@@ -39,7 +39,9 @@ public class CustomerCommunicationRuleContactConfiguration : IEntityTypeConfigur
         builder.ToTable("customer_communication_rule_contacts");
         builder.HasKey(c => c.Id);
 
-        builder.HasIndex(c => new { c.TenantId, c.RuleId, c.ContactId }).IsUnique();
+        // Unticking a contact soft-deletes the link; the index must not block re-ticking it.
+        builder.HasIndex(c => new { c.TenantId, c.RuleId, c.ContactId }).IsUnique()
+            .HasFilter("\"IsDeleted\" = false");
 
         builder.HasOne<CustomerContact>().WithMany()
             .HasForeignKey(c => c.ContactId).OnDelete(DeleteBehavior.Cascade);

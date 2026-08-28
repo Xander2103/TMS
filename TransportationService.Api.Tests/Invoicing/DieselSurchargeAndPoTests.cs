@@ -232,4 +232,82 @@ public class DieselSurchargeAndPoTests
         Assert.Equal(2, policy!.History.Count);
         Assert.True(policy.History.Single(p => p.PoNumber == "PO-B").IsEffectiveToday);
     }
+
+    // ---------------------------------------------------------------- audit: diesel base
+
+    /// <summary>
+    /// Rule F: the surcharge base is decided by the sales code of each generated line, never
+    /// by the raw order amount. A service line stamped with a code that does not count
+    /// (an administrative fee) is left out; the transport code counts by default.
+    /// </summary>
+    [Fact]
+    public async Task DieselBase_CountsOnlyLinesWhoseSalesCodeIsFlagged()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var adm = new TransportationService.Api.Modules.Accounting.Entities.SalesCategory
+        {
+            Id = Guid.NewGuid(), TenantId = h.TenantId, Code = "ADM", Name = "Administratieve kost",
+            IncludeInDieselBase = false, IsActive = true,
+        };
+        h.Db.Context.SalesCategories.Add(adm);
+        h.Db.Context.TransportOrderServiceLines.Add(new TransportOrderServiceLine
+        {
+            Id = Guid.NewGuid(), TenantId = h.TenantId, TransportOrderId = h.OrderId,
+            NameSnapshot = "Dossierkost", Kind = TransportationService.Api.Modules.Tarification.Entities.SurchargeKind.Fixed,
+            Value = 200m, Amount = 200m, SalesCategoryId = adm.Id,
+        });
+        await h.Db.Context.SaveChangesAsync();
+        await h.Billing.SaveSurchargeAsync(h.CustomerId, Surcharge(10m), CancellationToken.None);
+
+        var result = await h.Invoices.CreateAsync(
+            new CreateInvoiceRequest(h.CustomerId, null, [h.OrderId], [], null), CancellationToken.None);
+
+        Assert.Equal(InvoiceOperationOutcome.Success, result.Outcome);
+        var lines = result.Invoice!.Lines;
+        // Base transport 800 (1000 - 200 service) counts; the ADM service line (200) does not.
+        var surcharge = lines.Single(l => l.Description.Contains("Dieseltoeslag"));
+        Assert.Equal(80m, surcharge.UnitPrice);
+    }
+
+    [Fact]
+    public async Task DieselBase_WhenNoCodeIsFlagged_ProducesNoSurchargeLine_InsteadOfSurchargingEverything()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        await h.Billing.SaveSurchargeAsync(h.CustomerId, Surcharge(10m), CancellationToken.None);
+        // The seeded defaults flag transport + supplements; the operator unticks transport.
+        var tenant = new DevTenantContext(h.TenantId);
+        var accounting = new TransportationService.Api.Modules.Accounting.Services.AccountingService(
+            h.Db.Context, tenant, new AuditService(h.Db.Context, tenant, new DevCurrentUserContext(null)));
+        await accounting.EnsureSeededAsync(CancellationToken.None);
+        var transport = await h.Db.Context.SalesCategories.SingleAsync(c => c.TenantId == h.TenantId && c.Code == "TRANSPORT");
+        transport.IncludeInDieselBase = false;
+        await h.Db.Context.SaveChangesAsync();
+
+        var result = await h.Invoices.CreateAsync(
+            new CreateInvoiceRequest(h.CustomerId, null, [h.OrderId], [], null), CancellationToken.None);
+
+        Assert.Equal(InvoiceOperationOutcome.Success, result.Outcome);
+        Assert.DoesNotContain(result.Invoice!.Lines, l => l.Description.Contains("Dieseltoeslag"));
+    }
+
+    /// <summary>Rule E: generated wording follows the frozen invoice language via the stored catalog.</summary>
+    [Fact]
+    public async Task GeneratedSurchargeLine_UsesTheInvoiceLanguage_NotDutchByDefault()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var customer = await h.Db.Context.Customers.SingleAsync(c => c.Id == h.CustomerId);
+        customer.InvoiceLanguageCode = "fr";
+        await h.Db.Context.SaveChangesAsync();
+        await h.Billing.SaveSurchargeAsync(h.CustomerId, Surcharge(10m), CancellationToken.None);
+
+        var result = await h.Invoices.CreateAsync(
+            new CreateInvoiceRequest(h.CustomerId, null, [h.OrderId], [], null), CancellationToken.None);
+
+        Assert.Equal(InvoiceOperationOutcome.Success, result.Outcome);
+        Assert.Contains(result.Invoice!.Lines, l => l.Description.StartsWith("Surcharge gasoil 10%"));
+        Assert.DoesNotContain(result.Invoice.Lines, l => l.Description.Contains("Dieseltoeslag"));
+    }
 }

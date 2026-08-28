@@ -104,7 +104,33 @@ public class LocationService : ILocationService
             x.Location.IsDefaultLoadingLocation, x.Location.IsDefaultUnloadingLocation,
             x.Location.IsDefaultBillingLocation));
 
-        return await projected.ToPagedResultAsync(page, dto => dto, cancellationToken);
+        var result = await projected.ToPagedResultAsync(page, dto => dto, cancellationToken);
+
+        // Display column = every customer using the address ("A, B"), read from the links; the
+        // legacy owner above only served as the server-side sort key.
+        var names = await LinkedCustomerNamesAsync(result.Items.Select(i => i.Id).ToList(), cancellationToken);
+        return result with
+        {
+            Items = result.Items
+                .Select(i => names.TryGetValue(i.Id, out var linked) ? i with { CustomerName = string.Join(", ", linked) } : i)
+                .ToList(),
+        };
+    }
+
+    /// <summary>Customer names per address via the relationships (sorted, distinct), for the given address ids.</summary>
+    private async Task<Dictionary<Guid, List<string>>> LinkedCustomerNamesAsync(List<Guid> locationIds, CancellationToken cancellationToken)
+    {
+        if (locationIds.Count == 0) return [];
+
+        var rows = await _dbContext.CustomerLocationLinks.AsNoTracking()
+            .Where(l => l.TenantId == _tenantContext.TenantId && locationIds.Contains(l.LocationId))
+            .Join(_dbContext.Customers.AsNoTracking().Where(c => c.TenantId == _tenantContext.TenantId),
+                l => l.CustomerId, c => c.Id, (l, c) => new { l.LocationId, c.Name })
+            .ToListAsync(cancellationToken);
+
+        return rows
+            .GroupBy(r => r.LocationId)
+            .ToDictionary(g => g.Key, g => g.Select(r => r.Name).Distinct().OrderBy(n => n, StringComparer.OrdinalIgnoreCase).ToList());
     }
 
     /// <summary>
@@ -151,16 +177,34 @@ public class LocationService : ILocationService
                 (l.PostalCode != null && l.PostalCode.ToLower().Contains(term)));
         }
 
+        // Membership AND grouping come from the relationships: a shared address appears under
+        // each of its customers; an address without any relationship lands in the unlinked bucket.
+        var tenantId = _tenantContext.TenantId;
         var joined = from l in query
-                     join c in _dbContext.Customers.AsNoTracking().Where(cu => cu.TenantId == _tenantContext.TenantId)
-                         on l.CustomerId equals c.Id into custs
+                     join link in _dbContext.CustomerLocationLinks.AsNoTracking().Where(x => x.TenantId == tenantId)
+                         on l.Id equals link.LocationId into links
+                     from link in links.DefaultIfEmpty()
+                     join c in _dbContext.Customers.AsNoTracking().Where(cu => cu.TenantId == tenantId)
+                         on link.CustomerId equals c.Id into custs
                      from c in custs.DefaultIfEmpty()
-                     select new { Location = l, CustomerName = c != null ? (string?)c.Name : null };
+                     select new
+                     {
+                         Location = l,
+                         CustomerId = link != null ? (Guid?)link.CustomerId : null,
+                         CustomerName = c != null ? (string?)c.Name : null,
+                         IsDefaultLoading = link != null && link.IsDefaultLoading,
+                         IsDefaultUnloading = link != null && link.IsDefaultUnloading,
+                         IsDefaultBilling = link != null && link.IsDefaultBilling,
+                     };
+        if (customerId is { } onlyCustomer)
+        {
+            joined = joined.Where(x => x.CustomerId == onlyCustomer);
+        }
 
         // Page over the distinct groups (customer name, unlinked last), then load ONLY the
         // locations of the paged groups — two queries, correct totals, no client-side slicing.
         var groupKeys = joined
-            .Select(x => new { x.Location.CustomerId, x.CustomerName })
+            .Select(x => new { x.CustomerId, x.CustomerName })
             .Distinct()
             .OrderBy(g => g.CustomerName == null)
             .ThenBy(g => g.CustomerName);
@@ -173,16 +217,15 @@ public class LocationService : ILocationService
         var pagedCustomerIds = pagedKeys.Where(k => k.CustomerId is not null).Select(k => k.CustomerId).ToList();
         var includeUnlinked = pagedKeys.Any(k => k.CustomerId is null);
         var rows = await joined
-            .Where(x => (x.Location.CustomerId != null && pagedCustomerIds.Contains(x.Location.CustomerId))
-                        || (includeUnlinked && x.Location.CustomerId == null))
+            .Where(x => (x.CustomerId != null && pagedCustomerIds.Contains(x.CustomerId))
+                        || (includeUnlinked && x.CustomerId == null))
             .Select(x => new
             {
-                x.Location.CustomerId, x.CustomerName,
+                x.CustomerId, x.CustomerName,
                 Dto = new LocationListItemDto(
                     x.Location.Id, x.Location.Code, x.Location.Name, x.Location.Type, x.Location.City,
                     x.Location.CountryCode, x.CustomerName, x.Location.IsActive,
-                    x.Location.IsDefaultLoadingLocation, x.Location.IsDefaultUnloadingLocation,
-                    x.Location.IsDefaultBillingLocation),
+                    x.IsDefaultLoading, x.IsDefaultUnloading, x.IsDefaultBilling),
             })
             .ToListAsync(cancellationToken);
 
@@ -277,6 +320,19 @@ public class LocationService : ILocationService
         ApplyEditableFields(location, ToEditableShape(request), canViewSensitive);
         location.OpeningIntervals = BuildIntervals(request.OpeningIntervals, location);
 
+        // Same front door as an existing active address: enforced HERE, not only in a dialog,
+        // so every create path (full form, quick-create, imports) needs a deliberate override.
+        if (!request.OverrideDuplicate && !string.IsNullOrEmpty(location.AddressExactKey))
+        {
+            var duplicates = await AddressDuplicateFinder.FindAsync(_dbContext, _tenantContext.TenantId,
+                new AddressDuplicateCheckRequest(location.Street, location.HouseNumber, location.PostalCode, location.City, location.CountryCode, null),
+                cancellationToken);
+            if (duplicates.HasExactMatch)
+            {
+                return LocationOperationResult.PossibleDuplicateOf(duplicates);
+            }
+        }
+
         // Transaction: default-demotion runs as an immediate UPDATE and must roll back when the
         // insert itself fails.
         await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
@@ -346,6 +402,7 @@ public class LocationService : ILocationService
         }
 
         await _countryValidator.NormalizeAndValidateAsync(request.CountryCode, "land", cancellationToken, "countryCode");
+        await EnsureLegacyOwnerChangeAllowedAsync(location, request.CustomerId, cancellationToken);
 
         var before = await BuildAuditPayloadAsync(location, cancellationToken);
 
@@ -433,21 +490,32 @@ public class LocationService : ILocationService
     /// would be invisible everywhere that now reads the links.
     ///
     /// Only the relationship implied by the legacy field is touched: links other customers hold
-    /// on the same physical address are never affected.
+    /// on the same physical address are never affected. An existing link is never rewritten
+    /// from the address form — its defaults, alias, role and instructions belong to Klant › Adressen.
     /// </summary>
     private async Task SyncCustomerLinkAsync(Location location, Guid? previousCustomerId, CancellationToken cancellationToken)
     {
         if (previousCustomerId is { } previous && previous != location.CustomerId)
         {
-            await _dbContext.CustomerLocationLinks
-                .Where(l => l.TenantId == location.TenantId && l.LocationId == location.Id && l.CustomerId == previous)
-                .ExecuteDeleteAsync(cancellationToken);
+            // The legacy owner moved away: retire that ONE relationship through the normal
+            // soft-delete path (interceptor + audit), never a hard delete. Shared addresses
+            // were already refused by EnsureLegacyOwnerChangeAllowedAsync.
+            var previousLink = await _dbContext.CustomerLocationLinks
+                .FirstOrDefaultAsync(l => l.TenantId == location.TenantId && l.LocationId == location.Id && l.CustomerId == previous, cancellationToken);
+            if (previousLink is not null)
+            {
+                _dbContext.CustomerLocationLinks.Remove(previousLink); // soft delete via interceptor
+                await _dbContext.SaveChangesAsync(cancellationToken);
+                await _auditService.RecordAsync("CustomerLocationLink", previousLink.Id.ToString(), "Unlinked",
+                    new { previousLink.CustomerId, previousLink.LocationId, previousLink.Role }, null, cancellationToken);
+            }
         }
 
         if (location.CustomerId is not { } customerId) return;
 
         var link = await _dbContext.CustomerLocationLinks
             .FirstOrDefaultAsync(l => l.TenantId == location.TenantId && l.LocationId == location.Id && l.CustomerId == customerId, cancellationToken);
+        if (link is not null) return;
 
         // Demote the customer's other links before promoting this one; the filtered unique index
         // allows a single default holder of each kind per customer.
@@ -465,32 +533,42 @@ public class LocationService : ILocationService
                     cancellationToken);
         }
 
-        if (link is null)
+        var created = new CustomerLocationLink
         {
-            _dbContext.CustomerLocationLinks.Add(new CustomerLocationLink
-            {
-                Id = Guid.NewGuid(),
-                TenantId = location.TenantId,
-                CustomerId = customerId,
-                LocationId = location.Id,
-                Role = CustomerLocationRole.Both,
-                CustomerReference = location.ExternalReference,
-                IsDefaultLoading = location.IsDefaultLoadingLocation,
-                IsDefaultUnloading = location.IsDefaultUnloadingLocation,
-                IsDefaultBilling = location.IsDefaultBillingLocation,
-                IsActive = location.IsActive,
-            });
-        }
-        else
-        {
-            // Alias/role/instructions are relationship-level choices the address form does not
-            // know about, so they are preserved.
-            link.IsDefaultLoading = location.IsDefaultLoadingLocation;
-            link.IsDefaultUnloading = location.IsDefaultUnloadingLocation;
-            link.IsDefaultBilling = location.IsDefaultBillingLocation;
-        }
-
+            Id = Guid.NewGuid(),
+            TenantId = location.TenantId,
+            CustomerId = customerId,
+            LocationId = location.Id,
+            Role = CustomerLocationRole.Both,
+            CustomerReference = location.ExternalReference,
+            IsDefaultLoading = location.IsDefaultLoadingLocation,
+            IsDefaultUnloading = location.IsDefaultUnloadingLocation,
+            IsDefaultBilling = location.IsDefaultBillingLocation,
+            IsActive = location.IsActive,
+        };
+        _dbContext.CustomerLocationLinks.Add(created);
         await _dbContext.SaveChangesAsync(cancellationToken);
+        await _auditService.RecordAsync("CustomerLocationLink", created.Id.ToString(), "Linked", null,
+            new { created.CustomerId, created.LocationId, created.Role, created.IsDefaultLoading, created.IsDefaultUnloading, created.IsDefaultBilling },
+            cancellationToken);
+    }
+
+    /// <summary>
+    /// The legacy customer field on the address form can only re-home an address that ONE
+    /// customer uses. With several relationships there is no single owner to move, so the form
+    /// refuses and points at the place where each relationship is managed.
+    /// </summary>
+    private async Task EnsureLegacyOwnerChangeAllowedAsync(Location location, Guid? requestedCustomerId, CancellationToken cancellationToken)
+    {
+        if (location.CustomerId == requestedCustomerId) return;
+
+        var activeLinks = await _dbContext.CustomerLocationLinks
+            .CountAsync(l => l.TenantId == location.TenantId && l.LocationId == location.Id, cancellationToken);
+        if (activeLinks > 1)
+        {
+            throw new DomainValidationException("customerId",
+                "Dit adres is gedeeld met meerdere klanten; beheer de koppelingen via Klant › Adressen.");
+        }
     }
 
     /// <summary>
@@ -628,6 +706,9 @@ public class LocationService : ILocationService
             IsDefaultLoadingLocation = false,
             IsDefaultUnloadingLocation = false,
             IsDefaultBillingLocation = false,
+            // Same derivation as create/update: a copy must be findable as a duplicate.
+            AddressExactKey = AddressNormalizer.ExactKey(source.CountryCode, source.PostalCode, source.City, source.Street, source.HouseNumber),
+            AddressStreetKey = AddressNormalizer.StreetKey(source.CountryCode, source.PostalCode, source.City, source.Street),
         };
         copy.OpeningIntervals = source.OpeningIntervals
             .Select(i => new LocationOpeningInterval
@@ -661,6 +742,9 @@ public class LocationService : ILocationService
                 return LocationOperationResult.DuplicateCode;
             }
         }
+
+        // The copied legacy owner must become a real relationship, exactly as on create.
+        await SyncCustomerLinkAsync(copy, previousCustomerId: null, cancellationToken);
 
         await _auditService.RecordAsync(EntityType, copy.Id.ToString(), "Duplicated", null,
             new { SourceLocationId = id, copy.Code, copy.Name }, cancellationToken);
@@ -936,6 +1020,10 @@ public class LocationService : ILocationService
             .OrderBy(i => i.DayOfWeek).ThenBy(i => i.FromTime)
             .ToListAsync(cancellationToken);
 
+        var linkedNames = (await LinkedCustomerNamesAsync([l.Id], cancellationToken)).GetValueOrDefault(l.Id) ?? [];
+        // A legacy-less address that IS linked still shows who uses it.
+        customerName ??= linkedNames.Count > 0 ? string.Join(", ", linkedNames) : null;
+
         return new LocationDetailDto(
             l.Id, l.Code, l.Name, l.Type,
             l.Street, l.HouseNumber, l.PostalCode, l.City, l.CountryCode,
@@ -969,7 +1057,9 @@ public class LocationService : ILocationService
             LatestArrival: FormatTime(l.LatestArrival),
             OpeningIntervals: intervals
                 .Select(i => new LocationOpeningIntervalDto(i.DayOfWeek, FormatTime(i.FromTime)!, FormatTime(i.ToTime)!, i.Note))
-                .ToList());
+                .ToList(),
+            LinkedCustomerCount: linkedNames.Count,
+            LinkedCustomerNames: linkedNames);
     }
 
     private static string? Trim(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();

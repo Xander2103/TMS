@@ -46,15 +46,19 @@ public class AccountingService : IAccountingService
 
     private Guid TenantId => _tenant.TenantId;
 
-    /// <summary>Default categories; codes are stable seeds, names/roles editable per tenant.</summary>
-    private static readonly (string Code, string Name, SalesCategorySystemRole Role, int SortOrder)[] DefaultCategories =
+    /// <summary>
+    /// Default categories; codes are stable seeds, names/roles editable per tenant. Transport and
+    /// supplements count in the diesel-surcharge base by default (the pre-wave behaviour, where
+    /// the surcharge ran over the whole order amount); the operator unticks what should not.
+    /// </summary>
+    private static readonly (string Code, string Name, SalesCategorySystemRole Role, int SortOrder, bool DieselBase)[] DefaultCategories =
     [
-        ("TRANSPORT", "Transport", SalesCategorySystemRole.Transport, 0),
-        ("SUPPLEMENTEN", "Supplementen", SalesCategorySystemRole.Surcharge, 1),
-        ("DIESEL", "Diesel", SalesCategorySystemRole.Diesel, 2),
-        ("EUROPALLETS", "Verkoop europallets", SalesCategorySystemRole.None, 3),
-        ("DIVERS-BINNEN", "Diverse verkoop binnenland", SalesCategorySystemRole.None, 4),
-        ("DIVERS-BUITEN", "Diverse verkoop buitenland", SalesCategorySystemRole.None, 5),
+        ("TRANSPORT", "Transport", SalesCategorySystemRole.Transport, 0, true),
+        ("SUPPLEMENTEN", "Supplementen", SalesCategorySystemRole.Surcharge, 1, true),
+        ("DIESEL", "Diesel", SalesCategorySystemRole.Diesel, 2, false),
+        ("EUROPALLETS", "Verkoop europallets", SalesCategorySystemRole.None, 3, false),
+        ("DIVERS-BINNEN", "Diverse verkoop binnenland", SalesCategorySystemRole.None, 4, false),
+        ("DIVERS-BUITEN", "Diverse verkoop buitenland", SalesCategorySystemRole.None, 5, false),
     ];
 
     public async Task EnsureSeededAsync(CancellationToken cancellationToken)
@@ -62,7 +66,7 @@ public class AccountingService : IAccountingService
         // IgnoreQueryFilters: a deliberately deleted default category is never resurrected.
         var existing = await _db.SalesCategories.IgnoreQueryFilters()
             .Where(c => c.TenantId == TenantId).Select(c => c.Code).ToListAsync(cancellationToken);
-        foreach (var (code, name, role, sortOrder) in DefaultCategories)
+        foreach (var (code, name, role, sortOrder, dieselBase) in DefaultCategories)
         {
             if (existing.Contains(code))
             {
@@ -72,7 +76,7 @@ public class AccountingService : IAccountingService
             _db.SalesCategories.Add(new SalesCategory
             {
                 Id = Guid.NewGuid(), TenantId = TenantId, Code = code, Name = name,
-                SystemRole = role, SortOrder = sortOrder,
+                SystemRole = role, SortOrder = sortOrder, IncludeInDieselBase = dieselBase,
             });
         }
 
@@ -132,7 +136,9 @@ public class AccountingService : IAccountingService
         var used = await _db.SalesCategories.IgnoreQueryFilters()
                        .AnyAsync(c => c.TenantId == TenantId && c.LedgerAccountId == id, cancellationToken)
                    || await _db.InvoiceLines.IgnoreQueryFilters()
-                       .AnyAsync(l => l.TenantId == TenantId && l.LedgerAccountId == id, cancellationToken);
+                       .AnyAsync(l => l.TenantId == TenantId && l.LedgerAccountId == id, cancellationToken)
+                   || await _db.Set<SalesCategoryLedgerMapping>().IgnoreQueryFilters()
+                       .AnyAsync(m => m.TenantId == TenantId && m.LedgerAccountId == id, cancellationToken);
         if (used)
         {
             await _audit.RecordAsync("LedgerAccount", id.ToString(), "DeleteBlocked",
@@ -176,7 +182,7 @@ public class AccountingService : IAccountingService
         await ValidateCategoryAsync(request, existingId: null, cancellationToken);
         var category = new SalesCategory { Id = Guid.NewGuid(), TenantId = TenantId };
         await ApplyCategoryAsync(category, request, cancellationToken);
-        ApplyLedgerMappings(category, request.LedgerMappings);
+        await ApplyLedgerMappingsAsync(category, request.LedgerMappings, cancellationToken);
         _db.SalesCategories.Add(category);
         await _db.SaveChangesAsync(cancellationToken);
         await _audit.RecordAsync("SalesCategory", category.Id.ToString(), "Created", null,
@@ -186,7 +192,8 @@ public class AccountingService : IAccountingService
 
     public async Task<SalesCategoryDto?> UpdateSalesCategoryAsync(Guid id, SaveSalesCategoryRequest request, CancellationToken cancellationToken)
     {
-        var category = await _db.SalesCategories.FirstOrDefaultAsync(c => c.TenantId == TenantId && c.Id == id, cancellationToken);
+        var category = await _db.SalesCategories.Include(c => c.LedgerMappings)
+            .FirstOrDefaultAsync(c => c.TenantId == TenantId && c.Id == id, cancellationToken);
         if (category is null)
         {
             return null;
@@ -202,7 +209,7 @@ public class AccountingService : IAccountingService
         var oldValues = new { category.Code, category.Name, category.SystemRole, category.IsActive, Grootboekrekening = oldAccount };
 
         await ApplyCategoryAsync(category, request, cancellationToken);
-        ApplyLedgerMappings(category, request.LedgerMappings);
+        await ApplyLedgerMappingsAsync(category, request.LedgerMappings, cancellationToken);
         await _db.SaveChangesAsync(cancellationToken);
 
         var newAccount = category.LedgerAccountId is { } newId
@@ -312,6 +319,29 @@ public class AccountingService : IAccountingService
                 "Ongeldige btw-categorie. Toegestaan: S, Z, E, AE, K of G (UNCL5305).");
         }
 
+        // Audit fix: the statutory classification (VatTreatmentOverride) decides the UBL category;
+        // a legacy category override may only refine the customer's own domestic treatment. Both
+        // set and contradicting each other would give an invoice that declares one thing and
+        // charges another.
+        if (request.VatTreatmentOverride is { } statutory && vatOverride is not null)
+        {
+            var info = Partners.Services.VatTreatmentCatalog.Resolve(statutory);
+            var expected = Partners.Services.VatTreatmentCatalog
+                .ResolveVatCategory(statutory, info.DefaultRatePercent ?? 21m).Code;
+            if (statutory != Partners.Entities.VatTreatment.DomesticVat && vatOverride != expected)
+            {
+                throw new DomainValidationException("vatCategoryOverride",
+                    $"De btw-categorie '{vatOverride}' spreekt de fiscale classificatie '{info.Label}' tegen (verwacht '{expected}'). " +
+                    "Laat de btw-categorie leeg; ze volgt uit de classificatie.");
+            }
+        }
+
+        if ((request.CostCentre?.Trim().Length ?? 0) > CostCentreMaxLength)
+        {
+            throw new DomainValidationException("costCentre",
+                $"Een kostenplaats mag maximaal {CostCentreMaxLength} tekens bevatten.");
+        }
+
         category.Code = request.Code.Trim().ToUpperInvariant();
         category.Name = request.Name.Trim();
         category.SystemRole = request.SystemRole;
@@ -343,15 +373,78 @@ public class AccountingService : IAccountingService
     /// Replaces the per-entity ledger overrides wholesale: nothing outside the sales code
     /// references an individual mapping row, and a diff would only add ceremony.
     /// </summary>
-    private void ApplyLedgerMappings(SalesCategory category, IReadOnlyList<SalesCategoryLedgerMappingDto>? mappings)
+    /// <summary>
+    /// Audit fix: every mapping must point at an own-tenant, active invoicing entity and an
+    /// own-tenant ledger account (a new assignment requires an ACTIVE account, like the
+    /// primary mapping). Rows are diffed rather than replaced, so an unchanged mapping does not
+    /// leave a soft-deleted twin behind on every save.
+    /// </summary>
+    private async Task ApplyLedgerMappingsAsync(
+        SalesCategory category, IReadOnlyList<SalesCategoryLedgerMappingDto>? mappings, CancellationToken cancellationToken)
     {
-        _db.RemoveRange(category.LedgerMappings);
-        category.LedgerMappings.Clear();
-        if (mappings is null) return;
+        var wanted = (mappings ?? []).DistinctBy(m => m.LegalEntityId).ToList();
 
-        foreach (var mapping in mappings.DistinctBy(m => m.LegalEntityId))
+        if (wanted.Count > 0)
         {
-            category.LedgerMappings.Add(new SalesCategoryLedgerMapping
+            var entityIds = wanted.Select(m => m.LegalEntityId).ToList();
+            var knownEntities = await _db.LegalEntities.AsNoTracking()
+                .Where(e => e.TenantId == TenantId && entityIds.Contains(e.Id) && e.IsActive)
+                .Select(e => e.Id)
+                .ToListAsync(cancellationToken);
+            if (knownEntities.Count != entityIds.Count)
+            {
+                throw new InvalidTenantReferenceException("facturerende entiteit");
+            }
+
+            var accountIds = wanted.Select(m => m.LedgerAccountId).Distinct().ToList();
+            var knownAccounts = await _db.LedgerAccounts.AsNoTracking()
+                .Where(a => a.TenantId == TenantId && accountIds.Contains(a.Id))
+                .Select(a => new { a.Id, a.IsActive })
+                .ToListAsync(cancellationToken);
+            if (knownAccounts.Count != accountIds.Count)
+            {
+                throw new InvalidTenantReferenceException("grootboekrekening");
+            }
+
+            var inactive = knownAccounts.Where(a => !a.IsActive).Select(a => a.Id).ToHashSet();
+            var newlyAssignedInactive = wanted.Any(m =>
+                inactive.Contains(m.LedgerAccountId)
+                && !category.LedgerMappings.Any(existing =>
+                    existing.LegalEntityId == m.LegalEntityId && existing.LedgerAccountId == m.LedgerAccountId));
+            if (newlyAssignedInactive)
+            {
+                throw new DomainValidationException("ledgerMappings",
+                    "Een inactieve grootboekrekening kan niet meer worden toegewezen. Heractiveer de rekening eerst.");
+            }
+
+            var tooLong = wanted.FirstOrDefault(m => (m.CostCentre?.Trim().Length ?? 0) > CostCentreMaxLength);
+            if (tooLong is not null)
+            {
+                throw new DomainValidationException("ledgerMappings",
+                    $"Een kostenplaats mag maximaal {CostCentreMaxLength} tekens bevatten.");
+            }
+        }
+
+        var removed = category.LedgerMappings
+            .Where(existing => wanted.All(m => m.LegalEntityId != existing.LegalEntityId))
+            .ToList();
+        _db.RemoveRange(removed);
+        foreach (var gone in removed)
+        {
+            category.LedgerMappings.Remove(gone);
+        }
+
+        foreach (var mapping in wanted)
+        {
+            var existing = category.LedgerMappings.FirstOrDefault(m => m.LegalEntityId == mapping.LegalEntityId);
+            if (existing is not null)
+            {
+                existing.LedgerAccountId = mapping.LedgerAccountId;
+                existing.CostCentre = Blank(mapping.CostCentre);
+                continue;
+            }
+
+            var created = new SalesCategoryLedgerMapping
             {
                 Id = Guid.NewGuid(),
                 TenantId = TenantId,
@@ -359,9 +452,20 @@ public class AccountingService : IAccountingService
                 LegalEntityId = mapping.LegalEntityId,
                 LedgerAccountId = mapping.LedgerAccountId,
                 CostCentre = Blank(mapping.CostCentre),
-            });
+            };
+            // Client-generated id: mark Added explicitly — discovery through the navigation would
+            // attach it as Modified and the save would fail with "0 rows affected" (audit fix:
+            // this is why per-entity mappings could never be stored before).
+            _db.Add(created);
+            if (!category.LedgerMappings.Contains(created))
+            {
+                category.LedgerMappings.Add(created);
+            }
         }
     }
+
+    /// <summary>Matches invoice_lines.CostCentreSnapshot (varchar 40): a longer value would break finalization.</summary>
+    internal const int CostCentreMaxLength = 40;
 
     private static LedgerAccountDto Map(LedgerAccount account) =>
         new(account.Id, account.AccountNumber, account.Name, account.ExternalCode, account.Description, account.IsActive);

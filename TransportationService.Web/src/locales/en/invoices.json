@@ -299,7 +299,7 @@
     "source": {
       "Customer": "customer",
       "LineOverride": "line override",
-      "SalesCode": "sales code",
+      "SalesCode": "sales category",
       "TenantDefault": "company default"
     },
     "sourceLabel": "source",

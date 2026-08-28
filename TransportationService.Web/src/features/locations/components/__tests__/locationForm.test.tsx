@@ -28,6 +28,12 @@ vi.mock('../../../reference/components/CountryCombobox', () => ({
   CountryCombobox: ({ id }: { id?: string }) => <input id={id} aria-label="Land" />,
 }))
 
+const addressApi = vi.hoisted(() => ({ check: vi.fn() }))
+vi.mock('../../api/customerAddressesApi', async (orig) => ({
+  ...(await orig<typeof import('../../api/customerAddressesApi')>()),
+  checkAddressDuplicates: (...a: unknown[]) => addressApi.check(...a),
+}))
+
 // The guard needs the data router; the form's behaviour under test does not.
 vi.mock('../../../../components/ui/UnsavedChangesGuard', () => ({
   UnsavedChangesGuard: () => null,
@@ -60,6 +66,104 @@ beforeEach(() => {
   auth.permissions = []
   api.searchCustomers.mockReset().mockResolvedValue({ items: [], totalCount: 0, page: 1, pageSize: 200 })
   api.getCustomer.mockReset()
+  addressApi.check.mockReset().mockResolvedValue({ hasExactMatch: false, candidates: [] })
+})
+
+const exactCandidate = {
+  locationId: 'loc-9',
+  code: 'ADR-9',
+  name: 'Bestaand magazijn',
+  match: 'Exact' as const,
+  street: 'Noorderlaan',
+  houseNumber: '10',
+  postalCode: '2030',
+  city: 'Antwerpen',
+  countryCode: 'BE',
+  isActive: true,
+  linkedCustomers: ['Klant A'],
+  type: 'Warehouse' as const,
+}
+
+describe('LocationForm (address master audit)', () => {
+  it('makes the customer field read-only on a shared address and points at Klant › Adressen (D2)', async () => {
+    api.getCustomer.mockResolvedValue({ id: 'c1', name: 'Alfa BV', contacts: [] })
+    renderForm({
+      mode: 'edit',
+      initial: {
+        ...EMPTY_LOCATION_INPUT,
+        code: 'LOC-1',
+        name: 'Gedeeld magazijn',
+        customerId: 'c1',
+        linkedCustomerCount: 2,
+        linkedCustomerNames: ['Alfa BV', 'Beta BV'],
+      },
+    })
+
+    expect(screen.getByRole('combobox', { name: 'Klant' })).toBeDisabled()
+    expect(screen.getByText(/Dit adres is gedeeld met 2 klanten \(Alfa BV, Beta BV\)/)).toBeInTheDocument()
+    expect(screen.getByText(/Klant › Adressen/)).toBeInTheDocument()
+  })
+
+  it('keeps the customer field editable on a single-link address', () => {
+    api.getCustomer.mockResolvedValue({ id: 'c1', name: 'Alfa BV', contacts: [] })
+    renderForm({
+      mode: 'edit',
+      initial: { ...EMPTY_LOCATION_INPUT, code: 'LOC-1', name: 'Eigen magazijn', customerId: 'c1', linkedCustomerCount: 1 },
+    })
+    expect(screen.getByRole('combobox', { name: 'Klant' })).not.toBeDisabled()
+  })
+
+  it('shows the duplicate candidates on create and only submits with overrideDuplicate after "Toch aanmaken" (R1)', async () => {
+    addressApi.check.mockResolvedValue({ hasExactMatch: true, candidates: [exactCandidate] })
+    const onSubmit = renderForm()
+
+    await userEvent.type(nameField(), 'Magazijn Noord')
+    await goTo(/Adres/)
+    await userEvent.type(screen.getByLabelText('Straat'), 'Noorderlaan')
+    await userEvent.type(screen.getByLabelText('Nummer'), '10')
+    await clickSubmit('Adres aanmaken')
+
+    // Blocked: the same front door exists, with the customers using it.
+    expect(await screen.findByText('Dit adres bestaat mogelijk al.')).toBeInTheDocument()
+    expect(screen.getByText(/Bestaand magazijn/)).toBeInTheDocument()
+    expect(screen.getByText(/in gebruik bij Klant A/)).toBeInTheDocument()
+    expect(onSubmit).not.toHaveBeenCalled()
+    expect(addressApi.check).toHaveBeenCalledWith(expect.objectContaining({ street: 'Noorderlaan', houseNumber: '10' }))
+
+    // Deliberate override → submitted once, flag set, no second check.
+    await userEvent.click(screen.getByRole('button', { name: 'Toch nieuw adres maken' }))
+    await clickSubmit('Adres aanmaken')
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1))
+    expect((onSubmit.mock.calls[0][0] as LocationInput).overrideDuplicate).toBe(true)
+    expect(addressApi.check).toHaveBeenCalledTimes(1)
+  })
+
+  it('drops the override again when the address changes', async () => {
+    addressApi.check.mockResolvedValue({ hasExactMatch: true, candidates: [exactCandidate] })
+    const onSubmit = renderForm()
+
+    await userEvent.type(nameField(), 'Magazijn Noord')
+    await goTo(/Adres/)
+    await userEvent.type(screen.getByLabelText('Straat'), 'Noorderlaan')
+    await clickSubmit('Adres aanmaken')
+    await userEvent.click(await screen.findByRole('button', { name: 'Toch nieuw adres maken' }))
+
+    await userEvent.type(screen.getByLabelText('Nummer'), '12')
+    await clickSubmit('Adres aanmaken')
+
+    // The address changed after the override, so it is checked again (and blocked again).
+    await waitFor(() => expect(addressApi.check).toHaveBeenCalledTimes(2))
+    expect(onSubmit).not.toHaveBeenCalled()
+  })
+
+  it('renders the candidates from a server 409 address_duplicate handed over by the page', async () => {
+    const { ApiError } = await import('../../../../api/apiClient')
+    const conflict = new ApiError('conflict', 409, { code: 'address_duplicate', hasExactMatch: true, candidates: [exactCandidate] })
+    renderForm({ submitError: conflict })
+
+    expect(await screen.findByText('Dit adres bestaat mogelijk al.')).toBeInTheDocument()
+    expect(screen.getByText(/Bestaand magazijn/)).toBeInTheDocument()
+  })
 })
 
 describe('LocationForm (sectioned)', () => {

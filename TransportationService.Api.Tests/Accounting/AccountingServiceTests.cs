@@ -158,4 +158,94 @@ public class AccountingServiceTests
         await Assert.ThrowsAsync<DomainValidationException>(() => h.Service.CreateSalesCategoryAsync(
             new SaveSalesCategoryRequest("TRANSPORT2", "Transport bis", SalesCategorySystemRole.Transport), CancellationToken.None));
     }
+
+    // ------------------------------------------ audit: per-entity ledger mappings
+
+    private static async Task<Guid> AddEntityAsync(Harness h)
+    {
+        var entity = new TransportationService.Api.Modules.Organization.Entities.LegalEntity
+        {
+            Id = Guid.NewGuid(), TenantId = h.TenantId, LegalName = "Entiteit", IsActive = true,
+        };
+        h.Db.Context.LegalEntities.Add(entity);
+        await h.Db.Context.SaveChangesAsync();
+        return entity.Id;
+    }
+
+    [Fact]
+    public async Task LedgerMapping_MustReferenceAnOwnTenantAccountAndEntity()
+    {
+        var h = await SetupAsync();
+        using var _ = h.Db;
+        var entityId = await AddEntityAsync(h);
+        var ownAccount = await h.Service.CreateLedgerAccountAsync(new SaveLedgerAccountRequest("700000", "Transport"), CancellationToken.None);
+        var transport = (await h.Service.ListSalesCategoriesAsync(false, CancellationToken.None)).Single(c => c.Code == "TRANSPORT");
+
+        // Another tenant's account: refused, never silently stored.
+        var otherTenant = Guid.NewGuid();
+        h.Db.Context.Tenants.Add(new Tenant { Id = otherTenant, Name = "Other", Slug = "other", IsActive = true, CreatedAt = DateTime.UtcNow });
+        var foreignAccount = new LedgerAccount { Id = Guid.NewGuid(), TenantId = otherTenant, AccountNumber = "700000", Name = "Foreign" };
+        h.Db.Context.LedgerAccounts.Add(foreignAccount);
+        await h.Db.Context.SaveChangesAsync();
+
+        await Assert.ThrowsAsync<InvalidTenantReferenceException>(() => h.Service.UpdateSalesCategoryAsync(
+            transport.Id, new SaveSalesCategoryRequest(transport.Code, transport.Name, transport.SystemRole, null, true, transport.SortOrder,
+                LedgerMappings: [new SalesCategoryLedgerMappingDto(entityId, foreignAccount.Id, null)]), CancellationToken.None));
+
+        // An unknown entity: refused.
+        await Assert.ThrowsAsync<InvalidTenantReferenceException>(() => h.Service.UpdateSalesCategoryAsync(
+            transport.Id, new SaveSalesCategoryRequest(transport.Code, transport.Name, transport.SystemRole, null, true, transport.SortOrder,
+                LedgerMappings: [new SalesCategoryLedgerMappingDto(Guid.NewGuid(), ownAccount.Id, null)]), CancellationToken.None));
+
+        // A valid mapping is stored, and the mapped account can no longer be deleted.
+        var saved = await h.Service.UpdateSalesCategoryAsync(
+            transport.Id, new SaveSalesCategoryRequest(transport.Code, transport.Name, transport.SystemRole, null, true, transport.SortOrder,
+                LedgerMappings: [new SalesCategoryLedgerMappingDto(entityId, ownAccount.Id, "CC-1")]), CancellationToken.None);
+        Assert.Single(saved.LedgerMappings!, m => m.LegalEntityId == entityId && m.LedgerAccountId == ownAccount.Id);
+        await Assert.ThrowsAsync<DomainValidationException>(() => h.Service.DeleteLedgerAccountAsync(ownAccount.Id, CancellationToken.None));
+
+        // Saving the same mapping again does not pile up soft-deleted twins.
+        await h.Service.UpdateSalesCategoryAsync(
+            transport.Id, new SaveSalesCategoryRequest(transport.Code, transport.Name, transport.SystemRole, null, true, transport.SortOrder,
+                LedgerMappings: [new SalesCategoryLedgerMappingDto(entityId, ownAccount.Id, "CC-1")]), CancellationToken.None);
+        var rows = await h.Db.Context.Set<SalesCategoryLedgerMapping>().IgnoreQueryFilters()
+            .CountAsync(m => m.SalesCategoryId == transport.Id);
+        Assert.Equal(1, rows);
+    }
+
+    [Fact]
+    public async Task CostCentre_LongerThanTheSnapshotColumn_IsRefusedUpFront()
+    {
+        var h = await SetupAsync();
+        using var _ = h.Db;
+        var transport = (await h.Service.ListSalesCategoriesAsync(false, CancellationToken.None)).Single(c => c.Code == "TRANSPORT");
+
+        await Assert.ThrowsAsync<DomainValidationException>(() => h.Service.UpdateSalesCategoryAsync(
+            transport.Id, new SaveSalesCategoryRequest(transport.Code, transport.Name, transport.SystemRole, null, true, transport.SortOrder,
+                CostCentre: new string('X', 41)), CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task AStatutoryClassification_RefusesAContradictingLegacyCategory()
+    {
+        var h = await SetupAsync();
+        using var _ = h.Db;
+        var transport = (await h.Service.ListSalesCategoriesAsync(false, CancellationToken.None)).Single(c => c.Code == "TRANSPORT");
+
+        await Assert.ThrowsAsync<DomainValidationException>(() => h.Service.UpdateSalesCategoryAsync(
+            transport.Id, new SaveSalesCategoryRequest(transport.Code, transport.Name, transport.SystemRole, null, true, transport.SortOrder,
+                VatCategoryOverride: "S",
+                VatTreatmentOverride: TransportationService.Api.Modules.Partners.Entities.VatTreatment.ReverseCharge), CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Seeding_FlagsTransportAndSupplements_ForTheDieselBase()
+    {
+        var h = await SetupAsync();
+        using var _ = h.Db;
+        var categories = await h.Service.ListSalesCategoriesAsync(false, CancellationToken.None);
+        Assert.True(categories.Single(c => c.Code == "TRANSPORT").IncludeInDieselBase);
+        Assert.True(categories.Single(c => c.Code == "SUPPLEMENTEN").IncludeInDieselBase);
+        Assert.False(categories.Single(c => c.Code == "DIESEL").IncludeInDieselBase);
+    }
 }

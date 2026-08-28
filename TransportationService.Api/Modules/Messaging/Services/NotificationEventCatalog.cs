@@ -45,10 +45,27 @@ public static class NotificationEventCatalog
 {
     private static readonly string[] OrderTokens = ["orderNumber", "customerName", "goodsDescription"];
 
+    /// <summary>
+    /// Customer routing for one <c>CustomerCommunicationType</c> name, with the primary contact
+    /// as fallback. The order matters: <see cref="NotificationEventService"/> skips a
+    /// CustomerPrimaryContact spec when an earlier CustomerCommunicationRule spec already found
+    /// recipients.
+    /// </summary>
+    private static RecipientSpec[] CustomerRuleWithFallback(string communicationType) =>
+    [
+        new RecipientSpec(NotificationRecipientType.CustomerCommunicationRule, communicationType),
+        new RecipientSpec(NotificationRecipientType.CustomerPrimaryContact, null),
+    ];
+
     private static readonly IReadOnlyDictionary<string, NotificationEventInfo> Entries =
         new List<NotificationEventInfo>
         {
             // --- Orders ---
+            // Customer-facing order events resolve through the customer's communication rules
+            // ("who receives what?" on the contact card). A CustomerPrimaryContact spec listed
+            // AFTER a CustomerCommunicationRule spec is a FALLBACK: NotificationEventService only
+            // uses it when the rule resolved nobody, so a configured contact is never doubled
+            // up with the primary contact.
             new(MessageKinds.OrderCreated, "Opdracht aangemaakt", NotificationEventGroups.Orders,
                 OrderTokens, DefaultInApp: true, DefaultEmail: false,
                 [new RecipientSpec(NotificationRecipientType.InternalPermission, PermissionCodes.OrdersChangeStatus)],
@@ -59,45 +76,47 @@ public static class NotificationEventCatalog
                 MessageKinds.OrderSubmittedPortal, NotificationSeverity.Info),
             new(MessageKinds.OrderAccepted, "Opdracht geaccepteerd", NotificationEventGroups.Orders,
                 OrderTokens, DefaultInApp: false, DefaultEmail: true,
-                [new RecipientSpec(NotificationRecipientType.CustomerPrimaryContact, null)],
+                CustomerRuleWithFallback("OrderConfirmation"),
                 MessageKinds.OrderAccepted, NotificationSeverity.Info),
             new(MessageKinds.OrderRejected, "Opdracht geweigerd", NotificationEventGroups.Orders,
                 OrderTokens, DefaultInApp: false, DefaultEmail: true,
-                [new RecipientSpec(NotificationRecipientType.CustomerPrimaryContact, null)],
+                CustomerRuleWithFallback("OrderConfirmation"),
                 MessageKinds.OrderRejected, NotificationSeverity.Warning),
             new(MessageKinds.OrderInfoRequested, "Extra informatie gevraagd", NotificationEventGroups.Orders,
                 [.. OrderTokens, "reason"], DefaultInApp: false, DefaultEmail: true,
-                [new RecipientSpec(NotificationRecipientType.CustomerPrimaryContact, null)],
+                CustomerRuleWithFallback("OrderConfirmation"),
                 MessageKinds.OrderInfoRequested, NotificationSeverity.Warning),
+            // The driver keeps the in-app notice only (unchanged); the customer's "planning"
+            // contacts are mailed by the pickup/delivery-window events below.
             new(MessageKinds.OrderPlanned, "Opdracht ingepland", NotificationEventGroups.Orders,
                 OrderTokens, DefaultInApp: true, DefaultEmail: false,
                 [new RecipientSpec(NotificationRecipientType.Driver, null)],
                 MessageKinds.OrderPlanned, NotificationSeverity.Info),
             new(MessageKinds.OrderPickupWindow, "Ophaalvenster bevestigd", NotificationEventGroups.Orders,
                 OrderTokens, DefaultInApp: false, DefaultEmail: true,
-                [new RecipientSpec(NotificationRecipientType.CustomerPrimaryContact, null)],
+                CustomerRuleWithFallback("PlanningAlert"),
                 MessageKinds.OrderPickupWindow, NotificationSeverity.Info),
             new(MessageKinds.OrderDeliveryWindow, "Leveringsvenster bevestigd", NotificationEventGroups.Orders,
                 OrderTokens, DefaultInApp: false, DefaultEmail: true,
-                [new RecipientSpec(NotificationRecipientType.CustomerPrimaryContact, null)],
+                CustomerRuleWithFallback("PlanningAlert"),
                 MessageKinds.OrderDeliveryWindow, NotificationSeverity.Info),
             new(MessageKinds.OrderPickupCompleted, "Ophaling afgerond", NotificationEventGroups.Orders,
                 OrderTokens, DefaultInApp: false, DefaultEmail: true,
-                [new RecipientSpec(NotificationRecipientType.CustomerPrimaryContact, null)],
+                CustomerRuleWithFallback("ProofOfDelivery"),
                 MessageKinds.OrderPickupCompleted, NotificationSeverity.Info),
             new(MessageKinds.OrderDeliveryCompleted, "Levering afgerond", NotificationEventGroups.Orders,
                 OrderTokens, DefaultInApp: false, DefaultEmail: true,
-                [new RecipientSpec(NotificationRecipientType.CustomerPrimaryContact, null)],
+                CustomerRuleWithFallback("ProofOfDelivery"),
                 MessageKinds.OrderDeliveryCompleted, NotificationSeverity.Info),
             new(MessageKinds.OrderDelayDetected, "Vertraging vastgesteld", NotificationEventGroups.Orders,
                 [.. OrderTokens, "reason"], DefaultInApp: false, DefaultEmail: true,
-                [new RecipientSpec(NotificationRecipientType.CustomerPrimaryContact, null)],
+                CustomerRuleWithFallback("DelayNotification"),
                 MessageKinds.OrderDelayDetected, NotificationSeverity.Warning,
                 DefaultRequiresReview: true),
             new(MessageKinds.OrderFailedDelivery, "Levering mislukt", NotificationEventGroups.Orders,
                 [.. OrderTokens, "reason"], DefaultInApp: true, DefaultEmail: true,
                 [
-                    new RecipientSpec(NotificationRecipientType.CustomerPrimaryContact, null),
+                    .. CustomerRuleWithFallback("Claims"),
                     new RecipientSpec(NotificationRecipientType.InternalPermission, PermissionCodes.ExceptionsResolve),
                 ],
                 MessageKinds.OrderFailedDelivery, NotificationSeverity.Warning,
@@ -105,14 +124,14 @@ public static class NotificationEventCatalog
             new(MessageKinds.OrderDamageRegistered, "Schade geregistreerd bij opdracht", NotificationEventGroups.Orders,
                 [.. OrderTokens, "reason"], DefaultInApp: true, DefaultEmail: true,
                 [
-                    new RecipientSpec(NotificationRecipientType.CustomerPrimaryContact, null),
+                    .. CustomerRuleWithFallback("Claims"),
                     new RecipientSpec(NotificationRecipientType.InternalPermission, PermissionCodes.ExceptionsResolve),
                 ],
                 MessageKinds.OrderDamageRegistered, NotificationSeverity.Warning,
                 DefaultRequiresReview: true),
             new(MessageKinds.OrderPodAvailable, "Afleverbewijs beschikbaar", NotificationEventGroups.Orders,
                 OrderTokens, DefaultInApp: false, DefaultEmail: true,
-                [new RecipientSpec(NotificationRecipientType.CustomerPrimaryContact, null)],
+                CustomerRuleWithFallback("ProofOfDelivery"),
                 MessageKinds.OrderPodAvailable, NotificationSeverity.Info),
 
             // --- Facturatie ---
@@ -138,7 +157,7 @@ public static class NotificationEventCatalog
                 MessageKinds.InvoicePeppolFailed, NotificationSeverity.Warning),
             new(MessageKinds.InvoiceCreditNote, "Creditnota aangemaakt", NotificationEventGroups.Facturatie,
                 ["invoiceNumber", "customerName"], DefaultInApp: false, DefaultEmail: true,
-                [new RecipientSpec(NotificationRecipientType.CustomerCommunicationRule, "Invoice")],
+                [new RecipientSpec(NotificationRecipientType.CustomerCommunicationRule, "CreditNote")],
                 MessageKinds.InvoiceCreditNote, NotificationSeverity.Info),
 
             // --- Personeel ---

@@ -149,6 +149,7 @@
       "codeAuto": "Leave blank for an automatic code.",
       "customerContact": "Choose to prefill the fields below; they remain editable.",
       "customerSearch": "Type to search; blank = no customer linked.",
+      "sharedAddress": "This address is shared by {count} customers ({customers}). Manage the links and defaults via Customer › Addresses.",
       "externalReference": "The customer's or partner's reference for this address.",
       "internalMemo": "Never visible to drivers or customers.",
       "openingFallback": "Shown when no time slots are configured."

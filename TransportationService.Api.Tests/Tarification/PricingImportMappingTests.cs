@@ -276,7 +276,11 @@ public class PricingImportMappingTests
                 agreementId, new PricingImportCommitRequest(PricingImportMode.UpdateAgreement, false, null, null),
                 ToStream(CustomerWorkbook()), null, "atlas.xlsx", CancellationToken.None));
 
-        Assert.Empty(await h.Db.Context.PricingImportRuns.AsNoTracking().ToListAsync());
+        // D3: the attempt IS in the history — but as Rejected, never as an import that happened.
+        var run = Assert.Single(await h.Db.Context.PricingImportRuns.AsNoTracking().ToListAsync());
+        Assert.Equal(PricingImportRunStatus.Rejected, run.Status);
+        Assert.Contains("ontbreken", run.Error);
+        Assert.Equal(0, run.Created + run.Updated + run.Removed);
         Assert.Empty(await h.Db.Context.PriceRules.AsNoTracking().Where(r => r.AgreementId == agreementId).ToListAsync());
     }
 
@@ -395,5 +399,319 @@ public class PricingImportMappingTests
         Assert.Equal(headers.Count, headers.Distinct(StringComparer.OrdinalIgnoreCase).Count());
         // Only the rule name is indispensable; blocking on more would reject usable sheets.
         Assert.Equal(["naam"], PricingImportColumns.All.Where(c => c.Required).Select(c => c.Key).ToArray());
+    }
+
+    // ------------------------------------------------------- audit fixes D1–D5, R2, R3
+
+    /// <summary>Generic sheet builder: any headers (row 1), any cell values (numbers stay numeric).</summary>
+    private static byte[] Sheet(string[] headers, params object?[][] rows)
+    {
+        using var workbook = new XLWorkbook();
+        var sheet = workbook.Worksheets.Add("Tarieven");
+        for (var i = 0; i < headers.Length; i += 1) sheet.Cell(1, i + 1).SetValue(headers[i]);
+        for (var r = 0; r < rows.Length; r += 1)
+        {
+            for (var c = 0; c < rows[r].Length; c += 1)
+            {
+                switch (rows[r][c])
+                {
+                    case null: break;
+                    case decimal d: sheet.Cell(r + 2, c + 1).SetValue(d); break;
+                    case int i: sheet.Cell(r + 2, c + 1).SetValue(i); break;
+                    case string s: sheet.Cell(r + 2, c + 1).SetValue(s); break;
+                    default: throw new NotSupportedException();
+                }
+            }
+        }
+
+        using var stream = new MemoryStream();
+        workbook.SaveAs(stream);
+        return stream.ToArray();
+    }
+
+    private static PricingImportCommitRequest Update => new(PricingImportMode.UpdateAgreement, false, null, null);
+
+    [Fact]
+    public async Task D1_PartialColumnFile_OnlyTouchesTheFieldsItActuallyContains()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var agreementId = await SeedAgreementAsync(h);
+        var rule = await h.Admin.CreateRuleAsync(new SavePriceRuleRequest(
+            null, h.UnitId, PriceRuleBasis.PerUnit, null, "Rit", new DateOnly(2026, 1, 1), new DateOnly(2026, 12, 31), true,
+            10m, 5m, null, AgreementId: agreementId, Priority: 3, MaximumAmount: 100m), CancellationToken.None);
+        var profile = new PricingImportProfile
+        {
+            Id = Guid.NewGuid(), TenantId = h.TenantId, Name = "Alleen prijs", HeaderRow = 1, IsActive = true,
+            MappingJson = JsonSerializer.Serialize(new Dictionary<string, string>
+            {
+                ["regelId"] = "Id", ["naam"] = "Omschrijving", ["basis"] = "Berekening", ["eenheidsprijs"] = "Tarief",
+            }),
+        };
+        h.Db.Context.PricingImportProfiles.Add(profile);
+        await h.Db.Context.SaveChangesAsync();
+
+        var file = Sheet(["Id", "Omschrijving", "Berekening", "Tarief"], [rule.Id.ToString(), "Rit", "PerUnit", 12m]);
+
+        var (preview, error) = await h.Excel.PreviewAsync(agreementId, ToStream(file), profile.Id, "prijs.xlsx", CancellationToken.None);
+        Assert.Null(error);
+        Assert.Empty(preview!.Errors);
+        var change = Assert.Single(preview.Updated);
+        // The preview lists ONLY the price change — no "Eenheid: EUROPALLET → (geen)" noise.
+        Assert.Single(change.FieldChanges!);
+        Assert.Contains("Eenheidsprijs", change.FieldChanges![0]);
+        Assert.DoesNotContain("staffels", preview.PresentFields!);
+        Assert.Contains("eenheidsprijs", preview.PresentFields!);
+
+        await h.Excel.CommitAsync(agreementId, Update, ToStream(file), profile.Id, "prijs.xlsx", CancellationToken.None);
+
+        var after = await h.Db.Context.PriceRules.AsNoTracking().SingleAsync(r => r.Id == rule.Id);
+        Assert.Equal(12m, after.UnitPrice);
+        Assert.Equal(h.UnitId, after.UnitTypeId);
+        Assert.Equal(5m, after.MinimumAmount);
+        Assert.Equal(100m, after.MaximumAmount);
+        Assert.Equal(3, after.Priority);
+        Assert.Equal(new DateOnly(2026, 12, 31), after.EffectiveUntil);
+    }
+
+    [Fact]
+    public async Task D1_PartialColumnFile_KeepsExistingBrackets()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var agreementId = await SeedAgreementAsync(h);
+        var rule = await h.Admin.CreateRuleAsync(new SavePriceRuleRequest(
+            null, h.UnitId, PriceRuleBasis.QuantityBracket, null, "Pallets", new DateOnly(2026, 1, 1), null, true, null, null,
+            [new SavePriceRuleBracketRequest(1, 5, 50m, null), new SavePriceRuleBracketRequest(6, null, 40m, null)],
+            AgreementId: agreementId), CancellationToken.None);
+
+        // Standard headers, but no bracket columns and no price column: the file only renames.
+        var file = Sheet(["RegelId", "Naam", "Basis", "Minimum"], [rule.Id.ToString(), "Pallets (BE)", "QuantityBracket", 20m]);
+
+        var (preview, error) = await h.Excel.PreviewAsync(agreementId, ToStream(file), null, "x.xlsx", CancellationToken.None);
+        Assert.Null(error);
+        Assert.Empty(preview!.Errors); // no "Ontbrekende prijs": the file carries no price column at all
+        await h.Excel.CommitAsync(agreementId, Update, ToStream(file), null, "x.xlsx", CancellationToken.None);
+
+        var after = await h.Db.Context.PriceRules.AsNoTracking().Include(r => r.Brackets).SingleAsync(r => r.Id == rule.Id);
+        Assert.Equal("Pallets (BE)", after.Name);
+        Assert.Equal(20m, after.MinimumAmount);
+        Assert.Equal(2, after.Brackets.Count);
+    }
+
+    [Fact]
+    public async Task D2_ImportingTheSameRegelIdLessSheetTwice_DoesNotCreateDuplicateRules()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var agreementId = await SeedAgreementAsync(h);
+        var file = Sheet(["Naam", "Basis", "Eenheid", "Eenheidsprijs", "Geldig van"],
+            ["Rit", "PerUnit", "EUROPALLET", 10m, "2026-01-01"],
+            ["Forfait", "Fixed", null, 25m, "2026-01-01"]);
+
+        var (first, _) = await h.Excel.CommitAsync(agreementId, Update, ToStream(file), null, "a.xlsx", CancellationToken.None);
+        Assert.Equal(2, first!.Added);
+
+        var (preview, error) = await h.Excel.PreviewAsync(agreementId, ToStream(file), null, "a.xlsx", CancellationToken.None);
+        Assert.Null(error);
+        Assert.Empty(preview!.Errors);
+        Assert.Empty(preview.Added);
+        Assert.Empty(preview.Updated);
+        Assert.Empty(preview.Removed); // matched rules are referenced, not "missing from the file"
+        Assert.Equal(2, preview.MatchedByNameCount);
+
+        // A changed price on the same name is an update of THAT rule.
+        var changed = Sheet(["Naam", "Basis", "Eenheid", "Eenheidsprijs", "Geldig van"],
+            ["Rit", "PerUnit", "EUROPALLET", 11m, "2026-01-01"],
+            ["Forfait", "Fixed", null, 25m, "2026-01-01"]);
+        var (second, _) = await h.Excel.CommitAsync(agreementId, Update, ToStream(changed), null, "b.xlsx", CancellationToken.None);
+        Assert.Equal(0, second!.Added);
+        Assert.Equal(1, second.Updated);
+
+        var rules = await h.Db.Context.PriceRules.AsNoTracking().Where(r => r.AgreementId == agreementId).ToListAsync();
+        Assert.Equal(2, rules.Count);
+        Assert.Equal(11m, rules.Single(r => r.Name == "Rit").UnitPrice);
+    }
+
+    [Fact]
+    public async Task D2_ABlankRegelIdNextToAnEqualExistingRule_IsARowErrorTellingTheOperatorWhatToDo()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var agreementId = await SeedAgreementAsync(h);
+        await h.Admin.CreateRuleAsync(new SavePriceRuleRequest(
+            null, null, PriceRuleBasis.Fixed, null, "Forfait", new DateOnly(2026, 1, 1), null, true, 25m, null, null,
+            AgreementId: agreementId), CancellationToken.None);
+
+        // The RegelId column IS present (so name-matching is off) but left empty on the row.
+        var file = Sheet(["RegelId", "Naam", "Basis", "Eenheidsprijs", "Geldig van"], [null, "Forfait", "Fixed", 30m, "2026-01-01"]);
+
+        var (preview, _) = await h.Excel.PreviewAsync(agreementId, ToStream(file), null, "x.xlsx", CancellationToken.None);
+        var problem = Assert.Single(preview!.Errors);
+        Assert.Equal(2, problem.Row);
+        Assert.Contains("RegelId", problem.Message);
+        Assert.Contains("verwijder de oude regel", problem.Message);
+
+        await Assert.ThrowsAsync<TransportationService.Api.Common.DomainValidationException>(() =>
+            h.Excel.CommitAsync(agreementId, Update, ToStream(file), null, "x.xlsx", CancellationToken.None));
+        Assert.Equal(1, await h.Db.Context.PriceRules.CountAsync(r => r.AgreementId == agreementId));
+    }
+
+    [Fact]
+    public async Task D3_ARejectedCommit_IsRecordedAsRejected_WithoutAnyRuleWritten()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var agreementId = await SeedAgreementAsync(h);
+        var bad = Sheet(["Naam", "Basis", "Eenheidsprijs"], ["Rit", "Bogus", 1m]);
+
+        await Assert.ThrowsAsync<TransportationService.Api.Common.DomainValidationException>(() =>
+            h.Excel.CommitAsync(agreementId, Update, ToStream(bad), null, "bad.xlsx", CancellationToken.None));
+
+        var run = await h.Db.Context.PricingImportRuns.AsNoTracking().SingleAsync();
+        Assert.Equal(PricingImportRunStatus.Rejected, run.Status);
+        Assert.Contains("Bogus", run.Error);
+        Assert.Equal(1, run.RowsRead);
+        Assert.Equal(1, run.Failed);
+        Assert.Equal(0, run.Created);
+        Assert.Empty(await h.Db.Context.PriceRules.Where(r => r.AgreementId == agreementId).ToListAsync());
+    }
+
+    [Fact]
+    public async Task D3_ADatabaseFailure_IsRecordedAsFailed_AfterTheRollback()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var agreementId = await SeedAgreementAsync(h);
+        await h.Db.Context.Database.ExecuteSqlRawAsync(
+            "CREATE TRIGGER fail_rules BEFORE INSERT ON price_rules BEGIN SELECT RAISE(ABORT, 'schijf vol'); END;");
+        var file = Sheet(["Naam", "Basis", "Eenheidsprijs", "Geldig van"], ["Rit", "PerKm", 2m, "2026-01-01"]);
+
+        await Assert.ThrowsAsync<DbUpdateException>(() =>
+            h.Excel.CommitAsync(agreementId, Update, ToStream(file), null, "x.xlsx", CancellationToken.None));
+
+        var run = await h.Db.Context.PricingImportRuns.AsNoTracking().SingleAsync();
+        Assert.Equal(PricingImportRunStatus.Failed, run.Status);
+        Assert.Contains("schijf vol", run.Error);
+        Assert.Equal(0, run.Created);
+        Assert.Empty(await h.Db.Context.PriceRules.Where(r => r.AgreementId == agreementId).ToListAsync());
+    }
+
+    [Fact]
+    public async Task D3_ASuccessfulCommit_IsRecordedAsSucceeded()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var agreementId = await SeedAgreementAsync(h);
+        var profileId = await AddProfileAsync(h);
+
+        await h.Excel.CommitAsync(agreementId, Update, ToStream(CustomerWorkbook()), profileId, "atlas.xlsx", CancellationToken.None);
+
+        var run = await h.Db.Context.PricingImportRuns.AsNoTracking().SingleAsync();
+        Assert.Equal(PricingImportRunStatus.Succeeded, run.Status);
+        Assert.Null(run.Error);
+    }
+
+    [Fact]
+    public async Task D4_ReadHeaders_UsesTheHeaderRowAndSheetTheOperatorTyped_BeforeAnyProfileExists()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+
+        var (defaults, _) = await h.Excel.ReadHeadersAsync(ToStream(CustomerWorkbook()), null, null, null, CancellationToken.None);
+        Assert.Equal(["Tarieflijst Atlas Copco — versie 2026"], defaults!); // row 1 = the title
+
+        var (typed, error) = await h.Excel.ReadHeadersAsync(ToStream(CustomerWorkbook()), null, 2, "Tarieven 2026", CancellationToken.None);
+        Assert.Null(error);
+        Assert.Equal(["Omschrijving", "Berekening", "Tarief", "Start"], typed!);
+    }
+
+    [Fact]
+    public async Task D5_SameNameAndBasisWithADifferentUnit_AreTwoRules_NotOneMergedRule()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var agreementId = await SeedAgreementAsync(h);
+        var file = Sheet(["Naam", "Basis", "Eenheid", "Eenheidsprijs", "Geldig van"],
+            ["Rit", "PerUnit", "EUROPALLET", 10m, "2026-01-01"],
+            ["Rit", "PerUnit", null, 8m, "2026-01-01"]);
+
+        var (preview, error) = await h.Excel.PreviewAsync(agreementId, ToStream(file), null, "x.xlsx", CancellationToken.None);
+        Assert.Null(error);
+        Assert.Empty(preview!.Errors);
+        Assert.Equal(2, preview.Added.Count);
+    }
+
+    [Fact]
+    public async Task D5_RowsOfOneRuleWithDifferentScalarValues_AreAnError()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var agreementId = await SeedAgreementAsync(h);
+        var file = Sheet(["Naam", "Basis", "Staffel van", "Staffel tot", "Staffelprijs", "Minimum", "Geldig van"],
+            ["Pallets", "QuantityBracket", 1m, 5m, 50m, 20m, "2026-01-01"],
+            ["Pallets", "QuantityBracket", 6m, null, 40m, 30m, "2026-01-01"]);
+
+        var (preview, _) = await h.Excel.PreviewAsync(agreementId, ToStream(file), null, "x.xlsx", CancellationToken.None);
+        var problem = Assert.Single(preview!.Errors);
+        Assert.Equal(3, problem.Row);
+        Assert.Contains("Minimum", problem.Message);
+        Assert.Contains("rij 2", problem.Message);
+    }
+
+    [Theory]
+    [InlineData("1,25", "1.25")]
+    [InlineData("1.25", "1.25")]
+    [InlineData("1250", "1250")]
+    [InlineData("1,250", "1.250")]
+    [InlineData("-3,5", "-3.5")]
+    public void R2_TextNumbers_CommaAndPointAreDecimals_NeverThousandsSeparators(string text, string expected)
+    {
+        Assert.Equal(decimal.Parse(expected, System.Globalization.CultureInfo.InvariantCulture), PricingExcelService.ParseDecimalText(text));
+    }
+
+    [Theory]
+    [InlineData("1.250,00")]
+    [InlineData("abc")]
+    [InlineData("1 250")]
+    public void R2_AmbiguousOrInvalidNumbers_AreRejected(string text)
+    {
+        Assert.Null(PricingExcelService.ParseDecimalText(text));
+    }
+
+    [Theory]
+    [InlineData("2026-02-01", 2026, 2, 1)]
+    [InlineData("01/02/2026", 2026, 2, 1)]
+    [InlineData("1/2/2026", 2026, 2, 1)]
+    [InlineData("13/02/2026", 2026, 2, 13)]
+    public void R2_TextDates_IsoOrDayFirst_NeverMonthFirst(string text, int year, int month, int day)
+    {
+        Assert.Equal(new DateOnly(year, month, day), PricingExcelService.ParseDateText(text));
+    }
+
+    [Theory]
+    [InlineData("02/13/2026")]
+    [InlineData("2026/02/01")]
+    [InlineData("1 februari 2026")]
+    public void R2_OtherDateForms_AreRejected(string text)
+    {
+        Assert.Null(PricingExcelService.ParseDateText(text));
+    }
+
+    [Fact]
+    public async Task R3_PriorityOutsideMinus1000To1000_IsARowError()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var agreementId = await SeedAgreementAsync(h);
+        var file = Sheet(["Naam", "Basis", "Prioriteit", "Eenheidsprijs", "Geldig van"],
+            ["Rit", "PerKm", 5000, 2m, "2026-01-01"],
+            ["Rit 2", "PerKm", -1000, 2m, "2026-01-01"]);
+
+        var (preview, _) = await h.Excel.PreviewAsync(agreementId, ToStream(file), null, "x.xlsx", CancellationToken.None);
+        var problem = Assert.Single(preview!.Errors);
+        Assert.Equal(2, problem.Row);
+        Assert.Contains("Prioriteit", problem.Message);
+        Assert.Contains("-1000 en 1000", problem.Message);
     }
 }

@@ -149,6 +149,7 @@
       "codeAuto": "Laisser vide pour un code automatique.",
       "customerContact": "Choisissez pour préremplir les champs ci-dessous ; ils restent modifiables.",
       "customerSearch": "Tapez pour rechercher ; vide = aucun client lié.",
+      "sharedAddress": "Cette adresse est partagée par {count} clients ({customers}). Gérez les liens et adresses par défaut via Client › Adresses.",
       "externalReference": "Référence du client ou du partenaire pour cette adresse.",
       "internalMemo": "Jamais visible pour les chauffeurs ou les clients.",
       "openingFallback": "Affiché lorsqu'aucune plage horaire n'est définie."

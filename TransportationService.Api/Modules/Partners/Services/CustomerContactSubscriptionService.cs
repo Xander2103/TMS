@@ -67,6 +67,12 @@ public class CustomerContactSubscriptionService : ICustomerContactSubscriptionSe
         if (!await ContactExistsAsync(customerId, contactId, cancellationToken)) return null;
 
         var rules = await Rules(customerId).ToListAsync(cancellationToken);
+        return new ContactSubscriptionsDto(contactId, OptionKeysFor(rules, contactId));
+    }
+
+    /// <summary>The option keys a contact currently receives, derived from an already-loaded rule set.</summary>
+    private static List<string> OptionKeysFor(IReadOnlyCollection<CustomerCommunicationRule> rules, Guid contactId)
+    {
         var subscribedTypes = rules
             .Where(r => r.IsActive && r.Contacts.Any(c => c.ContactId == contactId))
             .Select(r => r.Type)
@@ -74,12 +80,10 @@ public class CustomerContactSubscriptionService : ICustomerContactSubscriptionSe
 
         // An option counts as "on" as soon as the contact receives ANY of the types behind it,
         // which is what the single checkbox promised.
-        var keys = CustomerNotificationCatalog.Options
+        return CustomerNotificationCatalog.Options
             .Where(o => o.Types.Any(subscribedTypes.Contains))
             .Select(o => o.Key)
             .ToList();
-
-        return new ContactSubscriptionsDto(contactId, keys);
     }
 
     public async Task<ContactSubscriptionsDto?> SetForContactAsync(
@@ -93,9 +97,9 @@ public class CustomerContactSubscriptionService : ICustomerContactSubscriptionSe
             .Select(o => o!.Key)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        var before = (await GetForContactAsync(customerId, contactId, cancellationToken))!.OptionKeys;
-        var currentlyOn = before.ToHashSet(StringComparer.OrdinalIgnoreCase);
         var rules = await Rules(customerId).ToListAsync(cancellationToken);
+        var before = OptionKeysFor(rules, contactId);
+        var currentlyOn = before.ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         // Links are added through the DbSet with an explicit RuleId rather than through the
         // parent's navigation: the rules were just re-queried into an already-tracked graph, and
@@ -111,15 +115,19 @@ public class CustomerContactSubscriptionService : ICustomerContactSubscriptionSe
             if (subscribe == currentlyOn.Contains(option.Key)) continue;
             foreach (var type in option.Types)
             {
-                var rule = rules.FirstOrDefault(r => r.Type == type);
                 if (subscribe)
                 {
-                    rule = Subscribe(rule, customerId, type, contactId, addedLinks);
+                    var rule = await SubscribeAsync(rules, customerId, type, contactId, addedLinks, cancellationToken);
                     if (!rules.Contains(rule)) rules.Add(rule);
                 }
-                else if (rule is not null)
+                else
                 {
-                    Unsubscribe(rule, contactId);
+                    // The contact may sit on several rules of the same type (an advanced rule
+                    // next to a simple one); unticking the box must clear all of them.
+                    foreach (var rule in rules.Where(r => r.Type == type).ToList())
+                    {
+                        Unsubscribe(rule, contactId);
+                    }
                 }
             }
         }
@@ -127,17 +135,35 @@ public class CustomerContactSubscriptionService : ICustomerContactSubscriptionSe
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         var after = (await GetForContactAsync(customerId, contactId, cancellationToken))!;
-        await _auditService.RecordAsync(EntityType, customerId.ToString(), "ContactNotificationsChanged",
-            new { ContactId = contactId, OptionKeys = before },
-            new { ContactId = contactId, after.OptionKeys }, cancellationToken);
+        var changed = !before.Order(StringComparer.OrdinalIgnoreCase)
+            .SequenceEqual(after.OptionKeys.Order(StringComparer.OrdinalIgnoreCase));
+        if (changed)
+        {
+            await _auditService.RecordAsync(EntityType, customerId.ToString(), "ContactNotificationsChanged",
+                new { ContactId = contactId, OptionKeys = before },
+                new { ContactId = contactId, after.OptionKeys }, cancellationToken);
+        }
 
         return after;
     }
 
-    private CustomerCommunicationRule Subscribe(
-        CustomerCommunicationRule? rule, Guid customerId, CustomerCommunicationType type, Guid contactId,
-        HashSet<(Guid RuleId, Guid ContactId)> addedLinks)
+    /// <summary>A rule without CC, fallback or language override is "simple": the kind this service creates itself.</summary>
+    private static bool IsSimple(CustomerCommunicationRule rule) =>
+        rule.FallbackContactId is null && string.IsNullOrWhiteSpace(rule.CcEmail) && string.IsNullOrWhiteSpace(rule.LanguageCode);
+
+    private async Task<CustomerCommunicationRule> SubscribeAsync(
+        List<CustomerCommunicationRule> rules, Guid customerId, CustomerCommunicationType type, Guid contactId,
+        HashSet<(Guid RuleId, Guid ContactId)> addedLinks, CancellationToken cancellationToken)
     {
+        // Already delivered by an active rule of this type: nothing to do.
+        var existing = rules.FirstOrDefault(r => r.Type == type && r.IsActive && r.Contacts.Any(c => c.ContactId == contactId));
+        if (existing is not null) return existing;
+
+        // Prefer an active rule WITHOUT advanced settings, so a simple tick never widens a rule
+        // an administrator gave a CC address, fallback contact or language override.
+        // A rule an administrator switched off is never re-activated from here — IsActive belongs
+        // to the advanced screen — so a fresh simple rule is created next to it instead.
+        var rule = rules.Where(r => r.Type == type && r.IsActive).OrderByDescending(IsSimple).FirstOrDefault();
         if (rule is null)
         {
             rule = new CustomerCommunicationRule
@@ -151,22 +177,36 @@ public class CustomerContactSubscriptionService : ICustomerContactSubscriptionSe
             };
             _dbContext.CustomerCommunicationRules.Add(rule);
         }
-        else
-        {
-            // A rule that was switched off entirely would silently swallow the new subscription.
-            rule.IsActive = true;
-            if (rule.Contacts.Any(c => c.ContactId == contactId)) return rule;
-        }
 
         if (!addedLinks.Add((rule.Id, contactId))) return rule;
 
-        _dbContext.CustomerCommunicationRuleContacts.Add(new CustomerCommunicationRuleContact
+        // Unticking soft-deletes the link (AuditingSaveChangesInterceptor) and the query filter
+        // then hides it; re-ticking must resurrect that row instead of inserting a duplicate
+        // under the unique (TenantId, RuleId, ContactId) index.
+        var deleted = await _dbContext.CustomerCommunicationRuleContacts
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(c => c.TenantId == _tenantContext.TenantId && c.RuleId == rule.Id
+                                      && c.ContactId == contactId && c.IsDeleted, cancellationToken);
+        if (deleted is not null)
+        {
+            deleted.IsDeleted = false;
+            deleted.DeletedAt = null;
+            deleted.DeletedByUserId = null;
+            if (!rule.Contacts.Contains(deleted)) rule.Contacts.Add(deleted);
+            return rule;
+        }
+
+        var link = new CustomerCommunicationRuleContact
         {
             Id = Guid.NewGuid(),
             TenantId = _tenantContext.TenantId,
             RuleId = rule.Id,
             ContactId = contactId,
-        });
+        };
+        _dbContext.CustomerCommunicationRuleContacts.Add(link);
+        // Add() already fixed the link up into the tracked rule's collection; only a brand-new,
+        // not-yet-tracked graph needs it added by hand (never twice — Unsubscribe removes by reference).
+        if (!rule.Contacts.Contains(link)) rule.Contacts.Add(link);
 
         return rule;
     }

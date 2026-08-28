@@ -196,23 +196,32 @@ public class OrderCustomerChangeTests
         Assert.Equal(OrderPriceLineKind.Manual, manual.Kind);
         Assert.Equal(60m, manual.Amount);
 
-        // The adjusted line keeps its amount but is visibly flagged: its basis was the OLD
-        // customer's tariff, so it is a manual line that names where it came from and must be
-        // reviewed — never a clean price for the new customer.
+        // The adjusted line's amount was DERIVED from the OLD customer's tariff, so it is not
+        // allowed to count for the new customer by itself: it survives as an unconfirmed
+        // proposal (excluded from the total until explicitly confirmed) that names where it
+        // came from — never a clean, silently valid price for the new customer.
         var adjusted = Assert.Single(lines, l => l.Label == "Extra stop");
-        Assert.Equal(OrderPriceLineKind.Manual, adjusted.Kind);
+        Assert.Equal(OrderPriceLineKind.Proposed, adjusted.Kind);
+        Assert.True(adjusted.Proposed);
+        Assert.Equal(40m, adjusted.Amount);
         Assert.Null(adjusted.RuleName);
         Assert.Null(adjusted.AgreementName);
+        Assert.Null(adjusted.OriginalAmount);
         Assert.Contains("VCB tijdelijk", adjusted.AdjustReason);
-        Assert.Contains("controleren", adjusted.AdjustReason);
+        Assert.Contains("bevestigen", adjusted.AdjustReason);
 
-        // The order needs a price decision again.
+        // The order needs a price decision again, and the frozen numbers are flagged stale so
+        // invoice readiness cannot report the order as ready on the old customer's figures.
         var order = await h.Db.Context.TransportOrders.AsNoTracking().FirstAsync(o => o.Id == h.OrderId);
         Assert.Null(order.AgreedPrice);
+        Assert.NotEqual(InvoiceReadinessEvaluator.ReadyForInvoice, order.InvoiceReadiness);
         var snapshot = await h.Db.Context.TransportOrderPricingSnapshots.AsNoTracking()
             .FirstAsync(s => s.TransportOrderId == h.OrderId);
         Assert.Equal(OrderPricingStatus.Draft, snapshot.Status);
+        Assert.True(snapshot.IsStale);
         Assert.Null(snapshot.CalculatedTotal);
+        // Only the genuinely manual line still counts; the proposal does not.
+        Assert.Equal(60m, snapshot.LinesTotal);
     }
 
     [Fact]
@@ -349,6 +358,9 @@ public class OrderCustomerChangeTests
             Id = Guid.NewGuid(), TenantId = h.TenantId, InvoiceId = invoiceId, TransportOrderId = h.OrderId,
             Sequence = 0, Description = "Transport", Quantity = 1m, UnitPrice = 500m, VatRatePercent = 21m,
         });
+        // Real state: an order on a concept invoice already carries Status = Invoiced.
+        var invoicedOrder = await h.Db.Context.TransportOrders.FirstAsync(o => o.Id == h.OrderId);
+        invoicedOrder.Status = TransportOrderStatus.Invoiced;
         await h.Db.Context.SaveChangesAsync();
 
         var impact = await h.Sut.PreviewAsync(h.OrderId, h.RealCustomerId, CancellationToken.None);
@@ -363,6 +375,9 @@ public class OrderCustomerChangeTests
             .Where(l => l.TransportOrderId == h.OrderId).ToListAsync());
         // The invoice itself is kept so the invoicing user can rebuild the proposal.
         Assert.True(await h.Db.Context.Invoices.AsNoTracking().AnyAsync(i => i.Id == invoiceId));
+        // Audit fix: the released order is invoiceable again under the new customer.
+        var released = await h.Db.Context.TransportOrders.AsNoTracking().FirstAsync(o => o.Id == h.OrderId);
+        Assert.Equal(TransportOrderStatus.Completed, released.Status);
     }
 
     // -------------------------------------------------------------- guards

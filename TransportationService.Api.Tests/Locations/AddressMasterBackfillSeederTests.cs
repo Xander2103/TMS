@@ -121,6 +121,28 @@ public class AddressMasterBackfillSeederTests
     }
 
     [Fact]
+    public async Task Backfill_RecomputesKeysWrittenByAnOlderNormaliser_Once()
+    {
+        var s = await ArrangeLegacyDataAsync();
+        using var _ = s.Db;
+        // Stale keys as the pre-audit normaliser wrote them ("1/1" collapsed to "11").
+        var stale = await s.Db.Context.Locations.SingleAsync(l => l.Id == s.LocationId);
+        stale.HouseNumber = "1/1";
+        stale.AddressExactKey = "BE|2030|antwerpen|noorderlaan|11";
+        stale.AddressStreetKey = "BE|2030|antwerpen|noorderlaan";
+        await s.Db.Context.SaveChangesAsync();
+
+        var (keys, _) = await AddressMasterBackfillSeeder.SyncAsync(s.Db.Context);
+        var (keysAgain, _) = await AddressMasterBackfillSeeder.SyncAsync(s.Db.Context);
+
+        Assert.Equal(1, keys);
+        Assert.Equal(0, keysAgain);
+        var location = await s.Db.Context.Locations.AsNoTracking().SingleAsync(l => l.Id == s.LocationId);
+        Assert.Equal(AddressNormalizer.ExactKey("BE", "2030", "Antwerpen", "Noorderlaan", "1/1"), location.AddressExactKey);
+        Assert.EndsWith("|1/1", location.AddressExactKey);
+    }
+
+    [Fact]
     public async Task Backfill_SkipsAddressesWithoutACustomer()
     {
         var s = await ArrangeLegacyDataAsync();

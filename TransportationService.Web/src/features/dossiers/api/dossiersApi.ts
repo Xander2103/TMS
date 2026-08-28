@@ -38,6 +38,22 @@ export function changeDossierLegalEntity(
   )
 }
 
+/** Mirrors DossierLegalEntityChangeImpactDto (GET /api/dossiers/{id}/legal-entity/impact). */
+export interface DossierLegalEntityChangeImpact {
+  dossierId: string
+  currentLegalEntityId: string | null
+  targetLegalEntityId: string
+  deviatesFromCustomerDefault: boolean
+  blockedReason: string | null
+  orders: { orderId: string; orderNumber: string; blockedReason: string | null; draftInvoiceLinesReleased: number }[]
+  draftInvoiceLinesReleased: number
+}
+
+export function getDossierLegalEntityImpact(id: string, legalEntityId: string): Promise<DossierLegalEntityChangeImpact> {
+  const params = new URLSearchParams({ legalEntityId })
+  return apiClient.getJson<DossierLegalEntityChangeImpact>(`/api/dossiers/${id}/legal-entity/impact?${params}`)
+}
+
 /** Mirrors DossierCustomerChangeImpactDto (GET /api/dossiers/{id}/customer/impact). */
 export interface DossierCustomerChangeImpact {
   dossierId: string

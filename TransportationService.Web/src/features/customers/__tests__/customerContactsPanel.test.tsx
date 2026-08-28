@@ -18,6 +18,10 @@ vi.mock('../../auth/authContextValue', () => ({
   }),
 }))
 
+vi.mock('../../../components/ui/toastContext', () => ({
+  useToast: () => ({ showSuccess: vi.fn(), showError: vi.fn(), showToast: vi.fn() }),
+}))
+
 vi.mock('../../master-data/hooks/useLookupOptions', () => ({
   useLookupOptions: () => ({
     options: [{ id: 'dep-1', code: 'SALES', name: 'Verkoop' }],

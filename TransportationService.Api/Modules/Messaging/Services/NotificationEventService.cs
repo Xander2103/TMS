@@ -121,12 +121,35 @@ public class NotificationEventService : INotificationEventService
             return;
         }
 
+        // Fallback semantics: a CustomerPrimaryContact spec only fires when no earlier
+        // CustomerCommunicationRule spec in the same list produced a recipient. That is how the
+        // catalog expresses "the configured contacts, or else the primary contact" without
+        // mailing both. Addresses are de-duplicated across specs as well.
+        var ruleResolvedCustomerRecipient = false;
+        var queuedAddresses = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
         foreach (var spec in recipients)
         {
             if (emailEnabled)
             {
-                foreach (var target in await ResolveEmailTargetsAsync(spec, context, tenantId, cancellationToken))
+                if (spec.Type == NotificationRecipientType.CustomerPrimaryContact && ruleResolvedCustomerRecipient)
                 {
+                    continue;
+                }
+
+                var targets = await ResolveEmailTargetsAsync(spec, context, tenantId, cancellationToken);
+                if (spec.Type == NotificationRecipientType.CustomerCommunicationRule && targets.Count > 0)
+                {
+                    ruleResolvedCustomerRecipient = true;
+                }
+
+                foreach (var target in targets)
+                {
+                    if (!queuedAddresses.Add(target.Address))
+                    {
+                        continue;
+                    }
+
                     var language = await ResolveLanguageAsync(target.PreferredLanguage, target.CustomerIdForTemplate, tenantId, cancellationToken);
                     var idempotencyKey = $"{eventKey}:{context.EntityType}:{context.EntityId}:{target.Address}";
                     await _messageOutbox.QueueAsync(new MessageRequest(

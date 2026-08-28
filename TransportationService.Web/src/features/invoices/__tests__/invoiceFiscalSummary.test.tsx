@@ -55,6 +55,6 @@ describe('invoice fiscal source', () => {
     expect(container).toBeEmptyDOMElement()
 
     render(<InvoiceLineFiscalBadge line={fromCode} />)
-    expect(screen.getByText(/Afwijkend: .* via verkoopcode SC-EX/)).toBeInTheDocument()
+    expect(screen.getByText(/Afwijkend: .* via verkoopcategorie SC-EX/)).toBeInTheDocument()
   })
 })

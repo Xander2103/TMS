@@ -162,9 +162,15 @@ public class OrderLegalEntityChangeTests
         using var _ = h.Db;
         h.Permissions.Codes.Add(PermissionCodes.DossiersOverrideEntity);
         var draftId = await AddInvoiceWithLineAsync(h, InvoiceStatus.Draft, h.EntityA);
+        // Real state: an order on a concept invoice already carries Status = Invoiced. Before the
+        // audit fix this was refused as "gefactureerd", making the draft-release path unreachable.
+        var invoiced = await h.Db.Context.TransportOrders.FirstAsync(o => o.Id == h.OrderId);
+        invoiced.Status = TransportOrderStatus.Invoiced;
+        await h.Db.Context.SaveChangesAsync();
 
         var impact = await h.Sut.PreviewLegalEntityChangeAsync(h.OrderId, h.EntityB, CancellationToken.None);
-        Assert.Equal(1, impact!.DraftInvoiceLinesReleased);
+        Assert.Null(impact!.BlockedReason);
+        Assert.Equal(1, impact.DraftInvoiceLinesReleased);
 
         var result = await h.Sut.ChangeLegalEntityAsync(h.OrderId, new ChangeOrderLegalEntityRequest(h.EntityB, "x"), CancellationToken.None);
         Assert.Equal(TransportOrderOperationOutcome.Success, result.Outcome);
@@ -172,6 +178,9 @@ public class OrderLegalEntityChangeTests
         var remaining = await h.Db.Context.InvoiceLines.AsNoTracking()
             .CountAsync(l => l.InvoiceId == draftId && !l.IsDeleted);
         Assert.Equal(0, remaining);
+        var released = await h.Db.Context.TransportOrders.AsNoTracking().FirstAsync(o => o.Id == h.OrderId);
+        Assert.Equal(TransportOrderStatus.Completed, released.Status);
+        Assert.Equal(h.EntityB, released.LegalEntityId);
     }
 
     [Fact]

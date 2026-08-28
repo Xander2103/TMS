@@ -21,13 +21,21 @@ public static class DieselSurchargeCalculator
         && (config.EffectiveFrom is null || config.EffectiveFrom <= invoiceDate)
         && (config.EffectiveUntil is null || config.EffectiveUntil >= invoiceDate);
 
+    /// <param name="strings">
+    /// Customer-facing wording in the invoice language (stored catalog, never translated on
+    /// the fly); null renders Dutch.
+    /// </param>
     public static IReadOnlyList<SurchargeLine> BuildLines(
-        CustomerDieselSurcharge config, IReadOnlyList<OrderBase> orders, DateOnly invoiceDate)
+        CustomerDieselSurcharge config, IReadOnlyList<OrderBase> orders, DateOnly invoiceDate,
+        InvoicePdfStrings? strings = null)
     {
         if (!Applies(config, invoiceDate) || orders.Count == 0)
         {
             return [];
         }
+
+        strings ??= InvoicePdfStrings.Nl;
+        var label = strings.DieselSurcharge;
 
         if (config.Basis == DieselSurchargeBasis.InvoiceSubtotal)
         {
@@ -36,7 +44,7 @@ public static class DieselSurchargeCalculator
             var amount = Round(subtotal * config.Percent / 100m, config.Rounding);
             return amount == 0m
                 ? []
-                : [new SurchargeLine(null, $"Dieseltoeslag {Pct(config.Percent)}% op factuursubtotaal", amount)];
+                : [new SurchargeLine(null, $"{label} {Pct(config.Percent)}% {strings.OnInvoiceSubtotal}", amount)];
         }
 
         var perOrder = orders
@@ -57,15 +65,15 @@ public static class DieselSurchargeCalculator
             return perOrder
                 .Select(x => new SurchargeLine(
                     x.Order.OrderId,
-                    $"Dieseltoeslag {Pct(x.Pct)}% — {x.Order.OrderNumber}",
+                    $"{label} {Pct(x.Pct)}% — {x.Order.OrderNumber}",
                     x.Amount))
                 .ToList();
         }
 
         // Aggregated: per-order amounts (overrides respected) summed into one line.
         var distinctPcts = perOrder.Select(x => x.Pct).Distinct().ToList();
-        var label = distinctPcts.Count == 1 ? $"Dieseltoeslag {Pct(distinctPcts[0])}%" : "Dieseltoeslag";
-        return [new SurchargeLine(null, label, perOrder.Sum(x => x.Amount))];
+        var aggregatedLabel = distinctPcts.Count == 1 ? $"{label} {Pct(distinctPcts[0])}%" : label;
+        return [new SurchargeLine(null, aggregatedLabel, perOrder.Sum(x => x.Amount))];
     }
 
     private static decimal Round(decimal value, DieselSurchargeRounding rounding) => rounding switch

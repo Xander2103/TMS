@@ -96,6 +96,6 @@ public class AddressMasterController : ControllerBase
     [RequirePermission(PermissionCodes.LocationsView)]
     public async Task<ActionResult<IReadOnlyList<AddressPickerOptionDto>>> Picker(
         [FromQuery] Guid? customerId, [FromQuery] string? search, [FromQuery] int take,
-        CancellationToken cancellationToken)
-        => Ok(await _service.PickerAsync(customerId, search, take, cancellationToken));
+        [FromQuery] Guid? excludeCustomerId, CancellationToken cancellationToken)
+        => Ok(await _service.PickerAsync(customerId, search, take, excludeCustomerId, cancellationToken));
 }

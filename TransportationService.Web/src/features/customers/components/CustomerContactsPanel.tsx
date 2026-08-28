@@ -6,6 +6,8 @@ import { Badge } from '../../../components/ui/Badge'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { DataTable, type Column } from '../../../components/ui/DataTable'
 import { useAuth } from '../../auth/authContextValue'
+import { useToast } from '../../../components/ui/toastContext'
+import { describeApiError } from '../../../api/problemDetails'
 import { useLocale, type TranslateFn } from '../../../i18n/localeContext'
 import {
   CONTACT_LANGUAGES,
@@ -50,13 +52,23 @@ function contactTypeLabel(t: TranslateFn, type: CustomerContactType): string {
   return key ? t(key) : type
 }
 
+/** Order-insensitive comparison of two option-key sets. */
+function sameKeys(a: readonly string[], b: readonly string[]): boolean {
+  if (a.length !== b.length) return false
+  const set = new Set(a)
+  return b.every((key) => set.has(key))
+}
+
 export function CustomerContactsPanel({ customerId, contacts, isSubmitting, onAdd, onUpdate, onRemove }: CustomerContactsPanelProps) {
   const { t } = useLocale()
   const [dialog, setDialog] = useState<DialogState>(null)
   const [removeTarget, setRemoveTarget] = useState<CustomerContact | null>(null)
   const [typeFilter, setTypeFilter] = useState<CustomerContactType | ''>('')
   const { hasPermission } = useAuth()
+  const toast = useToast()
   const canViewDepartments = hasPermission('contact_departments.view')
+  // "Ontvangt meldingen" writes communication rules, so it follows that permission.
+  const canManageNotifications = hasPermission('customers.manage_communication')
   const departments = useLookupOptions('/api/contact-departments', { enabled: canViewDepartments })
   const departmentNames = useMemo(() => new Map(departments.options.map((d) => [d.id, d.name])), [departments.options])
 
@@ -149,9 +161,10 @@ export function CustomerContactsPanel({ customerId, contacts, isSubmitting, onAd
         <ContactDialog
           customerId={customerId}
           contact={dialog.mode === 'edit' ? dialog.contact : undefined}
+          canManageNotifications={canManageNotifications}
           isSubmitting={isSubmitting}
           onClose={() => setDialog(null)}
-          onSubmit={async (input, notificationKeys) => {
+          onSubmit={async (input, notifications) => {
             // A new contact has no id until it exists, so the notification choices are stored
             // right after the contact itself is created.
             const contactId =
@@ -159,10 +172,15 @@ export function CustomerContactsPanel({ customerId, contacts, isSubmitting, onAd
                 ? (await onUpdate(dialog.contact.id, input)) ? dialog.contact.id : null
                 : ((await onAdd(input))?.id ?? null)
             if (!contactId) return
-            try {
-              await setContactNotifications(customerId, contactId, notificationKeys)
-            } catch {
-              // The contact itself is saved; a failed routing update must not lose that.
+            // Only an actual change is written: an untouched card must never rewrite the
+            // routing underneath (advanced rules stay exactly as the administrator left them).
+            if (canManageNotifications && !sameKeys(notifications.keys, notifications.initialKeys)) {
+              try {
+                await setContactNotifications(customerId, contactId, notifications.keys)
+              } catch (err) {
+                // The contact itself is saved; say so instead of silently losing the choice.
+                toast.showError(describeApiError(err, t('customers.notifications.saveFailed')).message)
+              }
             }
             setDialog(null)
           }}
@@ -189,17 +207,25 @@ export function CustomerContactsPanel({ customerId, contacts, isSubmitting, onAd
   )
 }
 
+/** What the dialog hands back about "Ontvangt meldingen": the chosen keys and what was preloaded. */
+interface NotificationSelection {
+  keys: string[]
+  initialKeys: string[]
+}
+
 function ContactDialog({
   customerId,
   contact,
+  canManageNotifications,
   isSubmitting,
   onSubmit,
   onClose,
 }: {
   customerId: string
   contact?: CustomerContact
+  canManageNotifications: boolean
   isSubmitting: boolean
-  onSubmit: (input: CustomerContactInput, notificationKeys: string[]) => void
+  onSubmit: (input: CustomerContactInput, notifications: NotificationSelection) => void
   onClose: () => void
 }) {
   const { t } = useLocale()
@@ -221,8 +247,14 @@ function ContactDialog({
   // "Ontvangt meldingen" (sprint 3): the business question, not a routing rule.
   const [options, setOptions] = useState<CustomerNotificationOption[]>([])
   const [notificationKeys, setNotificationKeys] = useState<string[]>([])
+  // What the contact already received when the dialog opened; saving compares against this.
+  const [initialNotificationKeys, setInitialNotificationKeys] = useState<string[]>([])
+  // A stored language outside the offered list (e.g. "it") must survive a save untouched.
+  const storedLanguage = contact?.preferredLanguageCode ?? ''
+  const hasOtherLanguage = storedLanguage !== '' && !(CONTACT_LANGUAGES as readonly string[]).includes(storedLanguage)
 
   useEffect(() => {
+    if (!canManageNotifications) return
     let active = true
     void getNotificationOptions()
       .then((data) => {
@@ -232,20 +264,22 @@ function ContactDialog({
     return () => {
       active = false
     }
-  }, [])
+  }, [canManageNotifications])
 
   useEffect(() => {
-    if (!contact) return
+    if (!contact || !canManageNotifications) return
     let active = true
     void getContactNotifications(customerId, contact.id)
       .then((data) => {
-        if (active) setNotificationKeys(data.optionKeys)
+        if (!active) return
+        setNotificationKeys(data.optionKeys)
+        setInitialNotificationKeys(data.optionKeys)
       })
       .catch(() => undefined)
     return () => {
       active = false
     }
-  }, [customerId, contact])
+  }, [customerId, contact, canManageNotifications])
 
   function toggleNotification(key: string, on: boolean) {
     setNotificationKeys((keys) => (on ? [...new Set([...keys, key])] : keys.filter((k) => k !== key)))
@@ -275,7 +309,7 @@ function ContactDialog({
       departmentId: departmentId || null,
       preferredLanguageCode: preferredLanguageCode.trim() || null,
       isActive,
-    }, notificationKeys)
+    }, { keys: notificationKeys, initialKeys: initialNotificationKeys })
   }
 
   return (
@@ -348,12 +382,15 @@ function ContactDialog({
                 {t(CONTACT_LANGUAGE_KEYS[code])}
               </option>
             ))}
+            {hasOtherLanguage && (
+              <option value={storedLanguage}>{t('customers.notifications.languageOther', { code: storedLanguage })}</option>
+            )}
           </select>
         </FormField>
         <FormField label={t('customers.contacts.notes')} htmlFor="ct-notes">
           <textarea id="ct-notes" value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} maxLength={1000} />
         </FormField>
-        {options.length > 0 && (
+        {canManageNotifications && options.length > 0 && (
           <fieldset className="customer-form-requirements form-span-all">
             <legend>{t('customers.notifications.receivesTitle')}</legend>
             <p className="customer-form-muted">{t('customers.notifications.receivesHint')}</p>

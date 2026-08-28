@@ -22,8 +22,9 @@ vi.mock('../../auth/authContextValue', () => ({
     hasAnyPermission: (codes: string[]) => codes.some((c) => auth.permissions.includes(c)),
   }),
 }))
+const toast = vi.hoisted(() => ({ showSuccess: vi.fn(), showError: vi.fn(), showToast: vi.fn() }))
 vi.mock('../../../components/ui/toastContext', () => ({
-  useToast: () => ({ showSuccess: vi.fn(), showError: vi.fn(), showToast: vi.fn() }),
+  useToast: () => toast,
 }))
 vi.mock('../../master-data/components/LookupSelect', () => ({
   LookupSelect: ({ id }: { id?: string }) => <input id={id} aria-label="lookup" />,
@@ -131,6 +132,74 @@ describe('contact — Ontvangt meldingen', () => {
 
     await waitFor(() => expect(api.set).toHaveBeenCalledTimes(1))
     expect(api.set).toHaveBeenCalledWith('c1', 'ct-1', expect.arrayContaining(['planning', 'eta']))
+  })
+
+  it('hides the section without customers.manage_communication and never writes routing', async () => {
+    auth.permissions = ['customers.view']
+    renderContacts()
+    await userEvent.click(screen.getByRole('button', { name: 'Bewerken' }))
+
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).queryByRole('group', { name: 'Ontvangt meldingen' })).not.toBeInTheDocument()
+    expect(api.options).not.toHaveBeenCalled()
+    expect(api.get).not.toHaveBeenCalled()
+
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Opslaan' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(api.set).not.toHaveBeenCalled()
+  })
+
+  it('does not rewrite the routing when the boxes were left as preloaded', async () => {
+    renderContacts()
+    await userEvent.click(screen.getByRole('button', { name: 'Bewerken' }))
+
+    const dialog = await screen.findByRole('dialog')
+    await waitFor(() => expect(within(dialog).getByLabelText('Planning / levervenster')).toBeChecked())
+
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Opslaan' }))
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(api.set).not.toHaveBeenCalled()
+  })
+
+  it('surfaces a failed routing update instead of swallowing it', async () => {
+    api.set.mockRejectedValue(new Error('boom'))
+    renderContacts()
+    await userEvent.click(screen.getByRole('button', { name: 'Bewerken' }))
+
+    const dialog = await screen.findByRole('dialog')
+    await waitFor(() => expect(within(dialog).getByLabelText('Planning / levervenster')).toBeChecked())
+    await userEvent.click(within(dialog).getByLabelText('ETA / vertraging'))
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Opslaan' }))
+
+    await waitFor(() => expect(api.set).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(toast.showError).toHaveBeenCalledTimes(1))
+    // describeApiError keeps the server's own message when there is one.
+    expect(toast.showError).toHaveBeenCalledWith('boom')
+  })
+
+  it('keeps a stored language outside the offered list so a save does not wipe it', async () => {
+    const onUpdate = vi.fn().mockResolvedValue(true)
+    render(
+      <CustomerContactsPanel
+        customerId="c1"
+        contacts={[contact({ preferredLanguageCode: 'it' })]}
+        isSubmitting={false}
+        onAdd={vi.fn()}
+        onUpdate={onUpdate}
+        onRemove={vi.fn()}
+      />,
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'Bewerken' }))
+
+    const dialog = await screen.findByRole('dialog')
+    const select = within(dialog).getByLabelText('Voorkeurstaal') as HTMLSelectElement
+    expect(select).toHaveValue('it')
+    expect(within(select).getByRole('option', { name: 'Andere: it' })).toBeInTheDocument()
+
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Opslaan' }))
+    await waitFor(() => expect(onUpdate).toHaveBeenCalledTimes(1))
+    expect(onUpdate).toHaveBeenCalledWith('ct-1', expect.objectContaining({ preferredLanguageCode: 'it' }))
   })
 
   it('offers the four supported languages as a dropdown, never a locale code', async () => {

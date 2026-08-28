@@ -70,7 +70,7 @@ public static class InvoiceLineFiscalResolver
     {
         var (treatment, source) =
             lineOverride is { } overridden ? (overridden, FiscalTreatmentSource.LineOverride)
-            : salesCode?.VatTreatmentOverride is { } coded ? (coded, FiscalTreatmentSource.SalesCode)
+            : StatutoryClassification(salesCode) is { } coded ? (coded, FiscalTreatmentSource.SalesCode)
             : customerTreatment is { } customer ? (customer, FiscalTreatmentSource.Customer)
             : (VatTreatment.DomesticVat, FiscalTreatmentSource.TenantDefault);
 
@@ -80,13 +80,55 @@ public static class InvoiceLineFiscalResolver
         // any stored customer rate: that rate only expresses WHICH domestic rate applies.
         var rate = info.DefaultRatePercent ?? customerRatePercent ?? tenantDefaultRatePercent;
 
-        // The code may still force the UBL category (the pre-existing Wave 2 behaviour).
-        var category = string.IsNullOrWhiteSpace(salesCode?.VatCategoryOverride)
-            ? VatTreatmentCatalog.ResolveVatCategory(treatment, rate).Code
-            : salesCode!.VatCategoryOverride!;
+        // The UBL category is DERIVED from the resolved treatment. The legacy Wave 2 category
+        // override on the code is honoured only as a refinement of the customer's own treatment
+        // (e.g. a domestic zero-rated code) — never when a higher level (line override) or the
+        // code's own statutory classification decided, and never when it would contradict the
+        // resolved treatment (an "AE" category on a 21% domestic line is invalid UBL).
+        var derived = VatTreatmentCatalog.ResolveVatCategory(treatment, rate).Code;
+        var legacyOverride = salesCode?.VatCategoryOverride?.Trim().ToUpperInvariant();
+        var category = source == FiscalTreatmentSource.Customer || source == FiscalTreatmentSource.TenantDefault
+            ? !string.IsNullOrWhiteSpace(legacyOverride) && IsCompatibleCategory(legacyOverride, treatment, rate)
+                ? legacyOverride
+                : derived
+            : derived;
 
         return new FiscalResolution(treatment, rate, source, category, info.InvoiceLegalText);
     }
+
+    /// <summary>
+    /// The code's statutory classification: the explicit <see cref="SalesCategory.VatTreatmentOverride"/>,
+    /// or — for codes configured before that field existed — the treatment IMPLIED by a legacy
+    /// exemption category ("G" = export, "K" = intra-community, "AE" = reverse charge, "E" =
+    /// exempt). "S"/"Z" are domestic refinements, not classifications. One truth per line: the
+    /// treatment, the 0% rate, the UBL category and the legal text then all agree.
+    /// </summary>
+    public static VatTreatment? StatutoryClassification(SalesCategory? salesCode)
+    {
+        if (salesCode is null) return null;
+        if (salesCode.VatTreatmentOverride is { } explicitOverride) return explicitOverride;
+        return salesCode.VatCategoryOverride?.Trim().ToUpperInvariant() switch
+        {
+            "AE" => VatTreatment.ReverseCharge,
+            "K" => VatTreatment.IntraCommunitySupply,
+            "G" => VatTreatment.ExportOutsideEu,
+            "E" => VatTreatment.VatExempt,
+            _ => null,
+        };
+    }
+
+    /// <summary>
+    /// A legacy category override may only refine, never contradict: on a domestic treatment
+    /// "S"/"Z" must agree with whether VAT is charged; on a statutory treatment only its own
+    /// category is acceptable.
+    /// </summary>
+    private static bool IsCompatibleCategory(string category, VatTreatment treatment, decimal rate) =>
+        treatment switch
+        {
+            VatTreatment.DomesticVat => (category == "S" && rate > 0m) || (category == "Z" && rate == 0m)
+                                        || (category == "E" && rate == 0m),
+            _ => category == VatTreatmentCatalog.ResolveVatCategory(treatment, rate).Code,
+        };
 
     /// <summary>
     /// Configuration that looks inconsistent. These are shown to the user for review; they

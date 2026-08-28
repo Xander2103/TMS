@@ -35,6 +35,14 @@ public interface ITransportOrderService
     /// </summary>
     Task<TransportOrderOperationResult> ChangeLegalEntityAsync(Guid id, ChangeOrderLegalEntityRequest request, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Applies an entity change for one order inside a transaction the CALLER (the dossier)
+    /// owns. The dossier already enforced the override right + reason; the financial guards
+    /// (sent invoice, policy, draft release) still apply per order. Returns the blocking
+    /// reason when refused, null when applied.
+    /// </summary>
+    Task<string?> ChangeLegalEntityWithinDossierAsync(Guid id, Guid legalEntityId, string? reason, CancellationToken cancellationToken);
+
     Task<TransportOrderOperationResult> CorrectStatusAsync(Guid id, TransportOrderStatus target, string reason, CancellationToken cancellationToken);
 
     /// <summary>All orders matching the filters (bounded), for CSV export.</summary>

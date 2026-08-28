@@ -401,6 +401,10 @@ public class InvoiceService : IInvoiceService
             throw new Common.InvalidTenantReferenceException("verkoopcategorie");
         }
 
+        // Customer-facing wording on generated lines follows the frozen invoice language via
+        // the stored string catalog (rule E: no machine translation, no Dutch on a French invoice).
+        var strings = InvoicePdfStrings.For(invoice.LanguageCode);
+
         var sequence = 1;
         foreach (var order in orderDtos)
         {
@@ -426,7 +430,7 @@ public class InvoiceService : IInvoiceService
                 // The frozen effective invoice description wins (customer override > global > name).
                 var description = serviceLine.InvoiceDescriptionSnapshot ?? serviceLine.NameSnapshot;
                 var quantitySuffix = serviceLine.Quantity is { } serviceQuantity
-                    ? $" ({serviceQuantity:0.##} {(serviceLine.Kind == Modules.Tarification.Entities.SurchargeKind.PerHour ? "uur" : "stops")})"
+                    ? $" ({serviceQuantity:0.##} {(serviceLine.Kind == Modules.Tarification.Entities.SurchargeKind.PerHour ? strings.HourUnit : strings.StopsUnit)})"
                     : string.Empty;
                 invoice.Lines.Add(new InvoiceLine
                 {
@@ -503,11 +507,21 @@ public class InvoiceService : IInvoiceService
         {
             var overridesByOrder = orders.ToDictionary(
                 o => o.Id, o => o.DieselSurchargeOverride ? o.DieselSurchargePercentOverride : null);
+            // Rule F: the base is decided by the sales code of each generated line — only codes
+            // flagged "meetellen in basis dieseltoeslag" count, and the diesel code itself is
+            // excluded structurally. Never the raw order amount.
             var bases = orderDtos
                 .Select(o => new DieselSurchargeCalculator.OrderBase(
-                    o.Id, o.OrderNumber, o.AgreedPrice ?? 0m, overridesByOrder.GetValueOrDefault(o.Id)))
+                    o.Id, o.OrderNumber,
+                    Modules.Accounting.Services.InvoiceLineFiscalResolver.DieselBase(
+                        invoice.Lines
+                            .Where(l => l.TransportOrderId == o.Id)
+                            .Select(l => (
+                                l.SalesCategoryId is { } cid ? activeCategoryById.GetValueOrDefault(cid) : null,
+                                Math.Round(l.Quantity * l.UnitPrice, 2)))),
+                    overridesByOrder.GetValueOrDefault(o.Id)))
                 .ToList();
-            foreach (var surchargeLine in DieselSurchargeCalculator.BuildLines(surchargeConfig!, bases, invoiceDate))
+            foreach (var surchargeLine in DieselSurchargeCalculator.BuildLines(surchargeConfig!, bases, invoiceDate, strings))
             {
                 invoice.Lines.Add(new InvoiceLine
                 {
@@ -518,7 +532,7 @@ public class InvoiceService : IInvoiceService
                     Description = surchargeLine.Description,
                     Quantity = 1m,
                     UnitPrice = surchargeLine.Amount,
-                    VatRatePercent = vatRate,
+                    VatRatePercent = RateFor(dieselCategoryId),
                     SalesCategoryId = dieselCategoryId,
                 });
             }

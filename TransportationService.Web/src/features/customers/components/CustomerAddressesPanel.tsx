@@ -198,7 +198,6 @@ export function CustomerAddressesPanel({ customerId }: CustomerAddressesPanelPro
       {showLinkDialog && (
         <LinkAddressDialog
           customerId={customerId}
-          alreadyLinked={new Set(rows.map((r) => r.locationId))}
           busy={busy}
           onPick={handleLink}
           onClose={() => setShowLinkDialog(false)}
@@ -208,11 +207,18 @@ export function CustomerAddressesPanel({ customerId }: CustomerAddressesPanelPro
       {showQuickCreate && (
         <LocationQuickCreateDialog
           customerId={customerId}
-          onClose={(created) => {
+          onClose={(created, source) => {
             setShowQuickCreate(false)
-            // The quick-create dialog also resolves with an EXISTING address when the user
-            // picks one from the duplicate warning; linking is correct either way.
-            if (created) void handleLink(created.id)
+            if (!created) return
+            if (source === 'existing') {
+              // The user picked an EXISTING address from the duplicate warning: link it.
+              void handleLink(created.id)
+              return
+            }
+            // A NEW address was posted with this customerId, so the server already created
+            // the relationship — linking again would be a no-op round trip. Just reload.
+            toast.showSuccess(t('customers.addresses.created'))
+            reload()
           }}
         />
       )}
@@ -244,33 +250,46 @@ export function CustomerAddressesPanel({ customerId }: CustomerAddressesPanelPro
 
 interface LinkAddressDialogProps {
   customerId: string
-  alreadyLinked: Set<string>
   busy: boolean
   onPick: (locationId: string) => void
   onClose: () => void
 }
 
-/** Search the central address master; already-linked addresses are not offered again. */
-function LinkAddressDialog({ customerId, alreadyLinked, busy, onPick, onClose }: LinkAddressDialogProps) {
+const SEARCH_DEBOUNCE_MS = 250
+
+/**
+ * Search the central address master. Addresses this customer already uses are excluded
+ * SERVER-side (before the take), so no candidate is lost to the cut-off; typing is debounced.
+ */
+function LinkAddressDialog({ customerId, busy, onPick, onClose }: LinkAddressDialogProps) {
   const { t } = useLocale()
   const [search, setSearch] = useState('')
-  const [options, setOptions] = useState<AddressPickerOption[]>([])
-  const [loading, setLoading] = useState(true)
+  const [debouncedSearch, setDebouncedSearch] = useState('')
+  // Results are keyed by the query they answer, so "loading" is derived (no setState in the effect).
+  const [result, setResult] = useState<{ key: string; options: AddressPickerOption[] } | null>(null)
+  const queryKey = `${customerId}|${debouncedSearch}`
+  const loading = result?.key !== queryKey
+  const options = loading ? [] : result.options
+
+  useEffect(() => {
+    if (search === debouncedSearch) return
+    const handle = window.setTimeout(() => setDebouncedSearch(search), SEARCH_DEBOUNCE_MS)
+    return () => window.clearTimeout(handle)
+  }, [search, debouncedSearch])
 
   useEffect(() => {
     let active = true
-    setLoading(true)
-    pickAddresses({ customerId, search, take: 50 })
+    pickAddresses({ search: debouncedSearch, take: 50, excludeCustomerId: customerId })
       .then((data) => {
-        if (active) setOptions(data.filter((o) => !alreadyLinked.has(o.locationId)))
+        if (active) setResult({ key: queryKey, options: data })
       })
-      .finally(() => {
-        if (active) setLoading(false)
+      .catch(() => {
+        if (active) setResult({ key: queryKey, options: [] })
       })
     return () => {
       active = false
     }
-  }, [customerId, search, alreadyLinked])
+  }, [customerId, debouncedSearch, queryKey])
 
   return (
     <Modal

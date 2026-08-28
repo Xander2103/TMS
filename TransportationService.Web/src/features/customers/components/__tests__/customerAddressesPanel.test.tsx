@@ -30,6 +30,8 @@ const api = vi.hoisted(() => ({
   unlink: vi.fn(),
   update: vi.fn(),
   picker: vi.fn(),
+  check: vi.fn(),
+  createLocation: vi.fn(),
 }))
 vi.mock('../../../locations/api/customerAddressesApi', async (orig) => ({
   ...(await orig<typeof import('../../../locations/api/customerAddressesApi')>()),
@@ -38,6 +40,14 @@ vi.mock('../../../locations/api/customerAddressesApi', async (orig) => ({
   unlinkCustomerAddress: (...a: unknown[]) => api.unlink(...a),
   updateCustomerAddressLink: (...a: unknown[]) => api.update(...a),
   pickAddresses: (...a: unknown[]) => api.picker(...a),
+  checkAddressDuplicates: (...a: unknown[]) => api.check(...a),
+}))
+vi.mock('../../../locations/api/locationsApi', async (orig) => ({
+  ...(await orig<typeof import('../../../locations/api/locationsApi')>()),
+  createLocation: (...a: unknown[]) => api.createLocation(...a),
+}))
+vi.mock('../../../reference/components/CountryCombobox', () => ({
+  CountryCombobox: ({ id }: { id?: string }) => <input id={id} aria-label="Land" />,
 }))
 
 function address(overrides: Partial<CustomerAddress> = {}): CustomerAddress {
@@ -98,6 +108,17 @@ beforeEach(() => {
   api.picker.mockResolvedValue([pickerOption()])
   api.link.mockResolvedValue(address({ linkId: 'link-2', locationId: 'loc-2' }))
   api.unlink.mockResolvedValue(undefined)
+  api.check.mockResolvedValue({ hasExactMatch: false, candidates: [] })
+  api.createLocation.mockResolvedValue({
+    id: 'loc-new',
+    code: 'LOC-NEW',
+    name: 'Nieuw magazijn',
+    type: 'CustomerLocation',
+    city: 'Gent',
+    isDefaultLoadingLocation: false,
+    isDefaultUnloadingLocation: false,
+    isDefaultBillingLocation: false,
+  })
 })
 
 describe('CustomerAddressesPanel', () => {
@@ -125,16 +146,85 @@ describe('CustomerAddressesPanel', () => {
     expect(api.link).toHaveBeenCalledWith('c1', expect.objectContaining({ locationId: 'loc-2' }))
   })
 
-  it('does not offer an address that is already linked', async () => {
-    api.picker.mockResolvedValue([pickerOption(), pickerOption({ locationId: 'loc-1', name: 'Magazijn Noord' })])
+  it('asks the server to leave out already-linked addresses (before the take), not the client', async () => {
     renderPanel()
     await screen.findByText('Magazijn Noord')
 
     await userEvent.click(screen.getByRole('button', { name: 'Bestaand adres koppelen' }))
 
     expect(await screen.findByRole('button', { name: 'Gedeeld magazijn' })).toBeInTheDocument()
-    // The already-linked one is filtered out of the candidate list (the table row stays).
-    expect(screen.queryByRole('button', { name: 'Magazijn Noord' })).not.toBeInTheDocument()
+    expect(api.picker).toHaveBeenCalledWith(expect.objectContaining({ excludeCustomerId: 'c1', take: 50 }))
+  })
+
+  it('creates a new address WITHOUT a second link call and reloads the list (D1)', async () => {
+    renderPanel()
+    await screen.findByText('Magazijn Noord')
+    expect(api.list).toHaveBeenCalledTimes(1)
+
+    await userEvent.click(screen.getByRole('button', { name: '+ Nieuw adres' }))
+    const dialog = await screen.findByRole('dialog')
+    await userEvent.type(within(dialog).getByLabelText(/^Naam/), 'Nieuw magazijn')
+    await userEvent.type(within(dialog).getByLabelText('Straat'), 'Zuidlaan')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Adres aanmaken' }))
+
+    await waitFor(() => expect(api.createLocation).toHaveBeenCalledTimes(1))
+    // The server links the address through customerId; a follow-up link would 409.
+    expect(api.createLocation).toHaveBeenCalledWith(expect.objectContaining({ customerId: 'c1', overrideDuplicate: false }))
+    expect(api.link).not.toHaveBeenCalled()
+    await waitFor(() => expect(api.list).toHaveBeenCalledTimes(2))
+    expect(toast.showSuccess).toHaveBeenCalledWith('Adres aangemaakt en aan deze klant gekoppeld.')
+    expect(toast.showError).not.toHaveBeenCalled()
+  })
+
+  it('links (does not create) when the user picks an existing address from the duplicate warning', async () => {
+    api.check.mockResolvedValue({
+      hasExactMatch: true,
+      candidates: [
+        {
+          locationId: 'loc-2',
+          code: 'ADR-2',
+          name: 'Gedeeld magazijn',
+          match: 'Exact',
+          street: 'Zuidlaan',
+          houseNumber: '5',
+          postalCode: '9000',
+          city: 'Gent',
+          countryCode: 'BE',
+          isActive: true,
+          linkedCustomers: ['Klant B'],
+          type: 'Warehouse',
+        },
+        {
+          locationId: 'loc-3',
+          code: 'ADR-3',
+          name: 'Oud magazijn',
+          match: 'Exact',
+          street: 'Zuidlaan',
+          houseNumber: '5',
+          postalCode: '9000',
+          city: 'Gent',
+          countryCode: 'BE',
+          isActive: false,
+          linkedCustomers: [],
+          type: 'Warehouse',
+        },
+      ],
+    })
+    renderPanel()
+    await screen.findByText('Magazijn Noord')
+
+    await userEvent.click(screen.getByRole('button', { name: '+ Nieuw adres' }))
+    const dialog = await screen.findByRole('dialog')
+    await userEvent.type(within(dialog).getByLabelText(/^Naam/), 'Nog een magazijn')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Adres aanmaken' }))
+
+    // Only the ACTIVE candidate is offered for reuse; the inactive one is shown for context only.
+    const useExisting = await within(dialog).findAllByRole('button', { name: 'Bestaand adres gebruiken' })
+    expect(useExisting).toHaveLength(1)
+    await userEvent.click(useExisting[0])
+
+    await waitFor(() => expect(api.link).toHaveBeenCalledWith('c1', expect.objectContaining({ locationId: 'loc-2' })))
+    expect(api.createLocation).not.toHaveBeenCalled()
   })
 
   it('unlinks the relationship and says the address itself is kept', async () => {

@@ -33,6 +33,10 @@ export interface PricingImportPreview {
   alreadyImported: boolean
   previousImportAt: string | null
   previousImportFileName: string | null
+  /** Rows without a RegelId column matched to an existing rule on exact name+basis+unit+zone (updated, not duplicated). */
+  matchedByNameCount?: number
+  /** Canonical field keys the file supplies (plus 'staffels'); absent fields are left untouched on update. */
+  presentFields?: string[] | null
 }
 
 // --- Mapping profiles (sprint 4D) ---
@@ -82,7 +86,12 @@ export interface PricingImportRun {
   failed: number
   importedAt: string
   importedByUserId: string | null
+  /** Succeeded = rows written; Rejected = validation refused the file; Failed = the database write failed and was rolled back. */
+  status: PricingImportRunStatus
+  error: string | null
 }
+
+export type PricingImportRunStatus = 'Succeeded' | 'Rejected' | 'Failed'
 
 // --- Commit ---
 
@@ -124,6 +133,8 @@ export async function downloadAgreementExport(agreementId: string, agreementName
   URL.revokeObjectURL(url)
 }
 
+// Raw fetch on purpose: apiClient only serialises JSON bodies (no FormData support), and a
+// multipart upload must let the browser set the boundary header itself.
 async function postWorkbook<T>(path: string, file: File, fields?: Record<string, string>): Promise<T> {
   const form = new FormData()
   form.append('file', file)
@@ -157,16 +168,31 @@ export function previewPricingImport(
   )
 }
 
+export interface ReadPricingImportHeadersOptions {
+  /** Saved profile whose header row / sheet apply when no explicit values are given. */
+  profileId?: string | null
+  /** The header row the operator is typing right now (1-based); wins over the profile's. */
+  headerRow?: number | null
+  /** The worksheet the operator is typing right now; wins over the profile's. */
+  sheetName?: string | null
+}
+
 /** The header texts of an uploaded workbook plus the fields they can map onto (wizard step 2). */
 export function readPricingImportHeaders(
   file: File,
-  profileId?: string | null,
+  options: ReadPricingImportHeadersOptions | string | null = null,
 ): Promise<{ headers: string[]; fields: PricingImportField[] }> {
-  return postWorkbook<{ headers: string[]; fields: PricingImportField[] }>(
-    '/api/pricing/import/headers',
-    file,
-    profileId ? { profileId } : undefined,
-  )
+  const opts: ReadPricingImportHeadersOptions = typeof options === 'string' ? { profileId: options } : (options ?? {})
+  return postWorkbook<{ headers: string[]; fields: PricingImportField[] }>('/api/pricing/import/headers', file, {
+    ...(opts.profileId ? { profileId: opts.profileId } : {}),
+    ...(opts.headerRow && opts.headerRow > 0 ? { headerRow: String(opts.headerRow) } : {}),
+    ...(opts.sheetName?.trim() ? { sheetName: opts.sheetName.trim() } : {}),
+  })
+}
+
+/** The canonical pricing fields a profile can map onto — available without a workbook. */
+export function listPricingImportFields(): Promise<PricingImportField[]> {
+  return apiClient.getJson<PricingImportField[]>('/api/pricing/import/fields')
 }
 
 export function listPricingImportProfiles(): Promise<PricingImportProfile[]> {

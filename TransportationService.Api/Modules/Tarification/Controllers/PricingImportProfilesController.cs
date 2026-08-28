@@ -23,7 +23,9 @@ public record PricingImportRunDto(
     Guid Id, Guid AgreementId, Guid TargetAgreementId, string FileName, string Checksum,
     string? ProfileName, string Mode,
     int RowsRead, int RowsValid, int Created, int Updated, int Removed, int Failed,
-    DateTime ImportedAt, Guid? ImportedByUserId);
+    DateTime ImportedAt, Guid? ImportedByUserId,
+    /// <summary>Succeeded / Rejected / Failed — see <see cref="PricingImportRunStatus"/>.</summary>
+    string Status, string? Error);
 
 /// <summary>
 /// Sprint 4D/4F: reusable column-mapping profiles and the import history. Both are
@@ -115,6 +117,13 @@ public class PricingImportProfilesController : ControllerBase
             throw new DomainValidationException("name", "Een naam voor het mappingprofiel is verplicht.");
         }
 
+        // Same uniqueness rule as Create — otherwise the unique index turns a rename into a 500.
+        if (await _dbContext.PricingImportProfiles
+            .AnyAsync(p => p.TenantId == _tenantContext.TenantId && p.Id != id && p.Name == name, cancellationToken))
+        {
+            throw new DomainValidationException("name", "Er bestaat al een mappingprofiel met deze naam.");
+        }
+
         var before = new { profile.Name, profile.HeaderRow, profile.SheetName, profile.MappingJson, profile.IsActive };
         profile.Name = name;
         profile.Notes = string.IsNullOrWhiteSpace(request.Notes) ? null : request.Notes.Trim();
@@ -164,7 +173,7 @@ public class PricingImportProfilesController : ControllerBase
             .Select(r => new PricingImportRunDto(
                 r.Id, r.AgreementId, r.TargetAgreementId, r.FileName, r.Checksum, r.ProfileName, r.Mode,
                 r.RowsRead, r.RowsValid, r.Created, r.Updated, r.Removed, r.Failed,
-                r.CreatedAt, r.CreatedByUserId))
+                r.CreatedAt, r.CreatedByUserId, r.Status, r.Error))
             .ToListAsync(cancellationToken);
         return Ok(runs);
     }

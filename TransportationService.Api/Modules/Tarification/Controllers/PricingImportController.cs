@@ -1,6 +1,7 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc;
 using TransportationService.Api.Modules.Identity;
 using TransportationService.Api.Modules.Identity.Authorization;
+using TransportationService.Api.Modules.Security;
 using TransportationService.Api.Modules.Tarification.Dtos;
 using TransportationService.Api.Modules.Tarification.Services;
 
@@ -15,6 +16,9 @@ namespace TransportationService.Api.Modules.Tarification.Controllers;
 public class PricingImportController : ControllerBase
 {
     private const long MaxUploadBytes = 5 * 1024 * 1024;
+    private static readonly string[] AllowedExtensions = [".xlsx"];
+    private const string SizeError = "Het bestand moet tussen 1 byte en 5 MB groot zijn.";
+    private const string ExtensionError = "Alleen .xlsx-bestanden worden aanvaard.";
 
     private readonly IPricingExcelService _excelService;
 
@@ -22,6 +26,10 @@ public class PricingImportController : ControllerBase
     {
         _excelService = excelService;
     }
+
+    /// <summary>Shared upload gate (size window, extension, signature) — one place, not three copies.</summary>
+    private static string? ValidateUpload(IFormFile file) =>
+        UploadValidation.Validate(file, MaxUploadBytes, AllowedExtensions, SizeError, ExtensionError);
 
     [HttpGet("api/pricing/agreements/{id:guid}/export")]
     [RequirePermission(PermissionCodes.TariffsView, PermissionCodes.TariffsManage, PermissionCodes.TariffsImport)]
@@ -39,14 +47,9 @@ public class PricingImportController : ControllerBase
     public async Task<IActionResult> Preview(
         Guid id, IFormFile file, [FromForm] Guid? profileId, CancellationToken cancellationToken)
     {
-        if (file.Length == 0 || file.Length > MaxUploadBytes)
+        if (ValidateUpload(file) is { } uploadError)
         {
-            return BadRequest(new { message = "Het bestand moet tussen 1 byte en 5 MB groot zijn." });
-        }
-
-        if (Modules.Security.UploadValidation.SignatureError(file) is { } signatureError)
-        {
-            return BadRequest(new { message = signatureError });
+            return BadRequest(new { message = uploadError });
         }
 
         await using var stream = file.OpenReadStream();
@@ -54,24 +57,30 @@ public class PricingImportController : ControllerBase
         return error is not null ? BadRequest(new { message = error }) : Ok(preview);
     }
 
-    /// <summary>Sprint 4: the header texts of an uploaded file, for the mapping step.</summary>
+    /// <summary>
+    /// Sprint 4: the header texts of an uploaded file, for the mapping step. headerRow/sheetName
+    /// let the wizard read the columns with the values the operator is typing RIGHT NOW, before
+    /// the profile is saved; a saved profile id supplies them otherwise.
+    /// </summary>
     [HttpPost("api/pricing/import/headers")]
     [RequirePermission(PermissionCodes.TariffsImport, PermissionCodes.TariffsManage)]
     [RequestSizeLimit(MaxUploadBytes + 1024)]
-    public async Task<IActionResult> Headers(IFormFile file, [FromForm] Guid? profileId, CancellationToken cancellationToken)
+    public async Task<IActionResult> Headers(
+        IFormFile file, [FromForm] Guid? profileId, [FromForm] int? headerRow, [FromForm] string? sheetName,
+        CancellationToken cancellationToken)
     {
-        if (file.Length == 0 || file.Length > MaxUploadBytes)
+        if (ValidateUpload(file) is { } uploadError)
         {
-            return BadRequest(new { message = "Het bestand moet tussen 1 byte en 5 MB groot zijn." });
+            return BadRequest(new { message = uploadError });
         }
 
-        if (Modules.Security.UploadValidation.SignatureError(file) is { } signatureError)
+        if (headerRow is < 1 or > 1000)
         {
-            return BadRequest(new { message = signatureError });
+            return BadRequest(new { message = "De kopregel moet tussen 1 en 1000 liggen." });
         }
 
         await using var stream = file.OpenReadStream();
-        var (headers, error) = await _excelService.ReadHeadersAsync(stream, profileId, cancellationToken);
+        var (headers, error) = await _excelService.ReadHeadersAsync(stream, profileId, headerRow, sheetName, cancellationToken);
         return error is not null
             ? BadRequest(new { message = error })
             : Ok(new { headers, fields = PricingImportColumns.All });
@@ -89,19 +98,14 @@ public class PricingImportController : ControllerBase
         [FromForm] Guid? profileId,
         CancellationToken cancellationToken)
     {
-        if (file.Length == 0 || file.Length > MaxUploadBytes)
+        if (ValidateUpload(file) is { } uploadError)
         {
-            return BadRequest(new { message = "Het bestand moet tussen 1 byte en 5 MB groot zijn." });
+            return BadRequest(new { message = uploadError });
         }
 
         if (!TransportationService.Api.Common.EnumParsing.TryParseDefined<PricingImportMode>(mode, out var parsedMode))
         {
             return BadRequest(new { message = "Onbekende importmodus." });
-        }
-
-        if (Modules.Security.UploadValidation.SignatureError(file) is { } signatureError)
-        {
-            return BadRequest(new { message = signatureError });
         }
 
         await using var stream = file.OpenReadStream();

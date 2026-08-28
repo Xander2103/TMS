@@ -14,6 +14,9 @@ import { useAuth } from '../../auth/authContextValue'
 import { searchCustomers, getCustomer } from '../../customers/api/customersApi'
 import type { CustomerContact, CustomerListItem } from '../../customers/types'
 import { CountryCombobox } from '../../reference/components/CountryCombobox'
+import { checkAddressDuplicates, type AddressDuplicateCandidate } from '../api/customerAddressesApi'
+import { extractAddressDuplicateConflict } from '../api/addressDuplicates'
+import { AddressDuplicateWarning } from './LocationQuickCreateDialog'
 import { OpeningHoursEditor } from './OpeningHoursEditor'
 import { openingIntervalsValid } from '../openingHours'
 import {
@@ -31,10 +34,18 @@ interface LocationFormProps {
   initial: LocationInput
   submitting: boolean
   error?: string | null
+  /**
+   * The raw error of the last submit, when the page has one. A 409 `address_duplicate`
+   * (same front door, see R1) is rendered as the candidate list with "Toch aanmaken".
+   */
+  submitError?: unknown
   onSubmit: (value: LocationInput) => void
   onCancel: () => void
   submitLabel?: string
 }
+
+/** The physical-address fields: changing any of them invalidates a duplicate override. */
+const ADDRESS_KEYS: ReadonlySet<keyof LocationInput> = new Set(['street', 'houseNumber', 'postalCode', 'city', 'countryCode'])
 
 function contactDisplayName(contact: CustomerContact): string {
   return contact.displayName || [contact.firstName, contact.lastName].filter(Boolean).join(' ')
@@ -59,7 +70,7 @@ const FIELD_LABEL_KEYS: Record<string, string> = {
  * The access code field is rendered — and included in the payload — only for users holding
  * locations.view_sensitive: the backend preserves the stored code when the field is omitted.
  */
-export function LocationForm({ mode, initial, submitting, error, onSubmit, onCancel, submitLabel }: LocationFormProps) {
+export function LocationForm({ mode, initial, submitting, error, submitError, onSubmit, onCancel, submitLabel }: LocationFormProps) {
   const { t } = useLocale()
   const { hasPermission } = useAuth()
   const canViewSensitive = hasPermission('locations.view_sensitive')
@@ -68,6 +79,22 @@ export function LocationForm({ mode, initial, submitting, error, onSubmit, onCan
   const [openingValid, setOpeningValid] = useState(() => openingIntervalsValid(initial.openingIntervals))
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [dirty, setDirty] = useState(false)
+
+  // Same-front-door rule (R1): the server refuses a duplicate create unless overridden; the
+  // form checks first so the candidates show before the round trip, and also understands the
+  // server's 409 when the page hands it over.
+  const [duplicates, setDuplicates] = useState<AddressDuplicateCandidate[] | null>(null)
+  const [overrideDuplicate, setOverrideDuplicate] = useState(false)
+  const [checkingDuplicates, setCheckingDuplicates] = useState(false)
+  // Derived, not synced: the server's candidates show until the user overrides THAT error.
+  const [dismissedSubmitError, setDismissedSubmitError] = useState<unknown>(undefined)
+  const serverDuplicates = useMemo(() => extractAddressDuplicateConflict(submitError)?.candidates ?? null, [submitError])
+  const shownDuplicates = duplicates ?? (submitError !== undefined && dismissedSubmitError !== submitError ? serverDuplicates : null)
+
+  // A shared address (several customer relationships) has no single legacy owner to move:
+  // the customer field is read-only and points at Klant › Adressen (D2).
+  const linkedCustomerCount = initial.linkedCustomerCount ?? 0
+  const sharedAddress = mode === 'edit' && linkedCustomerCount > 1
 
   const [customers, setCustomers] = useState<CustomerListItem[]>([])
   // Contacts (and the customer name, for when the linked customer falls outside the first
@@ -123,6 +150,11 @@ export function LocationForm({ mode, initial, submitting, error, onSubmit, onCan
 
   function set<K extends keyof LocationInput>(key: K, value: LocationInput[K]) {
     setForm((f) => ({ ...f, [key]: value }))
+    if (ADDRESS_KEYS.has(key)) {
+      // An override only applies to the address it was given for.
+      setOverrideDuplicate(false)
+      setDuplicates(null)
+    }
   }
 
   function touch() {
@@ -225,8 +257,41 @@ export function LocationForm({ mode, initial, submitting, error, onSubmit, onCan
       // Never echo a value the user could not see: the backend keeps the stored access code.
       delete payload.accessCode
     }
+    delete payload.linkedCustomerCount
+    delete payload.linkedCustomerNames
+
+    if (mode === 'create' && !overrideDuplicate && form.street?.trim()) {
+      // Pre-flight: show the candidates before the round trip. The server enforces the rule
+      // regardless, so a failed check simply lets the submit through.
+      void submitAfterDuplicateCheck(payload)
+      return
+    }
+
     setDirty(false)
-    onSubmit(payload)
+    onSubmit({ ...payload, overrideDuplicate })
+  }
+
+  async function submitAfterDuplicateCheck(payload: LocationInput) {
+    setCheckingDuplicates(true)
+    try {
+      const check = await checkAddressDuplicates({
+        street: payload.street,
+        houseNumber: payload.houseNumber,
+        postalCode: payload.postalCode,
+        city: payload.city,
+        countryCode: payload.countryCode,
+      })
+      if (check.hasExactMatch) {
+        setDuplicates(check.candidates)
+        return
+      }
+    } catch {
+      /* the server still enforces the rule */
+    } finally {
+      setCheckingDuplicates(false)
+    }
+    setDirty(false)
+    onSubmit({ ...payload, overrideDuplicate: false })
   }
 
   const summaryErrors: FieldErrors = Object.fromEntries(
@@ -285,14 +350,25 @@ export function LocationForm({ mode, initial, submitting, error, onSubmit, onCan
           maxLength={100}
         />
       </FormField>
-      <FormField label={t('locations.form.fields.customer')} htmlFor="loc-customer" hint={t('locations.form.hints.customerSearch')}>
+      <FormField
+        label={t('locations.form.fields.customer')}
+        htmlFor="loc-customer"
+        hint={
+          sharedAddress
+            ? t('locations.form.hints.sharedAddress', {
+                count: linkedCustomerCount,
+                customers: (initial.linkedCustomerNames ?? []).join(', '),
+              })
+            : t('locations.form.hints.customerSearch')
+        }
+      >
         <SearchableSelect
           id="loc-customer"
           value={form.customerId}
           onChange={selectCustomer}
           options={customerOptions}
           placeholder={t('locations.form.noCustomer')}
-          disabled={submitting}
+          disabled={submitting || sharedAddress}
           ariaLabel={t('locations.form.fields.customer')}
         />
       </FormField>
@@ -613,8 +689,8 @@ export function LocationForm({ mode, initial, submitting, error, onSubmit, onCan
       <Button type="button" variant="secondary" onClick={onCancel} disabled={submitting}>
         {t('ui.actions.cancel')}
       </Button>
-      <Button type="submit" disabled={submitting}>
-        {submitting ? t('locations.form.busy') : submitLabel ?? (mode === 'create' ? t('locations.form.createSubmit') : t('ui.actions.save'))}
+      <Button type="submit" disabled={submitting || checkingDuplicates}>
+        {submitting || checkingDuplicates ? t('locations.form.busy') : submitLabel ?? (mode === 'create' ? t('locations.form.createSubmit') : t('ui.actions.save'))}
       </Button>
     </FormActions>
   )
@@ -622,6 +698,17 @@ export function LocationForm({ mode, initial, submitting, error, onSubmit, onCan
   return (
     <form ref={formRef} className="location-form" onSubmit={handleSubmit} onChange={touch} noValidate>
       <UnsavedChangesGuard when={dirty && !submitting} />
+      {shownDuplicates && shownDuplicates.length > 0 && (
+        <AddressDuplicateWarning
+          candidates={shownDuplicates}
+          disabled={submitting || checkingDuplicates}
+          onCreateAnyway={() => {
+            setOverrideDuplicate(true)
+            setDuplicates(null)
+            setDismissedSubmitError(submitError)
+          }}
+        />
+      )}
       <ValidationSummary
         message={error}
         fieldErrors={summaryErrors}

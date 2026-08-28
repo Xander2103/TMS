@@ -25,7 +25,8 @@ public record CustomerChangeImpactDto(
     int ManualLinesKept,
     /// <summary>
     /// Lines that were an automatic price the user adjusted. Their amount was DERIVED from the
-    /// old customer's tariff, so they are kept only as flagged manual lines that need review.
+    /// old customer's tariff, so they are kept only as unconfirmed proposals that must be
+    /// explicitly confirmed (or removed) under the new customer before they count.
     /// </summary>
     int AdjustedLinesFlaggedForReview,
     /// <summary>True when the new customer has no usable tariff, so the order lands in pricing review.</summary>
@@ -133,29 +134,46 @@ public class OrderCustomerChangeService : IOrderCustomerChangeService
         _dbContext.RemoveRange(automatic);
 
         // An auto line the user had adjusted started from the OLD customer's tariff, so its
-        // amount is commercially suspect for the new one. It is kept (the user's work is not
-        // thrown away) but becomes an explicitly flagged manual line: the review note names the
-        // old customer, and the order stays in pricing review until someone confirms it.
+        // amount is commercially suspect for the new one. The user's work is not thrown away,
+        // but the amount is NOT allowed to count for the new customer on its own: the line
+        // becomes an unconfirmed PROPOSAL (excluded from LinesTotal/AgreedPrice until someone
+        // explicitly confirms it), its note names the old customer, and the engine baseline is
+        // dropped so nothing still claims to be derived from the old tariff.
         var oldCustomerName = context.Impact.CurrentCustomerName;
         foreach (var adjusted in context.PricingLines.Where(l => l.Kind == OrderPriceLineKind.AutoAdjusted))
         {
-            adjusted.Kind = OrderPriceLineKind.Manual;
-            adjusted.Proposed = false;
+            adjusted.Kind = OrderPriceLineKind.Proposed;
+            adjusted.Proposed = true;
             adjusted.RuleName = null;
             adjusted.AgreementName = null;
-            adjusted.Source = "Klantwijziging — te controleren";
-            var note = $"Overgenomen bij klantwijziging van '{oldCustomerName}' — bedrag controleren.";
+            adjusted.RuleId = null;
+            adjusted.OriginalAmount = null;
+            adjusted.OriginalQuantity = null;
+            adjusted.OriginalUnitPrice = null;
+            adjusted.Source = "Klantwijziging — te bevestigen";
+            var note = $"Overgenomen bij klantwijziging van '{oldCustomerName}' — bedrag bevestigen of verwijderen.";
             adjusted.AdjustReason = string.IsNullOrWhiteSpace(adjusted.AdjustReason)
                 ? note
                 : $"{note} ({adjusted.AdjustReason})";
         }
 
-        // The order goes back to needing a price decision under the new customer.
+        // The order goes back to needing a price decision under the new customer. The frozen
+        // numbers are flagged stale, so invoice readiness reports "pricing.stale" until a
+        // recalculation/confirmation under the NEW customer happened — the old total can never
+        // slip through to an invoice.
         if (context.Snapshot is { } snapshot)
         {
             snapshot.Status = OrderPricingStatus.Draft;
             snapshot.CalculatedTotal = null;
             snapshot.AgreementNames = null;
+            snapshot.LinesTotal = decimal.Round(
+                context.PricingLines
+                    .Where(l => l.Kind == OrderPriceLineKind.Manual && !l.Informational)
+                    .Sum(l => l.Amount), 2);
+            snapshot.IsStale = true;
+            snapshot.ConfirmedAtUtc = null;
+            snapshot.ConfirmedByUserId = null;
+            snapshot.ConfirmedByName = null;
         }
 
         order.AgreedPrice = null;
@@ -163,8 +181,19 @@ public class OrderCustomerChangeService : IOrderCustomerChangeService
         // Sprint 6E: a concept invoice must never end up holding an order that now belongs to
         // another customer. The order's lines are released from the draft; the invoice itself
         // stays (possibly empty) so the invoicing user sees what happened and can rebuild it.
+        // Audit fix: an order on a concept invoice carries Status = Invoiced; releasing its
+        // lines must hand it back to Completed, otherwise it can never be invoiced again.
         _dbContext.RemoveRange(context.DraftInvoiceLines);
+        if (context.DraftInvoiceLines.Count > 0 && order.Status == TransportOrderStatus.Invoiced)
+        {
+            order.Status = TransportOrderStatus.Completed;
+        }
 
+        order.Version = Guid.NewGuid();
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        // Readiness reads the persisted snapshot, so it runs after the stale flag is saved.
+        await InvoiceReadinessEvaluator.EvaluateAsync(_dbContext, order, cancellationToken);
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         await _auditService.RecordAsync(EntityType, order.Id.ToString(), "CustomerChanged",

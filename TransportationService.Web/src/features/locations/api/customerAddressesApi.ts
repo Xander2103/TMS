@@ -106,6 +106,8 @@ export interface AddressDuplicateCandidate {
   isActive: boolean
   /** Customers already using this address — the reason to reuse it. */
   linkedCustomers: string[]
+  /** The candidate's own type ("use existing" must carry the real address, not the form's choice). */
+  type: LocationType
 }
 
 export interface AddressDuplicateCheckResult {
@@ -150,11 +152,21 @@ export interface AddressPickerOption {
   group: AddressPickerGroup
 }
 
-/** Customer addresses first, then recently used, then the rest of the master. */
-export function pickAddresses(params: { customerId?: string | null; search?: string; take?: number }): Promise<AddressPickerOption[]> {
+/**
+ * Customer addresses first, then recently used, then the rest of the master.
+ * `excludeCustomerId` drops the addresses that customer already uses SERVER-side (before the
+ * take), so the "link an existing address" dialog never loses candidates to the cut-off.
+ */
+export function pickAddresses(params: {
+  customerId?: string | null
+  search?: string
+  take?: number
+  excludeCustomerId?: string | null
+}): Promise<AddressPickerOption[]> {
   const query = new URLSearchParams()
   if (params.customerId) query.set('customerId', params.customerId)
   if (params.search) query.set('search', params.search)
   if (params.take) query.set('take', String(params.take))
+  if (params.excludeCustomerId) query.set('excludeCustomerId', params.excludeCustomerId)
   return apiClient.getJson<AddressPickerOption[]>(`/api/addresses/picker?${query.toString()}`)
 }

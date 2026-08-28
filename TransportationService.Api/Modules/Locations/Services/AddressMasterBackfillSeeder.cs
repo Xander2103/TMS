@@ -11,7 +11,7 @@ namespace TransportationService.Api.Modules.Locations.Services;
 /// Two independent steps, both safe to re-run and both batched:
 /// <list type="number">
 /// <item>Derive <see cref="Location.AddressExactKey"/>/<see cref="Location.AddressStreetKey"/>
-/// for rows that have none yet. The keys need diacritic folding, which is not expressible in
+/// for rows that have none yet or whose keys came from an older normaliser. The keys need diacritic folding, which is not expressible in
 /// plain SQL, so they are computed here with the same <see cref="AddressNormalizer"/> the
 /// service uses — a SQL approximation would silently disagree with newly written rows and miss
 /// duplicates on accented addresses.</item>
@@ -35,6 +35,12 @@ public static class AddressMasterBackfillSeeder
         return (keys, links);
     }
 
+    /// <summary>
+    /// Derives the keys for every address whose stored keys differ from a fresh computation:
+    /// rows that never had keys AND rows written by an older normaliser (the house-number and
+    /// street-key rules changed after the first backfill). Recomputation converges, so the pass
+    /// is idempotent without a separate marker — a second run finds nothing to write.
+    /// </summary>
     private static async Task<int> BackfillAddressKeysAsync(
         TransportationDbContext db, CancellationToken cancellationToken)
     {
@@ -44,7 +50,7 @@ public static class AddressMasterBackfillSeeder
         while (true)
         {
             var batch = await db.Locations
-                .Where(l => l.Id > lastId && l.AddressExactKey == null && l.AddressStreetKey == null)
+                .Where(l => l.Id > lastId)
                 .OrderBy(l => l.Id)
                 .Take(BatchSize)
                 .ToListAsync(cancellationToken);
@@ -53,15 +59,19 @@ public static class AddressMasterBackfillSeeder
             foreach (var location in batch)
             {
                 // Empty string (not null) marks "computed, nothing to match on", so an address
-                // without street/city is not re-examined on every start-up.
-                location.AddressExactKey = AddressNormalizer.ExactKey(
+                // without street is not re-examined on every start-up.
+                var exactKey = AddressNormalizer.ExactKey(
                     location.CountryCode, location.PostalCode, location.City, location.Street, location.HouseNumber);
-                location.AddressStreetKey = AddressNormalizer.StreetKey(
+                var streetKey = AddressNormalizer.StreetKey(
                     location.CountryCode, location.PostalCode, location.City, location.Street);
+                if (location.AddressExactKey == exactKey && location.AddressStreetKey == streetKey) continue;
+
+                location.AddressExactKey = exactKey;
+                location.AddressStreetKey = streetKey;
+                written++;
             }
 
             await db.SaveChangesAsync(cancellationToken);
-            written += batch.Count;
             lastId = batch[^1].Id;
         }
     }

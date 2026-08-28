@@ -34,6 +34,8 @@ public class PricingImportRunConfiguration : IEntityTypeConfiguration<PricingImp
         builder.Property(r => r.Checksum).IsRequired().HasMaxLength(64);
         builder.Property(r => r.ProfileName).HasMaxLength(120);
         builder.Property(r => r.Mode).IsRequired().HasMaxLength(40);
+        builder.Property(r => r.Status).IsRequired().HasMaxLength(20).HasDefaultValue(PricingImportRunStatus.Succeeded);
+        builder.Property(r => r.Error).HasMaxLength(1000);
 
         builder.HasIndex(r => r.TenantId);
         builder.HasIndex(r => new { r.TenantId, r.AgreementId });

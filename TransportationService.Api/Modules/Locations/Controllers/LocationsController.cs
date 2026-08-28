@@ -152,6 +152,14 @@ public class LocationsController : ControllerBase
         LocationOperationOutcome.DuplicateCode => Conflict(new { message = "Er bestaat al een locatie met deze code." }),
         LocationOperationOutcome.InvalidCoordinates => BadRequest(new { message = "Ongeldige coördinaten (breedtegraad -90..90, lengtegraad -180..180)." }),
         LocationOperationOutcome.InvalidReference => BadRequest(new { message = "De gekoppelde klant bestaat niet." }),
+        // Stable code so the form can branch on it (never on the Dutch text) and offer the candidates.
+        LocationOperationOutcome.PossibleDuplicate => Conflict(new
+        {
+            code = "address_duplicate",
+            message = "Er bestaat al een adres met dezelfde straat, huisnummer en plaats. Gebruik het bestaande adres of maak het bewust toch aan.",
+            hasExactMatch = result.Duplicates!.HasExactMatch,
+            candidates = result.Duplicates.Candidates,
+        }),
         _ => Conflict(),
     };
 }

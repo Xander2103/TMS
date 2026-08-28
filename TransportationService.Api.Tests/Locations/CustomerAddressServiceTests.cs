@@ -167,17 +167,126 @@ public class CustomerAddressServiceTests
     }
 
     [Fact]
-    public async Task Link_RejectsASecondRelationshipForTheSameCustomerAndAddress()
+    public async Task Link_IsIdempotent_ASecondLinkReturnsTheExistingRelationship()
     {
         var h = await SeedAsync();
         using var _ = h.Db;
         var customerA = await AddCustomerAsync(h, "Klant A", "KL-1");
         var locationId = await AddAddressAsync(h, "ADR-1", "Magazijn Noord");
 
-        await h.Sut.LinkAsync(customerA, LinkRequest(locationId), CancellationToken.None);
-        var again = await h.Sut.LinkAsync(customerA, LinkRequest(locationId), CancellationToken.None);
+        var first = await h.Sut.LinkAsync(customerA, LinkRequest(locationId), CancellationToken.None);
+        var again = await h.Sut.LinkAsync(customerA, LinkRequest(locationId, defaultLoading: true), CancellationToken.None);
 
-        Assert.Equal(CustomerAddressOutcome.AlreadyLinked, again.Outcome);
+        // A re-link is not an error: same relationship, nothing rewritten, still one row.
+        Assert.Equal(CustomerAddressOutcome.Success, again.Outcome);
+        Assert.Equal(first.Address!.LinkId, again.Address!.LinkId);
+        Assert.False(again.Address.IsDefaultLoading);
+        Assert.Equal(1, await h.Db.Context.CustomerLocationLinks.CountAsync());
+    }
+
+    [Fact]
+    public async Task Link_AfterTheAddressFormCreatedTheLink_ReturnsThatLink_NotAConflict()
+    {
+        // D1: "Nieuw adres" on the customer tab posts customerId, which already links; the
+        // follow-up link call must succeed instead of ending in a 409.
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var customerA = await AddCustomerAsync(h, "Klant A", "KL-1");
+        var created = await h.Locations.CreateAsync(new CreateLocationRequest(
+                "ADR-1", "Magazijn Noord", LocationType.CustomerLocation,
+                Street: "Noorderlaan", HouseNumber: "10", PostalCode: "2030", City: "Antwerpen", CountryCode: "BE",
+                Latitude: null, Longitude: null, ContactName: null, ContactPhone: null, ContactEmail: null,
+                OpeningHours: null, LoadingInstructions: null, UnloadingInstructions: null, AccessInstructions: null,
+                AccessRestrictions: null, VehicleRestrictions: null, TrailerRestrictions: null,
+                AlfapassRequired: false, AppointmentRequired: false, CustomerId: customerA, Notes: null),
+            CancellationToken.None);
+        Assert.Equal(LocationOperationOutcome.Success, created.Outcome);
+
+        var link = await h.Sut.LinkAsync(customerA, LinkRequest(created.Location!.Id), CancellationToken.None);
+
+        Assert.Equal(CustomerAddressOutcome.Success, link.Outcome);
+        Assert.Single(await h.Sut.ListForCustomerAsync(customerA, false, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Link_ResurrectsASoftDeletedPair_InsteadOfInsertingADuplicate()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var customerA = await AddCustomerAsync(h, "Klant A", "KL-1");
+        var locationId = await AddAddressAsync(h, "ADR-1", "Magazijn Noord");
+        var first = await h.Sut.LinkAsync(customerA, LinkRequest(locationId), CancellationToken.None);
+        Assert.True(await h.Sut.UnlinkAsync(customerA, first.Address!.LinkId, CancellationToken.None));
+
+        var relinked = await h.Sut.LinkAsync(customerA,
+            LinkRequest(locationId, defaultLoading: true) with { Alias = "Magazijn Noord (nieuw)" }, CancellationToken.None);
+
+        Assert.Equal(CustomerAddressOutcome.Success, relinked.Outcome);
+        Assert.Equal(first.Address.LinkId, relinked.Address!.LinkId);
+        Assert.Equal("Magazijn Noord (nieuw)", relinked.Address.Alias);
+        Assert.True(relinked.Address.IsDefaultLoading);
+        // One physical row for the pair, soft-deleted flag cleared — the filtered unique index is respected.
+        var rows = await h.Db.Context.CustomerLocationLinks.IgnoreQueryFilters()
+            .Where(l => l.CustomerId == customerA && l.LocationId == locationId).ToListAsync();
+        var row = Assert.Single(rows);
+        Assert.False(row.IsDeleted);
+        Assert.Null(row.DeletedAt);
+    }
+
+    [Fact]
+    public async Task Link_ReactivatesAnInactiveRelationship()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var customerA = await AddCustomerAsync(h, "Klant A", "KL-1");
+        var locationId = await AddAddressAsync(h, "ADR-1", "Magazijn Noord");
+        var first = await h.Sut.LinkAsync(customerA, LinkRequest(locationId), CancellationToken.None);
+        await h.Sut.UpdateLinkAsync(customerA, first.Address!.LinkId,
+            new UpdateCustomerAddressLinkRequest(null, null, CustomerLocationRole.Both, false, false, false, null, IsActive: false),
+            CancellationToken.None);
+
+        var relinked = await h.Sut.LinkAsync(customerA, LinkRequest(locationId), CancellationToken.None);
+
+        Assert.Equal(CustomerAddressOutcome.Success, relinked.Outcome);
+        Assert.True(relinked.Address!.IsActive);
+        Assert.Single(await h.Sut.ListForCustomerAsync(customerA, false, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Picker_ExcludesAddressesTheCustomerAlreadyUses_ServerSide()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var customerA = await AddCustomerAsync(h, "Klant A", "KL-1");
+        var linked = await AddAddressAsync(h, "ADR-1", "Al gekoppeld");
+        var free = await AddAddressAsync(h, "ADR-2", "Nog vrij", street: "Zuidlaan", houseNumber: "5", city: "Gent", postalCode: "9000");
+        await h.Sut.LinkAsync(customerA, LinkRequest(linked), CancellationToken.None);
+
+        var options = await h.Sut.PickerAsync(null, null, 50, excludeCustomerId: customerA, CancellationToken.None);
+
+        Assert.Equal([free], options.Select(o => o.LocationId).ToArray());
+        Assert.DoesNotContain(options, o => o.LocationId == linked);
+    }
+
+    [Fact]
+    public async Task DuplicateCheck_ReportsTheCandidatesOwnType()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var result = await h.Locations.CreateAsync(new CreateLocationRequest(
+                "DEP-1", "Depot", LocationType.Depot,
+                Street: "Noorderlaan", HouseNumber: "10", PostalCode: "2030", City: "Antwerpen", CountryCode: "BE",
+                Latitude: null, Longitude: null, ContactName: null, ContactPhone: null, ContactEmail: null,
+                OpeningHours: null, LoadingInstructions: null, UnloadingInstructions: null, AccessInstructions: null,
+                AccessRestrictions: null, VehicleRestrictions: null, TrailerRestrictions: null,
+                AlfapassRequired: false, AppointmentRequired: false, CustomerId: null, Notes: null),
+            CancellationToken.None);
+        Assert.Equal(LocationOperationOutcome.Success, result.Outcome);
+
+        var check = await h.Sut.CheckDuplicatesAsync(
+            new AddressDuplicateCheckRequest("Noorderlaan", "10", "2030", "Antwerpen", "BE", null), CancellationToken.None);
+
+        Assert.Equal(LocationType.Depot, Assert.Single(check.Candidates).Type);
     }
 
     [Fact]
@@ -213,7 +322,7 @@ public class CustomerAddressServiceTests
         var other = await AddAddressAsync(h, "ADR-2", "Ander adres", street: "Zuidlaan", houseNumber: "5", city: "Gent", postalCode: "9000");
         await h.Sut.LinkAsync(customerB, LinkRequest(shared), CancellationToken.None);
 
-        var options = await h.Sut.PickerAsync(customerB, null, 50, CancellationToken.None);
+        var options = await h.Sut.PickerAsync(customerB, null, 50, null, CancellationToken.None);
 
         Assert.Equal(shared, options[0].LocationId);
         Assert.Equal(AddressPickerGroup.CustomerAddress, options[0].Group);

@@ -142,7 +142,7 @@ public class CustomerContactsAndAddressesTests
 
     private static CreateLocationRequest LocationRequest(string code, string name, Guid? customerId, bool isBilling = false) => new(
         code, name, LocationType.BillingAddress,
-        "Straat", "1", "2000", "Antwerpen", "BE", null, null,
+        "Straat", code, "2000", "Antwerpen", "BE", null, null,
         null, null, null, null, null, null, null, null, null, null,
         AlfapassRequired: false, AppointmentRequired: false, CustomerId: customerId, Notes: null,
         IsDefaultBillingLocation: isBilling);

@@ -93,7 +93,7 @@
     "account": "Ledger account",
     "costCentre": "Cost centre",
     "entity": "Entity",
-    "intro": "A separate ledger account and cost centre per invoicing entity. Without a mapping, the sales code’s default account applies.",
+    "intro": "A separate ledger account and cost centre per invoicing entity. Without a mapping, the sales category’s default account applies.",
     "loadFailed": "The entities could not be loaded.",
     "noEntities": "No active entities.",
     "title": "Ledger mapping per entity",

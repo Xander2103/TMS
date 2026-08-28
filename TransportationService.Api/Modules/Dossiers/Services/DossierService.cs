@@ -24,6 +24,9 @@ public interface IDossierService
     /// <summary>Audited change of the issuing entity (old→new); inherited silently at create.</summary>
     Task<DossierDetailDto?> ChangeLegalEntityAsync(Guid id, ChangeDossierEntityRequest request, CancellationToken cancellationToken);
 
+    /// <summary>Impact of an entity change on the dossier's linked orders, before confirming.</summary>
+    Task<DossierLegalEntityChangeImpactDto?> PreviewLegalEntityChangeAsync(Guid id, Guid legalEntityId, CancellationToken cancellationToken);
+
     Task<DossierDetailDto?> CloseAsync(Guid id, CancellationToken cancellationToken);
 
     Task<DossierDetailDto?> ReopenAsync(Guid id, CancellationToken cancellationToken);
@@ -45,6 +48,7 @@ public class DossierService : IDossierService
     private readonly ITenantContext _tenantContext;
     private readonly IAuditService _auditService;
     private readonly TimeProvider _timeProvider;
+    private readonly Modules.Orders.Services.ITransportOrderService? _orderService;
     private readonly IDossierReadinessService _readinessService;
     private readonly Modules.Identity.Services.IPermissionAuthorizationService? _permissionService;
     private readonly Modules.Identity.Services.ICurrentUserContext? _currentUser;
@@ -56,12 +60,14 @@ public class DossierService : IDossierService
         TimeProvider timeProvider,
         IDossierReadinessService? readinessService = null,
         Modules.Identity.Services.IPermissionAuthorizationService? permissionService = null,
-        Modules.Identity.Services.ICurrentUserContext? currentUser = null)
+        Modules.Identity.Services.ICurrentUserContext? currentUser = null,
+        Modules.Orders.Services.ITransportOrderService? orderService = null)
     {
         _dbContext = dbContext;
         _tenantContext = tenantContext;
         _auditService = auditService;
         _timeProvider = timeProvider;
+        _orderService = orderService;
         _readinessService = readinessService ?? new DossierReadinessService(dbContext, tenantContext);
         _permissionService = permissionService;
         _currentUser = currentUser;
@@ -458,13 +464,104 @@ public class DossierService : IDossierService
             }
         }
 
+        // Rule H (audit fix): the dossier is the commercial authority for its linked orders, so
+        // the orders that shared its entity move along in ONE unit of work through the same
+        // per-order guards (sent invoice → refused, concept lines → released). Nothing ever
+        // leaves a dossier and its orders on different invoicing entities silently.
+        var impact = await BuildLegalEntityImpactAsync(dossier, request.LegalEntityId, customerDefault, cancellationToken);
+        if (impact.BlockedReason is { } blockedByOrder)
+        {
+            throw new DomainValidationException("legalEntityId", blockedByOrder);
+        }
+
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+        foreach (var linked in impact.Orders)
+        {
+            var refused = await _orderService!.ChangeLegalEntityWithinDossierAsync(
+                linked.OrderId, request.LegalEntityId, reason, cancellationToken);
+            if (refused is not null)
+            {
+                throw new DomainValidationException("legalEntityId", $"Order {linked.OrderNumber}: {refused}");
+            }
+        }
+
         dossier.LegalEntityId = request.LegalEntityId;
+        dossier.Version = Guid.NewGuid();
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         await _auditService.RecordAsync(EntityType, dossier.Id.ToString(), "LegalEntityChanged",
-            new { LegalEntityId = previous }, new { dossier.LegalEntityId, Reason = reason }, cancellationToken);
+            new { LegalEntityId = previous },
+            new
+            {
+                dossier.LegalEntityId, Reason = reason,
+                OrdersMoved = impact.Orders.Select(o => o.OrderNumber).ToList(),
+                impact.DraftInvoiceLinesReleased,
+            },
+            cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
 
         return await GetAsync(id, cancellationToken);
+    }
+
+    public async Task<DossierLegalEntityChangeImpactDto?> PreviewLegalEntityChangeAsync(
+        Guid id, Guid legalEntityId, CancellationToken cancellationToken)
+    {
+        var dossier = await FindAsync(id, cancellationToken);
+        if (dossier is null)
+        {
+            return null;
+        }
+
+        var customerDefault = dossier.CustomerId is { } customerId
+            ? await _dbContext.Customers
+                .Where(c => c.TenantId == _tenantContext.TenantId && c.Id == customerId)
+                .Select(c => c.DefaultLegalEntityId)
+                .FirstOrDefaultAsync(cancellationToken)
+            : null;
+        return await BuildLegalEntityImpactAsync(dossier, legalEntityId, customerDefault, cancellationToken);
+    }
+
+    private async Task<DossierLegalEntityChangeImpactDto> BuildLegalEntityImpactAsync(
+        TransportDossier dossier, Guid legalEntityId, Guid? customerDefault, CancellationToken cancellationToken)
+    {
+        var tenantId = _tenantContext.TenantId;
+        string? blocked = null;
+
+        // Only orders that FOLLOW the dossier's entity move with it; an order deliberately put on
+        // another entity keeps that choice.
+        var linkedOrders = await _dbContext.DossierOrders.AsNoTracking()
+            .Where(l => l.TenantId == tenantId && l.DossierId == dossier.Id)
+            .Join(_dbContext.TransportOrders.AsNoTracking().Where(o => o.TenantId == tenantId),
+                l => l.TransportOrderId, o => o.Id, (l, o) => new { o.Id, o.OrderNumber, o.LegalEntityId })
+            .Where(o => o.LegalEntityId == dossier.LegalEntityId && o.LegalEntityId != legalEntityId)
+            .OrderBy(o => o.OrderNumber)
+            .ToListAsync(cancellationToken);
+
+        var orders = new List<DossierLegalEntityChangeOrderDto>();
+        if (linkedOrders.Count > 0 && _orderService is null)
+        {
+            blocked = "Gekoppelde orders kunnen niet mee verplaatst worden (orderservice niet beschikbaar).";
+        }
+
+        foreach (var linked in linkedOrders)
+        {
+            var orderImpact = _orderService is null
+                ? null
+                : await _orderService.PreviewLegalEntityChangeAsync(linked.Id, legalEntityId, cancellationToken);
+            var orderBlocked = orderImpact?.BlockedReason;
+            if (orderBlocked is not null && blocked is null)
+            {
+                blocked = $"Order {linked.OrderNumber}: {orderBlocked}";
+            }
+
+            orders.Add(new DossierLegalEntityChangeOrderDto(
+                linked.Id, linked.OrderNumber, orderBlocked, orderImpact?.DraftInvoiceLinesReleased ?? 0));
+        }
+
+        return new DossierLegalEntityChangeImpactDto(
+            dossier.Id, dossier.LegalEntityId, legalEntityId,
+            customerDefault is null || legalEntityId != customerDefault,
+            blocked, orders, orders.Sum(o => o.DraftInvoiceLinesReleased));
     }
 
     private async Task RequireVersionAsync(TransportDossier dossier, Guid? version, CancellationToken cancellationToken)

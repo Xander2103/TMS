@@ -196,9 +196,8 @@ public class CustomerPortalService : ICustomerPortalService
         var locationIds = request.Stops.Where(s => s.LocationId is not null).Select(s => s.LocationId!.Value).Distinct().ToList();
         if (locationIds.Count > 0)
         {
-            var owned = await _dbContext.Locations.AsNoTracking()
-                .Where(l => l.TenantId == _tenantContext.TenantId && l.CustomerId == customer.Value.CustomerId
-                    && l.IsActive && locationIds.Contains(l.Id))
+            var owned = await MyLocationsQuery(customer.Value.CustomerId)
+                .Where(l => locationIds.Contains(l.Id))
                 .CountAsync(cancellationToken);
             if (owned != locationIds.Count)
             {
@@ -280,17 +279,42 @@ public class CustomerPortalService : ICustomerPortalService
             return PortalResult<IReadOnlyList<PortalLocationDto>>.NoCustomerLink();
         }
 
-        var locations = await _dbContext.Locations.AsNoTracking()
-            .Where(l => l.TenantId == _tenantContext.TenantId && l.CustomerId == customer.Value.CustomerId && l.IsActive)
-            .OrderByDescending(l => l.IsDefaultLoadingLocation || l.IsDefaultUnloadingLocation)
-            .ThenBy(l => l.Name)
-            .Select(l => new PortalLocationDto(
-                l.Id, l.Name, l.Street, l.HouseNumber, l.PostalCode, l.City, l.CountryCode,
-                l.IsDefaultLoadingLocation, l.IsDefaultUnloadingLocation))
+        var customerId = customer.Value.CustomerId;
+        // The per-customer defaults live on the relationship (sprint 2); the legacy address
+        // flags only stand in for a pre-backfill single-owner address.
+        var locations = await MyLocationsQuery(customerId)
+            .Select(l => new
+            {
+                Location = l,
+                Link = _dbContext.CustomerLocationLinks
+                    .Where(link => link.LocationId == l.Id && link.CustomerId == customerId && link.IsActive)
+                    .Select(link => new { link.IsDefaultLoading, link.IsDefaultUnloading })
+                    .FirstOrDefault(),
+            })
+            .Select(x => new PortalLocationDto(
+                x.Location.Id, x.Location.Name, x.Location.Street, x.Location.HouseNumber, x.Location.PostalCode,
+                x.Location.City, x.Location.CountryCode,
+                x.Link != null ? x.Link.IsDefaultLoading : x.Location.IsDefaultLoadingLocation,
+                x.Link != null ? x.Link.IsDefaultUnloading : x.Location.IsDefaultUnloadingLocation))
             .ToListAsync(cancellationToken);
 
-        return PortalResult<IReadOnlyList<PortalLocationDto>>.Success(locations);
+        return PortalResult<IReadOnlyList<PortalLocationDto>>.Success(locations
+            .OrderByDescending(l => l.IsDefaultLoadingLocation || l.IsDefaultUnloadingLocation)
+            .ThenBy(l => l.Name, StringComparer.OrdinalIgnoreCase)
+            .ToList());
     }
+
+    /// <summary>
+    /// The addresses THIS customer may see and use: every active address with an active
+    /// relationship to the customer (a shared address counts for each of its customers).
+    /// A single-owner address that only carries the legacy owner column — no relationship
+    /// row at all — behaves exactly as before, so nothing disappears before the backfill.
+    /// </summary>
+    private IQueryable<Location> MyLocationsQuery(Guid customerId) =>
+        _dbContext.Locations.AsNoTracking()
+            .Where(l => l.TenantId == _tenantContext.TenantId && l.IsActive)
+            .Where(l => _dbContext.CustomerLocationLinks.Any(link => link.LocationId == l.Id && link.CustomerId == customerId && link.IsActive)
+                        || (l.CustomerId == customerId && !_dbContext.CustomerLocationLinks.Any(link => link.LocationId == l.Id)));
 
     public async Task<PortalResult<PortalLocationDto>> CreateMyLocationAsync(
         PortalCreateLocationRequest request, CancellationToken cancellationToken)
@@ -320,7 +344,10 @@ public class CustomerPortalService : ICustomerPortalService
             AccessInstructions: null, AccessRestrictions: null, VehicleRestrictions: null, TrailerRestrictions: null,
             AlfapassRequired: false, AppointmentRequired: false,
             CustomerId: customer.Value.CustomerId,
-            Notes: "Aangemaakt via het klantportaal"), cancellationToken);
+            Notes: "Aangemaakt via het klantportaal",
+            // Portal users cannot pick from the central master, so the duplicate rule would
+            // only block them; the planner reconciles duplicates internally.
+            OverrideDuplicate: true), cancellationToken);
 
         if (result.Outcome != LocationOperationOutcome.Success)
         {

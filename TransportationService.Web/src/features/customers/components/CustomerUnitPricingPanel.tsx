@@ -597,7 +597,7 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
         <h3>{t('customers.pricing.basisTitle')}</h3>
         {canManage && <Button variant="secondary" onClick={() => openAgreementDraft(null)}>{t('customers.pricing.addAgreement')}</Button>}
       </div>
-      {true && <p className="customer-form-muted">{t('customers.pricing.basisHint')}</p>}
+      <p className="customer-form-muted">{t('customers.pricing.basisHint')}</p>
         {agreements.length === 0 && sharedAssigned.length === 0 && (
         <p className="placeholder-text">{t('customers.pricing.agreementsEmpty')}</p>
       )}

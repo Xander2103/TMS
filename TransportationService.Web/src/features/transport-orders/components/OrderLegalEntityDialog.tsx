@@ -79,7 +79,12 @@ export function OrderLegalEntityDialog({ order, onClose, onChanged }: OrderLegal
   }, [order.id, order.legalEntityId, entityId, t])
 
   // An empty allowed set means "no restriction configured" (backend semantics).
-  const visibleEntities = allowedIds && allowedIds.length > 0 ? entities.filter((e) => allowedIds.includes(e.id)) : entities
+  // The order's CURRENT entity always stays selectable, even when it sits outside the
+  // customer's allowed set (a pre-existing state), so the dialog never hides where the order is.
+  const visibleEntities =
+    allowedIds && allowedIds.length > 0
+      ? entities.filter((e) => allowedIds.includes(e.id) || e.id === order.legalEntityId)
+      : entities
   // Only a preview for the CURRENT selection counts.
   const currentImpact = impact && impact.targetLegalEntityId === entityId ? impact : null
   const deviates = currentImpact?.deviatesFromCustomerDefault ?? (entityId !== '' && entityId !== customerDefaultId)

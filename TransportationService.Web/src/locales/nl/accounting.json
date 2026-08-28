@@ -93,7 +93,7 @@
     "account": "Grootboekrekening",
     "costCentre": "Kostenplaats",
     "entity": "Entiteit",
-    "intro": "Per facturerende entiteit een eigen grootboekrekening en kostenplaats. Zonder koppeling geldt de standaardrekening van de verkoopcode.",
+    "intro": "Per facturerende entiteit een eigen grootboekrekening en kostenplaats. Zonder koppeling geldt de standaardrekening van de verkoopcategorie.",
     "loadFailed": "Entiteiten konden niet worden geladen.",
     "noEntities": "Geen actieve entiteiten.",
     "title": "Boekhoudkundige koppeling per entiteit",

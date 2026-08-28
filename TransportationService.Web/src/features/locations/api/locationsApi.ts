@@ -70,6 +70,11 @@ export function getLocation(id: string): Promise<LocationDetail> {
   return apiClient.getJson<LocationDetail>(`/api/locations/${id}`)
 }
 
+/**
+ * Creates an address. A same-front-door duplicate is refused with a 409 `address_duplicate`
+ * (candidates in the body — see `extractAddressDuplicateConflict` in ./addressDuplicates)
+ * unless `overrideDuplicate` is true.
+ */
 export function createLocation(input: LocationInput): Promise<LocationDetail> {
   return apiClient.postJson<LocationDetail, LocationInput>('/api/locations', input)
 }

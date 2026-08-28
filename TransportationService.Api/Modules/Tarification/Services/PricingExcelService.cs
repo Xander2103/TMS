@@ -19,9 +19,12 @@ public interface IPricingExcelService
     Task<(PricingImportPreviewDto? Preview, string? Error)> PreviewAsync(
         Guid agreementId, Stream workbook, Guid? profileId, string? fileName, CancellationToken cancellationToken);
 
-    /// <summary>The header texts of an uploaded workbook, for the mapping step of the wizard.</summary>
+    /// <summary>
+    /// The header texts of an uploaded workbook, for the mapping step of the wizard. Explicit
+    /// headerRow/sheetName (what the operator is typing) win over the saved profile's values.
+    /// </summary>
     Task<(IReadOnlyList<string>? Headers, string? Error)> ReadHeadersAsync(
-        Stream workbook, Guid? profileId, CancellationToken cancellationToken);
+        Stream workbook, Guid? profileId, int? headerRow, string? sheetName, CancellationToken cancellationToken);
 
     /// <summary>Null result + null error = the agreement does not exist. Row errors throw DomainValidationException.</summary>
     Task<(PricingImportCommitResultDto? Result, string? Error)> CommitAsync(
@@ -216,7 +219,7 @@ public class PricingExcelService : IPricingExcelService
     }
 
     public async Task<(IReadOnlyList<string>? Headers, string? Error)> ReadHeadersAsync(
-        Stream stream, Guid? profileId, CancellationToken cancellationToken)
+        Stream stream, Guid? profileId, int? headerRow, string? sheetName, CancellationToken cancellationToken)
     {
         var profile = await LoadProfileAsync(profileId, cancellationToken);
         XLWorkbook workbook;
@@ -230,26 +233,33 @@ public class PricingExcelService : IPricingExcelService
         }
 
         using var _ = workbook;
-        var sheetName = profile?.SheetName;
-        var sheet = (string.IsNullOrWhiteSpace(sheetName)
-                ? workbook.Worksheets.FirstOrDefault(w => w.Name == "Tarieven")
-                : workbook.Worksheets.FirstOrDefault(w => string.Equals(w.Name, sheetName, StringComparison.OrdinalIgnoreCase)))
-            ?? workbook.Worksheets.FirstOrDefault();
+        var effectiveSheetName = string.IsNullOrWhiteSpace(sheetName) ? profile?.SheetName : sheetName.Trim();
+        var sheet = FindSheet(workbook, effectiveSheetName);
         if (sheet is null) return (null, "Het werkboek bevat geen werkblad.");
 
-        var headerRow = profile?.HeaderRow is { } configured && configured > 0 ? configured : 1;
-        return (PricingImportColumns.ReadHeaders(sheet, headerRow), null);
+        var effectiveHeaderRow = headerRow is { } explicitRow && explicitRow > 0
+            ? explicitRow
+            : profile?.HeaderRow is { } configured && configured > 0 ? configured : 1;
+        return (PricingImportColumns.ReadHeaders(sheet, effectiveHeaderRow), null);
     }
 
+    private static IXLWorksheet? FindSheet(XLWorkbook workbook, string? sheetName) =>
+        (string.IsNullOrWhiteSpace(sheetName)
+            ? workbook.Worksheets.FirstOrDefault(w => w.Name == "Tarieven")
+            : workbook.Worksheets.FirstOrDefault(w => string.Equals(w.Name, sheetName, StringComparison.OrdinalIgnoreCase)))
+        ?? workbook.Worksheets.FirstOrDefault();
+
     /// <summary>
-    /// Records what an import did (sprint 4F). Written inside the import transaction, so a
-    /// rolled-back import leaves no history claiming it happened.
+    /// Records what an import did (sprint 4F). A successful run is written inside the import
+    /// transaction (a rollback must not leave history claiming it happened); a rejected or
+    /// failed run is written AFTER the rollback, so the history also shows what did NOT land.
     /// </summary>
     private void RecordRun(
         Guid agreementId, Guid targetAgreementId, string? fileName, string checksum,
-        PricingImportProfile? profile, PricingImportCommitRequest request, ParseOutcome outcome,
-        int added, int updated, int removed)
+        PricingImportProfile? profile, PricingImportCommitRequest request, ParseOutcome? outcome,
+        int added, int updated, int removed, string status, string? error)
     {
+        var failedRows = outcome?.Errors.Select(e => e.Row).Distinct().Count() ?? 0;
         _dbContext.Set<PricingImportRun>().Add(new PricingImportRun
         {
             Id = Guid.NewGuid(),
@@ -260,14 +270,30 @@ public class PricingExcelService : IPricingExcelService
             Checksum = checksum,
             ProfileId = profile?.Id,
             ProfileName = profile?.Name,
-            RowsRead = outcome.RowsFound,
-            RowsValid = outcome.RowsFound - outcome.Errors.Select(e => e.Row).Distinct().Count(),
+            RowsRead = outcome?.RowsFound ?? 0,
+            RowsValid = (outcome?.RowsFound ?? 0) - failedRows,
             Created = added,
             Updated = updated,
             Removed = removed,
-            Failed = outcome.Errors.Select(e => e.Row).Distinct().Count(),
+            Failed = failedRows,
             Mode = request.Mode.ToString(),
+            Status = status,
+            Error = error is null ? null : error.Length > 1000 ? error[..1000] : error,
         });
+    }
+
+    /// <summary>
+    /// Writes a Rejected/Failed history row on its own, outside any import transaction. The
+    /// change tracker is cleared first so nothing of the abandoned import is retried with it.
+    /// </summary>
+    private async Task RecordUnsuccessfulRunAsync(
+        Guid agreementId, string? fileName, string checksum, PricingImportProfile? profile,
+        PricingImportCommitRequest request, ParseOutcome? outcome, string status, string error,
+        CancellationToken cancellationToken)
+    {
+        _dbContext.ChangeTracker.Clear();
+        RecordRun(agreementId, agreementId, fileName, checksum, profile, request, outcome, 0, 0, 0, status, error);
+        await _dbContext.SaveChangesAsync(cancellationToken);
     }
 
     private static string SanitizeFileName(string name)
@@ -330,7 +356,9 @@ public class PricingExcelService : IPricingExcelService
             changes.AddedDto, changes.UpdatedDto, changes.RemovedDto,
             previousImport is not null,
             previousImport?.CreatedAt,
-            previousImport?.FileName);
+            previousImport?.FileName,
+            outcome.MatchedByNameCount,
+            outcome.PresentFields.OrderBy(f => f, StringComparer.Ordinal).ToList());
     }
 
     // ======================================================================
@@ -357,24 +385,46 @@ public class PricingExcelService : IPricingExcelService
         var profile = await LoadProfileAsync(profileId, cancellationToken);
         var checksum = await ChecksumAsync(workbook, cancellationToken);
         var outcome = await ParseWorkbookAsync(agreementId, agreement.EffectiveFrom, workbook, profile, cancellationToken);
-        if (outcome.FileError is not null)
+
+        // Validation rejections are recorded in the history (D3) — as Rejected, never as an
+        // import that happened — and then surfaced to the caller exactly as before.
+        var rejection = outcome.FileError
+            ?? (outcome.Errors.Count > 0
+                ? "Import geblokkeerd door fouten: " + string.Join(" | ",
+                    outcome.Errors.OrderBy(e => e.Row).Select(e => $"Rij {e.Row}: {e.Message}"))
+                : null)
+            ?? (request.Mode == PricingImportMode.DuplicateAsNewVersion
+                && (string.IsNullOrWhiteSpace(request.NewName) || request.NewEffectiveFrom is null)
+                ? "Kies een naam en een ingangsdatum voor de nieuwe versie."
+                : null);
+        if (rejection is not null)
         {
-            throw new DomainValidationException(outcome.FileError);
+            await RecordUnsuccessfulRunAsync(agreementId, fileName, checksum, profile, request,
+                outcome.FileError is null ? outcome : null, PricingImportRunStatus.Rejected, rejection, cancellationToken);
+            throw new DomainValidationException(rejection);
         }
 
-        if (outcome.Errors.Count > 0)
+        try
         {
-            throw new DomainValidationException(
-                "Import geblokkeerd door fouten: " + string.Join(" | ",
-                    outcome.Errors.OrderBy(e => e.Row).Select(e => $"Rij {e.Row}: {e.Message}")));
+            return await ApplyCommitAsync(agreementId, agreement, request, profile, checksum, fileName, outcome, cancellationToken);
         }
-
-        if (request.Mode == PricingImportMode.DuplicateAsNewVersion
-            && (string.IsNullOrWhiteSpace(request.NewName) || request.NewEffectiveFrom is null))
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            throw new DomainValidationException("Kies een naam en een ingangsdatum voor de nieuwe versie.");
+            // The transaction is already disposed (rolled back) here; the Failed row is written
+            // on its own so the history explains why nothing landed.
+            await RecordUnsuccessfulRunAsync(agreementId, fileName, checksum, profile, request, outcome,
+                PricingImportRunStatus.Failed,
+                ex.InnerException?.Message is { Length: > 0 } inner ? $"{ex.Message} {inner}" : ex.Message,
+                cancellationToken);
+            throw;
         }
+    }
 
+    private async Task<(PricingImportCommitResultDto? Result, string? Error)> ApplyCommitAsync(
+        Guid agreementId, PricingAgreement agreement, PricingImportCommitRequest request,
+        PricingImportProfile? profile, string checksum, string? fileName, ParseOutcome outcome,
+        CancellationToken cancellationToken)
+    {
         await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
 
         PricingAgreement targetAgreement;
@@ -426,7 +476,8 @@ public class PricingExcelService : IPricingExcelService
 
         foreach (var (group, existing) in changes.ToUpdate)
         {
-            ApplyUpdate(existing, group, effectiveOutcome.UnitIdsByCode, effectiveOutcome.ZoneIdsByCode, preserveValidity);
+            ApplyUpdate(existing, group, effectiveOutcome.UnitIdsByCode, effectiveOutcome.ZoneIdsByCode, preserveValidity,
+                effectiveOutcome.PresentFields);
         }
 
         var removedCount = 0;
@@ -442,7 +493,7 @@ public class PricingExcelService : IPricingExcelService
         // Written before the save so the history row shares the import's transaction: a
         // rollback must not leave history claiming the import happened.
         RecordRun(agreementId, targetAgreement.Id, fileName, checksum, profile, request, outcome,
-            changes.ToAdd.Count, changes.ToUpdate.Count, removedCount);
+            changes.ToAdd.Count, changes.ToUpdate.Count, removedCount, PricingImportRunStatus.Succeeded, null);
 
         await _dbContext.SaveChangesAsync(cancellationToken);
         await _auditService.RecordAsync("PricingAgreement", targetAgreement.Id.ToString(), "imported", null,
@@ -495,27 +546,37 @@ public class PricingExcelService : IPricingExcelService
         return rule;
     }
 
+    /// <summary>
+    /// D1: only the fields the file actually supplies are written. A partial-column file (a
+    /// customer sheet with just name/basis/price) must not wipe min/max/zone/validity/brackets
+    /// on every matched rule.
+    /// </summary>
     private void ApplyUpdate(
         PriceRule existing, RuleGroup group,
         IReadOnlyDictionary<string, Guid> unitIdsByCode, IReadOnlyDictionary<string, Guid> zoneIdsByCode,
-        bool preserveValidity)
+        bool preserveValidity, IReadOnlySet<string> present)
     {
         existing.Name = group.Name.Trim();
         existing.Basis = group.Basis;
-        existing.UnitTypeId = group.UnitCode is { } unitCode ? unitIdsByCode[unitCode] : null;
-        existing.ZoneId = group.ZoneCode is { } zoneCode ? zoneIdsByCode[zoneCode] : null;
-        existing.Priority = group.Priority;
-        existing.UnitPrice = group.UnitPrice;
-        existing.BaseAmount = group.BaseAmount;
-        existing.MinimumAmount = group.MinimumAmount;
-        existing.MaximumAmount = group.MaximumAmount;
-        existing.MinimumQuantity = group.MinimumQuantity;
-        existing.QuantityRoundingStep = group.QuantityRoundingStep;
-        existing.BracketMode = group.BracketMode;
+        if (present.Contains("eenheid")) existing.UnitTypeId = group.UnitCode is { } unitCode ? unitIdsByCode[unitCode] : null;
+        if (present.Contains("zone")) existing.ZoneId = group.ZoneCode is { } zoneCode ? zoneIdsByCode[zoneCode] : null;
+        if (present.Contains("prioriteit")) existing.Priority = group.Priority;
+        if (present.Contains("eenheidsprijs")) existing.UnitPrice = group.UnitPrice;
+        if (present.Contains("basisbedrag")) existing.BaseAmount = group.BaseAmount;
+        if (present.Contains("minimum")) existing.MinimumAmount = group.MinimumAmount;
+        if (present.Contains("maximum")) existing.MaximumAmount = group.MaximumAmount;
+        if (present.Contains("minAantal")) existing.MinimumQuantity = group.MinimumQuantity;
+        if (present.Contains("afrondingsstap")) existing.QuantityRoundingStep = group.QuantityRoundingStep;
+        if (present.Contains("staffelmodus")) existing.BracketMode = group.BracketMode;
         if (!preserveValidity)
         {
-            existing.EffectiveFrom = group.EffectiveFrom ?? existing.EffectiveFrom;
-            existing.EffectiveUntil = group.EffectiveUntil;
+            if (present.Contains("geldigVan")) existing.EffectiveFrom = group.EffectiveFrom ?? existing.EffectiveFrom;
+            if (present.Contains("geldigTot")) existing.EffectiveUntil = group.EffectiveUntil;
+        }
+
+        if (!present.Contains(BracketField))
+        {
+            return;
         }
 
         // Full-replace, same pattern as PricingAdminService.UpdateRuleAsync — no explicit Added
@@ -565,7 +626,7 @@ public class PricingExcelService : IPricingExcelService
             if (group.RegelId is { } id && existingById.TryGetValue(id, out var existing))
             {
                 referencedIds.Add(id);
-                var fieldChanges = DiffRule(existing, group, outcome.UnitCodes, outcome.ZoneCodes, preserveValidity);
+                var fieldChanges = DiffRule(existing, group, outcome.UnitCodes, outcome.ZoneCodes, preserveValidity, outcome.PresentFields);
                 if (fieldChanges.Count > 0)
                 {
                     toUpdate.Add((group, existing));
@@ -595,14 +656,16 @@ public class PricingExcelService : IPricingExcelService
         return string.Join("; ", parts);
     }
 
+    /// <summary>Same present-field gating as <see cref="ApplyUpdate"/>, so the preview shows exactly what commit will do.</summary>
     private static List<string> DiffRule(
         PriceRule existing, RuleGroup group,
-        IReadOnlyDictionary<Guid, string> unitCodes, IReadOnlyDictionary<Guid, string> zoneCodes, bool preserveValidity)
+        IReadOnlyDictionary<Guid, string> unitCodes, IReadOnlyDictionary<Guid, string> zoneCodes, bool preserveValidity,
+        IReadOnlySet<string> present)
     {
         var changes = new List<string>();
-        void Diff(string label, string oldValue, string newValue)
+        void Diff(string field, string label, string oldValue, string newValue)
         {
-            if (!string.Equals(oldValue, newValue, StringComparison.Ordinal))
+            if (present.Contains(field) && !string.Equals(oldValue, newValue, StringComparison.Ordinal))
             {
                 changes.Add($"{label}: {oldValue} → {newValue}");
             }
@@ -611,30 +674,30 @@ public class PricingExcelService : IPricingExcelService
         var existingUnitCode = existing.UnitTypeId is { } existingUnitId ? unitCodes.GetValueOrDefault(existingUnitId) : null;
         var existingZoneCode = existing.ZoneId is { } existingZoneId ? zoneCodes.GetValueOrDefault(existingZoneId) : null;
 
-        Diff("Naam", existing.Name, group.Name);
-        Diff("Basis", existing.Basis.ToString(), group.Basis.ToString());
-        Diff("Eenheid", existingUnitCode ?? "(geen)", group.UnitCode ?? "(geen)");
-        Diff("Zone", existingZoneCode ?? "(geen)", group.ZoneCode ?? "(geen)");
-        Diff("Prioriteit", existing.Priority.ToString(CultureInfo.InvariantCulture), group.Priority.ToString(CultureInfo.InvariantCulture));
-        Diff("Eenheidsprijs", FormatAmount(existing.UnitPrice), FormatAmount(group.UnitPrice));
-        Diff("Basisbedrag", FormatAmount(existing.BaseAmount), FormatAmount(group.BaseAmount));
-        Diff("Minimum", FormatAmount(existing.MinimumAmount), FormatAmount(group.MinimumAmount));
-        Diff("Maximum", FormatAmount(existing.MaximumAmount), FormatAmount(group.MaximumAmount));
-        Diff("Min. aantal", FormatAmount(existing.MinimumQuantity), FormatAmount(group.MinimumQuantity));
-        Diff("Afrondingsstap", FormatAmount(existing.QuantityRoundingStep), FormatAmount(group.QuantityRoundingStep));
-        Diff("Staffelmodus", existing.BracketMode.ToString(), group.BracketMode.ToString());
+        Diff("naam", "Naam", existing.Name, group.Name);
+        Diff("basis", "Basis", existing.Basis.ToString(), group.Basis.ToString());
+        Diff("eenheid", "Eenheid", existingUnitCode ?? "(geen)", group.UnitCode ?? "(geen)");
+        Diff("zone", "Zone", existingZoneCode ?? "(geen)", group.ZoneCode ?? "(geen)");
+        Diff("prioriteit", "Prioriteit", existing.Priority.ToString(CultureInfo.InvariantCulture), group.Priority.ToString(CultureInfo.InvariantCulture));
+        Diff("eenheidsprijs", "Eenheidsprijs", FormatAmount(existing.UnitPrice), FormatAmount(group.UnitPrice));
+        Diff("basisbedrag", "Basisbedrag", FormatAmount(existing.BaseAmount), FormatAmount(group.BaseAmount));
+        Diff("minimum", "Minimum", FormatAmount(existing.MinimumAmount), FormatAmount(group.MinimumAmount));
+        Diff("maximum", "Maximum", FormatAmount(existing.MaximumAmount), FormatAmount(group.MaximumAmount));
+        Diff("minAantal", "Min. aantal", FormatAmount(existing.MinimumQuantity), FormatAmount(group.MinimumQuantity));
+        Diff("afrondingsstap", "Afrondingsstap", FormatAmount(existing.QuantityRoundingStep), FormatAmount(group.QuantityRoundingStep));
+        Diff("staffelmodus", "Staffelmodus", existing.BracketMode.ToString(), group.BracketMode.ToString());
         if (!preserveValidity)
         {
             // Skipped for DuplicateAsNewVersion: the exported file freezes the SOURCE's window,
             // while the copy already carries its own (new version) window — not a real change.
             var resolvedEffectiveFrom = group.EffectiveFrom ?? existing.EffectiveFrom;
-            Diff("Geldig van", existing.EffectiveFrom.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+            Diff("geldigVan", "Geldig van", existing.EffectiveFrom.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
                 resolvedEffectiveFrom.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
-            Diff("Geldig tot", existing.EffectiveUntil?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? "onbeperkt",
+            Diff("geldigTot", "Geldig tot", existing.EffectiveUntil?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? "onbeperkt",
                 group.EffectiveUntil?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? "onbeperkt");
         }
 
-        Diff("Staffels", BracketSignature(existing.Brackets), BracketSignature(group.Brackets));
+        Diff(BracketField, "Staffels", BracketSignature(existing.Brackets), BracketSignature(group.Brackets));
 
         return changes;
     }
@@ -668,15 +731,22 @@ public class PricingExcelService : IPricingExcelService
         decimal? MinimumQuantity, decimal? QuantityRoundingStep, BracketSelectionMode BracketMode,
         DateOnly? EffectiveFrom, DateOnly? EffectiveUntil, List<PriceRuleBracket> Brackets);
 
+    /// <summary>Pseudo-field key: the bracket columns as a whole (present when "Staffel van" is mapped).</summary>
+    private const string BracketField = "staffels";
+
     private sealed record ParseOutcome(
         string? FileError, int RowsFound,
         List<(int Row, string Message)> Errors, List<(int Row, string Message)> Warnings,
         List<RuleGroup> CleanGroups, List<PriceRule> ExistingRules,
         Dictionary<Guid, string> UnitCodes, Dictionary<Guid, string> ZoneCodes,
-        Dictionary<string, Guid> UnitIdsByCode, Dictionary<string, Guid> ZoneIdsByCode)
+        Dictionary<string, Guid> UnitIdsByCode, Dictionary<string, Guid> ZoneIdsByCode,
+        /// <summary>Canonical field keys the file supplies (plus <see cref="BracketField"/>); updates only touch these.</summary>
+        HashSet<string> PresentFields,
+        /// <summary>RegelId-less rows matched to an existing rule on Naam+Basis+Eenheid+Zone.</summary>
+        int MatchedByNameCount)
     {
         public static ParseOutcome ForFileError(string message) =>
-            new(message, 0, [], [], [], [], [], [], [], []);
+            new(message, 0, [], [], [], [], [], [], [], [], [], 0);
     }
 
     private async Task<ParseOutcome> ParseWorkbookAsync(
@@ -717,6 +787,12 @@ public class PricingExcelService : IPricingExcelService
         }
 
         var columns = resolution.ColumnByField;
+        // D1: what the file/profile actually supplies. Anything else is left untouched on an
+        // update instead of being read as "set to empty".
+        var presentFields = columns.Keys.ToHashSet(StringComparer.Ordinal);
+        if (columns.ContainsKey("staffelVan")) presentFields.Add(BracketField);
+        var regelIdMapped = columns.ContainsKey("regelId");
+        var pricePresent = presentFields.Contains("eenheidsprijs") || presentFields.Contains(BracketField);
 
         var lastRow = sheet.LastRowUsed()?.RowNumber() ?? headerRow;
         if (lastRow - headerRow > MaxRows)
@@ -826,6 +902,14 @@ public class PricingExcelService : IPricingExcelService
 
             var staffelmodus = ParseBracketMode(staffelmodusText, rowNumber, errors);
 
+            // R3: the engine stores priority as an int; anything outside a sane window is a
+            // typo (or a price in the wrong column), not a precedence choice.
+            if (priorityValue is { } priorityCheck && (priorityCheck < -1000 || priorityCheck > 1000))
+            {
+                errors.Add((rowNumber, $"Prioriteit '{priorityCheck.ToString(CultureInfo.InvariantCulture)}' moet tussen -1000 en 1000 liggen."));
+                priorityValue = null;
+            }
+
             rawRows.Add(new RawRow(
                 rowNumber, regelId, name, basis, unitCode, zoneCode,
                 (int)Math.Round(priorityValue ?? 0, 0, MidpointRounding.AwayFromZero), priorityValue,
@@ -871,26 +955,63 @@ public class PricingExcelService : IPricingExcelService
         // Source rows that contributed a bracket per group, so bracket-level errors can be
         // attributed to every row involved instead of only the group's first row.
         var bracketRowsByGroup = new Dictionary<int, List<int>>();
+        // D2: without a RegelId column the file cannot reference rules by id, so an existing
+        // rule with exactly the same Naam + Basis + Eenheid + Zone is treated as THAT rule (an
+        // update), not as a new equal-specificity duplicate the engine would refuse to price.
+        var existingByNameKey = existingRules
+            .GroupBy(r => NameKey(r.Name, r.Basis,
+                r.UnitTypeId is { } uid ? unitCodes.GetValueOrDefault(uid) : null,
+                r.ZoneId is { } zid ? zoneCodes.GetValueOrDefault(zid) : null))
+            .Where(g => g.Count() == 1)
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
+        var matchedByName = new HashSet<Guid>();
+
         foreach (var row in cleanRows)
         {
-            var key = row.RegelId is { } id ? $"ID:{id}" : $"NEW:{row.Name.Trim().ToUpperInvariant()}|{row.Basis}";
+            var regelId = row.RegelId;
+            if (regelId is null && !regelIdMapped
+                && existingByNameKey.TryGetValue(NameKey(row.Name, row.Basis!.Value, row.UnitCode, row.ZoneCode), out var matched))
+            {
+                regelId = matched.Id;
+                matchedByName.Add(matched.Id);
+            }
+
+            // D5: a new rule is identified by Naam + Basis + Eenheid + Zone; rows that differ
+            // only in unit or zone are different rules, never silently merged into one.
+            var key = regelId is { } id ? $"ID:{id}" : "NEW:" + NameKey(row.Name, row.Basis!.Value, row.UnitCode, row.ZoneCode);
             if (!groupIndexByKey.TryGetValue(key, out var index))
             {
                 index = groups.Count;
                 groupIndexByKey[key] = index;
                 groups.Add(new RuleGroup(
-                    row.RegelId, row.RowNumber, row.Name, row.Basis!.Value, row.UnitCode, row.ZoneCode, row.Priority,
+                    regelId, row.RowNumber, row.Name, row.Basis!.Value, row.UnitCode, row.ZoneCode, row.Priority,
                     row.Eenheidsprijs, row.Basisbedrag, row.Minimum, row.Maximum,
                     row.MinAantal, row.Afrondingsstap, row.Staffelmodus, row.GeldigVan, row.GeldigTot, []));
 
                 // An empty Prioriteit cell silently defaults to 0, which can silently reorder
                 // precedence on re-import — warn only when the SOURCE rule actually had a non-zero
                 // priority (an empty cell on a genuinely new/zero-priority rule is not surprising).
-                if (row.RegelId is { } existingRuleId && row.PriorityRaw is null
+                if (regelId is { } existingRuleId && row.PriorityRaw is null && presentFields.Contains("prioriteit")
                     && existingById.TryGetValue(existingRuleId, out var existingForPriority)
                     && existingForPriority.Priority != 0)
                 {
                     warnings.Add((row.RowNumber, $"Prioriteit leeg — 0 gebruikt voor '{row.Name}'."));
+                }
+            }
+            else
+            {
+                // D5: the rule-level (scalar) cells of every row in a group must agree. An
+                // empty cell inherits the anchor row's value; a conflicting value is an error.
+                var anchor = groups[index];
+                var conflicts = ScalarConflicts(anchor, row);
+                if (conflicts.Count > 0)
+                {
+                    errors.Add((row.RowNumber,
+                        $"Rij hoort bij regel '{anchor.Name}' (rij {anchor.AnchorRow}) maar wijkt af in {string.Join(", ", conflicts)}; per regel mogen deze waarden maar één keer voorkomen."));
+                }
+                else
+                {
+                    groups[index] = FillBlanks(anchor, row);
                 }
             }
 
@@ -918,8 +1039,11 @@ public class PricingExcelService : IPricingExcelService
 
         foreach (var group in groups)
         {
+            // A file without any price column leaves the matched rule's price alone (D1); only
+            // a NEW rule, or a file that does carry price columns, must actually supply one.
             var hasPrice = group.UnitPrice is not null || group.Brackets.Count > 0;
-            if (!hasPrice)
+            var isExisting = group.RegelId is { } gid && existingById.ContainsKey(gid);
+            if (!hasPrice && (pricePresent || !isExisting))
             {
                 errors.Add((group.AnchorRow, "Ontbrekende prijs: vul Staffelprijs of Eenheidsprijs in."));
             }
@@ -948,8 +1072,23 @@ public class PricingExcelService : IPricingExcelService
         // Audit fix (4E): equal-specificity conflicts — two rules with the same name, basis,
         // unit and zone whose validity windows overlap. The engine would pick by priority (or
         // arbitrarily at equal priority), so the operator is told instead of finding out later.
-        foreach (var pair in groups
-            .GroupBy(g => (Name: g.Name.Trim().ToUpperInvariant(), g.Basis, g.UnitCode, g.ZoneCode))
+        // Two rows in the FILE conflicting is a warning (the operator may be re-sequencing);
+        // a file row conflicting with an existing rule the file does not reference (D2) is an
+        // error, because committing it would create the exact duplicate the engine refuses.
+        var referencedIds = groups.Where(g => g.RegelId is not null).Select(g => g.RegelId!.Value).ToHashSet();
+        var candidates = groups
+            .Select(g => (g.Name, g.Basis, g.UnitCode, g.ZoneCode, g.Priority,
+                From: g.EffectiveFrom ?? DateOnly.MinValue, To: g.EffectiveUntil ?? DateOnly.MaxValue,
+                Row: (int?)g.AnchorRow, ExistingId: (Guid?)null))
+            .Concat(existingRules.Where(r => !referencedIds.Contains(r.Id)).Select(r => (
+                r.Name, r.Basis,
+                UnitCode: r.UnitTypeId is { } uid ? unitCodes.GetValueOrDefault(uid)?.ToUpperInvariant() : null,
+                ZoneCode: r.ZoneId is { } zid ? zoneCodes.GetValueOrDefault(zid)?.ToUpperInvariant() : null,
+                r.Priority, From: r.EffectiveFrom, To: r.EffectiveUntil ?? DateOnly.MaxValue,
+                Row: (int?)null, ExistingId: (Guid?)r.Id)))
+            .ToList();
+        foreach (var pair in candidates
+            .GroupBy(c => NameKey(c.Name, c.Basis, c.UnitCode, c.ZoneCode), StringComparer.Ordinal)
             .Where(g => g.Count() > 1))
         {
             var list = pair.ToList();
@@ -957,14 +1096,22 @@ public class PricingExcelService : IPricingExcelService
             {
                 for (var j = i + 1; j < list.Count; j += 1)
                 {
-                    var aFrom = list[i].EffectiveFrom ?? DateOnly.MinValue;
-                    var aTo = list[i].EffectiveUntil ?? DateOnly.MaxValue;
-                    var bFrom = list[j].EffectiveFrom ?? DateOnly.MinValue;
-                    var bTo = list[j].EffectiveUntil ?? DateOnly.MaxValue;
-                    if (aFrom <= bTo && bFrom <= aTo && list[i].Priority == list[j].Priority)
+                    var a = list[i];
+                    var b = list[j];
+                    if (a.Row is null && b.Row is null) continue; // two existing rules: not this import's doing
+                    if (!(a.From <= b.To && b.From <= a.To && a.Priority == b.Priority)) continue;
+
+                    if (a.Row is { } aRow && b.Row is { } bRow)
                     {
-                        warnings.Add((list[j].AnchorRow,
-                            $"Conflict: '{list[j].Name}' komt met dezelfde basis, eenheid, zone en prioriteit ook voor op rij {list[i].AnchorRow} met een overlappende geldigheid."));
+                        warnings.Add((bRow,
+                            $"Conflict: '{b.Name}' komt met dezelfde basis, eenheid, zone en prioriteit ook voor op rij {aRow} met een overlappende geldigheid."));
+                    }
+                    else
+                    {
+                        var fileRow = a.Row ?? b.Row!.Value;
+                        var existingName = a.Row is null ? a.Name : b.Name;
+                        errors.Add((fileRow,
+                            $"Conflict: er bestaat al een regel '{existingName}' met dezelfde basis, eenheid, zone en prioriteit en een overlappende geldigheid. Vul de RegelId van die regel in om ze bij te werken, of verwijder de oude regel eerst."));
                     }
                 }
             }
@@ -973,8 +1120,50 @@ public class PricingExcelService : IPricingExcelService
         var invalidAnchors = errors.Select(e => e.Row).ToHashSet();
         var cleanGroups = groups.Where(g => !invalidAnchors.Contains(g.AnchorRow)).ToList();
 
-        return new ParseOutcome(null, rowsFound, errors, warnings, cleanGroups, existingRules, unitCodes, zoneCodes, unitIdsByCode, zoneIdsByCode);
+        return new ParseOutcome(null, rowsFound, errors, warnings, cleanGroups, existingRules, unitCodes, zoneCodes,
+            unitIdsByCode, zoneIdsByCode, presentFields, matchedByName.Count);
     }
+
+    /// <summary>Exact Naam + Basis + Eenheid + Zone identity (case-insensitive), shared by D2 matching and D5 grouping.</summary>
+    private static string NameKey(string name, PriceRuleBasis basis, string? unitCode, string? zoneCode) =>
+        $"{name.Trim().ToUpperInvariant()}|{basis}|{unitCode?.Trim().ToUpperInvariant() ?? ""}|{zoneCode?.Trim().ToUpperInvariant() ?? ""}";
+
+    /// <summary>Rule-level cells of a continuation row that are filled in AND differ from the anchor row.</summary>
+    private static List<string> ScalarConflicts(RuleGroup anchor, RawRow row)
+    {
+        var conflicts = new List<string>();
+        void Check<T>(string label, T? anchorValue, T? rowValue) where T : struct
+        {
+            if (rowValue is { } value && anchorValue is { } expected && !EqualityComparer<T>.Default.Equals(value, expected))
+            {
+                conflicts.Add(label);
+            }
+        }
+
+        Check("Prioriteit", (decimal?)anchor.Priority, row.PriorityRaw is { } p ? Math.Round(p, 0, MidpointRounding.AwayFromZero) : null);
+        Check("Eenheidsprijs", anchor.UnitPrice, row.Eenheidsprijs);
+        Check("Basisbedrag", anchor.BaseAmount, row.Basisbedrag);
+        Check("Minimum", anchor.MinimumAmount, row.Minimum);
+        Check("Maximum", anchor.MaximumAmount, row.Maximum);
+        Check("Min. aantal", anchor.MinimumQuantity, row.MinAantal);
+        Check("Afrondingsstap", anchor.QuantityRoundingStep, row.Afrondingsstap);
+        Check("Geldig van", anchor.EffectiveFrom, row.GeldigVan);
+        Check("Geldig tot", anchor.EffectiveUntil, row.GeldigTot);
+        return conflicts;
+    }
+
+    /// <summary>An anchor row that left a rule-level cell blank adopts the value a later row of the same rule supplies.</summary>
+    private static RuleGroup FillBlanks(RuleGroup anchor, RawRow row) => anchor with
+    {
+        UnitPrice = anchor.UnitPrice ?? row.Eenheidsprijs,
+        BaseAmount = anchor.BaseAmount ?? row.Basisbedrag,
+        MinimumAmount = anchor.MinimumAmount ?? row.Minimum,
+        MaximumAmount = anchor.MaximumAmount ?? row.Maximum,
+        MinimumQuantity = anchor.MinimumQuantity ?? row.MinAantal,
+        QuantityRoundingStep = anchor.QuantityRoundingStep ?? row.Afrondingsstap,
+        EffectiveFrom = anchor.EffectiveFrom ?? row.GeldigVan,
+        EffectiveUntil = anchor.EffectiveUntil ?? row.GeldigTot,
+    };
 
     private static string? NullIfEmpty(string value) => string.IsNullOrWhiteSpace(value) ? null : value;
 
@@ -984,9 +1173,9 @@ public class PricingExcelService : IPricingExcelService
     /// Numeric cells written by our own export are stored as native doubles; reading them back
     /// through <see cref="IXLCell.GetDouble"/> and rounding to 4 decimals removes the double→decimal
     /// float noise (e.g. 45.8 round-tripping as 45.799999999999997) without truncating anything a
-    /// human would actually type. Text cells (typed by a human, or after re-saving in another
-    /// locale) are parsed with the invariant culture first, then nl-BE (comma decimals) as a
-    /// fallback, since Belgian spreadsheets commonly use a comma.
+    /// human would actually type. Text cells are parsed WITHOUT thousands separators (R2): a
+    /// Belgian "1,250" is one euro twenty-five, never twelve hundred and fifty — nl-BE (comma
+    /// decimal) is tried first, then the invariant culture (point decimal).
     /// </summary>
     private static decimal? ParseDecimalCell(IXLCell? cell, string label, int rowNumber, List<(int Row, string Message)> errors)
     {
@@ -1006,17 +1195,31 @@ public class PricingExcelService : IPricingExcelService
             return null;
         }
 
-        if (decimal.TryParse(text, NumberStyles.Number | NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var invariant))
+        if (ParseDecimalText(text) is { } parsed)
         {
-            return invariant;
+            return parsed;
         }
 
-        if (decimal.TryParse(text, NumberStyles.Number | NumberStyles.AllowLeadingSign, NlCulture, out var nl))
+        errors.Add((rowNumber, $"{label} '{text}' is geen geldig getal."));
+        return null;
+    }
+
+    private const NumberStyles TextNumberStyles =
+        NumberStyles.AllowDecimalPoint | NumberStyles.AllowLeadingSign | NumberStyles.AllowLeadingWhite | NumberStyles.AllowTrailingWhite;
+
+    /// <summary>"1,25" → 1.25 (nl-BE), "1.25" → 1.25 (invariant), "1250" → 1250; "1,250" → 1.25, never 1250.</summary>
+    public static decimal? ParseDecimalText(string text)
+    {
+        if (decimal.TryParse(text, TextNumberStyles, NlCulture, out var nl))
         {
             return nl;
         }
 
-        errors.Add((rowNumber, $"{label} '{text}' is geen geldig getal."));
+        if (decimal.TryParse(text, TextNumberStyles, CultureInfo.InvariantCulture, out var invariant))
+        {
+            return invariant;
+        }
+
         return null;
     }
 
@@ -1038,24 +1241,26 @@ public class PricingExcelService : IPricingExcelService
             return null;
         }
 
-        if (DateOnly.TryParseExact(text, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var iso))
+        if (ParseDateText(text) is { } parsed)
         {
-            return iso;
+            return parsed;
         }
 
-        if (DateOnly.TryParse(text, CultureInfo.InvariantCulture, DateTimeStyles.None, out var invariant))
-        {
-            return invariant;
-        }
-
-        if (DateOnly.TryParse(text, NlCulture, DateTimeStyles.None, out var nl))
-        {
-            return nl;
-        }
-
-        errors.Add((rowNumber, $"{label} '{text}' is geen geldige datum."));
+        errors.Add((rowNumber, $"{label} '{text}' is geen geldige datum (gebruik jjjj-MM-dd of dd/MM/jjjj)."));
         return null;
     }
+
+    /// <summary>
+    /// R2: only ISO (2026-02-01) and the Belgian day-first form (01/02/2026 = 1 februari) are
+    /// accepted. The culture-generic parsers read "01/02/2026" as 2 January, which silently
+    /// shifts a tariff's validity; that ambiguity is refused rather than guessed.
+    /// </summary>
+    private static readonly string[] AcceptedDateFormats = ["yyyy-MM-dd", "dd/MM/yyyy", "d/M/yyyy", "dd-MM-yyyy", "d-M-yyyy"];
+
+    public static DateOnly? ParseDateText(string text) =>
+        DateOnly.TryParseExact(text, AcceptedDateFormats, CultureInfo.InvariantCulture, DateTimeStyles.None, out var date)
+            ? date
+            : null;
 
     private static PriceRuleBasis? ParseBasisCell(string text, int rowNumber, List<(int Row, string Message)> errors)
     {

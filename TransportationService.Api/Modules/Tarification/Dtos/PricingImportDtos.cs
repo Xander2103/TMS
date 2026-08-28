@@ -27,7 +27,14 @@ public record PricingImportPreviewDto(
     /// <summary>Sprint 4F: this exact file was already imported into this table before.</summary>
     bool AlreadyImported = false,
     DateTime? PreviousImportAt = null,
-    string? PreviousImportFileName = null);
+    string? PreviousImportFileName = null,
+    /// <summary>
+    /// Rows without a RegelId column that were matched to an existing rule on exact
+    /// Naam + Basis + Eenheid + Zone and are therefore treated as updates, not duplicates.
+    /// </summary>
+    int MatchedByNameCount = 0,
+    /// <summary>Canonical field keys the file/profile actually supplies; absent fields are left untouched on update.</summary>
+    IReadOnlyList<string>? PresentFields = null);
 
 /// <summary>
 /// Commit form fields (multipart, alongside the file). NewName/NewEffectiveFrom are required

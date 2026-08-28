@@ -20,6 +20,7 @@
     "linkFailed": "Het adres kon niet worden gekoppeld.",
     "linkTitle": "Bestaand adres koppelen",
     "linked": "Adres gekoppeld.",
+    "created": "Adres aangemaakt en aan deze klant gekoppeld.",
     "loadFailed": "De adressen konden niet worden geladen.",
     "loading": "Adressen laden…",
     "noCandidates": "Geen adressen gevonden.",
@@ -563,11 +564,13 @@
     "languageEn": "English",
     "languageFr": "Français",
     "languageNl": "Nederlands",
+    "languageOther": "Andere: {code}",
     "orderConfirmation": "Orderbevestigingen",
     "planning": "Planning / levervenster",
     "receivesHint": "Vink aan wat deze contactpersoon van ons moet ontvangen. Meerdere contactpersonen mogen dezelfde melding krijgen.",
     "receivesTitle": "Ontvangt meldingen",
-    "redelivery": "Herlevering"
+    "redelivery": "Herlevering",
+    "saveFailed": "De contactpersoon is opgeslagen, maar de meldingskeuzes konden niet worden bewaard."
   },
   "peppolDelivery": {
     "EmailFallback": "E-mail (terugval)",

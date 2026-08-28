@@ -146,7 +146,7 @@ public class LocationOperationalDataTests
         // GET returns the same picture (interval list compared element-wise: the record's own
         // equality would compare the freshly materialised lists by reference).
         var fetched = await h.Sut.GetByIdAsync(d.Id, CancellationToken.None, canViewSensitive: true);
-        Assert.Equal(d with { OpeningIntervals = null }, fetched! with { OpeningIntervals = null });
+        Assert.Equal(d with { OpeningIntervals = null, LinkedCustomerNames = null }, fetched! with { OpeningIntervals = null, LinkedCustomerNames = null });
         Assert.Equal(d.OpeningIntervals, fetched.OpeningIntervals!);
     }
 
@@ -183,7 +183,7 @@ public class LocationOperationalDataTests
         Assert.Equal((2, "06:00", "18:00"), (interval.DayOfWeek, interval.FromTime, interval.ToTime));
 
         // Everything not touched by the update stays exactly as created.
-        Assert.Equal(created with { Gate = "Poort 9", OpeningIntervals = updated.OpeningIntervals }, updated);
+        Assert.Equal(created with { Gate = "Poort 9", OpeningIntervals = updated.OpeningIntervals, LinkedCustomerNames = updated.LinkedCustomerNames }, updated);
 
         // The old interval rows are really gone, not orphaned.
         Assert.Single(h.Db.Context.Set<LocationOpeningInterval>().Where(i => i.LocationId == created.Id).ToList());

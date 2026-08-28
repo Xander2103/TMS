@@ -30,35 +30,47 @@ public sealed record InvoicePdfStrings(
     string PaymentHeading,
     string PaymentReferenceLabel,
     /// <summary>.NET date format string for all dates on the document.</summary>
-    string DateFormat)
+    string DateFormat,
+    /// <summary>Unit word after an hourly service quantity ("2 uur").</summary>
+    string HourUnit = "uur",
+    /// <summary>Unit word after a per-stop service quantity ("3 stops").</summary>
+    string StopsUnit = "stops",
+    /// <summary>Label of a diesel-surcharge line ("Dieseltoeslag 12%").</summary>
+    string DieselSurcharge = "Dieseltoeslag",
+    /// <summary>Suffix for a diesel surcharge computed over the invoice subtotal.</summary>
+    string OnInvoiceSubtotal = "op factuursubtotaal")
 {
     public static readonly InvoicePdfStrings Nl = new(
         "FACTUUR", "CREDITNOTA", "Factuurnummer", "Creditnotanummer", "Datum", "Vervaldatum",
         "Crediteert factuur", "PO-nummer", "Factuuradres", "BTW",
         "Omschrijving", "Aantal", "Prijs", "BTW%", "Totaal",
         "BTW-overzicht", "over", "Subtotaal", "BTW", "Totaal",
-        "Betaalgegevens", "Mededeling", "dd-MM-yyyy");
+        "Betaalgegevens", "Mededeling", "dd-MM-yyyy",
+        "uur", "stops", "Dieseltoeslag", "op factuursubtotaal");
 
     public static readonly InvoicePdfStrings Fr = new(
         "FACTURE", "NOTE DE CRÉDIT", "Numéro de facture", "Numéro de note de crédit", "Date", "Échéance",
         "Crédite la facture", "Numéro de commande", "Adresse de facturation", "TVA",
         "Description", "Quantité", "Prix", "TVA%", "Total",
         "Récapitulatif TVA", "sur", "Sous-total", "TVA", "Total",
-        "Informations de paiement", "Communication", "dd/MM/yyyy");
+        "Informations de paiement", "Communication", "dd/MM/yyyy",
+        "h", "arrêts", "Surcharge gasoil", "sur le sous-total de la facture");
 
     public static readonly InvoicePdfStrings En = new(
         "INVOICE", "CREDIT NOTE", "Invoice number", "Credit note number", "Date", "Due date",
         "Credits invoice", "PO number", "Billing address", "VAT",
         "Description", "Quantity", "Price", "VAT%", "Total",
         "VAT breakdown", "on", "Subtotal", "VAT", "Total",
-        "Payment details", "Reference", "dd/MM/yyyy");
+        "Payment details", "Reference", "dd/MM/yyyy",
+        "h", "stops", "Diesel surcharge", "on invoice subtotal");
 
     public static readonly InvoicePdfStrings De = new(
         "RECHNUNG", "GUTSCHRIFT", "Rechnungsnummer", "Gutschriftnummer", "Datum", "Fälligkeitsdatum",
         "Gutschrift zur Rechnung", "Bestellnummer", "Rechnungsadresse", "USt.",
         "Beschreibung", "Menge", "Preis", "USt.%", "Gesamt",
         "USt.-Übersicht", "auf", "Zwischensumme", "USt.", "Gesamt",
-        "Zahlungsinformationen", "Verwendungszweck", "dd.MM.yyyy");
+        "Zahlungsinformationen", "Verwendungszweck", "dd.MM.yyyy",
+        "Std.", "Stopps", "Dieselzuschlag", "auf Rechnungszwischensumme");
 
     public static InvoicePdfStrings For(string? languageCode) =>
         languageCode?.Trim().ToLowerInvariant() switch

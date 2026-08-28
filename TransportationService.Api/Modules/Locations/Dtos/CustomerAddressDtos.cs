@@ -76,7 +76,9 @@ public record AddressDuplicateCandidateDto(
     string? CountryCode,
     bool IsActive,
     /// <summary>Names of the customers already using this address — the reason to reuse it.</summary>
-    IReadOnlyList<string> LinkedCustomers);
+    IReadOnlyList<string> LinkedCustomers,
+    /// <summary>The candidate's own type, so "use existing" carries the real address, not the form's choice.</summary>
+    LocationType Type = LocationType.CustomerLocation);
 
 public record AddressDuplicateCheckRequest(
     string? Street,
@@ -130,7 +132,10 @@ public enum CustomerAddressOutcome
     NotFound,
     /// <summary>Customer or address does not exist in this tenant.</summary>
     InvalidReference,
-    /// <summary>This customer is already linked to this address.</summary>
+    /// <summary>
+    /// Kept for API compatibility only: since the audit fixes a re-link of an existing active
+    /// relationship returns <see cref="Success"/> with that relationship (a re-link is not an error).
+    /// </summary>
     AlreadyLinked,
 }
 

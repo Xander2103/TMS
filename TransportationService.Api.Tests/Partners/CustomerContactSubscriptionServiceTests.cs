@@ -310,6 +310,168 @@ public class CustomerContactSubscriptionServiceTests
             .AnyAsync(r => r.Type == CustomerCommunicationType.DeliveryChange));
     }
 
+    // ------------------------------------------------ untick / retick, rule hygiene
+
+    [Fact]
+    public async Task RetickingAfterUnticking_ResurrectsTheSoftDeletedLink_WithoutADuplicate()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var jan = await AddContactAsync(h, "Jan", "Peeters", "jan@example.com");
+        var sofie = await AddContactAsync(h, "Sofie", "Janssens", "sofie@example.com");
+        await h.Sut.SetForContactAsync(h.CustomerId, jan, ["planning"], CancellationToken.None);
+        await h.Sut.SetForContactAsync(h.CustomerId, sofie, ["planning"], CancellationToken.None);
+
+        // Jan is unticked (the rule survives because Sofie is still on it) and ticked again.
+        await h.Sut.SetForContactAsync(h.CustomerId, jan, [], CancellationToken.None);
+        var saved = await h.Sut.SetForContactAsync(h.CustomerId, jan, ["planning"], CancellationToken.None);
+
+        Assert.Equal(["planning"], saved!.OptionKeys);
+        var recipients = await h.Communication.ResolveRecipientsAsync(
+            h.CustomerId, CustomerCommunicationType.PlanningAlert, CancellationToken.None);
+        Assert.Equal(2, recipients.Count);
+        Assert.Contains(recipients, r => r.ContactId == jan);
+        Assert.Contains(recipients, r => r.ContactId == sofie);
+
+        // One physical row per (rule, contact): the soft-deleted link was reused, not duplicated.
+        var rule = await h.Db.Context.CustomerCommunicationRules.AsNoTracking()
+            .FirstAsync(r => r.Type == CustomerCommunicationType.PlanningAlert);
+        var janLinks = await h.Db.Context.CustomerCommunicationRuleContacts.IgnoreQueryFilters().AsNoTracking()
+            .Where(c => c.RuleId == rule.Id && c.ContactId == jan)
+            .ToListAsync();
+        var link = Assert.Single(janLinks);
+        Assert.False(link.IsDeleted);
+        Assert.Null(link.DeletedAt);
+    }
+
+    [Fact]
+    public async Task Subscribing_NeverReactivatesARuleAnAdministratorSwitchedOff()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var jan = await AddContactAsync(h, "Jan", "Peeters", "jan@example.com");
+        var sofie = await AddContactAsync(h, "Sofie", "Janssens", "sofie@example.com");
+
+        var inactiveId = Guid.NewGuid();
+        h.Db.Context.CustomerCommunicationRules.Add(new CustomerCommunicationRule
+        {
+            Id = inactiveId, TenantId = h.TenantId, CustomerId = h.CustomerId,
+            Type = CustomerCommunicationType.ProofOfDelivery, Channel = "Email", IsActive = false, CcEmail = "archief@klant.be",
+            Contacts = [new CustomerCommunicationRuleContact { Id = Guid.NewGuid(), TenantId = h.TenantId, ContactId = sofie }],
+        });
+        await h.Db.Context.SaveChangesAsync();
+
+        await h.Sut.SetForContactAsync(h.CustomerId, jan, ["delivery-pod"], CancellationToken.None);
+
+        var rules = await h.Db.Context.CustomerCommunicationRules.Include(r => r.Contacts).AsNoTracking()
+            .Where(r => r.Type == CustomerCommunicationType.ProofOfDelivery)
+            .ToListAsync();
+        var inactive = Assert.Single(rules, r => r.Id == inactiveId);
+        Assert.False(inactive.IsActive);
+        Assert.Equal("archief@klant.be", inactive.CcEmail);
+        Assert.Single(inactive.Contacts, c => c.ContactId == sofie);
+
+        var fresh = Assert.Single(rules, r => r.Id != inactiveId);
+        Assert.True(fresh.IsActive);
+        Assert.Single(fresh.Contacts, c => c.ContactId == jan);
+
+        // Jan receives; Sofie (only on the switched-off rule) still does not.
+        var recipients = await h.Communication.ResolveRecipientsAsync(
+            h.CustomerId, CustomerCommunicationType.ProofOfDelivery, CancellationToken.None);
+        Assert.Single(recipients, r => r.ContactId == jan);
+    }
+
+    [Fact]
+    public async Task Unticking_RemovesTheContactFromEveryRuleOfThatType_AndKeepsTheAdvancedRule()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var jan = await AddContactAsync(h, "Jan", "Peeters", "jan@example.com");
+        var backup = await AddContactAsync(h, "Backup", "Balie", "balie@example.com");
+
+        var simpleId = Guid.NewGuid();
+        var advancedId = Guid.NewGuid();
+        h.Db.Context.CustomerCommunicationRules.AddRange(
+            new CustomerCommunicationRule
+            {
+                Id = simpleId, TenantId = h.TenantId, CustomerId = h.CustomerId,
+                Type = CustomerCommunicationType.Invoice, Channel = "Email", IsActive = true,
+                Contacts = [new CustomerCommunicationRuleContact { Id = Guid.NewGuid(), TenantId = h.TenantId, ContactId = jan }],
+            },
+            new CustomerCommunicationRule
+            {
+                Id = advancedId, TenantId = h.TenantId, CustomerId = h.CustomerId,
+                Type = CustomerCommunicationType.Invoice, Channel = "Email", IsActive = true,
+                CcEmail = "boekhouding@klant.be", LanguageCode = "fr", FallbackContactId = backup,
+                Contacts = [new CustomerCommunicationRuleContact { Id = Guid.NewGuid(), TenantId = h.TenantId, ContactId = jan }],
+            });
+        await h.Db.Context.SaveChangesAsync();
+
+        await h.Sut.SetForContactAsync(h.CustomerId, jan, [], CancellationToken.None);
+
+        Assert.Empty((await h.Sut.GetForContactAsync(h.CustomerId, jan, CancellationToken.None))!.OptionKeys);
+        Assert.False(await h.Db.Context.CustomerCommunicationRuleContacts.AnyAsync(c => c.ContactId == jan));
+
+        // The empty simple rule is gone; the advanced one is kept with all its routing intact.
+        Assert.False(await h.Db.Context.CustomerCommunicationRules.AnyAsync(r => r.Id == simpleId));
+        var advanced = await h.Db.Context.CustomerCommunicationRules.Include(r => r.Contacts).AsNoTracking()
+            .FirstAsync(r => r.Id == advancedId);
+        Assert.Equal("boekhouding@klant.be", advanced.CcEmail);
+        Assert.Equal("fr", advanced.LanguageCode);
+        Assert.Equal(backup, advanced.FallbackContactId);
+        Assert.Empty(advanced.Contacts);
+    }
+
+    [Fact]
+    public async Task Subscribing_PrefersTheActiveRuleWithoutAdvancedSettings()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var jan = await AddContactAsync(h, "Jan", "Peeters", "jan@example.com");
+        var sofie = await AddContactAsync(h, "Sofie", "Janssens", "sofie@example.com");
+
+        var advancedId = Guid.NewGuid();
+        var simpleId = Guid.NewGuid();
+        h.Db.Context.CustomerCommunicationRules.AddRange(
+            new CustomerCommunicationRule
+            {
+                Id = advancedId, TenantId = h.TenantId, CustomerId = h.CustomerId,
+                Type = CustomerCommunicationType.Invoice, Channel = "Email", IsActive = true, CcEmail = "boekhouding@klant.be",
+                Contacts = [new CustomerCommunicationRuleContact { Id = Guid.NewGuid(), TenantId = h.TenantId, ContactId = sofie }],
+            },
+            new CustomerCommunicationRule
+            {
+                Id = simpleId, TenantId = h.TenantId, CustomerId = h.CustomerId,
+                Type = CustomerCommunicationType.Invoice, Channel = "Email", IsActive = true,
+                Contacts = [new CustomerCommunicationRuleContact { Id = Guid.NewGuid(), TenantId = h.TenantId, ContactId = sofie }],
+            });
+        await h.Db.Context.SaveChangesAsync();
+
+        await h.Sut.SetForContactAsync(h.CustomerId, jan, ["invoice"], CancellationToken.None);
+
+        var simple = await h.Db.Context.CustomerCommunicationRules.Include(r => r.Contacts).AsNoTracking().FirstAsync(r => r.Id == simpleId);
+        var advanced = await h.Db.Context.CustomerCommunicationRules.Include(r => r.Contacts).AsNoTracking().FirstAsync(r => r.Id == advancedId);
+        Assert.Contains(simple.Contacts, c => c.ContactId == jan);
+        Assert.DoesNotContain(advanced.Contacts, c => c.ContactId == jan);
+    }
+
+    [Fact]
+    public async Task SavingUnchangedOptions_WritesNoAuditRecord()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var jan = await AddContactAsync(h, "Jan", "Peeters");
+
+        await h.Sut.SetForContactAsync(h.CustomerId, jan, ["planning"], CancellationToken.None);
+        Assert.Equal(1, await h.Db.Context.AuditLogs.CountAsync(a => a.Action == "ContactNotificationsChanged"));
+
+        await h.Sut.SetForContactAsync(h.CustomerId, jan, ["planning"], CancellationToken.None);
+        Assert.Equal(1, await h.Db.Context.AuditLogs.CountAsync(a => a.Action == "ContactNotificationsChanged"));
+
+        await h.Sut.SetForContactAsync(h.CustomerId, jan, ["planning", "eta"], CancellationToken.None);
+        Assert.Equal(2, await h.Db.Context.AuditLogs.CountAsync(a => a.Action == "ContactNotificationsChanged"));
+    }
+
     // ------------------------------------------------------------- overview
 
     [Fact]

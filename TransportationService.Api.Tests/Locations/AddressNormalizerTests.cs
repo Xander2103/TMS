@@ -61,9 +61,72 @@ public class AddressNormalizerTests
     }
 
     [Fact]
-    public void ExactKey_IsStillBuilt_WhenOnlyTheCityIsKnown()
+    public void StreetKey_IsEmpty_WhenOnlyTheCityIsKnown()
     {
-        // City alone is enough to compare on; the street part is simply empty.
-        Assert.NotEqual(string.Empty, AddressNormalizer.StreetKey("BE", "2030", "Antwerpen", null));
+        // A city-only record must not become a "same street" candidate for every address in
+        // that city, so without a street there is nothing to compare on.
+        Assert.Equal(string.Empty, AddressNormalizer.StreetKey("BE", "2030", "Antwerpen", null));
+        Assert.Equal(string.Empty, AddressNormalizer.ExactKey("BE", "2030", "Antwerpen", null, "10"));
+    }
+
+    // ---------------------------------------------------------- audit R2
+
+    [Theory]
+    [InlineData("1 bus 1", "1/1")]
+    [InlineData("1/1", "1/1")]
+    [InlineData("1-1", "1/1")]
+    [InlineData("1 b 1", "1/1")]
+    [InlineData("1b1", "1/1")]
+    [InlineData("1 / 1", "1/1")]
+    [InlineData("10a bte 2", "10a/2")]
+    [InlineData("12 box 3", "12/3")]
+    [InlineData("1A", "1a")]
+    [InlineData("1 a", "1a")]
+    [InlineData("10 B", "10b")]
+    [InlineData("10", "10")]
+    public void HouseNumber_CanonicalisesBusSeparators_AndKeepsLettersAdjacent(string input, string expectedPart)
+    {
+        var key = AddressNormalizer.ExactKey("BE", "2030", "Antwerpen", "Noorderlaan", input);
+        Assert.EndsWith("|" + expectedPart, key);
+    }
+
+    [Theory]
+    [InlineData("1/1", "11")]
+    [InlineData("12/3", "123")]
+    [InlineData("1 bus 1", "11")]
+    public void HouseNumber_BusSeparatorIsNotDeleted_SoTheseAreDifferentDoors(string a, string b)
+    {
+        Assert.NotEqual(
+            AddressNormalizer.ExactKey("BE", "2030", "Antwerpen", "Noorderlaan", a),
+            AddressNormalizer.ExactKey("BE", "2030", "Antwerpen", "Noorderlaan", b));
+    }
+
+    [Fact]
+    public void Fold_MapsSharpSToSs()
+    {
+        Assert.Equal(
+            AddressNormalizer.StreetKey("DE", "50667", "Köln", "Große Straße"),
+            AddressNormalizer.StreetKey("DE", "50667", "Koeln".Replace("oe", "o"), "grosse strasse"));
+    }
+
+    [Theory]
+    [InlineData("B-2030", "2030")]
+    [InlineData("NL-1234 AB", "1234ab")]
+    [InlineData("L-1234", "1234")]
+    [InlineData("1234 AB", "1234ab")]
+    public void PostalCode_StripsLeadingIsoPrefix_AndSeparators(string input, string canonical)
+    {
+        Assert.Equal(
+            AddressNormalizer.StreetKey("BE", input, "Stad", "Straat"),
+            AddressNormalizer.StreetKey("BE", canonical, "Stad", "Straat"));
+    }
+
+    [Fact]
+    public void Keys_AreDeterministic_AcrossCalls()
+    {
+        var first = AddressNormalizer.ExactKey("be", " B-2030 ", "ANTWERPEN", "Noorderlaan ", "1 bus 2");
+        var second = AddressNormalizer.ExactKey("be", " B-2030 ", "ANTWERPEN", "Noorderlaan ", "1 bus 2");
+        Assert.Equal(first, second);
+        Assert.Equal("BE|2030|antwerpen|noorderlaan|1/2", first);
     }
 }

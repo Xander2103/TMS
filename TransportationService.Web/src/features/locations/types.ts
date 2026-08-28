@@ -143,6 +143,13 @@ export interface LocationDetail {
   isDefaultLoadingLocation: boolean
   isDefaultUnloadingLocation: boolean
   isDefaultBillingLocation: boolean
+  /**
+   * The customer relationships behind this address (sprint 2 audit). More than one means the
+   * legacy customer/default fields on the address form are read-only: manage the links via
+   * Klant › Adressen. Optional so older callers/fixtures keep type-checking.
+   */
+  linkedCustomerCount?: number
+  linkedCustomerNames?: string[]
 }
 
 /**
@@ -151,10 +158,19 @@ export interface LocationDetail {
  *   interval, so the type requires an array (send [] to intentionally clear).
  * - `accessCode` must be OMITTED entirely when the user lacks locations.view_sensitive
  *   (the backend then preserves the stored value).
+ * - `overrideDuplicate` (create only): the server refuses a same-front-door address with a
+ *   409 `address_duplicate` unless this is true — set it only after the user chose "Toch aanmaken".
  */
-export type LocationInput = Omit<LocationDetail, 'id' | 'customerName' | 'accessCode' | 'openingIntervals'> & {
+export type LocationInput = Omit<
+  LocationDetail,
+  'id' | 'customerName' | 'accessCode' | 'openingIntervals' | 'linkedCustomerCount' | 'linkedCustomerNames'
+> & {
   accessCode?: string | null
   openingIntervals: LocationOpeningInterval[]
+  overrideDuplicate?: boolean
+  /** Read-only context for the edit form (never posted with meaning; the server ignores it). */
+  linkedCustomerCount?: number
+  linkedCustomerNames?: string[]
 }
 
 /** Blank location form value; spread and override to prefill (e.g. customerId from the URL). */

@@ -16,7 +16,9 @@ public interface ICustomerAddressService
     Task<CustomerAddressResult> LinkAsync(Guid customerId, LinkCustomerAddressRequest request, CancellationToken cancellationToken);
     Task<CustomerAddressResult> UpdateLinkAsync(Guid customerId, Guid linkId, UpdateCustomerAddressLinkRequest request, CancellationToken cancellationToken);
     Task<bool> UnlinkAsync(Guid customerId, Guid linkId, CancellationToken cancellationToken);
-    Task<IReadOnlyList<AddressPickerOptionDto>> PickerAsync(Guid? customerId, string? search, int take, CancellationToken cancellationToken);
+    /// <param name="excludeCustomerId">Leave out addresses this customer already uses (the "link an existing address" dialog).</param>
+    Task<IReadOnlyList<AddressPickerOptionDto>> PickerAsync(
+        Guid? customerId, string? search, int take, Guid? excludeCustomerId, CancellationToken cancellationToken);
 }
 
 /// <summary>
@@ -80,64 +82,19 @@ public class CustomerAddressService : ICustomerAddressService
 
     // ------------------------------------------------------ duplicate check
 
-    public async Task<AddressDuplicateCheckResultDto> CheckDuplicatesAsync(
-        AddressDuplicateCheckRequest request, CancellationToken cancellationToken)
-    {
-        var exactKey = AddressNormalizer.ExactKey(
-            request.CountryCode, request.PostalCode, request.City, request.Street, request.HouseNumber);
-        var streetKey = AddressNormalizer.StreetKey(
-            request.CountryCode, request.PostalCode, request.City, request.Street);
-
-        // Not enough address to compare on: never report "possible duplicate" from two blanks.
-        if (streetKey.Length == 0)
-        {
-            return new AddressDuplicateCheckResultDto(false, []);
-        }
-
-        var candidates = await Locations().AsNoTracking()
-            .Where(l => l.AddressStreetKey == streetKey)
-            .Where(l => request.ExcludeLocationId == null || l.Id != request.ExcludeLocationId)
-            .OrderBy(l => l.Name)
-            .Take(25)
-            .Select(l => new
-            {
-                l.Id, l.Code, l.Name, l.Street, l.HouseNumber, l.PostalCode, l.City, l.CountryCode, l.IsActive,
-                IsExact = l.AddressExactKey == exactKey,
-            })
-            .ToListAsync(cancellationToken);
-
-        if (candidates.Count == 0)
-        {
-            return new AddressDuplicateCheckResultDto(false, []);
-        }
-
-        var ids = candidates.Select(c => c.Id).ToList();
-        var customersByLocation = await Links().AsNoTracking()
-            .Where(l => ids.Contains(l.LocationId))
-            .Join(_dbContext.Customers.Where(c => c.TenantId == _tenantContext.TenantId),
-                link => link.CustomerId, c => c.Id, (link, c) => new { link.LocationId, c.Name })
-            .ToListAsync(cancellationToken);
-
-        var grouped = customersByLocation
-            .GroupBy(x => x.LocationId)
-            .ToDictionary(g => g.Key, g => (IReadOnlyList<string>)g.Select(x => x.Name).Distinct().OrderBy(n => n).ToList());
-
-        var dtos = candidates
-            .Select(c => new AddressDuplicateCandidateDto(
-                c.Id, c.Code, c.Name,
-                c.IsExact && exactKey.Length > 0 ? AddressDuplicateMatch.Exact : AddressDuplicateMatch.SameStreet,
-                c.Street, c.HouseNumber, c.PostalCode, c.City, c.CountryCode, c.IsActive,
-                grouped.GetValueOrDefault(c.Id, [])))
-            // Same front door first — that is the one the user almost certainly means.
-            .OrderBy(c => c.Match == AddressDuplicateMatch.Exact ? 0 : 1)
-            .ThenBy(c => c.Name)
-            .ToList();
-
-        return new AddressDuplicateCheckResultDto(dtos.Any(d => d.Match == AddressDuplicateMatch.Exact), dtos);
-    }
+    public Task<AddressDuplicateCheckResultDto> CheckDuplicatesAsync(
+        AddressDuplicateCheckRequest request, CancellationToken cancellationToken) =>
+        AddressDuplicateFinder.FindAsync(_dbContext, _tenantContext.TenantId, request, cancellationToken);
 
     // --------------------------------------------------------------- write
 
+    /// <summary>
+    /// Idempotent: linking a customer to an address it already uses is not an error — the
+    /// existing active relationship is returned as-is (the address form and the quick-create
+    /// flow both end up here after the address itself created the link). An inactive or
+    /// soft-deleted pair is resurrected with the request's values rather than duplicated, and a
+    /// race on the filtered unique index resolves to the row that won.
+    /// </summary>
     public async Task<CustomerAddressResult> LinkAsync(
         Guid customerId, LinkCustomerAddressRequest request, CancellationToken cancellationToken)
     {
@@ -149,32 +106,61 @@ public class CustomerAddressService : ICustomerAddressService
             return CustomerAddressResult.InvalidReference;
         }
 
-        if (await Links().AnyAsync(l => l.CustomerId == customerId && l.LocationId == request.LocationId, cancellationToken))
+        // IgnoreQueryFilters bypasses tenant + soft delete, hence the explicit tenant predicate.
+        var existing = await _dbContext.CustomerLocationLinks.IgnoreQueryFilters()
+            .Where(l => l.TenantId == _tenantContext.TenantId && l.CustomerId == customerId && l.LocationId == request.LocationId)
+            .OrderBy(l => l.IsDeleted).ThenBy(l => l.CreatedAt)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (existing is { IsDeleted: false, IsActive: true })
         {
-            return CustomerAddressResult.AlreadyLinked;
+            return CustomerAddressResult.Success(Map(existing, location, await ShareCountAsync(location.Id, cancellationToken)));
         }
 
-        var link = new CustomerLocationLink
+        var link = existing ?? new CustomerLocationLink
         {
             Id = Guid.NewGuid(),
             TenantId = _tenantContext.TenantId,
             CustomerId = customerId,
             LocationId = request.LocationId,
-            Alias = Trim(request.Alias),
-            CustomerReference = Trim(request.CustomerReference),
-            Role = request.Role,
-            Instructions = Trim(request.Instructions),
-            IsActive = true,
         };
+        var resurrected = existing is not null;
+        var before = resurrected
+            ? new { link.Alias, link.CustomerReference, link.Role, link.IsDefaultLoading, link.IsDefaultUnloading, link.IsDefaultBilling, link.Instructions, link.IsActive, link.IsDeleted }
+            : null;
+
+        link.Alias = Trim(request.Alias);
+        link.CustomerReference = Trim(request.CustomerReference);
+        link.Role = request.Role;
+        link.Instructions = Trim(request.Instructions);
+        link.IsActive = true;
+        link.IsDeleted = false;
+        link.DeletedAt = null;
 
         // Promote/demote runs as an immediate UPDATE, so it shares the insert's transaction.
         await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
         await ApplyDefaultsAsync(link, request.IsDefaultLoading, request.IsDefaultUnloading, request.IsDefaultBilling, cancellationToken);
-        _dbContext.CustomerLocationLinks.Add(link);
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        if (!resurrected) _dbContext.CustomerLocationLinks.Add(link);
+
+        try
+        {
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException) when (!resurrected)
+        {
+            // Check-then-insert race on the filtered unique index: somebody linked the same
+            // pair in between. Their row is the relationship; return it instead of a 500.
+            _dbContext.Entry(link).State = EntityState.Detached;
+            await transaction.RollbackAsync(cancellationToken);
+            var winner = await Links().AsNoTracking()
+                .FirstOrDefaultAsync(l => l.CustomerId == customerId && l.LocationId == request.LocationId, cancellationToken);
+            if (winner is null) throw;
+            return CustomerAddressResult.Success(Map(winner, location, await ShareCountAsync(location.Id, cancellationToken)));
+        }
+
         await SyncLegacyOwnerAsync(request.LocationId, customerId, cancellationToken);
 
-        await _auditService.RecordAsync(EntityType, link.Id.ToString(), "Linked", null,
+        await _auditService.RecordAsync(EntityType, link.Id.ToString(), resurrected ? "Relinked" : "Linked", before,
             new { link.CustomerId, link.LocationId, link.Role, link.IsDefaultLoading, link.IsDefaultUnloading, link.IsDefaultBilling },
             cancellationToken);
         await transaction.CommitAsync(cancellationToken);
@@ -241,9 +227,17 @@ public class CustomerAddressService : ICustomerAddressService
     /// then the rest of the central master.
     /// </summary>
     public async Task<IReadOnlyList<AddressPickerOptionDto>> PickerAsync(
-        Guid? customerId, string? search, int take, CancellationToken cancellationToken)
+        Guid? customerId, string? search, int take, Guid? excludeCustomerId, CancellationToken cancellationToken)
     {
         var query = Locations().AsNoTracking().Where(l => l.IsActive);
+
+        // Server-side, so the exclusion happens BEFORE the take — a client filter after the
+        // cut-off would silently drop candidates.
+        if (excludeCustomerId is { } excluded)
+        {
+            query = query.Where(l => !_dbContext.CustomerLocationLinks
+                .Any(link => link.LocationId == l.Id && link.CustomerId == excluded));
+        }
 
         if (!string.IsNullOrWhiteSpace(search))
         {

@@ -94,7 +94,11 @@ public record LocationDetailDto(
     string? PreferredArrivalTo = null,
     string? EarliestArrival = null,
     string? LatestArrival = null,
-    IReadOnlyList<LocationOpeningIntervalDto>? OpeningIntervals = null);
+    IReadOnlyList<LocationOpeningIntervalDto>? OpeningIntervals = null,
+    // Sprint 2 audit: the customer relationships behind this address. More than one link means
+    // the legacy customer/default fields on the address form are read-only (Klant › Adressen).
+    int LinkedCustomerCount = 0,
+    IReadOnlyList<string>? LinkedCustomerNames = null);
 
 public record CreateLocationRequest(
     // Optional since the master-data wave: when blank the service generates "LOC-xxxxxxxx".
@@ -147,7 +151,13 @@ public record CreateLocationRequest(
     string? PreferredArrivalTo = null,
     string? EarliestArrival = null,
     string? LatestArrival = null,
-    IReadOnlyList<LocationOpeningIntervalDto>? OpeningIntervals = null);
+    IReadOnlyList<LocationOpeningIntervalDto>? OpeningIntervals = null,
+    /// <summary>
+    /// An address with the same front door (normalised country/postcode/city/street/house
+    /// number) already exists → <see cref="LocationOperationOutcome.PossibleDuplicate"/> unless
+    /// the user deliberately overrides. The rule lives here, not only in a dialog.
+    /// </summary>
+    bool OverrideDuplicate = false);
 
 public record UpdateLocationRequest(
     string Code,
@@ -217,11 +227,16 @@ public enum LocationOperationOutcome
     DuplicateCode,
     InvalidCoordinates,
     InvalidReference,
+    /// <summary>Same front door as an existing active address and no explicit override; see <see cref="LocationOperationResult.Duplicates"/>.</summary>
+    PossibleDuplicate,
 }
 
-public record LocationOperationResult(LocationOperationOutcome Outcome, LocationDetailDto? Location)
+public record LocationOperationResult(
+    LocationOperationOutcome Outcome, LocationDetailDto? Location, AddressDuplicateCheckResultDto? Duplicates = null)
 {
     public static LocationOperationResult Success(LocationDetailDto location) => new(LocationOperationOutcome.Success, location);
+    public static LocationOperationResult PossibleDuplicateOf(AddressDuplicateCheckResultDto duplicates) =>
+        new(LocationOperationOutcome.PossibleDuplicate, null, duplicates);
     public static readonly LocationOperationResult NotFound = new(LocationOperationOutcome.NotFound, null);
     public static readonly LocationOperationResult DuplicateCode = new(LocationOperationOutcome.DuplicateCode, null);
     public static readonly LocationOperationResult InvalidCoordinates = new(LocationOperationOutcome.InvalidCoordinates, null);

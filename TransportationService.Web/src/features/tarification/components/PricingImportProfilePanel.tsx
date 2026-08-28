@@ -1,12 +1,14 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Button } from '../../../components/ui/Button'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { FormField } from '../../../components/ui/FormField'
 import { localizeApiError } from '../../../api/problemDetails'
 import { useLocale } from '../../../i18n/localeContext'
+import { useAuth } from '../../auth/authContextValue'
 import {
   createPricingImportProfile,
   deletePricingImportProfile,
+  listPricingImportFields,
   readPricingImportHeaders,
   updatePricingImportProfile,
   type PricingImportField,
@@ -31,13 +33,21 @@ const FIELD_LABEL_KEYS = new Set([
   'afrondingsstap', 'staffelmodus', 'geldigVan', 'geldigTot',
 ])
 
+/** Backend limits (PricingImportProfileConfiguration): Name 120, SheetName 120, Notes 1000. */
+const NAME_MAX_LENGTH = 120
+const SHEET_NAME_MAX_LENGTH = 120
+const NOTES_MAX_LENGTH = 1000
+
 /**
- * Sprint 4 (completion): mapping profiles managed where they are used. The operator reads the
- * columns of the chosen workbook, maps each business-labelled pricing field onto one of them,
- * and saves that as a named profile (create / update / rename / delete). No JSON is ever shown.
+ * Sprint 4 (completion): mapping profiles managed where they are used. The canonical fields are
+ * loaded on mount so a profile's mapping can be viewed and edited without a workbook; reading
+ * the columns of the chosen file adds them as source options (with the header row and sheet
+ * the operator typed, not the saved ones). Saving/deleting needs tariffs.manage.
  */
 export function PricingImportProfilePanel({ file, profile, onProfilesChanged, onMessage, disabled }: PricingImportProfilePanelProps) {
   const { t } = useLocale()
+  const { hasPermission } = useAuth()
+  const canManage = hasPermission('tariffs.manage')
   const [headers, setHeaders] = useState<string[]>([])
   const [fields, setFields] = useState<PricingImportField[]>([])
   // Initialised from the selected profile; the dialog keys this panel on the profile id so a
@@ -51,8 +61,26 @@ export function PricingImportProfilePanel({ file, profile, onProfilesChanged, on
   const [error, setError] = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
 
-  // Fields are needed even without a workbook (to show what can be mapped): read them once via
-  // the headers endpoint of the chosen file; without a file the operator is asked for one.
+  // The fields exist independently of any workbook: load them once so the mapping table is
+  // there immediately (a saved profile is reviewable without re-uploading the customer's file).
+  useEffect(() => {
+    let cancelled = false
+    listPricingImportFields()
+      .then((data) => {
+        if (!cancelled) setFields(data)
+      })
+      .catch(() => {
+        if (!cancelled) setError(t('tarification.importProfiles.fieldsFailed'))
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [t])
+
+  function parsedHeaderRow(): number {
+    return Math.max(1, Number.parseInt(headerRow, 10) || 1)
+  }
+
   async function readColumns() {
     if (!file) {
       setError(t('tarification.importProfiles.noFile'))
@@ -61,7 +89,12 @@ export function PricingImportProfilePanel({ file, profile, onProfilesChanged, on
     setBusy(true)
     setError(null)
     try {
-      const result = await readPricingImportHeaders(file, null)
+      // The header row / sheet name the operator is typing win over the saved profile's values.
+      const result = await readPricingImportHeaders(file, {
+        profileId: profile?.id ?? null,
+        headerRow: parsedHeaderRow(),
+        sheetName: sheetName.trim() || null,
+      })
       setHeaders(result.headers)
       setFields(result.fields)
     } catch (err) {
@@ -81,7 +114,7 @@ export function PricingImportProfilePanel({ file, profile, onProfilesChanged, on
     return {
       name: name.trim(),
       notes: notes.trim() || null,
-      headerRow: Math.max(1, Number.parseInt(headerRow, 10) || 1),
+      headerRow: parsedHeaderRow(),
       sheetName: sheetName.trim() || null,
       mapping: Object.fromEntries(Object.entries(mapping).filter(([, header]) => header.trim().length > 0)),
       isActive: true,
@@ -129,33 +162,36 @@ export function PricingImportProfilePanel({ file, profile, onProfilesChanged, on
     }
   }
 
-  const locked = disabled || busy
+  const locked = disabled || busy || !canManage
   // Existing mappings may name headers that are not in this file; keep them selectable so
-  // nothing silently disappears when the operator only renames the profile.
+  // nothing silently disappears when the operator only renames the profile — but say so.
+  const headerSet = new Set(headers)
   const sourceOptions = Array.from(new Set([...headers, ...Object.values(mapping).filter((h) => h)]))
+  const absentSuffix = ` ${t('tarification.importProfiles.headerNotInFile')}`
 
   return (
     <section className="pricing-import-profile" data-testid="pricing-import-profile-panel">
       <h3>{t('tarification.importProfiles.title')}</h3>
       <p className="customer-form-muted">{t('tarification.importProfiles.intro')}</p>
+      {!canManage && <p className="customer-form-muted" role="note">{t('tarification.importProfiles.readOnly')}</p>}
 
       <div className="issued-items-form-row">
         <FormField label={t('tarification.importProfiles.nameLabel')} htmlFor="pricing-profile-name" required>
-          <input id="pricing-profile-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={120} disabled={locked} />
+          <input id="pricing-profile-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={NAME_MAX_LENGTH} disabled={locked} />
         </FormField>
         <FormField label={t('tarification.importProfiles.headerRow')} htmlFor="pricing-profile-header-row">
-          <input id="pricing-profile-header-row" type="number" min={1} value={headerRow} onChange={(e) => setHeaderRow(e.target.value)} disabled={locked} />
+          <input id="pricing-profile-header-row" type="number" min={1} max={1000} value={headerRow} onChange={(e) => setHeaderRow(e.target.value)} disabled={locked} />
         </FormField>
         <FormField label={t('tarification.importProfiles.sheetName')} htmlFor="pricing-profile-sheet">
-          <input id="pricing-profile-sheet" value={sheetName} onChange={(e) => setSheetName(e.target.value)} maxLength={60} disabled={locked} />
+          <input id="pricing-profile-sheet" value={sheetName} onChange={(e) => setSheetName(e.target.value)} maxLength={SHEET_NAME_MAX_LENGTH} disabled={locked} />
         </FormField>
       </div>
       <FormField label={t('tarification.importProfiles.notesLabel')} htmlFor="pricing-profile-notes">
-        <input id="pricing-profile-notes" value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={500} disabled={locked} />
+        <input id="pricing-profile-notes" value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={NOTES_MAX_LENGTH} disabled={locked} />
       </FormField>
 
       <div className="pricing-import-profile-actions">
-        <Button variant="secondary" onClick={() => void readColumns()} disabled={locked || !file}>
+        <Button variant="secondary" onClick={() => void readColumns()} disabled={disabled || busy || !file}>
           {t('tarification.importProfiles.readColumns')}
         </Button>
         {headers.length > 0 && <span className="customer-form-muted">{t('tarification.importProfiles.columnsFound', { count: headers.length })}</span>}
@@ -186,7 +222,7 @@ export function PricingImportProfilePanel({ file, profile, onProfilesChanged, on
                     <option value="">{t('tarification.importProfiles.notMapped')}</option>
                     {sourceOptions.map((header) => (
                       <option key={header} value={header}>
-                        {header}
+                        {headers.length > 0 && !headerSet.has(header) ? `${header}${absentSuffix}` : header}
                       </option>
                     ))}
                   </select>
@@ -203,21 +239,23 @@ export function PricingImportProfilePanel({ file, profile, onProfilesChanged, on
         </p>
       )}
 
-      <div className="pricing-import-profile-actions">
-        {profile && (
-          <Button onClick={() => void save(false)} disabled={locked}>
-            {t('tarification.importProfiles.update')}
+      {canManage && (
+        <div className="pricing-import-profile-actions">
+          {profile && (
+            <Button onClick={() => void save(false)} disabled={locked}>
+              {t('tarification.importProfiles.update')}
+            </Button>
+          )}
+          <Button variant={profile ? 'secondary' : 'primary'} onClick={() => void save(true)} disabled={locked}>
+            {t('tarification.importProfiles.saveNew')}
           </Button>
-        )}
-        <Button variant={profile ? 'secondary' : 'primary'} onClick={() => void save(true)} disabled={locked}>
-          {t('tarification.importProfiles.saveNew')}
-        </Button>
-        {profile && (
-          <Button variant="secondary" onClick={() => setConfirmDelete(true)} disabled={locked}>
-            {t('tarification.importProfiles.delete')}
-          </Button>
-        )}
-      </div>
+          {profile && (
+            <Button variant="secondary" onClick={() => setConfirmDelete(true)} disabled={locked}>
+              {t('tarification.importProfiles.delete')}
+            </Button>
+          )}
+        </div>
+      )}
 
       {confirmDelete && profile && (
         <ConfirmDialog

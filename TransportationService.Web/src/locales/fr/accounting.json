@@ -93,7 +93,7 @@
     "account": "Compte du grand livre",
     "costCentre": "Centre de coûts",
     "entity": "Entité",
-    "intro": "Par entité facturante, un compte du grand livre et un centre de coûts propres. Sans imputation, le compte par défaut du code de vente s’applique.",
+    "intro": "Par entité facturante, un compte du grand livre et un centre de coûts propres. Sans imputation, le compte par défaut de la catégorie de vente s’applique.",
     "loadFailed": "Les entités n’ont pas pu être chargées.",
     "noEntities": "Aucune entité active.",
     "title": "Imputation comptable par entité",

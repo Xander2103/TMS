@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using TransportationService.Api.Common.Models;
 using TransportationService.Api.Common.Reference;
 using TransportationService.Api.Data;
@@ -34,7 +35,7 @@ public class LocationServiceTests
 
     private static CreateLocationRequest CreateRequest(string code = "DEP-001", string name = "Hoofddepot") => new(
         code, name, LocationType.Depot,
-        Street: "Havenlaan", HouseNumber: "1", PostalCode: "2000", City: "Antwerpen", CountryCode: "be",
+        Street: "Havenlaan", HouseNumber: code, PostalCode: "2000", City: "Antwerpen", CountryCode: "be",
         Latitude: 51.22m, Longitude: 4.40m,
         ContactName: "Jan", ContactPhone: null, ContactEmail: null,
         OpeningHours: "08:00-18:00", LoadingInstructions: null, UnloadingInstructions: null, AccessInstructions: null,
@@ -327,5 +328,187 @@ public class LocationServiceTests
 
         Assert.Equal(0, foreign.TotalCount);
         Assert.Empty(foreign.Items);
+    }
+
+    // ------------------------------------------------------------ audit fixes
+
+    private static UpdateLocationRequest UpdateFrom(LocationDetailDto d, Guid? customerId) => new(
+        d.Code, d.Name, d.Type, d.Street, d.HouseNumber, d.PostalCode, d.City, d.CountryCode,
+        d.Latitude, d.Longitude, d.ContactName, d.ContactPhone, d.ContactEmail,
+        d.OpeningHours, d.LoadingInstructions, d.UnloadingInstructions, d.AccessInstructions,
+        d.AccessRestrictions, d.VehicleRestrictions, d.TrailerRestrictions,
+        d.AlfapassRequired, d.AppointmentRequired, IsActive: true, CustomerId: customerId, Notes: d.Notes,
+        d.IsDefaultLoadingLocation, d.IsDefaultUnloadingLocation, d.IsDefaultBillingLocation);
+
+    private static async Task<CustomerLocationLink> LinkAsync(Harness h, Guid customerId, Guid locationId)
+    {
+        var link = new CustomerLocationLink
+        {
+            Id = Guid.NewGuid(), TenantId = h.TenantId, CustomerId = customerId, LocationId = locationId,
+            Role = CustomerLocationRole.Both, IsActive = true, Alias = "Eigen naam", IsDefaultLoading = true,
+        };
+        h.Db.Context.CustomerLocationLinks.Add(link);
+        await h.Db.Context.SaveChangesAsync();
+        return link;
+    }
+
+    [Fact]
+    public async Task Update_ChangingTheLegacyOwnerOfASharedAddress_IsRefused()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var customerA = await SeedCustomerAsync(h, "KL-1", "Alfa BV");
+        var customerB = await SeedCustomerAsync(h, "KL-2", "Beta BV");
+        var customerC = await SeedCustomerAsync(h, "KL-3", "Gamma BV");
+        var created = await h.Sut.CreateAsync(CreateRequest("S-1", "Gedeeld") with { CustomerId = customerA }, CancellationToken.None);
+        await LinkAsync(h, customerB, created.Location!.Id);
+
+        var ex = await Assert.ThrowsAsync<TransportationService.Api.Common.DomainValidationException>(
+            () => h.Sut.UpdateAsync(created.Location.Id, UpdateFrom(created.Location, customerC), CancellationToken.None));
+
+        Assert.Contains("Klant › Adressen", ex.Message);
+        // Nothing was touched: both relationships survive, no soft delete.
+        var links = await h.Db.Context.CustomerLocationLinks.IgnoreQueryFilters()
+            .Where(l => l.LocationId == created.Location.Id).ToListAsync();
+        Assert.Equal(2, links.Count);
+        Assert.All(links, l => Assert.False(l.IsDeleted));
+    }
+
+    [Fact]
+    public async Task Update_ChangingTheLegacyOwnerOfASingleLinkAddress_SoftDeletesTheOldLink_WithAudit()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var customerA = await SeedCustomerAsync(h, "KL-1", "Alfa BV");
+        var customerB = await SeedCustomerAsync(h, "KL-2", "Beta BV");
+        var created = await h.Sut.CreateAsync(CreateRequest("S-1", "Verhuisd") with { CustomerId = customerA }, CancellationToken.None);
+        var oldLinkId = (await h.Db.Context.CustomerLocationLinks.SingleAsync(l => l.LocationId == created.Location!.Id)).Id;
+
+        var updated = await h.Sut.UpdateAsync(created.Location!.Id, UpdateFrom(created.Location, customerB), CancellationToken.None);
+
+        Assert.Equal(LocationOperationOutcome.Success, updated.Outcome);
+        var all = await h.Db.Context.CustomerLocationLinks.IgnoreQueryFilters()
+            .Where(l => l.LocationId == created.Location.Id).ToListAsync();
+        var old = Assert.Single(all, l => l.Id == oldLinkId);
+        Assert.True(old.IsDeleted); // soft, never ExecuteDelete
+        Assert.Single(all, l => l.CustomerId == customerB && !l.IsDeleted);
+        Assert.Contains(await h.Db.Context.AuditLogs.ToListAsync(),
+            a => a.EntityType == "CustomerLocationLink" && a.EntityId == oldLinkId.ToString() && a.Action == "Unlinked");
+    }
+
+    [Fact]
+    public async Task Update_NeverOverwritesAnExistingLinksDefaultsFromTheAddressForm()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var customerA = await SeedCustomerAsync(h, "KL-1", "Alfa BV");
+        var created = await h.Sut.CreateAsync(CreateRequest("S-1", "Site") with { CustomerId = customerA }, CancellationToken.None);
+        var link = await h.Db.Context.CustomerLocationLinks.SingleAsync(l => l.LocationId == created.Location!.Id);
+        link.IsDefaultUnloading = true;
+        link.Alias = "Magazijn Noord";
+        await h.Db.Context.SaveChangesAsync();
+
+        // The address form re-saves with its own (false) default flags.
+        await h.Sut.UpdateAsync(created.Location!.Id,
+            UpdateFrom(created.Location, customerA) with { IsDefaultUnloadingLocation = false }, CancellationToken.None);
+
+        var after = await h.Db.Context.CustomerLocationLinks.AsNoTracking().SingleAsync(l => l.Id == link.Id);
+        Assert.True(after.IsDefaultUnloading);
+        Assert.Equal("Magazijn Noord", after.Alias);
+    }
+
+    [Fact]
+    public async Task Duplicate_DerivesAddressKeys_AndCreatesTheCustomerLink()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var customerA = await SeedCustomerAsync(h, "KL-1", "Alfa BV");
+        var source = await h.Sut.CreateAsync(CreateRequest("S-1", "Origineel") with { CustomerId = customerA }, CancellationToken.None);
+
+        var copy = await h.Sut.DuplicateAsync(source.Location!.Id, CancellationToken.None);
+
+        Assert.Equal(LocationOperationOutcome.Success, copy.Outcome);
+        var stored = await h.Db.Context.Locations.AsNoTracking().SingleAsync(l => l.Id == copy.Location!.Id);
+        var original = await h.Db.Context.Locations.AsNoTracking().SingleAsync(l => l.Id == source.Location.Id);
+        Assert.Equal(original.AddressExactKey, stored.AddressExactKey);
+        Assert.Equal(original.AddressStreetKey, stored.AddressStreetKey);
+        Assert.False(string.IsNullOrEmpty(stored.AddressExactKey));
+        Assert.Single(await h.Db.Context.CustomerLocationLinks
+            .Where(l => l.LocationId == stored.Id && l.CustomerId == customerA).ToListAsync());
+        Assert.Equal(1, copy.Location!.LinkedCustomerCount);
+    }
+
+    [Fact]
+    public async Task Create_SameFrontDoorAsAnActiveAddress_ReturnsPossibleDuplicate_UnlessOverridden()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var customerA = await SeedCustomerAsync(h, "KL-1", "Alfa BV");
+        var existing = await h.Sut.CreateAsync(CreateRequest("S-1", "Bestaand") with { CustomerId = customerA }, CancellationToken.None);
+        Assert.Equal(LocationOperationOutcome.Success, existing.Outcome);
+
+        // Different casing/spacing, same door: refused with the candidate list.
+        var again = CreateRequest("S-2", "Nogmaals") with { Street = " havenlaan ", HouseNumber = "s-1", City = "ANTWERPEN" };
+        var refused = await h.Sut.CreateAsync(again, CancellationToken.None);
+
+        Assert.Equal(LocationOperationOutcome.PossibleDuplicate, refused.Outcome);
+        Assert.Null(refused.Location);
+        Assert.True(refused.Duplicates!.HasExactMatch);
+        var candidate = Assert.Single(refused.Duplicates.Candidates);
+        Assert.Equal(existing.Location!.Id, candidate.LocationId);
+        Assert.Equal(["Alfa BV"], candidate.LinkedCustomers);
+        Assert.Equal(1, await h.Db.Context.Locations.CountAsync());
+
+        var overridden = await h.Sut.CreateAsync(again with { OverrideDuplicate = true }, CancellationToken.None);
+        Assert.Equal(LocationOperationOutcome.Success, overridden.Outcome);
+        Assert.Equal(2, await h.Db.Context.Locations.CountAsync());
+    }
+
+    [Fact]
+    public async Task Create_SameFrontDoorAsAnInactiveAddress_IsAllowed()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var existing = await h.Sut.CreateAsync(CreateRequest("S-1", "Oud"), CancellationToken.None);
+        await h.Sut.SetActiveAsync(existing.Location!.Id, new SetLocationActiveRequest(false), CancellationToken.None);
+
+        var result = await h.Sut.CreateAsync(CreateRequest("S-2", "Nieuw") with { HouseNumber = "S-1" }, CancellationToken.None);
+
+        Assert.Equal(LocationOperationOutcome.Success, result.Outcome);
+    }
+
+    [Fact]
+    public async Task Grouped_ListsASharedAddressUnderEachOfItsCustomers_ViaTheLinks()
+    {
+        var (h, customerA, customerB) = await SeedGroupedAsync();
+        using var _d = h.Db;
+        // "Magazijn Leuven" (legacy owner Alfa) is now also used by Beta — via a link only.
+        var shared = await h.Db.Context.Locations.SingleAsync(l => l.Name == "Magazijn Leuven");
+        await LinkAsync(h, customerB, shared.Id);
+
+        var all = await h.Sut.SearchGroupedAsync(null, null, null, null, null, null,
+            "name", PageRequest.Of(1, 10), CancellationToken.None);
+
+        var alfa = all.Items.Single(g => g.CustomerId == customerA);
+        var beta = all.Items.Single(g => g.CustomerId == customerB);
+        Assert.Contains(alfa.Locations, l => l.Id == shared.Id);
+        var betaRow = Assert.Single(beta.Locations, l => l.Id == shared.Id);
+        // Per-customer defaults come from Beta's own link, not from the legacy owner's flags.
+        Assert.True(betaRow.IsDefaultLoadingLocation);
+        Assert.Equal(["Leverpunt Gent", "Magazijn Leuven"], beta.Locations.Select(l => l.Name).ToArray());
+
+        // Filtering on Beta only shows Beta's relationships (Alfa's group is absent).
+        var onlyBeta = await h.Sut.SearchGroupedAsync(null, null, null, customerB, null, null,
+            "name", PageRequest.Of(1, 10), CancellationToken.None);
+        Assert.Equal(1, onlyBeta.TotalCount);
+        Assert.Equal(2, Assert.Single(onlyBeta.Items).Locations.Count);
+
+        // The flat list aggregates every user of the address.
+        var flat = await h.Sut.SearchAsync("Leuven", null, null, null, null, null, null, null, PageRequest.Of(1, 10), CancellationToken.None);
+        Assert.Equal("Alfa BV, Beta BV", Assert.Single(flat.Items).CustomerName);
+
+        var detail = await h.Sut.GetByIdAsync(shared.Id, CancellationToken.None);
+        Assert.Equal(2, detail!.LinkedCustomerCount);
+        Assert.Equal(["Alfa BV", "Beta BV"], detail.LinkedCustomerNames);
     }
 }

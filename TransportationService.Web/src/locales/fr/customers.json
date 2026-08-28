@@ -20,6 +20,7 @@
     "linkFailed": "L'adresse n'a pas pu être liée.",
     "linkTitle": "Lier une adresse existante",
     "linked": "Adresse liée.",
+    "created": "Adresse créée et liée à ce client.",
     "loadFailed": "Les adresses n'ont pas pu être chargées.",
     "loading": "Chargement des adresses…",
     "noCandidates": "Aucune adresse trouvée.",
@@ -563,11 +564,13 @@
     "languageEn": "English",
     "languageFr": "Français",
     "languageNl": "Nederlands",
+    "languageOther": "Autre : {code}",
     "orderConfirmation": "Confirmations de commande",
     "planning": "Planification / créneau de livraison",
     "receivesHint": "Cochez ce que cette personne de contact doit recevoir de notre part. Plusieurs personnes peuvent recevoir la même notification.",
     "receivesTitle": "Reçoit les notifications",
-    "redelivery": "Nouvelle livraison"
+    "redelivery": "Nouvelle livraison",
+    "saveFailed": "La personne de contact a été enregistrée, mais les choix de notification n'ont pas pu être sauvegardés."
   },
   "peppolDelivery": {
     "EmailFallback": "E-mail (secours)",

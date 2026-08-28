@@ -85,4 +85,38 @@ describe('AccountingSettingsPage', () => {
     expect(screen.queryByLabelText('Grootboekrekening voor Transport')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '+ Grootboekrekening' })).not.toBeInTheDocument()
   })
+
+  it('lets the operator set the fiscal classification, diesel-base participation and translations of a sales category', async () => {
+    const user = userEvent.setup()
+    state.categories = [
+      category({
+        ledgerAccountId: 'acc-1', ledgerAccountNumber: '700000', ledgerAccountName: 'Transportopbrengsten',
+        invoiceDescriptionNl: 'Transport', invoiceDescriptionFr: null, includeInDieselBase: false, vatTreatmentOverride: null,
+      }),
+    ]
+    render(
+      <MemoryRouter>
+        <AccountingSettingsPage />
+      </MemoryRouter>,
+    )
+
+    await user.click((await screen.findAllByRole('button', { name: 'Bewerken' }))[0])
+    expect(await screen.findByText('Verkoopcategorie bewerken — Transport')).toBeInTheDocument()
+
+    await user.type(screen.getByLabelText('Factuuromschrijving (FR)'), 'Transport routier')
+    await user.selectOptions(screen.getByLabelText('Afwijkende btw-behandeling'), 'ReverseCharge')
+    await user.click(screen.getByLabelText('Meetellen in basis dieseltoeslag'))
+    await user.click(screen.getByRole('button', { name: 'Opslaan' }))
+
+    await waitFor(() =>
+      expect(state.updateCategory).toHaveBeenCalledWith(
+        'cat-1',
+        expect.objectContaining({
+          invoiceDescriptionFr: 'Transport routier',
+          vatTreatmentOverride: 'ReverseCharge',
+          includeInDieselBase: true,
+        }),
+      ),
+    )
+  })
 })

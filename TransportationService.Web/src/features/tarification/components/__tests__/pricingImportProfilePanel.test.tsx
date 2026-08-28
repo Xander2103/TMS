@@ -1,11 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { PricingImportProfilePanel } from '../PricingImportProfilePanel'
 import type { PricingImportProfile } from '../../api/pricingImportApi'
 
 const api = vi.hoisted(() => ({
   readPricingImportHeaders: vi.fn(),
+  listPricingImportFields: vi.fn(),
   createPricingImportProfile: vi.fn(),
   updatePricingImportProfile: vi.fn(),
   deletePricingImportProfile: vi.fn(),
@@ -13,9 +14,14 @@ const api = vi.hoisted(() => ({
 vi.mock('../../api/pricingImportApi', async (orig) => ({
   ...(await orig<typeof import('../../api/pricingImportApi')>()),
   readPricingImportHeaders: api.readPricingImportHeaders,
+  listPricingImportFields: api.listPricingImportFields,
   createPricingImportProfile: api.createPricingImportProfile,
   updatePricingImportProfile: api.updatePricingImportProfile,
   deletePricingImportProfile: api.deletePricingImportProfile,
+}))
+const auth = vi.hoisted(() => ({ permissions: new Set<string>(['tariffs.manage']) }))
+vi.mock('../../../auth/authContextValue', () => ({
+  useAuth: () => ({ hasPermission: (code: string) => auth.permissions.has(code) }),
 }))
 
 const file = new File(['x'], 'klant.xlsx')
@@ -33,7 +39,9 @@ const existing: PricingImportProfile = {
 }
 
 beforeEach(() => {
+  auth.permissions = new Set(['tariffs.manage'])
   api.readPricingImportHeaders.mockReset().mockResolvedValue(headersResult)
+  api.listPricingImportFields.mockReset().mockResolvedValue(headersResult.fields)
   api.createPricingImportProfile.mockReset().mockImplementation((input) => Promise.resolve({ id: 'p-new', ...input }))
   api.updatePricingImportProfile.mockReset().mockImplementation((id, input) => Promise.resolve({ id, ...input }))
   api.deletePricingImportProfile.mockReset().mockResolvedValue(undefined)
@@ -93,5 +101,47 @@ describe('PricingImportProfilePanel', () => {
     await userEvent.click(screen.getAllByRole('button', { name: 'Profiel verwijderen' }).at(-1)!)
     await waitFor(() => expect(api.deletePricingImportProfile).toHaveBeenCalledWith('p1'))
     expect(onProfilesChanged).toHaveBeenLastCalledWith(null)
+  })
+
+  it('shows the mapping table from the canonical fields on mount, without a workbook', async () => {
+    render(<PricingImportProfilePanel file={null} profile={existing} onProfilesChanged={vi.fn()} onMessage={vi.fn()} />)
+
+    // No file, no "read columns" click — the saved mapping is reviewable right away.
+    expect(await screen.findByRole('combobox', { name: 'Naam van de regel' })).toHaveValue('Artikel')
+    expect(screen.getByRole('combobox', { name: 'Prijsbasis' })).toHaveValue('Soort')
+    expect(api.listPricingImportFields).toHaveBeenCalledTimes(1)
+    expect(api.readPricingImportHeaders).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: 'Kolommen uit bestand lezen' })).toBeDisabled()
+  })
+
+  it('reads the columns with the header row and sheet the operator typed, and flags mapped headers absent from the file', async () => {
+    render(<PricingImportProfilePanel file={file} profile={existing} onProfilesChanged={vi.fn()} onMessage={vi.fn()} />)
+
+    const headerRow = screen.getByLabelText(/Kopregel/)
+    await userEvent.clear(headerRow)
+    await userEvent.type(headerRow, '3')
+    await userEvent.type(screen.getByLabelText(/Werkblad/), 'Tarieven 2026')
+    await userEvent.click(screen.getByRole('button', { name: 'Kolommen uit bestand lezen' }))
+    await screen.findByText('4 kolommen gevonden.')
+
+    expect(api.readPricingImportHeaders).toHaveBeenCalledWith(file, { profileId: 'p1', headerRow: 3, sheetName: 'Tarieven 2026' })
+    // "Soort" is mapped but not one of the file's headers: kept selectable, but marked.
+    const basis = screen.getByRole('combobox', { name: 'Prijsbasis' })
+    expect(basis).toHaveValue('Soort')
+    expect(within(basis).getByRole('option', { name: 'Soort (niet in dit bestand)' })).toBeInTheDocument()
+    expect(within(basis).getByRole('option', { name: 'Artikel' })).toBeInTheDocument()
+  })
+
+  it('is read-only without tariffs.manage: no save/update/delete buttons, inputs disabled', async () => {
+    auth.permissions = new Set(['tariffs.import'])
+    render(<PricingImportProfilePanel file={file} profile={existing} onProfilesChanged={vi.fn()} onMessage={vi.fn()} />)
+
+    await screen.findByRole('combobox', { name: 'Naam van de regel' })
+    expect(screen.getByRole('note')).toHaveTextContent('alleen-lezen')
+    expect(screen.queryByRole('button', { name: 'Profiel bijwerken' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Opslaan als nieuw profiel' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Profiel verwijderen' })).not.toBeInTheDocument()
+    expect(screen.getByLabelText(/Profielnaam/)).toBeDisabled()
+    expect(screen.getByRole('combobox', { name: 'Prijsbasis' })).toBeDisabled()
   })
 })

@@ -299,7 +299,7 @@
     "source": {
       "Customer": "klant",
       "LineOverride": "lijnoverride",
-      "SalesCode": "verkoopcode",
+      "SalesCode": "verkoopcategorie",
       "TenantDefault": "bedrijfsstandaard"
     },
     "sourceLabel": "bron",

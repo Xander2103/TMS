@@ -299,7 +299,7 @@
     "source": {
       "Customer": "client",
       "LineOverride": "dérogation de ligne",
-      "SalesCode": "code de vente",
+      "SalesCode": "catégorie de vente",
       "TenantDefault": "défaut de l’entreprise"
     },
     "sourceLabel": "source",

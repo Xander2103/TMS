@@ -241,4 +241,66 @@ public class SalesCodeFiscalTests
     {
         Assert.Empty(InvoiceLineFiscalResolver.Inspect(VatTreatment.DomesticVat, "BE0123456749", "BE", "BE"));
     }
+
+    // ---------------------------------------------- audit: one fiscal truth per line
+
+    /// <summary>
+    /// A legacy Wave 2 exemption category on a sales code ("AE" configured before the statutory
+    /// classification field existed) can never yield "AE at 21%": it IS the classification, so
+    /// treatment, rate, category and legal text agree — one fiscal truth per line.
+    /// </summary>
+    [Fact]
+    public void ALegacyExemptionCategory_IsTheStatutoryClassification_NotAContradiction()
+    {
+        var code = Code();
+        code.VatCategoryOverride = "AE";
+
+        var resolution = InvoiceLineFiscalResolver.Resolve(
+            null, code, VatTreatment.DomesticVat, 21m, TenantDefaultRate);
+
+        Assert.Equal(VatTreatment.ReverseCharge, resolution.Treatment);
+        Assert.Equal(FiscalTreatmentSource.SalesCode, resolution.Source);
+        Assert.Equal(0m, resolution.RatePercent);
+        Assert.Equal("AE", resolution.VatCategoryCode);
+        Assert.NotNull(resolution.LegalText);
+    }
+
+    [Fact]
+    public void ALegacyCategoryOverride_MayRefineADomesticTreatment_WhenCompatible()
+    {
+        var code = Code();
+        code.VatCategoryOverride = "Z";
+
+        var resolution = InvoiceLineFiscalResolver.Resolve(
+            null, code, VatTreatment.DomesticVat, 0m, TenantDefaultRate);
+
+        Assert.Equal("Z", resolution.VatCategoryCode);
+    }
+
+    [Fact]
+    public void ALineOverride_DerivesItsCategoryFromTheOverride_NotFromTheCode()
+    {
+        var code = Code();
+        code.VatCategoryOverride = "S";
+
+        var resolution = InvoiceLineFiscalResolver.Resolve(
+            VatTreatment.IntraCommunitySupply, code, VatTreatment.DomesticVat, 21m, TenantDefaultRate);
+
+        Assert.Equal(0m, resolution.RatePercent);
+        Assert.Equal("K", resolution.VatCategoryCode);
+        Assert.Equal(FiscalTreatmentSource.LineOverride, resolution.Source);
+    }
+
+    [Fact]
+    public void AStatutoryCodeClassification_DerivesItsCategoryFromTheClassification()
+    {
+        var code = Code(vatOverride: VatTreatment.ReverseCharge);
+        code.VatCategoryOverride = "S";
+
+        var resolution = InvoiceLineFiscalResolver.Resolve(
+            null, code, VatTreatment.DomesticVat, 21m, TenantDefaultRate);
+
+        Assert.Equal("AE", resolution.VatCategoryCode);
+        Assert.Equal(0m, resolution.RatePercent);
+    }
 }

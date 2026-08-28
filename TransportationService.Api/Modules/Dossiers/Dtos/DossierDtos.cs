@@ -121,6 +121,23 @@ public record SaveDossierRequest(
     /// <summary>Expected concurrency token on update; null (legacy clients) skips the check.</summary>
     Guid? Version = null);
 
+/// <summary>What a dossier-level entity change will do to its linked orders, shown BEFORE confirming.</summary>
+public record DossierLegalEntityChangeImpactDto(
+    Guid DossierId,
+    Guid? CurrentLegalEntityId,
+    Guid TargetLegalEntityId,
+    /// <summary>True when the target is not the customer default: needs the override right AND a reason.</summary>
+    bool DeviatesFromCustomerDefault,
+    /// <summary>Blocking reason for the whole dossier; set as soon as one linked order is refused.</summary>
+    string? BlockedReason,
+    /// <summary>Linked orders (on the dossier's current entity) that move along.</summary>
+    IReadOnlyList<DossierLegalEntityChangeOrderDto> Orders,
+    /// <summary>Total concept-invoice lines released across those orders.</summary>
+    int DraftInvoiceLinesReleased);
+
+public record DossierLegalEntityChangeOrderDto(
+    Guid OrderId, string OrderNumber, string? BlockedReason, int DraftInvoiceLinesReleased);
+
 public record ChangeDossierEntityRequest(
     Guid LegalEntityId, Guid? Version = null,
     /// <summary>Wave 2: mandatory when the target differs from the customer default (audited old→new+reason).</summary>

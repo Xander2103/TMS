@@ -31,6 +31,13 @@ public class SalesCategoryConfiguration : IEntityTypeConfiguration<SalesCategory
         builder.Property(c => c.InvoiceDescriptionNl).HasMaxLength(300);
         builder.Property(c => c.DefaultUnitCode).HasMaxLength(20);
         builder.Property(c => c.VatCategoryOverride).HasMaxLength(5);
+        // Audit fix: bounded like InvoiceDescriptionNl; CostCentre must fit invoice_lines.CostCentreSnapshot (40).
+        builder.Property(c => c.InvoiceDescriptionFr).HasMaxLength(300);
+        builder.Property(c => c.InvoiceDescriptionEn).HasMaxLength(300);
+        builder.Property(c => c.InvoiceDescriptionDe).HasMaxLength(300);
+        builder.Property(c => c.CostCentre).HasMaxLength(40);
+        builder.Property(c => c.DefaultPricingBasis).HasMaxLength(40);
+        builder.Property(c => c.Notes).HasMaxLength(1000);
         builder.HasOne(c => c.LedgerAccount).WithMany().HasForeignKey(c => c.LedgerAccountId).OnDelete(DeleteBehavior.Restrict);
         builder.HasIndex(c => new { c.TenantId, c.Code }).IsUnique().HasFilter("\"IsDeleted\" = false");
         builder.HasIndex(c => c.TenantId);
@@ -54,6 +61,15 @@ public class SalesCategoryLedgerMappingConfiguration : IEntityTypeConfiguration<
         // One mapping per code per invoicing entity.
         builder.HasIndex(m => new { m.TenantId, m.SalesCategoryId, m.LegalEntityId })
             .IsUnique().HasFilter("\"IsDeleted\" = false");
+
+        // Audit fix: real references, Restrict so a mapped account/entity can never vanish
+        // underneath a sales code (the delete guard in AccountingService reports it first).
+        builder.HasOne<LedgerAccount>().WithMany()
+            .HasForeignKey(m => m.LedgerAccountId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<Modules.Organization.Entities.LegalEntity>().WithMany()
+            .HasForeignKey(m => m.LegalEntityId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasIndex(m => m.LedgerAccountId);
+        builder.HasIndex(m => m.LegalEntityId);
 
         builder.HasQueryFilter(m => !m.IsDeleted);
     }

@@ -459,7 +459,14 @@ public class TransportOrderService : ITransportOrderService
         var previousEntityId = order.LegalEntityId;
         // Draft coherence: a concept invoice belongs to ONE entity, so lines of this order on a
         // concept of the old entity are released (the sent-invoice case was refused above).
+        // Audit fix: an order on a concept invoice carries Status = Invoiced; once its lines are
+        // released it is handed back to Completed so it can be invoiced again under the new entity.
         _dbContext.InvoiceLines.RemoveRange(draftLines);
+        if (draftLines.Count > 0 && order.Status == TransportOrderStatus.Invoiced)
+        {
+            order.Status = TransportOrderStatus.Completed;
+            await InvoiceReadinessEvaluator.EvaluateAsync(_dbContext, order, cancellationToken);
+        }
         order.LegalEntityId = request.LegalEntityId;
         order.Version = Guid.NewGuid();
         await _dbContext.SaveChangesAsync(cancellationToken);
@@ -472,15 +479,56 @@ public class TransportOrderService : ITransportOrderService
         return TransportOrderOperationResult.Success(await MapDetailAsync(order, cancellationToken));
     }
 
+    public async Task<string?> ChangeLegalEntityWithinDossierAsync(
+        Guid id, Guid legalEntityId, string? reason, CancellationToken cancellationToken)
+    {
+        var order = await TenantScoped().FirstOrDefaultAsync(o => o.Id == id, cancellationToken);
+        if (order is null)
+        {
+            return "De order bestaat niet.";
+        }
+
+        if (order.LegalEntityId == legalEntityId)
+        {
+            return null;
+        }
+
+        var (impact, draftLines) = await LoadLegalEntityChangeAsync(order, legalEntityId, cancellationToken);
+        if (impact.BlockedReason is { } blocked)
+        {
+            return blocked;
+        }
+
+        var previousEntityId = order.LegalEntityId;
+        _dbContext.InvoiceLines.RemoveRange(draftLines);
+        if (draftLines.Count > 0 && order.Status == TransportOrderStatus.Invoiced)
+        {
+            order.Status = TransportOrderStatus.Completed;
+            await InvoiceReadinessEvaluator.EvaluateAsync(_dbContext, order, cancellationToken);
+        }
+        order.LegalEntityId = legalEntityId;
+        order.Version = Guid.NewGuid();
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        await _auditService.RecordAsync(EntityType, order.Id.ToString(), "LegalEntityChanged",
+            new { LegalEntityId = previousEntityId },
+            new { order.LegalEntityId, Reason = reason, DraftInvoiceLinesReleased = draftLines.Count, ViaDossier = true },
+            cancellationToken);
+        return null;
+    }
+
     private async Task<(OrderLegalEntityChangeImpactDto Impact, List<Modules.Invoicing.Entities.InvoiceLine> DraftLines)>
         LoadLegalEntityChangeAsync(TransportOrder order, Guid legalEntityId, CancellationToken cancellationToken)
     {
         var tenantId = _tenantContext.TenantId;
         string? blocked = null;
 
-        if (order.Status is TransportOrderStatus.Cancelled or TransportOrderStatus.Invoiced)
+        // Financial safety is decided by the INVOICE state, not the order flag: an order on a
+        // concept invoice (Status = Invoiced) may still move — its concept lines are released —
+        // while any order on a sent/booked invoice is refused below.
+        if (order.Status is TransportOrderStatus.Cancelled)
         {
-            blocked = "Een gefactureerde of geannuleerde opdracht kan niet van facturerende entiteit wijzigen.";
+            blocked = "Een geannuleerde opdracht kan niet van facturerende entiteit wijzigen.";
         }
         else if (!await _dbContext.LegalEntities.AnyAsync(
                      e => e.TenantId == tenantId && e.Id == legalEntityId && e.IsActive, cancellationToken))

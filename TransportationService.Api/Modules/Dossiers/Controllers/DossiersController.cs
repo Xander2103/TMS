@@ -95,6 +95,15 @@ public class DossiersController : ControllerBase
         return dossier is null ? NotFound() : Ok(dossier);
     }
 
+    [HttpGet("{id:guid}/legal-entity/impact")]
+    [RequirePermission(PermissionCodes.DossiersView, PermissionCodes.DossiersManage)]
+    public async Task<ActionResult<DossierLegalEntityChangeImpactDto>> LegalEntityChangeImpact(
+        Guid id, [FromQuery] Guid legalEntityId, CancellationToken cancellationToken)
+    {
+        var impact = await _service.PreviewLegalEntityChangeAsync(id, legalEntityId, cancellationToken);
+        return impact is null ? NotFound() : Ok(impact);
+    }
+
     [HttpPut("{id:guid}/legal-entity")]
     [RequirePermission(PermissionCodes.DossiersManage)]
     public async Task<ActionResult<DossierDetailDto>> ChangeLegalEntity(

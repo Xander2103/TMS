@@ -20,6 +20,7 @@
     "linkFailed": "The address could not be linked.",
     "linkTitle": "Link existing address",
     "linked": "Address linked.",
+    "created": "Address created and linked to this customer.",
     "loadFailed": "The addresses could not be loaded.",
     "loading": "Loading addresses…",
     "noCandidates": "No addresses found.",
@@ -563,11 +564,13 @@
     "languageEn": "English",
     "languageFr": "Français",
     "languageNl": "Nederlands",
+    "languageOther": "Other: {code}",
     "orderConfirmation": "Order confirmations",
     "planning": "Planning / delivery window",
     "receivesHint": "Tick what this contact should receive from us. Several contacts may receive the same notification.",
     "receivesTitle": "Receives notifications",
-    "redelivery": "Redelivery"
+    "redelivery": "Redelivery",
+    "saveFailed": "The contact was saved, but the notification choices could not be stored."
   },
   "peppolDelivery": {
     "EmailFallback": "E-mail (fallback)",

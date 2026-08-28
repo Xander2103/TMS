@@ -10,7 +10,8 @@ import { useAuth } from '../../auth/authContextValue'
 import { getCustomer } from '../../customers/api/customersApi'
 import { getLegalEntityOptions } from '../../legal-entities/api/legalEntitiesApi'
 import type { LegalEntityOption } from '../../legal-entities/types'
-import { changeDossierLegalEntity } from '../api/dossiersApi'
+import { changeDossierLegalEntity, getDossierLegalEntityImpact } from '../api/dossiersApi'
+import type { DossierLegalEntityChangeImpact } from '../api/dossiersApi'
 import { formatDate, operationalStatus, priceChip } from '../dossierDisplay'
 import { DOSSIER_STATUS_LABELS, DOSSIER_STATUS_TONE, type DossierDetail } from '../types'
 
@@ -62,8 +63,26 @@ export function DossierHeader({ dossier, canManage, onAddActivity, menuActions, 
         setAllowedIds(customer?.allowedLegalEntityIds ?? [])
         setCustomerDefaultId(customer?.defaultLegalEntityId ?? null)
       })
-      .catch(() => setEntities([]))
-  }, [entityDialog, dossier.customerId])
+      .catch((err: unknown) => {
+        setEntities([])
+        setError(describeApiError(err, t('dossiers.header.entityLoadFailed')).message)
+      })
+  }, [entityDialog, dossier.customerId, t])
+
+  // Impact preview: which linked orders move along and how many concept-invoice lines are
+  // released — shown BEFORE confirming, and blocking when one order sits on a sent invoice.
+  const [impact, setImpact] = useState<DossierLegalEntityChangeImpact | null>(null)
+  useEffect(() => {
+    if (!entityDialog || !entityId || entityId === dossier.legalEntityId) {
+      setImpact(null)
+      return
+    }
+    let cancelled = false
+    getDossierLegalEntityImpact(dossier.id, entityId)
+      .then((result) => { if (!cancelled) setImpact(result) })
+      .catch(() => { if (!cancelled) setImpact(null) })
+    return () => { cancelled = true }
+  }, [entityDialog, entityId, dossier.id, dossier.legalEntityId])
 
   const visibleEntities = allowedIds.length > 0
     ? entities.filter((e) => allowedIds.includes(e.id) || e.id === dossier.legalEntityId)
@@ -183,7 +202,7 @@ export function DossierHeader({ dossier, canManage, onAddActivity, menuActions, 
               <Button variant="secondary" onClick={() => setEntityDialog(false)} disabled={busy}>
                 {t('ui.actions.cancel')}
               </Button>
-              <Button onClick={() => void saveEntity()} disabled={busy || !entityId || lacksOverrideRight}>
+              <Button onClick={() => void saveEntity()} disabled={busy || !entityId || lacksOverrideRight || Boolean(impact?.blockedReason)}>
                 {t('dossiers.header.changeAction')}
               </Button>
             </>
@@ -206,6 +225,20 @@ export function DossierHeader({ dossier, canManage, onAddActivity, menuActions, 
               ))}
             </select>
           </FormField>
+          {impact && (
+            <div className="customer-form-muted" data-testid="dossier-entity-impact">
+              {impact.blockedReason ? (
+                <p className="customer-import-message customer-import-message-error" role="alert">{impact.blockedReason}</p>
+              ) : (
+                <>
+                  <p>{t('dossiers.header.entityImpactOrders', { count: impact.orders.length })}</p>
+                  {impact.draftInvoiceLinesReleased > 0 && (
+                    <p>{t('dossiers.header.entityImpactDraftLines', { count: impact.draftInvoiceLinesReleased })}</p>
+                  )}
+                </>
+              )}
+            </div>
+          )}
           {entityDeviates && (
             <p className={lacksOverrideRight ? 'customer-import-message customer-import-message-error' : 'customer-form-muted'} role={lacksOverrideRight ? 'alert' : undefined}>
               {lacksOverrideRight ? t('dossiers.header.entityNoOverride') : t('dossiers.header.entityDeviates')}

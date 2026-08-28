@@ -214,6 +214,52 @@ public class CustomerPortalServiceTests
     }
 
     [Fact]
+    public async Task Locations_ASharedAddressLinkedToMyCustomer_IsListedAndAccepted_WithMyOwnDefaults()
+    {
+        // D4: membership and defaults come from the customer↔address relationship, not from the
+        // legacy owner column — a shared address (legacy owner = the other customer) is mine too.
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        h.Db.Context.CustomerLocationLinks.Add(new CustomerLocationLink
+        {
+            Id = Guid.NewGuid(), TenantId = h.TenantId, CustomerId = h.CustomerId, LocationId = h.ForeignLocationId,
+            Role = CustomerLocationRole.Both, IsActive = true, IsDefaultUnloading = true,
+        });
+        await h.Db.Context.SaveChangesAsync();
+        var sut = h.For(h.PortalUserId);
+
+        var list = await sut.ListMyLocationsAsync(CancellationToken.None);
+
+        Assert.Equal(2, list.Value!.Count);
+        var shared = list.Value.Single(l => l.Id == h.ForeignLocationId);
+        Assert.True(shared.IsDefaultUnloadingLocation);
+        Assert.False(shared.IsDefaultLoadingLocation);
+        // Still listed: the single-owner legacy address without any link row.
+        Assert.Contains(list.Value, l => l.Id == h.OwnLocationId);
+
+        var submitted = await sut.SubmitOrderAsync(Request(h, loadingLocationId: h.ForeignLocationId), CancellationToken.None);
+        Assert.Equal(PortalOutcomeKind.Success, submitted.Outcome);
+    }
+
+    [Fact]
+    public async Task Locations_AnInactiveLinkDoesNotGrantAccess()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        h.Db.Context.CustomerLocationLinks.Add(new CustomerLocationLink
+        {
+            Id = Guid.NewGuid(), TenantId = h.TenantId, CustomerId = h.CustomerId, LocationId = h.ForeignLocationId,
+            Role = CustomerLocationRole.Both, IsActive = false,
+        });
+        await h.Db.Context.SaveChangesAsync();
+        var sut = h.For(h.PortalUserId);
+
+        Assert.Single((await sut.ListMyLocationsAsync(CancellationToken.None)).Value!);
+        var refused = await sut.SubmitOrderAsync(Request(h, loadingLocationId: h.ForeignLocationId), CancellationToken.None);
+        Assert.Equal(PortalOutcomeKind.ValidationFailed, refused.Outcome);
+    }
+
+    [Fact]
     public async Task NotificationPreferences_DefaultsThenRoundTrip_FilteringUnknownKinds()
     {
         var h = await SeedAsync();

@@ -86,10 +86,18 @@ public class CustomerHistoryService : ICustomerHistoryService
             .Select(l => l.Id.ToString())
             .ToListAsync(cancellationToken);
 
+        // Sprint 2: the customer ↔ address relationships (link/unlink/defaults) are audited on
+        // their own entity type; soft-deleted (unlinked) rows included so the history stays whole.
+        var linkIds = await _dbContext.CustomerLocationLinks.IgnoreQueryFilters()
+            .Where(l => l.TenantId == _tenantContext.TenantId && l.CustomerId == customerId)
+            .Select(l => l.Id.ToString())
+            .ToListAsync(cancellationToken);
+
         var logs = await _dbContext.AuditLogs.AsNoTracking()
             .Where(a => a.TenantId == _tenantContext.TenantId
                         && ((a.EntityType == "Customer" && a.EntityId == customerKey)
-                            || (a.EntityType == "Location" && locationIds.Contains(a.EntityId))))
+                            || (a.EntityType == "Location" && locationIds.Contains(a.EntityId))
+                            || (a.EntityType == "CustomerLocationLink" && linkIds.Contains(a.EntityId))))
             .OrderByDescending(a => a.Timestamp)
             .Take(MaxRows)
             .ToListAsync(cancellationToken);
@@ -142,6 +150,7 @@ public class CustomerHistoryService : ICustomerHistoryService
     private static string Categorize(string entityType, string action) => entityType switch
     {
         "Location" => "Locaties",
+        "CustomerLocationLink" => "Locaties",
         _ when action.StartsWith("Contact", StringComparison.Ordinal) => "Contactpersonen",
         _ when action.StartsWith("CommunicationRule", StringComparison.Ordinal) => "Communicatie",
         _ when action.StartsWith("Po", StringComparison.Ordinal)
@@ -153,7 +162,15 @@ public class CustomerHistoryService : ICustomerHistoryService
     private static string ActionLabel(string entityType, string action) => action switch
     {
         "Created" => entityType == "Location" ? "Locatie aangemaakt" : "Aangemaakt",
-        "Updated" => entityType == "Location" ? "Locatie gewijzigd" : "Gewijzigd",
+        "Updated" => entityType switch
+        {
+            "Location" => "Locatie gewijzigd",
+            "CustomerLocationLink" => "Adreskoppeling gewijzigd",
+            _ => "Gewijzigd",
+        },
+        "Linked" => "Adres gekoppeld",
+        "Relinked" => "Adres opnieuw gekoppeld",
+        "Unlinked" => "Adres ontkoppeld",
         "Deleted" => entityType == "Location" ? "Locatie verwijderd" : "Verwijderd",
         "Activated" => "Geactiveerd",
         "Deactivated" => "Gedeactiveerd",

@@ -6,6 +6,7 @@ import { FormField } from '../../../components/ui/FormField'
 import { Modal } from '../../../components/ui/Modal'
 import { localizeApiError } from '../../../api/problemDetails'
 import { useLocale } from '../../../i18n/localeContext'
+import { useAuth } from '../../auth/authContextValue'
 import {
   commitPricingImport,
   downloadAgreementExport,
@@ -31,6 +32,14 @@ interface PricingImportDialogProps {
 }
 
 const today = () => new Date().toISOString().slice(0, 10)
+
+/** Fields an update can touch; when the file lacks any of them the operator is told the rest stays as it is. */
+const UPDATABLE_FIELDS = [
+  'eenheid', 'zone', 'prioriteit', 'eenheidsprijs', 'basisbedrag', 'minimum', 'maximum', 'minAantal',
+  'afrondingsstap', 'staffelmodus', 'geldigVan', 'geldigTot', 'staffels',
+]
+
+const STATUS_TONE: Record<string, BadgeTone> = { Succeeded: 'success', Rejected: 'warning', Failed: 'danger' }
 
 function ChangeBadge({ label, tone, count }: { label: string; tone: BadgeTone; count: number }) {
   return (
@@ -59,6 +68,9 @@ function RuleChangeRow({ change }: { change: PricingImportRuleChange }) {
  */
 export function PricingImportDialog({ agreementId, agreementName, onClose, onImported }: PricingImportDialogProps) {
   const { t } = useLocale()
+  const { hasPermission } = useAuth()
+  // Profiles are configuration: listing/using them needs only view/import, managing them needs manage.
+  const canManageProfiles = hasPermission('tariffs.manage')
   const [file, setFile] = useState<File | null>(null)
   const [preview, setPreview] = useState<PricingImportPreview | null>(null)
   const [applyRemovals, setApplyRemovals] = useState(false)
@@ -218,11 +230,13 @@ export function PricingImportDialog({ agreementId, agreementName, onClose, onImp
             ))}
           </select>
         </FormField>
-        <button type="button" className="customer-import-template-link" onClick={() => setProfilePanelOpen((open) => !open)} disabled={busy}>
-          {profilePanelOpen ? t('tarification.importProfiles.hide') : t('tarification.importProfiles.manage')}
-        </button>
+        {canManageProfiles && (
+          <button type="button" className="customer-import-template-link" onClick={() => setProfilePanelOpen((open) => !open)} disabled={busy}>
+            {profilePanelOpen ? t('tarification.importProfiles.hide') : t('tarification.importProfiles.manage')}
+          </button>
+        )}
         {notice && <p className="customer-form-muted" role="status">{notice}</p>}
-        {profilePanelOpen && (
+        {canManageProfiles && profilePanelOpen && (
           <PricingImportProfilePanel
             key={profileId || 'new'}
             file={file}
@@ -307,25 +321,35 @@ export function PricingImportDialog({ agreementId, agreementName, onClose, onImp
                     <th>{t('tarification.import.historyColumnWhen')}</th>
                     <th>{t('tarification.import.historyColumnFile')}</th>
                     <th>{t('tarification.import.historyColumnProfile')}</th>
+                    <th>{t('tarification.import.historyColumnStatus')}</th>
                     <th>{t('tarification.import.historyColumnResult')}</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {history.map((run) => (
-                    <tr key={run.id}>
-                      <td>{formatDateTime(run.importedAt)}</td>
-                      <td>{run.fileName}</td>
-                      <td>{run.profileName ?? t('tarification.import.profileNone')}</td>
-                      <td>
-                        {t('tarification.import.historyResult', {
-                          read: run.rowsRead,
-                          created: run.created,
-                          updated: run.updated,
-                          failed: run.failed,
-                        })}
-                      </td>
-                    </tr>
-                  ))}
+                  {history.map((run) => {
+                    // Older rows (before the status column existed) are successful imports.
+                    const status = run.status ?? 'Succeeded'
+                    return (
+                      <tr key={run.id}>
+                        <td>{formatDateTime(run.importedAt)}</td>
+                        <td>{run.fileName}</td>
+                        <td>{run.profileName ?? t('tarification.import.profileNone')}</td>
+                        <td>
+                          <Badge tone={STATUS_TONE[status] ?? 'neutral'}>{t(`tarification.import.historyStatus${status}`)}</Badge>
+                        </td>
+                        <td>
+                          {status === 'Succeeded'
+                            ? t('tarification.import.historyResult', {
+                                read: run.rowsRead,
+                                created: run.created,
+                                updated: run.updated,
+                                failed: run.failed,
+                              })
+                            : (run.error ?? '—')}
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             )}
@@ -340,6 +364,17 @@ export function PricingImportDialog({ agreementId, agreementName, onClose, onImp
                   when: preview.previousImportAt ? formatDateTime(preview.previousImportAt) : '—',
                   file: preview.previousImportFileName ?? '—',
                 })}
+              </p>
+            )}
+            {(preview.matchedByNameCount ?? 0) > 0 && (
+              <p className="customer-form-muted" role="status">
+                {t('tarification.import.matchedByName', { count: preview.matchedByNameCount ?? 0 })}
+              </p>
+            )}
+            {preview.presentFields && preview.updated.length > 0
+              && UPDATABLE_FIELDS.some((field) => !preview.presentFields!.includes(field)) && (
+              <p className="customer-form-muted" role="status">
+                {t('tarification.import.partialColumns')}
               </p>
             )}
             <p className="pricing-import-summary">

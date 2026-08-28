@@ -59,4 +59,20 @@ public class PricingImportRun : AuditableTenantEntity
 
     /// <summary>Import mode used (update in place vs. duplicate as a new version).</summary>
     public string Mode { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Outcome of the attempt: Succeeded (rows written), Rejected (validation refused the file,
+    /// nothing written) or Failed (the database write itself failed and was rolled back).
+    /// </summary>
+    public string Status { get; set; } = PricingImportRunStatus.Succeeded;
+
+    /// <summary>The rejection/failure message, so the history explains WHY nothing landed.</summary>
+    public string? Error { get; set; }
+}
+
+public static class PricingImportRunStatus
+{
+    public const string Succeeded = "Succeeded";
+    public const string Rejected = "Rejected";
+    public const string Failed = "Failed";
 }

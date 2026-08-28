@@ -149,6 +149,7 @@
       "codeAuto": "Leeg laten voor automatische code.",
       "customerContact": "Kies om onderstaande velden in te vullen; ze blijven aanpasbaar.",
       "customerSearch": "Typ om te zoeken; leeg = geen klant gekoppeld.",
+      "sharedAddress": "Dit adres is gedeeld met {count} klanten ({customers}). Beheer de koppelingen en standaardadressen via Klant › Adressen.",
       "externalReference": "Referentie van de klant of partner voor dit adres.",
       "internalMemo": "Nooit zichtbaar voor chauffeurs of klanten.",
       "openingFallback": "Wordt getoond wanneer er geen tijdvakken zijn ingesteld."
