@@ -873,6 +873,13 @@ public class CustomerService : ICustomerService
         }
 
         var normalized = requested.Trim();
+        // Legacy rows carry "" (pre-Wave-10 default); an empty value from the form means
+        // "today's behaviour", never a validation error the user cannot get past.
+        if (normalized.Length == 0)
+        {
+            normalized = "Manual";
+        }
+
         if (normalized is not ("PerDossier" or "Weekly" or "Monthly" or "ByReference" or "Manual"))
         {
             throw new DomainValidationException("invoiceGrouping",
@@ -891,6 +898,12 @@ public class CustomerService : ICustomerService
         }
 
         var normalized = requested.Trim();
+        // Legacy rows carry "" — treat as the default rather than blocking the save.
+        if (normalized.Length == 0)
+        {
+            normalized = "GenerateOwn";
+        }
+
         if (normalized is not ("GenerateOwn" or "CustomerDocument" or "PerOrder"))
         {
             throw new DomainValidationException("documentStrategy",

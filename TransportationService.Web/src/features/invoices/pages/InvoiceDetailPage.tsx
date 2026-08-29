@@ -463,7 +463,9 @@ export function InvoiceDetailPage() {
                       </button>
                     )}{' '}
                     {line.customerDescription ?? line.description}
-                    {line.customerDescription && line.customerDescription !== line.description && (
+                    {line.customerDescription
+                      && line.customerDescription !== line.description
+                      && line.description !== line.salesCategoryName && (
                       <div className="customer-form-muted">
                         {line.description}
                       </div>
@@ -689,7 +691,7 @@ export function InvoiceDetailPage() {
               : 'invoices.internalDetail.cancelMessage',
             { number: invoice.invoiceNumber },
           )}
-          confirmLabel={t('ui.actions.cancel')}
+          confirmLabel={t(INVOICE_TRANSITION_LABELS.Cancelled)}
           destructive
           onConfirm={() => void applyTransition(confirmTransition)}
           onCancel={() => setConfirmTransition(null)}

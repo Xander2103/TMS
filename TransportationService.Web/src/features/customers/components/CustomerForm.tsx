@@ -238,8 +238,8 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
   }, [])
 
   const [invoiceEmail, setInvoiceEmail] = useState(initial?.invoiceEmail ?? '')
-  const [invoiceGrouping, setInvoiceGrouping] = useState(initial?.invoiceGrouping ?? 'Manual')
-  const [documentStrategy, setDocumentStrategy] = useState(initial?.documentStrategy ?? 'GenerateOwn')
+  const [invoiceGrouping, setInvoiceGrouping] = useState(initial?.invoiceGrouping || 'Manual') // '' = legacy rows → Manual
+  const [documentStrategy, setDocumentStrategy] = useState(initial?.documentStrategy || 'GenerateOwn') // '' = legacy rows → default
   const [invoiceLanguageCode, setInvoiceLanguageCode] = useState(initial?.invoiceLanguageCode ?? '')
   const [paymentTermDays, setPaymentTermDays] = useState(String(initial?.paymentTermDays ?? 30))
   const [defaultLanguageCode, setDefaultLanguageCode] = useState(initial?.defaultLanguageCode ?? '')

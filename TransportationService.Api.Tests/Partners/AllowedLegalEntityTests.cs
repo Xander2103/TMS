@@ -100,6 +100,23 @@ public class AllowedLegalEntityTests
         "Klant BV", null, null, null, null, null, null, null, null, null, null, null, null, 30, null, null, true,
         DefaultLegalEntityId: defaultEntity, AllowedLegalEntityIds: allowed, InvoiceGrouping: invoiceGrouping);
 
+    /// <summary>Legacy rows carry InvoiceGrouping = "" — the form echoes that back; saving must not fail on it.</summary>
+    [Fact]
+    public async Task Customer_Update_AcceptsEmptyInvoiceGrouping_AsManual()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var customers = h.Customers();
+
+        var detail = await customers.UpdateAsync(h.CustomerId,
+            UpdateRequest(h.EntityAId, []) with { InvoiceGrouping = "", DocumentStrategy = "" }, CancellationToken.None);
+
+        Assert.NotNull(detail);
+        var stored = await h.Db.Context.Customers.AsNoTracking().SingleAsync(c => c.Id == h.CustomerId);
+        Assert.Equal("Manual", stored.InvoiceGrouping);
+        Assert.Equal("GenerateOwn", stored.DocumentStrategy);
+    }
+
     [Fact]
     public async Task Customer_SavesAllowedSet_AndRequiresTheDefaultInsideIt()
     {

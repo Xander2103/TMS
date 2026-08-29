@@ -307,3 +307,26 @@ describe('CustomerForm contacts repeater + payload', () => {
     expect(onSubmit.mock.calls[0][1]).toBe('saveAndNew')
   })
 })
+
+describe('CustomerForm — legacy invoice grouping', () => {
+  it('submits "Manual" for a customer whose stored grouping is an empty string', async () => {
+    const onSubmit = vi.fn()
+    render(
+      <MemoryRouter>
+        <CustomerForm
+          mode="edit"
+          initial={{ ...customerDetail(), invoiceGrouping: '', documentStrategy: '' }}
+          isSubmitting={false}
+          submitError={null}
+          onSubmit={onSubmit}
+          onCancel={vi.fn()}
+        />
+      </MemoryRouter>,
+    )
+    await userEvent.click(screen.getAllByRole('button', { name: 'Opslaan' })[0])
+    expect(onSubmit).toHaveBeenCalledTimes(1)
+    const [values] = onSubmit.mock.calls[0] as [CustomerInput]
+    expect(values.invoiceGrouping).toBe('Manual')
+    expect(values.documentStrategy).toBe('GenerateOwn')
+  })
+})

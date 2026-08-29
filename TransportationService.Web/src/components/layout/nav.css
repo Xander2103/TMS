@@ -144,14 +144,23 @@
 }
 
 .nav-subgroup { margin-top: 4px; }
+/* Subgroup caption: a divider label, NOT a clickable group. Reads differently from the
+   module header (bold button with icon + chevron): smaller, muted, with a hairline above it
+   and no hover affordance. Stays uppercase (layout invariant: heading treatment). */
 .nav-subgroup-label {
-  margin: 10px 12px 4px;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
+  margin: 8px 12px 2px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--text-h);
-  opacity: 0.75;
+  color: var(--text-muted, var(--text-h));
+  opacity: 0.9;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: default;
 }
 
 .nav-empty { padding: 8px 12px; font-size: 13px; opacity: 0.6; }
