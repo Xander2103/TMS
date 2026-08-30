@@ -102,7 +102,7 @@ public class CustomerPortalController : ControllerBase
     [HttpGet("announcements")]
     [RequirePermission(PermissionCodes.CustomerPortalView)]
     public async Task<ActionResult<IReadOnlyList<PortalAnnouncementDto>>> Announcements(CancellationToken cancellationToken) =>
-        Ok(await _announcementService.ListActiveAsync(cancellationToken));
+        Handle(await _announcementService.ListForPortalAsync(cancellationToken));
 
     // --- Messages ---
 

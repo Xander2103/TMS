@@ -57,13 +57,8 @@ public class PortalDashboardService : IPortalDashboardService
             return PortalResult<PortalDashboardDto>.NoCustomerLink();
         }
 
-        // H-14: join Customers on IsActive so a deactivated customer loses portal access at once
-        // (same rule as PortalDocumentService/PortalInvoiceService/CustomerPortalService).
-        var customerId = await _dbContext.Users.AsNoTracking()
-            .Where(u => u.Id == userId && u.TenantId == _tenantContext.TenantId && u.CustomerId != null)
-            .Join(_dbContext.Customers.AsNoTracking().Where(c => c.TenantId == _tenantContext.TenantId && c.IsActive),
-                u => u.CustomerId, c => c.Id, (u, c) => (Guid?)c.Id)
-            .FirstOrDefaultAsync(cancellationToken);
+        var customerId = await PortalCustomerResolver.ResolveCustomerIdAsync(
+            _dbContext, _tenantContext.TenantId, userId, cancellationToken);
         if (customerId is null)
         {
             return PortalResult<PortalDashboardDto>.NoCustomerLink();

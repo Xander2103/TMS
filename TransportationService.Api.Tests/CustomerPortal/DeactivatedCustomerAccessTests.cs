@@ -90,10 +90,13 @@ public class DeactivatedCustomerAccessTests
                 new CustomerBillingConfigService(Db.Context, tenant, audit, Clock),
                 new AccountingService(Db.Context, tenant, audit));
             return new PortalDashboardService(Db.Context, tenant, Caller, Messages(), invoices,
-                new PortalAnnouncementService(Db.Context, tenant, audit, Clock), Clock);
+                new PortalAnnouncementService(Db.Context, tenant, Caller, audit, Clock), Clock);
         }
 
         public CustomerMessageService Messages() =>
+            new(Db.Context, Tenant, Caller, Audit, Clock);
+
+        public PortalAnnouncementService Announcements() =>
             new(Db.Context, Tenant, Caller, Audit, Clock);
 
         public PortalMessageService PortalMessages() =>
@@ -162,6 +165,12 @@ public class DeactivatedCustomerAccessTests
             });
         }
 
+        db.Context.PortalAnnouncements.Add(new TransportationService.Api.Modules.CustomerPortal.Entities.PortalAnnouncement
+        {
+            Id = Guid.NewGuid(), TenantId = tenantId, Title = "Kerstsluiting",
+            Body = "Wij zijn gesloten van 24/12 tot 02/01.", IsActive = true,
+        });
+
         db.Context.Invoices.Add(new Invoice
         {
             Id = Guid.NewGuid(), TenantId = tenantId, CustomerId = customerId, InvoiceNumber = "2026080001",
@@ -201,6 +210,9 @@ public class DeactivatedCustomerAccessTests
         Assert.Equal(PortalOutcomeKind.Success, (await h.Messages().ListPortalAsync(null, CancellationToken.None)).Outcome);
         Assert.NotNull(await h.PortalMessages().ListFeedAsync(CancellationToken.None));
         Assert.Equal(PortalOutcomeKind.Success, (await h.Users().ListAsync(CancellationToken.None)).Outcome);
+        var announcements = await h.Announcements().ListForPortalAsync(CancellationToken.None);
+        Assert.Equal(PortalOutcomeKind.Success, announcements.Outcome);
+        Assert.Single(announcements.Value!);
         Assert.Equal(PortalUserOperationOutcome.Success,
             (await h.Users().DeactivateAsync(h.SecondPortalUserId, CancellationToken.None)).Outcome);
     }
@@ -261,6 +273,29 @@ public class DeactivatedCustomerAccessTests
 
         Assert.Null(await sut.ListFeedAsync(CancellationToken.None));
         Assert.Null(await sut.FeedUnreadCountAsync(CancellationToken.None));
+    }
+
+    /// <summary>
+    /// Fix wave B, item B3 (pass-2 finding I-4): the announcements endpoint was the ONE portal
+    /// route that never ran a customer resolver, so a deactivated customer kept receiving the
+    /// tenant's broadcast notices. Announcements have no per-customer targeting today, which is
+    /// why the impact was low — but "every portal endpoint resolves the caller's active customer
+    /// first" is the rule, and an exception to it silently widens the day targeting lands.
+    /// </summary>
+    [Fact]
+    public async Task DeactivatedCustomer_LosesTheAnnouncementFeed()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        await DeactivateCustomerAsync(h);
+
+        var result = await h.Announcements().ListForPortalAsync(CancellationToken.None);
+
+        Assert.Equal(PortalOutcomeKind.NoCustomerLink, result.Outcome);
+        Assert.Null(result.Value);
+        // The admin-side listing is unchanged — it is gated by an internal permission, not by the
+        // portal resolver, and must keep working for staff of a deactivated customer's tenant.
+        Assert.Single(await h.Announcements().ListAllAsync(CancellationToken.None));
     }
 
     /// <summary>

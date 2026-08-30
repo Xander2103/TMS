@@ -232,6 +232,7 @@
     "windowTo": "Fenêtre jusqu'à",
     "before": "Avant",
     "instructions": "Instructions",
+    "instructionsHint": "Visible pour le client dans le portail client. Les remarques internes vont dans les instructions d'accès, de chargement ou de déchargement.",
     "advanced": "Avancé",
     "requestedFrom": "Demandé de",
     "requestedFromHint": "Fenêtre demandée par le client",

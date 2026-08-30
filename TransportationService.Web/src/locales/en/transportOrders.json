@@ -232,6 +232,7 @@
     "windowTo": "Window to",
     "before": "Before",
     "instructions": "Instructions",
+    "instructionsHint": "Visible to the customer in the customer portal. Internal remarks belong in the access, loading or unloading instructions.",
     "advanced": "Advanced",
     "requestedFrom": "Requested from",
     "requestedFromHint": "Window requested by the customer",

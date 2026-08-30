@@ -1,3 +1,6 @@
+using System.Linq.Expressions;
+using TransportationService.Api.Modules.Identity.Entities;
+
 namespace TransportationService.Api.Modules.Identity.Services;
 
 /// <summary>
@@ -25,4 +28,14 @@ public static class PortalPermissionScope
 
     /// <summary>True when EVERY code belongs to the customer-portal namespace (empty = vacuously true).</summary>
     public static bool CoversAll(IEnumerable<string> permissionCodes) => permissionCodes.All(Covers);
+
+    /// <summary>
+    /// The other half of the same rule, expressed over the IDENTITY instead of the code: a user
+    /// with a customer link is a portal identity. Compose this onto any "everyone who holds
+    /// permission X" recipient query so internal traffic — in-app notifications and staff e-mail —
+    /// can never be routed to a portal account that happens to carry a legacy internal grant
+    /// (<c>DefaultRoleUpgrades</c> never removes one). The evaluators stop such an account from
+    /// CALLING anything internal; this stops it from being TOLD anything internal.
+    /// </summary>
+    public static readonly Expression<Func<User, bool>> InternalIdentityOnly = u => u.CustomerId == null;
 }

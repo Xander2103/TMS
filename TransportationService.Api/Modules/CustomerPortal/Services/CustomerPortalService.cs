@@ -85,15 +85,9 @@ public class CustomerPortalService : ICustomerPortalService
             return null;
         }
 
-        // H-14: join on IsActive so a deactivated/soft-deleted customer loses portal access at
-        // once — aligned with PortalDocumentService/PortalInvoiceService, which already did this.
-        var link = await _dbContext.Users.AsNoTracking()
-            .Where(u => u.Id == userId && u.TenantId == _tenantContext.TenantId && u.CustomerId != null)
-            .Join(_dbContext.Customers.AsNoTracking().Where(c => c.TenantId == _tenantContext.TenantId && c.IsActive),
-                u => u.CustomerId, c => c.Id,
-                (u, c) => new { c.Id, c.Name })
-            .FirstOrDefaultAsync(cancellationToken);
-        return link is null ? null : (link.Id, link.Name);
+        var link = await PortalCustomerResolver.ResolveAsync(
+            _dbContext, _tenantContext.TenantId, userId, cancellationToken);
+        return link is null ? null : (link.CustomerId, link.CustomerName);
     }
 
     public async Task<PortalResult<PortalContextDto>> GetContextAsync(CancellationToken cancellationToken)

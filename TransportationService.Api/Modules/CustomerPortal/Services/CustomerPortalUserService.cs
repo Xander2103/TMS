@@ -98,16 +98,12 @@ public class CustomerPortalUserService : ICustomerPortalUserService
             return null;
         }
 
-        // H-14: the customer must still be ACTIVE. Without this, the administrator of a
-        // deactivated customer could keep inviting people — minting working credentials for a
-        // customer the tenant has just switched off.
-        var link = await _dbContext.Users.AsNoTracking()
-            .Where(u => u.Id == userId && u.TenantId == _tenantContext.TenantId && u.CustomerId != null)
-            .Join(_dbContext.Customers.AsNoTracking().Where(c => c.TenantId == _tenantContext.TenantId && c.IsActive),
-                u => u.CustomerId, c => c.Id,
-                (u, c) => new { c.Id, c.Name })
-            .FirstOrDefaultAsync(cancellationToken);
-        return link is null ? null : (link.Id, link.Name);
+        // The shared resolver refuses a deactivated customer. That matters most here: without it
+        // the administrator of a deactivated customer could keep inviting people — minting working
+        // credentials for a customer the tenant has just switched off.
+        var link = await PortalCustomerResolver.ResolveAsync(
+            _dbContext, _tenantContext.TenantId, userId, cancellationToken);
+        return link is null ? null : (link.CustomerId, link.CustomerName);
     }
 
     public async Task<PortalResult<IReadOnlyList<PortalUserListItemDto>>> ListAsync(CancellationToken cancellationToken)
