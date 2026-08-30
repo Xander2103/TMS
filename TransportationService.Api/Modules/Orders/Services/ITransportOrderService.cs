@@ -14,7 +14,12 @@ public interface ITransportOrderService
 
     Task<TransportOrderOperationResult> CreateAsync(CreateTransportOrderRequest request, CancellationToken cancellationToken);
 
-    /// <summary>Full update including wholesale stop replacement; only Draft and Confirmed orders are editable.</summary>
+    /// <summary>
+    /// Full update including an identity-preserving stop sync (an echoed stop id updates that
+    /// stop in place; a stop that is still operationally referenced cannot be removed or
+    /// retyped). Only Draft, Submitted and Confirmed orders are editable, and the customer and
+    /// invoicing entity may NOT be changed here — those have dedicated flows.
+    /// </summary>
     Task<TransportOrderOperationResult> UpdateAsync(Guid id, UpdateTransportOrderRequest request, CancellationToken cancellationToken);
 
     /// <summary>Guarded workflow transition (e.g. Draft -> Confirmed requires loading + unloading stops).

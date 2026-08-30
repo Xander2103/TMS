@@ -5,6 +5,13 @@ import type { LegalEntityOption } from '../../../legal-entities/types'
 import type { TransportOrderDetail } from '../../types'
 
 interface GeneralSectionProps {
+  /**
+   * Whether the form CREATES a new order or EDITS a persisted one. Deliberately not derived from
+   * `order`: the create page passes an existing order as a TEMPLATE ("nieuwe opdracht op basis
+   * van deze"), and that flow must keep the customer and entity free.
+   */
+  mode: 'create' | 'edit'
+  /** The order being edited, or the order this new one is based on (create-from-template). */
   order?: TransportOrderDetail
   customers: CustomerListItem[]
   legalEntities: LegalEntityOption[]
@@ -32,6 +39,7 @@ interface GeneralSectionProps {
 
 /** Algemeen section: customer, reference, date, invoicing entity, diesel-surcharge exception. */
 export function GeneralSection({
+  mode,
   order,
   customers,
   legalEntities,
@@ -55,15 +63,28 @@ export function GeneralSection({
   errors,
 }: GeneralSectionProps) {
   const { t } = useLocale()
+  // Wave 1 blocker C-02: on a PERSISTED order the customer and the invoicing entity may only be
+  // moved through their dedicated flows ("Klant wijzigen" / "Entiteit wijzigen" on the detail
+  // page), which demand a reason and re-evaluate pricing, entity policy and draft invoices. The
+  // plain update refuses a different value server-side; the selects are locked here so the user
+  // never types a change the API will reject. Creating a new order — including from a template,
+  // which also carries an `order` — is deliberately unaffected.
+  const editingExisting = mode === 'edit'
   return (
     <>
       <div className="tof-row">
-        <FormField label={t('transportOrders.general.customer')} htmlFor="to-customer" required error={errors.customerId}>
+        <FormField
+          label={t('transportOrders.general.customer')}
+          htmlFor="to-customer"
+          required
+          hint={editingExisting ? t('transportOrders.general.customerLockedHint') : undefined}
+          error={errors.customerId}
+        >
           <select
             id="to-customer"
             value={customerId}
             onChange={(e) => setCustomerId(e.target.value)}
-            disabled={saving}
+            disabled={saving || editingExisting}
             aria-invalid={errors.customerId ? true : undefined}
           >
             <option value="">{t('transportOrders.general.selectCustomer')}</option>
@@ -106,9 +127,18 @@ export function GeneralSection({
         <FormField
           label={t('transportOrders.general.legalEntity')}
           htmlFor="to-legal-entity"
-          hint={t('transportOrders.general.legalEntityHint')}
+          hint={
+            editingExisting
+              ? t('transportOrders.general.legalEntityLockedHint')
+              : t('transportOrders.general.legalEntityHint')
+          }
         >
-          <select id="to-legal-entity" value={legalEntityId} onChange={(e) => setLegalEntityId(e.target.value)} disabled={saving}>
+          <select
+            id="to-legal-entity"
+            value={legalEntityId}
+            onChange={(e) => setLegalEntityId(e.target.value)}
+            disabled={saving || editingExisting}
+          >
             <option value="">{t('transportOrders.general.customerDefault')}</option>
             {/* Sprint 6: only the entities this customer allows (empty set = no restriction); the
                 current value stays listed so an existing order never loses its entity silently. */}

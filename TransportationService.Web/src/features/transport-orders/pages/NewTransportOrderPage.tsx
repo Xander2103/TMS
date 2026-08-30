@@ -68,6 +68,9 @@ export function NewTransportOrderPage() {
       />
       <TransportOrderForm
         key={template?.id ?? 'blank'}
+        // A template is prefilled data, NOT an order being edited: the customer and invoicing
+        // entity stay free here (review I-2).
+        mode="create"
         order={template ?? undefined}
         submitLabel={t('transportOrders.new.submit')}
         onCancel={() => navigate('/transport-orders')}

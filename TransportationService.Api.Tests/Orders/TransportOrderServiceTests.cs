@@ -59,7 +59,9 @@ public class TransportOrderServiceTests
     /// <summary>
     /// Maps a detail DTO back into an update request, carrying stops AND cargo items (reused by
     /// later tasks). Cargo stop links are re-resolved from ids to indexes via the detail DTO's
-    /// stop list order, since CargoItemInput addresses stops by index.
+    /// stop list order, since CargoItemInput addresses stops by index. Stop ids are echoed the
+    /// way the real client does (wave 1 blocker C-01): an echoed id identifies an EXISTING stop,
+    /// which is then updated in place instead of replaced.
     /// </summary>
     private static UpdateTransportOrderRequest BuildUpdateFrom(TransportOrderDetailDto d)
     {
@@ -73,7 +75,7 @@ public class TransportOrderServiceTests
             d.AgreedPrice, d.Notes,
             d.Stops.Select(s => new TransportOrderStopInput(
                     s.StopType, s.LocationId, s.LocationName, s.Address, s.PostalCode, s.City, s.CountryCode,
-                    s.PlannedFrom, s.PlannedTo, s.Reference, s.Instructions))
+                    s.PlannedFrom, s.PlannedTo, s.Reference, s.Instructions, Id: s.Id))
                 .ToList(),
             CargoItems: d.CargoItems.Select(c => new CargoItemInput(
                     c.Description, c.Barcode, c.ExpectedQuantity, c.QuantityUnit, c.Notes,
@@ -206,14 +208,18 @@ public class TransportOrderServiceTests
     }
 
     /// <summary>
-    /// Stops are wholesale-replaced with fresh ids on every update (old rows soft-deleted, new
-    /// rows inserted), including when CargoItems is null (leave-unchanged). Soft delete never
-    /// fires the SetNull FK, so without a fix the preserved cargo row would keep pointing at the
-    /// just-deleted old stop ids. With exactly one loading + one unloading stop (unambiguous),
-    /// the fix must re-resolve the cargo's links to the NEW stop ids.
+    /// INVARIANT CHANGED (wave 1 blocker C-01): stops are no longer wholesale-replaced. A client
+    /// that echoes a stop id addresses the SAME stop, which is updated in place — so its id, and
+    /// with it every package pin / stop execution / POD / scan / ETA hanging off it, survives the
+    /// edit. This test used to assert the opposite (Assert.NotEqual on the stop ids, plus a cargo
+    /// re-link to the freshly generated ids); it now asserts identity preservation and that the
+    /// preserved cargo keeps its (still valid) links. The legacy id-less client path — where
+    /// stops really are replaced and the cargo re-link is what saves the row from dangling on a
+    /// soft-deleted stop — is covered by
+    /// OrderUpdateIntegrityTests.Update_WithoutStopIds_ReplacesStops_AndRelinksPreservedCargo.
     /// </summary>
     [Fact]
-    public async Task Update_NullCargoItems_RelinksCargoToReplacedStops()
+    public async Task Update_NullCargoItems_PreservesStopIdentityAndCargoLinks()
     {
         var h = await SeedAsync();
         using var _ = h.Db;
@@ -224,29 +230,33 @@ public class TransportOrderServiceTests
         };
         var created = await h.Sut.CreateAsync(create, CancellationToken.None);
         var cargoLine = created.Order!.CargoItems.Single();
-        var oldLoadingStopId = created.Order.Stops.Single(s => s.StopType == StopType.Loading).Id;
-        var oldUnloadingStopId = created.Order.Stops.Single(s => s.StopType == StopType.Unloading).Id;
-        Assert.Equal(oldLoadingStopId, cargoLine.LoadingStopId); // auto-linked on create (unambiguous)
-        Assert.Equal(oldUnloadingStopId, cargoLine.UnloadingStopId);
+        var loadingStopId = created.Order.Stops.Single(s => s.StopType == StopType.Loading).Id;
+        var unloadingStopId = created.Order.Stops.Single(s => s.StopType == StopType.Unloading).Id;
+        Assert.Equal(loadingStopId, cargoLine.LoadingStopId); // auto-linked on create (unambiguous)
+        Assert.Equal(unloadingStopId, cargoLine.UnloadingStopId);
         h.Db.Context.ChangeTracker.Clear();
 
         var updated = await h.Sut.UpdateAsync(created.Order.Id,
             BuildUpdateFrom(created.Order) with { CargoItems = null }, CancellationToken.None);
 
         Assert.Equal(TransportOrderOperationOutcome.Success, updated.Outcome);
-        var newLoadingStopId = updated.Order!.Stops.Single(s => s.StopType == StopType.Loading).Id;
-        var newUnloadingStopId = updated.Order.Stops.Single(s => s.StopType == StopType.Unloading).Id;
-        Assert.NotEqual(oldLoadingStopId, newLoadingStopId); // stops were indeed replaced
-        Assert.NotEqual(oldUnloadingStopId, newUnloadingStopId);
+        Assert.Equal(loadingStopId, updated.Order!.Stops.Single(s => s.StopType == StopType.Loading).Id);
+        Assert.Equal(unloadingStopId, updated.Order.Stops.Single(s => s.StopType == StopType.Unloading).Id);
 
         var preservedCargo = Assert.Single(updated.Order.CargoItems);
         Assert.Equal(cargoLine.Id, preservedCargo.Id);
-        Assert.Equal(newLoadingStopId, preservedCargo.LoadingStopId);
-        Assert.Equal(newUnloadingStopId, preservedCargo.UnloadingStopId);
+        Assert.Equal(loadingStopId, preservedCargo.LoadingStopId);
+        Assert.Equal(unloadingStopId, preservedCargo.UnloadingStopId);
 
         var persistedCargo = await h.Db.Context.CargoItems.AsNoTracking().SingleAsync(c => c.Id == cargoLine.Id);
-        Assert.Equal(newLoadingStopId, persistedCargo.LoadingStopId);
-        Assert.Equal(newUnloadingStopId, persistedCargo.UnloadingStopId);
+        Assert.Equal(loadingStopId, persistedCargo.LoadingStopId);
+        Assert.Equal(unloadingStopId, persistedCargo.UnloadingStopId);
+
+        // No soft-deleted twin was left behind: the two live rows ARE the original two.
+        var stopRows = await h.Db.Context.TransportOrderStops.IgnoreQueryFilters().AsNoTracking()
+            .Where(s => s.TransportOrderId == created.Order.Id).ToListAsync();
+        Assert.Equal(2, stopRows.Count);
+        Assert.All(stopRows, s => Assert.False(s.IsDeleted));
     }
 
     /// <summary>

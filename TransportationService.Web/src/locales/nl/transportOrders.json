@@ -178,6 +178,8 @@
     "customer": "Klant",
     "selectCustomer": "Selecteer een klant…",
     "deactivatedSuffix": "(gedeactiveerd)",
+    "customerLockedHint": "De klant van een bestaande opdracht wijzig je via 'Klant wijzigen'; prijzen, facturerende entiteit en gekoppelde facturen worden dan mee herbeoordeeld.",
+    "legalEntityLockedHint": "De facturerende entiteit van een bestaande opdracht wijzig je via 'Entiteit wijzigen'; openstaande conceptfacturen worden dan mee herbeoordeeld.",
     "customerReference": "Klantreferentie",
     "orderDate": "Opdrachtdatum",
     "requirementsNote": "Let op voor deze klant: {hints}.",

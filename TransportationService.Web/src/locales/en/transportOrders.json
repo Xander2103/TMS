@@ -178,6 +178,8 @@
     "customer": "Customer",
     "selectCustomer": "Select a customer…",
     "deactivatedSuffix": "(deactivated)",
+    "customerLockedHint": "Change an existing order's customer via 'Change customer'; pricing, invoicing entity and linked invoices are then re-evaluated.",
+    "legalEntityLockedHint": "Change an existing order's invoicing entity via 'Change entity'; open draft invoices are then re-evaluated.",
     "customerReference": "Customer reference",
     "orderDate": "Order date",
     "requirementsNote": "Note for this customer: {hints}.",

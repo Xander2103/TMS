@@ -41,6 +41,13 @@ import {
 import './transport-order-form.css'
 
 interface TransportOrderFormProps {
+  /**
+   * Create a new order or edit a persisted one. Required (never defaulted) because `order` alone
+   * cannot answer it: the create page passes an existing order as a TEMPLATE. Sections that must
+   * behave differently per mode — e.g. the C-02 customer/entity lock — read this, not `order`.
+   */
+  mode: 'create' | 'edit'
+  /** The order being edited, or the order this new one is based on (create-from-template). */
   order?: TransportOrderDetail
   onSubmit: (input: TransportOrderInput) => Promise<void>
   onCancel?: () => void
@@ -59,7 +66,7 @@ const SECTION_IDS = ['algemeen', 'route', 'goederen', 'services', 'documenten', 
  * here — the section bodies live in `./sections/` — so switching tabs preserves values and
  * never touches the router.
  */
-export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, documentsSection, documentsSectionIsPanel }: TransportOrderFormProps) {
+export function TransportOrderForm({ mode, order, onSubmit, onCancel, submitLabel, documentsSection, documentsSectionIsPanel }: TransportOrderFormProps) {
   const { t } = useLocale()
   const { hasPermission } = useAuth()
   const canCreateLocations = hasPermission('locations.create')
@@ -334,7 +341,7 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
       render: () => (
         <GeneralSection
           {...{
-            order, customers, legalEntities, customerRequirements, requirementHints,
+            mode, order, customers, legalEntities, customerRequirements, requirementHints,
             customerId, setCustomerId, customerReference, setCustomerReference, orderDate, setOrderDate,
             legalEntityId, setLegalEntityId, dieselSurchargeOverride, setDieselSurchargeOverride,
             dieselSurchargePercentOverride, setDieselSurchargePercentOverride,

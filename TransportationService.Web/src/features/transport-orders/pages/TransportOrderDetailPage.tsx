@@ -743,6 +743,7 @@ export function TransportOrderDetailPage() {
 
       {editing ? (
         <TransportOrderForm
+          mode="edit"
           order={order}
           submitLabel="Wijzigingen opslaan"
           onCancel={() => setEditing(false)}

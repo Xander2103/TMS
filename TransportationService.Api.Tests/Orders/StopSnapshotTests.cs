@@ -194,8 +194,14 @@ public class StopSnapshotTests
         Assert.Equal("Laden enkel aan dok 5", stop.LoadingInstructions);
     }
 
+    /// <summary>
+    /// Renamed in wave 1 (C-01): there is no rebuild any more — an echoed id now identifies the
+    /// stop and it is updated IN PLACE. The carry-over rule this test guards is unchanged: an
+    /// unchanged master-location stop keeps its frozen snapshot instead of silently re-copying
+    /// live master data.
+    /// </summary>
     [Fact]
-    public async Task Update_EchoedStopId_CarriesSnapshotOverDespiteRebuild()
+    public async Task Update_EchoedStopId_KeepsTheSnapshotOfThePreservedStop()
     {
         var h = await SeedAsync();
         using var _ = h.Db;

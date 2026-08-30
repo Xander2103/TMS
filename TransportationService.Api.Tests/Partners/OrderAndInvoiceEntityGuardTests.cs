@@ -107,6 +107,13 @@ public class OrderAndInvoiceEntityGuardTests
         Assert.Contains("Acme Logistics BV", ex.Message);
     }
 
+    /// <summary>
+    /// INVARIANT CHANGED (wave 1 blocker C-02): the plain header update no longer moves an order
+    /// to another invoicing entity at all — it refuses, whatever rights the caller holds. The
+    /// override right, the mandatory reason, the sent-invoice guard and the draft-line release
+    /// live in the dedicated flow (ChangeLegalEntityAsync), which this test now exercises for
+    /// both halves of the original assertion.
+    /// </summary>
     [Fact]
     public async Task OrderUpdate_ToNonDefaultEntity_RequiresTheOverrideRight()
     {
@@ -125,12 +132,21 @@ public class OrderAndInvoiceEntityGuardTests
                 .ToList(),
             LegalEntityId: h.EntityBId);
 
-        var denied = await h.Orders.UpdateAsync(order.Id, update, CancellationToken.None);
+        // The header edit refuses the move outright and points at the dedicated flow.
+        var refused = await h.Orders.UpdateAsync(order.Id, update, CancellationToken.None);
+        Assert.Equal(TransportOrderOperationOutcome.ValidationFailed, refused.Outcome);
+        Assert.Contains("Entiteit wijzigen", refused.Error!);
+        Assert.Equal(h.EntityAId, (await h.Orders.GetByIdAsync(order.Id, CancellationToken.None))!.LegalEntityId);
+
+        // The dedicated flow still enforces the override right...
+        var change = new ChangeOrderLegalEntityRequest(h.EntityBId, "Klant factureert via BV B");
+        var denied = await h.Orders.ChangeLegalEntityAsync(order.Id, change, CancellationToken.None);
         Assert.Equal(TransportOrderOperationOutcome.ValidationFailed, denied.Outcome);
         Assert.Contains("geen rechten", denied.Error!);
 
+        // ...and applies the move once it is held.
         h.Permissions.Codes.Add(PermissionCodes.DossiersOverrideEntity);
-        var allowed = await h.Orders.UpdateAsync(order.Id, update, CancellationToken.None);
+        var allowed = await h.Orders.ChangeLegalEntityAsync(order.Id, change, CancellationToken.None);
         Assert.Equal(TransportOrderOperationOutcome.Success, allowed.Outcome);
         Assert.Equal(h.EntityBId, allowed.Order!.LegalEntityId);
     }
