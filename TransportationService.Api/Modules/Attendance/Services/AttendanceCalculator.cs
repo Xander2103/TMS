@@ -1,3 +1,4 @@
+using TransportationService.Api.Common;
 using TransportationService.Api.Modules.Attendance.Entities;
 
 namespace TransportationService.Api.Modules.Attendance.Services;
@@ -50,19 +51,12 @@ public static class AttendanceCalculator
     /// <summary>
     /// Tenant-tijdzone (IANA, bv. "Europe/Amsterdam") naar <see cref="TimeZoneInfo"/>;
     /// onbekende of lege waarden vallen terug op Europe/Amsterdam (tenant-default).
+    /// Delegeert naar <see cref="TenantTimeZone.Resolve"/>: er is exact één resolver in de API,
+    /// zodat aanwezigheid, opdrachten, labels, planningsvoorstellen en documentruns nooit een
+    /// andere terugvalregel hanteren. Blijft bestaan als vertrouwde naam binnen deze module.
     /// </summary>
-    public static TimeZoneInfo ResolveTimeZone(string? ianaTimeZoneId)
-    {
-        var id = string.IsNullOrWhiteSpace(ianaTimeZoneId) ? "Europe/Amsterdam" : ianaTimeZoneId;
-        try
-        {
-            return TimeZoneInfo.FindSystemTimeZoneById(id);
-        }
-        catch (TimeZoneNotFoundException)
-        {
-            return TimeZoneInfo.FindSystemTimeZoneById("Europe/Amsterdam");
-        }
-    }
+    public static TimeZoneInfo ResolveTimeZone(string? ianaTimeZoneId) =>
+        TenantTimeZone.Resolve(ianaTimeZoneId);
 
     /// <summary>
     /// Splitst een sessie (en zijn pauzes) per kalenderdag in de gegeven tijdzone.

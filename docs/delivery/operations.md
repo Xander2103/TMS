@@ -69,6 +69,204 @@ extra configuratie vereisen maar wel bekend moeten zijn bij de beheerder:
 (`EtaShiftNotifyMinutes`, nu instelbaar via de UI; leeg = functie uit). Het
 Excel-importprofiel "Generiek v1" wordt per tenant idempotent geseed bij eerste gebruik.
 
+### 1.2b Wave 1 datamigraties (productieblokkers, 2026-08-30)
+
+Twee **datamigraties** — ze wijzigen géén schema, alleen bestaande rijen. Ze horen bij dezelfde
+release als de frontend-tijdconventie (C-03) en de stabiele stopidentiteit (C-01) en mogen daar
+niet van gescheiden worden: het deployscript stopt de oude app, migreert en start pas daarna de
+nieuwe, wat precies de vereiste volgorde is.
+
+| Migratie | Wat ze doet |
+|---|---|
+| `20260830133955_StopWindowTenantZoneReencoding` | Her-encodeert de acht tijdvenstercolommen van `transport_order_stops` van "wandklok gestempeld als UTC" naar echte UTC-instants, per tenant-tijdzone. Vensters die **mét een inkomend EDI-bericht** zijn meegekomen worden per rij uitgesloten (die dragen al een echte instant); een venster dat later in het webformulier op zo'n opdracht is ingetypt wordt wél omgezet. |
+| `20260830134439_PackageStopPinRepair` | Herstelt `packages."LoadingStopId"/"DeliveryStopId"` die naar een soft-deleted stop wijzen, maar uitsluitend waar de match eenduidig is (zelfde opdracht, `Sequence`, `StopType` én plaats). |
+
+Beide schrijven hun tellingen naar `audit_logs` (`EntityType = 'DataMigration'`), één rij per
+tenant: `RAISE NOTICE` van PostgreSQL is **niet zichtbaar** via `dotnet ef database update`, en dat
+is hoe `scripts/deploy-transportationservice.sh` migreert. De tellingen zijn dus ook achteraf nog
+opvraagbaar, en zichtbaar in de auditpagina. `audit_logs` is append-only (trigger
+`trg_audit_logs_append_only`): deze rijen kunnen niet meer verwijderd worden, en een
+`Down`→`Up`-cyclus stapelt generaties op. Sorteer daarom altijd op `Timestamp`.
+
+Beide migraties vereisen **PostgreSQL 13 of hoger** (`gen_random_uuid()`) en bewaken dat zelf met
+een `RAISE EXCEPTION` bovenaan het `DO`-blok — de migratie faalt dan meteen en volledig, in plaats
+van halverwege.
+
+**Twee harde randvoorwaarden:**
+
+1. Corrigeer een onbruikbare `tenant_settings."Timezone"` **vóór** het toepassen (query 2/3), en
+   **wijzig die instelling daarna niet meer** zolang een rollback nog mogelijk is: `Down`
+   herberekent de zone uit de *huidige* instelling en zou dan met de verkeerde offset terugdraaien.
+2. Reken vóór het toepassen query 4b uit (EDI). Levert die rijen op, beslis dan expliciet per rij
+   in plaats van de migratie te laten beslissen.
+
+#### Vóór toepassen (op een **teruggezette kopie** van productie, nooit live)
+
+```sql
+-- 0. Serverversie: beide migraties eisen >= 13.
+SHOW server_version;
+
+-- 1. Omvang per tenant + welke tijdzone gebruikt wordt (NULL = geen tenant_settings-rij → default).
+SELECT t."Id", t."Name", ts."Timezone",
+       count(s.*) FILTER (WHERE s."PlannedFrom" IS NOT NULL OR s."PlannedTo" IS NOT NULL
+                            OR s."RequestedFrom" IS NOT NULL OR s."RequestedTo" IS NOT NULL
+                            OR s."ConfirmedFrom" IS NOT NULL OR s."ConfirmedTo" IS NOT NULL
+                            OR s."EarliestAllowed" IS NOT NULL OR s."LatestAllowed" IS NOT NULL) AS stop_rows
+  FROM tenants t
+  LEFT JOIN tenant_settings ts ON ts."TenantId" = t."Id"
+  LEFT JOIN transport_order_stops s ON s."TenantId" = t."Id"
+ GROUP BY 1, 2, 3
+ ORDER BY 4 DESC;
+
+-- 2. BLOKKEREND. Tenants met een tijdzone die PostgreSQL niet kent (de migratie gebruikt dan
+--    Europe/Amsterdam terwijl de API de .NET-interpretatie kan gebruiken). Corrigeer vooraf.
+SELECT ts."TenantId", ts."Timezone"
+  FROM tenant_settings ts
+ WHERE lower(btrim(ts."Timezone")) NOT IN ('utc', 'etc/utc', 'universal', 'zulu')
+   AND NOT EXISTS (SELECT 1 FROM pg_timezone_names z
+                    WHERE lower(z.name) = lower(btrim(ts."Timezone")));
+
+-- 3. BLOKKEREND. Tenants zonder tenant_settings-rij die wél stops hebben (idem: default
+--    Europe/Amsterdam, zowel in SQL als in de C#).
+SELECT t."Id", t."Name"
+  FROM tenants t
+  LEFT JOIN tenant_settings ts ON ts."TenantId" = t."Id"
+ WHERE ts."Id" IS NULL
+   AND EXISTS (SELECT 1 FROM transport_order_stops s WHERE s."TenantId" = t."Id");
+
+-- 3b. Stops van een TenantId zonder tenants-rij: de migratie loopt over `tenants`, dus die worden
+--     nooit omgezet en nooit gerapporteerd. Moet leeg zijn.
+SELECT s."TenantId", count(*)
+  FROM transport_order_stops s
+ WHERE NOT EXISTS (SELECT 1 FROM tenants t WHERE t."Id" = s."TenantId")
+ GROUP BY 1;
+
+-- 4. Stopregels MET een venster die per rij als EDI-geschreven gelden. Dit getal hoort exact te
+--    kloppen met de som van "skippedEdi" over de auditrijen (zelfde predikaat).
+SELECT count(*)
+  FROM transport_order_stops s
+ WHERE (s."PlannedFrom" IS NOT NULL OR s."PlannedTo" IS NOT NULL
+     OR s."RequestedFrom" IS NOT NULL OR s."RequestedTo" IS NOT NULL
+     OR s."ConfirmedFrom" IS NOT NULL OR s."ConfirmedTo" IS NOT NULL
+     OR s."EarliestAllowed" IS NOT NULL OR s."LatestAllowed" IS NOT NULL)
+   AND EXISTS (SELECT 1 FROM edi_messages m
+                WHERE m."TenantId" = s."TenantId" AND m."IsDeleted" = false
+                  AND m."Direction" = 'Inbound' AND m."Status" = 'Processed'
+                  AND m."ResultEntityType" = 'TransportOrder'
+                  AND m."ResultEntityId" = s."TransportOrderId"::text
+                  AND s."CreatedAt" <= coalesce(m."ProcessedAt", m."CreatedAt"));
+
+-- 4b. BLOKKEREND, per rij. Elke stop met een venster op een EDI-aangemaakte opdracht, met de twee
+--     tijdstippen waarop de uitsluiting berust. `stop_created <= edi_processed` = het venster kwam
+--     mét het bericht mee (niet omzetten); later = in het webformulier ingetypt (wél omzetten).
+--     Leeg resultaat ⇒ de uitsluiting is gratis en er hoeft niets beslist te worden.
+SELECT s."Id", s."TransportOrderId",
+       s."CreatedAt" AS stop_created,
+       m."CreatedAt" AS edi_created,
+       coalesce(m."ProcessedAt", m."CreatedAt") AS edi_processed,
+       (s."CreatedAt" <= coalesce(m."ProcessedAt", m."CreatedAt")) AS treated_as_edi_written,
+       s."PlannedFrom", s."RequestedFrom", s."ConfirmedFrom", s."EarliestAllowed"
+  FROM transport_order_stops s
+  JOIN edi_messages m
+    ON m."TenantId" = s."TenantId" AND m."IsDeleted" = false
+   AND m."Direction" = 'Inbound' AND m."Status" = 'Processed'
+   AND m."ResultEntityType" = 'TransportOrder'
+   AND m."ResultEntityId" = s."TransportOrderId"::text
+ WHERE s."PlannedFrom" IS NOT NULL OR s."PlannedTo" IS NOT NULL
+    OR s."RequestedFrom" IS NOT NULL OR s."RequestedTo" IS NOT NULL
+    OR s."ConfirmedFrom" IS NOT NULL OR s."ConfirmedTo" IS NOT NULL
+    OR s."EarliestAllowed" IS NOT NULL OR s."LatestAllowed" IS NOT NULL
+ ORDER BY 1;
+
+-- 5. Droogloop van de omzetting: verwacht -02:00:00 (zomer), -01:00:00 (winter) of 00:00:00 (UTC).
+--    Elke andere waarde = stoppen en onderzoeken. De zonekeuze en de EDI-uitsluiting zijn identiek
+--    aan de migratie: zonder de pg_timezone_names-guard breekt deze query af op precies de tenants
+--    waarvoor die guard bestaat.
+SELECT ((s."PlannedFrom" AT TIME ZONE 'UTC') AT TIME ZONE
+          CASE WHEN ts."Timezone" IS NOT NULL
+                AND EXISTS (SELECT 1 FROM pg_timezone_names z
+                             WHERE lower(z.name) = lower(btrim(ts."Timezone")))
+               THEN btrim(ts."Timezone") ELSE 'Europe/Amsterdam' END)
+         - s."PlannedFrom" AS shift,
+       count(*)
+  FROM transport_order_stops s
+  LEFT JOIN tenant_settings ts ON ts."TenantId" = s."TenantId"
+ WHERE s."PlannedFrom" IS NOT NULL
+   AND NOT EXISTS (SELECT 1 FROM edi_messages m
+                    WHERE m."TenantId" = s."TenantId" AND m."IsDeleted" = false
+                      AND m."Direction" = 'Inbound' AND m."Status" = 'Processed'
+                      AND m."ResultEntityType" = 'TransportOrder'
+                      AND m."ResultEntityId" = s."TransportOrderId"::text
+                      AND s."CreatedAt" <= coalesce(m."ProcessedAt", m."CreatedAt"))
+ GROUP BY 1 ORDER BY 2 DESC;
+
+-- 6. Omvang van de verweesde colli-pins (C-01), vóór het herstel.
+SELECT count(*) FROM packages p
+ WHERE p."IsDeleted" = false
+   AND (EXISTS (SELECT 1 FROM transport_order_stops d WHERE d."Id" = p."LoadingStopId"  AND d."IsDeleted")
+     OR EXISTS (SELECT 1 FROM transport_order_stops d WHERE d."Id" = p."DeliveryStopId" AND d."IsDeleted"));
+```
+
+**Optionele voorbereidende index.** Het EDI-predikaat is een gecorreleerde subquery en
+`edi_messages` heeft geen index op `("TenantId","ResultEntityId")`. Bij een grote `edi_messages` of
+veel tenants is dat de dominante kostenpost. Vooraf, buiten de migratietransactie:
+
+```sql
+CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_edi_messages_tenant_result
+    ON edi_messages ("TenantId", "ResultEntityId");
+-- Na afloop desgewenst: DROP INDEX CONCURRENTLY ix_edi_messages_tenant_result;
+```
+
+#### Na toepassen
+
+```sql
+-- A. De tellingen die de migraties zelf hebben vastgelegd.
+SELECT a."Timestamp", a."TenantId", a."Action", a."OldValuesJson", a."NewValuesJson"
+  FROM audit_logs a
+ WHERE a."EntityType" = 'DataMigration'
+ ORDER BY a."Timestamp" DESC;
+```
+
+Controleer per tenant in die rijen:
+
+* `timezoneUsed` / `timezoneSource` zijn wat je verwacht (`tenant_settings`, niet `default (...)`,
+  tenzij je dat bewust zo laat);
+* **`converted` = `candidateStopRows`** voor elke niet-UTC-tenant. Een verschil betekent dat rijen
+  vergrendeld waren of dat het predikaat is afgeweken — onderzoeken;
+* `skippedEdi` klopt met query 4;
+* `dstInvertedWindowsRepaired` / `dstInvertedStopIds`: vensters die over het lentegat vielen en
+  omgekeerd uitkwamen. Ze zijn hersteld met behoud van hun **oorspronkelijke breedte**
+  (`ondergrens_nieuw + originele breedte`), niet dichtgeklapt. De ids staan in de auditrij (max.
+  500, met `dstInvertedStopIdsTruncated`) — dat is de enige plek waar ze terug te vinden zijn;
+* `alreadyInvertedLeftUntouched` / `alreadyInvertedStopIds`: vensters die al vóór de migratie
+  omgekeerd stonden. Die zijn **bewust niet aangeraakt** (de applicatie kan ze niet aanmaken; ze
+  kunnen alleen van een directe DB-schrijfactie komen) en verklaren een niet-nul uitkomst van
+  query B hieronder.
+
+```sql
+-- B. Omgekeerde vensters. Moet gelijk zijn aan de som van "alreadyInvertedLeftUntouched",
+--    normaal 0. Elke andere waarde betekent dat de omzetting iets heeft gebroken.
+SELECT count(*) FROM transport_order_stops
+ WHERE "PlannedTo" < "PlannedFrom" OR "RequestedTo" < "RequestedFrom"
+    OR "ConfirmedTo" < "ConfirmedFrom" OR "LatestAllowed" < "EarliestAllowed";
+
+-- C. Restant verweesde colli-pins = "stillAmbiguous" uit A; die moeten met de hand nagekeken
+--    worden (diagnosequery in het taakrapport task-5-report.md). Per tenant hoort te gelden:
+--    danglingPackages - repairedLoadingPins - repairedDeliveryPins = stillAmbiguous.
+SELECT count(*) FROM packages p
+ WHERE p."IsDeleted" = false
+   AND (EXISTS (SELECT 1 FROM transport_order_stops d WHERE d."Id" = p."LoadingStopId"  AND d."IsDeleted")
+     OR EXISTS (SELECT 1 FROM transport_order_stops d WHERE d."Id" = p."DeliveryStopId" AND d."IsDeleted"));
+```
+
+Sluit af met `VACUUM (ANALYZE) transport_order_stops;` — de omzetting herschrijft elke rij met een
+venster, wat de tabel tijdelijk ongeveer verdubbelt tot autovacuum bijtrekt, en de statistieken
+verouderd achterlaat. Controleer daarna in de applicatie zelf, op de vijf schermen die nu een
+wandklok tonen: een **opdrachtdetail** (tijdvensters + openingsurenwaarschuwingen), een
+**collietiket** (ophaal-/leveruur), een **planningsvoorstel** met venster, een
+**klant/dag-documentrun** met een levering vroeg in de ochtend, en een **prijsherberekening** op een
+opdracht met een stop vlak naast het weekend (weekendtoeslag).
+
 ### 1.3 Verifiëren
 
 Na `database update`:

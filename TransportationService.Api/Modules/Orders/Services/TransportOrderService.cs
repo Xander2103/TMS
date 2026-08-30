@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using TransportationService.Api.Common;
 using TransportationService.Api.Common.Models;
 using TransportationService.Api.Common.Persistence;
 using TransportationService.Api.Data;
@@ -78,6 +79,10 @@ public class TransportOrderService : ITransportOrderService
     private readonly INotificationEventService? _notificationEvents;
     private readonly ILogger<TransportOrderService>? _logger;
     private readonly IOpeningHoursEvaluator _openingHoursEvaluator;
+
+    /// <summary>Lazily resolved tenant zone (see <see cref="ResolveTenantTimeZoneAsync"/>); the
+    /// service is request-scoped, so this caches for exactly one request.</summary>
+    private TimeZoneInfo? _tenantTimeZone;
 
     public TransportOrderService(
         TransportationDbContext dbContext,
@@ -2156,13 +2161,30 @@ public class TransportOrderService : ITransportOrderService
         ["maandag", "dinsdag", "woensdag", "donderdag", "vrijdag", "zaterdag", "zondag"];
 
     /// <summary>
+    /// The tenant's IANA zone (<c>TenantSettings.Timezone</c>) as a <see cref="TimeZoneInfo"/>,
+    /// resolved at most once per service instance (= per request).
+    /// </summary>
+    /// <remarks>
+    /// The one transport-time convention (C-03): stored/wire values are UTC instants, everything a
+    /// human types or reads is tenant wall clock. Opening hours are stored as local wall clock
+    /// (<see cref="TimeOnly"/>), so any comparison between the two has to pass through this zone.
+    /// Resolution goes through <see cref="TenantTimeZone"/>, the single resolver in the API.
+    /// </remarks>
+    private async Task<TimeZoneInfo> ResolveTenantTimeZoneAsync(CancellationToken cancellationToken) =>
+        _tenantTimeZone ??= await TenantTimeZone.ForTenantAsync(_dbContext, _tenantContext.TenantId, cancellationToken);
+
+    /// <summary>
     /// Advisory (never blocking) opening-hours warnings for one stop. Evaluated against the
     /// LIVE location intervals on purpose: the warning answers "will the site be open at the
     /// planned time", while the snapshot answers "what did we agree back then".
     /// </summary>
-    private IReadOnlyList<string>? BuildOpeningHoursWarnings(TransportOrderStop stop, Location? location)
+    /// <param name="zone">Tenant zone; the planned UTC instants are projected onto it before they
+    /// are compared with the location's local opening hours (C-03). Null when the caller resolved
+    /// no zone because the order has no master-location stop — which is also the only case in
+    /// which no warning can exist, so the two conditions are checked together.</param>
+    private IReadOnlyList<string>? BuildOpeningHoursWarnings(TransportOrderStop stop, Location? location, TimeZoneInfo? zone)
     {
-        if (location is null || location.OpeningIntervals.Count == 0)
+        if (location is null || zone is null || location.OpeningIntervals.Count == 0)
         {
             return null; // Free-address stop or no structured hours (NoData) → no warning.
         }
@@ -2177,22 +2199,25 @@ public class TransportOrderService : ITransportOrderService
                 continue;
             }
 
-            // A lone midnight "from" is the wire encoding of a date-only stop (no time chosen);
+            var local = TenantTimeZone.ToWallClock(planned, zone);
+
+            // A lone LOCAL midnight "from" is the wire encoding of a date-only stop (no time
+            // chosen: the client sends 00:00 tenant time, which is 22:00Z / 23:00Z on the wire);
             // warning about 00:00 would be noise.
-            if (planned.TimeOfDay == TimeSpan.Zero && stop.PlannedTo is null)
+            if (local.TimeOfDay == TimeSpan.Zero && stop.PlannedTo is null)
             {
                 continue;
             }
 
-            var time = TimeOnly.FromDateTime(planned);
-            var check = _openingHoursEvaluator.Check(location.OpeningIntervals, planned.DayOfWeek, time);
+            var time = TimeOnly.FromDateTime(local);
+            var check = _openingHoursEvaluator.Check(location.OpeningIntervals, local.DayOfWeek, time);
             var message = check.Status switch
             {
                 OpeningHoursStatus.BeforeOpening or OpeningHoursStatus.AfterClosing =>
                     $"De geplande {activity} van {time:HH\\:mm} valt buiten de openingsuren " +
                     $"({OpeningHoursFormatter.FormatDayIntervals(check.DayIntervals)}) van {name}.",
                 OpeningHoursStatus.ClosedDay =>
-                    $"De geplande {activity} op {DutchDayNames[planned.DayOfWeek == DayOfWeek.Sunday ? 6 : (int)planned.DayOfWeek - 1]} valt op een sluitingsdag van {name}.",
+                    $"De geplande {activity} op {DutchDayNames[local.DayOfWeek == DayOfWeek.Sunday ? 6 : (int)local.DayOfWeek - 1]} valt op een sluitingsdag van {name}.",
                 _ => null,
             };
             if (message is not null)
@@ -2228,6 +2253,14 @@ public class TransportOrderService : ITransportOrderService
 
         // Sensitive access codes only surface for locations.view_sensitive holders (fail-closed).
         var canViewSensitiveAccess = await CurrentUserHasAnyAsync(cancellationToken, PermissionCodes.LocationsViewSensitive);
+
+        // Opening-hours warnings compare a UTC instant with LOCAL opening hours, so they need the
+        // tenant zone (C-03). Only a stop with a master location can produce one; with no such
+        // stop there is nothing to resolve, and the null travels into the guard rather than a
+        // placeholder zone that would be silently wrong if the guard ever moved.
+        TimeZoneInfo? tenantZone = locations.Count == 0
+            ? null
+            : await ResolveTenantTimeZoneAsync(cancellationToken);
 
         var stops = order.Stops
             .Where(s => !s.IsDeleted)
@@ -2266,7 +2299,7 @@ public class TransportOrderService : ITransportOrderService
                     DefaultLoadingMinutes: s.DefaultLoadingMinutes,
                     DefaultUnloadingMinutes: s.DefaultUnloadingMinutes,
                     SnapshotAt: s.SnapshotAt,
-                    Warnings: BuildOpeningHoursWarnings(s, location));
+                    Warnings: BuildOpeningHoursWarnings(s, location, tenantZone));
             })
             .ToList();
 
@@ -2710,6 +2743,11 @@ public class TransportOrderService : ITransportOrderService
                     .ToListAsync(cancellationToken);
 
             // §16: per-stop time facts feed time-based service conditions (never hardcoded times).
+            // C-03: PlannedDate drives the WEEKEND and HOLIDAY surcharges (PricingEngine
+            // ServiceConditionKind.Weekend/Holiday), so it must be the tenant-local calendar day.
+            // Truncating the raw instant prices a Monday 00:30 stop (Sunday 22:30Z) as weekend work
+            // and drops the surcharge from a Saturday 00:30 stop (Friday 22:30Z): money, both ways.
+            var pricingZone = await ResolveTenantTimeZoneAsync(cancellationToken);
             var stopTimeInputs = order.Stops
                 .Where(s => !s.IsDeleted)
                 .OrderBy(s => s.Sequence)
@@ -2719,7 +2757,7 @@ public class TransportOrderService : ITransportOrderService
                     s.TimeRequirementFrom,
                     s.TimeRequirementTo,
                     s.AppointmentRequired,
-                    (s.PlannedFrom ?? s.PlannedTo) is { } planned ? DateOnly.FromDateTime(planned) : null))
+                    (s.PlannedFrom ?? s.PlannedTo) is { } planned ? TenantTimeZone.ToLocalDate(planned, pricingZone) : null))
                 .ToList();
 
             var warehouseActivity = await ResolveWarehouseActivityAsync(order, cancellationToken);

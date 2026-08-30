@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using TransportationService.Api.Common;
 using TransportationService.Api.Data;
 using TransportationService.Api.Modules.Orders.Entities;
 using TransportationService.Api.Modules.Tenancy.Services;
@@ -227,6 +228,11 @@ public class TransportDocumentService : ITransportDocumentService
             .GroupBy(x => x.TransportOrderId)
             .ToDictionary(g => g.Key, g => g.Max(x => x.TripDate));
 
+        // C-03: the requested window is a UTC instant, but "the deliveries of a date" is a
+        // TENANT-LOCAL calendar day. Truncating the raw instant moves every delivery before
+        // 01:00/02:00 local onto the previous day and out of that day's document run.
+        var zone = await TenantTimeZone.ForTenantAsync(_dbContext, tenantId, cancellationToken);
+
         return orders
             .Where(o =>
             {
@@ -239,7 +245,7 @@ public class TransportDocumentService : ITransportDocumentService
                     .OrderBy(s => s.Sequence)
                     .Select(s => s.RequestedFrom ?? s.RequestedTo)
                     .LastOrDefault(d => d is not null);
-                return requested is { } r ? DateOnly.FromDateTime(r) == date : o.OrderDate == date;
+                return requested is { } r ? TenantTimeZone.ToLocalDate(r, zone) == date : o.OrderDate == date;
             })
             .OrderBy(o => o.OrderNumber)
             .ToList();
