@@ -652,7 +652,7 @@ public class InvoiceService : IInvoiceService
         // is refused out loud instead of being silently ignored. Amounts, wording and dropping
         // the line entirely stay editable — that is how a partial credit is made.
         var mirroredById = invoice.Lines
-            .Where(l => !l.IsDeleted && IsMirroredCreditLine(invoice, l))
+            .Where(l => !l.IsDeleted && InvoiceLineMirror.IsMirrored(invoice, l))
             .ToDictionary(l => l.Id);
         foreach (var line in request.Lines)
         {
@@ -917,17 +917,20 @@ public class InvoiceService : IInvoiceService
                     "De btw-regeling van de klant ontbreekt op deze factuur; bewerk en bewaar de conceptfactuur eerst opnieuw.");
             }
 
+            // H-06: resolve which lines are copies of a credited document BEFORE the first pass
+            // stamps snapshots of its own — after that, a freshly frozen line is indistinguishable
+            // from a copy. Both passes then skip exactly this set.
+            var mirroredLineIds = InvoiceLineMirror.MirroredIds(invoice);
+
             // §7.3: freeze the sales category + ledger account from the THEN-current mapping.
             // Later mapping changes never rewrite these lines; the accounting export reads
-            // exclusively from these snapshots. H-06: a MIRRORED credit-note line is skipped
-            // inside — it already carries the credited document's freeze, gaps included.
-            await FreezeLedgerSnapshotsAsync(invoice, cancellationToken);
+            // exclusively from these snapshots.
+            await FreezeLedgerSnapshotsAsync(invoice, mirroredLineIds, cancellationToken);
             // Sprint 5H: the sales-code resolver freezes treatment, rate, category, description
             // language and cost centre for every line WITH a sales code. It must run before the
             // customer-level category fallback below, otherwise a sales code's statutory
-            // exception could never win (audit fix). It only touches lines that carry no
-            // treatment snapshot yet, so a mirrored credit-note line is out of scope by design.
-            await FreezeSalesCodeSnapshotsAsync(invoice, cancellationToken);
+            // exception could never win (audit fix).
+            await FreezeSalesCodeSnapshotsAsync(invoice, mirroredLineIds, cancellationToken);
 
             // Gap filler for lines without any category at all; never overwrites a frozen value,
             // so on a credit note it only touches what the credited document itself left open.
@@ -1146,11 +1149,7 @@ public class InvoiceService : IInvoiceService
         }
 
         return invoice.Kind != InvoiceKind.CreditNote
-               && invoice.Lines.Any(l => !l.IsDeleted
-                                         && (l.VatCategoryCode is not null
-                                             || l.VatTreatmentSnapshot is not null
-                                             || l.SalesCategoryNameSnapshot is not null
-                                             || l.LedgerAccountNumberSnapshot is not null));
+               && invoice.Lines.Any(l => !l.IsDeleted && InvoiceLineMirror.HasFrozenFiscalData(l));
     }
 
     /// <summary>
@@ -1227,17 +1226,9 @@ public class InvoiceService : IInvoiceService
         }
     }
 
-    /// <summary>
-    /// H-06 — is this line a copy of a credited line rather than one typed on the credit note
-    /// itself? Only a copy carries a fiscal freeze while its document is still Draft, so
-    /// <see cref="InvoiceLine.VatTreatmentSnapshot"/> is the marker. Copies are never re-frozen,
-    /// never re-derived and never recategorised: they mirror the document they credit.
-    /// </summary>
-    private static bool IsMirroredCreditLine(Invoice invoice, InvoiceLine line) =>
-        invoice.Kind == InvoiceKind.CreditNote && line.VatTreatmentSnapshot is not null;
-
     /// <summary>§7.3: resolve category + mapped account for every category-carrying line at Send.</summary>
-    private async Task FreezeLedgerSnapshotsAsync(Invoice invoice, CancellationToken cancellationToken)
+    private async Task FreezeLedgerSnapshotsAsync(
+        Invoice invoice, IReadOnlySet<Guid> mirroredLineIds, CancellationToken cancellationToken)
     {
         var lines = invoice.Lines.Where(l => !l.IsDeleted).ToList();
         var categoryIds = lines.Where(l => l.SalesCategoryId is not null).Select(l => l.SalesCategoryId!.Value).Distinct().ToList();
@@ -1271,7 +1262,7 @@ public class InvoiceService : IInvoiceService
             // gap here would book the credit against an account the invoice it reverses never
             // touched. A line the user added to the draft credit note itself has no treatment
             // snapshot and is frozen normally.
-            if (IsMirroredCreditLine(invoice, line))
+            if (mirroredLineIds.Contains(line.Id))
             {
                 continue;
             }
@@ -1298,9 +1289,19 @@ public class InvoiceService : IInvoiceService
     /// cost centre of the invoicing entity. Never overwrites an already-frozen value, so a
     /// re-run (or a later correction flow) cannot rewrite history.
     /// </summary>
-    private async Task FreezeSalesCodeSnapshotsAsync(Invoice invoice, CancellationToken cancellationToken)
+    private async Task FreezeSalesCodeSnapshotsAsync(
+        Invoice invoice, IReadOnlySet<Guid> mirroredLineIds, CancellationToken cancellationToken)
     {
-        var lines = invoice.Lines.Where(l => !l.IsDeleted && l.SalesCategoryId is not null && l.VatTreatmentSnapshot is null).ToList();
+        // H-06: the `VatTreatmentSnapshot is null` filter is an idempotency check, NOT a mirror
+        // check — a credit-note line copied from a pre-2026-08-28 invoice has a null treatment
+        // snapshot and would be selected here, so it needs the mirror guard explicitly. Without it
+        // this method would rewrite the credit's treatment, source, legal text, RATE, UBL category,
+        // cost centre and customer-facing description from today's master data, and the credit note
+        // could state a different VAT rate than the invoice it reverses.
+        var lines = invoice.Lines
+            .Where(l => !l.IsDeleted && l.SalesCategoryId is not null && l.VatTreatmentSnapshot is null
+                        && !mirroredLineIds.Contains(l.Id))
+            .ToList();
         if (lines.Count == 0)
         {
             return;
@@ -1444,6 +1445,15 @@ public class InvoiceService : IInvoiceService
             VatLegalText = original.VatLegalText,
         };
 
+        // H-06: every copy must carry at least one freeze marker, or it cannot be told apart from a
+        // line typed on the credit note itself and Send would re-derive it from live master data.
+        // A line so old that it predates the UBL category (Peppol wave) has none, so it is stamped
+        // here with the category the CREDITED header dictates — byte for byte what FreezeVatCategories
+        // would write at Send, only early enough to be recognisable as a mirror.
+        var creditedTreatment = Enum.TryParse<VatTreatment>(original.CustomerVatTreatment, out var creditedParsed)
+            ? creditedParsed
+            : VatTreatment.DomesticVat;
+
         var sequence = 1;
         foreach (var line in original.Lines.Where(l => !l.IsDeleted).OrderBy(l => l.Sequence))
         {
@@ -1460,7 +1470,8 @@ public class InvoiceService : IInvoiceService
                 UnitPrice = line.UnitPrice,
                 VatRatePercent = line.VatRatePercent,
                 UnitCode = line.UnitCode,
-                VatCategoryCode = line.VatCategoryCode,
+                VatCategoryCode = line.VatCategoryCode
+                    ?? Partners.Services.VatTreatmentCatalog.ResolveVatCategory(creditedTreatment, line.VatRatePercent).Code,
                 SalesCategoryId = line.SalesCategoryId,
                 // H-06: the full fiscal freeze of the credited line travels with it. The credit
                 // must book against the SAME ledger account, treatment and wording as the invoice
@@ -1539,7 +1550,10 @@ public class InvoiceService : IInvoiceService
         }
 
         var missingBefore = invoice.Lines.Count(l => !l.IsDeleted && l.LedgerAccountNumberSnapshot is null);
-        await FreezeLedgerSnapshotsAsync(invoice, cancellationToken);
+        // H-06 (review M-3): this gap filler resolves against TODAY's mapping, so it must respect
+        // the mirror rule too — a credit line that inherited a null account from the document it
+        // credits keeps that null rather than booking somewhere the original never did.
+        await FreezeLedgerSnapshotsAsync(invoice, InvoiceLineMirror.MirroredIds(invoice), cancellationToken);
         var missingAfter = invoice.Lines.Count(l => !l.IsDeleted && l.LedgerAccountNumberSnapshot is null);
         await _dbContext.SaveChangesAsync(cancellationToken);
 
@@ -1585,9 +1599,10 @@ public class InvoiceService : IInvoiceService
         var lines = liveLines.Select(l =>
         {
             var live = l.SalesCategoryId is { } categoryId ? liveCategories.GetValueOrDefault(categoryId) : null;
-            // A line that already carries its freeze shows the freeze, draft or not: a draft
-            // credit note copied it from the credited invoice and Send will not touch it (H-06).
-            var frozen = !isDraft || l.VatTreatmentSnapshot is not null;
+            // A mirrored line shows its freeze, draft or not: a draft credit note copied it from the
+            // credited invoice and Send will not touch it (H-06). Same marker as the freeze guards,
+            // so the preview can never disagree with what Send stores.
+            var frozen = !isDraft || InvoiceLineMirror.IsMirrored(invoice, l);
             var categoryName = l.SalesCategoryNameSnapshot ?? live?.Name;
             var accountNumber = frozen ? l.LedgerAccountNumberSnapshot : live?.LedgerAccount?.AccountNumber;
             var accountName = frozen ? l.LedgerAccountNameSnapshot : live?.LedgerAccount?.Name;

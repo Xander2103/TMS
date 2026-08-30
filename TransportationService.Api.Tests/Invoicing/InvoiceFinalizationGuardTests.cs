@@ -453,6 +453,154 @@ public class InvoiceFinalizationGuardTests
         Assert.NotNull(addedLine.VatTreatmentSnapshot);
     }
 
+    /// <summary>Maps DIVERS-BINNEN to a ledger account and returns the category id.</summary>
+    private static async Task<Guid> MapDiversBinnenAsync(Harness h, string accountNumber, string accountName)
+    {
+        var account = await h.Accounting.CreateLedgerAccountAsync(
+            new SaveLedgerAccountRequest(accountNumber, accountName), CancellationToken.None);
+        var category = (await h.Accounting.ListSalesCategoriesAsync(false, CancellationToken.None))
+            .Single(c => c.Code == "DIVERS-BINNEN");
+        await h.Accounting.UpdateSalesCategoryAsync(category.Id, new SaveSalesCategoryRequest(
+            category.Code, category.Name, category.SystemRole, account.Id, true, category.SortOrder),
+            CancellationToken.None);
+        return category.Id;
+    }
+
+    /// <summary>
+    /// Makes the sales code carry a statutory classification, the way a master-data correction would
+    /// AFTER the invoice went out. Any line re-derived from live data afterwards lands on
+    /// reverse charge at 0% / category "AE" instead of the 21% / "S" that was invoiced.
+    /// </summary>
+    private static async Task ReclassifyCodeAsReverseChargeAsync(Harness h, Guid categoryId)
+    {
+        var stored = await h.Db.Context.SalesCategories.SingleAsync(c => c.Id == categoryId);
+        stored.VatTreatmentOverride = VatTreatment.ReverseCharge;
+        await h.Db.Context.SaveChangesAsync();
+    }
+
+    /// <summary>
+    /// Legacy shape: `VatTreatmentSnapshot` and the rest of the sprint-5H block only exist since
+    /// 2026-08-28 and were never backfilled, so a line frozen before that carries a ledger snapshot
+    /// with a NULL treatment snapshot. Its credit-note copy inherits that null and must still be
+    /// recognised as a mirror — otherwise the credit note re-derives VAT treatment, rate, category
+    /// and cost centre from today's master data and credits 0% against an invoice that charged 21%.
+    /// </summary>
+    [Fact]
+    public async Task CreditNote_MirrorsALegacyCreditedLine_ThatCarriesNoTreatmentSnapshot()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var categoryId = await MapDiversBinnenAsync(h, "700400", "Diverse verkoop binnenland");
+        var created = await h.Sut.CreateAsync(new CreateInvoiceRequest(
+            h.CustomerId, null, [], [new ManualInvoiceLineInput("Verkoop binnenland", 1m, 100m, 21m, categoryId)], null),
+            CancellationToken.None);
+        await h.Sut.ChangeStatusAsync(created.Invoice!.Id, InvoiceStatus.Sent, CancellationToken.None);
+
+        // Rewrite the sent line into the pre-5H shape: ledger snapshot kept, fiscal block null.
+        var originalLine = await h.Db.Context.InvoiceLines.SingleAsync(l => l.InvoiceId == created.Invoice.Id);
+        Assert.Equal("700400", originalLine.LedgerAccountNumberSnapshot);
+        originalLine.VatTreatmentSnapshot = null;
+        originalLine.VatTreatmentSourceSnapshot = null;
+        originalLine.VatLegalTextSnapshot = null;
+        originalLine.SalesCodeSnapshot = null;
+        originalLine.DescriptionLanguageSnapshot = null;
+        originalLine.CostCentreSnapshot = null;
+        await h.Db.Context.SaveChangesAsync();
+        Assert.Equal(21m, originalLine.VatRatePercent);
+        Assert.Equal("S", originalLine.VatCategoryCode);
+
+        await ReclassifyCodeAsReverseChargeAsync(h, categoryId);
+
+        var credit = await h.Sut.CreateCreditNoteAsync(created.Invoice.Id, CancellationToken.None);
+        Assert.Equal(InvoiceOperationOutcome.Success, credit.Outcome);
+        // The draft view already shows the mirror, not today's live mapping.
+        Assert.Equal("700400", credit.Invoice!.Lines.Single().LedgerAccountNumber);
+
+        var sent = await h.Sut.ChangeStatusAsync(credit.Invoice.Id, InvoiceStatus.Sent, CancellationToken.None);
+        Assert.Equal(InvoiceOperationOutcome.Success, sent.Outcome);
+
+        var creditLine = await h.Db.Context.InvoiceLines.SingleAsync(l => l.InvoiceId == credit.Invoice.Id);
+        Assert.Equal(21m, creditLine.VatRatePercent);
+        Assert.Equal("S", creditLine.VatCategoryCode);
+        Assert.Equal("700400", creditLine.LedgerAccountNumberSnapshot);
+        Assert.Equal("Verkoop binnenland", creditLine.Description);
+        // The credited line had no fiscal block; the mirror honestly has none either.
+        Assert.Null(creditLine.VatTreatmentSnapshot);
+        Assert.Null(creditLine.VatLegalTextSnapshot);
+        Assert.Null(creditLine.CostCentreSnapshot);
+    }
+
+    /// <summary>
+    /// The oldest shape of all: a credited line with no fiscal freeze whatsoever (pre-Peppol, so not
+    /// even a UBL category). The copy is stamped with the category the credited HEADER dictates —
+    /// exactly what Send would have written — so it still reads as a mirror and is never re-derived.
+    /// </summary>
+    [Fact]
+    public async Task CreditNote_MirrorsAnAncientCreditedLine_WithNoFiscalSnapshotsAtAll()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var categoryId = await MapDiversBinnenAsync(h, "700400", "Diverse verkoop binnenland");
+        var created = await h.Sut.CreateAsync(new CreateInvoiceRequest(
+            h.CustomerId, null, [], [new ManualInvoiceLineInput("Verkoop binnenland", 1m, 100m, 21m, categoryId)], null),
+            CancellationToken.None);
+        await h.Sut.ChangeStatusAsync(created.Invoice!.Id, InvoiceStatus.Sent, CancellationToken.None);
+
+        var originalLine = await h.Db.Context.InvoiceLines.SingleAsync(l => l.InvoiceId == created.Invoice.Id);
+        originalLine.VatTreatmentSnapshot = null;
+        originalLine.VatTreatmentSourceSnapshot = null;
+        originalLine.VatLegalTextSnapshot = null;
+        originalLine.SalesCodeSnapshot = null;
+        originalLine.DescriptionLanguageSnapshot = null;
+        originalLine.CostCentreSnapshot = null;
+        originalLine.SalesCategoryNameSnapshot = null;
+        originalLine.LedgerAccountId = null;
+        originalLine.LedgerAccountNumberSnapshot = null;
+        originalLine.LedgerAccountNameSnapshot = null;
+        originalLine.VatCategoryCode = null;
+        await h.Db.Context.SaveChangesAsync();
+
+        await ReclassifyCodeAsReverseChargeAsync(h, categoryId);
+
+        var credit = await h.Sut.CreateCreditNoteAsync(created.Invoice.Id, CancellationToken.None);
+        await h.Sut.ChangeStatusAsync(credit.Invoice!.Id, InvoiceStatus.Sent, CancellationToken.None);
+
+        var creditLine = await h.Db.Context.InvoiceLines.SingleAsync(l => l.InvoiceId == credit.Invoice.Id);
+        Assert.Equal(21m, creditLine.VatRatePercent);
+        Assert.Equal("S", creditLine.VatCategoryCode);
+        Assert.Null(creditLine.VatTreatmentSnapshot);
+        Assert.Null(creditLine.LedgerAccountNumberSnapshot);
+    }
+
+    /// <summary>The M-4 refusal must recognise a legacy mirror too, not only a post-5H one.</summary>
+    [Fact]
+    public async Task CreditNote_RecategorisingALegacyMirroredLine_IsAlsoRefused()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var categoryId = await MapDiversBinnenAsync(h, "700400", "Diverse verkoop binnenland");
+        var otherCategory = (await h.Accounting.ListSalesCategoriesAsync(false, CancellationToken.None))
+            .First(c => c.Id != categoryId);
+        var created = await h.Sut.CreateAsync(new CreateInvoiceRequest(
+            h.CustomerId, null, [], [new ManualInvoiceLineInput("Verkoop binnenland", 1m, 100m, 21m, categoryId)], null),
+            CancellationToken.None);
+        await h.Sut.ChangeStatusAsync(created.Invoice!.Id, InvoiceStatus.Sent, CancellationToken.None);
+        var originalLine = await h.Db.Context.InvoiceLines.SingleAsync(l => l.InvoiceId == created.Invoice.Id);
+        originalLine.VatTreatmentSnapshot = null;
+        await h.Db.Context.SaveChangesAsync();
+
+        var credit = await h.Sut.CreateCreditNoteAsync(created.Invoice.Id, CancellationToken.None);
+        var mirrored = credit.Invoice!.Lines.Single();
+
+        var refused = await h.Sut.UpdateAsync(credit.Invoice.Id, new UpdateInvoiceRequest(
+            credit.Invoice.InvoiceDate, credit.Invoice.DueDate,
+            [new UpdateInvoiceLineInput(mirrored.Id, mirrored.Description, mirrored.Quantity, mirrored.UnitPrice,
+                mirrored.VatRatePercent, otherCategory.Id)], null), CancellationToken.None);
+
+        Assert.Equal(InvoiceOperationOutcome.ValidationFailed, refused.Outcome);
+        Assert.Equal(categoryId, (await h.Db.Context.InvoiceLines.SingleAsync(l => l.Id == mirrored.Id)).SalesCategoryId);
+    }
+
     /// <summary>
     /// Recategorising a mirrored credit-note line would leave SalesCategoryId pointing at one code
     /// and the frozen snapshots at another. The mirror wins and the edit is refused out loud —
