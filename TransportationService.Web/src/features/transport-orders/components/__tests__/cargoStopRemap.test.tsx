@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, RouterProvider, createMemoryRouter } from 'react-router-dom'
 import { TransportOrderForm } from '../TransportOrderForm'
@@ -217,6 +217,38 @@ describe('TransportOrderForm — goods lines follow a reordered stop', () => {
     expect(payload.cargoItems[0].unloadingStopIndex).toBe(1)
     expect(payload.cargoItems[0].loadingStopIndex).toBe(0)
   })
+
+  /**
+   * Re-review N-1: `mutateStops` read `stops` from the RENDER CLOSURE, so two stop mutations
+   * dispatched before React re-rendered both started from the pre-batch list and the first was
+   * silently discarded — together with the cargo remap computed against that same stale list.
+   * Two removals inside one `act` reproduce it: the buggy version keeps two stops (last write
+   * wins), the fixed one applies both.
+   */
+  it('applies two stop mutations issued in the same tick', async () => {
+    const onSubmit = vi.fn().mockResolvedValue(undefined)
+    render(
+      <MemoryRouter>
+        <TransportOrderForm mode="edit" order={makeOrder()} submitLabel="Opslaan" onSubmit={onSubmit} />
+      </MemoryRouter>,
+    )
+    await userEvent.click(screen.getByRole('tab', { name: /Route & stops/ }))
+
+    const remove = screen.getAllByRole('button', { name: 'Verwijderen' })
+    await act(async () => {
+      remove[2].click() // Brugge
+      remove[1].click() // Gent
+    })
+    await userEvent.click(screen.getByRole('button', { name: 'Opslaan' }))
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled())
+    const payload = onSubmit.mock.calls[0][0]
+    expect(payload.stops.map((s: { id: string | null }) => s.id)).toEqual(['stop-1'])
+    // Both unloading stops are gone, so the line's link falls back to automatic rather than to a
+    // position that no longer exists.
+    expect(payload.cargoItems[0].unloadingStopIndex).toBeNull()
+    expect(payload.cargoItems[0].loadingStopIndex).toBe(0)
+  })
 })
 
 /** SectionDrawer guards unsaved changes with `useBlocker`, which needs a DATA router. */
@@ -250,6 +282,23 @@ describe('RouteDrawer — the stop-only editor keeps the goods links coherent', 
     await waitFor(() => expect(updateOrderSpy).toHaveBeenCalled())
     const payload = updateOrderSpy.mock.calls[0][1]
     expect(payload.stops).toHaveLength(2)
+    expect(payload.cargoItems[0].unloadingStopIndex).toBeNull()
+  })
+
+  /** Re-review N-1, drawer side — same lost-update window, same reproduction. */
+  it('applies two stop mutations issued in the same tick', async () => {
+    renderDrawer()
+
+    const remove = screen.getAllByRole('button', { name: 'Verwijderen' })
+    await act(async () => {
+      remove[2].click() // Brugge
+      remove[1].click() // Gent
+    })
+    await userEvent.click(screen.getByRole('button', { name: /Opslaan/ }))
+
+    await waitFor(() => expect(updateOrderSpy).toHaveBeenCalled())
+    const payload = updateOrderSpy.mock.calls[0][1]
+    expect(payload.stops.map((s: { id: string | null }) => s.id)).toEqual(['stop-1'])
     expect(payload.cargoItems[0].unloadingStopIndex).toBeNull()
   })
 })

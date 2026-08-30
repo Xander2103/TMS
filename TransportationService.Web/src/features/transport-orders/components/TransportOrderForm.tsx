@@ -19,6 +19,7 @@ import { PriceSection } from './sections/PriceSection'
 import { SummarySection } from './sections/SummarySection'
 import { useOrderFormData, useOrderPricePreview } from './sections/useOrderFormData'
 import { buildSubmitPayload } from './sections/orderFormPayload'
+import { useStopMutation } from './sections/useStopMutation'
 import {
   cargoFromOrder,
   cargoRowFromHeader,
@@ -26,7 +27,6 @@ import {
   emptyCargoRow,
   emptyStop,
   fieldErrorMap,
-  remapCargoStopIndices,
   serviceDaysFromOrder,
   serviceIdsFromOrder,
   serviceNotesFromOrder,
@@ -123,6 +123,9 @@ export function TransportOrderForm({ mode, order, onSubmit, onCancel, submitLabe
 
   const [stops, setStops] = useState<StopFormRow[]>(() => stopsFromOrder(order))
   const [cargoItems, setCargoItems] = useState<CargoFormRow[]>(() => cargoFromOrder(order))
+  // A1a: the goods lines address their stops by POSITION, so every stop mutation renumbers those
+  // links in the same step. N-1: the hook also guarantees two mutations in one tick both apply.
+  const mutateStops = useStopMutation(stops, setStops, setCargoItems)
 
   const [formError, setFormError] = useState<string | null>(null)
   const [clientErrors, setClientErrors] = useState<OrderFormValidationError[]>([])
@@ -247,8 +250,10 @@ export function TransportOrderForm({ mode, order, onSubmit, onCancel, submitLabe
   // Live price preview, debounced on the pricing-relevant inputs (extracted hook).
   const preview = useOrderPricePreview(values, unitOptions, touchedWarehouseIds, effectiveWeightKg, effectivePalletCount)
 
+  // Every write to the stop list — including a single-field patch — goes through the one mutation
+  // path, so nothing can start from a stale list when two writes land in the same tick (N-1).
   function setStop(key: string, patch: Partial<StopFormRow>) {
-    setStops((rows) => rows.map((row) => (row.key === key ? { ...row, ...patch } : row)))
+    mutateStops((rows) => rows.map((row) => (row.key === key ? { ...row, ...patch } : row)))
   }
 
   function setCargo(key: string, patch: Partial<CargoFormRow>) {
@@ -290,18 +295,6 @@ export function TransportOrderForm({ mode, order, onSubmit, onCancel, submitLabe
         return next
       }),
     )
-  }
-
-  /**
-   * Every stop-list mutation goes through here (A1a): the goods lines address their stops by
-   * POSITION, so reordering, removing or inserting a stop must renumber those links in the same
-   * breath or the lines silently move to another stop.
-   */
-  function mutateStops(mutate: (rows: StopFormRow[]) => StopFormRow[]) {
-    const next = mutate(stops)
-    if (next === stops) return
-    setStops(next)
-    setCargoItems((rows) => remapCargoStopIndices(rows, stops, next))
   }
 
   function moveStop(index: number, delta: number) {

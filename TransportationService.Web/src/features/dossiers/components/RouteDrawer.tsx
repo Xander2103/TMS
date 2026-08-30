@@ -13,12 +13,12 @@ import {
   cargoFromOrder,
   emptyStop,
   fieldErrorMap,
-  remapCargoStopIndices,
   stopsFromOrder,
   validateOrderForm,
   type CargoFormRow,
   type StopFormRow,
 } from '../../transport-orders/components/sections/orderFormState'
+import { useStopMutation } from '../../transport-orders/components/sections/useStopMutation'
 import { orderValuesFromDetail } from './orderDrawerState'
 import { SectionDrawer } from './SectionDrawer'
 import '../../transport-orders/components/transport-order-form.css'
@@ -52,13 +52,9 @@ export function RouteDrawer({ order, onClose, onSaved }: RouteDrawerProps) {
   const [refreshTarget, setRefreshTarget] = useState<string | null>(null)
   const { locationHours, serviceOptions } = useOrderFormData(baseOrder.customerId, stops)
 
-  function mutateStops(mutate: (rows: StopFormRow[]) => StopFormRow[]) {
-    const next = mutate(stops)
-    if (next === stops) return
-    setStops(next)
-    setCargoItems((rows) => remapCargoStopIndices(rows, stops, next))
-    setDirty(true)
-  }
+  // A1a + N-1: one write path for the stop list — it renumbers the goods links in the same step
+  // and guarantees that two mutations in a single tick both apply. See `useStopMutation`.
+  const mutateStops = useStopMutation(stops, setStops, setCargoItems, () => setDirty(true))
 
   function setStop(key: string, patch: Partial<StopFormRow>) {
     mutateStops((rows) => rows.map((row) => (row.key === key ? { ...row, ...patch } : row)))

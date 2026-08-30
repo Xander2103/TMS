@@ -225,6 +225,66 @@ public class OrderLegalEntityChangeTests
     }
 
     /// <summary>
+    /// Re-review N-2 — the DOSSIER twin of the entity change had no test at all, before or after
+    /// this wave, while it carries the same A6 release and shares A7's predicate through
+    /// <c>LoadLegalEntityChangeAsync</c>. It is also the path a user actually reaches from the
+    /// dossier screen. Asserted end to end: the concept lines are released, the order is handed
+    /// back to Completed, its price leaves the terminal Invoiced status, and the move is audited
+    /// as a dossier action.
+    /// </summary>
+    [Fact]
+    public async Task ChangingEntityViaTheDossier_OfADraftInvoicedOrder_ReleasesTheLinesOrderAndPrice()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var draftId = await AddInvoiceWithLineAsync(h, InvoiceStatus.Draft, h.EntityA);
+        var order = await h.Db.Context.TransportOrders.FirstAsync(o => o.Id == h.OrderId);
+        order.Status = TransportOrderStatus.Invoiced;
+        var snapshotId = Guid.NewGuid();
+        h.Db.Context.TransportOrderPricingSnapshots.Add(new TransportOrderPricingSnapshot
+        {
+            Id = snapshotId, TenantId = h.TenantId, TransportOrderId = h.OrderId,
+            TariffDate = new DateOnly(2026, 8, 10), Currency = "EUR", Status = OrderPricingStatus.Invoiced,
+        });
+        await h.Db.Context.SaveChangesAsync();
+        h.Db.Context.ChangeTracker.Clear();
+
+        var error = await h.Sut.ChangeLegalEntityWithinDossierAsync(
+            h.OrderId, h.EntityB, "Klant factureert via B", CancellationToken.None);
+
+        Assert.Null(error);
+        h.Db.Context.ChangeTracker.Clear();
+        var moved = await h.Db.Context.TransportOrders.AsNoTracking().SingleAsync(o => o.Id == h.OrderId);
+        Assert.Equal(h.EntityB, moved.LegalEntityId);
+        Assert.Equal(TransportOrderStatus.Completed, moved.Status);
+        Assert.Equal(OrderPricingStatus.Locked,
+            (await h.Db.Context.TransportOrderPricingSnapshots.AsNoTracking().SingleAsync(s => s.Id == snapshotId)).Status);
+        Assert.Equal(0, await h.Db.Context.InvoiceLines.AsNoTracking()
+            .CountAsync(l => l.InvoiceId == draftId && !l.IsDeleted));
+        var audit = await h.Db.Context.AuditLogs.AsNoTracking()
+            .SingleAsync(a => a.EntityId == h.OrderId.ToString() && a.Action == "LegalEntityChanged");
+        Assert.Contains("ViaDossier", audit.NewValuesJson);
+    }
+
+    /// <summary>The dossier path shares A7's predicate: a PAID invoice still blocks it.</summary>
+    [Fact]
+    public async Task ChangingEntityViaTheDossier_OfAnOrderOnAPaidInvoice_IsRefused()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        await AddInvoiceWithLineAsync(h, InvoiceStatus.Paid, h.EntityA);
+
+        var error = await h.Sut.ChangeLegalEntityWithinDossierAsync(
+            h.OrderId, h.EntityB, "x", CancellationToken.None);
+
+        Assert.NotNull(error);
+        Assert.Contains("creditnota", error);
+        h.Db.Context.ChangeTracker.Clear();
+        Assert.Equal(h.EntityA,
+            (await h.Db.Context.TransportOrders.AsNoTracking().SingleAsync(o => o.Id == h.OrderId)).LegalEntityId);
+    }
+
+    /// <summary>
     /// Wave 1 fix A (A7) — the guard blocked on "not Draft", which includes Cancelled. A cancelled
     /// draft is not an invoice: it was never sent, it cannot be credited (crediting needs
     /// Sent/Paid), so the user was told to "corrigeer via een creditnota" for a document that can
