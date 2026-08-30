@@ -97,6 +97,10 @@ namespace TransportationService.Api.Migrations
         {
             migrationBuilder.Sql($"""
                 DO $$
+                -- NOTE: the CTEs below are named `dangling` and `candidates` and expose a column
+                -- `n`. PL/pgSQL's default variable_conflict = error, so do NOT declare a variable
+                -- called `candidates`, `dangling` or `n` in this block — it would only fail at
+                -- runtime, inside the deploy.
                 DECLARE
                     r RECORD;
                     before_dangling bigint;
@@ -104,6 +108,10 @@ namespace TransportationService.Api.Migrations
                     fixed_delivery bigint;
                     still_dangling bigint;
                 BEGIN
+                    IF current_setting('server_version_num')::int < 130000 THEN
+                        RAISE EXCEPTION 'PackageStopPinRepair: PostgreSQL 13 of hoger vereist (gen_random_uuid); deze server is %.', current_setting('server_version');
+                    END IF;
+
                     FOR r IN SELECT t."Id" AS tenant_id FROM tenants t
                     LOOP
                         {CountDangling("before_dangling")}

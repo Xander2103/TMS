@@ -2743,6 +2743,11 @@ public class TransportOrderService : ITransportOrderService
                     .ToListAsync(cancellationToken);
 
             // §16: per-stop time facts feed time-based service conditions (never hardcoded times).
+            // C-03: PlannedDate drives the WEEKEND and HOLIDAY surcharges (PricingEngine
+            // ServiceConditionKind.Weekend/Holiday), so it must be the tenant-local calendar day.
+            // Truncating the raw instant prices a Monday 00:30 stop (Sunday 22:30Z) as weekend work
+            // and drops the surcharge from a Saturday 00:30 stop (Friday 22:30Z): money, both ways.
+            var pricingZone = await ResolveTenantTimeZoneAsync(cancellationToken);
             var stopTimeInputs = order.Stops
                 .Where(s => !s.IsDeleted)
                 .OrderBy(s => s.Sequence)
@@ -2752,7 +2757,7 @@ public class TransportOrderService : ITransportOrderService
                     s.TimeRequirementFrom,
                     s.TimeRequirementTo,
                     s.AppointmentRequired,
-                    (s.PlannedFrom ?? s.PlannedTo) is { } planned ? DateOnly.FromDateTime(planned) : null))
+                    (s.PlannedFrom ?? s.PlannedTo) is { } planned ? TenantTimeZone.ToLocalDate(planned, pricingZone) : null))
                 .ToList();
 
             var warehouseActivity = await ResolveWarehouseActivityAsync(order, cancellationToken);
