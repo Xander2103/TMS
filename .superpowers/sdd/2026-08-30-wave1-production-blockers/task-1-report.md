@@ -357,7 +357,7 @@ Test Files  1 passed (1)
 
 # Fix round 1 — response to the task review
 
-Commit `TBD-round-1` on `worktree-agent-a6d0ccc14e7d087c5` (on top of `bec68f5`).
+Commit `9a0ec73` on `worktree-agent-a6d0ccc14e7d087c5` (on top of `bec68f5`).
 Review source: `task-1-review.md` (Approved with required follow-ups; 4 Important, 8 Minor).
 
 Every fix below was verified the same way: the new test was run against the *old* behaviour first
