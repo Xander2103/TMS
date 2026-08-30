@@ -13,6 +13,7 @@ using TransportationService.Api.Modules.Messaging.Entities;
 using TransportationService.Api.Modules.Messaging.Services;
 using TransportationService.Api.Modules.Orders.Dtos;
 using TransportationService.Api.Modules.Orders.Entities;
+using TransportationService.Api.Modules.Packages.Entities;
 using TransportationService.Api.Modules.Tarification.Dtos;
 using TransportationService.Api.Modules.Tarification.Services;
 using TransportationService.Api.Modules.Tenancy.Entities;
@@ -695,6 +696,15 @@ public class TransportOrderService : ITransportOrderService
         var cargoBefore = existingCargo
             .Select(c => new { c.Description, c.ExpectedQuantity, c.QuantityUnitCode }).ToList();
 
+        // A1b: a goods line may only be moved to another stop while its colli can follow it. Still
+        // part of the fail-before-mutate block — the refusal must leave the order untouched.
+        var (cargoRelink, cargoRelinkError) = await PlanCargoStopRelinkAsync(
+            order, request.CargoItems, request.Stops, stopPlan!, existingCargo, cancellationToken);
+        if (cargoRelinkError is not null)
+        {
+            return cargoRelinkError;
+        }
+
         var before = new {
             order.CustomerId, order.GoodsDescription, StopCount = order.Stops.Count, Cargo = cargoBefore,
             StopRequirements = SummarizeStopRequirements(order.Stops),
@@ -781,11 +791,25 @@ public class TransportOrderService : ITransportOrderService
             replacementCargo = existingCargo;
         }
 
+        if (cargoRelink!.Count > 0)
+        {
+            await RepinPackagesToCargoStopsAsync(cargoRelink, replacementCargo, cancellationToken);
+        }
+
         DeriveSummaryFromCargo(order, replacementCargo);
         if (await ApplyPricingAsync(order, request.AgreedPrice, ResolveServiceSelections(request.Services, request.ServiceOptionIds),
                 request.PriceIsManual, request.PriceOverrideReason, replacementCargo, cancellationToken) is { } pricingError)
         {
             return pricingError;
+        }
+
+        // Wave 1 fix A (A4): the concurrency token is stamped by the auditing interceptor only for a
+        // MODIFIED order row, so an edit that touched nothing but stops or goods lines left the
+        // token unchanged and a colleague's stale token kept validating. Now that the dossier
+        // drawers are the sanctioned way to edit exactly those two slices, the bump is explicit.
+        if (StopsOrCargoChanged(order.Id))
+        {
+            order.Version = Guid.NewGuid();
         }
 
         // Wave 2 §6: pricing/coverage may have changed — keep the readiness projection current.
@@ -1628,6 +1652,148 @@ public class TransportOrderService : ITransportOrderService
         }
     }
 
+    /// <summary>
+    /// One echoed goods line whose stop link the request moves, with the links it had before, so
+    /// the colli that follow it can be re-pinned once the new stop ids exist.
+    /// </summary>
+    private sealed record CargoStopRelink(Guid CargoItemId, Guid? PreviousLoadingStopId, Guid? PreviousUnloadingStopId);
+
+    /// <summary>
+    /// Wave 1 fix A (A1b) — a goods line's stop links are sent as INDEXES into the request's stop
+    /// list, so a pure stop reorder silently re-points every line at a different stop while the
+    /// colli generated from it keep the pin they were born with. The result is a delivery scan
+    /// that raises "hoort bij een andere losstop" on every collo of the order.
+    ///
+    /// The rule, decided BEFORE anything is mutated: when an echoed line resolves to a different
+    /// loading/unloading stop than the one stored, its live colli either follow it (they are still
+    /// nothing but generated rows) or the whole edit is refused (a label was printed, a scan
+    /// happened, custody moved). Same evidence test as the pin release on stop removal (A2).
+    /// </summary>
+    /// <returns>The lines to re-pin after the sync, or the refusal.</returns>
+    private async Task<(List<CargoStopRelink>? Plan, TransportOrderOperationResult? Error)> PlanCargoStopRelinkAsync(
+        TransportOrder order,
+        IReadOnlyList<CargoItemInput>? inputs,
+        IReadOnlyList<TransportOrderStopInput> stopInputs,
+        StopSyncPlan stopPlan,
+        IReadOnlyList<CargoItem> existingCargo,
+        CancellationToken cancellationToken)
+    {
+        // null = "leave cargo unchanged" (API contract): RelinkCargoToSurvivingStops owns that path.
+        if (inputs is null || existingCargo.Count == 0)
+        {
+            return ([], null);
+        }
+
+        // The stop id every input index WILL resolve to. Guid.Empty stands for "a stop that does
+        // not exist yet" — never equal to a stored link, which is exactly the semantics we want.
+        Guid? PlannedStopId(int index) => stopPlan.Matched[index]?.Id ?? Guid.Empty;
+        Guid? SingleStopOfType(StopType type)
+        {
+            var indexes = Enumerable.Range(0, stopInputs.Count).Where(i => stopInputs[i].StopType == type).ToList();
+            return indexes.Count == 1 ? PlannedStopId(indexes[0]) : null;
+        }
+
+        var defaultLoading = SingleStopOfType(StopType.Loading);
+        var defaultUnloading = SingleStopOfType(StopType.Unloading);
+
+        var byId = existingCargo.ToDictionary(c => c.Id);
+        var moved = new List<(CargoItem Line, Guid? Stop)>();
+        var relinks = new List<CargoStopRelink>();
+        foreach (var input in inputs)
+        {
+            if (input.Id is not { } lineId || !byId.TryGetValue(lineId, out var line))
+            {
+                continue; // a new line has no colli of its own yet.
+            }
+
+            var newLoading = input.LoadingStopIndex is { } load ? PlannedStopId(load) : defaultLoading;
+            var newUnloading = input.UnloadingStopIndex is { } unload ? PlannedStopId(unload) : defaultUnloading;
+            if (newLoading == line.LoadingStopId && newUnloading == line.UnloadingStopId)
+            {
+                continue;
+            }
+
+            moved.Add((line, newUnloading != line.UnloadingStopId ? line.UnloadingStopId : line.LoadingStopId));
+            relinks.Add(new CargoStopRelink(line.Id, line.LoadingStopId, line.UnloadingStopId));
+        }
+
+        if (relinks.Count == 0)
+        {
+            return ([], null);
+        }
+
+        var tenantId = _tenantContext.TenantId;
+        var movedIds = relinks.Select(r => r.CargoItemId).ToList();
+        var packages = await _dbContext.Packages.AsNoTracking()
+            .Where(p => p.TenantId == tenantId && p.CargoItemId != null && movedIds.Contains(p.CargoItemId!.Value)
+                        && p.CurrentLifecycleStatus != PackageLifecycleStatus.Cancelled)
+            .Select(p => new { p.Id, CargoItemId = p.CargoItemId!.Value })
+            .ToListAsync(cancellationToken);
+        if (packages.Count == 0)
+        {
+            return (relinks, null);
+        }
+
+        var evidenced = await LoadPackagesWithPostGenerationEvidenceAsync(
+            packages.Select(p => p.Id).ToList(), cancellationToken);
+        var blockedCargoIds = packages.Where(p => evidenced.Contains(p.Id)).Select(p => p.CargoItemId).ToHashSet();
+        if (blockedCargoIds.Count == 0)
+        {
+            return (relinks, null);
+        }
+
+        var sequenceByStopId = order.Stops.Where(s => !s.IsDeleted).ToDictionary(s => s.Id, s => s.Sequence);
+        var (blockedLine, blockedStop) = moved.First(m => blockedCargoIds.Contains(m.Line.Id));
+        var stopLabel = blockedStop is { } stopId && sequenceByStopId.TryGetValue(stopId, out var sequence)
+            ? sequence.ToString()
+            : "?";
+        return (null, TransportOrderOperationResult.Invalid(
+            $"Goederenlijn {blockedLine.Sequence} is al gekoppeld aan stop {stopLabel} (colli gegenereerd/gescand); "
+            + "annuleer of ontkoppel eerst die colli voor je de stopkoppeling van deze lijn wijzigt."));
+    }
+
+    /// <summary>
+    /// A1b — the colli follow their goods line onto its new stop. Only pins that still match the
+    /// line's PREVIOUS link (or were just released because that stop was removed) are rewritten,
+    /// so a collo somebody deliberately re-pinned by hand keeps its own pin.
+    /// </summary>
+    private async Task RepinPackagesToCargoStopsAsync(
+        IReadOnlyList<CargoStopRelink> relinks, IReadOnlyList<CargoItem> cargoItems, CancellationToken cancellationToken)
+    {
+        var tenantId = _tenantContext.TenantId;
+        var movedIds = relinks.Select(r => r.CargoItemId).ToList();
+        var packages = await _dbContext.Packages
+            .Where(p => p.TenantId == tenantId && p.CargoItemId != null && movedIds.Contains(p.CargoItemId!.Value)
+                        && p.CurrentLifecycleStatus != PackageLifecycleStatus.Cancelled)
+            .ToListAsync(cancellationToken);
+        if (packages.Count == 0)
+        {
+            return;
+        }
+
+        var lineById = cargoItems.ToDictionary(c => c.Id);
+        foreach (var relink in relinks)
+        {
+            if (!lineById.TryGetValue(relink.CargoItemId, out var line))
+            {
+                continue;
+            }
+
+            foreach (var package in packages.Where(p => p.CargoItemId == relink.CargoItemId))
+            {
+                if (package.LoadingStopId == relink.PreviousLoadingStopId || package.LoadingStopId is null)
+                {
+                    package.LoadingStopId = line.LoadingStopId;
+                }
+
+                if (package.DeliveryStopId == relink.PreviousUnloadingStopId || package.DeliveryStopId is null)
+                {
+                    package.DeliveryStopId = line.UnloadingStopId;
+                }
+            }
+        }
+    }
+
     private static string? WindowError(DateTime? from, DateTime? to) =>
         from is { } f && to is { } t && t < f
             ? "Het einde van een tijdvenster moet na het begin liggen."
@@ -1763,15 +1929,31 @@ public class TransportOrderService : ITransportOrderService
 
     /// <summary>
     /// Operational references pinned to a stop. HARD references record something that actually
-    /// happened at that stop (executions, POD, ETA promises, scans, exceptions, package events,
-    /// incidents) — detaching them destroys the trail, and three of them carry a NON-nullable FK,
+    /// happened at that stop (executions, POD, live ETA promises, real scans, custody events,
+    /// incidents) — detaching them destroys the trail, and two of them carry a NON-nullable FK,
     /// so removing the stop would be outright corruption. PACKAGE PINS are best-effort links the
-    /// scan pipeline falls back on; they may still be released while the order is not confirmed.
+    /// scan pipeline falls back on; they may be released as long as the colli hanging off them
+    /// carry no post-generation evidence (<see cref="PackageEvidence"/>).
+    ///
+    /// Wave 1 fix A (A3): rows produced by an ERROR or by CLOSED work are deliberately NOT hard
+    /// references. A driver who scans one collo at the wrong stop writes an
+    /// <c>ExecutionException</c>, a <c>WrongPackageScan</c> package event and a
+    /// <c>WrongItem</c>/<c>UnexpectedItem</c> scan row on that stop — none of which proves the
+    /// stop belongs to this order's route, yet all of which used to pin it forever, in every
+    /// editable status, with no way out but cancelling the whole order. Likewise a cancelled trip
+    /// keeps its <c>StopEta</c> rows and a cancelled collo keeps its pin.
     /// </summary>
-    private sealed record StopReferences(HashSet<Guid> Hard, HashSet<Guid> PackagePinned)
+    private sealed record StopReferences(HashSet<Guid> Hard, HashSet<Guid> PackagePinned, HashSet<Guid> PackageEvidence)
     {
         public bool IsReferenced(Guid stopId) => Hard.Contains(stopId) || PackagePinned.Contains(stopId);
     }
+
+    /// <summary>
+    /// Scan results that record "this barcode did not belong here". They are warnings the scanner
+    /// keeps for the trail, not proof that the stop is part of the order (A3).
+    /// </summary>
+    private static readonly Modules.Scanning.Entities.ScanResult[] WrongScanResults =
+        [Modules.Scanning.Entities.ScanResult.WrongItem, Modules.Scanning.Entities.ScanResult.UnexpectedItem];
 
     private async Task<StopReferences> LoadStopReferencesAsync(
         IReadOnlyCollection<Guid> stopIds, CancellationToken cancellationToken)
@@ -1779,7 +1961,7 @@ public class TransportOrderService : ITransportOrderService
         var tenantId = _tenantContext.TenantId;
         if (stopIds.Count == 0)
         {
-            return new StopReferences([], []);
+            return new StopReferences([], [], []);
         }
 
         var ids = stopIds.ToList();
@@ -1791,27 +1973,35 @@ public class TransportOrderService : ITransportOrderService
         hard.UnionWith(await _dbContext.ProofsOfDelivery.AsNoTracking()
             .Where(p => p.TenantId == tenantId && ids.Contains(p.TransportOrderStopId))
             .Select(p => p.TransportOrderStopId).Distinct().ToListAsync(cancellationToken));
+        // A3: an ETA is a live promise only while its trip is. A cancelled trip's leftover rows
+        // must not pin the stops of an order that was handed back to planning.
         hard.UnionWith(await _dbContext.StopEtas.AsNoTracking()
-            .Where(e => e.TenantId == tenantId && ids.Contains(e.TransportOrderStopId))
+            .Where(e => e.TenantId == tenantId && ids.Contains(e.TransportOrderStopId)
+                        && _dbContext.Trips.Any(t => t.TenantId == tenantId && t.Id == e.TripId
+                                                     && t.Status != Modules.Planning.Entities.TripStatus.Cancelled))
             .Select(e => e.TransportOrderStopId).Distinct().ToListAsync(cancellationToken));
         hard.UnionWith(await _dbContext.ScanEvents.AsNoTracking()
-            .Where(s => s.TenantId == tenantId && s.TransportOrderStopId != null && ids.Contains(s.TransportOrderStopId!.Value))
+            .Where(s => s.TenantId == tenantId && s.TransportOrderStopId != null && ids.Contains(s.TransportOrderStopId!.Value)
+                        && !WrongScanResults.Contains(s.Result))
             .Select(s => s.TransportOrderStopId!.Value).Distinct().ToListAsync(cancellationToken));
-        hard.UnionWith(await _dbContext.ExecutionExceptions.AsNoTracking()
-            .Where(e => e.TenantId == tenantId && e.TransportOrderStopId != null && ids.Contains(e.TransportOrderStopId!.Value))
-            .Select(e => e.TransportOrderStopId!.Value).Distinct().ToListAsync(cancellationToken));
+        // A3: ExecutionException rows are error reports with a NULLABLE stop link — the rejection
+        // path of the scanner writes one for every mis-scan. Resolving them does not clear the
+        // link, so treating them as hard references made one mis-scan permanent.
         hard.UnionWith(await _dbContext.PackageEvents.AsNoTracking()
-            .Where(e => e.TenantId == tenantId && e.TransportOrderStopId != null && ids.Contains(e.TransportOrderStopId!.Value))
+            .Where(e => e.TenantId == tenantId && e.TransportOrderStopId != null && ids.Contains(e.TransportOrderStopId!.Value)
+                        && e.EventType != PackageEventType.WrongPackageScan)
             .Select(e => e.TransportOrderStopId!.Value).Distinct().ToListAsync(cancellationToken));
         hard.UnionWith(await _dbContext.Incidents.AsNoTracking()
             .Where(i => i.TenantId == tenantId && i.SourceStopId != null && ids.Contains(i.SourceStopId!.Value))
             .Select(i => i.SourceStopId!.Value).Distinct().ToListAsync(cancellationToken));
 
+        // A3: a cancelled collo is closed work — it can no longer pin anything.
         var pinned = await _dbContext.Packages.AsNoTracking()
             .Where(p => p.TenantId == tenantId
+                        && p.CurrentLifecycleStatus != PackageLifecycleStatus.Cancelled
                         && ((p.LoadingStopId != null && ids.Contains(p.LoadingStopId!.Value))
                             || (p.DeliveryStopId != null && ids.Contains(p.DeliveryStopId!.Value))))
-            .Select(p => new { p.LoadingStopId, p.DeliveryStopId })
+            .Select(p => new { p.Id, p.LoadingStopId, p.DeliveryStopId })
             .ToListAsync(cancellationToken);
         var packagePinned = new HashSet<Guid>();
         foreach (var pin in pinned)
@@ -1827,7 +2017,55 @@ public class TransportOrderService : ITransportOrderService
             }
         }
 
-        return new StopReferences(hard, packagePinned);
+        // A2: which of those pins is backed by a collo that has left the generator — a printed
+        // label, a scan, any custody move. Those pins are physical and may never be rewritten.
+        var evidenced = await LoadPackagesWithPostGenerationEvidenceAsync(
+            pinned.Select(p => p.Id).ToList(), cancellationToken);
+        var packageEvidence = new HashSet<Guid>();
+        foreach (var pin in pinned.Where(p => evidenced.Contains(p.Id)))
+        {
+            if (pin.LoadingStopId is { } l && stopIds.Contains(l))
+            {
+                packageEvidence.Add(l);
+            }
+
+            if (pin.DeliveryStopId is { } d && stopIds.Contains(d))
+            {
+                packageEvidence.Add(d);
+            }
+        }
+
+        return new StopReferences(hard, packagePinned, packageEvidence);
+    }
+
+    /// <summary>
+    /// The only two custody events a collo carries straight out of the generator: its creation and
+    /// (for surplus lines) its cancellation. Every OTHER <see cref="PackageEventType"/> means the
+    /// collo left the office — a label was printed or reprinted, it was scanned, moved, delivered,
+    /// refused, quarantined, grouped. Wave 1 fix A keys the pin rules on exactly that distinction
+    /// instead of on the order's status: a corrected order (Confirmed → Draft) can carry printed
+    /// labels, and a confirmed order can carry colli nobody has touched yet.
+    /// </summary>
+    private static readonly PackageEventType[] GenerationOnlyEventTypes =
+        [PackageEventType.Created, PackageEventType.Cancelled];
+
+    /// <summary>Ids of the given packages that carry at least one post-generation custody event.</summary>
+    private async Task<HashSet<Guid>> LoadPackagesWithPostGenerationEvidenceAsync(
+        IReadOnlyCollection<Guid> packageIds, CancellationToken cancellationToken)
+    {
+        if (packageIds.Count == 0)
+        {
+            return [];
+        }
+
+        var ids = packageIds.ToList();
+        var evidenced = await _dbContext.PackageEvents.AsNoTracking()
+            .Where(e => e.TenantId == _tenantContext.TenantId && ids.Contains(e.PackageId)
+                        && !GenerationOnlyEventTypes.Contains(e.EventType))
+            .Select(e => e.PackageId)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+        return evidenced.ToHashSet();
     }
 
     /// <summary>
@@ -1840,7 +2078,7 @@ public class TransportOrderService : ITransportOrderService
     /// <param name="Removed">Existing stops no input echoes; to be soft-deleted.</param>
     /// <param name="PackagePinsToRelease">
     /// Ids of removed stops whose (best-effort) package pins must be set to null — only ever
-    /// populated while the order is not yet Confirmed.
+    /// populated for stops whose live colli carry nothing but their generation event (A2).
     /// </param>
     private sealed record StopSyncPlan(
         TransportOrderStop?[] Matched,
@@ -1904,11 +2142,13 @@ public class TransportOrderService : ITransportOrderService
 
             foreach (var stop in removed)
             {
-                // Hard references pin the stop unconditionally; package pins may still be
-                // released while the order is not yet confirmed (the scan pipeline documents a
-                // null pin as the fallback), but never on a physically bound order.
-                if (references.Hard.Contains(stop.Id)
-                    || (references.PackagePinned.Contains(stop.Id) && order.Status == TransportOrderStatus.Confirmed))
+                // Hard references pin the stop unconditionally; package pins may still be released
+                // (the scan pipeline documents a null pin as the fallback) as long as every collo
+                // on them is still nothing but a generated row. Wave 1 fix A (A2): the test used
+                // to be `order.Status == Confirmed`, which released the pins of ten printed labels
+                // as soon as a planner corrected the order back to Draft — and refused a harmless
+                // release on a confirmed order whose colli nobody had touched.
+                if (references.Hard.Contains(stop.Id) || references.PackageEvidence.Contains(stop.Id))
                 {
                     return (null, TransportOrderOperationResult.Invalid(
                         $"Stop {stop.Sequence} is al operationeel in gebruik (colli, uitvoering, aflevering of scans) "
@@ -1934,7 +2174,7 @@ public class TransportOrderService : ITransportOrderService
 
     /// <summary>
     /// Executes a validated <see cref="StopSyncPlan"/>: releases the package pins of removed
-    /// stops (Draft/Submitted only — the plan never lists any otherwise), updates the preserved
+    /// stops (evidence-free colli only — the plan never lists any otherwise), updates the preserved
     /// stops in place, creates the new ones, renumbers, resolves the location snapshots and stages
     /// the removals as soft deletes.
     /// </summary>
@@ -1948,6 +2188,7 @@ public class TransportOrderService : ITransportOrderService
             var releasable = plan.PackagePinsToRelease;
             var packages = await _dbContext.Packages
                 .Where(p => p.TenantId == tenantId
+                            && p.CurrentLifecycleStatus != PackageLifecycleStatus.Cancelled
                             && ((p.LoadingStopId != null && releasable.Contains(p.LoadingStopId!.Value))
                                 || (p.DeliveryStopId != null && releasable.Contains(p.DeliveryStopId!.Value))))
                 .ToListAsync(cancellationToken);
@@ -3173,6 +3414,25 @@ public class TransportOrderService : ITransportOrderService
             .Where(l => l.TenantId == _tenantContext.TenantId && l.TransportOrderId == order.Id)
             .ToListAsync(cancellationToken);
         return await ServiceSelectionsChangedAsync(order.CustomerId, order.OrderDate, storedServices, serviceSelections, cancellationToken);
+    }
+
+    /// <summary>
+    /// Wave 1 fix A (A4) — did this update stage a change to any stop or goods line of the order?
+    /// The auditing interceptor bumps <see cref="TransportOrder.Version"/> only for a MODIFIED
+    /// order row, so a stop- or cargo-only edit (exactly what the dossier route/goods drawers do)
+    /// used to leave the token untouched: a colleague's stale token still validated and their save
+    /// silently overwrote the route instead of surfacing the 409 rebase banner. Soft deletes are
+    /// still <c>Deleted</c> at this point (the interceptor converts them during SaveChanges), so
+    /// removals count too.
+    /// </summary>
+    private bool StopsOrCargoChanged(Guid orderId)
+    {
+        static bool Changed(EntityState state) => state is EntityState.Added or EntityState.Modified or EntityState.Deleted;
+
+        return _dbContext.ChangeTracker.Entries<TransportOrderStop>()
+                   .Any(e => e.Entity.TransportOrderId == orderId && Changed(e.State))
+               || _dbContext.ChangeTracker.Entries<CargoItem>()
+                   .Any(e => e.Entity.TransportOrderId == orderId && Changed(e.State));
     }
 
     /// <summary>Cargo-line properties that feed the pricing engine (quantity/unit/measures/dims/ADR).</summary>

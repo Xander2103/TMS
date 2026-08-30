@@ -98,6 +98,28 @@ public class OrderUpdateIntegrityTests
         LegalEntityId: d.LegalEntityId,
         QuantityUnitCode: d.QuantityUnitCode);
 
+    /// <summary>
+    /// Stages the "labels printed and stuck on the pallets" evidence: every live collo of the
+    /// order gets a post-generation custody event, which is what wave 1 fix A (A2) keys the pin
+    /// rules on instead of the order's status.
+    /// </summary>
+    private static async Task LabelPackagesAsync(Harness h, Guid orderId)
+    {
+        var packages = await h.Db.Context.Packages.AsNoTracking()
+            .Where(p => p.TransportOrderId == orderId).ToListAsync();
+        foreach (var package in packages)
+        {
+            h.Db.Context.PackageEvents.Add(new PackageEvent
+            {
+                Id = Guid.NewGuid(), TenantId = h.TenantId, PackageId = package.Id,
+                EventType = PackageEventType.Labelled, TransportOrderId = orderId, OccurredAt = Now.UtcDateTime,
+            });
+        }
+
+        await h.Db.Context.SaveChangesAsync();
+        h.Db.Context.ChangeTracker.Clear();
+    }
+
     private static async Task<TransportOrderDetailDto> CreateTwoStopOrderAsync(Harness h)
     {
         var created = await h.Sut.CreateAsync(Request(h.CustomerId,
@@ -284,8 +306,13 @@ public class OrderUpdateIntegrityTests
         Assert.True(dropped.IsDeleted);
     }
 
+    /// <summary>
+    /// Wave 1 fix A (A2): the refusal is keyed on EVIDENCE, not on the order's status — the colli
+    /// here have been labelled, so their pin is physical and the stop they hang on cannot go.
+    /// The status-free counterparts live in <see cref="OrderStopPinEvidenceTests"/>.
+    /// </summary>
     [Fact]
-    public async Task Update_RemovingAStopWithPackagesOnAConfirmedOrder_IsRefused()
+    public async Task Update_RemovingAStopWithLabelledPackagesOnAConfirmedOrder_IsRefused()
     {
         var h = await SeedAsync();
         using var _ = h.Db;
@@ -293,6 +320,7 @@ public class OrderUpdateIntegrityTests
         await h.Sut.ChangeStatusAsync(order.Id, TransportOrderStatus.Confirmed, CancellationToken.None);
         await h.Packages.GenerateForOrderAsync(order.Id, CancellationToken.None);
         h.Db.Context.ChangeTracker.Clear();
+        await LabelPackagesAsync(h, order.Id);
 
         var reloaded = await h.Sut.GetByIdAsync(order.Id, CancellationToken.None);
         var update = UpdateFrom(reloaded!);
@@ -480,6 +508,8 @@ public class OrderUpdateIntegrityTests
         await h.Sut.ChangeStatusAsync(order.Id, TransportOrderStatus.Confirmed, CancellationToken.None);
         await h.Packages.GenerateForOrderAsync(order.Id, CancellationToken.None);
         h.Db.Context.ChangeTracker.Clear();
+        // The pin only refuses the removal once it is backed by evidence (A2).
+        await LabelPackagesAsync(h, order.Id);
 
         var before = await h.Db.Context.TransportOrders.AsNoTracking().FirstAsync(o => o.Id == order.Id);
         var stopsBefore = await h.Db.Context.TransportOrderStops.AsNoTracking()
@@ -521,12 +551,14 @@ public class OrderUpdateIntegrityTests
     }
 
     /// <summary>
-    /// Review I-3: the Draft/Submitted carve-out is the only branch in this change that writes to
+    /// Review I-3: the pin-release carve-out is the only branch in this change that writes to
     /// another module's rows, so it gets its own test. Package pins are best-effort links (the
-    /// scan pipeline documents a null pin as the fallback), so on a not-yet-confirmed order the
-    /// stop may go — but the pin must be RELEASED, never left dangling on a soft-deleted row.
-    /// The Confirmed counterpart is refused; see
-    /// <see cref="Update_RemovingAStopWithPackagesOnAConfirmedOrder_IsRefused"/>.
+    /// scan pipeline documents a null pin as the fallback), so while the colli carry nothing but
+    /// their generation event the stop may go — but the pin must be RELEASED, never left dangling
+    /// on a soft-deleted row. Wave 1 fix A (A2) made that carve-out evidence-based rather than
+    /// status-based: see <see cref="Update_RemovingAStopWithLabelledPackagesOnAConfirmedOrder_IsRefused"/>
+    /// and, for the Draft-with-printed-labels case this test used to mis-state as safe,
+    /// <see cref="OrderStopPinEvidenceTests.Update_DraftOrder_RemovingAStopPinnedByALabelledPackage_IsRefused"/>.
     /// </summary>
     [Fact]
     public async Task Update_DraftOrder_RemovingAPinnedStop_ReleasesThePackagePins()
@@ -545,8 +577,8 @@ public class OrderUpdateIntegrityTests
         Assert.All(pinnedBefore, p => Assert.Equal(unloadingStopId, p.DeliveryStopId));
         h.Db.Context.ChangeTracker.Clear();
 
-        // Drop the pinned unloading stop and offer a new one. A Draft order is not physically
-        // bound, so this is allowed.
+        // Drop the pinned unloading stop and offer a new one. These colli were only generated —
+        // no label, no scan, no custody move — so the pin is still best-effort and may be released.
         var update = UpdateFrom(order);
         var result = await h.Sut.UpdateAsync(order.Id, update with
         {
