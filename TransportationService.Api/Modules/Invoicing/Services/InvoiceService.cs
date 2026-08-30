@@ -20,14 +20,40 @@ public class InvoiceService : IInvoiceService
 {
     private const string EntityType = "Invoice";
 
+    /// <summary>
+    /// H-06: a finalized document is never cancelled. Once Sent, the only way forward is Paid —
+    /// cancelling would hand the orders on it back to Completed and re-open their prices, so a
+    /// document the customer already has could silently be invoiced a second time. A mistake on
+    /// a sent invoice is corrected with a credit note, which leaves the original untouched.
+    /// </summary>
     private static readonly IReadOnlyDictionary<InvoiceStatus, InvoiceStatus[]> Transitions =
         new Dictionary<InvoiceStatus, InvoiceStatus[]>
         {
             [InvoiceStatus.Draft] = [InvoiceStatus.Sent, InvoiceStatus.Cancelled],
-            [InvoiceStatus.Sent] = [InvoiceStatus.Paid, InvoiceStatus.Cancelled],
+            [InvoiceStatus.Sent] = [InvoiceStatus.Paid],
             [InvoiceStatus.Paid] = [],
             [InvoiceStatus.Cancelled] = [],
         };
+
+    /// <summary>
+    /// Hint shown wherever a finalized document may not be touched any more; identical in intent
+    /// to the wording the order side uses (TransportOrderService / OrderCustomerChangeService).
+    /// </summary>
+    private const string CreditNoteHint =
+        "Corrigeer via een creditnota; de historische factuur blijft ongewijzigd.";
+
+    /// <summary>
+    /// Peppol statuses that prove the document left the building: the provider has seen it.
+    /// Draft/Validated/Queued are purely local, Cancelled is a local withdrawal before submission.
+    /// </summary>
+    private static readonly Modules.Peppol.Entities.PeppolTransmissionStatus[] TransmittedStatuses =
+    [
+        Modules.Peppol.Entities.PeppolTransmissionStatus.SubmittedToProvider,
+        Modules.Peppol.Entities.PeppolTransmissionStatus.AcceptedByProvider,
+        Modules.Peppol.Entities.PeppolTransmissionStatus.Delivered,
+        Modules.Peppol.Entities.PeppolTransmissionStatus.Failed,
+        Modules.Peppol.Entities.PeppolTransmissionStatus.Rejected,
+    ];
 
     private readonly TransportationDbContext _dbContext;
     private readonly ITenantContext _tenantContext;
@@ -230,13 +256,22 @@ public class InvoiceService : IInvoiceService
             return InvoiceOperationResult.Invalid("Een factuur heeft minstens één lijn nodig.");
         }
 
+        // H-06: the same order twice on one invoice is double billing, not a selection quirk —
+        // it would produce two identical lines while only one order flips to Invoiced.
+        var requestedOrderIds = request.OrderIds.Distinct().ToList();
+        if (requestedOrderIds.Count != request.OrderIds.Count)
+        {
+            return InvoiceOperationResult.Invalid(
+                "Dezelfde opdracht staat meermaals in de selectie; kies elke opdracht maar één keer.");
+        }
+
         // Orders: completed, of this customer, not yet on a live invoice.
         List<UninvoicedOrderDto> orderDtos = [];
-        if (request.OrderIds.Count > 0)
+        if (requestedOrderIds.Count > 0)
         {
             var candidates = await ListUninvoicedOrdersAsync(request.CustomerId, cancellationToken);
             var byId = candidates.ToDictionary(o => o.Id);
-            foreach (var orderId in request.OrderIds)
+            foreach (var orderId in requestedOrderIds)
             {
                 if (!byId.TryGetValue(orderId, out var dto))
                 {
@@ -479,7 +514,7 @@ public class InvoiceService : IInvoiceService
         var orders = orderDtos.Count == 0
             ? []
             : await _dbContext.TransportOrders
-                .Where(o => o.TenantId == tenantId && request.OrderIds.Contains(o.Id))
+                .Where(o => o.TenantId == tenantId && requestedOrderIds.Contains(o.Id))
                 .ToListAsync(cancellationToken);
         foreach (var order in orders)
         {
@@ -608,6 +643,25 @@ public class InvoiceService : IInvoiceService
             if (line.Quantity <= 0)
             {
                 return InvoiceOperationResult.Invalid("De hoeveelheid van een factuurlijn moet groter zijn dan nul.");
+            }
+        }
+
+        // H-06: a mirrored credit-note line reproduces the credited line's sales code and the
+        // whole fiscal freeze that hangs off it. Accepting a different code here would leave
+        // SalesCategoryId pointing at one code and the frozen snapshots at another, so the edit
+        // is refused out loud instead of being silently ignored. Amounts, wording and dropping
+        // the line entirely stay editable — that is how a partial credit is made.
+        var mirroredById = invoice.Lines
+            .Where(l => !l.IsDeleted && InvoiceLineMirror.IsMirrored(invoice, l))
+            .ToDictionary(l => l.Id);
+        foreach (var line in request.Lines)
+        {
+            if (line.Id is { } mirroredId && mirroredById.TryGetValue(mirroredId, out var mirrored)
+                && line.SalesCategoryId != mirrored.SalesCategoryId)
+            {
+                return InvoiceOperationResult.Invalid(
+                    "De verkoopcategorie van een gecrediteerde lijn ligt vast: een creditnota volgt de factuur die ze crediteert. "
+                    + "Verwijder de lijn en voeg een nieuwe toe als je een andere categorie nodig hebt.");
             }
         }
 
@@ -774,6 +828,16 @@ public class InvoiceService : IInvoiceService
             return InvoiceOperationResult.NotFound;
         }
 
+        // H-06 — the finalization gate comes FIRST so a refused cancellation says why (and points
+        // at the credit note) instead of producing the generic transition message.
+        if (target == InvoiceStatus.Cancelled && await IsFinalizedAsync(invoice, cancellationToken))
+        {
+            return InvoiceOperationResult.InvalidState(
+                invoice.Kind == InvoiceKind.CreditNote
+                    ? "Deze creditnota is al definitief (verzonden of doorgestuurd) en kan niet meer geannuleerd worden."
+                    : $"Deze factuur is al definitief (verzonden of doorgestuurd) en kan niet meer geannuleerd worden. {CreditNoteHint}");
+        }
+
         if (!Transitions[invoice.Status].Contains(target))
         {
             return InvoiceOperationResult.InvalidState($"Een factuur met status '{invoice.Status}' kan niet naar '{target}'.");
@@ -853,15 +917,23 @@ public class InvoiceService : IInvoiceService
                     "De btw-regeling van de klant ontbreekt op deze factuur; bewerk en bewaar de conceptfactuur eerst opnieuw.");
             }
 
+            // H-06: resolve which lines are copies of a credited document BEFORE the first pass
+            // stamps snapshots of its own — after that, a freshly frozen line is indistinguishable
+            // from a copy. Both passes then skip exactly this set.
+            var mirroredLineIds = InvoiceLineMirror.MirroredIds(invoice);
+
             // §7.3: freeze the sales category + ledger account from the THEN-current mapping.
             // Later mapping changes never rewrite these lines; the accounting export reads
             // exclusively from these snapshots.
-            await FreezeLedgerSnapshotsAsync(invoice, cancellationToken);
+            await FreezeLedgerSnapshotsAsync(invoice, mirroredLineIds, cancellationToken);
             // Sprint 5H: the sales-code resolver freezes treatment, rate, category, description
             // language and cost centre for every line WITH a sales code. It must run before the
             // customer-level category fallback below, otherwise a sales code's statutory
             // exception could never win (audit fix).
-            await FreezeSalesCodeSnapshotsAsync(invoice, cancellationToken);
+            await FreezeSalesCodeSnapshotsAsync(invoice, mirroredLineIds, cancellationToken);
+
+            // Gap filler for lines without any category at all; never overwrites a frozen value,
+            // so on a credit note it only touches what the credited document itself left open.
             FreezeVatCategories(invoice);
         }
 
@@ -904,6 +976,19 @@ public class InvoiceService : IInvoiceService
         if (invoice.Status is not (InvoiceStatus.Draft or InvoiceStatus.Cancelled))
         {
             return InvoiceOperationResult.InvalidState("Alleen concept- of geannuleerde facturen kunnen worden verwijderd.");
+        }
+
+        // H-06 — deletion is the other way out, and it must obey the same rule as cancellation,
+        // whatever the current status says. Two reasons: a DRAFT row that already reached the
+        // provider (status written around the API, or rolled back by an older build) would have
+        // its orders released below, which is the leak itself; and a document that consumed an
+        // issued invoice number must stay readable for the audit trail even once cancelled.
+        // A genuine draft leaves none of this evidence, so nothing legitimate is blocked.
+        if (await WasEverFinalizedAsync(invoice, cancellationToken))
+        {
+            var document = invoice.Kind == InvoiceKind.CreditNote ? "creditnota" : "factuur";
+            return InvoiceOperationResult.InvalidState(
+                $"Deze {document} is ooit verzonden en kan niet verwijderd worden; ze blijft bewaard als historisch document.");
         }
 
         if (invoice.Status == InvoiceStatus.Draft)
@@ -1027,6 +1112,47 @@ public class InvoiceService : IInvoiceService
     }
 
     /// <summary>
+    /// H-06 — "finalized": the document left the building. Either its own status says so
+    /// (Sent or Paid), or a Peppol transmission for it got past the local queue, which means the
+    /// provider has seen it (see <see cref="TransmittedStatuses"/>). A finalized document is
+    /// never cancelled, so the orders on it can never return from Invoiced to Completed.
+    /// </summary>
+    private async Task<bool> IsFinalizedAsync(Invoice invoice, CancellationToken cancellationToken) =>
+        invoice.Status is InvoiceStatus.Sent or InvoiceStatus.Paid
+        || await _dbContext.PeppolTransmissions.AnyAsync(
+            t => t.TenantId == _tenantContext.TenantId && t.InvoiceId == invoice.Id
+                 && TransmittedStatuses.Contains(t.Status), cancellationToken);
+
+    /// <summary>
+    /// Was this (now cancelled) document ever finalized? There is no "was sent" flag, so the
+    /// traces Send leaves behind are the evidence: a Peppol transmission of any kind, a credit
+    /// note issued against it (only Sent/Paid invoices can be credited), or — for an invoice —
+    /// a line carrying a snapshot that only the Send freeze writes. Credit-note lines COPY those
+    /// snapshots at creation, so for a credit note only the first two signals count.
+    /// </summary>
+    private async Task<bool> WasEverFinalizedAsync(Invoice invoice, CancellationToken cancellationToken)
+    {
+        if (await IsFinalizedAsync(invoice, cancellationToken))
+        {
+            return true;
+        }
+
+        if (await _dbContext.PeppolTransmissions.AnyAsync(
+                t => t.TenantId == _tenantContext.TenantId && t.InvoiceId == invoice.Id, cancellationToken))
+        {
+            return true;
+        }
+
+        if (await TenantScoped().AnyAsync(i => i.CreditedInvoiceId == invoice.Id, cancellationToken))
+        {
+            return true;
+        }
+
+        return invoice.Kind != InvoiceKind.CreditNote
+               && invoice.Lines.Any(l => !l.IsDeleted && InvoiceLineMirror.HasFrozenFiscalData(l));
+    }
+
+    /// <summary>
     /// A cancelled invoice must never leave the building: any Peppol transmission still in the
     /// queue is withdrawn with it. Transmissions already at the provider are left alone — the
     /// dispatcher refuses to submit for non-Sent/Paid invoices as the second belt.
@@ -1101,7 +1227,8 @@ public class InvoiceService : IInvoiceService
     }
 
     /// <summary>§7.3: resolve category + mapped account for every category-carrying line at Send.</summary>
-    private async Task FreezeLedgerSnapshotsAsync(Invoice invoice, CancellationToken cancellationToken)
+    private async Task FreezeLedgerSnapshotsAsync(
+        Invoice invoice, IReadOnlySet<Guid> mirroredLineIds, CancellationToken cancellationToken)
     {
         var lines = invoice.Lines.Where(l => !l.IsDeleted).ToList();
         var categoryIds = lines.Where(l => l.SalesCategoryId is not null).Select(l => l.SalesCategoryId!.Value).Distinct().ToList();
@@ -1130,6 +1257,16 @@ public class InvoiceService : IInvoiceService
                 continue;
             }
 
+            // H-06: a credit-note line copied from the credited document carries that document's
+            // freeze — a MISSING account included (its category had none at Send). Filling that
+            // gap here would book the credit against an account the invoice it reverses never
+            // touched. A line the user added to the draft credit note itself has no treatment
+            // snapshot and is frozen normally.
+            if (mirroredLineIds.Contains(line.Id))
+            {
+                continue;
+            }
+
             if (line.SalesCategoryId is not { } categoryId || !categories.TryGetValue(categoryId, out var category))
             {
                 continue;
@@ -1152,9 +1289,19 @@ public class InvoiceService : IInvoiceService
     /// cost centre of the invoicing entity. Never overwrites an already-frozen value, so a
     /// re-run (or a later correction flow) cannot rewrite history.
     /// </summary>
-    private async Task FreezeSalesCodeSnapshotsAsync(Invoice invoice, CancellationToken cancellationToken)
+    private async Task FreezeSalesCodeSnapshotsAsync(
+        Invoice invoice, IReadOnlySet<Guid> mirroredLineIds, CancellationToken cancellationToken)
     {
-        var lines = invoice.Lines.Where(l => !l.IsDeleted && l.SalesCategoryId is not null && l.VatTreatmentSnapshot is null).ToList();
+        // H-06: the `VatTreatmentSnapshot is null` filter is an idempotency check, NOT a mirror
+        // check — a credit-note line copied from a pre-2026-08-28 invoice has a null treatment
+        // snapshot and would be selected here, so it needs the mirror guard explicitly. Without it
+        // this method would rewrite the credit's treatment, source, legal text, RATE, UBL category,
+        // cost centre and customer-facing description from today's master data, and the credit note
+        // could state a different VAT rate than the invoice it reverses.
+        var lines = invoice.Lines
+            .Where(l => !l.IsDeleted && l.SalesCategoryId is not null && l.VatTreatmentSnapshot is null
+                        && !mirroredLineIds.Contains(l.Id))
+            .ToList();
         if (lines.Count == 0)
         {
             return;
@@ -1298,6 +1445,15 @@ public class InvoiceService : IInvoiceService
             VatLegalText = original.VatLegalText,
         };
 
+        // H-06: every copy must carry at least one freeze marker, or it cannot be told apart from a
+        // line typed on the credit note itself and Send would re-derive it from live master data.
+        // A line so old that it predates the UBL category (Peppol wave) has none, so it is stamped
+        // here with the category the CREDITED header dictates — byte for byte what FreezeVatCategories
+        // would write at Send, only early enough to be recognisable as a mirror.
+        var creditedTreatment = Enum.TryParse<VatTreatment>(original.CustomerVatTreatment, out var creditedParsed)
+            ? creditedParsed
+            : VatTreatment.DomesticVat;
+
         var sequence = 1;
         foreach (var line in original.Lines.Where(l => !l.IsDeleted).OrderBy(l => l.Sequence))
         {
@@ -1314,8 +1470,25 @@ public class InvoiceService : IInvoiceService
                 UnitPrice = line.UnitPrice,
                 VatRatePercent = line.VatRatePercent,
                 UnitCode = line.UnitCode,
-                VatCategoryCode = line.VatCategoryCode,
+                VatCategoryCode = line.VatCategoryCode
+                    ?? Partners.Services.VatTreatmentCatalog.ResolveVatCategory(creditedTreatment, line.VatRatePercent).Code,
                 SalesCategoryId = line.SalesCategoryId,
+                // H-06: the full fiscal freeze of the credited line travels with it. The credit
+                // must book against the SAME ledger account, treatment and wording as the invoice
+                // it reverses, whatever the sales-code mapping looks like today; Send therefore
+                // skips both freeze passes for a credit note.
+                SalesCategoryNameSnapshot = line.SalesCategoryNameSnapshot,
+                LedgerAccountId = line.LedgerAccountId,
+                LedgerAccountNumberSnapshot = line.LedgerAccountNumberSnapshot,
+                LedgerAccountNameSnapshot = line.LedgerAccountNameSnapshot,
+                SalesCodeSnapshot = line.SalesCodeSnapshot,
+                DescriptionLanguageSnapshot = line.DescriptionLanguageSnapshot,
+                VatTreatmentSnapshot = line.VatTreatmentSnapshot,
+                VatTreatmentSourceSnapshot = line.VatTreatmentSourceSnapshot,
+                VatLegalTextSnapshot = line.VatLegalTextSnapshot,
+                CostCentreSnapshot = line.CostCentreSnapshot,
+                VatTreatmentOverride = line.VatTreatmentOverride,
+                VatTreatmentOverrideReason = line.VatTreatmentOverrideReason,
             });
         }
 
@@ -1377,7 +1550,10 @@ public class InvoiceService : IInvoiceService
         }
 
         var missingBefore = invoice.Lines.Count(l => !l.IsDeleted && l.LedgerAccountNumberSnapshot is null);
-        await FreezeLedgerSnapshotsAsync(invoice, cancellationToken);
+        // H-06 (review M-3): this gap filler resolves against TODAY's mapping, so it must respect
+        // the mirror rule too — a credit line that inherited a null account from the document it
+        // credits keeps that null rather than booking somewhere the original never did.
+        await FreezeLedgerSnapshotsAsync(invoice, InvoiceLineMirror.MirroredIds(invoice), cancellationToken);
         var missingAfter = invoice.Lines.Count(l => !l.IsDeleted && l.LedgerAccountNumberSnapshot is null);
         await _dbContext.SaveChangesAsync(cancellationToken);
 
@@ -1423,13 +1599,17 @@ public class InvoiceService : IInvoiceService
         var lines = liveLines.Select(l =>
         {
             var live = l.SalesCategoryId is { } categoryId ? liveCategories.GetValueOrDefault(categoryId) : null;
-            var categoryName = isDraft ? live?.Name : l.SalesCategoryNameSnapshot ?? live?.Name;
-            var accountNumber = isDraft ? live?.LedgerAccount?.AccountNumber : l.LedgerAccountNumberSnapshot;
-            var accountName = isDraft ? live?.LedgerAccount?.Name : l.LedgerAccountNameSnapshot;
+            // A mirrored line shows its freeze, draft or not: a draft credit note copied it from the
+            // credited invoice and Send will not touch it (H-06). Same marker as the freeze guards,
+            // so the preview can never disagree with what Send stores.
+            var frozen = !isDraft || InvoiceLineMirror.IsMirrored(invoice, l);
+            var categoryName = l.SalesCategoryNameSnapshot ?? live?.Name;
+            var accountNumber = frozen ? l.LedgerAccountNumberSnapshot : live?.LedgerAccount?.AccountNumber;
+            var accountName = frozen ? l.LedgerAccountNameSnapshot : live?.LedgerAccount?.Name;
 
-            // Fiscal source: the frozen snapshot once sent; while Draft, what Send WOULD freeze.
+            // Fiscal source: the frozen snapshot once frozen; while Draft, what Send WOULD freeze.
             string? fiscalTreatment, fiscalSource, fiscalLegalText, salesCode;
-            if (isDraft)
+            if (!frozen)
             {
                 var lineOverride = Enum.TryParse<VatTreatment>(l.VatTreatmentOverride, out var overridden) ? (VatTreatment?)overridden : null;
                 var resolution = Modules.Accounting.Services.InvoiceLineFiscalResolver.Resolve(
@@ -1446,7 +1626,7 @@ public class InvoiceService : IInvoiceService
                 fiscalLegalText = l.VatLegalTextSnapshot;
                 salesCode = l.SalesCodeSnapshot;
             }
-            var warning = isDraft
+            var warning = !frozen
                 ? l.SalesCategoryId is null
                     ? "Geen verkoopcategorie gekozen voor deze lijn."
                     : accountNumber is null
@@ -1463,8 +1643,8 @@ public class InvoiceService : IInvoiceService
                 // Frozen after Send; live-derived while Draft so the preview shows what WILL freeze.
                 l.VatCategoryCode ?? Partners.Services.VatTreatmentCatalog.ResolveVatCategory(mappedTreatment, l.VatRatePercent).Code,
                 fiscalTreatment, fiscalSource, fiscalLegalText, salesCode,
-                // Draft: what Send will freeze (same rule as Send and the draft PDF); Sent: frozen.
-                isDraft ? InvoiceLineDescriptions.CustomerFacing(l.Description, live, invoice.LanguageCode) : l.Description);
+                // Draft: what Send will freeze (same rule as Send and the draft PDF); frozen: as stored.
+                frozen ? l.Description : InvoiceLineDescriptions.CustomerFacing(l.Description, live, invoice.LanguageCode));
         }).ToList();
 
         var subtotal = Math.Round(lines.Sum(l => l.LineTotal), 2);

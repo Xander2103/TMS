@@ -341,8 +341,14 @@ public class PeppolTransmissionTests
         Assert.Null(transmission.ProviderMessageId); // the provider was never contacted
     }
 
+    /// <summary>
+    /// H-06: a SENT invoice can no longer be cancelled at all, so it can no longer withdraw its
+    /// transmission either — the document is out and only a credit note corrects it. Withdrawing
+    /// a queued transmission with a cancelled DRAFT is covered by
+    /// <c>InvoiceFinalizationGuardTests.Cancel_DraftInvoice_WithQueuedTransmission_WithdrawsIt</c>.
+    /// </summary>
     [Fact]
-    public async Task InvoiceCancellation_WithdrawsQueuedTransmissions()
+    public async Task InvoiceCancellation_OfASentInvoice_IsRefused_AndLeavesTheTransmission()
     {
         var h = await SeedAsync();
         using var _ = h.Db;
@@ -359,9 +365,11 @@ public class PeppolTransmissionTests
 
         var result = await invoices.ChangeStatusAsync(invoice.Id, InvoiceStatus.Cancelled, CancellationToken.None);
 
-        Assert.Equal(Modules.Invoicing.Dtos.InvoiceOperationOutcome.Success, result.Outcome);
+        Assert.Equal(Modules.Invoicing.Dtos.InvoiceOperationOutcome.InvalidState, result.Outcome);
+        Assert.Contains("creditnota", result.Error!, StringComparison.OrdinalIgnoreCase);
         var transmission = await h.Db.Context.PeppolTransmissions.SingleAsync(t => t.InvoiceId == invoice.Id);
-        Assert.Equal(PeppolTransmissionStatus.Cancelled, transmission.Status);
+        Assert.Equal(PeppolTransmissionStatus.Queued, transmission.Status);
+        Assert.Equal(InvoiceStatus.Sent, (await h.Db.Context.Invoices.SingleAsync(i => i.Id == invoice.Id)).Status);
     }
 
     [Fact]

@@ -74,9 +74,14 @@ public class InvoicePdfService : IInvoicePdfService
         // A draft renders the description the customer WILL read (same rule Send freezes with);
         // after Send the line text is already frozen and the sales code is not consulted.
         var isDraft = invoice.Status == InvoiceStatus.Draft;
+        // H-06: a MIRRORED credit-note line carries the credited document's wording from the moment
+        // it is copied and Send never re-derives it — so the preview must not re-derive it either.
+        // A line typed on the draft credit note itself is not mirrored and follows the normal rule.
         var liveLines = invoice.Lines.Where(l => !l.IsDeleted).OrderBy(l => l.Sequence).ToList();
+        bool ResolveLive(Entities.InvoiceLine line) => isDraft && !InvoiceLineMirror.IsMirrored(invoice, line);
         var codeIds = isDraft
-            ? liveLines.Where(l => l.SalesCategoryId is not null).Select(l => l.SalesCategoryId!.Value).Distinct().ToList()
+            ? liveLines.Where(l => ResolveLive(l) && l.SalesCategoryId is not null)
+                .Select(l => l.SalesCategoryId!.Value).Distinct().ToList()
             : [];
         var salesCodes = codeIds.Count == 0
             ? new Dictionary<Guid, Modules.Accounting.Entities.SalesCategory>()
@@ -86,7 +91,7 @@ public class InvoicePdfService : IInvoicePdfService
 
         var lines = liveLines
             .Select(l => new InvoicePdfLine(
-                isDraft
+                ResolveLive(l)
                     ? InvoiceLineDescriptions.CustomerFacing(
                         l.Description,
                         l.SalesCategoryId is { } codeId ? salesCodes.GetValueOrDefault(codeId) : null,
