@@ -258,6 +258,13 @@ export function InvoiceDetailPage() {
   const editable = invoice.status === 'Draft' && hasPermission('invoices.edit')
   const deletable = (invoice.status === 'Draft' || invoice.status === 'Cancelled') && hasPermission('invoices.delete')
   const canOverrideNumber = invoice.status === 'Draft' && hasPermission('invoices.override_number')
+  // H-06: een definitief document (verzonden of betaald) wordt nooit geannuleerd — corrigeren
+  // gebeurt met 'Creditnota maken' hieronder. De server weigert het hoe dan ook; deze filter
+  // zorgt dat de knop ook niet meer verschijnt bij een oudere/gecachete allowedTransitions.
+  const finalized = invoice.status === 'Sent' || invoice.status === 'Paid'
+  const offeredTransitions = invoice.allowedTransitions.filter(
+    (target) => !(finalized && target === 'Cancelled'),
+  )
 
   return (
     <div>
@@ -281,7 +288,7 @@ export function InvoiceDetailPage() {
             )}
             {hasPermission('invoices.change_status') &&
               !editing &&
-              invoice.allowedTransitions.map((target) => (
+              offeredTransitions.map((target) => (
                 <Button
                   key={target}
                   variant={target === 'Cancelled' ? 'secondary' : 'primary'}
@@ -685,12 +692,7 @@ export function InvoiceDetailPage() {
       {confirmTransition && (
         <ConfirmDialog
           title={t('invoices.internalDetail.cancelTitle')}
-          message={t(
-            invoice.status === 'Sent' || invoice.status === 'Paid'
-              ? 'invoices.internalDetail.cancelSentMessage'
-              : 'invoices.internalDetail.cancelMessage',
-            { number: invoice.invoiceNumber },
-          )}
+          message={t('invoices.internalDetail.cancelMessage', { number: invoice.invoiceNumber })}
           confirmLabel={t(INVOICE_TRANSITION_LABELS.Cancelled)}
           destructive
           onConfirm={() => void applyTransition(confirmTransition)}

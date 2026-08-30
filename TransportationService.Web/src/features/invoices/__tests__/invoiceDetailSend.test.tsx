@@ -178,12 +178,21 @@ describe('InvoiceDetailPage — verzenden en voorbeeld', () => {
     // A sent invoice is never editable again: no Bewerken, and Verzenden is gone.
     expect(screen.queryByRole('button', { name: 'Bewerken' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Verzenden' })).not.toBeInTheDocument()
-    // Cancel is explicit about being the wrong tool for a sent invoice.
-    expect(screen.getByRole('button', { name: 'Factuur annuleren' })).toBeInTheDocument()
+    // H-06: cancelling a sent invoice is not offered at all — even when a stale allowedTransitions
+    // still carries it — omdat de server het weigert; de creditnota is de enige correctieweg.
+    expect(screen.queryByRole('button', { name: 'Factuur annuleren' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Creditnota maken' })).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Creditnota maken' }))
     await waitFor(() => expect(api.createCreditNote).toHaveBeenCalledWith('inv-1'))
     expect(api.changeInvoiceStatus).not.toHaveBeenCalled()
+  })
+
+  it('still offers cancelling a draft invoice', async () => {
+    api.getInvoice.mockResolvedValue(draft({ allowedTransitions: ['Sent', 'Cancelled'] }))
+    renderPage()
+    await screen.findByText('Frais administratifs')
+    expect(screen.getByRole('button', { name: 'Factuur annuleren' })).toBeInTheDocument()
   })
 
   it('shows which credit notes exist on an invoice, and which invoice a credit note credits', async () => {
