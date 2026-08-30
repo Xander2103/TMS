@@ -348,6 +348,16 @@ public class InvoiceFinalizationGuardTests
     /// <summary>
     /// The credit-note flow end to end: created from a sent invoice, never order-linked (so the
     /// orders stay Invoiced), and blocked while a live one already exists.
+    ///
+    /// CHARACTERISATION, not the target state (second-pass test review I-7 / A16). The audit's
+    /// H-06 recommendation is the opposite for the *lifecycle* half: a fully credited invoice
+    /// should hand its orders back (Invoiced → Completed) with the pricing snapshot released to
+    /// Locked and the credit recorded on the order. Wave 1 deliberately did NOT do that — crediting
+    /// re-opening an order lifecycle is a bigger change than the blocker needed, and doing it half
+    /// way (status without snapshot, or vice versa) is worse than not at all. So the state pinned
+    /// here — order permanently Invoiced, snapshot permanently Invoiced, therefore refused by every
+    /// pricing endpoint — is the CURRENT, deliberately deferred behaviour (Wave 2), not the
+    /// invariant we want. Change this test when that wave lands; do not treat it as a guard rail.
     /// </summary>
     [Fact]
     public async Task CreditNote_FromSentInvoice_LeavesTheOrdersInvoiced_AndIsOnlyIssuedOnce()
@@ -639,5 +649,120 @@ public class InvoiceFinalizationGuardTests
                 mirrored.VatRatePercent, category.Id)], null), CancellationToken.None);
         Assert.Equal(InvoiceOperationOutcome.Success, partial.Outcome);
         Assert.Equal(40m, partial.Invoice!.Lines.Single().UnitPrice);
+    }
+
+    /// <summary>
+    /// Wave 1 fix A (A8) — the editor cannot empty an invoice, but the customer- and
+    /// entity-change flows delete an order's draft lines and deliberately leave the (now possibly
+    /// empty) draft behind. Sending that draft would consume an issued invoice number on a €0,00
+    /// document which, under H-06, can never be cancelled afterwards — only credited.
+    /// </summary>
+    [Fact]
+    public async Task Send_AnInvoiceWithoutLines_IsRefused()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var created = await h.Sut.CreateAsync(
+            new CreateInvoiceRequest(h.CustomerId, null, [h.OrderId], [], null), CancellationToken.None);
+        // What the customer/entity-change flows do: drop this order's lines, keep the draft.
+        h.Db.Context.InvoiceLines.RemoveRange(
+            await h.Db.Context.InvoiceLines.Where(l => l.InvoiceId == created.Invoice!.Id).ToListAsync());
+        await h.Db.Context.SaveChangesAsync();
+        h.Db.Context.ChangeTracker.Clear();
+
+        var refused = await h.Sut.ChangeStatusAsync(created.Invoice!.Id, InvoiceStatus.Sent, CancellationToken.None);
+
+        Assert.Equal(InvoiceOperationOutcome.InvalidState, refused.Outcome);
+        Assert.Equal("Een factuur zonder lijnen kan niet verzonden worden.", refused.Error);
+        h.Db.Context.ChangeTracker.Clear();
+        var invoice = await h.Db.Context.Invoices.AsNoTracking().SingleAsync(i => i.Id == created.Invoice.Id);
+        Assert.Equal(InvoiceStatus.Draft, invoice.Status);
+    }
+
+    /// <summary>
+    /// Wave 1 fix A (A9) — the mirror rule froze a credit line with the null ledger account its
+    /// credited line carried, and no action could ever fill it: the freeze pass skips mirrored
+    /// lines and the export blocks the WHOLE date window on any line without an account, telling
+    /// the user to run the one action guaranteed not to help. The credit line mirrors the CREDITED
+    /// LINE, so once that line obtains its account (via 'Boekhoudsnapshot aanvullen' on the
+    /// original) the credit may copy it from there — never from today's live mapping.
+    /// </summary>
+    [Fact]
+    public async Task CreditNote_LedgerGapIsFilledFromTheCreditedLine_AndUnblocksTheExport()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var export = new AccountingExportService(h.Db.Context, new DevTenantContext(h.TenantId));
+        var category = (await h.Accounting.ListSalesCategoriesAsync(false, CancellationToken.None))
+            .Single(c => c.Code == "DIVERS-BINNEN");
+
+        // Sent while the sales code had no ledger account at all.
+        var created = await h.Sut.CreateAsync(new CreateInvoiceRequest(
+            h.CustomerId, null, [], [new ManualInvoiceLineInput("Verkoop binnenland", 1m, 100m, 21m, category.Id)], null),
+            CancellationToken.None);
+        await h.Sut.ChangeStatusAsync(created.Invoice!.Id, InvoiceStatus.Sent, CancellationToken.None);
+        var credit = await h.Sut.CreateCreditNoteAsync(created.Invoice.Id, CancellationToken.None);
+        await h.Sut.ChangeStatusAsync(credit.Invoice!.Id, InvoiceStatus.Sent, CancellationToken.None);
+
+        var window = (From: new DateOnly(2026, 8, 1), To: new DateOnly(2026, 8, 31));
+        await Assert.ThrowsAsync<TransportationService.Api.Common.DomainValidationException>(
+            () => export.ExportAsync(window.From, window.To, CancellationToken.None));
+
+        // The bookkeeper configures the mapping and completes the ORIGINAL…
+        var account = await h.Accounting.CreateLedgerAccountAsync(
+            new SaveLedgerAccountRequest("700400", "Diverse verkoop binnenland"), CancellationToken.None);
+        await h.Accounting.UpdateSalesCategoryAsync(category.Id, new SaveSalesCategoryRequest(
+            category.Code, category.Name, category.SystemRole, account.Id, true, category.SortOrder), CancellationToken.None);
+        await h.Sut.CompleteLedgerSnapshotsAsync(created.Invoice.Id, CancellationToken.None);
+        // …and then the credit note, which copies from the line it credits.
+        var completed = await h.Sut.CompleteLedgerSnapshotsAsync(credit.Invoice.Id, CancellationToken.None);
+        Assert.Equal(InvoiceOperationOutcome.Success, completed.Outcome);
+
+        h.Db.Context.ChangeTracker.Clear();
+        var originalLine = await h.Db.Context.InvoiceLines.AsNoTracking()
+            .SingleAsync(l => l.InvoiceId == created.Invoice.Id);
+        var creditLine = await h.Db.Context.InvoiceLines.AsNoTracking()
+            .SingleAsync(l => l.InvoiceId == credit.Invoice.Id);
+        Assert.Equal("700400", creditLine.LedgerAccountNumberSnapshot);
+        Assert.Equal(originalLine.LedgerAccountNumberSnapshot, creditLine.LedgerAccountNumberSnapshot);
+        Assert.Equal(originalLine.LedgerAccountNameSnapshot, creditLine.LedgerAccountNameSnapshot);
+        Assert.Equal(originalLine.LedgerAccountId, creditLine.LedgerAccountId);
+
+        var workbook = await export.ExportAsync(window.From, window.To, CancellationToken.None);
+        Assert.NotEmpty(workbook);
+    }
+
+    /// <summary>
+    /// The counterpart of A9: while the CREDITED line still has no account, the credit note is not
+    /// gap-filled from today's mapping either — the mirror rule stands. The export stays blocked
+    /// for both documents, which is honest: nothing has been booked anywhere yet.
+    /// </summary>
+    [Fact]
+    public async Task CreditNote_LedgerGap_IsNotFilledWhileTheCreditedLineStillHasNone()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var category = (await h.Accounting.ListSalesCategoriesAsync(false, CancellationToken.None))
+            .Single(c => c.Code == "DIVERS-BINNEN");
+        var created = await h.Sut.CreateAsync(new CreateInvoiceRequest(
+            h.CustomerId, null, [], [new ManualInvoiceLineInput("Verkoop binnenland", 1m, 100m, 21m, category.Id)], null),
+            CancellationToken.None);
+        await h.Sut.ChangeStatusAsync(created.Invoice!.Id, InvoiceStatus.Sent, CancellationToken.None);
+        var credit = await h.Sut.CreateCreditNoteAsync(created.Invoice.Id, CancellationToken.None);
+        await h.Sut.ChangeStatusAsync(credit.Invoice!.Id, InvoiceStatus.Sent, CancellationToken.None);
+
+        var account = await h.Accounting.CreateLedgerAccountAsync(
+            new SaveLedgerAccountRequest("700400", "Diverse verkoop binnenland"), CancellationToken.None);
+        await h.Accounting.UpdateSalesCategoryAsync(category.Id, new SaveSalesCategoryRequest(
+            category.Code, category.Name, category.SystemRole, account.Id, true, category.SortOrder), CancellationToken.None);
+
+        // Completing ONLY the credit note must not invent an account the original never used.
+        await h.Sut.CompleteLedgerSnapshotsAsync(credit.Invoice.Id, CancellationToken.None);
+
+        h.Db.Context.ChangeTracker.Clear();
+        var creditLine = await h.Db.Context.InvoiceLines.AsNoTracking()
+            .SingleAsync(l => l.InvoiceId == credit.Invoice.Id);
+        Assert.Null(creditLine.LedgerAccountNumberSnapshot);
+        Assert.Null(creditLine.LedgerAccountId);
     }
 }

@@ -188,6 +188,39 @@ public class PackageLabelTests
         Assert.Equal("Europallet", snapshots[first.Id].UnitTypeLabel);
     }
 
+    /// <summary>
+    /// Wave 1 fix A (A5): a pin pointing at a stop that no longer exists — every order edited
+    /// before blocker C-01 landed carries some — used to resolve to null through the
+    /// soft-delete-filtered stop set and print a BLANK sender/recipient. A dangling pin now falls
+    /// back to the order's own stops, exactly like the null pin the entity documents.
+    /// </summary>
+    [Fact]
+    public async Task Snapshot_WithAPinToARemovedStop_FallsBackToTheOrdersLiveStops()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var removedStopId = Guid.NewGuid();
+        h.Db.Context.TransportOrderStops.Add(new TransportOrderStop
+        {
+            Id = removedStopId, TenantId = h.TenantId, TransportOrderId = h.OrderId, Sequence = 3,
+            StopType = StopType.Unloading, City = "Gent", IsDeleted = true,
+        });
+        var package = (await h.Packages.CreateAsync(h.OrderId, new CreatePackageRequest("Doos"), CancellationToken.None)).Package!;
+        h.Db.Context.Packages.Single(p => p.Id == package.Id).DeliveryStopId = removedStopId;
+        await h.Db.Context.SaveChangesAsync();
+
+        var (pdf, error) = await h.Sut.PrintAsync([package.Id], LabelFormat.Thermal100x150, null, CancellationToken.None);
+
+        Assert.Null(error);
+        Assert.NotNull(pdf);
+        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        var snapshot = JsonSerializer.Deserialize<LabelSnapshot>(
+            h.Db.Context.PackageLabels.Single(l => l.PackageId == package.Id).SnapshotJson, options)!;
+        Assert.Equal("Rotterdam", snapshot.DeliveryLocation);
+        Assert.Equal("Rotterdam", snapshot.RecipientPostalCodeCity);
+        Assert.Equal("Antwerpen", snapshot.LoadingLocation);
+    }
+
     [Fact]
     public async Task CancelledPackages_GetNoLabel()
     {

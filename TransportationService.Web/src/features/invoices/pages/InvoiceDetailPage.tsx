@@ -246,8 +246,10 @@ export function InvoiceDetailPage() {
       await deleteInvoice(invoice.id)
       showSuccess(t('invoices.internalDetail.deleted'))
       navigate('/invoices')
-    } catch {
-      showError(t('invoices.internalDetail.deleteError'))
+    } catch (err) {
+      // A10: the H-06 refusal ("ooit verzonden … blijft bewaard als historisch document") is
+      // precisely what the user needs here, and it used to be thrown away for a generic sentence.
+      showError(localizeApiError(t, err, t('invoices.internalDetail.deleteError')))
       setConfirmDelete(false)
     }
   }

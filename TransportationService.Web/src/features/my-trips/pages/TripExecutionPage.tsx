@@ -13,6 +13,7 @@ import { useAuth } from '../../auth/authContextValue'
 import { useLocale } from '../../../i18n/localeContext'
 import { ApiError } from '../../../api/apiClient'
 import { localizeApiError } from '../../../api/problemDetails'
+import { formatTime } from '../../../utils/dates'
 import { OfflineQueuedError } from '../../driver/offlineActions'
 import { TRIP_STATUS_LABELS, TRIP_STATUS_TONE } from '../../planning/types'
 import { STOP_TYPE_LABELS } from '../../transport-orders/types'
@@ -35,9 +36,12 @@ import {
 } from '../types'
 import './my-trips.css'
 
-function formatTime(value: string | null): string {
-  return value ? value.slice(11, 16) : ''
-}
+/**
+ * Wave 1 fix A (A11): this page used to shadow `formatTime` with `value.slice(11, 16)`, i.e. the
+ * RAW UTC clock. That was accidentally right while the form stored the typed wall clock tagged
+ * with a "Z"; since C-03 the wire carries a real instant, so the slice showed the driver every
+ * window two hours early in summer. There is one clock in this app and it is the tenant's.
+ */
 
 /** Whether this transition records the arrival moment (explicit or via the backend's arrival bridge). */
 function recordsArrival(stop: ExecutionStop, to: StopExecutionStatus): boolean {
@@ -91,10 +95,9 @@ export function TripExecutionPage() {
   const [podStop, setPodStop] = useState<ExecutionStop | null>(null)
 
   function formatWindow(from: string | null, to: string | null): string {
-    const fmt = (v: string) => v.slice(11, 16)
-    if (from && to) return `${fmt(from)}–${fmt(to)}`
-    if (from) return t('myTrips.execution.windowFrom', { time: fmt(from) })
-    if (to) return t('myTrips.execution.windowUntil', { time: fmt(to) })
+    if (from && to) return `${formatTime(from)}–${formatTime(to)}`
+    if (from) return t('myTrips.execution.windowFrom', { time: formatTime(from) })
+    if (to) return t('myTrips.execution.windowUntil', { time: formatTime(to) })
     return ''
   }
 

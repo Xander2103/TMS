@@ -7,6 +7,9 @@ import { Modal } from '../../../components/ui/Modal'
 import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
 import { useLocale } from '../../../i18n/localeContext'
+// A13: `arrivedAt` is a genuine instant (the server stamps UtcNow), so it keeps the tenant-zone
+// formatter. The PLANNED pair is a stored wall clock and uses this file's own helpers instead —
+// see `dockWallClockTime` for the reasoning and the Wave-2 migration note.
 import { formatTime } from '../../../utils/dates'
 import { ORDER_PRIORITY_LABELS } from '../../transport-orders/types'
 import {
@@ -15,6 +18,7 @@ import {
 } from '../api/warehousingApi'
 import {
   DOCK_STATUS_LABELS, DOCK_STATUS_TONE, OPERATION_LABELS, dockBlockPosition,
+  dockWallClockInput, dockWallClockTime,
   type DockAppointment, type DockAppointmentInput, type DockBoard, type DockConflict,
   type Warehouse, type WarehouseDashboard,
 } from '../types'
@@ -260,7 +264,7 @@ export function DockPlanningPage() {
             <p>
               <Badge tone={DOCK_STATUS_TONE[selected.status]}>{t(DOCK_STATUS_LABELS[selected.status])}</Badge>{' '}
               {t(OPERATION_LABELS[selected.operationType])} · {selected.dockCode ?? t('warehousing.dockPlanning.queueLower')} ·{' '}
-              {formatTime(selected.plannedStart)}–{formatTime(selected.plannedEnd)}
+              {dockWallClockTime(selected.plannedStart)}–{dockWallClockTime(selected.plannedEnd)}
             </p>
             {selected.customerName && <p>{selected.customerName}</p>}
             {selected.packageCount > 0 && (
@@ -284,8 +288,8 @@ export function DockPlanningPage() {
                 <Button variant="secondary" disabled={busy} onClick={() => {
                   setEditing({
                     id: selected.id, ...toInput(selected, {}),
-                    plannedStart: selected.plannedStart.slice(0, 16),
-                    plannedEnd: selected.plannedEnd.slice(0, 16),
+                    plannedStart: dockWallClockInput(selected.plannedStart),
+                    plannedEnd: dockWallClockInput(selected.plannedEnd),
                   })
                   setSelected(null)
                 }}>

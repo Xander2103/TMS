@@ -319,6 +319,45 @@ public class KioskSecurityTests
         Assert.Equal("en", identify.PreferredLanguage);
     }
 
+    /// <summary>
+    /// Wave 1 fix A (A12) — /kiosk runs outside every shell and outside RequireAuth, so no
+    /// DisplayPreferencesProvider ever mounts for it and the shared formatters stayed pinned to
+    /// the default zone forever, while the big wall clock next to them used the DEVICE zone. The
+    /// two contradicted each other on any tenant not on the Amsterdam offset. The ping already
+    /// carries presentation configuration (the device language); the tenant zone joins it, so the
+    /// kiosk needs no session and no new endpoint to agree with itself.
+    /// </summary>
+    [Fact]
+    public async Task Ping_CarriesTheTenantTimeZone_SoTheKioskNeedsNoSession()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        await SetPinAsync(h);
+        h.Db.Context.TenantSettings.Add(new TenantSettings
+        {
+            Id = Guid.NewGuid(), TenantId = h.TenantId, Timezone = "Europe/Lisbon",
+        });
+        await h.Db.Context.SaveChangesAsync();
+
+        var ping = await h.Sut().PingAsync(h.DeviceKey, CancellationToken.None);
+
+        Assert.Equal(KioskOutcome.Success, ping.Outcome);
+        Assert.Equal("Europe/Lisbon", ping.TimeZone);
+    }
+
+    /// <summary>A tenant without settings rows keeps the documented default, never an empty zone.</summary>
+    [Fact]
+    public async Task Ping_WithoutTenantSettings_FallsBackToTheDefaultTimeZone()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        await SetPinAsync(h);
+
+        var ping = await h.Sut().PingAsync(h.DeviceKey, CancellationToken.None);
+
+        Assert.Equal("Europe/Amsterdam", ping.TimeZone);
+    }
+
     [Fact]
     public async Task RotateSecret_InvalidatesTheOldDeviceKey()
     {

@@ -10,12 +10,15 @@ import { RouteSection } from '../../transport-orders/components/sections/RouteSe
 import { useOrderFormData } from '../../transport-orders/components/sections/useOrderFormData'
 import { buildSubmitPayload } from '../../transport-orders/components/sections/orderFormPayload'
 import {
+  cargoFromOrder,
   emptyStop,
   fieldErrorMap,
   stopsFromOrder,
   validateOrderForm,
+  type CargoFormRow,
   type StopFormRow,
 } from '../../transport-orders/components/sections/orderFormState'
+import { useStopMutation } from '../../transport-orders/components/sections/useStopMutation'
 import { orderValuesFromDetail } from './orderDrawerState'
 import { SectionDrawer } from './SectionDrawer'
 import '../../transport-orders/components/transport-order-form.css'
@@ -36,6 +39,11 @@ export function RouteDrawer({ order, onClose, onSaved }: RouteDrawerProps) {
   const { t } = useLocale()
   const [baseOrder, setBaseOrder] = useState(order)
   const [stops, setStops] = useState<StopFormRow[]>(() => stopsFromOrder(order))
+  // The drawer edits stops only, but the goods lines address those stops BY POSITION, so it has
+  // to carry them and renumber their links alongside every stop mutation (A1a). Without it a
+  // reorder silently moved every line to another stop, and a removal sent an out-of-range index
+  // back as a 400 about a goods field this drawer does not even render.
+  const [cargoItems, setCargoItems] = useState<CargoFormRow[]>(() => cargoFromOrder(order))
   const [dirty, setDirty] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -44,10 +52,9 @@ export function RouteDrawer({ order, onClose, onSaved }: RouteDrawerProps) {
   const [refreshTarget, setRefreshTarget] = useState<string | null>(null)
   const { locationHours, serviceOptions } = useOrderFormData(baseOrder.customerId, stops)
 
-  function mutateStops(mutate: (rows: StopFormRow[]) => StopFormRow[]) {
-    setStops(mutate)
-    setDirty(true)
-  }
+  // A1a + N-1: one write path for the stop list — it renumbers the goods links in the same step
+  // and guarantees that two mutations in a single tick both apply. See `useStopMutation`.
+  const mutateStops = useStopMutation(stops, setStops, setCargoItems, () => setDirty(true))
 
   function setStop(key: string, patch: Partial<StopFormRow>) {
     mutateStops((rows) => rows.map((row) => (row.key === key ? { ...row, ...patch } : row)))
@@ -64,7 +71,7 @@ export function RouteDrawer({ order, onClose, onSaved }: RouteDrawerProps) {
   }
 
   async function save() {
-    const values = { ...orderValuesFromDetail(baseOrder, serviceOptions), stops }
+    const values = { ...orderValuesFromDetail(baseOrder, serviceOptions), stops, cargoItems }
     // Only this drawer's section blocks locally; other sections stay untouched anyway.
     const routeErrors = validateOrderForm(values).filter((e) => e.section === 'route')
     setErrors(fieldErrorMap(routeErrors))
@@ -93,6 +100,7 @@ export function RouteDrawer({ order, onClose, onSaved }: RouteDrawerProps) {
     if (!conflict) return
     setBaseOrder(conflict)
     setStops(stopsFromOrder(conflict))
+    setCargoItems(cargoFromOrder(conflict))
     setDirty(false)
     setConflict(null)
     setError(null)

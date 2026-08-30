@@ -311,7 +311,15 @@ public sealed record KioskPingResult(
     string? LocationName,
     string? Error,
     /// <summary>Standaardtaal van dit device — het beginscherm rendert hierin.</summary>
-    string DefaultLanguage = "nl");
+    string DefaultLanguage = "nl",
+    /// <summary>
+    /// Tijdzone van de tenant (IANA). Wave 1 fix A (A12): /kiosk draait buiten elke shell en
+    /// buiten RequireAuth, dus het kan `GET /api/company-settings/display` niet bereiken — zonder
+    /// dit veld stond de gedeelde tijdformatter er voorgoed op de standaardzone terwijl de grote
+    /// wandklok de DEVICE-zone toonde: twee klokken op één scherm. Presentatieconfiguratie, net
+    /// als DefaultLanguage hierboven — geen persoonsgegeven.
+    /// </summary>
+    string TimeZone = "Europe/Amsterdam");
 
 public enum KioskPunchAction
 {

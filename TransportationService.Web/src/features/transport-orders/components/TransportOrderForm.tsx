@@ -19,6 +19,7 @@ import { PriceSection } from './sections/PriceSection'
 import { SummarySection } from './sections/SummarySection'
 import { useOrderFormData, useOrderPricePreview } from './sections/useOrderFormData'
 import { buildSubmitPayload } from './sections/orderFormPayload'
+import { useStopMutation } from './sections/useStopMutation'
 import {
   cargoFromOrder,
   cargoRowFromHeader,
@@ -122,6 +123,9 @@ export function TransportOrderForm({ mode, order, onSubmit, onCancel, submitLabe
 
   const [stops, setStops] = useState<StopFormRow[]>(() => stopsFromOrder(order))
   const [cargoItems, setCargoItems] = useState<CargoFormRow[]>(() => cargoFromOrder(order))
+  // A1a: the goods lines address their stops by POSITION, so every stop mutation renumbers those
+  // links in the same step. N-1: the hook also guarantees two mutations in one tick both apply.
+  const mutateStops = useStopMutation(stops, setStops, setCargoItems)
 
   const [formError, setFormError] = useState<string | null>(null)
   const [clientErrors, setClientErrors] = useState<OrderFormValidationError[]>([])
@@ -246,8 +250,10 @@ export function TransportOrderForm({ mode, order, onSubmit, onCancel, submitLabe
   // Live price preview, debounced on the pricing-relevant inputs (extracted hook).
   const preview = useOrderPricePreview(values, unitOptions, touchedWarehouseIds, effectiveWeightKg, effectivePalletCount)
 
+  // Every write to the stop list — including a single-field patch — goes through the one mutation
+  // path, so nothing can start from a stale list when two writes land in the same tick (N-1).
   function setStop(key: string, patch: Partial<StopFormRow>) {
-    setStops((rows) => rows.map((row) => (row.key === key ? { ...row, ...patch } : row)))
+    mutateStops((rows) => rows.map((row) => (row.key === key ? { ...row, ...patch } : row)))
   }
 
   function setCargo(key: string, patch: Partial<CargoFormRow>) {
@@ -292,7 +298,7 @@ export function TransportOrderForm({ mode, order, onSubmit, onCancel, submitLabe
   }
 
   function moveStop(index: number, delta: number) {
-    setStops((rows) => {
+    mutateStops((rows) => {
       const target = index + delta
       if (target < 0 || target >= rows.length) return rows
       const next = [...rows]
@@ -356,8 +362,8 @@ export function TransportOrderForm({ mode, order, onSubmit, onCancel, submitLabe
       render: () => (
         <RouteSection
           {...{ stops, customerId, saving, locationHours, errors, setStop, moveStop }}
-          onAddStop={(stopType) => setStops((rows) => [...rows, emptyStop(stopType)])}
-          onRemoveStop={(key) => setStops((rows) => rows.filter((row) => row.key !== key))}
+          onAddStop={(stopType) => mutateStops((rows) => [...rows, emptyStop(stopType)])}
+          onRemoveStop={(key) => mutateStops((rows) => rows.filter((row) => row.key !== key))}
           onRequestRefresh={setRefreshTarget}
           onQuickCreate={
             customerId && canCreateLocations

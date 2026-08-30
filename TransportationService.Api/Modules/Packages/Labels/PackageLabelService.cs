@@ -200,12 +200,14 @@ public class PackageLabelService : IPackageLabelService
         {
             orders.TryGetValue(package.TransportOrderId, out var order);
             var orderStops = stops.Where(s => s.TransportOrderId == package.TransportOrderId).ToList();
-            var loading = package.LoadingStopId is { } loadId
-                ? orderStops.FirstOrDefault(s => s.Id == loadId)
-                : orderStops.Where(s => s.StopType == StopType.Loading).OrderBy(s => s.Sequence).FirstOrDefault();
-            var delivery = package.DeliveryStopId is { } deliveryId
-                ? orderStops.FirstOrDefault(s => s.Id == deliveryId)
-                : orderStops.Where(s => s.StopType == StopType.Unloading).OrderBy(s => s.Sequence).LastOrDefault();
+            // Wave 1 fix A (A5): a pin that no longer resolves — a DANGLING pin, which every order
+            // edited before blocker C-01 landed can carry — gets the same fallback as a null pin
+            // (first loading / last unloading stop). Without it the label printed a blank sender
+            // and recipient instead of the order's own addresses.
+            var loading = (package.LoadingStopId is { } loadId ? orderStops.FirstOrDefault(s => s.Id == loadId) : null)
+                ?? orderStops.Where(s => s.StopType == StopType.Loading).OrderBy(s => s.Sequence).FirstOrDefault();
+            var delivery = (package.DeliveryStopId is { } deliveryId ? orderStops.FirstOrDefault(s => s.Id == deliveryId) : null)
+                ?? orderStops.Where(s => s.StopType == StopType.Unloading).OrderBy(s => s.Sequence).LastOrDefault();
 
             var group = siblings
                 .Where(s => s.TransportOrderId == package.TransportOrderId

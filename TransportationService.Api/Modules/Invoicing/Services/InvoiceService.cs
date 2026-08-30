@@ -845,6 +845,15 @@ public class InvoiceService : IInvoiceService
 
         if (target == InvoiceStatus.Sent)
         {
+            // H-06 (wave 1 fix A / A8): the editor cannot empty an invoice, but the customer- and
+            // entity-change flows delete an order's draft lines and deliberately leave the (now
+            // possibly empty) draft in place. Sending it would consume an issued invoice number on
+            // a €0,00 document that can afterwards never be cancelled, only credited.
+            if (!invoice.Lines.Any(l => !l.IsDeleted))
+            {
+                return InvoiceOperationResult.InvalidState("Een factuur zonder lijnen kan niet verzonden worden.");
+            }
+
             // Fail-safe: sending requires a valid, active, same-tenant issuing entity. Only
             // a tenant with NO entities configured at all (pre-seed legacy) is exempt.
             var entityValid = invoice.LegalEntityId is { } entityId
@@ -1204,27 +1213,14 @@ public class InvoiceService : IInvoiceService
     }
 
     /// <summary>
-    /// Mirrors an order-status release (Invoiced → Completed) on its pricing snapshot: an
-    /// invoice cancellation/delete/line-drop must give the price back a way out of the
-    /// terminal Invoiced state, or it can never be corrected (spec ch. 24-26). No-op when an
-    /// order carries no snapshot, or its snapshot isn't Invoiced (e.g. was never priced).
+    /// Mirrors an order-status release (Invoiced → Completed) on its pricing snapshot. The rule
+    /// itself lives in <see cref="Modules.Orders.Services.OrderPricingSnapshotRelease"/> because
+    /// the order side releases orders too (customer/entity change) and must apply exactly the
+    /// same one.
     /// </summary>
-    private async Task ReleasePricingSnapshotsAsync(IReadOnlyList<Guid> orderIds, CancellationToken cancellationToken)
-    {
-        if (orderIds.Count == 0)
-        {
-            return;
-        }
-
-        var snapshots = await _dbContext.TransportOrderPricingSnapshots
-            .Where(s => s.TenantId == _tenantContext.TenantId && orderIds.Contains(s.TransportOrderId)
-                        && s.Status == Modules.Orders.Entities.OrderPricingStatus.Invoiced)
-            .ToListAsync(cancellationToken);
-        foreach (var snapshot in snapshots)
-        {
-            snapshot.Status = Modules.Orders.Entities.OrderPricingStatus.Locked;
-        }
-    }
+    private Task ReleasePricingSnapshotsAsync(IReadOnlyList<Guid> orderIds, CancellationToken cancellationToken) =>
+        Modules.Orders.Services.OrderPricingSnapshotRelease.ReleaseAsync(
+            _dbContext, _tenantContext.TenantId, orderIds, cancellationToken);
 
     /// <summary>§7.3: resolve category + mapped account for every category-carrying line at Send.</summary>
     private async Task FreezeLedgerSnapshotsAsync(
@@ -1553,7 +1549,12 @@ public class InvoiceService : IInvoiceService
         // H-06 (review M-3): this gap filler resolves against TODAY's mapping, so it must respect
         // the mirror rule too — a credit line that inherited a null account from the document it
         // credits keeps that null rather than booking somewhere the original never did.
-        await FreezeLedgerSnapshotsAsync(invoice, InvoiceLineMirror.MirroredIds(invoice), cancellationToken);
+        var mirroredIds = InvoiceLineMirror.MirroredIds(invoice);
+        await FreezeLedgerSnapshotsAsync(invoice, mirroredIds, cancellationToken);
+        // Wave 1 fix A (A9): …but a mirrored line may copy the account from the very line it
+        // mirrors, once THAT line has one. Not today's mapping — the credited document's own
+        // freeze, which is exactly what the mirror rule protects.
+        await CopyLedgerSnapshotsFromCreditedLinesAsync(invoice, mirroredIds, cancellationToken);
         var missingAfter = invoice.Lines.Count(l => !l.IsDeleted && l.LedgerAccountNumberSnapshot is null);
         await _dbContext.SaveChangesAsync(cancellationToken);
 
@@ -1561,6 +1562,75 @@ public class InvoiceService : IInvoiceService
             new { MissingSnapshots = missingBefore }, new { MissingSnapshots = missingAfter }, cancellationToken);
 
         return InvoiceOperationResult.Success(await MapDetailAsync(invoice, cancellationToken));
+    }
+
+    /// <summary>
+    /// Wave 1 fix A (A9) — fills the ledger gap of a MIRRORED credit-note line from the invoice
+    /// line it credits.
+    ///
+    /// Why this is not "re-freezing": a credit line is a copy of one credited line, and its ledger
+    /// account is a property of that line's own Send-time freeze. When the credited line was sent
+    /// before its sales code had a mapping, both documents carry a null account and the accounting
+    /// export blocks the whole date window for both. Completing the ORIGINAL fixes it there; before
+    /// this method the credit note could never be fixed at all — the freeze pass skips mirrored
+    /// lines by design, so the "Boekhoudsnapshot aanvullen" action was a silent no-op and the export
+    /// stayed blocked forever, with no in-app remedy.
+    ///
+    /// The account is copied from the credited line, never resolved from today's mapping, so the
+    /// credit still books exactly where the invoice it reverses booked. Lines are matched on their
+    /// SalesCategoryId — the account IS a function of that code at freeze time — and only when the
+    /// credited document agrees with itself: if two of its lines carry the same code but different
+    /// frozen accounts (possible when one was completed later, under a changed mapping), nothing is
+    /// copied rather than picking one at random.
+    /// </summary>
+    private async Task CopyLedgerSnapshotsFromCreditedLinesAsync(
+        Invoice invoice, IReadOnlySet<Guid> mirroredLineIds, CancellationToken cancellationToken)
+    {
+        if (invoice.Kind != InvoiceKind.CreditNote || invoice.CreditedInvoiceId is not { } creditedInvoiceId)
+        {
+            return;
+        }
+
+        var gaps = invoice.Lines
+            .Where(l => !l.IsDeleted && mirroredLineIds.Contains(l.Id)
+                        && l.LedgerAccountNumberSnapshot is null && l.SalesCategoryId is not null)
+            .ToList();
+        if (gaps.Count == 0)
+        {
+            return;
+        }
+
+        var creditedLines = await _dbContext.InvoiceLines.AsNoTracking()
+            .Where(l => l.TenantId == _tenantContext.TenantId && l.InvoiceId == creditedInvoiceId
+                        && l.SalesCategoryId != null && l.LedgerAccountNumberSnapshot != null)
+            .Select(l => new
+            {
+                CategoryId = l.SalesCategoryId!.Value,
+                l.LedgerAccountId, l.LedgerAccountNumberSnapshot, l.LedgerAccountNameSnapshot, l.SalesCategoryNameSnapshot,
+            })
+            .ToListAsync(cancellationToken);
+        if (creditedLines.Count == 0)
+        {
+            return;
+        }
+
+        var byCategory = creditedLines
+            .GroupBy(l => l.CategoryId)
+            .Where(g => g.Select(l => l.LedgerAccountNumberSnapshot).Distinct().Count() == 1)
+            .ToDictionary(g => g.Key, g => g.First());
+
+        foreach (var line in gaps)
+        {
+            if (!byCategory.TryGetValue(line.SalesCategoryId!.Value, out var credited))
+            {
+                continue;
+            }
+
+            line.LedgerAccountId = credited.LedgerAccountId;
+            line.LedgerAccountNumberSnapshot = credited.LedgerAccountNumberSnapshot;
+            line.LedgerAccountNameSnapshot = credited.LedgerAccountNameSnapshot;
+            line.SalesCategoryNameSnapshot ??= credited.SalesCategoryNameSnapshot;
+        }
     }
 
     private async Task<InvoiceDetailDto> MapDetailAsync(Invoice invoice, CancellationToken cancellationToken)

@@ -82,8 +82,16 @@ public class KioskPunchService : IKioskPunchService
                 .FirstOrDefaultAsync(cancellationToken)
             : null;
 
+        // A12: the kiosk has no user session, so the shared display-preferences endpoint is out of
+        // reach for it; the tenant zone rides along on the device check it already performs.
+        var timeZone = await _dbContext.TenantSettings.AsNoTracking()
+            .Where(s => s.TenantId == device.TenantId)
+            .Select(s => s.Timezone)
+            .FirstOrDefaultAsync(cancellationToken);
+
         return new KioskPingResult(KioskOutcome.Success, device.Name, locationName, null,
-            Common.SupportedLanguages.Normalize(device.DefaultLanguage));
+            Common.SupportedLanguages.Normalize(device.DefaultLanguage),
+            string.IsNullOrWhiteSpace(timeZone) ? "Europe/Amsterdam" : timeZone);
     }
 
     public async Task<KioskIdentifyResult> IdentifyAsync(string? deviceKey, string? pin, CancellationToken cancellationToken)

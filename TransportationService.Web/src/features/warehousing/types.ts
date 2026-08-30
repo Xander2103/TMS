@@ -187,6 +187,29 @@ export interface WarehouseDashboard {
   utilization: DockUtilization[]
 }
 
+/**
+ * The wall clock a dock appointment was BOOKED at, straight out of the wire string.
+ *
+ * Wave 1 fix A (A13): `dock_appointments` store the typed wall clock stamped as UTC
+ * (`DockPlanningService.AsUtc` turns an Unspecified DateTime into a UTC one), so the hours and
+ * minutes in the string ARE the appointment's clock — no conversion applies, in either direction.
+ * Reading them through `new Date()` (browser zone) or `formatTime` (tenant zone) shifted the
+ * display away from the value the very same screen writes back with `slice(0, 16)`, which is how
+ * one appointment ended up showing three different times.
+ *
+ * Wave 2: migrate this screen to the tenant-zone helpers in `utils/dates`, together with a data
+ * re-encoding of `dock_appointments` — the two must happen in one step or every historical
+ * appointment shifts by the tenant offset.
+ */
+export function dockWallClockTime(value: string): string {
+  return value.slice(11, 16)
+}
+
+/** The same wall clock as a `datetime-local` input value ("2026-07-15T08:00"). */
+export function dockWallClockInput(value: string): string {
+  return value.slice(0, 16)
+}
+
 /** Horizontal block position on the dock timeline, in % of the operating window. */
 export function dockBlockPosition(
   plannedStart: string,
@@ -197,10 +220,12 @@ export function dockBlockPosition(
   const open = parseMinutes(opensAt) ?? 6 * 60
   const close = parseMinutes(closesAt) ?? 20 * 60
   const window = Math.max(close - open, 60)
-  const start = new Date(plannedStart)
-  const end = new Date(plannedEnd)
-  const startMinutes = clamp(start.getHours() * 60 + start.getMinutes() - open, 0, window)
-  const endMinutes = clamp(end.getHours() * 60 + end.getMinutes() - open, startMinutes + 15, window)
+  // A13: the block sits on the booked wall clock, exactly like the label above it and the field
+  // below it — never on whatever zone the planner's laptop happens to be set to.
+  const start = parseMinutes(dockWallClockTime(plannedStart)) ?? open
+  const end = parseMinutes(dockWallClockTime(plannedEnd)) ?? open
+  const startMinutes = clamp(start - open, 0, window)
+  const endMinutes = clamp(end - open, startMinutes + 15, window)
   return {
     leftPct: (startMinutes / window) * 100,
     widthPct: Math.max(((endMinutes - startMinutes) / window) * 100, 2),

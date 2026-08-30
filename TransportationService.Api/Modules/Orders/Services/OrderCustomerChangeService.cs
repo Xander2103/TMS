@@ -346,8 +346,9 @@ public class OrderCustomerChangeService : IOrderCustomerChangeService
     }
 
     /// <summary>
-    /// Financial safety: once the order sits on an invoice that left Draft, its customer is
-    /// history and must be corrected through a credit note, never rewritten in place.
+    /// Financial safety: once the order sits on a FINALIZED invoice (Sent or Paid), its customer is
+    /// history and must be corrected through a credit note, never rewritten in place. A cancelled
+    /// draft is not a finalized document and does not block (A7).
     /// </summary>
     private async Task<string?> BlockingReasonAsync(TransportOrder order, Guid newCustomerId, CancellationToken cancellationToken)
     {
@@ -356,11 +357,16 @@ public class OrderCustomerChangeService : IOrderCustomerChangeService
             return "Deze order staat al op deze klant.";
         }
 
+        // Wave 1 fix A (A7): FINALIZED means Sent or Paid. The predicate used to be "not Draft",
+        // which also caught a CANCELLED draft — never sent, impossible to credit (crediting
+        // requires Sent/Paid) — so the user was told to correct via a credit note that can never
+        // exist. Cancelling a draft leaves its lines in place, which is why the order still looks
+        // invoiced here at all.
         var finalizedInvoice = await _dbContext.InvoiceLines.AsNoTracking()
             .Where(l => l.TenantId == TenantId && l.TransportOrderId == order.Id)
             .Join(_dbContext.Invoices.AsNoTracking().Where(i => i.TenantId == TenantId),
                 line => line.InvoiceId, invoice => invoice.Id, (line, invoice) => invoice)
-            .AnyAsync(i => i.Status != InvoiceStatus.Draft, cancellationToken);
+            .AnyAsync(i => i.Status == InvoiceStatus.Sent || i.Status == InvoiceStatus.Paid, cancellationToken);
         if (finalizedInvoice)
         {
             return "Deze order staat op een verzonden of geboekte factuur. Corrigeer via een creditnota; "

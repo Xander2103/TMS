@@ -28,6 +28,7 @@ const okPing = {
   locationName: 'Duisburg',
   error: null,
   defaultLanguage: 'nl' as const,
+  timeZone: 'Europe/Amsterdam',
 }
 
 describe('KioskPage', () => {

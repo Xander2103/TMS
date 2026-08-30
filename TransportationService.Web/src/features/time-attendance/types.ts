@@ -272,6 +272,12 @@ export interface KioskPing {
   error: string | null
   /** Standaardtaal van het device — het beginscherm rendert hierin. */
   defaultLanguage: 'nl' | 'fr' | 'en'
+  /**
+   * IANA-tijdzone van de tenant (A12). De kiosk heeft geen sessie en dus geen toegang tot
+   * `/api/company-settings/display`; zonder dit veld toonde de wandklok de device-zone naast
+   * priktijden in de standaardzone.
+   */
+  timeZone: string
 }
 
 export interface KioskIdentifyResult {
