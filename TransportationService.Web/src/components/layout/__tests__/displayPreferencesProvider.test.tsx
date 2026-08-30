@@ -1,10 +1,12 @@
 import { act, render, screen, waitFor } from '@testing-library/react'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
-  DisplayPreferencesProvider, resetDisplayPreferencesForTests,
+  DisplayPreferencesProvider, resetDisplayPreferences,
 } from '../DisplayPreferencesProvider'
+import { AuthContext, type AuthContextValue } from '../../../features/auth/authContextValue'
+import type { CurrentUser } from '../../../features/auth/authTypes'
 import {
-  formatDateTime, resetDateFormatPreferenceForTests, resetTimeZonePreferenceForTests,
+  formatDateTime, resetDateFormatPreference, resetTimeZonePreference,
 } from '../../../utils/dates'
 
 /**
@@ -45,11 +47,41 @@ function renderGate() {
   )
 }
 
+/** A signed-in session; only the identity fields matter to the bootstrap. */
+function user(id: string, tenantId: string): CurrentUser {
+  return { id, tenantId, permissions: [], roles: [] } as unknown as CurrentUser
+}
+
+function authValue(current: CurrentUser): AuthContextValue {
+  return {
+    status: 'authenticated',
+    user: current,
+    login: vi.fn(),
+    logout: vi.fn(),
+    hasPermission: () => true,
+    hasAnyPermission: () => true,
+  }
+}
+
+function gateFor(current: CurrentUser) {
+  return (
+    <AuthContext.Provider value={authValue(current)}>
+      <DisplayPreferencesProvider fallback={<span>voorkeuren laden</span>}>
+        <Probe />
+      </DisplayPreferencesProvider>
+    </AuthContext.Provider>
+  )
+}
+
+function renderGateAs(current: CurrentUser) {
+  return render(gateFor(current))
+}
+
 beforeEach(() => {
   api.getJson.mockReset()
-  resetDisplayPreferencesForTests()
-  resetTimeZonePreferenceForTests()
-  resetDateFormatPreferenceForTests()
+  resetDisplayPreferences()
+  resetTimeZonePreference()
+  resetDateFormatPreference()
 })
 
 afterEach(() => {
@@ -110,6 +142,55 @@ describe('DisplayPreferencesProvider', () => {
     render(<Probe />)
     const stamps = await screen.findAllByTestId('stamp')
     expect(stamps[stamps.length - 1]).toHaveTextContent('15/07/2026 15:00')
+  })
+
+  it('refetches for the NEXT session: a logout/login on the same tab never reuses the first tenant zone', async () => {
+    // The memo that dedupes the shells (R6) must not outlive the session it belongs to.
+    // logout() and login() are pure SPA transitions — no page reload — so the module-level cache
+    // is the only thing standing between tenant A's zone and tenant B's screens.
+    api.getJson
+      .mockResolvedValueOnce({ dateFormat: 'dd/MM/yyyy', decimalSeparator: ',', timezone: 'Europe/Amsterdam' })
+      .mockResolvedValueOnce({ dateFormat: 'yyyy-MM-dd', decimalSeparator: '.', timezone: 'Asia/Tokyo' })
+
+    const sessionA = renderGateAs(user('u-a', 'tenant-a'))
+    expect(await screen.findByTestId('stamp')).toHaveTextContent('15/07/2026 08:00')
+
+    // Logout: RequireAuth renders <Navigate to="/login">, unmounting the shell and the gate.
+    sessionA.unmount()
+
+    // Login as somebody else — a different tenant, on a different zone.
+    renderGateAs(user('u-b', 'tenant-b'))
+
+    expect(await screen.findByTestId('stamp')).toHaveTextContent('2026-07-15 15:00')
+    expect(api.getJson).toHaveBeenCalledTimes(2)
+  })
+
+  it('refetches when the session changes under a still-mounted gate (token refresh, account switch)', async () => {
+    api.getJson
+      .mockResolvedValueOnce({ dateFormat: 'dd/MM/yyyy', timezone: 'Europe/Amsterdam' })
+      .mockResolvedValueOnce({ dateFormat: 'dd/MM/yyyy', timezone: 'Asia/Tokyo' })
+
+    const view = renderGateAs(user('u-a', 'tenant-a'))
+    expect(await screen.findByTestId('stamp')).toHaveTextContent('15/07/2026 08:00')
+
+    // An unrecoverable 401 → refresh → a different subject never passes through logout().
+    view.rerender(gateFor(user('u-b', 'tenant-b')))
+
+    await waitFor(() => expect(screen.getByTestId('stamp')).toHaveTextContent('15/07/2026 15:00'))
+    expect(api.getJson).toHaveBeenCalledTimes(2)
+  })
+
+  it('returns the formatters to their defaults on sign-out', async () => {
+    api.getJson.mockResolvedValue({ dateFormat: 'yyyy-MM-dd', timezone: 'Asia/Tokyo' })
+
+    const view = renderGateAs(user('u-a', 'tenant-a'))
+    expect(await screen.findByTestId('stamp')).toHaveTextContent('2026-07-15 15:00')
+    view.unmount()
+
+    // What AuthContext.logout() calls: nothing of the previous account survives it.
+    resetDisplayPreferences()
+    render(<Probe />)
+    expect(screen.getByTestId('stamp')).toHaveTextContent('15/07/2026 08:00')
   })
 
   it('fetches the preferences once per session, however many shells mount', async () => {

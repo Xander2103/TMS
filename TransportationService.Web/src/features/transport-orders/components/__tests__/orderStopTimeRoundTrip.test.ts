@@ -1,7 +1,7 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { buildSubmitPayload } from '../sections/orderFormPayload'
 import { stopsFromOrder, type OrderFormValues, type StopFormRow } from '../sections/orderFormState'
-import { resetTimeZonePreferenceForTests, setTimeZonePreference } from '../../../../utils/dates'
+import { resetTimeZonePreference, setTimeZonePreference } from '../../../../utils/dates'
 import type { TransportOrderDetail, TransportOrderStop } from '../../types'
 
 /**
@@ -28,7 +28,7 @@ afterAll(() => {
   else process.env.TZ = ORIGINAL_TZ
 })
 
-afterEach(() => resetTimeZonePreferenceForTests())
+afterEach(() => resetTimeZonePreference())
 
 function stopDto(overrides: Partial<TransportOrderStop> = {}): TransportOrderStop {
   return {

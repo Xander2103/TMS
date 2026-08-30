@@ -1,12 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { resetDisplayPreferencesForTests } from '../../../../components/layout/DisplayPreferencesProvider'
+import { resetDisplayPreferences } from '../../../../components/layout/DisplayPreferencesProvider'
 import { render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { CustomerPortalLayout } from '../CustomerPortalLayout'
 
 const auth = vi.hoisted(() => ({ permissions: [] as string[] }))
 
-vi.mock('../../../auth/authContextValue', () => ({
+// The shared display-preferences bootstrap keys its cache on the signed-in session, so it reads
+// AuthContext from this module — keep the real exports alongside the stubbed useAuth.
+vi.mock('../../../auth/authContextValue', async (actual) => ({
+  ...(await actual<typeof import('../../../auth/authContextValue')>()),
   useAuth: () => ({
     status: 'authenticated' as const,
     user: {
@@ -54,7 +57,7 @@ function renderLayout() {
 
 describe('CustomerPortalLayout', () => {
   beforeEach(() => {
-    resetDisplayPreferencesForTests()
+    resetDisplayPreferences()
     unreadCount.value = 0
     unreadNotices.value = 0
   })

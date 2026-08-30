@@ -2,9 +2,9 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import { render, screen } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { DriverLayout } from '../DriverLayout'
-import { resetDisplayPreferencesForTests } from '../../../../components/layout/DisplayPreferencesProvider'
+import { resetDisplayPreferences } from '../../../../components/layout/DisplayPreferencesProvider'
 import {
-  formatDateTime, resetDateFormatPreferenceForTests, resetTimeZonePreferenceForTests,
+  formatDateTime, resetDateFormatPreference, resetTimeZonePreference,
 } from '../../../../utils/dates'
 
 /**
@@ -41,9 +41,9 @@ function DriverProbe() {
 
 beforeEach(() => {
   api.getJson.mockReset()
-  resetDisplayPreferencesForTests()
-  resetTimeZonePreferenceForTests()
-  resetDateFormatPreferenceForTests()
+  resetDisplayPreferences()
+  resetTimeZonePreference()
+  resetDateFormatPreference()
 })
 
 describe('DriverLayout regional bootstrap', () => {

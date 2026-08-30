@@ -1,6 +1,6 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { formatDate, formatDateTime } from '../formatters'
-import { resetTimeZonePreferenceForTests, setTimeZonePreference } from '../../utils/dates'
+import { resetTimeZonePreference, setTimeZonePreference } from '../../utils/dates'
 
 /**
  * C-03 in the portal's own formatters — the deliberate split: the FORMAT follows the reader's
@@ -24,7 +24,7 @@ afterAll(() => {
   else process.env.TZ = ORIGINAL_TZ
 })
 
-afterEach(() => resetTimeZonePreferenceForTests())
+afterEach(() => resetTimeZonePreference())
 
 describe('portal formatDateTime — tenant clock, reader language', () => {
   it('renders a timestamp in the tenant zone, not the browser zone', () => {

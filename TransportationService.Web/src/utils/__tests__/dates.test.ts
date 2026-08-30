@@ -2,10 +2,10 @@ import { afterEach, describe, expect, it } from 'vitest'
 import {
   formatDate, formatDateLong, formatDateTime, formatDurationMinutes, formatExample,
   formatSignedDurationMinutes, formatTime,
-  parseDisplayDate, parseIsoDate, resetDateFormatPreferenceForTests, setDateFormatPreference,
+  parseDisplayDate, parseIsoDate, resetDateFormatPreference, setDateFormatPreference,
 } from '../dates'
 
-afterEach(() => resetDateFormatPreferenceForTests())
+afterEach(() => resetDateFormatPreference())
 
 describe('parseIsoDate', () => {
   it('parses a date-only string as a local calendar date (no day-shift)', () => {

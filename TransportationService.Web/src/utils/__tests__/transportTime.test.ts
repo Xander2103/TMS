@@ -2,7 +2,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import {
   formatDate, formatDateTime, formatTime,
   fromDateTimeLocalInput, fromWireDateTime,
-  getTimeZonePreference, resetDateFormatPreferenceForTests, resetTimeZonePreferenceForTests,
+  getTimeZonePreference, resetDateFormatPreference, resetTimeZonePreference,
   setDateFormatPreference, setTimeZonePreference, toDateTimeLocalInput, toWireDateTime,
 } from '../dates'
 
@@ -32,8 +32,8 @@ afterAll(() => {
 })
 
 afterEach(() => {
-  resetTimeZonePreferenceForTests()
-  resetDateFormatPreferenceForTests()
+  resetTimeZonePreference()
+  resetDateFormatPreference()
 })
 
 describe('the machine zone really is different from the tenant zone', () => {

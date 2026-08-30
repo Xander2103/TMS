@@ -66,8 +66,12 @@ export function getDateFormatPreference(): DateFormatPreference {
   return activeFormat
 }
 
-/** Test-only escape hatch so suites can reset the module state between cases. */
-export function resetDateFormatPreferenceForTests(): void {
+/**
+ * Back to the built-in default. Called on a session change (see DisplayPreferencesProvider —
+ * one tenant's regional settings must never survive into the next one's screens) and by suites
+ * that need a clean module state between cases.
+ */
+export function resetDateFormatPreference(): void {
   activeFormat = DEFAULT_FORMAT
 }
 
@@ -106,8 +110,8 @@ export function getTimeZonePreference(): string {
   return activeTimeZone
 }
 
-/** Test-only escape hatch so suites can reset the module state between cases. */
-export function resetTimeZonePreferenceForTests(): void {
+/** Back to Europe/Amsterdam — see resetDateFormatPreference for when and why. */
+export function resetTimeZonePreference(): void {
   activeTimeZone = DEFAULT_TIME_ZONE
 }
 
