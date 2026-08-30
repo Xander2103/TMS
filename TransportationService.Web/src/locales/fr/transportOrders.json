@@ -178,6 +178,8 @@
     "customer": "Client",
     "selectCustomer": "Sélectionnez un client…",
     "deactivatedSuffix": "(désactivé)",
+    "customerLockedHint": "Le client d’une commande existante se modifie via « Modifier le client » ; les prix, l’entité facturante et les factures liées sont alors réévalués.",
+    "legalEntityLockedHint": "L’entité facturante d’une commande existante se modifie via « Modifier l’entité » ; les factures brouillon ouvertes sont alors réévaluées.",
     "customerReference": "Référence client",
     "orderDate": "Date de la commande",
     "requirementsNote": "Attention pour ce client : {hints}.",

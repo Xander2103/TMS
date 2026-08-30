@@ -64,8 +64,10 @@ public class Package : AuditableTenantEntity
     /// <summary>The cargo line this package was generated from (null for manually created packages).</summary>
     public Guid? CargoItemId { get; set; }
 
-    /// <summary>Best-effort pins; stops are wholesale-replaced on order edits (FK SetNull),
-    /// so a null pin falls back to the order's loading/unloading stops at scan time.</summary>
+    /// <summary>Best-effort pins. Since wave 1 blocker C-01 an order edit PRESERVES stop identity,
+    /// so these normally survive; removing a pinned stop is refused on a confirmed order and
+    /// releases the pin (null) while the order is still Draft/Submitted. A null pin falls back to
+    /// the order's loading/unloading stops at scan time.</summary>
     public Guid? LoadingStopId { get; set; }
     public Guid? DeliveryStopId { get; set; }
 

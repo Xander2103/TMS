@@ -360,9 +360,12 @@ public record TransportOrderStopInput(
     /// <summary>Wave 2026-08-04 §18: stop-level included-minutes override (stop → order → contract).</summary>
     int? IncludedTimeMinutesOverride = null,
     /// <summary>
-    /// Existing stop id echoed by the client (stops are still wholesale-rebuilt on update). A
-    /// matching id with an unchanged LocationId carries the previous location snapshot over
-    /// instead of re-copying live master data (master-data wave 2026-08-05, Phase 7).
+    /// Existing stop id echoed by the client. Since wave 1 blocker C-01 this IDENTIFIES the stop:
+    /// an id belonging to the order being updated addresses that very row, which is then updated
+    /// in place (packages, executions, POD, scans and ETAs stay attached); no id — or an id the
+    /// order does not own — creates a new stop. A matching id with an unchanged LocationId also
+    /// carries the previous location snapshot over instead of re-copying live master data
+    /// (master-data wave 2026-08-05, Phase 7).
     /// </summary>
     Guid? Id = null,
     /// <summary>True = deliberately re-copy the CURRENT master-location data onto this stop (audited).</summary>

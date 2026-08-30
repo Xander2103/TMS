@@ -26,8 +26,12 @@ public class TransportOrderService : ITransportOrderService
 
     /// <summary>
     /// Allowed workflow transitions. Planned is entered via the planning engine (Phase 6).
-    /// Cancelled is deliberately absent: cancelling is a separate action (CancelAsync) with
-    /// its own permission and a mandatory reason.
+    /// Cancelled is deliberately absent as a TARGET: cancelling is a separate action
+    /// (CancelAsync) with its own permission and a mandatory reason.
+    /// EVERY <see cref="TransportOrderStatus"/> member must have an entry here — statuses set by
+    /// other modules (Invoiced) reach both ChangeStatusAsync and MapDetailAsync, and a missing
+    /// key used to surface as a 500 on plain GETs (wave 1 blocker C-04). Both readers use
+    /// TryGetValue as a second line of defence; OrderInvoicedStatusTests guards the coverage.
     /// </summary>
     private static readonly IReadOnlyDictionary<TransportOrderStatus, TransportOrderStatus[]> Transitions =
         new Dictionary<TransportOrderStatus, TransportOrderStatus[]>
@@ -39,6 +43,8 @@ public class TransportOrderService : ITransportOrderService
             [TransportOrderStatus.Planned] = [TransportOrderStatus.InProgress],
             [TransportOrderStatus.InProgress] = [TransportOrderStatus.Completed],
             [TransportOrderStatus.Completed] = [],
+            // Terminal for the manual workflow: unwinding an invoice runs through invoicing.
+            [TransportOrderStatus.Invoiced] = [],
             [TransportOrderStatus.Cancelled] = [],
         };
 
@@ -602,6 +608,29 @@ public class TransportOrderService : ITransportOrderService
             return TransportOrderOperationResult.Conflict(await MapDetailAsync(order, cancellationToken));
         }
 
+        // Wave 1 blocker C-02: a plain header edit may NEVER move an order to another customer or
+        // invoicing entity. Both have dedicated flows (OrderCustomerChangeService.ApplyAsync /
+        // ChangeLegalEntityAsync) that demand a reason, re-evaluate pricing and the entity policy,
+        // release draft invoice lines and audit the move. CustomerId stays on the request for
+        // backwards compatibility, but it must ECHO the stored value — a different value is
+        // refused rather than silently ignored. Mirrors DossierService.UpdateAsync.
+        if (request.CustomerId != order.CustomerId)
+        {
+            return TransportOrderOperationResult.Invalid(
+                "Gebruik 'Klant wijzigen' om de klant van een bestaande opdracht aan te passen; "
+                + "prijzen, facturatie-entiteit en gekoppelde facturen worden dan mee herbeoordeeld.");
+        }
+
+        // Null keeps the current entity (older clients never send it); an explicit DIFFERENT
+        // entity belongs in the dedicated flow, which also handles the override right, the
+        // sent/booked-invoice guard and the release of draft invoice lines.
+        if (request.LegalEntityId is { } requestedEntityId && requestedEntityId != order.LegalEntityId)
+        {
+            return TransportOrderOperationResult.Invalid(
+                "Gebruik 'Entiteit wijzigen' om de facturerende entiteit van een bestaande opdracht aan te passen; "
+                + "openstaande conceptfacturen worden dan mee herbeoordeeld.");
+        }
+
         // Switching an order TO a blocked customer is refused; editing an existing order whose
         // customer became blocked afterwards stays possible (dispatch still needs to manage it).
         // Null CargoItems means "leave unchanged" (API contract), so the minimal-cargo rule falls
@@ -610,9 +639,11 @@ public class TransportOrderService : ITransportOrderService
             ? request.CargoItems.Count > 0
             : await _dbContext.CargoItems.AsNoTracking()
                 .AnyAsync(c => c.TenantId == _tenantContext.TenantId && c.TransportOrderId == order.Id, cancellationToken);
-        var validation = await ValidateAsync(request.CustomerId, request.CustomerReference, request.GoodsDescription,
+        // The guard above proves request.CustomerId == order.CustomerId, so this edit is never
+        // "new work for another customer": the blocked/deactivated intake gate does not apply.
+        var validation = await ValidateAsync(order.CustomerId, request.CustomerReference, request.GoodsDescription,
             request.Quantity, request.QuantityUnitCode ?? request.QuantityUnit, hasCargoLines,
-            request.Stops, enforceCustomerIntake: request.CustomerId != order.CustomerId, cancellationToken);
+            request.Stops, enforceCustomerIntake: false, cancellationToken);
         if (validation is not null)
         {
             return validation;
@@ -661,7 +692,9 @@ public class TransportOrderService : ITransportOrderService
             order.ExtraTimeHourlyRateOverride, order.ExtraTimeRoundingStepMinutes, order.ExtraTimeMinimumBillableMinutes,
         };
 
-        order.CustomerId = request.CustomerId;
+        // CustomerId is deliberately NOT assigned here (C-02): the guard above already proved the
+        // request echoes the stored value, and the only sanctioned way to move an order is
+        // OrderCustomerChangeService.
         order.CustomerReference = Trim(request.CustomerReference);
         order.OrderDate = request.OrderDate ?? order.OrderDate;
         order.GoodsDescription = Trim(request.GoodsDescription);
@@ -694,50 +727,18 @@ public class TransportOrderService : ITransportOrderService
         var surchargeChanged = surchargeBefore.DieselSurchargeOverride != order.DieselSurchargeOverride
             || surchargeBefore.DieselSurchargePercentOverride != order.DieselSurchargePercentOverride;
 
-        // Null keeps the current entity (never silently cleared); explicit ids are validated.
-        if (request.LegalEntityId is { } requestedEntity && requestedEntity != order.LegalEntityId)
+        // LegalEntityId is deliberately NOT assigned here (C-02): moving an order to another
+        // invoicing entity runs through ChangeLegalEntityAsync, which owns the override-right
+        // check, the entity policy, the sent/booked-invoice guard, the draft-line release and the
+        // LegalEntityChanged audit entry. The guard at the top of this method proved the request
+        // either omits the field or echoes the stored value.
+
+        // Identity-preserving stop sync (C-01). Refuses removals/type changes that would orphan
+        // an operational reference; returns null when the sync succeeded.
+        if (await SyncStopsAsync(order, request.Stops, cancellationToken) is { } stopError)
         {
-            // Wave 2 (spec Part O): changing an order to a NON-default entity is the same audited
-            // right as moving a dossier — dossiers.manage/orders.edit alone no longer suffices.
-            var entityCustomerDefault = await _dbContext.Customers
-                .Where(c => c.TenantId == _tenantContext.TenantId && c.Id == order.CustomerId)
-                .Select(c => c.DefaultLegalEntityId)
-                .FirstOrDefaultAsync(cancellationToken);
-            if (requestedEntity != entityCustomerDefault)
-            {
-                var entityUserId = _currentUser?.CurrentUserId;
-                var mayOverrideEntity = _permissionService is not null
-                    && entityUserId is { } euid
-                    && await _permissionService.UserHasPermissionAsync(
-                        euid, PermissionCodes.DossiersOverrideEntity, cancellationToken);
-                if (!mayOverrideEntity)
-                {
-                    return TransportOrderOperationResult.Invalid(
-                        "Je hebt geen rechten om deze order naar een andere entiteit dan de klantstandaard te verplaatsen.");
-                }
-            }
-
-            var previousEntityId = order.LegalEntityId;
-            order.LegalEntityId = await ResolveOrderLegalEntityAsync(requestedEntity, order.CustomerId, cancellationToken);
-            await _auditService.RecordAsync(EntityType, order.Id.ToString(), "LegalEntityChanged",
-                new { LegalEntityId = previousEntityId }, new { order.LegalEntityId }, cancellationToken);
+            return stopError;
         }
-
-        // Wholesale stop replacement; removal is soft, so the trail stays auditable. The
-        // previous rows are captured first so an unchanged stop (client echoes its id, same
-        // LocationId, no RefreshSnapshot) carries its location snapshot over into the rebuilt
-        // row instead of silently re-copying live master data (Phase 7).
-        var previousStops = order.Stops.Where(s => !s.IsDeleted).ToDictionary(s => s.Id);
-        _dbContext.RemoveRange(order.Stops);
-        order.Stops = await BuildStopsAsync(request.Stops, previousStops, cancellationToken);
-        foreach (var stop in order.Stops)
-        {
-            stop.TransportOrderId = order.Id;
-        }
-
-        // The new stops carry client-generated ids; navigation discovery would attach them as
-        // Modified (phantom UPDATE). Mark them Added explicitly.
-        _dbContext.AddRange(order.Stops);
 
         List<CargoItem> replacementCargo;
         if (request.CargoItems is not null)
@@ -766,10 +767,10 @@ public class TransportOrderService : ITransportOrderService
         else
         {
             // null = leave cargo unchanged; still feed the (unmodified) current lines to pricing.
-            // Stops were just wholesale-replaced above (old rows soft-deleted, new rows added),
-            // so the preserved cargo's stop links must be re-resolved against the new stops or
-            // they'd dangle on soft-deleted rows (soft delete never fires the SetNull FK).
-            RelinkCargoToReplacedStops(existingCargo, order.Stops);
+            // A link to a stop that SURVIVED the sync stays exactly as it was (C-01); only a
+            // dangling link (its stop was removed, or a legacy id-less client replaced the whole
+            // stop set) is re-resolved — soft delete never fires the SetNull FK.
+            RelinkCargoToSurvivingStops(existingCargo, order.Stops);
             replacementCargo = existingCargo;
         }
 
@@ -986,7 +987,7 @@ public class TransportOrderService : ITransportOrderService
             return TransportOrderOperationResult.NotFound;
         }
 
-        if (!Transitions[order.Status].Contains(target))
+        if (!Transitions.TryGetValue(order.Status, out var allowedTargets) || !allowedTargets.Contains(target))
         {
             return TransportOrderOperationResult.InvalidState(
                 $"Een opdracht met status '{order.Status}' kan niet naar '{target}'.");
@@ -1590,20 +1591,33 @@ public class TransportOrderService : ITransportOrderService
     }
 
     /// <summary>
-    /// Re-links preserved cargo rows to the freshly-replaced stops when CargoItems is omitted
-    /// (leave-unchanged). Stops are wholesale-replaced with new ids on every update, and soft
-    /// delete never fires the SetNull FK, so without this the preserved cargo would keep
-    /// pointing at just-soft-deleted stop rows. Reuses the same unambiguous-order auto-link rule
-    /// as ApplyCargoInput/BuildCargoItems: exactly one loading + one unloading stop auto-links;
-    /// otherwise the link is cleared.
+    /// Repairs DANGLING cargo stop links when CargoItems is omitted (leave-unchanged). Soft
+    /// delete never fires the SetNull FK, so a link to a removed — or, for legacy clients that
+    /// don't echo stop ids, wholesale-replaced — stop would keep pointing at a hidden row.
+    /// A link to a stop that survived the sync is left untouched (C-01: stop identity is
+    /// preserved, so churning the link would be pure damage). Dangling links fall back to the
+    /// same unambiguous-order auto-link rule as ApplyCargoInput/BuildCargoItem: exactly one
+    /// loading + one unloading stop auto-links, otherwise the link is cleared.
     /// </summary>
-    private static void RelinkCargoToReplacedStops(IEnumerable<CargoItem> cargoItems, IReadOnlyList<TransportOrderStop> stops)
+    private static void RelinkCargoToSurvivingStops(IEnumerable<CargoItem> cargoItems, IReadOnlyList<TransportOrderStop> stops)
     {
+        // A link is only kept when its stop survived AND still plays the matching role: a stop
+        // that was retyped (allowed while nothing references it) can no longer be the goods'
+        // loading stop.
+        var survivingLoading = stops.Where(s => s.StopType == StopType.Loading).Select(s => s.Id).ToHashSet();
+        var survivingUnloading = stops.Where(s => s.StopType == StopType.Unloading).Select(s => s.Id).ToHashSet();
         var (defaultLoading, defaultUnloading) = DefaultCargoStopLinks(stops);
         foreach (var item in cargoItems)
         {
-            item.LoadingStopId = defaultLoading;
-            item.UnloadingStopId = defaultUnloading;
+            if (item.LoadingStopId is not { } loadingId || !survivingLoading.Contains(loadingId))
+            {
+                item.LoadingStopId = defaultLoading;
+            }
+
+            if (item.UnloadingStopId is not { } unloadingId || !survivingUnloading.Contains(unloadingId))
+            {
+                item.UnloadingStopId = defaultUnloading;
+            }
         }
     }
 
@@ -1638,44 +1652,311 @@ public class TransportOrderService : ITransportOrderService
             .ToList();
 
     private List<TransportOrderStop> BuildStops(IReadOnlyList<TransportOrderStopInput> inputs) =>
-        inputs.Select((input, index) => new TransportOrderStop
+        inputs.Select((input, index) =>
         {
-            Id = Guid.NewGuid(),
-            TenantId = _tenantContext.TenantId,
-            Sequence = index + 1,
-            StopType = input.StopType,
-            LocationId = input.LocationId,
-            LocationName = Trim(input.LocationName),
-            Address = Trim(input.Address),
-            PostalCode = Trim(input.PostalCode),
-            City = Trim(input.City),
-            CountryCode = Trim(input.CountryCode)?.ToUpperInvariant(),
-            PlannedFrom = input.PlannedFrom,
-            PlannedTo = input.PlannedTo,
-            RequestedFrom = input.RequestedFrom,
-            RequestedTo = input.RequestedTo,
-            ConfirmedFrom = input.ConfirmedFrom,
-            ConfirmedTo = input.ConfirmedTo,
-            EarliestAllowed = input.EarliestAllowed,
-            LatestAllowed = input.LatestAllowed,
-            AppointmentRequired = input.AppointmentRequired,
-            AppointmentReference = Trim(input.AppointmentReference),
-            // §15: only the fields the chosen kind actually uses are stored — a leftover time
-            // from a previously chosen kind must never linger.
-            TimeRequirement = input.TimeRequirement,
-            TimeRequirementFrom = input.TimeRequirement is StopTimeRequirementKind.After or StopTimeRequirementKind.Window
-                ? input.TimeRequirementFrom
-                : null,
-            TimeRequirementTo = input.TimeRequirement is StopTimeRequirementKind.Before or StopTimeRequirementKind.Window
-                ? input.TimeRequirementTo
-                : null,
-            IncludedTimeMinutesOverride = input.IncludedTimeMinutesOverride,
-            Reference = Trim(input.Reference),
-            Instructions = Trim(input.Instructions),
-            AccessInstructions = Trim(input.AccessInstructions),
-            LoadingInstructions = Trim(input.LoadingInstructions),
-            UnloadingInstructions = Trim(input.UnloadingInstructions),
+            var stop = new TransportOrderStop { Id = Guid.NewGuid(), TenantId = _tenantContext.TenantId };
+            ApplyStopInput(stop, input, index + 1);
+            return stop;
         }).ToList();
+
+    /// <summary>
+    /// Sets every CLIENT-EXPRESSIBLE field of one stop from its input, shared by create (via
+    /// <see cref="BuildStops"/>) and the id-preserving update sync. The location-snapshot fields
+    /// are deliberately untouched here — they are resolved afterwards
+    /// (<see cref="ApplyLocationSnapshot"/> / <see cref="CarryOverSnapshot"/>).
+    /// </summary>
+    private static void ApplyStopInput(TransportOrderStop stop, TransportOrderStopInput input, int sequence)
+    {
+        stop.Sequence = sequence;
+        stop.StopType = input.StopType;
+        stop.LocationId = input.LocationId;
+        stop.LocationName = Trim(input.LocationName);
+        stop.Address = Trim(input.Address);
+        stop.PostalCode = Trim(input.PostalCode);
+        stop.City = Trim(input.City);
+        stop.CountryCode = Trim(input.CountryCode)?.ToUpperInvariant();
+        stop.PlannedFrom = input.PlannedFrom;
+        stop.PlannedTo = input.PlannedTo;
+        stop.RequestedFrom = input.RequestedFrom;
+        stop.RequestedTo = input.RequestedTo;
+        stop.ConfirmedFrom = input.ConfirmedFrom;
+        stop.ConfirmedTo = input.ConfirmedTo;
+        stop.EarliestAllowed = input.EarliestAllowed;
+        stop.LatestAllowed = input.LatestAllowed;
+        stop.AppointmentRequired = input.AppointmentRequired;
+        stop.AppointmentReference = Trim(input.AppointmentReference);
+        // §15: only the fields the chosen kind actually uses are stored — a leftover time
+        // from a previously chosen kind must never linger.
+        stop.TimeRequirement = input.TimeRequirement;
+        stop.TimeRequirementFrom = input.TimeRequirement is StopTimeRequirementKind.After or StopTimeRequirementKind.Window
+            ? input.TimeRequirementFrom
+            : null;
+        stop.TimeRequirementTo = input.TimeRequirement is StopTimeRequirementKind.Before or StopTimeRequirementKind.Window
+            ? input.TimeRequirementTo
+            : null;
+        stop.IncludedTimeMinutesOverride = input.IncludedTimeMinutesOverride;
+        stop.Reference = Trim(input.Reference);
+        stop.Instructions = Trim(input.Instructions);
+        stop.AccessInstructions = Trim(input.AccessInstructions);
+        stop.LoadingInstructions = Trim(input.LoadingInstructions);
+        stop.UnloadingInstructions = Trim(input.UnloadingInstructions);
+    }
+
+    /// <summary>
+    /// Detached copy of the fields the snapshot resolution reads back (address quintet,
+    /// instructions and the frozen location snapshot), taken BEFORE the input overwrites them.
+    /// </summary>
+    private static TransportOrderStop CaptureStopSnapshot(TransportOrderStop stop) => new()
+    {
+        Id = stop.Id,
+        LocationId = stop.LocationId,
+        LocationName = stop.LocationName,
+        Address = stop.Address,
+        PostalCode = stop.PostalCode,
+        City = stop.City,
+        CountryCode = stop.CountryCode,
+        ContactName = stop.ContactName,
+        ContactPhone = stop.ContactPhone,
+        ContactMobile = stop.ContactMobile,
+        ContactEmail = stop.ContactEmail,
+        OpeningHoursSummary = stop.OpeningHoursSummary,
+        Gate = stop.Gate,
+        AccessCode = stop.AccessCode,
+        Dock = stop.Dock,
+        RouteDescription = stop.RouteDescription,
+        DefaultLoadingMinutes = stop.DefaultLoadingMinutes,
+        DefaultUnloadingMinutes = stop.DefaultUnloadingMinutes,
+        SnapshotAt = stop.SnapshotAt,
+        Instructions = stop.Instructions,
+        AccessInstructions = stop.AccessInstructions,
+        LoadingInstructions = stop.LoadingInstructions,
+        UnloadingInstructions = stop.UnloadingInstructions,
+    };
+
+    /// <summary>
+    /// Resets the snapshot-only fields of a preserved stop so it starts the snapshot resolution
+    /// in exactly the state a freshly built row would: a free-address stop keeps no location
+    /// snapshot, and a carry-over/refresh re-fills them deliberately.
+    /// </summary>
+    private static void ClearLocationSnapshot(TransportOrderStop stop)
+    {
+        stop.ContactName = null;
+        stop.ContactPhone = null;
+        stop.ContactMobile = null;
+        stop.ContactEmail = null;
+        stop.OpeningHoursSummary = null;
+        stop.Gate = null;
+        stop.AccessCode = null;
+        stop.Dock = null;
+        stop.RouteDescription = null;
+        stop.DefaultLoadingMinutes = null;
+        stop.DefaultUnloadingMinutes = null;
+        stop.SnapshotAt = null;
+    }
+
+    /// <summary>
+    /// Operational references pinned to a stop. HARD references record something that actually
+    /// happened at that stop (executions, POD, ETA promises, scans, exceptions, package events,
+    /// incidents) — detaching them destroys the trail, and three of them carry a NON-nullable FK,
+    /// so removing the stop would be outright corruption. PACKAGE PINS are best-effort links the
+    /// scan pipeline falls back on; they may still be released while the order is not confirmed.
+    /// </summary>
+    private sealed record StopReferences(HashSet<Guid> Hard, HashSet<Guid> PackagePinned)
+    {
+        public bool IsReferenced(Guid stopId) => Hard.Contains(stopId) || PackagePinned.Contains(stopId);
+    }
+
+    private async Task<StopReferences> LoadStopReferencesAsync(
+        IReadOnlyCollection<Guid> stopIds, CancellationToken cancellationToken)
+    {
+        var tenantId = _tenantContext.TenantId;
+        if (stopIds.Count == 0)
+        {
+            return new StopReferences([], []);
+        }
+
+        var ids = stopIds.ToList();
+        var hard = new HashSet<Guid>();
+
+        hard.UnionWith(await _dbContext.StopExecutions.AsNoTracking()
+            .Where(e => e.TenantId == tenantId && ids.Contains(e.TransportOrderStopId))
+            .Select(e => e.TransportOrderStopId).Distinct().ToListAsync(cancellationToken));
+        hard.UnionWith(await _dbContext.ProofsOfDelivery.AsNoTracking()
+            .Where(p => p.TenantId == tenantId && ids.Contains(p.TransportOrderStopId))
+            .Select(p => p.TransportOrderStopId).Distinct().ToListAsync(cancellationToken));
+        hard.UnionWith(await _dbContext.StopEtas.AsNoTracking()
+            .Where(e => e.TenantId == tenantId && ids.Contains(e.TransportOrderStopId))
+            .Select(e => e.TransportOrderStopId).Distinct().ToListAsync(cancellationToken));
+        hard.UnionWith(await _dbContext.ScanEvents.AsNoTracking()
+            .Where(s => s.TenantId == tenantId && s.TransportOrderStopId != null && ids.Contains(s.TransportOrderStopId!.Value))
+            .Select(s => s.TransportOrderStopId!.Value).Distinct().ToListAsync(cancellationToken));
+        hard.UnionWith(await _dbContext.ExecutionExceptions.AsNoTracking()
+            .Where(e => e.TenantId == tenantId && e.TransportOrderStopId != null && ids.Contains(e.TransportOrderStopId!.Value))
+            .Select(e => e.TransportOrderStopId!.Value).Distinct().ToListAsync(cancellationToken));
+        hard.UnionWith(await _dbContext.PackageEvents.AsNoTracking()
+            .Where(e => e.TenantId == tenantId && e.TransportOrderStopId != null && ids.Contains(e.TransportOrderStopId!.Value))
+            .Select(e => e.TransportOrderStopId!.Value).Distinct().ToListAsync(cancellationToken));
+        hard.UnionWith(await _dbContext.Incidents.AsNoTracking()
+            .Where(i => i.TenantId == tenantId && i.SourceStopId != null && ids.Contains(i.SourceStopId!.Value))
+            .Select(i => i.SourceStopId!.Value).Distinct().ToListAsync(cancellationToken));
+
+        var pinned = await _dbContext.Packages.AsNoTracking()
+            .Where(p => p.TenantId == tenantId
+                        && ((p.LoadingStopId != null && ids.Contains(p.LoadingStopId!.Value))
+                            || (p.DeliveryStopId != null && ids.Contains(p.DeliveryStopId!.Value))))
+            .Select(p => new { p.LoadingStopId, p.DeliveryStopId })
+            .ToListAsync(cancellationToken);
+        var packagePinned = new HashSet<Guid>();
+        foreach (var pin in pinned)
+        {
+            if (pin.LoadingStopId is { } l && stopIds.Contains(l))
+            {
+                packagePinned.Add(l);
+            }
+
+            if (pin.DeliveryStopId is { } d && stopIds.Contains(d))
+            {
+                packagePinned.Add(d);
+            }
+        }
+
+        return new StopReferences(hard, packagePinned);
+    }
+
+    /// <summary>
+    /// Wave 1 blocker C-01 — identity-preserving stop sync. Stop identity:
+    /// <list type="bullet">
+    /// <item>an input echoing an <c>Id</c> that belongs to THIS order is the SAME stop and is
+    /// updated in place (id, and therefore every package pin, execution, POD, scan, ETA and
+    /// exception pointing at it, survives);</item>
+    /// <item>an input without an id — or with an id this order does not own, including one of
+    /// another order or tenant — is a NEW stop and always gets a freshly generated id (a client
+    /// can never adopt someone else's row);</item>
+    /// <item>an existing stop no input echoes is REMOVED (soft-deleted), unless it is still
+    /// operationally referenced;</item>
+    /// <item>changing the <c>StopType</c> of a referenced stop is a replacement in identity terms
+    /// and is refused — the packages/executions hanging off it describe a load, not a delivery.</item>
+    /// </list>
+    /// Returns a failure result when a rule refuses the edit, otherwise null (order.Stops is then
+    /// the new, renumbered set and the removals are staged as soft deletes).
+    /// </summary>
+    private async Task<TransportOrderOperationResult?> SyncStopsAsync(
+        TransportOrder order, IReadOnlyList<TransportOrderStopInput> inputs, CancellationToken cancellationToken)
+    {
+        var existing = order.Stops.Where(s => !s.IsDeleted).ToDictionary(s => s.Id);
+
+        // Match inputs onto existing rows. A duplicate echo of the same id only claims it once —
+        // the second occurrence becomes a new stop rather than silently aliasing the first.
+        var matched = new TransportOrderStop?[inputs.Count];
+        var claimed = new HashSet<Guid>();
+        for (var i = 0; i < inputs.Count; i++)
+        {
+            if (inputs[i].Id is { } echoedId && existing.TryGetValue(echoedId, out var stop) && claimed.Add(echoedId))
+            {
+                matched[i] = stop;
+            }
+        }
+
+        var removed = existing.Values.Where(s => !claimed.Contains(s.Id)).ToList();
+        var retyped = Enumerable.Range(0, inputs.Count)
+            .Where(i => matched[i] is { } m && m.StopType != inputs[i].StopType)
+            .Select(i => matched[i]!)
+            .ToList();
+
+        if (removed.Count > 0 || retyped.Count > 0)
+        {
+            var references = await LoadStopReferencesAsync(
+                removed.Concat(retyped).Select(s => s.Id).ToHashSet(), cancellationToken);
+
+            foreach (var stop in removed)
+            {
+                // Hard references pin the stop unconditionally; package pins may still be
+                // released while the order is not yet confirmed (the scan pipeline documents a
+                // null pin as the fallback), but never on a physically bound order.
+                if (references.Hard.Contains(stop.Id)
+                    || (references.PackagePinned.Contains(stop.Id) && order.Status == TransportOrderStatus.Confirmed))
+                {
+                    return TransportOrderOperationResult.Invalid(
+                        $"Stop {stop.Sequence} is al operationeel in gebruik (colli, uitvoering, aflevering of scans) "
+                        + "en kan niet meer worden verwijderd.");
+                }
+            }
+
+            foreach (var stop in retyped)
+            {
+                if (references.IsReferenced(stop.Id))
+                {
+                    return TransportOrderOperationResult.Invalid(
+                        $"Het type van stop {stop.Sequence} kan niet meer worden gewijzigd: "
+                        + "er hangen al colli, uitvoeringen of scans aan deze stop.");
+                }
+            }
+
+            // Draft/Submitted removal of a package-pinned stop: release the best-effort pins so
+            // nothing keeps pointing at a soft-deleted row.
+            var releasable = removed.Select(s => s.Id).Where(references.PackagePinned.Contains).ToList();
+            if (releasable.Count > 0)
+            {
+                var tenantId = _tenantContext.TenantId;
+                var packages = await _dbContext.Packages
+                    .Where(p => p.TenantId == tenantId
+                                && ((p.LoadingStopId != null && releasable.Contains(p.LoadingStopId!.Value))
+                                    || (p.DeliveryStopId != null && releasable.Contains(p.DeliveryStopId!.Value))))
+                    .ToListAsync(cancellationToken);
+                foreach (var package in packages)
+                {
+                    if (package.LoadingStopId is { } l && releasable.Contains(l))
+                    {
+                        package.LoadingStopId = null;
+                    }
+
+                    if (package.DeliveryStopId is { } d && releasable.Contains(d))
+                    {
+                        package.DeliveryStopId = null;
+                    }
+                }
+            }
+        }
+
+        // Snapshot the preserved rows BEFORE the inputs overwrite them, so the carry-over rules
+        // (Phase 7) keep working unchanged for an unchanged master-location stop.
+        var previousStops = matched.Where(s => s is not null)
+            .ToDictionary(s => s!.Id, s => CaptureStopSnapshot(s!));
+
+        var stops = new List<TransportOrderStop>(inputs.Count);
+        var added = new List<TransportOrderStop>();
+        for (var i = 0; i < inputs.Count; i++)
+        {
+            var stop = matched[i];
+            if (stop is null)
+            {
+                // Never reuse the client-supplied id: an unknown id is a NEW stop, not an adoption.
+                stop = new TransportOrderStop
+                {
+                    Id = Guid.NewGuid(), TenantId = _tenantContext.TenantId, TransportOrderId = order.Id,
+                };
+                added.Add(stop);
+            }
+            else
+            {
+                ClearLocationSnapshot(stop);
+            }
+
+            ApplyStopInput(stop, inputs[i], i + 1);
+            stops.Add(stop);
+        }
+
+        await ResolveStopSnapshotsAsync(stops, inputs, previousStops, cancellationToken);
+
+        // Removals first (explicit soft delete), so reassigning the navigation never leaves EF to
+        // guess what happened to the dropped rows.
+        _dbContext.RemoveRange(removed);
+        order.Stops = stops;
+        // New rows carry service-generated ids; navigation discovery would attach them as
+        // Modified (phantom UPDATE). Mark them Added explicitly.
+        _dbContext.AddRange(added);
+        return null;
+    }
 
     /// <summary>
     /// Builds the replacement stop rows AND resolves each stop's location snapshot (Phase 7):
@@ -1689,7 +1970,22 @@ public class TransportOrderService : ITransportOrderService
         CancellationToken cancellationToken)
     {
         var stops = BuildStops(inputs);
+        await ResolveStopSnapshotsAsync(stops, inputs, previousStops, cancellationToken);
+        return stops;
+    }
 
+    /// <summary>
+    /// Resolves each stop's location snapshot (Phase 7), index-aligned with its input: an
+    /// unchanged master-location stop (echoed id, same LocationId, no RefreshSnapshot) carries
+    /// the previous snapshot over; a new/changed/refreshed one takes a fresh copy from the
+    /// tenant's location (single batched query). Free-address stops are untouched.
+    /// </summary>
+    private async Task ResolveStopSnapshotsAsync(
+        IReadOnlyList<TransportOrderStop> stops,
+        IReadOnlyList<TransportOrderStopInput> inputs,
+        IReadOnlyDictionary<Guid, TransportOrderStop>? previousStops,
+        CancellationToken cancellationToken)
+    {
         var freshLocationIds = inputs
             .Where(input => NeedsFreshSnapshot(input, previousStops))
             .Select(input => input.LocationId!.Value)
@@ -1722,8 +2018,6 @@ public class TransportOrderService : ITransportOrderService
                 CarryOverSnapshot(stops[i], previous);
             }
         }
-
-        return stops;
     }
 
     /// <summary>Fresh copy needed for: new stop, changed LocationId, or an explicit refresh.</summary>
@@ -2000,7 +2294,8 @@ public class TransportOrderService : ITransportOrderService
             order.Quantity, order.QuantityUnit, order.WeightKg, order.VolumeM3, order.PalletCount,
             order.AdrRequired, order.CraneRequired, order.AgreedPrice, order.Notes,
             order.CancellationReason,
-            stops, cargoItems, Transitions[order.Status],
+            stops, cargoItems,
+            Transitions.TryGetValue(order.Status, out var allowedTransitions) ? allowedTransitions : [],
             CancellableStatuses.Contains(order.Status),
             CorrectiveTransitions.TryGetValue(order.Status, out var corrections) ? corrections : [],
             order.Priority,
@@ -2873,29 +3168,39 @@ public class TransportOrderService : ITransportOrderService
 
     /// <summary>
     /// Wave 2026-08-04 §16/§21: stop time requirements feed time-based surcharges and are
-    /// therefore pricing inputs. Stops are wholesale-replaced on update, so the old rows are the
-    /// change tracker's Deleted entries; compared as ordered multisets of the pricing-relevant
-    /// facts. Planned dates/windows are deliberately NOT compared — planning must stay possible
-    /// on a locked price.
+    /// therefore pricing inputs. Since C-01 stops are synced in place, so the "before" side is
+    /// read from the change tracker's ORIGINAL values (Deleted and Modified/Unchanged rows) and
+    /// the "after" side from the current entities (Added rows included); compared as ordered
+    /// multisets of the pricing-relevant facts. Planned dates/windows are deliberately NOT
+    /// compared — planning must stay possible on a locked price.
     /// </summary>
     private bool StopTimeRequirementsChanged(TransportOrder order)
     {
-        var oldStops = _dbContext.ChangeTracker.Entries<TransportOrderStop>()
-            .Where(e => e.State == EntityState.Deleted && e.Entity.TransportOrderId == order.Id)
-            .Select(e => e.Entity)
+        var entries = _dbContext.ChangeTracker.Entries<TransportOrderStop>()
+            .Where(e => e.Entity.TransportOrderId == order.Id)
             .ToList();
-        if (oldStops.Count == 0)
-        {
-            // Create path / recalculation: no replacement happened.
-            return false;
-        }
 
         static (StopType, StopTimeRequirementKind, TimeOnly?, TimeOnly?, bool, int?) Key(TransportOrderStop s) =>
             (s.StopType, s.TimeRequirement, s.TimeRequirementFrom, s.TimeRequirementTo, s.AppointmentRequired,
              s.IncludedTimeMinutesOverride);
 
-        var before = oldStops.Select(Key).OrderBy(k => k).ToList();
-        var after = order.Stops.Where(s => !s.IsDeleted).Select(Key).OrderBy(k => k).ToList();
+        static (StopType, StopTimeRequirementKind, TimeOnly?, TimeOnly?, bool, int?) OriginalKey(
+            Microsoft.EntityFrameworkCore.ChangeTracking.EntityEntry<TransportOrderStop> e) =>
+            (e.OriginalValues.GetValue<StopType>(nameof(TransportOrderStop.StopType)),
+             e.OriginalValues.GetValue<StopTimeRequirementKind>(nameof(TransportOrderStop.TimeRequirement)),
+             e.OriginalValues.GetValue<TimeOnly?>(nameof(TransportOrderStop.TimeRequirementFrom)),
+             e.OriginalValues.GetValue<TimeOnly?>(nameof(TransportOrderStop.TimeRequirementTo)),
+             e.OriginalValues.GetValue<bool>(nameof(TransportOrderStop.AppointmentRequired)),
+             e.OriginalValues.GetValue<int?>(nameof(TransportOrderStop.IncludedTimeMinutesOverride)));
+
+        var before = entries.Where(e => e.State != EntityState.Added).Select(OriginalKey).OrderBy(k => k).ToList();
+        if (before.Count == 0)
+        {
+            // Create path: nothing persisted to compare against.
+            return false;
+        }
+
+        var after = entries.Where(e => e.State != EntityState.Deleted).Select(e => Key(e.Entity)).OrderBy(k => k).ToList();
         return !before.SequenceEqual(after);
     }
 
