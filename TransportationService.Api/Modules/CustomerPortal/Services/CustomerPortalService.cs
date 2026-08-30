@@ -85,9 +85,11 @@ public class CustomerPortalService : ICustomerPortalService
             return null;
         }
 
+        // H-14: join on IsActive so a deactivated/soft-deleted customer loses portal access at
+        // once — aligned with PortalDocumentService/PortalInvoiceService, which already did this.
         var link = await _dbContext.Users.AsNoTracking()
             .Where(u => u.Id == userId && u.TenantId == _tenantContext.TenantId && u.CustomerId != null)
-            .Join(_dbContext.Customers.AsNoTracking().Where(c => c.TenantId == _tenantContext.TenantId),
+            .Join(_dbContext.Customers.AsNoTracking().Where(c => c.TenantId == _tenantContext.TenantId && c.IsActive),
                 u => u.CustomerId, c => c.Id,
                 (u, c) => new { c.Id, c.Name })
             .FirstOrDefaultAsync(cancellationToken);
@@ -375,7 +377,8 @@ public class CustomerPortalService : ICustomerPortalService
         var timeline = await _dbContext.TransportOrderStatusHistories.AsNoTracking()
             .Where(h => h.TenantId == tenantId && h.TransportOrderId == order.Id && CustomerVisibleStatuses.Contains(h.ToStatus))
             .OrderBy(h => h.ChangedAt)
-            .Select(h => new PortalTimelineEventDto(h.ToStatus, h.ChangedAt, h.Reason))
+            // H-14: the reason column is planner-typed and stays internal.
+            .Select(h => new PortalTimelineEventDto(h.ToStatus, h.ChangedAt))
             .ToListAsync(cancellationToken);
 
         var exceptions = await _dbContext.Set<Modules.Exceptions.Entities.ExecutionException>().AsNoTracking()
@@ -405,9 +408,11 @@ public class CustomerPortalService : ICustomerPortalService
             .Select(p => new PortalPodSummaryDto(p.DeliveredAt, p.RecipientName, p.Outcome.ToString()))
             .FirstOrDefaultAsync(cancellationToken);
 
+        // H-14: order.Notes and order.CancellationReason are staff-only and deliberately dropped
+        // here — the classification lives in this projection, never in the frontend.
         return new PortalOrderDetailDto(
             order.Id, order.OrderNumber, order.OrderDate, order.Status, order.CustomerReference,
-            order.GoodsDescription, order.Notes, order.CancellationReason,
+            order.GoodsDescription,
             order.Stops.Select(s => new PortalStopDto(
                 s.Sequence, s.StopType, s.LocationName, s.City, s.RequestedFrom, s.RequestedTo, s.Reference, s.Instructions)).ToList(),
             order.CargoItems.Select(c => new PortalCargoDto(

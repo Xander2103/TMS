@@ -54,7 +54,6 @@
     "submittedFor": "Soumise pour le {date}",
     "yourRef": "votre réf. {reference}",
     "messagesButton": "Messages concernant cette commande",
-    "cancelledReason": "Annulée : {reason}",
     "statusTitle": "Statut",
     "expectedDelivery": "Livraison prévue",
     "attentionTitle": "Points d'attention",
@@ -74,7 +73,6 @@
       "type": "Type",
       "adr": "ADR"
     },
-    "remarksTitle": "Vos remarques",
     "podTitle": "Preuve de livraison",
     "podDeliveredAt": "Livré le {time}",
     "podRecipient": "Réceptionné par {name}",

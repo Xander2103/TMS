@@ -50,7 +50,10 @@ public interface IAccountSecurityService
 public sealed class AccountSecurityService : IAccountSecurityService
 {
     public const string PortalTemplatePrefix = "klantportaal";
-    public const string PortalPermissionPrefix = "customer_portal.";
+
+    /// <summary>Kept for callers that already reference it; the rule itself lives in
+    /// <see cref="PortalPermissionScope"/>.</summary>
+    public const string PortalPermissionPrefix = PortalPermissionScope.Prefix;
 
     private readonly TransportationDbContext _db;
     private readonly ITenantContext _tenant;
@@ -73,8 +76,15 @@ public sealed class AccountSecurityService : IAccountSecurityService
         _currentUser.CurrentUserId
         ?? throw new UnauthorizedAccessException("No authenticated actor for a privileged operation (fail-closed).");
 
+    /// <summary>
+    /// Deliberately the RAW assigned set, not the identity-class-filtered one: this feeds the
+    /// privilege-comparison guards below, where over-reporting the target's rights is the safe
+    /// direction. (A portal identity whose account still carries an internal role cannot USE that
+    /// role — see the guard in PermissionSetService — but it must still count against an actor who
+    /// wants to manage that account.)
+    /// </summary>
     public Task<IReadOnlySet<string>> EffectivePermissionsAsync(Guid userId, CancellationToken cancellationToken) =>
-        _permissions.GetPermissionCodesAsync(userId, cancellationToken);
+        _permissions.GetAssignedPermissionCodesAsync(userId, cancellationToken);
 
     public async Task<bool> IsProtectedSystemUserAsync(Guid userId, CancellationToken cancellationToken) =>
         await _db.UserRoles.AsNoTracking()
@@ -129,8 +139,7 @@ public sealed class AccountSecurityService : IAccountSecurityService
     public bool IsPortalTemplateRole(Role role) =>
         role.TemplateCode is { } code && code.StartsWith(PortalTemplatePrefix, StringComparison.OrdinalIgnoreCase);
 
+    // One rule, one place: see PortalPermissionScope for why the comparison is ordinal.
     public bool IsPortalPermissionSet(IEnumerable<string> permissionCodes) =>
-        permissionCodes.All(code =>
-            !string.IsNullOrWhiteSpace(code)
-            && code.Trim().StartsWith(PortalPermissionPrefix, StringComparison.OrdinalIgnoreCase));
+        PortalPermissionScope.CoversAll(permissionCodes);
 }

@@ -89,7 +89,7 @@ public class OrderPortalReviewService : IOrderPortalReviewService
                     return TransportOrderOperationResult.Invalid("Een reden is verplicht bij het weigeren van een opdracht.");
                 }
 
-                return await _orderService.CancelAsync(orderId, request.Reason, cancellationToken);
+                return await RejectAsync(order, request.Reason, cancellationToken);
 
             case PortalReviewAction.RequestInfo:
                 return await RequestInfoAsync(order, request.Reason, cancellationToken);
@@ -97,6 +97,43 @@ public class OrderPortalReviewService : IOrderPortalReviewService
             default:
                 return TransportOrderOperationResult.Invalid("Onbekende actie.");
         }
+    }
+
+    /// <summary>
+    /// Rejects a customer-submitted order AND tells the customer why. `CancellationReason` is a
+    /// staff field (planners also type internal motivations into it on the ordinary cancel action)
+    /// and H-14 removed it from the portal DTO, so the explanation now travels through the same
+    /// customer-facing order thread the RequestInfo branch uses. The message is posted with
+    /// publishNotification: false because the cancel already published the richer order_rejected
+    /// e-mail — one action, one mail.
+    /// </summary>
+    private async Task<TransportOrderOperationResult> RejectAsync(
+        Orders.Entities.TransportOrder order, string reason, CancellationToken cancellationToken)
+    {
+        var cancelled = await _orderService.CancelAsync(order.Id, reason, cancellationToken);
+        if (cancelled.Outcome != TransportOrderOperationOutcome.Success)
+        {
+            return cancelled;
+        }
+
+        // The cancellation is committed; a failing note must not undo it, but it must be visible
+        // in the log because the customer would otherwise be left without an explanation.
+        try
+        {
+            await _messageService.SendToCustomerAsync(
+                order.CustomerId,
+                new SendCustomerMessageRequest(order.Id,
+                    $"Uw opdracht {order.OrderNumber} is geweigerd. Reden: {reason.Trim()}"),
+                cancellationToken, publishNotification: false);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            _logger?.LogError(exception,
+                "Rejection note for order {OrderId} could not be posted; the cancellation itself is already committed.",
+                order.Id);
+        }
+
+        return cancelled;
     }
 
     private async Task<TransportOrderOperationResult> RequestInfoAsync(

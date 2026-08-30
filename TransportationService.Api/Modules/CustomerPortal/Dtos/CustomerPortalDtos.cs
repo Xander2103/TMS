@@ -33,11 +33,23 @@ public record PortalCargoDto(
     PackageUnitType? UnitType,
     bool AdrRequired);
 
-public record PortalTimelineEventDto(TransportOrderStatus Status, DateTime ChangedAt, string? Reason);
+/// <summary>
+/// H-14: the timeline shows WHEN a status was reached, never WHY. The history's Reason column
+/// carries planner-typed cancel/correction motivations ("dispatch boekte verkeerd", "klant
+/// betaalt niet") and is internal by classification.
+/// </summary>
+public record PortalTimelineEventDto(TransportOrderStatus Status, DateTime ChangedAt);
 
 public record PortalExceptionDto(string Type, string Description, string Status, DateTime OccurredAt);
 
-/// <summary>Customer-facing order view: deliberately NO prices or internal planning data.</summary>
+/// <summary>
+/// Customer-facing order view: deliberately NO prices or internal planning data.
+/// H-14: <c>Notes</c> (the planners' free-text field on the order) and <c>CancellationReason</c>
+/// are staff-only and are NOT projected here. The portal's intake still writes the customer's own
+/// remarks into <c>TransportOrder.Notes</c>, but a planner edits that same field afterwards, so the
+/// column cannot be echoed back safely; a customer-facing exception or portal message is the
+/// supported way to tell the customer something.
+/// </summary>
 public record PortalOrderDetailDto(
     Guid Id,
     string OrderNumber,
@@ -45,8 +57,6 @@ public record PortalOrderDetailDto(
     TransportOrderStatus Status,
     string? CustomerReference,
     string? GoodsDescription,
-    string? Notes,
-    string? CancellationReason,
     IReadOnlyList<PortalStopDto> Stops,
     IReadOnlyList<PortalCargoDto> CargoItems,
     IReadOnlyList<PortalTimelineEventDto> Timeline,

@@ -13,6 +13,7 @@ import {
   downloadOrderDocumentFile,
   listOrderDocuments,
   createOrderDocument,
+  updateOrderDocument,
   uploadOrderDocumentFile,
   type OrderDocument,
   type OrderDocumentType,
@@ -29,10 +30,16 @@ export function OrderDocumentsPanel({ orderId }: OrderDocumentsPanelProps) {
   const { hasPermission } = useAuth()
   const { showSuccess, showError } = useToast()
   const canManage = hasPermission('orders.edit') || hasPermission('orders.create') || hasPermission('orders.manage')
+  // Publishing a document goes through PUT /api/order-documents/{id}, which requires
+  // orders.edit or orders.manage — orders.create alone may upload but not (un)publish, so the
+  // toggle must not be offered to it.
+  const canPublish = hasPermission('orders.edit') || hasPermission('orders.manage')
 
   const [documents, setDocuments] = useState<OrderDocument[] | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [uploadType, setUploadType] = useState<OrderDocumentType>('CustomerDeliveryNote')
+  // Documenten zijn intern tenzij de uploader ze bewust deelt met de klant (H-14).
+  const [uploadCustomerVisible, setUploadCustomerVisible] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState<OrderDocument | null>(null)
   const [busy, setBusy] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -61,12 +68,34 @@ export function OrderDocumentsPanel({ orderId }: OrderDocumentsPanelProps) {
         title: file.name,
         issueDate: null,
         notes: null,
+        customerVisible: uploadCustomerVisible,
       })
       await uploadOrderDocumentFile(created.id, file)
       showSuccess('Document toegevoegd.')
       reload()
     } catch (err) {
       showError(describeApiError(err, 'Het document kon niet worden toegevoegd.').message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  /** Publiceren naar/terugtrekken uit het klantportaal; de rest van de metadata blijft gelijk. */
+  async function toggleCustomerVisible(doc: OrderDocument, next: boolean) {
+    setBusy(true)
+    try {
+      await updateOrderDocument(doc.id, {
+        documentType: doc.documentType,
+        customTypeName: doc.customTypeName,
+        title: doc.title,
+        issueDate: doc.issueDate,
+        notes: doc.notes,
+        customerVisible: next,
+      })
+      showSuccess(next ? 'Document is nu zichtbaar in het klantportaal.' : 'Document is niet langer zichtbaar voor de klant.')
+      reload()
+    } catch (err) {
+      showError(describeApiError(err, 'De zichtbaarheid kon niet worden aangepast.').message)
     } finally {
       setBusy(false)
     }
@@ -109,10 +138,24 @@ export function OrderDocumentsPanel({ orderId }: OrderDocumentsPanelProps) {
               e.target.value = ''
             }}
           />
+          <label className="tof-documents-visibility">
+            <input
+              type="checkbox"
+              checked={uploadCustomerVisible}
+              onChange={(e) => setUploadCustomerVisible(e.target.checked)}
+              disabled={busy}
+            />
+            Zichtbaar voor de klant
+          </label>
           <Button variant="secondary" onClick={() => fileRef.current?.click()} disabled={busy}>
             + Document uploaden
           </Button>
         </div>
+      )}
+      {canManage && (
+        <p className="ui-form-section-description">
+          Documenten zijn standaard intern. Vink “Zichtbaar voor de klant” aan om ze in het klantportaal te tonen.
+        </p>
       )}
 
       {documents.length === 0 && <p className="placeholder-text">Nog geen documenten bij deze opdracht.</p>}
@@ -123,6 +166,7 @@ export function OrderDocumentsPanel({ orderId }: OrderDocumentsPanelProps) {
               <th>Titel</th>
               <th>Type</th>
               <th>Bestand</th>
+              <th>Klantportaal</th>
               <th aria-label="Acties" />
             </tr>
           </thead>
@@ -134,6 +178,24 @@ export function OrderDocumentsPanel({ orderId }: OrderDocumentsPanelProps) {
                   <Badge tone="info">{t(ORDER_DOCUMENT_TYPE_LABELS[doc.documentType])}</Badge>
                 </td>
                 <td>{doc.hasAttachment ? doc.fileName : '—'}</td>
+                <td>
+                  {canPublish ? (
+                    <label className="tof-documents-visibility">
+                      <input
+                        type="checkbox"
+                        aria-label={`Zichtbaar voor de klant: ${doc.title}`}
+                        checked={doc.customerVisible}
+                        disabled={busy}
+                        onChange={(e) => void toggleCustomerVisible(doc, e.target.checked)}
+                      />
+                      {doc.customerVisible ? 'Zichtbaar' : 'Intern'}
+                    </label>
+                  ) : (
+                    <Badge tone={doc.customerVisible ? 'success' : 'neutral'}>
+                      {doc.customerVisible ? 'Zichtbaar' : 'Intern'}
+                    </Badge>
+                  )}
+                </td>
                 <td className="issued-items-row-actions">
                   {doc.hasAttachment && (
                     <button

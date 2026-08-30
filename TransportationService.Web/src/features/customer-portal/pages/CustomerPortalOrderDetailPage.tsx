@@ -88,12 +88,6 @@ export function CustomerPortalOrderDetailPage() {
         }
       />
 
-      {order.cancellationReason && (
-        <p className="to-cancel-reason" role="note">
-          {t('orders.detail.cancelledReason', { reason: order.cancellationReason })}
-        </p>
-      )}
-
       {order.expectedDeliveryEta && (
         <p className="cpp-eta" role="status">
           {t('orders.detail.expectedDelivery')}:{' '}
@@ -128,7 +122,6 @@ export function CustomerPortalOrderDetailPage() {
               <li key={index} className="cpp-row">
                 <span>
                   <Badge tone={ORDER_STATUS_TONE[event.status]}>{orderStatusLabel(t, event.status)}</Badge>
-                  {event.reason ? ` — ${event.reason}` : ''}
                 </span>
                 <span>{event.changedAt.slice(0, 16).replace('T', ' ')}</span>
               </li>
@@ -207,13 +200,6 @@ export function CustomerPortalOrderDetailPage() {
               ))}
             </tbody>
           </table>
-        </section>
-      )}
-
-      {order.notes && (
-        <section className="to-section">
-          <h2>{t('orders.detail.remarksTitle')}</h2>
-          <p>{order.notes}</p>
         </section>
       )}
 

@@ -68,7 +68,9 @@ public class PortalDocumentService : IPortalDocumentService
         var orderDocs = await (
             from d in _dbContext.TransportOrderDocuments.AsNoTracking()
             join o in _dbContext.TransportOrders.AsNoTracking() on d.TransportOrderId equals o.Id
-            where d.TenantId == tenantId && o.TenantId == tenantId && o.CustomerId == customerId && d.DocumentPath != null
+            // H-14: order documents are internal until a planner publishes them explicitly.
+            where d.TenantId == tenantId && o.TenantId == tenantId && o.CustomerId == customerId
+                && d.CustomerVisible && d.DocumentPath != null
             select new PortalDocumentDto(
                 d.Id, PortalDocumentSource.OrderDocument, d.Title, d.FileName, d.CreatedAt, o.Id, o.OrderNumber, null, null))
             .ToListAsync(cancellationToken);
@@ -118,7 +120,7 @@ public class PortalDocumentService : IPortalDocumentService
                     from d in _dbContext.TransportOrderDocuments.AsNoTracking()
                     join o in _dbContext.TransportOrders.AsNoTracking() on d.TransportOrderId equals o.Id
                     where d.TenantId == tenantId && o.TenantId == tenantId
-                        && d.Id == id && o.CustomerId == customerId
+                        && d.Id == id && o.CustomerId == customerId && d.CustomerVisible
                     select new { d.DocumentPath, d.FileName, d.ContentType })
                     .FirstOrDefaultAsync(cancellationToken);
                 if (doc?.DocumentPath is not { } path)

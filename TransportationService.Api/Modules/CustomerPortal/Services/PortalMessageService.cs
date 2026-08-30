@@ -430,9 +430,10 @@ public class PortalMessageService : IPortalMessageService
             return null;
         }
 
+        // H-14: a deactivated customer loses the portal inbox and its unread counter.
         var link = await _dbContext.Users.AsNoTracking()
             .Where(u => u.Id == userId && u.TenantId == _tenantContext.TenantId && u.CustomerId != null)
-            .Join(_dbContext.Customers.AsNoTracking().Where(c => c.TenantId == _tenantContext.TenantId),
+            .Join(_dbContext.Customers.AsNoTracking().Where(c => c.TenantId == _tenantContext.TenantId && c.IsActive),
                 u => u.CustomerId, c => c.Id,
                 (u, c) => new { u.Id, CustomerId = c.Id, u.PreferredLanguageCode, c.DefaultLanguageCode })
             .FirstOrDefaultAsync(cancellationToken);

@@ -121,6 +121,44 @@ public class OrderPortalReviewServiceTests
         Assert.Contains(h.Db.Context.AuditLogs, a => a.EntityType == "TransportOrder" && a.Action == "Cancelled");
     }
 
+    /// <summary>
+    /// H-14 fix round 1: `CancellationReason` is internal and no longer reaches the portal DTO, so
+    /// the rejection reason must travel through the customer-facing channel instead — the same
+    /// order thread the RequestInfo branch already uses. Still exactly ONE e-mail (the richer
+    /// order_rejected one); the generic customer_message_reply is suppressed as it is there.
+    /// </summary>
+    [Fact]
+    public async Task Reject_PostsTheReasonOnTheOrderThread_WithoutASecondEmail()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+
+        var result = await h.Sut.ReviewAsync(
+            h.OrderId, new PortalReviewRequest(PortalReviewAction.Reject, "Onvoldoende capaciteit"), CancellationToken.None);
+
+        Assert.Equal(TransportOrderOperationOutcome.Success, result.Outcome);
+
+        var message = Assert.Single(h.Db.Context.CustomerMessages);
+        Assert.True(message.AuthorIsStaff);
+        Assert.Equal(h.OrderId, message.TransportOrderId);
+        Assert.Contains("Onvoldoende capaciteit", message.Body, StringComparison.Ordinal);
+
+        var outboxMessage = Assert.Single(h.Db.Context.OutboxMessages);
+        Assert.Equal(MessageKinds.OrderRejected, outboxMessage.Kind);
+    }
+
+    /// <summary>A refused rejection must not leave a message on the customer's thread either.</summary>
+    [Fact]
+    public async Task Reject_WithoutReason_PostsNoCustomerMessage()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+
+        await h.Sut.ReviewAsync(h.OrderId, new PortalReviewRequest(PortalReviewAction.Reject, "   "), CancellationToken.None);
+
+        Assert.Empty(h.Db.Context.CustomerMessages.ToList());
+    }
+
     [Fact]
     public async Task RequestInfo_WithoutReason_IsRejected()
     {

@@ -43,10 +43,13 @@ export interface PortalCargo {
   adrRequired: boolean
 }
 
+/**
+ * H-14: de tijdlijn toont WANNEER een status bereikt werd, nooit WAAROM — de reden op de
+ * statushistoriek is door planners getypte interne motivering en verlaat de server niet.
+ */
 export interface PortalTimelineEvent {
   status: TransportOrderStatus
   changedAt: string
-  reason: string | null
 }
 
 export interface PortalException {
@@ -70,8 +73,8 @@ export interface PortalOrderDetail {
   status: TransportOrderStatus
   customerReference: string | null
   goodsDescription: string | null
-  notes: string | null
-  cancellationReason: string | null
+  // H-14: `notes` (planningsnotities) en `cancellationReason` zijn interne velden en worden
+  // bewust niet door /api/customer-portal/orders/{id} teruggegeven.
   stops: PortalStop[]
   cargoItems: PortalCargo[]
   timeline: PortalTimelineEvent[]

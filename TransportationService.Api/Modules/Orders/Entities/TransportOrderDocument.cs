@@ -33,4 +33,13 @@ public class TransportOrderDocument : AuditableTenantEntity
     public string? ContentType { get; set; }
     public DateOnly? IssueDate { get; set; }
     public string? Notes { get; set; }
+
+    /// <summary>
+    /// Opt-in publication to the customer portal. Order documents are INTERNAL by default —
+    /// damage photos, internal delivery notes and scans attached by planners must never be
+    /// published to the customer merely because they hang on that customer's order. The uploader
+    /// sets this deliberately through the existing save endpoints; PortalDocumentService filters
+    /// on it in both the list and the content download.
+    /// </summary>
+    public bool CustomerVisible { get; set; }
 }

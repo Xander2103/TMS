@@ -26,6 +26,9 @@ public class ResourceLinkServiceTests
 
         public Task<IReadOnlySet<string>> GetPermissionCodesAsync(Guid userId, CancellationToken cancellationToken) =>
             Task.FromResult(Codes);
+
+        public Task<IReadOnlySet<string>> GetAssignedPermissionCodesAsync(Guid userId, CancellationToken cancellationToken) =>
+            Task.FromResult(Codes);
     }
 
     private sealed record Harness(
