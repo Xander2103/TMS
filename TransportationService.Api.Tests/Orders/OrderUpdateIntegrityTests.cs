@@ -192,6 +192,73 @@ public class OrderUpdateIntegrityTests
         Assert.Equal(h.CustomerId, result.Order.CustomerId);
     }
 
+    // ------------------------------------------------------ the edit gate itself (A15)
+
+    /// <summary>
+    /// Second-pass test review I-4 / fix-wave item A15 — the status gate at the top of
+    /// <c>UpdateAsync</c> ("Alleen concept-, ingediende en bevestigde opdrachten") had no test at
+    /// all, and the whole pin-release branch is safe only because of it: package pins exist from
+    /// confirmation onwards while <c>StopExecution</c> rows appear only once the trip runs, so a
+    /// Planned order carries live pins and no hard reference. Widen this gate without noticing and
+    /// blocker C-01 quietly reopens with a green suite.
+    /// </summary>
+    [Fact]
+    public async Task Update_PlannedOrder_IsRefused()
+    {
+        await AssertEditGateRefusesAsync(TransportOrderStatus.Planned);
+    }
+
+    [Fact]
+    public async Task Update_InProgressOrder_IsRefused()
+    {
+        await AssertEditGateRefusesAsync(TransportOrderStatus.InProgress);
+    }
+
+    private static async Task AssertEditGateRefusesAsync(TransportOrderStatus status)
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var order = await CreateTwoStopOrderAsync(h);
+        await h.Packages.GenerateForOrderAsync(order.Id, CancellationToken.None);
+        var entity = await h.Db.Context.TransportOrders.FirstAsync(o => o.Id == order.Id);
+        entity.Status = status;
+        await h.Db.Context.SaveChangesAsync();
+        h.Db.Context.ChangeTracker.Clear();
+
+        var before = await h.Db.Context.TransportOrders.AsNoTracking().FirstAsync(o => o.Id == order.Id);
+        var stopsBefore = await h.Db.Context.TransportOrderStops.AsNoTracking()
+            .Where(s => s.TransportOrderId == order.Id).OrderBy(s => s.Sequence)
+            .Select(s => new { s.Id, s.Sequence, s.City }).ToListAsync();
+        h.Db.Context.ChangeTracker.Clear();
+
+        var update = UpdateFrom(order);
+        var result = await h.Sut.UpdateAsync(order.Id, update with
+        {
+            Notes = "Mag nooit landen",
+            // Dropping the pinned unloading stop is exactly what the gate must never let through.
+            Stops = [update.Stops.Single(s => s.StopType == StopType.Loading), Stop(StopType.Unloading, city: "Brugge")],
+        }, CancellationToken.None);
+
+        Assert.Equal(TransportOrderOperationOutcome.InvalidState, result.Outcome);
+        Assert.Contains("Alleen concept-, ingediende en bevestigde", result.Error!);
+
+        await h.Db.Context.SaveChangesAsync(); // flush anything the refused call might have staged
+        h.Db.Context.ChangeTracker.Clear();
+        var after = await h.Db.Context.TransportOrders.AsNoTracking().FirstAsync(o => o.Id == order.Id);
+        Assert.Equal(before.Version, after.Version);
+        Assert.Equal(before.Notes, after.Notes);
+        Assert.Equal(status, after.Status);
+        var stopsAfter = await h.Db.Context.TransportOrderStops.AsNoTracking()
+            .Where(s => s.TransportOrderId == order.Id).OrderBy(s => s.Sequence)
+            .Select(s => new { s.Id, s.Sequence, s.City }).ToListAsync();
+        Assert.Equal(stopsBefore, stopsAfter);
+        // The colli keep the pins they were generated with.
+        var packages = await h.Db.Context.Packages.AsNoTracking()
+            .Where(p => p.TransportOrderId == order.Id).ToListAsync();
+        Assert.NotEmpty(packages);
+        Assert.All(packages, p => Assert.NotNull(p.DeliveryStopId));
+    }
+
     // ---------------------------------------------------------------- C-01
 
     [Fact]
