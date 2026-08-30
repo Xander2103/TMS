@@ -5,7 +5,7 @@ import {
   KioskUnreachableError, clearDeviceKey, getStoredDeviceKey, kioskIdentify, kioskPing, kioskPunch,
   storeDeviceKey,
 } from '../api/kioskApi'
-import { formatTime } from '../../../utils/dates'
+import { formatTime, getTimeZonePreference, setTimeZonePreference } from '../../../utils/dates'
 import type { AttendanceStatus, KioskOutcome, KioskPunchAction } from '../types'
 import './kiosk.css'
 
@@ -93,7 +93,7 @@ export function KioskPage() {
     }
   }, [screen, resetToPin])
 
-  // Devicecheck bij opstart: naam + standaardtaal.
+  // Devicecheck bij opstart: naam, standaardtaal en tijdzone.
   useEffect(() => {
     if (!deviceKey) return
     let mounted = true
@@ -102,6 +102,9 @@ export function KioskPage() {
         if (!mounted) return
         if (result.outcome === 'Success') {
           setDeviceName(result.deviceName)
+          // A12: /kiosk mounts no DisplayPreferencesProvider (it has no session), so this is the
+          // only moment the shared formatters learn which clock this tenant runs on.
+          setTimeZonePreference(result.timeZone)
           if (isLocale(result.defaultLanguage)) {
             setDeviceLanguage(result.defaultLanguage)
             setLocale(result.defaultLanguage)
@@ -213,6 +216,7 @@ export function KioskPage() {
         storeDeviceKey(key)
         setDeviceKey(key)
         setDeviceName(result.deviceName)
+        setTimeZonePreference(result.timeZone)
         if (isLocale(result.defaultLanguage)) {
           setDeviceLanguage(result.defaultLanguage)
           setLocale(result.defaultLanguage)
@@ -231,13 +235,16 @@ export function KioskPage() {
     }
   }
 
+  // A12: the wall clock, the punch confirmation and "je werkt sinds …" must all read the TENANT
+  // zone. The device zone (getHours()) is whatever the tablet on the wall happens to be set to —
+  // on any tenant off the Amsterdam offset it contradicted the punch times right beside it.
   const clock = (
     <div className="kiosk-clock" aria-hidden="true">
-      <span className="kiosk-time">
-        {String(now.getHours()).padStart(2, '0')}:{String(now.getMinutes()).padStart(2, '0')}
-      </span>
+      <span className="kiosk-time">{formatTime(now.toISOString())}</span>
       <span className="kiosk-date">
-        {now.toLocaleDateString(CLOCK_LOCALE_TAGS[locale], { weekday: 'long', day: 'numeric', month: 'long' })}
+        {now.toLocaleDateString(CLOCK_LOCALE_TAGS[locale], {
+          weekday: 'long', day: 'numeric', month: 'long', timeZone: getTimeZonePreference(),
+        })}
       </span>
       {deviceName && <span className="kiosk-device">{deviceName}</span>}
     </div>

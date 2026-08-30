@@ -9,7 +9,7 @@ import type { EtaSource } from '../../operations/types'
 import { getMyDashboard } from '../api/driverApi'
 import { DriverActivityCard } from '../../time-attendance/components/DriverActivityCard'
 import type { MyDashboard } from '../types'
-import { formatDate } from '../../../utils/dates'
+import { formatDate, formatTime } from '../../../utils/dates'
 
 const SNAPSHOT_PREFIX = 'ts.driverSnapshot.v1'
 
@@ -128,7 +128,9 @@ export function DriverHomePage() {
               <div className="drv-fact-row">
                 <span>{t('driverApp.home.eta')}</span>
                 <span>
-                  {new Date(dashboard.nextStopEta).toLocaleTimeString('nl-BE', { hour: '2-digit', minute: '2-digit' })}
+                  {/* A11: the locale tag sets no zone — this printed the DEVICE clock next to the
+                      tenant-zone date above it. One clock per app: the tenant's. */}
+                  {formatTime(dashboard.nextStopEta)}
                   {dashboard.nextStopEtaSource && ` (${t(ETA_SOURCE_KEYS[dashboard.nextStopEtaSource])})`}
                 </span>
               </div>

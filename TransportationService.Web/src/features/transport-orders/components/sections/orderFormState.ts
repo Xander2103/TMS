@@ -332,6 +332,46 @@ export function cargoFromOrder(order: TransportOrderDetail | undefined): CargoFo
   })
 }
 
+/**
+ * Wave 1 fix A (A1a) — keeps every goods line pointing at the SAME stop when the stop list is
+ * reordered, has a stop removed, or gets one inserted.
+ *
+ * A cargo row addresses its stops by position in the submitted stop list (`loadingStopIndex` /
+ * `unloadingStopIndex`), and the backend resolves those positions against the request. Moving a
+ * stop renumbered the list without touching the indexes, so a pure reorder silently moved every
+ * goods line to a different stop: the server re-pinned the cargo while the colli generated from it
+ * kept the pin they were born with, and the driver's delivery scan raised "hoort bij een andere
+ * losstop" on every collo. Removing a stop was worse — the stale index went out of range and the
+ * route drawer, which renders no goods fields at all, showed a 400 the user could not act on.
+ *
+ * Rows are matched to stops by ROW KEY, which is stable for the lifetime of an editor, so this
+ * works for saved stops (id) and unsaved ones alike. A link whose stop is gone is cleared to ''
+ * ("automatic"), which is what the unambiguous-order auto-link on the server expects; an already
+ * automatic link stays automatic.
+ *
+ * Both editors that mutate stops — the full order form and the dossier route drawer — must route
+ * their mutation through this helper; that is the whole point of it living here.
+ */
+export function remapCargoStopIndices(
+  cargoItems: CargoFormRow[], previousStops: StopFormRow[], nextStops: StopFormRow[],
+): CargoFormRow[] {
+  const positionByKey = new Map(nextStops.map((stop, index) => [stop.key, index]))
+  const remap = (index: string): string => {
+    if (index === '') return ''
+    const previous = previousStops[Number(index)]
+    if (!previous) return ''
+    const position = positionByKey.get(previous.key)
+    return position === undefined ? '' : String(position)
+  }
+  return cargoItems.map((row) => {
+    const loadingStopIndex = remap(row.loadingStopIndex)
+    const unloadingStopIndex = remap(row.unloadingStopIndex)
+    return loadingStopIndex === row.loadingStopIndex && unloadingStopIndex === row.unloadingStopIndex
+      ? row
+      : { ...row, loadingStopIndex, unloadingStopIndex }
+  })
+}
+
 // --- Service selection initial state (spec 7) ---
 
 export function serviceIdsFromOrder(order: TransportOrderDetail | undefined): string[] {

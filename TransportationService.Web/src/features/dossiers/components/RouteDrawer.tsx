@@ -10,10 +10,13 @@ import { RouteSection } from '../../transport-orders/components/sections/RouteSe
 import { useOrderFormData } from '../../transport-orders/components/sections/useOrderFormData'
 import { buildSubmitPayload } from '../../transport-orders/components/sections/orderFormPayload'
 import {
+  cargoFromOrder,
   emptyStop,
   fieldErrorMap,
+  remapCargoStopIndices,
   stopsFromOrder,
   validateOrderForm,
+  type CargoFormRow,
   type StopFormRow,
 } from '../../transport-orders/components/sections/orderFormState'
 import { orderValuesFromDetail } from './orderDrawerState'
@@ -36,6 +39,11 @@ export function RouteDrawer({ order, onClose, onSaved }: RouteDrawerProps) {
   const { t } = useLocale()
   const [baseOrder, setBaseOrder] = useState(order)
   const [stops, setStops] = useState<StopFormRow[]>(() => stopsFromOrder(order))
+  // The drawer edits stops only, but the goods lines address those stops BY POSITION, so it has
+  // to carry them and renumber their links alongside every stop mutation (A1a). Without it a
+  // reorder silently moved every line to another stop, and a removal sent an out-of-range index
+  // back as a 400 about a goods field this drawer does not even render.
+  const [cargoItems, setCargoItems] = useState<CargoFormRow[]>(() => cargoFromOrder(order))
   const [dirty, setDirty] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -45,7 +53,10 @@ export function RouteDrawer({ order, onClose, onSaved }: RouteDrawerProps) {
   const { locationHours, serviceOptions } = useOrderFormData(baseOrder.customerId, stops)
 
   function mutateStops(mutate: (rows: StopFormRow[]) => StopFormRow[]) {
-    setStops(mutate)
+    const next = mutate(stops)
+    if (next === stops) return
+    setStops(next)
+    setCargoItems((rows) => remapCargoStopIndices(rows, stops, next))
     setDirty(true)
   }
 
@@ -64,7 +75,7 @@ export function RouteDrawer({ order, onClose, onSaved }: RouteDrawerProps) {
   }
 
   async function save() {
-    const values = { ...orderValuesFromDetail(baseOrder, serviceOptions), stops }
+    const values = { ...orderValuesFromDetail(baseOrder, serviceOptions), stops, cargoItems }
     // Only this drawer's section blocks locally; other sections stay untouched anyway.
     const routeErrors = validateOrderForm(values).filter((e) => e.section === 'route')
     setErrors(fieldErrorMap(routeErrors))
@@ -93,6 +104,7 @@ export function RouteDrawer({ order, onClose, onSaved }: RouteDrawerProps) {
     if (!conflict) return
     setBaseOrder(conflict)
     setStops(stopsFromOrder(conflict))
+    setCargoItems(cargoFromOrder(conflict))
     setDirty(false)
     setConflict(null)
     setError(null)

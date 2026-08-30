@@ -26,6 +26,7 @@ import {
   emptyCargoRow,
   emptyStop,
   fieldErrorMap,
+  remapCargoStopIndices,
   serviceDaysFromOrder,
   serviceIdsFromOrder,
   serviceNotesFromOrder,
@@ -291,8 +292,20 @@ export function TransportOrderForm({ mode, order, onSubmit, onCancel, submitLabe
     )
   }
 
+  /**
+   * Every stop-list mutation goes through here (A1a): the goods lines address their stops by
+   * POSITION, so reordering, removing or inserting a stop must renumber those links in the same
+   * breath or the lines silently move to another stop.
+   */
+  function mutateStops(mutate: (rows: StopFormRow[]) => StopFormRow[]) {
+    const next = mutate(stops)
+    if (next === stops) return
+    setStops(next)
+    setCargoItems((rows) => remapCargoStopIndices(rows, stops, next))
+  }
+
   function moveStop(index: number, delta: number) {
-    setStops((rows) => {
+    mutateStops((rows) => {
       const target = index + delta
       if (target < 0 || target >= rows.length) return rows
       const next = [...rows]
@@ -356,8 +369,8 @@ export function TransportOrderForm({ mode, order, onSubmit, onCancel, submitLabe
       render: () => (
         <RouteSection
           {...{ stops, customerId, saving, locationHours, errors, setStop, moveStop }}
-          onAddStop={(stopType) => setStops((rows) => [...rows, emptyStop(stopType)])}
-          onRemoveStop={(key) => setStops((rows) => rows.filter((row) => row.key !== key))}
+          onAddStop={(stopType) => mutateStops((rows) => [...rows, emptyStop(stopType)])}
+          onRemoveStop={(key) => mutateStops((rows) => rows.filter((row) => row.key !== key))}
           onRequestRefresh={setRefreshTarget}
           onQuickCreate={
             customerId && canCreateLocations

@@ -9,6 +9,7 @@ import { describeApiError } from '../../../api/problemDetails'
 import { useAuth } from '../../auth/authContextValue'
 import {
   formatDate, formatDateLong, formatDateTime, formatDurationMinutes, formatSignedDurationMinutes,
+  fromDateTimeLocalInput, toDateTimeLocalInput,
 } from '../../../utils/dates'
 import { useLocale } from '../../../i18n/localeContext'
 import {
@@ -24,20 +25,23 @@ function toIsoDate(date: Date): string {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
 }
 
-/** ISO-UTC → waarde voor <input type="datetime-local"> in lokale tijd. */
-function toLocalInput(iso: string | null): string {
-  if (!iso) return ''
-  const date = new Date(iso.endsWith('Z') || iso.includes('+') ? iso : `${iso}Z`)
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`
-}
+/**
+ * Wave 1 fix A (A13) — één klok op dit scherm.
+ *
+ * Dit paar rekende met `getHours()` / `new Date(value)`, dus in de BROWSERzone, terwijl de
+ * tijdlijnrij, de correctietitel en de annuleerbevestiging ernaast al in de tenantzone renderen.
+ * Een HR-gebruiker één uur naast de tenant zag 07:54 in de rij en 06:54 in het veld voor dezelfde
+ * prik — en bewaren verschoof de prik met dat verschil.
+ *
+ * Anders dan het dockbord vraagt dit géén herencodering van data: een prik wordt serverzijde op
+ * `UtcNow` gezet (`AttendanceService`) en een correctie wordt bewaard als het instant dat
+ * binnenkomt (`AttendanceCorrectionService`), dus élke waarde hier is al een echt tijdstip. Beide
+ * richtingen lopen daarom nu door dezelfde tenantzone-helpers als de rest van de app.
+ */
+const toLocalInput = toDateTimeLocalInput
 
-/** datetime-local (lokale tijd) → ISO-UTC, of null bij leeg. */
-function fromLocalInput(value: string): string | null {
-  if (!value) return null
-  const date = new Date(value)
-  return Number.isNaN(date.getTime()) ? null : date.toISOString()
-}
+/** datetime-local (tenant-wandklok) → ISO-UTC, of null bij leeg. */
+const fromLocalInput = fromDateTimeLocalInput
 
 interface CorrectionDraft {
   session: AttendanceSession
