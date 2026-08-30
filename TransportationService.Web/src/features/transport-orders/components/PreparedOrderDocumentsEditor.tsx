@@ -29,6 +29,8 @@ export function PreparedOrderDocumentsEditor({ value, onChange }: PreparedOrderD
       title: '',
       issueDate: '',
       notes: '',
+      // H-14: intern tenzij de planner het document bewust deelt met de klant.
+      customerVisible: false,
     }))
     onChange([...value, ...additions])
   }
@@ -67,6 +69,15 @@ export function PreparedOrderDocumentsEditor({ value, onChange }: PreparedOrderD
           <FormField label="Notities" htmlFor={`pod-notes-${doc.key}`}>
             <input id={`pod-notes-${doc.key}`} value={doc.notes} onChange={(e) => patch(doc.key, { notes: e.target.value })} maxLength={500} />
           </FormField>
+          <label className="tof-documents-visibility">
+            <input
+              id={`pod-visible-${doc.key}`}
+              type="checkbox"
+              checked={doc.customerVisible}
+              onChange={(e) => patch(doc.key, { customerVisible: e.target.checked })}
+            />
+            Zichtbaar voor de klant
+          </label>
           <div className="prepared-editor-actions">
             <Button variant="ghost" onClick={() => onChange(value.filter((d) => d.key !== doc.key))}>
               Verwijderen

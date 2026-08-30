@@ -16,6 +16,8 @@ export interface PreparedOrderDocument {
   title: string
   issueDate: string
   notes: string
+  /** H-14: gedeeld met de klant via het klantportaal. Standaard false — documenten zijn intern. */
+  customerVisible: boolean
   createdDocumentId?: string
 }
 
@@ -48,6 +50,7 @@ export async function uploadPreparedOrderDocuments(
           title: doc.title.trim() || doc.file.name,
           issueDate: doc.issueDate || null,
           notes: doc.notes.trim() || null,
+          customerVisible: doc.customerVisible,
         })
         createdId = created.id
       }

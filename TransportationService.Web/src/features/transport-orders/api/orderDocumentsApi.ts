@@ -28,6 +28,8 @@ export interface OrderDocument {
   fileName: string | null
   issueDate: string | null
   notes: string | null
+  /** Gepubliceerd in het klantportaal. Standaard false: documenten zijn intern tenzij bewust gedeeld. */
+  customerVisible: boolean
 }
 
 export interface OrderDocumentInput {
@@ -36,6 +38,8 @@ export interface OrderDocumentInput {
   title: string
   issueDate: string | null
   notes: string | null
+  /** Zie OrderDocument.customerVisible — de server bewaart false wanneer dit ontbreekt. */
+  customerVisible: boolean
 }
 
 export const listOrderDocuments = (orderId: string): Promise<OrderDocument[]> =>

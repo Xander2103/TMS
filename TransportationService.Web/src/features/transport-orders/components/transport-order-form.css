@@ -400,3 +400,10 @@
   gap: 8px;
   margin-bottom: 12px;
 }
+
+.tof-documents-visibility {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}

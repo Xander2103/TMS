@@ -91,6 +91,8 @@ public class TransportOrderDocumentConfiguration : IEntityTypeConfiguration<Tran
         builder.Property(d => d.FileName).HasMaxLength(300);
         builder.Property(d => d.ContentType).HasMaxLength(150);
         builder.Property(d => d.Notes).HasMaxLength(1000);
+        // H-14: internal until explicitly published to the customer portal.
+        builder.Property(d => d.CustomerVisible).HasDefaultValue(false);
         builder.HasIndex(d => new { d.TenantId, d.TransportOrderId });
         builder.HasOne<TransportOrder>().WithMany().HasForeignKey(d => d.TransportOrderId).OnDelete(DeleteBehavior.Cascade);
         builder.HasQueryFilter(d => !d.IsDeleted);

@@ -73,8 +73,15 @@ public sealed class AccountSecurityService : IAccountSecurityService
         _currentUser.CurrentUserId
         ?? throw new UnauthorizedAccessException("No authenticated actor for a privileged operation (fail-closed).");
 
+    /// <summary>
+    /// Deliberately the RAW assigned set, not the identity-class-filtered one: this feeds the
+    /// privilege-comparison guards below, where over-reporting the target's rights is the safe
+    /// direction. (A portal identity whose account still carries an internal role cannot USE that
+    /// role — see the guard in PermissionSetService — but it must still count against an actor who
+    /// wants to manage that account.)
+    /// </summary>
     public Task<IReadOnlySet<string>> EffectivePermissionsAsync(Guid userId, CancellationToken cancellationToken) =>
-        _permissions.GetPermissionCodesAsync(userId, cancellationToken);
+        _permissions.GetAssignedPermissionCodesAsync(userId, cancellationToken);
 
     public async Task<bool> IsProtectedSystemUserAsync(Guid userId, CancellationToken cancellationToken) =>
         await _db.UserRoles.AsNoTracking()

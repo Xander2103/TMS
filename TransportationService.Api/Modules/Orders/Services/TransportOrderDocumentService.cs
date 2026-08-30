@@ -10,11 +10,15 @@ namespace TransportationService.Api.Modules.Orders.Services;
 
 public record TransportOrderDocumentDto(
     Guid Id, Guid TransportOrderId, TransportOrderDocumentType DocumentType, string? CustomTypeName,
-    string Title, bool HasAttachment, string? FileName, DateOnly? IssueDate, string? Notes);
+    string Title, bool HasAttachment, string? FileName, DateOnly? IssueDate, string? Notes,
+    /// <summary>H-14: whether this document is published to the customer portal (default false).</summary>
+    bool CustomerVisible = false);
 
 public record SaveTransportOrderDocumentRequest(
     TransportOrderDocumentType DocumentType, string? CustomTypeName, string Title,
-    DateOnly? IssueDate, string? Notes);
+    DateOnly? IssueDate, string? Notes,
+    /// <summary>H-14: publish this document to the customer portal. Omitted = internal.</summary>
+    bool CustomerVisible = false);
 
 public interface ITransportOrderDocumentService
 {
@@ -78,7 +82,7 @@ public class TransportOrderDocumentService : ITransportOrderDocumentService
         _dbContext.TransportOrderDocuments.Add(document);
         await _dbContext.SaveChangesAsync(cancellationToken);
         await _auditService.RecordAsync(EntityType, document.Id.ToString(), "Created", null,
-            new { document.TransportOrderId, document.DocumentType, document.Title }, cancellationToken);
+            new { document.TransportOrderId, document.DocumentType, document.Title, document.CustomerVisible }, cancellationToken);
         return Map(document);
     }
 
@@ -95,7 +99,7 @@ public class TransportOrderDocumentService : ITransportOrderDocumentService
         Apply(document, request);
         await _dbContext.SaveChangesAsync(cancellationToken);
         await _auditService.RecordAsync(EntityType, document.Id.ToString(), "Updated", null,
-            new { document.DocumentType, document.Title }, cancellationToken);
+            new { document.DocumentType, document.Title, document.CustomerVisible }, cancellationToken);
         return Map(document);
     }
 
@@ -184,11 +188,13 @@ public class TransportOrderDocumentService : ITransportOrderDocumentService
         document.Title = request.Title.Trim();
         document.IssueDate = request.IssueDate;
         document.Notes = string.IsNullOrWhiteSpace(request.Notes) ? null : request.Notes.Trim();
+        // H-14: publication to the customer portal is always an explicit choice of the uploader.
+        document.CustomerVisible = request.CustomerVisible;
     }
 
     private static TransportOrderDocumentDto Map(TransportOrderDocument d) => new(
         d.Id, d.TransportOrderId, d.DocumentType, d.CustomTypeName, d.Title,
-        d.DocumentPath != null, d.FileName, d.IssueDate, d.Notes);
+        d.DocumentPath != null, d.FileName, d.IssueDate, d.Notes, d.CustomerVisible);
 
     private Task<TransportOrderDocument?> FindAsync(Guid id, CancellationToken cancellationToken) =>
         _dbContext.TransportOrderDocuments.FirstOrDefaultAsync(

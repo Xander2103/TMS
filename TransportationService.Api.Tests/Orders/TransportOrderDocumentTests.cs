@@ -91,6 +91,36 @@ public class TransportOrderDocumentTests : IDisposable
         Assert.Null(await otherSut.ListAsync(h.OrderId, CancellationToken.None));
     }
 
+    /// <summary>
+    /// H-14: a newly uploaded order document is INTERNAL until someone deliberately publishes it
+    /// to the customer portal. The flag rides along on the existing save request (no new
+    /// permission, no new endpoint) and is echoed on the DTO so the panel can show its state.
+    /// </summary>
+    [Fact]
+    public async Task CustomerVisibility_DefaultsToFalse_AndIsToggledThroughTheSaveRequest()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+
+        var created = await h.Sut.CreateAsync(h.OrderId, new SaveTransportOrderDocumentRequest(
+            TransportOrderDocumentType.Cmr, null, "CMR", null, null), CancellationToken.None);
+        Assert.False(created!.CustomerVisible);
+        Assert.False(h.Db.Context.TransportOrderDocuments.Single(d => d.Id == created.Id).CustomerVisible);
+
+        var published = await h.Sut.UpdateAsync(created.Id, new SaveTransportOrderDocumentRequest(
+            TransportOrderDocumentType.Cmr, null, "CMR", null, null, CustomerVisible: true), CancellationToken.None);
+        Assert.True(published!.CustomerVisible);
+        Assert.True(h.Db.Context.TransportOrderDocuments.Single(d => d.Id == created.Id).CustomerVisible);
+
+        var listed = Assert.Single((await h.Sut.ListAsync(h.OrderId, CancellationToken.None))!);
+        Assert.True(listed.CustomerVisible);
+
+        // ... and it can be withdrawn again.
+        var withdrawn = await h.Sut.UpdateAsync(created.Id, new SaveTransportOrderDocumentRequest(
+            TransportOrderDocumentType.Cmr, null, "CMR", null, null, CustomerVisible: false), CancellationToken.None);
+        Assert.False(withdrawn!.CustomerVisible);
+    }
+
     [Fact]
     public async Task Create_RequiresTitle()
     {

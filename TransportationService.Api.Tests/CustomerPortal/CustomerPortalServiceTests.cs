@@ -332,4 +332,121 @@ public class CustomerPortalServiceTests
         var hidden = await sut.GetMyOrderAsync(orderId, CancellationToken.None);
         Assert.Null(hidden.Value!.Pod);
     }
+
+    /// <summary>
+    /// H-14: staff-only free text must never reach a /api/customer-portal/* payload. Notes are the
+    /// planners' own scratch pad (the portal's intake writes the customer's remarks into the same
+    /// column, but the planner then edits it), CancellationReason and the status-history Reason are
+    /// planner-typed correction/cancel motivations. Asserted on the SERIALISED payload, so a field
+    /// that is merely hidden in the UI still fails this test.
+    /// </summary>
+    [Fact]
+    public async Task GetMyOrder_NeverExposesStaffNotesCancellationOrCorrectionReasons()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var sut = h.For(h.PortalUserId);
+
+        var submitted = await sut.SubmitOrderAsync(Request(h), CancellationToken.None);
+        var orderId = submitted.Value!.Id;
+        await h.Orders.ChangeStatusAsync(orderId, TransportOrderStatus.Confirmed, CancellationToken.None);
+
+        var order = h.Db.Context.TransportOrders.Single(o => o.Id == orderId);
+        order.Notes = "INTERN: klant betaalt slecht, altijd vooraf factureren";
+        order.CancellationReason = "INTERN: chauffeur ziek, wij annuleren zelf";
+        await h.Db.Context.SaveChangesAsync();
+
+        // A planner-typed correction reason on the immutable trail.
+        h.Db.Context.TransportOrderStatusHistories.Add(new TransportOrderStatusHistory
+        {
+            Id = Guid.NewGuid(), TenantId = h.TenantId, TransportOrderId = orderId,
+            FromStatus = TransportOrderStatus.Confirmed, ToStatus = TransportOrderStatus.Planned,
+            Reason = "INTERN: verkeerde status geboekt door dispatch", IsCorrection = true,
+            ChangedAt = Now.UtcDateTime,
+        });
+        await h.Db.Context.SaveChangesAsync();
+
+        var detail = await sut.GetMyOrderAsync(orderId, CancellationToken.None);
+        Assert.Equal(PortalOutcomeKind.Success, detail.Outcome);
+
+        var json = System.Text.Json.JsonSerializer.Serialize(detail.Value!,
+            new System.Text.Json.JsonSerializerOptions { PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase });
+        Assert.DoesNotContain("INTERN", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"notes\"", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"cancellationReason\"", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"reason\"", json, StringComparison.Ordinal);
+
+        // Structural: the properties do not exist on the contract at all.
+        var detailProperties = typeof(PortalOrderDetailDto).GetProperties().Select(p => p.Name).ToList();
+        Assert.DoesNotContain("Notes", detailProperties);
+        Assert.DoesNotContain("CancellationReason", detailProperties);
+        Assert.DoesNotContain("Reason", typeof(PortalTimelineEventDto).GetProperties().Select(p => p.Name).ToList());
+
+        // The internal detail still carries everything — nothing was deleted, only withheld.
+        var internalDetail = await h.Orders.GetByIdAsync(orderId, CancellationToken.None);
+        Assert.Equal("INTERN: klant betaalt slecht, altijd vooraf factureren", internalDetail!.Notes);
+        Assert.Equal("INTERN: chauffeur ziek, wij annuleren zelf", internalDetail.CancellationReason);
+    }
+
+    /// <summary>
+    /// The stop projection must stay the safe subset: no access codes, gates, docks or route
+    /// descriptions ever leave through the portal, whatever the internal stop snapshot holds.
+    /// </summary>
+    [Fact]
+    public async Task GetMyOrder_StopProjection_CarriesNoSiteSecrets()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var sut = h.For(h.PortalUserId);
+
+        var submitted = await sut.SubmitOrderAsync(Request(h), CancellationToken.None);
+        var orderId = submitted.Value!.Id;
+        foreach (var stop in h.Db.Context.TransportOrderStops.Where(s => s.TransportOrderId == orderId).ToList())
+        {
+            stop.AccessCode = "GEHEIM-1234";
+            stop.Gate = "Poort 7";
+            stop.Dock = "Dok 3";
+            stop.RouteDescription = "Via de interne dienstweg achteraan";
+        }
+
+        await h.Db.Context.SaveChangesAsync();
+
+        var detail = await sut.GetMyOrderAsync(orderId, CancellationToken.None);
+        var json = System.Text.Json.JsonSerializer.Serialize(detail.Value!,
+            new System.Text.Json.JsonSerializerOptions { PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase });
+        Assert.DoesNotContain("GEHEIM-1234", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("Poort 7", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("Dok 3", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("dienstweg", json, StringComparison.Ordinal);
+
+        var stopProperties = typeof(PortalStopDto).GetProperties().Select(p => p.Name).ToList();
+        Assert.DoesNotContain("AccessCode", stopProperties);
+        Assert.DoesNotContain("Gate", stopProperties);
+        Assert.DoesNotContain("Dock", stopProperties);
+        Assert.DoesNotContain("RouteDescription", stopProperties);
+    }
+
+    /// <summary>
+    /// Deactivating a customer must cut portal access instantly — aligned with
+    /// PortalDocumentService/PortalInvoiceService, which already join on Customer.IsActive.
+    /// </summary>
+    [Fact]
+    public async Task DeactivatedCustomer_LosesPortalAccessEverywhere()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var sut = h.For(h.PortalUserId);
+        var submitted = await sut.SubmitOrderAsync(Request(h), CancellationToken.None);
+        var orderId = submitted.Value!.Id;
+
+        var customer = h.Db.Context.Customers.Single(c => c.Id == h.CustomerId);
+        customer.IsActive = false;
+        await h.Db.Context.SaveChangesAsync();
+
+        Assert.Equal(PortalOutcomeKind.NoCustomerLink, (await sut.GetContextAsync(CancellationToken.None)).Outcome);
+        Assert.Equal(PortalOutcomeKind.NoCustomerLink, (await sut.ListMyOrdersAsync(CancellationToken.None)).Outcome);
+        Assert.Equal(PortalOutcomeKind.NoCustomerLink, (await sut.GetMyOrderAsync(orderId, CancellationToken.None)).Outcome);
+        Assert.Equal(PortalOutcomeKind.NoCustomerLink, (await sut.ListMyLocationsAsync(CancellationToken.None)).Outcome);
+        Assert.Equal(PortalOutcomeKind.NoCustomerLink, (await sut.SubmitOrderAsync(Request(h), CancellationToken.None)).Outcome);
+    }
 }

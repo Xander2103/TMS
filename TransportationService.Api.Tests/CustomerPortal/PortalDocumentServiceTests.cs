@@ -66,7 +66,16 @@ public class PortalDocumentServiceTests
         {
             Id = Guid.NewGuid(), TenantId = tenantId, TransportOrderId = orderId,
             DocumentType = TransportOrderDocumentType.Cmr, Title = "CMR", DocumentPath = orderDocPath,
-            FileName = "cmr.pdf", ContentType = "application/pdf",
+            FileName = "cmr.pdf", ContentType = "application/pdf", CustomerVisible = true,
+        });
+        // H-14: an internal attachment on the SAME order — not marked customer-visible, so the
+        // portal must neither list it nor serve its bytes.
+        var internalDocPath = await SaveFile("order-documents", "intern.pdf", "internal-content");
+        db.Context.TransportOrderDocuments.Add(new TransportOrderDocument
+        {
+            Id = Guid.NewGuid(), TenantId = tenantId, TransportOrderId = orderId,
+            DocumentType = TransportOrderDocumentType.Other, Title = "Interne schadefoto", DocumentPath = internalDocPath,
+            FileName = "intern.pdf", ContentType = "application/pdf",
         });
 
         // ProofOfDelivery has real FKs to Trip and TransportOrderStop — both must exist.
@@ -145,10 +154,56 @@ public class PortalDocumentServiceTests
         var h = await SeedAsync();
         using var _ = h.Db;
 
-        var docId = (await h.Db.Context.TransportOrderDocuments.FirstAsync()).Id;
+        var docId = (await h.Db.Context.TransportOrderDocuments.FirstAsync(d => d.CustomerVisible)).Id;
         var result = await h.Sut.GetDocumentContentAsync(PortalDocumentSource.OrderDocument, docId, CancellationToken.None);
         Assert.Equal(PortalOutcomeKind.Success, result.Outcome);
         Assert.True(result.Value!.Content.Length > 0);
+    }
+
+    /// <summary>
+    /// H-14: order documents used to be published to the portal wholesale — every CMR, damage
+    /// photo and internal note attached to an order of this customer. They are now opt-in
+    /// (CustomerVisible, default false) and the filter guards the list AND the content endpoint.
+    /// </summary>
+    [Fact]
+    public async Task List_OmitsOrderDocumentsThatAreNotMarkedCustomerVisible()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+
+        var result = await h.Sut.ListMyDocumentsAsync(CancellationToken.None);
+
+        var orderDoc = Assert.Single(result.Value!, d => d.Source == PortalDocumentSource.OrderDocument);
+        Assert.Equal("CMR", orderDoc.Title);
+        Assert.DoesNotContain(result.Value!, d => d.Title == "Interne schadefoto");
+    }
+
+    [Fact]
+    public async Task Content_OrderDocumentNotMarkedCustomerVisible_ReturnsNotFound()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+
+        var internalId = (await h.Db.Context.TransportOrderDocuments.FirstAsync(d => !d.CustomerVisible)).Id;
+        var result = await h.Sut.GetDocumentContentAsync(PortalDocumentSource.OrderDocument, internalId, CancellationToken.None);
+
+        Assert.Equal(PortalOutcomeKind.NotFound, result.Outcome);
+    }
+
+    [Fact]
+    public async Task DeactivatedCustomer_SeesAndDownloadsNothing()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var visibleId = (await h.Db.Context.TransportOrderDocuments.FirstAsync(d => d.CustomerVisible)).Id;
+
+        var customer = await h.Db.Context.Customers.FirstAsync(c => c.Id == h.CustomerId);
+        customer.IsActive = false;
+        await h.Db.Context.SaveChangesAsync();
+
+        Assert.Equal(PortalOutcomeKind.NoCustomerLink, (await h.Sut.ListMyDocumentsAsync(CancellationToken.None)).Outcome);
+        Assert.Equal(PortalOutcomeKind.NoCustomerLink,
+            (await h.Sut.GetDocumentContentAsync(PortalDocumentSource.OrderDocument, visibleId, CancellationToken.None)).Outcome);
     }
 
     [Fact]
