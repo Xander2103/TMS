@@ -472,6 +472,12 @@ public class TransportOrderService : ITransportOrderService
         if (draftLines.Count > 0 && order.Status == TransportOrderStatus.Invoiced)
         {
             order.Status = TransportOrderStatus.Completed;
+            // Wave 1 fix A (A6): the price must be released with the order, or it stays stuck on
+            // the terminal Invoiced status and every pricing endpoint refuses the order forever —
+            // it could only be re-invoiced at the stale amount of the entity it just left. Same
+            // rule the invoice side applies when it releases an order.
+            await OrderPricingSnapshotRelease.ReleaseAsync(
+                _dbContext, _tenantContext.TenantId, [order.Id], cancellationToken);
             await InvoiceReadinessEvaluator.EvaluateAsync(_dbContext, order, cancellationToken);
         }
         order.LegalEntityId = request.LegalEntityId;
@@ -511,6 +517,9 @@ public class TransportOrderService : ITransportOrderService
         if (draftLines.Count > 0 && order.Status == TransportOrderStatus.Invoiced)
         {
             order.Status = TransportOrderStatus.Completed;
+            // A6 — same release as the direct flow above; see the comment there.
+            await OrderPricingSnapshotRelease.ReleaseAsync(
+                _dbContext, _tenantContext.TenantId, [order.Id], cancellationToken);
             await InvoiceReadinessEvaluator.EvaluateAsync(_dbContext, order, cancellationToken);
         }
         order.LegalEntityId = legalEntityId;
@@ -542,11 +551,16 @@ public class TransportOrderService : ITransportOrderService
         {
             blocked = "De gekozen facturerende entiteit bestaat niet of is niet actief.";
         }
+        // Wave 1 fix A (A7): FINALIZED means Sent or Paid. The predicate used to be "not Draft",
+        // which also caught a CANCELLED draft — a document that was never sent and for which a
+        // credit note is impossible (crediting requires Sent/Paid), so the refusal pointed the
+        // user at a correction they could not make.
         else if (await _dbContext.InvoiceLines.AsNoTracking()
                      .Where(l => l.TenantId == tenantId && l.TransportOrderId == order.Id)
                      .Join(_dbContext.Invoices.AsNoTracking().Where(i => i.TenantId == tenantId),
                          line => line.InvoiceId, invoice => invoice.Id, (line, invoice) => invoice)
-                     .AnyAsync(i => i.Status != Modules.Invoicing.Entities.InvoiceStatus.Draft, cancellationToken))
+                     .AnyAsync(i => i.Status == Modules.Invoicing.Entities.InvoiceStatus.Sent
+                                    || i.Status == Modules.Invoicing.Entities.InvoiceStatus.Paid, cancellationToken))
         {
             blocked = "Deze opdracht staat op een verzonden of geboekte factuur; de entiteit kan niet meer wijzigen. "
                       + "Corrigeer via een creditnota; de historische factuur blijft ongewijzigd.";

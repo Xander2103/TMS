@@ -380,6 +380,75 @@ public class OrderCustomerChangeTests
         Assert.Equal(TransportOrderStatus.Completed, released.Status);
     }
 
+    /// <summary>
+    /// Wave 1 fix A (A7) — the guard blocked on "not Draft", which includes Cancelled. Cancelling a
+    /// draft releases the order but leaves its lines on the cancelled document, so the order kept
+    /// looking invoiced: the user was told to correct via a credit note for an invoice that was
+    /// never sent and can never be credited (crediting requires Sent/Paid). Only Sent and Paid are
+    /// finalized.
+    /// </summary>
+    [Fact]
+    public async Task F2_AnOrderOnACancelledDraftInvoice_MayStillBeMoved()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+
+        var invoiceId = Guid.NewGuid();
+        h.Db.Context.Invoices.Add(new Invoice
+        {
+            Id = invoiceId, TenantId = h.TenantId, CustomerId = h.PlaceholderId, InvoiceNumber = "GEANNULEERD",
+            InvoiceDate = new DateOnly(2026, 8, 20), DueDate = new DateOnly(2026, 9, 20),
+            Status = InvoiceStatus.Cancelled, LegalEntityId = h.EntityA,
+        });
+        h.Db.Context.Set<InvoiceLine>().Add(new InvoiceLine
+        {
+            Id = Guid.NewGuid(), TenantId = h.TenantId, InvoiceId = invoiceId, TransportOrderId = h.OrderId,
+            Sequence = 0, Description = "Transport", Quantity = 1m, UnitPrice = 500m, VatRatePercent = 21m,
+        });
+        await h.Db.Context.SaveChangesAsync();
+        h.Db.Context.ChangeTracker.Clear();
+
+        var impact = await h.Sut.PreviewAsync(h.OrderId, h.RealCustomerId, CancellationToken.None);
+        Assert.Null(impact!.BlockedReason);
+
+        await h.Sut.ApplyAsync(h.OrderId, Request(h.RealCustomerId), CancellationToken.None);
+
+        h.Db.Context.ChangeTracker.Clear();
+        var moved = await h.Db.Context.TransportOrders.AsNoTracking().FirstAsync(o => o.Id == h.OrderId);
+        Assert.Equal(h.RealCustomerId, moved.CustomerId);
+        // The cancelled document is history and keeps its line — it is never rewritten.
+        Assert.True(await h.Db.Context.InvoiceLines.AsNoTracking().AnyAsync(l => l.InvoiceId == invoiceId));
+    }
+
+    /// <summary>A PAID invoice is finalized just like a sent one: the customer stays put.</summary>
+    [Fact]
+    public async Task G2_AnOrderOnAPaidInvoice_CannotBeMoved()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+
+        var invoiceId = Guid.NewGuid();
+        h.Db.Context.Invoices.Add(new Invoice
+        {
+            Id = invoiceId, TenantId = h.TenantId, CustomerId = h.PlaceholderId, InvoiceNumber = "FAC-2",
+            InvoiceDate = new DateOnly(2026, 8, 20), DueDate = new DateOnly(2026, 9, 20),
+            Status = InvoiceStatus.Paid, LegalEntityId = h.EntityA,
+        });
+        h.Db.Context.Set<InvoiceLine>().Add(new InvoiceLine
+        {
+            Id = Guid.NewGuid(), TenantId = h.TenantId, InvoiceId = invoiceId, TransportOrderId = h.OrderId,
+            Sequence = 0, Description = "Transport", Quantity = 1m, UnitPrice = 500m, VatRatePercent = 21m,
+        });
+        await h.Db.Context.SaveChangesAsync();
+        h.Db.Context.ChangeTracker.Clear();
+
+        var impact = await h.Sut.PreviewAsync(h.OrderId, h.RealCustomerId, CancellationToken.None);
+        Assert.Contains("creditnota", impact!.BlockedReason!);
+
+        await Assert.ThrowsAsync<DomainValidationException>(() =>
+            h.Sut.ApplyAsync(h.OrderId, Request(h.RealCustomerId), CancellationToken.None));
+    }
+
     // -------------------------------------------------------------- guards
 
     [Fact]

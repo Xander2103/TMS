@@ -183,6 +183,89 @@ public class OrderLegalEntityChangeTests
         Assert.Equal(h.EntityB, released.LegalEntityId);
     }
 
+    /// <summary>
+    /// Wave 1 fix A (A6) — releasing the order's draft invoice lines hands the ORDER back to
+    /// Completed, but used to leave its pricing snapshot on Invoiced. `PricingStatusTransitions`
+    /// has no way out of Invoiced and every pricing guard refuses it, so the order could only ever
+    /// be re-invoiced at the stale price of the entity it just left. The snapshot now follows the
+    /// order, through the same rule the invoice side uses when it releases an order.
+    /// </summary>
+    [Fact]
+    public async Task ChangingEntity_OfADraftInvoicedOrder_ReleasesThePricingSnapshotToLocked()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        h.Permissions.Codes.Add(PermissionCodes.DossiersOverrideEntity);
+        h.Permissions.Codes.Add(PermissionCodes.OrdersLockPrice);
+        await AddInvoiceWithLineAsync(h, InvoiceStatus.Draft, h.EntityA);
+        var order = await h.Db.Context.TransportOrders.FirstAsync(o => o.Id == h.OrderId);
+        order.Status = TransportOrderStatus.Invoiced;
+        var snapshotId = Guid.NewGuid();
+        h.Db.Context.TransportOrderPricingSnapshots.Add(new TransportOrderPricingSnapshot
+        {
+            Id = snapshotId, TenantId = h.TenantId, TransportOrderId = h.OrderId,
+            TariffDate = new DateOnly(2026, 8, 10), Currency = "EUR", Status = OrderPricingStatus.Invoiced,
+        });
+        await h.Db.Context.SaveChangesAsync();
+        h.Db.Context.ChangeTracker.Clear();
+
+        var result = await h.Sut.ChangeLegalEntityAsync(
+            h.OrderId, new ChangeOrderLegalEntityRequest(h.EntityB, "x"), CancellationToken.None);
+
+        Assert.Equal(TransportOrderOperationOutcome.Success, result.Outcome);
+        h.Db.Context.ChangeTracker.Clear();
+        var snapshot = await h.Db.Context.TransportOrderPricingSnapshots.AsNoTracking()
+            .SingleAsync(s => s.Id == snapshotId);
+        Assert.Equal(OrderPricingStatus.Locked, snapshot.Status);
+
+        // Locked is a state the price can be brought out of; Invoiced was a dead end.
+        var unlocked = await h.Sut.SetOrderPricingStatusAsync(
+            h.OrderId, OrderPricingStatus.Reviewed, CancellationToken.None);
+        Assert.Equal(TransportOrderOperationOutcome.Success, unlocked.Outcome);
+    }
+
+    /// <summary>
+    /// Wave 1 fix A (A7) — the guard blocked on "not Draft", which includes Cancelled. A cancelled
+    /// draft is not an invoice: it was never sent, it cannot be credited (crediting needs
+    /// Sent/Paid), so the user was told to "corrigeer via een creditnota" for a document that can
+    /// never have one. Only Sent and Paid are finalized.
+    /// </summary>
+    [Fact]
+    public async Task AnOrderOnACancelledDraftInvoice_CanStillChangeEntity()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        h.Permissions.Codes.Add(PermissionCodes.DossiersOverrideEntity);
+        await AddInvoiceWithLineAsync(h, InvoiceStatus.Cancelled, h.EntityA);
+
+        var impact = await h.Sut.PreviewLegalEntityChangeAsync(h.OrderId, h.EntityB, CancellationToken.None);
+        Assert.Null(impact!.BlockedReason);
+
+        var result = await h.Sut.ChangeLegalEntityAsync(
+            h.OrderId, new ChangeOrderLegalEntityRequest(h.EntityB, "x"), CancellationToken.None);
+
+        Assert.Equal(TransportOrderOperationOutcome.Success, result.Outcome);
+        h.Db.Context.ChangeTracker.Clear();
+        Assert.Equal(h.EntityB,
+            (await h.Db.Context.TransportOrders.AsNoTracking().SingleAsync(o => o.Id == h.OrderId)).LegalEntityId);
+    }
+
+    /// <summary>A PAID invoice is finalized just like a sent one: the entity stays put.</summary>
+    [Fact]
+    public async Task AnOrderOnAPaidInvoice_CannotChangeEntity()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        h.Permissions.Codes.Add(PermissionCodes.DossiersOverrideEntity);
+        await AddInvoiceWithLineAsync(h, InvoiceStatus.Paid, h.EntityA);
+
+        var result = await h.Sut.ChangeLegalEntityAsync(
+            h.OrderId, new ChangeOrderLegalEntityRequest(h.EntityB, "x"), CancellationToken.None);
+
+        Assert.Equal(TransportOrderOperationOutcome.InvalidState, result.Outcome);
+        Assert.Contains("creditnota", result.Error!);
+    }
+
     [Fact]
     public async Task MovingBackToTheCustomerDefault_NeedsNoOverrideRight()
     {
