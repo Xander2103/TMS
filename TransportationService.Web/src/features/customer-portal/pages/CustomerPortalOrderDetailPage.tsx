@@ -20,8 +20,16 @@ import {
 import { exceptionStatusLabel, orderStatusLabel, stopTypeLabel, unitTypeLabel } from './portalStatusLabels'
 import './customer-portal-pages.css'
 
-function formatWindow(t: TranslateFn, from: string | null, to: string | null): string {
-  const fmt = (value: string) => value.slice(0, 16).replace('T', ' ')
+/**
+ * C-03: the requested window is a UTC instant on the wire. It used to be shown by slicing the
+ * ISO string, which printed UTC to the customer while the internal screens printed something
+ * else. It now runs through the locale formatter, which renders the DATE in the customer's
+ * language but the CLOCK in the carrier's (tenant) zone — the dock appointment is the same
+ * moment for both sides of the order.
+ */
+function formatWindow(
+  fmt: (iso: string) => string, t: TranslateFn, from: string | null, to: string | null,
+): string {
   if (from && to) return `${fmt(from)} – ${fmt(to)}`
   if (from) return t('orders.detail.windowFrom', { time: fmt(from) })
   if (to) return t('orders.detail.windowTo', { time: fmt(to) })
@@ -32,7 +40,7 @@ function formatWindow(t: TranslateFn, from: string | null, to: string | null): s
 export function CustomerPortalOrderDetailPage() {
   const { id = '' } = useParams<{ id: string }>()
   const { hasPermission } = useAuth()
-  const { t, formatDate } = useLocale()
+  const { t, formatDate, formatDateTime } = useLocale()
   const [order, setOrder] = useState<PortalOrderDetail | null>(null)
   const [documents, setDocuments] = useState<PortalDocument[]>([])
   const [error, setError] = useState(false)
@@ -91,7 +99,7 @@ export function CustomerPortalOrderDetailPage() {
       {order.expectedDeliveryEta && (
         <p className="cpp-eta" role="status">
           {t('orders.detail.expectedDelivery')}:{' '}
-          <strong>{new Date(order.expectedDeliveryEta).toLocaleString()}</strong>
+          <strong>{formatDateTime(order.expectedDeliveryEta)}</strong>
         </p>
       )}
 
@@ -100,7 +108,7 @@ export function CustomerPortalOrderDetailPage() {
           <h2>{t('orders.detail.podTitle')}</h2>
           <ul className="cpp-list">
             <li className="cpp-row">
-              <span>{t('orders.detail.podDeliveredAt', { time: order.pod.deliveredAt.slice(0, 16).replace('T', ' ') })}</span>
+              <span>{t('orders.detail.podDeliveredAt', { time: formatDateTime(order.pod.deliveredAt) })}</span>
               {order.pod.outcome && (
                 <Badge tone={order.pod.outcome === 'Complete' ? 'success' : 'warning'}>
                   {t(`orders.detail.podOutcomes.${order.pod.outcome}`)}
@@ -123,7 +131,7 @@ export function CustomerPortalOrderDetailPage() {
                 <span>
                   <Badge tone={ORDER_STATUS_TONE[event.status]}>{orderStatusLabel(t, event.status)}</Badge>
                 </span>
-                <span>{event.changedAt.slice(0, 16).replace('T', ' ')}</span>
+                <span>{formatDateTime(event.changedAt)}</span>
               </li>
             ))}
           </ul>
@@ -165,7 +173,7 @@ export function CustomerPortalOrderDetailPage() {
                   {stop.locationName}
                   {stop.city ? `, ${stop.city}` : ''}
                 </td>
-                <td>{formatWindow(t, stop.requestedFrom, stop.requestedTo)}</td>
+                <td>{formatWindow(formatDateTime, t, stop.requestedFrom, stop.requestedTo)}</td>
                 <td>{stop.reference ?? '—'}</td>
               </tr>
             ))}

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { setUnauthorizedHandler } from '../../api/apiClient'
+import { resetDisplayPreferences } from '../../components/layout/DisplayPreferencesProvider'
 import * as authApi from './authApi'
 import { AuthContext, type AuthContextValue } from './authContextValue'
 import { clearLegacyTokens, clearTokens, getAccessToken, setAccessToken } from './authStorage'
@@ -16,6 +17,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // drops the app back to the unauthenticated state exactly once, without redirect loops.
   useEffect(() => {
     setUnauthorizedHandler(() => {
+      // C-03: an unrecoverable 401 never passes through logout(), so the regional preferences
+      // are dropped here too — nothing of this account may colour the next one's screens.
+      resetDisplayPreferences()
       setUser(null)
       setStatus('unauthenticated')
     })
@@ -63,6 +67,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // survive for the next account on this device.
     const { clearDriverOfflineState } = await import('../driver/offlineActions')
     clearDriverOfflineState()
+    // C-03: the tenant's date format, decimal separator and TIME ZONE go with it. The cache in
+    // DisplayPreferencesProvider is session-keyed as well, so this is belt-and-braces — it is
+    // what keeps the *unauthenticated* screens off the previous tenant's notation.
+    resetDisplayPreferences()
     setUser(null)
     setStatus('unauthenticated')
   }, [])

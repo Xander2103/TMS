@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../../auth/authContextValue'
+import { DisplayPreferencesProvider } from '../../../components/layout/DisplayPreferencesProvider'
 import { LocaleProvider } from '../../../i18n/LocaleProvider'
 import { useLocale } from '../../../i18n/localeContext'
 import { isLocale, type Locale } from '../../../i18n/translations'
@@ -144,7 +145,12 @@ function CustomerPortalShell({ companyName }: { companyName: string | null }) {
         ))}
       </nav>
       <main className="cpl-content">
-        <Outlet />
+        {/* C-03: portal users never pass through AppLayout, so the shared bootstrap runs here
+            too — a stop window is an appointment at the CARRIER's dock, and it must not render
+            on the seeded default zone for a tenant that runs on another one. */}
+        <DisplayPreferencesProvider>
+          <Outlet />
+        </DisplayPreferencesProvider>
       </main>
       <footer className="cpl-footer">
         <LanguageSwitcher />

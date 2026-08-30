@@ -62,7 +62,7 @@ import {
   type TransportOrderStatus,
   type TransportOrderStop,
 } from '../types'
-import { formatDate, formatDateTime, parseIsoDate } from '../../../utils/dates'
+import { formatDate, formatDateTime, formatTime } from '../../../utils/dates'
 import { formatCurrency, formatQuantity } from '../../../utils/numbers'
 import { useLocale } from '../../../i18n/localeContext'
 import './transport-orders.css'
@@ -94,12 +94,13 @@ function stopTimeRequirementBadge(stop: TransportOrderStop): string {
   }
 }
 
-/** "04/08/2026 om 20:59" — the confirmation stamp next to the prominent total (§9). */
+/**
+ * "04/08/2026 om 20:59" — the confirmation stamp next to the prominent total (§9). C-03: the
+ * hour comes from formatTime (tenant zone), not from the browser's getHours().
+ */
 function formatConfirmedStamp(isoUtc: string): string {
-  const date = parseIsoDate(isoUtc)
-  if (!date || Number.isNaN(date.getTime())) return ''
-  const time = `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
-  return `${formatDate(isoUtc)} om ${time}`
+  const time = formatTime(isoUtc)
+  return time ? `${formatDate(isoUtc)} om ${time}` : ''
 }
 
 /**

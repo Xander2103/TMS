@@ -23,8 +23,8 @@ export function getDecimalSeparatorPreference(): DecimalSeparatorPreference {
   return activeSeparator
 }
 
-/** Test-only escape hatch. */
-export function resetDecimalSeparatorPreferenceForTests(): void {
+/** Back to the built-in default; called on a session change and by tests (see utils/dates). */
+export function resetDecimalSeparatorPreference(): void {
   activeSeparator = ','
 }
 

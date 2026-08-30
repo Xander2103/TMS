@@ -1,3 +1,4 @@
+import { getTimeZonePreference } from '../utils/dates'
 import type { Locale } from './translations'
 
 /** BCP-47 tags the portal formats dates/amounts with, per UI language. */
@@ -24,13 +25,30 @@ function parseIso(iso: string): Date {
 export function formatDate(locale: Locale, iso: string): string {
   const date = parseIso(iso)
   if (Number.isNaN(date.getTime())) return iso
-  return date.toLocaleDateString(LOCALE_TAGS[locale])
+  // A timestamp's calendar day is the day it falls on in the TENANT zone (C-03); a date-only
+  // value is already a calendar date and must not be converted at all.
+  return date.toLocaleDateString(
+    LOCALE_TAGS[locale],
+    DATE_ONLY.test(iso) ? undefined : { timeZone: getTimeZonePreference() },
+  )
 }
 
+/**
+ * C-03 — deliberate split: the FORMAT follows the reader's language (a French customer reads
+ * 15/07/2026), the CLOCK follows the tenant/carrier zone. A stop window is an appointment at
+ * the carrier's dock, so 08:00 must stay 08:00 whatever device or country the portal user is
+ * on; rendering it in the browser zone would tell a customer in Lisbon to be there at 07:00.
+ */
 export function formatDateTime(locale: Locale, iso: string): string {
   const date = parseIso(iso)
   if (Number.isNaN(date.getTime())) return iso
-  return date.toLocaleString(LOCALE_TAGS[locale], { dateStyle: 'short', timeStyle: 'short' })
+  // A date-only value is a calendar date, not an instant: `parseIso` gave it browser-local
+  // midnight, and reprojecting THAT into a zone behind the browser walks the day backwards
+  // (a Tokyo reader saw "14/07/2026 17:00" for the 15th). Same guard as formatDate above.
+  const zone = DATE_ONLY.test(iso) ? undefined : getTimeZonePreference()
+  return date.toLocaleString(LOCALE_TAGS[locale], {
+    dateStyle: 'short', timeStyle: 'short', timeZone: zone,
+  })
 }
 
 export function formatCurrency(locale: Locale, value: number, currency = 'EUR'): string {

@@ -7,14 +7,13 @@ import { useToast } from '../../../components/ui/toastContext'
 import { updateStopExecutionPlan } from '../api/transportOrdersApi'
 import { STOP_TYPE_LABELS, type TransportOrderDetail, type TransportOrderStop } from '../types'
 import { useLocale } from '../../../i18n/localeContext'
+import { fromDateTimeLocalInput, toDateTimeLocalInput } from '../../../utils/dates'
 
-function toLocalInput(value: string | null): string {
-  return value ? value.slice(0, 16) : ''
-}
-
-function toApiValue(value: string): string | null {
-  return value ? `${value}:00Z` : null
-}
+// C-03: the datetime-local fields hold TENANT wall clock, the wire holds UTC instants. Both
+// directions go through utils/dates so this dialog, the order form and the detail table agree
+// on what "08:00" means.
+const toLocalInput = toDateTimeLocalInput
+const toApiValue = fromDateTimeLocalInput
 
 interface StopExecutionPlanDialogProps {
   orderId: string

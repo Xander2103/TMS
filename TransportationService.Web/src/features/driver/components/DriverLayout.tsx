@@ -1,4 +1,5 @@
 import { NavLink, Outlet } from 'react-router-dom'
+import { DisplayPreferencesProvider } from '../../../components/layout/DisplayPreferencesProvider'
 import { useActionQueueSync } from '../../../hooks/useActionQueueSync'
 import { useOnlineStatus } from '../../../hooks/useOnlineStatus'
 import { useLocale } from '../../../i18n/localeContext'
@@ -24,7 +25,12 @@ export function DriverLayout() {
         </span>
       </header>
       <main className="drv-content">
-        <Outlet />
+        {/* C-03: the driver shell is mounted outside AppLayout (AppRoutes), so it needs the
+            shared regional bootstrap of its own — without it every driver screen rendered its
+            timestamps on the seeded default zone and format. */}
+        <DisplayPreferencesProvider>
+          <Outlet />
+        </DisplayPreferencesProvider>
       </main>
       <nav className="drv-tabs" aria-label={t('driverApp.layout.navLabel')}>
         <NavLink to="/driver" end className={({ isActive }) => (isActive ? 'drv-tab-active' : undefined)}>

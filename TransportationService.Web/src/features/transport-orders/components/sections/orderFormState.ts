@@ -1,5 +1,6 @@
 import { getActiveLocale } from '../../../../i18n/activeLocale'
 import { translate } from '../../../../i18n/translations'
+import { fromWireDateTime, toDateTimeLocalInput } from '../../../../utils/dates'
 import { computeVolumeM3 } from '../../../../utils/volume'
 import type { ServiceOption } from '../../../tarification/api/pricingApi'
 import type { PackageUnitType } from '../../../packages/types'
@@ -205,9 +206,13 @@ export function cargoRowFromHeader(header: {
   }
 }
 
-/** ISO datetime → value usable by <input type="datetime-local"> (minute precision). */
+/**
+ * Wire timestamp → `<input type="datetime-local">` value (minute precision). C-03: the ISO substring it used to
+ * take showed UTC while the label said local time; the conversion now runs through the tenant
+ * zone. Kept as a named re-export so the call sites and their tests stay readable.
+ */
 export function toLocalInput(value: string | null): string {
-  return value ? value.slice(0, 16) : ''
+  return toDateTimeLocalInput(value)
 }
 
 /** "10:00:00" (TimeOnly wire format) → "10:00" for <input type="time">. */
@@ -227,6 +232,22 @@ export function timeRequirementBadge(stop: Pick<StopFormRow, 'timeRequirement' |
       return stop.timeReqFrom && stop.timeReqTo ? `${stop.timeReqFrom}–${stop.timeReqTo}` : ''
     default:
       return ''
+  }
+}
+
+/**
+ * §14 planned window → the form's one-date-plus-two-times shape, read in the tenant zone.
+ * A lone midnight "from" is the wire encoding of a date-only stop — shown as an empty time.
+ */
+function plannedWindowFields(
+  plannedFrom: string | null, plannedTo: string | null,
+): Pick<StopFormRow, 'date' | 'fromTime' | 'toTime'> {
+  const from = fromWireDateTime(plannedFrom)
+  const to = fromWireDateTime(plannedTo)
+  return {
+    date: from?.date ?? to?.date ?? '',
+    fromTime: from && !(from.time === '00:00' && !to) ? from.time : '',
+    toTime: to?.time ?? '',
   }
 }
 
@@ -250,12 +271,10 @@ export function stopsFromOrder(order: TransportOrderDetail | undefined): StopFor
     postalCode: s.postalCode ?? '',
     city: s.city ?? '',
     countryCode: s.countryCode ?? 'BE',
-    date: (s.plannedFrom ?? s.plannedTo)?.slice(0, 10) ?? '',
-    // A lone midnight "from" is the wire encoding of a date-only stop — show it as empty.
-    fromTime: s.plannedFrom
-      ? (s.plannedFrom.slice(11, 16) === '00:00' && !s.plannedTo ? '' : s.plannedFrom.slice(11, 16))
-      : '',
-    toTime: s.plannedTo ? s.plannedTo.slice(11, 16) : '',
+    // C-03: the planned window is a UTC instant on the wire; the form edits the TENANT wall
+    // clock, so date and times come from one conversion (never an ISO substring, which showed
+    // 06:00 for an 08:00 stop and wrote that back on the next save).
+    ...plannedWindowFields(s.plannedFrom, s.plannedTo),
     timeRequirement: s.timeRequirement && s.timeRequirement !== 'None' ? s.timeRequirement : '',
     timeReqFrom: toTimeInput(s.timeRequirementFrom),
     timeReqTo: toTimeInput(s.timeRequirementTo),

@@ -89,8 +89,9 @@ function makeOrder(overrides: Partial<TransportOrderDetail> = {}): TransportOrde
         postalCode: '2030',
         city: 'Antwerpen',
         countryCode: 'BE',
-        plannedFrom: '2026-07-20T18:30:00Z',
-        plannedTo: '2026-07-20T19:30:00Z',
+        // C-03: the wire is UTC; 16:30Z IS 18:30 in Europe/Amsterdam on this summer Monday.
+        plannedFrom: '2026-07-20T16:30:00Z',
+        plannedTo: '2026-07-20T17:30:00Z',
         requestedFrom: null,
         requestedTo: null,
         confirmedFrom: null,

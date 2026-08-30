@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import {
-  formatCurrency, formatDecimal, formatQuantity, resetDecimalSeparatorPreferenceForTests,
+  formatCurrency, formatDecimal, formatQuantity, resetDecimalSeparatorPreference,
   setDecimalSeparatorPreference,
 } from '../numbers'
 
-afterEach(() => resetDecimalSeparatorPreferenceForTests())
+afterEach(() => resetDecimalSeparatorPreference())
 
 describe('formatQuantity — tenant decimal separator, no trailing zeros', () => {
   it('renders integers without a fraction part', () => {
