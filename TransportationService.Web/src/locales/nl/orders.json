@@ -54,7 +54,6 @@
     "submittedFor": "Ingediend voor {date}",
     "yourRef": "uw ref. {reference}",
     "messagesButton": "Berichten over deze opdracht",
-    "cancelledReason": "Geannuleerd: {reason}",
     "statusTitle": "Status",
     "expectedDelivery": "Verwachte levering",
     "attentionTitle": "Aandachtspunten",
@@ -74,7 +73,6 @@
       "type": "Type",
       "adr": "ADR"
     },
-    "remarksTitle": "Uw opmerkingen",
     "podTitle": "Leveringsbewijs",
     "podDeliveredAt": "Geleverd op {time}",
     "podRecipient": "In ontvangst genomen door {name}",

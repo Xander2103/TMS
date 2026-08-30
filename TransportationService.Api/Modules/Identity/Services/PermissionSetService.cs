@@ -52,8 +52,11 @@ public class PermissionSetService : IPermissionSetService
                 join rp in _dbContext.RolePermissions.AsNoTracking() on r.Id equals rp.RoleId
                 join p in _dbContext.Permissions.AsNoTracking() on rp.PermissionId equals p.Id
                 where ur.UserId == userId && u.IsActive && !u.IsBlocked && r.IsActive && r.TenantId == u.TenantId
+                      // Same rule as PermissionAuthorizationService, from the same constant:
+                      // PortalPermissionScope.Covers is the in-memory twin of this predicate and
+                      // PortalIdentityClassGuardTests pins that the two agree on the whole catalog.
                       && (!applyIdentityClassGuard || u.CustomerId == null
-                          || p.Code.StartsWith(AccountSecurityService.PortalPermissionPrefix))
+                          || p.Code.StartsWith(PortalPermissionScope.Prefix))
                 select p.Code)
             .Distinct()
             .ToListAsync(cancellationToken);

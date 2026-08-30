@@ -30,6 +30,10 @@ export function OrderDocumentsPanel({ orderId }: OrderDocumentsPanelProps) {
   const { hasPermission } = useAuth()
   const { showSuccess, showError } = useToast()
   const canManage = hasPermission('orders.edit') || hasPermission('orders.create') || hasPermission('orders.manage')
+  // Publishing a document goes through PUT /api/order-documents/{id}, which requires
+  // orders.edit or orders.manage — orders.create alone may upload but not (un)publish, so the
+  // toggle must not be offered to it.
+  const canPublish = hasPermission('orders.edit') || hasPermission('orders.manage')
 
   const [documents, setDocuments] = useState<OrderDocument[] | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -175,7 +179,7 @@ export function OrderDocumentsPanel({ orderId }: OrderDocumentsPanelProps) {
                 </td>
                 <td>{doc.hasAttachment ? doc.fileName : '—'}</td>
                 <td>
-                  {canManage ? (
+                  {canPublish ? (
                     <label className="tof-documents-visibility">
                       <input
                         type="checkbox"

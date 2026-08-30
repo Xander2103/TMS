@@ -429,9 +429,11 @@ public class CustomerPortalServiceTests
     /// <summary>
     /// Deactivating a customer must cut portal access instantly — aligned with
     /// PortalDocumentService/PortalInvoiceService, which already join on Customer.IsActive.
+    /// This covers THIS service's entry points only; the tenant-wide claim ("everywhere", across
+    /// all seven portal resolvers) is owned by <see cref="DeactivatedCustomerAccessTests"/>.
     /// </summary>
     [Fact]
-    public async Task DeactivatedCustomer_LosesPortalAccessEverywhere()
+    public async Task DeactivatedCustomer_LosesOrderLocationAndSubmitAccess()
     {
         var h = await SeedAsync();
         using var _ = h.Db;

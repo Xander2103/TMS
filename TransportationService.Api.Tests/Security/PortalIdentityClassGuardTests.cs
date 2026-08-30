@@ -1,3 +1,5 @@
+using Microsoft.EntityFrameworkCore;
+using TransportationService.Api.Data;
 using TransportationService.Api.Modules.Identity;
 using TransportationService.Api.Modules.Identity.Entities;
 using TransportationService.Api.Modules.Identity.Services;
@@ -110,5 +112,30 @@ public class PortalIdentityClassGuardTests
 
         var internalCodes = await sut.GetPermissionCodesAsync(h.InternalUserId, CancellationToken.None);
         Assert.Contains(PermissionCodes.OrdersView, internalCodes);
+    }
+
+    /// <summary>
+    /// The rule lives in ONE place (<see cref="PortalPermissionScope"/>) with ONE case semantics:
+    /// the in-memory predicate and the database predicate must classify the entire permission
+    /// catalog identically, or the single-code path and the bulk path would drift apart.
+    /// </summary>
+    [Fact]
+    public async Task InMemoryAndDatabasePredicates_ClassifyTheWholeCatalogIdentically()
+    {
+        using var db = new SqliteTestDbContext();
+        await PermissionCatalogSeeder.SyncAsync(db.Context);
+
+        var fromDatabase = await db.Context.Permissions
+            .Where(p => p.Code.StartsWith(PortalPermissionScope.Prefix))
+            .Select(p => p.Code)
+            .ToListAsync();
+        var inMemory = (await db.Context.Permissions.Select(p => p.Code).ToListAsync())
+            .Where(PortalPermissionScope.Covers)
+            .ToList();
+
+        Assert.NotEmpty(inMemory);
+        Assert.Equal(inMemory.OrderBy(c => c, StringComparer.Ordinal).ToArray(),
+            fromDatabase.OrderBy(c => c, StringComparer.Ordinal).ToArray());
+        Assert.All(inMemory, code => Assert.StartsWith("customer_portal.", code, StringComparison.Ordinal));
     }
 }

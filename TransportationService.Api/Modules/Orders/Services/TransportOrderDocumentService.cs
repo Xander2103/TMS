@@ -17,8 +17,13 @@ public record TransportOrderDocumentDto(
 public record SaveTransportOrderDocumentRequest(
     TransportOrderDocumentType DocumentType, string? CustomTypeName, string Title,
     DateOnly? IssueDate, string? Notes,
-    /// <summary>H-14: publish this document to the customer portal. Omitted = internal.</summary>
-    bool CustomerVisible = false);
+    /// <summary>
+    /// H-14: publish this document to the customer portal. Tri-state on purpose — omitted/null
+    /// means "leave the current publication state alone", so a caller that predates the field
+    /// (or a partial metadata PUT) can never silently unpublish a document. A NEW document with
+    /// no value stays internal, which is the safe default.
+    /// </summary>
+    bool? CustomerVisible = null);
 
 public interface ITransportOrderDocumentService
 {
@@ -188,8 +193,12 @@ public class TransportOrderDocumentService : ITransportOrderDocumentService
         document.Title = request.Title.Trim();
         document.IssueDate = request.IssueDate;
         document.Notes = string.IsNullOrWhiteSpace(request.Notes) ? null : request.Notes.Trim();
-        // H-14: publication to the customer portal is always an explicit choice of the uploader.
-        document.CustomerVisible = request.CustomerVisible;
+        // H-14: publication to the customer portal is always an explicit choice of the uploader —
+        // and an omitted value changes nothing (a new document starts internal either way).
+        if (request.CustomerVisible is { } customerVisible)
+        {
+            document.CustomerVisible = customerVisible;
+        }
     }
 
     private static TransportOrderDocumentDto Map(TransportOrderDocument d) => new(

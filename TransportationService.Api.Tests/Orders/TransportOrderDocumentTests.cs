@@ -121,6 +121,30 @@ public class TransportOrderDocumentTests : IDisposable
         Assert.False(withdrawn!.CustomerVisible);
     }
 
+    /// <summary>
+    /// Fix round 1: an update that does not mention visibility must LEAVE it alone. Making the
+    /// flag a full overwrite turned every metadata PUT that omits the new field into a silent
+    /// unpublish — fail-safe in direction, but a trap for any caller that predates the field.
+    /// </summary>
+    [Fact]
+    public async Task Update_WithoutAVisibilityValue_LeavesThePublicationStateUntouched()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+
+        var created = await h.Sut.CreateAsync(h.OrderId, new SaveTransportOrderDocumentRequest(
+            TransportOrderDocumentType.Cmr, null, "CMR", null, null, CustomerVisible: true), CancellationToken.None);
+        Assert.True(created!.CustomerVisible);
+
+        // A legacy/partial PUT: type, title, dates — no visibility field at all.
+        var renamed = await h.Sut.UpdateAsync(created.Id, new SaveTransportOrderDocumentRequest(
+            TransportOrderDocumentType.Cmr, null, "CMR (herzien)", null, null), CancellationToken.None);
+
+        Assert.Equal("CMR (herzien)", renamed!.Title);
+        Assert.True(renamed.CustomerVisible);
+        Assert.True(h.Db.Context.TransportOrderDocuments.Single(d => d.Id == created.Id).CustomerVisible);
+    }
+
     [Fact]
     public async Task Create_RequiresTitle()
     {

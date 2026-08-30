@@ -50,7 +50,10 @@ public interface IAccountSecurityService
 public sealed class AccountSecurityService : IAccountSecurityService
 {
     public const string PortalTemplatePrefix = "klantportaal";
-    public const string PortalPermissionPrefix = "customer_portal.";
+
+    /// <summary>Kept for callers that already reference it; the rule itself lives in
+    /// <see cref="PortalPermissionScope"/>.</summary>
+    public const string PortalPermissionPrefix = PortalPermissionScope.Prefix;
 
     private readonly TransportationDbContext _db;
     private readonly ITenantContext _tenant;
@@ -136,8 +139,7 @@ public sealed class AccountSecurityService : IAccountSecurityService
     public bool IsPortalTemplateRole(Role role) =>
         role.TemplateCode is { } code && code.StartsWith(PortalTemplatePrefix, StringComparison.OrdinalIgnoreCase);
 
+    // One rule, one place: see PortalPermissionScope for why the comparison is ordinal.
     public bool IsPortalPermissionSet(IEnumerable<string> permissionCodes) =>
-        permissionCodes.All(code =>
-            !string.IsNullOrWhiteSpace(code)
-            && code.Trim().StartsWith(PortalPermissionPrefix, StringComparison.OrdinalIgnoreCase));
+        PortalPermissionScope.CoversAll(permissionCodes);
 }

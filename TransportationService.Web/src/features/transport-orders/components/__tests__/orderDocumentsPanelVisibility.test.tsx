@@ -105,4 +105,15 @@ describe('OrderDocumentsPanel customer visibility', () => {
     expect(api.update.mock.calls[0][0]).toBe('d1')
     expect(api.update.mock.calls[0][1]).toMatchObject({ customerVisible: true, title: 'CMR' })
   })
+
+  it('shows a read-only state to orders.create-only users, who cannot call the update endpoint', async () => {
+    // PUT /api/order-documents/{id} requires orders.edit or orders.manage; offering an enabled
+    // checkbox to orders.create would just 403.
+    auth.permissions = new Set(['orders.view', 'orders.create'])
+    api.list.mockResolvedValue([doc()])
+    render(<OrderDocumentsPanel orderId="o1" />)
+
+    expect(await screen.findByText('Intern')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Zichtbaar voor de klant: CMR')).not.toBeInTheDocument()
+  })
 })

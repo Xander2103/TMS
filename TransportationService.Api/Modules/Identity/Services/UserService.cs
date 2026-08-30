@@ -117,6 +117,7 @@ public class UserService : IUserService
     {
         await EnsureLinksInTenantAsync(request.EmployeeId, request.CustomerId, cancellationToken);
         await EnsureRolesInTenantAsync(request.RoleIds, cancellationToken);
+        await EnsureIdentityClassConsistentAsync(request.CustomerId, request.RoleIds, cancellationToken);
 
         var user = new User
         {
@@ -153,6 +154,11 @@ public class UserService : IUserService
         if (user is null) return null;
 
         await EnsureLinksInTenantAsync(request.EmployeeId, request.CustomerId, cancellationToken);
+        // The roles are not part of this request, so the check runs against the ones the user
+        // already has: linking an internal account to a customer is the bricking scenario.
+        var currentRoleIds = await _dbContext.UserRoles.AsNoTracking()
+            .Where(ur => ur.UserId == id).Select(ur => ur.RoleId).ToListAsync(cancellationToken);
+        await EnsureIdentityClassConsistentAsync(request.CustomerId, currentRoleIds, cancellationToken);
 
         var oldValues = new { user.Email, user.FirstName, user.LastName, user.IsActive, user.IsBlocked };
 
@@ -248,6 +254,15 @@ public class UserService : IUserService
         var newRoleIds = request.RoleIds.Distinct().ToHashSet();
         await EnsureRolesInTenantAsync(newRoleIds, cancellationToken);
 
+        // Identity-class rule, other direction: handing an internal role to an account that is
+        // already linked to a customer. Reported as a validation failure rather than thrown,
+        // matching this method's result-shaped contract.
+        if (await NonPortalPermissionsAsync(user.CustomerId, newRoleIds, cancellationToken) is { Count: > 0 } offending)
+        {
+            return new UserOperationResult(UserOperationOutcome.ValidationFailed,
+                await MapAsync(user, cancellationToken), IdentityClassError(offending));
+        }
+
         var existingRoles = await _dbContext.UserRoles.Where(ur => ur.UserId == id).ToListAsync(cancellationToken);
         var oldRoleIds = existingRoles.Select(ur => ur.RoleId).ToHashSet();
 
@@ -325,6 +340,54 @@ public class UserService : IUserService
         {
             throw new InvalidTenantReferenceException("klant");
         }
+    }
+
+    /// <summary>
+    /// H-14 identity-class rule, enforced where the data is WRITTEN. A user carrying a customer
+    /// link is a portal identity and the permission evaluator will refuse every code outside the
+    /// customer_portal.* namespace for it — so allowing such a combination to be saved would
+    /// silently brick an internal account (every request 403s with a misleading "Missing
+    /// permission: orders.view"). Refuse it up front instead, naming the offending codes.
+    /// Portal accounts created by CustomerPortalUserService are unaffected: those only ever
+    /// receive the klantportaal_* templates, which hold portal permissions exclusively.
+    /// </summary>
+    private async Task EnsureIdentityClassConsistentAsync(
+        Guid? customerId, IReadOnlyCollection<Guid> roleIds, CancellationToken cancellationToken)
+    {
+        if (await NonPortalPermissionsAsync(customerId, roleIds, cancellationToken) is { Count: > 0 } offending)
+        {
+            throw new DomainValidationException("customerId", IdentityClassError(offending));
+        }
+    }
+
+    /// <summary>The non-portal permission codes the given roles would grant; empty when the
+    /// combination is fine (including whenever there is no customer link at all).</summary>
+    private async Task<IReadOnlyList<string>> NonPortalPermissionsAsync(
+        Guid? customerId, IReadOnlyCollection<Guid> roleIds, CancellationToken cancellationToken)
+    {
+        if (customerId is null || roleIds.Count == 0)
+        {
+            return [];
+        }
+
+        var distinct = roleIds.Distinct().ToList();
+        var codes = await _dbContext.RolePermissions.AsNoTracking()
+            .Where(rp => distinct.Contains(rp.RoleId))
+            .Join(_dbContext.Permissions.AsNoTracking(), rp => rp.PermissionId, p => p.Id, (rp, p) => p.Code)
+            .Where(code => !code.StartsWith(PortalPermissionScope.Prefix))
+            .Distinct()
+            .OrderBy(code => code)
+            .ToListAsync(cancellationToken);
+        return codes;
+    }
+
+    private static string IdentityClassError(IReadOnlyList<string> offendingCodes)
+    {
+        var shown = string.Join(", ", offendingCodes.Take(3));
+        var suffix = offendingCodes.Count > 3 ? $" en {offendingCodes.Count - 3} andere" : string.Empty;
+        return "Een gebruiker die aan een klant is gekoppeld, mag alleen klantportaalrollen hebben. "
+               + $"Deze rollen geven ook interne rechten ({shown}{suffix}). "
+               + "Verwijder de klantkoppeling of kies rollen zonder interne rechten.";
     }
 
     /// <summary>Only roles belonging to the current tenant may be assigned.</summary>

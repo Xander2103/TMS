@@ -54,7 +54,6 @@
     "submittedFor": "Submitted for {date}",
     "yourRef": "your ref. {reference}",
     "messagesButton": "Messages about this order",
-    "cancelledReason": "Cancelled: {reason}",
     "statusTitle": "Status",
     "expectedDelivery": "Expected delivery",
     "attentionTitle": "Needs attention",
@@ -74,7 +73,6 @@
       "type": "Type",
       "adr": "ADR"
     },
-    "remarksTitle": "Your remarks",
     "podTitle": "Proof of delivery",
     "podDeliveredAt": "Delivered on {time}",
     "podRecipient": "Received by {name}",

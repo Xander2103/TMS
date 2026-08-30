@@ -19,7 +19,7 @@ public class PermissionAuthorizationService : IPermissionAuthorizationService
         // account. Fail-closed and evaluated in the same roundtrip, so a mis-seeded portal
         // account carrying an internal role is refused by the evaluator itself rather than by
         // whichever caller happened to remember the rule.
-        var portalCode = IsPortalPermission(permissionCode);
+        var portalCode = PortalPermissionScope.Covers(permissionCode);
 
         // Defense in depth: a role only grants permissions when it belongs to the user's own
         // tenant, even if a cross-tenant UserRole row were ever to exist.
@@ -40,8 +40,4 @@ public class PermissionAuthorizationService : IPermissionAuthorizationService
 
         return await query.AnyAsync(cancellationToken);
     }
-
-    /// <summary>The customer_portal.* namespace — the only codes a customer-linked user may hold.</summary>
-    internal static bool IsPortalPermission(string permissionCode) =>
-        permissionCode.StartsWith(AccountSecurityService.PortalPermissionPrefix, StringComparison.OrdinalIgnoreCase);
 }
