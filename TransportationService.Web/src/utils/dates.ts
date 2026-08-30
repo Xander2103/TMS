@@ -210,6 +210,11 @@ function instantFromWallClock(
  * 2026-07-15 08:00 Europe/Amsterdam → "2026-07-15T06:00:00Z". A missing time means midnight
  * tenant time — the wire encoding of a date-only stop (§14). Null when the date is absent or
  * not an ISO date.
+ *
+ * Caveat for a handful of zones (America/Santiago, Asia/Beirut, …) whose DST switch happens AT
+ * local midnight: on that one day 00:00 does not exist, so the gap policy shifts it to 01:00 and
+ * a date-only stop would read back as 01:00 instead of an empty time. Harmless in the tenant
+ * zones this product serves; it is the price of one consistent disambiguation rule.
  */
 export function toWireDateTime(
   date: string | null | undefined, time?: string | null,
@@ -288,10 +293,17 @@ export function formatDate(value: string | null | undefined): string {
 }
 
 export function formatDateTime(value: string | null | undefined): string {
-  const time = formatTime(value)
-  const wall = calendarOf(value)
-  if (!wall) return ''
-  return `${renderDate(wall, activeFormat)} ${time || '00:00'}`
+  if (!value) return ''
+  // Date-only: a calendar date with no time of day; shown at midnight, never converted.
+  if (DATE_ONLY.test(value)) {
+    const [year, month, day] = value.split('-').map(Number)
+    return `${renderDate({ year, month, day }, activeFormat)} 00:00`
+  }
+  const instant = parseIsoDate(value)
+  if (!instant || Number.isNaN(instant.getTime())) return ''
+  // One formatToParts for date AND time — going through formatDate + formatTime would cost two.
+  const wall = wallClockOf(instant)
+  return `${renderDate(wall, activeFormat)} ${pad(wall.hour)}:${pad(wall.minute)}`
 }
 
 const LONG_DATE_LOCALE_TAGS = { nl: 'nl-BE', fr: 'fr-BE', en: 'en-GB' } as const

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { resetDisplayPreferencesForTests } from '../../../../components/layout/DisplayPreferencesProvider'
 import { render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { CustomerPortalLayout } from '../CustomerPortalLayout'
@@ -17,6 +18,16 @@ vi.mock('../../../auth/authContextValue', () => ({
     hasPermission: (code: string) => auth.permissions.includes(code),
     hasAnyPermission: (codes: string[]) => codes.some((c) => auth.permissions.includes(c)),
   }),
+}))
+
+// C-03: the portal shell now gates its routed content on the shared regional bootstrap, so the
+// display-preferences call has to answer before the Outlet renders.
+vi.mock('../../../../api/apiClient', () => ({
+  apiClient: {
+    getJson: () => Promise.resolve({
+      dateFormat: 'dd/MM/yyyy', decimalSeparator: ',', timezone: 'Europe/Amsterdam',
+    }),
+  },
 }))
 
 const unreadCount = vi.hoisted(() => ({ value: 0 }))
@@ -43,6 +54,7 @@ function renderLayout() {
 
 describe('CustomerPortalLayout', () => {
   beforeEach(() => {
+    resetDisplayPreferencesForTests()
     unreadCount.value = 0
     unreadNotices.value = 0
   })
@@ -58,7 +70,7 @@ describe('CustomerPortalLayout', () => {
     expect(screen.queryByRole('link', { name: 'Facturen' })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Berichten' })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Gebruikers' })).not.toBeInTheDocument()
-    expect(screen.getByText('Opdrachten-inhoud')).toBeInTheDocument()
+    expect(await screen.findByText('Opdrachten-inhoud')).toBeInTheDocument()
   })
 
   it('shows Gebruikers only when customer_portal.manage_users is granted', async () => {

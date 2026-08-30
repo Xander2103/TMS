@@ -42,8 +42,12 @@ export function formatDate(locale: Locale, iso: string): string {
 export function formatDateTime(locale: Locale, iso: string): string {
   const date = parseIso(iso)
   if (Number.isNaN(date.getTime())) return iso
+  // A date-only value is a calendar date, not an instant: `parseIso` gave it browser-local
+  // midnight, and reprojecting THAT into a zone behind the browser walks the day backwards
+  // (a Tokyo reader saw "14/07/2026 17:00" for the 15th). Same guard as formatDate above.
+  const zone = DATE_ONLY.test(iso) ? undefined : getTimeZonePreference()
   return date.toLocaleString(LOCALE_TAGS[locale], {
-    dateStyle: 'short', timeStyle: 'short', timeZone: getTimeZonePreference(),
+    dateStyle: 'short', timeStyle: 'short', timeZone: zone,
   })
 }
 

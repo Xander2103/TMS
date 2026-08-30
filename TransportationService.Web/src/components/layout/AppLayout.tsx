@@ -1,11 +1,9 @@
 import { Suspense, useEffect, useState } from 'react'
 import { Outlet } from 'react-router-dom'
-import { apiClient } from '../../api/apiClient'
 import { useAuth } from '../../features/auth/authContextValue'
 import { useLocale } from '../../i18n/localeContext'
 import { isLocale } from '../../i18n/translations'
-import { setDateFormatPreference, setTimeZonePreference } from '../../utils/dates'
-import { setDecimalSeparatorPreference } from '../../utils/numbers'
+import { DisplayPreferencesProvider, useDisplayPreferences } from './DisplayPreferencesProvider'
 import { useActionQueueSync } from '../../hooks/useActionQueueSync'
 import { useShortcutRegistry } from '../../hooks/useShortcutRegistry'
 import { NotificationBell } from '../../features/notifications/components/NotificationBell'
@@ -32,30 +30,19 @@ export function AppLayout() {
   // Offline queues (scans + driver actions) replay automatically when the connection returns.
   const queues = useActionQueueSync()
 
-  // Regional display preferences: ONE fetch per session drives the central date formatter
-  // (utils/dates.ts). Until it resolves the Belgian default applies; failure is non-fatal.
+  // Regional display preferences (date format, decimal separator, TENANT TIME ZONE) are loaded
+  // and applied by the shared bootstrap — see DisplayPreferencesProvider, which also gates the
+  // routed content below so no page renders a timestamp before the zone is known.
   // Taalresolutie: heeft de gebruiker géén eigen voorkeur, dan geldt de tenant-default
-  // als fallback (§7/§9) — een bewuste sessiewissel blijft altijd winnen.
+  // als fallback (§7/§9) — een bewuste sessiewissel blijft altijd winnen. Dat stuk blijft hier,
+  // omdat alleen deze shell de ingelogde interne gebruiker kent.
   const hasOwnLanguage = user?.preferredLanguage != null
+  const { preferences } = useDisplayPreferences()
   useEffect(() => {
-    apiClient
-      .getJson<{
-        dateFormat: string; decimalSeparator?: string; timezone?: string; defaultLanguage?: string
-      }>('/api/company-settings/display')
-      .then((prefs) => {
-        setDateFormatPreference(prefs.dateFormat)
-        setDecimalSeparatorPreference(prefs.decimalSeparator)
-        // C-03: operational wall-clock times (stop windows, ETAs, stamps) render in the TENANT
-        // zone, never the browser zone — so the zone is bootstrapped here with the rest of the
-        // regional preferences. Until it resolves utils/dates uses the Europe/Amsterdam default,
-        // which is also the backend's seeded default.
-        setTimeZonePreference(prefs.timezone)
-        if (!hasOwnLanguage && isLocale(prefs.defaultLanguage)) {
-          applyFallbackLocale(prefs.defaultLanguage)
-        }
-      })
-      .catch(() => {})
-  }, [applyFallbackLocale, hasOwnLanguage])
+    if (!hasOwnLanguage && isLocale(preferences?.defaultLanguage)) {
+      applyFallbackLocale(preferences.defaultLanguage)
+    }
+  }, [applyFallbackLocale, hasOwnLanguage, preferences])
   // Central keyboard shortcuts: mod+K/'/' palette, 'g x' navigation chords, '?' help.
   const shortcuts = useShortcutRegistry()
 
@@ -99,7 +86,9 @@ export function AppLayout() {
           <main className="content">
             {/* Pages are code-split per route; the shell stays visible while a chunk loads. */}
             <Suspense fallback={<LoadingState message={t('ui.nav.pageLoading')} />}>
-              <Outlet />
+              <DisplayPreferencesProvider fallback={<LoadingState message={t('ui.nav.pageLoading')} />}>
+                <Outlet />
+              </DisplayPreferencesProvider>
             </Suspense>
           </main>
         </div>

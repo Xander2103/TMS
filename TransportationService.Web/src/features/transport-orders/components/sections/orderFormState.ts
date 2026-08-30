@@ -206,9 +206,8 @@ export function cargoRowFromHeader(header: {
   }
 }
 
-/** ISO datetime → value usable by <input type="datetime-local"> (minute precision). */
 /**
- * Wire timestamp → `<input type="datetime-local">` value. C-03: the ISO substring it used to
+ * Wire timestamp → `<input type="datetime-local">` value (minute precision). C-03: the ISO substring it used to
  * take showed UTC while the label said local time; the conversion now runs through the tenant
  * zone. Kept as a named re-export so the call sites and their tests stay readable.
  */
