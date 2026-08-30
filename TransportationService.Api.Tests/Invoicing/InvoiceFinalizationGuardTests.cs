@@ -243,6 +243,30 @@ public class InvoiceFinalizationGuardTests
         Assert.Equal(TransportOrderStatus.Invoiced, (await h.Db.Context.TransportOrders.FindAsync(h.OrderId))!.Status);
     }
 
+    /// <summary>
+    /// The mirror of <see cref="Cancel_DraftInvoice_WithTransmissionPastTheQueue_IsRefused"/>:
+    /// deleting a Draft DOES release its orders, so the same adversarial state must be refused on
+    /// the delete path too, or the guard is bypassed by pressing "Verwijderen" instead.
+    /// </summary>
+    [Fact]
+    public async Task Delete_DraftInvoice_WithTransmissionPastTheQueue_IsRefused()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var snapshotId = await AddPricingSnapshotAsync(h);
+        var created = await h.Sut.CreateAsync(
+            new CreateInvoiceRequest(h.CustomerId, null, [h.OrderId], [], null), CancellationToken.None);
+        await AddTransmissionAsync(h, created.Invoice!.Id, PeppolTransmissionStatus.SubmittedToProvider);
+
+        var refused = await h.Sut.DeleteAsync(created.Invoice.Id, CancellationToken.None);
+
+        Assert.Equal(InvoiceOperationOutcome.InvalidState, refused.Outcome);
+        Assert.NotNull(await h.Db.Context.Invoices.FindAsync(created.Invoice.Id));
+        Assert.Equal(TransportOrderStatus.Invoiced, (await h.Db.Context.TransportOrders.FindAsync(h.OrderId))!.Status);
+        Assert.Equal(OrderPricingStatus.Invoiced,
+            (await h.Db.Context.TransportOrderPricingSnapshots.FindAsync(snapshotId))!.Status);
+    }
+
     /// <summary>A cancelled draft was never finalized and stays deletable.</summary>
     [Fact]
     public async Task Delete_CancelledDraftInvoice_StillWorks()
@@ -347,5 +371,125 @@ public class InvoiceFinalizationGuardTests
 
         var second = await h.Sut.CreateCreditNoteAsync(created.Invoice.Id, CancellationToken.None);
         Assert.Equal(InvoiceOperationOutcome.InvalidState, second.Outcome);
+    }
+
+    /// <summary>
+    /// The behaviour that is uniquely the credit-note freeze skip's: the GAP FILL. Both freeze
+    /// methods are idempotent, so a line that already carries a ledger snapshot is safe either
+    /// way — but a credited line whose category had NO ledger account at Send carries a null, and
+    /// re-freezing would fill it from today's mapping. The credit would then book against an
+    /// account the invoice it reverses never touched.
+    /// </summary>
+    [Fact]
+    public async Task CreditNote_NeverGapFillsALedgerAccountTheCreditedLineNeverHad()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        // Sent while the category existed but the MAPPING was still missing.
+        var category = (await h.Accounting.ListSalesCategoriesAsync(false, CancellationToken.None))
+            .Single(c => c.Code == "DIVERS-BINNEN");
+        var created = await h.Sut.CreateAsync(new CreateInvoiceRequest(
+            h.CustomerId, null, [], [new ManualInvoiceLineInput("Verkoop binnenland", 1m, 100m, 21m, category.Id)], null),
+            CancellationToken.None);
+        await h.Sut.ChangeStatusAsync(created.Invoice!.Id, InvoiceStatus.Sent, CancellationToken.None);
+        var originalLine = await h.Db.Context.InvoiceLines.SingleAsync(l => l.InvoiceId == created.Invoice.Id);
+        Assert.Null(originalLine.LedgerAccountNumberSnapshot);
+        Assert.NotNull(originalLine.VatTreatmentSnapshot);
+
+        // The category gets its account only AFTER the invoice went out.
+        var account = await h.Accounting.CreateLedgerAccountAsync(
+            new SaveLedgerAccountRequest("700400", "Diverse verkoop binnenland"), CancellationToken.None);
+        await h.Accounting.UpdateSalesCategoryAsync(category.Id, new SaveSalesCategoryRequest(
+            category.Code, category.Name, category.SystemRole, account.Id, true, category.SortOrder), CancellationToken.None);
+
+        var credit = await h.Sut.CreateCreditNoteAsync(created.Invoice.Id, CancellationToken.None);
+        var sentCredit = await h.Sut.ChangeStatusAsync(credit.Invoice!.Id, InvoiceStatus.Sent, CancellationToken.None);
+        Assert.Equal(InvoiceOperationOutcome.Success, sentCredit.Outcome);
+
+        var creditLine = await h.Db.Context.InvoiceLines.SingleAsync(l => l.InvoiceId == credit.Invoice.Id);
+        Assert.Null(creditLine.LedgerAccountNumberSnapshot);
+        Assert.Null(creditLine.LedgerAccountNameSnapshot);
+        Assert.Null(creditLine.LedgerAccountId);
+        Assert.Equal(originalLine.SalesCategoryNameSnapshot, creditLine.SalesCategoryNameSnapshot);
+    }
+
+    /// <summary>
+    /// The skip is per mirrored LINE, not per document: a line the user adds to a draft credit note
+    /// has nothing to mirror and must still freeze its own snapshots at Send, or it would reach the
+    /// accounting export without a ledger account.
+    /// </summary>
+    [Fact]
+    public async Task CreditNote_ALineAddedToTheDraft_StillFreezesItsOwnSnapshots()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var account = await h.Accounting.CreateLedgerAccountAsync(
+            new SaveLedgerAccountRequest("700400", "Diverse verkoop binnenland"), CancellationToken.None);
+        var category = (await h.Accounting.ListSalesCategoriesAsync(false, CancellationToken.None))
+            .Single(c => c.Code == "DIVERS-BINNEN");
+        await h.Accounting.UpdateSalesCategoryAsync(category.Id, new SaveSalesCategoryRequest(
+            category.Code, category.Name, category.SystemRole, account.Id, true, category.SortOrder), CancellationToken.None);
+
+        var created = await h.Sut.CreateAsync(new CreateInvoiceRequest(
+            h.CustomerId, null, [], [new ManualInvoiceLineInput("Verkoop binnenland", 1m, 100m, 21m, category.Id)], null),
+            CancellationToken.None);
+        await h.Sut.ChangeStatusAsync(created.Invoice!.Id, InvoiceStatus.Sent, CancellationToken.None);
+        var credit = await h.Sut.CreateCreditNoteAsync(created.Invoice.Id, CancellationToken.None);
+        var mirrored = credit.Invoice!.Lines.Single();
+
+        var updated = await h.Sut.UpdateAsync(credit.Invoice.Id, new UpdateInvoiceRequest(
+            credit.Invoice.InvoiceDate, credit.Invoice.DueDate,
+            [
+                new UpdateInvoiceLineInput(mirrored.Id, mirrored.Description, mirrored.Quantity, mirrored.UnitPrice,
+                    mirrored.VatRatePercent, category.Id),
+                new UpdateInvoiceLineInput(null, "Extra creditlijn", 1m, 10m, 21m, category.Id),
+            ], null), CancellationToken.None);
+        Assert.Equal(InvoiceOperationOutcome.Success, updated.Outcome);
+
+        await h.Sut.ChangeStatusAsync(credit.Invoice.Id, InvoiceStatus.Sent, CancellationToken.None);
+
+        var addedLine = await h.Db.Context.InvoiceLines.SingleAsync(l => l.Description == "Extra creditlijn");
+        Assert.Equal("700400", addedLine.LedgerAccountNumberSnapshot);
+        Assert.NotNull(addedLine.VatTreatmentSnapshot);
+    }
+
+    /// <summary>
+    /// Recategorising a mirrored credit-note line would leave SalesCategoryId pointing at one code
+    /// and the frozen snapshots at another. The mirror wins and the edit is refused out loud —
+    /// the same rule the header already follows (a credit note is never re-snapshotted).
+    /// </summary>
+    [Fact]
+    public async Task CreditNote_RecategorisingAMirroredLine_IsRefused()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var categories = await h.Accounting.ListSalesCategoriesAsync(false, CancellationToken.None);
+        var category = categories.Single(c => c.Code == "DIVERS-BINNEN");
+        var otherCategory = categories.First(c => c.Id != category.Id);
+
+        var created = await h.Sut.CreateAsync(new CreateInvoiceRequest(
+            h.CustomerId, null, [], [new ManualInvoiceLineInput("Verkoop binnenland", 1m, 100m, 21m, category.Id)], null),
+            CancellationToken.None);
+        await h.Sut.ChangeStatusAsync(created.Invoice!.Id, InvoiceStatus.Sent, CancellationToken.None);
+        var credit = await h.Sut.CreateCreditNoteAsync(created.Invoice.Id, CancellationToken.None);
+        var mirrored = credit.Invoice!.Lines.Single();
+
+        var refused = await h.Sut.UpdateAsync(credit.Invoice.Id, new UpdateInvoiceRequest(
+            credit.Invoice.InvoiceDate, credit.Invoice.DueDate,
+            [new UpdateInvoiceLineInput(mirrored.Id, mirrored.Description, mirrored.Quantity, mirrored.UnitPrice,
+                mirrored.VatRatePercent, otherCategory.Id)], null), CancellationToken.None);
+
+        Assert.Equal(InvoiceOperationOutcome.ValidationFailed, refused.Outcome);
+        Assert.Contains("creditnota", refused.Error!, StringComparison.OrdinalIgnoreCase);
+        var stored = await h.Db.Context.InvoiceLines.SingleAsync(l => l.Id == mirrored.Id);
+        Assert.Equal(category.Id, stored.SalesCategoryId);
+
+        // Editing the amount of that same line stays possible (partial credit).
+        var partial = await h.Sut.UpdateAsync(credit.Invoice.Id, new UpdateInvoiceRequest(
+            credit.Invoice.InvoiceDate, credit.Invoice.DueDate,
+            [new UpdateInvoiceLineInput(mirrored.Id, mirrored.Description, mirrored.Quantity, 40m,
+                mirrored.VatRatePercent, category.Id)], null), CancellationToken.None);
+        Assert.Equal(InvoiceOperationOutcome.Success, partial.Outcome);
+        Assert.Equal(40m, partial.Invoice!.Lines.Single().UnitPrice);
     }
 }
