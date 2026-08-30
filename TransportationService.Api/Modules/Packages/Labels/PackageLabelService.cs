@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using TransportationService.Api.Common;
 using TransportationService.Api.Data;
 using TransportationService.Api.Modules.Auditing.Services;
 using TransportationService.Api.Modules.Identity.Services;
@@ -162,6 +163,11 @@ public class PackageLabelService : IPackageLabelService
                          ?? await _dbContext.Tenants.AsNoTracking()
                              .Where(t => t.Id == tenantId).Select(t => t.Name).FirstAsync(cancellationToken);
 
+        // C-03: stop windows are UTC instants; a label shows the wall clock the dispatcher and the
+        // driver agreed on. A label is printed once and stuck to freight, so getting this wrong is
+        // not recallable.
+        var zone = await TenantTimeZone.ForTenantAsync(_dbContext, tenantId, cancellationToken);
+
         var orderIds = packages.Select(p => p.TransportOrderId).Distinct().ToList();
         var orders = await _dbContext.TransportOrders.AsNoTracking()
             .Where(o => o.TenantId == tenantId && orderIds.Contains(o.Id))
@@ -210,6 +216,8 @@ public class PackageLabelService : IPackageLabelService
 
             var loadingAddress = ResolveAddress(loading, locations);
             var deliveryAddress = ResolveAddress(delivery, locations);
+            var pickupLocal = TenantTimeZone.ToWallClock(loading?.PlannedFrom, zone);
+            var deliveryLocal = TenantTimeZone.ToWallClock(delivery?.PlannedFrom, zone);
 
             result[package.Id] = new LabelSnapshot(
                 tenantName,
@@ -235,14 +243,14 @@ public class PackageLabelService : IPackageLabelService
                 SenderStreet: loadingAddress.Street,
                 SenderPostalCodeCity: loadingAddress.PostalCity,
                 SenderCountry: loadingAddress.Country,
-                PickupDate: loading?.PlannedFrom?.ToString("dd-MM-yyyy"),
-                PickupTime: loading?.PlannedFrom?.ToString("HH:mm"),
+                PickupDate: pickupLocal?.ToString("dd-MM-yyyy"),
+                PickupTime: pickupLocal?.ToString("HH:mm"),
                 RecipientName: deliveryAddress.Name,
                 RecipientStreet: deliveryAddress.Street,
                 RecipientPostalCodeCity: deliveryAddress.PostalCity,
                 RecipientCountry: deliveryAddress.Country,
-                DeliveryDate: delivery?.PlannedFrom?.ToString("dd-MM-yyyy"),
-                DeliveryTime: delivery?.PlannedFrom?.ToString("HH:mm"),
+                DeliveryDate: deliveryLocal?.ToString("dd-MM-yyyy"),
+                DeliveryTime: deliveryLocal?.ToString("HH:mm"),
                 SequenceNumber: position > 0 ? position : null,
                 SequenceTotal: position > 0 ? group.Count : null,
                 VolumeM3: package.VolumeM3,

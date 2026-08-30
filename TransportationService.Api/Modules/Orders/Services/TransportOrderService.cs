@@ -1,10 +1,10 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using TransportationService.Api.Common;
 using TransportationService.Api.Common.Models;
 using TransportationService.Api.Common.Persistence;
 using TransportationService.Api.Data;
-using TransportationService.Api.Modules.Attendance.Services;
 using TransportationService.Api.Modules.Auditing.Services;
 using TransportationService.Api.Modules.Identity;
 using TransportationService.Api.Modules.Identity.Services;
@@ -2168,47 +2168,10 @@ public class TransportOrderService : ITransportOrderService
     /// The one transport-time convention (C-03): stored/wire values are UTC instants, everything a
     /// human types or reads is tenant wall clock. Opening hours are stored as local wall clock
     /// (<see cref="TimeOnly"/>), so any comparison between the two has to pass through this zone.
-    /// Resolution reuses <see cref="AttendanceCalculator.ResolveTimeZone"/> — the one existing
-    /// resolver in the API — rather than adding a second, divergent one.
+    /// Resolution goes through <see cref="TenantTimeZone"/>, the single resolver in the API.
     /// </remarks>
-    private async Task<TimeZoneInfo> ResolveTenantTimeZoneAsync(CancellationToken cancellationToken)
-    {
-        if (_tenantTimeZone is not null)
-        {
-            return _tenantTimeZone;
-        }
-
-        var id = await _dbContext.TenantSettings.AsNoTracking()
-            .Where(s => s.TenantId == _tenantContext.TenantId)
-            .Select(s => s.Timezone)
-            .FirstOrDefaultAsync(cancellationToken);
-        return _tenantTimeZone = ResolveTimeZoneOrUtc(id);
-    }
-
-    /// <summary>
-    /// Never throws. An unknown/misspelled id falls back to the tenant default Europe/Amsterdam —
-    /// the same degradation the web client applies (<c>utils/dates.ts isSupportedTimeZone</c>), so
-    /// a warning can never contradict the clock the dispatcher is looking at. Only a runtime with
-    /// no time-zone database at all (invariant globalization) falls back to UTC: advisory warnings
-    /// must never take down the order detail.
-    /// </summary>
-    private static TimeZoneInfo ResolveTimeZoneOrUtc(string? ianaTimeZoneId)
-    {
-        try
-        {
-            return AttendanceCalculator.ResolveTimeZone(ianaTimeZoneId);
-        }
-        catch (Exception e) when (e is TimeZoneNotFoundException or InvalidTimeZoneException)
-        {
-            return TimeZoneInfo.Utc;
-        }
-    }
-
-    /// <summary>UTC instant → tenant wall clock. Accepts any <see cref="DateTime.Kind"/>: stored
-    /// values arrive as <c>Utc</c> from Npgsql and as <c>Unspecified</c> from an in-memory entity
-    /// that has not round-tripped yet; both mean the same instant.</summary>
-    private static DateTime ToTenantWallClock(DateTime instant, TimeZoneInfo zone) =>
-        TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(instant, DateTimeKind.Utc), zone);
+    private async Task<TimeZoneInfo> ResolveTenantTimeZoneAsync(CancellationToken cancellationToken) =>
+        _tenantTimeZone ??= await TenantTimeZone.ForTenantAsync(_dbContext, _tenantContext.TenantId, cancellationToken);
 
     /// <summary>
     /// Advisory (never blocking) opening-hours warnings for one stop. Evaluated against the
@@ -2216,10 +2179,12 @@ public class TransportOrderService : ITransportOrderService
     /// planned time", while the snapshot answers "what did we agree back then".
     /// </summary>
     /// <param name="zone">Tenant zone; the planned UTC instants are projected onto it before they
-    /// are compared with the location's local opening hours (C-03).</param>
-    private IReadOnlyList<string>? BuildOpeningHoursWarnings(TransportOrderStop stop, Location? location, TimeZoneInfo zone)
+    /// are compared with the location's local opening hours (C-03). Null when the caller resolved
+    /// no zone because the order has no master-location stop — which is also the only case in
+    /// which no warning can exist, so the two conditions are checked together.</param>
+    private IReadOnlyList<string>? BuildOpeningHoursWarnings(TransportOrderStop stop, Location? location, TimeZoneInfo? zone)
     {
-        if (location is null || location.OpeningIntervals.Count == 0)
+        if (location is null || zone is null || location.OpeningIntervals.Count == 0)
         {
             return null; // Free-address stop or no structured hours (NoData) → no warning.
         }
@@ -2234,7 +2199,7 @@ public class TransportOrderService : ITransportOrderService
                 continue;
             }
 
-            var local = ToTenantWallClock(planned, zone);
+            var local = TenantTimeZone.ToWallClock(planned, zone);
 
             // A lone LOCAL midnight "from" is the wire encoding of a date-only stop (no time
             // chosen: the client sends 00:00 tenant time, which is 22:00Z / 23:00Z on the wire);
@@ -2291,9 +2256,10 @@ public class TransportOrderService : ITransportOrderService
 
         // Opening-hours warnings compare a UTC instant with LOCAL opening hours, so they need the
         // tenant zone (C-03). Only a stop with a master location can produce one; with no such
-        // stop the value is never read, so the settings query is skipped.
-        var tenantZone = locations.Count == 0
-            ? TimeZoneInfo.Utc
+        // stop there is nothing to resolve, and the null travels into the guard rather than a
+        // placeholder zone that would be silently wrong if the guard ever moved.
+        TimeZoneInfo? tenantZone = locations.Count == 0
+            ? null
             : await ResolveTenantTimeZoneAsync(cancellationToken);
 
         var stops = order.Stops

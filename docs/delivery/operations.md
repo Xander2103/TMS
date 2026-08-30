@@ -69,6 +69,108 @@ extra configuratie vereisen maar wel bekend moeten zijn bij de beheerder:
 (`EtaShiftNotifyMinutes`, nu instelbaar via de UI; leeg = functie uit). Het
 Excel-importprofiel "Generiek v1" wordt per tenant idempotent geseed bij eerste gebruik.
 
+### 1.2b Wave 1 datamigraties (productieblokkers, 2026-08-30)
+
+Twee **datamigraties** — ze wijzigen géén schema, alleen bestaande rijen. Ze horen bij dezelfde
+release als de frontend-tijdconventie (C-03) en de stabiele stopidentiteit (C-01) en mogen daar
+niet van gescheiden worden: het deployscript stopt de oude app, migreert en start pas daarna de
+nieuwe, wat precies de vereiste volgorde is.
+
+| Migratie | Wat ze doet |
+|---|---|
+| `20260830133955_StopWindowTenantZoneReencoding` | Her-encodeert de acht tijdvenstercolommen van `transport_order_stops` van "wandklok gestempeld als UTC" naar echte UTC-instants, per tenant-tijdzone. Rijen van EDI-opdrachten worden **uitgesloten** (die dragen al een echte instant). |
+| `20260830134439_PackageStopPinRepair` | Herstelt `packages."LoadingStopId"/"DeliveryStopId"` die naar een soft-deleted stop wijzen, maar uitsluitend waar de match eenduidig is (zelfde opdracht, `Sequence`, `StopType` én plaats). |
+
+Beide schrijven hun tellingen naar `audit_logs` (`EntityType = 'DataMigration'`), één rij per
+tenant: `RAISE NOTICE` van PostgreSQL is **niet zichtbaar** via `dotnet ef database update`, en dat
+is hoe `scripts/deploy-transportationservice.sh` migreert. De tellingen zijn dus ook achteraf nog
+opvraagbaar, en zichtbaar in de auditpagina.
+
+#### Vóór toepassen (op een **teruggezette kopie** van productie, nooit live)
+
+```sql
+-- 1. Omvang per tenant + welke tijdzone gebruikt wordt (NULL = geen tenant_settings-rij → default).
+SELECT t."Id", t."Name", ts."Timezone",
+       count(s.*) FILTER (WHERE s."PlannedFrom" IS NOT NULL OR s."PlannedTo" IS NOT NULL
+                            OR s."RequestedFrom" IS NOT NULL OR s."RequestedTo" IS NOT NULL
+                            OR s."ConfirmedFrom" IS NOT NULL OR s."ConfirmedTo" IS NOT NULL
+                            OR s."EarliestAllowed" IS NOT NULL OR s."LatestAllowed" IS NOT NULL) AS stop_rows
+  FROM tenants t
+  LEFT JOIN tenant_settings ts ON ts."TenantId" = t."Id"
+  LEFT JOIN transport_order_stops s ON s."TenantId" = t."Id"
+ GROUP BY 1, 2, 3
+ ORDER BY 4 DESC;
+
+-- 2. Tenants met een tijdzone die PostgreSQL niet kent (de migratie gebruikt dan Europe/Amsterdam,
+--    exact zoals de C#). Corrigeer die instelling liefst vooraf.
+SELECT ts."TenantId", ts."Timezone"
+  FROM tenant_settings ts
+ WHERE lower(btrim(ts."Timezone")) NOT IN ('utc', 'etc/utc', 'universal', 'zulu')
+   AND NOT EXISTS (SELECT 1 FROM pg_timezone_names z
+                    WHERE lower(z.name) = lower(btrim(ts."Timezone")));
+
+-- 3. Tenants zonder tenant_settings-rij die wél stops hebben (idem: default Europe/Amsterdam).
+SELECT t."Id", t."Name"
+  FROM tenants t
+  LEFT JOIN tenant_settings ts ON ts."TenantId" = t."Id"
+ WHERE ts."Id" IS NULL
+   AND EXISTS (SELECT 1 FROM transport_order_stops s WHERE s."TenantId" = t."Id");
+
+-- 4. Stopregels van EDI-opdrachten. Die worden NIET omgezet; het getal hoort te kloppen met
+--    "skippedEdi" in de auditrij.
+SELECT count(*)
+  FROM transport_order_stops s
+ WHERE EXISTS (SELECT 1 FROM edi_messages m
+                WHERE m."TenantId" = s."TenantId" AND m."IsDeleted" = false
+                  AND m."Direction" = 'Inbound' AND m."Status" = 'Processed'
+                  AND m."ResultEntityType" = 'TransportOrder'
+                  AND m."ResultEntityId" = s."TransportOrderId"::text);
+
+-- 5. Droogloop van de omzetting: verwacht -02:00:00 (zomer), -01:00:00 (winter) of 00:00:00 (UTC).
+--    Elke andere waarde = stoppen en onderzoeken.
+SELECT ((s."PlannedFrom" AT TIME ZONE 'UTC') AT TIME ZONE coalesce(ts."Timezone", 'Europe/Amsterdam'))
+         - s."PlannedFrom" AS shift,
+       count(*)
+  FROM transport_order_stops s
+  LEFT JOIN tenant_settings ts ON ts."TenantId" = s."TenantId"
+ WHERE s."PlannedFrom" IS NOT NULL
+ GROUP BY 1 ORDER BY 2 DESC;
+
+-- 6. Omvang van de verweesde colli-pins (C-01), vóór het herstel.
+SELECT count(*) FROM packages p
+ WHERE p."IsDeleted" = false
+   AND (EXISTS (SELECT 1 FROM transport_order_stops d WHERE d."Id" = p."LoadingStopId"  AND d."IsDeleted")
+     OR EXISTS (SELECT 1 FROM transport_order_stops d WHERE d."Id" = p."DeliveryStopId" AND d."IsDeleted"));
+```
+
+#### Na toepassen
+
+```sql
+-- A. De tellingen die de migraties zelf hebben vastgelegd.
+SELECT a."Timestamp", a."TenantId", a."Action", a."OldValuesJson", a."NewValuesJson"
+  FROM audit_logs a
+ WHERE a."EntityType" = 'DataMigration'
+ ORDER BY a."Timestamp" DESC;
+
+-- B. Geen omgekeerde vensters meer (de migratie klapt DST-inversies dicht; moet 0 zijn).
+SELECT count(*) FROM transport_order_stops
+ WHERE "PlannedTo" < "PlannedFrom" OR "RequestedTo" < "RequestedFrom"
+    OR "ConfirmedTo" < "ConfirmedFrom" OR "LatestAllowed" < "EarliestAllowed";
+
+-- C. Restant verweesde colli-pins = "stillAmbiguous" uit A; die moeten met de hand nagekeken
+--    worden (diagnosequery in het taakrapport task-5-report.md).
+SELECT count(*) FROM packages p
+ WHERE p."IsDeleted" = false
+   AND (EXISTS (SELECT 1 FROM transport_order_stops d WHERE d."Id" = p."LoadingStopId"  AND d."IsDeleted")
+     OR EXISTS (SELECT 1 FROM transport_order_stops d WHERE d."Id" = p."DeliveryStopId" AND d."IsDeleted"));
+```
+
+Sluit af met `VACUUM (ANALYZE) transport_order_stops;` — de omzetting herschrijft elke rij met een
+venster, wat de tabel tijdelijk ongeveer verdubbelt tot autovacuum bijtrekt, en de statistieken
+verouderd achterlaat. Controleer daarna in de applicatie zelf: een opdrachtdetail (tijdvensters),
+een **collietiket** (ophaal-/leveruur) en een **planningsvoorstel** met venster — dat zijn de drie
+schermen die de wandklok tonen.
+
 ### 1.3 Verifiëren
 
 Na `database update`:

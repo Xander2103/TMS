@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using TransportationService.Api.Common;
 using TransportationService.Api.Data;
 using TransportationService.Api.Modules.Orders.Entities;
 using TransportationService.Api.Modules.Planning.Dtos;
@@ -112,6 +113,11 @@ public class PlanningProposalService : IPlanningProposalService
             .Distinct()
             .ToListAsync(cancellationToken)).ToHashSet();
 
+        // C-03: a requested window is a UTC instant, opening hours are LOCAL wall clock. Both the
+        // constraint text the planner reads and the comparison against the intervals run in the
+        // tenant zone — comparing the raw instant reports a normal 08:00 delivery as "outside".
+        var tenantZone = await TenantTimeZone.ForTenantAsync(_dbContext, tenantId, cancellationToken);
+
         // Capacity signal: the largest active vehicle bounds what one tour can carry.
         var maxPayload = await _dbContext.Vehicles.AsNoTracking()
             .Where(v => v.TenantId == tenantId && v.IsActive && v.PayloadKg != null)
@@ -163,9 +169,11 @@ public class PlanningProposalService : IPlanningProposalService
                 constraints.Add("Moffett/meeneemheftruck vereist.");
             }
 
-            if (delivery.RequestedFrom is not null || delivery.RequestedTo is not null)
+            var requestedFromLocal = TenantTimeZone.ToWallClock(delivery.RequestedFrom, tenantZone);
+            var requestedToLocal = TenantTimeZone.ToWallClock(delivery.RequestedTo, tenantZone);
+            if (requestedFromLocal is not null || requestedToLocal is not null)
             {
-                var windowText = $"{delivery.RequestedFrom:HH:mm}–{delivery.RequestedTo:HH:mm}";
+                var windowText = $"{requestedFromLocal:HH:mm}–{requestedToLocal:HH:mm}";
                 constraints.Add($"Gevraagd venster {windowText}.");
             }
 
@@ -176,7 +184,7 @@ public class PlanningProposalService : IPlanningProposalService
                 {
                     constraints.Add("Losadres is gesloten op deze dag (openingsuren).");
                 }
-                else if (delivery.RequestedFrom is { } requestedFrom)
+                else if (requestedFromLocal is { } requestedFrom)
                 {
                     var requestedTime = TimeOnly.FromDateTime(requestedFrom);
                     if (!intervals.Any(i => requestedTime >= i.FromTime && requestedTime <= i.ToTime))

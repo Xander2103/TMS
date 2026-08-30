@@ -105,12 +105,20 @@ public class DocumentStrategyTests
 
     private sealed record Harness(SqliteTestDbContext Db, TransportDocumentService Sut, Guid TenantId, Guid CustomerId);
 
-    private static async Task<Harness> SeedAsync(string customerStrategy = "GenerateOwn")
+    private static async Task<Harness> SeedAsync(string customerStrategy = "GenerateOwn", string? timezone = null)
     {
         var db = new SqliteTestDbContext();
         var tenantId = Guid.NewGuid();
         var customerId = Guid.NewGuid();
         db.Context.Tenants.Add(new Tenant { Id = tenantId, Name = "Acme", Slug = "acme", IsActive = true, CreatedAt = DateTime.UtcNow });
+        if (timezone is not null)
+        {
+            db.Context.TenantSettings.Add(new TenantSettings
+            {
+                Id = Guid.NewGuid(), TenantId = tenantId, Timezone = timezone,
+            });
+        }
+
         db.Context.Customers.Add(new Customer
         {
             Id = customerId, TenantId = tenantId, CustomerNumber = "KL-1", Name = "Haven BV",
@@ -236,5 +244,68 @@ public class DocumentStrategyTests
         Assert.Equal("CustomerDefault", strategy.Source);
         Assert.Equal("CustomerDocument", strategy.CustomerStrategy);
         Assert.Contains("klant", strategy.Reason, StringComparison.OrdinalIgnoreCase);
+    }
+
+    // --- C-03: "the deliveries of a date" is a TENANT-LOCAL calendar day ---
+
+    /// <summary>An order whose only date signal is a requested delivery window on its last
+    /// unloading stop. The order date is deliberately a different day, so only the window can
+    /// put the order in the day's document run.</summary>
+    private static void WindowedOrder(Harness h, string number, DateTime requestedFrom)
+    {
+        var order = Order(h, number, orderDate: new DateOnly(2026, 8, 20));
+        order.Stops.Last().RequestedFrom = requestedFrom;
+    }
+
+    [Fact]
+    public async Task CustomerDay_EarlyMorningDelivery_BelongsToTheLocalDay()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        // 00:30 local on Thursday 13 August = 2026-08-12T22:30:00Z. Truncating the raw instant
+        // puts this delivery on the 12th, so it silently drops out of the 13th's print run.
+        WindowedOrder(h, "ORD-1", new DateTime(2026, 8, 12, 22, 30, 0, DateTimeKind.Utc));
+        await h.Db.Context.SaveChangesAsync();
+
+        var thirteenth = await h.Sut.PreviewCustomerDayAsync(
+            h.CustomerId, new DateOnly(2026, 8, 13), CancellationToken.None);
+        var twelfth = await h.Sut.PreviewCustomerDayAsync(
+            h.CustomerId, new DateOnly(2026, 8, 12), CancellationToken.None);
+
+        Assert.Equal(1, thirteenth!.TotalOrders);
+        Assert.Contains(thirteenth.Rows, r => r.OrderNumber == "ORD-1");
+        Assert.Equal(0, twelfth!.TotalOrders);
+    }
+
+    [Fact]
+    public async Task CustomerDay_LateEveningDelivery_StaysOnTheLocalDay()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        // 23:30 local on 13 August = 21:30Z the same day — the mirror case, which must NOT move.
+        WindowedOrder(h, "ORD-1", new DateTime(2026, 8, 13, 21, 30, 0, DateTimeKind.Utc));
+        await h.Db.Context.SaveChangesAsync();
+
+        var preview = await h.Sut.PreviewCustomerDayAsync(
+            h.CustomerId, new DateOnly(2026, 8, 13), CancellationToken.None);
+
+        Assert.Equal(1, preview!.TotalOrders);
+    }
+
+    [Fact]
+    public async Task CustomerDay_OnAUtcTenant_KeepsTheRawCalendarDay()
+    {
+        var h = await SeedAsync(timezone: "UTC");
+        using var _ = h.Db;
+        WindowedOrder(h, "ORD-1", new DateTime(2026, 8, 12, 22, 30, 0, DateTimeKind.Utc));
+        await h.Db.Context.SaveChangesAsync();
+
+        var thirteenth = await h.Sut.PreviewCustomerDayAsync(
+            h.CustomerId, new DateOnly(2026, 8, 13), CancellationToken.None);
+        var twelfth = await h.Sut.PreviewCustomerDayAsync(
+            h.CustomerId, new DateOnly(2026, 8, 12), CancellationToken.None);
+
+        Assert.Equal(0, thirteenth!.TotalOrders);
+        Assert.Equal(1, twelfth!.TotalOrders);
     }
 }

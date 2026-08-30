@@ -1,3 +1,4 @@
+using TransportationService.Api.Modules.Locations.Entities;
 using TransportationService.Api.Modules.Orders.Entities;
 using TransportationService.Api.Modules.Partners.Entities;
 using TransportationService.Api.Modules.Planning.Entities;
@@ -146,5 +147,130 @@ public class PlanningProposalTests
         // Infeasibility is explained, never hidden.
         Assert.Contains(ant.Explanations, e => e.Contains("overschrijdt het grootste voertuig"));
         Assert.Contains(ant.Explanations, e => e.Contains("voorwaarden"));
+    }
+
+    // ------------------------------------------------------------------
+    // C-03: the requested window is a UTC INSTANT, the location's opening
+    // hours are LOCAL wall clock. The comparison and the displayed window
+    // both run in the tenant zone.
+    // ------------------------------------------------------------------
+
+    /// <summary>Monday 10 August 2026; the delivery location opens 08:00–17:00 on Mondays.</summary>
+    private static readonly DateOnly Monday = new(2026, 8, 10);
+
+    private static DateTime Utc(int year, int month, int day, int hour, int minute = 0) =>
+        new(year, month, day, hour, minute, 0, DateTimeKind.Utc);
+
+    private static Guid SeedDeliveryLocation(Harness h, string? timezone)
+    {
+        if (timezone is not null)
+        {
+            h.Db.Context.TenantSettings.Add(new TenantSettings
+            {
+                Id = Guid.NewGuid(), TenantId = h.TenantId, Timezone = timezone,
+            });
+        }
+
+        var locationId = Guid.NewGuid();
+        h.Db.Context.Locations.Add(new Location
+        {
+            Id = locationId, TenantId = h.TenantId, Code = "LOC-1", Name = "Magazijn Antwerpen",
+            City = "Antwerpen", CountryCode = "BE", Type = LocationType.Warehouse, IsActive = true,
+            OpeningIntervals =
+            [
+                new LocationOpeningInterval
+                {
+                    Id = Guid.NewGuid(), TenantId = h.TenantId, LocationId = locationId,
+                    DayOfWeek = 1, FromTime = new(8, 0), ToTime = new(17, 0),
+                },
+            ],
+        });
+        return locationId;
+    }
+
+    private static void SeedWindowedOrder(Harness h, Guid locationId, DateTime from, DateTime to)
+    {
+        var order = new TransportOrder
+        {
+            Id = Guid.NewGuid(), TenantId = h.TenantId, CustomerId = h.CustomerId,
+            OrderNumber = "ORD-1", OrderDate = Monday, Status = TransportOrderStatus.Confirmed,
+        };
+        order.Stops.Add(new TransportOrderStop
+        {
+            Id = Guid.NewGuid(), TenantId = h.TenantId, Sequence = 1, StopType = StopType.Unloading,
+            PostalCode = "2000", City = "Antwerpen", CountryCode = "BE", LocationId = locationId,
+            RequestedFrom = from, RequestedTo = to,
+        });
+        h.Db.Context.TransportOrders.Add(order);
+    }
+
+    private static async Task<ProposalOrderDto> ProposeAsync(Harness h)
+    {
+        await h.Db.Context.SaveChangesAsync();
+        var result = await h.Sut.GetProposalsAsync(Monday, CancellationToken.None);
+        return Assert.Single(Assert.Single(result.Proposals, p => p.ZoneCode == "ANT").Orders);
+    }
+
+    [Fact]
+    public async Task Proposals_RequestedWindow_IsComparedInTheTenantZone()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var locationId = SeedDeliveryLocation(h, "Europe/Amsterdam");
+        // 08:00–10:00 local on Monday 10 August (CEST, +02:00) = 06:00Z–08:00Z. Read as raw UTC
+        // that is 06:00, before the 08:00 opening, and the proposal would claim the window falls
+        // outside the opening hours of a perfectly ordinary delivery.
+        SeedWindowedOrder(h, locationId, Utc(2026, 8, 10, 6), Utc(2026, 8, 10, 8));
+
+        var order = await ProposeAsync(h);
+
+        Assert.Contains(order.Constraints, c => c == "Gevraagd venster 08:00–10:00.");
+        Assert.DoesNotContain(order.Constraints, c => c.Contains("buiten de openingsuren"));
+    }
+
+    [Fact]
+    public async Task Proposals_RequestedWindowGenuinelyOutsideHours_StillWarns_WithTheLocalTime()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var locationId = SeedDeliveryLocation(h, "Europe/Amsterdam");
+        // 18:30 local = 16:30Z — genuinely after closing; the message must name 18:30.
+        SeedWindowedOrder(h, locationId, Utc(2026, 8, 10, 16, 30), Utc(2026, 8, 10, 17, 30));
+
+        var order = await ProposeAsync(h);
+
+        Assert.Contains(order.Constraints, c => c == "Gevraagd venster 18:30–19:30.");
+        Assert.Contains(order.Constraints, c => c == "Gevraagd venster valt buiten de openingsuren (08:00–17:00).");
+    }
+
+    [Fact]
+    public async Task Proposals_OnAUtcTenant_KeepTheRawReading()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var locationId = SeedDeliveryLocation(h, "UTC");
+        SeedWindowedOrder(h, locationId, Utc(2026, 8, 10, 6), Utc(2026, 8, 10, 8));
+
+        var order = await ProposeAsync(h);
+
+        Assert.Contains(order.Constraints, c => c == "Gevraagd venster 06:00–08:00.");
+        Assert.Contains(order.Constraints, c => c.Contains("buiten de openingsuren"));
+    }
+
+    [Fact]
+    public async Task Proposals_TenantWithoutASettingsRow_UsesTheTenantDefaultZone()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        // The settings row is created lazily by CompanySettingsService, so it can be absent.
+        // The API must then behave exactly like Europe/Amsterdam — the same rule the SQL data
+        // migration mirrors with LEFT JOIN + COALESCE.
+        var locationId = SeedDeliveryLocation(h, timezone: null);
+        SeedWindowedOrder(h, locationId, Utc(2026, 8, 10, 6), Utc(2026, 8, 10, 8));
+
+        var order = await ProposeAsync(h);
+
+        Assert.Contains(order.Constraints, c => c == "Gevraagd venster 08:00–10:00.");
+        Assert.DoesNotContain(order.Constraints, c => c.Contains("buiten de openingsuren"));
     }
 }
