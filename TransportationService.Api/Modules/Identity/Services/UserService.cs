@@ -274,7 +274,9 @@ public class UserService : IUserService
         var affectedRoleIds = newRoleIds.Except(oldRoleIds).Concat(oldRoleIds.Except(newRoleIds)).ToHashSet();
         if (affectedRoleIds.Count > 0)
         {
-            var actorPermissions = await _accountSecurity.EffectivePermissionsAsync(actorId, cancellationToken);
+            // ACTOR side: the filtered set, so a customer-linked account carrying a legacy internal
+            // role cannot hand that role out (fix wave B / B6).
+            var actorPermissions = await _accountSecurity.ActorPermissionsAsync(actorId, cancellationToken);
             var actorIsSystemUser = await _accountSecurity.IsProtectedSystemUserAsync(actorId, cancellationToken);
 
             var affectedRoles = await _dbContext.Roles

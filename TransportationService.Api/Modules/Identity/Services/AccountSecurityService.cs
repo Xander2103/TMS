@@ -17,8 +17,20 @@ public interface IAccountSecurityService
     /// <summary>The acting user's id (fail-closed: throws when there is no authenticated actor).</summary>
     Guid RequireActorId();
 
-    /// <summary>Effective permission codes a user holds across all of their active roles.</summary>
+    /// <summary>
+    /// The permission codes a user is ASSIGNED across their active roles, WITHOUT the H-14
+    /// identity-class guard. This is the TARGET side of a privilege comparison, where
+    /// over-reporting is the safe direction. Never use it to authorise an actor — see
+    /// <see cref="ActorPermissionsAsync"/>.
+    /// </summary>
     Task<IReadOnlySet<string>> EffectivePermissionsAsync(Guid userId, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// The permission codes an actor may actually EXERCISE — the identity-class-filtered set, i.e.
+    /// exactly what <c>[RequirePermission]</c> would honour. This is the ACTOR side, where
+    /// under-reporting is the safe direction.
+    /// </summary>
+    Task<IReadOnlySet<string>> ActorPermissionsAsync(Guid actorUserId, CancellationToken cancellationToken);
 
     /// <summary>True when the user is a member of any protected (IsSystemRole) role in the tenant.</summary>
     Task<bool> IsProtectedSystemUserAsync(Guid userId, CancellationToken cancellationToken);
@@ -43,7 +55,8 @@ public interface IAccountSecurityService
     /// <summary>Whether a role is a customer-portal template (only customer_portal.* permissions allowed).</summary>
     bool IsPortalTemplateRole(Role role);
 
-    /// <summary>All codes belong to the customer_portal.* namespace (case-insensitive).</summary>
+    /// <summary>All codes belong to the customer_portal.* namespace (ordinal, case-sensitive —
+    /// see <see cref="PortalPermissionScope"/> for why the strict direction is the safe one).</summary>
     bool IsPortalPermissionSet(IEnumerable<string> permissionCodes);
 }
 
@@ -77,14 +90,25 @@ public sealed class AccountSecurityService : IAccountSecurityService
         ?? throw new UnauthorizedAccessException("No authenticated actor for a privileged operation (fail-closed).");
 
     /// <summary>
-    /// Deliberately the RAW assigned set, not the identity-class-filtered one: this feeds the
-    /// privilege-comparison guards below, where over-reporting the target's rights is the safe
-    /// direction. (A portal identity whose account still carries an internal role cannot USE that
-    /// role — see the guard in PermissionSetService — but it must still count against an actor who
-    /// wants to manage that account.)
+    /// TARGET side. Deliberately the RAW assigned set, not the identity-class-filtered one: a
+    /// portal identity whose account still carries an internal role cannot USE that role (see the
+    /// guard in PermissionSetService), but it must still count against an actor who wants to
+    /// manage that account — otherwise filtering here would make a stale portal account *easier*
+    /// to take over than a clean internal one.
     /// </summary>
     public Task<IReadOnlySet<string>> EffectivePermissionsAsync(Guid userId, CancellationToken cancellationToken) =>
         _permissions.GetAssignedPermissionCodesAsync(userId, cancellationToken);
+
+    /// <summary>
+    /// ACTOR side, and the opposite direction of <see cref="EffectivePermissionsAsync"/> for the
+    /// same reason: over-reporting a TARGET is safe, over-reporting an ACTOR is not. A
+    /// customer-linked account that still carries a legacy internal role is refused every internal
+    /// endpoint by <c>[RequirePermission]</c>; it must not be able to authorise itself through the
+    /// inner privilege guards either, which would otherwise leave the edge check as the only
+    /// remaining barrier.
+    /// </summary>
+    public Task<IReadOnlySet<string>> ActorPermissionsAsync(Guid actorUserId, CancellationToken cancellationToken) =>
+        _permissions.GetPermissionCodesAsync(actorUserId, cancellationToken);
 
     public async Task<bool> IsProtectedSystemUserAsync(Guid userId, CancellationToken cancellationToken) =>
         await _db.UserRoles.AsNoTracking()
@@ -96,7 +120,7 @@ public sealed class AccountSecurityService : IAccountSecurityService
     public async Task<bool> CanManageUserAsync(Guid targetUserId, CancellationToken cancellationToken)
     {
         var actorId = RequireActorId();
-        var actorPermissions = await EffectivePermissionsAsync(actorId, cancellationToken);
+        var actorPermissions = await ActorPermissionsAsync(actorId, cancellationToken);
         var targetPermissions = await EffectivePermissionsAsync(targetUserId, cancellationToken);
 
         // Escalation guard: the target may hold nothing the actor lacks.
@@ -117,7 +141,7 @@ public sealed class AccountSecurityService : IAccountSecurityService
 
     public async Task<bool> ActorHoldsAllAsync(IEnumerable<string> requested, CancellationToken cancellationToken)
     {
-        var actorPermissions = await EffectivePermissionsAsync(RequireActorId(), cancellationToken);
+        var actorPermissions = await ActorPermissionsAsync(RequireActorId(), cancellationToken);
         return requested.All(code => actorPermissions.Contains(code));
     }
 
