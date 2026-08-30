@@ -104,10 +104,10 @@ describe('parseDisplayDate — strict, unambiguous input parsing', () => {
 })
 
 describe('formatTime / durations (attendance)', () => {
-  it('renders 24h HH:mm from a UTC timestamp', () => {
-    // Een Date uit lokale componenten IS al het juiste UTC-instant voor die wandkloktijd.
-    const iso = new Date(2026, 7, 20, 7, 54, 0).toISOString()
-    expect(formatTime(iso)).toBe('07:54')
+  it('renders 24h HH:mm in the TENANT zone, not the runner zone (C-03)', () => {
+    // 05:54Z is 07:54 in Europe/Amsterdam in August; asserting the literal instant keeps this
+    // test valid on a UTC CI runner, which the old `new Date(local...)` form was not.
+    expect(formatTime('2026-08-20T05:54:00Z')).toBe('07:54')
   })
 
   it('returns an empty string for invalid input', () => {

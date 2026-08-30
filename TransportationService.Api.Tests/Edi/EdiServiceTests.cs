@@ -95,6 +95,88 @@ public class EdiServiceTests
         Assert.Single(h.Db.Context.CargoItems.Where(c => c.Barcode == "EDI-BC-1"));
     }
 
+    private static string PayloadWithWindow(object from, object to, string key = "plannedFrom") => JsonSerializer.Serialize(new
+    {
+        externalOrderId = "EXT-TIME",
+        goodsDescription = "Tijdvenster",
+        stops = new object[]
+        {
+            new Dictionary<string, object>
+            {
+                ["type"] = "Loading", ["externalLocationCode"] = "TERMINAL-77",
+                [key] = from, [key == "plannedFrom" ? "plannedTo" : "requestedTo"] = to,
+            },
+            new { type = "Unloading", city = "Gent" },
+        },
+        cargoItems = new object[] { new { description = "Pallet", quantity = 1 } },
+    });
+
+    /// <summary>
+    /// C-03: a partner window is a REQUEST, and it is parsed as an instant. An offset-carrying
+    /// value converts to UTC (08:00+02:00 → 06:00Z) instead of picking up the server's zone, and
+    /// it lands in RequestedFrom/To — planning stays empty until a dispatcher plans the stop.
+    /// </summary>
+    [Fact]
+    public async Task Ingest_PartnerWindowWithOffset_BecomesUtcRequestedWindow_NotPlanned()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+
+        var result = await h.Sut.IngestAsync(
+            "haven-edi", "order",
+            PayloadWithWindow("2026-07-15T08:00:00+02:00", "2026-07-15T10:00:00+02:00"),
+            CancellationToken.None);
+
+        Assert.Equal(EdiProcessingStatus.Processed, result.Message!.Status);
+        var stop = h.Db.Context.TransportOrderStops.OrderBy(s => s.Sequence).First();
+
+        Assert.Equal(new DateTime(2026, 07, 15, 6, 0, 0, DateTimeKind.Utc), stop.RequestedFrom);
+        Assert.Equal(new DateTime(2026, 07, 15, 8, 0, 0, DateTimeKind.Utc), stop.RequestedTo);
+        Assert.Equal(DateTimeKind.Utc, stop.RequestedFrom!.Value.Kind);
+        Assert.Null(stop.PlannedFrom);
+        Assert.Null(stop.PlannedTo);
+    }
+
+    /// <summary>An offset-LESS partner value is taken to be UTC already (documented contract).</summary>
+    [Fact]
+    public async Task Ingest_PartnerWindowWithoutOffset_IsReadAsUtc()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+
+        var result = await h.Sut.IngestAsync(
+            "haven-edi", "order",
+            PayloadWithWindow("2026-07-15T06:00:00", "2026-07-15T08:00:00"),
+            CancellationToken.None);
+
+        Assert.Equal(EdiProcessingStatus.Processed, result.Message!.Status);
+        var stop = h.Db.Context.TransportOrderStops.OrderBy(s => s.Sequence).First();
+
+        Assert.Equal(new DateTime(2026, 07, 15, 6, 0, 0, DateTimeKind.Utc), stop.RequestedFrom);
+        Assert.Equal(DateTimeKind.Utc, stop.RequestedFrom!.Value.Kind);
+        Assert.Null(stop.PlannedFrom);
+    }
+
+    /// <summary>`requestedFrom`/`requestedTo` are accepted as the clearer aliases of the keys.</summary>
+    [Fact]
+    public async Task Ingest_AcceptsRequestedWindowKeys()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+
+        var result = await h.Sut.IngestAsync(
+            "haven-edi", "order",
+            PayloadWithWindow("2026-07-15T08:00:00+02:00", "2026-07-15T10:00:00+02:00", "requestedFrom"),
+            CancellationToken.None);
+
+        Assert.Equal(EdiProcessingStatus.Processed, result.Message!.Status);
+        var stop = h.Db.Context.TransportOrderStops.OrderBy(s => s.Sequence).First();
+
+        Assert.Equal(new DateTime(2026, 07, 15, 6, 0, 0, DateTimeKind.Utc), stop.RequestedFrom);
+        Assert.Equal(new DateTime(2026, 07, 15, 8, 0, 0, DateTimeKind.Utc), stop.RequestedTo);
+        Assert.Null(stop.PlannedFrom);
+    }
+
     [Fact]
     public async Task Ingest_ResolvesUnits_ViaCustomerEdiCode_ThenGlobalCode()
     {

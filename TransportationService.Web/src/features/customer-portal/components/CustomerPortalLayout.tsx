@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
+import { apiClient } from '../../../api/apiClient'
 import { useAuth } from '../../auth/authContextValue'
+import { setTimeZonePreference } from '../../../utils/dates'
 import { LocaleProvider } from '../../../i18n/LocaleProvider'
 import { useLocale } from '../../../i18n/localeContext'
 import { isLocale, type Locale } from '../../../i18n/translations'
@@ -56,6 +58,17 @@ export function CustomerPortalLayout() {
     return () => {
       mounted = false
     }
+  }, [])
+
+  // C-03: portal users never pass through AppLayout, so the tenant zone is bootstrapped here
+  // too — otherwise the portal would silently keep the Europe/Amsterdam default and misreport
+  // stop windows for any tenant that runs on a different zone. Presentation-only endpoint,
+  // open to every signed-in user; a failure is non-fatal (the default stands).
+  useEffect(() => {
+    apiClient
+      .getJson<{ timezone?: string }>('/api/company-settings/display')
+      .then((prefs) => setTimeZonePreference(prefs.timezone))
+      .catch(() => {})
   }, [])
 
   const preferredLanguage: Locale | null = context && isLocale(context.preferredLanguage) ? context.preferredLanguage : null

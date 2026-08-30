@@ -4,7 +4,7 @@ import { apiClient } from '../../api/apiClient'
 import { useAuth } from '../../features/auth/authContextValue'
 import { useLocale } from '../../i18n/localeContext'
 import { isLocale } from '../../i18n/translations'
-import { setDateFormatPreference } from '../../utils/dates'
+import { setDateFormatPreference, setTimeZonePreference } from '../../utils/dates'
 import { setDecimalSeparatorPreference } from '../../utils/numbers'
 import { useActionQueueSync } from '../../hooks/useActionQueueSync'
 import { useShortcutRegistry } from '../../hooks/useShortcutRegistry'
@@ -39,11 +39,17 @@ export function AppLayout() {
   const hasOwnLanguage = user?.preferredLanguage != null
   useEffect(() => {
     apiClient
-      .getJson<{ dateFormat: string; decimalSeparator?: string; defaultLanguage?: string }>(
-        '/api/company-settings/display')
+      .getJson<{
+        dateFormat: string; decimalSeparator?: string; timezone?: string; defaultLanguage?: string
+      }>('/api/company-settings/display')
       .then((prefs) => {
         setDateFormatPreference(prefs.dateFormat)
         setDecimalSeparatorPreference(prefs.decimalSeparator)
+        // C-03: operational wall-clock times (stop windows, ETAs, stamps) render in the TENANT
+        // zone, never the browser zone — so the zone is bootstrapped here with the rest of the
+        // regional preferences. Until it resolves utils/dates uses the Europe/Amsterdam default,
+        // which is also the backend's seeded default.
+        setTimeZonePreference(prefs.timezone)
         if (!hasOwnLanguage && isLocale(prefs.defaultLanguage)) {
           applyFallbackLocale(prefs.defaultLanguage)
         }

@@ -13,6 +13,7 @@ import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
 import { useLocale } from '../../../i18n/localeContext'
 import { describeApiError, type FieldErrors } from '../../../api/problemDetails'
+import { fromDateTimeLocalInput } from '../../../utils/dates'
 import { UNIT_TYPE_LABELS, type PackageUnitType } from '../../packages/types'
 import type { StopType } from '../../transport-orders/types'
 import {
@@ -129,8 +130,11 @@ export function CustomerPortalNewOrderPage() {
           postalCode: stop.locationId ? null : stop.postalCode.trim() || null,
           city: stop.locationId ? null : stop.city.trim() || null,
           countryCode: stop.locationId ? null : 'BE',
-          requestedFrom: stop.requestedFrom || null,
-          requestedTo: stop.requestedTo || null,
+          // C-03: the datetime-local fields hold TENANT wall clock (the carrier's dock time).
+          // They used to travel as a bare "2026-07-15T08:00" — no zone at all, which the API
+          // cannot store as an instant; they now travel as the UTC instant the wire expects.
+          requestedFrom: fromDateTimeLocalInput(stop.requestedFrom),
+          requestedTo: fromDateTimeLocalInput(stop.requestedTo),
           reference: stop.reference.trim() || null,
           instructions: stop.instructions.trim() || null,
         })),

@@ -942,8 +942,10 @@ describe('TransportOrderForm stops layout & simple time input (wave 2026-08-04 �
 
     const input = onSubmit.mock.calls[0][0]
     const unloading = input.stops[1]
-    expect(unloading.plannedFrom).toBe('2026-08-12T08:00:00Z')
-    expect(unloading.plannedTo).toBe('2026-08-12T10:00:00Z')
+    // C-03: 08:00–10:00 is TENANT wall clock (Europe/Amsterdam, summer) → 06:00Z–08:00Z on the
+    // wire. The old expectation pasted the typed text after a "Z" and so asserted the bug.
+    expect(unloading.plannedFrom).toBe('2026-08-12T06:00:00Z')
+    expect(unloading.plannedTo).toBe('2026-08-12T08:00:00Z')
     expect(unloading.timeRequirement).toBe('Before')
     expect(unloading.timeRequirementTo).toBe('10:00')
     expect(unloading.timeRequirementFrom).toBeNull()

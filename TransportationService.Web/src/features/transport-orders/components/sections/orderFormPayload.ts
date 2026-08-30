@@ -1,3 +1,4 @@
+import { fromDateTimeLocalInput, toWireDateTime } from '../../../../utils/dates'
 import { computeVolumeM3 } from '../../../../utils/volume'
 import type { TransportOrderInput } from '../../types'
 import { numberOrNullFrom, type OrderFormValues } from './orderFormState'
@@ -137,8 +138,11 @@ export function buildSubmitPayload(values: OrderFormValues): TransportOrderInput
       city: stop.city.trim() || null,
       countryCode: stop.countryCode.trim() || null,
       // §14: one date + optional from/to time; a date without times keeps the day itself.
-      plannedFrom: stop.date ? `${stop.date}T${stop.fromTime || '00:00'}:00Z` : null,
-      plannedTo: stop.date && stop.toTime ? `${stop.date}T${stop.toTime}:00Z` : null,
+      // C-03: the typed date/time is TENANT wall clock — toWireDateTime converts it to the UTC
+      // instant the API stores. Pasting the text straight after a "Z" (the old form) claimed the
+      // dispatcher had typed UTC and silently moved every window one or two hours.
+      plannedFrom: toWireDateTime(stop.date, stop.fromTime || '00:00'),
+      plannedTo: stop.toTime ? toWireDateTime(stop.date, stop.toTime) : null,
       timeRequirement: stop.timeRequirement || 'None',
       timeRequirementFrom:
         (stop.timeRequirement === 'After' || stop.timeRequirement === 'Window') && stop.timeReqFrom
@@ -149,12 +153,13 @@ export function buildSubmitPayload(values: OrderFormValues): TransportOrderInput
           ? stop.timeReqTo
           : null,
       includedTimeMinutesOverride: numberOrNullFrom(stop.includedTimeMinutesOverride),
-      requestedFrom: stop.requestedFrom ? `${stop.requestedFrom}:00Z` : null,
-      requestedTo: stop.requestedTo ? `${stop.requestedTo}:00Z` : null,
-      confirmedFrom: stop.confirmedFrom ? `${stop.confirmedFrom}:00Z` : null,
-      confirmedTo: stop.confirmedTo ? `${stop.confirmedTo}:00Z` : null,
-      earliestAllowed: stop.earliestAllowed ? `${stop.earliestAllowed}:00Z` : null,
-      latestAllowed: stop.latestAllowed ? `${stop.latestAllowed}:00Z` : null,
+      // C-03: datetime-local values are tenant wall clock too — same conversion, one helper.
+      requestedFrom: fromDateTimeLocalInput(stop.requestedFrom),
+      requestedTo: fromDateTimeLocalInput(stop.requestedTo),
+      confirmedFrom: fromDateTimeLocalInput(stop.confirmedFrom),
+      confirmedTo: fromDateTimeLocalInput(stop.confirmedTo),
+      earliestAllowed: fromDateTimeLocalInput(stop.earliestAllowed),
+      latestAllowed: fromDateTimeLocalInput(stop.latestAllowed),
       appointmentRequired: stop.appointmentRequired,
       appointmentReference: stop.appointmentReference.trim() || null,
       reference: stop.reference.trim() || null,

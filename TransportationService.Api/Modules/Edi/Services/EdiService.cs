@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -329,9 +330,14 @@ public class EdiService : IEdiService
                 locationId = mapped;
             }
 
+            // C-03: what a partner sends is what the partner ASKS for, not what the planner has
+            // decided — it belongs in the requested window. Writing it to PlannedFrom/To made an
+            // EDI order look planned before a dispatcher had seen it, and let an inbound message
+            // silently overwrite real planning.
             stops.Add(new TransportOrderStopInput(
                 stop.Type, locationId, null, null, null, stop.City, null,
-                stop.PlannedFrom, stop.PlannedTo, stop.Reference, null));
+                null, null, stop.Reference, null,
+                RequestedFrom: stop.RequestedFrom, RequestedTo: stop.RequestedTo));
         }
 
         if (errors.Count > 0)
@@ -404,9 +410,14 @@ public class EdiService : IEdiService
         message.FailureKind = failureKind;
     }
 
+    /// <summary>
+    /// The partner's stop. The window is the partner's REQUEST (see MapStops); the inbound JSON
+    /// keys stay `plannedFrom`/`plannedTo` for the published generic-json-v1 contract, with
+    /// `requestedFrom`/`requestedTo` accepted as the clearer aliases.
+    /// </summary>
     private sealed record ParsedStop(
         StopType Type, string? ExternalLocationCode, string? City,
-        DateTime? PlannedFrom, DateTime? PlannedTo, string? Reference);
+        DateTime? RequestedFrom, DateTime? RequestedTo, string? Reference);
 
     private sealed record ParsedOrder(
         string ExternalOrderId, string? CustomerReference, string GoodsDescription,
@@ -460,8 +471,8 @@ public class EdiService : IEdiService
                         type,
                         ReadString(stop, "externalLocationCode"),
                         ReadString(stop, "city"),
-                        ReadDate(stop, "plannedFrom"),
-                        ReadDate(stop, "plannedTo"),
+                        ReadDate(stop, "requestedFrom") ?? ReadDate(stop, "plannedFrom"),
+                        ReadDate(stop, "requestedTo") ?? ReadDate(stop, "plannedTo"),
                         ReadString(stop, "reference")));
                 }
             }
@@ -518,9 +529,22 @@ public class EdiService : IEdiService
             ? value.GetString()
             : null;
 
+    /// <summary>
+    /// C-03 — partner timestamps land as UTC instants or not at all. `DateTime.TryParse` with
+    /// its defaults yields Kind=Local for an offset-carrying value (converted to the SERVER's
+    /// zone, so the same payload means different things on a Brussels box and a UTC container)
+    /// and Kind=Unspecified for a bare one; neither can be written to a `timestamp with time
+    /// zone` column. AdjustToUniversal|AssumeUniversal makes the contract explicit and the
+    /// result always Kind=Utc: a partner value carrying an offset ("2026-07-15T08:00:00+02:00")
+    /// is converted; a value WITHOUT an offset ("2026-07-15T08:00:00") is taken to be UTC
+    /// already — partners must send the offset if they mean local time. InvariantCulture keeps
+    /// the parse independent of the server locale.
+    /// </summary>
     private static DateTime? ReadDate(JsonElement element, string property) =>
         element.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.String
-        && DateTime.TryParse(value.GetString(), out var parsed)
+        && DateTime.TryParse(
+            value.GetString(), CultureInfo.InvariantCulture,
+            DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var parsed)
             ? parsed
             : null;
 }
