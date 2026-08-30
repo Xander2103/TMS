@@ -252,7 +252,7 @@ public class OrderUpdateIntegrityTests
         Assert.Equal(TransportOrderOperationOutcome.Success, result.Outcome);
         Assert.Equal(3, result.Order!.Stops.Count);
         Assert.Equal(2, result.Order.Stops.Count(s => existingIds.Contains(s.Id)));
-        Assert.Single(result.Order.Stops.Where(s => !existingIds.Contains(s.Id)));
+        Assert.Single(result.Order.Stops, s => !existingIds.Contains(s.Id));
         Assert.Equal([1, 2, 3], result.Order.Stops.Select(s => s.Sequence).ToArray());
     }
 
@@ -409,7 +409,7 @@ public class OrderUpdateIntegrityTests
         }, CancellationToken.None);
 
         Assert.Equal(TransportOrderOperationOutcome.Success, result.Outcome);
-        var added = Assert.Single(result.Order!.Stops.Where(s => !ownIds.Contains(s.Id)));
+        var added = Assert.Single(result.Order!.Stops, s => !ownIds.Contains(s.Id));
         Assert.NotEqual(foreignStopId, added.Id);
 
         h.Db.Context.ChangeTracker.Clear();
@@ -461,5 +461,237 @@ public class OrderUpdateIntegrityTests
         var preserved = Assert.Single(result.Order!.CargoItems);
         Assert.Equal(cargo.LoadingStopId, preserved.LoadingStopId);
         Assert.Equal(cargo.UnloadingStopId, preserved.UnloadingStopId);
+    }
+
+    /// <summary>
+    /// Review I-4: a refused stop plan must leave the tracked entity COMPLETELY untouched. The
+    /// stop guards used to run after ~20 header fields had already been assigned, so a 400 left a
+    /// fully-applied, never-validated header edit in the change tracker — which any later
+    /// <c>IAuditService.RecordAsync</c> in the same DI scope would have flushed (it calls
+    /// SaveChangesAsync unconditionally). The whole stop plan is now validated before the first
+    /// mutation.
+    /// </summary>
+    [Fact]
+    public async Task Update_RefusedStopRemoval_LeavesHeaderVersionAndStopsUntouched()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var order = await CreateTwoStopOrderAsync(h);
+        await h.Sut.ChangeStatusAsync(order.Id, TransportOrderStatus.Confirmed, CancellationToken.None);
+        await h.Packages.GenerateForOrderAsync(order.Id, CancellationToken.None);
+        h.Db.Context.ChangeTracker.Clear();
+
+        var before = await h.Db.Context.TransportOrders.AsNoTracking().FirstAsync(o => o.Id == order.Id);
+        var stopsBefore = await h.Db.Context.TransportOrderStops.AsNoTracking()
+            .Where(s => s.TransportOrderId == order.Id).OrderBy(s => s.Sequence)
+            .Select(s => new { s.Id, s.Sequence, s.StopType, s.City, s.Instructions }).ToListAsync();
+        h.Db.Context.ChangeTracker.Clear();
+
+        var reloaded = await h.Sut.GetByIdAsync(order.Id, CancellationToken.None);
+        var update = UpdateFrom(reloaded!);
+        var result = await h.Sut.UpdateAsync(order.Id, update with
+        {
+            // Every one of these header edits must be discarded along with the refusal.
+            CustomerReference = "GEWIJZIGD",
+            Notes = "Deze notitie mag nooit landen",
+            GoodsDescription = "Iets heel anders",
+            AdrRequired = true,
+            Stops = [Stop(StopType.Loading, city: "Luik"), update.Stops.Single(s => s.StopType == StopType.Unloading)],
+        }, CancellationToken.None);
+
+        Assert.Equal(TransportOrderOperationOutcome.ValidationFailed, result.Outcome);
+
+        // Force a flush of anything the refused call might have left in the tracker: if the header
+        // had been mutated before the guard, this would persist it.
+        await h.Db.Context.SaveChangesAsync();
+        h.Db.Context.ChangeTracker.Clear();
+
+        var after = await h.Db.Context.TransportOrders.AsNoTracking().FirstAsync(o => o.Id == order.Id);
+        Assert.Equal(before.Version, after.Version);
+        Assert.Equal(before.CustomerReference, after.CustomerReference);
+        Assert.Equal(before.Notes, after.Notes);
+        Assert.Equal(before.GoodsDescription, after.GoodsDescription);
+        Assert.Equal(before.AdrRequired, after.AdrRequired);
+        Assert.Equal(before.UpdatedAt, after.UpdatedAt);
+
+        var stopsAfter = await h.Db.Context.TransportOrderStops.AsNoTracking()
+            .Where(s => s.TransportOrderId == order.Id).OrderBy(s => s.Sequence)
+            .Select(s => new { s.Id, s.Sequence, s.StopType, s.City, s.Instructions }).ToListAsync();
+        Assert.Equal(stopsBefore, stopsAfter);
+    }
+
+    /// <summary>
+    /// Review I-3: the Draft/Submitted carve-out is the only branch in this change that writes to
+    /// another module's rows, so it gets its own test. Package pins are best-effort links (the
+    /// scan pipeline documents a null pin as the fallback), so on a not-yet-confirmed order the
+    /// stop may go — but the pin must be RELEASED, never left dangling on a soft-deleted row.
+    /// The Confirmed counterpart is refused; see
+    /// <see cref="Update_RemovingAStopWithPackagesOnAConfirmedOrder_IsRefused"/>.
+    /// </summary>
+    [Fact]
+    public async Task Update_DraftOrder_RemovingAPinnedStop_ReleasesThePackagePins()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var order = await CreateTwoStopOrderAsync(h);
+        Assert.Equal(TransportOrderStatus.Draft, order.Status);
+        await h.Packages.GenerateForOrderAsync(order.Id, CancellationToken.None);
+        h.Db.Context.ChangeTracker.Clear();
+
+        var unloadingStopId = order.Stops.Single(s => s.StopType == StopType.Unloading).Id;
+        var pinnedBefore = await h.Db.Context.Packages.AsNoTracking()
+            .Where(p => p.TransportOrderId == order.Id).ToListAsync();
+        Assert.NotEmpty(pinnedBefore);
+        Assert.All(pinnedBefore, p => Assert.Equal(unloadingStopId, p.DeliveryStopId));
+        h.Db.Context.ChangeTracker.Clear();
+
+        // Drop the pinned unloading stop and offer a new one. A Draft order is not physically
+        // bound, so this is allowed.
+        var update = UpdateFrom(order);
+        var result = await h.Sut.UpdateAsync(order.Id, update with
+        {
+            Stops = [update.Stops.Single(s => s.StopType == StopType.Loading), Stop(StopType.Unloading, city: "Brugge")],
+        }, CancellationToken.None);
+
+        Assert.Equal(TransportOrderOperationOutcome.Success, result.Outcome);
+
+        h.Db.Context.ChangeTracker.Clear();
+        var droppedStop = await h.Db.Context.TransportOrderStops.IgnoreQueryFilters().AsNoTracking()
+            .SingleAsync(s => s.Id == unloadingStopId);
+        Assert.True(droppedStop.IsDeleted);
+
+        var packagesAfter = await h.Db.Context.Packages.AsNoTracking()
+            .Where(p => p.TransportOrderId == order.Id).ToListAsync();
+        Assert.NotEmpty(packagesAfter);
+        // The pin to the removed stop is released; the pin to the PRESERVED loading stop stays.
+        Assert.All(packagesAfter, p => Assert.Null(p.DeliveryStopId));
+        Assert.All(packagesAfter, p => Assert.Equal(
+            result.Order!.Stops.Single(s => s.StopType == StopType.Loading).Id, p.LoadingStopId));
+    }
+
+    /// <summary>
+    /// Review M-3: reordering is where in-place updates are most likely to surprise (transient
+    /// duplicate sequences, cargo stop indexes re-resolved by position). Ids must survive and the
+    /// sequences must follow the new request order.
+    /// </summary>
+    [Fact]
+    public async Task Update_ReorderingEchoedStops_KeepsIdsAndRenumbersSequences()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var created = await h.Sut.CreateAsync(Request(h.CustomerId,
+            Stop(StopType.Loading, h.LocationId), Stop(StopType.Unloading, city: "Gent"),
+            Stop(StopType.Unloading, city: "Brugge")), CancellationToken.None);
+        h.Db.Context.ChangeTracker.Clear();
+        var order = created.Order!;
+        var gentId = order.Stops.Single(s => s.City == "Gent").Id;
+        var bruggeId = order.Stops.Single(s => s.City == "Brugge").Id;
+
+        // Swap the two unloading stops.
+        var update = UpdateFrom(order);
+        var reordered = new[] { update.Stops[0], update.Stops[2], update.Stops[1] };
+        var result = await h.Sut.UpdateAsync(order.Id, update with { Stops = reordered }, CancellationToken.None);
+
+        Assert.Equal(TransportOrderOperationOutcome.Success, result.Outcome);
+        Assert.Equal([1, 2, 3], result.Order!.Stops.Select(s => s.Sequence).ToArray());
+        Assert.Equal(bruggeId, result.Order.Stops.Single(s => s.Sequence == 2).Id);
+        Assert.Equal(gentId, result.Order.Stops.Single(s => s.Sequence == 3).Id);
+
+        h.Db.Context.ChangeTracker.Clear();
+        var persisted = await h.Db.Context.TransportOrderStops.IgnoreQueryFilters().AsNoTracking()
+            .Where(s => s.TransportOrderId == order.Id).ToListAsync();
+        Assert.Equal(3, persisted.Count); // no phantom rows, no soft-deleted twins
+        Assert.All(persisted, s => Assert.False(s.IsDeleted));
+        Assert.Equal(2, persisted.Single(s => s.Id == bruggeId).Sequence);
+        Assert.Equal(3, persisted.Single(s => s.Id == gentId).Sequence);
+    }
+
+    /// <summary>
+    /// Review M-4 (and the coordinator's ruling): the same stop id echoed twice in one request is
+    /// ambiguous — the client cannot mean one row twice. Rather than silently inventing a second
+    /// stop, the whole edit is refused so nobody's stop identity is guessed at.
+    /// </summary>
+    [Fact]
+    public async Task Update_WithADuplicateEchoedStopId_IsRefused()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var order = await CreateTwoStopOrderAsync(h);
+        var loadingStopId = order.Stops.Single(s => s.StopType == StopType.Loading).Id;
+
+        var update = UpdateFrom(order);
+        var result = await h.Sut.UpdateAsync(order.Id, update with
+        {
+            Stops = [.. update.Stops, Stop(StopType.Unloading, city: "Brugge") with { Id = loadingStopId }],
+        }, CancellationToken.None);
+
+        Assert.Equal(TransportOrderOperationOutcome.ValidationFailed, result.Outcome);
+        Assert.Contains("meermaals", result.Error!);
+
+        h.Db.Context.ChangeTracker.Clear();
+        var stops = await h.Db.Context.TransportOrderStops.AsNoTracking()
+            .Where(s => s.TransportOrderId == order.Id).ToListAsync();
+        Assert.Equal(2, stops.Count);
+    }
+
+    /// <summary>
+    /// Review M-2: the "foreign id" rule must hold across TENANTS, not just across orders. The
+    /// match set comes from the tenant-scoped order navigation, so another tenant's stop id can
+    /// never resolve — proven here against a real second tenant rather than a sibling order.
+    /// </summary>
+    [Fact]
+    public async Task Update_WithAStopIdOfAnotherTenant_TreatsItAsNew_AndNeverTouchesThatTenant()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+
+        var otherTenantId = Guid.NewGuid();
+        var otherOrderId = Guid.NewGuid();
+        var otherStopId = Guid.NewGuid();
+        h.Db.Context.Tenants.Add(new Tenant
+        {
+            Id = otherTenantId, Name = "Other", Slug = "other", IsActive = true, CreatedAt = Now.UtcDateTime,
+        });
+        var otherCustomerId = Guid.NewGuid();
+        h.Db.Context.Customers.Add(new Customer
+        {
+            Id = otherCustomerId, TenantId = otherTenantId, CustomerNumber = "KL-X", Name = "Vreemde NV", IsActive = true,
+        });
+        h.Db.Context.TransportOrders.Add(new TransportOrder
+        {
+            Id = otherOrderId, TenantId = otherTenantId, CustomerId = otherCustomerId, OrderNumber = "ORD-X",
+            OrderDate = new DateOnly(2026, 8, 30), Status = TransportOrderStatus.Confirmed,
+            Stops =
+            [
+                new TransportOrderStop
+                {
+                    Id = otherStopId, TenantId = otherTenantId, Sequence = 1,
+                    StopType = StopType.Loading, City = "Rotterdam",
+                },
+            ],
+        });
+        await h.Db.Context.SaveChangesAsync();
+        h.Db.Context.ChangeTracker.Clear();
+
+        var order = await CreateTwoStopOrderAsync(h);
+        var ownIds = order.Stops.Select(s => s.Id).ToHashSet();
+
+        var update = UpdateFrom(order);
+        var result = await h.Sut.UpdateAsync(order.Id, update with
+        {
+            Stops = [.. update.Stops, Stop(StopType.Unloading, city: "Brugge") with { Id = otherStopId }],
+        }, CancellationToken.None);
+
+        Assert.Equal(TransportOrderOperationOutcome.Success, result.Outcome);
+        var added = Assert.Single(result.Order!.Stops, s => !ownIds.Contains(s.Id));
+        Assert.NotEqual(otherStopId, added.Id);
+
+        h.Db.Context.ChangeTracker.Clear();
+        var foreignStop = await h.Db.Context.TransportOrderStops.IgnoreQueryFilters().AsNoTracking()
+            .SingleAsync(s => s.Id == otherStopId);
+        Assert.Equal(otherTenantId, foreignStop.TenantId);
+        Assert.Equal(otherOrderId, foreignStop.TransportOrderId);
+        Assert.Equal("Rotterdam", foreignStop.City);
+        Assert.False(foreignStop.IsDeleted);
     }
 }

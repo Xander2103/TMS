@@ -61,7 +61,7 @@ vi.mock('../../../tarification/api/pricingApi', async () => {
 function renderForm(onSubmit = vi.fn().mockResolvedValue(undefined)) {
   render(
     <MemoryRouter>
-      <TransportOrderForm submitLabel="Opdracht aanmaken" onSubmit={onSubmit} />
+      <TransportOrderForm mode="create" submitLabel="Opdracht aanmaken" onSubmit={onSubmit} />
     </MemoryRouter>,
   )
   return { onSubmit }

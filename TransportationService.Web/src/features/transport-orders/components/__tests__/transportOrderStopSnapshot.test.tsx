@@ -169,7 +169,7 @@ function makeOrder(overrides: Partial<TransportOrderDetail> = {}): TransportOrde
 function renderForm(order = makeOrder(), onSubmit = vi.fn().mockResolvedValue(undefined)) {
   render(
     <MemoryRouter>
-      <TransportOrderForm order={order} submitLabel="Opslaan" onSubmit={onSubmit} />
+      <TransportOrderForm mode="edit" order={order} submitLabel="Opslaan" onSubmit={onSubmit} />
     </MemoryRouter>,
   )
   return { onSubmit }

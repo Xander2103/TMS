@@ -51,8 +51,8 @@ function selects(container: HTMLElement) {
 }
 
 describe('GeneralSection commercial lock', () => {
-  it('leaves customer and entity editable while creating a new order', () => {
-    const { container } = render(<GeneralSection {...baseProps} />)
+  it('leaves customer and entity editable on a blank new order', () => {
+    const { container } = render(<GeneralSection {...baseProps} mode="create" />)
     const { customer, entity } = selects(container)
 
     expect(customer).toBeEnabled()
@@ -60,8 +60,23 @@ describe('GeneralSection commercial lock', () => {
     expect(screen.queryByText(/'Klant wijzigen'/)).toBeNull()
   })
 
-  it('locks customer and entity when editing an existing order and explains where to change them', () => {
-    const { container } = render(<GeneralSection {...baseProps} order={existingOrder} />)
+  /**
+   * Regression (review I-2): the lock must key off the FORM MODE, not off the presence of an
+   * `order` prop — NewTransportOrderPage passes an existing order as a TEMPLATE ("nieuwe opdracht
+   * op basis van deze"). Locking there would make it impossible to raise the same transport for
+   * another customer, and "Klant wijzigen" does not exist for an order that is not created yet.
+   */
+  it('leaves customer and entity editable when creating from a template', () => {
+    const { container } = render(<GeneralSection {...baseProps} mode="create" order={existingOrder} />)
+    const { customer, entity } = selects(container)
+
+    expect(customer).toBeEnabled()
+    expect(entity).toBeEnabled()
+    expect(screen.queryByText(/'Klant wijzigen'/)).toBeNull()
+  })
+
+  it('locks customer and entity when editing a persisted order and explains where to change them', () => {
+    const { container } = render(<GeneralSection {...baseProps} mode="edit" order={existingOrder} />)
     const { customer, entity } = selects(container)
 
     expect(customer).toBeDisabled()
@@ -71,7 +86,7 @@ describe('GeneralSection commercial lock', () => {
   })
 
   it('keeps the current values selected so nothing is silently reset', () => {
-    const { container } = render(<GeneralSection {...baseProps} order={existingOrder} />)
+    const { container } = render(<GeneralSection {...baseProps} mode="edit" order={existingOrder} />)
     const { customer, entity } = selects(container)
 
     expect(customer.value).toBe('cust-1')

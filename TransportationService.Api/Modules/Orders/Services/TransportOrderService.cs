@@ -266,7 +266,7 @@ public class TransportOrderService : ITransportOrderService
             .FirstOrDefaultAsync(s => s.TenantId == _tenantContext.TenantId, cancellationToken);
 
         // Master-location stops get their location data snapshotted at creation (Phase 7).
-        var stops = await BuildStopsAsync(request.Stops, previousStops: null, cancellationToken);
+        var stops = await BuildStopsAsync(request.Stops, cancellationToken);
 
         var order = new TransportOrder
         {
@@ -676,6 +676,16 @@ public class TransportOrderService : ITransportOrderService
             return TransportOrderOperationResult.Invalid(includedTimeOverrideError);
         }
 
+        // C-01: decide AND validate the whole stop plan while nothing has been mutated yet, so a
+        // refusal (removing/retyping an operationally referenced stop, a duplicate echoed id)
+        // leaves the tracked entity exactly as it was loaded. The plan is executed further down,
+        // after the header fields — it is the last guard of the fail-before-mutate block.
+        var (stopPlan, stopPlanError) = await PlanStopSyncAsync(order, request.Stops, cancellationToken);
+        if (stopPlanError is not null)
+        {
+            return stopPlanError;
+        }
+
         // Cargo: id-matched in-place sync (loaded up front so both the audit "before" snapshot
         // and the sync below share one query). null = leave unchanged (API contract); [] = clear.
         var existingCargo = await _dbContext.CargoItems
@@ -733,12 +743,9 @@ public class TransportOrderService : ITransportOrderService
         // LegalEntityChanged audit entry. The guard at the top of this method proved the request
         // either omits the field or echoes the stored value.
 
-        // Identity-preserving stop sync (C-01). Refuses removals/type changes that would orphan
-        // an operational reference; returns null when the sync succeeded.
-        if (await SyncStopsAsync(order, request.Stops, cancellationToken) is { } stopError)
-        {
-            return stopError;
-        }
+        // Identity-preserving stop sync (C-01) — executing the plan validated above, so this
+        // phase can no longer refuse anything.
+        await ApplyStopSyncAsync(order, request.Stops, stopPlan!, cancellationToken);
 
         List<CargoItem> replacementCargo;
         if (request.CargoItems is not null)
@@ -1824,37 +1831,63 @@ public class TransportOrderService : ITransportOrderService
     }
 
     /// <summary>
-    /// Wave 1 blocker C-01 — identity-preserving stop sync. Stop identity:
+    /// The decided outcome of matching a request's stop inputs onto an order's existing stops.
+    /// Produced by <see cref="PlanStopSyncAsync"/> (read-only, fully validated) and consumed by
+    /// <see cref="ApplyStopSync"/> (mutating). Splitting the two is what lets
+    /// <see cref="UpdateAsync"/> refuse a stop plan BEFORE it has touched the tracked entity.
+    /// </summary>
+    /// <param name="Matched">Per input index: the existing stop it addresses, or null for a new one.</param>
+    /// <param name="Removed">Existing stops no input echoes; to be soft-deleted.</param>
+    /// <param name="PackagePinsToRelease">
+    /// Ids of removed stops whose (best-effort) package pins must be set to null — only ever
+    /// populated while the order is not yet Confirmed.
+    /// </param>
+    private sealed record StopSyncPlan(
+        TransportOrderStop?[] Matched,
+        List<TransportOrderStop> Removed,
+        List<Guid> PackagePinsToRelease);
+
+    /// <summary>
+    /// Wave 1 blocker C-01 — decides and VALIDATES the identity-preserving stop sync without
+    /// mutating anything. Stop identity:
     /// <list type="bullet">
-    /// <item>an input echoing an <c>Id</c> that belongs to THIS order is the SAME stop and is
+    /// <item>an input echoing an <c>Id</c> that belongs to THIS order is the SAME stop and will be
     /// updated in place (id, and therefore every package pin, execution, POD, scan, ETA and
     /// exception pointing at it, survives);</item>
     /// <item>an input without an id — or with an id this order does not own, including one of
     /// another order or tenant — is a NEW stop and always gets a freshly generated id (a client
     /// can never adopt someone else's row);</item>
+    /// <item>the same id echoed twice in one request is ambiguous and refused outright — the
+    /// client cannot mean one row twice, and guessing at stop identity is exactly what this
+    /// blocker exists to stop;</item>
     /// <item>an existing stop no input echoes is REMOVED (soft-deleted), unless it is still
     /// operationally referenced;</item>
     /// <item>changing the <c>StopType</c> of a referenced stop is a replacement in identity terms
     /// and is refused — the packages/executions hanging off it describe a load, not a delivery.</item>
     /// </list>
-    /// Returns a failure result when a rule refuses the edit, otherwise null (order.Stops is then
-    /// the new, renumbered set and the removals are staged as soft deletes).
+    /// Returns the failure result when a rule refuses the edit, otherwise the plan.
     /// </summary>
-    private async Task<TransportOrderOperationResult?> SyncStopsAsync(
+    private async Task<(StopSyncPlan? Plan, TransportOrderOperationResult? Error)> PlanStopSyncAsync(
         TransportOrder order, IReadOnlyList<TransportOrderStopInput> inputs, CancellationToken cancellationToken)
     {
         var existing = order.Stops.Where(s => !s.IsDeleted).ToDictionary(s => s.Id);
 
-        // Match inputs onto existing rows. A duplicate echo of the same id only claims it once —
-        // the second occurrence becomes a new stop rather than silently aliasing the first.
         var matched = new TransportOrderStop?[inputs.Count];
         var claimed = new HashSet<Guid>();
         for (var i = 0; i < inputs.Count; i++)
         {
-            if (inputs[i].Id is { } echoedId && existing.TryGetValue(echoedId, out var stop) && claimed.Add(echoedId))
+            if (inputs[i].Id is not { } echoedId || !existing.TryGetValue(echoedId, out var stop))
             {
-                matched[i] = stop;
+                continue; // no id, or an id this order does not own → a new stop.
             }
+
+            if (!claimed.Add(echoedId))
+            {
+                return (null, TransportOrderOperationResult.Invalid(
+                    $"Stop {stop.Sequence} komt meermaals voor in deze aanvraag; elke stop mag maar één keer worden meegestuurd."));
+            }
+
+            matched[i] = stop;
         }
 
         var removed = existing.Values.Where(s => !claimed.Contains(s.Id)).ToList();
@@ -1863,6 +1896,7 @@ public class TransportOrderService : ITransportOrderService
             .Select(i => matched[i]!)
             .ToList();
 
+        var pinsToRelease = new List<Guid>();
         if (removed.Count > 0 || retyped.Count > 0)
         {
             var references = await LoadStopReferencesAsync(
@@ -1876,9 +1910,9 @@ public class TransportOrderService : ITransportOrderService
                 if (references.Hard.Contains(stop.Id)
                     || (references.PackagePinned.Contains(stop.Id) && order.Status == TransportOrderStatus.Confirmed))
                 {
-                    return TransportOrderOperationResult.Invalid(
+                    return (null, TransportOrderOperationResult.Invalid(
                         $"Stop {stop.Sequence} is al operationeel in gebruik (colli, uitvoering, aflevering of scans) "
-                        + "en kan niet meer worden verwijderd.");
+                        + "en kan niet meer worden verwijderd."));
                 }
             }
 
@@ -1886,48 +1920,61 @@ public class TransportOrderService : ITransportOrderService
             {
                 if (references.IsReferenced(stop.Id))
                 {
-                    return TransportOrderOperationResult.Invalid(
+                    return (null, TransportOrderOperationResult.Invalid(
                         $"Het type van stop {stop.Sequence} kan niet meer worden gewijzigd: "
-                        + "er hangen al colli, uitvoeringen of scans aan deze stop.");
+                        + "er hangen al colli, uitvoeringen of scans aan deze stop."));
                 }
             }
 
-            // Draft/Submitted removal of a package-pinned stop: release the best-effort pins so
-            // nothing keeps pointing at a soft-deleted row.
-            var releasable = removed.Select(s => s.Id).Where(references.PackagePinned.Contains).ToList();
-            if (releasable.Count > 0)
-            {
-                var tenantId = _tenantContext.TenantId;
-                var packages = await _dbContext.Packages
-                    .Where(p => p.TenantId == tenantId
-                                && ((p.LoadingStopId != null && releasable.Contains(p.LoadingStopId!.Value))
-                                    || (p.DeliveryStopId != null && releasable.Contains(p.DeliveryStopId!.Value))))
-                    .ToListAsync(cancellationToken);
-                foreach (var package in packages)
-                {
-                    if (package.LoadingStopId is { } l && releasable.Contains(l))
-                    {
-                        package.LoadingStopId = null;
-                    }
+            pinsToRelease.AddRange(removed.Select(s => s.Id).Where(references.PackagePinned.Contains));
+        }
 
-                    if (package.DeliveryStopId is { } d && releasable.Contains(d))
-                    {
-                        package.DeliveryStopId = null;
-                    }
+        return (new StopSyncPlan(matched, removed, pinsToRelease), null);
+    }
+
+    /// <summary>
+    /// Executes a validated <see cref="StopSyncPlan"/>: releases the package pins of removed
+    /// stops (Draft/Submitted only — the plan never lists any otherwise), updates the preserved
+    /// stops in place, creates the new ones, renumbers, resolves the location snapshots and stages
+    /// the removals as soft deletes.
+    /// </summary>
+    private async Task ApplyStopSyncAsync(
+        TransportOrder order, IReadOnlyList<TransportOrderStopInput> inputs, StopSyncPlan plan,
+        CancellationToken cancellationToken)
+    {
+        if (plan.PackagePinsToRelease.Count > 0)
+        {
+            var tenantId = _tenantContext.TenantId;
+            var releasable = plan.PackagePinsToRelease;
+            var packages = await _dbContext.Packages
+                .Where(p => p.TenantId == tenantId
+                            && ((p.LoadingStopId != null && releasable.Contains(p.LoadingStopId!.Value))
+                                || (p.DeliveryStopId != null && releasable.Contains(p.DeliveryStopId!.Value))))
+                .ToListAsync(cancellationToken);
+            foreach (var package in packages)
+            {
+                if (package.LoadingStopId is { } l && releasable.Contains(l))
+                {
+                    package.LoadingStopId = null;
+                }
+
+                if (package.DeliveryStopId is { } d && releasable.Contains(d))
+                {
+                    package.DeliveryStopId = null;
                 }
             }
         }
 
         // Snapshot the preserved rows BEFORE the inputs overwrite them, so the carry-over rules
         // (Phase 7) keep working unchanged for an unchanged master-location stop.
-        var previousStops = matched.Where(s => s is not null)
+        var previousStops = plan.Matched.Where(s => s is not null)
             .ToDictionary(s => s!.Id, s => CaptureStopSnapshot(s!));
 
         var stops = new List<TransportOrderStop>(inputs.Count);
         var added = new List<TransportOrderStop>();
         for (var i = 0; i < inputs.Count; i++)
         {
-            var stop = matched[i];
+            var stop = plan.Matched[i];
             if (stop is null)
             {
                 // Never reuse the client-supplied id: an unknown id is a NEW stop, not an adoption.
@@ -1950,27 +1997,23 @@ public class TransportOrderService : ITransportOrderService
 
         // Removals first (explicit soft delete), so reassigning the navigation never leaves EF to
         // guess what happened to the dropped rows.
-        _dbContext.RemoveRange(removed);
+        _dbContext.RemoveRange(plan.Removed);
         order.Stops = stops;
         // New rows carry service-generated ids; navigation discovery would attach them as
         // Modified (phantom UPDATE). Mark them Added explicitly.
         _dbContext.AddRange(added);
-        return null;
     }
 
     /// <summary>
-    /// Builds the replacement stop rows AND resolves each stop's location snapshot (Phase 7):
-    /// an unchanged master-location stop (echoed id, same LocationId, no RefreshSnapshot)
-    /// carries the previous snapshot over; a new/changed/refreshed one takes a fresh copy from
-    /// the tenant's location (single batched query). Free-address stops are untouched.
+    /// CREATE path: builds brand-new stop rows and takes each one's location snapshot fresh from
+    /// the tenant's master location (there is no previous row to carry anything over from — the
+    /// update path owns that case, via <see cref="ApplyStopSyncAsync"/>).
     /// </summary>
     private async Task<List<TransportOrderStop>> BuildStopsAsync(
-        IReadOnlyList<TransportOrderStopInput> inputs,
-        IReadOnlyDictionary<Guid, TransportOrderStop>? previousStops,
-        CancellationToken cancellationToken)
+        IReadOnlyList<TransportOrderStopInput> inputs, CancellationToken cancellationToken)
     {
         var stops = BuildStops(inputs);
-        await ResolveStopSnapshotsAsync(stops, inputs, previousStops, cancellationToken);
+        await ResolveStopSnapshotsAsync(stops, inputs, previousStops: null, cancellationToken);
         return stops;
     }
 

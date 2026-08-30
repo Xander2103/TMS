@@ -1,3 +1,4 @@
+using System.Reflection;
 using Microsoft.EntityFrameworkCore;
 using TransportationService.Api.Common.Models;
 using TransportationService.Api.Modules.Auditing.Services;
@@ -78,11 +79,36 @@ public class OrderInvoicedStatusTests
     }
 
     /// <summary>
-    /// Reflection guard: a new status member must never again be able to reach production
-    /// without a transition entry.
+    /// Reflection guard on the MAP ITSELF (review I-1). The behavioural test below passes even
+    /// with a missing entry, because both readers now fall back through TryGetValue — but a
+    /// missing entry is still a defect: <c>ChangeStatusAsync</c> would silently refuse EVERY
+    /// transition out of that status, producing a dead-end status that looks like a permission or
+    /// data problem. So assert key coverage directly: a future status member cannot reach
+    /// production without a deliberate decision about what it may transition to.
     /// </summary>
     [Fact]
-    public async Task Transitions_CoverEveryTransportOrderStatusMember()
+    public void Transitions_HaveAnEntryForEveryTransportOrderStatusMember()
+    {
+        var field = typeof(TransportOrderService).GetField(
+            "Transitions", BindingFlags.NonPublic | BindingFlags.Static);
+        Assert.NotNull(field);
+        var transitions = Assert.IsAssignableFrom<IReadOnlyDictionary<TransportOrderStatus, TransportOrderStatus[]>>(
+            field!.GetValue(null));
+
+        var missing = Enum.GetValues<TransportOrderStatus>()
+            .Where(status => !transitions.ContainsKey(status))
+            .ToList();
+        Assert.True(missing.Count == 0,
+            $"TransportOrderService.Transitions has no entry for: {string.Join(", ", missing)}. "
+            + "Add one (use [] for a status that is terminal in the manual workflow).");
+    }
+
+    /// <summary>
+    /// Behavioural companion: every status must survive the READ path — MapDetailAsync indexes the
+    /// same map and used to throw KeyNotFoundException on an invoiced order (a 500 on a plain GET).
+    /// </summary>
+    [Fact]
+    public async Task GetById_InEveryStatus_ReturnsADetail()
     {
         var h = await SeedAsync();
         using var _ = h.Db;

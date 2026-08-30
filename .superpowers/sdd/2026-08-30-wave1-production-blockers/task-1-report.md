@@ -351,3 +351,192 @@ Test Files  1 passed (1)
    a user in the *form* sees the hint text but must leave the form to act on it. Wiring a shortcut
    button into the form would have meant touching files outside my scope; flagging it as a UX
    follow-up for the wave.
+
+---
+---
+
+# Fix round 1 — response to the task review
+
+Commit `TBD-round-1` on `worktree-agent-a6d0ccc14e7d087c5` (on top of `bec68f5`).
+Review source: `task-1-review.md` (Approved with required follow-ups; 4 Important, 8 Minor).
+
+Every fix below was verified the same way: the new test was run against the *old* behaviour first
+and observed to fail, then against the fix and observed to pass. Where that required temporarily
+reverting production code, the revert was undone immediately and the suite re-run.
+
+## I-2 (release-blocking) — the C-02 UI lock also fired on create-from-template
+
+**Confirmed, and the review's diagnosis is exactly right.** `NewTransportOrderPage.tsx:71` renders
+`<TransportOrderForm order={template ?? undefined} …>` — on the **create** page, `order` carries the
+order the new one is based on ("nieuwe opdracht op basis van deze"). `GeneralSection`'s
+`Boolean(order)` therefore greyed out the customer and entity selects on a brand-new order and told
+the planner to use "Klant wijzigen", a flow that does not exist for an order that has not been
+created yet. Duplicating an order for a different customer — the main reason the template flow
+exists — became impossible without re-keying from blank.
+
+**Fix.** An explicit `mode: 'create' | 'edit'` prop, threaded page → `TransportOrderForm` →
+`GeneralSection`, and the lock now reads `mode === 'edit'`. I made it **required, not defaulted**,
+so TypeScript is the enforcement: `npx tsc -b` immediately failed on all three existing test call
+sites, which is precisely the signal a default would have swallowed. `order` keeps its dual meaning
+(order under edit / template) and both are documented on the prop.
+
+**Scope.** This necessarily went beyond the brief's FE scope, as the reviewer predicted: the lock
+cannot be driven off `GeneralSection`'s own inputs, because `order` is the very signal that is
+ambiguous. Files touched: `TransportOrderForm.tsx`, `NewTransportOrderPage.tsx` (`mode="create"`),
+`TransportOrderDetailPage.tsx` (`mode="edit"`), `GeneralSection.tsx`, plus `mode` added to the three
+pre-existing form tests. No behaviour other than the lock reads `mode`.
+
+**Test.** `generalSectionCommercialLock.test.tsx` now has four cases; the decisive new one is
+`leaves customer and entity editable when creating from a template` (`mode="create"` **with** an
+`order`). *Verified against the old logic:* temporarily restoring `Boolean(order)` fails exactly
+that one test and no other — the old test suite could not have caught this, because it only
+distinguished "no `order`" from "`order`", which is the conflation at fault.
+
+## I-1 — the C-04 "reflection test" did not test map totality
+
+**Confirmed.** With `TryGetValue` on both readers, the behavioural loop passed whether or not the
+map had an `Invoiced` entry, while its docstring claimed to guard totality.
+
+**Fix.** Split into two tests. `Transitions_HaveAnEntryForEveryTransportOrderStatusMember` reaches
+the `private static readonly` map by reflection and asserts `ContainsKey` for every enum member,
+with a failure message naming the missing statuses and telling the next author what to do
+(`use [] for a status that is terminal in the manual workflow`).
+`GetById_InEveryStatus_ReturnsADetail` keeps the behavioural loop, now honestly described as a
+read-path guard rather than a totality guard.
+
+*Verified:* deleting `[TransportOrderStatus.Invoiced] = []` makes the new test fail with
+`TransportOrderService.Transitions has no entry for: Invoiced` while the other three tests in the
+file stay green — demonstrating both that the new test bites and that the old one never did.
+
+The failure the review predicted is the real motivation and is now covered: a future
+`TransportOrderStatus.Disputed` without a map entry would leave `MapDetailAsync` safe but
+`ChangeStatusAsync` silently refusing **every** transition out of it — a dead-end status that reads
+as a permission or data problem.
+
+## I-3 — the Draft/Submitted pin-release branch had no test
+
+**Confirmed** — the only code in this change that writes to `Modules/Packages` rows was unexercised.
+
+**Fix.** `Update_DraftOrder_RemovingAPinnedStop_ReleasesThePackagePins`: a Draft order, real
+packages via `PackageGenerationService`, then the pinned unloading stop is dropped in favour of a
+new one. Asserts 200, the dropped stop is soft-deleted, `DeliveryStopId` is now `null` on every
+package, **and** — the part that catches a one-sided release bug — the pin to the *preserved*
+loading stop is untouched. The docstring cross-references the Confirmed counterpart
+(`Update_RemovingAStopWithPackagesOnAConfirmedOrder_IsRefused`) so the two halves of the rule read
+as a pair.
+
+## I-4 — refusals returned after the header had already been mutated
+
+**Confirmed, and worth fixing even though it is latent.** The stop guards ran at `:738`, ~20 header
+assignments after `:698`. `AuditService.RecordAsync` calls `SaveChangesAsync` unconditionally, so
+any audit write later in the same DI scope would have flushed a header edit that was refused and
+never version-stamped. Nothing flushes it *today*, but C-01 made the late return far more reachable
+(every attempt to drop a referenced stop hits it).
+
+**Fix — split validate from apply.** `SyncStopsAsync` became:
+
+- `PlanStopSyncAsync` — read-only. Matches inputs to existing rows, computes removals/retypes, loads
+  the references, applies **all** the refusal rules, and returns either an error or a
+  `StopSyncPlan` record (matched array, removals, package pins to release). Called next to the other
+  guards, as the last member of the fail-before-mutate block, so error precedence for every
+  existing case is unchanged (`ConfirmationError` still wins where it did before).
+- `ApplyStopSyncAsync` — mutating, and by construction can no longer refuse anything: releases the
+  planned pins, updates preserved stops in place, creates new ones, renumbers, resolves snapshots,
+  stages removals.
+
+`UpdateAsync` is now fail-before-mutate end to end, matching what the C-02 guards already did.
+
+**Test.** `Update_RefusedStopRemoval_LeavesHeaderVersionAndStopsUntouched` sends a refused stop plan
+*together with* four header edits, then — the important part — calls `SaveChangesAsync()` on the
+test context to **force a flush of anything left in the tracker**, and only then reloads and asserts
+`Version`, `UpdatedAt`, `CustomerReference`, `Notes`, `GoodsDescription`, `AdrRequired` and the full
+stop projection are byte-identical. *Verified against the old ordering:* moving the guard back below
+the header assignments makes this test fail on `Assert.Equal() Failure: Values differ`.
+
+## Minor findings
+
+- **M-4 / duplicate echoed id — behaviour CHANGED, not just tested.** The review noted the
+  "second occurrence becomes a new stop" rule was untested; the coordinator ruled it should be a
+  400. I agree with the coordinator and changed it: a client echoing one id twice cannot mean one
+  row twice, so guessing at identity is exactly what this blocker exists to stop. Now refused with
+  `"Stop {n} komt meermaals voor in deze aanvraag; elke stop mag maar één keer worden meegestuurd."`
+  Test: `Update_WithADuplicateEchoedStopId_IsRefused` (400 + DB unchanged).
+- **M-2 / foreign *tenant* id.** `Update_WithAStopIdOfAnotherTenant_TreatsItAsNew_AndNeverTouchesThatTenant`
+  seeds a real second tenant with its own customer, order and stop, echoes that stop id, and asserts
+  the edit succeeds with a *freshly generated* id while the other tenant's row keeps its tenant,
+  parent order, city and `IsDeleted = false`. The order-level case is kept as well.
+- **M-3 / reorder.** `Update_ReorderingEchoedStops_KeepsIdsAndRenumbersSequences` swaps two unloading
+  stops and asserts ids survive, sequences follow the new request order, and (via
+  `IgnoreQueryFilters`) that there are exactly three rows with none soft-deleted — no phantom rows,
+  no transient-duplicate-sequence fallout.
+- **M-5 / vestigial parameter.** `BuildStopsAsync` lost its `previousStops` parameter (its only
+  caller is `CreateAsync`, which always passed null) and its doc comment now states plainly that it
+  is the CREATE path. `BuildStops` and `ResolveStopSnapshotsAsync` stay shared.
+- **M-6 / warnings.** Both `xUnit2031` warnings fixed with the `Assert.Single(collection, predicate)`
+  overload. The build is back to the 4 pre-existing warnings, and this time I verified the count
+  rather than asserting it — the earlier report's claim was wrong and the review was right to
+  catch it.
+- **M-7 / stale name.** `Update_EchoedStopId_CarriesSnapshotOverDespiteRebuild` →
+  `Update_EchoedStopId_KeepsTheSnapshotOfThePreservedStop`, with a comment recording that the
+  invariant changed (no rebuild) while the carry-over rule it guards did not.
+- **M-1 / retype-vs-delete asymmetry — NOT changed, deliberately.** On a Draft order a pinned stop
+  cannot be retyped but can be deleted and re-added as the other type. I left it: relaxing retype to
+  release pins would add a second, subtler pin-release path for a marginal convenience, and the
+  strict rule fails safe. Recorded here rather than silently kept.
+- **M-8 / execution-plan fields — noted, not fixed (pre-existing).** `ApplyStopInput` writes
+  `ConfirmedFrom/To`, `EarliestAllowed/LatestAllowed`, `AppointmentRequired` and
+  `AppointmentReference` from the request, and `orderFormPayload.ts` does not send them — so a
+  header edit still wipes a window confirmed via `UpdateStopExecutionPlanAsync`. Byte-identical to
+  the pre-fix `BuildStops`, so not a regression, but now that stop identity survives an edit this is
+  the next-most-visible way an ordinary edit destroys operational data. **Wave 2 candidate.**
+- **Data repair — still NOT done, by design.** Orders edited before this fix keep pins, executions
+  and PODs pointing at soft-deleted stops; per the review's severity note their scans stay blocked
+  (`PackageScanProcessor` refuses a mismatched pin) and their labels stay address-less
+  (`PackageLabelService` yields null with no fallback) until a backfill runs. **Task 5 will
+  evaluate.**
+
+## Files changed in this round
+
+Backend: `Modules/Orders/Services/TransportOrderService.cs` (I-4 split, M-4 refusal, M-5 parameter).
+Frontend: `components/TransportOrderForm.tsx`, `components/sections/GeneralSection.tsx`,
+`pages/NewTransportOrderPage.tsx`, `pages/TransportOrderDetailPage.tsx`.
+Tests: `Orders/OrderInvoicedStatusTests.cs`, `Orders/OrderUpdateIntegrityTests.cs`,
+`Orders/StopSnapshotTests.cs` (rename only), and `mode` added to
+`transportOrderFormDisclosure.test.tsx`, `transportOrderSectionedForm.test.tsx`,
+`transportOrderStopSnapshot.test.tsx`, `generalSectionCommercialLock.test.tsx`.
+
+No schema change, no new permission, no migration. Tenant isolation, `[RequirePermission]`
+attributes, financial snapshots and every `RecordAsync` remain as reviewed.
+
+## Test output (fix round 1)
+
+```
+$ dotnet build TransportationService.slnx
+Build succeeded.   0 errors, 4 warnings (all pre-existing; my 2 xUnit2031 are gone)
+
+$ dotnet test TransportationService.Api.Tests --no-build --filter FullyQualifiedName~Orders
+Passed!  - Failed: 0, Passed: 261, Skipped: 0, Total: 261   (was 255; +6 new)
+
+$ dotnet test TransportationService.Api.Tests --no-build
+Passed!  - Failed: 0, Passed: 2302, Skipped: 0, Total: 2302   (was 2296; +6 new)
+
+$ cd TransportationService.Web && npx tsc -b
+(exit 0, no output)
+
+$ npx vitest run src/features/transport-orders --testTimeout=30000
+Test Files  14 passed (14)
+      Tests  114 passed (114)   (was 113; +1 new template case)
+```
+
+## Concerns after this round
+
+1. **The `mode` prop touches two pages and the shared form** — beyond the brief's FE scope, but the
+   review is right that there is no correct fix inside `GeneralSection` alone. It is compile-enforced
+   (required prop), so no call site can silently regress.
+2. **M-1's asymmetry is now a documented decision, not an oversight** — if the coordinator prefers
+   symmetry, relaxing retype to release pins in Draft/Submitted is a small, contained follow-up.
+3. **Vitest's default 5 s timeout is still flaky on this machine** (unchanged from round 1) — all FE
+   runs above used `--testTimeout=30000` as instructed. Raising it in `vitest.config.ts` remains a
+   wave-level suggestion.
+4. **M-8 and the data backfill stay open** and are the two things most likely to be mistaken for
+   "C-01 was not fixed" if someone hits them after release.
