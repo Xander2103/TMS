@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using TransportationService.Api.Data;
 using TransportationService.Api.Modules.Identity;
+using TransportationService.Api.Modules.Identity.Services;
 using TransportationService.Api.Modules.Messaging.Entities;
 using TransportationService.Api.Modules.Notifications.Entities;
 using TransportationService.Api.Modules.Notifications.Services;
@@ -138,8 +139,11 @@ public class MessageDispatcher
         // Alert the back office in-app. The dispatcher runs tenant-agnostic (no request scope),
         // so the rows are written directly for the message's own tenant; Critical bypasses
         // preferences by definition.
+        // H-14 (I-3): back office only — a customer-linked account holding a legacy orders.manage
+        // grant is not staff and must never be told that a customer mail failed.
         var holders = await (from ur in _dbContext.UserRoles.AsNoTracking()
                              join u in _dbContext.Users.AsNoTracking().Where(u => u.TenantId == message.TenantId && u.IsActive)
+                                 .Where(PortalPermissionScope.InternalIdentityOnly)
                                  on ur.UserId equals u.Id
                              join r in _dbContext.Roles.AsNoTracking().Where(r => r.TenantId == message.TenantId && r.IsActive)
                                  on ur.RoleId equals r.Id

@@ -80,14 +80,9 @@ public class CustomerMessageService : ICustomerMessageService
             return null;
         }
 
-        // H-14: a deactivated customer loses the order thread too (same rule as every other
-        // portal resolver — see DeactivatedCustomerAccessTests).
-        var link = await _dbContext.Users.AsNoTracking()
-            .Where(u => u.Id == userId && u.TenantId == _tenantContext.TenantId && u.CustomerId != null)
-            .Join(_dbContext.Customers.AsNoTracking().Where(c => c.TenantId == _tenantContext.TenantId && c.IsActive),
-                u => u.CustomerId, c => c.Id, (u, c) => new { c.Id, c.Name })
-            .FirstOrDefaultAsync(cancellationToken);
-        return link is null ? null : (link.Id, link.Name);
+        var link = await PortalCustomerResolver.ResolveAsync(
+            _dbContext, _tenantContext.TenantId, userId, cancellationToken);
+        return link is null ? null : (link.CustomerId, link.CustomerName);
     }
 
     // --- Portal side ---

@@ -26,7 +26,7 @@ public class PortalAnnouncementServiceTests
         var tenant = new DevTenantContext(tenantId);
         var user = new DevCurrentUserContext(null);
         var clock = new TestClock(Now);
-        var sut = new PortalAnnouncementService(db.Context, tenant, new AuditService(db.Context, tenant, user), clock);
+        var sut = new PortalAnnouncementService(db.Context, tenant, user, new AuditService(db.Context, tenant, user), clock);
         return new Harness(db, tenantId, sut, clock);
     }
 

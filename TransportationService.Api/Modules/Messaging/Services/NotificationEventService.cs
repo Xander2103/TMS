@@ -2,6 +2,7 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using TransportationService.Api.Data;
+using TransportationService.Api.Modules.Identity.Services;
 using TransportationService.Api.Modules.Messaging.Entities;
 using TransportationService.Api.Modules.Notifications.Services;
 using TransportationService.Api.Modules.Partners.Entities;
@@ -307,9 +308,17 @@ public class NotificationEventService : INotificationEventService
     private async Task<IReadOnlyList<EmailTarget>> ResolveInternalAsync(
         string value, Guid tenantId, bool byPermission, CancellationToken cancellationToken)
     {
+        // H-14 (I-3): "internal staff" is an identity class, not just a role membership. A
+        // customer-linked account carrying a legacy internal grant is refused every internal
+        // endpoint, so it must not be mailed internal traffic either — this is the outbound-e-mail
+        // twin of the guard in NotificationService.
+        var staff = _dbContext.Users.AsNoTracking()
+            .Where(u => u.TenantId == tenantId && u.IsActive)
+            .Where(PortalPermissionScope.InternalIdentityOnly);
+
         var rows = byPermission
             ? await (from ur in _dbContext.UserRoles.AsNoTracking()
-                     join u in _dbContext.Users.AsNoTracking().Where(u => u.TenantId == tenantId && u.IsActive) on ur.UserId equals u.Id
+                     join u in staff on ur.UserId equals u.Id
                      join r in _dbContext.Roles.AsNoTracking().Where(r => r.TenantId == tenantId && r.IsActive) on ur.RoleId equals r.Id
                      join rp in _dbContext.RolePermissions.AsNoTracking() on r.Id equals rp.RoleId
                      join p in _dbContext.Permissions.AsNoTracking().Where(p => p.Code == value) on rp.PermissionId equals p.Id
@@ -317,7 +326,7 @@ public class NotificationEventService : INotificationEventService
                 .Distinct()
                 .ToListAsync(cancellationToken)
             : await (from ur in _dbContext.UserRoles.AsNoTracking()
-                     join u in _dbContext.Users.AsNoTracking().Where(u => u.TenantId == tenantId && u.IsActive) on ur.UserId equals u.Id
+                     join u in staff on ur.UserId equals u.Id
                      join r in _dbContext.Roles.AsNoTracking().Where(r => r.TenantId == tenantId && r.IsActive && r.TemplateCode == value)
                          on ur.RoleId equals r.Id
                      select new { u.Id, u.Email, u.FirstName, u.LastName, u.EmployeeId })

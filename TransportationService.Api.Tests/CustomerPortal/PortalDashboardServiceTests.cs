@@ -116,7 +116,7 @@ public class PortalDashboardServiceTests
             new InvoiceNumberService(db.Context, tenant),
             new CustomerBillingConfigService(db.Context, tenant, audit, clock),
             new AccountingService(db.Context, tenant, audit));
-        var announcementService = new PortalAnnouncementService(db.Context, tenant, audit, clock);
+        var announcementService = new PortalAnnouncementService(db.Context, tenant, new DevCurrentUserContext(portalUserId), audit, clock);
         await announcementService.CreateAsync(new SavePortalAnnouncementRequest("Onderhoud gepland", "Body", null, null, true), CancellationToken.None);
 
         var dashboardMessageService = new CustomerMessageService(db.Context, tenant, new DevCurrentUserContext(portalUserId), audit, clock);
@@ -155,7 +155,7 @@ public class PortalDashboardServiceTests
             new InvoiceNumberService(db.Context, tenant),
             new CustomerBillingConfigService(db.Context, tenant, audit, clock),
             new AccountingService(db.Context, tenant, audit));
-        var announcementService = new PortalAnnouncementService(db.Context, tenant, audit, clock);
+        var announcementService = new PortalAnnouncementService(db.Context, tenant, new DevCurrentUserContext(staffUserId), audit, clock);
         var sut = new PortalDashboardService(
             db.Context, tenant, new DevCurrentUserContext(staffUserId), messageService, invoiceService, announcementService, clock);
 

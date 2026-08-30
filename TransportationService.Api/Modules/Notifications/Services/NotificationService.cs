@@ -205,8 +205,12 @@ public class NotificationService : INotificationService
         NotificationOptions? options = null)
     {
         var tenantId = _tenantContext.TenantId;
+        // H-14 (I-3): only INTERNAL identities receive internal traffic. A customer-linked account
+        // carrying a legacy internal grant is refused every internal endpoint, so telling it about
+        // internal work would be a leak with no way to act on it.
         var recipients = await (from ur in _dbContext.UserRoles.AsNoTracking()
                                 join u in _dbContext.Users.AsNoTracking().Where(u => u.TenantId == tenantId && u.IsActive)
+                                    .Where(PortalPermissionScope.InternalIdentityOnly)
                                     on ur.UserId equals u.Id
                                 join r in _dbContext.Roles.AsNoTracking().Where(r => r.TenantId == tenantId && r.IsActive)
                                     on ur.RoleId equals r.Id
@@ -225,8 +229,12 @@ public class NotificationService : INotificationService
         NotificationOptions? options = null)
     {
         var tenantId = _tenantContext.TenantId;
+        // Same rule as NotifyPermissionHoldersAsync: this is the sibling fan-out behind the
+        // InternalRole recipient type, so a portal identity sitting in an internal role is not a
+        // recipient either.
         var recipients = await (from ur in _dbContext.UserRoles.AsNoTracking().Where(ur => ur.RoleId == roleId)
                                 join u in _dbContext.Users.AsNoTracking().Where(u => u.TenantId == tenantId && u.IsActive)
+                                    .Where(PortalPermissionScope.InternalIdentityOnly)
                                     on ur.UserId equals u.Id
                                 join r in _dbContext.Roles.AsNoTracking().Where(r => r.TenantId == tenantId && r.IsActive)
                                     on ur.RoleId equals r.Id

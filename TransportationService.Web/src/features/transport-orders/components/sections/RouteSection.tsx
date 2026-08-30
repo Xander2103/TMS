@@ -333,7 +333,16 @@ function StopRow({
             )}
           </div>
           <div className="tof-row">
-            <FormField label={t('transportOrders.route.instructions')} htmlFor={`st-instr-${stop.key}`}>
+            {/* Wave 1 fix B (B4): this column is a SHARED write surface — the portal writes it at
+                intake and a planner edits the same value here, and PortalStopDto echoes it back to
+                the customer. The hint says so, because "internal remark typed into a
+                customer-visible field" is the failure mode; internal handling notes belong in the
+                access/loading/unloading instructions, which are never exposed. */}
+            <FormField
+              label={t('transportOrders.route.instructions')}
+              htmlFor={`st-instr-${stop.key}`}
+              hint={t('transportOrders.route.instructionsHint')}
+            >
               <input id={`st-instr-${stop.key}`} value={stop.instructions} onChange={(e) => setStop(stop.key, { instructions: e.target.value })} disabled={saving} maxLength={2000} />
             </FormField>
           </div>

@@ -232,6 +232,7 @@
     "windowTo": "Venster tot",
     "before": "Vóór",
     "instructions": "Instructies",
+    "instructionsHint": "Zichtbaar voor de klant in het klantportaal. Interne opmerkingen horen bij toegangs-, laad- of losinstructies.",
     "advanced": "Geavanceerd",
     "requestedFrom": "Gevraagd van",
     "requestedFromHint": "Venster gevraagd door de klant",

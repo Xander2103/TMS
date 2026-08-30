@@ -6,6 +6,7 @@ using TransportationService.Api.Modules.Auditing.Services;
 using TransportationService.Api.Modules.Authentication.Dtos;
 using TransportationService.Api.Modules.Authentication.Entities;
 using TransportationService.Api.Modules.Identity.Entities;
+using TransportationService.Api.Modules.Identity.Services;
 
 namespace TransportationService.Api.Modules.Authentication.Services;
 
@@ -383,11 +384,25 @@ public sealed class AuthService : IAuthService
             .Select(r => r.Name)
             .ToListAsync(cancellationToken);
 
-        var permissions = await _db.RolePermissions.AsNoTracking()
+        var permissionQuery = _db.RolePermissions.AsNoTracking()
             .Where(rp => roleIds.Contains(rp.RoleId))
-            .Join(_db.Permissions.AsNoTracking(), rp => rp.PermissionId, p => p.Id, (rp, p) => p.Code)
-            .Distinct()
-            .ToListAsync(cancellationToken);
+            .Join(_db.Permissions.AsNoTracking(), rp => rp.PermissionId, p => p.Id, (rp, p) => p.Code);
+
+        // H-14 identity-class guard, third and last permission query in the code base (I-2). The
+        // rule is the same one PermissionAuthorizationService and PermissionSetService apply, from
+        // the same constant: a user linked to a customer is a PORTAL identity and only ever holds
+        // customer_portal.* — whatever roles happen to be attached to the account. Without this the
+        // access token and GET /api/auth/me still reported the legacy orders.view grant that
+        // DefaultRoleUpgrades deliberately leaves on upgraded tenants' klantportaal role, which no
+        // endpoint would honour: the client was told it holds rights every call refuses.
+        // The customer link is a property of the already-loaded user row, so the filter is applied
+        // as a plain conditional rather than pushed into the SQL as a constant comparison.
+        if (user.CustomerId is not null)
+        {
+            permissionQuery = permissionQuery.Where(code => code.StartsWith(PortalPermissionScope.Prefix));
+        }
+
+        var permissions = await permissionQuery.Distinct().ToListAsync(cancellationToken);
 
         return (roles, permissions);
     }

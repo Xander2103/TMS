@@ -3,6 +3,7 @@ using TransportationService.Api.Data;
 using TransportationService.Api.Modules.Auditing.Services;
 using TransportationService.Api.Modules.CustomerPortal.Dtos;
 using TransportationService.Api.Modules.CustomerPortal.Entities;
+using TransportationService.Api.Modules.Identity.Services;
 using TransportationService.Api.Modules.Tenancy.Services;
 
 namespace TransportationService.Api.Modules.CustomerPortal.Services;
@@ -12,8 +13,17 @@ public interface IPortalAnnouncementService
     /// <summary>Admin listing — every announcement regardless of window/active flag.</summary>
     Task<IReadOnlyList<PortalAnnouncementDto>> ListAllAsync(CancellationToken cancellationToken);
 
-    /// <summary>Portal listing — only announcements currently inside their active window, newest first.</summary>
+    /// <summary>Tenant-wide listing of the announcements currently inside their active window,
+    /// newest first. Callers that have ALREADY resolved the portal caller (the dashboard) use this
+    /// directly; the portal endpoint must go through <see cref="ListForPortalAsync"/>.</summary>
     Task<IReadOnlyList<PortalAnnouncementDto>> ListActiveAsync(CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Portal listing FOR THE CALLER: resolves the caller's active customer through the shared
+    /// <see cref="PortalCustomerResolver"/> first, so a deactivated customer is refused here
+    /// exactly as it is on every other <c>/api/customer-portal/*</c> route (I-4).
+    /// </summary>
+    Task<PortalResult<IReadOnlyList<PortalAnnouncementDto>>> ListForPortalAsync(CancellationToken cancellationToken);
 
     Task<PortalAnnouncementDto?> CreateAsync(SavePortalAnnouncementRequest request, CancellationToken cancellationToken);
     Task<PortalAnnouncementDto?> UpdateAsync(Guid id, SavePortalAnnouncementRequest request, CancellationToken cancellationToken);
@@ -31,14 +41,17 @@ public class PortalAnnouncementService : IPortalAnnouncementService
 
     private readonly TransportationDbContext _dbContext;
     private readonly ITenantContext _tenantContext;
+    private readonly ICurrentUserContext _currentUserContext;
     private readonly IAuditService _auditService;
     private readonly TimeProvider _timeProvider;
 
     public PortalAnnouncementService(
-        TransportationDbContext dbContext, ITenantContext tenantContext, IAuditService auditService, TimeProvider timeProvider)
+        TransportationDbContext dbContext, ITenantContext tenantContext, ICurrentUserContext currentUserContext,
+        IAuditService auditService, TimeProvider timeProvider)
     {
         _dbContext = dbContext;
         _tenantContext = tenantContext;
+        _currentUserContext = currentUserContext;
         _auditService = auditService;
         _timeProvider = timeProvider;
     }
@@ -60,6 +73,24 @@ public class PortalAnnouncementService : IPortalAnnouncementService
             .OrderByDescending(a => a.CreatedAt)
             .Select(a => Map(a))
             .ToListAsync(cancellationToken);
+    }
+
+    public async Task<PortalResult<IReadOnlyList<PortalAnnouncementDto>>> ListForPortalAsync(
+        CancellationToken cancellationToken)
+    {
+        // I-4: this endpoint used to answer straight off the tenant id, which made it the one
+        // portal route that kept serving a deactivated customer. Announcements carry no
+        // per-customer targeting today — the refusal is about the rule holding everywhere, so the
+        // day targeting lands it cannot be the exception nobody remembers.
+        var customerId = await PortalCustomerResolver.ResolveCustomerIdAsync(
+            _dbContext, _tenantContext.TenantId, _currentUserContext.CurrentUserId, cancellationToken);
+        if (customerId is null)
+        {
+            return PortalResult<IReadOnlyList<PortalAnnouncementDto>>.NoCustomerLink();
+        }
+
+        return PortalResult<IReadOnlyList<PortalAnnouncementDto>>.Success(
+            await ListActiveAsync(cancellationToken));
     }
 
     public async Task<PortalAnnouncementDto?> CreateAsync(SavePortalAnnouncementRequest request, CancellationToken cancellationToken)

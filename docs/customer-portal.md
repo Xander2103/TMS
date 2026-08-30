@@ -12,7 +12,8 @@ User.CustomerId (enige bron van klantcontext)
         │
         ▼
 CustomerPortalController (api/customer-portal/…)
-        │  elk endpoint: MyCustomerAsync() → geen koppeling? PortalOutcomeKind.NoCustomerLink → 403
+        │  elk endpoint: PortalCustomerResolver (één definitie: eigen user-rij + klant moet ACTIEF
+        │  zijn) → geen koppeling of gedeactiveerde klant? PortalOutcomeKind.NoCustomerLink → 403
         ▼
 CustomerPortalService / PortalDashboardService / PortalDocumentService /
 PortalInvoiceService / CustomerMessageService / PortalAnnouncementService
@@ -86,7 +87,37 @@ Bestaande interne services (TransportOrderService, IFileStorageService, …)
   Events: klant → staff in-app (`customer_message_received`), staff → klant e-mail
   (`customer_message_reply`).
 - **Mededelingen**: admin-CRUD op `api/portal-announcements`
-  (`portal_announcements.manage`); portaal ziet enkel actieve.
+  (`portal_announcements.manage`); portaal ziet enkel actieve. Sinds fix wave B loopt
+  `GET announcements` via `PortalAnnouncementService.ListForPortalAsync`, dat eerst de
+  `PortalCustomerResolver` raadpleegt — het was het enige portaalendpoint zonder
+  klantresolutie en bleef dus antwoorden voor een gedeactiveerde klant. `ListActiveAsync`
+  blijft de tenantbrede query voor callers die de klant al hebben opgelost (dashboard).
+
+## Vrije tekst per stop: wat de klant ziet en wat intern blijft
+
+`TransportOrderStop` heeft vier vrijetekstvelden. Ze zijn **niet** uitwisselbaar: twee
+zijn van de klant, twee zijn van de binnendienst. De grens ligt in de projectie
+(`PortalStopDto`), niet in de frontend.
+
+| Veld | Klantportaal | Waarom |
+|---|---|---|
+| `Instructions` ("Instructies") | **zichtbaar** | Klantgegeven leverinstructie; de portaalintake schrijft dit veld. |
+| `Reference` ("Referentie") | **zichtbaar** | Klanteigen dossier-/container-/boekingsnummer. |
+| `AccessInstructions`, `LoadingInstructions`, `UnloadingInstructions` | **nooit** | Interne behandelinstructies; niet geprojecteerd door `PortalStopDto`. |
+| `AccessCode`, `Gate`, `Dock`, `RouteDescription`, contacten, openingsuren, geplande/bevestigde vensters | **nooit** | Intern; niet geprojecteerd. |
+
+**Regel voor planners:** `Instructions` en `Reference` zijn *gedeelde* schrijfvelden — de
+klant vult ze in bij het indienen, een planner past ze daarna aan, en de klant leest het
+resultaat terug op zijn eigen orderpagina. Een interne opmerking ("alleen laden na
+bevestiging boekhouding") hoort daarom **niet** in `Instructions` maar in de toegangs-,
+laad- of losinstructies. Het interne orderformulier zegt dit ter plaatse:
+`transportOrders.route.instructionsHint` (nl/fr/en) staat als hint onder het veld, en
+`routeSectionInstructionsHint.test.tsx` bewaakt dat de tekst er blijft staan.
+
+`TransportOrder.Notes` en `CancellationReason` zitten in de andere categorie: die zijn
+sinds H-14 volledig uit de portaal-DTO verwijderd (staff-velden zonder klantvariant). De
+reden van een afgewezen portaalorder bereikt de klant via de berichtenthread, niet via het
+orderveld.
 
 ## Permissies (rollen v19)
 
