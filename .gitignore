@@ -138,3 +138,7 @@ Desktop.ini
 StartUp.txt
 StartUp
 StartUp.local.txt
+
+# Database dumps (production snapshots for migration validation) must never be committed
+*.dump
+*.pgdump
