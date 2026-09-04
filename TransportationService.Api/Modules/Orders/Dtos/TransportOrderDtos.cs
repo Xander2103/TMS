@@ -445,7 +445,20 @@ public record CreateTransportOrderRequest(
     // P6: equipment/movement pricing dimensions.
     bool PlateauRequired = false,
     bool MoffettRequired = false,
-    bool IsReturnMovement = false);
+    bool IsReturnMovement = false,
+    /// <summary>
+    /// One-page intake (2026-09): the dossier activity type of the auto-created wrapper dossier's
+    /// activity (Distributie / Direct transport / Kraantransport, …). Only used when
+    /// <see cref="DossierId"/> is null; must be an active type with stops. Null keeps the
+    /// existing behaviour: the tenant's system-default transport type.
+    /// </summary>
+    Guid? ActivityTypeId = null,
+    /// <summary>
+    /// One-page intake: DurationHours for the wrapper activity (e.g. Kraantransport). Only used
+    /// when <see cref="DossierId"/> is null; the wrapper type must AllowsDuration and the value
+    /// must be >= 0 — the same rules DossierActivityService enforces on the activity itself.
+    /// </summary>
+    decimal? ActivityDurationHours = null);
 
 public record UpdateTransportOrderRequest(
     Guid CustomerId,

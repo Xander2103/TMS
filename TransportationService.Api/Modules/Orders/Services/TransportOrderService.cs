@@ -263,9 +263,40 @@ public class TransportOrderService : ITransportOrderService
                     "Dit dossier is gesloten; heropen het dossier voor je een opdracht toevoegt.");
             }
         }
+        else if (request.ActivityTypeId is { } requestedTypeId)
+        {
+            // One-page intake: the caller chose the wrapper activity type (Distributie,
+            // Kraantransport, …) instead of the system default.
+            wrapperTransportType = await _dbContext.ActivityTypes
+                .FirstOrDefaultAsync(t => t.TenantId == _tenantContext.TenantId && t.Id == requestedTypeId, cancellationToken);
+            if (wrapperTransportType is null || !wrapperTransportType.IsActive)
+            {
+                return TransportOrderOperationResult.InvalidReference("Het opgegeven transporttype bestaat niet of is inactief.");
+            }
+
+            if (!wrapperTransportType.HasStops)
+            {
+                return TransportOrderOperationResult.Invalid("Dit transporttype ondersteunt geen transportopdrachten met stops.");
+            }
+        }
         else
         {
             wrapperTransportType = await ResolveDefaultTransportActivityTypeAsync(cancellationToken);
+        }
+
+        // One-page intake: duration lands on the WRAPPER ACTIVITY (never duplicated onto the
+        // order), guarded by the same rules DossierActivityService.ValidateScalars enforces.
+        if (request.ActivityDurationHours is { } wrapperDuration && targetDossier is null)
+        {
+            if (wrapperTransportType is null || !wrapperTransportType.AllowsDuration)
+            {
+                return TransportOrderOperationResult.Invalid("Dit activiteitstype ondersteunt geen duur.");
+            }
+
+            if (wrapperDuration < 0)
+            {
+                return TransportOrderOperationResult.Invalid("De duur kan niet negatief zijn.");
+            }
         }
 
         var settings = await _dbContext.TenantSettings
@@ -356,6 +387,7 @@ public class TransportOrderService : ITransportOrderService
                 {
                     Id = Guid.NewGuid(), TenantId = _tenantContext.TenantId, DossierId = wrapperDossier.Id,
                     ActivityTypeId = wrapperTransportType.Id, Sequence = 1, LinkedTransportOrderId = order.Id,
+                    DurationHours = wrapperTransportType.AllowsDuration ? request.ActivityDurationHours : null,
                 });
             }
 

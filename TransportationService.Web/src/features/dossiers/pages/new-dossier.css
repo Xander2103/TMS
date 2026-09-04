@@ -1,10 +1,40 @@
-/* §8 fast create: minimal, instant. Controls follow the Wave 0 baseline (≥44px). */
+/* One-page transport intake (2026-09): compact operational layout, ≥44px controls.
+   Selected states use the app accent tokens (--accent*, global.css) — never a hardcoded blue. */
 
 .new-dossier form {
-  max-width: 640px;
+  max-width: 960px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 20px;
+}
+
+.new-dossier-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.new-dossier-section > h2,
+.new-dossier-section-header > h2 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+}
+
+.new-dossier-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 4px;
+}
+
+.new-dossier-section-header > h2 {
+  border-bottom: none;
+  padding-bottom: 0;
 }
 
 .new-dossier-row {
@@ -34,11 +64,14 @@
 
 .new-dossier-tiles {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
   gap: 8px;
 }
 
+/* Tiles are labels around a visually-hidden native radio: free keyboard semantics
+   (arrow keys, form association) without a hand-rolled roving tabindex. */
 .new-dossier-tile {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -53,22 +86,76 @@
   text-align: left;
 }
 
+.new-dossier-tile input[type='radio'],
+.new-dossier-blanco input[type='radio'] {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+}
+
 .new-dossier-tile svg {
   flex-shrink: 0;
   opacity: 0.75;
 }
 
 .new-dossier-tile:hover {
-  border-color: var(--color-primary, #2563eb);
+  border-color: var(--accent-border);
 }
 
+.new-dossier-tile:has(input:focus-visible),
+.new-dossier-blanco:has(input:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Selected: border + fill + check glyph + weight — never colour alone. */
 .new-dossier-tile-selected {
-  border-color: var(--color-primary, #2563eb);
-  outline: 2px solid var(--color-primary, #2563eb);
-  outline-offset: -1px;
+  border-color: var(--accent-border);
+  background: var(--accent-bg);
+  font-weight: 600;
+}
+
+.new-dossier-tile-check {
+  margin-left: auto;
+  color: var(--accent);
+}
+
+/* Blanco dossier: a quiet escape hatch below the tiles — deliberately NOT a tile. */
+.new-dossier-blanco {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  min-height: 44px;
+  padding: 6px 8px;
+  font-size: 0.875rem;
+  color: var(--text-muted, var(--text));
+  cursor: pointer;
+  border-radius: 6px;
+}
+
+.new-dossier-blanco:hover {
+  color: var(--accent);
+}
+
+.new-dossier-blanco-selected {
+  color: var(--accent);
+  font-weight: 600;
+  background: var(--accent-bg);
+}
+
+.new-dossier-hint {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--text-muted, var(--text));
 }
 
 .new-dossier-actions {
   display: flex;
-  justify-content: flex-start;
+  justify-content: flex-end;
+  gap: 12px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
 }

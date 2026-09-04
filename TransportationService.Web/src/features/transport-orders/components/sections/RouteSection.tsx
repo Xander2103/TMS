@@ -25,6 +25,16 @@ interface RouteSectionProps {
   onRequestRefresh: (key: string) => void
   /** Inline location creation; undefined when the user lacks the permission or no customer is set. */
   onQuickCreate?: (name: string) => Promise<LocationOption | null>
+  /**
+   * Intake mode (dossier quick intake): hides the per-stop toolbar (move/collapse), the per-stop
+   * reference and the instructions row — a 1-3 stop intake needs none of that chrome. The
+   * advanced disclosure stays fully functional.
+   */
+  compact?: boolean
+  /** Hides the +Laadstop/+Losstop header (the intake supplies its own add action). */
+  hideHeader?: boolean
+  /** compact only: whether this stop offers a remove action (e.g. extra unload addresses). */
+  canRemoveStop?: (stop: StopFormRow, index: number) => boolean
 }
 
 /** Route & stops section: stop list with per-stop planning inputs and advanced disclosure. */
@@ -40,21 +50,26 @@ export function RouteSection({
   onRemoveStop,
   onRequestRefresh,
   onQuickCreate,
+  compact = false,
+  hideHeader = false,
+  canRemoveStop,
 }: RouteSectionProps) {
   const { t } = useLocale()
   return (
     <>
-      <div className="tof-stops-header">
-        <h3>{t('transportOrders.route.stopsTitle')}</h3>
-        <div className="tof-stops-actions">
-          <Button variant="secondary" onClick={() => onAddStop('Loading')} disabled={saving}>
-            {t('transportOrders.route.addLoading')}
-          </Button>
-          <Button variant="secondary" onClick={() => onAddStop('Unloading')} disabled={saving}>
-            {t('transportOrders.route.addUnloading')}
-          </Button>
+      {!hideHeader && (
+        <div className="tof-stops-header">
+          <h3>{t('transportOrders.route.stopsTitle')}</h3>
+          <div className="tof-stops-actions">
+            <Button variant="secondary" onClick={() => onAddStop('Loading')} disabled={saving}>
+              {t('transportOrders.route.addLoading')}
+            </Button>
+            <Button variant="secondary" onClick={() => onAddStop('Unloading')} disabled={saving}>
+              {t('transportOrders.route.addUnloading')}
+            </Button>
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="tof-stops-grid">
         {stops.map((stop, index) => (
@@ -72,6 +87,8 @@ export function RouteSection({
             onRemoveStop={onRemoveStop}
             onRequestRefresh={onRequestRefresh}
             onQuickCreate={onQuickCreate}
+            compact={compact}
+            removable={!compact || (canRemoveStop?.(stop, index) ?? false)}
           />
         ))}
       </div>
@@ -92,6 +109,8 @@ interface StopRowProps {
   onRemoveStop: (key: string) => void
   onRequestRefresh: (key: string) => void
   onQuickCreate?: (name: string) => Promise<LocationOption | null>
+  compact: boolean
+  removable: boolean
 }
 
 /** One stop card: toolbar, location-or-address, date/time, time requirement, advanced details. */
@@ -108,6 +127,8 @@ function StopRow({
   onRemoveStop,
   onRequestRefresh,
   onQuickCreate,
+  compact,
+  removable,
 }: StopRowProps) {
   const { t } = useLocale()
   const isUnloading = stop.stopType === 'Unloading'
@@ -147,39 +168,54 @@ function StopRow({
           </>
         )}
       </legend>
-      <div className="tof-stop-toolbar">
-        {/* Wave 1 §12: the stop type is set by the +Laadstop/+Losstop button — a static chip
-            replaces the old select (the type still round-trips in the payload). */}
-        <Badge tone={isUnloading ? 'neutral' : 'info'}>{t(STOP_TYPE_LABELS[stop.stopType])}</Badge>
-        <button type="button" className="tof-link" onClick={() => moveStop(index, -1)} disabled={saving || index === 0}>
-          ↑
-        </button>
-        <button
-          type="button"
-          className="tof-link"
-          onClick={() => moveStop(index, 1)}
-          disabled={saving || index === stopCount - 1}
-        >
-          ↓
-        </button>
-        <button
-          type="button"
-          className="tof-link"
-          onClick={() => setStop(stop.key, { collapsed: !stop.collapsed })}
-          disabled={saving}
-        >
-          {stop.collapsed ? t('transportOrders.route.expand') : t('transportOrders.route.collapse')}
-        </button>
-        <button
-          type="button"
-          className="tof-link tof-link-danger"
-          onClick={() => onRemoveStop(stop.key)}
-          disabled={saving}
-        >
-          {t('ui.actions.delete')}
-        </button>
-      </div>
-      {stop.collapsed ? (
+      {compact ? (
+        removable && (
+          <div className="tof-stop-toolbar">
+            <button
+              type="button"
+              className="tof-link tof-link-danger"
+              onClick={() => onRemoveStop(stop.key)}
+              disabled={saving}
+            >
+              {t('ui.actions.delete')}
+            </button>
+          </div>
+        )
+      ) : (
+        <div className="tof-stop-toolbar">
+          {/* Wave 1 §12: the stop type is set by the +Laadstop/+Losstop button — a static chip
+              replaces the old select (the type still round-trips in the payload). */}
+          <Badge tone={isUnloading ? 'neutral' : 'info'}>{t(STOP_TYPE_LABELS[stop.stopType])}</Badge>
+          <button type="button" className="tof-link" onClick={() => moveStop(index, -1)} disabled={saving || index === 0}>
+            ↑
+          </button>
+          <button
+            type="button"
+            className="tof-link"
+            onClick={() => moveStop(index, 1)}
+            disabled={saving || index === stopCount - 1}
+          >
+            ↓
+          </button>
+          <button
+            type="button"
+            className="tof-link"
+            onClick={() => setStop(stop.key, { collapsed: !stop.collapsed })}
+            disabled={saving}
+          >
+            {stop.collapsed ? t('transportOrders.route.expand') : t('transportOrders.route.collapse')}
+          </button>
+          <button
+            type="button"
+            className="tof-link tof-link-danger"
+            onClick={() => onRemoveStop(stop.key)}
+            disabled={saving}
+          >
+            {t('ui.actions.delete')}
+          </button>
+        </div>
+      )}
+      {!compact && stop.collapsed ? (
         <p className="tof-stop-summary">
           {stop.locationId
             ? `${stop.snapshotName || t('transportOrders.route.masterLocationFallback')}${stop.snapshotAddress ? ` — ${stop.snapshotAddress}` : ''}`
@@ -270,9 +306,11 @@ function StopRow({
             <FormField label={t('transportOrders.route.to')} htmlFor={`st-totime-${stop.key}`} hint={t('transportOrders.route.optional')}>
               <input id={`st-totime-${stop.key}`} type="time" value={stop.toTime} onChange={(e) => setStop(stop.key, { toTime: e.target.value })} disabled={saving} />
             </FormField>
-            <FormField label={t('transportOrders.route.reference')} htmlFor={`st-ref-${stop.key}`}>
-              <input id={`st-ref-${stop.key}`} value={stop.reference} onChange={(e) => setStop(stop.key, { reference: e.target.value })} disabled={saving} maxLength={100} />
-            </FormField>
+            {!compact && (
+              <FormField label={t('transportOrders.route.reference')} htmlFor={`st-ref-${stop.key}`}>
+                <input id={`st-ref-${stop.key}`} value={stop.reference} onChange={(e) => setStop(stop.key, { reference: e.target.value })} disabled={saving} maxLength={100} />
+              </FormField>
+            )}
           </div>
           {hoursHint && (
             <p className="tof-hours-warning" role="note">
@@ -332,20 +370,22 @@ function StopRow({
               </FormField>
             )}
           </div>
-          <div className="tof-row">
-            {/* Wave 1 fix B (B4): this column is a SHARED write surface — the portal writes it at
-                intake and a planner edits the same value here, and PortalStopDto echoes it back to
-                the customer. The hint says so, because "internal remark typed into a
-                customer-visible field" is the failure mode; internal handling notes belong in the
-                access/loading/unloading instructions, which are never exposed. */}
-            <FormField
-              label={t('transportOrders.route.instructions')}
-              htmlFor={`st-instr-${stop.key}`}
-              hint={t('transportOrders.route.instructionsHint')}
-            >
-              <input id={`st-instr-${stop.key}`} value={stop.instructions} onChange={(e) => setStop(stop.key, { instructions: e.target.value })} disabled={saving} maxLength={2000} />
-            </FormField>
-          </div>
+          {!compact && (
+            <div className="tof-row">
+              {/* Wave 1 fix B (B4): this column is a SHARED write surface — the portal writes it at
+                  intake and a planner edits the same value here, and PortalStopDto echoes it back to
+                  the customer. The hint says so, because "internal remark typed into a
+                  customer-visible field" is the failure mode; internal handling notes belong in the
+                  access/loading/unloading instructions, which are never exposed. */}
+              <FormField
+                label={t('transportOrders.route.instructions')}
+                htmlFor={`st-instr-${stop.key}`}
+                hint={t('transportOrders.route.instructionsHint')}
+              >
+                <input id={`st-instr-${stop.key}`} value={stop.instructions} onChange={(e) => setStop(stop.key, { instructions: e.target.value })} disabled={saving} maxLength={2000} />
+              </FormField>
+            </div>
+          )}
           {/* Wave 1 §12: everything beyond the 7 default controls lives behind "Geavanceerd" —
               hidden from the default flow, fully functional for round-trip. Auto-open when any
               advanced field carries a value so existing data never disappears silently. */}

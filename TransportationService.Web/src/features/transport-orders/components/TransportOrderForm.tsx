@@ -21,6 +21,7 @@ import { useOrderFormData, useOrderPricePreview } from './sections/useOrderFormD
 import { buildSubmitPayload } from './sections/orderFormPayload'
 import { useStopMutation } from './sections/useStopMutation'
 import {
+  applyUnitToCargoRow,
   cargoFromOrder,
   cargoRowFromHeader,
   computeCargoSummary,
@@ -267,34 +268,10 @@ export function TransportOrderForm({ mode, order, onSubmit, onCancel, submitLabe
   const cargoDimensionsFixed = (cargo: CargoFormRow) =>
     masterByCode(cargo.quantityUnitCode)?.dimensionBehavior === 'Fixed'
 
-  /**
-   * Selecting a unit auto-fills the physical defaults from the unit master data (spec §2.2):
-   * Fixed always sets them, DefaultButOverridable only fills what is still empty, Variable
-   * leaves everything to the planner.
-   */
+  /** Selecting a unit auto-fills physical defaults from the unit master (shared pure helper). */
   function applyCargoUnit(key: string, code: string | null) {
     const master = masterByCode(code)
-    setCargoItems((rows) =>
-      rows.map((row) => {
-        if (row.key !== key) return row
-        const next: CargoFormRow = { ...row, quantityUnitCode: code }
-        if (!master || master.dimensionBehavior === 'Variable') return next
-        const fixed = master.dimensionBehavior === 'Fixed'
-        const cmToM = (cm: number | null) => (cm === null ? null : String(cm / 100))
-        const fill = (current: string, cm: number | null) => {
-          const value = cmToM(cm)
-          if (value === null) return fixed ? '' : current
-          return fixed || current.trim() === '' ? value : current
-        }
-        next.lengthMeters = fill(row.lengthMeters, master.defaultLengthCm)
-        next.widthMeters = fill(row.widthMeters, master.defaultWidthCm)
-        next.heightMeters = fill(row.heightMeters, master.defaultHeightCm)
-        if (master.defaultWeightKg !== null && (fixed || row.weightPerUnitKg.trim() === '')) {
-          next.weightPerUnitKg = String(master.defaultWeightKg)
-        }
-        return next
-      }),
-    )
+    setCargoItems((rows) => rows.map((row) => (row.key === key ? applyUnitToCargoRow(row, code, master) : row)))
   }
 
   function moveStop(index: number, delta: number) {

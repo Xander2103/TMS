@@ -2,7 +2,7 @@ import { getActiveLocale } from '../../../../i18n/activeLocale'
 import { translate } from '../../../../i18n/translations'
 import { fromWireDateTime, toDateTimeLocalInput } from '../../../../utils/dates'
 import { computeVolumeM3 } from '../../../../utils/volume'
-import type { ServiceOption } from '../../../tarification/api/pricingApi'
+import type { ServiceOption, UnitTypeMaster } from '../../../tarification/api/pricingApi'
 import type { PackageUnitType } from '../../../packages/types'
 import type { StopInput, TransportOrderDetail } from '../../types'
 
@@ -180,6 +180,51 @@ export function emptyCargoRow(): CargoFormRow {
     unloadingStopIndex: '',
     palletCount: '',
   }
+}
+
+/**
+ * Selecting a unit auto-fills the physical defaults from the unit master data (spec §2.2):
+ * Fixed always sets them, DefaultButOverridable only fills what is still empty, Variable
+ * leaves everything to the planner. Pure helper shared by the order form and the dossier
+ * intake — one behaviour, one place.
+ */
+export function applyUnitToCargoRow(row: CargoFormRow, code: string | null, master: UnitTypeMaster | null): CargoFormRow {
+  const next: CargoFormRow = { ...row, quantityUnitCode: code }
+  if (!master || master.dimensionBehavior === 'Variable') return next
+  const fixed = master.dimensionBehavior === 'Fixed'
+  const cmToM = (cm: number | null) => (cm === null ? null : String(cm / 100))
+  const fill = (current: string, cm: number | null) => {
+    const value = cmToM(cm)
+    if (value === null) return fixed ? '' : current
+    return fixed || current.trim() === '' ? value : current
+  }
+  next.lengthMeters = fill(row.lengthMeters, master.defaultLengthCm)
+  next.widthMeters = fill(row.widthMeters, master.defaultWidthCm)
+  next.heightMeters = fill(row.heightMeters, master.defaultHeightCm)
+  if (master.defaultWeightKg !== null && (fixed || row.weightPerUnitKg.trim() === '')) {
+    next.weightPerUnitKg = String(master.defaultWeightKg)
+  }
+  return next
+}
+
+/** True when a stop row was never touched (no address, no location, no planning) — intake fast path. */
+export function isEmptyStopRow(stop: StopFormRow): boolean {
+  return (
+    !stop.locationId && !stop.locationName.trim() && !stop.address.trim() && !stop.postalCode.trim() &&
+    !stop.city.trim() && !stop.date && !stop.fromTime && !stop.toTime && !stop.timeRequirement &&
+    !stop.requestedFrom && !stop.confirmedFrom && !stop.appointmentRequired && !stop.reference.trim() &&
+    !stop.instructions.trim()
+  )
+}
+
+/** True when a cargo row carries no meaningful content beyond the seeded quantity. */
+export function isEmptyCargoRow(cargo: CargoFormRow): boolean {
+  return (
+    !cargo.description.trim() && !cargo.quantityUnitCode && !cargo.barcode.trim() &&
+    !cargo.totalWeightKg.trim() && !cargo.weightPerUnitKg.trim() && !cargo.volumeM3.trim() &&
+    !cargo.lengthMeters.trim() && !cargo.widthMeters.trim() && !cargo.heightMeters.trim() &&
+    !cargo.palletCount.trim() && !cargo.reference.trim() && !cargo.notes.trim() && !cargo.adrRequired
+  )
 }
 
 /**

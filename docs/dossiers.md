@@ -37,6 +37,12 @@ saves).
 
 ## Aanmaak & containment
 
+- **Eén-pagina-intake** (2026-09-02, /dossiers/new): klant + transporttype tonen meteen de
+  volledige transportintake (route/planning/goederen, hergebruik van de orderformulier-secties in
+  compacte modus). Een INGEVULDE intake gaat via POST /api/transport-orders met het additive veld
+  ActivityTypeId: order + stops + cargo + wrapper-dossier + activiteit van het GEKOZEN type in een
+  atomische save (tests OrderIntakeActivityTypeTests). Een onaangeroerde intake, Opslag en Blanco
+  dossier volgen het klassieke pad hieronder.
 - **Snelle aanmaak** (`POST /api/dossiers`): alleen de klant is verplicht. Datum = vandaag,
   titel = "{klant} — {datum}", entiteit stil geërfd (klantdefault → tenantdefault → geen),
   sjabloontegel (= quick-start-activiteitstype) wordt de eerste activiteit. Geblokkeerde/
@@ -75,7 +81,11 @@ actuele staat** (dossier: `DossierVersionConflictException` + filter; order:
 
 ## UX
 
-`/dossiers/new` = 4 velden + tegels. Dossierdetail = kop (nummer, klant·ref·datum·entiteit,
+`/dossiers/new` = een-pagina-intake: klant, transporttype-tegels (echte radio's, accent-tokens,
+Blanco dossier als bescheiden link eronder), referentie/datum en - zodra een transporttype is
+gekozen - route (LocationSelect met klantadressen + vrije adressen, tijdvensters, tijdseis),
+goederenregels en opmerkingen. Typewissel bewaart gedeelde velden; alleen echte dataverlies vraagt
+bevestiging. De snelle minimale flow blijft: klant + type volstaat. Dossierdetail = kop (nummer, klant·ref·datum·entiteit,
 twee statuschips, [+ Activiteit]), Aandacht-paneel met sectiesprongen, activiteitenkaarten
 (één actie), contextuele secties Route/Goederen (alleen bij capabilities), prijssamenvatting
 met details één klik dieper, drawers met expliciet opslaan. Route-/goederendrawers hosten de

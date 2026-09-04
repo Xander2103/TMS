@@ -537,4 +537,11 @@ export interface TransportOrderInput {
   extraTimeMinimumBillableMinutes?: number | null
   /** Wave 1 §10: expected concurrency token on update; omitted on create (server skips the check). */
   version?: string
+  /**
+   * One-page dossier intake (2026-09): the activity type of the auto-created wrapper dossier's
+   * activity (Distributie/Direct/Kraantransport). Create-only; null/omitted = system default.
+   */
+  activityTypeId?: string | null
+  /** One-page intake: DurationHours for the wrapper activity (AllowsDuration types only, >= 0). */
+  activityDurationHours?: number | null
 }
