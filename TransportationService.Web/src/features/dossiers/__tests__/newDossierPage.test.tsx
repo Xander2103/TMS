@@ -379,4 +379,81 @@ describe('NewDossierPage — one-page intake', () => {
       expect(createFast).toHaveBeenCalledWith(expect.objectContaining({ activityTypeId: 'at-dist' })),
     )
   })
+
+  // Regression (pre-deploy review 2026-09-04): every user-entered order field must count as
+  // "touched", otherwise the dossier-only fast path silently drops it.
+  it('a ticked ADR flag alone routes to the order create instead of the silent fast path', async () => {
+    const user = userEvent.setup()
+    renderPage()
+
+    await pickCustomer(user)
+    await user.click(await screen.findByRole('radio', { name: /Direct transport/ }))
+    await user.click(screen.getByLabelText('ADR-transport'))
+    await user.click(screen.getByRole('button', { name: 'Dossier aanmaken' }))
+
+    // Not the silent fast path: the order rules apply and tell the user what is still missing.
+    expect((await screen.findAllByText(/Vul minstens een hoeveelheid en eenheid in/)).length).toBeGreaterThan(0)
+    expect(createFast).not.toHaveBeenCalled()
+    expect(screen.getByLabelText('ADR-transport')).toBeChecked()
+
+    await user.type(screen.getByLabelText('Omschrijving'), 'Gevaarlijke stoffen')
+    await user.click(screen.getByRole('button', { name: 'Dossier aanmaken' }))
+    await waitFor(() => expect(createOrder).toHaveBeenCalledTimes(1))
+    expect(createOrder.mock.calls[0][0]).toEqual(expect.objectContaining({ activityTypeId: 'at-direct', adrRequired: true }))
+    expect(createFast).not.toHaveBeenCalled()
+  })
+
+  it('a header weight alone (goods line removed) is saved through the order create, not dropped', async () => {
+    const user = userEvent.setup()
+    renderPage()
+
+    await pickCustomer(user)
+    await user.click(await screen.findByRole('radio', { name: /Direct transport/ }))
+    // Removing the seeded goods line reveals the classic header inputs.
+    await user.click(screen.getByRole('button', { name: 'Verwijderen' }))
+    await user.type(screen.getByLabelText('Gewicht (kg)'), '1200')
+    await user.click(screen.getByRole('button', { name: 'Dossier aanmaken' }))
+
+    // Weight alone is not a complete goods entry: the order rules surface, nothing is discarded.
+    expect((await screen.findAllByText(/Vul minstens een hoeveelheid en eenheid in/)).length).toBeGreaterThan(0)
+    expect(createFast).not.toHaveBeenCalled()
+    expect(screen.getByLabelText('Gewicht (kg)')).toHaveValue(1200)
+
+    await user.type(screen.getByLabelText('Omschrijving goederen'), 'Staalplaten')
+    await user.click(screen.getByRole('button', { name: 'Dossier aanmaken' }))
+    await waitFor(() => expect(createOrder).toHaveBeenCalledTimes(1))
+    expect(createOrder.mock.calls[0][0]).toEqual(expect.objectContaining({ activityTypeId: 'at-direct', weightKg: 1200 }))
+    expect(createFast).not.toHaveBeenCalled()
+  })
+
+  it('an untouched Kraantransport still takes the fast path: the implied crane flag is not user data', async () => {
+    const user = userEvent.setup()
+    renderPage()
+
+    await pickCustomer(user)
+    await user.click(await screen.findByRole('radio', { name: /Kraantransport/ }))
+    expect(screen.getByLabelText('Kraan vereist')).toBeChecked()
+    await user.click(screen.getByRole('button', { name: 'Dossier aanmaken' }))
+
+    await waitFor(() =>
+      expect(createFast).toHaveBeenCalledWith(expect.objectContaining({ customerId: 'c-1', activityTypeId: 'at-kraan' })),
+    )
+    expect(createOrder).not.toHaveBeenCalled()
+  })
+
+  it('switching away from Kraantransport clears the implied crane flag unless the user set it', async () => {
+    const user = userEvent.setup()
+    renderPage()
+
+    await pickCustomer(user)
+    await user.click(await screen.findByRole('radio', { name: /Kraantransport/ }))
+    expect(screen.getByLabelText('Kraan vereist')).toBeChecked()
+    await user.click(screen.getByRole('radio', { name: /Direct transport/ }))
+    expect(screen.getByLabelText('Kraan vereist')).not.toBeChecked()
+
+    // Untouched after the switch → still the fast path.
+    await user.click(screen.getByRole('button', { name: 'Dossier aanmaken' }))
+    await waitFor(() => expect(createFast).toHaveBeenCalledWith(expect.objectContaining({ activityTypeId: 'at-direct' })))
+    expect(createOrder).not.toHaveBeenCalled()
+  })
 })

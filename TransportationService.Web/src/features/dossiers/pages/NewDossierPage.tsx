@@ -88,6 +88,8 @@ export function NewDossierPage() {
   const [loadingMeters, setLoadingMeters] = useState('')
   const [adrRequired, setAdrRequired] = useState(false)
   const [craneRequired, setCraneRequired] = useState(false)
+  /** Kraantransport implies the crane flag; once the user touches the checkbox it is theirs. */
+  const [craneTouched, setCraneTouched] = useState(false)
   const [plateauRequired, setPlateauRequired] = useState(false)
   const [moffettRequired, setMoffettRequired] = useState(false)
   const [isReturnMovement, setIsReturnMovement] = useState(false)
@@ -134,9 +136,15 @@ export function NewDossierPage() {
   const durationInvalid = durationValue !== null && (!Number.isFinite(durationValue) || durationValue < 0)
 
   const routeTouched = stops.some((stop) => !isEmptyStopRow(stop))
+  // Every order field the intake renders counts: anything the user typed or ticked must go
+  // through the order create, never silently through the dossier-only fast path.
+  const craneImplied = selectedType?.code === 'KRAANTRANSPORT'
   const goodsTouched =
     cargoItems.some((cargo) => !isEmptyCargoRow(cargo)) || goodsDescription.trim() !== '' ||
-    quantity.trim() !== '' || notes.trim() !== ''
+    quantity.trim() !== '' || notes.trim() !== '' || quantityUnitCode !== null ||
+    weightKg.trim() !== '' || volumeM3.trim() !== '' || palletCount.trim() !== '' ||
+    distanceKm.trim() !== '' || loadingMeters.trim() !== '' ||
+    adrRequired || plateauRequired || moffettRequired || isReturnMovement || craneRequired !== craneImplied
   const intakeTouched = routeTouched || goodsTouched || durationValue !== null
 
   const derivedFromCargo = cargoItems.length > 0
@@ -251,8 +259,14 @@ export function NewDossierPage() {
     setSelection(nextSelection)
     setClientErrors([])
     setFormError(null)
-    // Kraantransport implies a crane requirement; the checkbox stays editable in Goederen.
-    if (nextType?.code === 'KRAANTRANSPORT') setCraneRequired(true)
+    // Kraantransport implies a crane requirement; the checkbox stays editable in Goederen. The
+    // implied value follows the type until the user sets the flag themselves.
+    if (!craneTouched) setCraneRequired(nextType?.code === 'KRAANTRANSPORT')
+  }
+
+  function setCraneRequiredByUser(value: boolean) {
+    setCraneTouched(true)
+    setCraneRequired(value)
   }
 
   function confirmPendingSwitch() {
@@ -541,7 +555,7 @@ export function NewDossierPage() {
                 adrRequired={adrRequired}
                 setAdrRequired={setAdrRequired}
                 craneRequired={craneRequired}
-                setCraneRequired={setCraneRequired}
+                setCraneRequired={setCraneRequiredByUser}
                 plateauRequired={plateauRequired}
                 setPlateauRequired={setPlateauRequired}
                 moffettRequired={moffettRequired}

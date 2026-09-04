@@ -217,8 +217,13 @@ public record CustomerPricingConfigDto(
 public record SaveCustomerUnitRequest(
     Guid UnitTypeId, int SortOrder, string? CustomerLabel, string? EdiCode, string? ExcelCode, bool IsFavourite);
 
+/// <summary>
+/// Partial by design: <see cref="Units"/> null = leave the customer's unit mapping untouched
+/// (a present list is a full replace); option rows absent from <see cref="OptionPrices"/> are
+/// left untouched. Independent panels save their own slice without echoing the other's state.
+/// </summary>
 public record SaveCustomerPricingConfigRequest(
-    IReadOnlyList<SaveCustomerUnitRequest> Units,
+    IReadOnlyList<SaveCustomerUnitRequest>? Units,
     IReadOnlyList<SaveCustomerOptionPriceRequest> OptionPrices);
 
 public record SaveCustomerOptionPriceRequest(

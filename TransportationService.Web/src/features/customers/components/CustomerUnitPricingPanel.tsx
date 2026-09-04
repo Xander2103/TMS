@@ -291,18 +291,10 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
     setBusy(true)
     try {
       // The backend leaves option rows that are ABSENT from the request untouched, so a
-      // single-row save never clobbers other overrides; units however are a full replace.
-      const saved = await saveCustomerPricingConfig(customerId, {
-        units: config.preferredUnits.map((u) => ({
-          unitTypeId: u.unitTypeId,
-          sortOrder: u.sortOrder,
-          customerLabel: u.customerLabel,
-          ediCode: u.ediCode,
-          excelCode: u.excelCode,
-          isFavourite: u.isFavourite,
-        })),
-        optionPrices: [row],
-      })
+      // single-row save never clobbers other overrides. Units are a full replace when sent, and
+      // the units panel next to this one holds its own state — so never echo our (possibly
+      // stale) unit snapshot: omit units and the mapping stays exactly as it is.
+      const saved = await saveCustomerPricingConfig(customerId, { optionPrices: [row] })
       setConfig(saved)
       showSuccess(successMessage)
       return true

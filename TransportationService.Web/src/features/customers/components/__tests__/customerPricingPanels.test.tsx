@@ -939,3 +939,111 @@ describe('CustomerPriceAdjustmentsPanel', () => {
     expect(screen.queryByRole('button', { name: '+ Nieuwe prijsaanpassing' })).not.toBeInTheDocument()
   })
 })
+
+describe('CustomerUnitsPanel + CustomerUnitPricingPanel — sibling saves never clobber each other', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    auth.permissions = new Set(['tariffs.view', 'tariffs.manage'])
+    state.rules = []
+    state.agreements = []
+    state.links = []
+    state.bracketOverrides = []
+    state.units = []
+    state.serviceMeta = [
+      {
+        id: 'svc-10',
+        code: 'VOOR10',
+        name: 'Levering vóór 10:00',
+        kind: 'Fixed',
+        defaultValue: 15,
+        isActive: true,
+        sortOrder: 0,
+        description: null,
+        invoiceDescription: null,
+        selectableInOrders: true,
+        unitTypeId: null,
+        unitTypeName: null,
+        autoApply: true,
+        onlyForAdr: false,
+        timeConditions: [],
+      },
+    ]
+    state.config = {
+      ...makeConfig(),
+      serviceOptions: [
+        {
+          serviceOptionId: 'svc-10',
+          name: 'Levering vóór 10:00',
+          kind: 'Fixed',
+          defaultValue: 15,
+          customerValue: 10,
+          disabled: false,
+          minimumAmount: null,
+          invoiceDescription: null,
+          effectiveFrom: null,
+          effectiveUntil: null,
+          effectiveValue: 10,
+          source: 'Klanttarief',
+          autoApplyOverride: null,
+          effectiveAutoApply: true,
+        },
+      ],
+    }
+    // Simulated backend contract: units in the request are a FULL replace, units absent from the
+    // request stay as they are; option rows merge per row.
+    state.saveConfig.mockImplementation((_customerId: string, input: { units?: unknown; optionPrices: { serviceOptionId: string; value: number | null }[] }) => {
+      const current = state.config!
+      const units = input.units as { unitTypeId: string; customerLabel: string | null; ediCode: string | null; excelCode: string | null; isFavourite: boolean; sortOrder: number }[] | undefined | null
+      state.config = {
+        preferredUnits: units
+          ? units.map((u) => ({ ...current.preferredUnits.find((p) => p.unitTypeId === u.unitTypeId)!, ...u }))
+          : current.preferredUnits,
+        serviceOptions: current.serviceOptions.map((row) => {
+          const patch = input.optionPrices.find((p) => p.serviceOptionId === row.serviceOptionId)
+          return patch ? { ...row, customerValue: patch.value, effectiveValue: patch.value ?? row.defaultValue } : row
+        }),
+      }
+      return Promise.resolve(state.config)
+    })
+  })
+
+  it('a service-override save after a unit edit keeps the new unit mapping (no stale sibling snapshot)', async () => {
+    const user = userEvent.setup()
+    render(
+      <MemoryRouter>
+        <CustomerUnitPricingPanel customerId="cust-1" />
+        <CustomerUnitsPanel customerId="cust-1" />
+      </MemoryRouter>,
+    )
+
+    // 1. Edit the EDI code of Europallet in the units panel.
+    const unitRow = (await screen.findByText('Europallet')).closest('tr')!
+    await user.click(within(unitRow).getByRole('button', { name: 'Bewerken' }))
+    let dialog = await screen.findByRole('dialog')
+    const edi = within(dialog).getByLabelText(/EDI-code/)
+    await user.clear(edi)
+    await user.type(edi, 'EPAL-2')
+    await user.click(within(dialog).getByRole('button', { name: 'Opslaan' }))
+    await waitFor(() => expect(state.saveConfig).toHaveBeenCalledTimes(1))
+    expect(state.config!.preferredUnits[0].ediCode).toBe('EPAL-2')
+
+    // 2. Without reloading, edit a service override in the pricing panel.
+    const serviceRow = screen.getByText('Levering vóór 10:00').closest('tr')!
+    await user.click(within(serviceRow).getByRole('button', { name: 'Bewerken' }))
+    dialog = await screen.findByRole('dialog')
+    const valueInput = within(dialog).getByLabelText(/Prijs voor deze klant/)
+    await user.clear(valueInput)
+    await user.type(valueInput, '12.5')
+    await user.click(within(dialog).getByRole('button', { name: 'Opslaan' }))
+    await waitFor(() => expect(state.saveConfig).toHaveBeenCalledTimes(2))
+
+    // 3. The unit change survives: the override save must not carry a units snapshot at all.
+    const overridePayload = state.saveConfig.mock.calls[1][1]
+    expect(overridePayload.units).toBeUndefined()
+    expect(overridePayload.optionPrices).toEqual([expect.objectContaining({ serviceOptionId: 'svc-10', value: 12.5 })])
+    expect(state.config!.preferredUnits[0].ediCode).toBe('EPAL-2')
+    expect(state.config!.serviceOptions[0].customerValue).toBe(12.5)
+    // And the earlier data-loss fix still holds: the units save mentions no option prices.
+    expect(state.saveConfig.mock.calls[0][1].optionPrices).toEqual([])
+  })
+})

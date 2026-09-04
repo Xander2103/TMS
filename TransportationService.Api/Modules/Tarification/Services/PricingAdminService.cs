@@ -1645,7 +1645,8 @@ public class PricingAdminService : IPricingAdminService
             return null;
         }
 
-        var units = request.Units;
+        // Units null = the caller does not touch the unit mapping (option-price-only save).
+        var units = request.Units ?? [];
         var unitIds = units.Select(u => u.UnitTypeId).Distinct().ToList();
         if (unitIds.Count != units.Count)
         {
@@ -1678,28 +1679,31 @@ public class PricingAdminService : IPricingAdminService
             }
         }
 
-        var existingPreferred = await _dbContext.CustomerPreferredUnits
-            .Where(u => u.TenantId == TenantId && u.CustomerId == customerId)
-            .ToListAsync(cancellationToken);
-        _dbContext.CustomerPreferredUnits.RemoveRange(existingPreferred.Where(u => !unitIds.Contains(u.UnitTypeId)));
-        foreach (var unit in units)
+        if (request.Units is not null)
         {
-            var row = existingPreferred.FirstOrDefault(u => u.UnitTypeId == unit.UnitTypeId);
-            if (row is null)
+            var existingPreferred = await _dbContext.CustomerPreferredUnits
+                .Where(u => u.TenantId == TenantId && u.CustomerId == customerId)
+                .ToListAsync(cancellationToken);
+            _dbContext.CustomerPreferredUnits.RemoveRange(existingPreferred.Where(u => !unitIds.Contains(u.UnitTypeId)));
+            foreach (var unit in units)
             {
-                row = new CustomerPreferredUnit
+                var row = existingPreferred.FirstOrDefault(u => u.UnitTypeId == unit.UnitTypeId);
+                if (row is null)
                 {
-                    Id = Guid.NewGuid(), TenantId = TenantId, CustomerId = customerId,
-                    UnitTypeId = unit.UnitTypeId,
-                };
-                _dbContext.CustomerPreferredUnits.Add(row);
-            }
+                    row = new CustomerPreferredUnit
+                    {
+                        Id = Guid.NewGuid(), TenantId = TenantId, CustomerId = customerId,
+                        UnitTypeId = unit.UnitTypeId,
+                    };
+                    _dbContext.CustomerPreferredUnits.Add(row);
+                }
 
-            row.SortOrder = unit.SortOrder;
-            row.CustomerLabel = Clean(unit.CustomerLabel);
-            row.EdiCode = Clean(unit.EdiCode);
-            row.ExcelCode = Clean(unit.ExcelCode);
-            row.IsFavourite = unit.IsFavourite;
+                row.SortOrder = unit.SortOrder;
+                row.CustomerLabel = Clean(unit.CustomerLabel);
+                row.EdiCode = Clean(unit.EdiCode);
+                row.ExcelCode = Clean(unit.ExcelCode);
+                row.IsFavourite = unit.IsFavourite;
+            }
         }
 
         var existingPrices = await _dbContext.CustomerServiceOptionPrices
@@ -1744,7 +1748,7 @@ public class PricingAdminService : IPricingAdminService
 
         await _dbContext.SaveChangesAsync(cancellationToken);
         await _auditService.RecordAsync("CustomerPricingConfig", customerId.ToString(), "Updated", null,
-            new { PreferredUnits = unitIds.Count, OptionPrices = request.OptionPrices.Count }, cancellationToken);
+            new { PreferredUnits = request.Units is null ? (int?)null : unitIds.Count, OptionPrices = request.OptionPrices.Count }, cancellationToken);
         return await GetCustomerConfigAsync(customerId, cancellationToken);
     }
 

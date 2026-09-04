@@ -111,6 +111,29 @@ public class CustomerUnitConfigTests
         Assert.Equal(3, row.SortOrder);
     }
 
+    /// <summary>
+    /// Regression (pre-deploy review 2026-09-04): the service-override panel saves through the same
+    /// endpoint. A request WITHOUT units must leave the customer's unit mapping untouched — it must
+    /// never be a "replace with an older snapshot" of a sibling panel.
+    /// </summary>
+    [Fact]
+    public async Task Save_WithoutUnits_LeavesPreferredUnitsUntouched()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        await h.Admin.SaveCustomerConfigAsync(h.CustomerAId, new SaveCustomerPricingConfigRequest(
+            [Unit(h.PalletUnitId, 1, "EURO PAL", "EPAL-2", "EURO")], []), CancellationToken.None);
+
+        var saved = await h.Admin.SaveCustomerConfigAsync(h.CustomerAId, new SaveCustomerPricingConfigRequest(
+            null, []), CancellationToken.None);
+
+        Assert.NotNull(saved);
+        var pallet = Assert.Single(saved!.PreferredUnits);
+        Assert.Equal("EPAL-2", pallet.EdiCode);
+        Assert.Equal("EURO PAL", pallet.CustomerLabel);
+        Assert.Equal(1, await h.Db.Context.CustomerPreferredUnits.CountAsync(u => u.CustomerId == h.CustomerAId));
+    }
+
     [Fact]
     public async Task Save_RejectsDuplicateUnits_AndUnknownUnits()
     {

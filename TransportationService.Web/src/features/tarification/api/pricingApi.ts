@@ -600,7 +600,9 @@ export interface CustomerOptionPriceInput {
 }
 
 export interface CustomerPricingConfigInput {
-  units: CustomerUnitInput[]
+  /** Omitted/null = leave the unit mapping untouched; a list is a full replace. */
+  units?: CustomerUnitInput[] | null
+  /** Rows absent from the list are left untouched server-side. */
   optionPrices: CustomerOptionPriceInput[]
 }
 
