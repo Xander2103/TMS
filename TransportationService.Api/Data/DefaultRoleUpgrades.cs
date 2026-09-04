@@ -17,7 +17,7 @@ public static class DefaultRoleUpgrades
         IReadOnlyDictionary<string, IReadOnlyList<string>> GrantsByTemplateCode);
 
     /// <summary>Version 1 = the original role creation; steps start at 2.</summary>
-    public const int CurrentVersion = 30;
+    public const int CurrentVersion = 31;
 
     public static IReadOnlyList<UpgradeStep> Steps { get; } =
     [
@@ -561,6 +561,16 @@ public static class DefaultRoleUpgrades
                     PermissionCodes.AttendanceSelf, PermissionCodes.AttendanceView,
                     PermissionCodes.AttendanceReport,
                 ],
+            }),
+
+        new(31,
+            "Excel-importprofielen 2026-09-02: importprofielen (kolom→TMS-veld-mapping) worden "
+            + "beheerbaar via de UI. Planner en management mogen profielen aanmaken/bewerken; "
+            + "bekijken en importeren rijden op de bestaande orderpermissies.",
+            new Dictionary<string, IReadOnlyList<string>>
+            {
+                ["planner"] = [PermissionCodes.OrderImportsManageProfiles],
+                ["management"] = [PermissionCodes.OrderImportsManageProfiles],
             }),
     ];
 }

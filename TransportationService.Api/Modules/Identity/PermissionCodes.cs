@@ -228,6 +228,8 @@ public static class PermissionCodes
     public const string OrdersOverridePrice = "orders.override_price";
     /// <summary>Locks/unlocks the pricing status of an order (spec ch. 24-26), blocking further recalculation.</summary>
     public const string OrdersLockPrice = "orders.lock_price";
+    /// <summary>Excel-import mapping profiles: create/edit/delete (viewing rides on the order view permissions).</summary>
+    public const string OrderImportsManageProfiles = "order_imports.manage_profiles";
 
     /// <summary>
     /// Wave 2026-08-04 §10: confirm an order price even though one or more goods lines have no
@@ -584,6 +586,7 @@ public static class PermissionCodes
         (OrdersExport, "orders", "export", "Transportopdrachten exporteren"),
         (OrdersOverridePrice, "orders", "override_price", "Berekende orderprijs handmatig overschrijven"),
         (OrdersLockPrice, "orders", "lock_price", "Prijs van transportopdrachten vergrendelen en ontgrendelen"),
+        (OrderImportsManageProfiles, "order_imports", "manage_profiles", "Excel-importprofielen aanmaken en beheren"),
         (OrdersConfirmIncompletePrice, "orders", "confirm_incomplete_price", "Prijs bevestigen ook wanneer goederen geen basistarief hebben"),
         (OrdersManage, "orders", "manage", "Volledig beheer van transportopdrachten"),
         (DashboardView, "dashboard", "view", "Bedrijfsdashboard bekijken"),

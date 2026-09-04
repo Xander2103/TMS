@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { PageHeader } from '../../../components/layout/PageHeader'
 import { Badge, type BadgeTone } from '../../../components/ui/Badge'
@@ -6,14 +7,16 @@ import { Button } from '../../../components/ui/Button'
 import { DataTable, type Column } from '../../../components/ui/DataTable'
 import { FormField } from '../../../components/ui/FormField'
 import { Pagination } from '../../../components/ui/Pagination'
+import { SearchableSelect } from '../../../components/ui/SearchableSelect'
+import { TabPanel, Tabs } from '../../../components/ui/Tabs'
 import { useToast } from '../../../components/ui/toastContext'
 import { ApiError } from '../../../api/apiClient'
 import { usePagedQuery } from '../../../hooks/usePagedQuery'
 import { useLocale } from '../../../i18n/localeContext'
 import { useAuth } from '../../auth/authContextValue'
 import { searchCustomers } from '../../customers/api/customersApi'
-import type { CustomerListItem } from '../../customers/types'
 import {
+  analyzeOrderImportFile,
   getOrderImportBatch,
   listOrderImportBatches,
   listOrderImportProfiles,
@@ -22,13 +25,18 @@ import {
   type OrderImportBatchDetail,
   type OrderImportBatchStatus,
   type OrderImportProfile,
+  type OrderImportProfileMatch,
   type OrderImportRow,
   type OrderImportRowStatus,
 } from '../api/orderImportsApi'
+import { ImportProfilesPanel } from '../components/ImportProfilesPanel'
 import { formatDateTime } from '../../../utils/dates'
 import './order-imports.css'
 
 const PAGE_SIZE = 25
+
+const TAB_IDS = ['importeren', 'profielen', 'historiek'] as const
+type TabId = (typeof TAB_IDS)[number]
 
 const BATCH_STATUS_LABELS: Record<OrderImportBatchStatus, string> = {
   Validated: 'orderImports.batchStatus.Validated',
@@ -54,14 +62,29 @@ const ROW_STATUS_TONE: Record<OrderImportRowStatus, BadgeTone> = {
   Error: 'danger',
 }
 
-/** P13: automated Excel order import — upload with dry run, batch history, per-row outcome. */
+/**
+ * Excel-import (P13 + 2026-09 rework): one sidebar entry, three local tabs — Importeren (the
+ * existing upload/dry-run flow), Importprofielen (reusable column→TMS-field mappings) and
+ * Importhistoriek (the persisted batch history). Tab state follows the app convention:
+ * `?tab=`, replace-navigation, first tab = empty search.
+ */
 export function OrderImportsPage() {
   const { hasPermission } = useAuth()
   const { t } = useLocale()
   const { showSuccess, showError } = useToast()
+  const [searchParams, setSearchParams] = useSearchParams()
 
   const canView = hasPermission('orders.view') || hasPermission('orders.manage')
   const canUpload = hasPermission('orders.create') || hasPermission('orders.manage')
+
+  const requestedTab = searchParams.get('tab')
+  const tab: TabId = TAB_IDS.includes(requestedTab as TabId) ? (requestedTab as TabId) : 'importeren'
+
+  function setTab(next: string) {
+    setSearchParams(next === 'importeren' ? {} : { tab: next }, { replace: true })
+  }
+
+  // ---------------------------------------------------------------- history (tab: historiek)
 
   const [page, setPage] = useState(1)
   const {
@@ -78,18 +101,19 @@ export function OrderImportsPage() {
     { search: '', page, pageSize: PAGE_SIZE, errorMessage: t('orderImports.historyError') },
   )
 
-  // ---------------------------------------------------------------- upload form
+  // ---------------------------------------------------------------- upload form (tab: importeren)
 
   const [profiles, setProfiles] = useState<OrderImportProfile[]>([])
   const [profileId, setProfileId] = useState('')
-  const [customers, setCustomers] = useState<CustomerListItem[]>([])
-  const [customerSearch, setCustomerSearch] = useState('')
-  const [customerId, setCustomerId] = useState('')
+  const [customerOptions, setCustomerOptions] = useState<{ value: string; label: string }[]>([])
+  const [customerId, setCustomerId] = useState<string | null>(null)
   const [file, setFile] = useState<File | null>(null)
   const [fileInputKey, setFileInputKey] = useState(0)
   const [dryRun, setDryRun] = useState(true)
   const [uploading, setUploading] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
+  /** Best saved-profile match for the chosen file (≥90% auto-selects, ≥60% suggests). */
+  const [profileMatch, setProfileMatch] = useState<OrderImportProfileMatch | null>(null)
 
   useEffect(() => {
     if (!canUpload) return
@@ -101,23 +125,37 @@ export function OrderImportsPage() {
         if (data.length > 0) setProfileId((current) => current || data[0].id)
       })
       .catch(() => {})
-    return () => {
-      mounted = false
-    }
-  }, [canUpload])
-
-  useEffect(() => {
-    if (!canUpload) return
-    let mounted = true
-    searchCustomers({ search: customerSearch || undefined, isActive: true, page: 1, pageSize: 20 })
+    searchCustomers({ isActive: true, page: 1, pageSize: 200 })
       .then((result) => {
-        if (mounted) setCustomers(result.items)
+        if (mounted) {
+          setCustomerOptions(result.items.map((c) => ({ value: c.id, label: c.name, keywords: c.customerNumber })))
+        }
       })
       .catch(() => {})
     return () => {
       mounted = false
     }
-  }, [canUpload, customerSearch])
+  }, [canUpload])
+
+  // Profiles usable for the chosen customer: generic ones + that customer's own.
+  const selectableProfiles = profiles.filter((p) => !p.customerId || p.customerId === customerId)
+
+  async function handleFileChosen(chosen: File | null) {
+    setFile(chosen)
+    setProfileMatch(null)
+    if (!chosen) return
+    try {
+      // Header-based recognition against SAVED profiles; wrong guesses are worse than none,
+      // so only a very strong match is applied automatically (and never a foreign customer's).
+      const analysis = await analyzeOrderImportFile(chosen)
+      const best = analysis.profileMatches.find((m) => !m.customerId || m.customerId === customerId)
+      if (!best || best.matchPercent < 60) return
+      setProfileMatch(best)
+      if (best.matchPercent >= 90) setProfileId(best.profileId)
+    } catch {
+      // Recognition is a convenience — a failed analysis never blocks the manual flow.
+    }
+  }
 
   // ---------------------------------------------------------------- batch detail
 
@@ -137,6 +175,7 @@ export function OrderImportsPage() {
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault()
+    if (uploading) return
     setFormError(null)
     if (!profileId) {
       setFormError(t('orderImports.form.chooseProfile'))
@@ -166,6 +205,7 @@ export function OrderImportsPage() {
             }),
       )
       setFile(null)
+      setProfileMatch(null)
       setFileInputKey((key) => key + 1)
       setPage(1)
       reload()
@@ -238,6 +278,27 @@ export function OrderImportsPage() {
     },
   ]
 
+  const detailSection = (detail || detailLoading) && (
+    <section className="oi-detail" aria-label={t('orderImports.detailSection')}>
+      {detailLoading || !detail ? (
+        <p>{t('orderImports.detailLoading')}</p>
+      ) : (
+        <>
+          <h3>
+            {detail.batch.fileName} — {detail.batch.customerName}
+            {detail.batch.dryRun ? ` ${t('orderImports.dryRunTitleSuffix')}` : ''}
+          </h3>
+          <DataTable
+            columns={rowColumns}
+            rows={detail.rows}
+            rowKey={(row) => String(row.rowNumber)}
+            emptyMessage={t('orderImports.emptyRows')}
+          />
+        </>
+      )}
+    </section>
+  )
+
   if (!canView && !canUpload) {
     return (
       <div>
@@ -253,113 +314,129 @@ export function OrderImportsPage() {
       <Breadcrumbs items={[{ label: t('navigation.menu.excelImport') }]} />
       <PageHeader title={t('navigation.menu.excelImport')} subtitle={t('orderImports.subtitle')} />
 
-      {canUpload && (
-        <section className="oi-upload-card" aria-label={t('orderImports.uploadSection')}>
-          <form className="oi-upload-form" onSubmit={handleSubmit} noValidate>
-            <FormField label={t('orderImports.form.profile')} htmlFor="oi-profile" required>
-              <select
-                id="oi-profile"
-                value={profileId}
-                onChange={(e) => setProfileId(e.target.value)}
-                disabled={uploading}
-              >
-                {profiles.length === 0 && <option value="">{t('orderImports.form.noProfiles')}</option>}
-                {profiles.map((profile) => (
-                  <option key={profile.id} value={profile.id}>
-                    {profile.name}
-                  </option>
-                ))}
-              </select>
-            </FormField>
-            <FormField label={t('orderImports.form.customerSearch')} htmlFor="oi-customer-search">
-              <input
-                id="oi-customer-search"
-                value={customerSearch}
-                onChange={(e) => setCustomerSearch(e.target.value)}
-                placeholder={t('orderImports.form.customerSearchPlaceholder')}
-                disabled={uploading}
-              />
-            </FormField>
-            <FormField label={t('orderImports.form.customer')} htmlFor="oi-customer" required>
-              <select
-                id="oi-customer"
-                value={customerId}
-                onChange={(e) => setCustomerId(e.target.value)}
-                disabled={uploading}
-              >
-                <option value="">{t('orderImports.form.chooseCustomer')}</option>
-                {customers.map((customer) => (
-                  <option key={customer.id} value={customer.id}>
-                    {customer.name} ({customer.customerNumber})
-                  </option>
-                ))}
-              </select>
-            </FormField>
-            <FormField label={t('orderImports.form.file')} htmlFor="oi-file" required>
-              <input
-                key={fileInputKey}
-                id="oi-file"
-                type="file"
-                accept=".xlsx"
-                onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-                disabled={uploading}
-              />
-            </FormField>
-            <label className="oi-checkbox">
-              <input
-                type="checkbox"
-                checked={dryRun}
-                onChange={(e) => setDryRun(e.target.checked)}
-                disabled={uploading}
-              />
-              {t('orderImports.form.dryRun')}
-            </label>
-            <Button type="submit" disabled={uploading}>
-              {uploading
-                ? t('orderImports.form.busy')
-                : dryRun
-                  ? t('orderImports.form.validate')
-                  : t('orderImports.form.import')}
-            </Button>
-          </form>
-          {formError && (
-            <div className="oi-form-error" role="alert">
-              {formError}
-            </div>
+      <Tabs
+        tabs={[
+          { id: 'importeren', label: t('orderImports.tabs.import') },
+          { id: 'profielen', label: t('orderImports.tabs.profiles') },
+          { id: 'historiek', label: t('orderImports.tabs.history') },
+        ]}
+        activeId={tab}
+        onChange={setTab}
+      />
+
+      {tab === 'importeren' && (
+        <TabPanel tabId="importeren">
+          {canUpload ? (
+            <section className="oi-upload-card" aria-label={t('orderImports.uploadSection')}>
+              <form className="oi-upload-form" onSubmit={(event) => void handleSubmit(event)} noValidate>
+                <div className="oi-upload-grid">
+                  <FormField label={t('orderImports.form.customer')} htmlFor="oi-customer" required>
+                    <SearchableSelect
+                      id="oi-customer"
+                      value={customerId}
+                      onChange={(value) => {
+                        setCustomerId(value)
+                        setProfileMatch(null)
+                      }}
+                      options={customerOptions}
+                      placeholder={t('orderImports.form.customerSearchPlaceholder')}
+                      disabled={uploading}
+                    />
+                  </FormField>
+                  <FormField label={t('orderImports.form.profile')} htmlFor="oi-profile" required>
+                    <SearchableSelect
+                      id="oi-profile"
+                      value={profileId || null}
+                      onChange={(value) => setProfileId(value ?? '')}
+                      options={selectableProfiles.map((profile) => ({
+                        value: profile.id,
+                        label: profile.name,
+                        description: profile.customerName ?? undefined,
+                      }))}
+                      placeholder={t('orderImports.form.noProfiles')}
+                      clearable={false}
+                      disabled={uploading}
+                    />
+                  </FormField>
+                </div>
+                <FormField label={t('orderImports.form.file')} htmlFor="oi-file" required>
+                  <input
+                    key={fileInputKey}
+                    id="oi-file"
+                    type="file"
+                    accept=".xlsx"
+                    onChange={(e) => void handleFileChosen(e.target.files?.[0] ?? null)}
+                    disabled={uploading}
+                  />
+                </FormField>
+                {profileMatch && (
+                  <p className="oi-hint" role="note">
+                    {t('orderImports.form.profileRecognized', {
+                      name: profileMatch.name,
+                      percent: profileMatch.matchPercent,
+                    })}
+                    {profileMatch.matchPercent < 90 && profileId !== profileMatch.profileId && (
+                      <>
+                        {' '}
+                        <button type="button" className="oi-link" onClick={() => setProfileId(profileMatch.profileId)}>
+                          {t('orderImports.form.useRecognizedProfile')}
+                        </button>
+                      </>
+                    )}
+                  </p>
+                )}
+                <label className="oi-checkbox">
+                  <input
+                    type="checkbox"
+                    checked={dryRun}
+                    onChange={(e) => setDryRun(e.target.checked)}
+                    disabled={uploading}
+                  />
+                  {t('orderImports.form.dryRun')}
+                </label>
+                <div className="oi-section-actions">
+                  <Button type="submit" disabled={uploading}>
+                    {uploading
+                      ? t('orderImports.form.busy')
+                      : dryRun
+                        ? t('orderImports.form.validate')
+                        : t('orderImports.form.import')}
+                  </Button>
+                </div>
+              </form>
+              {formError && (
+                <div className="oi-form-error" role="alert">
+                  {formError}
+                </div>
+              )}
+            </section>
+          ) : (
+            <p className="oi-hint">{t('orderImports.noUploadPermission')}</p>
           )}
-        </section>
+          {detailSection}
+        </TabPanel>
       )}
 
-      <DataTable
-        columns={columns}
-        rows={batches}
-        rowKey={(row) => row.id}
-        isLoading={isLoading}
-        error={listError}
-        emptyMessage={t('orderImports.empty')}
-        loadingMessage={t('orderImports.loading')}
-      />
-      <Pagination page={page} pageSize={PAGE_SIZE} totalCount={totalCount} onPageChange={setPage} />
+      {tab === 'profielen' && (
+        <TabPanel tabId="profielen">
+          <ImportProfilesPanel />
+        </TabPanel>
+      )}
 
-      {(detail || detailLoading) && (
-        <section className="oi-detail" aria-label={t('orderImports.detailSection')}>
-          {detailLoading || !detail ? (
-            <p>{t('orderImports.detailLoading')}</p>
-          ) : (
-            <>
-              <h3>
-                {detail.batch.fileName} — {detail.batch.customerName}
-                {detail.batch.dryRun ? ` ${t('orderImports.dryRunTitleSuffix')}` : ''}
-              </h3>
-              <DataTable
-                columns={rowColumns}
-                rows={detail.rows}
-                rowKey={(row) => String(row.rowNumber)}
-                emptyMessage={t('orderImports.emptyRows')}
-              />
-            </>
-          )}
-        </section>
+      {tab === 'historiek' && (
+        <TabPanel tabId="historiek">
+          <DataTable
+            columns={columns}
+            rows={batches}
+            rowKey={(row) => row.id}
+            isLoading={isLoading}
+            error={listError}
+            emptyMessage={t('orderImports.empty')}
+            loadingMessage={t('orderImports.loading')}
+          />
+          <Pagination page={page} pageSize={PAGE_SIZE} totalCount={totalCount} onPageChange={setPage} />
+          {detailSection}
+        </TabPanel>
       )}
     </div>
   )

@@ -28,9 +28,57 @@ public class OrderImportsController : ControllerBase
 
     [HttpGet("profiles")]
     [RequirePermission(PermissionCodes.OrdersView, PermissionCodes.OrdersCreate, PermissionCodes.OrdersManage)]
-    public async Task<ActionResult<IReadOnlyList<OrderImportProfileDto>>> Profiles(CancellationToken cancellationToken)
+    public async Task<ActionResult<IReadOnlyList<OrderImportProfileDto>>> Profiles(
+        [FromQuery] bool includeInactive, CancellationToken cancellationToken)
     {
-        return Ok(await _importService.ListProfilesAsync(cancellationToken));
+        return Ok(await _importService.ListProfilesAsync(cancellationToken, includeInactive));
+    }
+
+    /// <summary>The importable TMS target fields (stable keys + picker groups; labels are client-side i18n).</summary>
+    [HttpGet("fields")]
+    [RequirePermission(PermissionCodes.OrdersView, PermissionCodes.OrdersCreate, PermissionCodes.OrdersManage)]
+    public ActionResult<IReadOnlyList<OrderImportFieldDto>> Fields() =>
+        Ok(OrderImportFields.All.Select(f => new OrderImportFieldDto(f.Key, f.Group)).ToList());
+
+    [HttpPost("profiles")]
+    [RequirePermission(PermissionCodes.OrderImportsManageProfiles, PermissionCodes.OrdersManage)]
+    public async Task<ActionResult<OrderImportProfileDto>> CreateProfile(
+        SaveOrderImportProfileRequest request, CancellationToken cancellationToken) =>
+        Ok(await _importService.CreateProfileAsync(request, cancellationToken));
+
+    [HttpPut("profiles/{id:guid}")]
+    [RequirePermission(PermissionCodes.OrderImportsManageProfiles, PermissionCodes.OrdersManage)]
+    public async Task<ActionResult<OrderImportProfileDto>> UpdateProfile(
+        Guid id, SaveOrderImportProfileRequest request, CancellationToken cancellationToken)
+    {
+        var updated = await _importService.UpdateProfileAsync(id, request, cancellationToken);
+        return updated is null ? NotFound() : Ok(updated);
+    }
+
+    [HttpDelete("profiles/{id:guid}")]
+    [RequirePermission(PermissionCodes.OrderImportsManageProfiles, PermissionCodes.OrdersManage)]
+    public async Task<IActionResult> DeleteProfile(Guid id, CancellationToken cancellationToken) =>
+        await _importService.DeleteProfileAsync(id, cancellationToken) ? NoContent() : NotFound();
+
+    /// <summary>
+    /// Reads a sample workbook's headers + a few example values per column, suggests target
+    /// fields (deterministic alias catalog) and scores saved profiles against the headers.
+    /// Never persists anything.
+    /// </summary>
+    [HttpPost("analyze")]
+    [RequirePermission(PermissionCodes.OrdersCreate, PermissionCodes.OrdersManage, PermissionCodes.OrderImportsManageProfiles)]
+    [RequestSizeLimit(MaxUploadBytes + 1024)]
+    public async Task<ActionResult<OrderImportAnalysisDto>> Analyze(IFormFile file, CancellationToken cancellationToken)
+    {
+        if (Modules.Security.UploadValidation.Validate(file, MaxUploadBytes, AllowedExtensions,
+                extensionError: "Alleen Excel-bestanden (.xlsx) zijn toegestaan.") is { } uploadError)
+        {
+            return BadRequest(new { message = uploadError });
+        }
+
+        using var buffer = new MemoryStream();
+        await file.CopyToAsync(buffer, cancellationToken);
+        return Ok(await _importService.AnalyzeAsync(buffer.ToArray(), cancellationToken));
     }
 
     [HttpGet]

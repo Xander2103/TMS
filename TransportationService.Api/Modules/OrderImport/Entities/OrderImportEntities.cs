@@ -19,6 +19,18 @@ public class OrderImportProfile : AuditableTenantEntity
     /// </summary>
     public string MappingJson { get; set; } = "{}";
 
+    /// <summary>
+    /// Optional customer binding: a bound profile ranks first for that customer's imports and
+    /// is refused for another customer's import. Null = generic (usable for every customer).
+    /// </summary>
+    public Guid? CustomerId { get; set; }
+
+    /// <summary>
+    /// JSON array of the sample file's header texts, in column order. Powers profile
+    /// recognition on upload and lets the editor re-open a profile without a new sample file.
+    /// </summary>
+    public string? SourceHeadersJson { get; set; }
+
     public bool IsActive { get; set; } = true;
 }
 

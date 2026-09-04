@@ -16,7 +16,33 @@ using TransportationService.Api.Modules.Tenancy.Services;
 namespace TransportationService.Api.Modules.OrderImport.Services;
 
 public sealed record OrderImportProfileDto(
-    Guid Id, string Name, string? Description, string MappingJson, bool IsActive);
+    Guid Id, string Name, string? Description, string MappingJson, bool IsActive,
+    /// <summary>Optional customer binding (null = generic profile, usable for every customer).</summary>
+    Guid? CustomerId = null, string? CustomerName = null,
+    /// <summary>Parsed mapping: field key → column reference, for the editor (MappingJson stays the wire truth).</summary>
+    IReadOnlyDictionary<string, string>? Mapping = null,
+    /// <summary>Sample-file headers in column order; lets the editor open without a new upload.</summary>
+    IReadOnlyList<string>? SourceHeaders = null,
+    int MappedFieldCount = 0, DateTime UpdatedAt = default);
+
+public sealed record SaveOrderImportProfileRequest(
+    string Name, string? Description, Guid? CustomerId, bool IsActive,
+    int HeaderRows, IReadOnlyDictionary<string, string> Mapping,
+    IReadOnlyList<string>? SourceHeaders = null);
+
+public sealed record OrderImportFieldDto(string Key, string Group);
+
+/// <summary>One sample-file column: header, a few example values and the deterministic suggestion.</summary>
+public sealed record OrderImportColumnAnalysisDto(
+    int ColumnIndex, string Header, IReadOnlyList<string> SampleValues,
+    string? SuggestedField, int? Confidence);
+
+/// <summary>How well a SAVED profile's stored headers match the uploaded file's headers.</summary>
+public sealed record OrderImportProfileMatchDto(Guid ProfileId, string Name, Guid? CustomerId, int MatchPercent);
+
+public sealed record OrderImportAnalysisDto(
+    IReadOnlyList<OrderImportColumnAnalysisDto> Columns,
+    IReadOnlyList<OrderImportProfileMatchDto> ProfileMatches);
 
 public sealed record OrderImportBatchDto(
     Guid Id, Guid ProfileId, string ProfileName, Guid CustomerId, string CustomerName,
@@ -31,8 +57,21 @@ public sealed record OrderImportBatchDetailDto(
 
 public interface IOrderImportService
 {
-    /// <summary>Active profiles; lazily seeds the generic sample profile per tenant (add-if-missing).</summary>
-    Task<IReadOnlyList<OrderImportProfileDto>> ListProfilesAsync(CancellationToken cancellationToken);
+    /// <summary>Profiles (active only unless includeInactive); lazily seeds the generic sample profile per tenant (add-if-missing).</summary>
+    Task<IReadOnlyList<OrderImportProfileDto>> ListProfilesAsync(CancellationToken cancellationToken, bool includeInactive = false);
+
+    Task<OrderImportProfileDto> CreateProfileAsync(SaveOrderImportProfileRequest request, CancellationToken cancellationToken);
+
+    Task<OrderImportProfileDto?> UpdateProfileAsync(Guid id, SaveOrderImportProfileRequest request, CancellationToken cancellationToken);
+
+    Task<bool> DeleteProfileAsync(Guid id, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Reads a sample workbook's header row + a few sample values per column, suggests target
+    /// fields deterministically (alias catalog) and scores saved profiles against the headers.
+    /// Never persists anything.
+    /// </summary>
+    Task<OrderImportAnalysisDto> AnalyzeAsync(byte[] fileBytes, CancellationToken cancellationToken);
 
     Task<PagedResult<OrderImportBatchDto>> ListBatchesAsync(int? page, int? pageSize, CancellationToken cancellationToken);
 
@@ -88,15 +127,313 @@ public class OrderImportService : IOrderImportService
 
     // ------------------------------------------------------------- profiles
 
-    public async Task<IReadOnlyList<OrderImportProfileDto>> ListProfilesAsync(CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<OrderImportProfileDto>> ListProfilesAsync(
+        CancellationToken cancellationToken, bool includeInactive = false)
     {
         await EnsureSampleProfileAsync(cancellationToken);
 
-        return await _dbContext.OrderImportProfiles.AsNoTracking()
-            .Where(p => p.TenantId == _tenantContext.TenantId && p.IsActive)
+        var profiles = await _dbContext.OrderImportProfiles.AsNoTracking()
+            .Where(p => p.TenantId == _tenantContext.TenantId && (includeInactive || p.IsActive))
             .OrderBy(p => p.Name)
-            .Select(p => new OrderImportProfileDto(p.Id, p.Name, p.Description, p.MappingJson, p.IsActive))
             .ToListAsync(cancellationToken);
+
+        // Fixed number of queries regardless of profile count.
+        var customerIds = profiles.Where(p => p.CustomerId is not null).Select(p => p.CustomerId!.Value).Distinct().ToList();
+        var customerNames = customerIds.Count == 0
+            ? new Dictionary<Guid, string>()
+            : await _dbContext.Customers.AsNoTracking()
+                .Where(c => c.TenantId == _tenantContext.TenantId && customerIds.Contains(c.Id))
+                .ToDictionaryAsync(c => c.Id, c => c.Name, cancellationToken);
+
+        return profiles.Select(p => MapProfile(p, customerNames)).ToList();
+    }
+
+    private static OrderImportProfileDto MapProfile(OrderImportProfile profile, IReadOnlyDictionary<Guid, string> customerNames)
+    {
+        // Lenient: a profile with drifted JSON still lists (the import itself reports the error).
+        IReadOnlyDictionary<string, string>? mapping = null;
+        try
+        {
+            var spec = ParseMapping(profile.MappingJson);
+            mapping = spec.Columns.ToDictionary(c => c.Key, c => ColumnLetter(c.Value));
+        }
+        catch (DomainValidationException)
+        {
+            // Keep mapping null; MappedFieldCount stays 0.
+        }
+
+        return new OrderImportProfileDto(
+            profile.Id, profile.Name, profile.Description, profile.MappingJson, profile.IsActive,
+            profile.CustomerId,
+            profile.CustomerId is { } customerId ? customerNames.GetValueOrDefault(customerId) : null,
+            mapping,
+            ParseSourceHeaders(profile.SourceHeadersJson),
+            mapping?.Count ?? 0,
+            profile.UpdatedAt == default ? profile.CreatedAt : profile.UpdatedAt);
+    }
+
+    /// <summary>1 → "A", 28 → "AB" — the inverse of <see cref="TryParseColumnReference"/>.</summary>
+    private static string ColumnLetter(int index)
+    {
+        var result = string.Empty;
+        while (index > 0)
+        {
+            index -= 1;
+            result = (char)('A' + (index % 26)) + result;
+            index /= 26;
+        }
+
+        return result;
+    }
+
+    private static IReadOnlyList<string>? ParseSourceHeaders(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return null;
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<List<string>>(json);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    // ------------------------------------------------------- profile management (2026-09)
+
+    public async Task<OrderImportProfileDto> CreateProfileAsync(
+        SaveOrderImportProfileRequest request, CancellationToken cancellationToken)
+    {
+        var profile = new OrderImportProfile { Id = Guid.NewGuid(), TenantId = _tenantContext.TenantId };
+        await ApplyProfileAsync(profile, request, cancellationToken);
+        _dbContext.OrderImportProfiles.Add(profile);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        await _auditService.RecordAsync("OrderImportProfile", profile.Id.ToString(), "Created", null,
+            new { profile.Name, profile.CustomerId, Fields = request.Mapping.Count }, cancellationToken);
+        return (await ListProfilesAsync(cancellationToken, includeInactive: true)).First(p => p.Id == profile.Id);
+    }
+
+    public async Task<OrderImportProfileDto?> UpdateProfileAsync(
+        Guid id, SaveOrderImportProfileRequest request, CancellationToken cancellationToken)
+    {
+        var profile = await _dbContext.OrderImportProfiles
+            .FirstOrDefaultAsync(p => p.TenantId == _tenantContext.TenantId && p.Id == id, cancellationToken);
+        if (profile is null)
+        {
+            return null;
+        }
+
+        var before = new { profile.Name, profile.CustomerId, profile.MappingJson, profile.IsActive };
+        await ApplyProfileAsync(profile, request, cancellationToken);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        await _auditService.RecordAsync("OrderImportProfile", profile.Id.ToString(), "Updated", before,
+            new { profile.Name, profile.CustomerId, Fields = request.Mapping.Count, profile.IsActive }, cancellationToken);
+        return (await ListProfilesAsync(cancellationToken, includeInactive: true)).First(p => p.Id == profile.Id);
+    }
+
+    public async Task<bool> DeleteProfileAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var profile = await _dbContext.OrderImportProfiles
+            .FirstOrDefaultAsync(p => p.TenantId == _tenantContext.TenantId && p.Id == id, cancellationToken);
+        if (profile is null)
+        {
+            return false;
+        }
+
+        var inUse = await _dbContext.OrderImportBatches.AsNoTracking()
+            .AnyAsync(b => b.TenantId == _tenantContext.TenantId && b.ProfileId == id, cancellationToken);
+        if (inUse)
+        {
+            // History rows FK the profile (Restrict); deactivating preserves the import trail.
+            throw new DomainValidationException(
+                "Dit importprofiel werd al gebruikt voor imports. Zet het op inactief in plaats van het te verwijderen.");
+        }
+
+        _dbContext.Remove(profile);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        await _auditService.RecordAsync("OrderImportProfile", profile.Id.ToString(), "Deleted",
+            new { profile.Name }, null, cancellationToken);
+        return true;
+    }
+
+    /// <summary>
+    /// Validates and applies a save request. The mapping is serialized into the SAME MappingJson
+    /// shape the importer reads, then round-tripped through <see cref="ParseMapping"/> so the
+    /// editor and the importer can never disagree about what a valid profile is.
+    /// </summary>
+    private async Task ApplyProfileAsync(
+        OrderImportProfile profile, SaveOrderImportProfileRequest request, CancellationToken cancellationToken)
+    {
+        var name = request.Name?.Trim() ?? string.Empty;
+        if (name.Length == 0)
+        {
+            throw new DomainValidationException("name", "Geef het profiel een naam.");
+        }
+
+        if (name.Length > 100)
+        {
+            throw new DomainValidationException("name", "De naam mag maximaal 100 tekens lang zijn.");
+        }
+
+        var nameTaken = await _dbContext.OrderImportProfiles.AsNoTracking()
+            .AnyAsync(p => p.TenantId == _tenantContext.TenantId && p.Id != profile.Id
+                           && p.Name.ToLower() == name.ToLower(), cancellationToken);
+        if (nameTaken)
+        {
+            throw new DomainValidationException("name", "Er bestaat al een importprofiel met deze naam.");
+        }
+
+        if (request.Description is { Length: > 500 })
+        {
+            throw new DomainValidationException("description", "De omschrijving mag maximaal 500 tekens lang zijn.");
+        }
+
+        if (request.CustomerId is { } customerId)
+        {
+            var customerExists = await _dbContext.Customers.AsNoTracking()
+                .AnyAsync(c => c.TenantId == _tenantContext.TenantId && c.Id == customerId, cancellationToken);
+            if (!customerExists)
+            {
+                throw new DomainValidationException("customerId", "De gekozen klant bestaat niet.");
+            }
+        }
+
+        if (request.HeaderRows is < 0 or > 10)
+        {
+            throw new DomainValidationException("headerRows", "Het aantal koprijen moet tussen 0 en 10 liggen.");
+        }
+
+        var columns = new Dictionary<string, string>();
+        foreach (var (fieldKey, columnRef) in request.Mapping)
+        {
+            var field = KnownFields.FirstOrDefault(f => f.Equals(fieldKey, StringComparison.OrdinalIgnoreCase));
+            if (field is null)
+            {
+                throw new DomainValidationException("mapping", $"Onbekend doelveld '{fieldKey}'.");
+            }
+
+            using var reference = JsonDocument.Parse(JsonSerializer.Serialize(columnRef));
+            if (TryParseColumnReference(reference.RootElement) is not { } index)
+            {
+                throw new DomainValidationException("mapping", $"Ongeldige kolomverwijzing '{columnRef}' voor '{field}'.");
+            }
+
+            columns[field] = ColumnLetter(index);
+        }
+
+        var mappingJson = JsonSerializer.Serialize(new { headerRows = request.HeaderRows, columns });
+        if (mappingJson.Length > 4000)
+        {
+            throw new DomainValidationException("mapping", "De mapping is te groot.");
+        }
+
+        // Single source of truth: the importer's own parser decides what a valid profile is
+        // (incl. the mandatory unloading city/location column).
+        ParseMapping(mappingJson);
+
+        string? headersJson = null;
+        if (request.SourceHeaders is { Count: > 0 })
+        {
+            headersJson = JsonSerializer.Serialize(
+                request.SourceHeaders.Select(h => h.Length > 100 ? h[..100] : h).Take(100).ToList());
+            if (headersJson.Length > 4000)
+            {
+                throw new DomainValidationException("sourceHeaders", "De kolomkoppen zijn samen te groot.");
+            }
+        }
+
+        profile.Name = name;
+        profile.Description = string.IsNullOrWhiteSpace(request.Description) ? null : request.Description.Trim();
+        profile.CustomerId = request.CustomerId;
+        profile.MappingJson = mappingJson;
+        profile.SourceHeadersJson = headersJson;
+        profile.IsActive = request.IsActive;
+    }
+
+    // ------------------------------------------------------- sample-file analysis (2026-09)
+
+    private const int MaxSampleValues = 3;
+
+    public async Task<OrderImportAnalysisDto> AnalyzeAsync(byte[] fileBytes, CancellationToken cancellationToken)
+    {
+        XLWorkbook workbook;
+        try
+        {
+            workbook = new XLWorkbook(new MemoryStream(fileBytes));
+        }
+        catch
+        {
+            throw new DomainValidationException("Het bestand is geen geldig Excel-werkboek (.xlsx).");
+        }
+
+        using var _ = workbook;
+        var sheet = workbook.Worksheets.FirstOrDefault()
+            ?? throw new DomainValidationException("Het werkboek bevat geen werkblad.");
+
+        var lastColumn = sheet.LastColumnUsed()?.ColumnNumber() ?? 0;
+        if (lastColumn == 0)
+        {
+            throw new DomainValidationException("Het bestand bevat geen kolommen.");
+        }
+
+        var lastRow = Math.Min(sheet.LastRowUsed()?.RowNumber() ?? 0, 1 + MaxSampleValues);
+        var columns = new List<OrderImportColumnAnalysisDto>();
+        for (var column = 1; column <= lastColumn; column += 1)
+        {
+            var header = sheet.Cell(1, column).GetString().Trim();
+            var samples = new List<string>();
+            for (var row = 2; row <= lastRow; row += 1)
+            {
+                var value = sheet.Cell(row, column).GetString().Trim();
+                if (value.Length > 0)
+                {
+                    samples.Add(value.Length > 60 ? value[..60] : value);
+                }
+            }
+
+            var suggestion = header.Length > 0 ? OrderImportFields.Suggest(header) : null;
+            columns.Add(new OrderImportColumnAnalysisDto(
+                column, header, samples, suggestion?.Field, suggestion?.Confidence));
+        }
+
+        var fileHeaders = columns
+            .Where(c => c.Header.Length > 0)
+            .Select(c => OrderImportFields.NormalizeHeader(c.Header))
+            .Where(h => h.Length > 0)
+            .ToHashSet();
+        var profileMatches = new List<OrderImportProfileMatchDto>();
+        if (fileHeaders.Count > 0)
+        {
+            var profiles = await _dbContext.OrderImportProfiles.AsNoTracking()
+                .Where(p => p.TenantId == _tenantContext.TenantId && p.IsActive && p.SourceHeadersJson != null)
+                .ToListAsync(cancellationToken);
+            foreach (var profile in profiles)
+            {
+                var stored = (ParseSourceHeaders(profile.SourceHeadersJson) ?? [])
+                    .Select(OrderImportFields.NormalizeHeader)
+                    .Where(h => h.Length > 0)
+                    .ToHashSet();
+                if (stored.Count == 0)
+                {
+                    continue;
+                }
+
+                var overlap = stored.Intersect(fileHeaders).Count();
+                var percent = (int)Math.Round(overlap * 100.0 / Math.Max(stored.Count, fileHeaders.Count));
+                if (percent >= 50)
+                {
+                    profileMatches.Add(new OrderImportProfileMatchDto(profile.Id, profile.Name, profile.CustomerId, percent));
+                }
+            }
+        }
+
+        return new OrderImportAnalysisDto(
+            columns,
+            profileMatches.OrderByDescending(m => m.MatchPercent).ThenBy(m => m.Name).Take(5).ToList());
     }
 
     /// <summary>
@@ -228,6 +565,11 @@ public class OrderImportService : IOrderImportService
         if (!customerExists)
         {
             throw new DomainValidationException("De gekozen klant bestaat niet.");
+        }
+
+        if (profile.CustomerId is { } boundCustomerId && boundCustomerId != customerId)
+        {
+            throw new DomainValidationException("Dit importprofiel is gekoppeld aan een andere klant.");
         }
 
         var mapping = ParseMapping(profile.MappingJson);

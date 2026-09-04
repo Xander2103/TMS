@@ -1,37 +1,59 @@
+/* Excel-import (2026-09 rework): local tabs, compact upload card, profile editor + visual
+   column mapping. Colors ride on the app tokens (global.css) — never a hardcoded blue. */
+
 .oi-upload-card {
-  border: 1px solid var(--color-border, #e2e8f0);
+  border: 1px solid var(--border);
   border-radius: 8px;
   padding: 16px;
   margin-bottom: 20px;
-  background: var(--color-surface, #fff);
+  background: var(--surface, transparent);
+  max-width: 860px;
 }
 
 .oi-upload-form {
   display: flex;
-  flex-wrap: wrap;
-  gap: 12px 16px;
-  align-items: flex-end;
+  flex-direction: column;
+  gap: 12px;
 }
 
-.oi-upload-form > * {
-  min-width: 200px;
+.oi-upload-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px 16px;
+}
+
+@media (max-width: 720px) {
+  .oi-upload-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .oi-checkbox {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding-bottom: 10px;
   white-space: nowrap;
 }
 
 .oi-form-error {
-  color: var(--color-danger, #b91c1c);
+  color: var(--danger, #b91c1c);
   margin-top: 8px;
 }
 
+.oi-hint {
+  margin: 4px 0;
+  font-size: 0.875rem;
+  color: var(--text-muted, var(--text));
+}
+
+.oi-section-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin: 8px 0;
+}
+
 .oi-detail {
-  border: 1px solid var(--color-border, #e2e8f0);
+  border: 1px solid var(--border);
   border-radius: 8px;
   padding: 12px 16px;
   margin-top: 16px;
@@ -43,14 +65,100 @@
 }
 
 .oi-row-error {
-  color: var(--color-danger, #b91c1c);
+  color: var(--danger, #b91c1c);
 }
 
 .oi-link {
   background: none;
   border: none;
   padding: 0;
-  color: var(--color-primary, #2563eb);
+  color: var(--accent);
   cursor: pointer;
   text-decoration: underline;
+}
+
+.oi-link-danger {
+  color: var(--danger, #b91c1c);
+}
+
+.oi-row-actions {
+  display: inline-flex;
+  gap: 12px;
+}
+
+/* --- Profile editor + visual column mapping --- */
+
+.oi-profile-editor {
+  max-width: 1000px;
+}
+
+.oi-editor-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px 16px;
+  margin-bottom: 12px;
+}
+
+@media (max-width: 720px) {
+  .oi-editor-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.oi-mapping {
+  margin-top: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.oi-mapping-head,
+.oi-mapping-row {
+  display: grid;
+  grid-template-columns: minmax(140px, 1fr) minmax(140px, 1fr) minmax(240px, 1.4fr) minmax(130px, 0.8fr);
+  gap: 8px 16px;
+  padding: 10px 12px;
+  align-items: center;
+}
+
+.oi-mapping-head {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-muted, transparent);
+}
+
+.oi-mapping-row + .oi-mapping-row {
+  border-top: 1px solid var(--border);
+}
+
+.oi-mapping-samples {
+  font-size: 0.8125rem;
+  color: var(--text-muted, var(--text));
+  overflow-wrap: anywhere;
+}
+
+.oi-mapping-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+@media (max-width: 860px) {
+  .oi-mapping-head {
+    display: none;
+  }
+
+  .oi-mapping-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+.oi-editor-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
 }

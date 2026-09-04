@@ -216,6 +216,8 @@ public class DefaultRoleSeederTests
                 PermissionCodes.TasksViewOwn, PermissionCodes.TasksManageOwn,
                 // v25 (master-data wave): sensitive location data for the planning side.
                 PermissionCodes.LocationsViewSensitive,
+                // v31 (Excel-importprofielen): planner beheert importprofielen.
+                PermissionCodes.OrderImportsManageProfiles,
             }
                 .Concat(Version3Codes).OrderBy(c => c),
             plannerAfter.Except(plannerBefore).OrderBy(c => c));
@@ -765,10 +767,17 @@ public class DefaultRoleSeederTests
 
         var state = await db.Context.RoleTemplateStates.SingleAsync(s => s.TenantId == tenantId);
         Assert.Equal(DefaultRoleUpgrades.CurrentVersion, state.AppliedVersion);
-        Assert.Equal(30, DefaultRoleUpgrades.CurrentVersion);
+        Assert.Equal(31, DefaultRoleUpgrades.CurrentVersion);
 
         var roles = await db.Context.Roles.Where(r => r.TenantId == tenantId).ToListAsync();
         Guid RoleId(string code) => roles.Single(r => r.TemplateCode == code).Id;
+
+        // v31 (Excel-importprofielen): planner + management beheren importprofielen;
+        // dispatcher/boekhouding bewust niet (least privilege — importeren zelf rijdt op orders.*).
+        Assert.Contains(PermissionCodes.OrderImportsManageProfiles, await CodesOfAsync(db, RoleId("planner")));
+        Assert.Contains(PermissionCodes.OrderImportsManageProfiles, await CodesOfAsync(db, RoleId("management")));
+        Assert.DoesNotContain(PermissionCodes.OrderImportsManageProfiles, await CodesOfAsync(db, RoleId("dispatcher")));
+        Assert.DoesNotContain(PermissionCodes.OrderImportsManageProfiles, await CodesOfAsync(db, RoleId("boekhouding")));
 
         // Elke interne medewerker (incl. chauffeur) mag zelf punchen en eigen uren zien.
         foreach (var template in new[] { "planner", "dispatcher", "boekhouding", "magazijn", "chauffeur", "hr", "management" })

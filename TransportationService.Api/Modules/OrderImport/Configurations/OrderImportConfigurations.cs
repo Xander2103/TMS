@@ -17,9 +17,13 @@ public class OrderImportProfileConfiguration : IEntityTypeConfiguration<OrderImp
         builder.Property(p => p.Name).IsRequired().HasMaxLength(100);
         builder.Property(p => p.Description).HasMaxLength(500);
         builder.Property(p => p.MappingJson).IsRequired().HasMaxLength(4000);
+        builder.Property(p => p.SourceHeadersJson).HasMaxLength(4000);
 
         builder.HasIndex(p => new { p.TenantId, p.Name })
             .HasFilter("\"IsDeleted\" = false");
+
+        // Optional customer binding (2026-09 profile editor); Restrict mirrors the batch FK.
+        builder.HasOne<Customer>().WithMany().HasForeignKey(p => p.CustomerId).OnDelete(DeleteBehavior.Restrict);
 
         builder.HasQueryFilter(p => !p.IsDeleted);
     }
