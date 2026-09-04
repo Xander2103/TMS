@@ -67,7 +67,9 @@ export function AttendanceTab({ employeeId }: { employeeId: string }) {
   const [rangeDays, setRangeDays] = useState(14)
   const [reloadToken, setReloadToken] = useState(0)
   const [history, setHistory] = useState<AttendanceHistory | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  // Keyed on the request identity, so a stale error hides itself when the range/reload changes —
+  // no synchronous reset inside the effect needed (react-hooks/set-state-in-effect).
+  const [errorState, setErrorState] = useState<{ key: string; message: string } | null>(null)
 
   const range = useMemo(() => {
     const today = new Date()
@@ -78,20 +80,22 @@ export function AttendanceTab({ employeeId }: { employeeId: string }) {
 
   const reload = useCallback(() => setReloadToken((t) => t + 1), [])
 
+  const requestKey = `${employeeId}|${range.from}|${range.to}|${reloadToken}`
+  const error = errorState?.key === requestKey ? errorState.message : null
+
   useEffect(() => {
     let mounted = true
-    setError(null)
     getEmployeeAttendance(employeeId, range.from, range.to)
       .then((data) => {
         if (mounted) setHistory(data)
       })
       .catch(() => {
-        if (mounted) setError('attendance.tab.loadFailed')
+        if (mounted) setErrorState({ key: requestKey, message: 'attendance.tab.loadFailed' })
       })
     return () => {
       mounted = false
     }
-  }, [employeeId, range.from, range.to, reloadToken])
+  }, [employeeId, range.from, range.to, reloadToken, requestKey])
 
   // ── Correctiedialoog ───────────────────────────────────────────────────────────
   const [draft, setDraft] = useState<CorrectionDraft | null>(null)

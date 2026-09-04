@@ -62,11 +62,11 @@ export function formatCurrency(value: number | null | undefined, currencySymbol 
   if (body === '') return ''
   switch (getActiveLocale()) {
     case 'fr':
-      return `${body} ${currencySymbol}`
+      return `${body}\u00a0${currencySymbol}`
     case 'en':
       return `${currencySymbol}${body}`
     default:
-      return `${currencySymbol} ${body}`
+      return `${currencySymbol}\u00a0${body}`
   }
 }
 

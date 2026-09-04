@@ -140,7 +140,7 @@ export function LocationDetailPage() {
     return () => {
       mounted = false
     }
-  }, [id])
+  }, [id, t])
 
   const loading = location === null && loadError === null
   const canEdit = hasPermission('locations.edit')

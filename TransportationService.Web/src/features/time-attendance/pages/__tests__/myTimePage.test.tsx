@@ -4,7 +4,8 @@ import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as api from '../../api/timeAttendanceApi'
 import type { AttendanceHistory, AttendanceStatus } from '../../types'
-import { MyTimePage, periodRange } from '../MyTimePage'
+import { MyTimePage } from '../MyTimePage'
+import { periodRange } from '../../utils/periodRange'
 
 vi.mock('../../../../components/ui/toastContext', () => ({
   useToast: () => ({ showSuccess: vi.fn(), showError: vi.fn() }),

@@ -10,33 +10,14 @@ import { useLocale } from '../../../i18n/localeContext'
 import { WorkStatusCard } from '../components/WorkStatusCard'
 import { SessionTimeline } from '../components/SessionTimeline'
 import { getMyAttendanceHistory } from '../api/timeAttendanceApi'
+import { periodRange, type Period } from '../utils/periodRange'
 import type { AttendanceHistory } from '../types'
 import './time-attendance.css'
-
-type Period = 'today' | 'week' | 'month'
 
 const PERIOD_LABELS: Record<Period, string> = {
   today: 'attendance.myTime.periodToday',
   week: 'attendance.myTime.periodWeek',
   month: 'attendance.myTime.periodMonth',
-}
-
-function toIso(date: Date): string {
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
-}
-
-export function periodRange(period: Period, now = new Date()): { from: string; to: string } {
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-  if (period === 'today') {
-    return { from: toIso(today), to: toIso(today) }
-  }
-  if (period === 'week') {
-    const monday = new Date(today)
-    monday.setDate(today.getDate() - ((today.getDay() + 6) % 7))
-    return { from: toIso(monday), to: toIso(today) }
-  }
-  return { from: toIso(new Date(today.getFullYear(), today.getMonth(), 1)), to: toIso(today) }
 }
 
 /** Self-service "Mijn uren": eigen sessies, pauzes, correcties en planning-vergelijking. */
@@ -45,15 +26,17 @@ export function MyTimePage() {
   const [period, setPeriod] = useState<Period>('week')
   const [history, setHistory] = useState<AttendanceHistory | null>(null)
   const [loadedKey, setLoadedKey] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  // Keyed on the request identity, so a stale error hides itself when the period changes —
+  // no synchronous reset inside the effect needed (react-hooks/set-state-in-effect).
+  const [errorState, setErrorState] = useState<{ key: string; message: string } | null>(null)
 
   const range = useMemo(() => periodRange(period), [period])
   const requestKey = `${range.from}:${range.to}`
+  const error = errorState?.key === requestKey ? errorState.message : null
   const isLoading = loadedKey !== requestKey && !error
 
   useEffect(() => {
     let mounted = true
-    setError(null)
     getMyAttendanceHistory(range.from, range.to)
       .then((data) => {
         if (!mounted) return
@@ -62,9 +45,12 @@ export function MyTimePage() {
       })
       .catch((err) => {
         if (!mounted) return
-        setError(err instanceof ApiError && err.status === 404
-          ? 'attendance.myTime.noEmployeeLink'
-          : 'attendance.myTime.loadFailed')
+        setErrorState({
+          key: requestKey,
+          message: err instanceof ApiError && err.status === 404
+            ? 'attendance.myTime.noEmployeeLink'
+            : 'attendance.myTime.loadFailed',
+        })
       })
     return () => {
       mounted = false

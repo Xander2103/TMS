@@ -71,16 +71,20 @@ export function DossierHeader({ dossier, canManage, onAddActivity, menuActions, 
 
   // Impact preview: which linked orders move along and how many concept-invoice lines are
   // released — shown BEFORE confirming, and blocking when one order sits on a sent invoice.
-  const [impact, setImpact] = useState<DossierLegalEntityChangeImpact | null>(null)
+  // Keyed on the entity it was fetched for: a stale preview (previous selection, closed dialog)
+  // derives to null instead of being reset synchronously inside the effect.
+  const [impactState, setImpactState] = useState<{ forEntityId: string; result: DossierLegalEntityChangeImpact } | null>(null)
+  const impact = entityDialog && entityId && entityId !== dossier.legalEntityId && impactState?.forEntityId === entityId
+    ? impactState.result
+    : null
   useEffect(() => {
     if (!entityDialog || !entityId || entityId === dossier.legalEntityId) {
-      setImpact(null)
       return
     }
     let cancelled = false
     getDossierLegalEntityImpact(dossier.id, entityId)
-      .then((result) => { if (!cancelled) setImpact(result) })
-      .catch(() => { if (!cancelled) setImpact(null) })
+      .then((result) => { if (!cancelled) setImpactState({ forEntityId: entityId, result }) })
+      .catch(() => { if (!cancelled) setImpactState(null) })
     return () => { cancelled = true }
   }, [entityDialog, entityId, dossier.id, dossier.legalEntityId])
 

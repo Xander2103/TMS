@@ -60,13 +60,16 @@ function NewEmployeePageContent({ onSavedAndNew }: { onSavedAndNew: () => void }
   // Non-blocking duplicate-name hint (task 10): debounced check against the existing employees
   // search API for an exact (trimmed, case-insensitive) first+last name match.
   const [nameCandidate, setNameCandidate] = useState({ firstName: '', lastName: '' })
-  const [duplicateNameFound, setDuplicateNameFound] = useState(false)
+  // Keyed on the exact name it was found for: a result for a name the user has since edited
+  // derives to false — no synchronous reset inside the effect needed.
+  const [duplicateState, setDuplicateState] = useState<{ nameKey: string; found: boolean } | null>(null)
+  const candidateNameKey = `${nameCandidate.firstName.trim().toLowerCase()}|${nameCandidate.lastName.trim().toLowerCase()}`
+  const duplicateNameFound = duplicateState?.nameKey === candidateNameKey && duplicateState.found
 
   useEffect(() => {
     const firstName = nameCandidate.firstName.trim()
     const lastName = nameCandidate.lastName.trim()
     if (!firstName || !lastName) {
-      setDuplicateNameFound(false)
       return
     }
     let isMounted = true
@@ -79,7 +82,7 @@ function NewEmployeePageContent({ onSavedAndNew }: { onSavedAndNew: () => void }
               item.firstName.trim().toLowerCase() === firstName.toLowerCase() &&
               item.lastName.trim().toLowerCase() === lastName.toLowerCase(),
           )
-          setDuplicateNameFound(match)
+          setDuplicateState({ nameKey: `${firstName.toLowerCase()}|${lastName.toLowerCase()}`, found: match })
         })
         .catch(() => {
           // Non-blocking hint — a failed lookup simply shows no warning.

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { fullYearsSince } from '../EmployeeDetailPage'
+import { fullYearsSince } from '../../utils/fullYearsSince'
 
 // Task 10 follow-up: dedicated coverage for the seniority/age helper used by both the header
 // subtitle ("In dienst sinds … · n jaar") and the read-only profile's age display ("(n j.)").

@@ -35,7 +35,7 @@ export function useQualificationTypes(): UseQualificationTypesResult {
     return () => {
       isMounted = false
     }
-  }, [])
+  }, [t])
 
   return { qualificationTypes, isLoading, error }
 }

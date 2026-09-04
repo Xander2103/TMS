@@ -2,7 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import { render, screen } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { DriverLayout } from '../DriverLayout'
-import { resetDisplayPreferences } from '../../../../components/layout/DisplayPreferencesProvider'
+import { resetDisplayPreferences } from '../../../../components/layout/displayPreferences'
 import {
   formatDateTime, resetDateFormatPreference, resetTimeZonePreference,
 } from '../../../../utils/dates'

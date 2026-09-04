@@ -37,7 +37,7 @@ export function useEmployeeNotes(employeeId: string): UseEmployeeNotesResult {
     return () => {
       isMounted = false
     }
-  }, [employeeId, reloadToken])
+  }, [employeeId, reloadToken, t])
 
   function reload() {
     setReloadToken((token) => token + 1)

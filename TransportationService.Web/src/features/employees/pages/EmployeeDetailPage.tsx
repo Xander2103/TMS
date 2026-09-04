@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { formatDate, parseIsoDate } from '../../../utils/dates'
+import { formatDate } from '../../../utils/dates'
 import { PageHeader } from '../../../components/layout/PageHeader'
 import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { LoadingState } from '../../../components/feedback/LoadingState'
@@ -37,20 +37,8 @@ import { useEmployee } from '../hooks/useEmployee'
 import { useEmployeeMutations } from '../hooks/useEmployeeMutations'
 import { contractEndBadge } from '../utils/employeeListBadges'
 import { CIVIL_STATUS_LABELS, EMPLOYMENT_STATUS_LABELS, EMPLOYMENT_STATUS_TONES } from '../types/employee'
+import { fullYearsSince } from '../utils/fullYearsSince'
 import './EmployeeDetailPage.css'
-
-/** Full elapsed years between an ISO date and today; null when the date is absent/invalid.
- * Exported for direct unit testing (header seniority text + read-only age display). */
-export function fullYearsSince(iso: string | null | undefined): number | null {
-  const start = parseIsoDate(iso)
-  if (!start || Number.isNaN(start.getTime())) return null
-  const now = new Date()
-  let years = now.getFullYear() - start.getFullYear()
-  const anniversaryPassed =
-    now.getMonth() > start.getMonth() || (now.getMonth() === start.getMonth() && now.getDate() >= start.getDate())
-  if (!anniversaryPassed) years -= 1
-  return years
-}
 
 const TAB_IDS = ['profiel', 'planning', 'kwalificaties', 'documenten', 'verlof', 'uren', 'taken', 'ritten', 'bedrijfsmiddelen', 'historiek'] as const
 type TabId = (typeof TAB_IDS)[number]

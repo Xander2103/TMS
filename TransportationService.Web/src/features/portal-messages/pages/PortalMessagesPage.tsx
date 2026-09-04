@@ -94,7 +94,7 @@ export function PortalMessagesPage() {
       })
   }
 
-  useEffect(load, [])
+  useEffect(load, [t])
 
   async function handleCancel() {
     if (!cancelTarget) return

@@ -1,4 +1,4 @@
-import { useRef, type Dispatch, type SetStateAction } from 'react'
+import { useLayoutEffect, useRef, type Dispatch, type SetStateAction } from 'react'
 import { remapCargoStopIndices, type CargoFormRow, type StopFormRow } from './orderFormState'
 
 /**
@@ -25,10 +25,13 @@ export function useStopMutation(
   setCargoItems: Dispatch<SetStateAction<CargoFormRow[]>>,
   onMutated?: () => void,
 ): (mutate: (rows: StopFormRow[]) => StopFormRow[]) => void {
-  // Re-synced on every render, so a stop list replaced elsewhere (the drawers' 409 rebase, a
-  // re-seeded form) is picked up; advanced by the mutation itself for the same-tick case.
+  // Re-synced after every commit (layout effect: before the user can interact again), so a stop
+  // list replaced elsewhere (the drawers' 409 rebase, a re-seeded form) is picked up; advanced by
+  // the mutation itself for the same-tick case. A render-time write violated the refs rule.
   const latest = useRef(stops)
-  latest.current = stops
+  useLayoutEffect(() => {
+    latest.current = stops
+  }, [stops])
 
   return (mutate) => {
     const previous = latest.current

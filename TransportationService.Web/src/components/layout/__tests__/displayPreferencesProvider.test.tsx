@@ -1,8 +1,7 @@
 import { act, render, screen, waitFor } from '@testing-library/react'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  DisplayPreferencesProvider, resetDisplayPreferences,
-} from '../DisplayPreferencesProvider'
+import { DisplayPreferencesProvider } from '../DisplayPreferencesProvider'
+import { resetDisplayPreferences } from '../displayPreferences'
 import { AuthContext, type AuthContextValue } from '../../../features/auth/authContextValue'
 import type { CurrentUser } from '../../../features/auth/authTypes'
 import {

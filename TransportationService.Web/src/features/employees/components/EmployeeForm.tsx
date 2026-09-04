@@ -224,8 +224,9 @@ export function EmployeeForm({
   // save when THIS submit changes the contract type. A legacy dossier whose contract type
   // was backfilled to requiresEndDate=true, but which predates that end date, stays editable
   // for unrelated fields — the completeness card surfaces the gap instead of a hard block.
-  const initialContractTypeIdRef = useRef(initial?.contractTypeId ?? null)
-  const contractTypeChanged = mode === 'create' || contractTypeId !== initialContractTypeIdRef.current
+  // Lazy useState captures the mount-time value once (a ref read during render violates the refs rule).
+  const [initialContractTypeId] = useState(() => initial?.contractTypeId ?? null)
+  const contractTypeChanged = mode === 'create' || contractTypeId !== initialContractTypeId
   const missingEndDateBlocking = contractTypeRequiresEndDate && contractTypeChanged
   const missingEndDateHint =
     contractTypeRequiresEndDate && !contractTypeChanged && !employmentEndDate

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { resetDisplayPreferences } from '../../../../components/layout/DisplayPreferencesProvider'
+import { resetDisplayPreferences } from '../../../../components/layout/displayPreferences'
 import { render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { CustomerPortalLayout } from '../CustomerPortalLayout'

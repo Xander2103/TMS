@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { setUnauthorizedHandler } from '../../api/apiClient'
-import { resetDisplayPreferences } from '../../components/layout/DisplayPreferencesProvider'
+import { resetDisplayPreferences } from '../../components/layout/displayPreferences'
 import * as authApi from './authApi'
 import { AuthContext, type AuthContextValue } from './authContextValue'
 import { clearLegacyTokens, clearTokens, getAccessToken, setAccessToken } from './authStorage'

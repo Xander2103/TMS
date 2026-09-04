@@ -61,7 +61,6 @@ export function CustomerCommunicationPanel({ customerId, contacts }: CustomerCom
   const contactsById = useMemo(() => new Map(contacts.map((contact) => [contact.id, contact])), [contacts])
 
   const reload = useCallback(() => {
-    setOverviewToken((token) => token + 1)
     listCommunicationRules(customerId)
       .then((data) => {
         setRules(data)
@@ -69,6 +68,12 @@ export function CustomerCommunicationPanel({ customerId, contacts }: CustomerCom
       })
       .catch(() => setLoadError(t('customers.communication.loadFailed')))
   }, [customerId, t])
+
+  /** After a rule mutation: re-read the rules AND bump the overview so it re-reads recipients. */
+  const reloadAfterMutation = useCallback(() => {
+    setOverviewToken((token) => token + 1)
+    reload()
+  }, [reload])
 
   useEffect(() => {
     reload()
@@ -135,7 +140,7 @@ export function CustomerCommunicationPanel({ customerId, contacts }: CustomerCom
         toast.showSuccess(t('customers.communication.added'))
       }
       setDialog(null)
-      reload()
+      reloadAfterMutation()
       return { ok: true }
     } catch (err) {
       const described = describeApiError(err, t('customers.communication.saveFailed'))
@@ -195,7 +200,7 @@ export function CustomerCommunicationPanel({ customerId, contacts }: CustomerCom
               await deleteCommunicationRule(customerId, removeTarget.id)
               toast.showSuccess(t('customers.communication.removed'))
               setRemoveTarget(null)
-              reload()
+              reloadAfterMutation()
             } catch (err) {
               toast.showError(describeApiError(err, t('customers.communication.removeFailed')).message)
             } finally {

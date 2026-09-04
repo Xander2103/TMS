@@ -38,7 +38,7 @@ export function useEmployeeDocuments(employeeId: string, includeArchived: boolea
     return () => {
       isMounted = false
     }
-  }, [employeeId, includeArchived, reloadToken])
+  }, [employeeId, includeArchived, reloadToken, t])
 
   function reload() {
     setReloadToken((token) => token + 1)

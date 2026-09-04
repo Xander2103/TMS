@@ -38,7 +38,7 @@ export function useEmployeeQualifications(employeeId: string): UseEmployeeQualif
     return () => {
       isMounted = false
     }
-  }, [employeeId, reloadToken])
+  }, [employeeId, reloadToken, t])
 
   function reload() {
     setReloadToken((token) => token + 1)

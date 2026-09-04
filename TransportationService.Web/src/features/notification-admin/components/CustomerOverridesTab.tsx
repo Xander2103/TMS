@@ -52,7 +52,7 @@ export function CustomerOverridesTab({ canManage }: CustomerOverridesTabProps) {
     return () => {
       isMounted = false
     }
-  }, [customerId, reloadToken])
+  }, [customerId, reloadToken, t])
 
   function reload() {
     setReloadToken((t) => t + 1)

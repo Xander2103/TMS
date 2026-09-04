@@ -379,8 +379,8 @@ export function KioskPage() {
         <h1 className="kiosk-heading">{kt('kiosk.pin.prompt')}</h1>
         <div className="kiosk-dots" aria-label={kt('kiosk.pin.digitsEntered', { count: pin.length })} aria-live="polite">
           {pin.length === 0 && <span className="kiosk-dots-empty">● ● ● ●</span>}
+          {/* Identical dots: the position IS the identity, so an index key is correct here. */}
           {pin.split('').map((_, index) => (
-            // eslint-disable-next-line react/no-array-index-key
             <span key={index} className="kiosk-dot" aria-hidden="true">●</span>
           ))}
         </div>

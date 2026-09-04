@@ -38,7 +38,7 @@ export function useEmployee(id: string): UseEmployeeResult {
     return () => {
       isMounted = false
     }
-  }, [id, reloadToken])
+  }, [id, reloadToken, t])
 
   function reload() {
     setReloadToken((token) => token + 1)

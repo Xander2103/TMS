@@ -57,7 +57,7 @@ export function CreateUserAccountDialog({ employeeId, firstName, lastName, email
     return () => {
       mounted = false
     }
-  }, [employeeId])
+  }, [employeeId, t])
 
   function toggleRole(roleId: string) {
     setSelectedRoleIds((current) => {

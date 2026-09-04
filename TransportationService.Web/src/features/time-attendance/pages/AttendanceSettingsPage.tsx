@@ -80,7 +80,9 @@ export function AttendanceSettingsPage() {
     if (!settings) return
     setSavingSettings(true)
     try {
-      const { kioskConfigured: _ignored, ...payload } = settings
+      // kioskConfigured is server-derived and stripped from the update payload.
+      const { kioskConfigured, ...payload } = settings
+      void kioskConfigured
       const updated = await updateAttendanceSettings(payload)
       setSettings(updated)
       showSuccess(t('attendance.settings.saved'))
