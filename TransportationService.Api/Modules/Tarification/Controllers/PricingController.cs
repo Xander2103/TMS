@@ -258,6 +258,32 @@ public class PricingController : ControllerBase
         return config is null ? NotFound() : Ok(config);
     }
 
+    /// <summary>
+    /// The customer's tariff base in one call: own private tables + shared tables assigned to this
+    /// customer (with the assignment adjustment/window and any planned agreement adjustment).
+    /// </summary>
+    [HttpGet("api/customers/{customerId:guid}/pricing-agreements")]
+    [RequirePermission(PermissionCodes.TariffsView, PermissionCodes.TariffsManage)]
+    public async Task<ActionResult<IReadOnlyList<CustomerAgreementLinkDto>>> ListCustomerAgreements(
+        Guid customerId, CancellationToken cancellationToken)
+    {
+        var links = await _admin.ListCustomerAgreementsAsync(customerId, cancellationToken);
+        return links is null ? NotFound() : Ok(links);
+    }
+
+    /// <summary>
+    /// Every bracket-row deviation of this customer across all rules, with rule/table context and
+    /// the current standard price of the targeted row (customer detail "Staffelafwijkingen").
+    /// </summary>
+    [HttpGet("api/customers/{customerId:guid}/bracket-overrides")]
+    [RequirePermission(PermissionCodes.TariffsView, PermissionCodes.TariffsManage)]
+    public async Task<ActionResult<IReadOnlyList<CustomerBracketOverrideRowDto>>> ListCustomerBracketOverrides(
+        Guid customerId, CancellationToken cancellationToken)
+    {
+        var rows = await _admin.ListCustomerBracketOverridesAsync(customerId, cancellationToken);
+        return rows is null ? NotFound() : Ok(rows);
+    }
+
     // --- Scheduled price adjustments ---
 
     [HttpGet("api/customers/{customerId:guid}/price-adjustments")]

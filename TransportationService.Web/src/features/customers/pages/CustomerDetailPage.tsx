@@ -49,6 +49,7 @@ export function CustomerDetailPage() {
   const canDeactivate = hasPermission('customers.deactivate')
   const canViewLocations = hasPermission('locations.view')
   const canViewBilling = hasAnyPermission(['customers.view'])
+  const canViewTariffs = hasAnyPermission(['tariffs.view', 'tariffs.manage'])
   const canOverrideNumber = hasPermission('customers.override_number')
   const canViewMessages = hasPermission('customer_messages.view')
   const canViewOrders = hasAnyPermission(['orders.view', 'orders.manage'])
@@ -246,10 +247,18 @@ export function CustomerDetailPage() {
             tarieven:
               canViewBilling && id ? (
                 <>
-                  <CustomerUnitsPanel customerId={id} />
-                  <CustomerUnitPricingPanel customerId={id} />
-                  <CustomerPriceAdjustmentsPanel customerId={id} />
-                  <CombinedDiscountsPanel customerId={id} />
+                  {/* Reading order: what prices this customer (basis → toeslagen → afwijkingen),
+                      then technical unit/EDI mapping, then invoicing config. */}
+                  {canViewTariffs ? (
+                    <>
+                      <CustomerUnitPricingPanel customerId={id} />
+                      <CustomerPriceAdjustmentsPanel customerId={id} />
+                      <CombinedDiscountsPanel customerId={id} />
+                      <CustomerUnitsPanel customerId={id} />
+                    </>
+                  ) : (
+                    <p className="customer-form-muted">{t('customers.detail.noTariffRights')}</p>
+                  )}
                   <CustomerBillingPanel customerId={id} />
                 </>
               ) : (
@@ -448,10 +457,18 @@ export function CustomerDetailPage() {
 
           {activeTab === 'billing' && canViewBilling && id && (
             <TabPanel tabId="billing">
-              <CustomerUnitsPanel customerId={id} />
-              <CustomerUnitPricingPanel customerId={id} />
-              <CustomerPriceAdjustmentsPanel customerId={id} />
-              <CombinedDiscountsPanel customerId={id} />
+              {/* Reading order: what prices this customer (basis → toeslagen → afwijkingen),
+                  then technical unit/EDI mapping, then invoicing config. */}
+              {canViewTariffs ? (
+                <>
+                  <CustomerUnitPricingPanel customerId={id} />
+                  <CustomerPriceAdjustmentsPanel customerId={id} />
+                  <CombinedDiscountsPanel customerId={id} />
+                  <CustomerUnitsPanel customerId={id} />
+                </>
+              ) : (
+                <p className="customer-form-muted">{t('customers.detail.noTariffRights')}</p>
+              )}
               <CustomerBillingPanel customerId={id} />
             </TabPanel>
           )}

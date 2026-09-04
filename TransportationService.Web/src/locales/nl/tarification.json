@@ -730,5 +730,12 @@
     "staffelprijs": "Staffelprijs",
     "volumeTot": "Volume tot (m³)",
     "zone": "Zone"
+  },
+  "primaryBasis": {
+    "unit": "Per eenheid"
+  },
+  "bracketMode": {
+    "Absolute": "Absoluut (prijs van de staffel)",
+    "PerNextUnit": "Per volgende eenheid (som per stuk)"
   }
 }

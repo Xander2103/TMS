@@ -1,43 +1,59 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { formatCurrency } from '../../../utils/numbers'
 import { Link } from 'react-router-dom'
 import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
+import { DataTable, type Column } from '../../../components/ui/DataTable'
+import { EmptyState } from '../../../components/ui/EmptyState'
 import { FormField } from '../../../components/ui/FormField'
+import { FormSection } from '../../../components/ui/FormSection'
 import { Modal } from '../../../components/ui/Modal'
+import { SearchableSelect, type SearchableSelectOption } from '../../../components/ui/SearchableSelect'
+import { LoadingState } from '../../../components/feedback/LoadingState'
+import { ErrorState } from '../../../components/feedback/ErrorState'
 import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
 import { useLocale, type TranslateFn } from '../../../i18n/localeContext'
 import { describeApiError } from '../../../api/problemDetails'
 import { formatServiceValue } from '../../tarification/serviceValueFormat'
-import type { SurchargeKind } from '../../tarification/types'
+import { SURCHARGE_KIND_LABELS, type SurchargeKind } from '../../tarification/types'
+import { getDieselSurcharge } from '../api/customerBillingConfigApi'
+import type { CustomerDieselSurcharge } from '../types'
 import {
-  BRACKET_SELECTION_MODE_LABELS,
-  PRICE_RULE_BASIS_LABELS,
-  PRIMARY_BASIS_LABELS,
+  BRACKET_SELECTION_MODE_KEYS,
+  PRICE_RULE_BASIS_KEYS,
+  PRIMARY_BASIS_KEYS,
   createPriceRule,
   createPricingAgreement,
   deletePriceRule,
   deletePricingAgreement,
   getAgreementAssignments,
   getCustomerPricingConfig,
+  listCustomerAgreements,
+  listCustomerBracketOverrides,
   listPriceRules,
   listPricingAgreements,
   listPricingZones,
+  listServiceOptions,
   listUnitTypeSettings,
+  saveAgreementAssignments,
   saveCustomerPricingConfig,
   updatePriceRule,
   updatePricingAgreement,
   type BracketSelectionMode,
+  type CustomerAgreementLink,
+  type CustomerBracketOverrideRow,
+  type CustomerOptionPriceInput,
   type CustomerPricingConfig,
+  type CustomerServiceOptionPrice,
   type PriceRule,
   type PriceRuleBasis,
   type PriceRuleBracketInput,
   type PricingAgreement,
   type PricingAgreementModifierInput,
-  type PricingAssignment,
   type PricingZone,
+  type ServiceOption,
   type UnitTypeSettings,
 } from '../../tarification/api/pricingApi'
 
@@ -106,20 +122,34 @@ interface AgreementDraft {
   modifiers: ModifierDraft[]
 }
 
-/** A shared (reusable) rate table this customer is assigned to, with its adjustment. */
-interface AssignedSharedAgreement {
-  agreement: PricingAgreement
-  assignment: PricingAssignment
+/** Modal state for one service override ("toeslag") — explicit save, never blur-autosave. */
+interface ServiceDraft {
+  /** Null while the user still has to pick a service ("+ Toeslag toevoegen"). */
+  serviceOptionId: string | null
+  isNew: boolean
+  value: string
+  disabled: boolean
+  minimumAmount: string
+  invoiceDescription: string
+  effectiveFrom: string
+  effectiveUntil: string
+  autoApply: 'inherit' | 'on' | 'off'
 }
 
-function assignmentAdjustmentLabel(t: TranslateFn, assignment: PricingAssignment): string {
+/** Modal state for the customer's ±% / fixed adjustment on one shared table. */
+interface AssignmentDraft {
+  link: CustomerAgreementLink
+  percent: string
+  fixed: string
+  effectiveFrom: string
+  effectiveUntil: string
+  notes: string | null
+}
+
+function adjustmentLabel(t: TranslateFn, percent: number | null, fixed: number | null): string {
   const parts: string[] = []
-  if (assignment.percentAdjustment !== null) {
-    parts.push(`${assignment.percentAdjustment > 0 ? '+' : ''}${assignment.percentAdjustment}%`)
-  }
-  if (assignment.fixedAdjustment !== null) {
-    parts.push(`${assignment.fixedAdjustment > 0 ? '+' : ''}${formatCurrency(assignment.fixedAdjustment)}`)
-  }
+  if (percent !== null) parts.push(`${percent > 0 ? '+' : ''}${percent}%`)
+  if (fixed !== null) parts.push(`${fixed > 0 ? '+' : ''}${formatCurrency(fixed)}`)
   return parts.length > 0 ? parts.join(', ') : t('customers.pricing.noAdjustment')
 }
 
@@ -143,14 +173,21 @@ function ruleValueSummary(t: TranslateFn, rule: PriceRule): string {
   return parts.join(', ') || '—'
 }
 
+/** One row of the "Toeslagen & diensten" table: merged customer view + global service metadata. */
+type ServiceRow = CustomerServiceOptionPrice & { meta: ServiceOption | undefined }
+
 /**
- * The customer's commercial tariff overview (spec §13): pricing agreements (tarievenkaarten),
- * current prices, scheduled future versions and price history, plus service-option prices.
- * Versioning happens via effective windows — old versions are never overwritten.
+ * Customer detail → "Tarieven & toeslagen": everything that determines what THIS customer pays.
+ * Three sections, in reading order: (1) Tariefbasis — which rate tables price this customer,
+ * (2) Toeslagen & diensten — services/surcharges on top of the base transport (incl. time-based
+ * delivery surcharges), (3) Afwijkende prijzen — customer-only price rules. Unit/EDI mapping
+ * lives in CustomerUnitsPanel (rendered at the bottom of the tab). All editing goes through
+ * explicit modals — never blur-autosave (each save PUTs config; a blur-save's blast radius was
+ * the whole config).
  */
 export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPanelProps) {
   const { hasPermission } = useAuth()
-  const { t } = useLocale()
+  const { t, formatDate } = useLocale()
   const { showSuccess, showError } = useToast()
   const canView = hasPermission('tariffs.view') || hasPermission('tariffs.manage')
   const canManage = hasPermission('tariffs.manage')
@@ -158,13 +195,17 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
   const [config, setConfig] = useState<CustomerPricingConfig | null>(null)
   // Sprint 4A: the services table lists the tenant's GENERAL prices. Showing all of them made a
   // company-wide default look like a price agreed with this customer, so only real customer
-  // deviations are listed unless the user asks for the full list.
+  // deviations + auto-applied contract services are listed unless the user asks for the full list.
   const [showAllServices, setShowAllServices] = useState(false)
   const [rules, setRules] = useState<PriceRule[]>([])
+  const [links, setLinks] = useState<CustomerAgreementLink[]>([])
+  const [bracketOverrides, setBracketOverrides] = useState<CustomerBracketOverrideRow[]>([])
+  // Own (customer-bound) agreements incl. surcharges/modifiers — the edit-modal source.
   const [agreements, setAgreements] = useState<PricingAgreement[]>([])
-  const [sharedAssigned, setSharedAssigned] = useState<AssignedSharedAgreement[]>([])
   // Company-wide/shared tables (CustomerId null) — the only valid "Afgeleid van" (base table) picks.
   const [baseTableOptions, setBaseTableOptions] = useState<PricingAgreement[]>([])
+  const [serviceMeta, setServiceMeta] = useState<ServiceOption[]>([])
+  const [diesel, setDiesel] = useState<CustomerDieselSurcharge | null>(null)
   const [units, setUnits] = useState<UnitTypeSettings[]>([])
   const [zones, setZones] = useState<PricingZone[]>([])
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -172,42 +213,42 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
   const [draftError, setDraftError] = useState<string | null>(null)
   const [agreementDraft, setAgreementDraft] = useState<AgreementDraft | null>(null)
   const [agreementError, setAgreementError] = useState<string | null>(null)
+  const [serviceDraft, setServiceDraft] = useState<ServiceDraft | null>(null)
+  const [serviceError, setServiceError] = useState<string | null>(null)
+  const [assignmentDraft, setAssignmentDraft] = useState<AssignmentDraft | null>(null)
+  const [assignmentError, setAssignmentError] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<PriceRule | null>(null)
-  const [deleteAgreementTarget, setDeleteAgreementTarget] = useState<PricingAgreement | null>(null)
+  const [deleteAgreementTarget, setDeleteAgreementTarget] = useState<CustomerAgreementLink | null>(null)
+  const [resetServiceTarget, setResetServiceTarget] = useState<ServiceRow | null>(null)
   const [busy, setBusy] = useState(false)
 
   const reload = useCallback(() => {
     if (!canView) return
     Promise.all([
       getCustomerPricingConfig(customerId),
+      listCustomerAgreements(customerId).catch(() => [] as CustomerAgreementLink[]),
+      listCustomerBracketOverrides(customerId).catch(() => [] as CustomerBracketOverrideRow[]),
       listPriceRules(customerId),
       listPricingAgreements(customerId).catch(() => [] as PricingAgreement[]),
-      // Company-wide + shared tables (CustomerId null); shared ones need an assignment check below.
       listPricingAgreements().catch(() => [] as PricingAgreement[]),
+      listServiceOptions().catch(() => [] as ServiceOption[]),
       listUnitTypeSettings().catch(() => [] as UnitTypeSettings[]),
       listPricingZones().catch(() => [] as PricingZone[]),
+      // Diesel is a billing-config read (customers.view); missing rights simply hide the card.
+      getDieselSurcharge(customerId).catch(() => null),
     ])
-      .then(async ([configData, ruleData, agreementData, companyWideData, unitData, zoneData]) => {
+      .then(([configData, linkData, overrideData, ruleData, ownAgreements, companyWideData, serviceData, unitData, zoneData, dieselData]) => {
         setConfig(configData)
+        setLinks(linkData)
+        setBracketOverrides(overrideData)
         setRules(ruleData)
-        setAgreements(agreementData)
+        setAgreements(ownAgreements)
         setBaseTableOptions(companyWideData)
+        setServiceMeta(serviceData)
         setUnits(unitData)
         setZones(zoneData)
+        setDiesel(dieselData)
         setLoadError(null)
-
-        const sharedTables = companyWideData.filter((a) => a.isShared)
-        const assignmentLists = await Promise.all(
-          sharedTables.map((a) => getAgreementAssignments(a.id).catch(() => [] as PricingAssignment[])),
-        )
-        setSharedAssigned(
-          sharedTables
-            .map((agreement, index) => {
-              const assignment = assignmentLists[index].find((a) => a.customerId === customerId)
-              return assignment ? { agreement, assignment } : null
-            })
-            .filter((x): x is AssignedSharedAgreement => x !== null),
-        )
       })
       .catch(() => setLoadError(t('customers.pricing.loadFailed')))
   }, [customerId, canView, t])
@@ -217,37 +258,40 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
   }, [reload])
 
   if (!canView) return null
-  if (loadError) return <p className="placeholder-text">{loadError}</p>
-  if (!config) return <p className="placeholder-text">{t('customers.pricing.loading')}</p>
+  if (loadError) return <ErrorState message={loadError} />
+  if (!config) return <LoadingState message={t('customers.pricing.loading')} />
 
   // A row is a customer DEVIATION when something was set for this customer specifically:
   // an own value, a deliberate switch-off, or an own validity window.
-  const hasCustomerDeviation = (option: (typeof config.serviceOptions)[number]) =>
-    option.customerValue !== null || option.disabled || option.effectiveFrom !== null || option.effectiveUntil !== null
-  const visibleServiceOptions = showAllServices
-    ? config.serviceOptions
-    : config.serviceOptions.filter(hasCustomerDeviation)
+  const hasCustomerDeviation = (option: CustomerServiceOptionPrice) =>
+    option.customerValue !== null || option.disabled || option.effectiveFrom !== null ||
+    option.effectiveUntil !== null || option.autoApplyOverride !== null
+  const metaById = new Map(serviceMeta.map((s) => [s.id, s]))
+  const serviceRows: ServiceRow[] = config.serviceOptions.map((o) => ({ ...o, meta: metaById.get(o.serviceOptionId) }))
+  const visibleServiceRows = showAllServices
+    ? serviceRows
+    : serviceRows.filter((o) => hasCustomerDeviation(o) || o.effectiveAutoApply)
 
   const now = today()
-  const currentRules = rules.filter(
+  const activeRules = rules.filter(
     (r) => r.isActive && r.effectiveFrom <= now && (r.effectiveUntil === null || r.effectiveUntil >= now),
   )
   const futureRules = rules.filter((r) => r.isActive && r.effectiveFrom > now)
+  const activeAndPlannedRules = [...activeRules, ...futureRules]
   const historyRules = rules.filter((r) => !r.isActive || (r.effectiveUntil !== null && r.effectiveUntil < now))
 
-  async function saveServiceOverride(
-    serviceOptionId: string,
-    patch: Partial<{
-      value: number | null
-      disabled: boolean
-      effectiveFrom: string | null
-      effectiveUntil: string | null
-      autoApplyOverride: boolean | null
-    }>,
-    reset = false,
-  ) {
-    if (!config) return
+  const validity = (from: string | null, until: string | null): string => {
+    if (!from && !until) return '—'
+    const fromLabel = from ? formatDate(from) : '…'
+    return until ? `${fromLabel} – ${formatDate(until)}` : `${fromLabel} →`
+  }
+
+  async function saveServiceOverride(row: CustomerOptionPriceInput, successMessage: string) {
+    if (!config) return false
+    setBusy(true)
     try {
+      // The backend leaves option rows that are ABSENT from the request untouched, so a
+      // single-row save never clobbers other overrides; units however are a full replace.
       const saved = await saveCustomerPricingConfig(customerId, {
         units: config.preferredUnits.map((u) => ({
           unitTypeId: u.unitTypeId,
@@ -257,41 +301,130 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
           excelCode: u.excelCode,
           isFavourite: u.isFavourite,
         })),
-        optionPrices: config.serviceOptions.map((o) => {
-          if (o.serviceOptionId !== serviceOptionId) {
-            return {
-              serviceOptionId: o.serviceOptionId,
-              value: o.customerValue,
-              disabled: o.disabled,
-              minimumAmount: o.minimumAmount,
-              invoiceDescription: o.invoiceDescription,
-              effectiveFrom: o.effectiveFrom,
-              effectiveUntil: o.effectiveUntil,
-              autoApplyOverride: o.autoApplyOverride,
-            }
-          }
-
-          if (reset) {
-            // "Algemene waarde opnieuw gebruiken": drop the whole override row.
-            return { serviceOptionId: o.serviceOptionId, value: null, disabled: false, autoApplyOverride: null }
-          }
-
-          return {
-            serviceOptionId: o.serviceOptionId,
-            value: patch.value !== undefined ? patch.value : o.customerValue,
-            disabled: patch.disabled !== undefined ? patch.disabled : o.disabled,
-            minimumAmount: o.minimumAmount,
-            invoiceDescription: o.invoiceDescription,
-            effectiveFrom: patch.effectiveFrom !== undefined ? patch.effectiveFrom : o.effectiveFrom,
-            effectiveUntil: patch.effectiveUntil !== undefined ? patch.effectiveUntil : o.effectiveUntil,
-            autoApplyOverride: patch.autoApplyOverride !== undefined ? patch.autoApplyOverride : o.autoApplyOverride,
-          }
-        }),
+        optionPrices: [row],
       })
       setConfig(saved)
-      showSuccess(reset ? t('customers.pricing.overrideReset') : t('customers.pricing.overrideSaved'))
+      showSuccess(successMessage)
+      return true
     } catch (err) {
       showError(describeApiError(err, t('customers.pricing.overrideSaveFailed')).message)
+      return false
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  function openServiceDraft(row: ServiceRow | null) {
+    setServiceError(null)
+    setServiceDraft(
+      row
+        ? {
+            serviceOptionId: row.serviceOptionId,
+            isNew: false,
+            value: row.customerValue !== null ? String(row.customerValue) : '',
+            disabled: row.disabled,
+            minimumAmount: row.minimumAmount !== null ? String(row.minimumAmount) : '',
+            invoiceDescription: row.invoiceDescription ?? '',
+            effectiveFrom: row.effectiveFrom ?? '',
+            effectiveUntil: row.effectiveUntil ?? '',
+            autoApply: row.autoApplyOverride === null ? 'inherit' : row.autoApplyOverride ? 'on' : 'off',
+          }
+        : {
+            serviceOptionId: null,
+            isNew: true,
+            value: '',
+            disabled: false,
+            minimumAmount: '',
+            invoiceDescription: '',
+            effectiveFrom: '',
+            effectiveUntil: '',
+            autoApply: 'inherit',
+          },
+    )
+  }
+
+  async function submitServiceDraft(event: FormEvent) {
+    event.preventDefault()
+    if (!serviceDraft) return
+    if (!serviceDraft.serviceOptionId) {
+      setServiceError(t('customers.pricing.chooseServiceError'))
+      return
+    }
+    const ok = await saveServiceOverride(
+      {
+        serviceOptionId: serviceDraft.serviceOptionId,
+        value: serviceDraft.value.trim() === '' ? null : Number(serviceDraft.value),
+        disabled: serviceDraft.disabled,
+        minimumAmount: serviceDraft.minimumAmount.trim() === '' ? null : Number(serviceDraft.minimumAmount),
+        invoiceDescription: serviceDraft.invoiceDescription.trim() === '' ? null : serviceDraft.invoiceDescription.trim(),
+        effectiveFrom: serviceDraft.effectiveFrom || null,
+        effectiveUntil: serviceDraft.effectiveUntil || null,
+        autoApplyOverride: serviceDraft.autoApply === 'inherit' ? null : serviceDraft.autoApply === 'on',
+      },
+      t('customers.pricing.overrideSaved'),
+    )
+    if (ok) setServiceDraft(null)
+  }
+
+  async function handleResetService() {
+    if (!resetServiceTarget) return
+    const target = resetServiceTarget
+    setResetServiceTarget(null)
+    // An all-empty row deletes the override server-side ("Algemene waarde opnieuw gebruiken").
+    await saveServiceOverride(
+      { serviceOptionId: target.serviceOptionId, value: null, disabled: false, autoApplyOverride: null },
+      t('customers.pricing.overrideReset'),
+    )
+  }
+
+  function openAssignmentDraft(link: CustomerAgreementLink) {
+    setAssignmentError(null)
+    setAssignmentDraft({
+      link,
+      percent: link.assignmentPercentAdjustment !== null ? String(link.assignmentPercentAdjustment) : '',
+      fixed: link.assignmentFixedAdjustment !== null ? String(link.assignmentFixedAdjustment) : '',
+      effectiveFrom: link.assignmentEffectiveFrom ?? '',
+      effectiveUntil: link.assignmentEffectiveUntil ?? '',
+      notes: null,
+    })
+  }
+
+  async function submitAssignmentDraft(event: FormEvent) {
+    event.preventDefault()
+    if (!assignmentDraft) return
+    setBusy(true)
+    try {
+      // The assignments endpoint replaces the full list per table, so re-read it first and only
+      // swap this customer's row — other customers' assignments pass through untouched.
+      const existing = await getAgreementAssignments(assignmentDraft.link.agreementId)
+      const ownRow = existing.find((a) => a.customerId === customerId)
+      const nextRows = existing.map((a) =>
+        a.customerId === customerId
+          ? {
+              customerId,
+              percentAdjustment: assignmentDraft.percent.trim() === '' ? null : Number(assignmentDraft.percent),
+              fixedAdjustment: assignmentDraft.fixed.trim() === '' ? null : Number(assignmentDraft.fixed),
+              effectiveFrom: assignmentDraft.effectiveFrom || null,
+              effectiveUntil: assignmentDraft.effectiveUntil || null,
+              notes: ownRow?.notes ?? null,
+            }
+          : {
+              customerId: a.customerId,
+              percentAdjustment: a.percentAdjustment,
+              fixedAdjustment: a.fixedAdjustment,
+              effectiveFrom: a.effectiveFrom,
+              effectiveUntil: a.effectiveUntil,
+              notes: a.notes,
+            },
+      )
+      await saveAgreementAssignments(assignmentDraft.link.agreementId, nextRows)
+      showSuccess(t('customers.pricing.assignmentSaved'))
+      setAssignmentDraft(null)
+      reload()
+    } catch (err) {
+      setAssignmentError(describeApiError(err, t('customers.pricing.assignmentSaveFailed')).message)
+    } finally {
+      setBusy(false)
     }
   }
 
@@ -361,7 +494,7 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
   async function submitDraft(event: FormEvent) {
     event.preventDefault()
     if (!draft) return
-    const usesBrackets = draft.basis === 'QuantityBracket' || draft.basis === 'WeightBracket' || draft.basis === 'PerStop'
+    const usesBracketsSubmit = draft.basis === 'QuantityBracket' || draft.basis === 'WeightBracket' || draft.basis === 'PerStop'
     const brackets: PriceRuleBracketInput[] = draft.brackets
       .filter((b) => b.from.trim() !== '')
       .map((b) => ({
@@ -397,7 +530,7 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
         oversizeLengthCm: draft.oversizeLengthCm.trim() === '' ? null : Number(draft.oversizeLengthCm),
         oversizeWidthCm: draft.oversizeWidthCm.trim() === '' ? null : Number(draft.oversizeWidthCm),
         oversizeBillableFactor: draft.oversizeBillableFactor.trim() === '' ? null : Number(draft.oversizeBillableFactor),
-        brackets: usesBrackets && brackets.length > 0 ? brackets : null,
+        brackets: usesBracketsSubmit && brackets.length > 0 ? brackets : null,
       }
       if (draft.rule) {
         await updatePriceRule(draft.rule.id, input)
@@ -521,7 +654,7 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
     const target = deleteAgreementTarget
     setDeleteAgreementTarget(null)
     try {
-      await deletePricingAgreement(target.id)
+      await deletePricingAgreement(target.agreementId)
       showSuccess(t('customers.pricing.agreementRemoved'))
       reload()
     } catch (err) {
@@ -548,296 +681,657 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
     PerTon: t('customers.pricing.priceLabel.PerTon'),
   }
 
-  const rulesTable = (list: PriceRule[]) => (
-    <table className="issued-items-table">
-      <thead>
-        <tr>
-          <th>{t('customers.pricing.columnName')}</th>
-          <th>{t('customers.pricing.columnUnit')}</th>
-          <th>{t('customers.pricing.columnBasis')}</th>
-          <th>{t('customers.pricing.columnZone')}</th>
-          <th>{t('customers.pricing.columnValue')}</th>
-          <th>{t('customers.pricing.columnAgreement')}</th>
-          <th>{t('customers.pricing.columnValidity')}</th>
-          {canManage && <th aria-label={t('customers.pricing.actionsAria')} />}
-        </tr>
-      </thead>
-      <tbody>
-        {list.map((rule) => (
-          <tr key={rule.id}>
-            <td>{rule.name}</td>
-            <td>{rule.unitTypeName ?? '—'}</td>
-            <td>{PRICE_RULE_BASIS_LABELS[rule.basis]}</td>
-            <td>{rule.zoneName ?? t('customers.pricing.allZones')}</td>
-            <td>{ruleValueSummary(t, rule)}</td>
-            <td>{rule.agreementName ?? '—'}</td>
-            <td>
-              {rule.effectiveFrom}
-              {rule.effectiveUntil ? ` – ${rule.effectiveUntil}` : ' →'}
-              {!rule.isActive && <Badge tone="neutral">{t('ui.statusBadges.inactive')}</Badge>}
-            </td>
-            {canManage && (
-              <td className="issued-items-row-actions">
+  const zoneOptions: SearchableSelectOption[] = zones.map((zone) => ({
+    value: zone.id,
+    label: `${zone.code} — ${zone.name}`,
+  }))
+  const unitOptions: SearchableSelectOption[] = pricingUnits.map((unit) => ({ value: unit.id, label: unit.name }))
+  const primaryBasisOptions: SearchableSelectOption[] = [
+    ...Object.entries(PRIMARY_BASIS_KEYS).map(([value, key]) => ({ value, label: t(key) })),
+    ...(draft && (draft.basis === 'PerPallet' || draft.basis === 'PerTon')
+      ? [{ value: draft.basis, label: t(PRICE_RULE_BASIS_KEYS[draft.basis]) }]
+      : []),
+  ]
+  const kindOptions: SearchableSelectOption[] = [
+    { value: 'Percent', label: t('customers.pricing.kindPercent') },
+    { value: 'Fixed', label: t('customers.pricing.kindFixed') },
+  ]
+
+  const plannedAdjustmentNote = (link: CustomerAgreementLink): string | null => {
+    if (!link.plannedAdjustmentDate) return null
+    const delta =
+      link.plannedAdjustmentPercent !== null
+        ? `${link.plannedAdjustmentPercent > 0 ? '+' : ''}${link.plannedAdjustmentPercent}%`
+        : link.plannedAdjustmentAmountDelta !== null
+          ? `${link.plannedAdjustmentAmountDelta > 0 ? '+' : ''}${formatCurrency(link.plannedAdjustmentAmountDelta)}`
+          : ''
+    return t('customers.pricing.plannedAdjustmentNote', { delta, date: formatDate(link.plannedAdjustmentDate) })
+  }
+
+  /** Human chips describing WHEN a service applies (time conditions, ADR, warehouses, validity). */
+  const conditionChips = (row: ServiceRow): ReactNode => {
+    const chips: string[] = []
+    for (const cond of row.meta?.timeConditions ?? []) {
+      const time = cond.timeOfDay ? cond.timeOfDay.slice(0, 5) : ''
+      const scope =
+        cond.stopScope === 'Loading'
+          ? ` (${t('customers.pricing.condLoading')})`
+          : cond.stopScope === 'Unloading'
+            ? ` (${t('customers.pricing.condUnloading')})`
+            : ''
+      if (cond.kind === 'StopTimeBefore') chips.push(t('customers.pricing.condBefore', { time }) + scope)
+      else if (cond.kind === 'StopTimeAfter') chips.push(t('customers.pricing.condAfter', { time }) + scope)
+      else if (cond.kind === 'AppointmentRequired') chips.push(t('customers.pricing.condAppointment') + scope)
+      else if (cond.kind === 'Weekend') chips.push(t('customers.pricing.condWeekend'))
+      else if (cond.kind === 'Holiday') chips.push(t('customers.pricing.condHoliday'))
+    }
+    if (row.meta?.onlyForAdr) chips.push(t('customers.pricing.condAdr'))
+    for (const name of row.meta?.warehouseNames ?? []) chips.push(name)
+    if (row.effectiveFrom) chips.push(t('customers.pricing.condFromDate', { date: formatDate(row.effectiveFrom) }))
+    if (row.effectiveUntil) chips.push(t('customers.pricing.condUntilDate', { date: formatDate(row.effectiveUntil) }))
+    if (chips.length === 0) return '—'
+    return (
+      <span className="customer-pricing-chips">
+        {chips.map((chip, index) => (
+          <Badge key={index} tone="neutral">
+            {chip}
+          </Badge>
+        ))}
+      </span>
+    )
+  }
+
+  const linkColumns: Column<CustomerAgreementLink>[] = [
+    {
+      key: 'name',
+      header: t('customers.pricing.columnName'),
+      render: (link) => (
+        <span className="customer-pricing-cell">
+          <Link to={`/pricing/tables/${link.agreementId}`} className="issued-items-link">
+            {link.name}
+          </Link>
+          {link.isShared && <Badge tone="info">{t('customers.pricing.sharedTableBadge')}</Badge>}
+          {link.baseAgreementId && (
+            <Badge tone="info">{t('customers.pricing.derivedFromBadge', { name: link.baseAgreementName ?? '—' })}</Badge>
+          )}
+          {!link.isActive && <Badge tone="neutral">{t('ui.statusBadges.inactive')}</Badge>}
+          {plannedAdjustmentNote(link) && (
+            <span className="customer-form-muted" role="note">
+              {plannedAdjustmentNote(link)}
+            </span>
+          )}
+        </span>
+      ),
+    },
+    {
+      key: 'adjustment',
+      header: t('customers.pricing.columnAdjustment'),
+      render: (link) =>
+        link.isShared ? adjustmentLabel(t, link.assignmentPercentAdjustment, link.assignmentFixedAdjustment) : '—',
+    },
+    {
+      key: 'validity',
+      header: t('customers.pricing.columnValidity'),
+      render: (link) => (
+        <span>
+          {validity(link.effectiveFrom, link.effectiveUntil)}
+          {link.isShared && (link.assignmentEffectiveFrom || link.assignmentEffectiveUntil) && (
+            <span className="customer-form-muted">
+              {' '}
+              ({t('customers.pricing.assignmentValidityNote', {
+                validity: validity(link.assignmentEffectiveFrom, link.assignmentEffectiveUntil),
+              })})
+            </span>
+          )}
+        </span>
+      ),
+    },
+    ...(canManage
+      ? [
+          {
+            key: 'actions',
+            header: <span aria-label={t('customers.pricing.actionsAria')} />,
+            align: 'right' as const,
+            render: (link: CustomerAgreementLink) =>
+              link.isShared ? (
+                // Editing a SHARED table from a customer page would change prices for every
+                // assigned customer — only the customer-scoped assignment is editable here.
+                <span className="issued-items-row-actions">
+                  <button type="button" className="issued-items-link" onClick={() => openAssignmentDraft(link)}>
+                    {t('customers.pricing.editAssignmentAction')}
+                  </button>
+                </span>
+              ) : (
+                <span className="issued-items-row-actions">
+                  <button
+                    type="button"
+                    className="issued-items-link"
+                    onClick={() => {
+                      const agreement = agreements.find((a) => a.id === link.agreementId)
+                      if (agreement) openAgreementDraft(agreement)
+                    }}
+                  >
+                    {t('ui.actions.edit')}
+                  </button>
+                  <button
+                    type="button"
+                    className="issued-items-link issued-items-link-danger"
+                    onClick={() => setDeleteAgreementTarget(link)}
+                  >
+                    {t('ui.actions.delete')}
+                  </button>
+                </span>
+              ),
+          },
+        ]
+      : []),
+  ]
+
+  /** "2", "2 – 5" or "3+", with the optional dimension caps appended ("≤ 120 kg"). */
+  const bracketRangeLabel = (row: CustomerBracketOverrideRow): string => {
+    const range =
+      row.toQuantity === null
+        ? `${row.fromQuantity}+`
+        : row.fromQuantity === row.toQuantity
+          ? `${row.fromQuantity}`
+          : `${row.fromQuantity} – ${row.toQuantity}`
+    const caps = [
+      row.weightToKg !== null ? t('customers.pricing.bracketCapWeight', { value: row.weightToKg }) : null,
+      row.volumeToM3 !== null ? t('customers.pricing.bracketCapVolume', { value: row.volumeToM3 }) : null,
+      row.loadingMetersTo !== null ? t('customers.pricing.bracketCapLdm', { value: row.loadingMetersTo }) : null,
+    ].filter(Boolean)
+    return caps.length > 0 ? `${range} · ${caps.join(' · ')}` : range
+  }
+
+  const bracketOverrideColumns: Column<CustomerBracketOverrideRow>[] = [
+    {
+      key: 'rule',
+      header: t('customers.pricing.columnRule'),
+      render: (row) => (
+        <span className="customer-pricing-cell">
+          {row.ruleName}
+          {row.agreementName && (
+            <span className="customer-form-muted" role="note">
+              {row.agreementName}
+            </span>
+          )}
+        </span>
+      ),
+    },
+    {
+      key: 'bracket',
+      header: t('customers.pricing.columnBracket'),
+      render: (row) => (row.unitTypeName ? `${bracketRangeLabel(row)} ${row.unitTypeName}` : bracketRangeLabel(row)),
+    },
+    {
+      key: 'standard',
+      header: t('customers.pricing.columnStandardPrice'),
+      render: (row) => (row.standardPrice !== null ? formatCurrency(row.standardPrice) : '—'),
+    },
+    {
+      key: 'customer',
+      header: t('customers.pricing.columnCustomerPrice'),
+      render: (row) => (
+        <span className="customer-pricing-cell">
+          {formatCurrency(row.price)}
+          {row.orphaned && <Badge tone="warning">{t('customers.pricing.orphanedOverrideBadge')}</Badge>}
+        </span>
+      ),
+    },
+    {
+      key: 'validity',
+      header: t('customers.pricing.columnValidity'),
+      render: (row) => validity(row.effectiveFrom, row.effectiveUntil),
+    },
+    {
+      key: 'link',
+      header: <span aria-label={t('customers.pricing.actionsAria')} />,
+      align: 'right' as const,
+      render: (row) =>
+        // Bracket overrides are managed on the rate-table detail (row action "Klantafwijking…");
+        // the customer page deliberately deep-links instead of duplicating that editor.
+        row.agreementId ? (
+          <Link to={`/pricing/tables/${row.agreementId}`} className="issued-items-link">
+            {t('customers.pricing.viewInRateTable')}
+          </Link>
+        ) : (
+          '—'
+        ),
+    },
+  ]
+
+  const serviceColumns: Column<ServiceRow>[] = [
+    {
+      key: 'service',
+      header: t('customers.pricing.columnService'),
+      render: (row) => (
+        <span className="customer-pricing-cell">
+          {row.name}
+          {row.disabled && <Badge tone="neutral">{t('customers.pricing.disabledValue')}</Badge>}
+        </span>
+      ),
+    },
+    {
+      key: 'calculation',
+      header: t('customers.pricing.columnCalculation'),
+      render: (row) => t(SURCHARGE_KIND_LABELS[row.kind]),
+    },
+    {
+      key: 'amount',
+      header: t('customers.pricing.columnAmount'),
+      render: (row) => (
+        <span className="customer-pricing-cell">
+          {row.disabled ? '—' : formatServiceValue(row.kind, row.effectiveValue, row.meta?.unitTypeName, t)}
+          {hasCustomerDeviation(row) && <Badge tone="warning">{t('customers.pricing.deviatingBadge')}</Badge>}
+          {row.customerValue !== null && !row.disabled && (
+            <span className="customer-form-muted" role="note">
+              {t('customers.pricing.standardValueNote', { value: formatServiceValue(row.kind, row.defaultValue, row.meta?.unitTypeName, t) })}
+            </span>
+          )}
+          {row.minimumAmount !== null && (
+            <span className="customer-form-muted" role="note">
+              {t('customers.pricing.minAmountSummary', { amount: formatCurrency(row.minimumAmount) })}
+            </span>
+          )}
+        </span>
+      ),
+    },
+    {
+      key: 'conditions',
+      header: t('customers.pricing.columnConditions'),
+      render: (row) => conditionChips(row),
+    },
+    {
+      key: 'auto',
+      header: t('customers.pricing.columnAuto'),
+      render: (row) =>
+        row.effectiveAutoApply ? t('customers.pricing.autoApplyOnShort') : t('customers.pricing.autoApplyOffShort'),
+    },
+    ...(canManage
+      ? [
+          {
+            key: 'actions',
+            header: <span aria-label={t('customers.pricing.actionsAria')} />,
+            align: 'right' as const,
+            render: (row: ServiceRow) => (
+              <span className="issued-items-row-actions">
+                <button type="button" className="issued-items-link" onClick={() => openServiceDraft(row)}>
+                  {t('ui.actions.edit')}
+                </button>
+                {hasCustomerDeviation(row) && (
+                  <button type="button" className="issued-items-link" onClick={() => setResetServiceTarget(row)}>
+                    {t('customers.pricing.useGeneralValueAgain')}
+                  </button>
+                )}
+              </span>
+            ),
+          },
+        ]
+      : []),
+  ]
+
+  const ruleColumns = (withStatus: boolean): Column<PriceRule>[] => [
+    { key: 'name', header: t('customers.pricing.columnName'), render: (rule) => rule.name },
+    { key: 'unit', header: t('customers.pricing.columnUnit'), render: (rule) => rule.unitTypeName ?? '—' },
+    {
+      key: 'basis',
+      header: t('customers.pricing.columnCalculation'),
+      render: (rule) => t(PRICE_RULE_BASIS_KEYS[rule.basis]),
+    },
+    { key: 'zone', header: t('customers.pricing.columnZone'), render: (rule) => rule.zoneName ?? t('customers.pricing.allZones') },
+    { key: 'value', header: t('customers.pricing.columnValue'), render: (rule) => ruleValueSummary(t, rule) },
+    { key: 'agreement', header: t('customers.pricing.columnAgreement'), render: (rule) => rule.agreementName ?? '—' },
+    {
+      key: 'validity',
+      header: t('customers.pricing.columnValidity'),
+      render: (rule) => validity(rule.effectiveFrom, rule.effectiveUntil),
+    },
+    ...(withStatus
+      ? [
+          {
+            key: 'status',
+            header: t('customers.pricing.columnStatus'),
+            render: (rule: PriceRule) =>
+              !rule.isActive ? (
+                <Badge tone="neutral">{t('ui.statusBadges.inactive')}</Badge>
+              ) : rule.effectiveFrom > now ? (
+                <Badge tone="info">{t('customers.pricing.statusPlanned', { date: formatDate(rule.effectiveFrom) })}</Badge>
+              ) : (
+                <Badge tone="success">{t('customers.pricing.statusActive')}</Badge>
+              ),
+          },
+        ]
+      : []),
+    ...(canManage
+      ? [
+          {
+            key: 'actions',
+            header: <span aria-label={t('customers.pricing.actionsAria')} />,
+            align: 'right' as const,
+            render: (rule: PriceRule) => (
+              <span className="issued-items-row-actions">
                 <button type="button" className="issued-items-link" onClick={() => openDraft(rule)}>
                   {t('ui.actions.edit')}
                 </button>
                 <button type="button" className="issued-items-link issued-items-link-danger" onClick={() => setDeleteTarget(rule)}>
                   {t('ui.actions.delete')}
                 </button>
-              </td>
-            )}
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  )
+              </span>
+            ),
+          },
+        ]
+      : []),
+  ]
+
+  const serviceDraftMeta = serviceDraft?.serviceOptionId ? metaById.get(serviceDraft.serviceOptionId) : undefined
+  const serviceDraftRow = serviceDraft?.serviceOptionId
+    ? config.serviceOptions.find((o) => o.serviceOptionId === serviceDraft.serviceOptionId)
+    : undefined
+  // "+ Toeslag toevoegen" offers every active service that has no deviation yet.
+  const addableServiceOptions: SearchableSelectOption[] = serviceRows
+    .filter((row) => !hasCustomerDeviation(row))
+    .map((row) => ({
+      value: row.serviceOptionId,
+      label: row.name,
+      description: `${t(SURCHARGE_KIND_LABELS[row.kind])} · ${formatServiceValue(row.kind, row.defaultValue, row.meta?.unitTypeName, t)}`,
+    }))
 
   return (
-    <section className="customer-panel">
-      <div className="customer-panel-header">
-        <h3>{t('customers.pricing.basisTitle')}</h3>
-        {canManage && <Button variant="secondary" onClick={() => openAgreementDraft(null)}>{t('customers.pricing.addAgreement')}</Button>}
-      </div>
-      <p className="customer-form-muted">{t('customers.pricing.basisHint')}</p>
-        {agreements.length === 0 && sharedAssigned.length === 0 && (
-        <p className="placeholder-text">{t('customers.pricing.agreementsEmpty')}</p>
-      )}
-      {(agreements.length > 0 || sharedAssigned.length > 0) && (
-        <table className="issued-items-table">
-          <thead>
-            <tr>
-              <th>{t('customers.pricing.columnName')}</th>
-              <th>{t('customers.pricing.columnValidity')}</th>
-              <th>{t('customers.pricing.columnMinimum')}</th>
-              <th>{t('customers.pricing.columnSurcharges')}</th>
-              <th>{t('customers.pricing.columnNotes')}</th>
-              {canManage && <th aria-label={t('customers.pricing.actionsAria')} />}
-            </tr>
-          </thead>
-          <tbody>
-            {sharedAssigned.map(({ agreement, assignment }) => (
-              <tr key={`shared-${agreement.id}`}>
-                <td>
-                  <Link to={`/pricing/tables/${agreement.id}`} className="issued-items-link">
-                    {agreement.name}
-                  </Link>{' '}
-                  <Badge tone="info">{t('customers.pricing.sharedTableBadge')}</Badge>
-                </td>
-                <td>
-                  {agreement.effectiveFrom}
-                  {agreement.effectiveUntil ? ` – ${agreement.effectiveUntil}` : ' →'}
-                </td>
-                <td>{agreement.minimumAmount !== null ? formatCurrency(agreement.minimumAmount) : '—'}</td>
-                <td>{assignmentAdjustmentLabel(t, assignment)}</td>
-                <td>{agreement.notes ?? '—'}</td>
-                {canManage && <td className="issued-items-row-actions">—</td>}
-              </tr>
-            ))}
-            {agreements.map((agreement) => (
-              <tr key={agreement.id}>
-                <td>
-                  <Link to={`/pricing/tables/${agreement.id}`} className="issued-items-link">
-                    {agreement.name}
-                  </Link>
-                  {agreement.baseAgreementId && (
-                    <Badge tone="info">{t('customers.pricing.derivedFromBadge', { name: agreement.baseAgreementName ?? '—' })}</Badge>
-                  )}
-                </td>
-                <td>
-                  {agreement.effectiveFrom}
-                  {agreement.effectiveUntil ? ` – ${agreement.effectiveUntil}` : ' →'}
-                </td>
-                <td>{agreement.minimumAmount !== null ? formatCurrency(agreement.minimumAmount) : '—'}</td>
-                <td>
-                  {agreement.surcharges.length === 0
-                    ? '—'
-                    : agreement.surcharges
-                        .map((s) => `${s.name} (${s.kind === 'Percent' ? `${s.value}%` : formatCurrency(s.value)})`)
-                        .join(', ')}
-                </td>
-                <td>{agreement.notes ?? '—'}</td>
-                {canManage && (
-                  <td className="issued-items-row-actions">
-                    <button type="button" className="issued-items-link" onClick={() => openAgreementDraft(agreement)}>
-                      {t('ui.actions.edit')}
-                    </button>
-                    <button
-                      type="button"
-                      className="issued-items-link issued-items-link-danger"
-                      onClick={() => setDeleteAgreementTarget(agreement)}
-                    >
-                      {t('ui.actions.delete')}
-                    </button>
-                  </td>
-                )}
-              </tr>
-            ))}
-          </tbody>
-        </table>
+    <section className="customer-panel customer-pricing-panel">
+      <FormSection title={t('customers.pricing.basisTitle')} description={t('customers.pricing.basisHint')} columns={1}>
+        {canManage && (
+          <div className="customer-panel-header customer-pricing-section-actions">
+            <Button variant="secondary" onClick={() => openAgreementDraft(null)}>
+              {t('customers.pricing.addAgreement')}
+            </Button>
+          </div>
+        )}
+        {links.length === 0 ? (
+          <EmptyState
+            message={t('customers.pricing.basisEmptyBody')}
+            action={
+              canManage ? (
+                <Button variant="secondary" onClick={() => openAgreementDraft(null)}>
+                  {t('customers.pricing.addAgreement')}
+                </Button>
+              ) : undefined
+            }
+          />
+        ) : (
+          <DataTable columns={linkColumns} rows={links} rowKey={(link) => `${link.agreementId}-${link.assignmentId ?? 'own'}`} />
+        )}
+        {bracketOverrides.length > 0 && (
+          <details className="customer-pricing-bracket-overrides">
+            <summary>{t('customers.pricing.bracketOverridesSummary', { count: bracketOverrides.length })}</summary>
+            <p className="customer-form-muted">{t('customers.pricing.bracketOverridesHint')}</p>
+            <DataTable
+              columns={bracketOverrideColumns}
+              rows={bracketOverrides}
+              rowKey={(row) => row.id}
+            />
+          </details>
+        )}
+      </FormSection>
+
+      <FormSection
+        title={t('customers.pricing.servicesSectionTitle')}
+        description={t('customers.pricing.servicesSectionHint')}
+        columns={1}
+      >
+        {canManage && (
+          <div className="customer-panel-header customer-pricing-section-actions">
+            <Button variant="secondary" onClick={() => openServiceDraft(null)}>
+              {t('customers.pricing.addServiceOverride')}
+            </Button>
+          </div>
+        )}
+        {diesel?.enabled && (
+          <p className="customer-form-muted customer-pricing-diesel" role="note">
+            <Badge tone="info">{t('customers.pricing.dieselCardTitle')}</Badge>{' '}
+            {t('customers.pricing.dieselCardSummary', { percent: diesel.percent })}{' '}
+            {t('customers.pricing.dieselCardNote')}
+          </p>
+        )}
+        <label className="customer-form-checkbox">
+          <input type="checkbox" checked={showAllServices} onChange={(e) => setShowAllServices(e.target.checked)} />
+          {t('customers.pricing.showAllStandardServices')}
+        </label>
+        {visibleServiceRows.length === 0 ? (
+          <EmptyState
+            message={showAllServices ? t('customers.pricing.noServices') : t('customers.pricing.servicesEmptyDeviations')}
+            action={
+              canManage ? (
+                <Button variant="secondary" onClick={() => openServiceDraft(null)}>
+                  {t('customers.pricing.addServiceOverride')}
+                </Button>
+              ) : undefined
+            }
+          />
+        ) : (
+          <DataTable columns={serviceColumns} rows={visibleServiceRows} rowKey={(row) => row.serviceOptionId} />
+        )}
+      </FormSection>
+
+      <FormSection
+        title={t('customers.pricing.deviationPricesTitle')}
+        description={t('customers.pricing.deviationPricesHint')}
+        columns={1}
+      >
+        {canManage && (
+          <div className="customer-panel-header customer-pricing-section-actions">
+            <Button onClick={() => openDraft(null)}>{t('customers.pricing.addRule')}</Button>
+          </div>
+        )}
+        {activeAndPlannedRules.length === 0 ? (
+          <EmptyState
+            message={t('customers.pricing.rulesEmptyBody')}
+            action={canManage ? <Button variant="secondary" onClick={() => openDraft(null)}>{t('customers.pricing.addRule')}</Button> : undefined}
+          />
+        ) : (
+          <DataTable columns={ruleColumns(true)} rows={activeAndPlannedRules} rowKey={(rule) => rule.id} />
+        )}
+        {historyRules.length > 0 && (
+          <details>
+            <summary>{t('customers.pricing.historyTitle', { count: historyRules.length })}</summary>
+            <DataTable columns={ruleColumns(false)} rows={historyRules} rowKey={(rule) => rule.id} />
+          </details>
+        )}
+      </FormSection>
+
+      {serviceDraft && (
+        <Modal
+          title={
+            serviceDraft.isNew
+              ? t('customers.pricing.newServiceOverrideTitle')
+              : t('customers.pricing.editServiceOverrideTitle', { name: serviceDraftRow?.name ?? '' })
+          }
+          onClose={() => setServiceDraft(null)}
+          busy={busy}
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setServiceDraft(null)} disabled={busy}>
+                {t('ui.actions.cancel')}
+              </Button>
+              <Button type="submit" form="service-override-form" disabled={busy}>
+                {t('ui.actions.save')}
+              </Button>
+            </>
+          }
+        >
+          <form id="service-override-form" className="issued-items-form" onSubmit={submitServiceDraft} noValidate>
+            {serviceError && (
+              <div className="issued-items-form-error" role="alert">
+                {serviceError}
+              </div>
+            )}
+            {serviceDraft.isNew && (
+              <FormField label={t('customers.pricing.serviceField')} htmlFor="so-service" required>
+                <SearchableSelect
+                  id="so-service"
+                  value={serviceDraft.serviceOptionId}
+                  onChange={(value) => setServiceDraft((d) => (d ? { ...d, serviceOptionId: value } : d))}
+                  options={addableServiceOptions}
+                  placeholder={t('customers.pricing.chooseServicePlaceholder')}
+                  emptyMessage={t('customers.pricing.noAddableServices')}
+                />
+              </FormField>
+            )}
+            {serviceDraft.serviceOptionId && serviceDraftRow && (
+              <p className="customer-form-muted" role="note">
+                {t('customers.pricing.standardValueNote', {
+                  value: formatServiceValue(serviceDraftRow.kind, serviceDraftRow.defaultValue, serviceDraftMeta?.unitTypeName, t),
+                })}
+              </p>
+            )}
+            <div className="issued-items-form-row">
+              <FormField label={t('customers.pricing.customerValueField')} htmlFor="so-value" hint={t('customers.pricing.customerValueHint')}>
+                <input
+                  id="so-value"
+                  type="number"
+                  step="0.01"
+                  value={serviceDraft.value}
+                  disabled={serviceDraft.disabled}
+                  onChange={(e) => setServiceDraft((d) => (d ? { ...d, value: e.target.value } : d))}
+                />
+              </FormField>
+              <FormField label={t('customers.pricing.minAmountField')} htmlFor="so-min">
+                <input
+                  id="so-min"
+                  type="number"
+                  step="0.01"
+                  value={serviceDraft.minimumAmount}
+                  disabled={serviceDraft.disabled}
+                  onChange={(e) => setServiceDraft((d) => (d ? { ...d, minimumAmount: e.target.value } : d))}
+                />
+              </FormField>
+            </div>
+            <div className="issued-items-form-row">
+              <FormField label={t('customers.pricing.validFromField')} htmlFor="so-from">
+                <input
+                  id="so-from"
+                  type="date"
+                  value={serviceDraft.effectiveFrom}
+                  onChange={(e) => setServiceDraft((d) => (d ? { ...d, effectiveFrom: e.target.value } : d))}
+                />
+              </FormField>
+              <FormField label={t('customers.pricing.validUntilField')} htmlFor="so-until" hint={t('customers.pricing.validUntilHint')}>
+                <input
+                  id="so-until"
+                  type="date"
+                  value={serviceDraft.effectiveUntil}
+                  onChange={(e) => setServiceDraft((d) => (d ? { ...d, effectiveUntil: e.target.value } : d))}
+                />
+              </FormField>
+            </div>
+            <div className="issued-items-form-row">
+              <FormField label={t('customers.pricing.columnAutoApply')} htmlFor="so-auto">
+                <SearchableSelect
+                  id="so-auto"
+                  value={serviceDraft.autoApply}
+                  onChange={(value) =>
+                    setServiceDraft((d) => (d ? { ...d, autoApply: (value ?? 'inherit') as ServiceDraft['autoApply'] } : d))
+                  }
+                  options={[
+                    {
+                      value: 'inherit',
+                      label: t('customers.pricing.autoApplyDefault', {
+                        state: (serviceDraftMeta?.autoApply ?? false)
+                          ? t('customers.pricing.autoApplyOnShort')
+                          : t('customers.pricing.autoApplyOffShort'),
+                      }),
+                    },
+                    { value: 'on', label: t('customers.pricing.autoApplyOn') },
+                    { value: 'off', label: t('customers.pricing.autoApplyOff') },
+                  ]}
+                  clearable={false}
+                />
+              </FormField>
+              <FormField label={t('customers.pricing.invoiceDescriptionField')} htmlFor="so-invoice">
+                <input
+                  id="so-invoice"
+                  value={serviceDraft.invoiceDescription}
+                  maxLength={200}
+                  onChange={(e) => setServiceDraft((d) => (d ? { ...d, invoiceDescription: e.target.value } : d))}
+                />
+              </FormField>
+            </div>
+            <label className="tof-checkbox">
+              <input
+                type="checkbox"
+                checked={serviceDraft.disabled}
+                onChange={(e) => setServiceDraft((d) => (d ? { ...d, disabled: e.target.checked } : d))}
+              />
+              {t('customers.pricing.disableForCustomer')}
+            </label>
+          </form>
+        </Modal>
       )}
 
-      <div className="customer-panel-header">
-        <h3>{t('customers.pricing.currentPricesTitle')}</h3>
-        {canManage && <Button onClick={() => openDraft(null)}>{t('customers.pricing.addRule')}</Button>}
-      </div>
-      {currentRules.length === 0 && <p className="placeholder-text">{t('customers.pricing.noCurrentRules')}</p>}
-      {currentRules.length > 0 && rulesTable(currentRules)}
-
-      {futureRules.length > 0 && (
-        <>
-          <h4>{t('customers.pricing.futurePricesTitle')}</h4>
-          {rulesTable(futureRules)}
-        </>
-      )}
-
-      {historyRules.length > 0 && (
-        <details>
-          <summary>{t('customers.pricing.historyTitle', { count: historyRules.length })}</summary>
-          {rulesTable(historyRules)}
-        </details>
-      )}
-
-      <h4>{t('customers.pricing.deviationsTitle')}</h4>
-      <p className="customer-form-muted">{t('customers.pricing.deviationsHint')}</p>
-      <p className="customer-form-muted">{t('customers.pricing.servicesOverrideWarning')}</p>
-      <label className="customer-form-checkbox">
-        <input type="checkbox" checked={showAllServices} onChange={(e) => setShowAllServices(e.target.checked)} />
-        {t('customers.pricing.showAllStandardServices')}
-      </label>
-      {visibleServiceOptions.length === 0 && (
-        <p className="placeholder-text">
-          {showAllServices ? t('customers.pricing.noServices') : t('customers.pricing.noDeviations')}
-        </p>
-      )}
-      {visibleServiceOptions.length > 0 && (
-      <table className="issued-items-table">
-        <thead>
-          <tr>
-            <th>{t('customers.pricing.columnService')}</th>
-            <th>{t('customers.pricing.columnGeneralStandard')}</th>
-            <th>{t('customers.pricing.columnCustomerPrice')}</th>
-            <th>{t('customers.pricing.columnValidity')}</th>
-            <th>{t('customers.pricing.columnEffectivePrice')}</th>
-            <th>{t('customers.pricing.columnSource')}</th>
-            <th>{t('customers.pricing.columnAutoApply')}</th>
-            {canManage && <th aria-label={t('customers.pricing.actionsAria')} />}
-          </tr>
-        </thead>
-        <tbody>
-          {visibleServiceOptions.map((option) => {
-            const hasOverride = hasCustomerDeviation(option)
-            return (
-              <tr key={option.serviceOptionId}>
-                <td>
-                  {option.name}
-                  {option.customerValue !== null && !option.disabled && (
-                    <div className="customer-form-muted" role="note">
-                      {option.effectiveFrom
-                        ? t('customers.pricing.overrideNoteFromDate', {
-                            value: formatServiceValue(option.kind, option.defaultValue),
-                          })
-                        : t('customers.pricing.overrideNote', {
-                            value: formatServiceValue(option.kind, option.defaultValue),
-                          })}
-                    </div>
-                  )}
-                  {option.disabled && (
-                    <div className="customer-form-muted" role="note">
-                      {t('customers.pricing.serviceDisabledNote')}
-                    </div>
-                  )}
-                </td>
-                <td>{formatServiceValue(option.kind, option.defaultValue)}</td>
-                <td>
-                  <input
-                    aria-label={t('customers.pricing.overrideAria', { name: option.name })}
-                    type="number"
-                    step="0.01"
-                    defaultValue={option.customerValue ?? ''}
-                    placeholder={t('customers.pricing.noOverridePlaceholder')}
-                    disabled={!canManage || option.disabled}
-                    onBlur={(e) => {
-                      const raw = e.target.value
-                      const current = option.customerValue === null ? '' : String(option.customerValue)
-                      if (raw !== current) {
-                        void saveServiceOverride(option.serviceOptionId, { value: raw.trim() === '' ? null : Number(raw) })
-                      }
-                    }}
-                  />
-                  {canManage && (
-                    <label className="tof-checkbox">
-                      <input
-                        type="checkbox"
-                        checked={option.disabled}
-                        onChange={(e) => void saveServiceOverride(option.serviceOptionId, { disabled: e.target.checked })}
-                      />
-                      {t('customers.pricing.disableForCustomer')}
-                    </label>
-                  )}
-                </td>
-                <td>
-                  <input
-                    aria-label={t('customers.pricing.overrideFromAria', { name: option.name })}
-                    type="date"
-                    defaultValue={option.effectiveFrom ?? ''}
-                    disabled={!canManage || !hasOverride}
-                    onBlur={(e) => {
-                      const value = e.target.value || null
-                      if (value !== option.effectiveFrom) void saveServiceOverride(option.serviceOptionId, { effectiveFrom: value })
-                    }}
-                  />
-                  <input
-                    aria-label={t('customers.pricing.overrideUntilAria', { name: option.name })}
-                    type="date"
-                    defaultValue={option.effectiveUntil ?? ''}
-                    disabled={!canManage || !hasOverride}
-                    onBlur={(e) => {
-                      const value = e.target.value || null
-                      if (value !== option.effectiveUntil) void saveServiceOverride(option.serviceOptionId, { effectiveUntil: value })
-                    }}
-                  />
-                </td>
-                <td>{option.disabled ? t('customers.pricing.disabledValue') : formatServiceValue(option.kind, option.effectiveValue)}</td>
-                <td>{option.source}</td>
-                <td>
-                  <select
-                    aria-label={t('customers.pricing.autoApplyAria', { name: option.name })}
-                    value={option.autoApplyOverride === null ? 'inherit' : option.autoApplyOverride ? 'on' : 'off'}
-                    disabled={!canManage}
-                    onChange={(e) => {
-                      const value = e.target.value
-                      void saveServiceOverride(option.serviceOptionId, {
-                        autoApplyOverride: value === 'inherit' ? null : value === 'on',
-                      })
-                    }}
-                  >
-                    <option value="inherit">
-                      {t('customers.pricing.autoApplyDefault', {
-                        state: option.effectiveAutoApply ? t('customers.pricing.autoApplyOnShort') : t('customers.pricing.autoApplyOffShort'),
-                      })}
-                    </option>
-                    <option value="on">{t('customers.pricing.autoApplyOn')}</option>
-                    <option value="off">{t('customers.pricing.autoApplyOff')}</option>
-                  </select>
-                </td>
-                {canManage && (
-                  <td className="issued-items-row-actions">
-                    {hasOverride && (
-                      <button
-                        type="button"
-                        className="issued-items-link"
-                        onClick={() => void saveServiceOverride(option.serviceOptionId, {}, true)}
-                      >
-                        {t('customers.pricing.useGeneralValueAgain')}
-                      </button>
-                    )}
-                  </td>
-                )}
-              </tr>
-            )
-          })}
-        </tbody>
-      </table>
+      {assignmentDraft && (
+        <Modal
+          title={t('customers.pricing.assignmentModalTitle', { name: assignmentDraft.link.name })}
+          onClose={() => setAssignmentDraft(null)}
+          busy={busy}
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setAssignmentDraft(null)} disabled={busy}>
+                {t('ui.actions.cancel')}
+              </Button>
+              <Button type="submit" form="assignment-form" disabled={busy}>
+                {t('ui.actions.save')}
+              </Button>
+            </>
+          }
+        >
+          <form id="assignment-form" className="issued-items-form" onSubmit={submitAssignmentDraft} noValidate>
+            {assignmentError && (
+              <div className="issued-items-form-error" role="alert">
+                {assignmentError}
+              </div>
+            )}
+            <p className="customer-form-muted" role="note">
+              {t('customers.pricing.assignmentModalHint')}
+            </p>
+            <div className="issued-items-form-row">
+              <FormField label={t('customers.pricing.assignmentPercentField')} htmlFor="as-percent" hint={t('customers.pricing.assignmentPercentHint')}>
+                <input
+                  id="as-percent"
+                  type="number"
+                  step="0.01"
+                  value={assignmentDraft.percent}
+                  onChange={(e) => setAssignmentDraft((d) => (d ? { ...d, percent: e.target.value } : d))}
+                />
+              </FormField>
+              <FormField label={t('customers.pricing.assignmentFixedField')} htmlFor="as-fixed" hint={t('customers.pricing.assignmentFixedHint')}>
+                <input
+                  id="as-fixed"
+                  type="number"
+                  step="0.01"
+                  value={assignmentDraft.fixed}
+                  onChange={(e) => setAssignmentDraft((d) => (d ? { ...d, fixed: e.target.value } : d))}
+                />
+              </FormField>
+            </div>
+            <div className="issued-items-form-row">
+              <FormField label={t('customers.pricing.validFromField')} htmlFor="as-from">
+                <input
+                  id="as-from"
+                  type="date"
+                  value={assignmentDraft.effectiveFrom}
+                  onChange={(e) => setAssignmentDraft((d) => (d ? { ...d, effectiveFrom: e.target.value } : d))}
+                />
+              </FormField>
+              <FormField label={t('customers.pricing.validUntilField')} htmlFor="as-until" hint={t('customers.pricing.validUntilHint')}>
+                <input
+                  id="as-until"
+                  type="date"
+                  value={assignmentDraft.effectiveUntil}
+                  onChange={(e) => setAssignmentDraft((d) => (d ? { ...d, effectiveUntil: e.target.value } : d))}
+                />
+              </FormField>
+            </div>
+          </form>
+        </Modal>
       )}
 
       {draft && (
@@ -867,36 +1361,36 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
                 <input id="pr-name" value={draft.name} onChange={(e) => setDraft((d) => (d ? { ...d, name: e.target.value } : d))} maxLength={200} />
               </FormField>
               <FormField label={t('customers.pricing.priceBasisField')} htmlFor="pr-basis" hint={t('customers.pricing.priceBasisHint')}>
-                <select
+                <SearchableSelect
                   id="pr-basis"
                   value={toPrimarySelectValue(draft.basis)}
-                  onChange={(e) => {
-                    const value = e.target.value
+                  onChange={(value) => {
+                    if (!value) return
                     setDraft((d) => (d ? { ...d, basis: value === 'unit' ? 'QuantityBracket' : (value as PriceRuleBasis) } : d))
                   }}
-                >
-                  {Object.entries(PRIMARY_BASIS_LABELS).map(([value, label]) => (
-                    <option key={value} value={value}>
-                      {label}
-                    </option>
-                  ))}
-                  {(draft.basis === 'PerPallet' || draft.basis === 'PerTon') && (
-                    <option value={draft.basis}>{PRICE_RULE_BASIS_LABELS[draft.basis]}</option>
-                  )}
-                </select>
+                  options={primaryBasisOptions}
+                  clearable={false}
+                  ariaLabel={t('customers.pricing.priceBasisField')}
+                />
               </FormField>
             </div>
             {(draft.basis === 'PerUnit' || draft.basis === 'QuantityBracket') && (
               <div className="issued-items-form-row">
                 <FormField label={t('customers.pricing.methodField')} htmlFor="pr-method">
-                  <select
+                  <SearchableSelect
                     id="pr-method"
                     value={draft.basis}
-                    onChange={(e) => setDraft((d) => (d ? { ...d, basis: e.target.value as PriceRuleBasis } : d))}
-                  >
-                    <option value="QuantityBracket">{t('customers.pricing.methodQuantityBracket')}</option>
-                    <option value="PerUnit">{t('customers.pricing.methodPerUnit')}</option>
-                  </select>
+                    onChange={(value) => {
+                      if (!value) return
+                      setDraft((d) => (d ? { ...d, basis: value as PriceRuleBasis } : d))
+                    }}
+                    options={[
+                      { value: 'QuantityBracket', label: t('customers.pricing.methodQuantityBracket') },
+                      { value: 'PerUnit', label: t('customers.pricing.methodPerUnit') },
+                    ]}
+                    clearable={false}
+                    ariaLabel={t('customers.pricing.methodField')}
+                  />
                 </FormField>
               </div>
             )}
@@ -907,25 +1401,25 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
                   htmlFor="pr-unit"
                   hint={draft.basis === 'Hourly' ? t('customers.pricing.unitHintHourly') : t('customers.pricing.unitHint')}
                 >
-                  <select id="pr-unit" value={draft.unitTypeId} onChange={(e) => setDraft((d) => (d ? { ...d, unitTypeId: e.target.value } : d))}>
-                    <option value="">{t('customers.pricing.chooseUnitOption')}</option>
-                    {pricingUnits.map((unit) => (
-                      <option key={unit.id} value={unit.id}>
-                        {unit.name}
-                      </option>
-                    ))}
-                  </select>
+                  <SearchableSelect
+                    id="pr-unit"
+                    value={draft.unitTypeId || null}
+                    onChange={(value) => setDraft((d) => (d ? { ...d, unitTypeId: value ?? '' } : d))}
+                    options={unitOptions}
+                    placeholder={t('customers.pricing.chooseUnitOption')}
+                    ariaLabel={t('customers.pricing.columnUnit')}
+                  />
                 </FormField>
               )}
               <FormField label={t('customers.pricing.columnZone')} htmlFor="pr-zone" hint={t('customers.pricing.zoneHint')}>
-                <select id="pr-zone" value={draft.zoneId} onChange={(e) => setDraft((d) => (d ? { ...d, zoneId: e.target.value } : d))}>
-                  <option value="">{t('customers.pricing.allOption')}</option>
-                  {zones.map((zone) => (
-                    <option key={zone.id} value={zone.id}>
-                      {zone.code} — {zone.name}
-                    </option>
-                  ))}
-                </select>
+                <SearchableSelect
+                  id="pr-zone"
+                  value={draft.zoneId || null}
+                  onChange={(value) => setDraft((d) => (d ? { ...d, zoneId: value ?? '' } : d))}
+                  options={zoneOptions}
+                  placeholder={t('customers.pricing.allOption')}
+                  ariaLabel={t('customers.pricing.columnZone')}
+                />
               </FormField>
             </div>
             <div className="issued-items-form-row">
@@ -934,14 +1428,16 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
                 htmlFor="pr-agreement"
                 hint={t('customers.pricing.agreementFieldHint')}
               >
-                <select id="pr-agreement" value={draft.agreementId} onChange={(e) => setDraft((d) => (d ? { ...d, agreementId: e.target.value } : d))}>
-                  <option value="">{t('customers.pricing.looseRuleOption')}</option>
-                  {agreements.filter((agreement) => !agreement.baseAgreementId).map((agreement) => (
-                    <option key={agreement.id} value={agreement.id}>
-                      {agreement.name}
-                    </option>
-                  ))}
-                </select>
+                <SearchableSelect
+                  id="pr-agreement"
+                  value={draft.agreementId || null}
+                  onChange={(value) => setDraft((d) => (d ? { ...d, agreementId: value ?? '' } : d))}
+                  options={agreements
+                    .filter((agreement) => !agreement.baseAgreementId)
+                    .map((agreement) => ({ value: agreement.id, label: agreement.name }))}
+                  placeholder={t('customers.pricing.looseRuleOption')}
+                  ariaLabel={t('customers.pricing.columnAgreement')}
+                />
               </FormField>
               <FormField label={t('customers.pricing.priorityField')} htmlFor="pr-priority" hint={t('customers.pricing.priorityHint')}>
                 <input id="pr-priority" type="number" value={draft.priority} onChange={(e) => setDraft((d) => (d ? { ...d, priority: e.target.value } : d))} />
@@ -1004,17 +1500,17 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
                     htmlFor="pr-bracket-mode"
                     hint={t('customers.pricing.bracketModeHint')}
                   >
-                    <select
+                    <SearchableSelect
                       id="pr-bracket-mode"
                       value={draft.bracketMode}
-                      onChange={(e) => setDraft((d) => (d ? { ...d, bracketMode: e.target.value as BracketSelectionMode } : d))}
-                    >
-                      {Object.entries(BRACKET_SELECTION_MODE_LABELS).map(([value, label]) => (
-                        <option key={value} value={value}>
-                          {label}
-                        </option>
-                      ))}
-                    </select>
+                      onChange={(value) => {
+                        if (!value) return
+                        setDraft((d) => (d ? { ...d, bracketMode: value as BracketSelectionMode } : d))
+                      }}
+                      options={Object.entries(BRACKET_SELECTION_MODE_KEYS).map(([value, key]) => ({ value, label: t(key) }))}
+                      clearable={false}
+                      ariaLabel={t('customers.pricing.bracketModeField')}
+                    />
                   </FormField>
                 )}
                 <label className="tof-checkbox">
@@ -1160,20 +1656,16 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
                 htmlFor="pa-base"
                 hint={t('customers.pricing.baseTableHint')}
               >
-                <select
+                <SearchableSelect
                   id="pa-base"
-                  value={agreementDraft.baseAgreementId}
-                  onChange={(e) => setAgreementDraft((d) => (d ? { ...d, baseAgreementId: e.target.value } : d))}
-                >
-                  <option value="">{t('customers.pricing.noBaseTableOption')}</option>
-                  {baseTableOptions
+                  value={agreementDraft.baseAgreementId || null}
+                  onChange={(value) => setAgreementDraft((d) => (d ? { ...d, baseAgreementId: value ?? '' } : d))}
+                  options={baseTableOptions
                     .filter((a) => a.id !== agreementDraft.agreement?.id)
-                    .map((a) => (
-                      <option key={a.id} value={a.id}>
-                        {a.name}
-                      </option>
-                    ))}
-                </select>
+                    .map((a) => ({ value: a.id, label: a.name }))}
+                  placeholder={t('customers.pricing.noBaseTableOption')}
+                  ariaLabel={t('customers.pricing.baseTableField')}
+                />
               </FormField>
               {agreementDraft.baseAgreementId && (
                 <>
@@ -1212,41 +1704,35 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
                           )
                         }
                       />
-                      <select
-                        aria-label={t('customers.pricing.modifierZoneAria', { index: index + 1 })}
-                        value={modifier.zoneId}
-                        onChange={(e) =>
+                      <SearchableSelect
+                        ariaLabel={t('customers.pricing.modifierZoneAria', { index: index + 1 })}
+                        value={modifier.zoneId || null}
+                        onChange={(value) =>
                           setAgreementDraft((d) =>
-                            d ? { ...d, modifiers: d.modifiers.map((m, i) => (i === index ? { ...m, zoneId: e.target.value } : m)) } : d,
+                            d ? { ...d, modifiers: d.modifiers.map((m, i) => (i === index ? { ...m, zoneId: value ?? '' } : m)) } : d,
                           )
                         }
-                      >
-                        <option value="">{t('customers.pricing.allZonesOption')}</option>
-                        {zones.map((zone) => (
-                          <option key={zone.id} value={zone.id}>
-                            {zone.code} — {zone.name}
-                          </option>
-                        ))}
-                      </select>
-                      <select
-                        aria-label={t('customers.pricing.modifierKindAria', { index: index + 1 })}
+                        options={zoneOptions}
+                        placeholder={t('customers.pricing.allZonesOption')}
+                      />
+                      <SearchableSelect
+                        ariaLabel={t('customers.pricing.modifierKindAria', { index: index + 1 })}
                         value={modifier.mode}
-                        onChange={(e) =>
+                        onChange={(value) =>
                           setAgreementDraft((d) =>
                             d
                               ? {
                                   ...d,
                                   modifiers: d.modifiers.map((m, i) =>
-                                    i === index ? { ...m, mode: e.target.value as 'Percent' | 'Fixed' } : m,
+                                    i === index ? { ...m, mode: (value ?? 'Percent') as 'Percent' | 'Fixed' } : m,
                                   ),
                                 }
                               : d,
                           )
                         }
-                      >
-                        <option value="Percent">{t('customers.pricing.kindPercent')}</option>
-                        <option value="Fixed">{t('customers.pricing.kindFixed')}</option>
-                      </select>
+                        options={kindOptions}
+                        clearable={false}
+                      />
                       <input
                         aria-label={t('customers.pricing.modifierValueAria', { index: index + 1 })}
                         type="number"
@@ -1304,11 +1790,24 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
                 <div key={index} className="issued-items-form-row customer-rule-bracket">
                   <input aria-label={t('customers.pricing.surchargeNameAria', { index: index + 1 })} placeholder={t('customers.pricing.namePlaceholder')} value={surcharge.name}
                     onChange={(e) => setAgreementDraft((d) => (d ? { ...d, surcharges: d.surcharges.map((s, i) => (i === index ? { ...s, name: e.target.value } : s)) } : d))} />
-                  <select aria-label={t('customers.pricing.surchargeKindAria', { index: index + 1 })} value={surcharge.kind}
-                    onChange={(e) => setAgreementDraft((d) => (d ? { ...d, surcharges: d.surcharges.map((s, i) => (i === index ? { ...s, kind: e.target.value as 'Percent' | 'Fixed' } : s)) } : d))}>
-                    <option value="Percent">{t('customers.pricing.kindPercent')}</option>
-                    <option value="Fixed">{t('customers.pricing.kindFixed')}</option>
-                  </select>
+                  <SearchableSelect
+                    ariaLabel={t('customers.pricing.surchargeKindAria', { index: index + 1 })}
+                    value={surcharge.kind}
+                    onChange={(value) =>
+                      setAgreementDraft((d) =>
+                        d
+                          ? {
+                              ...d,
+                              surcharges: d.surcharges.map((s, i) =>
+                                i === index ? { ...s, kind: (value ?? 'Percent') as SurchargeKind } : s,
+                              ),
+                            }
+                          : d,
+                      )
+                    }
+                    options={kindOptions}
+                    clearable={false}
+                  />
                   <input aria-label={t('customers.pricing.surchargeValueAria', { index: index + 1 })} type="number" step="0.01" placeholder={t('customers.pricing.valuePlaceholder')} value={surcharge.value}
                     onChange={(e) => setAgreementDraft((d) => (d ? { ...d, surcharges: d.surcharges.map((s, i) => (i === index ? { ...s, value: e.target.value } : s)) } : d))} />
                   <Button variant="ghost" onClick={() => setAgreementDraft((d) => (d ? { ...d, surcharges: d.surcharges.filter((_, i) => i !== index) } : d))}>
@@ -1343,6 +1842,20 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
           destructive
           onConfirm={handleDeleteAgreement}
           onCancel={() => setDeleteAgreementTarget(null)}
+        />
+      )}
+
+      {resetServiceTarget && (
+        <ConfirmDialog
+          title={t('customers.pricing.resetOverrideTitle')}
+          message={t('customers.pricing.resetOverrideMessage', {
+            name: resetServiceTarget.name,
+            value: formatServiceValue(resetServiceTarget.kind, resetServiceTarget.defaultValue, resetServiceTarget.meta?.unitTypeName, t),
+          })}
+          confirmLabel={t('customers.pricing.useGeneralValueAgain')}
+          destructive
+          onConfirm={handleResetService}
+          onCancel={() => setResetServiceTarget(null)}
         />
       )}
     </section>

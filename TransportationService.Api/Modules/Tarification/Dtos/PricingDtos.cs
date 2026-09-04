@@ -227,6 +227,45 @@ public record SaveCustomerOptionPriceRequest(
     DateOnly? EffectiveFrom = null, DateOnly? EffectiveUntil = null,
     bool? AutoApplyOverride = null);
 
+// --- Customer tariff base (customer detail "Tarieven & toeslagen") ---
+
+/// <summary>
+/// One rate table that prices (or will price) a specific customer: the customer's own private
+/// tables plus every shared table that has an assignment for that customer. Read model for the
+/// customer detail's "Tariefbasis" section — replaces the client-side fan-out over
+/// GET api/pricing/agreements/{id}/assignments (docs/pricing.md §11.4).
+/// </summary>
+public record CustomerAgreementLinkDto(
+    Guid AgreementId, string Name, bool IsShared,
+    DateOnly EffectiveFrom, DateOnly? EffectiveUntil, bool IsActive,
+    decimal? MinimumAmount, decimal? MaximumAmount,
+    /// <summary>Set => derived table ("NL = BE +30%"); rules come from the base-chain root.</summary>
+    Guid? BaseAgreementId = null, string? BaseAgreementName = null,
+    /// <summary>Shared tables only: this customer's assignment (adjustment + own validity window).</summary>
+    Guid? AssignmentId = null,
+    decimal? AssignmentPercentAdjustment = null, decimal? AssignmentFixedAdjustment = null,
+    DateOnly? AssignmentEffectiveFrom = null, DateOnly? AssignmentEffectiveUntil = null,
+    /// <summary>Earliest agreement-scoped scheduled adjustment that is still planned (not yet effective).</summary>
+    DateOnly? PlannedAdjustmentDate = null,
+    decimal? PlannedAdjustmentPercent = null, decimal? PlannedAdjustmentAmountDelta = null);
+
+/// <summary>
+/// One bracket-row deviation ("klantafwijking") of one customer, with the rule/table context and
+/// the CURRENT standard price of the targeted bracket row — a read model for the customer detail
+/// ("welke staffelprijzen wijken af voor deze klant?"). Standard values are null and
+/// <see cref="Orphaned"/> is true when the targeted row no longer exists on the rule (same
+/// value-identity matching as the rule-scoped listing). Never a second pricing engine: the
+/// effective application stays in <see cref="PricingEngine"/>.
+/// </summary>
+public record CustomerBracketOverrideRowDto(
+    Guid Id, Guid PriceRuleId, string RuleName,
+    Guid? AgreementId, string? AgreementName, string? UnitTypeName,
+    decimal FromQuantity, decimal? ToQuantity,
+    decimal? WeightToKg, decimal? VolumeToM3, decimal? LoadingMetersTo,
+    decimal? StandardPrice, decimal? StandardPricePerExtraUnit,
+    decimal Price, decimal? PricePerExtraUnit,
+    DateOnly? EffectiveFrom, DateOnly? EffectiveUntil, bool Orphaned);
+
 // --- Scheduled price adjustments ---
 
 public record PriceAdjustmentValueChange(string Field, decimal OldValue, decimal NewValue);

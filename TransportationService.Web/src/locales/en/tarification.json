@@ -730,5 +730,12 @@
     "staffelprijs": "Bracket price",
     "volumeTot": "Volume up to (m³)",
     "zone": "Zone"
+  },
+  "primaryBasis": {
+    "unit": "Per unit"
+  },
+  "bracketMode": {
+    "Absolute": "Absolute (bracket price)",
+    "PerNextUnit": "Per next unit (sum per piece)"
   }
 }

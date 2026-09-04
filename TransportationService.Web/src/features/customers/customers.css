@@ -11,3 +11,63 @@
   grid-template-columns: repeat(4, 1fr) auto;
   align-items: center;
 }
+
+/* Tarieven & toeslagen — sectioned layout (2026-09 rework) */
+
+.customer-pricing-panel .ui-form-section + .ui-form-section {
+  margin-top: 20px;
+}
+
+/* Per-section primary action, right-aligned in the section header area. */
+.customer-pricing-section-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}
+
+/* Name/amount cells stack a value with badges and a muted note without inflating row height. */
+.customer-pricing-cell {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+}
+
+.customer-pricing-cell .customer-form-muted {
+  display: block;
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 12px;
+}
+
+.customer-pricing-chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.customer-pricing-diesel {
+  margin: 4px 0 8px;
+}
+
+/* Technical unit/EDI mapping: collapsed disclosure at the bottom of the tab. */
+.customer-units-details > summary {
+  cursor: pointer;
+  list-style-position: outside;
+}
+
+.customer-units-details > summary h3 {
+  display: inline;
+  margin: 0;
+}
+
+.customer-units-add {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 12px;
+}
+
+.customer-units-add > :first-child {
+  min-width: 260px;
+}

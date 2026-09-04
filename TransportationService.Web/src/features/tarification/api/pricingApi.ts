@@ -277,6 +277,18 @@ export const PRIMARY_BASIS_LABELS: Record<PrimaryPricingBasis, string> = {
   Fixed: 'Forfait / vaste prijs',
 }
 
+/** Vertaalsleutels — renderen als t(PRIMARY_BASIS_KEYS[basis]). */
+export const PRIMARY_BASIS_KEYS: Record<PrimaryPricingBasis, string> = {
+  unit: 'tarification.primaryBasis.unit',
+  WeightBracket: 'tarification.basis.WeightBracket',
+  Hourly: 'tarification.basis.Hourly',
+  PerKm: 'tarification.basis.PerKm',
+  PerLoadingMeter: 'tarification.basis.PerLoadingMeter',
+  PerVolume: 'tarification.basis.PerVolume',
+  PerStop: 'tarification.basis.PerStop',
+  Fixed: 'tarification.basis.Fixed',
+}
+
 export interface PriceRuleBracket {
   id: string
   fromQuantity: number
@@ -295,6 +307,12 @@ export type BracketSelectionMode = 'Absolute' | 'PerNextUnit'
 export const BRACKET_SELECTION_MODE_LABELS: Record<BracketSelectionMode, string> = {
   Absolute: 'Absoluut (prijs van de staffel)',
   PerNextUnit: 'Per volgende eenheid (som per stuk)',
+}
+
+/** Vertaalsleutels — renderen als t(BRACKET_SELECTION_MODE_KEYS[mode]). */
+export const BRACKET_SELECTION_MODE_KEYS: Record<BracketSelectionMode, string> = {
+  Absolute: 'tarification.bracketMode.Absolute',
+  PerNextUnit: 'tarification.bracketMode.PerNextUnit',
 }
 
 export interface PriceRule {
@@ -592,6 +610,66 @@ export const saveCustomerPricingConfig = (
   customerId: string,
   input: CustomerPricingConfigInput,
 ): Promise<CustomerPricingConfig> => apiClient.putJson(`/api/customers/${customerId}/pricing-config`, input)
+
+/**
+ * One rate table that prices (or will price) a specific customer — own private tables plus every
+ * shared table with an assignment for that customer, in one call (no per-table fan-out).
+ */
+export interface CustomerAgreementLink {
+  agreementId: string
+  name: string
+  isShared: boolean
+  effectiveFrom: string
+  effectiveUntil: string | null
+  isActive: boolean
+  minimumAmount: number | null
+  maximumAmount: number | null
+  /** Set => derived table ("NL = BE +30%"); rules come from the base-chain root. */
+  baseAgreementId: string | null
+  baseAgreementName: string | null
+  /** Shared tables only: this customer's assignment (adjustment + own validity window). */
+  assignmentId: string | null
+  assignmentPercentAdjustment: number | null
+  assignmentFixedAdjustment: number | null
+  assignmentEffectiveFrom: string | null
+  assignmentEffectiveUntil: string | null
+  /** Earliest agreement-scoped scheduled adjustment that is still planned (not yet effective). */
+  plannedAdjustmentDate: string | null
+  plannedAdjustmentPercent: number | null
+  plannedAdjustmentAmountDelta: number | null
+}
+
+export const listCustomerAgreements = (customerId: string): Promise<CustomerAgreementLink[]> =>
+  apiClient.getJson(`/api/customers/${customerId}/pricing-agreements`)
+
+/**
+ * One bracket-row deviation ("klantafwijking") of this customer with rule/table context and the
+ * CURRENT standard price of the targeted row. Standard values are null and `orphaned` true when
+ * the targeted row no longer exists on the rule. Pure read model — application stays server-side.
+ */
+export interface CustomerBracketOverrideRow {
+  id: string
+  priceRuleId: string
+  ruleName: string
+  agreementId: string | null
+  agreementName: string | null
+  unitTypeName: string | null
+  fromQuantity: number
+  toQuantity: number | null
+  weightToKg: number | null
+  volumeToM3: number | null
+  loadingMetersTo: number | null
+  standardPrice: number | null
+  standardPricePerExtraUnit: number | null
+  price: number
+  pricePerExtraUnit: number | null
+  effectiveFrom: string | null
+  effectiveUntil: string | null
+  orphaned: boolean
+}
+
+export const listCustomerBracketOverrides = (customerId: string): Promise<CustomerBracketOverrideRow[]> =>
+  apiClient.getJson(`/api/customers/${customerId}/bracket-overrides`)
 
 // --- Unit type settings ---
 

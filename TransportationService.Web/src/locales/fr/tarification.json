@@ -730,5 +730,12 @@
     "staffelprijs": "Prix de tranche",
     "volumeTot": "Volume jusqu’à (m³)",
     "zone": "Zone"
+  },
+  "primaryBasis": {
+    "unit": "Par unité"
+  },
+  "bracketMode": {
+    "Absolute": "Absolu (prix de la tranche)",
+    "PerNextUnit": "Par unité suivante (somme par pièce)"
   }
 }

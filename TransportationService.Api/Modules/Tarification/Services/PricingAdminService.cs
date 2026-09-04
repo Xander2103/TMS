@@ -71,6 +71,21 @@ public interface IPricingAdminService
     Task<CustomerPricingConfigDto?> GetCustomerConfigAsync(Guid customerId, CancellationToken cancellationToken);
     Task<CustomerPricingConfigDto?> SaveCustomerConfigAsync(Guid customerId, SaveCustomerPricingConfigRequest request, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Every rate table that applies (or will apply) to one customer in a single call: the
+    /// customer's own private tables plus the shared tables with an assignment for that customer,
+    /// each with the assignment adjustment/window and the earliest still-planned agreement-scoped
+    /// price adjustment. Null = the customer does not exist for this tenant.
+    /// </summary>
+    Task<IReadOnlyList<CustomerAgreementLinkDto>?> ListCustomerAgreementsAsync(Guid customerId, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Every bracket-row deviation of one customer across ALL rules, with rule/table context and
+    /// the current standard price of the targeted row (customer detail read model). Null = the
+    /// customer does not exist for this tenant.
+    /// </summary>
+    Task<IReadOnlyList<CustomerBracketOverrideRowDto>?> ListCustomerBracketOverridesAsync(Guid customerId, CancellationToken cancellationToken);
+
     /// <summary>customerId/agreementId filter; both null lists every combined-unit discount of the tenant.</summary>
     Task<IReadOnlyList<CombinedUnitDiscountDto>> ListCombinedDiscountsAsync(Guid? customerId, Guid? agreementId, CancellationToken cancellationToken);
     Task<CombinedUnitDiscountDto> CreateCombinedDiscountAsync(SaveCombinedUnitDiscountRequest request, CancellationToken cancellationToken);
@@ -1494,6 +1509,132 @@ public class PricingAdminService : IPricingAdminService
             .ToList();
 
         return new CustomerPricingConfigDto(preferred, optionDtos);
+    }
+
+    public async Task<IReadOnlyList<CustomerAgreementLinkDto>?> ListCustomerAgreementsAsync(
+        Guid customerId, CancellationToken cancellationToken)
+    {
+        if (!await _dbContext.Customers.AnyAsync(c => c.TenantId == TenantId && c.Id == customerId, cancellationToken))
+        {
+            return null;
+        }
+
+        var own = await _dbContext.PricingAgreements.AsNoTracking()
+            .Where(a => a.TenantId == TenantId && a.CustomerId == customerId)
+            .ToListAsync(cancellationToken);
+
+        // Shared tables reach a customer only through an assignment; one row per assignment so a
+        // customer linked to two versions of a table sees both windows.
+        var assigned = await _dbContext.PricingAgreementAssignments.AsNoTracking()
+            .Where(x => x.TenantId == TenantId && x.CustomerId == customerId)
+            .Join(_dbContext.PricingAgreements.AsNoTracking().Where(a => a.TenantId == TenantId),
+                x => x.AgreementId, a => a.Id,
+                (x, a) => new { Assignment = x, Agreement = a })
+            .ToListAsync(cancellationToken);
+
+        var agreementIds = own.Select(a => a.Id).Concat(assigned.Select(x => x.Agreement.Id)).Distinct().ToList();
+
+        var baseIds = own.Concat(assigned.Select(x => x.Agreement))
+            .Where(a => a.BaseAgreementId is not null)
+            .Select(a => a.BaseAgreementId!.Value).Distinct().ToList();
+        var baseNames = baseIds.Count == 0
+            ? new Dictionary<Guid, string>()
+            : await _dbContext.PricingAgreements.AsNoTracking()
+                .Where(a => a.TenantId == TenantId && baseIds.Contains(a.Id))
+                .ToDictionaryAsync(a => a.Id, a => a.Name, cancellationToken);
+
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var plannedByAgreement = agreementIds.Count == 0
+            ? new Dictionary<Guid, ScheduledPriceAdjustment>()
+            : (await _dbContext.ScheduledPriceAdjustments.AsNoTracking()
+                .Where(s => s.TenantId == TenantId && s.AgreementId != null && agreementIds.Contains(s.AgreementId.Value)
+                            && s.Status == ScheduledAdjustmentStatus.Scheduled && s.EffectiveDate > today)
+                .ToListAsync(cancellationToken))
+                .GroupBy(s => s.AgreementId!.Value)
+                .ToDictionary(g => g.Key, g => g.OrderBy(s => s.EffectiveDate).First());
+
+        CustomerAgreementLinkDto Map(PricingAgreement a, PricingAgreementAssignment? assignment)
+        {
+            var planned = plannedByAgreement.GetValueOrDefault(a.Id);
+            return new CustomerAgreementLinkDto(
+                a.Id, a.Name, a.IsShared,
+                a.EffectiveFrom, a.EffectiveUntil, a.IsActive,
+                a.MinimumAmount, a.MaximumAmount,
+                a.BaseAgreementId,
+                a.BaseAgreementId is { } baseId ? baseNames.GetValueOrDefault(baseId) : null,
+                assignment?.Id,
+                assignment?.PercentAdjustment, assignment?.FixedAdjustment,
+                assignment?.EffectiveFrom, assignment?.EffectiveUntil,
+                planned?.EffectiveDate, planned?.Percent, planned?.AmountDelta);
+        }
+
+        return assigned
+            .OrderByDescending(x => x.Agreement.EffectiveFrom).ThenBy(x => x.Agreement.Name)
+            .Select(x => Map(x.Agreement, x.Assignment))
+            .Concat(own
+                .OrderByDescending(a => a.EffectiveFrom).ThenBy(a => a.Name)
+                .Select(a => Map(a, null)))
+            .ToList();
+    }
+
+    public async Task<IReadOnlyList<CustomerBracketOverrideRowDto>?> ListCustomerBracketOverridesAsync(
+        Guid customerId, CancellationToken cancellationToken)
+    {
+        if (!await _dbContext.Customers.AnyAsync(c => c.TenantId == TenantId && c.Id == customerId, cancellationToken))
+        {
+            return null;
+        }
+
+        var overrides = await _dbContext.PriceRuleBracketOverrides.AsNoTracking()
+            .Where(o => o.TenantId == TenantId && o.CustomerId == customerId)
+            .ToListAsync(cancellationToken);
+        if (overrides.Count == 0)
+        {
+            return [];
+        }
+
+        // Fixed number of queries regardless of override count (no per-rule fan-out).
+        var ruleIds = overrides.Select(o => o.PriceRuleId).Distinct().ToList();
+        var rules = await _dbContext.PriceRules.AsNoTracking()
+            .Include(r => r.Brackets)
+            .Where(r => r.TenantId == TenantId && ruleIds.Contains(r.Id))
+            .ToDictionaryAsync(r => r.Id, cancellationToken);
+        var agreementIds = rules.Values.Where(r => r.AgreementId is not null).Select(r => r.AgreementId!.Value).Distinct().ToList();
+        var agreementNames = agreementIds.Count == 0
+            ? new Dictionary<Guid, string>()
+            : await _dbContext.PricingAgreements.AsNoTracking()
+                .Where(a => a.TenantId == TenantId && agreementIds.Contains(a.Id))
+                .ToDictionaryAsync(a => a.Id, a => a.Name, cancellationToken);
+        var unitIds = rules.Values.Where(r => r.UnitTypeId is not null).Select(r => r.UnitTypeId!.Value).Distinct().ToList();
+        var unitNames = unitIds.Count == 0
+            ? new Dictionary<Guid, string>()
+            : await _dbContext.UnitTypes.AsNoTracking()
+                .Where(u => u.TenantId == TenantId && unitIds.Contains(u.Id))
+                .ToDictionaryAsync(u => u.Id, u => u.Name, cancellationToken);
+
+        return overrides
+            .Select(o =>
+            {
+                var rule = rules.GetValueOrDefault(o.PriceRuleId);
+                // Same value-identity match as the rule-scoped listing (MapBracketOverridesAsync):
+                // ids never survive row replacement, the value identity does.
+                var standardRow = rule?.Brackets.FirstOrDefault(b =>
+                    b.FromQuantity == o.FromQuantity && b.ToQuantity == o.ToQuantity
+                    && b.WeightToKg == o.WeightToKg && b.VolumeToM3 == o.VolumeToM3
+                    && b.LoadingMetersTo == o.LoadingMetersTo);
+                return new CustomerBracketOverrideRowDto(
+                    o.Id, o.PriceRuleId, rule?.Name ?? "?",
+                    rule?.AgreementId,
+                    rule?.AgreementId is { } agreementId ? agreementNames.GetValueOrDefault(agreementId) : null,
+                    rule?.UnitTypeId is { } unitTypeId ? unitNames.GetValueOrDefault(unitTypeId) : null,
+                    o.FromQuantity, o.ToQuantity, o.WeightToKg, o.VolumeToM3, o.LoadingMetersTo,
+                    standardRow?.Price, standardRow?.PricePerExtraUnit,
+                    o.Price, o.PricePerExtraUnit,
+                    o.EffectiveFrom, o.EffectiveUntil,
+                    Orphaned: standardRow is null);
+            })
+            .OrderBy(r => r.AgreementName ?? string.Empty).ThenBy(r => r.RuleName).ThenBy(r => r.FromQuantity)
+            .ToList();
     }
 
     public async Task<CustomerPricingConfigDto?> SaveCustomerConfigAsync(

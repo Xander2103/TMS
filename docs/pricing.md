@@ -58,8 +58,14 @@ naslagwerk voor wie met deze code moet werken.
   (`AgreementValidationPanel.tsx`, zie §4) + export/import-acties (`PricingImportDialog.tsx`).
 - `features/tarification/pages/PricingSettingsPage.tsx` — zones, diensten (`ServiceOptionsEditor.tsx`),
   eenheden (`UnitTypeMasterEditor.tsx`).
-- `features/customers/components/CustomerUnitPricingPanel.tsx` — klanttab "Tarieven": eigen
-  regels, gekoppelde gedeelde tabellen, dienstoverrides, eenheidvoorkeuren, prijsaanpassingen.
+- `features/customers/components/CustomerUnitPricingPanel.tsx` — klanttab "Tarieven & toeslagen"
+  (herwerkt 2026-09-02): drie secties in leesvolgorde — **Tariefbasis** (eigen + toegewezen
+  gedeelde tabellen via `GET api/customers/{id}/pricing-agreements`, gedeelde tabellen alleen
+  Bekijken + koppelingsaanpassing), **Toeslagen & diensten** (samengevoegde dienstweergave met
+  voorwaarde-chips incl. tijdsvoorwaarden, modal-bewerking per rij — nooit blur-autosave) en
+  **Afwijkende prijzen** (klantregels actueel+gepland met statusbadge, historiek achter
+  disclosure). Eenheden/EDI-mapping staat onderaan de tab in `CustomerUnitsPanel`
+  ("Eenheden & externe codes", ingeklapt).
 - Order-zijde: `features/transport-orders/pages/TransportOrderDetailPage.tsx` +
   `components/TransportOrderForm.tsx` — het "Prijs"-blok (regels, status, herberekenen, bevestigen).
 
@@ -483,10 +489,11 @@ Eerlijk overgenomen uit de code (geen van deze is "verborgen" — elk is hierond
    `RecalculateOrderPricingAsync`-endpoint, dat stops nooit vervangt (enkel de prijs herberekent) —
    dat is precies waarom testcode die stop-executies simuleert een reflectie-oproep naar
    `ApplyPricingAsync` gebruikt in plaats van een gewone save (zie `OneOffPricingTests.RepriceAsync`).
-4. **De front-end klantpaneel haalt per gedeelde tabel apart de koppelingen op (N+1-achtig).**
-   `CustomerUnitPricingPanel.tsx` doet `sharedTables.map(a => getAgreementAssignments(a.id))` in
-   een `Promise.all` — parallel, maar wel N aparte requests in plaats van één samengestelde
-   endpoint. Merkbaar pas bij veel gedeelde tabellen; geen correctheidsprobleem.
+4. **[OPGELOST 2026-09-02]** De vroegere N+1 (per gedeelde tabel apart de koppelingen ophalen) is
+   vervangen door één samengesteld read-endpoint: `GET api/customers/{id}/pricing-agreements`
+   (`PricingAdminService.ListCustomerAgreementsAsync`) levert eigen + toegewezen gedeelde tabellen
+   incl. koppelingsaanpassing/venster en de eerstvolgende geplande tabel-aanpassing in één call
+   (`CustomerAgreementLinkDto`, tests `CustomerAgreementLinksTests`).
 5. **Combinatiekorting-groepen en de geprijsde eenheidsregel tellen vanuit twee verschillende
    bronnen.** `BuildPricingGroupsAsync` bouwt de combinatiekorting-groepen door per
    lossing-stop de `CargoItem.ExpectedQuantity` van de gekoppelde vrachtregels op te tellen
