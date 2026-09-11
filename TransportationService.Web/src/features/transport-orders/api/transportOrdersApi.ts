@@ -161,6 +161,22 @@ export function saveOrderPriceLines(orderId: string, lines: SaveOrderPriceLineIn
 }
 
 /** Explicit re-run of the pricing engine (merge-on-recalc); refused while Locked/Invoiced. */
+export interface SetOneOffPriceInput {
+  /** The agreed one-off amount (€ 0 is a valid price); null returns the order to contract pricing. */
+  fixedAmount: number | null
+  /** Optimistic-concurrency token of the loaded order; a stale token yields 409 with the current state. */
+  version: string | null
+}
+
+/**
+ * Price-only mutation (hardening 2026-09-11): sets/clears the one-off price agreement without
+ * sending — or validating — the route. Replaces the full order PUT for the dossier's agreed price.
+ */
+export function setOrderOneOffPrice(orderId: string, input: SetOneOffPriceInput): Promise<TransportOrderDetail> {
+  return apiClient.postJson<TransportOrderDetail, SetOneOffPriceInput>(
+    `/api/transport-orders/${orderId}/pricing/one-off`, input)
+}
+
 export function recalculateOrderPricing(orderId: string): Promise<TransportOrderDetail> {
   return apiClient.postJson<TransportOrderDetail, Record<string, never>>(
     `/api/transport-orders/${orderId}/pricing/recalculate`, {})

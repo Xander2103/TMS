@@ -211,6 +211,15 @@ public record SaveOrderPriceLineRequest(
 public record SetOrderPricingStatusRequest(OrderPricingStatus Status);
 
 /// <summary>
+/// Hardening 2026-09-11: the dossier's "Afgesproken prijs". A price-only mutation: sets
+/// <see cref="OrderPricingSource.OneOff"/> with <paramref name="FixedAmount"/> (€ 0 is a valid,
+/// intentional price) or, when <paramref name="FixedAmount"/> is null, returns the order to
+/// contract pricing. Never touches stops or goods, so an incomplete route cannot block it;
+/// route validation stays on the order PUT and the confirmation gate.
+/// </summary>
+public record SetOneOffPriceRequest(decimal? FixedAmount, Guid? Version = null);
+
+/// <summary>
 /// Body for "Prijs bevestigen" (wave 2026-08-04 §8/§10). UnpricedGoodsReason is only consulted —
 /// and then mandatory — when the coverage shows unpriced goods and the caller may override.
 /// </summary>

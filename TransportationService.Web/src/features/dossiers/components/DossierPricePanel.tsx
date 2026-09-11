@@ -7,14 +7,11 @@ import { FormField } from '../../../components/ui/FormField'
 import { useToast } from '../../../components/ui/toastContext'
 import { useLocale } from '../../../i18n/localeContext'
 import { euro } from '../../invoices/types'
-import { listServiceOptions, type ServiceOption } from '../../tarification/api/pricingApi'
-import { saveOrderPriceLines, updateTransportOrder } from '../../transport-orders/api/transportOrdersApi'
-import { buildSubmitPayload } from '../../transport-orders/components/sections/orderFormPayload'
+import { saveOrderPriceLines, setOrderOneOffPrice } from '../../transport-orders/api/transportOrdersApi'
 import { ORDER_PRICING_STATUS_LABELS, type OrderPricingLine, type TransportOrderDetail } from '../../transport-orders/types'
 import { createOrderForActivity } from '../api/dossiersApi'
 import { isDossierPriced } from '../dossierDisplay'
 import type { DossierActivity, DossierDetail } from '../types'
-import { orderValuesFromDetail } from './orderDrawerState'
 
 export interface DossierPricePanelHandle {
   /** Focuses the control that resolves the "price" readiness field. */
@@ -59,7 +56,8 @@ function parseAmount(raw: string): number | null | undefined {
  * concepts of the order instead of a new "price" field:
  *  - the dossier total (SUM of AgreedPrice over priced orders; "Nog geen prijs" when none is priced),
  *  - the agreed price = the order's one-off price agreement (PricingSource OneOff + fixed amount),
- *    saved through the same full-order PUT + version gate as the order form,
+ *    saved through the price-only command POST /pricing/one-off (version-gated; never the full
+ *    order PUT, which would re-validate an unrelated, still incomplete route),
  *  - the sales lines (TransportOrderPricingLine) with an inline free line (Kind Manual).
  * A manual override (PriceIsManual) or a locked pricing status keeps the panel read-only and
  * points to Prijsdetails; the dossier never invents a second source of truth.
@@ -89,7 +87,6 @@ export function DossierPricePanel({
   const addActivityRef = useRef<HTMLButtonElement>(null)
   const addLineButtonRef = useRef<HTMLButtonElement>(null)
 
-  const [serviceOptions, setServiceOptions] = useState<ServiceOption[]>([])
   const [agreedInput, setAgreedInput] = useState(() => currentAgreedAmount(order))
   const [agreedError, setAgreedError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -99,18 +96,6 @@ export function DossierPricePanel({
   const [lineUnitPrice, setLineUnitPrice] = useState('')
   const [lineError, setLineError] = useState<string | null>(null)
   const pendingLineFocus = useRef(false)
-
-  useEffect(() => {
-    let mounted = true
-    listServiceOptions(false, true)
-      .then((data) => {
-        if (mounted) setServiceOptions(data)
-      })
-      .catch(() => {})
-    return () => {
-      mounted = false
-    }
-  }, [])
 
   // The agreed-price field follows the order it belongs to (adjusted during render, see React's
   // "storing information from previous renders" pattern).
@@ -171,18 +156,10 @@ export function DossierPricePanel({
     setBusy(true)
     setAgreedError(null)
     try {
-      const values = orderValuesFromDetail(order, serviceOptions)
-      if (amount === null) {
-        values.pricingSource = 'Contract'
-        values.oneOffFixedAmount = ''
-        // Also drop the legacy agreed amount: the order must read as "unpriced" again.
-        values.agreedPrice = ''
-      } else {
-        values.pricingSource = 'OneOff'
-        values.oneOffFixedAmount = String(amount)
-        values.agreedPrice = ''
-      }
-      const updated = await updateTransportOrder(order.id, buildSubmitPayload(values))
+      // Price-only command (hardening 2026-09-11). The previous full order PUT echoed the loaded
+      // stops and so re-validated an incomplete route ("Elke stop heeft een locatie …") — a valid
+      // price must never depend on unrelated route data. Route rules stay on the route save.
+      const updated = await setOrderOneOffPrice(order.id, { fixedAmount: amount, version: order.version })
       toast.showSuccess(amount === null ? t('dossierSheet.price.agreedCleared') : t('dossierSheet.price.agreedSaved'))
       onOrderSaved(updated)
     } catch (err) {

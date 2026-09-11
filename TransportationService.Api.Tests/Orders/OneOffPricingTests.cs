@@ -843,4 +843,212 @@ public class OneOffPricingTests
         Assert.Contains("30", audit.OldValuesJson);
         Assert.Contains("60", audit.NewValuesJson);
     }
+
+    // ------------------------------------------ hardening 2026-09-11: price-only mutation (SetOneOffPriceAsync)
+
+    /// <summary>
+    /// An unloading stop without location AND without city — exactly what the order PUT refuses
+    /// ("Elke stop heeft een locatie of minstens een plaatsnaam nodig."). Inserted directly, as a
+    /// dossier route left half-finished by the planner.
+    /// </summary>
+    private static async Task<Guid> AddIncompleteStopAsync(Harness h, Guid orderId)
+    {
+        var stop = new TransportOrderStop
+        {
+            Id = Guid.NewGuid(), TenantId = h.TenantId, TransportOrderId = orderId, Sequence = 3,
+            StopType = StopType.Unloading, LocationId = null, LocationName = null, City = null, CountryCode = "BE",
+        };
+        h.Db.Context.TransportOrderStops.Add(stop);
+        await h.Db.Context.SaveChangesAsync();
+        return stop.Id;
+    }
+
+    /// <summary>
+    /// Regression (browser smoke 2026-09-11): saving a valid agreed price must not require the
+    /// unrelated route to be complete. The old path (full order PUT built from the detail) still
+    /// refuses — proving route validation is untouched — while the price-only command succeeds,
+    /// persists € 450, derives AgreedPrice and leaves the incomplete stop exactly as it was.
+    /// </summary>
+    [Fact]
+    public async Task SetOneOffPrice_SucceedsWithAnIncompleteRoute_WhileTheOrderPutStillRefusesIt()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var created = await h.Sut.CreateAsync(ContractRequest(h.CustomerId, quantity: 3), CancellationToken.None);
+        var orderId = created.Order!.Id;
+        var incompleteStopId = await AddIncompleteStopAsync(h, orderId);
+        var before = (await h.Sut.GetByIdAsync(orderId, CancellationToken.None))!;
+        Assert.Equal(3, before.Stops.Count);
+        Assert.False(OrderPricingState.IsPriced(await h.Db.Context.TransportOrders.AsNoTracking().SingleAsync(o => o.Id == orderId)));
+
+        // The previous coupling: the whole-order PUT re-validates the echoed stops.
+        var put = await h.Sut.UpdateAsync(orderId, BuildUpdateFrom(before) with { PricingSource = OrderPricingSource.OneOff, OneOffFixedAmount = 450m }, CancellationToken.None);
+        Assert.Equal(TransportOrderOperationOutcome.ValidationFailed, put.Outcome);
+        Assert.Equal("Elke stop heeft een locatie of minstens een plaatsnaam nodig.", put.Error);
+
+        // The price-only command does not.
+        var result = await h.Sut.SetOneOffPriceAsync(orderId, new SetOneOffPriceRequest(450m, before.Version), CancellationToken.None);
+        Assert.Equal(TransportOrderOperationOutcome.Success, result.Outcome);
+        Assert.Equal(OrderPricingSource.OneOff, result.Order!.PricingSource);
+        Assert.Equal(450m, result.Order.OneOffFixedAmount);
+        Assert.Equal(450m, result.Order.AgreedPrice);
+        Assert.NotEqual(before.Version, result.Order.Version);
+
+        // Persisted, priced, and the route is still exactly as incomplete as before.
+        var reloaded = (await h.Sut.GetByIdAsync(orderId, CancellationToken.None))!;
+        Assert.Equal(450m, reloaded.OneOffFixedAmount);
+        Assert.Equal(450m, reloaded.AgreedPrice);
+        var stored = await h.Db.Context.TransportOrders.AsNoTracking().SingleAsync(o => o.Id == orderId);
+        Assert.True(OrderPricingState.IsPriced(stored));
+        var stop = await h.Db.Context.TransportOrderStops.AsNoTracking().SingleAsync(s => s.Id == incompleteStopId);
+        Assert.Null(stop.LocationId);
+        Assert.Null(stop.City);
+        Assert.Equal(3, reloaded.Stops.Count);
+        // Route rules are still enforced where they belong: the order PUT keeps refusing the incomplete stop.
+        var putAgain = await h.Sut.UpdateAsync(orderId, BuildUpdateFrom(reloaded), CancellationToken.None);
+        Assert.Equal(TransportOrderOperationOutcome.ValidationFailed, putAgain.Outcome);
+    }
+
+    [Fact]
+    public async Task SetOneOffPrice_ZeroIsAnIntentionalPrice_EvenWithAnIncompleteRoute()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var created = await h.Sut.CreateAsync(ContractRequest(h.CustomerId, quantity: 3), CancellationToken.None);
+        await AddIncompleteStopAsync(h, created.Order!.Id);
+
+        var result = await h.Sut.SetOneOffPriceAsync(created.Order.Id, new SetOneOffPriceRequest(0m, created.Order.Version), CancellationToken.None);
+
+        Assert.Equal(TransportOrderOperationOutcome.Success, result.Outcome);
+        Assert.Equal(0m, result.Order!.OneOffFixedAmount);
+        Assert.Equal(0m, result.Order.AgreedPrice);
+        Assert.False(result.Order.PriceIsManual);
+        Assert.True(OrderPricingState.IsPriced(await h.Db.Context.TransportOrders.AsNoTracking().SingleAsync(o => o.Id == created.Order.Id)));
+    }
+
+    [Fact]
+    public async Task SetOneOffPrice_ClearsTheAgreementAgain_AndKeepsOneOffDetailsWhenOnlyTheAmountChanges()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var created = await h.Sut.CreateAsync(OneOffRequest(h.CustomerId, 300m, includedLoading: 30, extraHourlyRate: 60m, notes: "Vaste afspraak"), CancellationToken.None);
+
+        var changed = await h.Sut.SetOneOffPriceAsync(created.Order!.Id, new SetOneOffPriceRequest(450m, created.Order.Version), CancellationToken.None);
+        Assert.Equal(TransportOrderOperationOutcome.Success, changed.Outcome);
+        Assert.Equal(450m, changed.Order!.OneOffFixedAmount);
+        Assert.Equal(30, changed.Order.OneOffIncludedLoadingMinutes);
+        Assert.Equal(60m, changed.Order.OneOffExtraHourlyRate);
+        Assert.Equal("Vaste afspraak", changed.Order.OneOffNotes);
+
+        var cleared = await h.Sut.SetOneOffPriceAsync(created.Order.Id, new SetOneOffPriceRequest(null, changed.Order.Version), CancellationToken.None);
+        Assert.Equal(TransportOrderOperationOutcome.Success, cleared.Outcome);
+        Assert.Equal(OrderPricingSource.Contract, cleared.Order!.PricingSource);
+        Assert.Null(cleared.Order.OneOffFixedAmount);
+        Assert.Null(cleared.Order.OneOffIncludedLoadingMinutes);
+        // No contract tariff configured → unpriced again, never a silent € 0.
+        Assert.False(OrderPricingState.IsPriced(await h.Db.Context.TransportOrders.AsNoTracking().SingleAsync(o => o.Id == created.Order.Id)));
+    }
+
+    [Fact]
+    public async Task SetOneOffPrice_RejectsNegativeAmounts()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var created = await h.Sut.CreateAsync(ContractRequest(h.CustomerId, quantity: 3), CancellationToken.None);
+
+        var result = await h.Sut.SetOneOffPriceAsync(created.Order!.Id, new SetOneOffPriceRequest(-1m, created.Order.Version), CancellationToken.None);
+
+        Assert.Equal(TransportOrderOperationOutcome.ValidationFailed, result.Outcome);
+        Assert.Contains("vaste bedrag", result.Error!);
+    }
+
+    [Fact]
+    public async Task SetOneOffPrice_IsRefusedWhileThePriceIsLockedOrInvoiced()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        h.Permissions.Codes.Add("orders.lock_price");
+        var created = await h.Sut.CreateAsync(OneOffRequest(h.CustomerId, 300m), CancellationToken.None);
+        await AddIncompleteStopAsync(h, created.Order!.Id);
+        await h.Sut.SetOrderPricingStatusAsync(created.Order.Id, OrderPricingStatus.Locked, CancellationToken.None);
+
+        var locked = await h.Sut.SetOneOffPriceAsync(created.Order.Id, new SetOneOffPriceRequest(450m, null), CancellationToken.None);
+        Assert.Equal(TransportOrderOperationOutcome.ValidationFailed, locked.Outcome);
+        Assert.Contains("vergrendeld", locked.Error!, StringComparison.OrdinalIgnoreCase);
+
+        var snapshot = await h.Db.Context.TransportOrderPricingSnapshots.SingleAsync(s => s.TransportOrderId == created.Order.Id);
+        snapshot.Status = OrderPricingStatus.Invoiced;
+        await h.Db.Context.SaveChangesAsync();
+        var invoiced = await h.Sut.SetOneOffPriceAsync(created.Order.Id, new SetOneOffPriceRequest(450m, null), CancellationToken.None);
+        Assert.Equal(TransportOrderOperationOutcome.ValidationFailed, invoiced.Outcome);
+
+        Assert.Equal(300m, (await h.Db.Context.TransportOrders.AsNoTracking().SingleAsync(o => o.Id == created.Order.Id)).OneOffFixedAmount);
+    }
+
+    [Fact]
+    public async Task SetOneOffPrice_StaleVersion_YieldsConflictWithTheCurrentState_AndChangesNothing()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var created = await h.Sut.CreateAsync(ContractRequest(h.CustomerId, quantity: 3), CancellationToken.None);
+        var colleague = await h.Sut.SetOneOffPriceAsync(created.Order!.Id, new SetOneOffPriceRequest(300m, created.Order.Version), CancellationToken.None);
+        Assert.Equal(TransportOrderOperationOutcome.Success, colleague.Outcome);
+
+        var stale = await h.Sut.SetOneOffPriceAsync(created.Order.Id, new SetOneOffPriceRequest(450m, created.Order.Version), CancellationToken.None);
+
+        Assert.Equal(TransportOrderOperationOutcome.VersionConflict, stale.Outcome);
+        Assert.Equal(300m, stale.Order!.OneOffFixedAmount); // 409 carries the current state
+        Assert.Equal(colleague.Order!.Version, stale.Order.Version);
+        Assert.Equal(300m, (await h.Db.Context.TransportOrders.AsNoTracking().SingleAsync(o => o.Id == created.Order.Id)).OneOffFixedAmount);
+
+        // Rebased on the current version it goes through.
+        var rebased = await h.Sut.SetOneOffPriceAsync(created.Order.Id, new SetOneOffPriceRequest(450m, colleague.Order.Version), CancellationToken.None);
+        Assert.Equal(TransportOrderOperationOutcome.Success, rebased.Outcome);
+        Assert.Equal(450m, rebased.Order!.OneOffFixedAmount);
+    }
+
+    /// <summary>
+    /// The permission distinction survives the new path: a whole-order override (PriceIsManual)
+    /// still needs orders.override_price, fail-closed, even for a price-only change.
+    /// </summary>
+    [Fact]
+    public async Task SetOneOffPrice_OnAnOverriddenOrder_StillRequiresOverridePrice()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        h.Permissions.Codes.Add("orders.override_price");
+        var created = await h.Sut.CreateAsync(
+            ContractRequest(h.CustomerId, quantity: 3) with { AgreedPrice = 99m, PriceIsManual = true, PriceOverrideReason = "Goodwill" },
+            CancellationToken.None);
+        Assert.True(created.Order!.PriceIsManual);
+
+        h.Permissions.Codes.Remove("orders.override_price");
+        var denied = await h.Sut.SetOneOffPriceAsync(created.Order.Id, new SetOneOffPriceRequest(450m, created.Order.Version), CancellationToken.None);
+        Assert.Equal(TransportOrderOperationOutcome.ValidationFailed, denied.Outcome);
+        Assert.Contains("geen rechten", denied.Error!);
+        var stored = await h.Db.Context.TransportOrders.AsNoTracking().SingleAsync(o => o.Id == created.Order.Id);
+        Assert.Equal(OrderPricingSource.Contract, stored.PricingSource);
+        Assert.Equal(99m, stored.AgreedPrice);
+
+        h.Permissions.Codes.Add("orders.override_price");
+        var allowed = await h.Sut.SetOneOffPriceAsync(created.Order.Id, new SetOneOffPriceRequest(450m, created.Order.Version), CancellationToken.None);
+        Assert.Equal(TransportOrderOperationOutcome.Success, allowed.Outcome);
+        Assert.True(allowed.Order!.PriceIsManual); // the override is untouched and still wins
+        Assert.Equal(99m, allowed.Order.AgreedPrice);
+    }
+
+    [Fact]
+    public async Task SetOneOffPrice_IsRefusedForCompletedOrCancelledOrders()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var created = await h.Sut.CreateAsync(ContractRequest(h.CustomerId, quantity: 3), CancellationToken.None);
+        var order = await h.Db.Context.TransportOrders.SingleAsync(o => o.Id == created.Order!.Id);
+        order.Status = TransportOrderStatus.Completed;
+        await h.Db.Context.SaveChangesAsync();
+
+        var result = await h.Sut.SetOneOffPriceAsync(order.Id, new SetOneOffPriceRequest(450m, null), CancellationToken.None);
+
+        Assert.Equal(TransportOrderOperationOutcome.InvalidState, result.Outcome);
+    }
 }

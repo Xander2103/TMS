@@ -43,11 +43,12 @@ const api = vi.hoisted(() => ({
 vi.mock('../api/dossiersApi', () => api)
 vi.mock('../api/activityTypesApi', () => ({ listActivityTypes: () => Promise.resolve([]) }))
 
-const orders = vi.hoisted(() => ({ get: vi.fn(), update: vi.fn(), saveLines: vi.fn() }))
+const orders = vi.hoisted(() => ({ get: vi.fn(), update: vi.fn(), saveLines: vi.fn(), setOneOff: vi.fn() }))
 vi.mock('../../transport-orders/api/transportOrdersApi', () => ({
   getTransportOrder: orders.get,
   updateTransportOrder: orders.update,
   saveOrderPriceLines: orders.saveLines,
+  setOrderOneOffPrice: orders.setOneOff,
   searchTransportOrders: () => Promise.resolve({ items: [], totalCount: 0 }),
 }))
 vi.mock('../../customers/api/customersApi', () => ({
@@ -211,7 +212,7 @@ describe('Dossier work surface', () => {
 
   it('"Ga naar prijs" focuses the agreed-price field; saving it stores a one-off price agreement on the order', async () => {
     const user = userEvent.setup()
-    orders.update.mockResolvedValue(orderDetail({ status: 'Draft', pricingSource: 'OneOff', oneOffFixedAmount: 450, agreedPrice: 450, version: 'ov-2' }))
+    orders.setOneOff.mockResolvedValue(orderDetail({ status: 'Draft', pricingSource: 'OneOff', oneOffFixedAmount: 450, agreedPrice: 450, version: 'ov-2' }))
     renderPage()
     await screen.findByDisplayValue('Nexans site Antwerpen')
 
@@ -221,32 +222,27 @@ describe('Dossier work surface', () => {
 
     await user.type(agreed, '450')
     await user.click(screen.getByRole('button', { name: 'Opslaan' }))
-    await waitFor(() => expect(orders.update).toHaveBeenCalledTimes(1))
-    const payload = orders.update.mock.calls[0][1] as TransportOrderInput
-    expect(payload.pricingSource).toBe('OneOff')
-    expect(payload.oneOffFixedAmount).toBe(450)
-    expect(payload.agreedPrice).toBeNull()
-    expect(payload.version).toBe('ov-1')
-    // Existing stops travel along unchanged (whole-order update).
-    expect(payload.stops[0].id).toBe('s-1')
+    // Price-only command (hardening 2026-09-11): the route is never sent along, so an incomplete
+    // route (this order has no unloading stop) can never block a valid price.
+    await waitFor(() => expect(orders.setOneOff).toHaveBeenCalledTimes(1))
+    expect(orders.setOneOff).toHaveBeenCalledWith('o-1', { fixedAmount: 450, version: 'ov-1' })
+    expect(orders.update).not.toHaveBeenCalled()
     await waitFor(() => expect(api.getDossier).toHaveBeenCalledTimes(2))
   })
 
   it('clearing the agreed price removes the price source again', async () => {
     const user = userEvent.setup()
     orders.get.mockResolvedValue(orderDetail({ status: 'Draft', pricingSource: 'OneOff', oneOffFixedAmount: 450, agreedPrice: 450 }))
-    orders.update.mockResolvedValue(orderDetail({ status: 'Draft', agreedPrice: null, version: 'ov-2' }))
+    orders.setOneOff.mockResolvedValue(orderDetail({ status: 'Draft', agreedPrice: null, version: 'ov-2' }))
     renderPage()
     const agreed = await screen.findByLabelText('Afgesproken prijs (€)')
     expect(agreed).toHaveValue('450')
 
     await user.clear(agreed)
     await user.click(screen.getByRole('button', { name: 'Opslaan' }))
-    await waitFor(() => expect(orders.update).toHaveBeenCalledTimes(1))
-    const payload = orders.update.mock.calls[0][1] as TransportOrderInput
-    expect(payload.pricingSource).toBe('Contract')
-    expect(payload.oneOffFixedAmount).toBeNull()
-    expect(payload.agreedPrice).toBeNull()
+    await waitFor(() => expect(orders.setOneOff).toHaveBeenCalledTimes(1))
+    expect(orders.setOneOff).toHaveBeenCalledWith('o-1', { fixedAmount: null, version: 'ov-1' })
+    expect(orders.update).not.toHaveBeenCalled()
   })
 
   it('adds a free sales line inline through the pricing-lines endpoint', async () => {

@@ -80,6 +80,13 @@ public interface ITransportOrderService
     /// <summary>Explicit re-run of the pricing engine (merge-on-recalc). Blocked while Locked/Invoiced.</summary>
     Task<TransportOrderOperationResult> RecalculateOrderPricingAsync(Guid orderId, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Price-only mutation (hardening 2026-09-11): set or clear the one-off price agreement and
+    /// re-derive AgreedPrice, without validating or touching the route. Version-gated, blocked
+    /// while Locked/Invoiced, override permission enforced when the order carries an override.
+    /// </summary>
+    Task<TransportOrderOperationResult> SetOneOffPriceAsync(Guid orderId, SetOneOffPriceRequest request, CancellationToken cancellationToken);
+
     /// <summary>Pricing status transition (Draft/Reviewed/Locked); Invoiced is set only by invoicing.</summary>
     Task<TransportOrderOperationResult> SetOrderPricingStatusAsync(
         Guid orderId, OrderPricingStatus target, CancellationToken cancellationToken);

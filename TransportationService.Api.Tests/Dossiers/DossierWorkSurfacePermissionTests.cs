@@ -37,6 +37,19 @@ public class DossierWorkSurfacePermissionTests
             Codes(typeof(TransportOrdersController), nameof(TransportOrdersController.Update)));
     }
 
+    /// <summary>
+    /// Hardening 2026-09-11: the agreed price moved from the whole-order PUT to a price-only
+    /// command. Same gate (commercial intake data → orders.edit), so the matrix is unchanged;
+    /// the override check stays service-side (OneOffPricingTests).
+    /// </summary>
+    [Fact]
+    public void AgreedPrice_PriceOnlyCommand_KeepsTheOrdersEditGate()
+    {
+        Assert.Equal(
+            new[] { PermissionCodes.OrdersEdit, PermissionCodes.OrdersManage },
+            Codes(typeof(TransportOrdersController), nameof(TransportOrdersController.SetOneOffPrice)));
+    }
+
     [Fact]
     public void SalesLines_RequireOverridePrice()
     {

@@ -3914,6 +3914,109 @@ public class TransportOrderService : ITransportOrderService
         return TransportOrderOperationResult.Success(await MapDetailAsync(order, cancellationToken));
     }
 
+    /// <summary>
+    /// Hardening 2026-09-11 — the dossier's "Afgesproken prijs" used to travel with the FULL order
+    /// PUT (built from the loaded detail), so the whole-order validation also re-validated the
+    /// echoed stops and an incomplete route ("Elke stop heeft een locatie of minstens een
+    /// plaatsnaam nodig.") blocked a perfectly valid price. This command changes ONLY the price
+    /// agreement: PricingSource + OneOffFixedAmount (null = back to contract pricing), then runs
+    /// the same pricing pipeline as an edit/recalculation so AgreedPrice, lines, snapshot and
+    /// readiness follow. Route rules are not weakened: they still apply to the order PUT and to
+    /// the confirmation gate, and nothing here mutates a stop.
+    /// </summary>
+    public async Task<TransportOrderOperationResult> SetOneOffPriceAsync(
+        Guid orderId, SetOneOffPriceRequest request, CancellationToken cancellationToken)
+    {
+        var tenantId = _tenantContext.TenantId;
+        var order = await TenantScoped().Include(o => o.Stops).FirstOrDefaultAsync(o => o.Id == orderId, cancellationToken);
+        if (order is null)
+        {
+            return TransportOrderOperationResult.NotFound;
+        }
+
+        if (order.Status is not (TransportOrderStatus.Draft or TransportOrderStatus.Submitted or TransportOrderStatus.Confirmed))
+        {
+            return TransportOrderOperationResult.InvalidState(
+                "Alleen concept-, ingediende en bevestigde opdrachten kunnen worden bewerkt.");
+        }
+
+        // Same optimistic-concurrency contract as UpdateAsync: a stale token yields 409 with the
+        // current state; null (legacy callers) skips the check.
+        if (request.Version is { } expectedVersion && expectedVersion != order.Version)
+        {
+            return TransportOrderOperationResult.Conflict(await MapDetailAsync(order, cancellationToken));
+        }
+
+        var snapshot = await _dbContext.TransportOrderPricingSnapshots
+            .FirstOrDefaultAsync(s => s.TenantId == tenantId && s.TransportOrderId == orderId, cancellationToken);
+        if (snapshot is { Status: OrderPricingStatus.Locked or OrderPricingStatus.Invoiced })
+        {
+            return TransportOrderOperationResult.Invalid(PricingLockedMessage);
+        }
+
+        var pricingSource = request.FixedAmount is null ? OrderPricingSource.Contract : OrderPricingSource.OneOff;
+        // An existing one-off agreement keeps its included-time/extra-rate/notes configuration; a
+        // fresh agreement (from contract pricing) starts with only the amount.
+        var keepOneOffDetails = pricingSource == OrderPricingSource.OneOff && order.PricingSource == OrderPricingSource.OneOff;
+        var includedLoading = keepOneOffDetails ? order.OneOffIncludedLoadingMinutes : null;
+        var includedUnloading = keepOneOffDetails ? order.OneOffIncludedUnloadingMinutes : null;
+        var includedCombined = keepOneOffDetails ? order.OneOffIncludedCombinedMinutes : null;
+        var extraHourlyRate = keepOneOffDetails ? order.OneOffExtraHourlyRate : null;
+        var notes = keepOneOffDetails ? order.OneOffNotes : null;
+
+        // The pricing-related rules of the order PUT, unchanged — and only those.
+        if (OneOffPricingError(pricingSource, request.FixedAmount, includedLoading, includedUnloading, includedCombined) is { } oneOffError)
+        {
+            return TransportOrderOperationResult.Invalid(oneOffError);
+        }
+
+        if (IncludedTimeOverrideError(
+                pricingSource, order.IncludedLoadingMinutesOverride, order.IncludedUnloadingMinutesOverride,
+                order.ExtraTimeHourlyRateOverride, order.ExtraTimeRoundingStepMinutes, order.ExtraTimeMinimumBillableMinutes)
+            is { } includedTimeOverrideError)
+        {
+            return TransportOrderOperationResult.Invalid(includedTimeOverrideError);
+        }
+
+        var previous = (order.PricingSource, order.OneOffFixedAmount, order.OneOffIncludedLoadingMinutes, order.OneOffIncludedUnloadingMinutes,
+            order.OneOffIncludedCombinedMinutes, order.OneOffExtraHourlyRate, order.OneOffNotes);
+        ApplyOneOffPricing(order, pricingSource, request.FixedAmount, includedLoading, includedUnloading, includedCombined, extraHourlyRate, notes);
+
+        var cargoItems = await _dbContext.CargoItems
+            .Where(c => c.TenantId == tenantId && c.TransportOrderId == orderId && !c.IsDeleted)
+            .ToListAsync(cancellationToken);
+        var existingServiceLines = await _dbContext.TransportOrderServiceLines
+            .Where(l => l.TenantId == tenantId && l.TransportOrderId == orderId)
+            .ToListAsync(cancellationToken);
+        var serviceSelections = existingServiceLines
+            .Where(l => l.ServiceOptionId is not null)
+            .Select(l => new OrderServiceInput(l.ServiceOptionId!.Value, l.Quantity, l.PalletCount, l.DayCount, l.Note))
+            .ToList();
+
+        // Without an override the requested agreed price is null on purpose (the dossier panel
+        // always sent it empty): a one-off agreement derives AgreedPrice from its counted line;
+        // clearing the agreement makes the order read as unpriced again unless the contract
+        // engine prices it. An existing whole-order override stays exactly what it is (amount,
+        // reason) and keeps its orders.override_price check inside the pipeline.
+        var pricingError = await ApplyPricingAsync(
+            order, order.PriceIsManual ? order.AgreedPrice : null, serviceSelections,
+            order.PriceIsManual, order.PriceOverrideReason, cargoItems, cancellationToken);
+        if (pricingError is not null)
+        {
+            // Refused (e.g. no override rights): leave the tracked entity as it was loaded.
+            ApplyOneOffPricing(order, previous.PricingSource, previous.OneOffFixedAmount, previous.OneOffIncludedLoadingMinutes,
+                previous.OneOffIncludedUnloadingMinutes, previous.OneOffIncludedCombinedMinutes, previous.OneOffExtraHourlyRate, previous.OneOffNotes);
+            return pricingError;
+        }
+
+        order.Version = Guid.NewGuid();
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        await _auditService.RecordAsync("OrderPricing", orderId.ToString(), "oneOffPriceSet", null,
+            new { order.PricingSource, order.OneOffFixedAmount, order.AgreedPrice }, cancellationToken);
+
+        return TransportOrderOperationResult.Success(await MapDetailAsync(order, cancellationToken));
+    }
+
     /// <summary>Pricing status transition (Draft/Reviewed/Locked); Invoiced is set only by invoice generation.</summary>
     public async Task<TransportOrderOperationResult> SetOrderPricingStatusAsync(
         Guid orderId, OrderPricingStatus target, CancellationToken cancellationToken)

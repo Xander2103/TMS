@@ -4,6 +4,7 @@ using TransportationService.Api.Modules.Dossiers;
 using TransportationService.Api.Modules.Dossiers.Dtos;
 using TransportationService.Api.Modules.Dossiers.Services;
 using TransportationService.Api.Modules.Identity.Services;
+using TransportationService.Api.Modules.Orders.Dtos;
 using TransportationService.Api.Modules.Orders.Entities;
 using TransportationService.Api.Modules.Orders.Services;
 using TransportationService.Api.Modules.Organization.Entities;
@@ -381,5 +382,47 @@ public class DossierReadinessTests
         order.Status = TransportOrderStatus.Completed;
         await h.Db.Context.SaveChangesAsync();
         Assert.Equal(0, await readiness.CountDossiersWithAttentionAsync(CancellationToken.None));
+    }
+
+    /// <summary>
+    /// Regression 2026-09-11 (browser smoke): the dossier's agreed price is saved through the
+    /// price-only command. With an incomplete route it succeeds, the pricing warning disappears,
+    /// the route warnings stay (the route is still incomplete — nothing was weakened), and the
+    /// dossier re-read shows the price.
+    /// </summary>
+    [Fact]
+    public async Task AgreedPriceOnAnIncompleteRoute_ClearsPricingMissing_AndKeepsTheRouteIssues()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var (dossier, order) = await h.DossierWithDraftOrderAsync();
+        // Only a loading stop, no unloading, no date: route incomplete in two ways.
+        await AddStopAsync(h, order.Id, StopType.Loading, 1, null);
+        var readiness = h.Readiness();
+        var before = await readiness.EvaluateAsync(dossier.Id, CancellationToken.None);
+        Assert.Contains(before, i => i.Code == "pricing.missing" && i.TransportOrderId == order.Id);
+        Assert.Contains(before, i => i.Code == "order.confirm.stops" && i.Field == "stops.unloading");
+        Assert.Contains(before, i => i.Code == "route.date_missing");
+
+        var tenant = new DevTenantContext(h.TenantId);
+        var orders = new TransportOrderService(h.Db.Context, tenant,
+            new AuditService(h.Db.Context, tenant, new DevCurrentUserContext(null)), new TestClock(Now));
+        var result = await orders.SetOneOffPriceAsync(order.Id, new SetOneOffPriceRequest(450m, order.Version), CancellationToken.None);
+        Assert.Equal(TransportOrderOperationOutcome.Success, result.Outcome);
+        Assert.Equal(450m, result.Order!.OneOffFixedAmount);
+
+        var after = await readiness.EvaluateAsync(dossier.Id, CancellationToken.None);
+        Assert.DoesNotContain(after, i => i.Code.StartsWith("pricing."));
+        Assert.Contains(after, i => i.Code == "order.confirm.stops" && i.Field == "stops.unloading");
+        Assert.Contains(after, i => i.Code == "route.date_missing");
+
+        // Full dossier refresh: the order counts as priced and carries € 450.
+        var refreshed = (await h.Dossiers().GetAsync(dossier.Id, CancellationToken.None))!;
+        Assert.Equal(1, refreshed.Financials.PricedOrderCount);
+        Assert.True(Assert.Single(refreshed.Orders).IsPriced);
+        Assert.Equal(450m, (await h.Db.Context.TransportOrders.AsNoTracking().SingleAsync(o => o.Id == order.Id)).OneOffFixedAmount);
+        // The unloading stop is still missing: the order cannot be confirmed — route rules untouched.
+        Assert.DoesNotContain(await h.Db.Context.TransportOrderStops.AsNoTracking().Where(s => s.TransportOrderId == order.Id).ToListAsync(),
+            s => s.StopType == StopType.Unloading);
     }
 }

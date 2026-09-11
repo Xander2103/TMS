@@ -112,3 +112,38 @@ een retry doet een PUT, nooit een tweede POST; vinkjes en invoer blijven (test e
   dragen dezelfde `locations.view` als het oude options-endpoint. `getLocationOptions` blijft
   bestaan voor EDI-mapping, attendance-instellingen en magazijnen.
 - `SearchableSelect` sync-modus: 29 consumenten, bestaande suites groen.
+
+## 12. Afgesproken prijs geblokkeerd door onvolledige route — OPGELOST (2026-09-11)
+
+**Regressie (browser-smoke):** dossier met transportopdracht waarvan de route nog onvolledig is →
+Verkoop & prijs → Afgesproken prijs € 450 → Opslaan → "Elke stop heeft een locatie of minstens
+een plaatsnaam nodig."
+
+**Oorzaak (koppeling):** het paneel bouwde uit de geladen `TransportOrderDetail` een volledige
+`PUT /api/transport-orders/{id}` (`orderValuesFromDetail` → `buildSubmitPayload`). Die echode álle
+bestaande stops, en `TransportOrderService.UpdateAsync` → `ValidateAsync` valideert elke
+meegestuurde stop (locatie of plaatsnaam verplicht). Een prijs-wijziging droeg dus impliciet een
+routevalidatie mee. Nergens bestond een gerichte prijsmutatie (wel `/pricing/lines`,
+`/recalculate`, `/status`, `/confirm`, `/reopen`; geen enkel commando voor de eenmalige afspraak).
+
+**Oplossing:** nieuw, smal commando `POST /api/transport-orders/{id}/pricing/one-off` met body
+`{ fixedAmount: decimal|null, version }` → `TransportOrderService.SetOneOffPriceAsync`:
+- zet `PricingSource = OneOff` + `OneOffFixedAmount` (€ 0 blijft een bewuste prijs), of bij `null`
+  terug naar contractprijs; bestaande one-off-details (inbegrepen tijd, extra uurtarief, nota)
+  blijven bewaard bij enkel een bedragwijziging;
+- valideert uitsluitend prijsregels (`OneOffPricingError`, `IncludedTimeOverrideError`) — raakt geen
+  stop aan; routeregels blijven ongewijzigd op de order-PUT (bewezen in dezelfde test) en op de
+  bevestigingsgrens;
+- zelfde statusregel als de PUT (Draft/Submitted/Confirmed), versie-gate (409 met huidige staat),
+  Locked/Invoiced geweigerd, een bestaande override blijft exact wat hij is en behoudt de
+  `orders.override_price`-check in de pipeline (fail-closed);
+- draait dezelfde prijspipeline (`ApplyPricingAsync`) → AgreedPrice, regels, snapshot, readiness en
+  dossierfinancials volgen; `Version` wordt gebumpt; audit `OrderPricing/oneOffPriceSet`.
+- Controller-gate `orders.edit | orders.manage` (ongewijzigde matrix).
+
+Frontend: `setOrderOneOffPrice()` in `transportOrdersApi.ts`; `DossierPricePanel` stuurt enkel
+`{ fixedAmount, version }`. Tests: `OneOffPricingTests.SetOneOffPrice_*` (scenario incl. bewijs dat
+de PUT nog weigert, € 0, wissen, negatief, Locked/Invoiced, stale versie, override-permissie,
+Completed), `DossierReadinessTests.AgreedPriceOnAnIncompleteRoute_*` (prijswaarschuwing weg,
+routewaarschuwingen blijven, refresh toont de prijs), `DossierWorkSurfacePermissionTests`,
+`dossierWorkSurface.test.tsx` (PUT wordt nooit meer aangeroepen voor de prijs).

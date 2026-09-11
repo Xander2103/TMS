@@ -287,6 +287,21 @@ public class TransportOrdersController : ControllerBase
         return Handle(result, created: false);
     }
 
+    /// <summary>
+    /// Hardening 2026-09-11: price-only mutation for the dossier's "Afgesproken prijs" (one-off
+    /// agreement). Same gate as the order PUT it replaces for this purpose (commercial intake data
+    /// → orders.edit); an existing whole-order override still needs orders.override_price, checked
+    /// service-side. Never validates or touches the route.
+    /// </summary>
+    [HttpPost("{id:guid}/pricing/one-off")]
+    [RequirePermission(PermissionCodes.OrdersEdit, PermissionCodes.OrdersManage)]
+    public async Task<ActionResult<TransportOrderDetailDto>> SetOneOffPrice(
+        Guid id, SetOneOffPriceRequest request, CancellationToken cancellationToken)
+    {
+        var result = await _service.SetOneOffPriceAsync(id, request, cancellationToken);
+        return Handle(result, created: false);
+    }
+
     /// <summary>Pricing status transition; fine-grained permission per transition is enforced service-side.</summary>
     [HttpPost("{id:guid}/pricing/status")]
     [RequirePermission(PermissionCodes.OrdersEdit, PermissionCodes.OrdersLockPrice, PermissionCodes.OrdersManage)]
