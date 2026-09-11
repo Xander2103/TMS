@@ -147,3 +147,86 @@ de PUT nog weigert, € 0, wissen, negatief, Locked/Invoiced, stale versie, over
 Completed), `DossierReadinessTests.AgreedPriceOnAnIncompleteRoute_*` (prijswaarschuwing weg,
 routewaarschuwingen blijven, refresh toont de prijs), `DossierWorkSurfacePermissionTests`,
 `dossierWorkSurface.test.tsx` (PUT wordt nooit meer aangeroepen voor de prijs).
+
+## 13. Opdrachtwissel in een dossiersectie sprong naar de paginatop — OPGELOST (2026-09-11)
+
+**Regressie (browser-smoke):** dossier met meerdere transportopdrachten → scroll naar Verkoop &
+prijs → wissel 0001 → 0004 → de pagina springt naar boven.
+
+**Oorzaak (gemeten in Chrome, MutationObserver op de eerste React-commit na de klik):**
+
+| moment | documenthoogte | scrollY | sectie Route | sectie Prijs |
+|---|---|---|---|---|
+| vóór de klik | 2749 | 1383 | 883 | 706 |
+| eerste commit ("Route laden…") | 1504 | 138 | 148 | 250 |
+| opdracht geladen | 2620 | 138 | 883 | 584 |
+
+De selectie is lokale state (`selectedActivityId`), er is geen navigatie, geen `key`-remount, geen
+`scrollTo`, geen her-registratie in de sectieregistry. Wél wordt `firstOrderLoading` waar zodra
+een ándere opdracht geladen wordt (`loadedOrder.id !== firstLinkedOrderId`), en dan vervangen
+`DossierRouteEditor`, `DossierGoodsSummary` en `DossierPricePanel` hun body in dezelfde commit door
+een éénregelige placeholder. Het document krimpt ~1200 px, de browser klemt de scrollpositie op de
+nieuwe maximale hoogte (138), en die positie blijft staan als de inhoud terugkomt. Een refetch van
+dezelfde opdracht (na een save) had dit nooit: dan blijft de body gemonteerd (stale-while-refetch).
+
+**Oplossing (gedeeld, geen per-component hack):** nieuwe primitive `components/ui/RetainedHeight`
+— houdt tijdens `retain` de laatst gemeten hoogte vast als `min-height` (layout-effect, vóór de
+paint) en zet `aria-busy`; laat los zodra echte inhoud rendert. `DossierDetailPage` wikkelt de
+bodies van Route, Goederen en Verkoop & prijs (`.dossier-section-body`) erin met
+`retain={firstOrderLoading}`. Er wordt geen andere opdracht getoond onder het verkeerde label en er
+is geen expliciete scroll-restauratie: de pagina krimpt gewoon niet meer. `goTo(section, field)`
+(Ga naar route / Ga naar prijs / aandacht) is ongewijzigd en scrollt/focust nog steeds bewust.
+
+**Browser-verificatie (na fix, dossier 0006 met ORD-0005/ORD-0014):** Route-wissel heen en terug:
+scrollY 456 → 456, sectietop 249 → 249, documenthoogte nooit onder de eindhoogte, reservering
+actief tijdens het laden. Prijs-wissel naar de kortere opdracht terwijl de pagina helemaal onderaan
+stond: scrollY 1383 → 1254 (browser-klem op het paginaeinde omdat de nieuwe inhoud 129 px korter
+is), sectie blijft midden in beeld (top 389 → 510 bij 1366 px hoog); terugwissel: scrollY
+onveranderd. Ga naar route / Ga naar prijs selecteren de juiste opdracht, focussen het veld en
+highlighten de sectie.
+
+Tests: `dossierWorkSurface.test.tsx` "order switch keeps the page in place" — dezelfde sectienodes
+vóór/tijdens/na de wissel, `min-height` = gemeten hoogte en `aria-busy` tijdens het laden, beide
+weer weg erna, geen locatiewijziging in de router, geen `scrollTo`/`scrollIntoView`; plus bewijs dat
+"Ga naar prijs" wél scrollt en focust.
+
+## 14. Lege/onvolledige stop verdween stil bij "Route opslaan" — OPGELOST (2026-09-11)
+
+**Regressie (browser-smoke):** "+ Extra losstop" → niets invullen → "Route opslaan" → de stop is
+weg zonder melding. Erger (in code gevonden): `isEmptyStopRow` keek niet naar `id`, dus een
+bestaande stop waarvan de plaats en vrije naam leeggemaakt werden, werd uit de PUT gefilterd en
+daarmee server-side verwijderd.
+
+**Contract (`isEmptyStopRow`, gedeeld met intake en orderformulier):** "leeg" = nieuwe stop
+(`id === null`) met álle persistente velden op de `emptyStop`-default (adres, plaats, naam, land,
+datum, tijdvenster, tijdseis, gevraagd/bevestigd venster, vroegst/laatst, afspraak, referentie,
+alle instructies, inbegrepen-tijd-override). Al het andere is *onvolledig*, gaat mee in de PUT en
+faalt inline op de bestaande regel "locatie of plaatsnaam" — verdwijnt nooit.
+
+**Dossier-route-editor:**
+- Gezaaide placeholderrijen (`seeded`: de ontbrekende laad-/losstop die de editor zelf toont)
+  worden, als ze onaangeraakt zijn, zonder vraag weggelaten én na de save opnieuw gezaaid — ze
+  verdwijnen dus nooit uit beeld.
+- Een rij die de planner zelf toevoegde en leeg liet: "Route opslaan" opent één dialoog voor alle
+  lege rijen — "Er is 1 lege stop zonder adres. Wil je deze lege stop verwijderen en de route
+  opslaan?" (meervoud via `_one/_other`), acties **Terug naar route** / **Lege stop(s) verwijderen
+  & opslaan**. Terug = niets gebeurt, rij blijft; bevestigen = rijen uit de editor (goederenlinks
+  worden hernummerd) en de rest wordt opgeslagen.
+- Verwijderen per stop: onaangeraakte rij direct; rij met gegevens of bestaande stop → bevestiging
+  ("Stop verwijderen?", pas definitief bij Route opslaan).
+- Validatiefouten worden op de getoonde index gezet (`toDisplayedField`), zodat een weggelaten
+  placeholder vooraan nooit de verkeerde stop markeert.
+- PUT-/versiesemantiek en backend-validatie ongewijzigd.
+
+Tests: `dossierWorkSurface.test.tsx` "empty and incomplete stops in the inline route editor" (7
+scenario's: vraag vóór weglaten, Terug behoudt, bevestigen slaat op met alle bestaande ids, alleen
+referentie / alleen datum blokkeert inline, alleen plaats is geldig en wordt opgeslagen, bestaande
+stop met leeggemaakt adres blokkeert i.p.v. te verdwijnen, Verwijderen direct vs. met bevestiging);
+`stopRowClassification.test.ts` (elk persistent veld apart, bestaande stop nooit leeg, UI-state en
+witruimte genegeerd). Browser-smoke op ORD-0005: dialoog verschijnt, Terug behoudt 3 stops, stop
+met enkel referentie blokkeert met de inline melding.
+Bevestigen & opslaan op ORD-0014 (concept): dialoog → "Lege stop verwijderen & opslaan" → toast
+"Route opgeslagen.", de twee ingevulde stops blijven, geen onopgeslagen staat. Op ORD-0005 weigerde
+de backend de PUT met "De prijs van deze order is vergrendeld" (prijsvergrendeling, los van deze
+wijziging); de editor toonde de fout en hield beide bestaande stops — niets ging verloren.
+Verwijderen op een stop met referentie vroeg bevestiging; Annuleren behield de stop.

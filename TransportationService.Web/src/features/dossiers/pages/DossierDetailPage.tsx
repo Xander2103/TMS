@@ -8,6 +8,7 @@ import { Button } from '../../../components/ui/Button'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { FormField } from '../../../components/ui/FormField'
 import { Modal } from '../../../components/ui/Modal'
+import { RetainedHeight } from '../../../components/ui/RetainedHeight'
 import { SearchableSelect, type SearchableSelectOption } from '../../../components/ui/SearchableSelect'
 import { ValidationSummary } from '../../../components/ui/ValidationSummary'
 import { useToast } from '../../../components/ui/toastContext'
@@ -223,6 +224,11 @@ function DossierDetailContent() {
   }, [firstLinkedOrderId, dossier?.version, orderLoadToken])
 
   const firstOrder = firstLinkedOrderId && loadedOrder?.id === firstLinkedOrderId ? loadedOrder.order : null
+  // True only while a DIFFERENT order than the one on screen is being fetched (an order switch or
+  // the first load). A refetch of the same order after a save keeps the current content mounted.
+  // While true, the route/goods/price bodies show a placeholder inside a RetainedHeight, so the
+  // page never shrinks under the planner's scroll position (browser-smoke 2026-09-11: switching
+  // the order in Verkoop & prijs jumped to the top because the three bodies collapsed at once).
   const firstOrderLoading = Boolean(firstLinkedOrderId) && loadedOrder?.id !== firstLinkedOrderId
 
   // Finish a deferred attention jump once its target activity is selected and its order is on
@@ -464,36 +470,40 @@ function DossierDetailContent() {
             onSelect={selectActivity}
             locked={routeDirty}
           />
-          <DossierRouteEditor
-            ref={routeEditorRef}
-            dossier={dossier}
-            activity={routeActivity}
-            order={firstOrder}
-            loading={firstOrderLoading}
-            canEdit={canManage && canEditOrder && isOpen}
-            canCreateLocations={canCreateLocations}
-            onOrderSaved={handleOrderSaved}
-            onDossierUpdated={applyDossier}
-            onConflict={handleConflict}
-            onDirtyChange={setRouteDirty}
-            onRetryLoad={() => setOrderLoadToken((token) => token + 1)}
-          />
+          <RetainedHeight retain={firstOrderLoading} className="dossier-section-body">
+            <DossierRouteEditor
+              ref={routeEditorRef}
+              dossier={dossier}
+              activity={routeActivity}
+              order={firstOrder}
+              loading={firstOrderLoading}
+              canEdit={canManage && canEditOrder && isOpen}
+              canCreateLocations={canCreateLocations}
+              onOrderSaved={handleOrderSaved}
+              onDossierUpdated={applyDossier}
+              onConflict={handleConflict}
+              onDirtyChange={setRouteDirty}
+              onRetryLoad={() => setOrderLoadToken((token) => token + 1)}
+            />
+          </RetainedHeight>
         </section>
       )}
 
       {hasGoods && (
         <section id="sectie-goederen" className="dossier-section" aria-label={t('dossiers.detail.goodsTitle')} ref={registerGoods}>
           <h2 tabIndex={-1}>{t('dossiers.detail.goodsTitle')}</h2>
-          {firstLinkedOrderId ? (
-            <DossierGoodsSummary
-              order={firstOrder}
-              loading={firstOrderLoading}
-              canEdit={canManage && isOpen}
-              onEdit={() => setGoodsDrawerOpen(true)}
-            />
-          ) : (
-            <p className="placeholder-text">{t('dossiers.detail.goodsOnOrder')}</p>
-          )}
+          <RetainedHeight retain={firstOrderLoading} className="dossier-section-body">
+            {firstLinkedOrderId ? (
+              <DossierGoodsSummary
+                order={firstOrder}
+                loading={firstOrderLoading}
+                canEdit={canManage && isOpen}
+                onEdit={() => setGoodsDrawerOpen(true)}
+              />
+            ) : (
+              <p className="placeholder-text">{t('dossiers.detail.goodsOnOrder')}</p>
+            )}
+          </RetainedHeight>
         </section>
       )}
 
@@ -505,22 +515,24 @@ function DossierDetailContent() {
           onSelect={selectActivity}
           locked={routeDirty}
         />
-        <DossierPricePanel
-          ref={pricePanelRef}
-          dossier={dossier}
-          order={firstOrder}
-          loading={firstOrderLoading}
-          orderUnavailable={Boolean(firstLinkedOrderId) && !firstOrderLoading && !firstOrder}
-          activityWithoutOrder={activityWithoutOrder}
-          canManage={canManage && isOpen}
-          canEditPrice={canEditOrder && isOpen}
-          canEditLines={canEditPriceLines && isOpen}
-          onOrderSaved={handleOrderSaved}
-          onDossierUpdated={applyDossier}
-          onConflict={handleConflict}
-          onAddActivity={() => setShowAddActivity(true)}
-          onRetryLoad={() => setOrderLoadToken((token) => token + 1)}
-        />
+        <RetainedHeight retain={firstOrderLoading} className="dossier-section-body">
+          <DossierPricePanel
+            ref={pricePanelRef}
+            dossier={dossier}
+            order={firstOrder}
+            loading={firstOrderLoading}
+            orderUnavailable={Boolean(firstLinkedOrderId) && !firstOrderLoading && !firstOrder}
+            activityWithoutOrder={activityWithoutOrder}
+            canManage={canManage && isOpen}
+            canEditPrice={canEditOrder && isOpen}
+            canEditLines={canEditPriceLines && isOpen}
+            onOrderSaved={handleOrderSaved}
+            onDossierUpdated={applyDossier}
+            onConflict={handleConflict}
+            onAddActivity={() => setShowAddActivity(true)}
+            onRetryLoad={() => setOrderLoadToken((token) => token + 1)}
+          />
+        </RetainedHeight>
       </section>
 
       <details

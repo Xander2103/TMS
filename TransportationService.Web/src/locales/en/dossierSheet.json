@@ -13,7 +13,17 @@
     "readOnlyRights": "You can view the route but not edit it.",
     "readOnlyStatus": "In this status the route is no longer changed from the dossier.",
     "sequenceHint": "The order of the stops is the driving order.",
-    "retryLoad": "Reload"
+    "retryLoad": "Reload",
+    "emptyStopsTitle_one": "Remove empty stop?",
+    "emptyStopsTitle_other": "Remove empty stops?",
+    "emptyStopsMessage_one": "There is 1 empty stop without an address. Remove this empty stop and save the route?",
+    "emptyStopsMessage_other": "There are {count} empty stops without an address. Remove these empty stops and save the route?",
+    "emptyStopsBack": "Back to route",
+    "emptyStopsConfirm_one": "Remove empty stop & save",
+    "emptyStopsConfirm_other": "Remove empty stops & save",
+    "removeStopTitle": "Remove stop?",
+    "removeStopMessage": "Stop {number} holds data and will be removed from the route once you save the route. Continue?",
+    "removeStopConfirm": "Remove stop"
   },
   "price": {
     "noPrice": "No price yet",

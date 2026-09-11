@@ -6,7 +6,7 @@ import { ApiError } from '../../../api/apiClient'
 import { DossierDetailPage } from '../pages/DossierDetailPage'
 import { dossierActivity, dossierDetail, orderDetail } from './fixtures'
 import type { DossierDetail, ReadinessIssue } from '../types'
-import type { TransportOrderInput } from '../../transport-orders/types'
+import type { TransportOrderDetail, TransportOrderInput } from '../../transport-orders/types'
 
 /**
  * UX-sprint 2026-09-09 — the dossier as an operational work surface: contextual Attention
@@ -89,7 +89,7 @@ function renderPage() {
   const router = createMemoryRouter([{ path: '/dossiers/:id', element: <DossierDetailPage /> }], {
     initialEntries: ['/dossiers/d-1'],
   })
-  return render(<RouterProvider router={router} />)
+  return { ...render(<RouterProvider router={router} />), router }
 }
 
 const issue = (code: string, section: ReadinessIssue['section'], field: string | null, message: string): ReadinessIssue => ({
@@ -582,5 +582,255 @@ describe('Dossier work surface — standalone activities', () => {
     expect(within(price).queryByRole('button', { name: '+ Activiteit' })).not.toBeInTheDocument()
     expect(within(price).queryByText('Voeg een transportactiviteit toe om een prijs te kunnen invoeren.')).not.toBeInTheDocument()
     expect(document.getElementById('sectie-route')).toBeNull()
+  })
+})
+
+/**
+ * Interaction contract (browser-smoke 2026-09-11): switching the target order INSIDE the dossier
+ * is a local context switch — the page must stay mounted, no navigation may happen and the
+ * sections must not collapse while the next order loads (a collapsed page makes the browser
+ * clamp the scroll position, which is what "the page jumps to the top" was). jsdom has no
+ * layout, so the test proves the architectural cause: same section nodes, same location, and
+ * the section body reserving its previous height for the whole loading window.
+ */
+describe('Dossier work surface — order switch keeps the page in place', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    auth.permissions = new Set(['dossiers.view', 'dossiers.manage', 'orders.edit', 'orders.override_price', 'locations.create'])
+    window.HTMLElement.prototype.scrollIntoView = vi.fn()
+    api.getDossier.mockResolvedValue(twoOrderDossier())
+  })
+
+  it('does not navigate, remount or collapse the route/goods/price sections while the next order loads', async () => {
+    const user = userEvent.setup()
+    // Every element measures 480px tall: the retained height must be exactly that during loading.
+    const heightSpy = vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(480)
+    const scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => {})
+    let resolveSecond: (order: TransportOrderDetail) => void = () => {}
+    orders.get.mockImplementation((id: string) =>
+      id === 'o-2'
+        ? new Promise<TransportOrderDetail>((resolve) => {
+            resolveSecond = resolve
+          })
+        : Promise.resolve(firstOrder()),
+    )
+    try {
+      const { router } = renderPage()
+      await screen.findByDisplayValue('Nexans site Antwerpen')
+      const locationBefore = router.state.location
+      const routeSection = document.getElementById('sectie-route')!
+      const goodsSection = document.getElementById('sectie-goederen')!
+      const priceSection = document.getElementById('sectie-prijs')!
+      const bodies = [routeSection, goodsSection, priceSection].map((section) => section.querySelector<HTMLElement>('.dossier-section-body')!)
+      expect(bodies.every(Boolean)).toBe(true)
+      for (const body of bodies) expect(body.style.minHeight).toBe('')
+
+      await user.click(within(screen.getAllByRole('group', { name: 'Opdracht' })[0]).getByRole('button', { name: /ORD-0002/ }))
+      await waitFor(() => expect(orders.get).toHaveBeenCalledWith('o-2'))
+
+      // Loading window: placeholders are shown, but inside bodies that keep their previous height.
+      expect(within(routeSection).getByText('Route laden…')).toBeInTheDocument()
+      for (const body of bodies) {
+        expect(body.style.minHeight).toBe('480px')
+        expect(body).toHaveAttribute('aria-busy', 'true')
+      }
+      expect(document.getElementById('sectie-route')).toBe(routeSection)
+      expect(document.getElementById('sectie-prijs')).toBe(priceSection)
+
+      resolveSecond(secondOrder())
+      await screen.findByDisplayValue('Depot Gent')
+      // Loaded: the reservation is released, the very same nodes are still on the page, nothing navigated or scrolled.
+      for (const body of bodies) {
+        expect(body.style.minHeight).toBe('')
+        expect(body).not.toHaveAttribute('aria-busy')
+      }
+      expect(document.getElementById('sectie-route')).toBe(routeSection)
+      expect(document.getElementById('sectie-goederen')).toBe(goodsSection)
+      expect(document.getElementById('sectie-prijs')).toBe(priceSection)
+      expect(routeSection.querySelector('.dossier-section-body')).toBe(bodies[0])
+      expect(router.state.location.pathname).toBe(locationBefore.pathname)
+      expect(router.state.location.key).toBe(locationBefore.key)
+      expect(scrollTo).not.toHaveBeenCalled()
+      expect(window.HTMLElement.prototype.scrollIntoView).not.toHaveBeenCalled()
+    } finally {
+      heightSpy.mockRestore()
+      scrollTo.mockRestore()
+    }
+  })
+
+  it('"Ga naar prijs" still deliberately scrolls to and focuses its destination', async () => {
+    const user = userEvent.setup()
+    orders.get.mockImplementation((id: string) => Promise.resolve(id === 'o-2' ? secondOrder() : firstOrder()))
+    renderPage()
+    await screen.findByDisplayValue('Nexans site Antwerpen')
+    await user.click(screen.getByRole('button', { name: 'Ga naar prijs' }))
+    await screen.findByText('Opdracht ORD-0002')
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText('Afgesproken prijs (€)')))
+    expect(window.HTMLElement.prototype.scrollIntoView).toHaveBeenCalledTimes(1)
+  })
+})
+
+/** Draft order with a complete, persisted two-stop route (no scaffolding rows in the editor). */
+function fullRouteOrder() {
+  const base = orderDetail()
+  return orderDetail({
+    status: 'Draft',
+    agreedPrice: 0,
+    stops: [
+      { ...base.stops[0], id: 's-1', plannedFrom: null, plannedTo: null },
+      { ...base.stops[0], id: 's-2', sequence: 2, stopType: 'Unloading', locationName: 'Depot Gent', address: '', postalCode: '', city: 'Gent', plannedFrom: null, plannedTo: null },
+    ],
+  })
+}
+
+function stopCards(): HTMLElement[] {
+  return Array.from(document.querySelectorAll<HTMLElement>('fieldset.tof-stop'))
+}
+
+/**
+ * Browser-smoke 2026-09-11: "+ Extra losstop", leave it blank, "Route opslaan" → the stop vanished
+ * without a word. Contract: an untouched new stop is only dropped after explicit confirmation
+ * during save; a stop holding ANY entered data is incomplete (blocks the save with the existing
+ * location-or-place rule) and is never discarded; persisted stops are never omitted.
+ */
+describe('Dossier work surface — empty and incomplete stops in the inline route editor', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    auth.permissions = new Set(['dossiers.view', 'dossiers.manage', 'orders.edit', 'orders.override_price', 'locations.create'])
+    window.HTMLElement.prototype.scrollIntoView = vi.fn()
+    api.getDossier.mockResolvedValue(unfinishedDossier())
+    orders.get.mockResolvedValue(fullRouteOrder())
+    orders.update.mockImplementation((_id: string, input: TransportOrderInput) =>
+      Promise.resolve({
+        ...fullRouteOrder(),
+        version: 'ov-2',
+        stops: input.stops.map((s, i) => ({ ...fullRouteOrder().stops[0], ...s, id: s.id ?? `new-${i}`, sequence: i + 1 })),
+      }),
+    )
+  })
+
+  it('an untouched extra stop is not silently dropped: saving asks first, and "Terug naar route" keeps it', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await screen.findByDisplayValue('Depot Gent')
+    await user.click(screen.getByRole('button', { name: '+ Extra losstop' }))
+    expect(stopCards()).toHaveLength(3)
+
+    await user.click(screen.getByRole('button', { name: 'Route opslaan' }))
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByText('Er is 1 lege stop zonder adres. Wil je deze lege stop verwijderen en de route opslaan?')).toBeInTheDocument()
+    expect(orders.update).not.toHaveBeenCalled()
+
+    await user.click(within(dialog).getByRole('button', { name: 'Terug naar route' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(stopCards()).toHaveLength(3)
+    expect(orders.update).not.toHaveBeenCalled()
+    expect(screen.getByText('Niet-opgeslagen wijzigingen')).toBeInTheDocument()
+  })
+
+  it('confirming removes the empty stops and saves the remaining route with every persisted stop', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await screen.findByDisplayValue('Depot Gent')
+    await user.click(screen.getByRole('button', { name: '+ Extra laadstop' }))
+    await user.click(screen.getByRole('button', { name: '+ Extra losstop' }))
+    expect(stopCards()).toHaveLength(4)
+
+    await user.click(screen.getByRole('button', { name: 'Route opslaan' }))
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByText('Er zijn 2 lege stops zonder adres. Wil je deze lege stops verwijderen en de route opslaan?')).toBeInTheDocument()
+    await user.click(within(dialog).getByRole('button', { name: 'Lege stops verwijderen & opslaan' }))
+
+    await waitFor(() => expect(orders.update).toHaveBeenCalledTimes(1))
+    const [orderId, payload] = orders.update.mock.calls[0] as [string, TransportOrderInput]
+    expect(orderId).toBe('o-1')
+    expect(payload.stops.map((s) => s.id)).toEqual(['s-1', 's-2'])
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(stopCards()).toHaveLength(2)
+  })
+
+  it('a stop with only a reference is incomplete, not empty: the save is blocked with an inline message at that stop', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await screen.findByDisplayValue('Depot Gent')
+    await user.click(screen.getByRole('button', { name: '+ Extra losstop' }))
+    await user.type(within(stopCards()[2]).getByLabelText('Referentie'), 'REF-9')
+
+    await user.click(screen.getByRole('button', { name: 'Route opslaan' }))
+    expect(await within(stopCards()[2]).findByText('Elke stop heeft een locatie of minstens een plaatsnaam nodig.')).toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(orders.update).not.toHaveBeenCalled()
+    expect(stopCards()).toHaveLength(3)
+    expect(within(stopCards()[2]).getByLabelText('Referentie')).toHaveValue('REF-9')
+  })
+
+  it('a stop with only a planning date is incomplete as well and stays in the editor', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await screen.findByDisplayValue('Depot Gent')
+    await user.click(screen.getByRole('button', { name: '+ Extra laadstop' }))
+    await user.type(within(stopCards()[2]).getByLabelText('Laaddatum'), '2026-09-12')
+
+    await user.click(screen.getByRole('button', { name: 'Route opslaan' }))
+    expect(await within(stopCards()[2]).findByText('Elke stop heeft een locatie of minstens een plaatsnaam nodig.')).toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(orders.update).not.toHaveBeenCalled()
+    expect(stopCards()).toHaveLength(3)
+  })
+
+  it('a stop with only a city is a valid free-address stop and is saved, never classified as empty', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await screen.findByDisplayValue('Depot Gent')
+    await user.click(screen.getByRole('button', { name: '+ Extra losstop' }))
+    await user.type(within(stopCards()[2]).getByLabelText(/Plaats/), 'Brussel')
+
+    await user.click(screen.getByRole('button', { name: 'Route opslaan' }))
+    await waitFor(() => expect(orders.update).toHaveBeenCalledTimes(1))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    const [, payload] = orders.update.mock.calls[0] as [string, TransportOrderInput]
+    expect(payload.stops).toHaveLength(3)
+    expect(payload.stops[2].city).toBe('Brussel')
+    expect(payload.stops[2].id).toBeNull()
+  })
+
+  it('a persisted stop is never omitted from the save, even with its address fields cleared: the save blocks on it', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await screen.findByDisplayValue('Depot Gent')
+    const unloadCard = stopCards()[1]
+    await user.clear(within(unloadCard).getByLabelText('Naam (vrij adres)'))
+    await user.clear(within(unloadCard).getByLabelText(/Plaats/))
+
+    await user.click(screen.getByRole('button', { name: 'Route opslaan' }))
+    expect(await within(unloadCard).findByText('Elke stop heeft een locatie of minstens een plaatsnaam nodig.')).toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(orders.update).not.toHaveBeenCalled()
+    expect(stopCards()).toHaveLength(2)
+  })
+
+  it('Verwijderen removes an untouched new stop directly but asks before removing a stop that holds data', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await screen.findByDisplayValue('Depot Gent')
+    await user.click(screen.getByRole('button', { name: '+ Extra losstop' }))
+    await user.click(screen.getByRole('button', { name: 'Stop 3 verwijderen' }))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(stopCards()).toHaveLength(2)
+
+    await user.click(screen.getByRole('button', { name: 'Stop 2 verwijderen' }))
+    let dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByText('Stop verwijderen?')).toBeInTheDocument()
+    await user.click(within(dialog).getByRole('button', { name: 'Annuleren' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(stopCards()).toHaveLength(2)
+    expect(screen.getByDisplayValue('Depot Gent')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Stop 2 verwijderen' }))
+    dialog = await screen.findByRole('dialog')
+    await user.click(within(dialog).getByRole('button', { name: 'Stop verwijderen' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(stopCards()).toHaveLength(1)
+    expect(screen.queryByDisplayValue('Depot Gent')).not.toBeInTheDocument()
   })
 })

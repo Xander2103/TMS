@@ -13,7 +13,17 @@
     "readOnlyRights": "Vous pouvez consulter l'itinéraire mais pas le modifier.",
     "readOnlyStatus": "Dans ce statut, l'itinéraire n'est plus modifié via le dossier.",
     "sequenceHint": "L'ordre des arrêts est l'ordre de passage.",
-    "retryLoad": "Recharger"
+    "retryLoad": "Recharger",
+    "emptyStopsTitle_one": "Supprimer l'arrêt vide ?",
+    "emptyStopsTitle_other": "Supprimer les arrêts vides ?",
+    "emptyStopsMessage_one": "Il y a 1 arrêt vide sans adresse. Voulez-vous supprimer cet arrêt vide et enregistrer l'itinéraire ?",
+    "emptyStopsMessage_other": "Il y a {count} arrêts vides sans adresse. Voulez-vous supprimer ces arrêts vides et enregistrer l'itinéraire ?",
+    "emptyStopsBack": "Retour à l'itinéraire",
+    "emptyStopsConfirm_one": "Supprimer l'arrêt vide et enregistrer",
+    "emptyStopsConfirm_other": "Supprimer les arrêts vides et enregistrer",
+    "removeStopTitle": "Supprimer l'arrêt ?",
+    "removeStopMessage": "L'arrêt {number} contient des données et sera retiré de l'itinéraire dès que vous enregistrez l'itinéraire. Continuer ?",
+    "removeStopConfirm": "Supprimer l'arrêt"
   },
   "price": {
     "noPrice": "Pas encore de prix",

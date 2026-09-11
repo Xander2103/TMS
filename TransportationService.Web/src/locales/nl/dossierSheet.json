@@ -13,7 +13,17 @@
     "readOnlyRights": "Je kunt de route bekijken maar niet bewerken.",
     "readOnlyStatus": "In deze status wordt de route niet meer via het dossier gewijzigd.",
     "sequenceHint": "De volgorde van de stops is de rijvolgorde.",
-    "retryLoad": "Opnieuw laden"
+    "retryLoad": "Opnieuw laden",
+    "emptyStopsTitle_one": "Lege stop verwijderen?",
+    "emptyStopsTitle_other": "Lege stops verwijderen?",
+    "emptyStopsMessage_one": "Er is 1 lege stop zonder adres. Wil je deze lege stop verwijderen en de route opslaan?",
+    "emptyStopsMessage_other": "Er zijn {count} lege stops zonder adres. Wil je deze lege stops verwijderen en de route opslaan?",
+    "emptyStopsBack": "Terug naar route",
+    "emptyStopsConfirm_one": "Lege stop verwijderen & opslaan",
+    "emptyStopsConfirm_other": "Lege stops verwijderen & opslaan",
+    "removeStopTitle": "Stop verwijderen?",
+    "removeStopMessage": "Stop {number} bevat gegevens en wordt uit de route verwijderd zodra je de route opslaat. Wil je doorgaan?",
+    "removeStopConfirm": "Stop verwijderen"
   },
   "price": {
     "noPrice": "Nog geen prijs",

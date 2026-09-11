@@ -34,15 +34,40 @@ import { DossierRouteSummary } from './DossierRouteSummary'
 import '../../transport-orders/components/transport-order-form.css'
 
 /**
- * Stop rows for the editor: the order's stops in sequence, plus an empty loading row in front /
+ * Stop rows for the editor: the order's stops in sequence, plus a seeded loading row in front /
  * unloading row at the end when that stop type is still missing, so an incomplete route looks
- * ready to be completed. Untouched rows are dropped again on save.
+ * ready to be completed. A seeded row left untouched is dropped again on save and re-seeded
+ * from the saved order, so it never disappears from the planner's view; a row the planner ADDED
+ * is never dropped without confirmation (see `requestSave`).
  */
 function seedStops(order: TransportOrderDetail | null): StopFormRow[] {
-  const rows = stopsFromOrder(order ?? undefined)
-  if (!rows.some((row) => row.stopType === 'Loading')) rows.unshift(emptyStop('Loading'))
-  if (!rows.some((row) => row.stopType === 'Unloading')) rows.push(emptyStop('Unloading'))
+  const rows = order && order.stops.length > 0 ? stopsFromOrder(order) : []
+  if (!rows.some((row) => row.stopType === 'Loading')) rows.unshift({ ...emptyStop('Loading'), seeded: true })
+  if (!rows.some((row) => row.stopType === 'Unloading')) rows.push({ ...emptyStop('Unloading'), seeded: true })
   return rows
+}
+
+/** A seeded placeholder the planner never touched: not data, silently re-seeded after the save. */
+function isUntouchedSeed(row: StopFormRow): boolean {
+  return Boolean(row.seeded) && isEmptyStopRow(row)
+}
+
+/** A row the planner added and never touched: only dropped after explicit confirmation. */
+function isUntouchedAdded(row: StopFormRow): boolean {
+  return !row.seeded && isEmptyStopRow(row)
+}
+
+/**
+ * Validation errors are computed on the SUBMITTED list (seeds dropped) but shown on the DISPLAYED
+ * list, so `stops[i]` is re-indexed to the row's on-screen position — a dropped seed in front
+ * would otherwise mark the wrong stop.
+ */
+function toDisplayedField(field: string, submitted: StopFormRow[], displayed: StopFormRow[]): string {
+  return field.replace(/^stops\[(\d+)\]/, (match, index: string) => {
+    const row = submitted[Number(index)]
+    const position = row ? displayed.indexOf(row) : -1
+    return position >= 0 ? `stops[${position}]` : match
+  })
 }
 
 /** Statuses in which the backend still accepts a full-order update (stops included). */
@@ -115,6 +140,10 @@ export function DossierRouteEditor({
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [conflict, setConflict] = useState<TransportOrderDetail | null>(null)
   const [refreshTarget, setRefreshTarget] = useState<string | null>(null)
+  // Keys of added-but-untouched rows awaiting the "drop and save?" confirmation.
+  const [emptyStopPrompt, setEmptyStopPrompt] = useState<string[] | null>(null)
+  // Row with data (or persisted) whose Verwijderen awaits confirmation.
+  const [removeTarget, setRemoveTarget] = useState<string | null>(null)
   const [quickCreate, setQuickCreate] = useState<{ name: string; resolve: (created: LocationOption | null) => void } | null>(null)
   const pendingFocus = useRef<string | null>(null)
 
@@ -209,7 +238,28 @@ export function DossierRouteEditor({
     })
   }
 
+  function removeStop(key: string) {
+    mutateStops((rows) => rows.filter((row) => row.key !== key))
+  }
+
+  /**
+   * Verwijderen: an untouched row (seeded or just added) goes immediately; a row that holds
+   * data — every persisted stop included — is only removed after confirmation, so a mis-click
+   * can never take real route data along.
+   */
+  function requestRemoveStop(key: string) {
+    const row = stops.find((candidate) => candidate.key === key)
+    if (!row) return
+    if (isEmptyStopRow(row)) {
+      removeStop(key)
+      return
+    }
+    setRemoveTarget(key)
+  }
+
   function discard() {
+    setEmptyStopPrompt(null)
+    setRemoveTarget(null)
     setStops(seedStops(baseOrder))
     setCargoItems(cargoFromOrder(baseOrder ?? undefined))
     setErrors({})
@@ -247,11 +297,37 @@ export function DossierRouteEditor({
     }
   }
 
-  async function save() {
-    // Untouched scaffolding rows are not data; drop them and keep the goods links pointing at
-    // the same stops (the backend links by position).
-    const effectiveStops = stops.filter((stop) => !isEmptyStopRow(stop))
-    const effectiveCargo = remapCargoStopIndices(cargoItems, stops, effectiveStops)
+  /**
+   * Route opslaan. A stop the planner added and left blank is never dropped silently: the save
+   * first asks whether to remove it (one dialog for all of them). Rows with any entered value
+   * are submitted and fail the location-or-place rule inline instead of vanishing.
+   */
+  function requestSave() {
+    const untouched = stops.filter(isUntouchedAdded).map((row) => row.key)
+    if (untouched.length > 0) {
+      setEmptyStopPrompt(untouched)
+      return
+    }
+    void save(stops, cargoItems)
+  }
+
+  /** "Lege stop(s) verwijderen & opslaan": drop the confirmed rows from the editor, then save the rest. */
+  function confirmDropEmptyStops() {
+    if (!emptyStopPrompt) return
+    const drop = new Set(emptyStopPrompt)
+    const remaining = stops.filter((row) => !drop.has(row.key))
+    const remainingCargo = remapCargoStopIndices(cargoItems, stops, remaining)
+    mutateStops(() => remaining)
+    setEmptyStopPrompt(null)
+    void save(remaining, remainingCargo)
+  }
+
+  async function save(rows: StopFormRow[], cargo: CargoFormRow[]) {
+    // Untouched seeded placeholders are not data: drop them (they are seeded again from the saved
+    // order) and keep the goods links pointing at the same stops (the backend links by position).
+    // Every other row is submitted as-is.
+    const effectiveStops = rows.filter((stop) => !isUntouchedSeed(stop))
+    const effectiveCargo = remapCargoStopIndices(cargo, rows, effectiveStops)
     setSaving(true)
     setError(null)
     try {
@@ -259,7 +335,7 @@ export function DossierRouteEditor({
       if (!target) return
       const values = { ...orderValuesFromDetail(target, serviceOptions), stops: effectiveStops, cargoItems: effectiveCargo }
       const routeErrors = validateOrderForm(values).filter((e) => e.section === 'route')
-      setErrors(fieldErrorMap(routeErrors))
+      setErrors(fieldErrorMap(routeErrors.map((e) => ({ ...e, field: toDisplayedField(e.field, effectiveStops, rows) }))))
       if (routeErrors.length > 0) {
         setError(t('dossiers.orderDrawer.checkStops'))
         return
@@ -342,7 +418,7 @@ export function DossierRouteEditor({
           onAddStop={(stopType) => mutateStops((rows) => [...rows, emptyStop(stopType)])}
           setStop={setStop}
           moveStop={moveStop}
-          onRemoveStop={(key) => mutateStops((rows) => rows.filter((row) => row.key !== key))}
+          onRemoveStop={requestRemoveStop}
           onRequestRefresh={setRefreshTarget}
           onQuickCreate={
             canCreateLocations && customerId
@@ -368,7 +444,7 @@ export function DossierRouteEditor({
           <Button variant="ghost" onClick={discard} disabled={!dirty || busy}>
             {t('dossierSheet.route.discard')}
           </Button>
-          <Button onClick={() => void save()} disabled={!dirty || busy}>
+          <Button onClick={requestSave} disabled={!dirty || busy}>
             {t('dossierSheet.route.save')}
           </Button>
         </div>
@@ -395,6 +471,32 @@ export function DossierRouteEditor({
             setRefreshTarget(null)
           }}
           onCancel={() => setRefreshTarget(null)}
+        />
+      )}
+
+      {emptyStopPrompt && (
+        <ConfirmDialog
+          title={t('dossierSheet.route.emptyStopsTitle', { count: emptyStopPrompt.length })}
+          message={t('dossierSheet.route.emptyStopsMessage', { count: emptyStopPrompt.length })}
+          confirmLabel={t('dossierSheet.route.emptyStopsConfirm', { count: emptyStopPrompt.length })}
+          cancelLabel={t('dossierSheet.route.emptyStopsBack')}
+          destructive
+          onConfirm={confirmDropEmptyStops}
+          onCancel={() => setEmptyStopPrompt(null)}
+        />
+      )}
+
+      {removeTarget && (
+        <ConfirmDialog
+          title={t('dossierSheet.route.removeStopTitle')}
+          message={t('dossierSheet.route.removeStopMessage', { number: stops.findIndex((row) => row.key === removeTarget) + 1 })}
+          confirmLabel={t('dossierSheet.route.removeStopConfirm')}
+          destructive
+          onConfirm={() => {
+            removeStop(removeTarget)
+            setRemoveTarget(null)
+          }}
+          onCancel={() => setRemoveTarget(null)}
         />
       )}
     </div>

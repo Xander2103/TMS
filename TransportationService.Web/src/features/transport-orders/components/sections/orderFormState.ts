@@ -83,6 +83,12 @@ export interface StopFormRow {
   unloadingInstructions: string
   /** §18: stop-level included-minutes override ('' = geen afwijking). */
   includedTimeMinutesOverride: string
+  /**
+   * Placeholder row an editor seeds for a stop type the route still lacks (dossier route editor).
+   * Re-seeded from the saved order after every save, so dropping it untouched loses nothing — unlike
+   * a row the planner added, which is only dropped after explicit confirmation.
+   */
+  seeded?: boolean
   /** §13: compact card state for orders with many stops. */
   collapsed: boolean
 }
@@ -115,6 +121,9 @@ export function nextRowKey(): string {
   return `stop-${rowKeyCounter}`
 }
 
+/** Country a new stop starts with; a different value counts as entered data (see `isEmptyStopRow`). */
+export const DEFAULT_STOP_COUNTRY = 'BE'
+
 export function emptyStop(stopType: StopInput['stopType']): StopFormRow {
   return {
     key: nextRowKey(),
@@ -128,7 +137,7 @@ export function emptyStop(stopType: StopInput['stopType']): StopFormRow {
     address: '',
     postalCode: '',
     city: '',
-    countryCode: 'BE',
+    countryCode: DEFAULT_STOP_COUNTRY,
     date: '',
     fromTime: '',
     toTime: '',
@@ -208,13 +217,26 @@ export function applyUnitToCargoRow(row: CargoFormRow, code: string | null, mast
 }
 
 /** True when a stop row was never touched (no address, no location, no planning) — intake fast path. */
+/**
+ * True only for a row the planner never touched: a NEW stop (no persisted id) with every
+ * persisted field still at its `emptyStop` default. Such a row may be dropped; any other row —
+ * a persisted stop, or a new one carrying a date, a window, a reference, an instruction, a
+ * free address, a changed country, … — is "incomplete" at most and must be validated, never
+ * discarded silently (data-safety contract of the route editors, 2026-09-11).
+ */
 export function isEmptyStopRow(stop: StopFormRow): boolean {
-  return (
-    !stop.locationId && !stop.locationName.trim() && !stop.address.trim() && !stop.postalCode.trim() &&
-    !stop.city.trim() && !stop.date && !stop.fromTime && !stop.toTime && !stop.timeRequirement &&
-    !stop.requestedFrom && !stop.confirmedFrom && !stop.appointmentRequired && !stop.reference.trim() &&
-    !stop.instructions.trim()
-  )
+  if (stop.id) return false
+  if (stop.appointmentRequired || stop.countryCode !== DEFAULT_STOP_COUNTRY) return false
+  const persistedText: string[] = [
+    stop.locationId, stop.locationName, stop.address, stop.postalCode, stop.city,
+    stop.date, stop.fromTime, stop.toTime,
+    stop.timeRequirement, stop.timeReqFrom, stop.timeReqTo,
+    stop.requestedFrom, stop.requestedTo, stop.confirmedFrom, stop.confirmedTo,
+    stop.earliestAllowed, stop.latestAllowed, stop.appointmentReference,
+    stop.reference, stop.instructions, stop.accessInstructions, stop.loadingInstructions, stop.unloadingInstructions,
+    stop.includedTimeMinutesOverride,
+  ]
+  return persistedText.every((value) => value.trim() === '')
 }
 
 /** True when a cargo row carries no meaningful content beyond the seeded quantity. */
