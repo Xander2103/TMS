@@ -994,3 +994,184 @@
     padding-right: 0;
   }
 }
+
+/* --- Desktop density pass (2026-09-11) ------------------------------------------------------
+   The app root is 18px on desktop and this page sized everything in rem, so at 100% zoom the
+   overview read like a zoomed-in page (36px title, 18px body, 42px actions). The dossier is an
+   operational desktop surface: it gets its own 15px scale, a wider cap and tighter card
+   spacing. Real sizes only — no zoom/transform. Everything below is in px on purpose. */
+
+.dossier-detail {
+  max-width: 1600px;
+  font-size: 15px;
+  line-height: 1.45;
+}
+
+.dossier-detail .dossier-header-title h1 {
+  font-size: 28px;
+  letter-spacing: -0.5px;
+  line-height: 1.15;
+  gap: 10px;
+}
+
+.dossier-detail .dossier-header-meta {
+  font-size: 14px;
+}
+
+.dossier-detail .dossier-header-entity .link-button {
+  font-size: 13px;
+}
+
+.dossier-detail .dossier-header-actions .ui-button,
+.dossier-detail .dossier-more summary {
+  min-height: 38px;
+  padding: 7px 14px;
+  font-size: 14px;
+}
+
+.dossier-detail .dossier-attention-strip {
+  font-size: 14px;
+  padding: 6px 12px;
+  margin-bottom: 10px;
+}
+
+.dossier-detail .dossier-attention-strip h2 {
+  font-size: 14px;
+}
+
+.dossier-detail .dossier-subnav-link {
+  font-size: 14px;
+  min-height: 40px;
+  padding: 8px 14px;
+  gap: 7px;
+}
+
+.dossier-detail .dossier-subnav-link svg {
+  width: 16px;
+  height: 16px;
+}
+
+.dossier-detail .dossier-subnav {
+  margin-bottom: 14px;
+}
+
+/* Overview cards: denser, but every element keeps its own readable size. */
+.dossier-detail .dossier-overview {
+  gap: 14px;
+}
+
+.dossier-detail .dossier-ov-card {
+  padding: 12px 16px 10px;
+  gap: 8px;
+}
+
+.dossier-detail .dossier-ov-head {
+  gap: 8px;
+}
+
+.dossier-detail .dossier-ov-head svg {
+  width: 18px;
+  height: 18px;
+}
+
+.dossier-detail .dossier-ov-head h2 {
+  font-size: 16px;
+  letter-spacing: -0.1px;
+}
+
+.dossier-detail .dossier-ov-body {
+  font-size: 14px;
+  gap: 4px;
+  min-height: 44px;
+}
+
+.dossier-detail .dossier-ov-muted,
+.dossier-detail .dossier-ov-list-sub,
+.dossier-detail .dossier-ov-route-value small {
+  font-size: 13px;
+}
+
+.dossier-detail .dossier-ov-context {
+  font-size: 12px;
+}
+
+.dossier-detail .dossier-ov-amount {
+  font-size: 18px;
+  gap: 8px;
+}
+
+.dossier-detail .dossier-ov-route {
+  gap: 8px;
+}
+
+.dossier-detail .dossier-ov-route li + li::after {
+  top: -10px;
+  height: 12px;
+}
+
+.dossier-detail .dossier-ov-list li {
+  padding: 6px 10px;
+  gap: 8px;
+}
+
+.dossier-detail .dossier-ov-action {
+  font-size: 14px;
+  min-height: 34px;
+  padding: 0 12px;
+  gap: 6px;
+}
+
+.dossier-detail .dossier-ov-action svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* Workspaces: section titles and inline notes follow the same scale. */
+.dossier-detail .dossier-section h2 {
+  font-size: 18px;
+}
+
+.dossier-detail .dossier-section h3,
+.dossier-detail .dossier-collapsed h3 {
+  font-size: 15px;
+}
+
+.dossier-detail .dossier-price-total {
+  font-size: 18px;
+}
+
+.dossier-detail .dossier-price-zero-warning,
+.dossier-detail .dossier-price-note,
+.dossier-detail .dossier-route-hint,
+.dossier-detail .dossier-route-state,
+.dossier-detail .dossier-order-switch-caption,
+.dossier-detail .dossier-order-switch-secondary,
+.dossier-detail .dossier-price-partial {
+  font-size: 13px;
+}
+
+.dossier-detail .dossier-price-table {
+  font-size: 14px;
+}
+
+/* Wide desktops: three overview columns from 1700px of content width, so a 2560px monitor
+   does not show two oversized halves; the two-column layout stays the default desktop case. */
+@media (min-width: 2000px) {
+  .dossier-detail .dossier-overview {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+/* Rows share their height and the action sits at the card's bottom-right, so two cards in one
+   row line up like the reference instead of one ending mid-row with dead space below it. */
+.dossier-detail .dossier-overview {
+  align-items: stretch;
+}
+
+.dossier-detail .dossier-ov-body {
+  flex: 1;
+}
+
+.dossier-detail .dossier-ov-foot {
+  margin-top: auto;
+}
