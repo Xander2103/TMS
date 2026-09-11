@@ -1,0 +1,690 @@
+/* Transportopdracht detail — redesign 2026-09-12 (reference: TransportOpdracht.png).
+   Desktop-first shell: compact header, attention strip, subnav, one section at a time. Real
+   sizes on a 15px page scale (the root is 18px on desktop) — no zoom/transform. */
+
+.tod-detail {
+  max-width: 1600px;
+  font-size: 15px;
+  line-height: 1.45;
+}
+
+/* --- Header ------------------------------------------------------------------------------- */
+
+.tod-header {
+  margin-bottom: 12px;
+}
+
+.tod-header-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px 24px;
+  flex-wrap: wrap;
+}
+
+.tod-header-main {
+  min-width: 0;
+  flex: 1 1 520px;
+}
+
+.tod-header-title {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.tod-header-title h1 {
+  margin: 0;
+  font-size: 28px;
+  letter-spacing: -0.5px;
+  line-height: 1.15;
+}
+
+.tod-header-chips {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.tod-header-chips code {
+  font-size: 13px;
+  padding: 2px 8px;
+}
+
+.tod-header-sub {
+  margin: 4px 0 0;
+  font-size: 14px;
+  color: var(--text-muted, var(--text));
+}
+
+.tod-commercial-bar {
+  margin: 8px 0 0;
+  font-size: 14px;
+}
+
+.tod-header-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.tod-actions-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.tod-actions-row .ui-button {
+  min-height: 38px;
+  padding: 7px 14px;
+  font-size: 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tod-actions-workflow .tod-action-destructive {
+  margin-left: 8px;
+}
+
+.tod-actions-documents .ui-button {
+  font-weight: 500;
+}
+
+/* --- Attention strip ---------------------------------------------------------------------- */
+
+.tod-attention {
+  border: 1px solid color-mix(in srgb, var(--color-warning, #d97706) 45%, var(--border));
+  border-left: 4px solid var(--color-warning, #d97706);
+  border-radius: var(--radius-md, 8px);
+  background: color-mix(in srgb, var(--color-warning, #d97706) 7%, var(--bg));
+  padding: 6px 14px;
+  margin-bottom: 14px;
+}
+
+.tod-attention.is-danger {
+  border-color: color-mix(in srgb, var(--color-danger, #dc2626) 40%, var(--border));
+  border-left-color: var(--color-danger, #dc2626);
+  background: color-mix(in srgb, var(--color-danger, #dc2626) 6%, var(--bg));
+}
+
+.tod-attention.is-info {
+  border-color: var(--border);
+  border-left-color: var(--accent);
+  background: var(--bg);
+}
+
+.tod-attention ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tod-attention-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 0;
+}
+
+.tod-attention-item + .tod-attention-item {
+  border-top: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+}
+
+.tod-attention-icon {
+  flex-shrink: 0;
+  display: inline-flex;
+  color: var(--color-warning, #d97706);
+}
+
+.tod-attention-item.is-danger .tod-attention-icon {
+  color: var(--color-danger, #dc2626);
+}
+
+.tod-attention-item.is-info .tod-attention-icon {
+  color: var(--accent);
+}
+
+.tod-attention-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 10px;
+  font-size: 14px;
+}
+
+.tod-attention-text strong {
+  color: var(--text-h);
+}
+
+.tod-attention-action {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text-h);
+  font-size: 13.5px;
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.tod-attention-action:hover {
+  border-color: var(--accent-border, var(--accent));
+  color: var(--accent);
+}
+
+/* --- Subnav ------------------------------------------------------------------------------- */
+
+.tod-subnav {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 16px;
+}
+
+.tod-subnav ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.tod-subnav-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 40px;
+  padding: 8px 14px;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  color: var(--text);
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.tod-subnav-link svg {
+  opacity: 0.75;
+}
+
+.tod-subnav-link:hover {
+  color: var(--text-h);
+}
+
+.tod-subnav-link.is-active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+.tod-subnav-link.is-active svg {
+  opacity: 1;
+}
+
+.tod-subnav-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  border-radius: 4px;
+}
+
+/* --- Overview cards ----------------------------------------------------------------------- */
+
+.tod-overview-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 14px;
+  align-items: stretch;
+}
+
+.tod-overview-grid > .tod-card {
+  grid-column: span 3;
+}
+
+.tod-overview-grid > .tod-card-media,
+.tod-overview-grid > .tod-card:nth-last-child(-n + 2) {
+  grid-column: span 2;
+}
+
+.tod-card {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 16px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  background: var(--bg);
+}
+
+.tod-card-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.tod-card-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--accent-bg, rgba(37, 99, 235, 0.1));
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.tod-card-head h2 {
+  flex: 1;
+  margin: 0;
+  font-size: 16px;
+  letter-spacing: -0.1px;
+}
+
+.tod-card-meta {
+  font-size: 13px;
+  color: var(--text-muted, var(--text));
+  white-space: nowrap;
+}
+
+.tod-card-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-h);
+  font-size: 13.5px;
+  font-weight: 500;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.tod-card-action:hover {
+  border-color: var(--accent-border, var(--accent));
+  color: var(--accent);
+}
+
+.tod-card-action:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.tod-card-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.tod-card-body p {
+  margin: 0;
+}
+
+.tod-muted {
+  color: var(--text-muted, var(--text));
+  font-size: 13.5px;
+}
+
+.tod-amount {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text-h);
+  line-height: 1.1;
+}
+
+/* key/value grid in a card */
+.tod-kv {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 8px 18px;
+  margin: 0;
+}
+
+.tod-kv > div {
+  min-width: 0;
+}
+
+.tod-kv dt {
+  font-size: 12.5px;
+  color: var(--text-muted, var(--text));
+  margin-bottom: 2px;
+}
+
+.tod-kv dd {
+  margin: 0;
+  color: var(--text-h);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.tod-kv-price {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.tod-kv-price > div + div {
+  border-left: 1px solid var(--border);
+  padding-left: 18px;
+}
+
+/* route list */
+.tod-route {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  position: relative;
+}
+
+.tod-route::before {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 10px;
+  bottom: 10px;
+  border-left: 2px dashed var(--border);
+}
+
+.tod-route li {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+}
+
+.tod-route li::before {
+  content: '';
+  position: absolute;
+  left: -14px;
+  top: 50%;
+  width: 10px;
+  height: 10px;
+  margin-top: -5px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.tod-route li.is-unloading::before {
+  background: var(--success, #16a34a);
+}
+
+.tod-route-place {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.tod-route-place strong {
+  color: var(--text-h);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tod-route-time {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+/* media (photos & documents) */
+.tod-media-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.tod-media-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  column-gap: 8px;
+  align-items: center;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--text) 3%, var(--bg));
+}
+
+.tod-media-item svg {
+  grid-row: 1 / 3;
+  color: var(--accent);
+}
+
+.tod-media-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-h);
+}
+
+/* timeline preview */
+.tod-timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  position: relative;
+}
+
+.tod-timeline li {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+  font-size: 13.5px;
+}
+
+.tod-timeline li::before {
+  content: '';
+  position: absolute;
+  left: -14px;
+  top: 6px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.tod-timeline-time {
+  color: var(--text-muted, var(--text));
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.tod-timeline-title {
+  color: var(--text-h);
+}
+
+.tod-empty-chat {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--text) 4%, var(--bg));
+  color: var(--text-muted, var(--text));
+  font-size: 14px;
+}
+
+/* --- Sections ----------------------------------------------------------------------------- */
+
+.tod-section {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.tod-panel {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px 16px;
+  margin: 0;
+  max-width: none;
+}
+
+.tod-panel > h2 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 12px;
+  font-size: 17px;
+}
+
+.tod-panel h3 {
+  font-size: 14px;
+  margin: 12px 0 6px;
+}
+
+.tod-facts {
+  border: none;
+  padding: 0;
+  gap: 8px 24px;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+
+.tod-facts dt {
+  font-size: 12.5px;
+}
+
+.tod-facts dd {
+  font-size: 14px;
+}
+
+.tod-table-wrap {
+  overflow-x: auto;
+}
+
+.tod-table {
+  font-size: 14px;
+}
+
+.tod-table th,
+.tod-table td {
+  padding: 8px 10px;
+}
+
+.tod-table th {
+  font-size: 12px;
+}
+
+.tod-stops-table td strong {
+  color: var(--text-h);
+  font-weight: 600;
+}
+
+/* Price summary panel: total + status + grouped actions on one row. */
+.tod-price-summary {
+  border-left: 4px solid var(--color-warning, #d97706);
+}
+
+.tod-price-summary.is-success {
+  border-left-color: var(--success, #16a34a);
+}
+
+.tod-price-summary.is-danger {
+  border-left-color: var(--color-danger, #dc2626);
+}
+
+.tod-price-summary-row {
+  display: flex;
+  align-items: center;
+  gap: 12px 28px;
+  flex-wrap: wrap;
+}
+
+.tod-price-main .to-price-summary-amount {
+  font-size: 26px;
+}
+
+.tod-price-status {
+  font-size: 14px;
+}
+
+.tod-price-actions {
+  margin-left: auto;
+}
+
+.tod-price-actions .ui-button {
+  min-height: 36px;
+  padding: 6px 12px;
+  font-size: 14px;
+}
+
+.tod-section-colli .to-section {
+  margin-top: 0;
+  max-width: none;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px 16px;
+}
+
+/* --- Responsive --------------------------------------------------------------------------- */
+
+@media (max-width: 1280px) {
+  .tod-overview-grid > .tod-card,
+  .tod-overview-grid > .tod-card-media,
+  .tod-overview-grid > .tod-card:nth-last-child(-n + 2) {
+    grid-column: span 3;
+  }
+}
+
+@media (max-width: 900px) {
+  .tod-overview-grid > .tod-card,
+  .tod-overview-grid > .tod-card-media,
+  .tod-overview-grid > .tod-card:nth-last-child(-n + 2) {
+    grid-column: span 6;
+  }
+
+  .tod-header-actions {
+    align-items: flex-start;
+  }
+
+  .tod-actions-row {
+    justify-content: flex-start;
+  }
+
+  .tod-kv-price {
+    grid-template-columns: 1fr;
+  }
+
+  .tod-kv-price > div + div {
+    border-left: none;
+    padding-left: 0;
+  }
+}

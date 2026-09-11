@@ -34,6 +34,7 @@ vi.mock('../../../master-data/hooks/useLookupOptions', () => ({
   }),
 }))
 vi.mock('../../components/OrderDocumentsPanel', () => ({ OrderDocumentsPanel: () => <div /> }))
+vi.mock('../../components/OrderDocumentStrategyPanel', () => ({ OrderDocumentStrategyPanel: () => <div /> }))
 vi.mock('../../components/OrderTimelinePanel', () => ({ OrderTimelinePanel: () => <div /> }))
 vi.mock('../../components/StopExecutionPlanDialog', () => ({ StopExecutionPlanDialog: () => <div /> }))
 vi.mock('../../../packages/components/OrderPackagesPanel', () => ({ OrderPackagesPanel: () => <div /> }))
@@ -76,6 +77,9 @@ function cargoItem(overrides: Partial<CargoItem>): CargoItem {
     ...overrides,
   }
 }
+
+/** Redesign 2026-09-12: the Lading facts live on the Lading subsection. */
+const LADING_TAB = '/transport-orders/order-1/lading'
 
 function baseOrder(overrides: Partial<TransportOrderDetail> = {}): TransportOrderDetail {
   return {
@@ -132,11 +136,11 @@ function baseOrder(overrides: Partial<TransportOrderDetail> = {}): TransportOrde
   }
 }
 
-function renderPage() {
+function renderPage(initialPath = '/transport-orders/order-1') {
   return render(
-    <MemoryRouter initialEntries={['/transport-orders/order-1']}>
+    <MemoryRouter initialEntries={[initialPath]}>
       <Routes>
-        <Route path="/transport-orders/:id" element={<TransportOrderDetailPage />} />
+        <Route path="/transport-orders/:id/:section?" element={<TransportOrderDetailPage />} />
       </Routes>
     </MemoryRouter>,
   )
@@ -158,10 +162,10 @@ describe('TransportOrderDetailPage Lading aggregation', () => {
         ],
       }),
     )
-    renderPage()
+    renderPage(LADING_TAB)
     await screen.findByText('ORD-0001 — Klant X')
 
-    expect(screen.getAllByText('Lading').length).toBeGreaterThanOrEqual(2) // section heading + <dt>
+    expect(screen.getAllByText('Lading').length).toBeGreaterThanOrEqual(2) // subnav link + panel heading + <dt>
     const list = document.querySelector('.to-lading-list') as HTMLElement
     expect(list).toBeInTheDocument()
     expect(within(list).getByText('2 Europallet')).toBeInTheDocument()
@@ -179,7 +183,7 @@ describe('TransportOrderDetailPage Lading aggregation', () => {
         ],
       }),
     )
-    renderPage()
+    renderPage(LADING_TAB)
     await screen.findByText('ORD-0001 — Klant X')
 
     const list = document.querySelector('.to-lading-list') as HTMLElement
@@ -188,7 +192,7 @@ describe('TransportOrderDetailPage Lading aggregation', () => {
 
   it('falls back to the order-level "Aantal" row when there are no cargo lines', async () => {
     api.getTransportOrder.mockResolvedValue(baseOrder({ cargoItems: [] }))
-    renderPage()
+    renderPage(LADING_TAB)
     await screen.findByText('ORD-0001 — Klant X')
 
     expect(screen.getByText('Aantal')).toBeInTheDocument()

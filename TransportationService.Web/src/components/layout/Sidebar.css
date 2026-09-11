@@ -121,3 +121,157 @@
     transform: translateX(0);
   }
 }
+
+/* --- Desktop density pass (2026-09-12) ------------------------------------------------------
+   The sidebar inherited the 18px desktop root font: 18px labels in 40px rows, a 44px filter,
+   205px of header before the first module and 10px gaps between modules. Every value below is
+   scoped to .sidebar (no global typography change, no zoom/transform) and matches the 14-15px
+   scale of the dossier content area. Rows keep >= 30px hit height; contrast is untouched. */
+
+.sidebar {
+  width: 232px;
+  padding: 14px 12px 12px;
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.sidebar .app-title {
+  font-size: 17px;
+  letter-spacing: -0.2px;
+  margin: 0 4px 12px;
+}
+
+.sidebar .le-switcher {
+  margin: 0 0 10px;
+  gap: 3px;
+}
+
+.sidebar .le-switcher-label {
+  font-size: 10.5px;
+}
+
+.sidebar .le-switcher-select {
+  padding: 4px 8px;
+  font-size: 13px;
+}
+
+.sidebar .nav-filter {
+  margin: 0 0 8px;
+  padding: 0 8px;
+  border-radius: 6px;
+}
+
+.sidebar .nav-filter-input {
+  padding: 6px 0;
+  font-size: 13px;
+}
+
+.sidebar .nav-filter-icon {
+  width: 14px;
+  height: 14px;
+}
+
+.sidebar .nav-filter-kbd {
+  font-size: 10px;
+}
+
+.sidebar .nav-module {
+  margin-bottom: 4px;
+}
+
+.sidebar .nav-module-header {
+  padding: 6px 10px;
+  gap: 8px;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  border-radius: 6px;
+}
+
+.sidebar .nav-module-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.sidebar .nav-module-header .nav-chevron {
+  width: 14px;
+  height: 14px;
+}
+
+.sidebar .nav-module-items {
+  padding: 2px 0 4px;
+  gap: 1px;
+}
+
+.sidebar .nav-item,
+.sidebar .nav-subitem-toggle {
+  padding: 5px 10px;
+  gap: 8px;
+  min-height: 30px;
+  font-size: 14px;
+}
+
+.sidebar .nav-item-icon {
+  width: 15px;
+  height: 15px;
+}
+
+.sidebar .nav-subitems .nav-item {
+  font-size: 13.5px;
+}
+
+.sidebar .nav-badge {
+  min-width: 17px;
+  padding: 0 5px;
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.sidebar .nav-subgroup {
+  margin-top: 2px;
+}
+
+.sidebar .nav-subgroup-label {
+  margin: 6px 10px 2px;
+  padding-top: 4px;
+  font-size: 10.5px;
+}
+
+.sidebar .nav-empty {
+  padding: 6px 10px;
+  font-size: 13px;
+}
+
+.sidebar .app-lang {
+  margin: 8px 2px 2px;
+}
+
+.sidebar .app-lang-select {
+  padding: 3px 6px;
+  font-size: 12.5px;
+}
+
+.sidebar .sidebar-user {
+  margin-top: 10px;
+  padding-top: 10px;
+  gap: 8px;
+}
+
+.sidebar .sidebar-user-avatar {
+  width: 30px;
+  height: 30px;
+  font-size: 12px;
+}
+
+.sidebar .sidebar-user-name {
+  font-size: 13px;
+}
+
+.sidebar .sidebar-user-tenant {
+  font-size: 11.5px;
+}
+
+.sidebar .sidebar-logout {
+  width: 28px;
+  height: 28px;
+  font-size: 14px;
+}

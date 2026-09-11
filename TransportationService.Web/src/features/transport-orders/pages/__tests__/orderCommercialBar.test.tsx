@@ -27,18 +27,24 @@ vi.mock('../../components/StopExecutionPlanDialog', () => ({ StopExecutionPlanDi
 vi.mock('../../../packages/components/OrderPackagesPanel', () => ({ OrderPackagesPanel: () => <div /> }))
 vi.mock('../../../packages/components/CustomerPackagesSummary', () => ({ CustomerPackagesSummary: () => <div /> }))
 
-const api = vi.hoisted(() => ({ getTransportOrder: vi.fn(), getLegalEntityOptions: vi.fn() }))
+const api = vi.hoisted(() => ({ getTransportOrder: vi.fn(), getLegalEntityOptions: vi.fn(), getTransportOrderTimeline: vi.fn() }))
 vi.mock('../../api/transportOrdersApi', async (orig) => ({
   ...(await orig<typeof import('../../api/transportOrdersApi')>()),
   getTransportOrder: api.getTransportOrder,
+  getTransportOrderTimeline: api.getTransportOrderTimeline,
+}))
+// The overview (default tab) fetches the documents list for its card; keep the type labels.
+vi.mock('../../api/orderDocumentsApi', async (orig) => ({
+  ...(await orig<typeof import('../../api/orderDocumentsApi')>()),
+  listOrderDocuments: vi.fn(() => Promise.resolve([])),
 }))
 vi.mock('../../../legal-entities/api/legalEntitiesApi', () => ({ getLegalEntityOptions: api.getLegalEntityOptions }))
 
-function renderPage() {
+function renderPage(initialPath = '/transport-orders/order-1') {
   return render(
-    <MemoryRouter initialEntries={['/transport-orders/order-1']}>
+    <MemoryRouter initialEntries={[initialPath]}>
       <Routes>
-        <Route path="/transport-orders/:id" element={<TransportOrderDetailPage />} />
+        <Route path="/transport-orders/:id/:section?" element={<TransportOrderDetailPage />} />
       </Routes>
     </MemoryRouter>,
   )
@@ -50,6 +56,7 @@ beforeEach(() => {
     { id: 'ent-a', displayName: 'Entiteit A', vatNumber: null, isDefault: true, isActive: true },
   ])
   api.getTransportOrder.mockReset().mockResolvedValue(orderDetail({ id: 'order-1', orderNumber: 'ORD-1', customerName: 'Klant X', legalEntityId: null }))
+  api.getTransportOrderTimeline.mockReset().mockResolvedValue([])
 })
 
 describe('order commercial bar (sprint 6)', () => {

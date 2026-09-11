@@ -55,6 +55,9 @@ vi.mock('../../api/transportOrdersApi', async (orig) => ({
   getTransportOrder: api.getTransportOrder,
 }))
 
+/** Redesign 2026-09-12: the stop table lives on the Stops subsection. */
+const STOPS_TAB = '/transport-orders/order-1/stops'
+
 /** 08:00–10:00 Europe/Amsterdam on a summer day, as the API stores and serves it. */
 const SUMMER_FROM = '2026-07-15T06:00:00Z'
 const SUMMER_TO = '2026-07-15T08:00:00Z'
@@ -104,11 +107,11 @@ function order(stops: TransportOrderStop[]): TransportOrderDetail {
   } as unknown as TransportOrderDetail
 }
 
-function renderDetailPage() {
+function renderDetailPage(initialPath = '/transport-orders/order-1') {
   return render(
-    <MemoryRouter initialEntries={['/transport-orders/order-1']}>
+    <MemoryRouter initialEntries={[initialPath]}>
       <Routes>
-        <Route path="/transport-orders/:id" element={<TransportOrderDetailPage />} />
+        <Route path="/transport-orders/:id/:section?" element={<TransportOrderDetailPage />} />
       </Routes>
     </MemoryRouter>,
   )
@@ -122,7 +125,7 @@ beforeEach(() => {
 describe('stop windows render in the tenant zone', () => {
   it('shows 08:00–10:00 for a 06:00Z–08:00Z summer window on the order detail page', async () => {
     api.getTransportOrder.mockResolvedValue(order([stop()]))
-    renderDetailPage()
+    renderDetailPage(STOPS_TAB)
 
     expect(await screen.findByText('15/07/2026 08:00 – 15/07/2026 10:00')).toBeInTheDocument()
     // The browser zone would have produced these — they must be nowhere on the page.
@@ -134,7 +137,7 @@ describe('stop windows render in the tenant zone', () => {
     api.getTransportOrder.mockResolvedValue(order([
       stop({ plannedFrom: '2026-01-15T07:00:00Z', plannedTo: '2026-01-15T09:00:00Z' }),
     ]))
-    renderDetailPage()
+    renderDetailPage(STOPS_TAB)
 
     expect(await screen.findByText('15/01/2026 08:00 – 15/01/2026 10:00')).toBeInTheDocument()
   })

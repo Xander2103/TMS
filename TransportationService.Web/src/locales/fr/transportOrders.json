@@ -591,7 +591,17 @@
     "reopenFailed": "Le prix n'a pas pu être modifié.",
     "reopenNotePrefix": "Le prix repasse à",
     "reopenNoteSuffix": " ; le prix total actuel et la confirmation restent conservés dans l'historique. Confirmez à nouveau le prix après la modification.",
-    "calcDetailsTitle": "Détails du calcul"
+    "calcDetailsTitle": "Détails du calcul",
+    "nav": {
+      "label": "Sections de la commande",
+      "overview": "Aperçu",
+      "lading": "Chargement",
+      "price": "Prix",
+      "stops": "Arrêts",
+      "colli": "Colis",
+      "history": "Historique",
+      "messages": "Messages"
+    }
   },
   "documents": {
     "loadFailed": "Les documents n'ont pas pu être chargés.",

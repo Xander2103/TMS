@@ -591,7 +591,17 @@
     "reopenFailed": "De prijs kon niet worden aangepast.",
     "reopenNotePrefix": "De prijs gaat terug naar",
     "reopenNoteSuffix": "; de huidige totaalprijs en bevestiging blijven bewaard in de historiek. Bevestig de prijs opnieuw na het aanpassen.",
-    "calcDetailsTitle": "Berekeningsdetails"
+    "calcDetailsTitle": "Berekeningsdetails",
+    "nav": {
+      "label": "Onderdelen van de opdracht",
+      "overview": "Overzicht",
+      "lading": "Lading",
+      "price": "Prijs",
+      "stops": "Stops",
+      "colli": "Colli",
+      "history": "Historiek",
+      "messages": "Berichten"
+    }
   },
   "documents": {
     "loadFailed": "Documenten konden niet worden geladen.",

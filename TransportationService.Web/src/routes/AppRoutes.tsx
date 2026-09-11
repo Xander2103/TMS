@@ -215,7 +215,9 @@ const router = createBrowserRouter(
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/transport-orders" element={<TransportOrdersPage />} />
           <Route path="/transport-orders/new" element={<NewTransportOrderPage />} />
-          <Route path="/transport-orders/:id" element={<TransportOrderDetailPage />} />
+          {/* Redesign 2026-09-12: the order shell stays mounted; the optional segment selects the
+              subsection (overzicht · lading · prijs · stops · colli · historiek · berichten). */}
+          <Route path="/transport-orders/:id/:section?" element={<TransportOrderDetailPage />} />
           <Route path="/order-imports" element={<OrderImportsPage />} />
           <Route path="/planning" element={<PlanningPage />} />
           <Route path="/planning-center" element={<PlanningCenterPage />} />

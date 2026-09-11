@@ -591,7 +591,17 @@
     "reopenFailed": "The price could not be adjusted.",
     "reopenNotePrefix": "The price goes back to",
     "reopenNoteSuffix": "; the current total price and confirmation remain in the history. Confirm the price again after adjusting.",
-    "calcDetailsTitle": "Calculation details"
+    "calcDetailsTitle": "Calculation details",
+    "nav": {
+      "label": "Order sections",
+      "overview": "Overview",
+      "lading": "Cargo",
+      "price": "Price",
+      "stops": "Stops",
+      "colli": "Packages",
+      "history": "History",
+      "messages": "Messages"
+    }
   },
   "documents": {
     "loadFailed": "Documents could not be loaded.",

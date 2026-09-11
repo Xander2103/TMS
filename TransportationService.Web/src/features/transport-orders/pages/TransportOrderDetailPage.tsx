@@ -1,11 +1,8 @@
-import { Fragment, useEffect, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import { addRecentItem } from '../../../hooks/recentItems'
-import { PageHeader } from '../../../components/layout/PageHeader'
-import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { LoadingState } from '../../../components/feedback/LoadingState'
 import { ErrorState } from '../../../components/feedback/ErrorState'
-import { BackButton } from '../../../components/ui/BackButton'
 import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
@@ -31,99 +28,49 @@ import {
 import { TransportOrderForm } from '../components/TransportOrderForm'
 import { UnitSelect } from '../components/UnitSelect'
 import { OrderDocumentsPanel } from '../components/OrderDocumentsPanel'
-import { OrderDocumentStrategyPanel } from '../components/OrderDocumentStrategyPanel'
-import { OrderPortalReviewPanel } from '../components/OrderPortalReviewPanel'
-import { OrderTimelinePanel } from '../components/OrderTimelinePanel'
-import { CustomerMessagesPanel } from '../../customers/components/CustomerMessagesPanel'
 import { StopExecutionPlanDialog } from '../components/StopExecutionPlanDialog'
-import { OrderPackagesPanel } from '../../packages/components/OrderPackagesPanel'
-import { UNIT_TYPE_LABELS } from '../../packages/types'
 import { useLookupOptions } from '../../master-data/hooks/useLookupOptions'
-import { CustomerPackagesSummary } from '../../packages/components/CustomerPackagesSummary'
-import { downloadOrderDocument } from '../api/transportDocumentsApi'
 import { OrderCustomerChangeDialog } from '../components/OrderCustomerChangeDialog'
 import { OrderLegalEntityDialog } from '../components/OrderLegalEntityDialog'
-import { isPlaceholderCustomerName } from '../components/placeholderCustomer'
 import { getLegalEntityOptions } from '../../legal-entities/api/legalEntitiesApi'
 import type { LegalEntityOption } from '../../legal-entities/types'
 import '../components/commercialChange.css'
 import {
-  ORDER_PRICE_LINE_KIND_TONE,
   ORDER_STATUS_LABELS,
-  ORDER_STATUS_TONE,
-  ORDER_TRANSITION_LABELS,
   PRICING_COVERAGE_LABELS,
   PRICING_COVERAGE_TONE,
-  STOP_TYPE_LABELS,
-  lineBadge,
   priceStatusDisplay,
   type OrderPricingLine,
   type TransportOrderDetail,
   type TransportOrderStatus,
   type TransportOrderStop,
 } from '../types'
-import { formatDate, formatDateTime, formatTime } from '../../../utils/dates'
 import { formatCurrency, formatQuantity } from '../../../utils/numbers'
 import { useLocale } from '../../../i18n/localeContext'
 import './transport-orders.css'
+import '../detail/order-detail.css'
+import { OrderDetailContext, type OrderDetailWorkspace } from '../detail/orderDetailContext'
+import { ORDER_TABS, isOrderTab, orderTabPath, type OrderTab } from '../detail/orderSections'
+import { OrderDetailHeader } from '../detail/OrderDetailHeader'
+import { OrderAttention } from '../detail/OrderAttention'
+import { OrderSubnav } from '../detail/OrderSubnav'
+import { OrderOverview } from '../detail/OrderOverview'
+import { OrderLadingSection } from '../detail/OrderLadingSection'
+import { OrderPriceSection } from '../detail/OrderPriceSection'
+import { OrderStopsSection } from '../detail/OrderStopsSection'
+import { OrderColliSection } from '../detail/OrderColliSection'
+import { OrderHistorySection } from '../detail/OrderHistorySection'
+import { OrderMessagesSection } from '../detail/OrderMessagesSection'
 
-function formatWindow(from: string | null, to: string | null): string {
-  if (from && to) return `${formatDateTime(from)} – ${formatDateTime(to)}`
-  if (from) return `vanaf ${formatDateTime(from)}`
-  if (to) return `tot ${formatDateTime(to)}`
-  return '—'
-}
 
-function money(amount: number): string {
-  return formatCurrency(amount)
-}
 
-/** §15 badge ("Vóór 10:00") for a stop's simple time requirement; '' when none. */
-function stopTimeRequirementBadge(stop: TransportOrderStop): string {
-  const from = stop.timeRequirementFrom?.slice(0, 5)
-  const to = stop.timeRequirementTo?.slice(0, 5)
-  switch (stop.timeRequirement) {
-    case 'Before':
-      return to ? `Vóór ${to}` : ''
-    case 'After':
-      return from ? `Na ${from}` : ''
-    case 'Window':
-      return from && to ? `${from}–${to}` : ''
-    default:
-      return ''
-  }
-}
 
-/**
- * "04/08/2026 om 20:59" — the confirmation stamp next to the prominent total (§9). C-03: the
- * hour comes from formatTime (tenant zone), not from the browser's getHours().
- */
-function formatConfirmedStamp(isoUtc: string): string {
-  const time = formatTime(isoUtc)
-  return time ? `${formatDate(isoUtc)} om ${time}` : ''
-}
 
-/**
- * Label for the Berekening column: quantity x unit x unit price when known AND consistent with
- * the shown Bedrag, else a flat-amount or unknown fallback. An amount-only adjustment (e.g.
- * Aantal cleared, Bedrag typed directly) legitimately leaves a stale quantity/unitPrice on the
- * stored line — showing the stale formula next to the real amount would contradict it, so the
- * formula is only rendered when it actually reproduces the amount (rounding-tolerant).
- */
-function calculationLabel(line: OrderPricingLine): string {
-  if (line.quantity != null && line.unitPrice != null) {
-    const computed = Math.round(line.quantity * line.unitPrice * 100) / 100
-    if (computed === line.amount) {
-      const unit = line.unit ? ` ${line.unit}` : ''
-      return `${formatQuantity(line.quantity)}${unit} × ${money(line.unitPrice)}`
-    }
-  }
-  return line.kind === 'Manual' ? 'Vast bedrag' : '—'
-}
 
 export function TransportOrderDetailPage() {
   const { t } = useLocale()
-  const { id = '' } = useParams<{ id: string }>()
+  const { id = '', section } = useParams<{ id: string; section?: string }>()
+  const activeTab: OrderTab = isOrderTab(section) ? section : 'overzicht'
   const navigate = useNavigate()
   const { showSuccess, showError } = useToast()
   const { hasPermission, hasAnyPermission } = useAuth()
@@ -503,6 +450,8 @@ export function TransportOrderDetailPage() {
 
   if (loadError) return <ErrorState message={loadError} />
   if (!order) return <LoadingState message="Opdracht laden..." />
+  // Redesign 2026-09-12: an unknown segment lands on the overview with a clean URL.
+  if (section !== undefined && !isOrderTab(section)) return <Navigate to={orderTabPath(id, 'overzicht')} replace />
 
   const editable =
     (order.status === 'Draft' || order.status === 'Confirmed') && hasPermission('orders.edit')
@@ -546,127 +495,60 @@ export function TransportOrderDetailPage() {
   const computedEditAmountDisplay =
     computedEditAmount !== null ? formatCurrency(computedEditAmount) : '—'
 
-  return (
-    <div>
-      <Breadcrumbs items={[{ label: 'Transportopdrachten', to: '/transport-orders' }, { label: order.orderNumber }]} />
-      <BackButton to="/transport-orders" label="Terug naar opdrachten" />
-      <PageHeader
-        title={`${order.orderNumber} — ${order.customerName}`}
-        subtitle={`Opdracht van ${formatDate(order.orderDate)}${order.customerReference ? ` · ref. ${order.customerReference}` : ''}`}
-        action={
-          <span className="to-header-actions">
-            {/* Wave 1: the containing dossier (wrapper or user-created) is one click away. */}
-            {order.dossierId && order.dossierNumber && (
-              <Link to={`/dossiers/${order.dossierId}`} className="ui-badge ui-badge-info" title="Open het dossier">
-                {order.dossierNumber}
-              </Link>
-            )}
-            <Badge tone={ORDER_STATUS_TONE[order.status]}>{t(ORDER_STATUS_LABELS[order.status])}</Badge>
-            {/* Wave 9: leveringsbon/CMR uit de bevroren ordergegevens. */}
-            <Button
-              variant="secondary"
-              onClick={() => void downloadOrderDocument(order.id, 'delivery-note', order.orderNumber)
-                .catch(() => showError('De leveringsbon kon niet worden gegenereerd.'))}
-              disabled={busy}
-            >
-              Leveringsbon
-            </Button>
-            <Button
-              variant="secondary"
-              onClick={() => void downloadOrderDocument(order.id, 'cmr', order.orderNumber)
-                .catch(() => showError('De CMR kon niet worden gegenereerd.'))}
-              disabled={busy}
-            >
-              CMR
-            </Button>
-            {editable && !editing && (
-              <Button variant="secondary" onClick={() => setEditing(true)} disabled={busy}>
-                Bewerken
-              </Button>
-            )}
-            {deletable && (
-              <Button variant="danger" onClick={() => setConfirmDelete(true)} disabled={busy || editing}>
-                Verwijderen
-              </Button>
-            )}
-            {hasAnyPermission(['orders.change_status', 'orders.manage']) &&
-              order.allowedTransitions.map((target) => (
-                <Button key={target} onClick={() => void applyTransition(target)} disabled={busy || editing}>
-                  {t(ORDER_TRANSITION_LABELS[target])}
-                </Button>
-              ))}
-            {order.canCancel && hasAnyPermission(['orders.cancel', 'orders.manage']) && (
-              <Button variant="secondary" onClick={() => setCancelDialogOpen(true)} disabled={busy || editing}>
-                Annuleren
-              </Button>
-            )}
-            {order.allowedCorrections.length > 0 && hasAnyPermission(['orders.correct_status', 'orders.manage']) && (
-              <Button variant="secondary" onClick={() => setCorrectDialogOpen(true)} disabled={busy || editing}>
-                Status corrigeren
-              </Button>
-            )}
-            {hasAnyPermission(['orders.create', 'orders.manage']) && (
-              <Button
-                variant="secondary"
-                onClick={() => navigate(`/transport-orders/new?template=${order.id}`)}
-                disabled={busy || editing}
-              >
-                Gebruik als sjabloon
-              </Button>
-            )}
-          </span>
-        }
-      />
+  const workspace: OrderDetailWorkspace = {
+    order,
+    busy,
+    editing,
+    entities,
+    editable,
+    deletable,
+    planEditable,
+    canEditPricingLines,
+    canEditPricingStatus,
+    canLockPrice,
+    canViewPackages: hasPermission('packages.view'),
+    canViewMessages: hasPermission('customer_messages.view'),
+    canChangeStatus: hasAnyPermission(['orders.change_status', 'orders.manage']),
+    canEditOrder: hasPermission('orders.edit'),
+    pricingStatus,
+    pricingLocked,
+    pricingBusy,
+    invoiceLines,
+    notAppliedLines,
+    coverage,
+    unpricedCoverage,
+    priceDisplay,
+    totalPrice,
+    unitLabel,
+    aggregateCargo,
+    setOrder,
+    openTab: (tab) => navigate(orderTabPath(id, tab)),
+    setPlanStop,
+    openCustomerChange: () => setCustomerChangeOpen(true),
+    openEntityChange: () => setEntityChangeOpen(true),
+    handleConfirmPriceClick,
+    openReopenPrice: () => {
+      setReopenPriceReason('')
+      setReopenPriceOpen(true)
+    },
+    handleRecalculateClick,
+    openAddLine,
+    openCalcDetails: () => setCalcDetailsOpen(true),
+    handleConfirmLine: (line) => void handleConfirmLine(line),
+    openEditLine,
+    openRemoveLine: (line) => setRemoveLine(line),
+  }
 
-      <p className="to-commercial-bar" data-testid="order-commercial-bar">
-        <span>
-          {t('transportOrders.commercial.customerLabel')}:{' '}
-          <Link to={`/customers/${order.customerId}`}>
-            <strong>{order.customerName}</strong>
-          </Link>
-          {isPlaceholderCustomerName(order.customerName) && (
-            <>
-              {' '}
-              <Badge tone="warning">{t('transportOrders.commercial.placeholderCustomer')}</Badge>
-            </>
-          )}
-          {hasPermission('orders.edit') && (
-            <button
-              type="button"
-              className="to-inline-action"
-              onClick={() => setCustomerChangeOpen(true)}
-              disabled={busy || editing}
-              aria-label={t('transportOrders.commercial.changeCustomerAria')}
-            >
-              {t('transportOrders.commercial.change')}
-            </button>
-          )}
-        </span>
-        <span>
-          {t('transportOrders.commercial.entityLabel')}:{' '}
-          <strong>
-            {order.legalEntityId
-              ? entities.find((e) => e.id === order.legalEntityId)?.displayName ?? '…'
-              : t('transportOrders.commercial.customerDefault')}
-          </strong>
-          {hasPermission('orders.edit') && (
-            <button
-              type="button"
-              className="to-inline-action"
-              onClick={() => setEntityChangeOpen(true)}
-              disabled={busy || editing}
-              aria-label={t('transportOrders.commercial.changeEntityAria')}
-            >
-              {t('transportOrders.commercial.change')}
-            </button>
-          )}
-        </span>
-      </p>
-      {isPlaceholderCustomerName(order.customerName) && (
-        <p className="customer-form-muted" role="note">
-          {t('transportOrders.commercial.placeholderHint')}
-        </p>
-      )}
+  return (
+    <OrderDetailContext.Provider value={workspace}>
+    <div className="tod-detail">
+      <OrderDetailHeader
+        onEdit={() => setEditing(true)}
+        onDelete={() => setConfirmDelete(true)}
+        onCancel={() => setCancelDialogOpen(true)}
+        onCorrectStatus={() => setCorrectDialogOpen(true)}
+        onTransition={(target) => void applyTransition(target)}
+      />
 
       {customerChangeOpen && (
         <OrderCustomerChangeDialog
@@ -694,52 +576,6 @@ export function TransportOrderDetailPage() {
         />
       )}
 
-      {order.status === 'Cancelled' && order.cancellationReason && (
-        <p className="to-cancel-reason" role="note">
-          Geannuleerd: {order.cancellationReason}
-        </p>
-      )}
-
-      {/* Documentstrategie bij de Wave 9-knoppen in de header: reden + orderkeuze. */}
-      {!editing && <OrderDocumentStrategyPanel orderId={order.id} />}
-
-      {/* Wave 2026-08-04 §9: prominent total + separate order/price status near the header. */}
-      {!editing && (order.pricingSnapshot || totalPrice !== null) && (
-        <section className={`to-price-summary to-price-summary-${priceDisplay.tone}`}>
-          <div className="to-price-summary-main">
-            <span className="to-price-summary-label">Totaalprijs</span>
-            <span className="to-price-summary-amount">{formatCurrency(totalPrice ?? 0)}</span>
-          </div>
-          <div className="to-price-summary-status">
-            <span>
-              Opdracht: <Badge tone={ORDER_STATUS_TONE[order.status]}>{t(ORDER_STATUS_LABELS[order.status])}</Badge>
-            </span>
-            <span>
-              Prijs: <Badge tone={priceDisplay.tone}>{t(priceDisplay.labelKey)}</Badge>
-            </span>
-          </div>
-          {order.pricingSnapshot?.confirmedAtUtc && (
-            <p className="to-price-summary-confirmed">
-              Bevestigd op {formatConfirmedStamp(order.pricingSnapshot.confirmedAtUtc)}
-              {order.pricingSnapshot.confirmedByName ? ` door ${order.pricingSnapshot.confirmedByName}` : ''}.
-            </p>
-          )}
-          {order.pricingSnapshot?.confirmedWithUnpricedGoodsReason && (
-            <p className="to-price-summary-warning" role="note">
-              Bevestigd terwijl niet alle goederen geprijsd zijn: {order.pricingSnapshot.confirmedWithUnpricedGoodsReason}
-            </p>
-          )}
-          {order.pricingSnapshot?.isStale && (
-            <p className="to-price-summary-warning" role="alert">
-              Prijs verouderd — de goederen of voorwaarden zijn gewijzigd na de laatste berekening. Herbereken de prijs.
-            </p>
-          )}
-        </section>
-      )}
-
-      {!editing && hasAnyPermission(['orders.change_status', 'orders.manage']) && (
-        <OrderPortalReviewPanel order={order} onReviewed={setOrder} />
-      )}
 
       {editing ? (
         <TransportOrderForm
@@ -758,379 +594,16 @@ export function TransportOrderDetailPage() {
         />
       ) : (
         <>
-          <section className="to-section">
-            <h2>Lading</h2>
-            <dl className="to-facts">
-              <div>
-                <dt>Goederen</dt>
-                <dd>{order.goodsDescription ?? '—'}</dd>
-              </div>
-              {order.cargoItems.length > 0 ? (
-                <div>
-                  <dt>Lading</dt>
-                  <dd>
-                    <ul className="to-lading-list">
-                      {aggregateCargo(order.cargoItems).map(({ unit, total }) => (
-                        <li key={unit}>{formatQuantity(total)} {unit}</li>
-                      ))}
-                    </ul>
-                  </dd>
-                </div>
-              ) : (
-                <div>
-                  <dt>Aantal</dt>
-                  <dd>{order.quantity !== null ? `${order.quantity} ${unitLabel(order.quantityUnitCode, order.quantityUnit)}`.trim() : '—'}</dd>
-                </div>
-              )}
-              <div>
-                <dt>Gewicht</dt>
-                <dd>{order.weightKg !== null ? `${formatQuantity(order.weightKg)} kg` : '—'}</dd>
-              </div>
-              <div>
-                <dt>Volume</dt>
-                <dd>{order.volumeM3 !== null ? `${formatQuantity(order.volumeM3)} m³` : '—'}</dd>
-              </div>
-              <div>
-                <dt>Paletten</dt>
-                <dd>{order.palletCount ?? '—'}</dd>
-              </div>
-              <div>
-                <dt>Prijs</dt>
-                <dd>
-                  {order.agreedPrice !== null
-                    ? formatCurrency(order.agreedPrice)
-                    : '—'}
-                </dd>
-              </div>
-              <div>
-                <dt>Kenmerken</dt>
-                <dd>
-                  {order.adrRequired && <Badge tone="danger">ADR</Badge>}
-                  {order.craneRequired && <Badge tone="info">Kraan</Badge>}
-                  {order.plateauRequired && <Badge tone="info">Plateau</Badge>}
-                  {order.moffettRequired && <Badge tone="info">Moffett</Badge>}
-                  {order.isReturnMovement && <Badge tone="neutral">Retour</Badge>}
-                  {!order.adrRequired && !order.craneRequired && !order.plateauRequired &&
-                    !order.moffettRequired && !order.isReturnMovement && '—'}
-                </dd>
-              </div>
-            </dl>
-            {order.notes && <p className="to-notes">{order.notes}</p>}
-          </section>
-
-          {order.pricingLines && order.pricingLines.length > 0 && (
-            <section className="to-section">
-              <h2>
-                Prijs <Badge tone={priceDisplay.tone}>{t(priceDisplay.labelKey)}</Badge>
-              </h2>
-              <div className="to-header-actions to-price-status-actions">
-                {canLockPrice && (pricingStatus === 'Draft' || pricingStatus === 'Reviewed') && (
-                  <Button onClick={handleConfirmPriceClick} disabled={pricingBusy}>
-                    Prijs bevestigen
-                  </Button>
-                )}
-                {canLockPrice && pricingStatus === 'Locked' && (
-                  <Button
-                    variant="secondary"
-                    onClick={() => {
-                      setReopenPriceReason('')
-                      setReopenPriceOpen(true)
-                    }}
-                    disabled={pricingBusy}
-                  >
-                    Prijs aanpassen
-                  </Button>
-                )}
-                {canEditPricingStatus && !pricingLocked && (
-                  <Button variant="secondary" onClick={handleRecalculateClick} disabled={pricingBusy}>
-                    Herberekenen
-                  </Button>
-                )}
-                {canEditPricingLines && !pricingLocked && (
-                  <Button variant="secondary" onClick={openAddLine} disabled={pricingBusy}>
-                    + Vrije regel
-                  </Button>
-                )}
-                {order.pricingSnapshot && (
-                  <Button variant="ghost" onClick={() => setCalcDetailsOpen(true)}>
-                    Bekijk berekeningsdetails
-                  </Button>
-                )}
-              </div>
-              {unpricedCoverage.length > 0 && (
-                <div className="to-coverage-warning" role="alert">
-                  <strong>Niet alle goederen zijn geprijsd.</strong>
-                  <ul>
-                    {unpricedCoverage.map((c, index) => (
-                      <li key={c.unitTypeId ?? `${c.unitLabel}-${index}`}>
-                        {formatQuantity(c.quantity)} {c.unitLabel}:{' '}
-                        {(c.reason ?? 'geen passend basistarief').toLowerCase()}
-                        {c.servicesAmount > 0 && ` — alleen diensten (${formatCurrency(c.servicesAmount)}), geen transportprijs`}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              {coverage.length > 0 && (
-                <div className="to-coverage">
-                  <h3>Prijsdekking per goederenlijn</h3>
-                  <ul>
-                    {coverage.map((c, index) => (
-                      <li key={c.unitTypeId ?? `${c.unitLabel}-${index}`}>
-                        <Badge tone={PRICING_COVERAGE_TONE[c.status]}>{t(PRICING_COVERAGE_LABELS[c.status])}</Badge>{' '}
-                        {formatQuantity(c.quantity)} {c.unitLabel}
-                        {c.status === 'Full' && ` — ${c.baseRuleName ?? 'basistarief'}: ${formatCurrency(c.baseAmount)}`}
-                        {c.status !== 'Full' && c.reason ? ` — ${c.reason}` : ''}
-                        {c.servicesAmount > 0 && ` · diensten ${formatCurrency(c.servicesAmount)}`}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              <table className="to-stops-table">
-                <thead>
-                  <tr>
-                    <th>Omschrijving</th>
-                    <th>Type</th>
-                    <th>Berekening</th>
-                    <th className="tof-price-amount">Bedrag</th>
-                    {canEditPricingLines && !pricingLocked && <th>Acties</th>}
-                  </tr>
-                </thead>
-                <tbody>
-                  {invoiceLines.map((line, index) => (
-                    <tr
-                      key={line.id ?? line.lineKey ?? index}
-                      className={line.informational ? 'tof-price-informational' : undefined}
-                    >
-                      <td>
-                        {line.label}
-                        {line.kind === 'AutoAdjusted' && (
-                          <div className="to-price-original">
-                            <s>
-                              {line.originalQuantity != null && line.originalUnitPrice != null
-                                ? `${formatQuantity(line.originalQuantity)} × ${formatCurrency(line.originalUnitPrice)}`
-                                : formatCurrency(line.originalAmount ?? 0)}
-                            </s>
-                            {' → '}
-                            {line.quantity != null && line.unitPrice != null
-                              ? `${formatQuantity(line.quantity)} × ${formatCurrency(line.unitPrice)}`
-                              : formatCurrency(line.amount)}
-                          </div>
-                        )}
-                      </td>
-                      <td>
-                        <Badge tone={ORDER_PRICE_LINE_KIND_TONE[line.kind]}>{t(lineBadge(line))}</Badge>
-                      </td>
-                      <td>{calculationLabel(line)}</td>
-                      <td className="tof-price-amount">{formatCurrency(line.amount)}</td>
-                      {canEditPricingLines && !pricingLocked && (
-                        <td className="to-price-line-actions">
-                          {line.kind === 'Proposed' ? (
-                            <Button variant="ghost" onClick={() => void handleConfirmLine(line)} disabled={pricingBusy}>
-                              Bevestigen
-                            </Button>
-                          ) : (
-                            <>
-                              <Button variant="ghost" onClick={() => openEditLine(line)} disabled={pricingBusy}>
-                                Bewerken
-                              </Button>
-                              <Button variant="ghost" onClick={() => setRemoveLine(line)} disabled={pricingBusy}>
-                                Verwijderen
-                              </Button>
-                            </>
-                          )}
-                        </td>
-                      )}
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr>
-                    <th>Totaal</th>
-                    <th />
-                    <th />
-                    <th className="tof-price-amount">
-                      {formatCurrency(order.pricingSnapshot?.linesTotal ?? order.agreedPrice ?? 0)}
-                    </th>
-                    {canEditPricingLines && !pricingLocked && <th />}
-                  </tr>
-                </tfoot>
-              </table>
-              {notAppliedLines.length > 0 && (
-                <div className="to-price-not-applied">
-                  <h3>Niet toegepast</h3>
-                  <ul>
-                    {notAppliedLines.map((line, index) => (
-                      <li key={line.id ?? line.lineKey ?? index}>{line.label}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </section>
-          )}
-
-          <section className="to-section">
-            <h2>Stops</h2>
-            <table className="to-stops-table">
-              <thead>
-                <tr>
-                  <th>#</th>
-                  <th>Type</th>
-                  <th>Locatie</th>
-                  <th>Adres</th>
-                  <th>Gepland</th>
-                  <th>Tijdseis</th>
-                  <th>Gevraagd</th>
-                  <th>Bevestigd</th>
-                  <th>Afspraak</th>
-                  <th>Referentie</th>
-                  {planEditable && <th aria-label="Acties" />}
-                </tr>
-              </thead>
-              <tbody>
-                {order.stops.map((stop) => (
-                  <Fragment key={stop.id}>
-                  <tr>
-                    <td>{stop.sequence}</td>
-                    <td>
-                      <Badge tone={stop.stopType === 'Loading' ? 'info' : 'success'}>{t(STOP_TYPE_LABELS[stop.stopType])}</Badge>
-                    </td>
-                    <td title={stop.instructions ?? undefined}>
-                      {(stop.warnings?.length ?? 0) > 0 && (
-                        <span className="to-stop-warning-marker" title="Waarschuwing openingsuren" aria-label="Waarschuwing">
-                          ⚠{' '}
-                        </span>
-                      )}
-                      {stop.locationName}
-                      {stop.locationCode && <span className="to-loc-code"> ({stop.locationCode})</span>}
-                      {(stop.gate || stop.dock) && (
-                        <div className="to-stop-site">
-                          {[stop.gate ? `Poort: ${stop.gate}` : null, stop.dock ? `Kade/dok: ${stop.dock}` : null]
-                            .filter(Boolean)
-                            .join(' · ')}
-                        </div>
-                      )}
-                    </td>
-                    <td>{[stop.address, [stop.postalCode, stop.city].filter(Boolean).join(' ')].filter(Boolean).join(', ') || '—'}</td>
-                    <td>{formatWindow(stop.plannedFrom, stop.plannedTo)}</td>
-                    <td>
-                      {stopTimeRequirementBadge(stop) ? (
-                        <Badge tone="info">{stopTimeRequirementBadge(stop)}</Badge>
-                      ) : (
-                        '—'
-                      )}
-                    </td>
-                    <td>{formatWindow(stop.requestedFrom, stop.requestedTo)}</td>
-                    <td>{formatWindow(stop.confirmedFrom, stop.confirmedTo)}</td>
-                    <td>
-                      {stop.appointmentRequired ? (
-                        <Badge tone="warning">Afspraak{stop.appointmentReference ? ` · ${stop.appointmentReference}` : ''}</Badge>
-                      ) : (
-                        '—'
-                      )}
-                    </td>
-                    <td>{stop.reference ?? '—'}</td>
-                    {planEditable && (
-                      <td>
-                        <Button variant="ghost" onClick={() => setPlanStop(stop)} disabled={busy || editing}>
-                          Venster
-                        </Button>
-                      </td>
-                    )}
-                  </tr>
-                  {(stop.warnings?.length ?? 0) > 0 && (
-                    <tr className="to-stop-warning-row">
-                      <td colSpan={planEditable ? 11 : 10}>
-                        {stop.warnings!.map((warning, index) => (
-                          <p key={index} className="to-stop-warning" role="note">
-                            ⚠ {warning}
-                          </p>
-                        ))}
-                      </td>
-                    </tr>
-                  )}
-                  </Fragment>
-                ))}
-              </tbody>
-            </table>
-          </section>
-
-          {hasPermission('packages.view') ? (
-            <OrderPackagesPanel
-              orderId={order.id}
-              unloadingStops={order.stops
-                .filter((stop) => stop.stopType === 'Unloading')
-                .map((stop) => ({ id: stop.id, label: `${stop.sequence}. ${stop.city ?? stop.locationName ?? 'Losstop'}` }))}
-            />
-          ) : (
-            <CustomerPackagesSummary orderId={order.id} />
-          )}
-
-          {order.cargoItems.length > 0 && (
-            <section className="to-section">
-              <h2>Goederenlijnen</h2>
-              <table className="to-stops-table">
-                <thead>
-                  <tr>
-                    <th>#</th>
-                    <th>Omschrijving</th>
-                    <th>Type</th>
-                    <th>Barcode</th>
-                    <th>Verwacht</th>
-                    <th>Gewicht</th>
-                    <th>Volume/stuk</th>
-                    <th>Kenmerken</th>
-                    <th>Notities</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {order.cargoItems.map((item) => (
-                    <tr key={item.id}>
-                      <td>{item.sequence}</td>
-                      <td>{item.description ?? `${item.expectedQuantity} × ${unitLabel(item.quantityUnitCode, item.quantityUnit)}`}</td>
-                      <td>{item.unitType ? (item.unitTypeLabel ?? t(UNIT_TYPE_LABELS[item.unitType])) : '—'}</td>
-                      <td>{item.barcode ? <code>{item.barcode}</code> : '—'}</td>
-                      <td>
-                        {item.expectedQuantity} {unitLabel(item.quantityUnitCode, item.quantityUnit)}
-                      </td>
-                      <td>{item.totalWeightKg !== null ? `${formatQuantity(item.totalWeightKg)} kg` : '—'}</td>
-                      <td>{item.volumeM3 !== null ? `${formatQuantity(item.volumeM3)} m³` : '—'}</td>
-                      <td>
-                        {item.adrRequired && <Badge tone="danger">ADR</Badge>}{' '}
-                        {!item.stackable && <Badge tone="warning">Niet stapelbaar</Badge>}
-                      </td>
-                      <td>{item.notes ?? '—'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </section>
-          )}
-
-          <section className="to-section">
-            <h2>Historiek</h2>
-            <OrderTimelinePanel orderId={order.id} />
-          </section>
-
-          {hasPermission('customer_messages.view') && (
-            <section className="to-section">
-              <h2>Berichten (klantportaal)</h2>
-              <CustomerMessagesPanel customerId={order.customerId} orderId={order.id} />
-            </section>
-          )}
-
-          <div className="to-detail-actions">
-            {editable && (
-              <Button variant="secondary" onClick={() => setEditing(true)} disabled={busy}>
-                Bewerken
-              </Button>
-            )}
-            {deletable && (
-              <Button variant="secondary" onClick={() => setConfirmDelete(true)} disabled={busy}>
-                Verwijderen
-              </Button>
-            )}
+          <OrderAttention />
+          <OrderSubnav orderId={order.id} tabs={[...ORDER_TABS]} />
+          <div className="tod-subsection" data-tab={activeTab}>
+            {activeTab === 'overzicht' && <OrderOverview />}
+            {activeTab === 'lading' && <OrderLadingSection />}
+            {activeTab === 'prijs' && <OrderPriceSection />}
+            {activeTab === 'stops' && <OrderStopsSection />}
+            {activeTab === 'colli' && <OrderColliSection />}
+            {activeTab === 'historiek' && <OrderHistorySection />}
+            {activeTab === 'berichten' && <OrderMessagesSection />}
           </div>
         </>
       )}
@@ -1575,5 +1048,6 @@ export function TransportOrderDetailPage() {
         </Modal>
       )}
     </div>
+    </OrderDetailContext.Provider>
   )
 }

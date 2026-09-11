@@ -58,6 +58,9 @@ vi.mock('../../api/transportOrdersApi', async (orig) => ({
   confirmOrderPriceLine: api.confirmOrderPriceLine,
 }))
 
+/** Redesign 2026-09-12: the price workspace is its own subsection; every test here exercises it. */
+const PRICE_TAB = '/transport-orders/order-1/prijs'
+
 function baseOrder(overrides: Partial<TransportOrderDetail> = {}): TransportOrderDetail {
   return {
     id: 'order-1',
@@ -133,11 +136,11 @@ function baseOrder(overrides: Partial<TransportOrderDetail> = {}): TransportOrde
   }
 }
 
-function renderPage() {
+function renderPage(initialPath = '/transport-orders/order-1') {
   return render(
-    <MemoryRouter initialEntries={['/transport-orders/order-1']}>
+    <MemoryRouter initialEntries={[initialPath]}>
       <Routes>
-        <Route path="/transport-orders/:id" element={<TransportOrderDetailPage />} />
+        <Route path="/transport-orders/:id/:section?" element={<TransportOrderDetailPage />} />
       </Routes>
     </MemoryRouter>,
   )
@@ -162,7 +165,7 @@ function money(amount: number): string {
 
 describe('TransportOrderDetailPage pricing lines', () => {
   it('renders a badge per line kind', async () => {
-    renderPage()
+    renderPage(PRICE_TAB)
     await screen.findByText('Basisregel')
 
     expect(screen.getByText('AUTO')).toBeInTheDocument()
@@ -172,7 +175,7 @@ describe('TransportOrderDetailPage pricing lines', () => {
   })
 
   it('renders the price table headers exactly: Omschrijving, Type, Berekening, Bedrag, Acties', async () => {
-    renderPage()
+    renderPage(PRICE_TAB)
     await screen.findByText('Basisregel')
 
     const table = screen.getByText('Basisregel').closest('table')!
@@ -190,7 +193,7 @@ describe('TransportOrderDetailPage pricing lines', () => {
         ],
       }),
     )
-    renderPage()
+    renderPage(PRICE_TAB)
     await screen.findByText('Diensttarief')
 
     const dienstRow = screen.getByText('Diensttarief').closest('tr')!
@@ -209,7 +212,7 @@ describe('TransportOrderDetailPage pricing lines', () => {
         ],
       }),
     )
-    renderPage()
+    renderPage(PRICE_TAB)
     await screen.findByText('Picking')
 
     const cell = (label: string) => {
@@ -239,7 +242,7 @@ describe('TransportOrderDetailPage pricing lines', () => {
         ],
       }),
     )
-    renderPage()
+    renderPage(PRICE_TAB)
     await screen.findByText('Auto line met bedrag-only aanpassing')
 
     const row = screen.getByText('Auto line met bedrag-only aanpassing').closest('tr')!
@@ -256,7 +259,7 @@ describe('TransportOrderDetailPage pricing lines', () => {
         ],
       }),
     )
-    renderPage()
+    renderPage(PRICE_TAB)
     await screen.findByText('Basisregel')
 
     expect(screen.queryByText('Pipeline picking: geen Colli op deze order')?.closest('tr')).toBeFalsy()
@@ -282,7 +285,7 @@ describe('TransportOrderDetailPage pricing lines', () => {
         ],
       }),
     )
-    renderPage()
+    renderPage(PRICE_TAB)
     await screen.findByText('Basisregel')
 
     const row = screen.getByText('Dieseltoeslag 8% (wordt bij facturatie toegevoegd)').closest('tr')!
@@ -294,7 +297,7 @@ describe('TransportOrderDetailPage pricing lines', () => {
 
   it('posts the adjusted quantity and reason when editing an auto line', async () => {
     api.saveOrderPriceLines.mockResolvedValue(baseOrder())
-    renderPage()
+    renderPage(PRICE_TAB)
     await screen.findByText('Basisregel')
 
     const row = screen.getByText('Basisregel').closest('tr')!
@@ -316,7 +319,7 @@ describe('TransportOrderDetailPage pricing lines', () => {
 
   it('confirms a proposed line via the dedicated endpoint', async () => {
     api.confirmOrderPriceLine.mockResolvedValue(baseOrder())
-    renderPage()
+    renderPage(PRICE_TAB)
     await screen.findByText('Extra laadtijd')
 
     const row = screen.getByText('Extra laadtijd').closest('tr')!
@@ -326,7 +329,7 @@ describe('TransportOrderDetailPage pricing lines', () => {
   })
 
   it('hides "Prijs bevestigen" without orders.lock_price; confirms directly with full coverage when granted', async () => {
-    const { rerender } = renderPage()
+    const { rerender } = renderPage(PRICE_TAB)
     await screen.findByText('Basisregel')
     expect(screen.queryByRole('button', { name: 'Prijs bevestigen' })).not.toBeInTheDocument()
     // Technical lock/unlock wording never appears for normal users.
@@ -336,9 +339,9 @@ describe('TransportOrderDetailPage pricing lines', () => {
     auth.permissions = new Set(['orders.view', 'orders.override_price', 'orders.edit', 'orders.lock_price'])
     api.confirmOrderPricing.mockResolvedValue(baseOrder({ pricingSnapshot: { ...baseOrder().pricingSnapshot!, status: 'Locked' } }))
     rerender(
-      <MemoryRouter initialEntries={['/transport-orders/order-1']}>
+      <MemoryRouter initialEntries={[PRICE_TAB]}>
         <Routes>
-          <Route path="/transport-orders/:id" element={<TransportOrderDetailPage />} />
+          <Route path="/transport-orders/:id/:section?" element={<TransportOrderDetailPage />} />
         </Routes>
       </MemoryRouter>,
     )
@@ -361,7 +364,7 @@ describe('TransportOrderDetailPage pricing lines', () => {
       }),
     )
     api.reopenOrderPricing.mockResolvedValue(baseOrder())
-    renderPage()
+    renderPage(PRICE_TAB)
 
     await screen.findByRole('button', { name: 'Prijs aanpassen' })
     expect(screen.queryByRole('button', { name: 'Prijs bevestigen' })).not.toBeInTheDocument()
@@ -389,7 +392,7 @@ describe('TransportOrderDetailPage pricing lines', () => {
         },
       }),
     )
-    renderPage()
+    renderPage(PRICE_TAB)
 
     await screen.findByRole('button', { name: 'Prijs bevestigen' })
     await userEvent.click(screen.getByRole('button', { name: 'Prijs bevestigen' }))
@@ -414,7 +417,7 @@ describe('TransportOrderDetailPage pricing lines', () => {
       }),
     )
     api.confirmOrderPricing.mockResolvedValue(baseOrder())
-    renderPage()
+    renderPage(PRICE_TAB)
 
     await screen.findByRole('button', { name: 'Prijs bevestigen' })
     await userEvent.click(screen.getByRole('button', { name: 'Prijs bevestigen' }))
@@ -440,7 +443,7 @@ describe('TransportOrderDetailPage pricing lines', () => {
         },
       }),
     )
-    renderPage()
+    renderPage(PRICE_TAB)
 
     await screen.findByText('Totaalprijs')
     expect(screen.getAllByText('€ 132,50').length).toBeGreaterThanOrEqual(1)
@@ -459,7 +462,7 @@ describe('TransportOrderDetailPage pricing lines', () => {
         pricingSnapshot: { ...baseOrder().pricingSnapshot!, linesTotal: 0 },
       }),
     )
-    renderPage()
+    renderPage(PRICE_TAB)
 
     await screen.findByText('Totaalprijs')
     expect(screen.getAllByText('€ 0,00').length).toBeGreaterThanOrEqual(1)
@@ -478,7 +481,7 @@ describe('TransportOrderDetailPage pricing lines', () => {
         },
       }),
     )
-    renderPage()
+    renderPage(PRICE_TAB)
 
     await screen.findByText('Totaalprijs')
     expect(screen.getAllByText('Onvolledig').length).toBeGreaterThanOrEqual(1)
@@ -486,15 +489,15 @@ describe('TransportOrderDetailPage pricing lines', () => {
 
   it('hides the recalculate action without orders.edit/orders.manage, shows it once granted', async () => {
     auth.permissions = new Set(['orders.view', 'orders.override_price'])
-    const { rerender } = renderPage()
+    const { rerender } = renderPage(PRICE_TAB)
     await screen.findByText('Basisregel')
     expect(screen.queryByRole('button', { name: 'Herberekenen' })).not.toBeInTheDocument()
 
     auth.permissions = new Set(['orders.view', 'orders.override_price', 'orders.edit'])
     rerender(
-      <MemoryRouter initialEntries={['/transport-orders/order-1']}>
+      <MemoryRouter initialEntries={[PRICE_TAB]}>
         <Routes>
-          <Route path="/transport-orders/:id" element={<TransportOrderDetailPage />} />
+          <Route path="/transport-orders/:id/:section?" element={<TransportOrderDetailPage />} />
         </Routes>
       </MemoryRouter>,
     )
@@ -505,7 +508,7 @@ describe('TransportOrderDetailPage pricing lines', () => {
     api.getTransportOrder.mockResolvedValue(
       baseOrder({ pricingSnapshot: { ...baseOrder().pricingSnapshot!, status: 'Reviewed' } }),
     )
-    renderPage()
+    renderPage(PRICE_TAB)
     await screen.findByText('Basisregel')
 
     await userEvent.click(screen.getByRole('button', { name: 'Herberekenen' }))
@@ -521,7 +524,7 @@ describe('TransportOrderDetailPage pricing lines', () => {
 
 describe('TransportOrderDetailPage add price line modal — berekeningswijze', () => {
   async function openAddModal() {
-    renderPage()
+    renderPage(PRICE_TAB)
     await screen.findByText('Basisregel')
     await userEvent.click(screen.getByRole('button', { name: '+ Vrije regel' }))
   }
@@ -605,7 +608,7 @@ describe('TransportOrderDetailPage pricing coverage (wave 2026-08-04 §7)', () =
     api.getTransportOrder.mockResolvedValue(
       baseOrder({ pricingSnapshot: { ...baseOrder().pricingSnapshot!, coverage } }),
     )
-    renderPage()
+    renderPage(PRICE_TAB)
 
     await screen.findByText('Niet alle goederen zijn geprijsd.')
     expect(screen.getByText(/2 Doos: geen passend basistarief/)).toBeInTheDocument()
@@ -617,7 +620,7 @@ describe('TransportOrderDetailPage pricing coverage (wave 2026-08-04 §7)', () =
     api.getTransportOrder.mockResolvedValue(
       baseOrder({ pricingSnapshot: { ...baseOrder().pricingSnapshot!, coverage } }),
     )
-    renderPage()
+    renderPage(PRICE_TAB)
 
     await screen.findByText('Prijsdekking per goederenlijn')
     expect(screen.getByText('Volledig geprijsd')).toBeInTheDocument()
@@ -626,7 +629,7 @@ describe('TransportOrderDetailPage pricing coverage (wave 2026-08-04 §7)', () =
   })
 
   it('renders no coverage blocks when the snapshot carries no coverage', async () => {
-    renderPage()
+    renderPage(PRICE_TAB)
 
     await screen.findByText('Basisregel')
     expect(screen.queryByText('Prijsdekking per goederenlijn')).not.toBeInTheDocument()

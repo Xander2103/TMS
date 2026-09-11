@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { TransportOrderDetailPage } from '../TransportOrderDetailPage'
@@ -35,11 +35,18 @@ vi.mock('../../../packages/components/CustomerPackagesSummary', () => ({ Custome
 const api = vi.hoisted(() => ({
   getTransportOrder: vi.fn(),
   deleteTransportOrder: vi.fn(),
+  getTransportOrderTimeline: vi.fn(),
 }))
 vi.mock('../../api/transportOrdersApi', async (orig) => ({
   ...(await orig<typeof import('../../api/transportOrdersApi')>()),
   getTransportOrder: api.getTransportOrder,
   deleteTransportOrder: api.deleteTransportOrder,
+  getTransportOrderTimeline: api.getTransportOrderTimeline,
+}))
+// The overview (default tab) fetches the documents list for its card; keep the type labels.
+vi.mock('../../api/orderDocumentsApi', async (orig) => ({
+  ...(await orig<typeof import('../../api/orderDocumentsApi')>()),
+  listOrderDocuments: vi.fn(() => Promise.resolve([])),
 }))
 
 function baseOrder(overrides: Partial<TransportOrderDetail> = {}): TransportOrderDetail {
@@ -97,11 +104,11 @@ function baseOrder(overrides: Partial<TransportOrderDetail> = {}): TransportOrde
   }
 }
 
-function renderPage() {
+function renderPage(initialPath = '/transport-orders/order-1') {
   return render(
-    <MemoryRouter initialEntries={['/transport-orders/order-1']}>
+    <MemoryRouter initialEntries={[initialPath]}>
       <Routes>
-        <Route path="/transport-orders/:id" element={<TransportOrderDetailPage />} />
+        <Route path="/transport-orders/:id/:section?" element={<TransportOrderDetailPage />} />
       </Routes>
     </MemoryRouter>,
   )
@@ -111,16 +118,21 @@ beforeEach(() => {
   auth.permissions = new Set(['orders.edit', 'orders.delete'])
   api.getTransportOrder.mockReset()
   api.deleteTransportOrder.mockReset()
+  api.getTransportOrderTimeline.mockReset().mockResolvedValue([])
   api.getTransportOrder.mockResolvedValue(baseOrder())
 })
 
 describe('TransportOrderDetailPage top-level actions', () => {
-  it('renders Bewerken and Verwijderen twice (header + bottom) for a Draft order with both permissions', async () => {
+  it('renders Bewerken and Verwijderen once each, in the header, for a Draft order with both permissions', async () => {
+    // Redesign 2026-09-12: the duplicate bottom action bar is gone; the header owns the actions.
     renderPage()
     await screen.findByText('ORD-0001 — Klant X')
 
-    expect(screen.getAllByRole('button', { name: 'Bewerken' })).toHaveLength(2)
-    expect(screen.getAllByRole('button', { name: 'Verwijderen' })).toHaveLength(2)
+    const header = document.querySelector<HTMLElement>('header.tod-header')!
+    expect(screen.getAllByRole('button', { name: 'Bewerken' })).toHaveLength(1)
+    expect(screen.getAllByRole('button', { name: 'Verwijderen' })).toHaveLength(1)
+    expect(within(header).getByRole('button', { name: 'Bewerken' })).toBeInTheDocument()
+    expect(within(header).getByRole('button', { name: 'Verwijderen' })).toBeInTheDocument()
   })
 
   it('hides both header buttons without orders.edit/orders.delete permissions', async () => {
@@ -144,8 +156,7 @@ describe('TransportOrderDetailPage top-level actions', () => {
     renderPage()
     await screen.findByText('ORD-0001 — Klant X')
 
-    const [headerDelete] = screen.getAllByRole('button', { name: 'Verwijderen' })
-    await userEvent.click(headerDelete)
+    await userEvent.click(screen.getByRole('button', { name: 'Verwijderen' }))
 
     const dialog = await screen.findByRole('dialog')
     expect(dialog).toHaveTextContent('ORD-0001')
