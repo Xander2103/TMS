@@ -31,7 +31,9 @@ public class ActivityTypeSeeder : IActivityTypeSeeder
     private sealed record Seed(
         string Code, string Name, string Icon, int SortOrder, string? KpiCategory,
         bool HasStops, bool SupportsGoods, bool PlanningRelevant, bool WarehouseRelevant,
-        bool AllowsDuration, bool IsQuickStart, int QuickStartOrder, bool IsDefaultTransport);
+        bool AllowsDuration, bool IsQuickStart, int QuickStartOrder, bool IsDefaultTransport,
+        /// <summary>Commercial unit (step 13). Only an empty positioning ride is internal by default.</summary>
+        bool IsBillable = true);
 
     private static readonly Seed[] Defaults =
     [
@@ -61,7 +63,8 @@ public class ActivityTypeSeeder : IActivityTypeSeeder
             AllowsDuration: false, IsQuickStart: false, QuickStartOrder: 0, IsDefaultTransport: false),
         new("POSITIONERING", "Positionering / lege rit", "move", 8, "Transport",
             HasStops: true, SupportsGoods: false, PlanningRelevant: true, WarehouseRelevant: false,
-            AllowsDuration: false, IsQuickStart: false, QuickStartOrder: 0, IsDefaultTransport: false),
+            AllowsDuration: false, IsQuickStart: false, QuickStartOrder: 0, IsDefaultTransport: false,
+            IsBillable: false),
         new("OVERIG", "Overig", "more", 9, null,
             HasStops: false, SupportsGoods: false, PlanningRelevant: false, WarehouseRelevant: false,
             AllowsDuration: true, IsQuickStart: false, QuickStartOrder: 0, IsDefaultTransport: false),
@@ -106,6 +109,7 @@ public class ActivityTypeSeeder : IActivityTypeSeeder
                 IsQuickStart = seed.IsQuickStart,
                 QuickStartOrder = seed.QuickStartOrder,
                 IsSystemDefaultTransport = takeDefaultFlag,
+                IsBillable = seed.IsBillable,
                 IsActive = true,
             });
         }

@@ -15,7 +15,9 @@ public record ActivityTypeDto(
     bool AllowsDuration,
     bool IsQuickStart,
     int QuickStartOrder,
-    bool IsSystemDefaultTransport);
+    bool IsSystemDefaultTransport,
+    /// <summary>Commercial unit: carries a sales price and counts in pricing completeness (step 13).</summary>
+    bool IsBillable = true);
 
 /// <summary>
 /// Create/update payload for a tenant activity type. <see cref="Code"/> is immutable after
@@ -36,4 +38,5 @@ public record SaveActivityTypeRequest(
     bool AllowsDuration = false,
     bool IsQuickStart = false,
     int QuickStartOrder = 0,
-    bool IsSystemDefaultTransport = false);
+    bool IsSystemDefaultTransport = false,
+    bool IsBillable = true);

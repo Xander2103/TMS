@@ -56,4 +56,24 @@ public static class OrderPricingState
             OneOffFixedAmount = oneOffFixedAmount,
             AgreedPrice = agreedPrice,
         });
+
+    /// <summary>
+    /// The effective agreed sales price as the dossier reads it (step 13): <c>AgreedPrice</c>
+    /// once the engine derived it, else — for a one-off agreement the engine has not run for yet
+    /// (no cargo, no tariff configuration) — the agreed fixed amount itself. Null when nothing
+    /// is agreed or derived. In EF projections inline the same tree:
+    /// <c>o.AgreedPrice ?? (o.PricingSource == OrderPricingSource.OneOff ? o.OneOffFixedAmount : null)</c>.
+    /// </summary>
+    public static decimal? EffectiveAgreedPrice(OrderPricingSource pricingSource, decimal? oneOffFixedAmount, decimal? agreedPrice) =>
+        agreedPrice ?? (pricingSource == OrderPricingSource.OneOff ? oneOffFixedAmount : null);
+
+    /// <summary>
+    /// Intentional € 0 (step 13): the price PROVENANCE itself is zero — a one-off agreement at 0
+    /// or a manual override at 0. Never the engine's empty zero (that is unpriced), never a
+    /// one-off amount the engine has not derived yet. Same tree for SQL:
+    /// <c>(o.PricingSource == OneOff &amp;&amp; o.OneOffFixedAmount == 0m) || (o.PriceIsManual &amp;&amp; o.AgreedPrice == 0m)</c>.
+    /// </summary>
+    public static bool IsIntentionalZero(bool priceIsManual, OrderPricingSource pricingSource, decimal? oneOffFixedAmount, decimal? agreedPrice) =>
+        (pricingSource == OrderPricingSource.OneOff && oneOffFixedAmount == 0m)
+        || (priceIsManual && agreedPrice == 0m);
 }

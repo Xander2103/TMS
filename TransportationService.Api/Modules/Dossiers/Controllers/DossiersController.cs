@@ -13,15 +13,18 @@ public class DossiersController : ControllerBase
     private readonly IDossierService _service;
     private readonly IDossierActivityService _activityService;
     private readonly IDossierReadinessService _readinessService;
+    private readonly IDossierActivityPricingService _activityPricingService;
 
     public DossiersController(
         IDossierService service,
         IDossierActivityService activityService,
-        IDossierReadinessService readinessService)
+        IDossierReadinessService readinessService,
+        IDossierActivityPricingService activityPricingService)
     {
         _service = service;
         _activityService = activityService;
         _readinessService = readinessService;
+        _activityPricingService = activityPricingService;
     }
 
     [HttpGet]
@@ -147,6 +150,21 @@ public class DossiersController : ControllerBase
         Guid id, Guid activityId, CreateActivityOrderRequest request, CancellationToken cancellationToken)
     {
         var dossier = await _activityService.CreateOrderForActivityAsync(id, activityId, request.Version, cancellationToken);
+        return dossier is null ? NotFound() : Ok(dossier);
+    }
+
+    /// <summary>
+    /// Step 13: agreed sales price of a standalone billable activity (Opslag, Kraanwerk, …) —
+    /// the activity-side twin of <c>POST /api/transport-orders/{id}/pricing/one-off</c>. Its own
+    /// commercial right (<c>dossiers.price</c>), never <c>dossiers.manage</c>: editing a dossier
+    /// is not pricing it.
+    /// </summary>
+    [HttpPut("{id:guid}/activities/{activityId:guid}/price")]
+    [RequirePermission(PermissionCodes.DossiersPrice)]
+    public async Task<ActionResult<DossierDetailDto>> SetActivityPrice(
+        Guid id, Guid activityId, SetActivityPriceRequest request, CancellationToken cancellationToken)
+    {
+        var dossier = await _activityPricingService.SetAgreedPriceAsync(id, activityId, request, cancellationToken);
         return dossier is null ? NotFound() : Ok(dossier);
     }
 

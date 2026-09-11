@@ -17,7 +17,8 @@ namespace TransportationService.Api.Modules.Reporting.Services;
 /// - Rows count ACTIVITIES: one dossier with a crane and a plateau activity contributes to
 ///   both rows independently.
 /// - Revenue = AgreedPrice ?? 0 of the linked, non-cancelled orders; counted once per distinct
-///   order within a row, and once overall in the totals (cross-row dedupe).
+///   order within a row, and once overall in the totals (cross-row dedupe) — plus, since step 13,
+///   the agreed price of standalone activities (their own DossierActivityPricing record).
 /// - RedeliveryCount per row = incidents whose LinkedRedeliveryOrderId points to one of the
 ///   row's linked orders and whose redelivery order's OrderDate falls in the period. The
 ///   totals carry the tenant-wide count for the period (also covers unlinked redeliveries).
@@ -70,7 +71,22 @@ public class ActivityKpiService : IActivityKpiService
             : await _dbContext.TransportOrders.AsNoTracking()
                 .Where(o => o.TenantId == tenantId && linkedOrderIds.Contains(o.Id)
                             && o.Status != TransportOrderStatus.Cancelled)
-                .ToDictionaryAsync(o => o.Id, o => o.AgreedPrice ?? 0m, cancellationToken);
+                .ToDictionaryAsync(o => o.Id,
+                    o => Orders.Services.OrderPricingState.EffectiveAgreedPrice(o.PricingSource, o.OneOffFixedAmount, o.AgreedPrice) ?? 0m,
+                    cancellationToken);
+
+        // Step 13: standalone activities (no linked order) carry their own agreed price; without
+        // this the crane/storage rows would report € 0 revenue while their counts rise.
+        var standaloneIds = activities
+            .Where(a => a.LinkedTransportOrderId is null)
+            .Select(a => a.Id)
+            .ToList();
+        var activityPrices = standaloneIds.Count == 0
+            ? new Dictionary<Guid, decimal>()
+            : await _dbContext.DossierActivityPricings.AsNoTracking()
+                .Where(p => p.TenantId == tenantId && standaloneIds.Contains(p.DossierActivityId))
+                .Where(Dossiers.Services.ActivityPricingState.IsPricedExpression)
+                .ToDictionaryAsync(p => p.DossierActivityId, p => p.AgreedPrice ?? 0m, cancellationToken);
 
         // Redeliveries: incidents whose redelivery order's OrderDate falls in the period.
         var redeliveries = await _dbContext.Incidents.AsNoTracking()
@@ -94,14 +110,16 @@ public class ActivityKpiService : IActivityKpiService
                     .Distinct()
                     .Where(orderPrices.ContainsKey)
                     .ToList();
+                var activityRevenue = g.Where(a => activityPrices.ContainsKey(a.Id)).Sum(a => activityPrices[a.Id]);
                 return new
                 {
                     SortOrder = type?.SortOrder ?? int.MaxValue,
                     OrderIds = orderIds,
+                    ActivityRevenue = activityRevenue,
                     Row = new ActivityKpiRowDto(
                         g.Key, type?.Code ?? "?", type?.Name ?? "?", type?.KpiCategory,
                         g.Count(), orderIds.Count,
-                        Round2(orderIds.Sum(id => orderPrices[id])),
+                        Round2(orderIds.Sum(id => orderPrices[id]) + activityRevenue),
                         orderIds.Sum(id => redeliveriesByOrder[id].Count())),
                 };
             })
@@ -113,7 +131,7 @@ public class ActivityKpiService : IActivityKpiService
         var totals = new ActivityKpiTotalsDto(
             activities.Count,
             allOrderIds.Count,
-            Round2(allOrderIds.Sum(id => orderPrices[id])),
+            Round2(allOrderIds.Sum(id => orderPrices[id]) + rows.Sum(x => x.ActivityRevenue)),
             redeliveries.Count);
 
         // Per-category rollup (same dedupe rules within each category).
@@ -126,7 +144,7 @@ public class ActivityKpiService : IActivityKpiService
                     g.Key,
                     g.Sum(x => x.Row.ActivityCount),
                     orderIds.Count,
-                    Round2(orderIds.Sum(id => orderPrices[id])),
+                    Round2(orderIds.Sum(id => orderPrices[id]) + g.Sum(x => x.ActivityRevenue)),
                     orderIds.Sum(id => redeliveriesByOrder[id].Count()));
             })
             .OrderBy(c => c.KpiCategory is null) // named categories first

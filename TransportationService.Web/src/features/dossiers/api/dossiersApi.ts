@@ -105,6 +105,19 @@ export function createOrderForActivity(id: string, activityId: string, version?:
   )
 }
 
+/**
+ * Stap 13: agreed price of a standalone billable activity (Opslag, Kraan, …). `fixedAmount` null
+ * clears the price; `version` is the activity price record's own token (null for the first save).
+ * Returns the full dossier — the panel re-renders totals, readiness and the activity from it.
+ */
+export function setActivityPrice(
+  id: string,
+  activityId: string,
+  input: { fixedAmount: number | null; version: string | null },
+): Promise<DossierDetail> {
+  return apiClient.putJson<DossierDetail, typeof input>(`/api/dossiers/${id}/activities/${activityId}/price`, input)
+}
+
 export function updateDossier(id: string, input: DossierInput): Promise<DossierDetail> {
   return apiClient.putJson<DossierDetail, DossierInput>(`/api/dossiers/${id}`, input)
 }

@@ -65,4 +65,18 @@ public class DossierWorkSurfacePermissionTests
         Assert.Equal(new[] { PermissionCodes.DossiersManage }, codes);
         Assert.DoesNotContain(PermissionCodes.OrdersCreate, codes);
     }
+
+    /// <summary>
+    /// Step 13 (2026-09-11): the agreed price of a standalone billable activity is a commercial
+    /// act on a non-order → its own right <c>dossiers.price</c>; neither <c>dossiers.manage</c>
+    /// (dossier structure) nor <c>orders.edit</c> (order intake) implies it.
+    /// </summary>
+    [Fact]
+    public void ActivityPrice_IsItsOwnCommercialRight()
+    {
+        var codes = Codes(typeof(DossiersController), nameof(DossiersController.SetActivityPrice));
+        Assert.Equal(new[] { PermissionCodes.DossiersPrice }, codes);
+        Assert.DoesNotContain(PermissionCodes.DossiersManage, codes);
+        Assert.DoesNotContain(PermissionCodes.OrdersEdit, codes);
+    }
 }

@@ -16,6 +16,8 @@ export interface ActivityType {
   isQuickStart: boolean
   quickStartOrder: number
   isSystemDefaultTransport: boolean
+  /** Stap 13: counts as a commercial unit (sales price + pricing attention on the dossier). */
+  isBillable: boolean
 }
 
 /** Create/update payload; `code` is immutable after creation (the backend refuses changes). */
@@ -34,6 +36,7 @@ export interface ActivityTypeInput {
   isQuickStart: boolean
   quickStartOrder: number
   isSystemDefaultTransport: boolean
+  isBillable: boolean
 }
 
 export const listActivityTypes = (includeInactive = false): Promise<ActivityType[]> =>

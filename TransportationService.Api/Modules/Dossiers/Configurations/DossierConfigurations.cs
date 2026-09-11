@@ -49,6 +49,9 @@ public class ActivityTypeConfiguration : IEntityTypeConfiguration<ActivityType>
         builder.Property(t => t.Name).HasMaxLength(100).IsRequired();
         builder.Property(t => t.Icon).HasMaxLength(50);
         builder.Property(t => t.KpiCategory).HasMaxLength(50);
+        // Step 13: existing types are commercial units unless a tenant says otherwise — the
+        // migration must backfill TRUE, never the CLR default false.
+        builder.Property(t => t.IsBillable).HasDefaultValue(true);
 
         builder.HasIndex(t => new { t.TenantId, t.Code }).IsUnique().HasFilter("\"IsDeleted\" = false");
         // Mirrors LegalEntity.IsDefault: at most one active system-default transport type per tenant.
@@ -136,5 +139,33 @@ public class DossierRelationConfiguration : IEntityTypeConfiguration<DossierRela
         builder.HasIndex(r => new { r.TenantId, r.TargetDossierId });
 
         builder.HasQueryFilter(r => !r.IsDeleted);
+    }
+}
+
+public class DossierActivityPricingConfiguration : IEntityTypeConfiguration<DossierActivityPricing>
+{
+    public void Configure(EntityTypeBuilder<DossierActivityPricing> builder)
+    {
+        builder.ToTable("dossier_activity_pricings");
+        builder.HasKey(p => p.Id);
+
+        builder.Property(p => p.PricingSource).HasConversion<string>().HasMaxLength(20);
+        builder.Property(p => p.Status).HasConversion<string>().HasMaxLength(20);
+        builder.Property(p => p.FixedAmount).HasPrecision(12, 2);
+        builder.Property(p => p.AgreedPrice).HasPrecision(12, 2);
+        builder.Property(p => p.Notes).HasMaxLength(1000);
+
+        // The record lives and dies with its activity (and, through it, with the dossier).
+        builder.HasOne<DossierActivity>().WithMany().HasForeignKey(p => p.DossierActivityId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        // One ACTIVE price record per activity — also the race guard for two concurrent first
+        // saves (the loser hits the index and is answered with 409 + current state).
+        builder.HasIndex(p => p.DossierActivityId, "UX_dossier_activity_pricings_activity")
+            .IsUnique()
+            .HasFilter("\"IsDeleted\" = false");
+        builder.HasIndex(p => new { p.TenantId, p.DossierActivityId });
+
+        builder.HasQueryFilter(p => !p.IsDeleted);
     }
 }

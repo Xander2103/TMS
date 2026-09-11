@@ -30,6 +30,7 @@ const api = vi.hoisted(() => ({
   deleteDossierActivity: vi.fn(),
   createOrderForActivity: vi.fn(),
   changeDossierLegalEntity: vi.fn(),
+  setActivityPrice: vi.fn(),
 }))
 vi.mock('../api/dossiersApi', () => api)
 
@@ -140,7 +141,8 @@ describe('DossierDetailPage', () => {
     api.getDossier.mockResolvedValue(transportDossier())
     renderPage()
 
-    expect(await screen.findByText('Direct transport')).toBeInTheDocument()
+    // The type name is on the card and (stap 13) as the sublabel of the unit switcher in Verkoop & prijs.
+    expect((await screen.findAllByText('Direct transport')).length).toBeGreaterThanOrEqual(1)
     // Ordernummer + status op de kaart (ook elders getoond: prijslijst / operationele chip).
     expect(screen.getAllByText('ORD-0001').length).toBeGreaterThanOrEqual(1)
     expect(screen.getAllByText('Bevestigd').length).toBeGreaterThanOrEqual(1)

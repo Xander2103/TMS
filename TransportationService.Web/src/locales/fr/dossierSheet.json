@@ -64,19 +64,27 @@
     "noOrderTitle": "Les prix sont gérés sur une commande de transport.",
     "noOrderCreate": "Créer la commande de transport",
     "noOrderNoActivity": "Ajoutez une activité de transport pour pouvoir saisir un prix.",
-    "standaloneNote": "Les activités autonomes (stockage, grutage) n'ont pas encore de support de prix propre.",
     "orderCreated": "Commande de transport créée.",
     "linesPermission": "Vous n'avez pas les droits pour ajouter des lignes de vente.",
-    "partialTotal": "{priced} commande(s) sur {total} tarifée(s)",
-    "standaloneOnly": "Les activités autonomes (stockage, grutage) ne sont pas tarifées sur le dossier dans cette version. Ne créez pas de commande de transport uniquement pour enregistrer un prix ; ces activités sont facturées en dehors du dossier."
+    "partialTotal": "{priced} sur {total} activités tarifées",
+    "forActivity": "Activité {name}",
+    "agreedHintActivity": "Prix de vente convenu pour cette activité. Laissez vide pour effacer le prix ; 0 € est un prix délibéré.",
+    "agreedClearedActivity": "Prix convenu supprimé.",
+    "lockedActivity": "Le prix de cette activité est verrouillé ({status}).",
+    "noActivityPrice": "Pas encore de prix pour cette activité",
+    "zeroWarningOrder": "⚠ Cette commande a un prix de vente de 0,00 €. Vérifiez que c'est voulu.",
+    "zeroWarningActivity": "⚠ Cette activité a un prix de vente de 0,00 €. Vérifiez que c'est voulu."
   },
   "orderSwitch": {
     "label": "Commande",
+    "unitLabel": "Unité",
     "noOrderYet": "pas encore de commande",
     "lockedWhileDirty": "Enregistrez l'itinéraire ou annulez les modifications avant de changer de commande."
   },
   "list": {
     "partialPriced": "{priced}/{total} tarifées",
-    "partialPricedTitle": "Seules {priced} commandes sur {total} ont un prix ; le montant n'est pas un total de dossier."
+    "partialPricedTitle": "Seules {priced} activités sur {total} ont un prix ; le montant n'est pas un total de dossier.",
+    "zeroPricedTitle_one": "Le prix de vente est de 0,00 €. Vérifiez que c'est voulu.",
+    "zeroPricedTitle_other": "Le prix de vente est de 0,00 € pour {count} activités. Vérifiez que c'est voulu."
   }
 }

@@ -64,19 +64,27 @@
     "noOrderTitle": "Prices are kept on a transport order.",
     "noOrderCreate": "Create transport order",
     "noOrderNoActivity": "Add a transport activity to be able to enter a price.",
-    "standaloneNote": "Standalone activities (storage, crane work) have no price carrier of their own yet.",
     "orderCreated": "Transport order created.",
     "linesPermission": "You have no rights to add sales lines.",
-    "partialTotal": "{priced} of {total} orders priced",
-    "standaloneOnly": "Standalone activities (storage, crane work) are not priced on the dossier in this release. Do not create a transport order merely to record a price; these activities are invoiced outside the dossier."
+    "partialTotal": "{priced} of {total} activities priced",
+    "forActivity": "Activity {name}",
+    "agreedHintActivity": "Agreed sales price for this activity. Leave empty to clear the price; € 0 is a deliberate price.",
+    "agreedClearedActivity": "Agreed price removed.",
+    "lockedActivity": "The price of this activity is locked ({status}).",
+    "noActivityPrice": "No price for this activity yet",
+    "zeroWarningOrder": "⚠ This order has a sales price of € 0.00. Check whether this is intended.",
+    "zeroWarningActivity": "⚠ This activity has a sales price of € 0.00. Check whether this is intended."
   },
   "orderSwitch": {
     "label": "Order",
+    "unitLabel": "Unit",
     "noOrderYet": "no order yet",
     "lockedWhileDirty": "Save the route or discard the changes before switching order."
   },
   "list": {
     "partialPriced": "{priced}/{total} priced",
-    "partialPricedTitle": "Only {priced} of {total} orders have a price; the amount is not a dossier total."
+    "partialPricedTitle": "Only {priced} of {total} activities have a price; the amount is not a dossier total.",
+    "zeroPricedTitle_one": "Sales price is € 0.00. Check whether this is intended.",
+    "zeroPricedTitle_other": "Sales price is € 0.00 for {count} activities. Check whether this is intended."
   }
 }

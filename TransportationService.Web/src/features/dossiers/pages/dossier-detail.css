@@ -590,3 +590,13 @@
   font-weight: 500;
   color: var(--color-warning, #d97706);
 }
+
+/* Stap 13: an intentional € 0 on the selected unit — amber (attention), never red (it is not an error). */
+.dossier-price-zero-warning {
+  margin: var(--space-2, 8px) 0 0;
+  padding: 6px 10px;
+  font-size: 0.875rem;
+  color: var(--color-warning, #d97706);
+  border-left: 4px solid var(--color-warning, #d97706);
+  max-width: 480px;
+}

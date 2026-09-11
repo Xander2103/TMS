@@ -1,7 +1,7 @@
-using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using TransportationService.Api.Data;
 using TransportationService.Api.Modules.Dossiers.Dtos;
+using TransportationService.Api.Modules.Dossiers.Entities;
 using TransportationService.Api.Modules.Orders.Entities;
 using TransportationService.Api.Modules.Orders.Services;
 using TransportationService.Api.Modules.Tenancy.Services;
@@ -23,6 +23,14 @@ public interface IDossierReadinessService
 /// tell the user exactly what needs attention for the NEXT step, each with the page section
 /// to jump to. Wave 1 produces Planning + Commercial rules; later waves add Warehouse /
 /// Execution / Invoice producers to the same vocabulary without schema change.
+/// <para>
+/// Step 13 (2026-09-11): the commercial rules reason about BILLABLE UNITS — a transport
+/// activity through its linked order, a standalone billable activity (Opslag, Kraanwerk, …)
+/// through its own <see cref="DossierActivityPricing"/>. Both produce <c>pricing.missing</c>
+/// (no price) and the non-blocking <c>pricing.zero</c> (intentional € 0 — priced by provenance
+/// but worth a second look). Each item carries the activity (and order) it is about so the
+/// page selects the right editor.
+/// </para>
 /// </summary>
 public class DossierReadinessService : IDossierReadinessService
 {
@@ -35,8 +43,6 @@ public class DossierReadinessService : IDossierReadinessService
         _tenantContext = tenantContext;
     }
 
-    private sealed record CoverageEntry(string? Status);
-
     public async Task<IReadOnlyList<ReadinessIssueDto>> EvaluateAsync(Guid dossierId, CancellationToken cancellationToken)
     {
         var tenantId = _tenantContext.TenantId;
@@ -45,7 +51,7 @@ public class DossierReadinessService : IDossierReadinessService
         var activities = await _dbContext.DossierActivities.AsNoTracking()
             .Where(a => a.TenantId == tenantId && a.DossierId == dossierId)
             .Join(_dbContext.ActivityTypes.AsNoTracking(), a => a.ActivityTypeId, t => t.Id,
-                (a, t) => new { a.Id, a.LinkedTransportOrderId, TypeName = t.Name, t.HasStops })
+                (a, t) => new { a.Id, a.Label, a.LinkedTransportOrderId, TypeName = t.Name, t.HasStops, t.IsBillable })
             .ToListAsync(cancellationToken);
 
         if (activities.Count == 0)
@@ -65,6 +71,36 @@ public class DossierReadinessService : IDossierReadinessService
                 "route", "stops.loading", "Planning", ActivityId: activity.Id));
         }
 
+        // Standalone billable activities: their own price record is the carrier (step 13).
+        var standalone = activities.Where(a => !a.HasStops && a.IsBillable).ToList();
+        if (standalone.Count > 0)
+        {
+            var standaloneIds = standalone.Select(a => a.Id).ToList();
+            var pricings = await _dbContext.DossierActivityPricings.AsNoTracking()
+                .Where(p => p.TenantId == tenantId && standaloneIds.Contains(p.DossierActivityId))
+                .Select(p => new { p.DossierActivityId, p.PricingSource, p.FixedAmount })
+                .ToDictionaryAsync(p => p.DossierActivityId, cancellationToken);
+
+            foreach (var activity in standalone)
+            {
+                var name = string.IsNullOrWhiteSpace(activity.Label) ? activity.TypeName : $"{activity.TypeName} · {activity.Label}";
+                if (!pricings.TryGetValue(activity.Id, out var pricing)
+                    || !ActivityPricingState.IsPriced(pricing.PricingSource, pricing.FixedAmount))
+                {
+                    issues.Add(new ReadinessIssueDto(
+                        "pricing.missing", "Warning", $"Nog geen verkoopprijs voor {name}.",
+                        "prijs", "price", "Commercial", ActivityId: activity.Id));
+                }
+                else if (pricing.FixedAmount == 0m)
+                {
+                    issues.Add(new ReadinessIssueDto(
+                        "pricing.zero", "Warning",
+                        $"{name} heeft een verkoopprijs van € 0,00. Controleer of dit bewust is.",
+                        "prijs", "price", "Commercial", ActivityId: activity.Id));
+                }
+            }
+        }
+
         var orderIds = activities
             .Where(a => a.LinkedTransportOrderId is not null)
             .Select(a => a.LinkedTransportOrderId!.Value)
@@ -72,10 +108,8 @@ public class DossierReadinessService : IDossierReadinessService
             .ToList();
         if (orderIds.Count == 0)
         {
-            // Only a transport-shaped activity can carry a price (the linked order is the price
-            // carrier — docs/dossiers.md). A dossier with only standalone activities (opslag,
-            // kraanwerk) has no actionable pricing step in this release, so it gets no issue:
-            // the attention panel never suggests creating a transport order to price storage.
+            // A transport activity whose order does not exist yet has no price carrier to point
+            // at; the standalone rules above already covered the other units.
             if (activities.Any(a => a.HasStops))
             {
                 issues.Add(new ReadinessIssueDto(
@@ -85,6 +119,13 @@ public class DossierReadinessService : IDossierReadinessService
 
             return issues;
         }
+
+        // The activity that carries each order (so order-level items can also name the activity,
+        // which is what the page selects) and whether that carrier is a billable unit at all.
+        var carrierByOrder = activities
+            .Where(a => a.LinkedTransportOrderId is not null)
+            .GroupBy(a => a.LinkedTransportOrderId!.Value)
+            .ToDictionary(g => g.Key, g => g.First());
 
         var orders = await _dbContext.TransportOrders.AsNoTracking()
             .Where(o => o.TenantId == tenantId && orderIds.Contains(o.Id))
@@ -114,7 +155,7 @@ public class DossierReadinessService : IDossierReadinessService
                     "order.confirm.stops", "Blocking",
                     $"{order.OrderNumber}: {missing} (nodig om te bevestigen).",
                     "route", order.HasLoading ? "stops.unloading" : "stops.loading", "Planning",
-                    TransportOrderId: order.Id));
+                    TransportOrderId: order.Id, ActivityId: carrierByOrder.GetValueOrDefault(order.Id)?.Id));
             }
 
             // Parenthesised on purpose: `!HasDate && Draft || Submitted || Confirmed` (the pre-sprint
@@ -124,7 +165,8 @@ public class DossierReadinessService : IDossierReadinessService
                 issues.Add(new ReadinessIssueDto(
                     "route.date_missing", "Warning",
                     $"{order.OrderNumber}: nog geen planningsdatum.",
-                    "route", "stops.plannedFrom", "Planning", TransportOrderId: order.Id));
+                    "route", "stops.plannedFrom", "Planning",
+                    TransportOrderId: order.Id, ActivityId: carrierByOrder.GetValueOrDefault(order.Id)?.Id));
             }
         }
 
@@ -139,13 +181,14 @@ public class DossierReadinessService : IDossierReadinessService
         var incompleteOrderIds = new HashSet<Guid>();
         foreach (var snapshot in snapshots)
         {
+            var carrierId = carrierByOrder.GetValueOrDefault(snapshot.TransportOrderId)?.Id;
             if (snapshot.CoverageStatus is "Partial" or "None")
             {
                 incompleteOrderIds.Add(snapshot.TransportOrderId);
                 issues.Add(new ReadinessIssueDto(
                     "pricing.incomplete", "Warning",
                     $"{snapshot.OrderNumber}: niet alle onderdelen hebben een volledige prijs.",
-                    "prijs", "price", "Commercial", TransportOrderId: snapshot.TransportOrderId));
+                    "prijs", "price", "Commercial", TransportOrderId: snapshot.TransportOrderId, ActivityId: carrierId));
             }
 
             if (snapshot.IsStale)
@@ -153,9 +196,12 @@ public class DossierReadinessService : IDossierReadinessService
                 issues.Add(new ReadinessIssueDto(
                     "pricing.stale", "Warning",
                     $"{snapshot.OrderNumber}: prijs verouderd — herbereken.",
-                    "prijs", "price", "Commercial", TransportOrderId: snapshot.TransportOrderId));
+                    "prijs", "price", "Commercial", TransportOrderId: snapshot.TransportOrderId, ActivityId: carrierId));
             }
         }
+
+        // A non-billable carrier (e.g. an empty positioning ride) is no commercial unit: no price items.
+        bool IsBillableUnit(Guid orderId) => carrierByOrder.GetValueOrDefault(orderId)?.IsBillable ?? true;
 
         // UX sprint 2026-09-09 §2.5: a linked order in its commercial phase without a sales price
         // (OrderPricingState.IsPriced — the same definition the list and the financials use).
@@ -164,13 +210,28 @@ public class DossierReadinessService : IDossierReadinessService
         // two conditions can coincide (coverage Partial with a 0 total) — one line suffices.
         foreach (var order in orders.Where(o =>
                      IsOpenCommercial(o.Status)
+                     && IsBillableUnit(o.Id)
                      && !OrderPricingState.IsPriced(o.PriceIsManual, o.PricingSource, o.OneOffFixedAmount, o.AgreedPrice)
                      && !incompleteOrderIds.Contains(o.Id)))
         {
             issues.Add(new ReadinessIssueDto(
                 "pricing.missing", "Warning",
                 $"{order.OrderNumber}: nog geen verkoopprijs.",
-                "prijs", "price", "Commercial", TransportOrderId: order.Id));
+                "prijs", "price", "Commercial", TransportOrderId: order.Id, ActivityId: carrierByOrder.GetValueOrDefault(order.Id)?.Id));
+        }
+
+        // Step 13: intentional € 0 on an order — priced by PROVENANCE (override or one-off
+        // agreement at 0), never the engine's empty zero. Non-blocking; silent once the order is
+        // cancelled or invoiced, because then nobody can still act on it.
+        foreach (var order in orders.Where(o =>
+                     o.Status is not (TransportOrderStatus.Cancelled or TransportOrderStatus.Invoiced)
+                     && IsBillableUnit(o.Id)
+                     && OrderPricingState.IsIntentionalZero(o.PriceIsManual, o.PricingSource, o.OneOffFixedAmount, o.AgreedPrice)))
+        {
+            issues.Add(new ReadinessIssueDto(
+                "pricing.zero", "Warning",
+                $"Opdracht {order.OrderNumber} heeft een verkoopprijs van € 0,00. Controleer of dit bewust is.",
+                "prijs", "price", "Commercial", TransportOrderId: order.Id, ActivityId: carrierByOrder.GetValueOrDefault(order.Id)?.Id));
         }
 
         return issues;
@@ -186,7 +247,9 @@ public class DossierReadinessService : IDossierReadinessService
     /// dossier with a linked order whose coverage is Partial/None or whose price went stale
     /// counts as needing attention — the Wave 1 gap closes. Since the UX sprint 2026-09-09 a
     /// linked order in its commercial phase that is not priced (<c>pricing.missing</c>) counts
-    /// too. Still a single SQL statement; the date/stop rules remain out of scope here.
+    /// too; since step 13 also a standalone billable activity without a price and an
+    /// intentional € 0 (order in its commercial phase, or activity). Still a single SQL
+    /// statement; the date/stop rules remain out of scope here.
     /// </remarks>
     public async Task<int> CountDossiersWithAttentionAsync(CancellationToken cancellationToken)
     {
@@ -213,7 +276,28 @@ public class DossierReadinessService : IDossierReadinessService
                     .Where(OrderPricingState.IsUnpricedExpression)
                     .Any(o => o.Status == TransportOrderStatus.Draft
                               || o.Status == TransportOrderStatus.Submitted
-                              || o.Status == TransportOrderStatus.Confirmed))
+                              || o.Status == TransportOrderStatus.Confirmed)
+                // Step 13: intentional € 0 on a linked order still in its commercial phase
+                // (OrderPricingState.IsIntentionalZero — the same tree, inlined for SQL).
+                || _dbContext.DossierActivities
+                    .Where(a => a.DossierId == d.Id && a.LinkedTransportOrderId != null)
+                    .Join(_dbContext.TransportOrders, a => a.LinkedTransportOrderId, o => o.Id, (a, o) => o)
+                    .Any(o => ((o.PricingSource == OrderPricingSource.OneOff && o.OneOffFixedAmount == 0m)
+                               || (o.PriceIsManual && o.AgreedPrice == 0m))
+                              && (o.Status == TransportOrderStatus.Draft
+                                  || o.Status == TransportOrderStatus.Submitted
+                                  || o.Status == TransportOrderStatus.Confirmed))
+                // Step 13: a standalone billable activity without a price, or priced at € 0.
+                || _dbContext.DossierActivities
+                    .Where(a => a.DossierId == d.Id)
+                    .Join(_dbContext.ActivityTypes, a => a.ActivityTypeId, t => t.Id, (a, t) => new { a.Id, t.HasStops, t.IsBillable })
+                    .Where(x => x.IsBillable && !x.HasStops)
+                    .Any(x => !_dbContext.DossierActivityPricings
+                                  .Where(ActivityPricingState.IsPricedExpression)
+                                  .Any(p => p.DossierActivityId == x.Id)
+                              || _dbContext.DossierActivityPricings
+                                  .Where(ActivityPricingState.IsPricedExpression)
+                                  .Any(p => p.DossierActivityId == x.Id && p.FixedAmount == 0m)))
             .CountAsync(cancellationToken);
     }
 }

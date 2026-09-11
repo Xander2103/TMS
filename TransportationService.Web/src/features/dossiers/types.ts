@@ -18,9 +18,14 @@ export interface DossierListItem {
   /** Klantreferentie van het dossier (niet de gegenereerde titel). */
   customerReference: string | null
   customerNumber: string | null
-  /** Som van de afgesproken prijzen; `null` = nog niet geprijsd (nooit 0 als "geen prijs"). */
+  /** Som van de afgesproken prijzen over alle geprijsde factureerbare eenheden; `null` = nog niet geprijsd (nooit 0 als "geen prijs"). */
   agreedPriceTotal: number | null
   pricedOrderCount: number
+  /** Stap 13 (2026-09-11): factureerbare eenheden = activiteiten van een IsBillable-type (+ compat: losse opdrachten). */
+  billableActivityCount: number
+  pricedActivityCount: number
+  /** Geprijsde eenheden met bedrag exact 0 — de lijst toont er een ⚠ voor. */
+  zeroPricedActivityCount: number
 }
 
 export interface DossierOrder {
@@ -55,9 +60,14 @@ export interface DossierIncident {
 }
 
 export interface DossierFinancialSummary {
+  /** Dossier total over ALL priced billable units (orders + standalone activities); the name is kept for compat. */
   agreedOrderTotal: number
   /** UX-sprint 2026-09-09: linked orders that carry a price (override or AgreedPrice > 0); 0 = "Nog geen prijs". */
   pricedOrderCount?: number
+  /** Stap 13: billable units (activities of an IsBillable type + legacy orders without activity). Absent on older payloads. */
+  billableActivityCount?: number
+  pricedActivityCount?: number
+  zeroPricedActivityCount?: number
   invoicedTotal: number
   estimatedIncidentCost: number
   actualIncidentCost: number
@@ -82,6 +92,19 @@ export interface DossierActivity {
   plannedDate: string | null
   durationHours: number | null
   notes: string | null
+  // --- Stap 13 (2026-09-11): the activity as a billable unit ---
+  /** Activity type flag: counts as a commercial unit (gets a sales price + pricing attention). */
+  isBillable: boolean
+  /** "Order" for a transport activity WITH an order (the order carries the price); "None"/"OneOff" for standalone ones. */
+  pricingSource: 'None' | 'OneOff' | 'Order'
+  /** Order price resp. activity price (null when unpriced). */
+  agreedPrice: number | null
+  /** Provenance flag (OrderPricingState resp. ActivityPricingState) — € 0 with provenance IS priced. */
+  isPriced: boolean
+  /** Snapshot status of the order resp. status of the activity price record (Draft/Reviewed/Locked/Invoiced). */
+  pricingStatus: string | null
+  /** Concurrency token of the activity price record; null without record and for orders (they use their own version). */
+  pricingVersion: string | null
 }
 
 export type ReadinessSeverity = 'Info' | 'Warning' | 'Blocking'

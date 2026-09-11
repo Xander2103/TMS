@@ -38,6 +38,7 @@ interface Draft {
   isQuickStart: boolean
   quickStartOrder: string
   isSystemDefaultTransport: boolean
+  isBillable: boolean
 }
 
 function emptyDraft(): Draft {
@@ -57,6 +58,7 @@ function emptyDraft(): Draft {
     isQuickStart: false,
     quickStartOrder: '0',
     isSystemDefaultTransport: false,
+    isBillable: true,
   }
 }
 
@@ -77,6 +79,7 @@ function draftOf(type: ActivityType): Draft {
     isQuickStart: type.isQuickStart,
     quickStartOrder: String(type.quickStartOrder),
     isSystemDefaultTransport: type.isSystemDefaultTransport,
+    isBillable: type.isBillable,
   }
 }
 
@@ -139,6 +142,7 @@ export function ActivityTypesPage() {
         isQuickStart: draft.isQuickStart,
         quickStartOrder: Number(draft.quickStartOrder) || 0,
         isSystemDefaultTransport: draft.isSystemDefaultTransport,
+        isBillable: draft.isBillable,
       }
       if (draft.type) {
         await updateActivityType(draft.type.id, input)
@@ -186,6 +190,7 @@ export function ActivityTypesPage() {
           {type.planningRelevant && <Badge tone="neutral">{t('dossiers.activityTypes.capPlanning')}</Badge>}
           {type.warehouseRelevant && <Badge tone="neutral">{t('dossiers.activityTypes.capWarehouse')}</Badge>}
           {type.allowsDuration && <Badge tone="neutral">{t('dossiers.activityTypes.capDuration')}</Badge>}
+          {type.isBillable && <Badge tone="neutral">{t('dossiers.activityTypes.capBillable')}</Badge>}
         </span>
       ),
     },
@@ -393,6 +398,17 @@ export function ActivityTypesPage() {
                 <span>
                   {t('dossiers.activityTypes.flagDuration')}
                   <span className="activity-type-flag-hint">{t('dossiers.activityTypes.flagDurationHint')}</span>
+                </span>
+              </label>
+              <label className="tof-checkbox">
+                <input
+                  type="checkbox"
+                  checked={draft.isBillable}
+                  onChange={(e) => patch({ isBillable: e.target.checked })}
+                />
+                <span>
+                  {t('dossiers.activityTypes.flagBillable')}
+                  <span className="activity-type-flag-hint">{t('dossiers.activityTypes.flagBillableHint')}</span>
                 </span>
               </label>
             </fieldset>

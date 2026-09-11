@@ -103,6 +103,7 @@ public class TransportationDbContext : DbContext
     public DbSet<TransportationService.Api.Modules.Partners.Entities.CustomerAllowedLegalEntity> CustomerAllowedLegalEntities => Set<TransportationService.Api.Modules.Partners.Entities.CustomerAllowedLegalEntity>();
     public DbSet<TransportationService.Api.Modules.Dossiers.Entities.ActivityType> ActivityTypes => Set<TransportationService.Api.Modules.Dossiers.Entities.ActivityType>();
     public DbSet<TransportationService.Api.Modules.Dossiers.Entities.DossierActivity> DossierActivities => Set<TransportationService.Api.Modules.Dossiers.Entities.DossierActivity>();
+    public DbSet<TransportationService.Api.Modules.Dossiers.Entities.DossierActivityPricing> DossierActivityPricings => Set<TransportationService.Api.Modules.Dossiers.Entities.DossierActivityPricing>();
     public DbSet<TransportationService.Api.Modules.Incidents.Entities.Incident> Incidents => Set<TransportationService.Api.Modules.Incidents.Entities.Incident>();
     public DbSet<TransportationService.Api.Modules.Incidents.Entities.IncidentChargePolicy> IncidentChargePolicies => Set<TransportationService.Api.Modules.Incidents.Entities.IncidentChargePolicy>();
 

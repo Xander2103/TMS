@@ -18,6 +18,9 @@ export function dossierListItem(overrides: Partial<DossierListItem> = {}): Dossi
     customerNumber: 'K-1001',
     agreedPriceTotal: 485,
     pricedOrderCount: 1,
+    billableActivityCount: 1,
+    pricedActivityCount: 1,
+    zeroPricedActivityCount: 0,
     ...overrides,
   }
 }
@@ -52,6 +55,10 @@ export function dossierDetail(overrides: Partial<DossierDetail> = {}): DossierDe
   }
 }
 
+/**
+ * Activity card fixture. Billable and unpriced by default; an activity linked to an order carries
+ * the order as its price source ("Order") unless the test says otherwise.
+ */
 export function dossierActivity(overrides: Partial<DossierActivity> = {}): DossierActivity {
   return {
     id: 'a-1',
@@ -71,6 +78,12 @@ export function dossierActivity(overrides: Partial<DossierActivity> = {}): Dossi
     plannedDate: null,
     durationHours: null,
     notes: null,
+    isBillable: true,
+    pricingSource: overrides.linkedTransportOrderId ? 'Order' : 'None',
+    agreedPrice: null,
+    isPriced: false,
+    pricingStatus: null,
+    pricingVersion: null,
     ...overrides,
   }
 }

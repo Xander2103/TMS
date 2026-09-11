@@ -39,6 +39,7 @@ const api = vi.hoisted(() => ({
   deleteDossierActivity: vi.fn(),
   createOrderForActivity: vi.fn(),
   changeDossierLegalEntity: vi.fn(),
+  setActivityPrice: vi.fn(),
 }))
 vi.mock('../api/dossiersApi', () => api)
 vi.mock('../api/activityTypesApi', () => ({ listActivityTypes: () => Promise.resolve([]) }))
@@ -316,10 +317,13 @@ function twoOrderDossier(): DossierDetail {
       { linkId: 'l-1', orderId: 'o-1', orderNumber: 'ORD-0001', orderDate: '2026-08-12', status: 'Draft', goodsDescription: 'Pallets', agreedPrice: 450, isPriced: true },
       { linkId: 'l-2', orderId: 'o-2', orderNumber: 'ORD-0002', orderDate: '2026-08-13', status: 'Draft', goodsDescription: null, agreedPrice: 0, isPriced: false },
     ],
-    financials: { agreedOrderTotal: 450, invoicedTotal: 0, estimatedIncidentCost: 0, actualIncidentCost: 0, pricedOrderCount: 1 },
+    financials: {
+      agreedOrderTotal: 450, invoicedTotal: 0, estimatedIncidentCost: 0, actualIncidentCost: 0,
+      pricedOrderCount: 1, billableActivityCount: 2, pricedActivityCount: 1, zeroPricedActivityCount: 0,
+    },
     activities: [
-      dossierActivity({ id: 'a-1', sequence: 1, linkedTransportOrderId: 'o-1', linkedOrderNumber: 'ORD-0001', linkedOrderStatus: 'Draft' }),
-      dossierActivity({ id: 'a-2', sequence: 2, activityTypeCode: 'EXPRESS', activityTypeName: 'Express', linkedTransportOrderId: 'o-2', linkedOrderNumber: 'ORD-0002', linkedOrderStatus: 'Draft' }),
+      dossierActivity({ id: 'a-1', sequence: 1, linkedTransportOrderId: 'o-1', linkedOrderNumber: 'ORD-0001', linkedOrderStatus: 'Draft', isPriced: true, agreedPrice: 450 }),
+      dossierActivity({ id: 'a-2', sequence: 2, activityTypeCode: 'EXPRESS', activityTypeName: 'Express', linkedTransportOrderId: 'o-2', linkedOrderNumber: 'ORD-0002', linkedOrderStatus: 'Draft', agreedPrice: 0 }),
     ],
     readiness: [
       { ...issue('order.confirm.stops', 'route', 'stops.unloading', 'ORD-0002: loslocatie is nog onbekend.'), transportOrderId: 'o-2' },
@@ -352,27 +356,28 @@ describe('Dossier work surface — several transport orders', () => {
     renderPage()
     await screen.findByDisplayValue('Nexans site Antwerpen')
 
-    const switchers = screen.getAllByRole('group', { name: 'Opdracht' })
-    expect(switchers).toHaveLength(2) // route + price
-    const routeSwitch = switchers[0]
+    // Route switches between orders ("Opdracht"); price switches between billable units ("Eenheid").
+    const routeSwitch = screen.getByRole('group', { name: 'Opdracht' })
+    const priceSwitch = screen.getByRole('group', { name: 'Eenheid' })
     expect(within(routeSwitch).getByRole('button', { name: /ORD-0001/ })).toHaveAttribute('aria-pressed', 'true')
     expect(within(routeSwitch).getByRole('button', { name: /ORD-0002/ })).toHaveAttribute('aria-pressed', 'false')
+    expect(within(priceSwitch).getByRole('button', { name: /ORD-0001/ })).toHaveAttribute('aria-pressed', 'true')
     expect(orders.get).toHaveBeenCalledWith('o-1')
     expect(orders.get).not.toHaveBeenCalledWith('o-2')
   })
 
-  it('never presents a partial aggregate as the dossier price: € 450 is marked "1 van 2 opdrachten geprijsd"', async () => {
+  it('never presents a partial aggregate as the dossier price: € 450 is marked "1 van 2 activiteiten geprijsd"', async () => {
     renderPage()
     await screen.findByRole('heading', { name: 'Verkoop & prijs' })
     const price = document.getElementById('sectie-prijs')!
     const total = price.querySelector('.dossier-price-total')!
     expect(await within(total as HTMLElement).findByText(/€\s450,00/)).toBeInTheDocument()
-    expect(within(total as HTMLElement).getByText('1 van 2 opdrachten geprijsd')).toBeInTheDocument()
-    // Per-order lines follow the backend flag, not "amount > 0".
+    expect(within(total as HTMLElement).getByText('1 van 2 activiteiten geprijsd')).toBeInTheDocument()
+    // Per-unit lines follow the backend flag, not "amount > 0".
     const rows = within(price).getAllByRole('listitem')
-    expect(rows[0]).toHaveTextContent('ORD-0001')
+    expect(rows[0]).toHaveTextContent('ORD-0001 · Direct transport')
     expect(rows[0]).toHaveTextContent(/€\s450,00/)
-    expect(rows[1]).toHaveTextContent('ORD-0002')
+    expect(rows[1]).toHaveTextContent('ORD-0002 · Express')
     expect(rows[1]).toHaveTextContent('—')
   })
 
@@ -382,12 +387,12 @@ describe('Dossier work surface — several transport orders', () => {
     renderPage()
     await screen.findByDisplayValue('Nexans site Antwerpen')
 
-    await user.click(within(screen.getAllByRole('group', { name: 'Opdracht' })[0]).getByRole('button', { name: /ORD-0002/ }))
+    await user.click(within(screen.getByRole('group', { name: 'Opdracht' })).getByRole('button', { name: /ORD-0002/ }))
     await waitFor(() => expect(orders.get).toHaveBeenCalledWith('o-2'))
     await screen.findByDisplayValue('Depot Gent')
     expect(screen.queryByDisplayValue('Nexans site Antwerpen')).not.toBeInTheDocument()
     // Both switchers reflect the same selection; the price panel now shows ORD-0002's agreed price (empty).
-    for (const group of screen.getAllByRole('group', { name: 'Opdracht' })) {
+    for (const group of [screen.getByRole('group', { name: 'Opdracht' }), screen.getByRole('group', { name: 'Eenheid' })]) {
       expect(within(group).getByRole('button', { name: /ORD-0002/ })).toHaveAttribute('aria-pressed', 'true')
     }
     expect(screen.getByLabelText('Afgesproken prijs (€)')).toHaveValue('')
@@ -409,7 +414,7 @@ describe('Dossier work surface — several transport orders', () => {
 
     await user.click(screen.getByRole('button', { name: 'Ga naar route' }))
     await screen.findByDisplayValue('Depot Gent')
-    const routeSwitch = screen.getAllByRole('group', { name: 'Opdracht' })[0]
+    const routeSwitch = screen.getByRole('group', { name: 'Opdracht' })
     expect(within(routeSwitch).getByRole('button', { name: /ORD-0002/ })).toHaveAttribute('aria-pressed', 'true')
     // stops.unloading → the (still empty) unloading location of ORD-0002.
     await waitFor(() => expect(document.activeElement).toBe(screen.getAllByLabelText('locatie')[1]))
@@ -426,13 +431,13 @@ describe('Dossier work surface — several transport orders', () => {
 
     const unloadCard = screen.getAllByLabelText('locatie')[1].closest('fieldset')!
     await user.type(within(unloadCard).getByLabelText(/Plaats/), 'Gent')
-    for (const group of screen.getAllByRole('group', { name: 'Opdracht' })) {
+    for (const group of [screen.getByRole('group', { name: 'Opdracht' }), screen.getByRole('group', { name: 'Eenheid' })]) {
       expect(within(group).getByRole('button', { name: /ORD-0002/ })).toBeDisabled()
     }
     expect(screen.getAllByText('Sla de route op of maak de wijzigingen ongedaan om van opdracht te wisselen.').length).toBeGreaterThan(0)
 
     await user.click(screen.getByRole('button', { name: 'Wijzigingen ongedaan maken' }))
-    expect(within(screen.getAllByRole('group', { name: 'Opdracht' })[0]).getByRole('button', { name: /ORD-0002/ })).toBeEnabled()
+    expect(within(screen.getByRole('group', { name: 'Opdracht' })).getByRole('button', { name: /ORD-0002/ })).toBeEnabled()
     expect(orders.get).not.toHaveBeenCalledWith('o-2')
   })
 })
@@ -559,29 +564,329 @@ describe('Dossier work surface — failure paths of the inline route save', () =
   })
 })
 
-describe('Dossier work surface — standalone activities', () => {
+// ---------------------------------------------------------------- stap 13 (2026-09-11): activity pricing
+
+const noFinancials = { agreedOrderTotal: 0, invoicedTotal: 0, estimatedIncidentCost: 0, actualIncidentCost: 0, pricedOrderCount: 0 }
+
+/** Opslag (storage) as the only activity; unpriced. */
+function storageOnlyDossier(): DossierDetail {
+  return dossierDetail({
+    financials: { ...noFinancials, billableActivityCount: 1, pricedActivityCount: 0, zeroPricedActivityCount: 0 },
+    activities: [dossierActivity({ id: 'a-1', activityTypeCode: 'OPSLAG', activityTypeName: 'Opslag', icon: 'warehouse', hasStops: false, supportsGoods: false })],
+    readiness: [{ ...issue('pricing.missing', 'prijs', 'price', 'Nog geen verkoopprijs voor Opslag.'), activityId: 'a-1' }],
+  })
+}
+
+/** Direct transport (ORD-0001 € 450) + Opslag (€ 200) + Kraanwerk (unpriced): 2 of 3 units priced. */
+function mixedDossier(): DossierDetail {
+  return dossierDetail({
+    orders: [{ linkId: 'l-1', orderId: 'o-1', orderNumber: 'ORD-0001', orderDate: '2026-08-12', status: 'Draft', goodsDescription: 'Pallets', agreedPrice: 450, isPriced: true }],
+    financials: { agreedOrderTotal: 650, invoicedTotal: 0, estimatedIncidentCost: 0, actualIncidentCost: 0, pricedOrderCount: 1, billableActivityCount: 3, pricedActivityCount: 2, zeroPricedActivityCount: 0 },
+    activities: [
+      dossierActivity({ id: 'a-1', sequence: 1, linkedTransportOrderId: 'o-1', linkedOrderNumber: 'ORD-0001', linkedOrderStatus: 'Draft', isPriced: true, agreedPrice: 450 }),
+      dossierActivity({ id: 'a-2', sequence: 2, activityTypeCode: 'OPSLAG', activityTypeName: 'Opslag', hasStops: false, supportsGoods: false, pricingSource: 'OneOff', isPriced: true, agreedPrice: 200, pricingStatus: 'Draft', pricingVersion: 'pv-2' }),
+      dossierActivity({ id: 'a-3', sequence: 3, activityTypeCode: 'KRAANWERK', activityTypeName: 'Kraanwerk', hasStops: false, supportsGoods: false, allowsDuration: true }),
+    ],
+    readiness: [{ ...issue('pricing.missing', 'prijs', 'price', 'Nog geen verkoopprijs voor Kraanwerk.'), activityId: 'a-3' }],
+  })
+}
+
+describe('Dossier work surface — standalone billable activities carry their own price', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    auth.permissions = new Set(['dossiers.view', 'dossiers.manage', 'orders.edit', 'orders.override_price'])
+    auth.permissions = new Set(['dossiers.view', 'dossiers.manage', 'dossiers.price', 'orders.edit', 'orders.override_price'])
     window.HTMLElement.prototype.scrollIntoView = vi.fn()
+    orders.get.mockResolvedValue(firstOrder())
   })
 
-  it('a storage-only dossier never suggests creating a transport order to attach a price', async () => {
+  it('a storage-only dossier shows the activity price editor and never "Transportopdracht aanmaken"', async () => {
+    api.getDossier.mockResolvedValue(storageOnlyDossier())
+    renderPage()
+    await screen.findByRole('heading', { name: 'Verkoop & prijs' })
+    const price = document.getElementById('sectie-prijs')!
+    expect(await within(price).findByText('Nog geen prijs')).toBeInTheDocument()
+    expect(within(price).getByText('Activiteit Opslag')).toBeInTheDocument()
+    expect(within(price).getByLabelText('Afgesproken prijs (€)')).toHaveValue('')
+    expect(within(price).queryByRole('button', { name: 'Transportopdracht aanmaken' })).not.toBeInTheDocument()
+    expect(within(price).queryByRole('button', { name: '+ Activiteit' })).not.toBeInTheDocument()
+    expect(within(price).queryByText('Voeg een transportactiviteit toe om een prijs te kunnen invoeren.')).not.toBeInTheDocument()
+    expect(within(price).queryByText(/niet op het dossier geprijsd/)).not.toBeInTheDocument()
+    expect(document.getElementById('sectie-route')).toBeNull()
+    expect(orders.get).not.toHaveBeenCalled()
+  })
+
+  it('a crane-only dossier shows the editor as well (any standalone billable type, not only storage)', async () => {
     api.getDossier.mockResolvedValue(
       dossierDetail({
-        activities: [dossierActivity({ id: 'a-1', activityTypeCode: 'OPSLAG', activityTypeName: 'Opslag', hasStops: false, supportsGoods: false })],
-        readiness: [],
+        financials: { ...noFinancials, billableActivityCount: 1, pricedActivityCount: 0, zeroPricedActivityCount: 0 },
+        activities: [dossierActivity({ id: 'a-1', activityTypeCode: 'KRAANWERK', activityTypeName: 'Kraanwerk', hasStops: false, supportsGoods: false, allowsDuration: true, label: 'Werf Gent' })],
       }),
     )
     renderPage()
     await screen.findByRole('heading', { name: 'Verkoop & prijs' })
     const price = document.getElementById('sectie-prijs')!
-    expect(await within(price).findByText('Nog geen prijs')).toBeInTheDocument()
-    expect(within(price).getByText(/worden in deze versie niet op het dossier geprijsd/)).toBeInTheDocument()
+    expect(await within(price).findByText('Activiteit Kraanwerk · Werf Gent')).toBeInTheDocument()
+    expect(within(price).getByLabelText('Afgesproken prijs (€)')).toBeInTheDocument()
     expect(within(price).queryByRole('button', { name: 'Transportopdracht aanmaken' })).not.toBeInTheDocument()
-    expect(within(price).queryByRole('button', { name: '+ Activiteit' })).not.toBeInTheDocument()
-    expect(within(price).queryByText('Voeg een transportactiviteit toe om een prijs te kunnen invoeren.')).not.toBeInTheDocument()
-    expect(document.getElementById('sectie-route')).toBeNull()
+  })
+
+  it('saving € 350 calls the activity price endpoint with the record version and re-renders the returned dossier', async () => {
+    const user = userEvent.setup()
+    const before = storageOnlyDossier()
+    before.activities[0].pricingVersion = 'pv-1'
+    api.getDossier.mockResolvedValue(before)
+    const after = storageOnlyDossier()
+    after.activities[0] = { ...after.activities[0], pricingSource: 'OneOff', isPriced: true, agreedPrice: 350, pricingStatus: 'Draft', pricingVersion: 'pv-2' }
+    after.financials = { ...after.financials, agreedOrderTotal: 350, pricedActivityCount: 1 }
+    after.readiness = []
+    api.setActivityPrice.mockResolvedValue(after)
+    renderPage()
+
+    const agreed = await screen.findByLabelText('Afgesproken prijs (€)')
+    await user.type(agreed, '350')
+    await user.click(screen.getByRole('button', { name: 'Opslaan' }))
+
+    await waitFor(() => expect(api.setActivityPrice).toHaveBeenCalledTimes(1))
+    expect(api.setActivityPrice).toHaveBeenCalledWith('d-1', 'a-1', { fixedAmount: 350, version: 'pv-1' })
+    expect(orders.setOneOff).not.toHaveBeenCalled()
+    expect(toast.showSuccess).toHaveBeenCalledWith('Afgesproken prijs opgeslagen.')
+    const price = document.getElementById('sectie-prijs')!
+    expect(await within(price).findByText('Huidige prijsafspraak: € 350,00')).toBeInTheDocument()
+    expect(within(price.querySelector('.dossier-price-total')!).getByText(/€\s350,00/)).toBeInTheDocument()
+    expect(screen.queryByText('Nog geen prijs')).not.toBeInTheDocument()
+    // The next save goes against the new record version.
+    expect(screen.getByLabelText('Afgesproken prijs (€)')).toHaveValue('350')
+  })
+
+  it('an invalid or negative amount is refused inline; an empty field clears the price', async () => {
+    const user = userEvent.setup()
+    api.getDossier.mockResolvedValue(mixedDossier())
+    api.setActivityPrice.mockResolvedValue(mixedDossier())
+    renderPage()
+    await screen.findByDisplayValue('Nexans site Antwerpen')
+    await user.click(within(screen.getByRole('group', { name: 'Eenheid' })).getByRole('button', { name: /Opslag/ }))
+    const agreed = screen.getByLabelText('Afgesproken prijs (€)')
+    expect(agreed).toHaveValue('200')
+
+    await user.clear(agreed)
+    await user.type(agreed, '-5')
+    await user.click(screen.getByRole('button', { name: 'Opslaan' }))
+    expect(await screen.findByText('Geef een geldig bedrag op (0 of meer).')).toBeInTheDocument()
+    expect(api.setActivityPrice).not.toHaveBeenCalled()
+
+    await user.clear(agreed)
+    await user.click(screen.getByRole('button', { name: 'Opslaan' }))
+    await waitFor(() => expect(api.setActivityPrice).toHaveBeenCalledWith('d-1', 'a-2', { fixedAmount: null, version: 'pv-2' }))
+    expect(toast.showSuccess).toHaveBeenCalledWith('Afgesproken prijs verwijderd.')
+  })
+
+  it('without dossiers.price the activity price is read-only', async () => {
+    auth.permissions = new Set(['dossiers.view', 'dossiers.manage', 'orders.edit'])
+    api.getDossier.mockResolvedValue(storageOnlyDossier())
+    renderPage()
+    await screen.findByRole('heading', { name: 'Verkoop & prijs' })
+    const price = document.getElementById('sectie-prijs')!
+    expect(await within(price).findByText('Nog geen prijs voor deze activiteit')).toBeInTheDocument()
+    expect(within(price).queryByLabelText('Afgesproken prijs (€)')).not.toBeInTheDocument()
+  })
+
+  it('a locked activity price is read-only with its status', async () => {
+    const locked = mixedDossier()
+    locked.activities[1] = { ...locked.activities[1], pricingStatus: 'Invoiced' }
+    api.getDossier.mockResolvedValue(locked)
+    const user = userEvent.setup()
+    renderPage()
+    await screen.findByDisplayValue('Nexans site Antwerpen')
+    await user.click(within(screen.getByRole('group', { name: 'Eenheid' })).getByRole('button', { name: /Opslag/ }))
+    expect(screen.getByText('De prijs van deze activiteit is vergrendeld (Gefactureerd).')).toBeInTheDocument()
+    expect(screen.getByText('Huidige prijsafspraak: € 200,00')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Afgesproken prijs (€)')).not.toBeInTheDocument()
+  })
+
+  it('409 on save shows the dossier conflict banner and an inline conflict message', async () => {
+    const user = userEvent.setup()
+    api.getDossier.mockResolvedValue(storageOnlyDossier())
+    const colleague = storageOnlyDossier()
+    colleague.activities[0] = { ...colleague.activities[0], pricingSource: 'OneOff', isPriced: true, agreedPrice: 99, pricingVersion: 'pv-9' }
+    api.setActivityPrice.mockRejectedValueOnce(new ApiError('Conflict', 409, colleague))
+    renderPage()
+
+    await user.type(await screen.findByLabelText('Afgesproken prijs (€)'), '350')
+    await user.click(screen.getByRole('button', { name: 'Opslaan' }))
+    const alerts = await screen.findAllByRole('alert')
+    expect(alerts.some((a) => /gewijzigd door een collega/.test(a.textContent ?? ''))).toBe(true)
+    // The entered amount is still there — nothing was silently replaced.
+    expect(screen.getByLabelText('Afgesproken prijs (€)')).toHaveValue('350')
+
+    await user.click(screen.getByRole('button', { name: 'Herladen' }))
+    expect(await screen.findByText('Huidige prijsafspraak: € 99,00')).toBeInTheDocument()
+    expect(screen.getByLabelText('Afgesproken prijs (€)')).toHaveValue('99')
+  })
+})
+
+describe('Dossier work surface — mixed dossier: transport + storage + crane', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    auth.permissions = new Set(['dossiers.view', 'dossiers.manage', 'dossiers.price', 'orders.edit', 'orders.override_price', 'locations.create'])
+    window.HTMLElement.prototype.scrollIntoView = vi.fn()
+    api.getDossier.mockResolvedValue(mixedDossier())
+    orders.get.mockResolvedValue(firstOrder())
+  })
+
+  it('totals over all priced units: € 650,00 with "2 van 3 activiteiten geprijsd" and one row per unit', async () => {
+    renderPage()
+    await screen.findByDisplayValue('Nexans site Antwerpen')
+    const price = document.getElementById('sectie-prijs')!
+    const total = price.querySelector<HTMLElement>('.dossier-price-total')!
+    expect(within(total).getByText(/€\s650,00/)).toBeInTheDocument()
+    expect(within(total).getByText('2 van 3 activiteiten geprijsd')).toBeInTheDocument()
+    const rows = within(price).getAllByRole('listitem')
+    expect(rows).toHaveLength(3)
+    expect(rows[0]).toHaveTextContent('ORD-0001 · Direct transport')
+    expect(rows[0]).toHaveTextContent(/€\s450,00/)
+    expect(rows[1]).toHaveTextContent('Opslag')
+    expect(rows[1]).toHaveTextContent(/€\s200,00/)
+    expect(rows[2]).toHaveTextContent('Kraanwerk')
+    expect(rows[2]).toHaveTextContent('—')
+    // Only one transport activity: no route switcher; the unit switcher lists all three units.
+    expect(screen.queryByRole('group', { name: 'Opdracht' })).not.toBeInTheDocument()
+    const units = screen.getByRole('group', { name: 'Eenheid' })
+    expect(within(units).getAllByRole('button')).toHaveLength(3)
+    expect(within(units).getByRole('button', { name: /ORD-0001/ })).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('selecting a standalone unit changes only the price target: Opslag shows € 200, Kraan an empty editor, saves go to the selected id', async () => {
+    const user = userEvent.setup()
+    api.setActivityPrice.mockResolvedValue(mixedDossier())
+    renderPage()
+    await screen.findByDisplayValue('Nexans site Antwerpen')
+    expect(screen.getByText('Opdracht ORD-0001')).toBeInTheDocument()
+    expect(screen.getByLabelText('Afgesproken prijs (€)')).toHaveValue('450')
+
+    const units = screen.getByRole('group', { name: 'Eenheid' })
+    await user.click(within(units).getByRole('button', { name: /Opslag/ }))
+    expect(screen.getByText('Activiteit Opslag')).toBeInTheDocument()
+    expect(screen.getByLabelText('Afgesproken prijs (€)')).toHaveValue('200')
+    expect(screen.getByText('Huidige prijsafspraak: € 200,00')).toBeInTheDocument()
+    // The route still shows ORD-0001 and no order was (re)loaded for the switch.
+    expect(screen.getByDisplayValue('Nexans site Antwerpen')).toBeInTheDocument()
+    expect(orders.get).toHaveBeenCalledTimes(1)
+
+    await user.click(within(units).getByRole('button', { name: /Kraanwerk/ }))
+    expect(screen.getByText('Activiteit Kraanwerk')).toBeInTheDocument()
+    const agreed = screen.getByLabelText('Afgesproken prijs (€)')
+    expect(agreed).toHaveValue('')
+    await user.type(agreed, '75')
+    await user.click(screen.getByRole('button', { name: 'Opslaan' }))
+    await waitFor(() => expect(api.setActivityPrice).toHaveBeenCalledTimes(1))
+    expect(api.setActivityPrice).toHaveBeenCalledWith('d-1', 'a-3', { fixedAmount: 75, version: null })
+    expect(api.setActivityPrice).not.toHaveBeenCalledWith('d-1', 'a-2', expect.anything())
+    expect(orders.setOneOff).not.toHaveBeenCalled()
+
+    // Back to the transport unit: the order editor with its own agreed price again.
+    await user.click(within(units).getByRole('button', { name: /ORD-0001/ }))
+    expect(screen.getByText('Opdracht ORD-0001')).toBeInTheDocument()
+    expect(screen.getByLabelText('Afgesproken prijs (€)')).toHaveValue('450')
+  })
+
+  it('"Ga naar prijs" for the crane attention item selects Kraanwerk and focuses its agreed price', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await screen.findByDisplayValue('Nexans site Antwerpen')
+
+    await user.click(screen.getByRole('button', { name: 'Ga naar prijs' }))
+    const units = screen.getByRole('group', { name: 'Eenheid' })
+    await waitFor(() => expect(within(units).getByRole('button', { name: /Kraanwerk/ })).toHaveAttribute('aria-pressed', 'true'))
+    expect(screen.getByText('Activiteit Kraanwerk')).toBeInTheDocument()
+    await waitFor(() => expect(document.activeElement).toBe(document.getElementById('dossier-activity-agreed-price')))
+    expect(window.HTMLElement.prototype.scrollIntoView).toHaveBeenCalledTimes(1)
+    // No order was loaded for the jump: a standalone unit has nothing to fetch.
+    expect(orders.get).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('Dossier work surface — intentional € 0 is priced, visible and questioned', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    auth.permissions = new Set(['dossiers.view', 'dossiers.manage', 'dossiers.price', 'orders.edit', 'orders.override_price'])
+    window.HTMLElement.prototype.scrollIntoView = vi.fn()
+  })
+
+  it('€ 0 on a standalone activity shows € 0,00 (not "Nog geen prijs") and the local zero warning', async () => {
+    const zero = storageOnlyDossier()
+    zero.activities[0] = { ...zero.activities[0], pricingSource: 'OneOff', isPriced: true, agreedPrice: 0, pricingStatus: 'Draft', pricingVersion: 'pv-1' }
+    zero.financials = { ...zero.financials, agreedOrderTotal: 0, pricedActivityCount: 1, zeroPricedActivityCount: 1 }
+    zero.readiness = [{ ...issue('pricing.zero', 'prijs', 'price', 'Opslag heeft een verkoopprijs van € 0,00. Controleer of dit bewust is.'), activityId: 'a-1' }]
+    api.getDossier.mockResolvedValue(zero)
+    renderPage()
+    await screen.findByRole('heading', { name: 'Verkoop & prijs' })
+    const price = document.getElementById('sectie-prijs')!
+    expect(await within(price.querySelector<HTMLElement>('.dossier-price-total')!).findByText(/€\s0,00/)).toBeInTheDocument()
+    expect(screen.queryByText('Nog geen prijs')).not.toBeInTheDocument()
+    expect(within(price).getByRole('note')).toHaveTextContent('⚠ Deze activiteit heeft een verkoopprijs van € 0,00. Controleer of dit bewust is.')
+    expect(within(price).getByLabelText('Afgesproken prijs (€)')).toHaveValue('0')
+  })
+
+  /** ORD-0001 with a deliberate one-off € 0. */
+  function zeroOrderDossier(amount: number): DossierDetail {
+    return dossierDetail({
+      orders: [{ linkId: 'l-1', orderId: 'o-1', orderNumber: 'ORD-0001', orderDate: '2026-08-12', status: 'Draft', goodsDescription: null, agreedPrice: amount, isPriced: true }],
+      financials: {
+        agreedOrderTotal: amount, invoicedTotal: 0, estimatedIncidentCost: 0, actualIncidentCost: 0,
+        pricedOrderCount: 1, billableActivityCount: 1, pricedActivityCount: 1, zeroPricedActivityCount: amount === 0 ? 1 : 0,
+      },
+      activities: [dossierActivity({ id: 'a-1', linkedTransportOrderId: 'o-1', linkedOrderNumber: 'ORD-0001', linkedOrderStatus: 'Draft', isPriced: true, agreedPrice: amount })],
+      readiness: amount === 0
+        ? [{ ...issue('pricing.zero', 'prijs', 'price', 'Opdracht ORD-0001 heeft een verkoopprijs van € 0,00. Controleer of dit bewust is.'), transportOrderId: 'o-1', activityId: 'a-1' }]
+        : [],
+    })
+  }
+  const zeroOrder = (amount: number, version = 'ov-1') =>
+    orderDetail({ status: 'Draft', pricingSource: 'OneOff', oneOffFixedAmount: amount, agreedPrice: amount, version })
+
+  it('€ 0 on an order shows € 0,00 as total plus the order zero warning; 0 → 120 removes it, 120 → 0 brings it back', async () => {
+    const user = userEvent.setup()
+    api.getDossier.mockResolvedValue(zeroOrderDossier(0))
+    orders.get.mockResolvedValue(zeroOrder(0))
+    renderPage()
+    await screen.findByDisplayValue('Nexans site Antwerpen')
+    const price = document.getElementById('sectie-prijs')!
+    const total = price.querySelector<HTMLElement>('.dossier-price-total')!
+    expect(within(total).getByText(/€\s0,00/)).toBeInTheDocument()
+    expect(screen.queryByText('Nog geen prijs')).not.toBeInTheDocument()
+    expect(within(price).getByRole('note')).toHaveTextContent('⚠ Deze opdracht heeft een verkoopprijs van € 0,00. Controleer of dit bewust is.')
+    const agreed = screen.getByLabelText('Afgesproken prijs (€)')
+    expect(agreed).toHaveValue('0')
+
+    // 0 → 120: the saved order is positive and the refetched dossier agrees → warning gone.
+    orders.setOneOff.mockResolvedValueOnce(zeroOrder(120, 'ov-2'))
+    api.getDossier.mockResolvedValue(zeroOrderDossier(120))
+    await user.clear(agreed)
+    await user.type(agreed, '120')
+    await user.click(screen.getByRole('button', { name: 'Opslaan' }))
+    await waitFor(() => expect(orders.setOneOff).toHaveBeenCalledWith('o-1', { fixedAmount: 120, version: 'ov-1' }))
+    await waitFor(() => expect(within(total).getByText(/€\s120,00/)).toBeInTheDocument())
+    expect(within(price).queryByRole('note')).not.toBeInTheDocument()
+
+    // 120 → 0: a deliberate zero again → the warning is back, the amount stays visible.
+    orders.setOneOff.mockResolvedValueOnce(zeroOrder(0, 'ov-3'))
+    api.getDossier.mockResolvedValue(zeroOrderDossier(0))
+    await user.clear(screen.getByLabelText('Afgesproken prijs (€)'))
+    await user.type(screen.getByLabelText('Afgesproken prijs (€)'), '0')
+    await user.click(screen.getByRole('button', { name: 'Opslaan' }))
+    await waitFor(() => expect(orders.setOneOff).toHaveBeenCalledWith('o-1', { fixedAmount: 0, version: 'ov-2' }))
+    expect(await within(price).findByRole('note')).toHaveTextContent('⚠ Deze opdracht heeft een verkoopprijs van € 0,00.')
+    await waitFor(() => expect(within(total).getByText(/€\s0,00/)).toBeInTheDocument())
+    expect(screen.queryByText('Nog geen prijs')).not.toBeInTheDocument()
+  })
+
+  it('an unpriced order at engine-zero gets NO zero warning (provenance, not magnitude)', async () => {
+    api.getDossier.mockResolvedValue(unfinishedDossier())
+    orders.get.mockResolvedValue(draftOrder())
+    renderPage()
+    await screen.findByDisplayValue('Nexans site Antwerpen')
+    expect(screen.getByText('Nog geen prijs')).toBeInTheDocument()
+    expect(within(document.getElementById('sectie-prijs')!).queryByRole('note')).not.toBeInTheDocument()
   })
 })
 
@@ -625,7 +930,7 @@ describe('Dossier work surface — order switch keeps the page in place', () => 
       expect(bodies.every(Boolean)).toBe(true)
       for (const body of bodies) expect(body.style.minHeight).toBe('')
 
-      await user.click(within(screen.getAllByRole('group', { name: 'Opdracht' })[0]).getByRole('button', { name: /ORD-0002/ }))
+      await user.click(within(screen.getByRole('group', { name: 'Opdracht' })).getByRole('button', { name: /ORD-0002/ }))
       await waitFor(() => expect(orders.get).toHaveBeenCalledWith('o-2'))
 
       // Loading window: placeholders are shown, but inside bodies that keep their previous height.

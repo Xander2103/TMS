@@ -17,7 +17,7 @@ public static class DefaultRoleUpgrades
         IReadOnlyDictionary<string, IReadOnlyList<string>> GrantsByTemplateCode);
 
     /// <summary>Version 1 = the original role creation; steps start at 2.</summary>
-    public const int CurrentVersion = 31;
+    public const int CurrentVersion = 32;
 
     public static IReadOnlyList<UpgradeStep> Steps { get; } =
     [
@@ -571,6 +571,16 @@ public static class DefaultRoleUpgrades
             {
                 ["planner"] = [PermissionCodes.OrderImportsManageProfiles],
                 ["management"] = [PermissionCodes.OrderImportsManageProfiles],
+            }),
+
+        new(32,
+            "Activiteitsprijzen 2026-09-11 (stap 13): zelfstandige dossieractiviteiten (opslag, "
+            + "kraanwerk) krijgen een eigen afgesproken verkoopprijs. Het nieuwe recht dossiers.price "
+            + "gaat naar elk sjabloon dat vandaag orders.edit heeft (dezelfde commerciële rol).",
+            new Dictionary<string, IReadOnlyList<string>>
+            {
+                ["planner"] = [PermissionCodes.DossiersPrice],
+                ["management"] = [PermissionCodes.DossiersPrice],
             }),
     ];
 }

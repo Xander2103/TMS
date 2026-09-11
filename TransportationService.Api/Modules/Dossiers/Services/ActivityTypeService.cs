@@ -259,6 +259,7 @@ public class ActivityTypeService : IActivityTypeService
         type.IsQuickStart = request.IsQuickStart;
         type.QuickStartOrder = request.QuickStartOrder;
         type.IsSystemDefaultTransport = request.IsSystemDefaultTransport;
+        type.IsBillable = request.IsBillable;
     }
 
     private async Task<ActivityType?> FindAsync(Guid id, CancellationToken cancellationToken) =>
@@ -268,7 +269,7 @@ public class ActivityTypeService : IActivityTypeService
     private static ActivityTypeDto ToDto(ActivityType t) => new(
         t.Id, t.Code, t.Name, t.IsActive, t.SortOrder, t.Icon, t.KpiCategory,
         t.HasStops, t.SupportsGoods, t.PlanningRelevant, t.WarehouseRelevant,
-        t.AllowsDuration, t.IsQuickStart, t.QuickStartOrder, t.IsSystemDefaultTransport);
+        t.AllowsDuration, t.IsQuickStart, t.QuickStartOrder, t.IsSystemDefaultTransport, t.IsBillable);
 
     private static string? Trim(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }

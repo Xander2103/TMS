@@ -193,9 +193,12 @@ public class DossierFoundationTests
         Assert.Empty(dossier.Orders);
         var activity = Assert.Single(dossier.Activities!);
         Assert.False(activity.HasStops);
-        // Hardening 2026-09-10: standalone activities have no price carrier, so there is no
-        // actionable pricing step — no pricing.* issue at all (never "add a transport order").
-        Assert.DoesNotContain(dossier.Readiness!, i => i.Code.StartsWith("pricing."));
+        // Step 13 (2026-09-11): storage is a billable unit with its OWN price record, so the only
+        // pricing item names the activity itself (never "add a transport order"); nothing blocks.
+        var missing = Assert.Single(dossier.Readiness!, i => i.Code.StartsWith("pricing."));
+        Assert.Equal("pricing.missing", missing.Code);
+        Assert.Equal(activity.Id, missing.ActivityId);
+        Assert.Null(missing.TransportOrderId);
         Assert.DoesNotContain(dossier.Readiness!, i => i.Severity == "Blocking");
     }
 

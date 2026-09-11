@@ -6,6 +6,7 @@ using TransportationService.Api.Modules.Auditing.Services;
 using TransportationService.Api.Modules.Dossiers.Dtos;
 using TransportationService.Api.Modules.Dossiers.Entities;
 using TransportationService.Api.Modules.Incidents.Entities;
+using TransportationService.Api.Modules.Orders.Entities;
 using TransportationService.Api.Modules.Orders.Services;
 using TransportationService.Api.Modules.Tenancy.Entities;
 using TransportationService.Api.Modules.Tenancy.Services;
@@ -128,12 +129,85 @@ public class DossierService : IDossierService
                     .Join(_dbContext.TransportOrders, l => l.TransportOrderId, o => o.Id, (l, o) => o)
                     .Where(OrderPricingState.IsPricedExpression)
                     .Count(),
-                // SUM over the priced orders only; SQL NULL when none.
-                AgreedPriceTotal = _dbContext.DossierOrders
-                    .Where(l => l.DossierId == d.Id)
+                // Step 13 — billable units, still ONE statement (correlated scalar subqueries):
+                // (a) transport activities of a billable type, priced through their linked order;
+                TransportUnitCount = _dbContext.DossierActivities
+                    .Where(a => a.DossierId == d.Id)
+                    .Join(_dbContext.ActivityTypes, a => a.ActivityTypeId, t => t.Id, (a, t) => t)
+                    .Count(t => t.IsBillable && t.HasStops),
+                TransportPricedCount = _dbContext.DossierActivities
+                    .Where(a => a.DossierId == d.Id && a.LinkedTransportOrderId != null)
+                    .Join(_dbContext.ActivityTypes, a => a.ActivityTypeId, t => t.Id, (a, t) => new { a, t })
+                    .Where(x => x.t.IsBillable && x.t.HasStops)
+                    .Join(_dbContext.TransportOrders, x => x.a.LinkedTransportOrderId, o => o.Id, (x, o) => o)
+                    .Where(OrderPricingState.IsPricedExpression)
+                    .Count(),
+                TransportPricedTotal = _dbContext.DossierActivities
+                    .Where(a => a.DossierId == d.Id && a.LinkedTransportOrderId != null)
+                    .Join(_dbContext.ActivityTypes, a => a.ActivityTypeId, t => t.Id, (a, t) => new { a, t })
+                    .Where(x => x.t.IsBillable && x.t.HasStops)
+                    .Join(_dbContext.TransportOrders, x => x.a.LinkedTransportOrderId, o => o.Id, (x, o) => o)
+                    .Where(OrderPricingState.IsPricedExpression)
+                    // OrderPricingState.EffectiveAgreedPrice — the same tree, inlined for SQL.
+                    .Sum(o => o.AgreedPrice ?? (o.PricingSource == OrderPricingSource.OneOff ? o.OneOffFixedAmount : null)),
+                TransportZeroCount = _dbContext.DossierActivities
+                    .Where(a => a.DossierId == d.Id && a.LinkedTransportOrderId != null)
+                    .Join(_dbContext.ActivityTypes, a => a.ActivityTypeId, t => t.Id, (a, t) => new { a, t })
+                    .Where(x => x.t.IsBillable && x.t.HasStops)
+                    .Join(_dbContext.TransportOrders, x => x.a.LinkedTransportOrderId, o => o.Id, (x, o) => o)
+                    // OrderPricingState.IsIntentionalZero — the same tree, inlined for SQL.
+                    .Count(o => (o.PricingSource == OrderPricingSource.OneOff && o.OneOffFixedAmount == 0m)
+                                || (o.PriceIsManual && o.AgreedPrice == 0m)),
+                // (b) standalone billable activities, priced through their own record;
+                StandaloneUnitCount = _dbContext.DossierActivities
+                    .Where(a => a.DossierId == d.Id)
+                    .Join(_dbContext.ActivityTypes, a => a.ActivityTypeId, t => t.Id, (a, t) => t)
+                    .Count(t => t.IsBillable && !t.HasStops),
+                StandalonePricedCount = _dbContext.DossierActivities
+                    .Where(a => a.DossierId == d.Id)
+                    .Join(_dbContext.ActivityTypes, a => a.ActivityTypeId, t => t.Id, (a, t) => new { a, t })
+                    .Where(x => x.t.IsBillable && !x.t.HasStops)
+                    .Join(_dbContext.DossierActivityPricings, x => x.a.Id, p => p.DossierActivityId, (x, p) => p)
+                    .Where(ActivityPricingState.IsPricedExpression)
+                    .Count(),
+                StandalonePricedTotal = _dbContext.DossierActivities
+                    .Where(a => a.DossierId == d.Id)
+                    .Join(_dbContext.ActivityTypes, a => a.ActivityTypeId, t => t.Id, (a, t) => new { a, t })
+                    .Where(x => x.t.IsBillable && !x.t.HasStops)
+                    .Join(_dbContext.DossierActivityPricings, x => x.a.Id, p => p.DossierActivityId, (x, p) => p)
+                    .Where(ActivityPricingState.IsPricedExpression)
+                    .Sum(p => p.AgreedPrice),
+                StandaloneZeroCount = _dbContext.DossierActivities
+                    .Where(a => a.DossierId == d.Id)
+                    .Join(_dbContext.ActivityTypes, a => a.ActivityTypeId, t => t.Id, (a, t) => new { a, t })
+                    .Where(x => x.t.IsBillable && !x.t.HasStops)
+                    .Join(_dbContext.DossierActivityPricings, x => x.a.Id, p => p.DossierActivityId, (x, p) => p)
+                    .Where(ActivityPricingState.IsPricedExpression)
+                    .Count(p => p.FixedAmount == 0m),
+                // (c) compat: linked orders no activity represents (LinkOrder on an old dossier).
+                LegacyUnitCount = _dbContext.DossierOrders
+                    .Count(l => l.DossierId == d.Id
+                                && !_dbContext.DossierActivities.Any(a => a.DossierId == d.Id && a.LinkedTransportOrderId == l.TransportOrderId)),
+                LegacyPricedCount = _dbContext.DossierOrders
+                    .Where(l => l.DossierId == d.Id
+                                && !_dbContext.DossierActivities.Any(a => a.DossierId == d.Id && a.LinkedTransportOrderId == l.TransportOrderId))
                     .Join(_dbContext.TransportOrders, l => l.TransportOrderId, o => o.Id, (l, o) => o)
                     .Where(OrderPricingState.IsPricedExpression)
-                    .Sum(o => o.AgreedPrice),
+                    .Count(),
+                LegacyPricedTotal = _dbContext.DossierOrders
+                    .Where(l => l.DossierId == d.Id
+                                && !_dbContext.DossierActivities.Any(a => a.DossierId == d.Id && a.LinkedTransportOrderId == l.TransportOrderId))
+                    .Join(_dbContext.TransportOrders, l => l.TransportOrderId, o => o.Id, (l, o) => o)
+                    .Where(OrderPricingState.IsPricedExpression)
+                    // OrderPricingState.EffectiveAgreedPrice — the same tree, inlined for SQL.
+                    .Sum(o => o.AgreedPrice ?? (o.PricingSource == OrderPricingSource.OneOff ? o.OneOffFixedAmount : null)),
+                LegacyZeroCount = _dbContext.DossierOrders
+                    .Where(l => l.DossierId == d.Id
+                                && !_dbContext.DossierActivities.Any(a => a.DossierId == d.Id && a.LinkedTransportOrderId == l.TransportOrderId))
+                    .Join(_dbContext.TransportOrders, l => l.TransportOrderId, o => o.Id, (l, o) => o)
+                    // OrderPricingState.IsIntentionalZero — the same tree, inlined for SQL.
+                    .Count(o => (o.PricingSource == OrderPricingSource.OneOff && o.OneOffFixedAmount == 0m)
+                                || (o.PriceIsManual && o.AgreedPrice == 0m)),
                 OpenIncidentCount = _dbContext.Incidents.Count(i =>
                     i.DossierId == d.Id && (i.Status == IncidentStatus.New || i.Status == IncidentStatus.InProgress)),
             })
@@ -145,9 +219,14 @@ public class DossierService : IDossierService
                 r.CustomerName, r.ResponsibleName, r.OrderCount, r.OpenIncidentCount, r.CreatedAt,
                 CustomerReference: r.CustomerReference,
                 CustomerNumber: r.CustomerNumber,
-                // Null (not € 0,00) when nothing is priced — an override at 0 still yields 0 here.
-                AgreedPriceTotal: r.PricedOrderCount > 0 ? r.AgreedPriceTotal ?? 0m : null,
-                PricedOrderCount: r.PricedOrderCount))
+                // Null (not € 0,00) when nothing is priced — an override or agreement at 0 still yields 0 here.
+                AgreedPriceTotal: r.TransportPricedCount + r.StandalonePricedCount + r.LegacyPricedCount > 0
+                    ? (r.TransportPricedTotal ?? 0m) + (r.StandalonePricedTotal ?? 0m) + (r.LegacyPricedTotal ?? 0m)
+                    : null,
+                PricedOrderCount: r.PricedOrderCount,
+                BillableActivityCount: r.TransportUnitCount + r.StandaloneUnitCount + r.LegacyUnitCount,
+                PricedActivityCount: r.TransportPricedCount + r.StandalonePricedCount + r.LegacyPricedCount,
+                ZeroPricedActivityCount: r.TransportZeroCount + r.StandaloneZeroCount + r.LegacyZeroCount))
             .ToList();
     }
 
@@ -335,8 +414,6 @@ public class DossierService : IDossierService
                 i.Id, i.Title, i.IncidentType.ToString(), i.Status.ToString(), i.Severity.ToString(), i.DueDate))
             .ToList();
 
-        var financials = await BuildFinancialsAsync(id, orderRows.Select(o => o.Id).ToList(), cancellationToken);
-
         var legalEntityName = dossier.LegalEntityId is { } entityId
             ? await _dbContext.LegalEntities.AsNoTracking()
                 .Where(e => e.Id == entityId && e.TenantId == tenantId)
@@ -349,22 +426,87 @@ public class DossierService : IDossierService
             .Join(_dbContext.ActivityTypes.AsNoTracking(), a => a.ActivityTypeId, t => t.Id,
                 (a, t) => new
                 {
-                    a.Id, a.ActivityTypeId, t.Code, t.Name, t.Icon, t.HasStops, t.SupportsGoods, t.AllowsDuration,
+                    a.Id, a.ActivityTypeId, t.Code, t.Name, t.Icon, t.HasStops, t.SupportsGoods, t.AllowsDuration, t.IsBillable,
                     a.Sequence, a.Label, a.LinkedTransportOrderId, a.LinkedActivityId,
                     a.PlannedDate, a.DurationHours, a.Notes,
                 })
             .ToListAsync(cancellationToken);
-        var linkedOrders = orderRows.ToDictionary(o => o.Id, o => new { o.OrderNumber, o.Status });
+        var linkedOrders = orderRows.ToDictionary(o => o.Id, o => o);
+
+        // Step 13: price carriers per unit — the order's snapshot status for transport activities,
+        // the activity's own record for standalone ones.
+        var orderIds = orderRows.Select(o => o.Id).ToList();
+        var snapshotStatusByOrder = orderIds.Count == 0
+            ? new Dictionary<Guid, OrderPricingStatus>()
+            : await _dbContext.TransportOrderPricingSnapshots.AsNoTracking()
+                .Where(s => s.TenantId == tenantId && orderIds.Contains(s.TransportOrderId))
+                .Select(s => new { s.TransportOrderId, s.Status })
+                .ToDictionaryAsync(s => s.TransportOrderId, s => s.Status, cancellationToken);
+        var standaloneIds = activityRows.Where(a => !a.HasStops).Select(a => a.Id).ToList();
+        var pricingByActivity = standaloneIds.Count == 0
+            ? new Dictionary<Guid, DossierActivityPricing>()
+            : await _dbContext.DossierActivityPricings.AsNoTracking()
+                .Where(p => p.TenantId == tenantId && standaloneIds.Contains(p.DossierActivityId))
+                .ToDictionaryAsync(p => p.DossierActivityId, cancellationToken);
+
         var activities = activityRows
             .Select(a =>
             {
                 var linked = a.LinkedTransportOrderId is { } oid ? linkedOrders.GetValueOrDefault(oid) : null;
-                return new DossierActivityDto(
+                string pricingSource = "None";
+                decimal? agreedPrice = null;
+                var isPriced = false;
+                var isZero = false;
+                string? pricingStatus = null;
+                Guid? pricingVersion = null;
+                if (a.HasStops)
+                {
+                    if (linked is not null)
+                    {
+                        pricingSource = "Order";
+                        agreedPrice = OrderPricingState.EffectiveAgreedPrice(linked.PricingSource, linked.OneOffFixedAmount, linked.AgreedPrice);
+                        isPriced = OrderPricingState.IsPriced(linked.PriceIsManual, linked.PricingSource, linked.OneOffFixedAmount, linked.AgreedPrice);
+                        isZero = OrderPricingState.IsIntentionalZero(linked.PriceIsManual, linked.PricingSource, linked.OneOffFixedAmount, linked.AgreedPrice);
+                        pricingStatus = snapshotStatusByOrder.TryGetValue(linked.Id, out var status) ? status.ToString() : null;
+                    }
+                }
+                else if (pricingByActivity.TryGetValue(a.Id, out var pricing))
+                {
+                    pricingSource = pricing.PricingSource.ToString();
+                    agreedPrice = pricing.AgreedPrice;
+                    isPriced = ActivityPricingState.IsPriced(pricing);
+                    isZero = isPriced && pricing.FixedAmount == 0m;
+                    pricingStatus = pricing.Status.ToString();
+                    pricingVersion = pricing.Version;
+                }
+
+                var dto = new DossierActivityDto(
                     a.Id, a.ActivityTypeId, a.Code, a.Name, a.Icon, a.HasStops, a.SupportsGoods, a.AllowsDuration,
                     a.Sequence, a.Label, a.LinkedTransportOrderId, linked?.OrderNumber, linked?.Status.ToString(),
-                    a.LinkedActivityId, a.PlannedDate, a.DurationHours, a.Notes);
+                    a.LinkedActivityId, a.PlannedDate, a.DurationHours, a.Notes,
+                    IsBillable: a.IsBillable, PricingSource: pricingSource, AgreedPrice: agreedPrice, IsPriced: isPriced,
+                    PricingStatus: pricingStatus, PricingVersion: pricingVersion);
+                return (Dto: dto, IsZero: isZero);
             })
             .ToList();
+
+        // Billable units (one definition, docs/ux-sprint/2026-09-11-activity-pricing-design.md §2.4):
+        // every billable activity, plus the linked orders no activity represents (compat).
+        var representedOrderIds = activityRows
+            .Where(a => a.LinkedTransportOrderId is not null)
+            .Select(a => a.LinkedTransportOrderId!.Value)
+            .ToHashSet();
+        var units = activities
+            .Where(a => a.Dto.IsBillable)
+            .Select(a => new BillableUnit(a.Dto.IsPriced, a.Dto.AgreedPrice, a.IsZero))
+            .Concat(orderRows
+                .Where(o => !representedOrderIds.Contains(o.Id))
+                .Select(o => new BillableUnit(
+                    OrderPricingState.IsPriced(o.PriceIsManual, o.PricingSource, o.OneOffFixedAmount, o.AgreedPrice),
+                    OrderPricingState.EffectiveAgreedPrice(o.PricingSource, o.OneOffFixedAmount, o.AgreedPrice),
+                    OrderPricingState.IsIntentionalZero(o.PriceIsManual, o.PricingSource, o.OneOffFixedAmount, o.AgreedPrice))))
+            .ToList();
+        var financials = await BuildFinancialsAsync(id, orderIds, orders.Count(o => o.IsPriced), units, cancellationToken);
 
         var readiness = await _readinessService.EvaluateAsync(id, cancellationToken);
 
@@ -374,7 +516,7 @@ public class DossierService : IDossierService
             dossier.ClosedAt, dossier.Notes, dossier.CreatedAt,
             orders, relations, incidents, financials,
             dossier.CustomerReference, dossier.DossierDate, dossier.LegalEntityId, legalEntityName,
-            dossier.Version, activities, readiness);
+            dossier.Version, activities.Select(a => a.Dto).ToList(), readiness);
     }
 
     public async Task<DossierDetailDto?> UpdateAsync(Guid id, SaveDossierRequest request, CancellationToken cancellationToken)
@@ -806,25 +948,27 @@ public class DossierService : IDossierService
         return await GetAsync(id, cancellationToken);
     }
 
+    /// <summary>One billable unit of a dossier as the financials see it (step 13).</summary>
+    private sealed record BillableUnit(bool IsPriced, decimal? Amount, bool IsIntentionalZero);
+
+    /// <param name="units">Billable units: activities of a billable type (priced via order or own record) + legacy links.</param>
     private async Task<DossierFinancialSummaryDto> BuildFinancialsAsync(
-        Guid dossierId, IReadOnlyList<Guid> orderIds, CancellationToken cancellationToken)
+        Guid dossierId, IReadOnlyList<Guid> orderIds, int pricedOrderCount, IReadOnlyList<BillableUnit> units,
+        CancellationToken cancellationToken)
     {
         var tenantId = _tenantContext.TenantId;
 
-        decimal agreed = 0, invoiced = 0;
-        var pricedOrderCount = 0;
+        // The dossier total is a SUM over the PRICED units only (an intentional € 0 contributes 0);
+        // the frontend shows "Nog geen prijs" while PricedActivityCount is 0.
+        var pricedUnits = units.Where(u => u.IsPriced).ToList();
+        var agreed = pricedUnits.Sum(u => u.Amount ?? 0m);
+        var zeroPriced = pricedUnits.Count(u => u.IsIntentionalZero);
+
+        decimal invoiced = 0;
         if (orderIds.Count > 0)
         {
-            agreed = await _dbContext.TransportOrders.AsNoTracking()
-                .Where(o => orderIds.Contains(o.Id))
-                .SumAsync(o => o.AgreedPrice ?? 0, cancellationToken);
-
-            // OrderPricingState.IsPricedExpression — the frontend shows "Nog geen prijs" instead
-            // of the € 0,00 total while this stays 0, and "x van y geprijsd" while it is partial.
-            pricedOrderCount = await _dbContext.TransportOrders.AsNoTracking()
-                .Where(o => orderIds.Contains(o.Id))
-                .CountAsync(OrderPricingState.IsPricedExpression, cancellationToken);
-
+            // Invoiced revenue still reaches the dossier through order-backed invoice lines only
+            // (design §2.7: activity prices are not invoiced by any automated path yet).
             var lines = await _dbContext.InvoiceLines.AsNoTracking()
                 .Where(l => l.TenantId == tenantId && l.TransportOrderId != null && orderIds.Contains(l.TransportOrderId.Value))
                 .Select(l => new { l.Quantity, l.UnitPrice })
@@ -842,7 +986,10 @@ public class DossierService : IDossierService
             invoiced,
             incidentCosts.Sum(i => i.EstimatedCost ?? 0),
             incidentCosts.Sum(i => i.ActualCost ?? 0),
-            PricedOrderCount: pricedOrderCount);
+            PricedOrderCount: pricedOrderCount,
+            BillableActivityCount: units.Count,
+            PricedActivityCount: pricedUnits.Count,
+            ZeroPricedActivityCount: zeroPriced);
     }
 
     private async Task ValidateAsync(SaveDossierRequest request, Guid tenantId, CancellationToken cancellationToken)

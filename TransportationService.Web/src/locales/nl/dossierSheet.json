@@ -64,19 +64,27 @@
     "noOrderTitle": "Prijzen worden bijgehouden op een transportopdracht.",
     "noOrderCreate": "Transportopdracht aanmaken",
     "noOrderNoActivity": "Voeg een transportactiviteit toe om een prijs te kunnen invoeren.",
-    "standaloneNote": "Zelfstandige activiteiten (opslag, kraanwerk) hebben nog geen eigen prijsdrager.",
     "orderCreated": "Transportopdracht aangemaakt.",
     "linesPermission": "Je hebt geen rechten om verkooplijnen toe te voegen.",
-    "partialTotal": "{priced} van {total} opdrachten geprijsd",
-    "standaloneOnly": "Zelfstandige activiteiten (opslag, kraanwerk) worden in deze versie niet op het dossier geprijsd. Maak geen transportopdracht aan enkel om een prijs vast te leggen; deze activiteiten worden buiten het dossier gefactureerd."
+    "partialTotal": "{priced} van {total} activiteiten geprijsd",
+    "forActivity": "Activiteit {name}",
+    "agreedHintActivity": "Afgesproken verkoopprijs voor deze activiteit. Leeg laten wist de prijs; € 0 is een bewuste prijs.",
+    "agreedClearedActivity": "Afgesproken prijs verwijderd.",
+    "lockedActivity": "De prijs van deze activiteit is vergrendeld ({status}).",
+    "noActivityPrice": "Nog geen prijs voor deze activiteit",
+    "zeroWarningOrder": "⚠ Deze opdracht heeft een verkoopprijs van € 0,00. Controleer of dit bewust is.",
+    "zeroWarningActivity": "⚠ Deze activiteit heeft een verkoopprijs van € 0,00. Controleer of dit bewust is."
   },
   "orderSwitch": {
     "label": "Opdracht",
+    "unitLabel": "Eenheid",
     "noOrderYet": "nog geen opdracht",
     "lockedWhileDirty": "Sla de route op of maak de wijzigingen ongedaan om van opdracht te wisselen."
   },
   "list": {
     "partialPriced": "{priced}/{total} geprijsd",
-    "partialPricedTitle": "Slechts {priced} van {total} opdrachten hebben een prijs; het bedrag is geen dossiertotaal."
+    "partialPricedTitle": "Slechts {priced} van {total} activiteiten hebben een prijs; het bedrag is geen dossiertotaal.",
+    "zeroPricedTitle_one": "Verkoopprijs is € 0,00. Controleer of dit bewust is.",
+    "zeroPricedTitle_other": "Verkoopprijs is € 0,00 voor {count} activiteiten. Controleer of dit bewust is."
   }
 }

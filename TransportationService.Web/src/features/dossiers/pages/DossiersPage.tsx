@@ -85,21 +85,32 @@ export function DossiersPage() {
       header: t('dossiers.list.columns.price'),
       width: '8rem',
       align: 'right',
-      // `null` = nog niet geprijsd; een echte € 0,00 (geprijsd op nul) blijft zichtbaar. Een
-      // gedeeltelijk geprijsd dossier (niet elke opdracht heeft een prijs) krijgt een marker:
-      // het bedrag is een som over de geprijsde opdrachten, geen dossiertotaal.
+      // `null` = nog niet geprijsd; een echte € 0,00 (geprijsd op nul) blijft zichtbaar en krijgt
+      // een ⚠ (bewust? — nooit vervangt het icoon het bedrag). Een gedeeltelijk geprijsd dossier
+      // (niet elke factureerbare activiteit heeft een prijs) krijgt een marker: het bedrag is een
+      // som over de geprijsde eenheden, geen dossiertotaal.
       render: (row) =>
         row.agreedPriceTotal === null ? (
           EMPTY
         ) : (
           <span className="dossier-list-amount">
             {euro(row.agreedPriceTotal)}
-            {row.pricedOrderCount < row.orderCount && (
+            {row.zeroPricedActivityCount > 0 && (
+              <span
+                className="dossier-list-zero"
+                role="img"
+                aria-label={t('dossierSheet.list.zeroPricedTitle', { count: row.zeroPricedActivityCount })}
+                title={t('dossierSheet.list.zeroPricedTitle', { count: row.zeroPricedActivityCount })}
+              >
+                ⚠
+              </span>
+            )}
+            {row.pricedActivityCount < row.billableActivityCount && (
               <span
                 className="dossier-list-partial"
-                title={t('dossierSheet.list.partialPricedTitle', { priced: row.pricedOrderCount, total: row.orderCount })}
+                title={t('dossierSheet.list.partialPricedTitle', { priced: row.pricedActivityCount, total: row.billableActivityCount })}
               >
-                {t('dossierSheet.list.partialPriced', { priced: row.pricedOrderCount, total: row.orderCount })}
+                {t('dossierSheet.list.partialPriced', { priced: row.pricedActivityCount, total: row.billableActivityCount })}
               </span>
             )}
           </span>

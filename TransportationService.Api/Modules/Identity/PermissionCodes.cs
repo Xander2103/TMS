@@ -253,6 +253,13 @@ public static class PermissionCodes
     public const string DossiersManage = "dossiers.manage";
     /// <summary>Wave 2: move a dossier/order to another issuing entity than the customer default (reason required, audited).</summary>
     public const string DossiersOverrideEntity = "dossiers.override_entity";
+    /// <summary>
+    /// Step 13 (2026-09-11): set/clear the agreed sales price of a standalone billable dossier
+    /// activity (Opslag, Kraanwerk, …). Deliberately its own code: orders.edit is the order
+    /// bewerkrecht (the order's one-off agreement rides on it), orders.override_price overrides a
+    /// calculated price, dossiers.manage is dossier structure — none of them IS "price a non-order".
+    /// </summary>
+    public const string DossiersPrice = "dossiers.price";
 
     // --- Activity types (tenant-configurable dossier activity catalogue) ---
     public const string ActivityTypesView = "activity_types.view";
@@ -597,6 +604,7 @@ public static class PermissionCodes
         (DossiersView, "dossiers", "view", "Transportdossiers bekijken"),
         (DossiersManage, "dossiers", "manage", "Transportdossiers beheren (aanmaken, koppelen, sluiten)"),
         (DossiersOverrideEntity, "dossiers", "override_entity", "Dossier of order naar een andere facturerende entiteit dan de klantstandaard verplaatsen (met reden, geauditeerd)"),
+        (DossiersPrice, "dossiers", "price", "Verkoopprijs van dossieractiviteiten beheren (afgesproken prijs van opslag, kraanwerk en andere zelfstandige activiteiten)"),
         (ActivityTypesView, "activity_types", "view", "Activiteitstypes bekijken"),
         (ActivityTypesManage, "activity_types", "manage", "Activiteitstypes beheren"),
         (IncidentsView, "incidents", "view", "Incidenten bekijken"),

@@ -11,7 +11,8 @@ import { saveOrderPriceLines, setOrderOneOffPrice } from '../../transport-orders
 import { ORDER_PRICING_STATUS_LABELS, type OrderPricingLine, type TransportOrderDetail } from '../../transport-orders/types'
 import { createOrderForActivity } from '../api/dossiersApi'
 import { isDossierPriced } from '../dossierDisplay'
-import type { DossierActivity, DossierDetail } from '../types'
+import type { DossierActivity, DossierDetail, DossierOrder } from '../types'
+import { DossierActivityPricePanel, type DossierActivityPricePanelHandle } from './DossierActivityPricePanel'
 
 export interface DossierPricePanelHandle {
   /** Focuses the control that resolves the "price" readiness field. */
@@ -20,19 +21,26 @@ export interface DossierPricePanelHandle {
 
 interface DossierPricePanelProps {
   dossier: DossierDetail
-  /** First linked transport order (the price carrier); null while loading / without order. */
+  /**
+   * The billable unit the editor works on (stap 13): a transport activity (its order is `order`)
+   * or a standalone activity (own price record); null for a dossier without billable activities.
+   */
+  activity: DossierActivity | null
+  /** The order of the target transport activity (the price carrier); null while loading / without order. */
   order: TransportOrderDetail | null
   loading: boolean
   /** The linked order exists but could not be loaded (e.g. 404): show that instead of "add an activity". */
   orderUnavailable?: boolean
-  /** First transport activity WITHOUT an order (offers "Transportopdracht aanmaken"). */
+  /** The target transport activity WITHOUT an order (offers "Transportopdracht aanmaken" — real execution, never a price trick). */
   activityWithoutOrder: DossierActivity | null
   /** dossiers.manage AND dossier open — governs create-order / add-activity actions. */
   canManage: boolean
-  /** orders.edit|orders.manage AND dossier open — governs the agreed price. */
+  /** orders.edit|orders.manage AND dossier open — governs the agreed price of an order. */
   canEditPrice: boolean
   /** orders.override_price|orders.manage AND dossier open — governs free sales lines. */
   canEditLines: boolean
+  /** dossiers.price AND dossier open — governs the agreed price of a standalone activity. */
+  canEditActivityPrice: boolean
   onOrderSaved: (order: TransportOrderDetail) => void
   onDossierUpdated: (dossier: DossierDetail) => void
   onConflict: (err: unknown) => boolean
@@ -61,9 +69,15 @@ function parseAmount(raw: string): number | null | undefined {
  *  - the sales lines (TransportOrderPricingLine) with an inline free line (Kind Manual).
  * A manual override (PriceIsManual) or a locked pricing status keeps the panel read-only and
  * points to Prijsdetails; the dossier never invents a second source of truth.
+ *
+ * Stap 13 (2026-09-11): the dossier reckons in BILLABLE UNITS — one per activity of a billable
+ * type. A transport unit is priced through its order (above); a standalone unit (Opslag, Kraan)
+ * through its own price record (DossierActivityPricePanel). The header (total, "x van y
+ * activiteiten geprijsd", per-unit list) spans all units; the body follows the selected one.
  */
 export function DossierPricePanel({
   dossier,
+  activity,
   order,
   loading,
   orderUnavailable = false,
@@ -71,6 +85,7 @@ export function DossierPricePanel({
   canManage,
   canEditPrice,
   canEditLines,
+  canEditActivityPrice,
   onOrderSaved,
   onDossierUpdated,
   onConflict,
@@ -86,6 +101,9 @@ export function DossierPricePanel({
   const createOrderRef = useRef<HTMLButtonElement>(null)
   const addActivityRef = useRef<HTMLButtonElement>(null)
   const addLineButtonRef = useRef<HTMLButtonElement>(null)
+  const activityPanelRef = useRef<DossierActivityPricePanelHandle>(null)
+  // The body shows the standalone editor when the target is a standalone unit; the order UI otherwise.
+  const standaloneTarget = activity && !activity.hasStops ? activity : null
 
   const [agreedInput, setAgreedInput] = useState(() => currentAgreedAmount(order))
   const [agreedError, setAgreedError] = useState<string | null>(null)
@@ -124,6 +142,7 @@ export function DossierPricePanel({
 
   useImperativeHandle(ref, () => ({
     focusField: () => {
+      if (standaloneTarget) return activityPanelRef.current?.focusField() ?? false
       if (agreedEditable && agreedInputRef.current) {
         agreedInputRef.current.focus()
         return true
@@ -240,12 +259,15 @@ export function DossierPricePanel({
   const priced = isDossierPriced(dossier)
   const pricingIssues = dossier.readiness.filter((issue) => issue.code.startsWith('pricing.') && issue.severity !== 'Info')
   const lineTotal = (line: OrderPricingLine) => (line.proposed ? null : line.amount)
-  // Hardening 2026-09-10: the total is a SUM over the PRICED orders only. With several orders
-  // of which some are unpriced, the amount must never read as "the dossier is priced".
-  const pricedCount = dossier.financials.pricedOrderCount ?? dossier.orders.filter((o) => o.isPriced ?? (o.agreedPrice != null && o.agreedPrice > 0)).length
-  const partial = priced && dossier.orders.length > 1 && pricedCount < dossier.orders.length
-  const hasTransportActivity = dossier.activities.some((a) => a.hasStops)
-  const standaloneOnly = dossier.activities.length > 0 && !hasTransportActivity
+  // Hardening 2026-09-10: the total is a SUM over the PRICED units only. With several units of
+  // which some are unpriced, the amount must never read as "the dossier is priced".
+  const units = billableUnits(dossier)
+  const unitStats = unitCounts(dossier, units)
+  const partial = priced && unitStats.total > 1 && unitStats.priced < unitStats.total
+  // Intentional € 0 on the target order: priced (provenance from the dossier payload) AND amount 0.
+  // Not a blocker — a deliberate free delivery exists — but it must never pass unnoticed.
+  const orderIsPriced = order ? isOrderPriced(dossier, order) : false
+  const orderIsZero = Boolean(order) && orderIsPriced && order?.agreedPrice === 0
 
   return (
     <div className="dossier-price-panel">
@@ -256,30 +278,41 @@ export function DossierPricePanel({
           <strong className="dossier-price-none">{t('dossierSheet.price.noPrice')}</strong>
         )}
         {partial && (
-          <span className="dossier-price-partial">{t('dossierSheet.price.partialTotal', { priced: pricedCount, total: dossier.orders.length })}</span>
+          <span className="dossier-price-partial">{t('dossierSheet.price.partialTotal', { priced: unitStats.priced, total: unitStats.total })}</span>
         )}
         {pricingIssues.length > 0 && (
           <span className="dossier-price-warning">⚠ {t('dossiers.price.attention', { count: pricingIssues.length })}</span>
         )}
       </p>
 
-      {dossier.orders.length > 1 && (
+      {units.length > 1 && (
         <ul className="dossier-price-lines">
-          {dossier.orders.map((o) => (
-            <li key={o.linkId}>
+          {units.map((unit) => (
+            <li key={unit.key}>
               <span>
-                <code>{o.orderNumber}</code>
-                {o.goodsDescription && ` ${o.goodsDescription}`}
+                {unit.code && <code>{unit.code}</code>}
+                {unit.text && (unit.code ? ` · ${unit.text}` : unit.text)}
               </span>
-              <span>{(o.isPriced ?? (o.agreedPrice != null && o.agreedPrice > 0)) ? euro(o.agreedPrice ?? 0) : '—'}</span>
+              <span>{unit.isPriced ? euro(unit.amount ?? 0) : '—'}</span>
             </li>
           ))}
         </ul>
       )}
 
-      {loading && <p className="placeholder-text">{t('dossiers.route.loading')}</p>}
+      {standaloneTarget && (
+        <DossierActivityPricePanel
+          ref={activityPanelRef}
+          dossier={dossier}
+          activity={standaloneTarget}
+          canEdit={canEditActivityPrice}
+          onDossierUpdated={onDossierUpdated}
+          onConflict={onConflict}
+        />
+      )}
 
-      {!loading && !order && orderUnavailable && (
+      {!standaloneTarget && loading && <p className="placeholder-text">{t('dossiers.route.loading')}</p>}
+
+      {!standaloneTarget && !loading && !order && orderUnavailable && (
         <div className="dossier-price-noorder">
           <p className="placeholder-text">{t('dossiers.route.loadFailed')}</p>
           {onRetryLoad && (
@@ -290,15 +323,9 @@ export function DossierPricePanel({
         </div>
       )}
 
-      {!loading && !order && !orderUnavailable && standaloneOnly && (
-        // Standalone activities (opslag, kraanwerk) have no price carrier in this release
-        // (docs/dossiers.md). Say so plainly — never suggest a transport order to attach a price.
-        <div className="dossier-price-noorder">
-          <p className="placeholder-text">{t('dossierSheet.price.standaloneOnly')}</p>
-        </div>
-      )}
-
-      {!loading && !order && !orderUnavailable && !standaloneOnly && (
+      {!standaloneTarget && !loading && !order && !orderUnavailable && (
+        // A transport unit without order: creating the order IS the real execution step (never a
+        // trick to hang a price on). Without any billable activity: offer to add one.
         <div className="dossier-price-noorder">
           <p>{t('dossierSheet.price.noOrderTitle')}</p>
           {activityWithoutOrder && canManage ? (
@@ -315,15 +342,12 @@ export function DossierPricePanel({
               )}
             </>
           )}
-          {dossier.activities.some((a) => !a.hasStops) && (
-            <p className="placeholder-text">{t('dossierSheet.price.standaloneNote')}</p>
-          )}
         </div>
       )}
 
-      {order && (
+      {!standaloneTarget && order && (
         <>
-          {dossier.orders.length > 1 && (
+          {units.length > 1 && (
             <p className="dossier-price-order-label">{t('dossierSheet.price.forOrder', { number: order.orderNumber })}</p>
           )}
 
@@ -371,6 +395,14 @@ export function DossierPricePanel({
                 </div>
               </FormField>
             </form>
+          )}
+          {!agreedEditable && orderIsPriced && order.agreedPrice != null && !overridden && (
+            <p className="dossier-price-note">{t('dossierSheet.price.agreedCurrent', { amount: euro(order.agreedPrice) })}</p>
+          )}
+          {orderIsZero && (
+            <p className="dossier-price-zero-warning" role="note">
+              {t('dossierSheet.price.zeroWarningOrder')}
+            </p>
           )}
 
           <div className="dossier-price-lines-block">
@@ -478,6 +510,69 @@ export function DossierPricePanel({
       )}
     </div>
   )
+}
+
+interface BillableUnit {
+  key: string
+  /** Order number (transport unit / legacy order); null for a standalone activity. */
+  code: string | null
+  /** Type name (+ label) for an activity; goods description for a legacy order. */
+  text: string | null
+  isPriced: boolean
+  amount: number | null
+}
+
+/** Provenance of a linked order from the dossier payload (activity entry first, then the order link, then the loaded order itself). */
+function isOrderPriced(dossier: DossierDetail, order: TransportOrderDetail): boolean {
+  const entry = dossier.activities.find((a) => a.linkedTransportOrderId === order.id)
+  if (entry && typeof entry.isPriced === 'boolean') return entry.isPriced
+  const link = dossier.orders.find((o) => o.orderId === order.id)
+  if (link?.isPriced !== undefined) return link.isPriced
+  return Boolean(order.priceIsManual) || (order.pricingSource === 'OneOff' && order.oneOffFixedAmount != null) || (order.agreedPrice != null && order.agreedPrice > 0)
+}
+
+/** Legacy fallback for a payload without the per-order flag: a positive amount. */
+function legacyOrderPriced(o: DossierOrder): boolean {
+  return o.isPriced ?? (o.agreedPrice != null && o.agreedPrice > 0)
+}
+
+/**
+ * One row per billable unit (DossierBillables): every activity of a billable type in dossier
+ * order — a transport unit takes its price from its order, a standalone one from its record —
+ * plus (compat) linked orders that no activity represents.
+ */
+function billableUnits(dossier: DossierDetail): BillableUnit[] {
+  const activities = [...dossier.activities].filter((a) => a.isBillable !== false).sort((a, b) => a.sequence - b.sequence)
+  const rows: BillableUnit[] = activities.map((a) => {
+    const link = a.linkedTransportOrderId ? dossier.orders.find((o) => o.orderId === a.linkedTransportOrderId) : undefined
+    // Older payloads without the activity price fields fall back to the order link.
+    const isPriced = typeof a.isPriced === 'boolean' ? a.isPriced : link ? legacyOrderPriced(link) : false
+    return {
+      key: `a:${a.id}`,
+      code: a.linkedOrderNumber,
+      text: a.label ? `${a.activityTypeName} · ${a.label}` : a.activityTypeName,
+      isPriced,
+      amount: a.agreedPrice ?? link?.agreedPrice ?? null,
+    }
+  })
+  const represented = new Set(dossier.activities.map((a) => a.linkedTransportOrderId).filter(Boolean))
+  for (const o of dossier.orders) {
+    if (represented.has(o.orderId)) continue
+    rows.push({ key: `o:${o.linkId}`, code: o.orderNumber, text: o.goodsDescription, isPriced: legacyOrderPriced(o), amount: o.agreedPrice })
+  }
+  return rows
+}
+
+/** Priced/total units for the partial marker; older payloads fall back to the order counts. */
+function unitCounts(dossier: DossierDetail, units: BillableUnit[]): { priced: number; total: number } {
+  const f = dossier.financials
+  if (f.pricedActivityCount !== undefined) {
+    return { priced: f.pricedActivityCount, total: f.billableActivityCount ?? units.length }
+  }
+  if (units.length > 0 && dossier.activities.length > 0) {
+    return { priced: units.filter((u) => u.isPriced).length, total: units.length }
+  }
+  return { priced: f.pricedOrderCount ?? dossier.orders.filter(legacyOrderPriced).length, total: dossier.orders.length }
 }
 
 /** Text shown in the agreed-price input for the order's current price agreement ('' = none). */

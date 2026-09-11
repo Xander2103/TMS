@@ -46,6 +46,7 @@ function activityType(overrides: Partial<ActivityType> = {}): ActivityType {
     isQuickStart: true,
     quickStartOrder: 2,
     isSystemDefaultTransport: true,
+    isBillable: true,
     ...overrides,
   }
 }

@@ -234,25 +234,96 @@ public class DossierReadinessTests
         order.AgreedPrice = 0m;
         await h.Db.Context.SaveChangesAsync();
         Assert.DoesNotContain(await readiness.EvaluateAsync(dossier.Id, CancellationToken.None), i => i.Code == "pricing.missing");
-        Assert.Equal(0, await readiness.CountDossiersWithAttentionAsync(CancellationToken.None));
+        // Step 13: priced, but an intentional € 0 is still worth a look (pricing.zero, non-blocking).
+        Assert.Equal(1, await readiness.CountDossiersWithAttentionAsync(CancellationToken.None));
+    }
+
+    // ------------------------------------------------------------ pricing.zero (step 13)
+
+    /// <summary>
+    /// The intentional-zero warning follows the SAME provenance rule as "priced": a one-off
+    /// agreement at € 0 and an override at € 0 warn; the engine's empty zero and a positive
+    /// price do not. It carries the order AND the activity that carries it, and never blocks.
+    /// </summary>
+    [Fact]
+    public async Task PricingZero_FollowsTheProvenanceRule_AndIsNonBlocking()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var (dossier, order) = await h.DossierWithDraftOrderAsync();
+        var activityId = dossier.Activities!.Single().Id;
+        var readiness = h.Readiness();
+
+        // Engine zero without provenance: unpriced → pricing.missing, never pricing.zero.
+        order.AgreedPrice = 0m;
+        await h.Db.Context.SaveChangesAsync();
+        var engineZero = await readiness.EvaluateAsync(dossier.Id, CancellationToken.None);
+        Assert.Contains(engineZero, i => i.Code == "pricing.missing" && i.TransportOrderId == order.Id && i.ActivityId == activityId);
+        Assert.DoesNotContain(engineZero, i => i.Code == "pricing.zero");
+
+        // One-off agreement at € 0 through the real command: priced + zero warning.
+        var tenant = new DevTenantContext(h.TenantId);
+        var orders = new TransportOrderService(h.Db.Context, tenant,
+            new AuditService(h.Db.Context, tenant, new DevCurrentUserContext(null)), new TestClock(Now));
+        var oneOff = await orders.SetOneOffPriceAsync(order.Id, new SetOneOffPriceRequest(0m, order.Version), CancellationToken.None);
+        Assert.Equal(TransportOrderOperationOutcome.Success, oneOff.Outcome);
+        var oneOffIssues = await readiness.EvaluateAsync(dossier.Id, CancellationToken.None);
+        var zero = Assert.Single(oneOffIssues, i => i.Code == "pricing.zero");
+        Assert.Equal("Warning", zero.Severity);
+        Assert.Equal("prijs", zero.Section);
+        Assert.Equal("price", zero.Field);
+        Assert.Equal(order.Id, zero.TransportOrderId);
+        Assert.Equal(activityId, zero.ActivityId);
+        Assert.Equal($"Opdracht {order.OrderNumber} heeft een verkoopprijs van € 0,00. Controleer of dit bewust is.", zero.Message);
+        Assert.DoesNotContain(oneOffIssues, i => i.Code == "pricing.missing");
+        Assert.DoesNotContain(oneOffIssues, i => i.Severity == "Blocking" && i.Code.StartsWith("pricing."));
+        var refreshed = (await h.Dossiers().GetAsync(dossier.Id, CancellationToken.None))!;
+        Assert.Equal(1, refreshed.Financials.PricedOrderCount);
+        Assert.Equal(1, refreshed.Financials.PricedActivityCount);
+        Assert.Equal(1, refreshed.Financials.ZeroPricedActivityCount);
+        Assert.Equal(0m, refreshed.Financials.AgreedOrderTotal);
+
+        // A positive agreement: no warning anymore.
+        var current = await h.Db.Context.TransportOrders.AsNoTracking().SingleAsync(o => o.Id == order.Id);
+        Assert.Equal(TransportOrderOperationOutcome.Success,
+            (await orders.SetOneOffPriceAsync(order.Id, new SetOneOffPriceRequest(120m, current.Version), CancellationToken.None)).Outcome);
+        Assert.DoesNotContain(await readiness.EvaluateAsync(dossier.Id, CancellationToken.None), i => i.Code.StartsWith("pricing."));
+
+        // Manual override at € 0: priced + zero warning as well.
+        var tracked = await h.Db.Context.TransportOrders.SingleAsync(o => o.Id == order.Id);
+        tracked.PricingSource = OrderPricingSource.Contract;
+        tracked.OneOffFixedAmount = null;
+        tracked.PriceIsManual = true;
+        tracked.PriceOverrideReason = "goodwill";
+        tracked.AgreedPrice = 0m;
+        await h.Db.Context.SaveChangesAsync();
+        Assert.Single(await readiness.EvaluateAsync(dossier.Id, CancellationToken.None), i => i.Code == "pricing.zero");
+
+        // Once invoiced nobody can act on it anymore: silent.
+        tracked.Status = TransportOrderStatus.Invoiced;
+        await h.Db.Context.SaveChangesAsync();
+        Assert.DoesNotContain(await readiness.EvaluateAsync(dossier.Id, CancellationToken.None), i => i.Code == "pricing.zero");
     }
 
     // ------------------------------------------------------------ hardening 2026-09-10
 
     [Fact]
-    public async Task StorageOnlyDossier_GetsNoPricingIssue_BecauseStandaloneActivitiesHaveNoPriceCarrier()
+    public async Task StorageOnlyDossier_GetsItsOwnPricingMissing_NeverARouteOrOrderSuggestion()
     {
         var h = await SeedAsync();
         using var _ = h.Db;
         var dossier = await h.Dossiers().CreateAsync(new SaveDossierRequest(
             CustomerId: h.CustomerId, ActivityTypeId: await h.TypeIdAsync("OPSLAG")), CancellationToken.None);
 
-        Assert.Single(dossier.Activities!);
-        Assert.False(dossier.Activities![0].HasStops);
-        // Nothing actionable: no order to price, and the panel must never suggest a transport order for storage.
-        Assert.DoesNotContain(dossier.Readiness!, i => i.Code.StartsWith("pricing."));
-        Assert.DoesNotContain(dossier.Readiness!, i => i.Code == "route.order_missing");
-        Assert.Equal(0, await h.Readiness().CountDossiersWithAttentionAsync(CancellationToken.None));
+        var activity = Assert.Single(dossier.Activities!);
+        Assert.False(activity.HasStops);
+        // Step 13: storage is a billable unit with its own price record — the attention item names
+        // the activity (the page opens its price editor); no order-shaped issue is ever produced.
+        var missing = Assert.Single(dossier.Readiness!, i => i.Code == "pricing.missing");
+        Assert.Equal(activity.Id, missing.ActivityId);
+        Assert.Null(missing.TransportOrderId);
+        Assert.DoesNotContain(dossier.Readiness!, i => i.Code == "route.order_missing" || i.Code == "pricing.none");
+        Assert.Equal(1, await h.Readiness().CountDossiersWithAttentionAsync(CancellationToken.None));
     }
 
     /// <summary>
@@ -371,11 +442,11 @@ public class DossierReadinessTests
         await h.Db.Context.SaveChangesAsync();
         Assert.Equal(0, await readiness.CountDossiersWithAttentionAsync(CancellationToken.None));
 
-        // A manual override at 0 is priced too.
+        // A manual override at 0 is priced too — but an intentional € 0 keeps the tile lit (step 13).
         order.AgreedPrice = 0m;
         order.PriceIsManual = true;
         await h.Db.Context.SaveChangesAsync();
-        Assert.Equal(0, await readiness.CountDossiersWithAttentionAsync(CancellationToken.None));
+        Assert.Equal(1, await readiness.CountDossiersWithAttentionAsync(CancellationToken.None));
 
         // Closed commercial phase → the price gap no longer demands attention.
         order.PriceIsManual = false;

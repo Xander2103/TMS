@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using TransportationService.Api.Modules.Dossiers.Entities;
 using TransportationService.Api.Modules.Incidents.Entities;
 using TransportationService.Api.Modules.Locations.Entities;
@@ -245,5 +246,34 @@ public class ActivityKpiTests
         Assert.Equal(0, report.Totals.RedeliveryCount);
         Assert.Null(report.PalletDays);
         Assert.Empty(report.PerCategory);
+    }
+
+    /// <summary>
+    /// Step 13 (2026-09-11): a standalone activity (no linked order) with its own agreed price
+    /// contributes that amount to its row, its category and the totals — otherwise the report
+    /// would show crane/storage revenue as € 0 while the counts rise.
+    /// </summary>
+    [Fact]
+    public async Task StandaloneActivityPrice_CountsAsRevenue_InRowCategoryAndTotals()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var plateau = await h.Db.Context.DossierActivities.SingleAsync(a => a.ActivityTypeId == h.PlateauTypeId);
+        h.Db.Context.DossierActivityPricings.Add(new TransportationService.Api.Modules.Dossiers.Entities.DossierActivityPricing
+        {
+            Id = Guid.NewGuid(), TenantId = h.TenantId, DossierActivityId = plateau.Id,
+            PricingSource = TransportationService.Api.Modules.Dossiers.Entities.ActivityPricingSource.OneOff,
+            FixedAmount = 200m, AgreedPrice = 200m,
+        });
+        await h.Db.Context.SaveChangesAsync();
+
+        var report = await h.Sut.GetActivityKpisAsync(JulFrom, JulTo, CancellationToken.None);
+
+        var plateauRow = report.Rows.Single(r => r.ActivityTypeId == h.PlateauTypeId);
+        Assert.Equal(0, plateauRow.LinkedOrderCount);
+        Assert.Equal(200m, plateauRow.Revenue);
+        Assert.Equal(1000m, report.Rows.Single(r => r.ActivityTypeId == h.CraneTypeId).Revenue);
+        Assert.Equal(1200m, report.Totals.Revenue);
+        Assert.Equal(1200m, report.PerCategory.Single(c => c.KpiCategory == "Kraan").Revenue);
     }
 }

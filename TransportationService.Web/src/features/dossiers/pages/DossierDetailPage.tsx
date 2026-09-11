@@ -79,6 +79,9 @@ function DossierDetailContent() {
   // 403 at save time from the old drawer).
   const canEditOrder = hasPermission('orders.edit') || hasPermission('orders.manage')
   const canEditPriceLines = hasPermission('orders.override_price') || hasPermission('orders.manage')
+  // Stap 13: the price of a standalone billable activity is a commercial act on a non-order and
+  // has its own right — neither orders.edit nor dossiers.manage implies it.
+  const canEditActivityPrice = hasPermission('dossiers.price')
   const canCreateLocations = hasPermission('locations.create')
   const goTo = useDossierNavigator()
   const routeEditorRef = useRef<DossierRouteEditorHandle>(null)
@@ -124,6 +127,10 @@ function DossierDetailContent() {
   // target explicitly (DossierOrderSwitcher); null = the default (first activity with an order,
   // else the first transport activity). Attention actions select the order they are about.
   const [selectedActivityId, setSelectedActivityId] = useState<string | null>(null)
+  // Stap 13: the price section also targets standalone billable activities (Opslag, Kraan). The
+  // route keeps its own transport target so that selecting a standalone unit changes ONLY the
+  // price target (no order reload, nothing collapses); selecting a transport unit moves both.
+  const [routeSelectionId, setRouteSelectionId] = useState<string | null>(null)
   const [routeDirty, setRouteDirty] = useState(false)
   // An attention jump whose target order still has to load: performed once it is on screen.
   const pendingJump = useRef<{ section: ReadinessSection; field: string | null; activityId: string } | null>(null)
@@ -196,10 +203,21 @@ function DossierDetailContent() {
   // else the first that already has an order, else the first transport activity (whose order the
   // route editor creates on save). With several transport activities the switcher is shown.
   const routeActivity =
-    (selectedActivityId ? transportActivities.find((a) => a.id === selectedActivityId) : undefined) ??
+    (routeSelectionId ? transportActivities.find((a) => a.id === routeSelectionId) : undefined) ??
     transportActivities.find((a) => a.linkedTransportOrderId) ??
     transportActivities[0] ??
     null
+  // Billable units (stap 13): every activity of a billable type, transport or standalone. The
+  // price target is the selected unit, else the route target when billable, else the first
+  // STANDALONE billable unit — never a different transport activity than the route works on,
+  // because the loaded order belongs to the route target.
+  const billableActivities = orderedActivities.filter((a) => a.isBillable !== false)
+  const priceActivity =
+    (selectedActivityId ? billableActivities.find((a) => a.id === selectedActivityId) : undefined) ??
+    (routeActivity && routeActivity.isBillable !== false ? routeActivity : undefined) ??
+    billableActivities.find((a) => !a.hasStops) ??
+    null
+  const priceTargetIsStandalone = priceActivity !== null && !priceActivity.hasStops
   const firstLinkedOrderId = routeActivity?.linkedTransportOrderId ?? null
   // The create-order offer in the price panel concerns the TARGET activity when it has no order
   // (never a different one than the route editor works on), else any transport activity without one.
@@ -232,14 +250,20 @@ function DossierDetailContent() {
   const firstOrderLoading = Boolean(firstLinkedOrderId) && loadedOrder?.id !== firstLinkedOrderId
 
   // Finish a deferred attention jump once its target activity is selected and its order is on
-  // screen (or the activity has no order yet — the editor then offers the empty route).
+  // screen (or the activity has no order yet — the editor then offers the empty route). A jump
+  // to the price of a standalone unit loads nothing, so it completes as soon as it is selected.
   const targetReady = routeActivity !== null && (!firstLinkedOrderId || Boolean(firstOrder))
+  const priceActivityId = priceActivity?.id ?? null
   useEffect(() => {
     const jump = pendingJump.current
-    if (!jump || !targetReady || routeActivity?.id !== jump.activityId) return
+    if (!jump) return
+    const onPrice = jump.section === 'prijs'
+    const currentId = onPrice ? priceActivityId : routeActivity?.id
+    if (currentId !== jump.activityId) return
+    if (!(onPrice && priceTargetIsStandalone) && !targetReady) return
     pendingJump.current = null
     goTo(jump.section, jump.field)
-  }, [targetReady, routeActivity?.id, goTo])
+  }, [targetReady, routeActivity?.id, priceActivityId, priceTargetIsStandalone, goTo])
 
   useEffect(() => {
     if (!editing) return
@@ -272,12 +296,16 @@ function DossierDetailContent() {
    * for the same reason) — the jump then lands on the section of the current target.
    */
   function goToSection(section: ReadinessSection, field: string | null, issue?: ReadinessIssue) {
+    // Price issues concern billable units (a standalone activity included); the other sections
+    // concern the transport activity that owns the order.
+    const candidates = section === 'prijs' ? billableActivities : transportActivities
+    const current = section === 'prijs' ? priceActivity : routeActivity
     const target =
-      (issue?.activityId ? transportActivities.find((a) => a.id === issue.activityId) : undefined) ??
-      (issue?.transportOrderId ? transportActivities.find((a) => a.linkedTransportOrderId === issue.transportOrderId) : undefined)
-    if (target && target.id !== routeActivity?.id && !routeDirty) {
+      (issue?.activityId ? candidates.find((a) => a.id === issue.activityId) : undefined) ??
+      (issue?.transportOrderId ? candidates.find((a) => a.linkedTransportOrderId === issue.transportOrderId) : undefined)
+    if (target && target.id !== current?.id && !routeDirty) {
       pendingJump.current = { section, field, activityId: target.id }
-      setSelectedActivityId(target.id)
+      selectActivity(target.id)
       return
     }
     goTo(section, field)
@@ -286,6 +314,8 @@ function DossierDetailContent() {
   function selectActivity(activityId: string) {
     if (routeDirty) return
     setSelectedActivityId(activityId)
+    // A transport unit is the target of BOTH sections; a standalone one only of the price section.
+    if (activities.find((a) => a.id === activityId)?.hasStops) setRouteSelectionId(activityId)
   }
 
   /** Inline route/price saves return the fresh order; the dossier is re-read for readiness + totals. */
@@ -510,22 +540,25 @@ function DossierDetailContent() {
       <section id="sectie-prijs" className="dossier-section" aria-label={t('dossiers.detail.priceAria')} ref={registerPrice}>
         <h2 tabIndex={-1}>{t('dossiers.detail.priceTitle')}</h2>
         <DossierOrderSwitcher
-          activities={transportActivities}
-          selectedActivityId={routeActivity?.id ?? ''}
+          activities={billableActivities}
+          selectedActivityId={priceActivity?.id ?? ''}
           onSelect={selectActivity}
           locked={routeDirty}
+          label={t('dossierSheet.orderSwitch.unitLabel')}
         />
-        <RetainedHeight retain={firstOrderLoading} className="dossier-section-body">
+        <RetainedHeight retain={!priceTargetIsStandalone && firstOrderLoading} className="dossier-section-body">
           <DossierPricePanel
             ref={pricePanelRef}
             dossier={dossier}
+            activity={priceActivity}
             order={firstOrder}
-            loading={firstOrderLoading}
+            loading={!priceTargetIsStandalone && firstOrderLoading}
             orderUnavailable={Boolean(firstLinkedOrderId) && !firstOrderLoading && !firstOrder}
             activityWithoutOrder={activityWithoutOrder}
             canManage={canManage && isOpen}
             canEditPrice={canEditOrder && isOpen}
             canEditLines={canEditPriceLines && isOpen}
+            canEditActivityPrice={canEditActivityPrice && isOpen}
             onOrderSaved={handleOrderSaved}
             onDossierUpdated={applyDossier}
             onConflict={handleConflict}

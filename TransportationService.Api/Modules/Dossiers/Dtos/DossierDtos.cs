@@ -13,10 +13,16 @@ public record DossierListItemDto(
     DateTime CreatedAt,
     string? CustomerReference = null,
     string? CustomerNumber = null,
-    /// <summary>Sum of AgreedPrice over the PRICED linked orders; null when none is priced (never € 0,00).</summary>
+    /// <summary>Sum of AgreedPrice over ALL priced billable units (orders + standalone activities); null when none is priced (never € 0,00).</summary>
     decimal? AgreedPriceTotal = null,
-    /// <summary>Linked orders that count as priced (OrderPricingState.IsPriced: override or AgreedPrice &gt; 0).</summary>
-    int PricedOrderCount = 0);
+    /// <summary>Linked orders that count as priced (OrderPricingState.IsPriced); kept for compatibility, see the activity counts.</summary>
+    int PricedOrderCount = 0,
+    /// <summary>Step 13: billable units of the dossier (activities of a billable type + legacy links without activity).</summary>
+    int BillableActivityCount = 0,
+    /// <summary>Step 13: billable units that are priced (order provenance or activity agreement).</summary>
+    int PricedActivityCount = 0,
+    /// <summary>Step 13: priced units whose effective price is exactly € 0 (intentional zero → ⚠ in the list).</summary>
+    int ZeroPricedActivityCount = 0);
 
 public record DossierOrderDto(
     Guid LinkId,
@@ -56,8 +62,14 @@ public record DossierFinancialSummaryDto(
     decimal InvoicedTotal,
     decimal EstimatedIncidentCost,
     decimal ActualIncidentCost,
-    /// <summary>Linked orders that count as priced (OrderPricingState.IsPriced); 0 → show "Nog geen prijs", not € 0,00.</summary>
-    int PricedOrderCount = 0);
+    /// <summary>Linked orders that count as priced (OrderPricingState.IsPriced); kept for compatibility.</summary>
+    int PricedOrderCount = 0,
+    /// <summary>Step 13: billable units (activities of a billable type + legacy links without activity).</summary>
+    int BillableActivityCount = 0,
+    /// <summary>Step 13: billable units that are priced; 0 → "Nog geen prijs", partial → "x van y activiteiten geprijsd".</summary>
+    int PricedActivityCount = 0,
+    /// <summary>Step 13: priced units at exactly € 0 (intentional zero).</summary>
+    int ZeroPricedActivityCount = 0);
 
 /// <summary>One activity card on the dossier: type capabilities + the linked execution record.</summary>
 public record DossierActivityDto(
@@ -77,7 +89,22 @@ public record DossierActivityDto(
     Guid? LinkedActivityId,
     DateOnly? PlannedDate,
     decimal? DurationHours,
-    string? Notes);
+    string? Notes,
+    /// <summary>Step 13: the activity type is a commercial unit (counts in pricing completeness).</summary>
+    bool IsBillable = true,
+    /// <summary>"Order" (HasStops with a linked order), "OneOff" (activity agreement) or "None".</summary>
+    string PricingSource = "None",
+    /// <summary>Effective sales price of the unit: the order's AgreedPrice or the activity's agreed amount.</summary>
+    decimal? AgreedPrice = null,
+    /// <summary>OrderPricingState resp. ActivityPricingState — the UI never re-derives it from the amount.</summary>
+    bool IsPriced = false,
+    /// <summary>Order snapshot status resp. activity pricing status (Draft/Reviewed/Locked/Invoiced); null without carrier.</summary>
+    string? PricingStatus = null,
+    /// <summary>Concurrency token of the activity's own price record (null without record; orders use their order version).</summary>
+    Guid? PricingVersion = null);
+
+/// <summary>Step 13: set (or clear with null) the agreed sales price of a standalone billable activity.</summary>
+public record SetActivityPriceRequest(decimal? FixedAmount, Guid? Version = null);
 
 /// <summary>
 /// One actionable attention item (additive readiness projection — never a new order status).

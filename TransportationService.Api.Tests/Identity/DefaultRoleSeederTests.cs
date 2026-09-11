@@ -767,10 +767,21 @@ public class DefaultRoleSeederTests
 
         var state = await db.Context.RoleTemplateStates.SingleAsync(s => s.TenantId == tenantId);
         Assert.Equal(DefaultRoleUpgrades.CurrentVersion, state.AppliedVersion);
-        Assert.Equal(31, DefaultRoleUpgrades.CurrentVersion);
+        Assert.Equal(32, DefaultRoleUpgrades.CurrentVersion);
 
         var roles = await db.Context.Roles.Where(r => r.TenantId == tenantId).ToListAsync();
         Guid RoleId(string code) => roles.Single(r => r.TemplateCode == code).Id;
+
+        // v32 (activiteitsprijzen, stap 13): planner + management prijzen zelfstandige
+        // activiteiten; niemand anders erft het via dossiers.manage of orders.edit.
+        foreach (var code in new[] { "planner", "management" })
+        {
+            Assert.Contains(PermissionCodes.DossiersPrice, await CodesOfAsync(db, RoleId(code)));
+        }
+        foreach (var code in new[] { "dispatcher", "boekhouding", "magazijn", "chauffeur", "hr" })
+        {
+            Assert.DoesNotContain(PermissionCodes.DossiersPrice, await CodesOfAsync(db, RoleId(code)));
+        }
 
         // v31 (Excel-importprofielen): planner + management beheren importprofielen;
         // dispatcher/boekhouding bewust niet (least privilege — importeren zelf rijdt op orders.*).

@@ -38,6 +38,14 @@ public class ActivityType : AuditableTenantEntity
     /// <summary>True → DossierActivity.DurationHours is shown/editable (crane hours etc.).</summary>
     public bool AllowsDuration { get; set; }
 
+    /// <summary>
+    /// True → the activity is a commercial unit: it carries a sales price (via its linked order
+    /// for HasStops types, via its own <see cref="DossierActivityPricing"/> otherwise), counts in
+    /// the dossier's pricing completeness and gets pricing attention items. False marks internal,
+    /// non-commercial work (e.g. an empty positioning ride) that must never read as "unpriced".
+    /// </summary>
+    public bool IsBillable { get; set; } = true;
+
     /// <summary>True → offered as a quick-start tile on the New Dossier screen.</summary>
     public bool IsQuickStart { get; set; }
 

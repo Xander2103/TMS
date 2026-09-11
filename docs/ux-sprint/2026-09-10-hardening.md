@@ -230,3 +230,12 @@ Bevestigen & opslaan op ORD-0014 (concept): dialoog → "Lege stop verwijderen &
 de backend de PUT met "De prijs van deze order is vergrendeld" (prijsvergrendeling, los van deze
 wijziging); de editor toonde de fout en hield beide bestaande stops — niets ging verloren.
 Verwijderen op een stop met referentie vroeg bevestiging; Annuleren behield de stop.
+
+## 15. Intentionele € 0-waarschuwing op drie niveaus + prijs voor zelfstandige activiteiten — ONTWERP 2026-09-11
+
+De productbeslissing van §1 ("bewust uitgesteld") is herzien: zelfstandige activiteiten (Opslag,
+Kraan, …) moeten zelfstandig geprijsd kunnen worden zonder kunstmatige transportopdracht.
+Architectuur, contracten, permissie, concurrency, migratie, downstream-audit en testplan staan in
+`2026-09-11-activity-pricing-design.md`. Dezelfde golf voegt de niet-blokkerende
+`pricing.zero`-waarschuwing toe (aandacht, Verkoop & prijs, dossierlijst) volgens de bestaande
+provenance-semantiek (`OrderPricingState`).

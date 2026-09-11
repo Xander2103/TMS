@@ -31,8 +31,13 @@ export function operationalStatus(dossier: DossierDetail): string | null {
   return worst ? ORDER_STATUS_LABELS[worst] : null
 }
 
-/** True when at least one linked order is priced — the same definition the backend list/detail use. */
+/**
+ * True when at least one billable unit (order OR standalone activity) is priced — the same
+ * definition the backend list/detail use. € 0 with provenance counts as priced.
+ */
 export function isDossierPriced(dossier: DossierDetail): boolean {
+  const unitCount = dossier.financials.pricedActivityCount
+  if (unitCount !== undefined) return unitCount > 0
   const count = dossier.financials.pricedOrderCount
   if (count !== undefined) return count > 0
   // Older payloads without the count: fall back to a positive per-order price.

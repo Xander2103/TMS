@@ -89,29 +89,66 @@ describe('DossiersPage (lijst)', () => {
   })
 
   it('markeert een gedeeltelijk geprijsd dossier: het bedrag is geen dossiertotaal', async () => {
-    api.listDossiers.mockResolvedValue([dossierListItem({ agreedPriceTotal: 450, orderCount: 2, pricedOrderCount: 1 })])
+    api.listDossiers.mockResolvedValue([
+      dossierListItem({ agreedPriceTotal: 450, orderCount: 2, pricedOrderCount: 1, billableActivityCount: 2, pricedActivityCount: 1 }),
+    ])
     renderPage()
     const row = (await screen.findByText('DOS-0001')).closest('tr')!
 
     expect(within(row).getByText(/€\s450,00/)).toBeInTheDocument()
-    expect(within(row).getByText('1/2 geprijsd')).toBeInTheDocument()
+    expect(within(row).getByText('1/2 geprijsd')).toHaveAttribute(
+      'title',
+      'Slechts 1 van 2 activiteiten hebben een prijs; het bedrag is geen dossiertotaal.',
+    )
   })
 
-  it('toont geen markering wanneer elke opdracht geprijsd is', async () => {
-    api.listDossiers.mockResolvedValue([dossierListItem({ agreedPriceTotal: 900, orderCount: 2, pricedOrderCount: 2 })])
+  it('toont geen markering wanneer elke factureerbare activiteit geprijsd is', async () => {
+    api.listDossiers.mockResolvedValue([
+      dossierListItem({ agreedPriceTotal: 900, orderCount: 2, pricedOrderCount: 2, billableActivityCount: 2, pricedActivityCount: 2 }),
+    ])
     renderPage()
     const row = (await screen.findByText('DOS-0001')).closest('tr')!
 
     expect(within(row).getByText(/€\s900,00/)).toBeInTheDocument()
     expect(within(row).queryByText(/geprijsd/)).toBeNull()
+    expect(within(row).queryByRole('img')).toBeNull()
   })
 
-  it('toont een echte € 0,00 wanneer het dossier op nul geprijsd is', async () => {
-    api.listDossiers.mockResolvedValue([dossierListItem({ agreedPriceTotal: 0, pricedOrderCount: 1 })])
+  it('toont een echte € 0,00 plus ⚠ (bewust?) wanneer het dossier op nul geprijsd is', async () => {
+    api.listDossiers.mockResolvedValue([
+      dossierListItem({ agreedPriceTotal: 0, pricedOrderCount: 1, billableActivityCount: 1, pricedActivityCount: 1, zeroPricedActivityCount: 1 }),
+    ])
     renderPage()
     const row = (await screen.findByText('DOS-0001')).closest('tr')!
 
+    // The amount is never replaced by the icon: both are there, the icon carries the question.
     expect(within(row).getByText(/€\s0,00/)).toBeInTheDocument()
+    const icon = within(row).getByRole('img', { name: 'Verkoopprijs is € 0,00. Controleer of dit bewust is.' })
+    expect(icon).toHaveTextContent('⚠')
+    expect(icon).toHaveAttribute('title', 'Verkoopprijs is € 0,00. Controleer of dit bewust is.')
+    expect(within(row).queryByText(/geprijsd/)).toBeNull()
+  })
+
+  it('€ 100 + € 0: toont € 100,00 zonder deelmarkering (2/2) maar mét de ⚠ voor de nul-eenheid', async () => {
+    api.listDossiers.mockResolvedValue([
+      dossierListItem({ agreedPriceTotal: 100, orderCount: 1, pricedOrderCount: 1, billableActivityCount: 2, pricedActivityCount: 2, zeroPricedActivityCount: 1 }),
+    ])
+    renderPage()
+    const row = (await screen.findByText('DOS-0001')).closest('tr')!
+
+    expect(within(row).getByText(/€\s100,00/)).toBeInTheDocument()
+    expect(within(row).queryByText(/geprijsd/)).toBeNull()
+    expect(within(row).getByRole('img', { name: 'Verkoopprijs is € 0,00. Controleer of dit bewust is.' })).toBeInTheDocument()
+  })
+
+  it('meervoud: twee nul-eenheden noemen het aantal in de tooltip', async () => {
+    api.listDossiers.mockResolvedValue([
+      dossierListItem({ agreedPriceTotal: 0, billableActivityCount: 2, pricedActivityCount: 2, zeroPricedActivityCount: 2 }),
+    ])
+    renderPage()
+    const row = (await screen.findByText('DOS-0001')).closest('tr')!
+
+    expect(within(row).getByRole('img', { name: 'Verkoopprijs is € 0,00 voor 2 activiteiten. Controleer of dit bewust is.' })).toBeInTheDocument()
   })
 
   it('zoekt server-side: de zoekterm gaat na de debounce naar listDossiers', async () => {

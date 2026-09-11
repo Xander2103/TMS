@@ -292,11 +292,16 @@ public class DossierServiceTests
         var row = (await sut.ListAsync(null, null, null, CancellationToken.None)).Single(d => d.Id == dossier.Id);
         Assert.Equal(6, row.OrderCount);
         Assert.Equal(4, row.PricedOrderCount);
-        Assert.Equal(500m, row.AgreedPriceTotal); // 500 + 0 + 0 + null
+        // Step 13: the EFFECTIVE price of a one-off agreement the engine has not derived yet is
+        // the agreed amount itself (OrderPricingState.EffectiveAgreedPrice): 500 + 0 + 0 + 120.
+        Assert.Equal(620m, row.AgreedPriceTotal);
+        // Legacy links without an activity are billable units too (compat); two are priced at € 0 by provenance.
+        Assert.Equal((6, 4, 2), (row.BillableActivityCount, row.PricedActivityCount, row.ZeroPricedActivityCount));
 
         var detail = (await sut.GetAsync(dossier.Id, CancellationToken.None))!;
         Assert.Equal(4, detail.Financials.PricedOrderCount);
-        Assert.Equal(500m, detail.Financials.AgreedOrderTotal);
+        Assert.Equal(620m, detail.Financials.AgreedOrderTotal);
+        Assert.Equal((6, 4, 2), (detail.Financials.BillableActivityCount, detail.Financials.PricedActivityCount, detail.Financials.ZeroPricedActivityCount));
         foreach (var order in detail.Orders)
         {
             Assert.Equal(expected[order.OrderId], order.IsPriced);

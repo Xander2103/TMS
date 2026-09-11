@@ -47,3 +47,10 @@
   color: var(--color-warning, #d97706);
   white-space: nowrap;
 }
+
+/* Stap 13: a priced unit at exactly € 0,00 — the amount stays, the icon asks "is this intended?". */
+.dossier-list-zero {
+  margin-left: 6px;
+  color: var(--color-warning, #d97706);
+  cursor: help;
+}
