@@ -251,7 +251,10 @@
     "accessInstr": "Toegangsinstructies",
     "loadInstr": "Laadinstructies",
     "unloadInstr": "Losinstructies",
-    "refreshFromLocation": "Adres opnieuw overnemen"
+    "refreshFromLocation": "Adres opnieuw overnemen",
+    "moveUp": "Stop {number} omhoog",
+    "moveDown": "Stop {number} omlaag",
+    "removeStop": "Stop {number} verwijderen"
   },
   "goods": {
     "description": "Omschrijving goederen",

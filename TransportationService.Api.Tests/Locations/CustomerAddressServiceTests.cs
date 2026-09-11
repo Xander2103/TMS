@@ -52,7 +52,7 @@ public class CustomerAddressServiceTests
     private static async Task<Guid> AddAddressAsync(
         Harness h, string code, string name,
         string street = "Noorderlaan", string houseNumber = "10", string postalCode = "2030",
-        string city = "Antwerpen", string country = "BE")
+        string city = "Antwerpen", string country = "BE", string? externalReference = null)
     {
         var result = await h.Locations.CreateAsync(
             new CreateLocationRequest(
@@ -62,7 +62,8 @@ public class CustomerAddressServiceTests
                 ContactName: null, ContactPhone: null, ContactEmail: null,
                 OpeningHours: null, LoadingInstructions: null, UnloadingInstructions: null, AccessInstructions: null,
                 AccessRestrictions: null, VehicleRestrictions: null, TrailerRestrictions: null,
-                AlfapassRequired: false, AppointmentRequired: false, CustomerId: null, Notes: null),
+                AlfapassRequired: false, AppointmentRequired: false, CustomerId: null, Notes: null,
+                ExternalReference: externalReference),
             CancellationToken.None);
         Assert.Equal(LocationOperationOutcome.Success, result.Outcome);
         return result.Location!.Id;
@@ -327,6 +328,75 @@ public class CustomerAddressServiceTests
         Assert.Equal(shared, options[0].LocationId);
         Assert.Equal(AddressPickerGroup.CustomerAddress, options[0].Group);
         Assert.Equal(AddressPickerGroup.All, options.Single(o => o.LocationId == other).Group);
+    }
+
+    // ------------------------------------------ UX sprint 2026-09-09 §2.5: picker contract
+
+    [Fact]
+    public async Task Picker_ShowsTheLinkedCustomerNames_MaxThreeThenEllipsis()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var a = await AddCustomerAsync(h, "Klant A", "KL-1");
+        var b = await AddCustomerAsync(h, "Klant B", "KL-2");
+        var c = await AddCustomerAsync(h, "Klant C", "KL-3");
+        var d = await AddCustomerAsync(h, "Klant D", "KL-4");
+        var shared = await AddAddressAsync(h, "ADR-1", "Gedeeld magazijn");
+        var two = await AddAddressAsync(h, "ADR-2", "Twee klanten", street: "Zuidlaan", houseNumber: "5", city: "Gent", postalCode: "9000");
+        var free = await AddAddressAsync(h, "ADR-3", "Vrij adres", street: "Oostkaai", houseNumber: "1", city: "Brugge", postalCode: "8000");
+        var inactiveOnly = await AddAddressAsync(h, "ADR-4", "Oude relatie", street: "Westlaan", houseNumber: "2", city: "Kortrijk", postalCode: "8500");
+        foreach (var customer in new[] { d, c, b, a })
+        {
+            await h.Sut.LinkAsync(customer, LinkRequest(shared), CancellationToken.None);
+        }
+        await h.Sut.LinkAsync(b, LinkRequest(two), CancellationToken.None);
+        await h.Sut.LinkAsync(a, LinkRequest(two), CancellationToken.None);
+        var inactiveLink = await h.Sut.LinkAsync(a, LinkRequest(inactiveOnly), CancellationToken.None);
+        var link = await h.Db.Context.CustomerLocationLinks.SingleAsync(l => l.Id == inactiveLink.Address!.LinkId);
+        link.IsActive = false;
+        await h.Db.Context.SaveChangesAsync();
+
+        var options = await h.Sut.PickerAsync(null, null, 50, null, CancellationToken.None);
+
+        Assert.Equal("Klant A, Klant B, Klant C…", options.Single(o => o.LocationId == shared).CustomerNames);
+        Assert.Equal("Klant A, Klant B", options.Single(o => o.LocationId == two).CustomerNames);
+        Assert.Null(options.Single(o => o.LocationId == free).CustomerNames);
+        Assert.Null(options.Single(o => o.LocationId == inactiveOnly).CustomerNames); // inactive links do not count
+    }
+
+    [Fact]
+    public async Task Picker_SearchMatchesTheExternalReference()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var withRef = await AddAddressAsync(h, "ADR-1", "Magazijn Noord", externalReference: "SAP-4711");
+        await AddAddressAsync(h, "ADR-2", "Magazijn Zuid", street: "Zuidlaan", houseNumber: "5", city: "Gent", postalCode: "9000");
+
+        var options = await h.Sut.PickerAsync(null, "sap-47", 50, null, CancellationToken.None);
+
+        Assert.Equal([withRef], options.Select(o => o.LocationId).ToArray());
+        // Existing fields keep matching.
+        Assert.Equal(2, (await h.Sut.PickerAsync(null, "magazijn", 50, null, CancellationToken.None)).Count);
+    }
+
+    [Fact]
+    public async Task Picker_HonoursTake_AndKeepsGroupOrderFirst()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var customer = await AddCustomerAsync(h, "Klant A", "KL-1");
+        await AddAddressAsync(h, "ADR-1", "Aaa eerste op naam");
+        await AddAddressAsync(h, "ADR-2", "Bbb tweede op naam", street: "Zuidlaan", houseNumber: "5", city: "Gent", postalCode: "9000");
+        var own = await AddAddressAsync(h, "ADR-3", "Zzz klantadres", street: "Oostkaai", houseNumber: "1", city: "Brugge", postalCode: "8000");
+        await h.Sut.LinkAsync(customer, LinkRequest(own), CancellationToken.None);
+
+        var options = await h.Sut.PickerAsync(customer, null, 2, null, CancellationToken.None);
+
+        Assert.Equal(2, options.Count);
+        // The customer's own address wins over alphabetically earlier names even with a tight limit.
+        Assert.Equal(own, options[0].LocationId);
+        Assert.Equal(AddressPickerGroup.CustomerAddress, options[0].Group);
+        Assert.Equal("Aaa eerste op naam", options[1].Name);
     }
 
     // ---------------------------------------------------------- scenario F

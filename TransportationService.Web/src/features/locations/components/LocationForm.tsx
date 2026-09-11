@@ -4,6 +4,7 @@ import { FormActions } from '../../../components/ui/FormActions'
 import { FormField } from '../../../components/ui/FormField'
 import { FormSection } from '../../../components/ui/FormSection'
 import { SearchableSelect } from '../../../components/ui/SearchableSelect'
+import { TimeInput } from '../../../components/ui/TimeInput'
 import { SectionedForm, type SectionDef } from '../../../components/ui/SectionedForm'
 import { UnsavedChangesGuard } from '../../../components/ui/UnsavedChangesGuard'
 import { ValidationSummary } from '../../../components/ui/ValidationSummary'
@@ -651,16 +652,16 @@ export function LocationForm({ mode, initial, submitting, error, submitError, on
         />
       </FormField>
       <FormField label={t('locations.form.fields.preferredFrom')} htmlFor="loc-pref-from">
-        <input id="loc-pref-from" type="time" value={form.preferredArrivalFrom ?? ''} onChange={(e) => set('preferredArrivalFrom', e.target.value || null)} disabled={submitting} />
+        <TimeInput id="loc-pref-from" value={form.preferredArrivalFrom ?? ''} onChange={(value) => set('preferredArrivalFrom', value || null)} disabled={submitting} />
       </FormField>
       <FormField label={t('locations.form.fields.preferredTo')} htmlFor="loc-pref-to">
-        <input id="loc-pref-to" type="time" value={form.preferredArrivalTo ?? ''} onChange={(e) => set('preferredArrivalTo', e.target.value || null)} disabled={submitting} />
+        <TimeInput id="loc-pref-to" value={form.preferredArrivalTo ?? ''} onChange={(value) => set('preferredArrivalTo', value || null)} disabled={submitting} />
       </FormField>
       <FormField label={t('locations.form.fields.earliestArrival')} htmlFor="loc-earliest">
-        <input id="loc-earliest" type="time" value={form.earliestArrival ?? ''} onChange={(e) => set('earliestArrival', e.target.value || null)} disabled={submitting} />
+        <TimeInput id="loc-earliest" value={form.earliestArrival ?? ''} onChange={(value) => set('earliestArrival', value || null)} disabled={submitting} />
       </FormField>
       <FormField label={t('locations.form.fields.latestArrival')} htmlFor="loc-latest">
-        <input id="loc-latest" type="time" value={form.latestArrival ?? ''} onChange={(e) => set('latestArrival', e.target.value || null)} disabled={submitting} />
+        <TimeInput id="loc-latest" value={form.latestArrival ?? ''} onChange={(value) => set('latestArrival', value || null)} disabled={submitting} />
       </FormField>
     </FormSection>
   )

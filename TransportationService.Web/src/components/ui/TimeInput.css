@@ -1,0 +1,52 @@
+/* 24-hour time field. Mirrors the `.ui-form-field input` conventions (FormField.css) so it sits
+   flush next to regular inputs, but with a fixed width so every time field is the same size.
+   The doubled selectors outrank `.ui-form-field input` (0,1,1) when rendered inside a FormField. */
+.ui-time-input,
+.ui-form-field input.ui-time-input {
+  font: inherit;
+  font-size: 1rem;
+  line-height: 1.4;
+  font-variant-numeric: tabular-nums;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text-h);
+  box-sizing: border-box;
+  min-height: 44px;
+  width: calc(5.5ch + 26px); /* 5 glyphs + horizontal padding + borders */
+  min-width: 0;
+  flex: 0 0 auto;
+  text-align: center;
+}
+
+.ui-time-input:focus,
+.ui-form-field input.ui-time-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-bg);
+}
+
+.ui-time-input[aria-invalid='true'],
+.ui-form-field input.ui-time-input[aria-invalid='true'] {
+  border-color: #dc2626;
+}
+
+.ui-time-input:disabled,
+.ui-form-field input.ui-time-input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.ui-time-input::placeholder {
+  color: var(--text);
+  opacity: 0.6;
+}
+
+/* Compact variant for dense grids/tables (stop rows, opening hours). */
+.ui-time-input.ui-time-input--compact,
+.ui-form-field input.ui-time-input.ui-time-input--compact {
+  min-height: 36px;
+  padding: 4px 8px;
+  width: calc(5.5ch + 18px);
+}

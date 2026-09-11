@@ -8,8 +8,22 @@ import { EmptyState } from '../../../components/ui/EmptyState'
 import { FilterBar } from '../../../components/ui/FilterBar'
 import { useLocale } from '../../../i18n/localeContext'
 import { useAuth } from '../../auth/authContextValue'
+import { euro } from '../../invoices/types'
 import { listDossiers } from '../api/dossiersApi'
 import { DOSSIER_STATUS_LABELS, DOSSIER_STATUS_TONE, type DossierListItem, type DossierStatus } from '../types'
+import './dossiers.css'
+
+const EMPTY = '—'
+
+/** Tekstcel die bij overloop afkapt met een ellipsis en de volledige waarde als tooltip toont. */
+function TruncatedCell({ value }: { value: string | null }) {
+  if (!value) return <>{EMPTY}</>
+  return (
+    <span className="dossier-list-truncate" title={value}>
+      {value}
+    </span>
+  )
+}
 
 /** Dossiers: bundels van activiteiten, opdrachten, incidenten en gerelateerde dossiers. */
 export function DossiersPage() {
@@ -43,20 +57,83 @@ export function DossiersPage() {
   }, [reload])
 
   const columns: Column<DossierListItem>[] = [
-    { key: 'number', header: t('dossiers.list.columns.number'), render: (row) => <code>{row.dossierNumber}</code> },
-    { key: 'title', header: t('dossiers.list.columns.title'), render: (row) => row.title },
-    { key: 'customer', header: t('dossiers.list.columns.customer'), render: (row) => row.customerName ?? '—' },
-    { key: 'responsible', header: t('dossiers.list.columns.responsible'), render: (row) => row.responsibleName ?? '—' },
-    { key: 'orders', header: t('dossiers.list.columns.orders'), render: (row) => String(row.orderCount) },
+    {
+      key: 'number',
+      header: t('dossiers.list.columns.number'),
+      width: '7rem',
+      render: (row) => <code>{row.dossierNumber}</code>,
+    },
+    {
+      key: 'reference',
+      header: t('dossiers.list.columns.reference'),
+      width: '14rem',
+      render: (row) => <TruncatedCell value={row.customerReference} />,
+    },
+    {
+      key: 'customer',
+      header: t('dossiers.list.columns.customer'),
+      render: (row) => <TruncatedCell value={row.customerName} />,
+    },
+    {
+      key: 'customerNumber',
+      header: t('dossiers.list.columns.customerNumber'),
+      width: '9rem',
+      render: (row) => row.customerNumber ?? EMPTY,
+    },
+    {
+      key: 'price',
+      header: t('dossiers.list.columns.price'),
+      width: '8rem',
+      align: 'right',
+      // `null` = nog niet geprijsd; een echte € 0,00 (geprijsd op nul) blijft zichtbaar. Een
+      // gedeeltelijk geprijsd dossier (niet elke opdracht heeft een prijs) krijgt een marker:
+      // het bedrag is een som over de geprijsde opdrachten, geen dossiertotaal.
+      render: (row) =>
+        row.agreedPriceTotal === null ? (
+          EMPTY
+        ) : (
+          <span className="dossier-list-amount">
+            {euro(row.agreedPriceTotal)}
+            {row.pricedOrderCount < row.orderCount && (
+              <span
+                className="dossier-list-partial"
+                title={t('dossierSheet.list.partialPricedTitle', { priced: row.pricedOrderCount, total: row.orderCount })}
+              >
+                {t('dossierSheet.list.partialPriced', { priced: row.pricedOrderCount, total: row.orderCount })}
+              </span>
+            )}
+          </span>
+        ),
+    },
+    {
+      key: 'responsible',
+      header: t('dossiers.list.columns.responsible'),
+      width: '12rem',
+      render: (row) => <TruncatedCell value={row.responsibleName} />,
+    },
+    {
+      key: 'orders',
+      header: t('dossiers.list.columns.orders'),
+      width: '6rem',
+      align: 'right',
+      render: (row) => <span className="dossier-list-amount">{row.orderCount}</span>,
+    },
     {
       key: 'incidents',
       header: t('dossiers.list.columns.openIncidents'),
+      width: '6rem',
+      align: 'right',
       render: (row) =>
-        row.openIncidentCount > 0 ? <Badge tone="warning">{row.openIncidentCount}</Badge> : '0',
+        row.openIncidentCount > 0 ? (
+          <Badge tone="warning">{row.openIncidentCount}</Badge>
+        ) : (
+          <span className="dossier-list-amount">0</span>
+        ),
     },
     {
       key: 'status',
       header: t('dossiers.list.columns.status'),
+      width: '6rem',
       render: (row) => <Badge tone={DOSSIER_STATUS_TONE[row.status]}>{t(DOSSIER_STATUS_LABELS[row.status])}</Badge>,
     },
   ]
@@ -86,7 +163,9 @@ export function DossiersPage() {
         <EmptyState message={t('dossiers.list.empty')} />
       )}
       {!error && dossiers.length > 0 && (
-        <DataTable columns={columns} rows={dossiers} rowKey={(row) => row.id} onRowClick={(row) => navigate(`/dossiers/${row.id}`)} />
+        <div className="dossier-list">
+          <DataTable columns={columns} rows={dossiers} rowKey={(row) => row.id} onRowClick={(row) => navigate(`/dossiers/${row.id}`)} />
+        </div>
       )}
     </div>
   )

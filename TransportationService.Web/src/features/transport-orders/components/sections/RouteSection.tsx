@@ -1,6 +1,7 @@
 import { Badge } from '../../../../components/ui/Badge'
 import { Button } from '../../../../components/ui/Button'
 import { FormField } from '../../../../components/ui/FormField'
+import { TimeInput } from '../../../../components/ui/TimeInput'
 import { useLocale } from '../../../../i18n/localeContext'
 import { LocationSelect } from '../../../locations/components/LocationSelect'
 import { CountryCombobox } from '../../../reference/components/CountryCombobox'
@@ -35,6 +36,13 @@ interface RouteSectionProps {
   hideHeader?: boolean
   /** compact only: whether this stop offers a remove action (e.g. extra unload addresses). */
   canRemoveStop?: (stop: StopFormRow, index: number) => boolean
+  /**
+   * Dossier work-sheet mode (UX-sprint 2026-09-09): every stop is always expanded, the toolbar
+   * offers move up/down + remove only, the reference stays visible next to date/time and the
+   * customer-visible instructions move into the advanced disclosure. Location, date and time
+   * window are the core operational fields a planner fills in directly on the dossier.
+   */
+  sheet?: boolean
 }
 
 /** Route & stops section: stop list with per-stop planning inputs and advanced disclosure. */
@@ -53,6 +61,7 @@ export function RouteSection({
   compact = false,
   hideHeader = false,
   canRemoveStop,
+  sheet = false,
 }: RouteSectionProps) {
   const { t } = useLocale()
   return (
@@ -88,6 +97,7 @@ export function RouteSection({
             onRequestRefresh={onRequestRefresh}
             onQuickCreate={onQuickCreate}
             compact={compact}
+            sheet={sheet}
             removable={!compact || (canRemoveStop?.(stop, index) ?? false)}
           />
         ))}
@@ -110,6 +120,7 @@ interface StopRowProps {
   onRequestRefresh: (key: string) => void
   onQuickCreate?: (name: string) => Promise<LocationOption | null>
   compact: boolean
+  sheet: boolean
   removable: boolean
 }
 
@@ -128,6 +139,7 @@ function StopRow({
   onRequestRefresh,
   onQuickCreate,
   compact,
+  sheet,
   removable,
 }: StopRowProps) {
   const { t } = useLocale()
@@ -168,7 +180,37 @@ function StopRow({
           </>
         )}
       </legend>
-      {compact ? (
+      {sheet ? (
+        <div className="tof-stop-toolbar">
+          <button
+            type="button"
+            className="tof-link"
+            onClick={() => moveStop(index, -1)}
+            disabled={saving || index === 0}
+            aria-label={t('transportOrders.route.moveUp', { number: index + 1 })}
+          >
+            ↑
+          </button>
+          <button
+            type="button"
+            className="tof-link"
+            onClick={() => moveStop(index, 1)}
+            disabled={saving || index === stopCount - 1}
+            aria-label={t('transportOrders.route.moveDown', { number: index + 1 })}
+          >
+            ↓
+          </button>
+          <button
+            type="button"
+            className="tof-link tof-link-danger"
+            onClick={() => onRemoveStop(stop.key)}
+            disabled={saving}
+            aria-label={t('transportOrders.route.removeStop', { number: index + 1 })}
+          >
+            {t('ui.actions.delete')}
+          </button>
+        </div>
+      ) : compact ? (
         removable && (
           <div className="tof-stop-toolbar">
             <button
@@ -215,7 +257,7 @@ function StopRow({
           </button>
         </div>
       )}
-      {!compact && stop.collapsed ? (
+      {!compact && !sheet && stop.collapsed ? (
         <p className="tof-stop-summary">
           {stop.locationId
             ? `${stop.snapshotName || t('transportOrders.route.masterLocationFallback')}${stop.snapshotAddress ? ` — ${stop.snapshotAddress}` : ''}`
@@ -301,10 +343,10 @@ function StopRow({
               <input id={`st-date-${stop.key}`} type="date" value={stop.date} onChange={(e) => setStop(stop.key, { date: e.target.value })} disabled={saving} />
             </FormField>
             <FormField label={t('transportOrders.route.from')} htmlFor={`st-fromtime-${stop.key}`} hint={t('transportOrders.route.optional')}>
-              <input id={`st-fromtime-${stop.key}`} type="time" value={stop.fromTime} onChange={(e) => setStop(stop.key, { fromTime: e.target.value })} disabled={saving} />
+              <TimeInput id={`st-fromtime-${stop.key}`} value={stop.fromTime} onChange={(value) => setStop(stop.key, { fromTime: value })} disabled={saving} />
             </FormField>
             <FormField label={t('transportOrders.route.to')} htmlFor={`st-totime-${stop.key}`} hint={t('transportOrders.route.optional')}>
-              <input id={`st-totime-${stop.key}`} type="time" value={stop.toTime} onChange={(e) => setStop(stop.key, { toTime: e.target.value })} disabled={saving} />
+              <TimeInput id={`st-totime-${stop.key}`} value={stop.toTime} onChange={(value) => setStop(stop.key, { toTime: value })} disabled={saving} />
             </FormField>
             {!compact && (
               <FormField label={t('transportOrders.route.reference')} htmlFor={`st-ref-${stop.key}`}>
@@ -343,11 +385,10 @@ function StopRow({
                 htmlFor={`st-timereqfrom-${stop.key}`}
                 error={errors[`stops[${index}].timeReqFrom`]}
               >
-                <input
+                <TimeInput
                   id={`st-timereqfrom-${stop.key}`}
-                  type="time"
                   value={stop.timeReqFrom}
-                  onChange={(e) => setStop(stop.key, { timeReqFrom: e.target.value })}
+                  onChange={(value) => setStop(stop.key, { timeReqFrom: value })}
                   disabled={saving}
                   aria-invalid={errors[`stops[${index}].timeReqFrom`] ? true : undefined}
                 />
@@ -359,18 +400,17 @@ function StopRow({
                 htmlFor={`st-timereqto-${stop.key}`}
                 error={errors[`stops[${index}].timeReqTo`]}
               >
-                <input
+                <TimeInput
                   id={`st-timereqto-${stop.key}`}
-                  type="time"
                   value={stop.timeReqTo}
-                  onChange={(e) => setStop(stop.key, { timeReqTo: e.target.value })}
+                  onChange={(value) => setStop(stop.key, { timeReqTo: value })}
                   disabled={saving}
                   aria-invalid={errors[`stops[${index}].timeReqTo`] ? true : undefined}
                 />
               </FormField>
             )}
           </div>
-          {!compact && (
+          {!compact && !sheet && (
             <div className="tof-row">
               {/* Wave 1 fix B (B4): this column is a SHARED write surface — the portal writes it at
                   intake and a planner edits the same value here, and PortalStopDto echoes it back to
@@ -394,9 +434,11 @@ function StopRow({
             open={Boolean(
               stop.requestedFrom || stop.requestedTo || stop.confirmedFrom || stop.confirmedTo ||
               stop.earliestAllowed || stop.latestAllowed ||
-              stop.appointmentRequired || stop.appointmentReference ||
+              // Sheet mode: the AFSPRAAK badge already surfaces the flag; only a reference opens the disclosure.
+              (!sheet && stop.appointmentRequired) || stop.appointmentReference ||
               stop.includedTimeMinutesOverride || stop.refreshSnapshot ||
-              stop.accessInstructions || stop.loadingInstructions || stop.unloadingInstructions,
+              stop.accessInstructions || stop.loadingInstructions || stop.unloadingInstructions ||
+              (sheet && stop.instructions),
             )}
           >
             <summary>{t('transportOrders.route.advanced')}</summary>
@@ -438,6 +480,17 @@ function StopRow({
                 <input id={`st-appref-${stop.key}`} value={stop.appointmentReference} onChange={(e) => setStop(stop.key, { appointmentReference: e.target.value })} disabled={saving} maxLength={100} placeholder={t('transportOrders.route.appointmentPlaceholder')} />
               </FormField>
             </div>
+            {sheet && (
+              <div className="tof-row">
+                <FormField
+                  label={t('transportOrders.route.instructions')}
+                  htmlFor={`st-instr-${stop.key}`}
+                  hint={t('transportOrders.route.instructionsHint')}
+                >
+                  <input id={`st-instr-${stop.key}`} value={stop.instructions} onChange={(e) => setStop(stop.key, { instructions: e.target.value })} disabled={saving} maxLength={2000} />
+                </FormField>
+              </div>
+            )}
             <div className="tof-row">
               <FormField label={t('transportOrders.route.accessInstr')} htmlFor={`st-access-${stop.key}`}>
                 <input id={`st-access-${stop.key}`} value={stop.accessInstructions} onChange={(e) => setStop(stop.key, { accessInstructions: e.target.value })} disabled={saving} maxLength={2000} />

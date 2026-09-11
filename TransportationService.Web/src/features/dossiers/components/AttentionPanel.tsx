@@ -25,8 +25,12 @@ const SECTION_LABEL_KEYS: Record<ReadinessSection, string> = {
 
 interface AttentionPanelProps {
   issues: ReadinessIssue[]
-  /** Scrolls to + opens the named section on the dossier page. */
-  onNavigate: (section: ReadinessSection) => void
+  /**
+   * Jumps to the section AND the field that resolves the issue (`field` is the backend's
+   * readiness field key, e.g. "stops.unloading", "stops.plannedFrom", "price"; null = section).
+   * The full issue travels along so the host can select the order/activity it is about first.
+   */
+  onNavigate: (section: ReadinessSection, field: string | null, issue: ReadinessIssue) => void
 }
 
 /**
@@ -46,7 +50,7 @@ export function AttentionPanel({ issues, onNavigate }: AttentionPanelProps) {
               {SEVERITY_ICON[issue.severity]}
             </span>
             <span className="dossier-attention-message">{issue.message}</span>
-            <button type="button" className="link-button" onClick={() => onNavigate(issue.section)}>
+            <button type="button" className="link-button" onClick={() => onNavigate(issue.section, issue.field ?? null, issue)}>
               {t('dossiers.attention.goTo', {
                 section: SECTION_LABEL_KEYS[issue.section] ? t(SECTION_LABEL_KEYS[issue.section]) : issue.section,
               })}

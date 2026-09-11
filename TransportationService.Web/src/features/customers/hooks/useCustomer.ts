@@ -4,7 +4,13 @@ import type { CustomerDetail } from '../types'
 
 interface UseCustomerResult {
   customer: CustomerDetail | null
+  /** True only while nothing for this id has been loaded yet (first load or a new id). */
   isLoading: boolean
+  /**
+   * True while a `reload()` for the already-shown customer is in flight. The previous
+   * `customer` stays available (stale-while-refetch) so a page never has to unmount its tree.
+   */
+  isRefreshing: boolean
   error: string | null
   reload: () => void
 }
@@ -39,10 +45,15 @@ export function useCustomer(id: string | undefined): UseCustomerResult {
     }
   }, [id, requestKey])
 
+  // Pending whenever an id is set but the result for this exact request has not yet arrived.
+  const pending = id !== undefined && state.loadedKey !== requestKey
+  // The customer we hold belongs to the current id (not to a previous route) → keep showing it.
+  const hasCurrent = state.customer !== null && id !== undefined && state.loadedKey.startsWith(`${id}:`)
+
   return {
-    customer: state.customer,
-    // Loading whenever an id is set but its result has not yet arrived.
-    isLoading: id !== undefined && state.loadedKey !== requestKey,
+    customer: hasCurrent ? state.customer : null,
+    isLoading: pending && !hasCurrent,
+    isRefreshing: pending && hasCurrent,
     error: state.error,
     reload,
   }

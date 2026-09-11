@@ -1,16 +1,41 @@
 .ui-form-section {
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 20px 24px 24px;
-  margin: 0 0 20px;
   min-width: 0;
 }
 
-.ui-form-section legend {
+/* Framed (default outside a SectionedForm): a bordered fieldset with a legend. */
+.ui-form-section-framed {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg, 12px);
+  padding: 20px 24px 24px;
+  margin: 0 0 20px;
+}
+
+.ui-form-section-framed legend {
   font-size: 16px;
   font-weight: 600;
   color: var(--text-h);
   padding: 0 8px;
+}
+
+/* Flat (default inside a SectionedForm): heading + content, no frame. Consecutive flat
+   sections are separated by whitespace and a hairline instead of nested boxes. */
+.ui-form-section-flat {
+  border: none;
+  padding: 0;
+  margin: 0 0 var(--space-6, 32px);
+}
+
+.ui-form-section-flat + .ui-form-section-flat {
+  border-top: 1px solid var(--border);
+  padding-top: var(--space-5, 24px);
+}
+
+.ui-form-section-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-h);
+  margin: 0 0 var(--space-4, 16px);
+  line-height: 1.3;
 }
 
 .ui-form-section-toggle {
@@ -39,8 +64,12 @@
 
 .ui-form-section-description {
   font-size: 13.5px;
-  color: var(--text);
+  color: var(--text-muted, var(--text));
   margin: -4px 0 16px;
+}
+
+.ui-form-section-flat .ui-form-section-description {
+  margin: -8px 0 16px;
 }
 
 .ui-form-section-grid {

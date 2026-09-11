@@ -150,23 +150,32 @@ export interface AddressPickerOption {
   city: string | null
   countryCode: string | null
   group: AddressPickerGroup
+  /**
+   * Names of the customers using this address (comma-separated), when the backend provides
+   * them (UX sprint 2026-09-09, additive). Absent on older payloads.
+   */
+  customerNames?: string | null
 }
 
 /**
  * Customer addresses first, then recently used, then the rest of the master.
  * `excludeCustomerId` drops the addresses that customer already uses SERVER-side (before the
  * take), so the "link an existing address" dialog never loses candidates to the cut-off.
+ * `signal` aborts the request (type-ahead callers cancel the previous search).
  */
 export function pickAddresses(params: {
   customerId?: string | null
   search?: string
   take?: number
   excludeCustomerId?: string | null
+  signal?: AbortSignal
 }): Promise<AddressPickerOption[]> {
   const query = new URLSearchParams()
   if (params.customerId) query.set('customerId', params.customerId)
   if (params.search) query.set('search', params.search)
   if (params.take) query.set('take', String(params.take))
   if (params.excludeCustomerId) query.set('excludeCustomerId', params.excludeCustomerId)
-  return apiClient.getJson<AddressPickerOption[]>(`/api/addresses/picker?${query.toString()}`)
+  return apiClient.getJson<AddressPickerOption[]>(`/api/addresses/picker?${query.toString()}`, {
+    signal: params.signal,
+  })
 }

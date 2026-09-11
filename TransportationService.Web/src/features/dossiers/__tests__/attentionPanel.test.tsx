@@ -6,7 +6,7 @@ import type { ReadinessIssue } from '../types'
 
 const issues: ReadinessIssue[] = [
   { code: 'route.unloading_missing', severity: 'Warning', message: 'Loslocatie is nog onbekend', section: 'route', field: null, stage: 'Planning' },
-  { code: 'pricing.incomplete', severity: 'Warning', message: 'Wachttijd 1,5 u heeft geen prijs', section: 'prijs', field: null, stage: 'Commercial' },
+  { code: 'pricing.incomplete', severity: 'Warning', message: 'Wachttijd 1,5 u heeft geen prijs', section: 'prijs', field: 'price', stage: 'Commercial' },
   { code: 'activity.none', severity: 'Info', message: 'Nog geen activiteit', section: 'activiteiten', field: null, stage: 'Planning' },
 ]
 
@@ -27,8 +27,8 @@ describe('AttentionPanel', () => {
     expect(screen.getByRole('img', { name: 'Info' })).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Ga naar route' }))
-    expect(onNavigate).toHaveBeenCalledWith('route')
+    expect(onNavigate).toHaveBeenCalledWith('route', null, issues[0])
     await user.click(screen.getByRole('button', { name: 'Ga naar prijs' }))
-    expect(onNavigate).toHaveBeenCalledWith('prijs')
+    expect(onNavigate).toHaveBeenCalledWith('prijs', 'price', issues[1])
   })
 })

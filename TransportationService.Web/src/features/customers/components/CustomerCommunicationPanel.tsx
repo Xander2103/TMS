@@ -5,6 +5,7 @@ import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { DataTable, type Column } from '../../../components/ui/DataTable'
 import { FormField } from '../../../components/ui/FormField'
 import { Modal } from '../../../components/ui/Modal'
+import { PanelHeader } from '../../../components/ui/PanelHeader'
 import { useToast } from '../../../components/ui/toastContext'
 import { describeApiError, getFieldError, type FieldErrors } from '../../../api/problemDetails'
 import { useAuth } from '../../auth/authContextValue'
@@ -157,14 +158,16 @@ export function CustomerCommunicationPanel({ customerId, contacts }: CustomerCom
       <details className="customer-communication-advanced">
         <summary>{t('customers.communication.advancedSummary')}</summary>
         <p className="customer-form-muted">{t('customers.communication.advancedHint')}</p>
-      <div className="page-header">
-        <h3 style={{ margin: 0 }}>{t('customers.communication.title')}</h3>
-        {canManage && (
-          <Button variant="secondary" onClick={() => setDialog({ mode: 'create' })}>
-            {t('customers.communication.addRule')}
-          </Button>
-        )}
-      </div>
+      <PanelHeader
+        title={t('customers.communication.title')}
+        actions={
+          canManage ? (
+            <Button variant="secondary" onClick={() => setDialog({ mode: 'create' })}>
+              {t('customers.communication.addRule')}
+            </Button>
+          ) : undefined
+        }
+      />
 
       <DataTable
         columns={columns}
@@ -247,14 +250,12 @@ function NotificationOverview({ customerId, reloadToken }: { customerId: string;
 
   return (
     <section className="customer-panel">
-      <div className="customer-panel-header">
-        <h3>{t('customers.communication.overviewTitle')}</h3>
+      <PanelHeader title={t('customers.communication.overviewTitle')} description={t('customers.communication.overviewHint')}>
         <label className="customer-form-checkbox">
           <input type="checkbox" checked={showAdvanced} onChange={(e) => setShowAdvanced(e.target.checked)} />
           {t('customers.communication.showAdvancedRouting')}
         </label>
-      </div>
-      <p className="customer-form-muted">{t('customers.communication.overviewHint')}</p>
+      </PanelHeader>
 
       {configured.length === 0 && <p className="placeholder-text">{t('customers.communication.overviewEmpty')}</p>}
 

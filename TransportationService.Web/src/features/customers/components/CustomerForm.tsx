@@ -7,6 +7,7 @@ import { SectionedForm, type SectionDef } from '../../../components/ui/Sectioned
 import { useSectionNavigation, firstSectionWithError } from '../../../components/ui/useSectionNavigation'
 import { ValidationSummary } from '../../../components/ui/ValidationSummary'
 import { UnsavedChangesGuard } from '../../../components/ui/UnsavedChangesGuard'
+import { SelfSavingPanel } from '../../../components/ui/SelfSavingPanel'
 import { describeApiError, getFieldError, type FieldErrors } from '../../../api/problemDetails'
 import { Badge } from '../../../components/ui/Badge'
 import { useAuth } from '../../auth/authContextValue'
@@ -413,6 +414,12 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
 
   const isEdit = mode === 'edit'
 
+  // Every embedded self-saving panel (and any dialog it opens) lives inside this page-level
+  // <form onChange={touch} onSubmit={handleSubmit}>. React bubbles those synthetic events
+  // through the component tree — portals included — so without a boundary a tick in the
+  // contact dialog marked the page dirty and the dialog's Opslaan also submitted the customer.
+  const selfSaving = (panel: ReactNode | undefined) => (panel ? <SelfSavingPanel>{panel}</SelfSavingPanel> : null)
+
   // Backend error paths (`contacts[i].…`) index the non-empty rows; map them back per row.
   const contactIndexByKey = payloadIndexByKey(contactRows)
   function contactError(rowKey: string, field: string): string | undefined {
@@ -661,7 +668,7 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
             </FormField>
             <div className="form-span-all">
               {isEdit
-                ? editPanels?.adressen
+                ? selfSaving(editPanels?.adressen)
                 : (stagedLocationsSlot ?? (
                     <p className="customer-form-muted">{t('customers.form.addressesAfterCreate')}</p>
                   ))}
@@ -674,13 +681,16 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
       id: 'contactpersonen',
       label: t('customers.form.contactsSection'),
       hasError: sectionHasError('contactpersonen'),
+      // In edit mode the contacts panel saves itself (dialog per contact): no page-level
+      // Opslaan/Annuleren above or below it, exactly like communicatie/tarieven/historiek.
+      panel: isEdit,
       render: () => (
         <FormSection
           title={t('customers.form.contactsSection')}
           columns={1}
-          description={isEdit ? undefined : t('customers.form.contactsDescription')}
+          description={isEdit ? t('customers.form.contactsPanelDescription') : t('customers.form.contactsDescription')}
         >
-          <div className="form-span-all">{isEdit ? (editPanels?.contactpersonen ?? null) : contactRepeater}</div>
+          <div className="form-span-all">{isEdit ? selfSaving(editPanels?.contactpersonen) : contactRepeater}</div>
         </FormSection>
       ),
     },
@@ -1163,7 +1173,7 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
       panel: true,
       render: () =>
         isEdit ? (
-          editPanels?.communicatie ?? null
+          selfSaving(editPanels?.communicatie)
         ) : (
           <p className="placeholder-text">{t('customers.form.communicationAfterCreate')}</p>
         ),
@@ -1175,7 +1185,7 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
       panel: true,
       render: () =>
         isEdit ? (
-          editPanels?.tarieven ?? null
+          selfSaving(editPanels?.tarieven)
         ) : (
           <p className="placeholder-text">{t('customers.form.tariffsAfterCreate')}</p>
         ),
@@ -1187,7 +1197,7 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
       panel: true,
       render: () =>
         isEdit ? (
-          editPanels?.historiek ?? null
+          selfSaving(editPanels?.historiek)
         ) : (
           <p className="placeholder-text">{t('customers.form.historyAfterCreate')}</p>
         ),

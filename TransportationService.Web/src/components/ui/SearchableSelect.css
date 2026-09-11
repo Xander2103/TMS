@@ -118,3 +118,55 @@
   color: var(--accent);
   font-weight: 600;
 }
+
+/* Rich (three-line) option: title + badges / subtitle / muted meta line. */
+.ui-searchable-select-option.is-rich {
+  gap: 2px;
+}
+
+.ui-searchable-select-option-title {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ui-searchable-select-option-subtitle {
+  font-size: 14px;
+  color: var(--text-h);
+}
+
+.ui-searchable-select-option-meta {
+  font-size: 13px;
+  color: var(--text);
+}
+
+.ui-searchable-select-badge {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--code-bg);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.ui-searchable-select-note-error {
+  color: var(--danger, #b42318);
+  font-style: normal;
+}
+
+/* Screen-reader-only live region announcing the result count of an async search. */
+.ui-searchable-select-status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

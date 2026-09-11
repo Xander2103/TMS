@@ -1,5 +1,26 @@
 import type { TransportOrderDetail } from '../../transport-orders/types'
-import type { DossierActivity, DossierDetail } from '../types'
+import type { DossierActivity, DossierDetail, DossierListItem } from '../types'
+
+/** Lijstrij zoals GET /api/dossiers ze teruggeeft; standaard geprijsd met referentie en klantnummer. */
+export function dossierListItem(overrides: Partial<DossierListItem> = {}): DossierListItem {
+  return {
+    id: 'd-1',
+    dossierNumber: 'DOS-0001',
+    title: 'Nexans NV — 12-08-2026',
+    status: 'Open',
+    customerId: 'c-1',
+    customerName: 'Nexans NV',
+    responsibleName: null,
+    orderCount: 1,
+    openIncidentCount: 0,
+    createdAt: '2026-08-12T09:00:00Z',
+    customerReference: 'ABC-458',
+    customerNumber: 'K-1001',
+    agreedPriceTotal: 485,
+    pricedOrderCount: 1,
+    ...overrides,
+  }
+}
 
 /** Volledige DossierDetail-fixture; overrides per test. */
 export function dossierDetail(overrides: Partial<DossierDetail> = {}): DossierDetail {

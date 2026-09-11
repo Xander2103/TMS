@@ -15,6 +15,12 @@ export interface DossierListItem {
   orderCount: number
   openIncidentCount: number
   createdAt: string
+  /** Klantreferentie van het dossier (niet de gegenereerde titel). */
+  customerReference: string | null
+  customerNumber: string | null
+  /** Som van de afgesproken prijzen; `null` = nog niet geprijsd (nooit 0 als "geen prijs"). */
+  agreedPriceTotal: number | null
+  pricedOrderCount: number
 }
 
 export interface DossierOrder {
@@ -25,6 +31,8 @@ export interface DossierOrder {
   status: string
   goodsDescription: string | null
   agreedPrice: number | null
+  /** Backend `OrderPricingState.IsPriced` (override, one-off agreement or positive amount). Absent on older payloads. */
+  isPriced?: boolean
 }
 
 export interface DossierRelation {
@@ -48,6 +56,8 @@ export interface DossierIncident {
 
 export interface DossierFinancialSummary {
   agreedOrderTotal: number
+  /** UX-sprint 2026-09-09: linked orders that carry a price (override or AgreedPrice > 0); 0 = "Nog geen prijs". */
+  pricedOrderCount?: number
   invoicedTotal: number
   estimatedIncidentCost: number
   actualIncidentCost: number
@@ -85,6 +95,10 @@ export interface ReadinessIssue {
   section: ReadinessSection
   field: string | null
   stage: string
+  /** The linked order an order-level rule is about (null/absent for dossier-level rules). */
+  transportOrderId?: string | null
+  /** The activity an activity-level rule is about (e.g. route.order_missing). */
+  activityId?: string | null
 }
 
 export interface DossierDetail {

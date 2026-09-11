@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using TransportationService.Api.Common.Reference;
 using TransportationService.Api.Modules.Auditing.Services;
 using TransportationService.Api.Modules.Identity.Services;
 using TransportationService.Api.Modules.Partners.Entities;
@@ -494,6 +495,47 @@ public class CustomerContactSubscriptionServiceTests
         Assert.Equal(["Jan Peeters", "Sofie Janssens"], planning.Recipients.Where(r => !r.IsAdvanced).Select(r => r.Name).Order().ToArray());
         // The CC mailbox is routing detail, not a person: flagged so the UI can hide it.
         Assert.Single(planning.Recipients, r => r.IsAdvanced && r.Email == "cc@klant.be");
+    }
+
+    // ------------------------------------------------------------- lifecycle (UX sprint 2026-09-09)
+
+    /// <summary>
+    /// Regression guard for the contact card: tick five, untick one, and the contact's own
+    /// fields never move — the subscription layer only touches communication rules.
+    /// </summary>
+    [Fact]
+    public async Task Lifecycle_SetGetRemoveOne_GetAgain_ContactFieldsUntouched()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var tenant = new DevTenantContext(h.TenantId);
+        var customers = new CustomerService(h.Db.Context, tenant,
+            new AuditService(h.Db.Context, tenant, new DevCurrentUserContext(null)),
+            new CountryCodeValidator(h.Db.Context));
+        var jan = await AddContactAsync(h, "Jan", "Peeters", "jan@example.com");
+        var before = (await customers.GetByIdAsync(h.CustomerId, CancellationToken.None))!.Contacts.Single(c => c.Id == jan);
+        // Give the contact a role so we can prove it survives.
+        var entity = await h.Db.Context.CustomerContacts.SingleAsync(c => c.Id == jan);
+        entity.Role = "Planner";
+        await h.Db.Context.SaveChangesAsync();
+
+        string[] full = ["planning", "eta", "delivery-pod", "invoice", "credit-note"];
+        await h.Sut.SetForContactAsync(h.CustomerId, jan, full, CancellationToken.None);
+        var afterFull = await h.Sut.GetForContactAsync(h.CustomerId, jan, CancellationToken.None);
+        Assert.Equal(full.Order().ToArray(), afterFull!.OptionKeys.Order().ToArray());
+
+        string[] withoutEta = ["planning", "delivery-pod", "invoice", "credit-note"];
+        await h.Sut.SetForContactAsync(h.CustomerId, jan, withoutEta, CancellationToken.None);
+        var afterRemoval = await h.Sut.GetForContactAsync(h.CustomerId, jan, CancellationToken.None);
+        Assert.Equal(withoutEta.Order().ToArray(), afterRemoval!.OptionKeys.Order().ToArray());
+        Assert.Empty(await h.Communication.ResolveRecipientsAsync(h.CustomerId, CustomerCommunicationType.EtaUpdate, CancellationToken.None));
+
+        var after = (await customers.GetByIdAsync(h.CustomerId, CancellationToken.None))!.Contacts.Single(c => c.Id == jan);
+        Assert.Equal(before.FirstName, after.FirstName);
+        Assert.Equal(before.LastName, after.LastName);
+        Assert.Equal(before.Email, after.Email);
+        Assert.Equal("Planner", after.Role);
+        Assert.Equal(before.IsPrimary, after.IsPrimary);
     }
 
     [Fact]

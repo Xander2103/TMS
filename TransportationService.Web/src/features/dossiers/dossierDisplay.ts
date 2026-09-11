@@ -31,12 +31,20 @@ export function operationalStatus(dossier: DossierDetail): string | null {
   return worst ? ORDER_STATUS_LABELS[worst] : null
 }
 
-/** §11 price chip: ⚠ bij open pricing-readiness, ✓ wanneer alles geprijsd is, — zonder opdrachten. */
+/** True when at least one linked order is priced — the same definition the backend list/detail use. */
+export function isDossierPriced(dossier: DossierDetail): boolean {
+  const count = dossier.financials.pricedOrderCount
+  if (count !== undefined) return count > 0
+  // Older payloads without the count: fall back to a positive per-order price.
+  return dossier.orders.some((o) => o.agreedPrice != null && o.agreedPrice > 0)
+}
+
+/** §11 price chip: ⚠ bij open pricing-readiness, ✓ wanneer alles geprijsd is, — zonder prijs. */
 export function priceChip(dossier: DossierDetail): { labelKey: string | null; tone: 'warning' | 'success' | 'neutral' } {
   if (dossier.readiness.some((issue) => issue.code.startsWith('pricing.') && issue.severity !== 'Info')) {
     return { labelKey: 'dossiers.display.priceIncomplete', tone: 'warning' }
   }
-  if (dossier.orders.length > 0 && !dossier.readiness.some((issue) => issue.code.startsWith('pricing.'))) {
+  if (isDossierPriced(dossier) && !dossier.readiness.some((issue) => issue.code.startsWith('pricing.'))) {
     return { labelKey: 'dossiers.display.priceOk', tone: 'success' }
   }
   return { labelKey: null, tone: 'neutral' }

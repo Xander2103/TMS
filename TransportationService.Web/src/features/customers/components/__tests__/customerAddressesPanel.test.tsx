@@ -93,10 +93,10 @@ function pickerOption(overrides: Partial<AddressPickerOption> = {}): AddressPick
   }
 }
 
-function renderPanel() {
+function renderPanel(props: { showTitle?: boolean } = {}) {
   return render(
     <MemoryRouter>
-      <CustomerAddressesPanel customerId="c1" />
+      <CustomerAddressesPanel customerId="c1" {...props} />
     </MemoryRouter>,
   )
 }
@@ -250,5 +250,19 @@ describe('CustomerAddressesPanel', () => {
 
     expect(screen.queryByRole('button', { name: 'Bestaand adres koppelen' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Ontkoppelen' })).not.toBeInTheDocument()
+  })
+
+  it('renders its own heading by default, and none with showTitle={false} (host already shows it)', async () => {
+    const { unmount } = renderPanel()
+    await screen.findByText('Magazijn Noord')
+    expect(screen.getByRole('heading', { name: 'Adressen van deze klant' })).toBeInTheDocument()
+    unmount()
+
+    renderPanel({ showTitle: false })
+    await screen.findByText('Magazijn Noord')
+    expect(screen.queryByRole('heading')).not.toBeInTheDocument()
+    // Filters and actions are still there — only the repeated title is gone.
+    expect(screen.getByLabelText('Toon inactieve')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Bestaand adres koppelen' })).toBeInTheDocument()
   })
 })

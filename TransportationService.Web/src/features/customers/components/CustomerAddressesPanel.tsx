@@ -5,6 +5,7 @@ import { Button } from '../../../components/ui/Button'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { FormField } from '../../../components/ui/FormField'
 import { Modal } from '../../../components/ui/Modal'
+import { PanelHeader } from '../../../components/ui/PanelHeader'
 import { useToast } from '../../../components/ui/toastContext'
 import { describeApiError } from '../../../api/problemDetails'
 import { useAuth } from '../../auth/authContextValue'
@@ -25,6 +26,11 @@ import { ADDRESS_PICKER_GROUP_KEYS } from '../../locations/api/customerAddresses
 
 interface CustomerAddressesPanelProps {
   customerId: string
+  /**
+   * Render the panel's own "Adressen" heading. Pass false when the host already shows the
+   * title (e.g. the customer edit form's FormSection) so it is not repeated. Default true.
+   */
+  showTitle?: boolean
 }
 
 const ROLES: CustomerLocationRole[] = ['Both', 'Loading', 'Unloading']
@@ -44,7 +50,7 @@ function formatAddress(a: { street: string | null; houseNumber: string | null; p
  * alias/reference/role/defaults, and unlink. Unlinking removes the relationship only — the
  * address itself, and every historical order that used it, stay untouched.
  */
-export function CustomerAddressesPanel({ customerId }: CustomerAddressesPanelProps) {
+export function CustomerAddressesPanel({ customerId, showTitle = true }: CustomerAddressesPanelProps) {
   const toast = useToast()
   const { t } = useLocale()
   const { hasPermission } = useAuth()
@@ -115,28 +121,29 @@ export function CustomerAddressesPanel({ customerId }: CustomerAddressesPanelPro
 
   return (
     <section className="customer-panel">
-      <div className="customer-panel-header">
-        <h3>{t('customers.addresses.title')}</h3>
-        {canEdit && (
-          <span className="customer-locations-new">
-            <Button variant="secondary" onClick={() => setShowLinkDialog(true)} disabled={busy}>
-              {t('customers.addresses.linkExisting')}
-            </Button>
-            {canCreate && (
-              <Button onClick={() => setShowQuickCreate(true)} disabled={busy}>
-                {t('customers.addresses.addNew')}
+      <PanelHeader
+        title={showTitle ? t('customers.addresses.title') : undefined}
+        description={t('customers.addresses.explanation')}
+        actions={
+          canEdit ? (
+            <>
+              <Button variant="secondary" onClick={() => setShowLinkDialog(true)} disabled={busy}>
+                {t('customers.addresses.linkExisting')}
               </Button>
-            )}
-          </span>
-        )}
-      </div>
-
-      <p className="customer-form-muted">{t('customers.addresses.explanation')}</p>
-
-      <label className="customer-form-checkbox">
-        <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} />
-        {t('customers.addresses.showInactive')}
-      </label>
+              {canCreate && (
+                <Button onClick={() => setShowQuickCreate(true)} disabled={busy}>
+                  {t('customers.addresses.addNew')}
+                </Button>
+              )}
+            </>
+          ) : undefined
+        }
+      >
+        <label className="customer-form-checkbox">
+          <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} />
+          {t('customers.addresses.showInactive')}
+        </label>
+      </PanelHeader>
 
       {rows.length === 0 && <p className="placeholder-text">{t('customers.addresses.empty')}</p>}
 

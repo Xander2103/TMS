@@ -70,6 +70,29 @@ Latere waves voegen producenten toe zonder schemawijziging. Dashboardteller:
 `GET /api/dossiers/attention-count` (structurele benadering; de prijsdimensie wordt
 querybaar in Wave 2 via de getypte dekkingskolom).
 
+UX-sprint 2026-09-09: elk aandachtspunt draagt nu een `field` dat de pagina kan focussen:
+`activity.none` → `activity.add`; `route.order_missing` → sectie `route`, `stops.loading`
+(de routesectie biedt inline invoer die de opdracht bij opslaan aanmaakt);
+`order.confirm.stops` → `stops.loading` als laden ontbreekt, anders `stops.unloading`;
+`route.date_missing` → `stops.plannedFrom`; `pricing.*` → `price`. Nieuwe regel
+`pricing.missing` (Warning, sectie prijs, fase Commercial, "{nr}: nog geen verkoopprijs."):
+gekoppelde opdracht in Draft/Submitted/Confirmed die niet geprijsd is volgens de ene
+definitie `OrderPricingState.IsPricedExpression` (provenance, hardening 2026-09-10:
+`PriceIsManual || (PricingSource == OneOff && OneOffFixedAmount != null) || AgreedPrice > 0`;
+€ 0 is een geldige prijs wanneer hij expliciet werd afgesproken; de motor schrijft 0 zonder
+tellende regels en dát leest als "niet geprijsd"). Onderdrukt voor een opdracht waarvoor
+`pricing.incomplete` al verschijnt (zelfde veld, specifiekere boodschap). `pricing.none` blijft
+Info voor een transportactiviteit zonder opdracht; een dossier met enkel zelfstandige
+activiteiten (opslag, kraanwerk) krijgt géén prijsaandachtspunt — die hebben geen prijsdrager
+(productbeslissing, zie `docs/ux-sprint/2026-09-10-hardening.md`).
+De attention-count telt zo'n ongeprijsde open opdracht mee (nog één SQL-statement).
+Elke opdrachtregel draagt `transportOrderId`, `route.order_missing` draagt `activityId`, zodat de
+dossierpagina bij meerdere transportopdrachten de juiste editor kiest (`DossierOrderSwitcher`).
+Lijst-DTO: `customerReference`, `customerNumber`, `pricedOrderCount`, `agreedPriceTotal`
+(null zolang niets geprijsd is; bij `pricedOrderCount < orderCount` toont de UI "n/m geprijsd");
+zoeken matcht ook referentie, klantnaam en klantnummer.
+Detail-financials: `pricedOrderCount` naast `agreedOrderTotal`; `orders[].isPriced` per opdracht.
+
 ## Concurrency
 
 `TransportDossier` en `TransportOrder` implementeren `IVersionedEntity`; de

@@ -1,10 +1,12 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { Modal } from '../../../components/ui/Modal'
 import { Button } from '../../../components/ui/Button'
 import { FormField } from '../../../components/ui/FormField'
 import { Badge } from '../../../components/ui/Badge'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { DataTable, type Column } from '../../../components/ui/DataTable'
+import { PanelHeader } from '../../../components/ui/PanelHeader'
+import { ValidationSummary } from '../../../components/ui/ValidationSummary'
 import { useAuth } from '../../auth/authContextValue'
 import { useToast } from '../../../components/ui/toastContext'
 import { describeApiError } from '../../../api/problemDetails'
@@ -35,9 +37,22 @@ interface CustomerContactsPanelProps {
   customerId: string
   contacts: CustomerContact[]
   isSubmitting: boolean
+  /**
+   * Renders the "Contactpersonen" heading in the toolbar. The edit form hosts this panel
+   * inside a FormSection that already carries that title, so it passes `false`.
+   */
+  showTitle?: boolean
+  /** Creates the contact; resolves with it (or null) — may also throw an API error. */
   onAdd: (input: CustomerContactInput) => Promise<CustomerContact | null>
+  /** Updates the contact fields only; resolves true (or false) — may also throw an API error. */
   onUpdate: (contactId: string, input: CustomerContactInput) => Promise<boolean>
   onRemove: (contactId: string) => Promise<boolean>
+  /**
+   * Called once ALL writes of a contact save (fields, then notification choices) succeeded.
+   * The host reloads here — never from inside `onAdd`/`onUpdate`, which would refetch (and
+   * possibly unmount this panel) while the notification PUT is still to be sent.
+   */
+  onChanged?: () => void
 }
 
 type DialogState = { mode: 'create' } | { mode: 'edit'; contact: CustomerContact } | null
@@ -59,7 +74,16 @@ function sameKeys(a: readonly string[], b: readonly string[]): boolean {
   return b.every((key) => set.has(key))
 }
 
-export function CustomerContactsPanel({ customerId, contacts, isSubmitting, onAdd, onUpdate, onRemove }: CustomerContactsPanelProps) {
+export function CustomerContactsPanel({
+  customerId,
+  contacts,
+  isSubmitting,
+  showTitle = true,
+  onAdd,
+  onUpdate,
+  onRemove,
+  onChanged,
+}: CustomerContactsPanelProps) {
   const { t } = useLocale()
   const [dialog, setDialog] = useState<DialogState>(null)
   const [removeTarget, setRemoveTarget] = useState<CustomerContact | null>(null)
@@ -121,19 +145,58 @@ export function CustomerContactsPanel({ customerId, contacts, isSubmitting, onAd
     },
   ]
 
+  /**
+   * Save order is the contract: contact fields → notification choices → `onChanged`. Returns
+   * the message to show inline when a step fails; the dialog then stays open with its values.
+   */
+  async function saveContact(
+    current: Exclude<DialogState, null>,
+    input: CustomerContactInput,
+    notifications: NotificationSelection,
+  ): Promise<string | null> {
+    let contactId: string | null
+    let created: CustomerContact | null = null
+    try {
+      if (current.mode === 'edit') {
+        contactId = (await onUpdate(current.contact.id, input)) ? current.contact.id : null
+      } else {
+        created = await onAdd(input)
+        contactId = created?.id ?? null
+      }
+    } catch (err) {
+      return describeApiError(err, t('customers.contacts.saveFailed')).message
+    }
+    if (!contactId) return t('customers.contacts.saveFailed')
+
+    // Only an actual change is written: an untouched card must never rewrite the routing
+    // underneath (advanced rules stay exactly as the administrator left them). Choices that
+    // never finished loading are never sent either — an empty set would unsubscribe everything.
+    if (canManageNotifications && notifications.state === 'ready' && !sameKeys(notifications.keys, notifications.initialKeys)) {
+      try {
+        await setContactNotifications(customerId, contactId, notifications.keys)
+      } catch (err) {
+        // The contact itself exists since this attempt: a retry must UPDATE it, never create a
+        // duplicate. The dialog keeps its typed values and ticks (state lives in the dialog).
+        if (created) setDialog({ mode: 'edit', contact: created })
+        return describeApiError(err, t('customers.notifications.saveFailed')).message
+      }
+    }
+
+    toast.showSuccess(current.mode === 'edit' ? t('customers.contacts.updated') : t('customers.contacts.added'))
+    setDialog(null)
+    onChanged?.()
+    return null
+  }
+
   return (
     <div className="customer-contacts">
-      <div className="page-header">
-        <h3 style={{ margin: 0 }}>{t('customers.contacts.title')}</h3>
-        <Button variant="secondary" onClick={() => setDialog({ mode: 'create' })}>
-          {t('customers.contacts.addContact')}
-        </Button>
-      </div>
-
-      <div className="customer-locations-toolbar">
-        <label className="customer-form-muted" htmlFor="ct-type-filter">
-          {t('customers.contacts.type')}
-        </label>
+      <PanelHeader
+        title={showTitle ? t('customers.contacts.title') : undefined}
+        actions={
+          <Button onClick={() => setDialog({ mode: 'create' })}>{t('customers.contacts.addContact')}</Button>
+        }
+      >
+        <label htmlFor="ct-type-filter">{t('customers.contacts.type')}</label>
         <select
           id="ct-type-filter"
           value={typeFilter}
@@ -146,7 +209,7 @@ export function CustomerContactsPanel({ customerId, contacts, isSubmitting, onAd
             </option>
           ))}
         </select>
-      </div>
+      </PanelHeader>
 
       <DataTable
         columns={columns}
@@ -164,26 +227,7 @@ export function CustomerContactsPanel({ customerId, contacts, isSubmitting, onAd
           canManageNotifications={canManageNotifications}
           isSubmitting={isSubmitting}
           onClose={() => setDialog(null)}
-          onSubmit={async (input, notifications) => {
-            // A new contact has no id until it exists, so the notification choices are stored
-            // right after the contact itself is created.
-            const contactId =
-              dialog.mode === 'edit'
-                ? (await onUpdate(dialog.contact.id, input)) ? dialog.contact.id : null
-                : ((await onAdd(input))?.id ?? null)
-            if (!contactId) return
-            // Only an actual change is written: an untouched card must never rewrite the
-            // routing underneath (advanced rules stay exactly as the administrator left them).
-            if (canManageNotifications && !sameKeys(notifications.keys, notifications.initialKeys)) {
-              try {
-                await setContactNotifications(customerId, contactId, notifications.keys)
-              } catch (err) {
-                // The contact itself is saved; say so instead of silently losing the choice.
-                toast.showError(describeApiError(err, t('customers.notifications.saveFailed')).message)
-              }
-            }
-            setDialog(null)
-          }}
+          onSubmit={(input, notifications) => saveContact(dialog, input, notifications)}
         />
       )}
 
@@ -207,10 +251,13 @@ export function CustomerContactsPanel({ customerId, contacts, isSubmitting, onAd
   )
 }
 
-/** What the dialog hands back about "Ontvangt meldingen": the chosen keys and what was preloaded. */
+type NotificationsState = 'loading' | 'ready' | 'error'
+
+/** What the dialog hands back about "Ontvangt meldingen": the chosen keys, what was preloaded, and whether the preload finished. */
 interface NotificationSelection {
   keys: string[]
   initialKeys: string[]
+  state: NotificationsState
 }
 
 function ContactDialog({
@@ -225,7 +272,8 @@ function ContactDialog({
   contact?: CustomerContact
   canManageNotifications: boolean
   isSubmitting: boolean
-  onSubmit: (input: CustomerContactInput, notifications: NotificationSelection) => void
+  /** Resolves with an error message to show inline, or null when everything was saved. */
+  onSubmit: (input: CustomerContactInput, notifications: NotificationSelection) => Promise<string | null>
   onClose: () => void
 }) {
   const { t } = useLocale()
@@ -244,14 +292,26 @@ function ContactDialog({
   const [isActive, setIsActive] = useState(contact?.isActive ?? true)
   const [notes, setNotes] = useState(contact?.notes ?? '')
   const [errors, setErrors] = useState<{ firstName?: string; lastName?: string; email?: string }>({})
+  const [submitError, setSubmitError] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
   // "Ontvangt meldingen" (sprint 3): the business question, not a routing rule.
   const [options, setOptions] = useState<CustomerNotificationOption[]>([])
   const [notificationKeys, setNotificationKeys] = useState<string[]>([])
   // What the contact already received when the dialog opened; saving compares against this.
   const [initialNotificationKeys, setInitialNotificationKeys] = useState<string[]>([])
+  // A new contact has nothing to preload; an existing one is 'loading' until the GET settles.
+  const [notificationsState, setNotificationsState] = useState<NotificationsState>(
+    contact && canManageNotifications ? 'loading' : 'ready',
+  )
+  // The GET result initialises the keys exactly once; it must never overwrite user ticks. A
+  // dialog that opened for a NEW contact has nothing to preload — also when the host promotes
+  // it to edit mode after a partial save (contact created, routing PUT failed): the user's
+  // ticks are the intended state, not whatever the server holds.
+  const notificationsInitialised = useRef(!contact || !canManageNotifications)
   // A stored language outside the offered list (e.g. "it") must survive a save untouched.
   const storedLanguage = contact?.preferredLanguageCode ?? ''
   const hasOtherLanguage = storedLanguage !== '' && !(CONTACT_LANGUAGES as readonly string[]).includes(storedLanguage)
+  const busy = isSubmitting || saving
 
   useEffect(() => {
     if (!canManageNotifications) return
@@ -267,15 +327,20 @@ function ContactDialog({
   }, [canManageNotifications])
 
   useEffect(() => {
-    if (!contact || !canManageNotifications) return
+    if (!contact || !canManageNotifications || notificationsInitialised.current) return
     let active = true
     void getContactNotifications(customerId, contact.id)
       .then((data) => {
-        if (!active) return
+        if (!active || notificationsInitialised.current) return
+        notificationsInitialised.current = true
         setNotificationKeys(data.optionKeys)
         setInitialNotificationKeys(data.optionKeys)
+        setNotificationsState('ready')
       })
-      .catch(() => undefined)
+      .catch(() => {
+        // Unknown current choices: keep the boxes locked and never send a (destructive) empty set.
+        if (active) setNotificationsState('error')
+      })
     return () => {
       active = false
     }
@@ -285,8 +350,9 @@ function ContactDialog({
     setNotificationKeys((keys) => (on ? [...new Set([...keys, key])] : keys.filter((k) => k !== key)))
   }
 
-  function handleSubmit(event: FormEvent) {
+  async function handleSubmit(event: FormEvent) {
     event.preventDefault()
+    if (busy) return
     const next: { firstName?: string; lastName?: string; email?: string } = {}
     if (!firstName.trim()) next.firstName = t('customers.contacts.firstNameRequired')
     if (!lastName.trim()) next.lastName = t('customers.contacts.lastNameRequired')
@@ -297,41 +363,60 @@ function ContactDialog({
       setErrors(next)
       return
     }
-    onSubmit({
-      firstName: firstName.trim(),
-      lastName: lastName.trim(),
-      contactType,
-      role: role.trim() || null,
-      email: email.trim() || null,
-      phoneNumber: phoneNumber.trim() || null,
-      isPrimary,
-      notes: notes.trim() || null,
-      displayName: displayName.trim() || null,
-      nickname: nickname.trim() || null,
-      mobilePhone: mobilePhone.trim() || null,
-      departmentId: departmentId || null,
-      preferredLanguageCode: preferredLanguageCode.trim() || null,
-      isActive,
-    }, { keys: notificationKeys, initialKeys: initialNotificationKeys })
+    setErrors({})
+    setSubmitError(null)
+    setSaving(true)
+    const message = await onSubmit(
+      {
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        contactType,
+        role: role.trim() || null,
+        email: email.trim() || null,
+        phoneNumber: phoneNumber.trim() || null,
+        isPrimary,
+        notes: notes.trim() || null,
+        displayName: displayName.trim() || null,
+        nickname: nickname.trim() || null,
+        mobilePhone: mobilePhone.trim() || null,
+        departmentId: departmentId || null,
+        preferredLanguageCode: preferredLanguageCode.trim() || null,
+        isActive,
+      },
+      { keys: notificationKeys, initialKeys: initialNotificationKeys, state: notificationsState },
+    )
+    // On success the host closes (unmounts) the dialog; on failure it stays open with the
+    // entered values and the message, so nothing the user typed is lost.
+    if (message !== null) {
+      setSubmitError(message)
+      setSaving(false)
+    }
   }
+
+  const notificationsLocked = notificationsState !== 'ready'
 
   return (
     <Modal
       title={contact ? t('customers.contacts.editTitle') : t('customers.contacts.newTitle')}
       onClose={onClose}
-      busy={isSubmitting}
+      busy={busy}
       footer={
         <>
-          <Button variant="secondary" onClick={onClose} disabled={isSubmitting}>
+          <Button variant="secondary" onClick={onClose} disabled={busy}>
             {t('ui.actions.cancel')}
           </Button>
-          <Button type="submit" form="contact-form" disabled={isSubmitting}>
-            {isSubmitting ? t('customers.common.saving') : t('ui.actions.save')}
+          <Button type="submit" form="contact-form" disabled={busy}>
+            {busy ? t('customers.common.saving') : t('ui.actions.save')}
           </Button>
         </>
       }
     >
       <form id="contact-form" onSubmit={handleSubmit} className="customer-form">
+        {submitError && (
+          <div className="form-span-all">
+            <ValidationSummary message={submitError} />
+          </div>
+        )}
         <FormField label={t('customers.contacts.firstName')} htmlFor="ct-first" error={errors.firstName} required>
           <input id="ct-first" value={firstName} onChange={(e) => setFirstName(e.target.value)} aria-invalid={errors.firstName ? 'true' : undefined} maxLength={100} autoFocus />
         </FormField>
@@ -397,6 +482,16 @@ function ContactDialog({
           <fieldset className="customer-form-requirements form-span-all">
             <legend>{t('customers.notifications.receivesTitle')}</legend>
             <p className="customer-form-muted">{t('customers.notifications.receivesHint')}</p>
+            {notificationsState === 'loading' && (
+              <p className="customer-form-muted" aria-live="polite">
+                {t('customers.contacts.notificationsLoading')}
+              </p>
+            )}
+            {notificationsState === 'error' && (
+              <p className="customer-import-message customer-import-message-error" role="alert">
+                {t('customers.contacts.notificationsLoadFailed')}
+              </p>
+            )}
             {(['Transport', 'Facturatie', 'Algemeen'] as CustomerNotificationGroup[]).map((group) => {
               const groupOptions = options.filter((o) => o.group === group)
               if (groupOptions.length === 0) return null
@@ -408,6 +503,7 @@ function ContactDialog({
                       <input
                         type="checkbox"
                         checked={notificationKeys.includes(option.key)}
+                        disabled={notificationsLocked}
                         onChange={(e) => toggleNotification(option.key, e.target.checked)}
                       />
                       {t(NOTIFICATION_OPTION_KEYS[option.key] ?? option.key)}

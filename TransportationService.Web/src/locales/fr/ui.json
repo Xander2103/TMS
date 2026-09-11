@@ -35,7 +35,9 @@
     "noResults": "Aucun résultat",
     "loading": "Chargement…",
     "clear": "Effacer la sélection",
-    "adding": "Ajout en cours…"
+    "adding": "Ajout en cours…",
+    "searchError": "La recherche a échoué.",
+    "resultCount": "{count} résultats"
   },
   "sections": {
     "navLabel": "Sections du formulaire",
@@ -124,5 +126,8 @@
     "more": "+{count} de plus",
     "free": "libre",
     "weekOf": "semaine du"
+  },
+  "time": {
+    "placeholder": "hh:mm"
   }
 }

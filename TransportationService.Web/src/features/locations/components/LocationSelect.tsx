@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useLocale, type TranslateFn } from '../../../i18n/localeContext'
-import { getLocationOptions } from '../api/locationsApi'
+import { getLocation } from '../api/locationsApi'
+import { pickAddresses, type AddressPickerGroup, type AddressPickerOption } from '../api/customerAddressesApi'
 import type { LocationOption, LocationType } from '../types'
 import { SearchableSelect, type SearchableSelectOption } from '../../../components/ui/SearchableSelect'
 
@@ -8,8 +9,13 @@ interface LocationSelectProps {
   id?: string
   value: string
   onChange: (locationId: string) => void
+  /**
+   * Narrow to one location type. The picker endpoint has no type filter, so this is applied
+   * CLIENT-side on the returned page (a very specific type may therefore yield fewer rows than
+   * `take`); leave it unset for stop entry.
+   */
   type?: LocationType
-  /** Restrict to one customer's active locations (order entry: only the customer's sites). */
+  /** Rank this customer's addresses first (and their recently used ones right after). */
   customerId?: string
   disabled?: boolean
   allowEmpty?: boolean
@@ -21,57 +27,68 @@ interface LocationSelectProps {
   onCreateNew?: (name: string) => Promise<LocationOption | null>
 }
 
-/**
- * The options endpoint also returns an address line + postal code (Phase 7) so the picker can
- * render "Magazijn Antwerpen — Noorderlaan 10, 2030 Antwerpen". Typed locally: the shared
- * LocationOption type is owned by another change set; the extra fields are additive on the wire.
- */
+/** Quick-create may hand back an option with address fields (additive on the wire). */
 type LocationOptionWithAddress = LocationOption & {
   address?: string | null
   postalCode?: string | null
 }
 
-function optionLabel(t: TranslateFn, option: LocationOptionWithAddress): string {
-  const base = `${option.name} (${option.code})`
-  const addressLine = [option.address, [option.postalCode, option.city].filter(Boolean).join(' ')]
-    .filter(Boolean)
-    .join(', ')
-  const withAddress = addressLine ? `${base} — ${addressLine}` : base
-  const markers = [
-    option.isDefaultLoadingLocation ? t('locations.select.defaultLoading') : null,
-    option.isDefaultUnloadingLocation ? t('locations.select.defaultUnloading') : null,
-  ].filter(Boolean)
-  const withMarkers = markers.length > 0 ? `${withAddress} — ${markers.join(' + ')}` : withAddress
-  const provenance = provenanceSuffix(t, option)
-  return provenance ? `${withMarkers} — ${provenance}` : withMarkers
+const GROUP_LABEL_KEYS: Record<AddressPickerGroup, string> = {
+  CustomerAddress: 'locations.select.group.customerAddress',
+  Recent: 'locations.select.group.recent',
+  All: 'locations.select.group.all',
 }
 
-/**
- * Central address master: the options endpoint offers every address of the tenant, sorted
- * customer-first. Addresses of this customer need no marker (they are on top); a company-wide
- * address and an address shared by other customers say so in plain words.
- */
-function provenanceSuffix(t: TranslateFn, option: LocationOptionWithAddress): string | null {
-  if (option.linkedCustomerCount === undefined) return null // older payload without provenance
-  if (option.isLinkedToCustomer) return null
-  if (option.linkedCustomerCount === 0) return t('locations.select.companyAddress')
-  return option.linkedCustomerNames
-    ? t('locations.select.sharedAddressWith', { names: option.linkedCustomerNames })
-    : t('locations.select.sharedAddress')
+const PICKER_TAKE = 20
+
+interface AddressParts {
+  street?: string | null
+  houseNumber?: string | null
+  postalCode?: string | null
+  city?: string | null
 }
 
-function toSelectOption(t: TranslateFn, option: LocationOptionWithAddress): SearchableSelectOption {
+/** "Noorderlaan 10, 2030 Antwerpen" — empty parts are skipped. */
+function addressLine(parts: AddressParts): string {
+  const streetPart = [parts.street, parts.houseNumber].filter(Boolean).join(' ')
+  const cityPart = [parts.postalCode, parts.city].filter(Boolean).join(' ')
+  return [streetPart, cityPart].filter(Boolean).join(', ')
+}
+
+/** Text committed to the input after a selection. */
+function committedLabel(name: string, line: string): string {
+  return line ? `${name} — ${line}` : name
+}
+
+function pickerOptionToSelectOption(t: TranslateFn, option: AddressPickerOption): SearchableSelectOption {
+  const line = addressLine(option)
+  const groupLabel = t(GROUP_LABEL_KEYS[option.group])
+  return {
+    value: option.locationId,
+    label: committedLabel(option.name, line),
+    title: option.code && option.code !== option.name ? `${option.name} (${option.code})` : option.name,
+    subtitle: line || undefined,
+    meta: option.customerNames ? `${groupLabel} · ${option.customerNames}` : groupLabel,
+  }
+}
+
+function createdOptionToSelectOption(option: LocationOptionWithAddress): SearchableSelectOption {
+  const line = addressLine({ street: option.address, postalCode: option.postalCode, city: option.city })
   return {
     value: option.id,
-    label: optionLabel(t, option),
-    keywords: [option.code, option.city ?? '', option.postalCode ?? '', option.address ?? ''].join(' '),
+    label: committedLabel(option.name, line),
   }
 }
 
 /**
- * Reusable active-location combobox, backed by GET /api/locations/options. Pass `type`
- * to narrow to a single kind and `customerId` to narrow to a customer's own locations
- * (their default loading/unloading sites are marked and sorted first).
+ * Reusable address combobox, backed by the prioritised picker GET /api/addresses/picker
+ * (customer addresses → recently used → whole master; server-side search on name, code,
+ * street, postal code and city). Searching is debounced and race-guarded by SearchableSelect;
+ * an empty query shows the customer's own and recent addresses.
+ *
+ * The caller only passes an id, so the label of a pre-set `value` is resolved once through
+ * GET /api/locations/{id} and cached; selections and created addresses go straight into that
+ * cache so they never trigger a lookup.
  */
 export function LocationSelect({
   id,
@@ -85,34 +102,63 @@ export function LocationSelect({
   onCreateNew,
 }: LocationSelectProps) {
   const { t } = useLocale()
-  const [options, setOptions] = useState<LocationOption[]>([])
-  // Loading state is derived from a request key so no setState runs synchronously in the effect.
-  const [loadedKey, setLoadedKey] = useState<string | null>(null)
-  const requestKey = `${type ?? 'all'}|${customerId ?? 'all'}`
-  const isLoading = loadedKey !== requestKey
+  // id → committed label, for values that were selected, created or resolved via getLocation.
+  const [knownLabels, setKnownLabels] = useState<Record<string, string>>({})
+  // Labels of the last search results, so a selection can be cached without a lookup.
+  const lastResultsRef = useRef<Map<string, string>>(new Map())
+
+  const selectedLabel = value ? knownLabels[value] : undefined
 
   useEffect(() => {
-    let mounted = true
-    getLocationOptions(type, customerId).then((data) => {
-      if (mounted) {
-        setOptions(data)
-        setLoadedKey(requestKey)
-      }
-    })
+    if (!value || selectedLabel !== undefined) return
+    let cancelled = false
+    getLocation(value).then(
+      (detail) => {
+        if (cancelled) return
+        const label = committedLabel(detail.name, addressLine(detail))
+        setKnownLabels((current) => (current[detail.id] === label ? current : { ...current, [detail.id]: label }))
+      },
+      () => {
+        // Unresolvable id (deleted / no access): the input simply shows no label.
+      },
+    )
     return () => {
-      mounted = false
+      cancelled = true
     }
-  }, [type, customerId, requestKey])
+  }, [value, selectedLabel])
+
+  const search = useCallback(
+    async (query: string, signal: AbortSignal): Promise<SearchableSelectOption[]> => {
+      const results = await pickAddresses({ customerId, search: query, take: PICKER_TAKE, signal })
+      const narrowed = type ? results.filter((r) => r.type === type) : results
+      const options = narrowed.map((r) => pickerOptionToSelectOption(t, r))
+      lastResultsRef.current = new Map(options.map((o) => [o.value, o.label]))
+      return options
+    },
+    [customerId, type, t],
+  )
+
+  function remember(locationId: string, label: string) {
+    setKnownLabels((current) => (current[locationId] === label ? current : { ...current, [locationId]: label }))
+  }
 
   return (
     <SearchableSelect
       id={id}
       value={value === '' ? null : value}
-      onChange={(v) => onChange(v ?? '')}
-      options={options.map((option) => toSelectOption(t, option))}
+      onChange={(v) => {
+        if (v) {
+          const label = lastResultsRef.current.get(v)
+          if (label !== undefined) remember(v, label)
+        }
+        onChange(v ?? '')
+      }}
+      options={[]}
+      selectedLabel={selectedLabel}
+      onSearch={search}
+      searchMinChars={0}
       placeholder={placeholder ?? t('locations.select.placeholder')}
       disabled={disabled}
-      isLoading={isLoading}
       clearable={allowEmpty}
       emptyMessage={t('locations.select.empty')}
       onCreate={
@@ -122,8 +168,9 @@ export function LocationSelect({
               create: async (query) => {
                 const created = await onCreateNew(query)
                 if (!created) return null
-                setOptions((current) => [...current, created])
-                return toSelectOption(t, created)
+                const option = createdOptionToSelectOption(created)
+                remember(option.value, option.label)
+                return option
               },
             }
           : undefined

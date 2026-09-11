@@ -251,7 +251,10 @@
     "accessInstr": "Instructions d'accès",
     "loadInstr": "Instructions de chargement",
     "unloadInstr": "Instructions de déchargement",
-    "refreshFromLocation": "Reprendre l'adresse"
+    "refreshFromLocation": "Reprendre l'adresse",
+    "moveUp": "Monter l'arrêt {number}",
+    "moveDown": "Descendre l'arrêt {number}",
+    "removeStop": "Supprimer l'arrêt {number}"
   },
   "goods": {
     "description": "Description des marchandises",

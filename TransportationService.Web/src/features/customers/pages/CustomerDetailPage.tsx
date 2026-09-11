@@ -15,7 +15,7 @@ import { Tabs, TabPanel } from '../../../components/ui/Tabs'
 import { useToast } from '../../../components/ui/toastContext'
 import { describeApiError, getFieldError, type FieldErrors } from '../../../api/problemDetails'
 import { useAuth } from '../../auth/authContextValue'
-import { changeCustomerNumber, removeCustomerContact } from '../api/customersApi'
+import { addCustomerContact, changeCustomerNumber, removeCustomerContact, updateCustomerContact } from '../api/customersApi'
 import { getCustomerMessagesUnreadCount } from '../api/customerMessagesApi'
 import { CustomerForm } from '../components/CustomerForm'
 import { CustomerContactsPanel } from '../components/CustomerContactsPanel'
@@ -89,6 +89,9 @@ export function CustomerDetailPage() {
     }
   }, [id, canViewMessages])
 
+  // Stale-while-refetch: only the very first load (or a new id) shows the loading state. A
+  // `reload()` after a panel save keeps the current customer on screen so the edit form, the
+  // self-saving panels and any open dialog stay mounted (and edits elsewhere survive).
   if (isLoading) return <LoadingState message={t('customers.detail.loading')} />
   if (error || !customer) return <ErrorState message={error ? t(error) : t('customers.detail.notFound')} />
 
@@ -130,31 +133,28 @@ export function CustomerDetailPage() {
   }
 
   // One wiring for the contacts panel, shared by the edit form and the read-only tab.
+  // Add/update go straight to the API and let a failure propagate: the panel keeps its dialog
+  // open with the entered values and shows the message inline. The callbacks never reload —
+  // the panel calls `onChanged` only after every write (contact + notifications) succeeded,
+  // so a refetch can never race the notification PUT or unmount the dialog mid-save.
   // Delete goes straight to the API so a backend refusal (e.g. contact still referenced by a
   // communication rule) surfaces its Dutch message via the error toast.
-  const contactsPanel = (
+  const renderContactsPanel = (showTitle: boolean) => (
     <CustomerContactsPanel
       customerId={id ?? ''}
       contacts={customer.contacts}
       isSubmitting={mutations.isSubmitting}
+      showTitle={showTitle}
       onAdd={async (input) => {
         if (!id) return null
-        const created = await mutations.addContact(id, input)
-        if (created) {
-          toast.showSuccess(t('customers.contacts.added'))
-          reload()
-        }
-        return created
+        return await addCustomerContact(id, input)
       }}
       onUpdate={async (contactId, input) => {
         if (!id) return false
-        const ok = await mutations.updateContact(id, contactId, input)
-        if (ok) {
-          toast.showSuccess(t('customers.contacts.updated'))
-          reload()
-        }
-        return ok
+        await updateCustomerContact(id, contactId, input)
+        return true
       }}
+      onChanged={reload}
       onRemove={async (contactId) => {
         if (!id) return false
         try {
@@ -237,11 +237,12 @@ export function CustomerDetailPage() {
           editPanels={{
             adressen:
               canViewLocations && id ? (
-                <CustomerAddressesPanel customerId={id} />
+                <CustomerAddressesPanel customerId={id} showTitle={false} />
               ) : (
                 <p className="customer-form-muted">{t('customers.detail.noAddressRights')}</p>
               ),
-            contactpersonen: contactsPanel,
+            // The flat FormSection already carries the "Contactpersonen" heading.
+            contactpersonen: renderContactsPanel(false),
             communicatie: id ? <CustomerCommunicationPanel customerId={id} contacts={customer.contacts} /> : null,
             historiek: id ? <CustomerHistoryPanel customerId={id} /> : null,
             tarieven:
@@ -441,7 +442,7 @@ export function CustomerDetailPage() {
             </TabPanel>
           )}
 
-          {activeTab === 'contacts' && <TabPanel tabId="contacts">{contactsPanel}</TabPanel>}
+          {activeTab === 'contacts' && <TabPanel tabId="contacts">{renderContactsPanel(true)}</TabPanel>}
 
           {activeTab === 'locations' && canViewLocations && id && (
             <TabPanel tabId="locations">

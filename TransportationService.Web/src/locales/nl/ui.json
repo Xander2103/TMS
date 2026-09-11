@@ -35,7 +35,9 @@
     "noResults": "Geen resultaten",
     "loading": "Laden…",
     "clear": "Selectie wissen",
-    "adding": "Bezig met toevoegen…"
+    "adding": "Bezig met toevoegen…",
+    "searchError": "Zoeken mislukt.",
+    "resultCount": "{count} resultaten"
   },
   "sections": {
     "navLabel": "Formuliersecties",
@@ -124,5 +126,8 @@
     "more": "+{count} meer",
     "free": "vrij",
     "weekOf": "week van"
+  },
+  "time": {
+    "placeholder": "uu:mm"
   }
 }

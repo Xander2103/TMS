@@ -253,7 +253,12 @@
     "companyAddress": "adresse de l'entreprise",
     "sharedAddress": "adresse partagée",
     "sharedAddressWith": "adresse partagée ({names})",
-    "placeholder": "— Sélectionner une adresse —"
+    "placeholder": "— Sélectionner une adresse —",
+    "group": {
+      "customerAddress": "Adresse client",
+      "recent": "Utilisé récemment",
+      "all": "Toutes les adresses"
+    }
   },
   "type": {
     "AdministrativeAddress": "Adresse administrative",

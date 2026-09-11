@@ -5,6 +5,7 @@ import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { DataTable, type Column } from '../../../components/ui/DataTable'
 import { FormField } from '../../../components/ui/FormField'
 import { Modal } from '../../../components/ui/Modal'
+import { PanelHeader } from '../../../components/ui/PanelHeader'
 import { useToast } from '../../../components/ui/toastContext'
 import { describeApiError, getFieldError, type FieldErrors } from '../../../api/problemDetails'
 import { useAuth } from '../../auth/authContextValue'
@@ -135,7 +136,7 @@ function DieselSurchargeSection({ customerId }: { customerId: string }) {
 
   return (
     <section className="customer-billing-section">
-      <h3>{t('customers.billing.dieselTitle')}</h3>
+      <PanelHeader title={t('customers.billing.dieselTitle')} />
       {loading ? (
         <p className="customer-form-muted">{t('customers.common.loading')}</p>
       ) : loadError ? (
@@ -334,14 +335,16 @@ function PoPolicySection({ customerId }: { customerId: string }) {
 
   return (
     <section className="customer-billing-section">
-      <div className="page-header">
-        <h3 style={{ margin: 0 }}>{t('customers.billing.poTitle')}</h3>
-        {canManage && (
-          <Button variant="secondary" onClick={() => setDialog({ mode: 'create' })}>
-            {t('customers.billing.addPoNumber')}
-          </Button>
-        )}
-      </div>
+      <PanelHeader
+        title={t('customers.billing.poTitle')}
+        actions={
+          canManage ? (
+            <Button variant="secondary" onClick={() => setDialog({ mode: 'create' })}>
+              {t('customers.billing.addPoNumber')}
+            </Button>
+          ) : undefined
+        }
+      />
 
       {loadError ? (
         <p className="customer-import-message customer-import-message-error" role="alert">

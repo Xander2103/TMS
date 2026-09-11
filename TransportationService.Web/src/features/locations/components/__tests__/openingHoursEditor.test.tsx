@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { useState } from 'react'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { OpeningHoursEditor } from '../OpeningHoursEditor'
 import type { LocationOpeningInterval } from '../../types'
@@ -102,5 +102,114 @@ describe('OpeningHoursEditor', () => {
     render(<Harness initial={[monday('08:00', '12:00'), monday('13:00', '17:00')]} />)
     await userEvent.click(screen.getAllByRole('button', { name: 'Tijdvak verwijderen (Ma)' })[0])
     expect(last.value).toEqual([monday('13:00', '17:00')])
+  })
+
+  // --- 24h TimeInput + grid layout (UX sprint 2026-09-09) ---
+
+  it('accepts 08:00→12:00 without an error and keeps "12:00" as 24h text in the DOM', () => {
+    render(<Harness initial={[monday('08:00', '12:00')]} />)
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    const to = screen.getByLabelText('Tot (Ma)') as HTMLInputElement
+    expect(to.value).toBe('12:00')
+    // A text field, never the native (AM/PM-prone) time control.
+    expect(to).toHaveAttribute('type', 'text')
+    fireEvent.change(to, { target: { value: '12:00' } })
+    expect(to.value).toBe('12:00')
+    expect(screen.queryByDisplayValue(/AM|PM/)).not.toBeInTheDocument()
+    expect(last.isValid).toBe(true)
+  })
+
+  it('round-trips 00:00 as a start time', () => {
+    render(<Harness initial={[monday('00:00', '06:00')]} />)
+    const from = screen.getByLabelText('Van (Ma)') as HTMLInputElement
+    expect(from.value).toBe('00:00')
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    fireEvent.change(from, { target: { value: '01:00' } })
+    expect(last.value[0].fromTime).toBe('01:00')
+    fireEvent.change(from, { target: { value: '00:00' } })
+    expect(last.value[0].fromTime).toBe('00:00')
+    expect(last.isValid).toBe(true)
+    expect(from.value).toBe('00:00')
+  })
+
+  it('accepts 13:00→17:00 as a valid afternoon window', () => {
+    render(<Harness initial={[monday('13:00', '17:00')]} />)
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('Tot (Ma)'), { target: { value: '17:30' } })
+    expect(last.value[0]).toEqual(monday('13:00', '17:30'))
+    expect(last.isValid).toBe(true)
+  })
+
+  it('renders two Monday intervals as two rows inside the Monday group, both labelled for Ma', () => {
+    const { container } = render(<Harness initial={[monday('08:00', '12:00'), monday('13:00', '17:00')]} />)
+    const mondayGroup = screen.getByRole('group', { name: 'Ma' })
+    const rows = mondayGroup.querySelectorAll('[data-interval-row]')
+    expect(rows).toHaveLength(2)
+    expect(container.querySelectorAll('[data-interval-row]')).toHaveLength(2)
+    const second = rows[1] as HTMLElement
+    expect(within(second).getByLabelText('Van (Ma)')).toHaveValue('13:00')
+    expect(within(second).getByLabelText('Tot (Ma)')).toHaveValue('17:00')
+    expect(within(second).getByLabelText('Notitie (Ma)')).toBeInTheDocument()
+    expect(within(second).getByRole('button', { name: 'Tijdvak verwijderen (Ma)' })).toBeInTheDocument()
+    // "+ Tijdvak" is the last row of the day; the label is rendered once, first.
+    expect(mondayGroup.lastElementChild).toHaveAccessibleName('Tijdvak toevoegen (Ma)')
+    expect(mondayGroup.firstElementChild).toHaveTextContent('Ma')
+    expect(within(mondayGroup).getAllByText('Ma')).toHaveLength(1)
+    // Other days only show "Gesloten" + "+ Tijdvak".
+    expect(within(screen.getByRole('group', { name: 'Di' })).getByText('Gesloten')).toBeInTheDocument()
+  })
+
+  it('keeps the note and remove button of an interval in place when its error row appears', () => {
+    render(<Harness initial={[monday('08:00', '12:00', 'voormiddag')]} />)
+    const row = screen.getByRole('group', { name: 'Ma' }).querySelector('[data-interval-row]') as HTMLElement
+    const before = Array.from(row.children).map((el) => el.className.split(' ')[0])
+    fireEvent.change(within(row).getByLabelText('Tot (Ma)'), { target: { value: '07:00' } })
+    const alert = within(row).getByRole('alert')
+    expect(alert).toHaveTextContent('Eindtijd moet na starttijd liggen.')
+    const after = Array.from(row.children).map((el) => el.className.split(' ')[0])
+    // Same cells in the same order; the error is appended as its own (last) row of the interval.
+    expect(after.slice(0, before.length)).toEqual(before)
+    expect(after).toHaveLength(before.length + 1)
+    expect(row.lastElementChild).toBe(alert)
+    expect(within(row).getByLabelText('Notitie (Ma)')).toHaveValue('voormiddag')
+    expect(within(row).getByRole('button', { name: 'Tijdvak verwijderen (Ma)' })).toBeInTheDocument()
+  })
+
+  it('copies exact HH:mm values (08:00–12:00 and 13:00–17:00) from monday to weekdays', async () => {
+    render(<Harness initial={[monday('08:00', '12:00'), monday('13:00', '17:00')]} />)
+    await userEvent.click(screen.getByRole('button', { name: 'Kopieer maandag naar weekdagen' }))
+    for (const day of [2, 3, 4, 5]) {
+      expect(last.value).toContainEqual({ dayOfWeek: day, fromTime: '08:00', toTime: '12:00', note: null })
+      expect(last.value).toContainEqual({ dayOfWeek: day, fromTime: '13:00', toTime: '17:00', note: null })
+    }
+    expect(last.isValid).toBe(true)
+    // The DOM shows the copies as 24h text too.
+    const friday = screen.getByRole('group', { name: 'Vr' })
+    expect(within(friday).getAllByLabelText('Van (Vr)').map((el) => (el as HTMLInputElement).value)).toEqual(['08:00', '13:00'])
+    expect(within(friday).getAllByLabelText('Tot (Vr)').map((el) => (el as HTMLInputElement).value)).toEqual(['12:00', '17:00'])
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('rejects 08:00→00:00 (windows must end on the same day)', () => {
+    render(<Harness initial={[monday('08:00', '12:00')]} />)
+    fireEvent.change(screen.getByLabelText('Tot (Ma)'), { target: { value: '00:00' } })
+    expect(screen.getByRole('alert')).toHaveTextContent('Eindtijd moet na starttijd liggen.')
+    expect(last.value[0].toTime).toBe('00:00')
+    expect(last.isValid).toBe(false)
+  })
+
+  it('shows the incomplete error when a time is cleared', () => {
+    render(<Harness initial={[monday('08:00', '12:00')]} />)
+    fireEvent.change(screen.getByLabelText('Van (Ma)'), { target: { value: '' } })
+    expect(screen.getByRole('alert')).toHaveTextContent('Vul start- en eindtijd in.')
+    expect(last.value[0].fromTime).toBe('')
+    expect(last.isValid).toBe(false)
+  })
+
+  it('exposes each weekday as a labelled group', () => {
+    render(<Harness />)
+    for (const label of ['Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za', 'Zo']) {
+      expect(screen.getByRole('group', { name: label })).toBeInTheDocument()
+    }
   })
 })

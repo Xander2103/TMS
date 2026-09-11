@@ -226,10 +226,19 @@ public class CustomerAddressService : ICustomerAddressService
     /// the customer's own addresses first, then addresses this tenant used recently,
     /// then the rest of the central master.
     /// </summary>
+    /// <remarks>
+    /// UX sprint 2026-09-09 §2.5: the search filter, the group ranking AND the limit all run in
+    /// SQL (one statement), so a large address master never streams through memory. The search
+    /// also matches <see cref="Location.ExternalReference"/> and — for the selected customer —
+    /// the link's alias/customer reference. A second, id-bounded query fills
+    /// <see cref="AddressPickerOptionDto.CustomerNames"/> for the returned rows only (no N+1).
+    /// </remarks>
     public async Task<IReadOnlyList<AddressPickerOptionDto>> PickerAsync(
         Guid? customerId, string? search, int take, Guid? excludeCustomerId, CancellationToken cancellationToken)
     {
         var query = Locations().AsNoTracking().Where(l => l.IsActive);
+        var hasCustomer = customerId.HasValue;
+        var cid = customerId ?? Guid.Empty;
 
         // Server-side, so the exclusion happens BEFORE the take — a client filter after the
         // cut-off would silently drop candidates.
@@ -247,13 +256,13 @@ public class CustomerAddressService : ICustomerAddressService
                 l.Code.ToLower().Contains(term) ||
                 (l.City != null && l.City.ToLower().Contains(term)) ||
                 (l.Street != null && l.Street.ToLower().Contains(term)) ||
-                (l.PostalCode != null && l.PostalCode.ToLower().Contains(term)));
+                (l.PostalCode != null && l.PostalCode.ToLower().Contains(term)) ||
+                (l.ExternalReference != null && l.ExternalReference.ToLower().Contains(term)) ||
+                (hasCustomer && _dbContext.CustomerLocationLinks.Any(link =>
+                    link.LocationId == l.Id && link.CustomerId == cid && link.IsActive &&
+                    ((link.Alias != null && link.Alias.ToLower().Contains(term)) ||
+                     (link.CustomerReference != null && link.CustomerReference.ToLower().Contains(term))))));
         }
-
-        var linkedIds = customerId is { } cid
-            ? await Links().AsNoTracking().Where(l => l.CustomerId == cid && l.IsActive)
-                .Select(l => l.LocationId).ToListAsync(cancellationToken)
-            : [];
 
         // "Recent" = used by a stop of this tenant lately. Stops keep their own frozen address,
         // so this only ranks the picker; it never reads history back into the master.
@@ -265,27 +274,45 @@ public class CustomerAddressService : ICustomerAddressService
             .Distinct()
             .ToListAsync(cancellationToken);
 
-        var candidates = await query
-            .Select(l => new { l.Id, l.Code, l.Name, l.Type, l.Street, l.HouseNumber, l.PostalCode, l.City, l.CountryCode })
-            .ToListAsync(cancellationToken);
-
-        var linked = linkedIds.ToHashSet();
-        var recent = recentIds.ToHashSet();
-
-        return candidates
+        var limit = take <= 0 ? 50 : take;
+        var rows = await query
             .Select(l => new
             {
-                Dto = new AddressPickerOptionDto(
-                    l.Id, l.Code, l.Name, l.Type, l.Street, l.HouseNumber, l.PostalCode, l.City, l.CountryCode,
-                    linked.Contains(l.Id)
-                        ? AddressPickerGroup.CustomerAddress
-                        : recent.Contains(l.Id) ? AddressPickerGroup.Recent : AddressPickerGroup.All),
+                l.Id, l.Code, l.Name, l.Type, l.Street, l.HouseNumber, l.PostalCode, l.City, l.CountryCode,
+                Rank = hasCustomer && _dbContext.CustomerLocationLinks.Any(link =>
+                           link.LocationId == l.Id && link.CustomerId == cid && link.IsActive)
+                    ? (int)AddressPickerGroup.CustomerAddress
+                    : recentIds.Contains(l.Id) ? (int)AddressPickerGroup.Recent : (int)AddressPickerGroup.All,
             })
-            .OrderBy(x => (int)x.Dto.Group)
-            .ThenBy(x => x.Dto.Name)
-            .Take(take <= 0 ? 50 : take)
-            .Select(x => x.Dto)
+            .OrderBy(x => x.Rank)
+            .ThenBy(x => x.Name)
+            .Take(limit)
+            .ToListAsync(cancellationToken);
+
+        var ids = rows.Select(r => r.Id).ToList();
+        var namesByLocation = ids.Count == 0
+            ? new Dictionary<Guid, string>()
+            : (await Links().AsNoTracking()
+                .Where(link => link.IsActive && ids.Contains(link.LocationId))
+                .Join(_dbContext.Customers, link => link.CustomerId, c => c.Id, (link, c) => new { link.LocationId, c.Name })
+                .ToListAsync(cancellationToken))
+                .GroupBy(x => x.LocationId)
+                .ToDictionary(g => g.Key, g => FormatCustomerNames(g.Select(x => x.Name)));
+
+        return rows
+            .Select(l => new AddressPickerOptionDto(
+                l.Id, l.Code, l.Name, l.Type, l.Street, l.HouseNumber, l.PostalCode, l.City, l.CountryCode,
+                (AddressPickerGroup)l.Rank,
+                namesByLocation.GetValueOrDefault(l.Id)))
             .ToList();
+    }
+
+    /// <summary>"Klant A, Klant B, Klant C…": alphabetical, at most three names, an ellipsis for the rest.</summary>
+    private static string FormatCustomerNames(IEnumerable<string> names)
+    {
+        var ordered = names.Distinct().OrderBy(n => n, StringComparer.OrdinalIgnoreCase).ToList();
+        var shown = string.Join(", ", ordered.Take(3));
+        return ordered.Count > 3 ? shown + "…" : shown;
     }
 
     // ------------------------------------------------------------- helpers

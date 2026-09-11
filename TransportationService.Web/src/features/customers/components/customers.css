@@ -193,8 +193,10 @@
   }
 }
 
+/* Contacts panel: one toolbar row (PanelHeader, own bottom margin) above the table, which is
+   the only container — no extra card or second heading. */
 .customer-contacts {
-  margin-top: 8px;
+  margin: 0;
 }
 
 .customer-contact-card {
@@ -309,18 +311,6 @@
   background: var(--bg);
   color: var(--text-h);
   min-width: 260px;
-}
-
-.customer-locations-new {
-  margin-left: auto;
-  display: inline-flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.customer-locations-new a {
-  font-size: 14px;
-  white-space: nowrap;
 }
 
 .customer-locations-code {

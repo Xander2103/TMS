@@ -384,25 +384,35 @@ export function LocationDetailPage() {
           <DetailCard title={t('locations.detail.cards.openingHours')}>
             {hasStructuredHours ? (
               <table className="location-hours-table">
+                {/* Mirrors the editor's columns (day | from–to | note): one row per window, the
+                    day label spans its windows. Times are the stored 24h "HH:mm" text as-is. */}
                 <tbody>
                   {OPENING_DAYS.map((day) => {
+                    const dayLabel = t(OPENING_DAY_LABEL_KEYS[day - 1])
                     const windows = openingIntervals
                       .filter((i) => i.dayOfWeek === day)
                       .sort((a, b) => a.fromTime.localeCompare(b.fromTime))
-                    return (
-                      <tr key={day}>
-                        <th scope="row">{t(OPENING_DAY_LABEL_KEYS[day - 1])}</th>
-                        <td>
-                          {windows.length === 0 ? (
+                    if (windows.length === 0) {
+                      return (
+                        <tr key={day}>
+                          <th scope="row">{dayLabel}</th>
+                          <td colSpan={2}>
                             <span className="location-hours-closed">{t('locations.openingHours.closed')}</span>
-                          ) : (
-                            windows
-                              .map((w) => `${w.fromTime}–${w.toTime}${w.note ? ` (${w.note})` : ''}`)
-                              .join(', ')
-                          )}
-                        </td>
+                          </td>
+                        </tr>
+                      )
+                    }
+                    return windows.map((w, i) => (
+                      <tr key={`${day}-${i}`}>
+                        {i === 0 && (
+                          <th scope="row" rowSpan={windows.length}>
+                            {dayLabel}
+                          </th>
+                        )}
+                        <td className="location-hours-time">{`${w.fromTime}–${w.toTime}`}</td>
+                        <td className="location-hours-note">{w.note ?? ''}</td>
                       </tr>
-                    )
+                    ))
                   })}
                 </tbody>
               </table>

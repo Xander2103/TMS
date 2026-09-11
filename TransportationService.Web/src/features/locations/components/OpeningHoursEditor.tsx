@@ -1,4 +1,5 @@
 import { Button } from '../../../components/ui/Button'
+import { TimeInput } from '../../../components/ui/TimeInput'
 import { useLocale } from '../../../i18n/localeContext'
 import { OPENING_DAYS, OPENING_DAY_LABEL_KEYS, computeOpeningIntervalErrors, openingIntervalsValid } from '../openingHours'
 import type { LocationOpeningInterval } from '../types'
@@ -12,9 +13,17 @@ interface OpeningHoursEditorProps {
 }
 
 /**
- * Controlled compact weekly opening-hours grid (Ma..Zo, ISO day numbers 1–7). A day without
- * intervals shows as "Gesloten"; every edit reports the full interval list plus its validity
- * to the parent so the surrounding form can block submit on invalid hours.
+ * Controlled weekly opening-hours editor (Ma..Zo, ISO day numbers 1–7).
+ *
+ * Layout: every day is its own CSS grid with the SAME fixed column template
+ * (`day | from | – | to | note | remove`), so columns line up across days without one big grid.
+ * Each interval is one grid row; its validation message is an extra row spanning the columns
+ * right of the day label, so an error never pushes the note or remove button sideways. "Gesloten"
+ * and "+ Tijdvak" are rows too; "+ Tijdvak" is always the last row of a day. Every cell has an
+ * explicit grid column, so auto-placement keeps column 1 free below the day label.
+ *
+ * A day without intervals shows as "Gesloten"; every edit reports the full interval list plus its
+ * validity to the parent so the surrounding form can block submit on invalid hours.
  */
 export function OpeningHoursEditor({ value, onChange, disabled }: OpeningHoursEditorProps) {
   const { t } = useLocale()
@@ -58,65 +67,68 @@ export function OpeningHoursEditor({ value, onChange, disabled }: OpeningHoursEd
           const label = t(OPENING_DAY_LABEL_KEYS[day - 1])
           const dayIntervals = value.map((interval, index) => ({ interval, index })).filter((x) => x.interval.dayOfWeek === day)
           return (
-            <div key={day} className="ohe-day-row">
+            <div key={day} className="ohe-day" role="group" aria-label={label} data-opening-day={day}>
               <span className="ohe-day-label">{label}</span>
-              <div className="ohe-day-body">
-                {dayIntervals.length === 0 && <span className="ohe-closed">{t('locations.openingHours.closed')}</span>}
-                {dayIntervals.map(({ interval, index }) => (
-                  <div key={index} className="ohe-interval">
-                    <div className="ohe-interval-fields">
-                      <input
-                        type="time"
-                        aria-label={t('locations.openingHours.fromAria', { day: label })}
-                        value={interval.fromTime}
-                        onChange={(e) => updateInterval(index, { fromTime: e.target.value })}
-                        disabled={disabled}
-                      />
-                      <span aria-hidden="true">–</span>
-                      <input
-                        type="time"
-                        aria-label={t('locations.openingHours.toAria', { day: label })}
-                        value={interval.toTime}
-                        onChange={(e) => updateInterval(index, { toTime: e.target.value })}
-                        disabled={disabled}
-                      />
-                      <input
-                        type="text"
-                        className="ohe-note"
-                        aria-label={t('locations.openingHours.noteAria', { day: label })}
-                        placeholder={t('locations.openingHours.notePlaceholder')}
-                        maxLength={200}
-                        value={interval.note ?? ''}
-                        onChange={(e) => updateInterval(index, { note: e.target.value || null })}
-                        disabled={disabled}
-                      />
-                      <button
-                        type="button"
-                        className="ohe-remove"
-                        aria-label={t('locations.openingHours.removeAria', { day: label })}
-                        onClick={() => removeInterval(index)}
-                        disabled={disabled}
-                      >
-                        ✕
-                      </button>
-                    </div>
-                    {errors[index] && (
+              {dayIntervals.length === 0 && <span className="ohe-closed">{t('locations.openingHours.closed')}</span>}
+              {dayIntervals.map(({ interval, index }) => {
+                const error = errors[index]
+                return (
+                  <div key={index} className="ohe-interval" data-interval-row={index}>
+                    <TimeInput
+                      className="ui-time-input--compact ohe-time ohe-from"
+                      aria-label={t('locations.openingHours.fromAria', { day: label })}
+                      aria-invalid={Boolean(error)}
+                      value={interval.fromTime}
+                      onChange={(fromTime) => updateInterval(index, { fromTime })}
+                      disabled={disabled}
+                    />
+                    <span className="ohe-sep" aria-hidden="true">
+                      –
+                    </span>
+                    <TimeInput
+                      className="ui-time-input--compact ohe-time ohe-to"
+                      aria-label={t('locations.openingHours.toAria', { day: label })}
+                      aria-invalid={Boolean(error)}
+                      value={interval.toTime}
+                      onChange={(toTime) => updateInterval(index, { toTime })}
+                      disabled={disabled}
+                    />
+                    <input
+                      type="text"
+                      className="ohe-note"
+                      aria-label={t('locations.openingHours.noteAria', { day: label })}
+                      placeholder={t('locations.openingHours.notePlaceholder')}
+                      maxLength={200}
+                      value={interval.note ?? ''}
+                      onChange={(e) => updateInterval(index, { note: e.target.value || null })}
+                      disabled={disabled}
+                    />
+                    <button
+                      type="button"
+                      className="ohe-remove"
+                      aria-label={t('locations.openingHours.removeAria', { day: label })}
+                      onClick={() => removeInterval(index)}
+                      disabled={disabled}
+                    >
+                      ✕
+                    </button>
+                    {error && (
                       <p className="ohe-error" role="alert">
-                        {t(errors[index])}
+                        {t(error)}
                       </p>
                     )}
                   </div>
-                ))}
-                <button
-                  type="button"
-                  className="ohe-add"
-                  aria-label={t('locations.openingHours.addAria', { day: label })}
-                  onClick={() => addInterval(day)}
-                  disabled={disabled}
-                >
-                  {t('locations.openingHours.add')}
-                </button>
-              </div>
+                )
+              })}
+              <button
+                type="button"
+                className="ohe-add"
+                aria-label={t('locations.openingHours.addAria', { day: label })}
+                onClick={() => addInterval(day)}
+                disabled={disabled}
+              >
+                {t('locations.openingHours.add')}
+              </button>
             </div>
           )
         })}

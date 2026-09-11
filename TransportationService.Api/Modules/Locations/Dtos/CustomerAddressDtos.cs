@@ -124,7 +124,12 @@ public record AddressPickerOptionDto(
     string? PostalCode,
     string? City,
     string? CountryCode,
-    AddressPickerGroup Group);
+    AddressPickerGroup Group,
+    /// <summary>
+    /// Names of the customers actively linked to this address ("Klant A, Klant B"; at most three,
+    /// then "…"); null when no customer is linked. Lets the picker show who else uses a shared address.
+    /// </summary>
+    string? CustomerNames = null);
 
 public enum CustomerAddressOutcome
 {

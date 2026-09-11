@@ -46,14 +46,48 @@ vi.mock('../api/activityTypesApi', () => ({
 }))
 
 const getOrder = vi.hoisted(() => vi.fn())
+const updateOrder = vi.hoisted(() => vi.fn())
+const savePriceLines = vi.hoisted(() => vi.fn())
 vi.mock('../../transport-orders/api/transportOrdersApi', () => ({
   getTransportOrder: getOrder,
+  updateTransportOrder: updateOrder,
+  saveOrderPriceLines: savePriceLines,
   searchTransportOrders: () => Promise.resolve({ items: [], totalCount: 0 }),
 }))
 
 vi.mock('../../customers/api/customersApi', () => ({
   searchCustomers: () => Promise.resolve({ items: [], totalCount: 0 }),
+  getCustomer: () => Promise.resolve({ id: 'c-1', isBlocked: false }),
 }))
+// The inline route editor hosts the order form's RouteSection: same reference-data mocks as the
+// order form tests (cargoStopRemap.test.tsx).
+vi.mock('../../master-data/hooks/useLookupOptions', () => ({
+  useLookupOptions: () => ({ options: [], isLoading: false, error: null }),
+}))
+vi.mock('../../locations/components/LocationSelect', () => ({
+  LocationSelect: ({ id }: { id?: string }) => <input id={id} aria-label="locatie" />,
+}))
+vi.mock('../../reference/components/CountryCombobox', () => ({
+  CountryCombobox: ({ id }: { id?: string }) => <input id={id} aria-label="Land" />,
+}))
+vi.mock('../../warehousing/api/warehousingApi', () => ({
+  listWarehouses: () => Promise.resolve([]),
+}))
+vi.mock('../../locations/api/locationsApi', () => ({
+  getLocation: () => Promise.resolve({ openingIntervals: [] }),
+  getLocationOptions: () => Promise.resolve([]),
+  createLocation: vi.fn(),
+}))
+vi.mock('../../tarification/api/pricingApi', async () => {
+  const actual = await vi.importActual<typeof import('../../tarification/api/pricingApi')>('../../tarification/api/pricingApi')
+  return {
+    ...actual,
+    listServiceOptions: () => Promise.resolve([]),
+    getCustomerPricingConfig: () => Promise.resolve({ preferredUnits: [], serviceOptions: [] }),
+    listUnitTypeMaster: () => Promise.resolve([]),
+    previewPrice: () => Promise.resolve({ lines: [], total: 0, currency: 'EUR', configurationError: null }),
+  }
+})
 vi.mock('../../users/api/usersApi', () => ({
   getUsers: () => Promise.resolve([]),
 }))
@@ -96,7 +130,7 @@ function transportDossier(): DossierDetail {
 describe('DossierDetailPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    auth.permissions = new Set(['dossiers.view', 'dossiers.manage'])
+    auth.permissions = new Set(['dossiers.view', 'dossiers.manage', 'orders.edit'])
     window.HTMLElement.prototype.scrollIntoView = vi.fn()
     getOrder.mockResolvedValue(orderDetail())
     api.listDossiers.mockResolvedValue([])
@@ -117,9 +151,11 @@ describe('DossierDetailPage', () => {
     // Capability-driven sections (any hasStops → Route, any supportsGoods → Goederen).
     expect(screen.getByRole('heading', { name: 'Route' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Goederen' })).toBeInTheDocument()
-    // Route summary from the linked order's stops.
-    expect(await screen.findByText('Nexans site Antwerpen')).toBeInTheDocument()
-    expect(screen.getByText('Nog te bepalen')).toBeInTheDocument() // geen losstop
+    // The route is an editable work sheet: the existing loading stop is shown in its fields and
+    // the missing unloading stop is already an empty, fillable row (no "Route bewerken" detour).
+    expect(await screen.findByDisplayValue('Nexans site Antwerpen')).toBeInTheDocument()
+    expect(screen.getAllByLabelText('locatie')).toHaveLength(2)
+    expect(screen.getByText('2. Lossen')).toBeInTheDocument()
   })
 
   it('renders no Route section for a storage-only dossier', async () => {

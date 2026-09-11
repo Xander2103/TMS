@@ -13,3 +13,37 @@
 .link-button:hover {
   opacity: 0.8;
 }
+
+/* ---- Dossierlijst ---- */
+/* Vaste kolombreedtes uit de kolomdefinities respecteren; de wrapper scrollt horizontaal. */
+.dossier-list .data-table {
+  table-layout: fixed;
+  min-width: 72rem;
+}
+
+.dossier-list .data-table tbody td {
+  overflow: hidden;
+}
+
+/* Lange referenties/klantnamen afkappen; volledige waarde via title-tooltip. */
+.dossier-list-truncate {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Bedragen en aantallen: gelijke cijferbreedte zodat rechts uitgelijnde kolommen netjes uitlijnen. */
+.dossier-list-amount {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Hardening 2026-09-10: a partially priced dossier never shows its sum as a plain total. */
+.dossier-list-partial {
+  margin-left: 6px;
+  font-size: 0.75rem;
+  color: var(--color-warning, #d97706);
+  white-space: nowrap;
+}

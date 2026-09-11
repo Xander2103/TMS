@@ -244,7 +244,8 @@
   font-size: 14px;
 }
 
-/* Openingsuren: compact day table, "Gesloten" clearly muted. */
+/* Openingsuren: read-only table with the editor's columns (day | from–to | note), one row per
+   window; the day label spans its windows. "Gesloten" clearly muted. */
 .location-hours-table {
   border-collapse: collapse;
   width: 100%;
@@ -253,13 +254,25 @@
 .location-hours-table th {
   text-align: left;
   font-weight: 600;
-  width: 44px;
-  padding: 2px 8px 2px 0;
+  width: 40px;
+  padding: 2px var(--space-2, 8px) 2px 0;
   vertical-align: top;
 }
 
 .location-hours-table td {
   padding: 2px 0;
+  vertical-align: top;
+}
+
+.location-hours-table .location-hours-time {
+  width: 1%;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  padding-right: var(--space-3, 12px);
+}
+
+.location-hours-note {
+  color: var(--text-muted, #6b7280);
 }
 
 .location-hours-closed {

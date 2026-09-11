@@ -226,3 +226,30 @@ export function useOrderPricePreview(
 
   return preview
 }
+
+/**
+ * Structured opening hours per referenced stop location only (UX-sprint 2026-09-09). The dossier
+ * route editor needs the hours hint but none of the intake reference data `useOrderFormData`
+ * loads (customers, entities, warehouses, unit master), so it uses this slice on its own.
+ */
+export function useLocationHours(stops: StopFormRow[]): Record<string, LocationOpeningInterval[]> {
+  const [locationHours, setLocationHours] = useState<Record<string, LocationOpeningInterval[]>>({})
+  const requestedHoursRef = useRef<Set<string>>(new Set())
+
+  useEffect(() => {
+    for (const stop of stops) {
+      const locationId = stop.locationId
+      if (!locationId || requestedHoursRef.current.has(locationId)) continue
+      requestedHoursRef.current.add(locationId)
+      getLocation(locationId)
+        .then((detail) => {
+          setLocationHours((current) => ({ ...current, [locationId]: detail.openingIntervals ?? [] }))
+        })
+        .catch(() => {
+          // Hint only — without hours there is simply no client-side warning.
+        })
+    }
+  }, [stops])
+
+  return locationHours
+}

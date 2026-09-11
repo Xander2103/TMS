@@ -253,7 +253,12 @@
     "companyAddress": "bedrijfsadres",
     "sharedAddress": "gedeeld adres",
     "sharedAddressWith": "gedeeld adres ({names})",
-    "placeholder": "— Selecteer een adres —"
+    "placeholder": "— Selecteer een adres —",
+    "group": {
+      "customerAddress": "Klantadres",
+      "recent": "Recent gebruikt",
+      "all": "Alle adressen"
+    }
   },
   "type": {
     "AdministrativeAddress": "Administratief adres",

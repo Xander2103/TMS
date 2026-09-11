@@ -10,7 +10,13 @@ public record DossierListItemDto(
     string? ResponsibleName,
     int OrderCount,
     int OpenIncidentCount,
-    DateTime CreatedAt);
+    DateTime CreatedAt,
+    string? CustomerReference = null,
+    string? CustomerNumber = null,
+    /// <summary>Sum of AgreedPrice over the PRICED linked orders; null when none is priced (never € 0,00).</summary>
+    decimal? AgreedPriceTotal = null,
+    /// <summary>Linked orders that count as priced (OrderPricingState.IsPriced: override or AgreedPrice &gt; 0).</summary>
+    int PricedOrderCount = 0);
 
 public record DossierOrderDto(
     Guid LinkId,
@@ -19,7 +25,9 @@ public record DossierOrderDto(
     DateOnly OrderDate,
     string Status,
     string? GoodsDescription,
-    decimal? AgreedPrice);
+    decimal? AgreedPrice,
+    /// <summary>OrderPricingState.IsPriced for this order (override, one-off agreement or positive amount); the UI never re-derives it.</summary>
+    bool IsPriced = false);
 
 /// <summary>One relation seen from the dossier being viewed; Other* describes the far end.</summary>
 public record DossierRelationDto(
@@ -47,7 +55,9 @@ public record DossierFinancialSummaryDto(
     decimal AgreedOrderTotal,
     decimal InvoicedTotal,
     decimal EstimatedIncidentCost,
-    decimal ActualIncidentCost);
+    decimal ActualIncidentCost,
+    /// <summary>Linked orders that count as priced (OrderPricingState.IsPriced); 0 → show "Nog geen prijs", not € 0,00.</summary>
+    int PricedOrderCount = 0);
 
 /// <summary>One activity card on the dossier: type capabilities + the linked execution record.</summary>
 public record DossierActivityDto(
@@ -80,7 +90,11 @@ public record ReadinessIssueDto(
     string Message,
     string Section,    // algemeen | activiteiten | route | goederen | prijs
     string? Field,
-    string Stage);     // Planning | Warehouse | Execution | Commercial | Invoice
+    string Stage,      // Planning | Warehouse | Execution | Commercial | Invoice
+    /// <summary>The linked order an order-level rule is about, so a multi-order dossier can target the right editor (null for dossier-level rules).</summary>
+    Guid? TransportOrderId = null,
+    /// <summary>The activity an activity-level rule is about (e.g. route.order_missing); null for dossier-level rules.</summary>
+    Guid? ActivityId = null);
 
 public record DossierDetailDto(
     Guid Id,

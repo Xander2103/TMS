@@ -193,7 +193,9 @@ public class DossierFoundationTests
         Assert.Empty(dossier.Orders);
         var activity = Assert.Single(dossier.Activities!);
         Assert.False(activity.HasStops);
-        Assert.Contains(dossier.Readiness!, i => i.Code == "pricing.none" && i.Severity == "Info");
+        // Hardening 2026-09-10: standalone activities have no price carrier, so there is no
+        // actionable pricing step — no pricing.* issue at all (never "add a transport order").
+        Assert.DoesNotContain(dossier.Readiness!, i => i.Code.StartsWith("pricing."));
         Assert.DoesNotContain(dossier.Readiness!, i => i.Severity == "Blocking");
     }
 
@@ -218,8 +220,12 @@ public class DossierFoundationTests
         Assert.Single(await h.Db.Context.TransportDossiers.Where(d => d.TenantId == h.TenantId).ToListAsync());
         Assert.Single(updated.Orders);
         // Confirm gate surfaced BEFORE the user hits Bevestigen.
-        Assert.Contains(updated.Readiness!, i => i.Code == "order.confirm.stops" && i.Severity == "Blocking");
-        Assert.Contains(updated.Readiness!, i => i.Code == "route.date_missing");
+        Assert.Contains(updated.Readiness!, i => i.Code == "order.confirm.stops" && i.Severity == "Blocking"
+                                                 && i.Section == "route" && i.Field == "stops.loading");
+        Assert.Contains(updated.Readiness!, i => i.Code == "route.date_missing" && i.Section == "route" && i.Field == "stops.plannedFrom");
+        // A linked draft order without a price is a commercial gap the user must see.
+        Assert.Contains(updated.Readiness!, i => i.Code == "pricing.missing" && i.Severity == "Warning"
+                                                 && i.Section == "prijs" && i.Field == "price");
     }
 
     // Existing order-less transport activity → explicit "Transportopdracht aanmaken" links a

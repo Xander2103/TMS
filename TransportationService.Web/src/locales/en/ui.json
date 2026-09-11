@@ -35,7 +35,9 @@
     "noResults": "No results",
     "loading": "Loading…",
     "clear": "Clear selection",
-    "adding": "Adding…"
+    "adding": "Adding…",
+    "searchError": "Search failed.",
+    "resultCount": "{count} results"
   },
   "sections": {
     "navLabel": "Form sections",
@@ -124,5 +126,8 @@
     "more": "+{count} more",
     "free": "free",
     "weekOf": "week of"
+  },
+  "time": {
+    "placeholder": "hh:mm"
   }
 }

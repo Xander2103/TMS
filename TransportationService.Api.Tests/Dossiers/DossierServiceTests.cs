@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using TransportationService.Api.Common;
 using TransportationService.Api.Modules.Auditing.Services;
 using TransportationService.Api.Modules.Dossiers.Dtos;
@@ -6,6 +7,7 @@ using TransportationService.Api.Modules.Identity.Entities;
 using TransportationService.Api.Modules.Identity.Services;
 using TransportationService.Api.Modules.Incidents.Entities;
 using TransportationService.Api.Modules.Orders.Entities;
+using TransportationService.Api.Modules.Orders.Services;
 using TransportationService.Api.Modules.Partners.Entities;
 using TransportationService.Api.Modules.Tenancy.Entities;
 using TransportationService.Api.Modules.Tenancy.Services;
@@ -240,5 +242,146 @@ public class DossierServiceTests
         Assert.Single(await sut.ListAsync(null, null, h.CustomerId, CancellationToken.None));
         await Assert.ThrowsAsync<DomainValidationException>(
             () => sut.ListAsync(null, "Nonsense", null, CancellationToken.None));
+    }
+
+    // ------------------------------------------------ UX sprint 2026-09-09 §2.5: list contract
+
+    private static async Task<Guid> AddOrderAsync(
+        Harness h, string number, decimal? agreedPrice, bool priceIsManual = false,
+        OrderPricingSource pricingSource = OrderPricingSource.Contract, decimal? oneOffFixedAmount = null)
+    {
+        var order = new TransportOrder
+        {
+            Id = Guid.NewGuid(), TenantId = h.TenantId, OrderNumber = number, CustomerId = h.CustomerId,
+            OrderDate = new DateOnly(2026, 7, 15), AgreedPrice = agreedPrice, PriceIsManual = priceIsManual,
+            PricingSource = pricingSource, OneOffFixedAmount = oneOffFixedAmount,
+        };
+        h.Db.Context.TransportOrders.Add(order);
+        await h.Db.Context.SaveChangesAsync();
+        return order.Id;
+    }
+
+    /// <summary>
+    /// Hardening 2026-09-10: the list, the financials and the per-order flag must all follow
+    /// <see cref="OrderPricingState"/> — including a one-off agreement at € 0, which IS a price —
+    /// so the three read paths can never drift from the helper (parity across the EF paths).
+    /// </summary>
+    [Fact]
+    public async Task Parity_ListFinancialsAndOrderFlag_FollowOrderPricingState()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var sut = h.Sut();
+        var engineZero = await AddOrderAsync(h, "ORD-0002", agreedPrice: 0m);
+        var nothing = await AddOrderAsync(h, "ORD-0003", agreedPrice: null);
+        var overrideZero = await AddOrderAsync(h, "ORD-0004", agreedPrice: 0m, priceIsManual: true);
+        var oneOffZero = await AddOrderAsync(h, "ORD-0005", agreedPrice: 0m, pricingSource: OrderPricingSource.OneOff, oneOffFixedAmount: 0m);
+        var oneOffAgreed = await AddOrderAsync(h, "ORD-0006", agreedPrice: null, pricingSource: OrderPricingSource.OneOff, oneOffFixedAmount: 120m);
+
+        var dossier = await sut.CreateAsync(new SaveDossierRequest("Pariteit", CustomerId: h.CustomerId), CancellationToken.None);
+        foreach (var orderId in new[] { h.OrderId, engineZero, nothing, overrideZero, oneOffZero, oneOffAgreed })
+        {
+            await sut.LinkOrderAsync(dossier.Id, new LinkDossierOrderRequest(orderId), CancellationToken.None);
+        }
+
+        var expected = await h.Db.Context.TransportOrders.AsNoTracking()
+            .Where(o => o.TenantId == h.TenantId)
+            .ToDictionaryAsync(o => o.Id, o => OrderPricingState.IsPriced(o));
+        Assert.Equal(4, expected.Count(kv => kv.Value)); // 500, override@0, one-off@0, one-off 120 (not yet derived)
+
+        var row = (await sut.ListAsync(null, null, null, CancellationToken.None)).Single(d => d.Id == dossier.Id);
+        Assert.Equal(6, row.OrderCount);
+        Assert.Equal(4, row.PricedOrderCount);
+        Assert.Equal(500m, row.AgreedPriceTotal); // 500 + 0 + 0 + null
+
+        var detail = (await sut.GetAsync(dossier.Id, CancellationToken.None))!;
+        Assert.Equal(4, detail.Financials.PricedOrderCount);
+        Assert.Equal(500m, detail.Financials.AgreedOrderTotal);
+        foreach (var order in detail.Orders)
+        {
+            Assert.Equal(expected[order.OrderId], order.IsPriced);
+        }
+    }
+
+    [Fact]
+    public async Task List_ExposesReferenceCustomerNumberAndPricedTotal()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var sut = h.Sut();
+        var unpriced = await AddOrderAsync(h, "ORD-0002", agreedPrice: 0m);       // engine: no counted line
+        var nullPrice = await AddOrderAsync(h, "ORD-0003", agreedPrice: null);
+        var overridden = await AddOrderAsync(h, "ORD-0004", agreedPrice: 0m, priceIsManual: true);
+
+        var priced = await sut.CreateAsync(new SaveDossierRequest("Geprijsd", CustomerId: h.CustomerId, CustomerReference: "PO-77"), CancellationToken.None);
+        await sut.LinkOrderAsync(priced.Id, new LinkDossierOrderRequest(h.OrderId), CancellationToken.None);   // 500
+        await sut.LinkOrderAsync(priced.Id, new LinkDossierOrderRequest(unpriced), CancellationToken.None);    // 0 → not priced
+        await sut.LinkOrderAsync(priced.Id, new LinkDossierOrderRequest(overridden), CancellationToken.None);  // override → priced, adds 0
+
+        var notPriced = await sut.CreateAsync(new SaveDossierRequest("Zonder prijs", CustomerId: h.CustomerId), CancellationToken.None);
+        await sut.LinkOrderAsync(notPriced.Id, new LinkDossierOrderRequest(nullPrice), CancellationToken.None);
+
+        var empty = await sut.CreateAsync(new SaveDossierRequest("Leeg", CustomerId: h.CustomerId), CancellationToken.None);
+
+        var list = await sut.ListAsync(null, null, null, CancellationToken.None);
+
+        var pricedRow = list.Single(d => d.Id == priced.Id);
+        Assert.Equal("PO-77", pricedRow.CustomerReference);
+        Assert.Equal("KL-1", pricedRow.CustomerNumber);
+        Assert.Equal("Klant BV", pricedRow.CustomerName);
+        Assert.Equal(3, pricedRow.OrderCount);
+        Assert.Equal(2, pricedRow.PricedOrderCount);
+        Assert.Equal(500m, pricedRow.AgreedPriceTotal);
+
+        var notPricedRow = list.Single(d => d.Id == notPriced.Id);
+        Assert.Equal(1, notPricedRow.OrderCount);
+        Assert.Equal(0, notPricedRow.PricedOrderCount);
+        Assert.Null(notPricedRow.AgreedPriceTotal); // "Nog geen prijs", never € 0,00
+
+        var emptyRow = list.Single(d => d.Id == empty.Id);
+        Assert.Null(emptyRow.CustomerReference);
+        Assert.Equal(0, emptyRow.PricedOrderCount);
+        Assert.Null(emptyRow.AgreedPriceTotal);
+    }
+
+    [Fact]
+    public async Task List_SearchMatchesReferenceCustomerNameAndCustomerNumber()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var sut = h.Sut();
+        var otherCustomerId = Guid.NewGuid();
+        h.Db.Context.Customers.Add(new Customer { Id = otherCustomerId, TenantId = h.TenantId, CustomerNumber = "KL-2", Name = "Andere BV" });
+        await h.Db.Context.SaveChangesAsync();
+        var withRef = await sut.CreateAsync(new SaveDossierRequest("Project Noord", CustomerId: h.CustomerId, CustomerReference: "PO-77"), CancellationToken.None);
+        var other = await sut.CreateAsync(new SaveDossierRequest("Project Zuid", CustomerId: otherCustomerId), CancellationToken.None);
+
+        Assert.Equal([withRef.Id], (await sut.ListAsync("po-7", null, null, CancellationToken.None)).Select(d => d.Id));
+        Assert.Equal([other.Id], (await sut.ListAsync("andere", null, null, CancellationToken.None)).Select(d => d.Id));
+        Assert.Equal([other.Id], (await sut.ListAsync("KL-2", null, null, CancellationToken.None)).Select(d => d.Id));
+        Assert.Equal([withRef.Id], (await sut.ListAsync("klant bv", null, null, CancellationToken.None)).Select(d => d.Id));
+        Assert.Equal(2, (await sut.ListAsync("project", null, null, CancellationToken.None)).Count);
+        Assert.Empty(await sut.ListAsync("bestaat-niet", null, null, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Financials_CountPricedOrders_WithTheSameDefinitionAsTheList()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var sut = h.Sut();
+        var unpriced = await AddOrderAsync(h, "ORD-0002", agreedPrice: 0m);
+        var dossier = await sut.CreateAsync(new SaveDossierRequest("Project", CustomerId: h.CustomerId), CancellationToken.None);
+        Assert.Equal(0, dossier.Financials.PricedOrderCount);
+
+        await sut.LinkOrderAsync(dossier.Id, new LinkDossierOrderRequest(unpriced), CancellationToken.None);
+        var oneUnpriced = await sut.GetAsync(dossier.Id, CancellationToken.None);
+        Assert.Equal(0, oneUnpriced!.Financials.PricedOrderCount);
+        Assert.Equal(0m, oneUnpriced.Financials.AgreedOrderTotal);
+
+        await sut.LinkOrderAsync(dossier.Id, new LinkDossierOrderRequest(h.OrderId), CancellationToken.None);
+        var withPriced = await sut.GetAsync(dossier.Id, CancellationToken.None);
+        Assert.Equal(1, withPriced!.Financials.PricedOrderCount);
+        Assert.Equal(500m, withPriced.Financials.AgreedOrderTotal);
     }
 }

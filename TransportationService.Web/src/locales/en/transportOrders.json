@@ -251,7 +251,10 @@
     "accessInstr": "Access instructions",
     "loadInstr": "Loading instructions",
     "unloadInstr": "Unloading instructions",
-    "refreshFromLocation": "Re-copy address"
+    "refreshFromLocation": "Re-copy address",
+    "moveUp": "Move stop {number} up",
+    "moveDown": "Move stop {number} down",
+    "removeStop": "Remove stop {number}"
   },
   "goods": {
     "description": "Goods description",

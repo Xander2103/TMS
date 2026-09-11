@@ -6,6 +6,7 @@ using TransportationService.Api.Modules.Auditing.Services;
 using TransportationService.Api.Modules.Dossiers.Dtos;
 using TransportationService.Api.Modules.Dossiers.Entities;
 using TransportationService.Api.Modules.Incidents.Entities;
+using TransportationService.Api.Modules.Orders.Services;
 using TransportationService.Api.Modules.Tenancy.Entities;
 using TransportationService.Api.Modules.Tenancy.Services;
 
@@ -96,9 +97,15 @@ public class DossierService : IDossierService
 
         if (!string.IsNullOrWhiteSpace(search))
         {
+            // Number, title, the customer's own reference, and the customer's name/number — all
+            // in the same SQL statement (correlated EXISTS), never a client-side pass.
             var term = search.Trim().ToLowerInvariant();
             query = query.Where(d =>
-                d.DossierNumber.ToLower().Contains(term) || d.Title.ToLower().Contains(term));
+                d.DossierNumber.ToLower().Contains(term)
+                || d.Title.ToLower().Contains(term)
+                || (d.CustomerReference != null && d.CustomerReference.ToLower().Contains(term))
+                || _dbContext.Customers.Any(c => c.Id == d.CustomerId
+                    && (c.Name.ToLower().Contains(term) || c.CustomerNumber.ToLower().Contains(term))));
         }
 
         var rows = await query
@@ -107,11 +114,26 @@ public class DossierService : IDossierService
             .Select(d => new
             {
                 d.Id, d.DossierNumber, d.Title, d.Status, d.CustomerId, d.ResponsibleUserId, d.CreatedAt,
+                d.CustomerReference,
                 CustomerName = _dbContext.Customers
                     .Where(c => c.Id == d.CustomerId).Select(c => (string?)c.Name).FirstOrDefault(),
+                CustomerNumber = _dbContext.Customers
+                    .Where(c => c.Id == d.CustomerId).Select(c => (string?)c.CustomerNumber).FirstOrDefault(),
                 ResponsibleName = _dbContext.Users
                     .Where(u => u.Id == d.ResponsibleUserId).Select(u => (string?)(u.FirstName + " " + u.LastName)).FirstOrDefault(),
                 OrderCount = _dbContext.DossierOrders.Count(l => l.DossierId == d.Id),
+                // OrderPricingState.IsPricedExpression — the single definition, translated in place.
+                PricedOrderCount = _dbContext.DossierOrders
+                    .Where(l => l.DossierId == d.Id)
+                    .Join(_dbContext.TransportOrders, l => l.TransportOrderId, o => o.Id, (l, o) => o)
+                    .Where(OrderPricingState.IsPricedExpression)
+                    .Count(),
+                // SUM over the priced orders only; SQL NULL when none.
+                AgreedPriceTotal = _dbContext.DossierOrders
+                    .Where(l => l.DossierId == d.Id)
+                    .Join(_dbContext.TransportOrders, l => l.TransportOrderId, o => o.Id, (l, o) => o)
+                    .Where(OrderPricingState.IsPricedExpression)
+                    .Sum(o => o.AgreedPrice),
                 OpenIncidentCount = _dbContext.Incidents.Count(i =>
                     i.DossierId == d.Id && (i.Status == IncidentStatus.New || i.Status == IncidentStatus.InProgress)),
             })
@@ -120,7 +142,12 @@ public class DossierService : IDossierService
         return rows
             .Select(r => new DossierListItemDto(
                 r.Id, r.DossierNumber, r.Title, r.Status.ToString(), r.CustomerId,
-                r.CustomerName, r.ResponsibleName, r.OrderCount, r.OpenIncidentCount, r.CreatedAt))
+                r.CustomerName, r.ResponsibleName, r.OrderCount, r.OpenIncidentCount, r.CreatedAt,
+                CustomerReference: r.CustomerReference,
+                CustomerNumber: r.CustomerNumber,
+                // Null (not € 0,00) when nothing is priced — an override at 0 still yields 0 here.
+                AgreedPriceTotal: r.PricedOrderCount > 0 ? r.AgreedPriceTotal ?? 0m : null,
+                PricedOrderCount: r.PricedOrderCount))
             .ToList();
     }
 
@@ -263,11 +290,16 @@ public class DossierService : IDossierService
         var orderRows = await _dbContext.DossierOrders.AsNoTracking()
             .Where(l => l.DossierId == id)
             .Join(_dbContext.TransportOrders.AsNoTracking(), l => l.TransportOrderId, o => o.Id,
-                (l, o) => new { LinkId = l.Id, o.Id, o.OrderNumber, o.OrderDate, o.Status, o.GoodsDescription, o.AgreedPrice })
+                (l, o) => new
+                {
+                    LinkId = l.Id, o.Id, o.OrderNumber, o.OrderDate, o.Status, o.GoodsDescription, o.AgreedPrice,
+                    o.PriceIsManual, o.PricingSource, o.OneOffFixedAmount,
+                })
             .OrderByDescending(x => x.OrderDate)
             .ToListAsync(cancellationToken);
         var orders = orderRows
-            .Select(x => new DossierOrderDto(x.LinkId, x.Id, x.OrderNumber, x.OrderDate, x.Status.ToString(), x.GoodsDescription, x.AgreedPrice))
+            .Select(x => new DossierOrderDto(x.LinkId, x.Id, x.OrderNumber, x.OrderDate, x.Status.ToString(), x.GoodsDescription, x.AgreedPrice,
+                IsPriced: OrderPricingState.IsPriced(x.PriceIsManual, x.PricingSource, x.OneOffFixedAmount, x.AgreedPrice)))
             .ToList();
 
         // Relations in both directions, labelled from this dossier's point of view.
@@ -780,11 +812,18 @@ public class DossierService : IDossierService
         var tenantId = _tenantContext.TenantId;
 
         decimal agreed = 0, invoiced = 0;
+        var pricedOrderCount = 0;
         if (orderIds.Count > 0)
         {
             agreed = await _dbContext.TransportOrders.AsNoTracking()
                 .Where(o => orderIds.Contains(o.Id))
                 .SumAsync(o => o.AgreedPrice ?? 0, cancellationToken);
+
+            // OrderPricingState.IsPricedExpression — the frontend shows "Nog geen prijs" instead
+            // of the € 0,00 total while this stays 0, and "x van y geprijsd" while it is partial.
+            pricedOrderCount = await _dbContext.TransportOrders.AsNoTracking()
+                .Where(o => orderIds.Contains(o.Id))
+                .CountAsync(OrderPricingState.IsPricedExpression, cancellationToken);
 
             var lines = await _dbContext.InvoiceLines.AsNoTracking()
                 .Where(l => l.TenantId == tenantId && l.TransportOrderId != null && orderIds.Contains(l.TransportOrderId.Value))
@@ -802,7 +841,8 @@ public class DossierService : IDossierService
             agreed,
             invoiced,
             incidentCosts.Sum(i => i.EstimatedCost ?? 0),
-            incidentCosts.Sum(i => i.ActualCost ?? 0));
+            incidentCosts.Sum(i => i.ActualCost ?? 0),
+            PricedOrderCount: pricedOrderCount);
     }
 
     private async Task ValidateAsync(SaveDossierRequest request, Guid tenantId, CancellationToken cancellationToken)
