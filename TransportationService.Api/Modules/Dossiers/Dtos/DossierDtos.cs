@@ -146,7 +146,12 @@ public record DossierDetailDto(
     string? LegalEntityName = null,
     Guid Version = default,
     IReadOnlyList<DossierActivityDto>? Activities = null,
-    IReadOnlyList<ReadinessIssueDto>? Readiness = null);
+    IReadOnlyList<ReadinessIssueDto>? Readiness = null,
+    /// <summary>Redesign 2026-09-11 (Overzicht): documents on the linked orders — count and distinct types, one query.</summary>
+    int DocumentCount = 0,
+    IReadOnlyList<string>? DocumentTypes = null,
+    /// <summary>Latest UpdatedAt over the dossier, its activities and its linked orders ("Laatste wijziging").</summary>
+    DateTime? LastChangedAt = null);
 
 public record SaveDossierRequest(
     /// <summary>Optional since the dossier-foundation wave: defaults to "{klant} — {datum}".</summary>

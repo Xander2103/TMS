@@ -12,7 +12,7 @@ import { getLegalEntityOptions } from '../../legal-entities/api/legalEntitiesApi
 import type { LegalEntityOption } from '../../legal-entities/types'
 import { changeDossierLegalEntity, getDossierLegalEntityImpact } from '../api/dossiersApi'
 import type { DossierLegalEntityChangeImpact } from '../api/dossiersApi'
-import { formatDate, operationalStatus, priceChip } from '../dossierDisplay'
+import { formatDate } from '../dossierDisplay'
 import { DOSSIER_STATUS_LABELS, DOSSIER_STATUS_TONE, type DossierDetail } from '../types'
 
 export interface DossierMenuAction {
@@ -48,9 +48,6 @@ export function DossierHeader({ dossier, canManage, onAddActivity, menuActions, 
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const menuRef = useRef<HTMLDetailsElement>(null)
-
-  const operational = operationalStatus(dossier)
-  const price = priceChip(dossier)
 
   useEffect(() => {
     if (!entityDialog) return
@@ -157,14 +154,6 @@ export function DossierHeader({ dossier, canManage, onAddActivity, menuActions, 
                 {t('dossiers.header.change')}
               </button>
             )}
-          </span>
-        </p>
-        <p className="dossier-header-chips">
-          <span>
-            {t('dossiers.header.operational')} <Badge tone="info">{operational ? t(operational) : '—'}</Badge>
-          </span>
-          <span>
-            {t('dossiers.header.price')} <Badge tone={price.tone}>{price.labelKey ? t(price.labelKey) : '—'}</Badge>
           </span>
         </p>
       </div>

@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import { ApiError } from '../../../api/apiClient'
 import { LoadingState } from '../../../components/feedback/LoadingState'
 import { ErrorState } from '../../../components/feedback/ErrorState'
@@ -8,7 +8,6 @@ import { Button } from '../../../components/ui/Button'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { FormField } from '../../../components/ui/FormField'
 import { Modal } from '../../../components/ui/Modal'
-import { RetainedHeight } from '../../../components/ui/RetainedHeight'
 import { SearchableSelect, type SearchableSelectOption } from '../../../components/ui/SearchableSelect'
 import { ValidationSummary } from '../../../components/ui/ValidationSummary'
 import { useToast } from '../../../components/ui/toastContext'
@@ -16,7 +15,6 @@ import { describeApiError, getFieldError, type FieldErrors } from '../../../api/
 import { useLocale } from '../../../i18n/localeContext'
 import { addRecentItem } from '../../../hooks/recentItems'
 import { useAuth } from '../../auth/authContextValue'
-import { euro } from '../../invoices/types'
 import { searchCustomers } from '../../customers/api/customersApi'
 import { getTransportOrder } from '../../transport-orders/api/transportOrdersApi'
 import type { TransportOrderDetail } from '../../transport-orders/types'
@@ -31,21 +29,26 @@ import {
 } from '../api/dossiersApi'
 import { type DossierActivity, type DossierDetail, type ReadinessIssue, type ReadinessSection } from '../types'
 import { ActivityDrawer } from '../components/ActivityDrawer'
-import { ActivityList } from '../components/ActivityList'
 import { AddActivityDialog } from '../components/AddActivityDialog'
 import { AttentionPanel } from '../components/AttentionPanel'
 import { DossierHeader, type DossierMenuAction } from '../components/DossierHeader'
 import { DossierCustomerChangeDialog } from '../components/DossierCustomerChangeDialog'
-import { DossierGoodsSummary } from '../components/DossierGoodsSummary'
 import { AddRelationDialog, LinkOrderDialog } from '../components/DossierLinkDialogs'
-import { DossierMoreSection } from '../components/DossierMoreSection'
-import { DossierOrderSwitcher } from '../components/DossierOrderSwitcher'
-import { DossierPricePanel, type DossierPricePanelHandle } from '../components/DossierPricePanel'
-import { DossierRouteEditor, type DossierRouteEditorHandle } from '../components/DossierRouteEditor'
+import { DossierOverview } from '../components/DossierOverview'
+import type { DossierPricePanelHandle } from '../components/DossierPricePanel'
+import type { DossierRouteEditorHandle } from '../components/DossierRouteEditor'
+import { DossierSubnav } from '../components/DossierSubnav'
 import { GoodsDrawer } from '../components/GoodsDrawer'
 import { DossierSectionsProvider } from '../components/DossierSectionsProvider'
-import { useDossierNavigator, useRegisterDossierSection } from '../sectionRegistry'
-import { formatDate as formatIsoDate } from '../../../utils/dates'
+import { DossierActivitiesSection } from '../components/sections/DossierActivitiesSection'
+import { DossierDocumentsSection } from '../components/sections/DossierDocumentsSection'
+import { DossierGoodsSection } from '../components/sections/DossierGoodsSection'
+import { DossierHistorySection } from '../components/sections/DossierHistorySection'
+import { DossierPriceSection } from '../components/sections/DossierPriceSection'
+import { DossierRouteSection } from '../components/sections/DossierRouteSection'
+import { DOSSIER_TABS, TAB_FOR_SECTION, dossierTabPath, isDossierTab, type DossierTab } from '../dossierSections'
+import { DossierWorkspaceContext, type DossierWorkspace } from '../dossierWorkspace'
+import { useDossierNavigator, type DossierSectionId } from '../sectionRegistry'
 import '../../dashboard/pages/dashboard.css'
 import './dossiers.css'
 import './dossier-detail.css'
@@ -58,7 +61,11 @@ function conflictBody(err: unknown): DossierDetail | null {
   return null
 }
 
-/** §11 dossierpagina: kop, aandacht, activiteiten, contextuele secties en drawers. */
+/**
+ * Redesign 2026-09-11 — the dossier as a navigation-based workspace: a stable shell (header,
+ * attention strip, subnav, dossier-level state and dialogs) and ONE subsection at a time,
+ * selected by the URL segment. Overzicht is read-only; editing lives in the subsections.
+ */
 export function DossierDetailPage() {
   return (
     <DossierSectionsProvider>
@@ -68,7 +75,7 @@ export function DossierDetailPage() {
 }
 
 function DossierDetailContent() {
-  const { id } = useParams<{ id: string }>()
+  const { id, section } = useParams<{ id: string; section?: string }>()
   const navigate = useNavigate()
   const { t } = useLocale()
   const toast = useToast()
@@ -87,31 +94,7 @@ function DossierDetailContent() {
   const routeEditorRef = useRef<DossierRouteEditorHandle>(null)
   const pricePanelRef = useRef<DossierPricePanelHandle>(null)
   const addActivityRef = useRef<HTMLButtonElement>(null)
-  const documentsRef = useRef<HTMLDetailsElement>(null)
-  const notesRef = useRef<HTMLDetailsElement>(null)
-  const registerActivities = useRegisterDossierSection('activiteiten', {
-    focusField: () => {
-      addActivityRef.current?.focus()
-      return Boolean(addActivityRef.current)
-    },
-  })
-  const registerRoute = useRegisterDossierSection('route', {
-    focusField: (field) => routeEditorRef.current?.focusField(field) ?? false,
-  })
-  const registerGoods = useRegisterDossierSection('goederen')
-  const registerPrice = useRegisterDossierSection('prijs', {
-    focusField: (field) => pricePanelRef.current?.focusField(field) ?? false,
-  })
-  const registerDocuments = useRegisterDossierSection('documenten', {
-    open: () => {
-      if (documentsRef.current) documentsRef.current.open = true
-    },
-  })
-  const registerNotes = useRegisterDossierSection('notities', {
-    open: () => {
-      if (notesRef.current) notesRef.current.open = true
-    },
-  })
+  const subnavRef = useRef<HTMLElement>(null)
 
   const [dossier, setDossier] = useState<DossierDetail | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -119,7 +102,8 @@ function DossierDetailContent() {
   const [conflict, setConflict] = useState<DossierDetail | null>(null)
 
   // The TARGET order (drives Route/Goederen/Prijs summaries + drawers), keyed by order id so
-  // switching orders never shows stale data and the effect stays callback-only.
+  // switching orders never shows stale data and the effect stays callback-only. Lives in the
+  // shell, so a subsection switch never refetches it.
   const [loadedOrder, setLoadedOrder] = useState<{ id: string; order: TransportOrderDetail | null } | null>(null)
   // Bumped by "Opnieuw laden" after a failed order load (the editors keep their entered state).
   const [orderLoadToken, setOrderLoadToken] = useState(0)
@@ -132,8 +116,11 @@ function DossierDetailContent() {
   // price target (no order reload, nothing collapses); selecting a transport unit moves both.
   const [routeSelectionId, setRouteSelectionId] = useState<string | null>(null)
   const [routeDirty, setRouteDirty] = useState(false)
-  // An attention jump whose target order still has to load: performed once it is on screen.
-  const pendingJump = useRef<{ section: ReadinessSection; field: string | null; activityId: string } | null>(null)
+  // An attention jump: performed once its subsection is mounted, its target unit selected and
+  // (for order-bound sections) the order on screen. `token` re-arms the effect for a jump that
+  // lands on the subsection already open.
+  const pendingJump = useRef<{ section: DossierSectionId; field: string | null; activityId: string | null } | null>(null)
+  const [jumpToken, setJumpToken] = useState(0)
 
   // Dialogs & drawers
   const [showAddActivity, setShowAddActivity] = useState(false)
@@ -196,11 +183,12 @@ function DossierDetailContent() {
     load()
   }, [load])
 
-  const activities = dossier?.activities ?? []
-  const orderedActivities = [...activities].sort((a, b) => a.sequence - b.sequence)
+  const rawActivities = dossier?.activities
+  const orderedActivities = useMemo(() => [...(rawActivities ?? [])].sort((a, b) => a.sequence - b.sequence), [rawActivities])
+  const activities = orderedActivities
   const transportActivities = orderedActivities.filter((a) => a.hasStops)
-  // The route/goods/price surfaces work on ONE transport activity — the explicitly selected one,
-  // else the first that already has an order, else the first transport activity (whose order the
+  // The route/goods surfaces work on ONE transport activity — the explicitly selected one, else
+  // the first that already has an order, else the first transport activity (whose order the
   // route editor creates on save). With several transport activities the switcher is shown.
   const routeActivity =
     (routeSelectionId ? transportActivities.find((a) => a.id === routeSelectionId) : undefined) ??
@@ -245,25 +233,48 @@ function DossierDetailContent() {
   // True only while a DIFFERENT order than the one on screen is being fetched (an order switch or
   // the first load). A refetch of the same order after a save keeps the current content mounted.
   // While true, the route/goods/price bodies show a placeholder inside a RetainedHeight, so the
-  // page never shrinks under the planner's scroll position (browser-smoke 2026-09-11: switching
-  // the order in Verkoop & prijs jumped to the top because the three bodies collapsed at once).
+  // page never shrinks under the planner's scroll position.
   const firstOrderLoading = Boolean(firstLinkedOrderId) && loadedOrder?.id !== firstLinkedOrderId
 
-  // Finish a deferred attention jump once its target activity is selected and its order is on
-  // screen (or the activity has no order yet — the editor then offers the empty route). A jump
-  // to the price of a standalone unit loads nothing, so it completes as soon as it is selected.
+  // --- Subsection from the URL ---------------------------------------------------------------
+  const hasRoute = activities.some((a) => a.hasStops)
+  const hasGoods = activities.some((a) => a.supportsGoods)
+  const availableTabs = useMemo(
+    () => DOSSIER_TABS.filter((tab) => (tab === 'route' ? hasRoute : tab === 'goederen' ? hasGoods : true)),
+    [hasRoute, hasGoods],
+  )
+  const requestedTab: DossierTab | null = section === undefined ? 'overzicht' : isDossierTab(section) ? section : null
+  const activeTab: DossierTab = requestedTab && availableTabs.includes(requestedTab) ? requestedTab : 'overzicht'
+
+  // Finish a deferred attention jump once its subsection is mounted (the register callback ran
+  // in the same commit as the route change), its target unit is selected and its order is on
+  // screen (a standalone price target and the activity list load nothing).
   const targetReady = routeActivity !== null && (!firstLinkedOrderId || Boolean(firstOrder))
   const priceActivityId = priceActivity?.id ?? null
+  const routeActivityId = routeActivity?.id ?? null
   useEffect(() => {
     const jump = pendingJump.current
     if (!jump) return
+    if (TAB_FOR_SECTION[jump.section] !== activeTab) return
     const onPrice = jump.section === 'prijs'
-    const currentId = onPrice ? priceActivityId : routeActivity?.id
-    if (currentId !== jump.activityId) return
-    if (!(onPrice && priceTargetIsStandalone) && !targetReady) return
+    const orderBound = jump.section === 'route' || jump.section === 'goederen' || (onPrice && !priceTargetIsStandalone)
+    if (jump.activityId) {
+      const currentId = onPrice ? priceActivityId : routeActivityId
+      if (currentId !== jump.activityId) return
+    }
+    if (orderBound && !targetReady) return
+    if (!goTo(jump.section, jump.field)) return
     pendingJump.current = null
-    goTo(jump.section, jump.field)
-  }, [targetReady, routeActivity?.id, priceActivityId, priceTargetIsStandalone, goTo])
+  }, [activeTab, jumpToken, targetReady, routeActivityId, priceActivityId, priceTargetIsStandalone, goTo])
+
+  // A subsection switch keeps the scroll offset (the shell stays mounted); only when the subnav
+  // itself was scrolled out of view is it brought back — never the global top, and never while
+  // an attention jump is about to scroll to its own destination.
+  useEffect(() => {
+    if (pendingJump.current) return
+    const nav = subnavRef.current
+    if (nav && nav.getBoundingClientRect().top < 0) nav.scrollIntoView?.({ block: 'start' })
+  }, [activeTab])
 
   useEffect(() => {
     if (!editing) return
@@ -281,41 +292,44 @@ function DossierDetailContent() {
 
   if (loadError) return <ErrorState message={loadError} />
   if (!dossier || !id) return <LoadingState message={t('dossiers.detail.loading')} />
+  // An unknown or unavailable segment lands on the overview with a clean URL.
+  if (section !== undefined && activeTab !== section) return <Navigate to={dossierTabPath(id, 'overzicht')} replace />
 
   const isOpen = dossier.status === 'Open'
-  const hasRoute = activities.some((a) => a.hasStops)
-  const hasGoods = activities.some((a) => a.supportsGoods)
   // Compat: opdrachten die (nog) niet door een activiteit vertegenwoordigd worden.
   const activityOrderIds = new Set(activities.map((a) => a.linkedTransportOrderId).filter(Boolean))
   const legacyOrders = dossier.orders.filter((o) => !activityOrderIds.has(o.orderId))
-
-  /**
-   * Attention jump. An issue about a specific order/activity first makes that activity the
-   * target of the route/price editors; the field focus follows once its order is loaded.
-   * Switching is refused while the route editor holds unsaved edits (the switcher is locked
-   * for the same reason) — the jump then lands on the section of the current target.
-   */
-  function goToSection(section: ReadinessSection, field: string | null, issue?: ReadinessIssue) {
-    // Price issues concern billable units (a standalone activity included); the other sections
-    // concern the transport activity that owns the order.
-    const candidates = section === 'prijs' ? billableActivities : transportActivities
-    const current = section === 'prijs' ? priceActivity : routeActivity
-    const target =
-      (issue?.activityId ? candidates.find((a) => a.id === issue.activityId) : undefined) ??
-      (issue?.transportOrderId ? candidates.find((a) => a.linkedTransportOrderId === issue.transportOrderId) : undefined)
-    if (target && target.id !== current?.id && !routeDirty) {
-      pendingJump.current = { section, field, activityId: target.id }
-      selectActivity(target.id)
-      return
-    }
-    goTo(section, field)
-  }
 
   function selectActivity(activityId: string) {
     if (routeDirty) return
     setSelectedActivityId(activityId)
     // A transport unit is the target of BOTH sections; a standalone one only of the price section.
     if (activities.find((a) => a.id === activityId)?.hasStops) setRouteSelectionId(activityId)
+  }
+
+  /**
+   * Attention jump. Opens the subsection that hosts the section, first makes the activity/order
+   * the issue is about the target of the editors, and finishes with the existing
+   * `goTo(section, field)` (scroll + field focus + highlight) once everything is on screen.
+   * Switching the target is refused while the route editor holds unsaved edits — the jump then
+   * lands on the current target; leaving the route tab itself is guarded by the unsaved-changes
+   * dialog of the editor.
+   */
+  function goToSection(section: ReadinessSection, field: string | null, issue?: ReadinessIssue) {
+    const candidates = section === 'prijs' ? billableActivities : transportActivities
+    const current = section === 'prijs' ? priceActivity : routeActivity
+    const target =
+      (issue?.activityId ? candidates.find((a) => a.id === issue.activityId) : undefined) ??
+      (issue?.transportOrderId ? candidates.find((a) => a.linkedTransportOrderId === issue.transportOrderId) : undefined)
+    const switching = Boolean(target) && target!.id !== current?.id && !routeDirty
+    if (switching) selectActivity(target!.id)
+    pendingJump.current = { section, field, activityId: switching ? target!.id : (current?.id ?? null) }
+    openTab(TAB_FOR_SECTION[section])
+    setJumpToken((token) => token + 1)
+  }
+
+  function openTab(tab: DossierTab) {
+    if (tab !== activeTab) navigate(dossierTabPath(id!, tab))
   }
 
   /** Inline route/price saves return the fresh order; the dossier is re-read for readiness + totals. */
@@ -424,359 +438,251 @@ function DossierDetailContent() {
   menuActions.push({
     key: 'history',
     label: t('dossiers.detail.menuHistory'),
-    onSelect: () => goTo('notities'),
+    onSelect: () => openTab('historiek'),
   })
 
+  const workspace: DossierWorkspace = {
+    dossier,
+    isOpen,
+    canManage,
+    canEditRoute: canManage && canEditOrder && isOpen,
+    canEditOrder,
+    canEditPriceLines,
+    canEditActivityPrice,
+    canCreateLocations,
+    busy,
+    activities: orderedActivities,
+    transportActivities,
+    billableActivities,
+    legacyOrders,
+    routeActivity,
+    priceActivity,
+    priceTargetIsStandalone,
+    activityWithoutOrder,
+    firstLinkedOrderId,
+    firstOrder,
+    firstOrderLoading,
+    routeDirty,
+    setRouteDirty,
+    selectActivity,
+    applyDossier,
+    handleConflict,
+    handleOrderSaved,
+    retryOrderLoad: () => setOrderLoadToken((token) => token + 1),
+    openActivity,
+    openAddActivity: () => setShowAddActivity(true),
+    openGoodsDrawer: () => setGoodsDrawerOpen(true),
+    unlinkOrder: (orderId) => void run(() => unlinkDossierOrder(id, orderId), t('dossiers.detail.unlinked')),
+    removeRelation: (relationId) => void run(() => removeDossierRelation(id, relationId), t('dossiers.detail.relationRemoved')),
+    focusRouteField: (field) => routeEditorRef.current?.focusField(field) ?? false,
+    focusPriceField: (field) => pricePanelRef.current?.focusField(field) ?? false,
+    focusAddActivity: () => {
+      addActivityRef.current?.focus()
+      return Boolean(addActivityRef.current)
+    },
+  }
+
   return (
-    <div className="dossier-detail">
-      <BackButton to="/dossiers" label={t('dossiers.detail.back')} />
+    <DossierWorkspaceContext.Provider value={workspace}>
+      <div className="dossier-detail">
+        <BackButton to="/dossiers" label={t('dossiers.detail.back')} />
 
-      <DossierHeader
-        dossier={dossier}
-        canManage={canManage}
-        onAddActivity={() => setShowAddActivity(true)}
-        menuActions={menuActions}
-        onUpdated={applyDossier}
-        onConflict={handleConflict}
-      />
-
-      {conflict && (
-        <div className="dossier-conflict-banner" role="alert">
-          <span>{t('dossiers.detail.conflict')}</span>
-          <Button variant="secondary" onClick={() => applyDossier(conflict)}>
-            {t('dossiers.detail.reload')}
-          </Button>
-        </div>
-      )}
-
-      <AttentionPanel issues={dossier.readiness} onNavigate={goToSection} />
-
-      <section id="sectie-activiteiten" className="dossier-section" aria-label={t('dossiers.detail.activitiesTitle')} ref={registerActivities}>
-        <h2 tabIndex={-1}>{t('dossiers.detail.activitiesTitle')}</h2>
-        <ActivityList
-          activities={activities}
-          canManage={canManage && isOpen}
-          onOpen={openActivity}
-          onAdd={() => setShowAddActivity(true)}
-          addButtonRef={addActivityRef}
+        <DossierHeader
+          dossier={dossier}
+          canManage={canManage}
+          onAddActivity={() => setShowAddActivity(true)}
+          menuActions={menuActions}
+          onUpdated={applyDossier}
+          onConflict={handleConflict}
         />
-        {legacyOrders.length > 0 && (
-          <div className="dossier-legacy-orders">
-            <h3>{t('dossiers.detail.linkedOrders')}</h3>
-            <ul className="db-list">
-              {legacyOrders.map((order) => (
-                <li key={order.linkId}>
-                  <span className="db-row">
-                    <button type="button" className="link-button" onClick={() => navigate(`/transport-orders/${order.orderId}`)}>
-                      <code>{order.orderNumber}</code>
-                    </button>
-                    <span className="db-row-main" title={order.goodsDescription ?? undefined}>
-                      {order.orderDate} · {order.status}
-                      {order.agreedPrice !== null && <> · {euro(order.agreedPrice)}</>}
-                    </span>
-                    {canManage && isOpen && (
-                      <Button
-                        variant="secondary"
-                        onClick={() => void run(() => unlinkDossierOrder(id, order.orderId), t('dossiers.detail.unlinked'))}
-                        disabled={busy}
-                      >
-                        {t('dossiers.detail.unlink')}
-                      </Button>
-                    )}
-                  </span>
-                </li>
-              ))}
-            </ul>
+
+        {conflict && (
+          <div className="dossier-conflict-banner" role="alert">
+            <span>{t('dossiers.detail.conflict')}</span>
+            <Button variant="secondary" onClick={() => applyDossier(conflict)}>
+              {t('dossiers.detail.reload')}
+            </Button>
           </div>
         )}
-      </section>
 
-      {hasRoute && (
-        <section id="sectie-route" className="dossier-section" aria-label={t('dossiers.detail.routeTitle')} ref={registerRoute}>
-          <h2 tabIndex={-1}>{t('dossiers.detail.routeTitle')}</h2>
-          <DossierOrderSwitcher
-            activities={transportActivities}
-            selectedActivityId={routeActivity?.id ?? ''}
-            onSelect={selectActivity}
-            locked={routeDirty}
-          />
-          <RetainedHeight retain={firstOrderLoading} className="dossier-section-body">
-            <DossierRouteEditor
-              ref={routeEditorRef}
-              dossier={dossier}
-              activity={routeActivity}
-              order={firstOrder}
-              loading={firstOrderLoading}
-              canEdit={canManage && canEditOrder && isOpen}
-              canCreateLocations={canCreateLocations}
-              onOrderSaved={handleOrderSaved}
-              onDossierUpdated={applyDossier}
-              onConflict={handleConflict}
-              onDirtyChange={setRouteDirty}
-              onRetryLoad={() => setOrderLoadToken((token) => token + 1)}
-            />
-          </RetainedHeight>
-        </section>
-      )}
+        <AttentionPanel issues={dossier.readiness} onNavigate={goToSection} />
 
-      {hasGoods && (
-        <section id="sectie-goederen" className="dossier-section" aria-label={t('dossiers.detail.goodsTitle')} ref={registerGoods}>
-          <h2 tabIndex={-1}>{t('dossiers.detail.goodsTitle')}</h2>
-          <RetainedHeight retain={firstOrderLoading} className="dossier-section-body">
-            {firstLinkedOrderId ? (
-              <DossierGoodsSummary
-                order={firstOrder}
-                loading={firstOrderLoading}
-                canEdit={canManage && isOpen}
-                onEdit={() => setGoodsDrawerOpen(true)}
-              />
-            ) : (
-              <p className="placeholder-text">{t('dossiers.detail.goodsOnOrder')}</p>
-            )}
-          </RetainedHeight>
-        </section>
-      )}
+        <DossierSubnav ref={subnavRef} dossierId={id} tabs={availableTabs} />
 
-      <section id="sectie-prijs" className="dossier-section" aria-label={t('dossiers.detail.priceAria')} ref={registerPrice}>
-        <h2 tabIndex={-1}>{t('dossiers.detail.priceTitle')}</h2>
-        <DossierOrderSwitcher
-          activities={billableActivities}
-          selectedActivityId={priceActivity?.id ?? ''}
-          onSelect={selectActivity}
-          locked={routeDirty}
-          label={t('dossierSheet.orderSwitch.unitLabel')}
-        />
-        <RetainedHeight retain={!priceTargetIsStandalone && firstOrderLoading} className="dossier-section-body">
-          <DossierPricePanel
-            ref={pricePanelRef}
+        <div className="dossier-subsection" data-tab={activeTab}>
+          {activeTab === 'overzicht' && <DossierOverview />}
+          {activeTab === 'activiteiten' && <DossierActivitiesSection addButtonRef={addActivityRef} />}
+          {activeTab === 'route' && <DossierRouteSection editorRef={routeEditorRef} />}
+          {activeTab === 'goederen' && <DossierGoodsSection />}
+          {activeTab === 'prijs' && <DossierPriceSection panelRef={pricePanelRef} />}
+          {activeTab === 'documenten' && <DossierDocumentsSection />}
+          {activeTab === 'historiek' && <DossierHistorySection />}
+        </div>
+
+        {showAddActivity && (
+          <AddActivityDialog
             dossier={dossier}
-            activity={priceActivity}
-            order={firstOrder}
-            loading={!priceTargetIsStandalone && firstOrderLoading}
-            orderUnavailable={Boolean(firstLinkedOrderId) && !firstOrderLoading && !firstOrder}
-            activityWithoutOrder={activityWithoutOrder}
-            canManage={canManage && isOpen}
-            canEditPrice={canEditOrder && isOpen}
-            canEditLines={canEditPriceLines && isOpen}
-            canEditActivityPrice={canEditActivityPrice && isOpen}
-            onOrderSaved={handleOrderSaved}
-            onDossierUpdated={applyDossier}
+            onClose={() => setShowAddActivity(false)}
+            onAdded={(updated) => {
+              applyDossier(updated)
+              toast.showSuccess(t('dossiers.detail.activityAdded'))
+            }}
             onConflict={handleConflict}
-            onAddActivity={() => setShowAddActivity(true)}
-            onRetryLoad={() => setOrderLoadToken((token) => token + 1)}
           />
-        </RetainedHeight>
-      </section>
-
-      <details
-        className="dossier-collapsed"
-        id="sectie-documenten"
-        ref={(el) => {
-          documentsRef.current = el
-          registerDocuments(el)
-        }}
-      >
-        <summary>{t('dossiers.detail.documentsTitle')}</summary>
-        {firstLinkedOrderId ? (
-          <p>
-            {t('dossiers.detail.documentsOnOrder')}{' '}
-            <button type="button" className="link-button" onClick={() => navigate(`/transport-orders/${firstLinkedOrderId}`)}>
-              {t('dossiers.detail.toOrder')}
-            </button>
-          </p>
-        ) : (
-          <p className="placeholder-text">{t('dossiers.detail.documentsNone')}</p>
         )}
-      </details>
 
-      <details
-        className="dossier-collapsed"
-        id="sectie-notities"
-        ref={(el) => {
-          notesRef.current = el
-          registerNotes(el)
-        }}
-      >
-        <summary>{t('dossiers.detail.notesTitle')}</summary>
-        {dossier.description && <p>{dossier.description}</p>}
-        {dossier.notes ? <p>{dossier.notes}</p> : <p className="placeholder-text">{t('dossiers.detail.noNotes')}</p>}
-        <p className="placeholder-text">
-          {t('dossiers.detail.createdAt', { date: formatIsoDate(dossier.createdAt) })}
-          {dossier.responsibleName && <> · {t('dossiers.detail.responsible', { name: dossier.responsibleName })}</>}
-          {dossier.closedAt && <> · {t('dossiers.detail.closedAt', { date: formatIsoDate(dossier.closedAt) })}</>}
-        </p>
-      </details>
+        {drawerActivity && (
+          <ActivityDrawer
+            dossier={dossier}
+            activity={drawerActivity}
+            canManage={canManage && isOpen}
+            onClose={() => setDrawerActivity(null)}
+            onUpdated={(updated) => {
+              applyDossier(updated)
+              toast.showSuccess(t('dossiers.detail.activityUpdated'))
+            }}
+            onConflict={handleConflict}
+          />
+        )}
 
-      <DossierMoreSection
-        dossier={dossier}
-        canManage={canManage}
-        busy={busy}
-        onRemoveRelation={(relationId) => void run(() => removeDossierRelation(id, relationId), t('dossiers.detail.relationRemoved'))}
-      />
+        {goodsDrawerOpen && firstOrder && (
+          <GoodsDrawer
+            order={firstOrder}
+            onClose={() => setGoodsDrawerOpen(false)}
+            onSaved={(updated) => {
+              setLoadedOrder({ id: updated.id, order: updated })
+              toast.showSuccess(t('dossiers.detail.goodsSaved'))
+              load()
+            }}
+          />
+        )}
 
-      {showAddActivity && (
-        <AddActivityDialog
-          dossier={dossier}
-          onClose={() => setShowAddActivity(false)}
-          onAdded={(updated) => {
-            applyDossier(updated)
-            toast.showSuccess(t('dossiers.detail.activityAdded'))
-          }}
-          onConflict={handleConflict}
-        />
-      )}
-
-      {drawerActivity && (
-        <ActivityDrawer
-          dossier={dossier}
-          activity={drawerActivity}
-          canManage={canManage && isOpen}
-          onClose={() => setDrawerActivity(null)}
-          onUpdated={(updated) => {
-            applyDossier(updated)
-            toast.showSuccess(t('dossiers.detail.activityUpdated'))
-          }}
-          onConflict={handleConflict}
-        />
-      )}
-
-      {goodsDrawerOpen && firstOrder && (
-        <GoodsDrawer
-          order={firstOrder}
-          onClose={() => setGoodsDrawerOpen(false)}
-          onSaved={(updated) => {
-            setLoadedOrder({ id: updated.id, order: updated })
-            toast.showSuccess(t('dossiers.detail.goodsSaved'))
-            load()
-          }}
-        />
-      )}
-
-      {editing && (
-        <Modal
-          title={t('dossiers.detail.editTitle')}
-          onClose={() => setEditing(false)}
-          busy={busy}
-          footer={
-            <>
-              <Button variant="secondary" onClick={() => setEditing(false)} disabled={busy}>
-                {t('ui.actions.cancel')}
-              </Button>
-              <Button type="submit" form="edit-dossier-form" disabled={busy}>
-                {t('ui.actions.save')}
-              </Button>
-            </>
-          }
-        >
-          <form id="edit-dossier-form" onSubmit={(event) => void submitEdit(event)}>
-            <ValidationSummary message={formError} fieldErrors={fieldErrors} />
-            <FormField label={t('dossiers.detail.titleField')} htmlFor="edit-title" required error={getFieldError(fieldErrors, 'title')}>
-              <input id="edit-title" value={title} onChange={(event) => setTitle(event.target.value)} maxLength={200} />
-            </FormField>
-            <FormField label={t('dossiers.detail.customerReferenceField')} htmlFor="edit-ref" error={getFieldError(fieldErrors, 'customerReference')}>
-              <input
-                id="edit-ref"
-                value={customerReference}
-                onChange={(event) => setCustomerReference(event.target.value)}
-                maxLength={100}
-              />
-            </FormField>
-            <FormField label={t('dossiers.detail.dateField')} htmlFor="edit-date" error={getFieldError(fieldErrors, 'dossierDate')}>
-              <input id="edit-date" type="date" value={dossierDate} onChange={(event) => setDossierDate(event.target.value)} />
-            </FormField>
-            <FormField label={t('dossiers.detail.descriptionField')} htmlFor="edit-description" error={getFieldError(fieldErrors, 'description')}>
-              <textarea
-                id="edit-description"
-                value={description}
-                onChange={(event) => setDescription(event.target.value)}
-                rows={3}
-                maxLength={2000}
-              />
-            </FormField>
-            {dossier.customerId || dossier.orders.length > 0 ? (
-              <FormField label={t('dossiers.detail.customerField')} htmlFor="edit-customer-locked" hint={t('dossiers.customerChange.lockedHint')}>
-                <div className="dossier-customer-locked">
-                  <span id="edit-customer-locked">{dossier.customerName ?? '—'}</span>
-                  <Button
-                    variant="secondary"
-                    onClick={() => {
-                      setEditing(false)
-                      setCustomerChangeOpen(true)
-                    }}
-                    disabled={busy}
-                  >
-                    {t('dossiers.customerChange.action')}
-                  </Button>
-                </div>
+        {editing && (
+          <Modal
+            title={t('dossiers.detail.editTitle')}
+            onClose={() => setEditing(false)}
+            busy={busy}
+            footer={
+              <>
+                <Button variant="secondary" onClick={() => setEditing(false)} disabled={busy}>
+                  {t('ui.actions.cancel')}
+                </Button>
+                <Button type="submit" form="edit-dossier-form" disabled={busy}>
+                  {t('ui.actions.save')}
+                </Button>
+              </>
+            }
+          >
+            <form id="edit-dossier-form" onSubmit={(event) => void submitEdit(event)}>
+              <ValidationSummary message={formError} fieldErrors={fieldErrors} />
+              <FormField label={t('dossiers.detail.titleField')} htmlFor="edit-title" required error={getFieldError(fieldErrors, 'title')}>
+                <input id="edit-title" value={title} onChange={(event) => setTitle(event.target.value)} maxLength={200} />
               </FormField>
-            ) : (
-              <FormField label={t('dossiers.detail.customerField')} htmlFor="edit-customer" error={getFieldError(fieldErrors, 'customerId')}>
-                <SearchableSelect id="edit-customer" value={customerId} onChange={setCustomerId} options={customerOptions} />
+              <FormField label={t('dossiers.detail.customerReferenceField')} htmlFor="edit-ref" error={getFieldError(fieldErrors, 'customerReference')}>
+                <input
+                  id="edit-ref"
+                  value={customerReference}
+                  onChange={(event) => setCustomerReference(event.target.value)}
+                  maxLength={100}
+                />
               </FormField>
-            )}
-            <FormField label={t('dossiers.detail.responsibleField')} htmlFor="edit-responsible" error={getFieldError(fieldErrors, 'responsibleUserId')}>
-              <SearchableSelect
-                id="edit-responsible"
-                value={responsibleUserId}
-                onChange={setResponsibleUserId}
-                options={userOptions}
-              />
-            </FormField>
-            <FormField label={t('dossiers.detail.notesField')} htmlFor="edit-notes" error={getFieldError(fieldErrors, 'notes')}>
-              <textarea id="edit-notes" value={notes} onChange={(event) => setNotes(event.target.value)} rows={3} maxLength={4000} />
-            </FormField>
-          </form>
-        </Modal>
-      )}
+              <FormField label={t('dossiers.detail.dateField')} htmlFor="edit-date" error={getFieldError(fieldErrors, 'dossierDate')}>
+                <input id="edit-date" type="date" value={dossierDate} onChange={(event) => setDossierDate(event.target.value)} />
+              </FormField>
+              <FormField label={t('dossiers.detail.descriptionField')} htmlFor="edit-description" error={getFieldError(fieldErrors, 'description')}>
+                <textarea
+                  id="edit-description"
+                  value={description}
+                  onChange={(event) => setDescription(event.target.value)}
+                  rows={3}
+                  maxLength={2000}
+                />
+              </FormField>
+              {dossier.customerId || dossier.orders.length > 0 ? (
+                <FormField label={t('dossiers.detail.customerField')} htmlFor="edit-customer-locked" hint={t('dossiers.customerChange.lockedHint')}>
+                  <div className="dossier-customer-locked">
+                    <span id="edit-customer-locked">{dossier.customerName ?? '—'}</span>
+                    <Button
+                      variant="secondary"
+                      onClick={() => {
+                        setEditing(false)
+                        setCustomerChangeOpen(true)
+                      }}
+                      disabled={busy}
+                    >
+                      {t('dossiers.customerChange.action')}
+                    </Button>
+                  </div>
+                </FormField>
+              ) : (
+                <FormField label={t('dossiers.detail.customerField')} htmlFor="edit-customer" error={getFieldError(fieldErrors, 'customerId')}>
+                  <SearchableSelect id="edit-customer" value={customerId} onChange={setCustomerId} options={customerOptions} />
+                </FormField>
+              )}
+              <FormField label={t('dossiers.detail.responsibleField')} htmlFor="edit-responsible" error={getFieldError(fieldErrors, 'responsibleUserId')}>
+                <SearchableSelect
+                  id="edit-responsible"
+                  value={responsibleUserId}
+                  onChange={setResponsibleUserId}
+                  options={userOptions}
+                />
+              </FormField>
+              <FormField label={t('dossiers.detail.notesField')} htmlFor="edit-notes" error={getFieldError(fieldErrors, 'notes')}>
+                <textarea id="edit-notes" value={notes} onChange={(event) => setNotes(event.target.value)} rows={3} maxLength={4000} />
+              </FormField>
+            </form>
+          </Modal>
+        )}
 
-      {customerChangeOpen && (
-        <DossierCustomerChangeDialog
-          dossier={dossier}
-          onClose={() => setCustomerChangeOpen(false)}
-          onChanged={(updated) => {
-            applyDossier(updated)
-            setCustomerChangeOpen(false)
-            toast.showSuccess(t('dossiers.customerChange.changed'))
-          }}
-        />
-      )}
+        {customerChangeOpen && (
+          <DossierCustomerChangeDialog
+            dossier={dossier}
+            onClose={() => setCustomerChangeOpen(false)}
+            onChanged={(updated) => {
+              applyDossier(updated)
+              setCustomerChangeOpen(false)
+              toast.showSuccess(t('dossiers.customerChange.changed'))
+            }}
+          />
+        )}
 
-      {showLinkOrder && (
-        <LinkOrderDialog
-          dossier={dossier}
-          onClose={() => setShowLinkOrder(false)}
-          onUpdated={(updated) => {
-            applyDossier(updated)
-            toast.showSuccess(t('dossiers.detail.orderLinked'))
-          }}
-        />
-      )}
+        {showLinkOrder && (
+          <LinkOrderDialog
+            dossier={dossier}
+            onClose={() => setShowLinkOrder(false)}
+            onUpdated={(updated) => {
+              applyDossier(updated)
+              toast.showSuccess(t('dossiers.detail.orderLinked'))
+            }}
+          />
+        )}
 
-      {showAddRelation && (
-        <AddRelationDialog
-          dossier={dossier}
-          onClose={() => setShowAddRelation(false)}
-          onUpdated={(updated) => {
-            applyDossier(updated)
-            toast.showSuccess(t('dossiers.detail.relationAdded'))
-          }}
-        />
-      )}
+        {showAddRelation && (
+          <AddRelationDialog
+            dossier={dossier}
+            onClose={() => setShowAddRelation(false)}
+            onUpdated={(updated) => {
+              applyDossier(updated)
+              toast.showSuccess(t('dossiers.detail.relationAdded'))
+            }}
+          />
+        )}
 
-      {confirmClose && (
-        <ConfirmDialog
-          title={t('dossiers.detail.closeTitle')}
-          message={t('dossiers.detail.closeMessage')}
-          confirmLabel={t('dossiers.detail.closeConfirm')}
-          busy={busy}
-          onCancel={() => setConfirmClose(false)}
-          onConfirm={() =>
-            void run(() => closeDossier(id), t('dossiers.detail.closed')).then((ok) => {
-              if (ok) setConfirmClose(false)
-            })
-          }
-        />
-      )}
-    </div>
+        {confirmClose && (
+          <ConfirmDialog
+            title={t('dossiers.detail.closeTitle')}
+            message={t('dossiers.detail.closeMessage')}
+            confirmLabel={t('dossiers.detail.closeConfirm')}
+            busy={busy}
+            onCancel={() => setConfirmClose(false)}
+            onConfirm={() =>
+              void run(() => closeDossier(id), t('dossiers.detail.closed')).then((ok) => {
+                if (ok) setConfirmClose(false)
+              })
+            }
+          />
+        )}
+      </div>
+    </DossierWorkspaceContext.Provider>
   )
 }

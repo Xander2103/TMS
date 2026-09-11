@@ -268,7 +268,10 @@ const router = createBrowserRouter(
           <Route path="/maintenance-policies" element={<MaintenancePoliciesPage />} />
           <Route path="/dossiers" element={<DossiersPage />} />
           <Route path="/dossiers/new" element={<NewDossierPage />} />
-          <Route path="/dossiers/:id" element={<DossierDetailPage />} />
+          {/* Redesign 2026-09-11: one route element for the dossier shell; the optional segment
+              selects the subsection (overzicht · activiteiten · route · goederen · prijs ·
+              documenten · historiek) so deep links and back/forward work without remounting. */}
+          <Route path="/dossiers/:id/:section?" element={<DossierDetailPage />} />
           <Route path="/incidents" element={<IncidentsPage />} />
           <Route path="/incidents/new" element={<IncidentDetailPage />} />
           <Route path="/incidents/:id" element={<IncidentDetailPage />} />

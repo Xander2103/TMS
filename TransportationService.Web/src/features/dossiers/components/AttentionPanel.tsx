@@ -34,15 +34,17 @@ interface AttentionPanelProps {
 }
 
 /**
- * §11 attention panel: one actionable row per readiness issue (icon + text, never
- * colour-only) with a [Ga naar …] jump. Hidden entirely when there is nothing to say.
+ * Aandacht as a compact horizontal strip (redesign 2026-09-11): one label, then every
+ * readiness issue inline — icon + text (never colour-only) + its [Ga naar …] jump — separated
+ * by dividers and wrapping onto a second line when needed. Hidden when there is nothing to say.
  */
 export function AttentionPanel({ issues, onNavigate }: AttentionPanelProps) {
   const { t } = useLocale()
   if (issues.length === 0) return null
+  const worst = issues.some((i) => i.severity === 'Blocking') ? 'blocking' : issues.some((i) => i.severity === 'Warning') ? 'warning' : 'info'
   return (
-    <section className="dossier-attention" aria-label={t('dossiers.attention.title')}>
-      <h2>{t('dossiers.attention.title')}</h2>
+    <section className={`dossier-attention dossier-attention-strip is-${worst}`} aria-label={t('dossiers.attention.title')}>
+      <h2>{t('dossiers.attention.title')}:</h2>
       <ul>
         {issues.map((issue) => (
           <li key={`${issue.code}-${issue.message}`} className={`dossier-attention-${issue.severity.toLowerCase()}`}>

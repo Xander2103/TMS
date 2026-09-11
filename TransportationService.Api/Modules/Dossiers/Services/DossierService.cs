@@ -372,7 +372,7 @@ public class DossierService : IDossierService
                 (l, o) => new
                 {
                     LinkId = l.Id, o.Id, o.OrderNumber, o.OrderDate, o.Status, o.GoodsDescription, o.AgreedPrice,
-                    o.PriceIsManual, o.PricingSource, o.OneOffFixedAmount,
+                    o.PriceIsManual, o.PricingSource, o.OneOffFixedAmount, o.UpdatedAt,
                 })
             .OrderByDescending(x => x.OrderDate)
             .ToListAsync(cancellationToken);
@@ -428,7 +428,7 @@ public class DossierService : IDossierService
                 {
                     a.Id, a.ActivityTypeId, t.Code, t.Name, t.Icon, t.HasStops, t.SupportsGoods, t.AllowsDuration, t.IsBillable,
                     a.Sequence, a.Label, a.LinkedTransportOrderId, a.LinkedActivityId,
-                    a.PlannedDate, a.DurationHours, a.Notes,
+                    a.PlannedDate, a.DurationHours, a.Notes, a.UpdatedAt,
                 })
             .ToListAsync(cancellationToken);
         var linkedOrders = orderRows.ToDictionary(o => o.Id, o => o);
@@ -510,13 +510,30 @@ public class DossierService : IDossierService
 
         var readiness = await _readinessService.EvaluateAsync(id, cancellationToken);
 
+        // Redesign 2026-09-11: the Overzicht summarises documents and "last changed" without
+        // extra client fetches — one query over the linked orders' documents, and the maximum
+        // UpdatedAt over rows that are already in memory.
+        var documentTypes = orderIds.Count == 0
+            ? []
+            : await _dbContext.TransportOrderDocuments.AsNoTracking()
+                .Where(d => d.TenantId == tenantId && orderIds.Contains(d.TransportOrderId))
+                .Select(d => d.DocumentType)
+                .ToListAsync(cancellationToken);
+        var lastChangedAt = new[] { dossier.UpdatedAt }
+            .Concat(activityRows.Select(a => a.UpdatedAt))
+            .Concat(orderRows.Select(o => o.UpdatedAt))
+            .Max();
+
         return new DossierDetailDto(
             dossier.Id, dossier.DossierNumber, dossier.Title, dossier.Description, dossier.Status.ToString(),
             dossier.CustomerId, customerName, dossier.ResponsibleUserId, responsibleName,
             dossier.ClosedAt, dossier.Notes, dossier.CreatedAt,
             orders, relations, incidents, financials,
             dossier.CustomerReference, dossier.DossierDate, dossier.LegalEntityId, legalEntityName,
-            dossier.Version, activities.Select(a => a.Dto).ToList(), readiness);
+            dossier.Version, activities.Select(a => a.Dto).ToList(), readiness,
+            DocumentCount: documentTypes.Count,
+            DocumentTypes: documentTypes.Select(d => d.ToString()).Distinct().ToList(),
+            LastChangedAt: lastChangedAt);
     }
 
     public async Task<DossierDetailDto?> UpdateAsync(Guid id, SaveDossierRequest request, CancellationToken cancellationToken)

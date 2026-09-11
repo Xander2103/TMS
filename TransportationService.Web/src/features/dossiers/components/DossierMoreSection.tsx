@@ -20,14 +20,16 @@ interface DossierMoreSectionProps {
   canManage: boolean
   busy: boolean
   onRemoveRelation: (relationId: string) => void
+  /** Redesign 2026-09-11: expanded by default inside the Historiek workspace. */
+  defaultOpen?: boolean
 }
 
 /** Ingeklapte compat-sectie: financieel overzicht, gerelateerde dossiers en incidenten. */
-export function DossierMoreSection({ dossier, canManage, busy, onRemoveRelation }: DossierMoreSectionProps) {
+export function DossierMoreSection({ dossier, canManage, busy, onRemoveRelation, defaultOpen = false }: DossierMoreSectionProps) {
   const { t } = useLocale()
   const navigate = useNavigate()
   return (
-    <details className="dossier-collapsed" id="sectie-meer">
+    <details className="dossier-collapsed" id="sectie-meer" open={defaultOpen}>
       <summary>
         {dossier.incidents.length > 0
           ? t('dossiers.more.summaryWithCount', { count: dossier.incidents.length })

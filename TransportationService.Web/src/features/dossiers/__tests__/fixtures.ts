@@ -51,6 +51,9 @@ export function dossierDetail(overrides: Partial<DossierDetail> = {}): DossierDe
     version: 'v-1',
     activities: [],
     readiness: [],
+    documentCount: 0,
+    documentTypes: [],
+    lastChangedAt: '2026-08-12T09:30:00Z',
     ...overrides,
   }
 }

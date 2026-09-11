@@ -150,6 +150,11 @@ export interface DossierDetail {
   version: string
   activities: DossierActivity[]
   readiness: ReadinessIssue[]
+  /** Redesign 2026-09-11 (Overzicht): documents on the linked orders — count + distinct type codes. Absent on older payloads. */
+  documentCount?: number
+  documentTypes?: string[]
+  /** Latest change over the dossier, its activities and linked orders (ISO); null/absent when unknown. */
+  lastChangedAt?: string | null
 }
 
 export interface DossierInput {

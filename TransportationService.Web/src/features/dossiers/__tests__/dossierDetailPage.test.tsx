@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 import { ApiError } from '../../../api/apiClient'
@@ -96,11 +96,16 @@ vi.mock('../../legal-entities/api/legalEntitiesApi', () => ({
   getLegalEntityOptions: () => Promise.resolve([]),
 }))
 
-function renderPage() {
-  const router = createMemoryRouter([{ path: '/dossiers/:id', element: <DossierDetailPage /> }], {
-    initialEntries: ['/dossiers/d-1'],
+/** Redesign 2026-09-11: `/dossiers/:id/:section?` — one subsection at a time; tests render on the tab they exercise. */
+function renderPage(initialPath = '/dossiers/d-1') {
+  const router = createMemoryRouter([{ path: '/dossiers/:id/:section?', element: <DossierDetailPage /> }], {
+    initialEntries: [initialPath],
   })
-  return render(<RouterProvider router={router} />)
+  return { ...render(<RouterProvider router={router} />), router }
+}
+
+function subnav() {
+  return screen.getByRole('navigation', { name: 'Dossieronderdelen' })
 }
 
 /** Transportdossier: transportactiviteit met gekoppelde opdracht + kraanwerk met duur en begeleiding. */
@@ -137,30 +142,34 @@ describe('DossierDetailPage', () => {
     api.listDossiers.mockResolvedValue([])
   })
 
-  it('shows activity cards with order status, duration and accompaniment; route/goods sections follow capabilities', async () => {
+  it('shows activity cards with order status, duration and accompaniment; route/goods tabs follow capabilities', async () => {
     api.getDossier.mockResolvedValue(transportDossier())
-    renderPage()
+    const user = userEvent.setup()
+    const { router } = renderPage('/dossiers/d-1/activiteiten')
 
-    // The type name is on the card and (stap 13) as the sublabel of the unit switcher in Verkoop & prijs.
+    // The type name is on the card (and elsewhere, e.g. the accompaniment line).
     expect((await screen.findAllByText('Direct transport')).length).toBeGreaterThanOrEqual(1)
-    // Ordernummer + status op de kaart (ook elders getoond: prijslijst / operationele chip).
+    // Ordernummer + status op de kaart (ook elders getoond: operationele chip in de kop).
     expect(screen.getAllByText('ORD-0001').length).toBeGreaterThanOrEqual(1)
     expect(screen.getAllByText('Bevestigd').length).toBeGreaterThanOrEqual(1)
     // Standalone crane card: duration + accompaniment on the contextual line.
     expect(screen.getByText(/2,5 u/)).toBeInTheDocument()
     expect(screen.getByText(/Gekoppeld aan Direct transport/)).toBeInTheDocument()
 
-    // Capability-driven sections (any hasStops → Route, any supportsGoods → Goederen).
-    expect(screen.getByRole('heading', { name: 'Route' })).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'Goederen' })).toBeInTheDocument()
-    // The route is an editable work sheet: the existing loading stop is shown in its fields and
+    // Capability-driven tabs (any hasStops → Route, any supportsGoods → Goederen).
+    expect(within(subnav()).getByRole('link', { name: 'Route' })).toBeInTheDocument()
+    expect(within(subnav()).getByRole('link', { name: 'Goederen' })).toBeInTheDocument()
+    // The route tab is an editable work sheet: the existing loading stop is shown in its fields and
     // the missing unloading stop is already an empty, fillable row (no "Route bewerken" detour).
+    await user.click(within(subnav()).getByRole('link', { name: 'Route' }))
+    expect(router.state.location.pathname).toBe('/dossiers/d-1/route')
+    expect(screen.getByRole('heading', { name: 'Route' })).toBeInTheDocument()
     expect(await screen.findByDisplayValue('Nexans site Antwerpen')).toBeInTheDocument()
     expect(screen.getAllByLabelText('locatie')).toHaveLength(2)
     expect(screen.getByText('2. Lossen')).toBeInTheDocument()
   })
 
-  it('renders no Route section for a storage-only dossier', async () => {
+  it('renders no Route tab or card for a storage-only dossier', async () => {
     api.getDossier.mockResolvedValue(
       dossierDetail({
         activities: [
@@ -175,6 +184,7 @@ describe('DossierDetailPage', () => {
 
     expect(await screen.findByText('Opslag')).toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: 'Route' })).not.toBeInTheDocument()
+    expect(within(subnav()).queryByRole('link', { name: 'Route' })).not.toBeInTheDocument()
     expect(getOrder).not.toHaveBeenCalled()
   })
 
@@ -190,22 +200,24 @@ describe('DossierDetailPage', () => {
         ],
       }),
     )
-    renderPage()
+    renderPage('/dossiers/d-1/activiteiten')
 
     expect(await screen.findByRole('heading', { name: 'Gekoppelde opdrachten' })).toBeInTheDocument()
     expect(screen.getAllByText('ORD-0099').length).toBeGreaterThanOrEqual(1)
     expect(screen.getByRole('button', { name: 'Ontkoppelen' })).toBeInTheDocument()
   })
 
-  it('scrolls to the named section from the attention panel', async () => {
+  it('opens the route tab and scrolls to the section from the attention strip', async () => {
     const scrollSpy = vi.fn()
     window.HTMLElement.prototype.scrollIntoView = scrollSpy
     api.getDossier.mockResolvedValue(transportDossier())
     const user = userEvent.setup()
-    renderPage()
+    const { router } = renderPage()
 
     await user.click(await screen.findByRole('button', { name: 'Ga naar route' }))
-    expect(scrollSpy).toHaveBeenCalled()
+    expect(router.state.location.pathname).toBe('/dossiers/d-1/route')
+    await waitFor(() => expect(scrollSpy).toHaveBeenCalled())
+    expect(document.getElementById('sectie-route')?.hasAttribute('data-highlight')).toBe(true)
   })
 
   it('shows the 409 banner on a conflicting mutation and Herladen adopts the fresh state', async () => {
