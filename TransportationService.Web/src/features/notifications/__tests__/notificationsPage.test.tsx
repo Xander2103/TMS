@@ -105,7 +105,7 @@ describe('NotificationsPage — list and grouping', () => {
   it('renders compact rows grouped as Vandaag / Deze week / Eerder with counts', async () => {
     vi.spyOn(api, 'listNotifications').mockResolvedValue(threeGroups())
     renderPage()
-    expect(await screen.findByText('Opdracht aangemaakt')).toBeInTheDocument()
+    expect((await screen.findAllByText('Opdracht aangemaakt'))[0]).toBeInTheDocument()
 
     expect(screen.getByRole('button', { name: 'Groep Vandaag in- of uitklappen' })).toHaveTextContent('Vandaag (1)')
     expect(screen.getByRole('button', { name: 'Groep Deze week in- of uitklappen' })).toHaveTextContent('Deze week (1)')
@@ -122,21 +122,22 @@ describe('NotificationsPage — list and grouping', () => {
   it('collapses and expands a group', async () => {
     vi.spyOn(api, 'listNotifications').mockResolvedValue(threeGroups())
     renderPage()
-    await screen.findByText('Opdracht aangemaakt')
+    await screen.findAllByText('Opdracht aangemaakt')
 
     const toggle = screen.getByRole('button', { name: 'Groep Vandaag in- of uitklappen' })
     expect(toggle).toHaveAttribute('aria-expanded', 'true')
     await userEvent.click(toggle)
     expect(toggle).toHaveAttribute('aria-expanded', 'false')
-    expect(screen.queryByRole('button', { name: /Opdracht aangemaakt/ })).not.toBeInTheDocument()
+    const list = () => within(screen.getByLabelText('Meldingenlijst'))
+    expect(list().queryByRole('button', { name: /Opdracht aangemaakt/ })).not.toBeInTheDocument()
     await userEvent.click(toggle)
-    expect(screen.getByRole('button', { name: /Opdracht aangemaakt/ })).toBeInTheDocument()
+    expect(list().getByRole('button', { name: /Opdracht aangemaakt/ })).toBeInTheDocument()
   })
 
   it('marks unread rows visually and read rows plainly', async () => {
     vi.spyOn(api, 'listNotifications').mockResolvedValue(threeGroups())
     renderPage()
-    await screen.findByText('Opdracht aangemaakt')
+    await screen.findAllByText('Opdracht aangemaakt')
 
     expect(rowButton('Opdracht aangemaakt')).toHaveClass('is-unread')
     expect(within(rowButton('Opdracht aangemaakt')).getByText('Ongelezen')).toBeInTheDocument()
@@ -149,20 +150,20 @@ describe('NotificationsPage — list and grouping', () => {
       makeNotification({ id: 'done', title: 'Opgeloste melding', resolvedAt: '2026-07-30T12:00:00Z', isRead: true }),
     ])
     renderPage()
-    expect(await screen.findByText('Actieve melding')).toBeInTheDocument()
+    expect((await screen.findAllByText('Actieve melding'))[0]).toBeInTheDocument()
     expect(screen.queryByText('Opgeloste melding')).not.toBeInTheDocument()
 
     const toggle = screen.getByLabelText(/Opgeloste verbergen/)
     expect(toggle).toBeChecked()
     await userEvent.click(toggle)
-    expect(await screen.findByText('Opgeloste melding')).toBeInTheDocument()
+    expect(await screen.findByText('Opgeloste melding', { selector: '.ntc-row-title' })).toBeInTheDocument()
     expect(screen.getByText('Opgelost')).toBeInTheDocument()
   })
 
   it('has no duplicate element ids and wires group toggles to their lists', async () => {
     vi.spyOn(api, 'listNotifications').mockResolvedValue(threeGroups())
     const { container } = renderPage()
-    await screen.findByText('Opdracht aangemaakt')
+    await screen.findAllByText('Opdracht aangemaakt')
     await userEvent.click(rowButton('Opdracht aangemaakt'))
 
     const ids = Array.from(container.querySelectorAll('[id]')).map((el) => el.id)
@@ -177,7 +178,7 @@ describe('NotificationsPage — list and grouping', () => {
   it('moves focus between rows with the arrow keys', async () => {
     vi.spyOn(api, 'listNotifications').mockResolvedValue(threeGroups())
     renderPage()
-    await screen.findByText('Opdracht aangemaakt')
+    await screen.findAllByText('Opdracht aangemaakt')
 
     rowButton('Opdracht aangemaakt').focus()
     await userEvent.keyboard('{ArrowDown}')
@@ -190,12 +191,27 @@ describe('NotificationsPage — list and grouping', () => {
 })
 
 describe('NotificationsPage — selection and detail panel', () => {
-  it('shows an empty detail state until a row is selected, then the full notification', async () => {
+  it('shows the newest visible notification in the detail panel by default (no empty right column)', async () => {
     vi.spyOn(api, 'listNotifications').mockResolvedValue(threeGroups())
     renderPage()
-    await screen.findByText('Opdracht aangemaakt')
+    await screen.findAllByText('Opdracht aangemaakt')
     const detail = screen.getByRole('region', { name: 'Meldingdetail' })
-    expect(within(detail).getByText('Geen melding geselecteerd')).toBeInTheDocument()
+    expect(within(detail).queryByText('Geen melding geselecteerd')).not.toBeInTheDocument()
+    expect(within(detail).getByRole('heading', { level: 2, name: 'Opdracht aangemaakt' })).toBeInTheDocument()
+    expect(rowButton('Opdracht aangemaakt')).toHaveAttribute('aria-pressed', 'true')
+
+    // Picking another row swaps the panel content without leaving the page.
+    await userEvent.click(rowButton('Lage voorraad'))
+    expect(rowButton('Lage voorraad')).toHaveAttribute('aria-pressed', 'true')
+    expect(rowButton('Opdracht aangemaakt')).toHaveAttribute('aria-pressed', 'false')
+    expect(within(detail).getByRole('heading', { level: 2, name: 'Lage voorraad' })).toBeInTheDocument()
+    expect(within(detail).getByRole('button', { name: 'Melding "Lage voorraad" archiveren' })).toBeInTheDocument()
+  })
+
+  it('selects a row into the detail panel with its content and contextual actions', async () => {
+    vi.spyOn(api, 'listNotifications').mockResolvedValue(threeGroups())
+    renderPage()
+    await screen.findAllByText('Opdracht aangemaakt')
 
     await userEvent.click(rowButton('Opdracht aangemaakt'))
     expect(rowButton('Opdracht aangemaakt')).toHaveAttribute('aria-pressed', 'true')
@@ -213,8 +229,12 @@ describe('NotificationsPage — selection and detail panel', () => {
     expect(within(panel).getByRole('button', { name: 'Melding "Opdracht aangemaakt" archiveren' })).toBeInTheDocument()
     expect(within(panel).getByText('Vervolgactie')).toBeInTheDocument()
 
+    // Closing the panel shows the empty state; selecting again re-fills it.
     await userEvent.click(within(panel).getByRole('button', { name: 'Detail sluiten' }))
     expect(screen.getByText('Geen melding geselecteerd')).toBeInTheDocument()
+    expect(rowButton('Opdracht aangemaakt')).toHaveAttribute('aria-pressed', 'false')
+    await userEvent.click(rowButton('Conceptfactuur klaar'))
+    expect(within(panel).getByRole('heading', { level: 2, name: 'Conceptfactuur klaar' })).toBeInTheDocument()
   })
 
   it('restores the selection from the ?id= query parameter (deep link)', async () => {
@@ -230,7 +250,7 @@ describe('NotificationsPage — selection and detail panel', () => {
   it('marks the selected notification as read without leaving the page', async () => {
     vi.spyOn(api, 'listNotifications').mockResolvedValue(threeGroups())
     renderPage()
-    await screen.findByText('Opdracht aangemaakt')
+    await screen.findAllByText('Opdracht aangemaakt')
     await userEvent.click(rowButton('Opdracht aangemaakt'))
 
     await userEvent.click(screen.getByRole('button', { name: 'Markeer als gelezen' }))
@@ -244,7 +264,7 @@ describe('NotificationsPage — selection and detail panel', () => {
   it('opens the related object via the primary action (legacy /orders path rewritten) and marks it read', async () => {
     vi.spyOn(api, 'listNotifications').mockResolvedValue(threeGroups())
     renderPage()
-    await screen.findByText('Opdracht aangemaakt')
+    await screen.findAllByText('Opdracht aangemaakt')
     await userEvent.click(rowButton('Opdracht aangemaakt'))
     await userEvent.click(screen.getByRole('button', { name: 'Open opdracht' }))
 
@@ -255,23 +275,26 @@ describe('NotificationsPage — selection and detail panel', () => {
   it('offers "Naar planbord" as follow-up for order notifications', async () => {
     vi.spyOn(api, 'listNotifications').mockResolvedValue(threeGroups())
     renderPage()
-    await screen.findByText('Opdracht aangemaakt')
+    await screen.findAllByText('Opdracht aangemaakt')
     await userEvent.click(rowButton('Opdracht aangemaakt'))
     await userEvent.click(screen.getByRole('button', { name: 'Naar planbord' }))
     expect(await screen.findByText('Planbord pagina')).toBeInTheDocument()
   })
 
-  it('archives from the detail panel, reloads and clears the selection', async () => {
-    vi.spyOn(api, 'listNotifications').mockResolvedValue(threeGroups())
+  it('archives from the detail panel, reloads and moves on to the next newest notification', async () => {
+    const [today, ...rest] = threeGroups()
+    vi.spyOn(api, 'listNotifications').mockResolvedValueOnce([today, ...rest]).mockResolvedValue(rest)
     renderPage()
-    await screen.findByText('Opdracht aangemaakt')
+    await screen.findAllByText('Opdracht aangemaakt')
     await userEvent.click(rowButton('Opdracht aangemaakt'))
     const callsBefore = vi.mocked(api.listNotifications).mock.calls.length
 
     await userEvent.click(screen.getByRole('button', { name: 'Melding "Opdracht aangemaakt" archiveren' }))
     expect(api.archiveNotification).toHaveBeenCalledWith('today')
     await waitFor(() => expect(vi.mocked(api.listNotifications).mock.calls.length).toBeGreaterThan(callsBefore))
-    expect(await screen.findByText('Geen melding geselecteerd')).toBeInTheDocument()
+    const panel = screen.getByRole('region', { name: 'Meldingdetail' })
+    expect(await within(panel).findByRole('heading', { level: 2, name: 'Lage voorraad' })).toBeInTheDocument()
+    expect(screen.queryByText('Geen melding geselecteerd')).not.toBeInTheDocument()
   })
 
   it('shows "Bevestigen" only for unacknowledged acknowledgement notifications and calls the API', async () => {
@@ -286,7 +309,7 @@ describe('NotificationsPage — selection and detail panel', () => {
       makeNotification({ id: 'plain', title: 'Zonder bevestiging' }),
     ])
     renderPage()
-    expect(await screen.findByText('Bevestiging nodig')).toBeInTheDocument()
+    expect((await screen.findAllByText('Bevestiging nodig'))[0]).toBeInTheDocument()
     expect(within(rowButton('Bevestiging nodig')).getByText('Te bevestigen')).toBeInTheDocument()
     expect(within(rowButton('Al bevestigd')).queryByText('Te bevestigen')).not.toBeInTheDocument()
 
@@ -305,15 +328,30 @@ describe('NotificationsPage — selection and detail panel', () => {
 })
 
 describe('NotificationsPage — header, filters and states', () => {
-  it('shows summary counters and marks everything read from the header', async () => {
+  it('shows the five summary chips and marks everything read from the toolbar', async () => {
     vi.spyOn(api, 'listNotifications').mockResolvedValue(threeGroups())
     renderPage()
-    await screen.findByText('Opdracht aangemaakt')
+    await screen.findAllByText('Opdracht aangemaakt')
 
     const summary = screen.getByRole('group', { name: 'Samenvatting' })
-    expect(within(summary).getByRole('button', { name: /Open/ })).toHaveTextContent('3')
-    expect(within(summary).getByRole('button', { name: /Ongelezen/ })).toHaveTextContent('2')
-    expect(within(summary).getByRole('button', { name: /Waarschuwingen/ })).toHaveTextContent('1')
+    const chip = (label: string) => within(summary).getByRole('button', { name: `Filter op ${label}` })
+    expect(within(summary).getAllByRole('button')).toHaveLength(5)
+    expect(chip('Ongelezen')).toHaveTextContent('2')
+    expect(chip('Ongelezen')).toHaveTextContent('2 nieuw')
+    expect(chip('Ongelezen')).toHaveTextContent('van 3 totaal')
+    expect(chip('Opdrachten')).toHaveTextContent('1')
+    expect(chip('Planning')).toHaveTextContent('0')
+    expect(chip('Planning')).toHaveTextContent('geen nieuwe')
+    expect(chip('Facturatie')).toHaveTextContent('1')
+    expect(chip('Incidenten')).toHaveTextContent('1')
+
+    // Chips are toggles that narrow the list.
+    await userEvent.click(chip('Facturatie'))
+    expect(chip('Facturatie')).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByText('1 melding')).toBeInTheDocument()
+    expect(screen.getByText('Conceptfactuur klaar', { selector: '.ntc-row-title' })).toBeInTheDocument()
+    await userEvent.click(chip('Facturatie'))
+    expect(screen.getByText('3 meldingen')).toBeInTheDocument()
 
     await userEvent.click(screen.getByRole('button', { name: 'Alles gelezen' }))
     expect(api.markAllNotificationsRead).toHaveBeenCalled()
@@ -322,21 +360,21 @@ describe('NotificationsPage — header, filters and states', () => {
   it('filters by search, status and warnings; category and archive go to the API', async () => {
     vi.spyOn(api, 'listNotifications').mockResolvedValue(threeGroups())
     renderPage()
-    await screen.findByText('Opdracht aangemaakt')
+    await screen.findAllByText('Opdracht aangemaakt')
 
     await userEvent.type(screen.getByRole('searchbox', { name: 'Zoeken in meldingen' }), 'voorraad')
     expect(screen.getByText('1 melding')).toBeInTheDocument()
-    expect(screen.queryByText('Opdracht aangemaakt')).not.toBeInTheDocument()
+    expect(screen.queryByText('Opdracht aangemaakt', { selector: '.ntc-row-title' })).not.toBeInTheDocument()
     await userEvent.clear(screen.getByRole('searchbox', { name: 'Zoeken in meldingen' }))
 
     await userEvent.selectOptions(screen.getByLabelText('Status'), 'unread')
     expect(screen.getByText('2 meldingen')).toBeInTheDocument()
-    expect(screen.queryByText('Lage voorraad')).not.toBeInTheDocument()
+    expect(screen.queryByText('Lage voorraad', { selector: '.ntc-row-title' })).not.toBeInTheDocument()
     await userEvent.selectOptions(screen.getByLabelText('Status'), 'all')
 
-    await userEvent.click(within(screen.getByRole('group', { name: 'Samenvatting' })).getByRole('button', { name: /Waarschuwingen/ }))
+    await userEvent.click(within(screen.getByRole('group', { name: 'Samenvatting' })).getByRole('button', { name: 'Filter op Incidenten' }))
     expect(screen.getByText('1 melding')).toBeInTheDocument()
-    expect(screen.getByText('Lage voorraad')).toBeInTheDocument()
+    expect(screen.getByText('Lage voorraad', { selector: '.ntc-row-title' })).toBeInTheDocument()
 
     await userEvent.click(screen.getByRole('button', { name: 'Filters wissen' }))
     expect(screen.getByText('3 meldingen')).toBeInTheDocument()
@@ -361,12 +399,12 @@ describe('NotificationsPage — header, filters and states', () => {
   it('shows a distinct empty state when filters exclude everything', async () => {
     vi.spyOn(api, 'listNotifications').mockResolvedValue(threeGroups())
     renderPage()
-    await screen.findByText('Opdracht aangemaakt')
+    await screen.findAllByText('Opdracht aangemaakt')
     await userEvent.type(screen.getByRole('searchbox', { name: 'Zoeken in meldingen' }), 'bestaat niet')
     expect(screen.getByText('Geen meldingen voor deze filters.')).toBeInTheDocument()
     // Both the filter bar and the empty state offer a reset; either works.
     await userEvent.click(screen.getAllByRole('button', { name: 'Filters wissen' })[1])
-    expect(screen.getByText('Opdracht aangemaakt')).toBeInTheDocument()
+    expect(screen.getByText('Opdracht aangemaakt', { selector: '.ntc-row-title' })).toBeInTheDocument()
   })
 
   it('shows an error state with retry when loading fails', async () => {
@@ -374,7 +412,7 @@ describe('NotificationsPage — header, filters and states', () => {
     renderPage()
     expect(await screen.findByRole('alert')).toHaveTextContent('Meldingen konden niet worden geladen.')
     await userEvent.click(screen.getByRole('button', { name: 'Opnieuw proberen' }))
-    expect(await screen.findByText('Opdracht aangemaakt')).toBeInTheDocument()
+    expect((await screen.findAllByText('Opdracht aangemaakt'))[0]).toBeInTheDocument()
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 })

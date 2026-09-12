@@ -82,12 +82,16 @@
     "daysAgo": "{count} days ago"
   },
   "stats": {
-    "open": "Open",
     "unread": "Unread",
-    "warnings": "Warnings",
+    "orders": "Orders",
+    "planning": "Planning",
+    "invoices": "Invoicing",
+    "warnings": "Incidents",
     "ofTotal": "of {count} total",
     "unreadNew": "{count} new",
-    "ariaLabel": "Summary"
+    "noneNew": "none new",
+    "ariaLabel": "Summary",
+    "filterAria": "Filter on {label}"
   },
   "groups": {
     "today": "Today",

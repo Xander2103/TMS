@@ -82,12 +82,16 @@
     "daysAgo": "il y a {count} jours"
   },
   "stats": {
-    "open": "Ouvertes",
     "unread": "Non lues",
-    "warnings": "Avertissements",
+    "orders": "Ordres",
+    "planning": "Planning",
+    "invoices": "Facturation",
+    "warnings": "Incidents",
     "ofTotal": "sur {count} au total",
     "unreadNew": "{count} nouvelles",
-    "ariaLabel": "Résumé"
+    "noneNew": "aucune nouvelle",
+    "ariaLabel": "Résumé",
+    "filterAria": "Filtrer sur {label}"
   },
   "groups": {
     "today": "Aujourd’hui",

@@ -1,6 +1,29 @@
-import { useCallback, useContext, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import {
+  useCallback,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type KeyboardEvent,
+  type ReactNode,
+  type RefObject,
+} from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { AlertTriangle, BellRing, CheckCheck, ChevronDown, ChevronRight, Inbox, Search } from 'lucide-react'
+import {
+  AlertTriangle,
+  Bell,
+  CalendarDays,
+  CheckCheck,
+  ChevronDown,
+  ChevronRight,
+  FileText,
+  Inbox,
+  Receipt,
+  Search,
+} from 'lucide-react'
 import { PageHeader } from '../../../components/layout/PageHeader'
 import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { Button } from '../../../components/ui/Button'
@@ -23,11 +46,12 @@ import { NotificationsContext } from '../notificationsContextValue'
 import { useLocale } from '../../../i18n/localeContext'
 import {
   DEFAULT_LIST_FILTERS,
-  computeStats,
+  computeSummary,
   filterNotifications,
   groupNotifications,
   resolveNotificationLink,
   type NotificationGroupKey,
+  type NotificationKind,
   type NotificationListFilters,
   type NotificationSort,
   type NotificationStatusFilter,
@@ -44,11 +68,61 @@ const GROUP_LABEL_KEYS: Record<NotificationGroupKey, string> = {
   earlier: 'notificationCenter.groups.earlier',
 }
 
+/** Bottom padding of `.content` (AppLayout.css) that the workspace leaves free below itself. */
+const CONTENT_BOTTOM_PADDING = 32
+
 /**
- * Meldingen: master-detail notification centre. The list (left) stays visible while the
- * selected notification is shown on the right with its contextual actions. Data flow,
- * filters (category/archive server-side, the rest client-side), read/acknowledge/archive
- * and preferences are the existing behaviours; only the presentation changed.
+ * Measures where the workspace starts on the page so CSS can size it to the remaining viewport
+ * height (the list scrolls inside its panel, the detail panel spans the full column).
+ * Re-measured on resize and whenever the header above it changes height.
+ */
+function useWorkspaceOffset(ref: RefObject<HTMLDivElement | null>): number | null {
+  const [offset, setOffset] = useState<number | null>(null)
+  useLayoutEffect(() => {
+    const element = ref.current
+    if (!element) return
+    const measure = () => {
+      const top = Math.round(element.getBoundingClientRect().top + window.scrollY)
+      setOffset(top > 0 ? top + CONTENT_BOTTOM_PADDING : null)
+    }
+    measure()
+    window.addEventListener('resize', measure)
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure)
+    observer?.observe(document.body)
+    return () => {
+      window.removeEventListener('resize', measure)
+      observer?.disconnect()
+    }
+  }, [ref])
+  return offset
+}
+
+interface SummaryChip {
+  key: 'unread' | NotificationKind | 'warnings'
+  label: string
+  icon: ReactNode
+  tone: 'accent' | 'neutral' | 'warning'
+  value: number
+  unread: number
+  active: boolean
+  onToggle: () => void
+  /** Extra caption after the "n nieuw" pill (only on the unread chip). */
+  caption?: string
+}
+
+/**
+ * Meldingen: master-detail notification centre laid out as an inbox workspace.
+ *
+ *   header - summary chips - filter bar (+ "Alles gelezen")
+ *   [ list panel ~58% ................ ] [ detail panel ~42% ......... ]
+ *   [ count / sort                     ] [ title - category - time    ]
+ *   [ Vandaag / Deze week / Eerder     ] [ contextual actions         ]
+ *   [ compact rows (scroll inside)     ] [ full text - metadata       ]
+ *
+ * Selecting a row never navigates; it populates the detail panel. The newest visible
+ * notification is shown until the user picks one or closes the panel. Data flow, filters
+ * (category/archive server-side, the rest client-side), read/acknowledge/archive and
+ * preferences are the existing behaviours.
  */
 export function NotificationsPage() {
   const navigate = useNavigate()
@@ -67,7 +141,11 @@ export function NotificationsPage() {
   const [collapsed, setCollapsed] = useState<Set<NotificationGroupKey>>(() => new Set())
   const [busy, setBusy] = useState(false)
   const [preferences, setPreferences] = useState<NotificationPreference[] | null>(null)
+  /** True after the user closed the detail panel: suppresses the automatic "newest" selection. */
+  const [detailDismissed, setDetailDismissed] = useState(false)
   const listRef = useRef<HTMLDivElement>(null)
+  const bodyRef = useRef<HTMLDivElement>(null)
+  const workspaceOffset = useWorkspaceOffset(bodyRef)
 
   useEffect(() => {
     let mounted = true
@@ -112,10 +190,13 @@ export function NotificationsPage() {
   const all = useMemo(() => notifications ?? [], [notifications])
   const visible = useMemo(() => filterNotifications(all, filters, categoryLabel), [all, filters, categoryLabel])
   const groups = useMemo(() => groupNotifications(visible, now), [visible, now])
-  const stats = useMemo(() => computeStats(all), [all])
+  const summary = useMemo(() => computeSummary(all), [all])
 
   const selectedId = searchParams.get(SELECTED_PARAM)
-  const selected = useMemo(() => all.find((n) => n.id === selectedId) ?? null, [all, selectedId])
+  /** Only rows in the filtered list can be shown, so list and panel never disagree. */
+  const explicitSelection = useMemo(() => visible.find((n) => n.id === selectedId) ?? null, [visible, selectedId])
+  /** Explicit choice (deep link / click) wins; otherwise the newest visible row keeps the panel filled. */
+  const selected = explicitSelection ?? (detailDismissed ? null : (visible[0] ?? null))
 
   const setSelectedId = useCallback(
     (id: string | null) => {
@@ -131,6 +212,16 @@ export function NotificationsPage() {
     },
     [setSearchParams],
   )
+
+  function selectNotification(notification: Notification) {
+    setDetailDismissed(false)
+    setSelectedId(notification.id)
+  }
+
+  function closeDetail() {
+    setDetailDismissed(true)
+    setSelectedId(null)
+  }
 
   function patchNotification(id: string, patch: Partial<Notification>) {
     setNotifications((current) => current?.map((n) => (n.id === id ? { ...n, ...patch } : n)) ?? null)
@@ -224,6 +315,10 @@ export function NotificationsPage() {
     setFilters((current) => ({ ...current, ...patch }))
   }
 
+  function toggleKind(kind: NotificationKind) {
+    patchFilters({ kind: filters.kind === kind ? 'all' : kind })
+  }
+
   function clearFilters() {
     setFilters(DEFAULT_LIST_FILTERS)
     setCategoryFilter('')
@@ -241,68 +336,104 @@ export function NotificationsPage() {
     next?.focus()
   }
 
-  const hasUnread = stats.unread > 0
+  const hasUnread = summary.unread > 0
   const filtersActive =
-    filters.search !== '' || filters.status !== 'all' || filters.warningsOnly || !filters.hideResolved || categoryFilter !== '' || includeArchived
+    filters.search !== '' ||
+    filters.status !== 'all' ||
+    filters.kind !== 'all' ||
+    filters.warningsOnly ||
+    !filters.hideResolved ||
+    categoryFilter !== '' ||
+    includeArchived
   const loaded = !loadError && notifications !== null
+
+  const chips: SummaryChip[] = [
+    {
+      key: 'unread',
+      label: t('notificationCenter.stats.unread'),
+      icon: <Bell size={18} aria-hidden="true" />,
+      tone: 'accent',
+      value: summary.unread,
+      unread: summary.unread,
+      active: filters.status === 'unread',
+      onToggle: () => patchFilters({ status: filters.status === 'unread' ? 'all' : 'unread' }),
+      caption: t('notificationCenter.stats.ofTotal', { count: summary.total }),
+    },
+    {
+      key: 'orders',
+      label: t('notificationCenter.stats.orders'),
+      icon: <FileText size={18} aria-hidden="true" />,
+      tone: 'neutral',
+      value: summary.orders.count,
+      unread: summary.orders.unread,
+      active: filters.kind === 'orders',
+      onToggle: () => toggleKind('orders'),
+    },
+    {
+      key: 'planning',
+      label: t('notificationCenter.stats.planning'),
+      icon: <CalendarDays size={18} aria-hidden="true" />,
+      tone: 'neutral',
+      value: summary.planning.count,
+      unread: summary.planning.unread,
+      active: filters.kind === 'planning',
+      onToggle: () => toggleKind('planning'),
+    },
+    {
+      key: 'invoices',
+      label: t('notificationCenter.stats.invoices'),
+      icon: <Receipt size={18} aria-hidden="true" />,
+      tone: 'neutral',
+      value: summary.invoices.count,
+      unread: summary.invoices.unread,
+      active: filters.kind === 'invoices',
+      onToggle: () => toggleKind('invoices'),
+    },
+    {
+      key: 'warnings',
+      label: t('notificationCenter.stats.warnings'),
+      icon: <AlertTriangle size={18} aria-hidden="true" />,
+      tone: 'warning',
+      value: summary.warnings.count,
+      unread: summary.warnings.unread,
+      active: filters.warningsOnly,
+      onToggle: () => patchFilters({ warningsOnly: !filters.warningsOnly }),
+    },
+  ]
+
+  const bodyStyle =
+    workspaceOffset === null ? undefined : ({ '--ntc-workspace-offset': `${workspaceOffset}px` } as CSSProperties)
 
   return (
     <div className="ntc-page">
       <Breadcrumbs items={[{ label: t('notificationCenter.page.title') }]} />
-      <PageHeader
-        title={t('notificationCenter.page.title')}
-        subtitle={t('notificationCenter.page.subtitle')}
-        action={
-          <Button variant="primary" onClick={() => void markAll()} disabled={!hasUnread}>
-            <CheckCheck size={16} aria-hidden="true" /> {t('notificationCenter.actions.markAllRead')}
-          </Button>
-        }
-      />
+      <PageHeader title={t('notificationCenter.page.title')} subtitle={t('notificationCenter.page.subtitle')} />
 
       <div className="ntc-stats" role="group" aria-label={t('notificationCenter.stats.ariaLabel')}>
-        <button
-          type="button"
-          className={`ntc-stat ${filters.status === 'all' && !filters.warningsOnly ? 'is-active' : ''}`}
-          aria-pressed={filters.status === 'all' && !filters.warningsOnly}
-          onClick={() => patchFilters({ status: 'all', warningsOnly: false })}
-        >
-          <span className="ntc-stat-icon is-info"><Inbox size={18} aria-hidden="true" /></span>
-          <span className="ntc-stat-body">
-            <span className="ntc-stat-label">{t('notificationCenter.stats.open')}</span>
-            <span className="ntc-stat-value">{stats.open}</span>
-            <span className="ntc-stat-sub">{t('notificationCenter.stats.ofTotal', { count: all.length })}</span>
-          </span>
-        </button>
-        <button
-          type="button"
-          className={`ntc-stat ${filters.status === 'unread' ? 'is-active' : ''}`}
-          aria-pressed={filters.status === 'unread'}
-          onClick={() => patchFilters({ status: filters.status === 'unread' ? 'all' : 'unread' })}
-        >
-          <span className="ntc-stat-icon is-accent"><BellRing size={18} aria-hidden="true" /></span>
-          <span className="ntc-stat-body">
-            <span className="ntc-stat-label">{t('notificationCenter.stats.unread')}</span>
-            <span className="ntc-stat-value">{stats.unread}</span>
-            <span className="ntc-stat-sub">
-              {stats.unread > 0 ? <span className="ntc-stat-pill">{t('notificationCenter.stats.unreadNew', { count: stats.unread })}</span> : '—'}
+        {chips.map((chip) => (
+          <button
+            key={chip.key}
+            type="button"
+            className={`ntc-stat is-${chip.tone} ${chip.active ? 'is-active' : ''}`}
+            aria-pressed={chip.active}
+            aria-label={t('notificationCenter.stats.filterAria', { label: chip.label })}
+            onClick={chip.onToggle}
+          >
+            <span className="ntc-stat-icon">{chip.icon}</span>
+            <span className="ntc-stat-body">
+              <span className="ntc-stat-label">{chip.label}</span>
+              <span className="ntc-stat-value">{chip.value}</span>
+              <span className="ntc-stat-sub">
+                {chip.unread > 0 ? (
+                  <span className="ntc-stat-pill">{t('notificationCenter.stats.unreadNew', { count: chip.unread })}</span>
+                ) : (
+                  <span className="ntc-stat-none">{t('notificationCenter.stats.noneNew')}</span>
+                )}
+                {chip.caption && <span className="ntc-stat-caption">{chip.caption}</span>}
+              </span>
             </span>
-          </span>
-        </button>
-        <button
-          type="button"
-          className={`ntc-stat ${filters.warningsOnly ? 'is-active' : ''}`}
-          aria-pressed={filters.warningsOnly}
-          onClick={() => patchFilters({ warningsOnly: !filters.warningsOnly })}
-        >
-          <span className="ntc-stat-icon is-warning"><AlertTriangle size={18} aria-hidden="true" /></span>
-          <span className="ntc-stat-body">
-            <span className="ntc-stat-label">{t('notificationCenter.stats.warnings')}</span>
-            <span className="ntc-stat-value">{stats.warnings}</span>
-            <span className="ntc-stat-sub">
-              {stats.warnings > 0 ? <span className="ntc-stat-pill is-warning">{t('notificationCenter.stats.unreadNew', { count: stats.warnings })}</span> : '—'}
-            </span>
-          </span>
-        </button>
+          </button>
+        ))}
       </div>
 
       <div className="ntc-filters">
@@ -351,9 +482,14 @@ export function NotificationsPage() {
             {t('notificationCenter.page.clearFilters')}
           </button>
         )}
+        <div className="ntc-filters-end">
+          <Button variant="primary" onClick={() => void markAll()} disabled={!hasUnread}>
+            <CheckCheck size={16} aria-hidden="true" /> {t('notificationCenter.actions.markAllRead')}
+          </Button>
+        </div>
       </div>
 
-      <div className={`ntc-body ${selected ? 'has-selection' : ''}`}>
+      <div ref={bodyRef} className={`ntc-body ${selected ? 'has-selection' : ''}`} style={bodyStyle}>
         <div className="ntc-list-panel" ref={listRef} onKeyDown={onListKeyDown}>
           <div className="ntc-list-head">
             <span className="ntc-list-count" aria-live="polite">
@@ -372,85 +508,87 @@ export function NotificationsPage() {
             </label>
           </div>
 
-          {loadError && (
-            <div className="ntc-state is-error" role="alert">
-              <p>{t('notificationCenter.errors.loadFailed')}</p>
-              <Button variant="secondary" onClick={reload}>
-                {t('notificationCenter.page.retry')}
-              </Button>
-            </div>
-          )}
-          {!loadError && notifications === null && <p className="ntc-state placeholder-text">{t('notificationCenter.page.loading')}</p>}
-          {loaded && visible.length === 0 && (
-            <div className="ntc-state">
-              <Inbox size={26} aria-hidden="true" />
-              <p>{all.length === 0 || !filtersActive ? t('notificationCenter.page.empty') : t('notificationCenter.page.emptyFiltered')}</p>
-              {all.length === 0 && !filtersActive ? (
-                <span className="ntc-state-hint">{t('notificationCenter.page.emptyHint')}</span>
-              ) : (
-                <button type="button" className="ntc-link-button" onClick={clearFilters}>
-                  {t('notificationCenter.page.clearFilters')}
-                </button>
-              )}
-            </div>
-          )}
+          <div className="ntc-list-scroll">
+            {loadError && (
+              <div className="ntc-state is-error" role="alert">
+                <p>{t('notificationCenter.errors.loadFailed')}</p>
+                <Button variant="secondary" onClick={reload}>
+                  {t('notificationCenter.page.retry')}
+                </Button>
+              </div>
+            )}
+            {!loadError && notifications === null && <p className="ntc-state placeholder-text">{t('notificationCenter.page.loading')}</p>}
+            {loaded && visible.length === 0 && (
+              <div className="ntc-state">
+                <Inbox size={26} aria-hidden="true" />
+                <p>{all.length === 0 || !filtersActive ? t('notificationCenter.page.empty') : t('notificationCenter.page.emptyFiltered')}</p>
+                {all.length === 0 && !filtersActive ? (
+                  <span className="ntc-state-hint">{t('notificationCenter.page.emptyHint')}</span>
+                ) : (
+                  <button type="button" className="ntc-link-button" onClick={clearFilters}>
+                    {t('notificationCenter.page.clearFilters')}
+                  </button>
+                )}
+              </div>
+            )}
 
-          {loaded && visible.length > 0 && (
-            <div className="ntc-groups" aria-label={t('notificationCenter.groups.listAria')}>
-              {groups.map((group) => {
-                const label = t(GROUP_LABEL_KEYS[group.key])
-                const isCollapsed = collapsed.has(group.key)
-                const listId = `ntc-group-${group.key}`
-                return (
-                  <section key={group.key} className="ntc-group">
-                    <h3 className="ntc-group-head">
-                      <button
-                        type="button"
-                        className="ntc-group-toggle"
-                        aria-expanded={!isCollapsed}
-                        aria-controls={listId}
-                        aria-label={t('notificationCenter.groups.toggleAria', { group: label })}
-                        onClick={() => toggleGroup(group.key)}
-                      >
-                        {isCollapsed ? <ChevronRight size={16} aria-hidden="true" /> : <ChevronDown size={16} aria-hidden="true" />}
-                        <span>
-                          {label} ({group.items.length})
-                        </span>
-                      </button>
-                    </h3>
-                    <ul id={listId} className="ntc-rows" hidden={isCollapsed}>
-                      {group.items.map((notification) => (
-                        <NotificationRow
-                          key={notification.id}
-                          notification={notification}
-                          selected={notification.id === selectedId}
-                          now={now}
-                          onSelect={(n) => setSelectedId(n.id)}
-                        />
-                      ))}
-                    </ul>
-                  </section>
-                )
-              })}
-            </div>
-          )}
+            {loaded && visible.length > 0 && (
+              <div className="ntc-groups" aria-label={t('notificationCenter.groups.listAria')}>
+                {groups.map((group) => {
+                  const label = t(GROUP_LABEL_KEYS[group.key])
+                  const isCollapsed = collapsed.has(group.key)
+                  const listId = `ntc-group-${group.key}`
+                  return (
+                    <section key={group.key} className="ntc-group">
+                      <h3 className="ntc-group-head">
+                        <button
+                          type="button"
+                          className="ntc-group-toggle"
+                          aria-expanded={!isCollapsed}
+                          aria-controls={listId}
+                          aria-label={t('notificationCenter.groups.toggleAria', { group: label })}
+                          onClick={() => toggleGroup(group.key)}
+                        >
+                          {isCollapsed ? <ChevronRight size={16} aria-hidden="true" /> : <ChevronDown size={16} aria-hidden="true" />}
+                          <span>
+                            {label} ({group.items.length})
+                          </span>
+                        </button>
+                      </h3>
+                      <ul id={listId} className="ntc-rows" hidden={isCollapsed}>
+                        {group.items.map((notification) => (
+                          <NotificationRow
+                            key={notification.id}
+                            notification={notification}
+                            selected={notification.id === selected?.id}
+                            now={now}
+                            onSelect={selectNotification}
+                          />
+                        ))}
+                      </ul>
+                    </section>
+                  )
+                })}
+              </div>
+            )}
 
-          {preferences && (
-            <details className="ntf-preferences">
-              <summary>{t('notificationCenter.page.preferencesSummary')}</summary>
-              <p className="ntf-preferences-hint">{t('notificationCenter.page.preferencesHint')}</p>
-              <ul>
-                {preferences.map((preference) => (
-                  <li key={preference.category}>
-                    <label>
-                      <input type="checkbox" checked={preference.enabled} onChange={() => void togglePreference(preference)} />{' '}
-                      {t(NOTIFICATION_CATEGORY_LABELS[preference.category])}
-                    </label>
-                  </li>
-                ))}
-              </ul>
-            </details>
-          )}
+            {preferences && (
+              <details className="ntf-preferences">
+                <summary>{t('notificationCenter.page.preferencesSummary')}</summary>
+                <p className="ntf-preferences-hint">{t('notificationCenter.page.preferencesHint')}</p>
+                <ul>
+                  {preferences.map((preference) => (
+                    <li key={preference.category}>
+                      <label>
+                        <input type="checkbox" checked={preference.enabled} onChange={() => void togglePreference(preference)} />{' '}
+                        {t(NOTIFICATION_CATEGORY_LABELS[preference.category])}
+                      </label>
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            )}
+          </div>
         </div>
 
         <NotificationDetail
@@ -462,7 +600,7 @@ export function NotificationsPage() {
           onAcknowledge={(n) => void acknowledge(n)}
           onArchive={(n) => void archive(n)}
           onNavigate={(path) => navigate(path)}
-          onClose={() => setSelectedId(null)}
+          onClose={closeDetail}
         />
       </div>
     </div>

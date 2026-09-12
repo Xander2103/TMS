@@ -3,6 +3,8 @@ import type { Notification } from '../api/notificationsApi'
 import {
   DEFAULT_LIST_FILTERS,
   computeStats,
+  computeSummary,
+  matchesKind,
   filterNotifications,
   groupKeyFor,
   groupNotifications,
@@ -113,5 +115,40 @@ describe('computeStats', () => {
       make({ id: 'd', isArchived: true, severity: 'Warning' }),
     ])
     expect(stats).toEqual({ open: 2, unread: 2, warnings: 1 })
+  })
+})
+
+describe('kind filter and summary chips', () => {
+  const label = (category: string) => category
+  const items = [
+    make({ id: 'o1', category: 'Orders', type: 'order_created' }),
+    make({ id: 'o2', category: 'Orders', type: 'order_created', isRead: true }),
+    make({ id: 'p1', category: 'Planning', type: 'planning_missing_date' }),
+    make({ id: 'i1', category: 'Orders', type: 'invoice_due_soon' }),
+    make({ id: 'w1', category: 'Execution', type: 'incident', severity: 'Critical' }),
+    make({ id: 'x1', category: 'Orders', type: 'order_created', isArchived: true }),
+  ]
+
+  it('classifies orders, planning and invoices (invoice types never count as orders)', () => {
+    expect(items.filter((n) => matchesKind(n, 'orders')).map((n) => n.id)).toEqual(['o1', 'o2', 'x1'])
+    expect(items.filter((n) => matchesKind(n, 'planning')).map((n) => n.id)).toEqual(['p1'])
+    expect(items.filter((n) => matchesKind(n, 'invoices')).map((n) => n.id)).toEqual(['i1'])
+    expect(items.filter((n) => matchesKind(n, 'all'))).toHaveLength(items.length)
+  })
+
+  it('narrows the list by kind', () => {
+    expect(filterNotifications(items, { ...DEFAULT_LIST_FILTERS, kind: 'invoices' }, label).map((n) => n.id)).toEqual(['i1'])
+    expect(filterNotifications(items, { ...DEFAULT_LIST_FILTERS, kind: 'orders' }, label).map((n) => n.id)).toEqual(['o1', 'o2', 'x1'])
+  })
+
+  it('counts per chip with the unread share, ignoring archived rows', () => {
+    expect(computeSummary(items)).toEqual({
+      total: 5,
+      unread: 4,
+      orders: { count: 2, unread: 1 },
+      planning: { count: 1, unread: 1 },
+      invoices: { count: 1, unread: 1 },
+      warnings: { count: 1, unread: 1 },
+    })
   })
 })

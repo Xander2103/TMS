@@ -159,7 +159,6 @@ export function NotificationDetail({
         {!notification.isArchived && (
           <Button
             variant="secondary"
-            className="ntc-detail-archive"
             onClick={() => keepFocus(() => onArchive(notification))}
             disabled={busy}
             aria-label={t('notificationCenter.page.archiveAria', { title: notification.title })}
@@ -170,15 +169,17 @@ export function NotificationDetail({
       </div>
 
       <div className="ntc-detail-body">
-        <p className="ntc-detail-message">{notification.message}</p>
-        <dl className="ntc-detail-facts">
-          {rows.map((row) => (
-            <div key={row.key} className="ntc-detail-fact">
-              <dt>{row.label}</dt>
-              <dd>{row.value}</dd>
-            </div>
-          ))}
-        </dl>
+        <div className="ntc-detail-card">
+          <p className="ntc-detail-message">{notification.message}</p>
+          <dl className="ntc-detail-facts">
+            {rows.map((row) => (
+              <div key={row.key} className="ntc-detail-fact">
+                <dt>{row.label}</dt>
+                <dd>{row.value}</dd>
+              </div>
+            ))}
+          </dl>
+        </div>
         {followUp && (
           <div className="ntc-followup">
             <Info size={18} aria-hidden="true" />

@@ -1,13 +1,18 @@
-/* Meldingen — master-detail notification centre (2026-09-12 redesign).
+/* Meldingen — master-detail notification workspace (2026-09-12 redesign, composition pass).
+
+   Desktop composition (>= 1101px):
+     header / summary chips / filter bar (natural height)
+     .ntc-body  = the workspace: a two-column grid sized to the remaining viewport height
+                  (--ntc-workspace-offset is measured by the page), so the list scrolls inside
+                  its own panel and the detail panel spans the full right-hand column.
    Page-scoped 15px scale (the desktop root font is 18px); no zoom/transform tricks. */
 
 .ntc-page {
-  max-width: 1600px;
   font-size: 15px;
 }
 
 .ntc-page .page-header {
-  margin-bottom: 14px;
+  margin-bottom: 12px;
 }
 
 .ntc-page .page-header h2 {
@@ -19,20 +24,21 @@
   font-size: 14px;
 }
 
-/* ---- Summary chips ---- */
+/* ---- Summary chips (Ongelezen · Opdrachten · Planning · Facturatie · Incidenten) ---- */
 
 .ntc-stats {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 12px;
-  margin-bottom: 14px;
+  margin-bottom: 12px;
 }
 
 .ntc-stat {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 12px 14px;
+  min-height: 78px;
+  padding: 10px 14px;
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
@@ -61,19 +67,15 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 38px;
-  height: 38px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
   flex-shrink: 0;
-}
-
-.ntc-stat-icon.is-info,
-.ntc-stat-icon.is-accent {
   background: var(--accent-bg);
   color: var(--accent);
 }
 
-.ntc-stat-icon.is-warning {
+.ntc-stat.is-warning .ntc-stat-icon {
   background: var(--danger-bg);
   color: var(--danger);
 }
@@ -98,6 +100,10 @@
 }
 
 .ntc-stat-sub {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 8px;
   font-size: 12px;
   color: var(--text);
 }
@@ -109,6 +115,15 @@
   background: var(--danger-bg);
   color: var(--danger);
   font-weight: 600;
+  white-space: nowrap;
+}
+
+.ntc-stat-none {
+  white-space: nowrap;
+}
+
+.ntc-stat-caption {
+  white-space: nowrap;
 }
 
 /* ---- Filter bar ---- */
@@ -118,7 +133,19 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 10px 14px;
-  margin-bottom: 14px;
+  margin-bottom: 12px;
+  font-size: 14px;
+}
+
+.ntc-filters-end {
+  margin-left: auto;
+}
+
+.ntc-filters-end .ui-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 38px;
   font-size: 14px;
 }
 
@@ -126,9 +153,8 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  flex: 1 1 260px;
-  max-width: 360px;
-  min-height: 36px;
+  flex: 0 1 320px;
+  min-height: 38px;
   padding: 0 10px;
   background: var(--bg);
   border: 1px solid var(--border);
@@ -152,7 +178,7 @@
 
 .ntc-filters select,
 .ntc-sort select {
-  min-height: 36px;
+  min-height: 38px;
   padding: 0 10px;
   font: inherit;
   font-size: 14px;
@@ -181,17 +207,31 @@
   text-decoration: underline;
 }
 
-/* ---- Master-detail body ---- */
+/* ---- Workspace: list (≈58%) | detail (≈42%) ---- */
 
 .ntc-body {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(360px, 42%);
+  grid-template-columns: minmax(0, 1.4fr) minmax(400px, 1fr);
   gap: 16px;
-  align-items: start;
+  align-items: stretch;
+  min-width: 0;
 }
 
+@media (min-width: 1101px) {
+  .ntc-body {
+    /* Fill the viewport below the header; both panels then manage their own scrolling. */
+    height: calc(100svh - var(--ntc-workspace-offset, 360px));
+    min-height: 520px;
+  }
+}
+
+/* List panel: fixed head + scrolling body */
+
 .ntc-list-panel {
+  display: flex;
+  flex-direction: column;
   min-width: 0;
+  min-height: 0;
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
@@ -203,9 +243,17 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 10px 14px;
+  flex-shrink: 0;
+  padding: 8px 14px;
   border-bottom: 1px solid var(--border);
   font-size: 14px;
+}
+
+.ntc-list-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .ntc-list-count {
@@ -255,9 +303,12 @@
   color: var(--danger);
 }
 
-/* Groups */
+/* Groups (Vandaag / Deze week / Eerder) — headers stay visible while their rows scroll */
 
 .ntc-group-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
   margin: 0;
   font-size: 14px;
   background: var(--code-bg);
@@ -273,7 +324,7 @@
   align-items: center;
   gap: 8px;
   width: 100%;
-  padding: 8px 14px;
+  padding: 7px 14px;
   border: 0;
   background: transparent;
   font: inherit;
@@ -294,7 +345,7 @@
   padding: 0;
 }
 
-/* Rows */
+/* Rows: dot · icon · title + category / one-line preview · time · chevron */
 
 .ntc-row {
   display: grid;
@@ -302,7 +353,8 @@
   align-items: center;
   gap: 10px;
   width: 100%;
-  padding: 9px 12px 9px 10px;
+  min-height: 58px;
+  padding: 7px 12px 7px 9px;
   border: 0;
   border-left: 3px solid transparent;
   border-bottom: 1px solid var(--border);
@@ -392,7 +444,7 @@
 .ntc-row-body {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
   min-width: 0;
 }
 
@@ -400,7 +452,8 @@
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 6px 8px;
+  gap: 4px 8px;
+  line-height: 1.35;
 }
 
 .ntc-row-head .ui-badge {
@@ -424,6 +477,7 @@
 
 .ntc-row-message {
   font-size: 13px;
+  line-height: 1.35;
   color: var(--text);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -448,27 +502,25 @@
   opacity: 1;
 }
 
-/* ---- Detail panel ---- */
+/* ---- Detail panel (spans the full right-hand column, scrolls inside) ---- */
 
 .ntc-detail {
-  position: sticky;
-  top: 12px;
-  max-height: calc(100vh - 24px);
-  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   padding: 16px 18px 18px;
-  min-width: 0;
 }
 
 .ntc-detail-empty {
-  display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  min-height: 260px;
   text-align: center;
   color: var(--text);
 }
@@ -490,6 +542,7 @@
   grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 14px;
   align-items: start;
+  flex-shrink: 0;
 }
 
 .ntc-detail-heading {
@@ -567,6 +620,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  flex-shrink: 0;
   margin: 16px 0;
 }
 
@@ -574,15 +628,20 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  min-height: 36px;
+  min-height: 38px;
   font-size: 14px;
 }
 
-.ntc-detail-archive {
-  margin-left: auto;
-}
+/* Body: message + facts card at the top, follow-up pinned to the bottom of the column. */
 
 .ntc-detail-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1 0 auto;
+  gap: 14px;
+}
+
+.ntc-detail-card {
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   padding: 14px 16px;
@@ -592,6 +651,7 @@
   margin: 0 0 12px;
   font-size: 15px;
   line-height: 1.5;
+  font-weight: 600;
   color: var(--text-h);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -605,9 +665,9 @@
 
 .ntc-detail-fact {
   display: grid;
-  grid-template-columns: minmax(140px, 32%) minmax(0, 1fr);
+  grid-template-columns: minmax(150px, 32%) minmax(0, 1fr);
   gap: 12px;
-  padding: 7px 0;
+  padding: 8px 0;
   border-top: 1px solid var(--border);
   font-size: 14px;
   align-items: center;
@@ -643,7 +703,7 @@
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 12px;
-  margin-top: 14px;
+  margin-top: auto;
   padding: 12px 14px;
   border: 1px solid var(--accent-border);
   border-left-width: 4px;
@@ -675,7 +735,7 @@
   white-space: nowrap;
 }
 
-/* ---- Preferences (existing feature, now under the list) ---- */
+/* ---- Preferences (existing feature, at the end of the list) ---- */
 
 .ntf-preferences {
   padding: 12px 14px;
@@ -705,14 +765,38 @@
 
 /* ---- Responsive ---- */
 
+@media (max-width: 1400px) {
+  .ntc-stats {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .ntc-stat {
+    padding: 10px 12px;
+    gap: 10px;
+  }
+}
+
 @media (max-width: 1100px) {
+  .ntc-stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
   .ntc-body {
     grid-template-columns: minmax(0, 1fr);
   }
 
+  .ntc-list-scroll,
   .ntc-detail {
-    position: static;
-    max-height: none;
+    overflow: visible;
+  }
+
+  .ntc-detail-body {
+    flex: 0 0 auto;
+  }
+
+  .ntc-followup {
+    margin-top: 0;
   }
 
   .ntc-body.has-selection .ntc-detail {
@@ -722,7 +806,12 @@
 
 @media (max-width: 720px) {
   .ntc-stats {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .ntc-filters-end {
+    margin-left: 0;
+    width: 100%;
   }
 
   .ntc-row {

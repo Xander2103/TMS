@@ -82,12 +82,16 @@
     "daysAgo": "{count} dagen geleden"
   },
   "stats": {
-    "open": "Open",
     "unread": "Ongelezen",
-    "warnings": "Waarschuwingen",
+    "orders": "Opdrachten",
+    "planning": "Planning",
+    "invoices": "Facturatie",
+    "warnings": "Incidenten",
     "ofTotal": "van {count} totaal",
     "unreadNew": "{count} nieuw",
-    "ariaLabel": "Samenvatting"
+    "noneNew": "geen nieuwe",
+    "ariaLabel": "Samenvatting",
+    "filterAria": "Filter op {label}"
   },
   "groups": {
     "today": "Vandaag",

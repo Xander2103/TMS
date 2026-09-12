@@ -117,9 +117,16 @@ export function groupNotifications(items: Notification[], now: Date): Notificati
 export type NotificationStatusFilter = 'all' | 'unread' | 'read' | 'ack'
 export type NotificationSort = 'newest' | 'oldest'
 
+/**
+ * Quick "kind" filter behind the summary chips (Opdrachten / Planning / Facturatie).
+ * Client-side over the fetched page, so the chip counters stay meaningful while one is active.
+ */
+export type NotificationKind = 'all' | 'orders' | 'planning' | 'invoices'
+
 export interface NotificationListFilters {
   search: string
   status: NotificationStatusFilter
+  kind: NotificationKind
   warningsOnly: boolean
   hideResolved: boolean
   sort: NotificationSort
@@ -128,9 +135,22 @@ export interface NotificationListFilters {
 export const DEFAULT_LIST_FILTERS: NotificationListFilters = {
   search: '',
   status: 'all',
+  kind: 'all',
   warningsOnly: false,
   hideResolved: true,
   sort: 'newest',
+}
+
+/** Invoice notifications are typed `invoice_*` regardless of their category. */
+export function isInvoiceNotification(notification: Pick<Notification, 'type'>): boolean {
+  return notification.type.toLowerCase().startsWith('invoice')
+}
+
+export function matchesKind(notification: Pick<Notification, 'type' | 'category'>, kind: NotificationKind): boolean {
+  if (kind === 'all') return true
+  if (kind === 'orders') return notification.category === 'Orders' && !isInvoiceNotification(notification)
+  if (kind === 'planning') return notification.category === 'Planning'
+  return isInvoiceNotification(notification)
 }
 
 export function isWarningSeverity(severity: NotificationSeverity): boolean {
@@ -157,6 +177,7 @@ export function filterNotifications(
     if (filters.status === 'read' && !n.isRead) return false
     if (filters.status === 'ack' && !needsAcknowledgement(n)) return false
     if (filters.warningsOnly && !isWarningSeverity(n.severity)) return false
+    if (!matchesKind(n, filters.kind)) return false
     if (needle) {
       const haystack = `${n.title} ${n.message} ${categoryLabel(n.category)}`.toLowerCase()
       if (!haystack.includes(needle)) return false
@@ -185,6 +206,56 @@ export function computeStats(items: Notification[]): NotificationStats {
     if (n.resolvedAt === null && isWarningSeverity(n.severity)) warnings += 1
   }
   return { open, unread, warnings }
+}
+
+export interface NotificationBucket {
+  /** Non-archived notifications in this bucket. */
+  count: number
+  /** Of which unread ("n nieuw"). */
+  unread: number
+}
+
+export interface NotificationSummary {
+  /** Everything that is not archived. */
+  total: number
+  /** Unread, non-archived. */
+  unread: number
+  orders: NotificationBucket
+  planning: NotificationBucket
+  invoices: NotificationBucket
+  /** Warning/critical severity that is not resolved yet ("Incidenten"). */
+  warnings: NotificationBucket
+}
+
+function emptyBucket(): NotificationBucket {
+  return { count: 0, unread: 0 }
+}
+
+function addToBucket(target: NotificationBucket, notification: Notification) {
+  target.count += 1
+  if (!notification.isRead) target.unread += 1
+}
+
+/** Summary-chip counters (Ongelezen · Opdrachten · Planning · Facturatie · Incidenten) over the fetched list. */
+export function computeSummary(items: Notification[]): NotificationSummary {
+  const summary: NotificationSummary = {
+    total: 0,
+    unread: 0,
+    orders: emptyBucket(),
+    planning: emptyBucket(),
+    invoices: emptyBucket(),
+    warnings: emptyBucket(),
+  }
+  for (const n of items) {
+    if (n.isArchived) continue
+    summary.total += 1
+    if (!n.isRead) summary.unread += 1
+    if (matchesKind(n, 'orders')) addToBucket(summary.orders, n)
+    if (matchesKind(n, 'planning')) addToBucket(summary.planning, n)
+    if (matchesKind(n, 'invoices')) addToBucket(summary.invoices, n)
+    if (n.resolvedAt === null && isWarningSeverity(n.severity)) addToBucket(summary.warnings, n)
+  }
+  return summary
 }
 
 export const NOTIFICATION_SEVERITY_LABELS: Record<NotificationSeverity, string> = {
