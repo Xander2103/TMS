@@ -438,7 +438,7 @@ public class TransportOrderService : ITransportOrderService
             })
         {
             CustomerId = order.CustomerId,
-            LinkPath = $"/orders/{order.Id}",
+            LinkPath = $"/transport-orders/{order.Id}",
             InAppMessage = $"{order.OrderNumber} ({customerName}) is aangemaakt.",
         }, cancellationToken);
 

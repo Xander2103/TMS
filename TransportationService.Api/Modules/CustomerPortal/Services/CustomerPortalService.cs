@@ -252,7 +252,7 @@ public class CustomerPortalService : ICustomerPortalService
                     })
                 {
                     CustomerId = customer.Value.CustomerId,
-                    LinkPath = $"/orders/{entity.Id}",
+                    LinkPath = $"/transport-orders/{entity.Id}",
                     InAppMessage = $"{entity.OrderNumber} ({customer.Value.CustomerName}) is ingediend via het klantportaal.",
                 }, cancellationToken);
             }

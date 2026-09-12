@@ -140,3 +140,24 @@
 .ntf-bell-mark-all:hover {
   text-decoration: underline;
 }
+
+/* Shared unread dot + severity glyph colours (also used by the Meldingen page rows). */
+.ntf-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.ntf-severity {
+  margin-right: 4px;
+}
+
+.ntf-severity-warning {
+  color: var(--warning);
+}
+
+.ntf-severity-critical {
+  color: var(--danger);
+}

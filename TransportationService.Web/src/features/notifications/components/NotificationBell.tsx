@@ -11,6 +11,7 @@ import {
 import { useUnreadNotifications } from '../notificationsContextValue'
 import { useLocale } from '../../../i18n/localeContext'
 import { formatRelativeTime } from '../relativeTime'
+import { resolveNotificationLink } from '../notificationView'
 import './NotificationBell.css'
 
 const DROPDOWN_TAKE = 8
@@ -77,10 +78,8 @@ export function NotificationBell() {
     }
     setOpen(false)
     refresh()
-    if (notification.linkPath) {
-      // Producer dedupe markers ride as a #fragment; strip before navigating.
-      navigate(notification.linkPath.split('#')[0])
-    }
+    const link = resolveNotificationLink(notification.linkPath)
+    if (link) navigate(link.path)
   }
 
   async function markAll() {
