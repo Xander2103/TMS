@@ -37,9 +37,9 @@ export interface NavModule {
   subgroups?: NavSubgroup[]
 }
 
-/** Lookup resources of one registry group as nav items (view+manage = any-of). */
+/** Lookup resources of one registry group as nav items (view+manage = any-of); lookups with a home elsewhere are skipped. */
 function lookupItems(group: LookupGroup): NavItem[] {
-  return LOOKUP_RESOURCES.filter((r) => r.group === group).map((r) => ({
+  return LOOKUP_RESOURCES.filter((r) => r.group === group && !r.hiddenFromNav).map((r) => ({
     label: `navigation.lookups.${r.slug}`,
     to: `/master-data/${r.slug}`,
     permissions: [r.viewPermission, r.managePermission],
@@ -100,7 +100,6 @@ function parametersModule(): NavModule {
           { label: 'navigation.menu.leaveSettings', to: '/settings/leave', permissions: ['leave_types.manage'] },
           { label: 'navigation.menu.attendanceSettings', to: '/settings/attendance', permissions: ['attendance.manage_settings', 'attendance.manage_kiosks'] },
           { label: 'navigation.menu.hrReminders', to: '/settings/hr-reminders', permissions: ['hr_settings.manage'] },
-          { label: 'navigation.menu.issuedItemTemplates', to: '/settings/issued-item-templates', permissions: ['issued_items.manage_templates'] },
           { label: 'navigation.menu.taskTemplates', to: '/settings/task-templates', permissions: ['tasks.manage_templates', 'tasks.manage_recurring'] },
         ],
       },
@@ -224,6 +223,11 @@ export function getNavModules(): NavModule[] {
         { label: 'navigation.menu.qualifications', to: '/qualifications', permissions: ['employee_documents.view'] },
         // Voorraad van bedrijfsmiddelen hoort bij het personeelsdomein (uitgifte aan medewerkers).
         { label: 'navigation.menu.inventory', to: '/inventory', permissions: ['inventory.view', 'inventory.manage'] },
+        // Beheer van bedrijfsmiddelen (categorieën + sjablonen) staat naast de voorraad, niet meer
+        // verspreid over Parameters → Personeel en Parameters → Basisgegevens. Het item wijst naar de
+        // sectiewortel (niet naar één tabblad): de prefix-match houdt het dan actief op zowel
+        // /issued-items/categories als /issued-items/templates(/:id); de indexroute kiest het tabblad.
+        { label: 'navigation.menu.issuedItemsAdmin', to: '/issued-items', permissions: ['issued_items.manage_templates', 'inventory.manage'] },
       ],
     },
     {

@@ -71,7 +71,9 @@
     "createFailed": "L'ajout a échoué. Veuillez réessayer.",
     "adding": "Ajout…",
     "addAndSelect": "Ajouter et sélectionner",
-    "codeHint": "Code court et unique pour cette valeur."
+    "codeHint": "Code court et unique pour cette valeur.",
+    "newAction": "+ Nouveau {singular}",
+    "codeAutoHint": "Laissez ce champ vide pour générer automatiquement le prochain code unique disponible."
   },
   "lookup": {
     "optionsLoadFailed": "Impossible de charger la liste de choix."

@@ -489,10 +489,16 @@ private static readonly XFont Title = new("Arial", 16, XFontStyleEx.Bold);
 ```
 
 C# runs static field initializers in declaration order, so `FontsConfigured` must stay textually
-before every `XFont` field, or the fonts construct before the font source is configured. Second
-half of the gotcha: **no `IFontResolver` is registered anywhere in the repo** — all four renderers
-rely on `UseWindowsFontsUnderWindows` + "Arial". Linux/container hosting requires a
-`GlobalFontSettings.FontResolver` first (`LabelRenderService.cs` carries the marker comment).
+before every `XFont` field, or the fonts construct before the font source is configured. Since the
+HR wave of 2026-09-12 `ConfigureFonts()` no longer flips `UseWindowsFontsUnderWindows`; it calls
+`Modules/Pdf/PdfFontResolver.Register()`, which installs one `IFontResolver` for the whole process
+(also registered once in `Program.cs`). The resolver maps every requested family to a regular/bold
+sans face and reads the bytes from Arial (Windows), Liberation/DejaVu (OS font folders) or the
+DejaVu Sans files embedded in the assembly (`Modules/Pdf/Fonts`, Bitstream Vera licence; its notice
+must accompany every copy, so the csproj ships `licenses/DejaVu-LICENSE.txt` with the output). Root
+cause it fixes: on the Linux demo host every PDF endpoint threw
+`No appropriate font found for family name 'Arial'` (receipt download 500). Keep the folder name
+`Pdf`: `documents/` is gitignored for uploaded files.
 
 **Endpoints:** `GET /api/orders/{id}/documents/{kind}` (`orders.view|manage`) and
 `GET /api/trips/{id}/documents/{kind}` (`planning.view`); accepted kinds `"cmr"` and
@@ -866,9 +872,8 @@ Verified in code on this branch; roughly ordered by impact. (Two former entries 
 the completion wave: `EtaShiftNotifyMinutes` now has a company-settings UI, and portal
 notification preferences can no longer suppress non-portal message kinds — see §17 P0/P8.)
 
-1. **PDFsharp fonts are Windows-only.** No `IFontResolver` is registered; all four renderers rely
-   on `GlobalFontSettings.UseWindowsFontsUnderWindows` + "Arial". Linux/container hosting requires
-   a font resolver first (§10).
+1. ~~**PDFsharp fonts are Windows-only.**~~ Resolved 2026-09-12: `Modules/Pdf/PdfFontResolver`
+   (OS fonts with embedded DejaVu fallback) is registered for all four renderers (§10).
 2. **Manual-price orders don't auto-absorb approved charges.** When `order.PriceIsManual`,
    `IncidentService.DecideChargeAsync` creates the pricing line but deliberately does not bump
    `AgreedPrice`, so the invoice's base line will not include the charge automatically (§6).

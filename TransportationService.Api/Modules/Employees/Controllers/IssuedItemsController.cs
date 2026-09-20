@@ -81,6 +81,24 @@ public class IssuedItemsController : ControllerBase
         return await _service.DeleteItemAsync(employeeId, itemId, cancellationToken) ? NoContent() : NotFound();
     }
 
+    /// <summary>"Teruggebracht": Issued → Returned. A state transition with full history, never a delete.</summary>
+    [HttpPost("api/employees/{employeeId:guid}/issued-items/{itemId:guid}/return")]
+    [RequirePermission(PermissionCodes.IssuedItemsManage)]
+    public async Task<ActionResult<EmployeeIssuedItemDto>> Return(Guid employeeId, Guid itemId, ReturnIssuedItemRequest request, CancellationToken cancellationToken)
+    {
+        var updated = await _service.ReturnAsync(employeeId, itemId, request, cancellationToken);
+        return updated is null ? NotFound() : Ok(updated);
+    }
+
+    /// <summary>"Heractiveren": Returned → Issued, audited.</summary>
+    [HttpPost("api/employees/{employeeId:guid}/issued-items/{itemId:guid}/reactivate")]
+    [RequirePermission(PermissionCodes.IssuedItemsManage)]
+    public async Task<ActionResult<EmployeeIssuedItemDto>> Reactivate(Guid employeeId, Guid itemId, ReactivateIssuedItemRequest request, CancellationToken cancellationToken)
+    {
+        var updated = await _service.ReactivateAsync(employeeId, itemId, request, cancellationToken);
+        return updated is null ? NotFound() : Ok(updated);
+    }
+
     [HttpGet("api/employees/{employeeId:guid}/issued-items/document")]
     [RequirePermission(PermissionCodes.IssuedItemsView, PermissionCodes.IssuedItemsManage)]
     public async Task<IActionResult> Document(Guid employeeId, CancellationToken cancellationToken)

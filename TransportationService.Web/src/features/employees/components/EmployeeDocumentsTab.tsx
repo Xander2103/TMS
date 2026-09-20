@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { LoadingState } from '../../../components/feedback/LoadingState'
 import { ErrorState } from '../../../components/feedback/ErrorState'
 import { Badge } from '../../../components/ui/Badge'
@@ -28,9 +28,14 @@ import './EmployeeDocumentsTab.css'
 
 interface EmployeeDocumentsTabProps {
   employeeId: string
+  /** Deep-link target (`?documentId=`): that document row is highlighted and scrolled into view. */
+  highlightDocumentId?: string | null
+  /** Fired after a successful upload/archive/restore/delete so the host can refresh derived
+   * data (the expiry-warning strip). */
+  onChanged?: () => void
 }
 
-export function EmployeeDocumentsTab({ employeeId }: EmployeeDocumentsTabProps) {
+export function EmployeeDocumentsTab({ employeeId, highlightDocumentId, onChanged }: EmployeeDocumentsTabProps) {
   const toast = useToast()
   const { t } = useLocale()
   const { hasPermission } = useAuth()
@@ -65,6 +70,13 @@ export function EmployeeDocumentsTab({ employeeId }: EmployeeDocumentsTabProps) 
     }))
   }, [documents])
 
+  // Scroll the deep-linked row into view once the list is there (and again when the target
+  // changes). Optional call: jsdom has no scrollIntoView implementation.
+  useEffect(() => {
+    if (!highlightDocumentId || isLoading) return
+    document.getElementById(`employee-document-${highlightDocumentId}`)?.scrollIntoView?.({ block: 'center', behavior: 'smooth' })
+  }, [highlightDocumentId, isLoading, documents])
+
   async function handleUpload(file: File) {
     setUploading(true)
     try {
@@ -82,6 +94,7 @@ export function EmployeeDocumentsTab({ employeeId }: EmployeeDocumentsTabProps) 
       setUploadExpiry('')
       setUploadNotes('')
       void reload()
+      onChanged?.()
     } catch (err) {
       toast.showError(describeApiError(err, t('employees.errors.uploadFailed')).message)
     } finally {
@@ -108,6 +121,7 @@ export function EmployeeDocumentsTab({ employeeId }: EmployeeDocumentsTabProps) 
       await setEmployeeDocumentArchived(employeeId, doc.id, !doc.isArchived)
       toast.showSuccess(doc.isArchived ? t('employees.documents.restored') : t('employees.documents.archived'))
       void reload()
+      onChanged?.()
     } catch (err) {
       toast.showError(describeApiError(err, t('employees.documents.actionFailed')).message)
     } finally {
@@ -197,8 +211,15 @@ export function EmployeeDocumentsTab({ employeeId }: EmployeeDocumentsTabProps) 
             <ul className="employee-documents-list">
               {docs.map((doc) => {
                 const expiry = classifyExpiry(doc.expiryDate)
+                const className = [
+                  'employee-document',
+                  doc.isArchived ? 'is-archived' : null,
+                  doc.id === highlightDocumentId ? 'is-highlighted' : null,
+                ]
+                  .filter(Boolean)
+                  .join(' ')
                 return (
-                  <li key={doc.id} className={doc.isArchived ? 'employee-document is-archived' : 'employee-document'}>
+                  <li key={doc.id} id={`employee-document-${doc.id}`} className={className}>
                     <div className="employee-document-main">
                       <span className="employee-document-name">{doc.customLabel || doc.fileName}</span>
                       <span className="employee-document-meta">
@@ -282,6 +303,7 @@ export function EmployeeDocumentsTab({ employeeId }: EmployeeDocumentsTabProps) 
               toast.showSuccess(t('employees.documents.deleted'))
               setDeleteTarget(null)
               void reload()
+              onChanged?.()
             } catch (err) {
               toast.showError(describeApiError(err, t('employees.documents.deleteFailed')).message)
             } finally {

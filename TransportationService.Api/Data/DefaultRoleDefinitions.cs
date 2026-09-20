@@ -213,7 +213,10 @@ public static class DefaultRoleDefinitions
                 PermissionCodes.AttendanceReport, PermissionCodes.AttendanceManageCredentials,
                 PermissionCodes.AttendanceManageSettings,
                 PermissionCodes.MessagesSend,
-                PermissionCodes.DepartmentsView, PermissionCodes.JobFunctionsView,
+                // HR master data (afdelingen, functies, contracttypes) is HR's own to maintain.
+                PermissionCodes.DepartmentsView, PermissionCodes.DepartmentsManage,
+                PermissionCodes.JobFunctionsView, PermissionCodes.JobFunctionsManage,
+                PermissionCodes.ReferenceDataView, PermissionCodes.ReferenceDataManage,
                 PermissionCodes.ContactDepartmentsView,
                 PermissionCodes.ReportsView,
             ]),

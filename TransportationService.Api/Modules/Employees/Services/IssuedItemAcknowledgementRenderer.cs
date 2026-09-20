@@ -18,7 +18,9 @@ public static class IssuedItemAcknowledgementRenderer
 
     private static bool ConfigureFonts()
     {
-        GlobalFontSettings.UseWindowsFontsUnderWindows = true;
+        // Platform-independent font source (Windows Arial when present, else Liberation/DejaVu,
+        // else the embedded DejaVu Sans). Without it Linux hosting throws "No appropriate font".
+        TransportationService.Api.Modules.Pdf.PdfFontResolver.Register();
         return true;
     }
 
@@ -31,7 +33,7 @@ public static class IssuedItemAcknowledgementRenderer
     {
         using var document = new PdfDocument();
         var page = document.AddPage();
-        using var gfx = XGraphics.FromPdfPage(page);
+        var gfx = XGraphics.FromPdfPage(page);
 
         var margin = 40.0;
         var width = page.Width.Point - 2 * margin;
@@ -74,7 +76,9 @@ public static class IssuedItemAcknowledgementRenderer
 
             if (y > page.Height.Point - 130)
             {
+                gfx.Dispose();
                 page = document.AddPage();
+                gfx = XGraphics.FromPdfPage(page);
                 y = margin;
             }
         }
@@ -87,6 +91,7 @@ public static class IssuedItemAcknowledgementRenderer
         gfx.DrawString("Handtekening / Signature: ______________________", Body, XBrushes.Black, new XPoint(margin, y));
         gfx.DrawString("Datum / Date: ______________", Body, XBrushes.Black, new XPoint(margin + width * 0.6, y));
 
+        gfx.Dispose();
         using var stream = new MemoryStream();
         document.Save(stream);
         return stream.ToArray();

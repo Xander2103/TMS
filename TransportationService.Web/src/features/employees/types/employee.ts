@@ -73,6 +73,36 @@ export interface EmployeeCompleteness {
   missingItems: EmployeeCompletenessItem[]
 }
 
+export type EmployeeAttentionKind = 'document' | 'qualification'
+export type EmployeeAttentionState = 'expiring' | 'expired'
+
+/** One expiring/expired document or qualification (`EmployeeAttentionItemDto`). The backend
+ * decides the state from its expiry policies — the UI renders it, never reclassifies dates. */
+export interface EmployeeAttentionItem {
+  kind: EmployeeAttentionKind
+  id: string
+  /** Document custom label / category name, or the qualification type name. */
+  label: string
+  /** Document category, or the qualification document number. */
+  detail: string | null
+  /** ISO date (yyyy-MM-dd). */
+  expiryDate: string
+  /** Negative once expired. */
+  daysLeft: number
+  state: EmployeeAttentionState
+}
+
+/** Expiry warnings for one dossier (`EmployeeAttentionDto`). Items come expired-first, then by
+ * expiry date; archived/deleted documents and renewed/suspended qualifications are excluded. */
+export interface EmployeeAttention {
+  items: EmployeeAttentionItem[]
+  documentsExpiring: number
+  documentsExpired: number
+  qualificationsExpiring: number
+  qualificationsExpired: number
+  hasItems: boolean
+}
+
 export interface EmployeeListItem {
   id: string
   employeeNumber: string
@@ -154,6 +184,9 @@ export interface EmployeeDetail {
   emergencyContacts: EmployeeEmergencyContact[]
   /** Null only if the backend didn't compute it (should not happen); absent-safe in the UI. */
   completeness: EmployeeCompleteness | null
+  /** Expiry warnings (documents/qualifications). Optional so existing fixtures/literals keep
+   * compiling; the API always sends it (null only if it could not be computed). */
+  attention?: EmployeeAttention | null
 }
 
 export interface EmployeeInput {

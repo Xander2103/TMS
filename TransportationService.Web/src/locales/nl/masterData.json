@@ -71,7 +71,9 @@
     "createFailed": "Toevoegen is mislukt. Probeer het opnieuw.",
     "adding": "Toevoegen…",
     "addAndSelect": "Toevoegen en selecteren",
-    "codeHint": "Korte unieke code voor deze waarde."
+    "codeHint": "Korte unieke code voor deze waarde.",
+    "newAction": "+ Nieuwe {singular}",
+    "codeAutoHint": "Laat dit veld leeg om automatisch de volgende beschikbare unieke code te laten genereren."
   },
   "lookup": {
     "optionsLoadFailed": "Keuzelijst kon niet worden geladen."

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { getActiveLocale } from '../../../i18n/activeLocale'
 import { translate } from '../../../i18n/translations'
 import { createLookupApi } from '../api/lookupApi'
@@ -8,6 +8,8 @@ interface UseLookupOptionsResult {
   options: LookupOption[]
   isLoading: boolean
   error: string | null
+  /** Reloads the option list (e.g. after an inline create); resolves once the state is updated. */
+  refresh: () => Promise<void>
 }
 
 /**
@@ -21,27 +23,41 @@ export function useLookupOptions(basePath: string, opts?: { enabled?: boolean })
     error: null,
     loadedKey: '',
   })
+  // Sequence number of the latest request: older responses (and responses arriving after an
+  // unmount or basePath change) are dropped instead of overwriting newer state.
+  const seqRef = useRef(0)
+
+  const load = useCallback((): Promise<void> => {
+    const seq = ++seqRef.current
+    return createLookupApi(basePath)
+      .options()
+      .then(
+        (data) => {
+          if (seq !== seqRef.current) return
+          setState({ options: data, error: null, loadedKey: basePath })
+        },
+        () => {
+          if (seq !== seqRef.current) return
+          // Ready-to-display text (module-level translate, mirroring utils/dates.ts): callers
+          // render this string as-is, so it must not be a raw key.
+          setState({ options: [], error: translate(getActiveLocale(), 'masterData.lookup.optionsLoadFailed'), loadedKey: basePath })
+        },
+      )
+  }, [basePath])
 
   useEffect(() => {
     if (!enabled) return
-    let isMounted = true
-    const api = createLookupApi(basePath)
-    api
-      .options()
-      .then((data) => {
-        if (!isMounted) return
-        setState({ options: data, error: null, loadedKey: basePath })
-      })
-      .catch(() => {
-        if (!isMounted) return
-        // Ready-to-display text (module-level translate, mirroring utils/dates.ts): callers
-        // render this string as-is, so it must not be a raw key.
-        setState({ options: [], error: translate(getActiveLocale(), 'masterData.lookup.optionsLoadFailed'), loadedKey: basePath })
-      })
+    void load()
+    const seq = seqRef
     return () => {
-      isMounted = false
+      seq.current++
     }
-  }, [basePath, enabled])
+  }, [enabled, load])
 
-  return { options: state.options, isLoading: enabled && state.loadedKey !== basePath, error: state.error }
+  const refresh = useCallback(async () => {
+    if (!enabled) return
+    await load()
+  }, [enabled, load])
+
+  return { options: state.options, isLoading: enabled && state.loadedKey !== basePath, error: state.error, refresh }
 }

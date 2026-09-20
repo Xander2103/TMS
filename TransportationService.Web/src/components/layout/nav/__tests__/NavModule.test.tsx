@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { Truck } from 'lucide-react'
 import { NavModule } from '../NavModule'
+import { getNavModules } from '../navConfig'
 import type { VisibleModule } from '../navState'
 
 const vm: VisibleModule = {
@@ -87,4 +88,20 @@ describe('NavModule', () => {
     expect(screen.getByRole('link', { name: 'Instellingen' })).not.toHaveClass('active')
     expect(screen.getByRole('link', { name: 'Eigen bedrijven' })).toHaveClass('active')
   })
+
+  it.each(['/issued-items/categories', '/issued-items/templates', '/issued-items/templates/abc-123'])(
+    'keeps the real Bedrijfsmiddelen (beheer) entry active on %s',
+    (path) => {
+      // Regression guard: the entry pointed at the templates tab, so it lost its highlight on Categorieën.
+      const personeel = getNavModules().find((m) => m.id === 'personeel')!
+      const real: VisibleModule = { module: personeel, items: personeel.items ?? [], subgroups: [] }
+      render(
+        <MemoryRouter initialEntries={[path]}>
+          <NavModule vm={real} expanded active unreadCount={0} onToggle={vi.fn()} />
+        </MemoryRouter>,
+      )
+      const active = screen.getAllByRole('link').filter((link) => link.classList.contains('active'))
+      expect(active.map((link) => link.getAttribute('href'))).toEqual(['/issued-items'])
+    },
+  )
 })

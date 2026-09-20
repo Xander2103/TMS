@@ -89,6 +89,23 @@ export function filterModule(
   return { module, items, subgroups }
 }
 
+/**
+ * First sidebar route the user may open, in menu order — the landing page for roles without
+ * a dossier/order list. The personal portal module is skipped: the landing is a work surface.
+ */
+export function findFirstPermittedRoute(
+  modules: NavModule[],
+  hasAnyPermission: (codes: string[]) => boolean,
+): string | null {
+  for (const module of modules) {
+    if (module.requiresEmployee) continue
+    const vm = filterModule(module, { hasAnyPermission, hasEmployee: false, query: '' })
+    const first = vm?.items[0] ?? vm?.subgroups[0]?.items[0]
+    if (first) return first.children?.[0]?.to ?? first.to
+  }
+  return null
+}
+
 export function moduleHasUnread(vm: VisibleModule, unreadCount: number): boolean {
   if (unreadCount <= 0) return false
   const has = (items: NavItem[]): boolean =>

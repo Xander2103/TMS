@@ -767,10 +767,20 @@ public class DefaultRoleSeederTests
 
         var state = await db.Context.RoleTemplateStates.SingleAsync(s => s.TenantId == tenantId);
         Assert.Equal(DefaultRoleUpgrades.CurrentVersion, state.AppliedVersion);
-        Assert.Equal(32, DefaultRoleUpgrades.CurrentVersion);
+        Assert.Equal(33, DefaultRoleUpgrades.CurrentVersion);
+
 
         var roles = await db.Context.Roles.Where(r => r.TenantId == tenantId).ToListAsync();
         Guid RoleId(string code) => roles.Single(r => r.TemplateCode == code).Id;
+
+        // v33 (Personeel/HR-wave 2026-09-12): HR beheert afdelingen, functies en referentiegegevens
+        // (contracttypes); geen ander sjabloon wordt verbreed.
+        foreach (var code in new[] { PermissionCodes.DepartmentsManage, PermissionCodes.JobFunctionsManage, PermissionCodes.ReferenceDataManage })
+        {
+            Assert.Contains(code, await CodesOfAsync(db, RoleId("hr")));
+            Assert.DoesNotContain(code, await CodesOfAsync(db, RoleId("planner")));
+            Assert.DoesNotContain(code, await CodesOfAsync(db, RoleId("magazijn")));
+        }
 
         // v32 (activiteitsprijzen, stap 13): planner + management prijzen zelfstandige
         // activiteiten; niemand anders erft het via dossiers.manage of orders.edit.

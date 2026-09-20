@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { getNavModules, type NavItem } from '../navConfig'
-import { filterModule, type VisibleModule } from '../navState'
+import { filterModule, findActiveModuleId, type VisibleModule } from '../navState'
 import { translate } from '../../../../i18n/translations'
 
 /** Nav labels zijn vertaalsleutels; de tests asserteren de nl-weergave. */
@@ -159,9 +159,39 @@ describe('getNavModules — §14 target tree', () => {
     const parameters = modules.find((m) => m.id === 'parameters')!
     const hrConfig = parameters.subgroups!.find((s) => nl(s.label) === 'Personeel')!
     expect(hrConfig.items.map((i) => i.to)).toEqual([
-      '/settings/leave', '/settings/attendance', '/settings/hr-reminders',
-      '/settings/issued-item-templates', '/settings/task-templates',
+      '/settings/leave', '/settings/attendance', '/settings/hr-reminders', '/settings/task-templates',
     ])
+  })
+
+  it('lists Bedrijfsmiddelen (beheer) once, under Personeel, and no longer under Parameters', () => {
+    const personeel = modules.find((m) => m.id === 'personeel')!
+    // The entry targets the section root (not one tab) so it stays active on every tab below it.
+    const admin = personeel.items!.find((i) => i.to === '/issued-items')!
+    expect(nl(admin.label)).toBe('Bedrijfsmiddelen (beheer)')
+    expect(admin.permissions).toEqual(['issued_items.manage_templates', 'inventory.manage'])
+    expect(admin.end).toBeFalsy()
+    // Voorraad stays as it was, right before the admin entry.
+    expect(personeel.items!.map((i) => i.to).slice(-2)).toEqual(['/inventory', '/issued-items'])
+
+    const parameters = modules.find((m) => m.id === 'parameters')!
+    const parameterRoutes = parameters.subgroups!.flatMap((sg) => sg.items.map((i) => i.to))
+    expect(parameterRoutes).not.toContain('/settings/issued-item-templates')
+    expect(parameterRoutes).not.toContain('/master-data/issued-item-categories')
+    // The other category lookups are untouched.
+    expect(parameterRoutes).toContain('/master-data/vehicle-categories')
+    expect(parameterRoutes).toContain('/master-data/task-categories')
+
+    const allRoutes = modules.flatMap((m) => [
+      ...(m.items ?? []).map((i) => i.to),
+      ...(m.subgroups ?? []).flatMap((sg) => sg.items.map((i) => i.to)),
+    ])
+    expect(allRoutes.filter((r) => r.startsWith('/issued-items'))).toEqual(['/issued-items'])
+  })
+
+  it('keeps Personeel the active module on every Bedrijfsmiddelen (beheer) route', () => {
+    for (const path of ['/issued-items/categories', '/issued-items/templates', '/issued-items/templates/abc-123']) {
+      expect(findActiveModuleId(modules, path)).toBe('personeel')
+    }
   })
 })
 
@@ -197,12 +227,13 @@ describe('getNavModules — role-scoped sidebars (§14)', () => {
     expect(ids).toContain('planning')
     expect(ids).not.toContain('klanten')
 
-    // Parameters shrinks to the single Stamgegevens lookup the template could already
-    // open before the redesign (Bedrijfsmiddelcategorieën via issued_items.view —
-    // permission arrays are deliberately untouched). No settings/pricing/admin leak.
+    // Bedrijfsmiddelcategorieën moved to Personeel → Bedrijfsmiddelen (beheer), which needs
+    // manage rights this template lacks, so Parameters disappears entirely for magazijn:
+    // no settings/pricing/admin leak.
     const parameters = visible.find((vm) => vm.module.id === 'parameters')
-    const parameterLeaves = parameters ? leavesOf(parameters).map((i) => nl(i.label)) : []
-    expect(parameterLeaves).toEqual(['Bedrijfsmiddelcategorieën'])
+    expect(parameters).toBeUndefined()
+    const personeel = visible.find((vm) => vm.module.id === 'personeel')!
+    expect(leavesOf(personeel).map((i) => nl(i.label))).toEqual(['Voorraad'])
 
     const magazijn = visible.find((vm) => vm.module.id === 'magazijn')!
     expect(leavesOf(magazijn).map((i) => nl(i.label))).toEqual([

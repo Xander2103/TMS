@@ -38,6 +38,7 @@ import {
   type VariantValueInput,
 } from '../inventoryApi'
 import { formatDateTime } from '../../../utils/dates'
+import { formatQuantityWithUnit } from '../issuedItemUnits'
 import { TemplateFormModal } from '../TemplateFormModal'
 import { NegativeStockConfirmModal } from '../components/NegativeStockConfirmModal'
 import { StockThresholdsCard } from '../components/StockThresholdsCard'
@@ -371,8 +372,8 @@ export function IssuedItemTemplateDetailPage() {
     <div>
       <Breadcrumbs
         items={[
-          { label: t('issuedItems.detail.breadcrumbSettings'), to: '/settings' },
-          { label: t('issuedItems.detail.breadcrumbTemplates'), to: '/settings/issued-item-templates' },
+          { label: t('navigation.menu.modules.personeel') },
+          { label: t('issuedItems.detail.breadcrumbTemplates'), to: '/issued-items/templates' },
           { label: template.name },
         ]}
       />
@@ -416,8 +417,7 @@ export function IssuedItemTemplateDetailPage() {
               <div>
                 <dt>{t('issuedItems.detail.available')}</dt>
                 <dd>
-                  {template.totalAvailable}
-                  {template.unit ? ` ${template.unit}` : ''}{' '}
+                  {formatQuantityWithUnit(t, template.totalAvailable, template.unit)}{' '}
                   {template.lowStock && <Badge tone="warning">{t('issuedItems.detail.lowStock')}</Badge>}
                 </dd>
               </div>
@@ -655,8 +655,7 @@ export function IssuedItemTemplateDetailPage() {
             )}
           </div>
           <p className="issued-items-stock-figure">
-            {template.currentStock}
-            {template.unit ? ` ${template.unit}` : ''} {t('issuedItems.detail.availableFigure')}{' '}
+            {formatQuantityWithUnit(t, template.currentStock, template.unit)} {t('issuedItems.detail.availableFigure')}{' '}
             {template.lowStock && <Badge tone="warning">{t('issuedItems.detail.lowStock')}</Badge>}
           </p>
           {template.lowStockThreshold !== null && (

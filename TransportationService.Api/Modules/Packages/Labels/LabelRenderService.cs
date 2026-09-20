@@ -60,7 +60,9 @@ public class LabelRenderService : ILabelRenderService
 
     private static bool ConfigureFonts()
     {
-        GlobalFontSettings.UseWindowsFontsUnderWindows = true;
+        // Platform-independent font source (Windows Arial when present, else Liberation/DejaVu,
+        // else the embedded DejaVu Sans). Without it Linux hosting throws "No appropriate font".
+        TransportationService.Api.Modules.Pdf.PdfFontResolver.Register();
         return true;
     }
 

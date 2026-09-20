@@ -88,19 +88,6 @@ public class UnitTypesController : LookupControllerBase<UnitType>
         return updated is null ? NotFound() : Ok(updated);
     }
 
-    /// <summary>Active stock units for the inventory-template "Voorraadeenheid" dropdown.</summary>
-    [HttpGet("inventory-options")]
-    [RequirePermission(PermissionCodes.IssuedItemsManageTemplates, PermissionCodes.InventoryView, PermissionCodes.InventoryManage,
-        PermissionCodes.UnitTypesView, PermissionCodes.UnitTypesManage)]
-    public async Task<ActionResult<IReadOnlyList<InventoryUnitOptionDto>>> InventoryOptions(CancellationToken cancellationToken)
-    {
-        var units = await _dbContext.UnitTypes.AsNoTracking()
-            .Where(u => u.TenantId == _tenantContext.TenantId && u.IsActive && u.AllowForInventory)
-            .OrderBy(u => u.SortOrder).ThenBy(u => u.Name)
-            .Select(u => new InventoryUnitOptionDto(u.Id, u.Code, u.Name, u.Symbol))
-            .ToListAsync(cancellationToken);
-        return Ok(units);
-    }
+    // The former "inventory-options" endpoint is gone on purpose: issued-item templates use the
+    // fixed catalogue in Modules/Employees/IssuedItemUnits.cs, not UnitType master data.
 }
-
-public record InventoryUnitOptionDto(Guid Id, string Code, string Name, string? Symbol);

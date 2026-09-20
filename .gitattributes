@@ -1,3 +1,8 @@
 # Shell scripts must reach the Linux server with LF endings — a CRLF shebang
 # ("#!/usr/bin/env bash\r") breaks execution. Windows checkouts keep LF here.
 *.sh text eol=lf
+
+# Bundled PDF fonts and their licence. The licence is a verbatim copy of the upstream text (it
+# must accompany the fonts unmodified), so no EOL conversion and no whitespace checks on it.
+*.ttf binary
+TransportationService.Api/Modules/Pdf/Fonts/LICENSE-DejaVu.txt -text -whitespace

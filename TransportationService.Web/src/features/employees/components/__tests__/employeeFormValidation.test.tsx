@@ -233,8 +233,8 @@ describe('EmployeeForm — bewaarbalk boven en onder', () => {
     // Gewone sectie: twee bewaarbalken (boven + onder), dus twee Opslaan-knoppen.
     expect(screen.getAllByRole('button', { name: 'Opslaan' })).toHaveLength(2)
     expect(screen.getAllByRole('button', { name: 'Annuleren' })).toHaveLength(2)
-    // Edit-modus kent geen "Opslaan en nieuwe werknemer".
-    expect(screen.queryByRole('button', { name: 'Opslaan en nieuwe werknemer' })).not.toBeInTheDocument()
+    // Edit-modus kent geen "Opslaan en nieuwe medewerker".
+    expect(screen.queryByRole('button', { name: 'Opslaan en nieuwe medewerker' })).not.toBeInTheDocument()
 
     // Paneelsectie: beide balken verdwijnen (het paneel bewaart zichzelf).
     await userEvent.click(screen.getByRole('tab', { name: /Paneelsectie/i }))
@@ -243,10 +243,10 @@ describe('EmployeeForm — bewaarbalk boven en onder', () => {
     expect(screen.queryAllByRole('button', { name: 'Annuleren' })).toHaveLength(0)
   })
 
-  it('toont in create-modus ook "Opslaan en nieuwe werknemer" in beide balken', () => {
+  it('toont in create-modus ook "Opslaan en nieuwe medewerker" in beide balken', () => {
     auth.permissions = []
     renderForm()
-    expect(screen.getAllByRole('button', { name: 'Opslaan en nieuwe werknemer' })).toHaveLength(2)
+    expect(screen.getAllByRole('button', { name: 'Opslaan en nieuwe medewerker' })).toHaveLength(2)
   })
 })
 

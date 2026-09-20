@@ -71,7 +71,9 @@
     "createFailed": "Adding failed. Please try again.",
     "adding": "Adding…",
     "addAndSelect": "Add and select",
-    "codeHint": "Short unique code for this value."
+    "codeHint": "Short unique code for this value.",
+    "newAction": "+ New {singular}",
+    "codeAutoHint": "Leave this field empty to generate the next available unique code automatically."
   },
   "lookup": {
     "optionsLoadFailed": "The list could not be loaded."

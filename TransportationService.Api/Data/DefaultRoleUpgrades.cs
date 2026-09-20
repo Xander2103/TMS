@@ -17,7 +17,7 @@ public static class DefaultRoleUpgrades
         IReadOnlyDictionary<string, IReadOnlyList<string>> GrantsByTemplateCode);
 
     /// <summary>Version 1 = the original role creation; steps start at 2.</summary>
-    public const int CurrentVersion = 32;
+    public const int CurrentVersion = 33;
 
     public static IReadOnlyList<UpgradeStep> Steps { get; } =
     [
@@ -581,6 +581,22 @@ public static class DefaultRoleUpgrades
             {
                 ["planner"] = [PermissionCodes.DossiersPrice],
                 ["management"] = [PermissionCodes.DossiersPrice],
+            }),
+
+        new(33,
+            "Personeel/HR-verbeteringswave 2026-09-12: HR beheert de eigen stamgegevens "
+            + "(afdelingen, functies, contracttypes via referentiegegevens) zodat de "
+            + "'+ Nieuwe …'-snelkoppelingen op het medewerkerformulier voor HR werken. "
+            + "Bedrijfsmiddelcategorieën/sjablonen bleven al bij HR (inventory.manage / issued_items.manage_templates).",
+            new Dictionary<string, IReadOnlyList<string>>
+            {
+                ["hr"] =
+                [
+                    PermissionCodes.DepartmentsManage,
+                    PermissionCodes.JobFunctionsManage,
+                    PermissionCodes.ReferenceDataView,
+                    PermissionCodes.ReferenceDataManage,
+                ],
             }),
     ];
 }

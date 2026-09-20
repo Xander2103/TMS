@@ -23,7 +23,7 @@ function makeRow(overrides: Partial<InventoryOverviewRow>): InventoryOverviewRow
     variantLabel: null,
     category: 'PBM',
     storageLocation: 'Rek A1',
-    unit: 'paar',
+    unit: 'pair',
     currentStock: 12,
     warningLevel: 5,
     minimumLevel: 2,
@@ -65,7 +65,7 @@ describe('InventoryOverviewPage', () => {
 
     const detailLinks = screen.getAllByRole('link', { name: 'Detail' })
     expect(detailLinks).toHaveLength(3)
-    expect(detailLinks[0]).toHaveAttribute('href', '/settings/issued-item-templates/t-1?tab=voorraad')
+    expect(detailLinks[0]).toHaveAttribute('href', '/issued-items/templates/t-1?tab=voorraad')
   })
 
   it('filters rows via the status select', async () => {

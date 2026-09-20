@@ -1,6 +1,4 @@
-import { ApiError, apiClient } from '../../api/apiClient'
-import { apiBaseUrl } from '../../config/env'
-import { getAccessToken } from '../auth/authStorage'
+import { apiClient } from '../../api/apiClient'
 import type { InventoryStatus } from './inventoryStatus'
 
 export type IssuedItemStatus = 'NotIssued' | 'Issued' | 'Returned' | 'Missing' | 'Damaged'
@@ -99,8 +97,30 @@ export interface EmployeeIssuedItem {
   returnedDate: string | null
   returnCondition: string | null
   receivedBackByUserId: string | null
+  /** Display name of the user who booked the return (null for active or legacy rows). */
+  receivedBackByName: string | null
   variantId: string | null
   variantLabel: string | null
+  expectedReturnDate?: string | null
+  returnDisposition?: ReturnDisposition | null
+  isReturnOverdue?: boolean
+}
+
+/** Body of POST …/issued-items/{id}/return — only valid for an Issued row. */
+export interface ReturnIssuedItemInput {
+  /** YYYY-MM-DD; server defaults to today. */
+  returnedDate?: string | null
+  returnCondition?: string | null
+  /** Server default "good"; only "good" may restore stock. */
+  returnDisposition?: ReturnDisposition | null
+  restoreStock?: boolean | null
+}
+
+/** Body of POST …/issued-items/{id}/reactivate — only valid for a Returned row. */
+export interface ReactivateIssuedItemInput {
+  /** YYYY-MM-DD; server defaults to today. */
+  issuedDate?: string | null
+  reason?: string | null
 }
 
 export interface EmployeeIssuedItemInput {
@@ -124,19 +144,8 @@ export interface EmployeeIssuedItemInput {
   expectedVersion?: string | null
 }
 
-// ---- Stock units (managed master data for the "Voorraadeenheid" dropdown) ----
-export interface InventoryUnitOption {
-  id: string
-  code: string
-  name: string
-  symbol: string | null
-}
-
-export function listInventoryUnitOptions(): Promise<InventoryUnitOption[]> {
-  return apiClient.getJson<InventoryUnitOption[]>('/api/unit-types/inventory-options')
-}
-
 // ---- Templates ----
+// The template `unit` is a fixed catalogue code (see issuedItemUnits.ts), not master data.
 export function listIssuedItemTemplates(includeInactive = false): Promise<IssuedItemTemplate[]> {
   const query = includeInactive ? '?includeInactive=true' : ''
   return apiClient.getJson<IssuedItemTemplate[]>(`/api/issued-item-templates${query}`)
@@ -169,20 +178,36 @@ export function saveEmployeeIssuedItem(
     : apiClient.postJson<EmployeeIssuedItem, EmployeeIssuedItemInput>(`/api/employees/${employeeId}/issued-items`, input)
 }
 
+/** Verwijderen blijft voorbehouden aan actieve/afwijkende rijen: een teruggebrachte uitgifte is historiek (server: 400). */
 export function deleteEmployeeIssuedItem(employeeId: string, itemId: string): Promise<void> {
   return apiClient.deleteRequest(`/api/employees/${employeeId}/issued-items/${itemId}`)
 }
 
-export async function downloadIssuedItemsAcknowledgement(employeeId: string): Promise<void> {
-  const response = await fetch(`${apiBaseUrl}/api/employees/${employeeId}/issued-items/document`, {
-    headers: { Authorization: `Bearer ${getAccessToken() ?? ''}` },
-  })
-  if (!response.ok) throw new ApiError('Het ontvangstbewijs kon niet worden gedownload.', response.status)
-  const blob = await response.blob()
-  const url = URL.createObjectURL(blob)
-  const anchor = document.createElement('a')
-  anchor.href = url
-  anchor.download = 'ontvangstbewijs-bedrijfsmiddelen.pdf'
-  anchor.click()
-  URL.revokeObjectURL(url)
+/** "Teruggebracht": closes an active issuance (status Issued → Returned) and returns the updated row. */
+export function returnEmployeeIssuedItem(
+  employeeId: string,
+  itemId: string,
+  input: ReturnIssuedItemInput,
+): Promise<EmployeeIssuedItem> {
+  return apiClient.postJson<EmployeeIssuedItem, ReturnIssuedItemInput>(
+    `/api/employees/${employeeId}/issued-items/${itemId}/return`,
+    input,
+  )
+}
+
+/** "Heractiveren": re-opens a returned issuance (status Returned → Issued) and returns the updated row. */
+export function reactivateEmployeeIssuedItem(
+  employeeId: string,
+  itemId: string,
+  input: ReactivateIssuedItemInput,
+): Promise<EmployeeIssuedItem> {
+  return apiClient.postJson<EmployeeIssuedItem, ReactivateIssuedItemInput>(
+    `/api/employees/${employeeId}/issued-items/${itemId}/reactivate`,
+    input,
+  )
+}
+
+/** Ontvangstbewijs (PDF) via the shared download path: token refresh on 401, server error message on failure. */
+export function downloadIssuedItemsAcknowledgement(employeeId: string): Promise<void> {
+  return apiClient.downloadFile(`/api/employees/${employeeId}/issued-items/document`, 'ontvangstbewijs-bedrijfsmiddelen.pdf')
 }

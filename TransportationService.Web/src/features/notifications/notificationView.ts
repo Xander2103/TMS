@@ -57,7 +57,7 @@ function linkKindFor(path: string): NotificationLinkKind {
   if (path.startsWith('/pods/')) return 'pod'
   if (path.startsWith('/packages/')) return 'package'
   if (path.startsWith('/vehicles') || path.startsWith('/trailers') || path.startsWith('/tank-cards')) return 'fleet'
-  if (path.startsWith('/settings/issued-item-templates')) return 'inventory'
+  if (path.startsWith('/settings/issued-item-templates') || path.startsWith('/issued-items')) return 'inventory'
   if (path.startsWith('/attendance')) return 'attendance'
   if (path.startsWith('/portal/qualifications')) return 'qualifications'
   return 'other'

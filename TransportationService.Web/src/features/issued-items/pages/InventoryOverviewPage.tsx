@@ -13,6 +13,7 @@ import {
   INVENTORY_STATUS_TONES,
   type InventoryStatus,
 } from '../inventoryStatus'
+import { formatQuantityWithUnit } from '../issuedItemUnits'
 import { formatDate } from '../../../utils/dates'
 import './InventoryOverviewPage.css'
 
@@ -95,7 +96,7 @@ export function InventoryOverviewPage() {
       key: 'voorraad',
       header: t('issuedItems.overview.colStock'),
       align: 'right',
-      render: (row) => `${row.currentStock}${row.unit ? ` ${row.unit}` : ''}`,
+      render: (row) => formatQuantityWithUnit(t, row.currentStock, row.unit),
     },
     { key: 'waarschuwing', header: t('issuedItems.overview.colWarning'), align: 'right', render: (row) => formatLevel(row.warningLevel) },
     { key: 'minimum', header: t('issuedItems.overview.colMinimum'), align: 'right', render: (row) => formatLevel(row.minimumLevel) },
@@ -114,7 +115,7 @@ export function InventoryOverviewPage() {
       key: 'acties',
       header: <span aria-label={t('issuedItems.tab.colActions')} />,
       render: (row) => (
-        <Link className="issued-items-link" to={`/settings/issued-item-templates/${row.templateId}?tab=voorraad`}>
+        <Link className="issued-items-link" to={`/issued-items/templates/${row.templateId}?tab=voorraad`}>
           {t('issuedItems.overview.detail')}
         </Link>
       ),

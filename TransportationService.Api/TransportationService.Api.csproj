@@ -28,4 +28,13 @@
     <PackageReference Include="Scalar.AspNetCore" Version="2.16.15" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Cross-platform PDF fallback fonts (DejaVu Sans, Bitstream Vera licence); see Modules/Pdf/PdfFontResolver.cs. -->
+    <EmbeddedResource Include="Modules\Pdf\Fonts\DejaVuSans.ttf" />
+    <EmbeddedResource Include="Modules\Pdf\Fonts\DejaVuSans-Bold.ttf" />
+    <!-- The licence requires its copyright and permission notice to accompany every copy of the
+         fonts. They travel inside the assembly, so the notice ships with the build/publish output. -->
+    <None Update="Modules\Pdf\Fonts\LICENSE-DejaVu.txt" Link="licenses\DejaVu-LICENSE.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

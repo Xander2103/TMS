@@ -27,6 +27,8 @@ public interface IEmployeeService
     Task<EmployeeDetailDto?> UpdateAsync(Guid id, UpdateEmployeeRequest request, bool canEditConfidential, CancellationToken cancellationToken);
 
     Task<bool> DeactivateAsync(Guid id, CancellationToken cancellationToken);
+    /// <summary>Tenant-scoped existence check (no DTO mapping).</summary>
+    Task<bool> ExistsAsync(Guid id, CancellationToken cancellationToken);
 
     Task<bool> ReactivateAsync(Guid id, CancellationToken cancellationToken);
 }

@@ -44,8 +44,9 @@ describe('LookupSelect with valueKey="code"', () => {
     await userEvent.click(screen.getByRole('combobox'))
     await userEvent.click(screen.getByText('Kilogram'))
 
-    expect(onChange).toHaveBeenCalledWith('KG')
+    // Second argument: the full lookup row of the chosen option.
+    expect(onChange).toHaveBeenCalledWith('KG', expect.objectContaining({ id: 'ut-2', code: 'KG', name: 'Kilogram' }))
     // id form would have returned 'ut-2' — assert we did NOT emit the id.
-    expect(onChange).not.toHaveBeenCalledWith('ut-2')
+    expect(onChange.mock.calls[0][0]).not.toBe('ut-2')
   })
 })

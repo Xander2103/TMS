@@ -20,7 +20,9 @@ public sealed class SqliteTestDbContext : IDisposable
     /// <param name="ambientTenantId">When set, the context behaves like a request-scoped context
     /// of that tenant: the global tenant query filter (H1) is ACTIVE. Default (null) mimics
     /// system/background scope — filter open, exactly like production seeders and dispatchers.</param>
-    public SqliteTestDbContext(Guid? ambientTenantId = null)
+    /// <param name="extraInterceptors">Test-only interceptors appended after the production ones
+    /// (e.g. to simulate a concurrent writer between a uniqueness check and SaveChanges).</param>
+    public SqliteTestDbContext(Guid? ambientTenantId = null, params Microsoft.EntityFrameworkCore.Diagnostics.IInterceptor[] extraInterceptors)
     {
         _connection = new SqliteConnection("DataSource=:memory:");
         _connection.Open();
@@ -33,6 +35,7 @@ public sealed class SqliteTestDbContext : IDisposable
         _options = new DbContextOptionsBuilder<TransportationDbContext>()
             .UseSqlite(_connection)
             .AddInterceptors(interceptor, statusHistoryInterceptor, storageClockInterceptor)
+            .AddInterceptors(extraInterceptors)
             .Options;
 
         Context = new TransportationDbContext(_options, new FixedTenantQueryFilterAccessor(ambientTenantId));

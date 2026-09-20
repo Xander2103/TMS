@@ -86,12 +86,51 @@ describe('RootRedirect', () => {
         <Routes>
           <Route path="/" element={<RootRedirect />} />
           <Route path="/klantportaal" element={<div>Klantportaal shell</div>} />
-          <Route path="/transport-orders" element={<div>Interne app</div>} />
+          <Route path="/transport-orders" element={<div>Opdrachtenlijst</div>} />
+          <Route path="/inbox" element={<div>Interne app</div>} />
         </Routes>
       </MemoryRouter>,
     )
 
+    // No permissions at all: the first ungated sidebar entry, never a page that answers 403.
     expect(screen.getByText('Interne app')).toBeInTheDocument()
+    expect(screen.queryByText('Opdrachtenlijst')).not.toBeInTheDocument()
+  })
+
+  it('sends a role without dossiers.view and orders.view (HR) to its first permitted sidebar entry', () => {
+    // Regression guard: HR landed on /transport-orders after every login and got a 403 there.
+    auth.customerId = null
+    auth.permissions = ['dashboard.view', 'employees.view', 'issued_items.manage_templates']
+
+    render(
+      <MemoryRouter initialEntries={['/']}>
+        <Routes>
+          <Route path="/" element={<RootRedirect />} />
+          <Route path="/dashboard" element={<div>Dashboard</div>} />
+          <Route path="/transport-orders" element={<div>Opdrachtenlijst</div>} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    expect(screen.getByText('Dashboard')).toBeInTheDocument()
+    expect(screen.queryByText('Opdrachtenlijst')).not.toBeInTheDocument()
+  })
+
+  it('skips sidebar entries the role may not open when picking the landing page', () => {
+    auth.customerId = null
+    auth.permissions = ['employees.view'] // no dashboard.view → /inbox is the first ungated entry
+
+    render(
+      <MemoryRouter initialEntries={['/']}>
+        <Routes>
+          <Route path="/" element={<RootRedirect />} />
+          <Route path="/dashboard" element={<div>Dashboard</div>} />
+          <Route path="/inbox" element={<div>Berichten</div>} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    expect(screen.getByText('Berichten')).toBeInTheDocument()
   })
 })
 

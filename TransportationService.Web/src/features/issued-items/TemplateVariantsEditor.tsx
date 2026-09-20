@@ -10,9 +10,11 @@ import {
   updateVariant,
   type IssuedItemVariant,
 } from './inventoryApi'
+import { formatQuantityWithUnit } from './issuedItemUnits'
 
 interface TemplateVariantsEditorProps {
   templateId: string
+  /** Catalogue code (issuedItemUnits.ts); legacy values render as "Overige". */
   unit: string | null
 }
 
@@ -210,7 +212,7 @@ export function TemplateVariantsEditor({ templateId, unit }: TemplateVariantsEdi
       )}
 
       <p className="issued-items-computed-stock">
-        {t('issuedItems.variantsEditor.total', { total: `${total}${unit ? ` ${unit}` : ''}` })}
+        {t('issuedItems.variantsEditor.total', { total: formatQuantityWithUnit(t, total, unit) })}
       </p>
 
       {hasAttributes ? (

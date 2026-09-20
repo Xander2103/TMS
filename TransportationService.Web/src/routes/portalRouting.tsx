@@ -1,14 +1,19 @@
 import { Navigate, Outlet } from 'react-router-dom'
+import { getNavModules } from '../components/layout/nav/navConfig'
+import { findFirstPermittedRoute } from '../components/layout/nav/navState'
 import { useAuth } from '../features/auth/authContextValue'
 import { isPortalUser } from './portalUser'
 
 /** Post-login/root landing: portal users go straight to their shell; internal users land on
  * the dossier list (Wave 1: het dossier is het centrale werkobject) when they may see it,
- * with the classic order list as fallback for roles without dossiers.view. */
+ * with the classic order list as fallback for roles without dossiers.view. A role with
+ * neither (HR) lands on the first sidebar entry it may open — never on a page that answers 403. */
 export function RootRedirect() {
-  const { user, hasPermission } = useAuth()
+  const { user, hasPermission, hasAnyPermission } = useAuth()
   if (isPortalUser(user)) return <Navigate to="/klantportaal" replace />
-  return <Navigate to={hasPermission('dossiers.view') ? '/dossiers' : '/transport-orders'} replace />
+  if (hasPermission('dossiers.view')) return <Navigate to="/dossiers" replace />
+  if (hasPermission('orders.view')) return <Navigate to="/transport-orders" replace />
+  return <Navigate to={findFirstPermittedRoute(getNavModules(), hasAnyPermission) ?? '/inbox'} replace />
 }
 
 /** Guards the internal app shell: a portal user who navigates here directly (e.g. a stale

@@ -84,46 +84,82 @@ public class LookupService<TEntity> : ILookupService<TEntity> where TEntity : Lo
         return entity is null ? null : MapToDto(entity);
     }
 
+    /// <summary>Attempts for a generated code when concurrent creates race for the same candidate.</summary>
+    private const int MaxGeneratedCodeAttempts = 5;
+
     public async Task<LookupOperationResult> CreateAsync(CreateLookupRequest request, CancellationToken cancellationToken)
     {
-        if (Validate(request.Code, request.Name) is { } validationError)
+        if (string.IsNullOrWhiteSpace(request.Name))
         {
-            return LookupOperationResult.Invalid(validationError);
+            return LookupOperationResult.Invalid("Naam is verplicht.");
         }
 
-        var code = request.Code.Trim();
-        if (await CodeExistsAsync(code, excludingId: null, cancellationToken))
+        var explicitCode = Normalize(request.Code);
+        if (explicitCode is not null && await CodeExistsAsync(explicitCode, excludingId: null, cancellationToken))
         {
-            return LookupOperationResult.Duplicate(code);
+            return LookupOperationResult.Duplicate(explicitCode);
         }
 
-        var entity = new TEntity
+        // Generated codes: the database (unique TenantId+Code index) is the arbiter. Two
+        // concurrent creates may compute the same candidate; the loser gets a
+        // DbUpdateException and simply moves on to the next free ordinal.
+        var rejectedCandidates = new List<string>();
+        for (var attempt = 1; ; attempt++)
         {
-            Id = Guid.NewGuid(),
-            TenantId = _tenantContext.TenantId,
-            Code = code,
-            Name = request.Name.Trim(),
-            Description = Normalize(request.Description),
-            IsActive = request.IsActive,
-            SortOrder = request.SortOrder,
-        };
-        ApplyRequiresEndDate(entity, request.RequiresEndDate);
+            var code = explicitCode ?? await NextGeneratedCodeAsync(request.Name, rejectedCandidates, cancellationToken);
 
-        _dbContext.Set<TEntity>().Add(entity);
+            var entity = new TEntity
+            {
+                Id = Guid.NewGuid(),
+                TenantId = _tenantContext.TenantId,
+                Code = code,
+                Name = request.Name.Trim(),
+                Description = Normalize(request.Description),
+                IsActive = request.IsActive,
+                SortOrder = request.SortOrder,
+            };
+            ApplyRequiresEndDate(entity, request.RequiresEndDate);
 
-        try
-        {
-            await _dbContext.SaveChangesAsync(cancellationToken);
+            _dbContext.Set<TEntity>().Add(entity);
+
+            try
+            {
+                await _dbContext.SaveChangesAsync(cancellationToken);
+            }
+            catch (DbUpdateException)
+            {
+                _dbContext.Entry(entity).State = EntityState.Detached;
+                if (explicitCode is not null || attempt >= MaxGeneratedCodeAttempts)
+                {
+                    return LookupOperationResult.Duplicate(code);
+                }
+
+                rejectedCandidates.Add(code);
+                continue;
+            }
+
+            await _auditService.RecordAsync(EntityTypeName, entity.Id.ToString(), "Created", null,
+                new { entity.Code, entity.Name, entity.IsActive, GeneratedCode = explicitCode is null }, cancellationToken);
+
+            return LookupOperationResult.Ok(MapToDto(entity));
         }
-        catch (DbUpdateException)
-        {
-            return LookupOperationResult.Duplicate(code);
-        }
+    }
 
-        await _auditService.RecordAsync(EntityTypeName, entity.Id.ToString(), "Created", null,
-            new { entity.Code, entity.Name, entity.IsActive }, cancellationToken);
-
-        return LookupOperationResult.Ok(MapToDto(entity));
+    /// <summary>
+    /// Next free code for <paramref name="name"/> within the tenant: the name-derived base, else
+    /// base-2, base-3, … Existing codes (including soft-deleted ones, so a reused code never
+    /// resurrects history) are read once; candidates that just lost a race are excluded too.
+    /// </summary>
+    private async Task<string> NextGeneratedCodeAsync(string name, IReadOnlyCollection<string> rejectedCandidates, CancellationToken cancellationToken)
+    {
+        var baseCode = LookupCodeGenerator.BaseFromName(name);
+        var prefix = baseCode.ToLowerInvariant();
+        var taken = await _dbContext.Set<TEntity>()
+            .IgnoreQueryFilters()
+            .Where(e => e.TenantId == _tenantContext.TenantId && e.Code.ToLower().StartsWith(prefix))
+            .Select(e => e.Code)
+            .ToListAsync(cancellationToken);
+        return LookupCodeGenerator.NextFree(baseCode, taken.Concat(rejectedCandidates));
     }
 
     public async Task<LookupOperationResult> UpdateAsync(Guid id, UpdateLookupRequest request, CancellationToken cancellationToken)

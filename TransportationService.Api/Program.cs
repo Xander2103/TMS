@@ -157,6 +157,8 @@ builder.Services.AddScoped<IRoleService, RoleService>();
 // Employees
 builder.Services.AddScoped<TransportationService.Api.Modules.Employees.Services.IEmployeeCompletenessService,
     TransportationService.Api.Modules.Employees.Services.EmployeeCompletenessService>();
+builder.Services.AddScoped<TransportationService.Api.Modules.Employees.Services.IEmployeeAttentionService,
+    TransportationService.Api.Modules.Employees.Services.EmployeeAttentionService>();
 builder.Services.AddScoped<IEmployeeService, EmployeeService>();
 builder.Services.AddScoped<IEmployeeHistoryService, EmployeeHistoryService>();
 builder.Services.AddScoped<TransportationService.Api.Modules.Employees.Services.IEmployeeNoteService,
@@ -670,6 +672,10 @@ builder.Services.AddScoped<TransportationService.Api.Modules.Reporting.Services.
     TransportationService.Api.Modules.Reporting.Services.DashboardService>();
 
 var app = builder.Build();
+
+// PDFsharp font source for every renderer (receipts, invoices, transport documents, labels):
+// the Windows-only default throws on Linux hosting, see Modules/Pdf/PdfFontResolver.cs.
+TransportationService.Api.Modules.Pdf.PdfFontResolver.Register();
 
 // Column-encryption key ring (Fase 9): keys come from env/vault, never from the repo. Without a
 // key the layer is pass-through — the validator below refuses that outside Development.

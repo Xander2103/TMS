@@ -27,10 +27,11 @@ public class EmployeeService : IEmployeeService
     private readonly IDriverService _driverService;
     private readonly IQualificationService _qualificationService;
     private readonly IEmployeeCompletenessService _completenessService;
+    private readonly IEmployeeAttentionService? _attentionService;
 
     public EmployeeService(TransportationDbContext dbContext, ITenantContext tenantContext, IAuditService auditService,
         ICountryCodeValidator countryValidator, IDriverService driverService, IQualificationService qualificationService,
-        IEmployeeCompletenessService completenessService)
+        IEmployeeCompletenessService completenessService, IEmployeeAttentionService? attentionService = null)
     {
         _dbContext = dbContext;
         _tenantContext = tenantContext;
@@ -39,6 +40,7 @@ public class EmployeeService : IEmployeeService
         _driverService = driverService;
         _qualificationService = qualificationService;
         _completenessService = completenessService;
+        _attentionService = attentionService;
     }
 
     private IQueryable<Employee> TenantScoped() =>
@@ -225,6 +227,9 @@ public class EmployeeService : IEmployeeService
 
         return employee is null ? null : await MapToDetailAsync(employee, includeConfidential, cancellationToken);
     }
+
+    public Task<bool> ExistsAsync(Guid id, CancellationToken cancellationToken) =>
+        _dbContext.Employees.AnyAsync(e => e.Id == id && e.TenantId == _tenantContext.TenantId, cancellationToken);
 
     public async Task<EmployeeDetailDto> CreateAsync(CreateEmployeeRequest request, bool canEditConfidential, CancellationToken cancellationToken)
     {
@@ -724,6 +729,7 @@ public class EmployeeService : IEmployeeService
             .ToList();
 
         var completeness = await _completenessService.GetForEmployeeAsync(e.Id, cancellationToken);
+        var attention = _attentionService is null ? null : await _attentionService.GetForEmployeeAsync(e.Id, cancellationToken);
 
         return new EmployeeDetailDto(
             e.Id, e.EmployeeNumber, e.FirstName, e.LastName,
@@ -747,7 +753,8 @@ public class EmployeeService : IEmployeeService
                 .OrderBy(c => c.Priority).ThenBy(c => c.Name)
                 .Select(c => new EmployeeEmergencyContactDto(c.Id, c.Name, c.Relationship, c.Phone, c.MobilePhone, c.Notes, c.Priority))
                 .ToList(),
-            completeness);
+            completeness,
+            attention);
     }
 
     private static int? ValidateDependentChildren(int? value)

@@ -155,6 +155,82 @@ async function deleteJson<T>(path: string, options?: RequestOptions): Promise<T>
   return request<T>('DELETE', path, undefined, options)
 }
 
+/** Reads the file name from a Content-Disposition header (quoted, plain or RFC 5987 `filename*`). */
+export function fileNameFromDisposition(header: string | null): string | null {
+  if (!header) return null
+  const encoded = /filename\*=(?:UTF-8|utf-8)''([^;]+)/.exec(header)
+  if (encoded) {
+    try {
+      return decodeURIComponent(encoded[1].trim())
+    } catch {
+      // fall through to the plain form
+    }
+  }
+  const plain = /filename="?([^";]+)"?/.exec(header)
+  return plain ? plain[1].trim() : null
+}
+
+/**
+ * Downloads a binary endpoint (PDF, export) through the same auth path as JSON requests:
+ * bearer token, one refresh-and-retry on 401, and the backend's ProblemDetails message on
+ * failure. Raw `fetch` callers used to skip the refresh, so a download after the access
+ * token expired failed until some other request had refreshed it.
+ */
+async function fetchBlob(path: string, options?: RequestOptions): Promise<{ blob: Blob; fileName: string | null }> {
+  const url = `${apiBaseUrl}${path}`
+  const send = (): Promise<Response> => fetch(url, { method: 'GET', headers: buildHeaders(false), signal: options?.signal })
+
+  let response: Response
+  try {
+    response = await send()
+  } catch (err) {
+    if (isAbortError(err)) throw err
+    throw new ApiError(`Unable to reach ${path}`)
+  }
+
+  if (response.status === 401) {
+    const refreshed = await attemptRefresh()
+    if (refreshed) response = await send()
+    if (response.status === 401) {
+      clearTokens()
+      onUnauthorized?.()
+      throw new ApiError('Authentication required', 401)
+    }
+  }
+
+  if (!response.ok) {
+    let serverMessage: string | null = null
+    try {
+      const data = (await response.json()) as { detail?: unknown; message?: unknown }
+      if (typeof data.detail === 'string') serverMessage = data.detail
+      else if (typeof data.message === 'string') serverMessage = data.message
+    } catch {
+      // Not JSON — generic message below.
+    }
+    throw new ApiError(serverMessage ?? `Request to ${path} failed with status ${response.status}`, response.status)
+  }
+
+  return { blob: await response.blob(), fileName: fileNameFromDisposition(response.headers.get('Content-Disposition')) }
+}
+
+/** Fetches a file and hands it to the browser as a download (`fallbackName` when the server sends no name). */
+async function downloadFile(path: string, fallbackName: string, options?: RequestOptions): Promise<void> {
+  const { blob, fileName } = await fetchBlob(path, options)
+  const objectUrl = URL.createObjectURL(blob)
+  try {
+    const anchor = document.createElement('a')
+    anchor.href = objectUrl
+    anchor.download = fileName ?? fallbackName
+    anchor.rel = 'noopener'
+    document.body.appendChild(anchor)
+    anchor.click()
+    anchor.remove()
+  } finally {
+    // Revoke after the click has been dispatched; some browsers cancel an immediately revoked URL.
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 1000)
+  }
+}
+
 export const apiClient = {
   getJson,
   postJson,
@@ -162,4 +238,6 @@ export const apiClient = {
   patchJson,
   deleteRequest,
   deleteJson,
+  fetchBlob,
+  downloadFile,
 }

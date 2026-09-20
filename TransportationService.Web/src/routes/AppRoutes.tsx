@@ -6,6 +6,8 @@ import {
   Outlet,
   Route,
   RouterProvider,
+  useLocation,
+  useParams,
 } from 'react-router-dom'
 import { AuthProvider } from '../features/auth/AuthContext'
 import { useAuth } from '../features/auth/authContextValue'
@@ -122,7 +124,7 @@ const DocumentRulesPage = lazyPage(() => import('../features/settings/pages/Docu
 const ChargePoliciesPage = lazyPage(() => import('../features/settings/pages/ChargePoliciesPage'), 'ChargePoliciesPage')
 const SystemInfoPage = lazyPage(() => import('../features/settings/pages/SystemInfoPage'), 'SystemInfoPage')
 const LegalEntitiesPage = lazyPage(() => import('../features/legal-entities/pages/LegalEntitiesPage'), 'LegalEntitiesPage')
-const IssuedItemTemplatesPage = lazyPage(() => import('../features/issued-items/pages/IssuedItemTemplatesPage'), 'IssuedItemTemplatesPage')
+const IssuedItemsAdminPage = lazyPage(() => import('../features/issued-items/pages/IssuedItemsAdminPage'), 'IssuedItemsAdminPage')
 const IssuedItemTemplateDetailPage = lazyPage(() => import('../features/issued-items/pages/IssuedItemTemplateDetailPage'), 'IssuedItemTemplateDetailPage')
 const InventoryOverviewPage = lazyPage(() => import('../features/issued-items/pages/InventoryOverviewPage'), 'InventoryOverviewPage')
 const LeaveSettingsPage = lazyPage(() => import('../features/leave-balance/pages/LeaveSettingsPage'), 'LeaveSettingsPage')
@@ -160,6 +162,16 @@ const TaskTemplatesPage = lazyPage(() => import('../features/tasks/pages/TaskTem
 function RootLocaleProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth()
   return <LocaleProvider preferredLanguage={user?.preferredLanguage ?? null}>{children}</LocaleProvider>
+}
+
+/**
+ * Legacy deep link (bookmarks, notification LinkPaths) for a template detail: keeps the id and
+ * the query string (?tab=…) while moving the page under /issued-items.
+ */
+function LegacyIssuedItemTemplateRedirect() {
+  const { id = '' } = useParams<{ id: string }>()
+  const { search } = useLocation()
+  return <Navigate to={`/issued-items/templates/${id}${search}`} replace />
 }
 
 /** Root layout route: providers that need to live inside the router render an Outlet. */
@@ -309,14 +321,20 @@ const router = createBrowserRouter(
           />
           <Route path="/master-data/eenheden" element={<UnitTypesPage />} />
           <Route path="/master-data/services" element={<ServiceOptionsPage />} />
+          {/* Bedrijfsmiddelcategorieën live with their templates under Personeel → Bedrijfsmiddelen. */}
+          <Route path="/master-data/issued-item-categories" element={<Navigate to="/issued-items/categories" replace />} />
           <Route path="/master-data/:resource" element={<LookupPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/settings/document-rules" element={<DocumentRulesPage />} />
           <Route path="/settings/charge-policies" element={<ChargePoliciesPage />} />
           <Route path="/settings/system" element={<SystemInfoPage />} />
           <Route path="/settings/legal-entities" element={<LegalEntitiesPage />} />
-          <Route path="/settings/issued-item-templates" element={<IssuedItemTemplatesPage />} />
-          <Route path="/settings/issued-item-templates/:id" element={<IssuedItemTemplateDetailPage />} />
+          {/* Bedrijfsmiddelen (beheer): categories + templates as tabs; the index lands on templates. */}
+          <Route path="/issued-items" element={<Navigate to="/issued-items/templates" replace />} />
+          <Route path="/issued-items/:tab" element={<IssuedItemsAdminPage />} />
+          <Route path="/issued-items/templates/:id" element={<IssuedItemTemplateDetailPage />} />
+          <Route path="/settings/issued-item-templates" element={<Navigate to="/issued-items/templates" replace />} />
+          <Route path="/settings/issued-item-templates/:id" element={<LegacyIssuedItemTemplateRedirect />} />
           <Route path="/inventory" element={<InventoryOverviewPage />} />
           <Route path="/settings/leave" element={<LeaveSettingsPage />} />
           <Route path="/settings/attendance" element={<AttendanceSettingsPage />} />

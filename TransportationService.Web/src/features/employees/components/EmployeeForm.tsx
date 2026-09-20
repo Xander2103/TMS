@@ -4,6 +4,7 @@ import { Button } from '../../../components/ui/Button'
 import { FormActions } from '../../../components/ui/FormActions'
 import { FormField } from '../../../components/ui/FormField'
 import { FormSection } from '../../../components/ui/FormSection'
+import { InfoTip } from '../../../components/ui/InfoTip'
 import { SearchableSelect } from '../../../components/ui/SearchableSelect'
 import { SectionedForm, type SectionDef } from '../../../components/ui/SectionedForm'
 import { useSectionNavigation, firstSectionWithError } from '../../../components/ui/useSectionNavigation'
@@ -14,6 +15,7 @@ import { useLocale } from '../../../i18n/localeContext'
 import { useAuth } from '../../auth/authContextValue'
 import { LookupSelect } from '../../master-data/components/LookupSelect'
 import { useLookupOptions } from '../../master-data/hooks/useLookupOptions'
+import type { LookupOption } from '../../master-data/types'
 import { CountryCombobox } from '../../reference/components/CountryCombobox'
 import { EmployeeNotesPanel } from './EmployeeNotesPanel'
 import { formatIban, formatNrn, validateIban, validateNrn } from '../utils/personFormats'
@@ -103,6 +105,10 @@ const FIELD_LABEL_KEYS: Record<string, string> = {
   qualifications: 'employees.fields.qualifications',
 }
 
+/** RSZ/ONSS explanation of the Dimona declaration, linked from the DIMONA-nummer info tip. */
+const DIMONA_INFO_URL =
+  'https://www.socialsecurity.be/employer/instructions/dmfa/nl/latest/instructions/obligations/obligations_nsso/dimona/general.html'
+
 function nullable(value: string): string | null {
   const trimmed = value.trim()
   return trimmed ? trimmed : null
@@ -154,6 +160,9 @@ export function EmployeeForm({
   const [departmentId, setDepartmentId] = useState<string | null>(initial?.departmentId ?? null)
   const [contractTypeId, setContractTypeId] = useState<string | null>(initial?.contractTypeId ?? null)
   const [jobFunctionIds, setJobFunctionIds] = useState<string[]>(initial?.jobFunctionIds ?? [])
+  // Functions created inline from the Functies select: known here at once (name + code for the
+  // chips and the driver suggestion) without waiting for this component's own option list.
+  const [createdFunctions, setCreatedFunctions] = useState<LookupOption[]>([])
 
   const [emergencyRows, setEmergencyRows] = useState(() => emergencyContactRowsFromDetail(initial?.emergencyContacts))
 
@@ -193,26 +202,38 @@ export function EmployeeForm({
     touch()
   }
 
+  const allFunctions = useMemo(
+    () => [...jobFunctions.options, ...createdFunctions.filter((c) => !jobFunctions.options.some((o) => o.id === c.id))],
+    [jobFunctions.options, createdFunctions],
+  )
+
   function updateFunctions(next: string[]) {
     setJobFunctionIds(next)
     touch()
     if (onFunctionsChanged) {
       const codes = next
-        .map((id) => jobFunctions.options.find((o) => o.id === id)?.code)
+        .map((id) => allFunctions.find((o) => o.id === id)?.code)
         .filter((code): code is string => Boolean(code))
       onFunctionsChanged(codes)
     }
   }
 
-  const functionOptions = useMemo(
-    () =>
-      jobFunctions.options
-        .filter((o) => !jobFunctionIds.includes(o.id))
-        .map((o) => ({ value: o.id, label: o.name, keywords: o.code })),
-    [jobFunctions.options, jobFunctionIds],
-  )
+  /** Adds a function chosen (or just created inline) in the Functies select. */
+  function addFunction(id: string, option?: LookupOption | null) {
+    if (jobFunctionIds.includes(id)) return
+    const isNew = Boolean(option) && !allFunctions.some((o) => o.id === id)
+    if (isNew) setCreatedFunctions((current) => [...current, option!])
+    const lookup = isNew ? [...allFunctions, option!] : allFunctions
+    const next = [...jobFunctionIds, id]
+    setJobFunctionIds(next)
+    touch()
+    onFunctionsChanged?.(
+      next.map((fid) => lookup.find((o) => o.id === fid)?.code).filter((code): code is string => Boolean(code)),
+    )
+  }
+
   const selectedFunctions = jobFunctionIds
-    .map((id) => jobFunctions.options.find((o) => o.id === id))
+    .map((id) => allFunctions.find((o) => o.id === id))
     .filter((o): o is NonNullable<typeof o> => Boolean(o))
 
   // Task 5: contract types can mandate an end date; the backend enforces the same rule and
@@ -432,6 +453,7 @@ export function EmployeeForm({
             basePath="/api/departments"
             managePermission="departments.manage"
             singular={t('employees.form.departmentSingular')}
+            createLabel={t('employees.form.newDepartment')}
             value={departmentId}
             onChange={(v) => {
               setDepartmentId(v)
@@ -446,6 +468,7 @@ export function EmployeeForm({
             basePath="/api/contract-types"
             managePermission="reference_data.manage"
             singular={t('employees.form.contractTypeSingular')}
+            createLabel={t('employees.form.newContractType')}
             value={contractTypeId}
             onChange={(v) => {
               setContractTypeId(v)
@@ -454,7 +477,16 @@ export function EmployeeForm({
             placeholder={t('employees.form.noneOption')}
           />
         </FormField>
-        <FormField label={t('employees.form.dimonaNumber')} htmlFor="e-dimona">
+        <FormField
+          label={t('employees.form.dimonaNumber')}
+          htmlFor="e-dimona"
+          labelExtra={
+            <InfoTip
+              text={t('employees.form.dimonaHelp')}
+              link={{ href: DIMONA_INFO_URL, label: t('employees.form.moreInfo') }}
+            />
+          }
+        >
           <input id="e-dimona" value={dimonaNumber} onChange={(e) => setDimonaNumber(e.target.value)} maxLength={50} />
         </FormField>
         <div className="employee-form-functions form-span-all">
@@ -475,16 +507,18 @@ export function EmployeeForm({
               ))}
               {selectedFunctions.length === 0 && <span className="employee-form-no-functions">{t('employees.form.noFunctionsChosen')}</span>}
             </div>
-            <SearchableSelect
+            <LookupSelect
               id="e-function-add"
+              basePath="/api/job-functions"
+              managePermission="job_functions.manage"
+              singular="masterData.singular.job-functions"
+              createLabel={t('employees.form.newFunction')}
+              excludeValues={jobFunctionIds}
               value={null}
-              onChange={(v) => {
-                if (v) updateFunctions([...jobFunctionIds, v])
+              onChange={(v, option) => {
+                if (v) addFunction(v, option)
               }}
-              options={functionOptions}
-              isLoading={jobFunctions.isLoading}
               placeholder={t('employees.form.addFunctionPlaceholder')}
-              clearable={false}
             />
           </FormField>
         </div>
@@ -739,16 +773,22 @@ export function EmployeeForm({
         {t('employees.form.cancel')}
       </Button>
       {mode === 'create' && (
-        <Button
-          type="submit"
-          variant="secondary"
-          disabled={isSubmitting}
-          onClick={() => {
-            submitIntentRef.current = 'saveAndNew'
-          }}
-        >
-          {t('employees.form.saveAndNew')}
-        </Button>
+        <>
+          <Button
+            type="submit"
+            variant="secondary"
+            disabled={isSubmitting}
+            onClick={() => {
+              submitIntentRef.current = 'saveAndNew'
+            }}
+          >
+            {t('employees.form.saveAndNew')}
+          </Button>
+          <InfoTip
+            text={t('employees.form.saveAndNewHelp')}
+            placement={position === 'top' ? 'bottom-end' : 'top-end'}
+          />
+        </>
       )}
       <Button
         type="submit"

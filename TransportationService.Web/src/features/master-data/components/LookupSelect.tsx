@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent } from 'react'
+import { useCallback, useMemo, useRef, useState, type FormEvent } from 'react'
 import { Button } from '../../../components/ui/Button'
 import { FormField } from '../../../components/ui/FormField'
 import { Modal } from '../../../components/ui/Modal'
@@ -12,6 +12,7 @@ import { useLocale } from '../../../i18n/localeContext'
 import { useAuth } from '../../auth/authContextValue'
 import { createLookupApi } from '../api/lookupApi'
 import { useLookupOptions } from '../hooks/useLookupOptions'
+import type { LookupOption } from '../types'
 
 interface LookupSelectProps {
   id?: string
@@ -32,12 +33,21 @@ interface LookupSelectProps {
    */
   singular: string
   /**
+   * Exact text of the permanent "+ Nieuwe …" shortcut row shown to users with the manage
+   * permission (e.g. "+ Nieuw contracttype"). Defaults to `masterData.select.newAction` with
+   * the singular filled in; pass it when the generic template reads badly for the noun.
+   */
+  createLabel?: string
+  /**
    * What the select stores/returns: the lookup `id` (default) or its stable `code`. Use `code`
    * when the surrounding form persists a code rather than a foreign key (e.g. order unit types).
    */
   valueKey?: 'id' | 'code'
+  /** Values (ids or codes, matching `valueKey`) left out of the list, e.g. items already chosen in a multi-select. */
+  excludeValues?: string[]
   value: string | null
-  onChange: (value: string | null) => void
+  /** The chosen value plus, when known, the full lookup row (so multi-select callers can render it at once). */
+  onChange: (value: string | null, option?: LookupOption | null) => void
   placeholder?: string
   disabled?: boolean
 }
@@ -68,19 +78,41 @@ function suggestCode(name: string): string {
 
 /**
  * Lookup-backed SearchableSelect with a permission-gated inline-create flow: users with the
- * manage permission get an "add new" row that opens a small dialog; the created item is
- * selected automatically so the surrounding form keeps all entered data.
+ * manage permission get a permanent "+ Nieuwe …" row (and an "add \"query\"" row while typing)
+ * that opens a small dialog inside the current page; the option list is refreshed and the
+ * created item is selected automatically so the surrounding form keeps all entered data.
  */
-export function LookupSelect({ id, basePath, viewPermission, managePermission, singular, valueKey = 'id', value, onChange, placeholder, disabled }: LookupSelectProps) {
+export function LookupSelect({
+  id,
+  basePath,
+  viewPermission,
+  managePermission,
+  singular,
+  createLabel,
+  valueKey = 'id',
+  excludeValues,
+  value,
+  onChange,
+  placeholder,
+  disabled,
+}: LookupSelectProps) {
   const { t } = useLocale()
   const { hasPermission } = useAuth()
   const canView = viewPermission === undefined || hasPermission(viewPermission)
-  const { options, isLoading } = useLookupOptions(basePath, { enabled: canView })
+  const { options, isLoading, refresh } = useLookupOptions(basePath, { enabled: canView })
   const [pending, setPending] = useState<PendingCreate | null>(null)
+  // Rows created inline, keyed by their select value: the parent may ask for the full row
+  // before the refreshed option list has propagated through React state.
+  const createdRef = useRef(new Map<string, LookupOption>())
+
+  const toValue = useCallback((o: LookupOption) => (valueKey === 'code' ? o.code : o.id), [valueKey])
 
   const selectOptions = useMemo<SearchableSelectOption[]>(
-    () => options.map((o) => ({ value: valueKey === 'code' ? o.code : o.id, label: o.name, keywords: o.code })),
-    [options, valueKey],
+    () =>
+      options
+        .filter((o) => !excludeValues?.includes(toValue(o)))
+        .map((o) => ({ value: toValue(o), label: o.name, keywords: o.code })),
+    [options, toValue, excludeValues],
   )
 
   const canCreate = canView && hasPermission(managePermission)
@@ -93,15 +125,26 @@ export function LookupSelect({ id, basePath, viewPermission, managePermission, s
         new Promise<SearchableSelectOption | null>((resolve) => {
           setPending({ query, resolve })
         }),
+      alwaysShow: true,
+      emptyQueryLabel: createLabel ?? t('masterData.select.newAction', { singular: resolveSingular(t, singular) }),
     }
-  }, [canCreate, disabled, singular, t])
+  }, [canCreate, disabled, singular, createLabel, t])
+
+  function handleChange(next: string | null) {
+    if (next === null) {
+      onChange(null, null)
+      return
+    }
+    const row = options.find((o) => toValue(o) === next) ?? createdRef.current.get(next) ?? null
+    onChange(next, row)
+  }
 
   return (
     <>
       <SearchableSelect
         id={id}
         value={value}
-        onChange={onChange}
+        onChange={handleChange}
         options={selectOptions}
         placeholder={placeholder ?? t('ui.select.placeholder')}
         disabled={disabled || !canView}
@@ -112,10 +155,12 @@ export function LookupSelect({ id, basePath, viewPermission, managePermission, s
         <LookupCreateDialog
           basePath={basePath}
           singular={singular}
-          valueKey={valueKey}
           initialName={pending.query}
-          onCreated={(option) => {
-            pending.resolve(option)
+          onCreated={async (created) => {
+            createdRef.current.set(toValue(created), created)
+            // Refresh first so the new row is in the list before it gets selected.
+            await refresh()
+            pending.resolve({ value: toValue(created), label: created.name, keywords: created.code })
             setPending(null)
           }}
           onCancel={() => {
@@ -131,29 +176,32 @@ export function LookupSelect({ id, basePath, viewPermission, managePermission, s
 function LookupCreateDialog({
   basePath,
   singular,
-  valueKey,
   initialName,
   onCreated,
   onCancel,
 }: {
   basePath: string
   singular: string
-  valueKey: 'id' | 'code'
   initialName: string
-  onCreated: (option: SearchableSelectOption) => void
+  onCreated: (created: LookupOption) => Promise<void>
   onCancel: () => void
 }) {
   const { t } = useLocale()
   const [name, setName] = useState(initialName)
-  const [code, setCode] = useState(suggestCode(initialName))
+  // Left empty by default: the backend then generates the next free unique code (the
+  // name-derived suggestion is only a placeholder).
+  const [code, setCode] = useState('')
   const [description, setDescription] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault()
-    if (!name.trim() || !code.trim()) {
-      setError(t('masterData.select.nameAndCodeRequired'))
+    // The dialog is portaled, but React still bubbles this submit through the component tree
+    // into the host form (e.g. the employee form) — which must NOT be submitted by it.
+    event.stopPropagation()
+    if (!name.trim()) {
+      setError(t('masterData.form.nameRequired'))
       return
     }
 
@@ -161,13 +209,13 @@ function LookupCreateDialog({
     setError(null)
     try {
       const created = await createLookupApi(basePath).create({
-        code: code.trim(),
+        code: code.trim() || null,
         name: name.trim(),
         description: description.trim() ? description.trim() : null,
         isActive: true,
         sortOrder: 0,
       })
-      onCreated({ value: valueKey === 'code' ? created.code : created.id, label: created.name, keywords: created.code })
+      await onCreated({ id: created.id, code: created.code, name: created.name })
     } catch (err) {
       setError(
         err instanceof ApiError && err.status === 409
@@ -204,16 +252,19 @@ function LookupCreateDialog({
           <input
             id="lookup-inline-name"
             value={name}
-            onChange={(e) => {
-              setName(e.target.value)
-              setCode(suggestCode(e.target.value))
-            }}
+            onChange={(e) => setName(e.target.value)}
             maxLength={150}
             autoFocus
           />
         </FormField>
-        <FormField label={t('masterData.form.codeLabel')} htmlFor="lookup-inline-code" hint={t('masterData.select.codeHint')} required>
-          <input id="lookup-inline-code" value={code} onChange={(e) => setCode(e.target.value)} maxLength={50} />
+        <FormField label={t('masterData.form.codeLabel')} htmlFor="lookup-inline-code" hint={t('masterData.select.codeAutoHint')}>
+          <input
+            id="lookup-inline-code"
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
+            placeholder={suggestCode(name)}
+            maxLength={50}
+          />
         </FormField>
         <FormField label={t('masterData.form.descriptionLabel')} htmlFor="lookup-inline-description">
           <textarea

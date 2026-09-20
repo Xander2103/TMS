@@ -43,7 +43,7 @@ function makeDetail(overrides?: Partial<IssuedItemTemplateDetail['template']>): 
       isActive: true,
       sortOrder: 0,
       description: null,
-      unit: 'stuks',
+      unit: 'piece',
       notes: null,
       stockTrackingEnabled: true,
       variantsEnabled: true,
@@ -98,11 +98,11 @@ function makeDetail(overrides?: Partial<IssuedItemTemplateDetail['template']>): 
   }
 }
 
-function renderPage(initialEntry = '/settings/issued-item-templates/t-1') {
+function renderPage(initialEntry = '/issued-items/templates/t-1') {
   return render(
     <MemoryRouter initialEntries={[initialEntry]}>
       <Routes>
-        <Route path="/settings/issued-item-templates/:id" element={<IssuedItemTemplateDetailPage />} />
+        <Route path="/issued-items/templates/:id" element={<IssuedItemTemplateDetailPage />} />
       </Routes>
     </MemoryRouter>,
   )
@@ -115,7 +115,7 @@ describe('IssuedItemTemplateDetailPage tabs', () => {
   })
 
   it('shows tabs and opens the variants tab via deep link', async () => {
-    renderPage('/settings/issued-item-templates/t-1?tab=varianten')
+    renderPage('/issued-items/templates/t-1?tab=varianten')
 
     await waitFor(() => expect(screen.getByRole('tab', { name: /Varianten & voorraad/ })).toBeInTheDocument())
     expect(screen.getByRole('tab', { name: /Varianten & voorraad/ })).toHaveAttribute('aria-selected', 'true')
@@ -127,7 +127,7 @@ describe('IssuedItemTemplateDetailPage tabs', () => {
   })
 
   it('generates variants from selected attribute values', async () => {
-    renderPage('/settings/issued-item-templates/t-1?tab=varianten')
+    renderPage('/issued-items/templates/t-1?tab=varianten')
     await waitFor(() => expect(screen.getByRole('button', { name: 'Varianten genereren' })).toBeInTheDocument())
 
     await userEvent.click(screen.getByRole('button', { name: 'Varianten genereren' }))
@@ -150,7 +150,8 @@ describe('IssuedItemTemplateDetailPage tabs', () => {
     expect(screen.queryByRole('tab', { name: /Varianten/ })).not.toBeInTheDocument()
 
     await userEvent.click(screen.getByRole('tab', { name: 'Voorraad' }))
-    expect(screen.getByText(/25 stuks beschikbaar/)).toBeInTheDocument()
+    // The stored catalogue code renders as its translated label, never as the raw code.
+    expect(screen.getByText(/25 Stuk beschikbaar/)).toBeInTheDocument()
     expect(screen.getByText('Lage-voorraadgrens: 3')).toBeInTheDocument()
   })
 })

@@ -36,7 +36,9 @@ export function LookupFormDialog({ config, api, item, onSaved, onClose }: Lookup
 
   function validate(): FormErrors {
     const next: FormErrors = {}
-    if (!code.trim()) next.code = t('masterData.form.codeRequired')
+    // Code is optional on create: an empty code asks the backend to generate the next free
+    // unique one. Editing keeps the existing code mandatory (the row already owns one).
+    if (isEdit && !code.trim()) next.code = t('masterData.form.codeRequired')
     else if (code.trim().length > 50) next.code = t('masterData.form.codeMax')
     if (!name.trim()) next.name = t('masterData.form.nameRequired')
     else if (name.trim().length > 150) next.name = t('masterData.form.nameMax')
@@ -52,7 +54,7 @@ export function LookupFormDialog({ config, api, item, onSaved, onClose }: Lookup
     }
 
     const input: LookupInput = {
-      code: code.trim(),
+      code: code.trim() || null,
       name: name.trim(),
       description: description.trim() ? description.trim() : null,
       isActive,
@@ -66,7 +68,7 @@ export function LookupFormDialog({ config, api, item, onSaved, onClose }: Lookup
       onSaved(saved, !item)
     } catch (error) {
       if (error instanceof ApiError && error.status === 409) {
-        setErrors({ code: t('masterData.errors.duplicateCode', { code: input.code }) })
+        setErrors({ code: t('masterData.errors.duplicateCode', { code: input.code ?? '' }) })
       } else {
         setErrors({ form: t('masterData.errors.saveFailed') })
       }
@@ -96,14 +98,20 @@ export function LookupFormDialog({ config, api, item, onSaved, onClose }: Lookup
             {errors.form}
           </p>
         )}
-        <FormField label={t('masterData.form.codeLabel')} htmlFor="lookup-code" error={errors.code} hint={config.codeHint ? t(config.codeHint) : undefined} required>
+        <FormField
+          label={t('masterData.form.codeLabel')}
+          htmlFor="lookup-code"
+          error={errors.code}
+          hint={[config.codeHint ? t(config.codeHint) : null, isEdit ? null : t('masterData.select.codeAutoHint')].filter(Boolean).join(' ') || undefined}
+          required={isEdit}
+        >
           <input
             id="lookup-code"
             value={code}
             onChange={(event) => setCode(event.target.value)}
             aria-invalid={errors.code ? 'true' : undefined}
             maxLength={50}
-            autoFocus
+            autoFocus={isEdit}
           />
         </FormField>
         <FormField label={t('masterData.form.nameLabel')} htmlFor="lookup-name" error={errors.name} required>
@@ -113,6 +121,7 @@ export function LookupFormDialog({ config, api, item, onSaved, onClose }: Lookup
             onChange={(event) => setName(event.target.value)}
             aria-invalid={errors.name ? 'true' : undefined}
             maxLength={150}
+            autoFocus={!isEdit}
           />
         </FormField>
         <FormField label={t('masterData.form.descriptionLabel')} htmlFor="lookup-description">

@@ -25,7 +25,9 @@ public record LookupItemDto(
 /// </summary>
 public record LookupOptionDto(Guid Id, string Code, string Name, bool? RequiresEndDate = null);
 
-public record CreateLookupRequest(string Code, string Name, string? Description, bool IsActive, int SortOrder, bool? RequiresEndDate = null);
+/// <summary>Create payload. An empty/omitted <c>Code</c> asks the server to generate the next free
+/// unique code for this lookup (derived from the name); an explicit code must be unique.</summary>
+public record CreateLookupRequest(string? Code, string Name, string? Description, bool IsActive, int SortOrder, bool? RequiresEndDate = null);
 
 public record UpdateLookupRequest(string Code, string Name, string? Description, bool IsActive, int SortOrder, bool? RequiresEndDate = null);
 

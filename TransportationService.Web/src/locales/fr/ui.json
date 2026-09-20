@@ -30,6 +30,9 @@
     "next": "Suivant",
     "page": "Page {page} / {totalPages}"
   },
+  "infoTip": {
+    "ariaLabel": "Plus d'informations"
+  },
   "select": {
     "placeholder": "— Sélectionner —",
     "noResults": "Aucun résultat",

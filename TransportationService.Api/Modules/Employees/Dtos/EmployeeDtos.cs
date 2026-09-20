@@ -13,6 +13,21 @@ public record CompletenessItemDto(string Code, string Label, string Section);
 /// equivalent to <c>MissingItems.Count == 0</c>.</summary>
 public record EmployeeCompletenessDto(int Percentage, bool IsComplete, IReadOnlyList<CompletenessItemDto> MissingItems);
 
+/// <summary>One document or qualification that needs attention. <c>Kind</c> = "document" |
+/// "qualification"; <c>State</c> = "expiring" | "expired"; <c>DaysLeft</c> is negative when expired.
+/// <c>Detail</c> carries the document category or the qualification's document number.</summary>
+public record EmployeeAttentionItemDto(
+    string Kind, Guid Id, string Label, string? Detail, DateOnly ExpiryDate, int DaysLeft, string State);
+
+/// <summary>Expiry warnings shown at the top of the personnel dossier (HR wave 2026-09-12 §5/§6).</summary>
+public record EmployeeAttentionDto(
+    IReadOnlyList<EmployeeAttentionItemDto> Items,
+    int DocumentsExpiring, int DocumentsExpired,
+    int QualificationsExpiring, int QualificationsExpired)
+{
+    public bool HasItems => Items.Count > 0;
+}
+
 public record EmployeeListItemDto(
     Guid Id,
     string EmployeeNumber,
@@ -78,7 +93,9 @@ public record EmployeeDetailDto(
     string? IdentityCardNumber = null,
     IReadOnlyList<EmployeeEmergencyContactDto>? EmergencyContacts = null,
     /// <summary>Dossier-completeness snapshot (HR maturity wave §2.1).</summary>
-    EmployeeCompletenessDto? Completeness = null);
+    EmployeeCompletenessDto? Completeness = null,
+    /// <summary>Expiring/expired documents and qualifications (HR wave 2026-09-12 §5/§6).</summary>
+    EmployeeAttentionDto? Attention = null);
 
 public record EmployeeEmergencyContactDto(
     Guid Id, string Name, string? Relationship, string? Phone, string? MobilePhone, string? Notes, int Priority);

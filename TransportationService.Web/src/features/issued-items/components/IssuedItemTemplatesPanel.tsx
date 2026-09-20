@@ -1,7 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { PageHeader } from '../../../components/layout/PageHeader'
-import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
@@ -13,13 +11,18 @@ import {
   listIssuedItemTemplates,
   type IssuedItemTemplate,
 } from '../issuedItemsApi'
+import { formatQuantityWithUnit } from '../issuedItemUnits'
 import { TemplateFormModal } from '../TemplateFormModal'
 import '../issued-items.css'
 
 type StockFilter = 'all' | 'managed' | 'unmanaged' | 'low'
 
-/** Settings page to manage issued-item ("Bedrijfsmiddelen") templates and their stock state. */
-export function IssuedItemTemplatesPage() {
+/**
+ * Template list of the "Bedrijfsmiddelen" admin page (Sjablonen tab): filters, stock state,
+ * create/edit/delete. Embedded without its own page header so the surrounding page owns
+ * title, breadcrumbs and tabs.
+ */
+export function IssuedItemTemplatesPanel() {
   const { t } = useLocale()
   const { showSuccess, showError } = useToast()
   const navigate = useNavigate()
@@ -87,22 +90,18 @@ export function IssuedItemTemplatesPage() {
   const yesNo = (value: boolean) => (value ? t('issuedItems.templates.yes') : t('issuedItems.templates.no'))
 
   return (
-    <div>
-      <Breadcrumbs items={[{ label: t('issuedItems.templates.breadcrumbSettings'), to: '/settings' }, { label: t('issuedItems.templates.breadcrumb') }]} />
-      <PageHeader
-        title={t('issuedItems.templates.title')}
-        subtitle={t('issuedItems.templates.subtitle')}
-        action={
-          <Button
-            onClick={() => {
-              setEditing(null)
-              setEditorOpen(true)
-            }}
-          >
-            {t('issuedItems.templates.add')}
-          </Button>
-        }
-      />
+    <div className="issued-items">
+      <div className="issued-items-panel-toolbar">
+        <p className="issued-items-panel-intro">{t('issuedItems.templates.intro')}</p>
+        <Button
+          onClick={() => {
+            setEditing(null)
+            setEditorOpen(true)
+          }}
+        >
+          {t('issuedItems.templates.add')}
+        </Button>
+      </div>
 
       <div className="issued-items-filters">
         <FormField label={t('issuedItems.templates.filterCategory')} htmlFor="tpl-filter-cat">
@@ -159,7 +158,7 @@ export function IssuedItemTemplatesPage() {
             {visible.map((tpl) => (
               <tr key={tpl.id}>
                 <td>
-                  <Link className="issued-items-link" to={`/settings/issued-item-templates/${tpl.id}`}>
+                  <Link className="issued-items-link" to={`/issued-items/templates/${tpl.id}`}>
                     {tpl.name}
                   </Link>
                 </td>
@@ -169,8 +168,7 @@ export function IssuedItemTemplatesPage() {
                 <td>
                   {tpl.stockTrackingEnabled ? (
                     <span className="issued-items-stock-cell">
-                      {tpl.totalAvailable}
-                      {tpl.unit ? ` ${tpl.unit}` : ''}
+                      {formatQuantityWithUnit(t, tpl.totalAvailable, tpl.unit)}
                       {tpl.lowStock && <Badge tone="warning">{t('issuedItems.templates.lowStock')}</Badge>}
                     </span>
                   ) : (
@@ -214,7 +212,7 @@ export function IssuedItemTemplatesPage() {
             setEditorOpen(false)
             // A brand-new variant template needs its variants configured — take the user there.
             if (!editing && saved.variantsEnabled) {
-              navigate(`/settings/issued-item-templates/${saved.id}?tab=varianten`)
+              navigate(`/issued-items/templates/${saved.id}?tab=varianten`)
               return
             }
             setReloadToken((token) => token + 1)

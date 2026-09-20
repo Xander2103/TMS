@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { formatDate } from '../../../utils/dates'
 import { PageHeader } from '../../../components/layout/PageHeader'
@@ -15,7 +15,9 @@ import { useToast } from '../../../components/ui/toastContext'
 import { useLocale } from '../../../i18n/localeContext'
 import { useAuth } from '../../auth/authContextValue'
 import { AbsencesTab } from '../../absences/components/AbsencesTab'
+import { getEmployeeAttention } from '../api/employeesApi'
 import { CompletenessCard } from '../components/CompletenessCard'
+import { EmployeeAttentionStrip } from '../components/EmployeeAttentionStrip'
 import { EmployeeHistoryPanel } from '../components/EmployeeHistoryPanel'
 import { EmployeeNotesPanel } from '../components/EmployeeNotesPanel'
 import { getDriver, updateDriver } from '../../drivers/api/driversApi'
@@ -36,7 +38,7 @@ import { QualificationsTab } from '../components/QualificationsTab'
 import { useEmployee } from '../hooks/useEmployee'
 import { useEmployeeMutations } from '../hooks/useEmployeeMutations'
 import { contractEndBadge } from '../utils/employeeListBadges'
-import { CIVIL_STATUS_LABELS, EMPLOYMENT_STATUS_LABELS, EMPLOYMENT_STATUS_TONES } from '../types/employee'
+import { CIVIL_STATUS_LABELS, EMPLOYMENT_STATUS_LABELS, EMPLOYMENT_STATUS_TONES, type EmployeeAttention } from '../types/employee'
 import { fullYearsSince } from '../utils/fullYearsSince'
 import './EmployeeDetailPage.css'
 
@@ -72,6 +74,23 @@ export function EmployeeDetailPage() {
   const [showAccountDialog, setShowAccountDialog] = useState(false)
   // Offered (never forced) after a successful deactivation when the employee still has open tasks.
   const [offerTaskRedistribution, setOfferTaskRedistribution] = useState(false)
+  // Expiry warnings come with the detail load; after a document/qualification mutation they are
+  // re-fetched on their own (cheaper than reloading the whole dossier). The refreshed value is
+  // keyed on the employee object it was fetched for, so a later full reload supersedes it.
+  const [attentionOverride, setAttentionOverride] = useState<{ source: unknown; value: EmployeeAttention | null } | null>(null)
+  const attention: EmployeeAttention | null =
+    attentionOverride && attentionOverride.source === employee ? attentionOverride.value : (employee?.attention ?? null)
+
+  const refreshAttention = useCallback(() => {
+    getEmployeeAttention(id)
+      .then((value) => setAttentionOverride({ source: employee, value }))
+      .catch(() => {
+        /* de strip is afgeleide info; de mutatie zelf is al gelukt */
+      })
+  }, [id, employee])
+
+  const highlightDocumentId = searchParams.get('documentId')
+  const highlightQualificationId = searchParams.get('qualificationId')
 
   const requestedTab = searchParams.get('tab')
   const alias = requestedTab ? TAB_ALIASES[requestedTab] : undefined
@@ -182,7 +201,9 @@ export function EmployeeDetailPage() {
       label: t('employees.sections.kwalificaties'),
       optional: true,
       panel: true,
-      render: () => <QualificationsTab employeeId={employee.id} />,
+      render: () => (
+        <QualificationsTab employeeId={employee.id} highlightQualificationId={highlightQualificationId} onChanged={refreshAttention} />
+      ),
     },
     {
       id: 'documenten',
@@ -191,7 +212,7 @@ export function EmployeeDetailPage() {
       panel: true,
       render: () =>
         canViewDocuments ? (
-          <EmployeeDocumentsTab employeeId={employee.id} />
+          <EmployeeDocumentsTab employeeId={employee.id} highlightDocumentId={highlightDocumentId} onChanged={refreshAttention} />
         ) : (
           <p className="placeholder-text">{t('employees.detail.noDocumentsPermission')}</p>
         ),
@@ -283,6 +304,8 @@ export function EmployeeDetailPage() {
           </>
         }
       />
+
+      <EmployeeAttentionStrip attention={attention} />
 
       {employee.completeness && (
         <CompletenessCard
@@ -455,13 +478,13 @@ export function EmployeeDetailPage() {
 
       {tab === 'kwalificaties' && (
         <TabPanel tabId="kwalificaties">
-          <QualificationsTab employeeId={employee.id} />
+          <QualificationsTab employeeId={employee.id} highlightQualificationId={highlightQualificationId} onChanged={refreshAttention} />
         </TabPanel>
       )}
 
       {tab === 'documenten' && canViewDocuments && (
         <TabPanel tabId="documenten">
-          <EmployeeDocumentsTab employeeId={employee.id} />
+          <EmployeeDocumentsTab employeeId={employee.id} highlightDocumentId={highlightDocumentId} onChanged={refreshAttention} />
         </TabPanel>
       )}
 

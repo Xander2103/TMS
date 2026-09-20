@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { Button } from '../../components/ui/Button'
 import { FormField } from '../../components/ui/FormField'
@@ -9,12 +9,18 @@ import { useLocale } from '../../i18n/localeContext'
 import { LookupSelect } from '../master-data/components/LookupSelect'
 import {
   createIssuedItemTemplate,
-  listInventoryUnitOptions,
   updateIssuedItemTemplate,
   type IssuedItemTemplate,
   type IssuedItemTemplateInput,
-  type InventoryUnitOption,
 } from './issuedItemsApi'
+import {
+  DEFAULT_ISSUED_ITEM_UNIT,
+  ISSUED_ITEM_UNIT_DESCRIPTIONS,
+  ISSUED_ITEM_UNIT_LABELS,
+  ISSUED_ITEM_UNITS,
+  issuedItemUnitForForm,
+  normalizeIssuedItemUnit,
+} from './issuedItemUnits'
 import { createVariant } from './inventoryApi'
 import { TemplateVariantsEditor } from './TemplateVariantsEditor'
 import './issued-items.css'
@@ -38,7 +44,7 @@ function emptyTemplateForm(): IssuedItemTemplateInput {
     isActive: true,
     sortOrder: 0,
     description: null,
-    unit: null,
+    unit: DEFAULT_ISSUED_ITEM_UNIT,
     notes: null,
     stockTrackingEnabled: false,
     variantsEnabled: false,
@@ -64,7 +70,8 @@ function templateToForm(template: IssuedItemTemplate): IssuedItemTemplateInput {
     isActive: template.isActive,
     sortOrder: template.sortOrder,
     description: template.description,
-    unit: template.unit,
+    // Legacy free-text units (pre-catalogue) land on "other" so the user re-picks consciously.
+    unit: issuedItemUnitForForm(template.unit),
     notes: template.notes,
     stockTrackingEnabled: template.stockTrackingEnabled,
     variantsEnabled: template.variantsEnabled,
@@ -95,24 +102,11 @@ export function TemplateFormModal({ editing, onSaved, onClose }: TemplateFormMod
   const [formError, setFormError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const canManageCategories = hasPermission('inventory.manage')
-  const canManageUnits = hasPermission('unit_types.manage') || hasPermission('tariffs.manage')
-  const [unitOptions, setUnitOptions] = useState<InventoryUnitOption[]>([])
   // Create mode: variants entered here are created (with their initial-stock movements)
   // right after the template itself.
   const [pendingVariants, setPendingVariants] = useState<PendingVariant[]>([])
   const [pendingDraft, setPendingDraft] = useState<PendingVariant>({ label: '', stock: '', threshold: '' })
-
-  useEffect(() => {
-    let mounted = true
-    listInventoryUnitOptions()
-      .then((data) => {
-        if (mounted) setUnitOptions(data)
-      })
-      .catch(() => {})
-    return () => {
-      mounted = false
-    }
-  }, [])
+  const selectedUnit = normalizeIssuedItemUnit(form.unit)
   // Reference value for detecting a stock change on an existing template (ledger correction).
   const loadedStock = editing && editing.stockTrackingEnabled && !editing.variantsEnabled ? editing.currentStock : null
   const stockChanged = form.stockTrackingEnabled && !form.variantsEnabled
@@ -210,7 +204,7 @@ export function TemplateFormModal({ editing, onSaved, onClose }: TemplateFormMod
               disabled={saving}
             />
             {canManageCategories && (
-              <Link className="issued-items-manage-link" to="/master-data/issued-item-categories">
+              <Link className="issued-items-manage-link" to="/issued-items/categories">
                 {t('issuedItems.form.manageCategories')}
               </Link>
             )}
@@ -236,6 +230,24 @@ export function TemplateFormModal({ editing, onSaved, onClose }: TemplateFormMod
           <FormField label={t('issuedItems.form.defaultQty')} htmlFor="tpl-qty">
             <input id="tpl-qty" type="number" min={1} value={form.defaultQuantity} onChange={(e) => set('defaultQuantity', Number(e.target.value) || 1)} disabled={saving} />
           </FormField>
+          {/* Fixed catalogue (one shared list with the backend): always selectable, also without stock tracking. */}
+          <FormField label={t('issuedItems.form.unit')} htmlFor="tpl-unit" hint={t(ISSUED_ITEM_UNIT_DESCRIPTIONS[selectedUnit])}>
+            <select
+              id="tpl-unit"
+              value={selectedUnit}
+              title={t('issuedItems.form.unitHint')}
+              onChange={(e) => set('unit', normalizeIssuedItemUnit(e.target.value))}
+              disabled={saving}
+            >
+              {ISSUED_ITEM_UNITS.map((unit) => (
+                <option key={unit} value={unit} title={t(ISSUED_ITEM_UNIT_DESCRIPTIONS[unit])}>
+                  {t(ISSUED_ITEM_UNIT_LABELS[unit])}
+                </option>
+              ))}
+            </select>
+          </FormField>
+        </div>
+        <div className="issued-items-form-row">
           <FormField
             label={t('issuedItems.form.sortOrder')}
             htmlFor="tpl-sort"
@@ -404,28 +416,6 @@ export function TemplateFormModal({ editing, onSaved, onClose }: TemplateFormMod
                   onChange={(e) => set('lowStockThreshold', e.target.value === '' ? null : Math.max(0, Number(e.target.value) || 0))}
                   disabled={saving}
                 />
-              </FormField>
-            </div>
-            <div className="issued-items-form-row">
-              <FormField label={t('issuedItems.form.unit')} htmlFor="tpl-unit" hint={t('issuedItems.form.unitHint')}>
-                {/* Managed dropdown (spec: no free text); a legacy free-text value stays selectable. */}
-                <select id="tpl-unit" value={form.unit ?? ''} onChange={(e) => set('unit', e.target.value || null)} disabled={saving}>
-                  <option value="">{t('issuedItems.form.unitPlaceholder')}</option>
-                  {form.unit && !unitOptions.some((u) => u.name === form.unit) && (
-                    <option value={form.unit}>{t('issuedItems.form.legacyUnit', { value: form.unit })}</option>
-                  )}
-                  {unitOptions.map((unit) => (
-                    <option key={unit.id} value={unit.name}>
-                      {unit.name}
-                      {unit.symbol ? ` (${unit.symbol})` : ''}
-                    </option>
-                  ))}
-                </select>
-                {canManageUnits && (
-                  <Link className="issued-items-manage-link" to="/master-data/eenheden">
-                    {t('issuedItems.form.manageUnits')}
-                  </Link>
-                )}
               </FormField>
               <FormField label={t('issuedItems.form.storage')} htmlFor="tpl-storage">
                 <input id="tpl-storage" value={form.storageLocation ?? ''} onChange={(e) => set('storageLocation', e.target.value || null)} disabled={saving} maxLength={150} />

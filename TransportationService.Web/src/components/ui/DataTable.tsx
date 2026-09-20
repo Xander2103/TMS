@@ -39,6 +39,8 @@ interface DataTableProps<TRow> {
   onRowClick?: (row: TRow) => void
   /** Optional extra class name per row, e.g. greying out inactive records. */
   rowClassName?: (row: TRow) => string | undefined
+  /** Optional DOM id per row, so callers can deep-link/scroll to one row (`getElementById`). */
+  rowId?: (row: TRow) => string | undefined
   /** Current (server-side) sort; columns with a `sortKey` become clickable when `onSortChange` is set. */
   sort?: SortState | null
   /** Called with the next sort when a sortable header is clicked (same column toggles direction). */
@@ -59,6 +61,7 @@ export function DataTable<TRow>({
   loadingMessage,
   onRowClick,
   rowClassName,
+  rowId,
   sort,
   onSortChange,
 }: DataTableProps<TRow>) {
@@ -115,6 +118,7 @@ export function DataTable<TRow>({
             return (
               <tr
                 key={rowKey(row)}
+                id={rowId?.(row)}
                 className={className || undefined}
                 onClick={onRowClick ? () => onRowClick(row) : undefined}
                 tabIndex={clickable ? 0 : undefined}

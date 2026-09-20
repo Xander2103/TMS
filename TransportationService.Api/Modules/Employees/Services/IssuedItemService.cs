@@ -40,7 +40,15 @@ public record EmployeeIssuedItemDto(
     Guid? VariantId = null, string? VariantLabel = null,
     DateOnly? ExpectedReturnDate = null, string? ConditionAtIssue = null,
     string? ReturnDisposition = null, bool IsReturnOverdue = false,
-    string? IssuedByName = null);
+    string? IssuedByName = null,
+    string? ReceivedBackByName = null);
+
+/// <summary>"Teruggebracht": closes an active issuance. Date defaults to today; disposition to "good".</summary>
+public record ReturnIssuedItemRequest(
+    DateOnly? ReturnedDate = null, string? ReturnCondition = null, string? ReturnDisposition = null, bool? RestoreStock = null);
+
+/// <summary>"Heractiveren": re-opens a returned issuance (the goods went out again).</summary>
+public record ReactivateIssuedItemRequest(DateOnly? IssuedDate = null, string? Reason = null);
 
 public record SaveEmployeeIssuedItemRequest(
     Guid? TemplateId, string? Name, string? Category, IssuedItemStatus Status,
@@ -66,6 +74,10 @@ public interface IIssuedItemService
     Task<IReadOnlyList<EmployeeIssuedItemDto>?> ListForEmployeeAsync(Guid employeeId, CancellationToken cancellationToken);
     Task<EmployeeIssuedItemDto?> UpsertAsync(Guid employeeId, Guid? itemId, SaveEmployeeIssuedItemRequest request, CancellationToken cancellationToken);
     Task<bool> DeleteItemAsync(Guid employeeId, Guid itemId, CancellationToken cancellationToken);
+    /// <summary>State transition Issued → Returned (never a delete; history is kept).</summary>
+    Task<EmployeeIssuedItemDto?> ReturnAsync(Guid employeeId, Guid itemId, ReturnIssuedItemRequest request, CancellationToken cancellationToken);
+    /// <summary>State transition Returned → Issued; stock is consumed again and the action is audited.</summary>
+    Task<EmployeeIssuedItemDto?> ReactivateAsync(Guid employeeId, Guid itemId, ReactivateIssuedItemRequest request, CancellationToken cancellationToken);
     Task<byte[]?> BuildAcknowledgementAsync(Guid employeeId, CancellationToken cancellationToken);
 }
 
@@ -214,10 +226,14 @@ public class IssuedItemService : IIssuedItemService
             .OrderBy(i => i.CategorySnapshot).ThenBy(i => i.NameSnapshot)
             .ToListAsync(cancellationToken);
 
-        var issuerNames = await UserNamesAsync(
-            items.Where(i => i.IssuedByUserId.HasValue).Select(i => i.IssuedByUserId!.Value), cancellationToken);
+        var userNames = await UserNamesAsync(
+            items.Where(i => i.IssuedByUserId.HasValue).Select(i => i.IssuedByUserId!.Value)
+                .Concat(items.Where(i => i.ReceivedBackByUserId.HasValue).Select(i => i.ReceivedBackByUserId!.Value)),
+            cancellationToken);
         return items
-            .Select(i => Map(i, i.IssuedByUserId is { } issuerId ? issuerNames.GetValueOrDefault(issuerId) : null))
+            .Select(i => Map(i,
+                i.IssuedByUserId is { } issuerId ? userNames.GetValueOrDefault(issuerId) : null,
+                i.ReceivedBackByUserId is { } receiverId ? userNames.GetValueOrDefault(receiverId) : null))
             .ToList();
     }
 
@@ -307,11 +323,94 @@ public class IssuedItemService : IIssuedItemService
                 cancellationToken);
         }
 
-        var issuedByName = item.IssuedByUserId is { } issuedByUserId
-            ? (await UserNamesAsync([issuedByUserId], cancellationToken)).GetValueOrDefault(issuedByUserId)
-            : null;
-        return Map(item, issuedByName);
+        var stampIds = new[] { item.IssuedByUserId, item.ReceivedBackByUserId }.Where(id => id.HasValue).Select(id => id!.Value).ToList();
+        var stampNames = stampIds.Count == 0 ? new Dictionary<Guid, string>() : await UserNamesAsync(stampIds, cancellationToken);
+        return Map(item,
+            item.IssuedByUserId is { } issuedByUserId ? stampNames.GetValueOrDefault(issuedByUserId) : null,
+            item.ReceivedBackByUserId is { } receivedBackByUserId ? stampNames.GetValueOrDefault(receivedBackByUserId) : null);
     }
+
+    public async Task<EmployeeIssuedItemDto?> ReturnAsync(Guid employeeId, Guid itemId, ReturnIssuedItemRequest request, CancellationToken cancellationToken)
+    {
+        var item = await FindItemAsync(employeeId, itemId, cancellationToken);
+        if (item is null)
+        {
+            return null;
+        }
+
+        if (item.Status != IssuedItemStatus.Issued)
+        {
+            throw new DomainValidationException("status", "Alleen een uitgereikt middel kan als teruggebracht gemarkeerd worden.");
+        }
+
+        var returnedDate = request.ReturnedDate ?? Today();
+        if (item.IssuedDate is { } issued && returnedDate < issued)
+        {
+            throw new DomainValidationException("returnedDate", "De retourdatum kan niet vóór de uitreikingsdatum liggen.");
+        }
+
+        var save = SnapshotRequest(item) with
+        {
+            Status = IssuedItemStatus.Returned,
+            ReturnedDate = returnedDate,
+            ReturnCondition = Trim(request.ReturnCondition),
+            ReturnDisposition = request.ReturnDisposition ?? "good",
+            RestoreStock = request.RestoreStock,
+        };
+        return await UpsertAsync(employeeId, itemId, save, cancellationToken);
+    }
+
+    public async Task<EmployeeIssuedItemDto?> ReactivateAsync(Guid employeeId, Guid itemId, ReactivateIssuedItemRequest request, CancellationToken cancellationToken)
+    {
+        var item = await FindItemAsync(employeeId, itemId, cancellationToken);
+        if (item is null)
+        {
+            return null;
+        }
+
+        if (item.Status != IssuedItemStatus.Returned)
+        {
+            throw new DomainValidationException("status", "Alleen een teruggebracht middel kan opnieuw geactiveerd worden.");
+        }
+
+        var previous = new { item.Status, item.ReturnedDate, item.ReturnCondition, item.ReturnDisposition, item.ReceivedBackByUserId };
+        var save = SnapshotRequest(item) with
+        {
+            Status = IssuedItemStatus.Issued,
+            IssuedDate = request.IssuedDate ?? Today(),
+            ReturnedDate = null,
+            ReturnCondition = null,
+            ReturnDisposition = null,
+            OverrideReason = Trim(request.Reason),
+        };
+        var result = await UpsertAsync(employeeId, itemId, save, cancellationToken);
+        if (result is not null)
+        {
+            item.ReceivedBackByUserId = null;
+            await _dbContext.SaveChangesAsync(cancellationToken);
+            await _auditService.RecordAsync(ItemEntity, item.Id.ToString(), "Reactivated", previous,
+                new { item.Status, item.IssuedDate, Reason = Trim(request.Reason), ReactivatedByUserId = _currentUser.CurrentUserId }, cancellationToken);
+            result = result with { ReceivedBackByUserId = null, ReceivedBackByName = null };
+        }
+
+        return result;
+    }
+
+    /// <summary>The item's current values as a save request, so state transitions reuse the single upsert path (stock, audit, stamps).</summary>
+    private static SaveEmployeeIssuedItemRequest SnapshotRequest(EmployeeIssuedItem item) => new(
+        item.TemplateId, item.NameSnapshot, item.CategorySnapshot, item.Status,
+        item.IssuedDate, item.Quantity, item.SerialNumber, item.Notes,
+        item.ReturnedDate, item.ReturnCondition,
+        VariantId: item.VariantId,
+        ReturnDisposition: item.ReturnDisposition,
+        ExpectedReturnDate: item.ExpectedReturnDate,
+        ConditionAtIssue: item.ConditionAtIssue);
+
+    private Task<EmployeeIssuedItem?> FindItemAsync(Guid employeeId, Guid itemId, CancellationToken cancellationToken) =>
+        _dbContext.EmployeeIssuedItems.FirstOrDefaultAsync(
+            i => i.TenantId == _tenantContext.TenantId && i.EmployeeId == employeeId && i.Id == itemId, cancellationToken);
+
+    private static DateOnly Today() => DateOnly.FromDateTime(DateTime.UtcNow);
 
     public async Task<bool> DeleteItemAsync(Guid employeeId, Guid itemId, CancellationToken cancellationToken)
     {
@@ -320,6 +419,13 @@ public class IssuedItemService : IIssuedItemService
         if (item is null)
         {
             return false;
+        }
+
+        // A returned issuance is history (who had what, when it came back): it is never deleted
+        // through the regular flow. Data corrections go through reactivate → edit.
+        if (item.Status == IssuedItemStatus.Returned)
+        {
+            throw new DomainValidationException("status", "Een teruggebrachte uitgifte blijft bewaard als historiek en kan niet verwijderd worden.");
         }
 
         // Deleting a still-issued, stock-tracked row gives the consumed quantity back so
@@ -588,7 +694,9 @@ public class IssuedItemService : IIssuedItemService
         template.IsActive = request.IsActive;
         template.SortOrder = request.SortOrder;
         template.Description = Trim(request.Description);
-        template.Unit = Trim(request.Unit);
+        template.Unit = IssuedItemUnits.TryParse(request.Unit)
+            ?? throw new DomainValidationException("unit",
+                $"Ongeldige eenheid '{request.Unit}'. Kies een eenheid uit de vaste lijst ({string.Join(", ", IssuedItemUnits.Codes)}).");
         template.Notes = Trim(request.Notes);
         template.StockTrackingEnabled = request.StockTrackingEnabled;
         template.VariantsEnabled = request.VariantsEnabled;
@@ -704,7 +812,7 @@ public class IssuedItemService : IIssuedItemService
             t.TargetStockLevel, t.ReorderQuantity, t.NegativeStockRequiresReason, status);
     }
 
-    private static EmployeeIssuedItemDto Map(EmployeeIssuedItem i, string? issuedByName = null) => new(
+    private static EmployeeIssuedItemDto Map(EmployeeIssuedItem i, string? issuedByName = null, string? receivedBackByName = null) => new(
         i.Id, i.TemplateId, i.NameSnapshot, i.CategorySnapshot, i.Status,
         i.IssuedDate, i.Quantity, i.SerialNumber, i.Notes, i.IssuedByUserId,
         i.ReturnedDate, i.ReturnCondition, i.ReceivedBackByUserId,
@@ -712,7 +820,8 @@ public class IssuedItemService : IIssuedItemService
         i.ExpectedReturnDate, i.ConditionAtIssue, i.ReturnDisposition,
         IsReturnOverdue: i.Status == IssuedItemStatus.Issued
             && i.ExpectedReturnDate is { } due && due < DateOnly.FromDateTime(DateTime.UtcNow),
-        IssuedByName: issuedByName);
+        IssuedByName: issuedByName,
+        ReceivedBackByName: receivedBackByName);
 
     private static string? Trim(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }

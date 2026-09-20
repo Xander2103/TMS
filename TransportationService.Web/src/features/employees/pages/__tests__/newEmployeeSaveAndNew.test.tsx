@@ -6,7 +6,7 @@ import { NewEmployeePage } from '../NewEmployeePage'
 
 // Fase 8 (master-data wave): de aanmaakpagina deelt het sectie-id "chauffeursgegevens" met de
 // detailpagina, een minimale aanmaak (enkel naam) gaat zonder chauffeursvelden naar de API, en
-// "Opslaan en nieuwe werknemer" reset de volledige pagina zonder te navigeren.
+// "Opslaan en nieuwe medewerker" reset de volledige pagina zonder te navigeren.
 
 const nav = vi.hoisted(() => ({ spy: vi.fn() }))
 const mutation = vi.hoisted(() => ({ create: vi.fn() }))
@@ -118,13 +118,13 @@ describe('NewEmployeePage — chauffeurssectie', () => {
   })
 })
 
-describe('NewEmployeePage — Opslaan en nieuwe werknemer', () => {
+describe('NewEmployeePage — Opslaan en nieuwe medewerker', () => {
   it('reset het formulier voor een volgende invoer en blijft op de pagina', async () => {
     mutation.create.mockResolvedValue({ id: 'emp-2', employeeNumber: 'M002', driverId: null })
     renderPage()
 
     await fillNames('An', 'Willems')
-    await userEvent.click(screen.getAllByRole('button', { name: 'Opslaan en nieuwe werknemer' })[0])
+    await userEvent.click(screen.getAllByRole('button', { name: 'Opslaan en nieuwe medewerker' })[0])
 
     await waitFor(() => expect(mutation.create).toHaveBeenCalledTimes(1))
     expect(mutation.create.mock.calls[0][0]).toMatchObject({ firstName: 'An', lastName: 'Willems' })

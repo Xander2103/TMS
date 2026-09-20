@@ -1,6 +1,6 @@
 import { apiClient } from '../../../api/apiClient'
 import type {
-  CreateEmployeeInput, EmployeeDetail, EmployeePagedResult, EmploymentStatus, EmployeeSortOption, UpdateEmployeeInput,
+  CreateEmployeeInput, EmployeeAttention, EmployeeDetail, EmployeePagedResult, EmploymentStatus, EmployeeSortOption, UpdateEmployeeInput,
 } from '../types/employee'
 
 export interface SearchEmployeesParams {
@@ -37,6 +37,12 @@ export function searchEmployees(params: SearchEmployeesParams): Promise<Employee
 
 export function getEmployee(id: string): Promise<EmployeeDetail> {
   return apiClient.getJson<EmployeeDetail>(`/api/employees/${id}`)
+}
+
+/** Same payload as `EmployeeDetail.attention`, re-fetched on its own after a document or
+ * qualification mutation so the warning strip updates without reloading the whole dossier. */
+export function getEmployeeAttention(id: string): Promise<EmployeeAttention | null> {
+  return apiClient.getJson<EmployeeAttention | null>(`/api/employees/${id}/attention`)
 }
 
 export function createEmployee(input: CreateEmployeeInput): Promise<EmployeeDetail> {

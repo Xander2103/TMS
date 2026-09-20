@@ -81,6 +81,19 @@ public class EmployeesController : ControllerBase
         return employee is null ? NotFound() : Ok(employee);
     }
 
+    /// <summary>Expiry warnings (documents/qualifications) for the dossier header; refreshable without reloading the employee.</summary>
+    [HttpGet("{id:guid}/attention")]
+    [RequirePermission(PermissionCodes.EmployeesView)]
+    public async Task<ActionResult<EmployeeAttentionDto>> GetAttention(Guid id, [FromServices] IEmployeeAttentionService attentionService, CancellationToken cancellationToken)
+    {
+        if (!await _employeeService.ExistsAsync(id, cancellationToken))
+        {
+            return NotFound();
+        }
+
+        return Ok(await attentionService.GetForEmployeeAsync(id, cancellationToken));
+    }
+
     /// <summary>
     /// Complete readable change history of the personnel dossier (profile + qualifications,
     /// documents, issued items, absences, leave balances, driver profile), newest first.

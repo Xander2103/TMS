@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { NavModule } from '../navConfig'
 import { getNavModules } from '../navConfig'
-import { filterModule, findActiveModuleId, moduleHasUnread } from '../navState'
+import { filterModule, findActiveModuleId, findFirstPermittedRoute, moduleHasUnread } from '../navState'
 import { translate } from '../../../../i18n/translations'
 import { Truck } from 'lucide-react'
 
@@ -20,6 +20,26 @@ describe('findActiveModuleId', () => {
   })
   it('returns null for an unknown route', () => {
     expect(findActiveModuleId(modules, '/nowhere')).toBeNull()
+  })
+})
+
+describe('findFirstPermittedRoute', () => {
+  const only = (...codes: string[]) => (required: string[]) => required.some((c) => codes.includes(c))
+
+  it('returns the first permitted entry in menu order and never the personal portal', () => {
+    expect(findFirstPermittedRoute(modules, allowAll)).toBe('/dashboard')
+    expect(findFirstPermittedRoute(modules, only('employees.view'))).toBe('/inbox')
+  })
+  it('falls through to a subgroup when a module has no permitted top-level item', () => {
+    const synthetic: NavModule[] = [
+      {
+        id: 'x', label: 'X', icon: Truck,
+        items: [{ label: 'Gated', to: '/gated', permissions: ['nope'] }],
+        subgroups: [{ label: 'SG', items: [{ label: 'Open', to: '/open', permissions: ['yes'] }] }],
+      },
+    ]
+    expect(findFirstPermittedRoute(synthetic, only('yes'))).toBe('/open')
+    expect(findFirstPermittedRoute(synthetic, only('other'))).toBeNull()
   })
 })
 

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { IssuedItemsTab } from '../IssuedItemsTab'
 import { ApiError } from '../../../api/apiClient'
@@ -25,6 +25,7 @@ vi.mock('../../../components/ui/toastContext', () => ({
 const items = vi.hoisted(() => ({ value: [] as EmployeeIssuedItem[] }))
 const templates = vi.hoisted(() => ({ value: [] as IssuedItemTemplate[] }))
 const saveSpy = vi.hoisted(() => ({ fn: vi.fn() }))
+const transitions = vi.hoisted(() => ({ returnFn: vi.fn(), reactivateFn: vi.fn(), downloadFn: vi.fn() }))
 
 vi.mock('../issuedItemsApi', async () => {
   const actual = await vi.importActual<typeof import('../issuedItemsApi')>('../issuedItemsApi')
@@ -36,6 +37,18 @@ vi.mock('../issuedItemsApi', async () => {
       // Tests may stub rejections (e.g. a negative-stock 409); default resolves the first item.
       const result = saveSpy.fn(...args) as Promise<EmployeeIssuedItem> | undefined
       return result ?? Promise.resolve(items.value[0])
+    },
+    returnEmployeeIssuedItem: (...args: unknown[]) => {
+      const result = transitions.returnFn(...args) as Promise<EmployeeIssuedItem> | undefined
+      return result ?? Promise.resolve(items.value[0])
+    },
+    reactivateEmployeeIssuedItem: (...args: unknown[]) => {
+      const result = transitions.reactivateFn(...args) as Promise<EmployeeIssuedItem> | undefined
+      return result ?? Promise.resolve(items.value[0])
+    },
+    downloadIssuedItemsAcknowledgement: (...args: unknown[]) => {
+      const result = transitions.downloadFn(...args) as Promise<void> | undefined
+      return result ?? Promise.resolve()
     },
   }
 })
@@ -72,6 +85,7 @@ function makeItem(overrides: Partial<EmployeeIssuedItem>): EmployeeIssuedItem {
     returnedDate: null,
     returnCondition: null,
     receivedBackByUserId: null,
+    receivedBackByName: null,
     variantId: null,
     variantLabel: null,
     ...overrides,
@@ -125,8 +139,140 @@ describe('IssuedItemsTab', () => {
     // Status badge label "Uitgereikt" appears alongside the same-named date column header.
     expect(screen.getAllByText('Uitgereikt').length).toBeGreaterThanOrEqual(2)
     expect(screen.getByText('Ontvangstbewijs (PDF)')).toBeInTheDocument()
-    // A read-only user gets no manage action.
+    // A read-only user gets no manage action at all — also no row actions.
     expect(screen.queryByText('Bedrijfsmiddel toevoegen')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Bewerken' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Teruggebracht' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Verwijderen' })).not.toBeInTheDocument()
+  })
+
+  it('downloads the acknowledgement through the shared download flow for a read-only user', async () => {
+    auth.permissions = ['issued_items.view']
+    items.value = [makeItem({})]
+    transitions.downloadFn.mockReset()
+    render(<IssuedItemsTab employeeId="emp-1" />)
+
+    const receipt = await screen.findByRole('button', { name: 'Ontvangstbewijs (PDF)' })
+    await userEvent.click(receipt)
+
+    // Regression: the receipt goes through apiClient.downloadFile (token refresh on 401), not a raw fetch.
+    await waitFor(() => expect(transitions.downloadFn).toHaveBeenCalledWith('emp-1'))
+  })
+
+  it('dims a returned row, shows who took it back, and only offers Heractiveren', async () => {
+    auth.permissions = ['issued_items.view', 'issued_items.manage']
+    items.value = [
+      makeItem({ id: 'ii-active', name: 'Laptop', status: 'Issued' }),
+      makeItem({
+        id: 'ii-returned',
+        name: 'Helm',
+        status: 'Returned',
+        returnedDate: '2026-08-15',
+        receivedBackByName: 'An Peeters',
+      }),
+    ]
+    render(<IssuedItemsTab employeeId="emp-5" />)
+
+    await waitFor(() => expect(screen.getByText('Helm')).toBeInTheDocument())
+    const returnedRow = screen.getByText('Helm').closest('tr')!
+    const activeRow = screen.getByText('Laptop').closest('tr')!
+
+    expect(returnedRow).toHaveClass('is-returned')
+    expect(activeRow).not.toHaveClass('is-returned')
+    // Status badge + return date + receiver in the "Teruggebracht" column.
+    expect(within(returnedRow).getByText('Teruggebracht')).toBeInTheDocument()
+    expect(returnedRow).toHaveTextContent('15/08/2026')
+    expect(returnedRow).toHaveTextContent('door An Peeters')
+
+    // A returned row is history: reactivate only — no edit, no delete, no second "Teruggebracht".
+    expect(within(returnedRow).getByRole('button', { name: 'Heractiveren' })).toBeInTheDocument()
+    expect(within(returnedRow).queryByRole('button', { name: 'Verwijderen' })).not.toBeInTheDocument()
+    expect(within(returnedRow).queryByRole('button', { name: 'Bewerken' })).not.toBeInTheDocument()
+    expect(within(returnedRow).queryByRole('button', { name: 'Teruggebracht' })).not.toBeInTheDocument()
+
+    // An active row offers Bewerken · Teruggebracht · Verwijderen.
+    expect(within(activeRow).getByRole('button', { name: 'Bewerken' })).toBeInTheDocument()
+    expect(within(activeRow).getByRole('button', { name: 'Teruggebracht' })).toBeInTheDocument()
+    expect(within(activeRow).getByRole('button', { name: 'Verwijderen' })).toBeInTheDocument()
+    expect(within(activeRow).queryByRole('button', { name: 'Heractiveren' })).not.toBeInTheDocument()
+  })
+
+  it('keeps Bewerken/Verwijderen without Teruggebracht for non-issued, non-returned statuses', async () => {
+    auth.permissions = ['issued_items.view', 'issued_items.manage']
+    items.value = [makeItem({ id: 'ii-missing', name: 'Badge', status: 'Missing' })]
+    render(<IssuedItemsTab employeeId="emp-6" />)
+
+    await waitFor(() => expect(screen.getByText('Badge')).toBeInTheDocument())
+    const row = screen.getByText('Badge').closest('tr')!
+    expect(within(row).getByRole('button', { name: 'Bewerken' })).toBeInTheDocument()
+    expect(within(row).getByRole('button', { name: 'Verwijderen' })).toBeInTheDocument()
+    expect(within(row).queryByRole('button', { name: 'Teruggebracht' })).not.toBeInTheDocument()
+    expect(within(row).queryByRole('button', { name: 'Heractiveren' })).not.toBeInTheDocument()
+  })
+
+  it('posts the chosen return values to the return endpoint', async () => {
+    auth.permissions = ['issued_items.view', 'issued_items.manage']
+    items.value = [makeItem({ id: 'ii-1', name: 'T-shirt', status: 'Issued', templateId: 't-1' })]
+    templates.value = [makeTemplate({ id: 't-1', stockTrackingEnabled: true, variantsEnabled: false })]
+    transitions.returnFn.mockReset()
+    render(<IssuedItemsTab employeeId="emp-7" />)
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Teruggebracht' })).toBeInTheDocument())
+    await userEvent.click(screen.getByRole('button', { name: 'Teruggebracht' }))
+
+    // Dialog: today's date prefilled, disposition "good", restore-stock on for a stock-tracked template.
+    const dateInput = screen.getByLabelText('Retourdatum')
+    expect(dateInput).toHaveValue(new Date().toISOString().slice(0, 10))
+    expect(screen.getByLabelText(/Retourconditie/)).toHaveValue('good')
+    expect(screen.getByLabelText('Voorraad terugboeken')).toBeChecked()
+
+    await userEvent.clear(dateInput)
+    await userEvent.type(dateInput, '2026-09-10')
+    await userEvent.type(screen.getByLabelText('Staat bij retour'), 'Lichte slijtage')
+    await userEvent.click(screen.getByLabelText('Voorraad terugboeken'))
+    await userEvent.click(screen.getByRole('button', { name: 'Markeer als teruggebracht' }))
+
+    await waitFor(() => expect(transitions.returnFn).toHaveBeenCalledTimes(1))
+    expect(transitions.returnFn).toHaveBeenCalledWith('emp-7', 'ii-1', {
+      returnedDate: '2026-09-10',
+      returnCondition: 'Lichte slijtage',
+      returnDisposition: 'good',
+      restoreStock: false,
+    })
+  })
+
+  it('hides the restore-stock option for a damaged return and never restores stock then', async () => {
+    auth.permissions = ['issued_items.view', 'issued_items.manage']
+    items.value = [makeItem({ id: 'ii-2', name: 'Helm', status: 'Issued', templateId: 't-1' })]
+    templates.value = [makeTemplate({ id: 't-1', stockTrackingEnabled: true, variantsEnabled: false })]
+    transitions.returnFn.mockReset()
+    render(<IssuedItemsTab employeeId="emp-8" />)
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Teruggebracht' })).toBeInTheDocument())
+    await userEvent.click(screen.getByRole('button', { name: 'Teruggebracht' }))
+    await userEvent.selectOptions(screen.getByLabelText(/Retourconditie/), 'damaged')
+    expect(screen.queryByLabelText('Voorraad terugboeken')).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Markeer als teruggebracht' }))
+
+    await waitFor(() => expect(transitions.returnFn).toHaveBeenCalledTimes(1))
+    expect(transitions.returnFn.mock.calls[0][2]).toMatchObject({ returnDisposition: 'damaged', restoreStock: false })
+  })
+
+  it('reactivates a returned item through the reactivate endpoint with the optional reason', async () => {
+    auth.permissions = ['issued_items.view', 'issued_items.manage']
+    items.value = [makeItem({ id: 'ii-3', name: 'Helm', status: 'Returned', returnedDate: '2026-08-15' })]
+    transitions.reactivateFn.mockReset()
+    render(<IssuedItemsTab employeeId="emp-9" />)
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Heractiveren' })).toBeInTheDocument())
+    await userEvent.click(screen.getByRole('button', { name: 'Heractiveren' }))
+    expect(screen.getByText(/"Helm" wordt opnieuw als uitgereikt gemarkeerd/)).toBeInTheDocument()
+    await userEvent.type(screen.getByLabelText('Reden (optioneel)'), 'Terug in dienst')
+    // The row action and the dialog's confirm share the label; confirm from inside the dialog.
+    await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Heractiveren' }))
+
+    await waitFor(() => expect(transitions.reactivateFn).toHaveBeenCalledTimes(1))
+    expect(transitions.reactivateFn).toHaveBeenCalledWith('emp-9', 'ii-3', { reason: 'Terug in dienst' })
   })
 
   it('shows the add button for a manager', async () => {

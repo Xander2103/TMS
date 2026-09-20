@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { LoadingState } from '../../../components/feedback/LoadingState'
 import { ErrorState } from '../../../components/feedback/ErrorState'
 import { Badge } from '../../../components/ui/Badge'
@@ -25,11 +25,16 @@ import './QualificationsTab.css'
 
 interface QualificationsTabProps {
   employeeId: string
+  /** Deep-link target (`?qualificationId=`): that row is highlighted and scrolled into view. */
+  highlightQualificationId?: string | null
+  /** Fired after a successful create/edit/verify/suspend so the host can refresh derived data
+   * (the expiry-warning strip). */
+  onChanged?: () => void
 }
 
 const STATUS_FILTERS: Array<QualificationStatus | 'all'> = ['all', 'Valid', 'ExpiringSoon', 'Expired', 'Pending', 'Suspended']
 
-export function QualificationsTab({ employeeId }: QualificationsTabProps) {
+export function QualificationsTab({ employeeId, highlightQualificationId, onChanged }: QualificationsTabProps) {
   const { qualifications, isLoading, error, reload } = useEmployeeQualifications(employeeId)
   const mutations = useQualificationMutations()
   const toast = useToast()
@@ -49,6 +54,15 @@ export function QualificationsTab({ employeeId }: QualificationsTabProps) {
     const rows = statusFilter === 'all' ? qualifications : qualifications.filter((q) => q.effectiveStatus === statusFilter)
     return [...rows].sort((a, b) => (a.expiryDate ?? '9999').localeCompare(b.expiryDate ?? '9999'))
   }, [qualifications, statusFilter])
+
+  // Scroll the deep-linked row into view once the table is there (and again when the target
+  // changes). Optional call: jsdom has no scrollIntoView implementation.
+  useEffect(() => {
+    if (!highlightQualificationId || isLoading) return
+    document
+      .getElementById(`employee-qualification-${highlightQualificationId}`)
+      ?.scrollIntoView?.({ block: 'center', behavior: 'smooth' })
+  }, [highlightQualificationId, isLoading, visible])
 
   async function handleUpload(qualification: EmployeeQualification, file: File) {
     setDocumentBusyId(qualification.id)
@@ -164,6 +178,7 @@ export function QualificationsTab({ employeeId }: QualificationsTabProps) {
                 if (saved) {
                   toast.showSuccess(t('employees.qualifications.verified'))
                   reload()
+                  onChanged?.()
                 }
               }}
               disabled={mutations.isSubmitting}
@@ -203,6 +218,8 @@ export function QualificationsTab({ employeeId }: QualificationsTabProps) {
         columns={columns}
         rows={visible}
         rowKey={(row) => row.id}
+        rowId={(row) => `employee-qualification-${row.id}`}
+        rowClassName={(row) => (row.id === highlightQualificationId ? 'is-highlighted' : undefined)}
         emptyMessage={
           statusFilter === 'all' ? t('employees.qualifications.empty') : t('employees.qualifications.emptyFiltered')
         }
@@ -216,6 +233,7 @@ export function QualificationsTab({ employeeId }: QualificationsTabProps) {
             setDialog(null)
             toast.showSuccess(t('employees.qualifications.saved'))
             reload()
+            onChanged?.()
           }}
           onCancel={() => setDialog(null)}
         />
@@ -234,6 +252,7 @@ export function QualificationsTab({ employeeId }: QualificationsTabProps) {
               toast.showSuccess(t('employees.qualifications.suspended'))
               setSuspendTarget(null)
               reload()
+              onChanged?.()
             }
           }}
           onCancel={() => setSuspendTarget(null)}

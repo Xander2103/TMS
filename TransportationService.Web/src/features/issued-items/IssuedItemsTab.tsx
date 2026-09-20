@@ -16,7 +16,9 @@ import {
   ISSUED_ITEM_STATUSES,
   listEmployeeIssuedItems,
   listIssuedItemTemplates,
+  reactivateEmployeeIssuedItem,
   RETURN_DISPOSITION_LABELS,
+  returnEmployeeIssuedItem,
   saveEmployeeIssuedItem,
   type EmployeeIssuedItem,
   type EmployeeIssuedItemInput,
@@ -24,6 +26,7 @@ import {
   type IssuedItemTemplate,
   type ReturnDisposition,
 } from './issuedItemsApi'
+import { formatQuantityWithUnit } from './issuedItemUnits'
 import {
   getTemplateDetail,
   parseNegativeStockPayload,
@@ -42,13 +45,29 @@ const STATUS_TONE: Record<IssuedItemStatus, BadgeTone> = {
   Damaged: 'warning',
 }
 
+/** Local state of the "Teruggebracht" dialog; becomes a ReturnIssuedItemInput on confirm. */
+interface ReturnDraft {
+  returnedDate: string
+  returnCondition: string
+  returnDisposition: ReturnDisposition
+  restoreStock: boolean
+}
+
+function today(): string {
+  return new Date().toISOString().slice(0, 10)
+}
+
+function emptyReturnDraft(): ReturnDraft {
+  return { returnedDate: today(), returnCondition: '', returnDisposition: 'good', restoreStock: true }
+}
+
 function emptyForm(): EmployeeIssuedItemInput {
   return {
     templateId: null,
     name: '',
     category: '',
     status: 'Issued',
-    issuedDate: new Date().toISOString().slice(0, 10),
+    issuedDate: today(),
     quantity: 1,
     serialNumber: null,
     notes: null,
@@ -85,6 +104,14 @@ export function IssuedItemsTab({ employeeId, employeeName }: { employeeId: strin
   const [deleteTarget, setDeleteTarget] = useState<EmployeeIssuedItem | null>(null)
   // 409-bevestigingsflow: payload van de server + de payload die opnieuw verstuurd moet worden.
   const [negativeStock, setNegativeStock] = useState<{ payload: NegativeStockPayload; input: EmployeeIssuedItemInput } | null>(null)
+  // "Teruggebracht" (Issued → Returned) en "Heractiveren" (Returned → Issued) lopen via eigen endpoints.
+  const [returnTarget, setReturnTarget] = useState<EmployeeIssuedItem | null>(null)
+  const [returnDraft, setReturnDraft] = useState<ReturnDraft>(emptyReturnDraft())
+  const [returnError, setReturnError] = useState<string | null>(null)
+  const [reactivateTarget, setReactivateTarget] = useState<EmployeeIssuedItem | null>(null)
+  const [reactivateReason, setReactivateReason] = useState('')
+  const [reactivateError, setReactivateError] = useState<string | null>(null)
+  const [transitionBusy, setTransitionBusy] = useState(false)
 
   useEffect(() => {
     let mounted = true
@@ -287,6 +314,65 @@ export function IssuedItemsTab({ employeeId, employeeName }: { employeeId: strin
     }
   }
 
+  function openReturn(item: EmployeeIssuedItem) {
+    setReturnTarget(item)
+    setReturnDraft(emptyReturnDraft())
+    setReturnError(null)
+  }
+
+  // Alleen een sjabloon met voorraadbeheer kan iets terugboeken; een vrij ("aangepast") middel niet.
+  // Een sjabloon dat niet (meer) in de actieve lijst zit, laten we de server beslissen (checkbox tonen).
+  const returnTemplate = returnTarget?.templateId ? templates.find((tpl) => tpl.id === returnTarget.templateId) ?? null : null
+  const returnStockTracked = returnTarget?.templateId != null && (returnTemplate?.stockTrackingEnabled ?? true)
+  const showRestoreStock = returnDraft.returnDisposition === 'good' && returnStockTracked
+
+  async function handleReturnSubmit(event: FormEvent) {
+    event.preventDefault()
+    if (!returnTarget) return
+    setReturnError(null)
+    setTransitionBusy(true)
+    try {
+      await returnEmployeeIssuedItem(employeeId, returnTarget.id, {
+        returnedDate: returnDraft.returnedDate || null,
+        returnCondition: returnDraft.returnCondition.trim() || null,
+        returnDisposition: returnDraft.returnDisposition,
+        restoreStock: showRestoreStock ? returnDraft.restoreStock : false,
+      })
+      showSuccess(t('issuedItems.return.success'))
+      setReturnTarget(null)
+      setReloadToken((token) => token + 1)
+    } catch (err) {
+      setReturnError(describeApiError(err, t('issuedItems.return.failed')).message)
+    } finally {
+      setTransitionBusy(false)
+    }
+  }
+
+  function openReactivate(item: EmployeeIssuedItem) {
+    setReactivateTarget(item)
+    setReactivateReason('')
+    setReactivateError(null)
+  }
+
+  async function handleReactivateSubmit(event: FormEvent) {
+    event.preventDefault()
+    if (!reactivateTarget) return
+    setReactivateError(null)
+    setTransitionBusy(true)
+    try {
+      await reactivateEmployeeIssuedItem(employeeId, reactivateTarget.id, {
+        reason: reactivateReason.trim() || null,
+      })
+      showSuccess(t('issuedItems.return.reactivated'))
+      setReactivateTarget(null)
+      setReloadToken((token) => token + 1)
+    } catch (err) {
+      setReactivateError(describeApiError(err, t('issuedItems.return.reactivateFailed')).message)
+    } finally {
+      setTransitionBusy(false)
+    }
+  }
+
   return (
     <section className="issued-items">
       <div className="issued-items-header">
@@ -329,33 +415,52 @@ export function IssuedItemsTab({ employeeId, employeeName }: { employeeId: strin
             </tr>
           </thead>
           <tbody>
-            {items.map((item) => (
-              <tr key={item.id}>
-                <td>{item.name}</td>
-                <td>{item.variantLabel ?? '—'}</td>
-                <td>{item.category}</td>
-                <td>{item.quantity}</td>
-                <td>{item.serialNumber ?? '—'}</td>
-                <td>{formatDate(item.issuedDate) || '—'}</td>
-                <td>{formatDate(item.returnedDate) || '—'}</td>
-                <td>{item.issuedByName ?? '—'}</td>
-                <td>
-                  <Badge tone={STATUS_TONE[item.status]}>{t(ISSUED_ITEM_STATUS_LABELS[item.status])}</Badge>
-                </td>
-                <td className="issued-items-row-actions">
-                  {canManage && (
-                    <button type="button" className="issued-items-link" onClick={() => openEdit(item)}>
-                      {t('ui.actions.edit')}
-                    </button>
-                  )}
-                  {canManage && (
-                    <button type="button" className="issued-items-link issued-items-link-danger" onClick={() => setDeleteTarget(item)}>
-                      {t('ui.actions.delete')}
-                    </button>
-                  )}
-                </td>
-              </tr>
-            ))}
+            {items.map((item) => {
+              const isReturned = item.status === 'Returned'
+              return (
+                // Een teruggebrachte uitgifte blijft als historiek staan (server weigert verwijderen), maar treedt visueel terug.
+                <tr key={item.id} className={isReturned ? 'is-returned' : undefined}>
+                  <td>{item.name}</td>
+                  <td>{item.variantLabel ?? '—'}</td>
+                  <td>{item.category}</td>
+                  <td>{item.quantity}</td>
+                  <td>{item.serialNumber ?? '—'}</td>
+                  <td>{formatDate(item.issuedDate) || '—'}</td>
+                  <td>
+                    {formatDate(item.returnedDate) || '—'}
+                    {isReturned && item.receivedBackByName && (
+                      <small className="issued-items-returned-by">{t('issuedItems.tab.returnedBy', { name: item.receivedBackByName })}</small>
+                    )}
+                  </td>
+                  <td>{item.issuedByName ?? '—'}</td>
+                  <td>
+                    <Badge tone={STATUS_TONE[item.status]}>{t(ISSUED_ITEM_STATUS_LABELS[item.status])}</Badge>
+                  </td>
+                  <td className="issued-items-row-actions">
+                    {canManage && isReturned && (
+                      <button type="button" className="issued-items-link" onClick={() => openReactivate(item)}>
+                        {t('issuedItems.tab.reactivate')}
+                      </button>
+                    )}
+                    {canManage && !isReturned && (
+                      <button type="button" className="issued-items-link" onClick={() => openEdit(item)}>
+                        {t('ui.actions.edit')}
+                      </button>
+                    )}
+                    {canManage && item.status === 'Issued' && (
+                      <button type="button" className="issued-items-link" onClick={() => openReturn(item)}>
+                        {t('issuedItems.tab.markReturned')}
+                      </button>
+                    )}
+                    {canManage && !isReturned && (
+                      <button type="button" className="issued-items-link issued-items-link-danger" onClick={() => setDeleteTarget(item)}>
+                        {t('ui.actions.delete')}
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       )}
@@ -414,7 +519,7 @@ export function IssuedItemsTab({ employeeId, employeeName }: { employeeId: strin
             {stockTracked && availableStock !== null && !editingId && (
               <p className={`issued-items-stock-preview${stockShortage ? ' issued-items-stock-preview-warning' : ''}`} role="status">
                 {t('issuedItems.tab.availableStock', {
-                  stock: `${availableStock}${selectedTemplate?.unit ? ` ${selectedTemplate.unit}` : ''}`,
+                  stock: formatQuantityWithUnit(t, availableStock, selectedTemplate?.unit),
                 })}
                 {stockShortage && ` ${t('issuedItems.tab.stockShortage')}`}
               </p>
@@ -490,6 +595,117 @@ export function IssuedItemsTab({ employeeId, employeeName }: { employeeId: strin
             )}
             <FormField label={t('issuedItems.tab.notes')} htmlFor="ii-notes">
               <textarea id="ii-notes" rows={2} value={form.notes ?? ''} onChange={(e) => set('notes', e.target.value || null)} disabled={saving} />
+            </FormField>
+          </form>
+        </Modal>
+      )}
+
+      {returnTarget && (
+        <Modal
+          title={t('issuedItems.return.title')}
+          onClose={() => setReturnTarget(null)}
+          busy={transitionBusy}
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setReturnTarget(null)} disabled={transitionBusy}>
+                {t('ui.actions.cancel')}
+              </Button>
+              <Button type="submit" form="issued-item-return-form" disabled={transitionBusy}>
+                {transitionBusy ? t('issuedItems.return.saving') : t('issuedItems.return.confirm')}
+              </Button>
+            </>
+          }
+        >
+          <form id="issued-item-return-form" className="issued-items-form" onSubmit={handleReturnSubmit} noValidate>
+            {returnError && (
+              <div className="issued-items-form-error" role="alert">
+                {returnError}
+              </div>
+            )}
+            <p className="customer-form-muted">{t('issuedItems.return.intro', { name: returnTarget.name })}</p>
+            <div className="issued-items-form-row">
+              <FormField label={t('issuedItems.return.returnedDate')} htmlFor="ii-return-date">
+                <input
+                  id="ii-return-date"
+                  type="date"
+                  value={returnDraft.returnedDate}
+                  onChange={(e) => setReturnDraft((d) => ({ ...d, returnedDate: e.target.value }))}
+                  disabled={transitionBusy}
+                />
+              </FormField>
+              <FormField label={t('issuedItems.return.condition')} htmlFor="ii-return-condition">
+                <input
+                  id="ii-return-condition"
+                  value={returnDraft.returnCondition}
+                  onChange={(e) => setReturnDraft((d) => ({ ...d, returnCondition: e.target.value }))}
+                  disabled={transitionBusy}
+                  maxLength={150}
+                />
+              </FormField>
+            </div>
+            <div className="issued-items-form-row">
+              <FormField label={t('issuedItems.return.disposition')} htmlFor="ii-return-disposition" hint={t('issuedItems.tab.dispositionHint')}>
+                <select
+                  id="ii-return-disposition"
+                  value={returnDraft.returnDisposition}
+                  onChange={(e) => setReturnDraft((d) => ({ ...d, returnDisposition: e.target.value as ReturnDisposition }))}
+                  disabled={transitionBusy}
+                >
+                  {(Object.keys(RETURN_DISPOSITION_LABELS) as ReturnDisposition[]).map((disposition) => (
+                    <option key={disposition} value={disposition}>
+                      {t(RETURN_DISPOSITION_LABELS[disposition])}
+                    </option>
+                  ))}
+                </select>
+              </FormField>
+              {showRestoreStock && (
+                <label className="issued-items-checkbox">
+                  <input
+                    type="checkbox"
+                    checked={returnDraft.restoreStock}
+                    onChange={(e) => setReturnDraft((d) => ({ ...d, restoreStock: e.target.checked }))}
+                    disabled={transitionBusy}
+                  />
+                  <span>{t('issuedItems.return.restoreStock')}</span>
+                </label>
+              )}
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {reactivateTarget && (
+        <Modal
+          title={t('issuedItems.return.reactivateTitle')}
+          onClose={() => setReactivateTarget(null)}
+          busy={transitionBusy}
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setReactivateTarget(null)} disabled={transitionBusy}>
+                {t('ui.actions.cancel')}
+              </Button>
+              <Button type="submit" form="issued-item-reactivate-form" disabled={transitionBusy}>
+                {transitionBusy ? t('issuedItems.return.saving') : t('issuedItems.return.reactivateConfirm')}
+              </Button>
+            </>
+          }
+        >
+          <form id="issued-item-reactivate-form" className="issued-items-form" onSubmit={handleReactivateSubmit} noValidate>
+            {reactivateError && (
+              <div className="issued-items-form-error" role="alert">
+                {reactivateError}
+              </div>
+            )}
+            <p className="customer-form-muted">{t('issuedItems.return.reactivateIntro', { name: reactivateTarget.name })}</p>
+            <FormField label={t('issuedItems.return.reactivateReason')} htmlFor="ii-reactivate-reason">
+              <textarea
+                id="ii-reactivate-reason"
+                rows={2}
+                value={reactivateReason}
+                onChange={(e) => setReactivateReason(e.target.value)}
+                disabled={transitionBusy}
+                maxLength={300}
+              />
             </FormField>
           </form>
         </Modal>

@@ -25,6 +25,13 @@ export interface SearchableSelectCreateConfig {
   label: (query: string) => string
   /** Creates the entity; resolve with the new option to auto-select it, or null to abort. */
   create: (query: string) => Promise<SearchableSelectOption | null>
+  /**
+   * Also render the create row while the query is empty (a permanent "manage" shortcut at the
+   * bottom of the list). With a non-empty query the usual `label(query)` row applies.
+   */
+  alwaysShow?: boolean
+  /** Complete row text for the empty-query row (e.g. "+ Nieuwe afdeling"); falls back to `label('')`. */
+  emptyQueryLabel?: string
 }
 
 export type SearchableSelectSearchFn = (query: string, signal: AbortSignal) => Promise<SearchableSelectOption[]>
@@ -45,7 +52,10 @@ export interface SearchableSelectProps {
   clearable?: boolean
   emptyMessage?: string
   ariaLabel?: string
-  /** Optional inline-create action rendered as the last row when the query has no exact match. */
+  /**
+   * Optional inline-create action rendered as the last row when the query has no exact match
+   * (and, with `alwaysShow`, also while the query is empty).
+   */
   onCreate?: SearchableSelectCreateConfig
   /**
    * Async mode: server-side search. Called on open (immediately) and on every query change
@@ -189,11 +199,18 @@ export function SearchableSelect({
 
   // ---- option resolution --------------------------------------------------------------------
   const allOptions = useMemo(() => {
-    if (!isAsync && rememberedOption && !options.some((o) => o.value === rememberedOption.value)) {
+    // Only the CURRENT value needs bridging; once the parent moved on (or cleared the value,
+    // as multi-select adders do) a remembered option must not sneak back into the list.
+    if (
+      !isAsync &&
+      rememberedOption &&
+      rememberedOption.value === value &&
+      !options.some((o) => o.value === rememberedOption.value)
+    ) {
       return [...options, rememberedOption]
     }
     return options
-  }, [options, rememberedOption, isAsync])
+  }, [options, rememberedOption, isAsync, value])
 
   const selected = useMemo<SearchableSelectOption | null>(() => {
     if (value === null || value === '') return null
@@ -222,12 +239,18 @@ export function SearchableSelect({
   const showErrorNote = isAsync && asyncStatus === 'error'
   const searchSettled = !isAsync || asyncStatus === 'done' || belowMinChars
 
+  const createRowReady = Boolean(onCreate) && !showLoadingNote && !searching
   const showCreateRow =
-    Boolean(onCreate) &&
-    !showLoadingNote &&
-    !searching &&
-    trimmedQuery.length > 0 &&
-    !filtered.some((o) => o.label.toLowerCase() === trimmedQuery.toLowerCase())
+    createRowReady &&
+    (trimmedQuery.length > 0
+      ? !filtered.some((o) => o.label.toLowerCase() === trimmedQuery.toLowerCase())
+      : Boolean(onCreate?.alwaysShow))
+  // Empty-query shortcut row ("+ Nieuwe …") vs. the query-driven "add \"query\"" row.
+  const createRowLabel = !onCreate
+    ? ''
+    : trimmedQuery.length > 0
+      ? `+ ${onCreate.label(trimmedQuery)}`
+      : (onCreate.emptyQueryLabel ?? `+ ${onCreate.label('')}`)
 
   const rowCount = filtered.length + (showCreateRow ? 1 : 0)
   // Clamp instead of resetting through an effect: the option list can shrink while filtering.
@@ -420,7 +443,7 @@ export function SearchableSelect({
           {showErrorNote && (
             <li className="ui-searchable-select-note ui-searchable-select-note-error">{t('ui.select.searchError')}</li>
           )}
-          {!showLoadingNote && searchSettled && filtered.length === 0 && !showCreateRow && (
+          {!showLoadingNote && searchSettled && filtered.length === 0 && (!showCreateRow || trimmedQuery.length === 0) && (
             <li className="ui-searchable-select-note">{emptyMessage ?? t('ui.select.noResults')}</li>
           )}
           {showCreateRow && (
@@ -440,7 +463,7 @@ export function SearchableSelect({
               onClick={() => void runCreate()}
               onMouseEnter={() => setHighlighted(filtered.length)}
             >
-              {creating ? t('ui.select.adding') : `+ ${onCreate!.label(trimmedQuery)}`}
+              {creating ? t('ui.select.adding') : createRowLabel}
             </li>
           )}
         </ul>

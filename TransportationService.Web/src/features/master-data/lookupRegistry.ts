@@ -16,6 +16,12 @@ export interface LookupResourceConfig {
   managePermission: string
   /** Optional TRANSLATION KEY for a hint under the code field. */
   codeHint?: string
+  /**
+   * Not listed under Parameters → Basisgegevens: the lookup has a dedicated home elsewhere
+   * (its /master-data/<slug> route redirects there). The registry entry itself stays, since
+   * LookupManager/LookupSelect resolve their config through it.
+   */
+  hiddenFromNav?: boolean
 }
 
 /** Vertaalsleutels — renderen als t(LOOKUP_GROUP_LABELS[group]). */
@@ -32,7 +38,8 @@ export const LOOKUP_RESOURCES: LookupResourceConfig[] = [
   { slug: 'trailer-categories', title: 'navigation.lookups.trailer-categories', singular: 'masterData.singular.trailer-categories', basePath: '/api/trailer-categories', group: 'categorieen', viewPermission: 'trailer_categories.view', managePermission: 'trailer_categories.manage' },
   { slug: 'driver-categories', title: 'navigation.lookups.driver-categories', singular: 'masterData.singular.driver-categories', basePath: '/api/driver-categories', group: 'categorieen', viewPermission: 'driver_categories.view', managePermission: 'driver_categories.manage' },
   { slug: 'customer-categories', title: 'navigation.lookups.customer-categories', singular: 'masterData.singular.customer-categories', basePath: '/api/customer-categories', group: 'categorieen', viewPermission: 'customer_categories.view', managePermission: 'customer_categories.manage' },
-  { slug: 'issued-item-categories', title: 'navigation.lookups.issued-item-categories', singular: 'masterData.singular.issued-item-categories', basePath: '/api/issued-item-categories', group: 'categorieen', viewPermission: 'issued_items.view', managePermission: 'inventory.manage' },
+  // Managed under Personeel → Bedrijfsmiddelen (/issued-items/categories), next to the templates they group.
+  { slug: 'issued-item-categories', title: 'navigation.lookups.issued-item-categories', singular: 'masterData.singular.issued-item-categories', basePath: '/api/issued-item-categories', group: 'categorieen', viewPermission: 'issued_items.view', managePermission: 'inventory.manage', hiddenFromNav: true },
   { slug: 'task-categories', title: 'navigation.lookups.task-categories', singular: 'masterData.singular.task-categories', basePath: '/api/task-categories', group: 'categorieen', viewPermission: 'tasks.view_own', managePermission: 'tasks.manage_categories' },
   // Countries are deliberately absent: they are global ISO reference data (seeded, read-only),
   // not tenant master data. Country selection happens through the CountryCombobox everywhere.
