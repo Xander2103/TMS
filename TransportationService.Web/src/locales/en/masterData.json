@@ -17,11 +17,23 @@
     "nationalities": "nationality",
     "contract-types": "contract type"
   },
+  "newLabel": {
+    "departments": "New department",
+    "job-functions": "New job function",
+    "vehicle-categories": "New vehicle category",
+    "trailer-categories": "New trailer category",
+    "driver-categories": "New driver category",
+    "customer-categories": "New customer category",
+    "issued-item-categories": "New company asset category",
+    "task-categories": "New task category",
+    "languages": "New language",
+    "nationalities": "New nationality",
+    "contract-types": "New contract type"
+  },
   "hints": {
     "languages": "ISO 639-1, e.g. nl"
   },
   "list": {
-    "new": "New {singular}",
     "searchPlaceholder": "Search by code or name...",
     "loadFailed": "{title} could not be loaded.",
     "empty": "No {titleLower} yet.",
@@ -50,7 +62,6 @@
   },
   "form": {
     "editTitle": "Edit {singular}",
-    "newTitle": "New {singular}",
     "saving": "Saving...",
     "codeLabel": "Code",
     "nameLabel": "Name",
@@ -64,16 +75,17 @@
     "nameMax": "Name may contain at most 150 characters."
   },
   "select": {
-    "createOption": "Add new {singular} \"{query}\"",
-    "newTitle": "New {singular}",
+    "createOption": "{newLabel} \"{query}\"",
     "nameAndCodeRequired": "Name and code are required.",
     "duplicate": "There is already a {singular} with code '{code}'.",
     "createFailed": "Adding failed. Please try again.",
     "adding": "Adding…",
     "addAndSelect": "Add and select",
     "codeHint": "Short unique code for this value.",
-    "newAction": "+ New {singular}",
-    "codeAutoHint": "Leave this field empty to generate the next available unique code automatically."
+    "newAction": "+ {newLabel}",
+    "codeAutoHint": "Leave this field empty to generate the next available unique code automatically.",
+    "createOptionGeneric": "Add \"{query}\" ({singular})",
+    "newGeneric": "Add: {singular}"
   },
   "lookup": {
     "optionsLoadFailed": "The list could not be loaded."

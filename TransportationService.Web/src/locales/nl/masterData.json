@@ -17,11 +17,23 @@
     "nationalities": "nationaliteit",
     "contract-types": "contracttype"
   },
+  "newLabel": {
+    "departments": "Nieuwe afdeling",
+    "job-functions": "Nieuwe functie",
+    "vehicle-categories": "Nieuwe voertuigcategorie",
+    "trailer-categories": "Nieuwe opleggercategorie",
+    "driver-categories": "Nieuwe chauffeurcategorie",
+    "customer-categories": "Nieuwe klantcategorie",
+    "issued-item-categories": "Nieuwe bedrijfsmiddelcategorie",
+    "task-categories": "Nieuwe taakcategorie",
+    "languages": "Nieuwe taal",
+    "nationalities": "Nieuwe nationaliteit",
+    "contract-types": "Nieuw contracttype"
+  },
   "hints": {
     "languages": "ISO 639-1, bv. nl"
   },
   "list": {
-    "new": "Nieuwe {singular}",
     "searchPlaceholder": "Zoeken op code of naam...",
     "loadFailed": "{title} konden niet worden geladen.",
     "empty": "Nog geen {titleLower}.",
@@ -50,7 +62,6 @@
   },
   "form": {
     "editTitle": "{singular} bewerken",
-    "newTitle": "Nieuwe {singular}",
     "saving": "Opslaan...",
     "codeLabel": "Code",
     "nameLabel": "Naam",
@@ -64,16 +75,17 @@
     "nameMax": "Naam mag maximaal 150 tekens bevatten."
   },
   "select": {
-    "createOption": "Nieuwe {singular} \"{query}\" toevoegen",
-    "newTitle": "Nieuwe {singular}",
+    "createOption": "{newLabel} \"{query}\" toevoegen",
     "nameAndCodeRequired": "Naam en code zijn verplicht.",
     "duplicate": "Er bestaat al een {singular} met code '{code}'.",
     "createFailed": "Toevoegen is mislukt. Probeer het opnieuw.",
     "adding": "Toevoegen…",
     "addAndSelect": "Toevoegen en selecteren",
     "codeHint": "Korte unieke code voor deze waarde.",
-    "newAction": "+ Nieuwe {singular}",
-    "codeAutoHint": "Laat dit veld leeg om automatisch de volgende beschikbare unieke code te laten genereren."
+    "newAction": "+ {newLabel}",
+    "codeAutoHint": "Laat dit veld leeg om automatisch de volgende beschikbare unieke code te laten genereren.",
+    "createOptionGeneric": "\"{query}\" toevoegen ({singular})",
+    "newGeneric": "Toevoegen: {singular}"
   },
   "lookup": {
     "optionsLoadFailed": "Keuzelijst kon niet worden geladen."

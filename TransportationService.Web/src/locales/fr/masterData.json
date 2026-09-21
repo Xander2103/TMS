@@ -17,11 +17,23 @@
     "nationalities": "une nationalité",
     "contract-types": "un type de contrat"
   },
+  "newLabel": {
+    "departments": "Nouveau département",
+    "job-functions": "Nouvelle fonction",
+    "vehicle-categories": "Nouvelle catégorie de véhicule",
+    "trailer-categories": "Nouvelle catégorie de semi-remorque",
+    "driver-categories": "Nouvelle catégorie de chauffeur",
+    "customer-categories": "Nouvelle catégorie de client",
+    "issued-item-categories": "Nouvelle catégorie de matériel",
+    "task-categories": "Nouvelle catégorie de tâche",
+    "languages": "Nouvelle langue",
+    "nationalities": "Nouvelle nationalité",
+    "contract-types": "Nouveau type de contrat"
+  },
   "hints": {
     "languages": "ISO 639-1, p. ex. nl"
   },
   "list": {
-    "new": "Ajouter {singular}",
     "searchPlaceholder": "Rechercher par code ou nom...",
     "loadFailed": "Impossible de charger « {title} ».",
     "empty": "Pas encore de {titleLower}.",
@@ -50,7 +62,6 @@
   },
   "form": {
     "editTitle": "Modifier {singular}",
-    "newTitle": "Ajouter {singular}",
     "saving": "Enregistrement...",
     "codeLabel": "Code",
     "nameLabel": "Nom",
@@ -64,16 +75,17 @@
     "nameMax": "Le nom ne peut pas dépasser 150 caractères."
   },
   "select": {
-    "createOption": "Ajouter {singular} « {query} »",
-    "newTitle": "Ajouter {singular}",
+    "createOption": "{newLabel} « {query} »",
     "nameAndCodeRequired": "Le nom et le code sont obligatoires.",
     "duplicate": "Il existe déjà {singular} avec le code « {code} ».",
     "createFailed": "L'ajout a échoué. Veuillez réessayer.",
     "adding": "Ajout…",
     "addAndSelect": "Ajouter et sélectionner",
     "codeHint": "Code court et unique pour cette valeur.",
-    "newAction": "+ Nouveau {singular}",
-    "codeAutoHint": "Laissez ce champ vide pour générer automatiquement le prochain code unique disponible."
+    "newAction": "+ {newLabel}",
+    "codeAutoHint": "Laissez ce champ vide pour générer automatiquement le prochain code unique disponible.",
+    "createOptionGeneric": "Ajouter « {query} » ({singular})",
+    "newGeneric": "Ajouter : {singular}"
   },
   "lookup": {
     "optionsLoadFailed": "Impossible de charger la liste de choix."

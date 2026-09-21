@@ -226,8 +226,11 @@ function ChangePasswordContent() {
         newPassword: password,
       })
       toast.showSuccess(t('auth.change.success'))
+      // Every session is revoked server-side, so the user signs in again with the new password.
+      // The sign-out makes RequireAuth leave for /login without a return location; replace keeps
+      // the abandoned change screen out of the history.
       await logout()
-      navigate('/login')
+      navigate('/login', { replace: true })
     } catch (err) {
       setError(describeApiError(err, t('auth.change.failed')).message)
       setBusy(false)

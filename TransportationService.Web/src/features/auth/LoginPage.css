@@ -34,10 +34,31 @@
   margin-bottom: 16px;
 }
 
-.login-title {
+/*
+ * Title of every card screen (login, forgot/reset/activate, forced password change). The global
+ * h1 is a 56px display size (36px below 1024px) and sets no line-height, so it inherits the
+ * root's COMPUTED one: 145% of the root font size, a fixed ~26px (23px on mobile). A title that
+ * wraps inside this 400px card therefore printed its lines on top of each other. A unitless
+ * line-height scales with the title itself, so it may wrap over as many lines as it needs.
+ */
+.login-card h1 {
   font-size: 24px;
+  line-height: 1.25;
   letter-spacing: -0.4px;
-  margin: 0 0 4px;
+  margin: 0 0 8px;
+  overflow-wrap: break-word;
+  text-wrap: balance;
+}
+
+.login-card .login-title {
+  margin-bottom: 4px;
+}
+
+/* Intro line of the flow screens (direct child of the card form): keep it off the first label. */
+.login-card > p {
+  margin: 0 0 16px;
+  /* An e-mail address in the welcome line has no break opportunity and ran out of the card. */
+  overflow-wrap: anywhere;
 }
 
 .login-subtitle {

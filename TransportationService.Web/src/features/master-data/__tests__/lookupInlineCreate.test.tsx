@@ -92,6 +92,39 @@ describe('LookupSelect — "+ Nieuwe …" shortcut', () => {
     expect(screen.getByRole('option', { name: 'Planner' })).toBeInTheDocument()
     expect(screen.getByRole('option', { name: '+ Nieuw contracttype' })).toBeInTheDocument()
   })
+
+  it('reads grammatically for a het-word in every create text (was "Nieuwe contracttype")', async () => {
+    auth.permissions = ['reference_data.manage']
+    renderSelect({ basePath: '/api/contract-types', managePermission: 'reference_data.manage', singular: 'masterData.singular.contract-types' })
+    const input = screen.getByRole('combobox')
+
+    await userEvent.click(input)
+    expect(screen.getByRole('option', { name: '+ Nieuw contracttype' })).toBeInTheDocument()
+
+    await userEvent.type(input, 'Interim')
+    const addRow = screen.getByRole('option', { name: '+ Nieuw contracttype "Interim" toevoegen' })
+    expect(screen.queryByText(/Nieuwe contracttype/)).not.toBeInTheDocument()
+
+    await userEvent.click(addRow)
+    expect(screen.getByRole('dialog', { name: 'Nieuw contracttype' })).toBeInTheDocument()
+  })
+
+  it('keeps de-words on "Nieuwe …" while typing', async () => {
+    auth.permissions = ['job_functions.manage']
+    renderSelect()
+    await userEvent.type(screen.getByRole('combobox'), 'Magazijnier')
+    expect(screen.getByRole('option', { name: '+ Nieuwe functie "Magazijnier" toevoegen' })).toBeInTheDocument()
+  })
+
+  it('a caller that passes a plain noun gets wording that needs no agreement with it', async () => {
+    auth.permissions = ['job_functions.manage']
+    renderSelect({ singular: 'eenheid' })
+    const input = screen.getByRole('combobox')
+    await userEvent.click(input)
+    expect(screen.getByRole('option', { name: '+ Toevoegen: eenheid' })).toBeInTheDocument()
+    await userEvent.type(input, 'kg')
+    expect(screen.getByRole('option', { name: '+ "kg" toevoegen (eenheid)' })).toBeInTheDocument()
+  })
 })
 
 describe('LookupSelect — inline create dialog', () => {

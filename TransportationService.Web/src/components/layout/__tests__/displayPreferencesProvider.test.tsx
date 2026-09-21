@@ -55,6 +55,7 @@ function authValue(current: CurrentUser): AuthContextValue {
   return {
     status: 'authenticated',
     user: current,
+    signedOut: false,
     login: vi.fn(),
     logout: vi.fn(),
     hasPermission: () => true,

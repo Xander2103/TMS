@@ -197,7 +197,7 @@ export function TemplateFormModal({ editing, onSaved, onClose }: TemplateFormMod
               basePath="/api/issued-item-categories"
               viewPermission="issued_items.view"
               managePermission="inventory.manage"
-              singular="categorie"
+              singular="masterData.singular.issued-item-categories"
               value={form.categoryId}
               onChange={(value) => set('categoryId', value)}
               placeholder={form.categoryId ? undefined : form.category || t('issuedItems.form.categoryPlaceholder')}

@@ -330,7 +330,7 @@ export function EmployeePlanningPage() {
           <LookupSelect
             basePath="/api/departments"
             managePermission="departments.manage"
-            singular="afdeling"
+            singular="masterData.singular.departments"
             value={departmentId}
             onChange={setDepartmentId}
             placeholder={t('employeePlanning.page.allDepartments')}

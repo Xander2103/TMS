@@ -11,6 +11,7 @@ type AuthStatus = AuthContextValue['status']
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<AuthStatus>('loading')
   const [user, setUser] = useState<CurrentUser | null>(null)
+  const [signedOut, setSignedOut] = useState(false)
   const initialised = useRef(false)
 
   // Register the shared apiClient's "give up" handler so an unrecoverable 401 (refresh failed)
@@ -54,6 +55,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const tokens = await authApi.login(email, password, signal)
     setAccessToken(tokens.accessToken)
     setUser(tokens.user)
+    setSignedOut(false)
     setStatus('authenticated')
   }, [])
 
@@ -72,6 +74,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // what keeps the *unauthenticated* screens off the previous tenant's notation.
     resetDisplayPreferences()
     setUser(null)
+    // Same render as the status flip, so RequireAuth never records the page being left as the
+    // place to return to (it did: after a forced password change that was /change-password).
+    setSignedOut(true)
     setStatus('unauthenticated')
   }, [])
 
@@ -80,12 +85,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return {
       status,
       user,
+      signedOut,
       login,
       logout,
       hasPermission: (code: string) => permissions.has(code),
       hasAnyPermission: (codes: string[]) => codes.some((code) => permissions.has(code)),
     }
-  }, [status, user, login, logout])
+  }, [status, user, signedOut, login, logout])
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

@@ -78,7 +78,7 @@ export function LookupFormDialog({ config, api, item, onSaved, onClose }: Lookup
 
   return (
     <Modal
-      title={isEdit ? t('masterData.form.editTitle', { singular: t(config.singular) }) : t('masterData.form.newTitle', { singular: t(config.singular) })}
+      title={isEdit ? t('masterData.form.editTitle', { singular: t(config.singular) }) : t(`masterData.newLabel.${config.slug}`)}
       onClose={onClose}
       busy={isSubmitting}
       footer={

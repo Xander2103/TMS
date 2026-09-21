@@ -34,8 +34,8 @@ interface LookupSelectProps {
   singular: string
   /**
    * Exact text of the permanent "+ Nieuwe …" shortcut row shown to users with the manage
-   * permission (e.g. "+ Nieuw contracttype"). Defaults to `masterData.select.newAction` with
-   * the singular filled in; pass it when the generic template reads badly for the noun.
+   * permission. Registry lookups (`singular` = `masterData.singular.<slug>`) need none: they get
+   * the explicit `masterData.newLabel.<slug>` translation (e.g. "+ Nieuw contracttype").
    */
   createLabel?: string
   /**
@@ -64,6 +64,31 @@ interface PendingCreate {
  */
 function resolveSingular(t: (key: string) => string, singular: string): string {
   return singular.includes('.') ? t(singular) : singular
+}
+
+const REGISTRY_SINGULAR_PREFIX = 'masterData.singular.'
+
+type Translate = (key: string, params?: Record<string, string | number>) => string
+
+/**
+ * "New …" phrases for the create flow. Gluing an adjective onto an arbitrary noun guesses at
+ * grammar ("Nieuwe contracttype", "Nouveau une fonction"), so registry lookups get an explicit
+ * translation per lookup (`masterData.newLabel.<slug>`). A caller that passes a plain noun falls
+ * back to wording that needs no agreement with the noun.
+ */
+function createTexts(t: Translate, singular: string) {
+  const noun = resolveSingular(t, singular)
+  if (singular.startsWith(REGISTRY_SINGULAR_PREFIX)) {
+    const newLabel = t(`masterData.newLabel.${singular.slice(REGISTRY_SINGULAR_PREFIX.length)}`)
+    return {
+      newLabel,
+      createOption: (query: string) => t('masterData.select.createOption', { singular: noun, newLabel, query }),
+    }
+  }
+  return {
+    newLabel: t('masterData.select.newGeneric', { singular: noun }),
+    createOption: (query: string) => t('masterData.select.createOptionGeneric', { singular: noun, query }),
+  }
 }
 
 /** Suggest a lookup code from a name: uppercase, alphanumeric, max 10 chars. */
@@ -119,14 +144,15 @@ export function LookupSelect({
 
   const onCreate = useMemo<SearchableSelectCreateConfig | undefined>(() => {
     if (!canCreate || disabled) return undefined
+    const texts = createTexts(t, singular)
     return {
-      label: (query) => t('masterData.select.createOption', { singular: resolveSingular(t, singular), query }),
+      label: texts.createOption,
       create: (query) =>
         new Promise<SearchableSelectOption | null>((resolve) => {
           setPending({ query, resolve })
         }),
       alwaysShow: true,
-      emptyQueryLabel: createLabel ?? t('masterData.select.newAction', { singular: resolveSingular(t, singular) }),
+      emptyQueryLabel: createLabel ?? t('masterData.select.newAction', { newLabel: texts.newLabel }),
     }
   }, [canCreate, disabled, singular, createLabel, t])
 
@@ -228,7 +254,7 @@ function LookupCreateDialog({
 
   return (
     <Modal
-      title={t('masterData.select.newTitle', { singular: resolveSingular(t, singular) })}
+      title={createTexts(t, singular).newLabel}
       onClose={onCancel}
       busy={submitting}
       footer={

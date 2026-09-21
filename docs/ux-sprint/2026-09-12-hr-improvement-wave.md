@@ -291,7 +291,10 @@ ongewijzigde licentietekst mee als `licenses/DejaVu-LICENSE.txt` in build- én p
 `Modules/Pdf/Fonts/LICENSE-DejaVu.txt`, overgenomen uit de officiële `version_2_37`-tag). De fonts
 niet hernoemen, subsetten of bewerken zonder deze paragraaf opnieuw te toetsen.
 
-## 12. Open vervolgpunten (geregistreerd, bewust NIET in deze wave opgelost)
+## 12. Vervolgpunten uit de afrondingsronde
+
+F-1, F-2 en F-3 zijn **opgelost in de follow-up van 2026-09-21** (§13); F-4 staat nog open. De
+tabel beschrijft de problemen zoals ze geregistreerd werden.
 
 | # | Probleem | Waar | Notitie |
 |---|---|---|---|
@@ -299,3 +302,94 @@ niet hernoemen, subsetten of bewerken zonder deze paragraaf opnieuw te toetsen.
 | F-2 | De titel op het wachtwoordwijzigingsscherm **overlapt zichzelf** bij regelafbreking | `/change-password` ("Kies je eigen wachtwoord") | De h1 breekt af over twee regels en die regels lopen in elkaar (vermoedelijk de regelhoogte; oorzaak niet onderzocht); zichtbaar in de smalle kaart op desktopbreedte. |
 | F-3 | Nederlandse vertaling **"Nieuwe contracttype"** is grammaticaal fout | `locales/nl/masterData.json` (`createOption`: `Nieuwe {singular} "{query}" toevoegen`) | Het sjabloon gaat uit van de-woorden; het-woorden (contracttype) vragen "Nieuw". De variant zonder zoekterm toont wél correct "+ Nieuw contracttype". Vergt een lidwoord/geslacht per lookup of een neutrale formulering; FR/EN nalopen op hetzelfde patroon. |
 | F-4 | Niet-geïdentificeerde falende frontendtest onder belasting | zie §11.4 | Geen oorzaak bewezen. |
+
+## 13. Follow-up 2026-09-21: F-1, F-2 en F-3 opgelost
+
+### 13.1 F-1 — na de verplichte wachtwoordwijziging opnieuw op `/change-password`
+
+**Oorzaak.** Na een geslaagde wijziging trekt de backend alle sessies in, dus het scherm roept
+`logout()` aan. Daardoor wordt de status `unauthenticated` terwijl de gebruiker nog op
+`/change-password` staat. `RequireAuth` kon een **bewuste afmelding** niet onderscheiden van een
+anonieme bezoeker of een verlopen sessie en bewaarde dus `from=/change-password`; `LoginPage`
+navigeerde daar na het aanmelden weer heen. Hetzelfde mechanisme speelde bij de gewone
+afmeldknop: de pagina die je verliet werd de landingspagina van de volgende aanmelding, ook als
+dat een ander account was (mogelijk zonder rechten op die pagina).
+
+**Fix (bij de oorzaak, geen hardcoded redirect).**
+- `AuthContext` houdt `signedOut` bij: `true` vanaf een expliciete `logout()` tot de volgende
+  aanmelding, in dezelfde render gezet als de statuswissel.
+- `RequireAuth` geeft `from` alleen nog mee als de sessie NIET door een afmelding eindigde. Na een
+  afmelding gaat `LoginPage` dus naar `/`, waar `RootRedirect` de startpagina op basis van rechten
+  kiest (§11.2). Een anonieme deeplink en een verlopen sessie keren nog steeds terug naar de
+  gevraagde pagina.
+- `/change-password` bestaat alleen voor de verplichte wijziging: wie de vlag niet (meer) heeft en
+  de pagina toch opent (bladwijzer, onthouden locatie) gaat naar `/` en dus naar zijn startpagina.
+- Het wijzigingsscherm navigeert met `replace`, zodat het verlaten scherm niet in de historiek blijft.
+
+**Tests.** `features/auth/__tests__/forcedPasswordChangeFlow.test.tsx` draait de échte
+`AuthProvider`, `RequireAuth`, `LoginPage`, `ChangePasswordPage` en `RootRedirect` tegen een kleine
+nagebootste backend (wachtwoord + `MustChangePassword` + sessie): volledige flow voor HR zonder
+`dossiers.view`/`orders.view` (landt op `/dashboard`), voor een rol mét `dossiers.view` (landt op
+`/dossiers`), F5 en opnieuw aanmelden, oud tijdelijk wachtwoord geweigerd, afmelden neemt de
+pagina niet mee, anonieme deeplink keert wél terug, `/change-password` zonder vlag. Vóór de fix
+faalden 5 van de 8.
+
+### 13.2 F-2 — overlappende titel
+
+**Oorzaak.** `:root` zet `font: 18px/145%`. Een line-height in procenten wordt op de root
+uitgerekend en als **vaste lengte** geërfd (26px; 23px onder 1024px). De globale `h1` is 56px
+(36px mobiel) en zet zelf geen line-height, dus een `h1` die afbreekt drukt zijn regels over
+elkaar. De kaartschermen (vergeten/reset/activeren/verplichte wijziging) gebruikten die kale
+`h1` in een kaart van 400px.
+
+**Fix.** `.login-card h1` krijgt in `LoginPage.css` de titelstijl van de kaart (24px, zoals de
+loginpagina) met een **eenheidsloze** `line-height: 1.25`, `overflow-wrap` en `text-wrap: balance`;
+geen zoom, geen scaling. De introregel van de flowschermen kreeg een ondermarge. Gemeten in de
+browser: 1440px en 390px één regel, 320px twee regels zonder overlap, titel binnen de kaart, geen
+horizontale scroll. `authCardTitle.test.ts` bewaakt de regel (`LoginPage.css` staat daarvoor in
+de `css.include` van `vitest.config.ts`).
+
+**Bewust niet gedaan:** de globale `h1` aanpassen. Dat verschuift de hoogte van elke paginatitel in
+de app en hoort niet in een kleine follow-up. Het onderliggende risico blijft: elke kale `h1` die
+afbreekt overlapt. Zie restpunt R-1.
+
+### 13.3 F-3 — "Nieuwe contracttype"
+
+**Oorzaak.** Vijf nl-sjablonen plakten "Nieuwe" vóór een willekeurig zelfstandig naamwoord
+(`Nieuwe {singular}`), fout voor het-woorden. De vorige wave had enkel de rij zónder zoekterm
+gepatcht met een override in het medewerkerformulier. In het Frans gaf hetzelfde patroon
+"+ Nouveau une fonction" (`{singular}` bevat daar het lidwoord).
+
+**Fix: expliciete vertalingen, geen geraden grammatica.** `masterData.newLabel.<slug>` bevat per
+lookup en per taal de volledige frase ("Nieuw contracttype", "Nouvelle fonction", "New department").
+Die wordt gebruikt voor de knop op de beheerpagina, beide dialoogtitels, de "+"-rij en de rij met
+zoekterm (`{newLabel} "{query}" toevoegen`). De generieke sleutels `list.new`, `form.newTitle` en
+`select.newTitle` zijn vervallen. Aanroepers die een los woord meegaven ("afdeling", "categorie" —
+hardgecodeerd Nederlands, dus ook fout in FR/EN) gebruiken nu de registry-sleutel; voor een los
+woord bestaat nog een neutrale terugval ("Toevoegen: {singular}"). De vijf overbodige
+`employees.form.*`-sleutels zijn verwijderd. `lookupNewLabels.test.ts` eist voor elke lookup in
+de registry een label in nl/fr/en en verbiedt elk sjabloon dat "nieuw" aan `{singular}` plakt.
+
+### 13.4 Restpunten
+
+| # | Punt |
+|---|---|
+| R-1 | Globale `h1` zonder eigen line-height (zie §13.2): latent voor elke kale `h1` die afbreekt. Vraagt een app-brede visuele controle. |
+| R-2 | nl-titels `"{singular} bewerken"` / `"{singular} verwijderen"` beginnen met een kleine letter ("contracttype bewerken"). Grammaticaal juist, typografisch slordig; niet aangeraakt. |
+| R-3 | Op de kaartschermen staat de link "Terug naar aanmelden" op 320px náást de knop en breekt dan af; de kaartformulieren hebben geen eigen kolomlayout. Cosmetisch, niet aangeraakt. |
+| F-4 | Onveranderd open (§11.4): oorzaak van de eenmalig falende frontendtest is niet vastgesteld. In deze ronde waren alle volledige runs groen (1580/1580). |
+
+Bijvangst in §13.2: een lang e-mailadres in de welkomstregel van het activatiescherm liep op 320px
+buiten de kaart; de introregel breekt nu af (`overflow-wrap: anywhere`).
+
+### 13.5 Validatie
+
+Frontend 1580/1580 (242 bestanden), `tsc -b` en `eslint .` schoon. Backend niet geraakt (geen
+enkel bestand onder `TransportationService.Api*` gewijzigd), dus de backend-suite is niet opnieuw
+gedraaid. Browser (headless Chromium, lokale API + Vite, tijdelijk HR-account dat na afloop weer
+gedeactiveerd en van een niet bewaard wachtwoord voorzien is): aanmelden met tijdelijk wachtwoord →
+`/change-password` → wijzigen → `/login` zonder `from` → aanmelden → `/dashboard` → F5 blijft
+`/dashboard` → afmelden vanaf `/employees` en opnieuw aanmelden → `/dashboard` → `/change-password`
+rechtstreeks openen → `/dashboard` → anonieme deeplink `/absences` keert na aanmelden terug naar
+`/absences`. Geen 4xx/5xx buiten de anonieme sessiecheck. F-3 nagelopen in nl en fr op het
+medewerkerformulier (drie lookups: "+"-rij, rij met zoekterm, dialoogtitel) en op de beheerpagina.

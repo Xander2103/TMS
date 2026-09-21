@@ -133,7 +133,7 @@ export function LookupManager({ config }: { config: LookupResourceConfig }) {
       />
       <PageHeader
         title={title}
-        action={canManage && <Button onClick={() => setDialog({ mode: 'create' })}>{t('masterData.list.new', { singular })}</Button>}
+        action={canManage && <Button onClick={() => setDialog({ mode: 'create' })}>{t(`masterData.newLabel.${config.slug}`)}</Button>}
       />
 
       <FilterBar

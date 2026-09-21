@@ -452,8 +452,7 @@ export function EmployeeForm({
             id="e-department"
             basePath="/api/departments"
             managePermission="departments.manage"
-            singular={t('employees.form.departmentSingular')}
-            createLabel={t('employees.form.newDepartment')}
+            singular="masterData.singular.departments"
             value={departmentId}
             onChange={(v) => {
               setDepartmentId(v)
@@ -467,8 +466,7 @@ export function EmployeeForm({
             id="e-contract"
             basePath="/api/contract-types"
             managePermission="reference_data.manage"
-            singular={t('employees.form.contractTypeSingular')}
-            createLabel={t('employees.form.newContractType')}
+            singular="masterData.singular.contract-types"
             value={contractTypeId}
             onChange={(v) => {
               setContractTypeId(v)
@@ -512,7 +510,6 @@ export function EmployeeForm({
               basePath="/api/job-functions"
               managePermission="job_functions.manage"
               singular="masterData.singular.job-functions"
-              createLabel={t('employees.form.newFunction')}
               excludeValues={jobFunctionIds}
               value={null}
               onChange={(v, option) => {
