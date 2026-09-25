@@ -20,6 +20,8 @@ public interface IDossierService
     Task<DossierDetailDto> CreateAsync(SaveDossierRequest request, CancellationToken cancellationToken);
 
     Task<DossierDetailDto?> GetAsync(Guid id, CancellationToken cancellationToken);
+    /// <summary>Server-side dossier search: filters + sort + pagination in one tenant-scoped query.</summary>
+    Task<Common.Models.PagedResult<DossierListItemDto>> SearchAsync(DossierSearchQuery query, CancellationToken cancellationToken);
 
     Task<DossierDetailDto?> UpdateAsync(Guid id, SaveDossierRequest request, CancellationToken cancellationToken);
 
@@ -29,9 +31,7 @@ public interface IDossierService
     /// <summary>Impact of an entity change on the dossier's linked orders, before confirming.</summary>
     Task<DossierLegalEntityChangeImpactDto?> PreviewLegalEntityChangeAsync(Guid id, Guid legalEntityId, CancellationToken cancellationToken);
 
-    Task<DossierDetailDto?> CloseAsync(Guid id, CancellationToken cancellationToken);
 
-    Task<DossierDetailDto?> ReopenAsync(Guid id, CancellationToken cancellationToken);
 
     Task<DossierDetailDto?> LinkOrderAsync(Guid id, LinkDossierOrderRequest request, CancellationToken cancellationToken);
 
@@ -42,7 +42,7 @@ public interface IDossierService
     Task<DossierDetailDto?> RemoveRelationAsync(Guid id, Guid relationId, CancellationToken cancellationToken);
 }
 
-public class DossierService : IDossierService
+public partial class DossierService : IDossierService
 {
     private const string EntityType = "TransportDossier";
 
@@ -109,13 +109,21 @@ public class DossierService : IDossierService
                     && (c.Name.ToLower().Contains(term) || c.CustomerNumber.ToLower().Contains(term))));
         }
 
-        var rows = await query
-            .OrderByDescending(d => d.CreatedAt)
-            .Take(500)
+        return await ProjectListAsync(query.OrderByDescending(d => d.CreatedAt).Take(500), cancellationToken);
+    }
+
+    /// <summary>
+    /// The list projection shared by <see cref="ListAsync"/> (compat) and <see cref="SearchAsync"/>:
+    /// ONE statement with correlated scalar subqueries per row — no per-row round trips.
+    /// </summary>
+    private async Task<List<DossierListItemDto>> ProjectListAsync(IQueryable<TransportDossier> ordered, CancellationToken cancellationToken)
+    {
+        var rows = await ordered
             .Select(d => new
             {
                 d.Id, d.DossierNumber, d.Title, d.Status, d.CustomerId, d.ResponsibleUserId, d.CreatedAt,
-                d.CustomerReference,
+                d.CustomerReference, d.DossierDate, d.ClosedAt, d.ConfirmationSource,
+                ActivityCount = _dbContext.DossierActivities.Count(a => a.DossierId == d.Id),
                 CustomerName = _dbContext.Customers
                     .Where(c => c.Id == d.CustomerId).Select(c => (string?)c.Name).FirstOrDefault(),
                 CustomerNumber = _dbContext.Customers
@@ -182,8 +190,9 @@ public class DossierService : IDossierService
                     .Join(_dbContext.ActivityTypes, a => a.ActivityTypeId, t => t.Id, (a, t) => new { a, t })
                     .Where(x => x.t.IsBillable && !x.t.HasStops)
                     .Join(_dbContext.DossierActivityPricings, x => x.a.Id, p => p.DossierActivityId, (x, p) => p)
-                    .Where(ActivityPricingState.IsPricedExpression)
-                    .Count(p => p.FixedAmount == 0m),
+                    // D5: priced at € 0 and NOT confirmed free — the single definition, translated in place.
+                    .Where(ActivityPricingState.IsUnconfirmedZeroExpression)
+                    .Count(),
                 // (c) compat: linked orders no activity represents (LinkOrder on an old dossier).
                 LegacyUnitCount = _dbContext.DossierOrders
                     .Count(l => l.DossierId == d.Id
@@ -226,7 +235,11 @@ public class DossierService : IDossierService
                 PricedOrderCount: r.PricedOrderCount,
                 BillableActivityCount: r.TransportUnitCount + r.StandaloneUnitCount + r.LegacyUnitCount,
                 PricedActivityCount: r.TransportPricedCount + r.StandalonePricedCount + r.LegacyPricedCount,
-                ZeroPricedActivityCount: r.TransportZeroCount + r.StandaloneZeroCount + r.LegacyZeroCount))
+                ZeroPricedActivityCount: r.TransportZeroCount + r.StandaloneZeroCount + r.LegacyZeroCount,
+                DossierDate: r.DossierDate,
+                ConfirmedAt: r.Status == DossierStatus.Closed ? r.ClosedAt : null,
+                ConfirmationSource: r.ConfirmationSource?.ToString(),
+                ActivityCount: r.ActivityCount))
             .ToList();
     }
 
@@ -364,6 +377,10 @@ public class DossierService : IDossierService
             ? await _dbContext.Users.AsNoTracking()
                 .Where(u => u.Id == userId).Select(u => (string?)(u.FirstName + " " + u.LastName)).FirstOrDefaultAsync(cancellationToken)
             : null;
+        var confirmedByName = dossier.ConfirmedByUserId is { } confirmedBy
+            ? await _dbContext.Users.AsNoTracking()
+                .Where(u => u.Id == confirmedBy).Select(u => (string?)(u.FirstName + " " + u.LastName)).FirstOrDefaultAsync(cancellationToken)
+            : null;
 
         // Linked orders (anonymous projection: record ctors do not translate in joins).
         var orderRows = await _dbContext.DossierOrders.AsNoTracking()
@@ -427,6 +444,7 @@ public class DossierService : IDossierService
                 (a, t) => new
                 {
                     a.Id, a.ActivityTypeId, t.Code, t.Name, t.Icon, t.HasStops, t.SupportsGoods, t.AllowsDuration, t.IsBillable,
+                    t.SupportsOnSiteWork,
                     a.Sequence, a.Label, a.LinkedTransportOrderId, a.LinkedActivityId,
                     a.PlannedDate, a.DurationHours, a.Notes, a.UpdatedAt,
                 })
@@ -436,18 +454,64 @@ public class DossierService : IDossierService
         // Step 13: price carriers per unit — the order's snapshot status for transport activities,
         // the activity's own record for standalone ones.
         var orderIds = orderRows.Select(o => o.Id).ToList();
-        var snapshotStatusByOrder = orderIds.Count == 0
-            ? new Dictionary<Guid, OrderPricingStatus>()
+        var snapshotByOrder = orderIds.Count == 0
+            ? []
             : await _dbContext.TransportOrderPricingSnapshots.AsNoTracking()
                 .Where(s => s.TenantId == tenantId && orderIds.Contains(s.TransportOrderId))
-                .Select(s => new { s.TransportOrderId, s.Status })
-                .ToDictionaryAsync(s => s.TransportOrderId, s => s.Status, cancellationToken);
+                .Select(s => new { s.TransportOrderId, s.Status, s.CoverageStatus, s.IsStale })
+                .ToDictionaryAsync(s => s.TransportOrderId, cancellationToken);
         var standaloneIds = activityRows.Where(a => !a.HasStops).Select(a => a.Id).ToList();
         var pricingByActivity = standaloneIds.Count == 0
             ? new Dictionary<Guid, DossierActivityPricing>()
             : await _dbContext.DossierActivityPricings.AsNoTracking()
                 .Where(p => p.TenantId == tenantId && standaloneIds.Contains(p.DossierActivityId))
                 .ToDictionaryAsync(p => p.DossierActivityId, cancellationToken);
+        // D5: the sales lines of the standalone price records — one query for the whole dossier.
+        var pricingIds = pricingByActivity.Values.Select(p => p.Id).ToList();
+        var priceLinesByPricing = pricingIds.Count == 0
+            ? new Dictionary<Guid, List<DossierActivityPriceLineDto>>()
+            : (await _dbContext.DossierActivityPriceLines.AsNoTracking()
+                    .Where(l => l.TenantId == tenantId && pricingIds.Contains(l.DossierActivityPricingId))
+                    .OrderBy(l => l.Sequence)
+                    .ToListAsync(cancellationToken))
+                .GroupBy(l => l.DossierActivityPricingId)
+                .ToDictionary(
+                    g => g.Key,
+                    g => g.Select(l => new DossierActivityPriceLineDto(
+                        l.Id, l.Sequence, l.Label, l.Quantity, l.Unit, l.UnitPrice, l.Amount, l.SalesCategoryId)).ToList());
+
+        // D7: note counts + the newest note per activity — set-based for the whole dossier.
+        var notes = await DossierNoteService.SummarizeAsync(_dbContext, tenantId, id, cancellationToken);
+
+        // D6: ONE query for every document of the dossier (both levels, each once) and one for the
+        // issued transport documents of its activities' orders — none per activity.
+        var documentRows = await Modules.Orders.Services.DossierDocumentQuery.ForDossier(_dbContext, tenantId, id)
+            .Select(d => new { d.TransportOrderId, d.DocumentType })
+            .ToListAsync(cancellationToken);
+        var documentCountByOrder = documentRows
+            .Where(d => d.TransportOrderId is not null)
+            .GroupBy(d => d.TransportOrderId!.Value)
+            .ToDictionary(g => g.Key, g => g.Count());
+        var activityOrderIds = activityRows.Where(a => a.LinkedTransportOrderId is not null)
+            .Select(a => a.LinkedTransportOrderId!.Value).Distinct().ToList();
+        var issuedByOrder = activityOrderIds.Count == 0
+            ? new Dictionary<Guid, List<DossierActivityIssuedDocumentDto>>()
+            : (await _dbContext.IssuedTransportDocuments.AsNoTracking()
+                    .Where(i => i.TenantId == tenantId && activityOrderIds.Contains(i.TransportOrderId))
+                    .OrderBy(i => i.IssuedAt).ThenBy(i => i.DocumentNumber)
+                    .Select(i => new { i.TransportOrderId, i.Id, i.Kind, i.DocumentNumber })
+                    .ToListAsync(cancellationToken))
+                .GroupBy(i => i.TransportOrderId)
+                .ToDictionary(
+                    g => g.Key,
+                    g => g.Select(i => new DossierActivityIssuedDocumentDto(i.Id, i.Kind.ToString(), i.DocumentNumber)).ToList());
+
+        // D1: effective assignment per activity = the trip of its order. Set-based for the whole
+        // dossier (a fixed number of queries, whatever the number of activities).
+        var assignmentByOrder = await BuildActivityAssignmentsAsync(
+            activityRows.Where(a => a.LinkedTransportOrderId is not null)
+                .Select(a => a.LinkedTransportOrderId!.Value).Distinct().ToList(),
+            cancellationToken);
 
         var activities = activityRows
             .Select(a =>
@@ -459,33 +523,69 @@ public class DossierService : IDossierService
                 var isZero = false;
                 string? pricingStatus = null;
                 Guid? pricingVersion = null;
+                string? priceStatus;
+                var freeConfirmed = false;
+                IReadOnlyList<DossierActivityPriceLineDto> priceLines = [];
                 if (a.HasStops)
                 {
+                    var snapshot = linked is null ? null : snapshotByOrder.GetValueOrDefault(linked.Id);
                     if (linked is not null)
                     {
                         pricingSource = "Order";
                         agreedPrice = OrderPricingState.EffectiveAgreedPrice(linked.PricingSource, linked.OneOffFixedAmount, linked.AgreedPrice);
                         isPriced = OrderPricingState.IsPriced(linked.PriceIsManual, linked.PricingSource, linked.OneOffFixedAmount, linked.AgreedPrice);
                         isZero = OrderPricingState.IsIntentionalZero(linked.PriceIsManual, linked.PricingSource, linked.OneOffFixedAmount, linked.AgreedPrice);
-                        pricingStatus = snapshotStatusByOrder.TryGetValue(linked.Id, out var status) ? status.ToString() : null;
+                        pricingStatus = snapshot?.Status.ToString();
                     }
+
+                    priceStatus = ActivityPriceStatus.ForOrder(
+                        a.IsBillable, linked is not null, isPriced, isZero, snapshot?.CoverageStatus, snapshot?.IsStale ?? false);
                 }
-                else if (pricingByActivity.TryGetValue(a.Id, out var pricing))
+                else
                 {
-                    pricingSource = pricing.PricingSource.ToString();
-                    agreedPrice = pricing.AgreedPrice;
-                    isPriced = ActivityPricingState.IsPriced(pricing);
-                    isZero = isPriced && pricing.FixedAmount == 0m;
-                    pricingStatus = pricing.Status.ToString();
-                    pricingVersion = pricing.Version;
+                    var pricing = pricingByActivity.GetValueOrDefault(a.Id);
+                    if (pricing is not null)
+                    {
+                        pricingSource = pricing.PricingSource.ToString();
+                        agreedPrice = pricing.AgreedPrice;
+                        isPriced = ActivityPricingState.IsPriced(pricing);
+                        // D5: a € 0 that was confirmed free is no longer a "check this" zero.
+                        isZero = ActivityPricingState.IsUnconfirmedZero(pricing);
+                        pricingStatus = pricing.Status.ToString();
+                        pricingVersion = pricing.Version;
+                        freeConfirmed = pricing.FreeConfirmed;
+                        priceLines = priceLinesByPricing.GetValueOrDefault(pricing.Id) ?? [];
+                    }
+
+                    priceStatus = ActivityPriceStatus.ForStandalone(a.IsBillable, pricing);
                 }
+
+                var activityNotes = notes.ByActivity.GetValueOrDefault(a.Id);
 
                 var dto = new DossierActivityDto(
                     a.Id, a.ActivityTypeId, a.Code, a.Name, a.Icon, a.HasStops, a.SupportsGoods, a.AllowsDuration,
                     a.Sequence, a.Label, a.LinkedTransportOrderId, linked?.OrderNumber, linked?.Status.ToString(),
                     a.LinkedActivityId, a.PlannedDate, a.DurationHours, a.Notes,
                     IsBillable: a.IsBillable, PricingSource: pricingSource, AgreedPrice: agreedPrice, IsPriced: isPriced,
-                    PricingStatus: pricingStatus, PricingVersion: pricingVersion);
+                    PricingStatus: pricingStatus, PricingVersion: pricingVersion,
+                    SupportsOnSiteWork: a.SupportsOnSiteWork,
+                    Assignment: a.LinkedTransportOrderId is { } assignedOrderId
+                        ? assignmentByOrder.GetValueOrDefault(assignedOrderId)
+                        : null,
+                    PriceLines: priceLines,
+                    FreeConfirmed: freeConfirmed,
+                    PriceStatus: priceStatus,
+                    NoteCount: activityNotes?.Count ?? 0,
+                    LatestNotePreview: activityNotes?.LatestPreview,
+                    LatestNoteAt: activityNotes?.LatestAt,
+                    // D6: the OWN documents of the activity's order — dossier-level documents are
+                    // counted on the dossier, never per activity.
+                    IssuedDocuments: a.LinkedTransportOrderId is { } issuedOrderId
+                        ? issuedByOrder.GetValueOrDefault(issuedOrderId) ?? []
+                        : [],
+                    DocumentCount: a.LinkedTransportOrderId is { } documentOrderId
+                        ? documentCountByOrder.GetValueOrDefault(documentOrderId)
+                        : 0);
                 return (Dto: dto, IsZero: isZero);
             })
             .ToList();
@@ -513,12 +613,9 @@ public class DossierService : IDossierService
         // Redesign 2026-09-11: the Overzicht summarises documents and "last changed" without
         // extra client fetches — one query over the linked orders' documents, and the maximum
         // UpdatedAt over rows that are already in memory.
-        var documentTypes = orderIds.Count == 0
-            ? []
-            : await _dbContext.TransportOrderDocuments.AsNoTracking()
-                .Where(d => d.TenantId == tenantId && orderIds.Contains(d.TransportOrderId))
-                .Select(d => d.DocumentType)
-                .ToListAsync(cancellationToken);
+        // D6: documents of the DOSSIER — the same definition as the dossier document list, so a
+        // document is counted exactly once whatever level it hangs on.
+        var documentTypes = documentRows.Select(d => d.DocumentType).ToList();
         var lastChangedAt = new[] { dossier.UpdatedAt }
             .Concat(activityRows.Select(a => a.UpdatedAt))
             .Concat(orderRows.Select(o => o.UpdatedAt))
@@ -533,7 +630,110 @@ public class DossierService : IDossierService
             dossier.Version, activities.Select(a => a.Dto).ToList(), readiness,
             DocumentCount: documentTypes.Count,
             DocumentTypes: documentTypes.Select(d => d.ToString()).Distinct().ToList(),
-            LastChangedAt: lastChangedAt);
+            LastChangedAt: lastChangedAt,
+            NoteCount: notes.DossierLevelCount,
+            ConfirmedAt: dossier.Status == DossierStatus.Closed ? dossier.ClosedAt : null,
+            ConfirmedByUserId: dossier.ConfirmedByUserId,
+            ConfirmedByName: confirmedByName,
+            ConfirmationSource: dossier.ConfirmationSource?.ToString(),
+            ConfirmationReason: dossier.ConfirmationReason,
+            CancelledAt: dossier.CancelledAt,
+            CancellationReason: dossier.CancellationReason);
+    }
+
+    /// <summary>
+    /// D1: the effective assignment of each order = its most relevant NON-CANCELLED trip (InProgress,
+    /// then Planned, then Draft, then Completed; the latest trip date within a status). Driver,
+    /// vehicle and trailer are read from the trip — the only place they live. Five set-based
+    /// queries at most for the whole dossier, none per activity.
+    /// </summary>
+    private async Task<Dictionary<Guid, DossierActivityAssignmentDto>> BuildActivityAssignmentsAsync(
+        IReadOnlyList<Guid> orderIds, CancellationToken cancellationToken)
+    {
+        var result = new Dictionary<Guid, DossierActivityAssignmentDto>();
+        if (orderIds.Count == 0)
+        {
+            return result;
+        }
+
+        var tenantId = _tenantContext.TenantId;
+        var links = await _dbContext.TripOrders.AsNoTracking()
+            .Where(to => to.TenantId == tenantId && orderIds.Contains(to.TransportOrderId))
+            .Join(_dbContext.Trips.AsNoTracking()
+                    .Where(t => t.TenantId == tenantId && t.Status != Modules.Planning.Entities.TripStatus.Cancelled),
+                to => to.TripId, t => t.Id,
+                (to, t) => new
+                {
+                    to.TransportOrderId, TripId = t.Id, t.TripNumber, t.TripDate, t.Status,
+                    t.DriverId, t.VehicleId, t.TrailerId, t.VehicleSelectionSource,
+                })
+            .ToListAsync(cancellationToken);
+        if (links.Count == 0)
+        {
+            return result;
+        }
+
+        static int Rank(Modules.Planning.Entities.TripStatus status) => status switch
+        {
+            Modules.Planning.Entities.TripStatus.InProgress => 0,
+            Modules.Planning.Entities.TripStatus.Planned => 1,
+            Modules.Planning.Entities.TripStatus.Draft => 2,
+            _ => 3,
+        };
+
+        var chosen = links
+            .GroupBy(l => l.TransportOrderId)
+            .ToDictionary(
+                g => g.Key,
+                g => (Trip: g.OrderBy(l => Rank(l.Status)).ThenByDescending(l => l.TripDate).ThenBy(l => l.TripNumber).First(),
+                    TripCount: g.Select(l => l.TripId).Distinct().Count()));
+
+        var tripIds = chosen.Values.Select(c => c.Trip.TripId).Distinct().ToList();
+        var orderCountByTrip = await _dbContext.TripOrders.AsNoTracking()
+            .Where(to => to.TenantId == tenantId && tripIds.Contains(to.TripId))
+            .GroupBy(to => to.TripId)
+            .Select(g => new { TripId = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.TripId, x => x.Count, cancellationToken);
+
+        var driverIds = chosen.Values.Where(c => c.Trip.DriverId is not null).Select(c => c.Trip.DriverId!.Value).Distinct().ToList();
+        var vehicleIds = chosen.Values.Where(c => c.Trip.VehicleId is not null).Select(c => c.Trip.VehicleId!.Value).Distinct().ToList();
+        var trailerIds = chosen.Values.Where(c => c.Trip.TrailerId is not null).Select(c => c.Trip.TrailerId!.Value).Distinct().ToList();
+
+        var drivers = driverIds.Count == 0
+            ? []
+            : await _dbContext.Drivers.AsNoTracking()
+                .Where(d => d.TenantId == tenantId && driverIds.Contains(d.Id))
+                .Join(_dbContext.Employees.AsNoTracking().Where(e => e.TenantId == tenantId), d => d.EmployeeId, e => e.Id,
+                    (d, e) => new { d.Id, Name = e.FirstName + " " + e.LastName })
+                .ToDictionaryAsync(x => x.Id, x => x.Name, cancellationToken);
+        var vehicles = vehicleIds.Count == 0
+            ? []
+            : await _dbContext.Vehicles.AsNoTracking()
+                .Where(v => v.TenantId == tenantId && vehicleIds.Contains(v.Id))
+                .Select(v => new { v.Id, v.InternalNumber, v.LicensePlate })
+                .ToDictionaryAsync(v => v.Id, cancellationToken);
+        var trailers = trailerIds.Count == 0
+            ? []
+            : await _dbContext.Trailers.AsNoTracking()
+                .Where(t => t.TenantId == tenantId && trailerIds.Contains(t.Id))
+                .Select(t => new { t.Id, t.InternalNumber, t.LicensePlate })
+                .ToDictionaryAsync(t => t.Id, cancellationToken);
+
+        foreach (var (orderId, (trip, tripCount)) in chosen)
+        {
+            var vehicle = trip.VehicleId is { } vid ? vehicles.GetValueOrDefault(vid) : null;
+            var trailer = trip.TrailerId is { } tid ? trailers.GetValueOrDefault(tid) : null;
+            result[orderId] = new DossierActivityAssignmentDto(
+                trip.TripId, trip.TripNumber, trip.TripDate, trip.Status.ToString(),
+                trip.DriverId, trip.DriverId is { } did ? drivers.GetValueOrDefault(did) : null,
+                trip.VehicleId, vehicle?.InternalNumber, vehicle?.LicensePlate,
+                trip.VehicleSelectionSource?.ToString(),
+                trip.TrailerId, trailer?.InternalNumber, trailer?.LicensePlate,
+                tripCount,
+                Math.Max(0, orderCountByTrip.GetValueOrDefault(trip.TripId, 1) - 1));
+        }
+
+        return result;
     }
 
     public async Task<DossierDetailDto?> UpdateAsync(Guid id, SaveDossierRequest request, CancellationToken cancellationToken)
@@ -581,7 +781,13 @@ public class DossierService : IDossierService
         }
 
         dossier.ResponsibleUserId = request.ResponsibleUserId;
-        dossier.Notes = Trim(request.Notes);
+        // D7: the legacy free-text column is history now (notes live in DossierNote). A client that
+        // no longer sends it (null) must not wipe it; an explicit empty string still clears.
+        if (request.Notes is not null)
+        {
+            dossier.Notes = Trim(request.Notes);
+        }
+
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         await _auditService.RecordAsync(EntityType, dossier.Id.ToString(), "Updated", null,
@@ -763,62 +969,6 @@ public class DossierService : IDossierService
         }
     }
 
-    public async Task<DossierDetailDto?> CloseAsync(Guid id, CancellationToken cancellationToken)
-    {
-        var dossier = await FindAsync(id, cancellationToken);
-        if (dossier is null)
-        {
-            return null;
-        }
-
-        if (dossier.Status == DossierStatus.Closed)
-        {
-            throw new DomainValidationException("Dit dossier is al gesloten.");
-        }
-
-        var openIncidents = await _dbContext.Incidents
-            .CountAsync(i => i.TenantId == dossier.TenantId && i.DossierId == id
-                             && (i.Status == IncidentStatus.New || i.Status == IncidentStatus.InProgress),
-                cancellationToken);
-        if (openIncidents > 0)
-        {
-            throw new DomainValidationException(
-                $"Dit dossier heeft nog {openIncidents} open incident(en). Handel die eerst af.");
-        }
-
-        dossier.Status = DossierStatus.Closed;
-        dossier.ClosedAt = _timeProvider.GetUtcNow().UtcDateTime;
-        await _dbContext.SaveChangesAsync(cancellationToken);
-
-        await _auditService.RecordAsync(EntityType, dossier.Id.ToString(), "Closed", null,
-            new { dossier.DossierNumber }, cancellationToken);
-
-        return await GetAsync(id, cancellationToken);
-    }
-
-    public async Task<DossierDetailDto?> ReopenAsync(Guid id, CancellationToken cancellationToken)
-    {
-        var dossier = await FindAsync(id, cancellationToken);
-        if (dossier is null)
-        {
-            return null;
-        }
-
-        if (dossier.Status == DossierStatus.Open)
-        {
-            throw new DomainValidationException("Dit dossier is al open.");
-        }
-
-        dossier.Status = DossierStatus.Open;
-        dossier.ClosedAt = null;
-        await _dbContext.SaveChangesAsync(cancellationToken);
-
-        await _auditService.RecordAsync(EntityType, dossier.Id.ToString(), "Reopened", null,
-            new { dossier.DossierNumber }, cancellationToken);
-
-        return await GetAsync(id, cancellationToken);
-    }
-
     public async Task<DossierDetailDto?> LinkOrderAsync(Guid id, LinkDossierOrderRequest request, CancellationToken cancellationToken)
     {
         var tenantId = _tenantContext.TenantId;
@@ -842,6 +992,16 @@ public class DossierService : IDossierService
         if (alreadyLinked)
         {
             throw new DomainValidationException("transportOrderId", "Deze opdracht is al aan het dossier gekoppeld.");
+        }
+
+        // D6: an order document's DossierId is the OWNING dossier of its order. A new link only
+        // changes the owner when the order had none (wrapper / oldest link keep winning) — then
+        // this dossier becomes it, and the order's documents follow in the same save.
+        var currentOwner = await OwningDossierResolver.ResolveAsync(_dbContext, tenantId, request.TransportOrderId, cancellationToken);
+        if (currentOwner is null)
+        {
+            await Modules.Orders.Services.OrderDocumentDossierSync.StageAsync(
+                _dbContext, tenantId, request.TransportOrderId, id, cancellationToken);
         }
 
         _dbContext.Add(new DossierOrder
@@ -875,6 +1035,14 @@ public class DossierService : IDossierService
         {
             throw new DomainValidationException("Deze opdracht is niet aan het dossier gekoppeld.");
         }
+
+        // D6: the order's documents follow its owning dossier AS IT WILL BE after this removal (the
+        // wrapper, else the next-oldest link, else none). Only the link column changes — documents
+        // of the dossier as a whole stay where they are, and no file is touched.
+        var nextOwner = await OwningDossierResolver.ResolveAsync(
+            _dbContext, dossier.TenantId, transportOrderId, cancellationToken, excludingLinkId: link.Id);
+        await Modules.Orders.Services.OrderDocumentDossierSync.StageAsync(
+            _dbContext, dossier.TenantId, transportOrderId, nextOwner?.Id, cancellationToken);
 
         _dbContext.Remove(link);
         await _dbContext.SaveChangesAsync(cancellationToken);
@@ -981,17 +1149,22 @@ public class DossierService : IDossierService
         var agreed = pricedUnits.Sum(u => u.Amount ?? 0m);
         var zeroPriced = pricedUnits.Count(u => u.IsIntentionalZero);
 
-        decimal invoiced = 0;
-        if (orderIds.Count > 0)
-        {
-            // Invoiced revenue still reaches the dossier through order-backed invoice lines only
-            // (design §2.7: activity prices are not invoiced by any automated path yet).
-            var lines = await _dbContext.InvoiceLines.AsNoTracking()
-                .Where(l => l.TenantId == tenantId && l.TransportOrderId != null && orderIds.Contains(l.TransportOrderId.Value))
-                .Select(l => new { l.Quantity, l.UnitPrice })
-                .ToListAsync(cancellationToken);
-            invoiced = Math.Round(lines.Sum(l => l.Quantity * l.UnitPrice), 2);
-        }
+        // Invoiced revenue: order-backed lines of the dossier's orders + (closure sprint
+        // 2026-09-23) the lines that bill its standalone activities. Cancelled documents do not
+        // count; a draft counts as "invoiced" exactly as it does for orders.
+        var dossierActivityIds = _dbContext.DossierActivities.AsNoTracking()
+            .Where(a => a.TenantId == tenantId && a.DossierId == dossierId)
+            .Select(a => a.Id);
+        var liveInvoiceIds = _dbContext.Invoices.AsNoTracking()
+            .Where(i => i.TenantId == tenantId && i.Status != Modules.Invoicing.Entities.InvoiceStatus.Cancelled)
+            .Select(i => i.Id);
+        var lines = await _dbContext.InvoiceLines.AsNoTracking()
+            .Where(l => l.TenantId == tenantId && liveInvoiceIds.Contains(l.InvoiceId)
+                        && ((l.TransportOrderId != null && orderIds.Contains(l.TransportOrderId.Value))
+                            || (l.DossierActivityId != null && dossierActivityIds.Contains(l.DossierActivityId.Value))))
+            .Select(l => new { l.Quantity, l.UnitPrice })
+            .ToListAsync(cancellationToken);
+        var invoiced = Math.Round(lines.Sum(l => l.Quantity * l.UnitPrice), 2);
 
         var incidentCosts = await _dbContext.Incidents.AsNoTracking()
             .Where(i => i.TenantId == tenantId && i.DossierId == dossierId && i.Status != IncidentStatus.Cancelled)
@@ -1006,7 +1179,8 @@ public class DossierService : IDossierService
             PricedOrderCount: pricedOrderCount,
             BillableActivityCount: units.Count,
             PricedActivityCount: pricedUnits.Count,
-            ZeroPricedActivityCount: zeroPriced);
+            ZeroPricedActivityCount: zeroPriced,
+            UnpricedActivityCount: units.Count - pricedUnits.Count);
     }
 
     private async Task ValidateAsync(SaveDossierRequest request, Guid tenantId, CancellationToken cancellationToken)

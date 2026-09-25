@@ -72,6 +72,17 @@ describe('sidebar layout invariants', () => {
     expect(body).toMatch(/scrollbar-gutter:\s*stable/)
   })
 
+  // Sprint 2026-09-21 — one viewport unit: exactly as high as the visible viewport, own scroll.
+  it('is exactly viewport-high in dvh and scrolls on its own overflow', () => {
+    const body = ruleBody(sidebarCss, '.sidebar')
+    expect(body).toMatch(/height:\s*100dvh/)
+    expect(body).toMatch(/overflow-y:\s*auto/)
+    expect(body).toMatch(/position:\s*sticky/)
+    // The mixed svh/vh pair let the column differ from the visible viewport.
+    expect(body).not.toMatch(/100svh/)
+    expect(body).not.toMatch(/max-height/)
+  })
+
   // 1B — subsection labels must read as headings, clearly stronger than today.
   it('gives subsection labels heading treatment distinct from clickable rows', () => {
     const body = ruleBody(navCss, '.nav-subgroup-label')

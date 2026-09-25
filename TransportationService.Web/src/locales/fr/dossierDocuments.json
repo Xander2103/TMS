@@ -1,0 +1,144 @@
+{
+  "levels": {
+    "dossier": "Dossier (général)",
+    "dossierShort": "Dossier"
+  },
+  "summary_one": "{count} document dans ce dossier",
+  "summary_other": "{count} documents dans ce dossier",
+  "loading": "Chargement des documents…",
+  "loadFailed": "Les documents n'ont pas pu être chargés.",
+  "retry": "Réessayer",
+  "downloadFailed": "Le document n'a pas pu être téléchargé.",
+  "viewFailed": "Le document n'a pas pu être ouvert.",
+  "viewBlocked": "Le navigateur a bloqué le nouvel onglet. Autorisez les pop-ups ou utilisez Télécharger.",
+  "fileMissing": "Fichier manquant",
+  "sections": {
+    "dossier": "Documents généraux",
+    "dossierHint": "Documents du dossier complet. Ils sont consultables depuis chaque ordre de ce dossier.",
+    "own": "Documents propres",
+    "ownHint": "Documents qui appartiennent uniquement à l'ordre {number}.",
+    "general": "Documents généraux du dossier",
+    "generalHint": "Les mêmes documents qu'au niveau du dossier, pas des copies. Ici uniquement consulter et télécharger.",
+    "manageViaDossier": "Gérer via Dossier (général)"
+  },
+  "empty": {
+    "dossier": "Pas encore de documents généraux pour ce dossier.",
+    "order": "Pas encore de documents propres pour cet ordre.",
+    "general": "Ce dossier n'a pas de documents généraux."
+  },
+  "columns": {
+    "title": "Titre",
+    "type": "Type",
+    "level": "Niveau",
+    "file": "Fichier",
+    "portal": "Portail client",
+    "actions": "Actions"
+  },
+  "actions": {
+    "view": "Consulter : {title}",
+    "download": "Télécharger : {title}",
+    "attachFile": "Ajouter un fichier : {title}",
+    "visibility": "Modifier la visibilité : {title}",
+    "move": "Déplacer : {title}",
+    "delete": "Supprimer : {title}"
+  },
+  "visibility": {
+    "visible": "Visible pour le client",
+    "internal": "Interne",
+    "independent": "La visibilité pour le client est indépendante du niveau : déplacer un document ne le rend ni visible ni interne.",
+    "title": "Modifier la visibilité",
+    "makeVisible": "Rendre visible pour le client",
+    "makeInternal": "Rendre interne",
+    "confirmVisible": "Le client pourra ensuite consulter et télécharger ce document dans le portail client.",
+    "confirmInternal": "Le document disparaît du portail client et n'est plus consultable qu'en interne.",
+    "failed": "La visibilité n'a pas pu être modifiée.",
+    "nowVisible": "Le document est maintenant visible dans le portail client.",
+    "nowInternal": "Le document n'est plus visible pour le client."
+  },
+  "upload": {
+    "open": "Téléverser un document",
+    "title": "Téléverser un document",
+    "target": "Lier le document à",
+    "targetHint": "Un document du dossier complet est consultable depuis chaque ordre.",
+    "targetDossier": "Dossier complet",
+    "targetOrder": "Ordre {label}",
+    "type": "Type de document",
+    "customType": "Nom de type personnalisé (facultatif)",
+    "file": "Fichier",
+    "fileHint": "PDF, JPG ou PNG, 10 Mo maximum.",
+    "documentTitle": "Titre",
+    "customerVisible": "Visible pour le client",
+    "customerVisibleHint": "Les documents sont internes par défaut. Cochez uniquement pour afficher le document dans le portail client.",
+    "submit": "Téléverser",
+    "retry": "Téléverser à nouveau le fichier",
+    "retryHint": "Les données du document figurent déjà dans le dossier. Choisissez au besoin un autre fichier et réessayez, ou supprimez le document.",
+    "closeWithoutFile": "Fermer sans fichier",
+    "removeCreated": "Supprimer le document",
+    "removed": "Le document sans fichier a été supprimé.",
+    "success": "Document ajouté.",
+    "createFailed": "Le document n'a pas pu être créé.",
+    "fileFailed": "Les données du document sont enregistrées, mais le fichier n'a PAS été téléversé : {reason}",
+    "fileFailedFallback": "Le fichier n'a pas pu être téléversé.",
+    "titleRequired": "Donnez un titre au document.",
+    "fileRequired": "Choisissez un fichier.",
+    "fileProblem": {
+      "empty": "Le fichier est vide.",
+      "tooLarge": "Le fichier dépasse 10 Mo.",
+      "unsupportedType": "Seuls les fichiers PDF, JPG et PNG sont autorisés."
+    }
+  },
+  "move": {
+    "title": "Déplacer le document vers…",
+    "intro": "Choisissez le niveau auquel « {title} » appartiendra désormais.",
+    "legend": "Déplacer vers",
+    "current": "emplacement actuel",
+    "explanation": "Le fichier lui-même reste identique : seul le lien change. La visibilité pour le client ne change pas.",
+    "confirm": "Déplacer",
+    "failed": "Le document n'a pas pu être déplacé.",
+    "success": "Document déplacé vers {level}."
+  },
+  "delete": {
+    "title": "Supprimer le document",
+    "confirmDossier": "Voulez-vous vraiment supprimer « {title} » ? Ce document est visible dans tous les ordres de ce dossier et sera supprimé partout.",
+    "confirmOrder": "Voulez-vous vraiment supprimer « {title} » ? Ce document appartient uniquement à l'ordre {number} et sera supprimé définitivement.",
+    "confirm": "Supprimer",
+    "success": "Document supprimé.",
+    "failed": "Le document n'a pas pu être supprimé."
+  },
+  "issued": {
+    "title": "Documents de transport",
+    "empty": "Aucun document de transport créé pour l'instant.",
+    "loadFailed": "Les documents de transport n'ont pas pu être chargés.",
+    "kind": {
+      "Cmr": "Lettre de voiture (CMR)",
+      "DeliveryNote": "Bon de livraison",
+      "WorkOrder": "Bon de travail"
+    },
+    "kindLabel": "Type de document",
+    "externalNumber": "Numéro externe / préimprimé (facultatif)",
+    "externalNumberValue": "n° externe {number}",
+    "issuedAt": "créé le {date}",
+    "issuedAtBy": "créé le {date} par {name}",
+    "pdfLabel": "Télécharger le PDF de {number}",
+    "pdfFailed": "Le PDF n'a pas pu être téléchargé.",
+    "create": {
+      "Cmr": "Créer une lettre de voiture",
+      "DeliveryNote": "Créer un bon de livraison",
+      "WorkOrder": "Créer un bon de travail"
+    },
+    "success": "Document de transport {number} créé.",
+    "failed": "Le document de transport n'a pas pu être créé.",
+    "failedRetry": "{reason} Réessayez : une nouvelle tentative ne produit jamais un second numéro."
+  },
+  "activityStatus": {
+    "none": "Pas encore créé",
+    "several": {
+      "Cmr": "{count} lettres de voiture",
+      "DeliveryNote": "{count} bons de livraison",
+      "WorkOrder": "{count} bons de travail",
+      "Mixed": "{count} documents de transport"
+    },
+    "uploads_one": "{count} document",
+    "uploads_other": "{count} documents"
+  }
+}

@@ -1,0 +1,78 @@
+{
+  "noPriceSet": "Aucun prix de vente défini.",
+  "notPricedYet": "Pas encore tarifé",
+  "free": "Gratuit",
+  "addLine": "+ Ajouter une ligne de vente",
+  "status": {
+    "NotPriced": "Non tarifé",
+    "PartiallyPriced": "Partiellement tarifé",
+    "Priced": "Tarifé",
+    "Free": "Gratuit"
+  },
+  "picker": {
+    "itemWithOrder": "{number} — {name}",
+    "lockedWhileDirty": "Enregistrez les lignes de vente ou annulez les modifications pour changer d'activité."
+  },
+  "summary": {
+    "toPrice": "Encore à tarifer :",
+    "partial": "{name} (partiel)",
+    "legacyOrders": "Ordres liés sans activité"
+  },
+  "activity": {
+    "readOnlyNoPermission": "Vous n'avez pas le droit de modifier les prix des activités.",
+    "readOnlyClosed": "Le dossier est clôturé ; le prix est en lecture seule.",
+    "freeConfirmed": "Cette activité est confirmée comme gratuite (0 €).",
+    "linesTitle": "Lignes de vente",
+    "noLines": "Pas encore de lignes de vente.",
+    "colLabel": "Description",
+    "colQuantity": "Quantité",
+    "colUnit": "Unité",
+    "colUnitPrice": "Prix unitaire (€)",
+    "colAmount": "Montant",
+    "colActions": "Actions",
+    "rowLabel": "Description ligne {index}",
+    "rowQuantity": "Quantité ligne {index}",
+    "rowUnit": "Unité ligne {index}",
+    "rowUnitPrice": "Prix unitaire ligne {index}",
+    "moveUp": "Monter la ligne {index}",
+    "moveDown": "Descendre la ligne {index}",
+    "removeRow": "Supprimer la ligne {index}",
+    "previewHint": "Les montants sont un aperçu (quantité × prix unitaire). Après l'enregistrement, les montants et le total du serveur font foi.",
+    "subtotal": "Sous-total",
+    "previewSubtotal": "Sous-total provisoire (aperçu)",
+    "saveLines": "Enregistrer les lignes de vente",
+    "discard": "Annuler les modifications",
+    "linesSaved": "Lignes de vente enregistrées.",
+    "linesSaveFailed": "Les lignes de vente n'ont pas pu être enregistrées.",
+    "labelRequired": "Ligne {index} : une description est obligatoire.",
+    "quantityInvalid": "Ligne {index} : indiquez une quantité supérieure à zéro.",
+    "unitPriceInvalid": "Ligne {index} : indiquez un prix unitaire valide (0 ou plus).",
+    "noRowsToSave": "Ajoutez au moins une ligne de vente, ou utilisez « Supprimer le prix » pour effacer le prix.",
+    "conflict": "Ce prix a entre-temps été modifié par un collègue. La dernière version a été chargée ; vos lignes non enregistrées sont toujours là. Vérifiez-les et enregistrez à nouveau.",
+    "conflictReloadFailed": "Ce prix a entre-temps été modifié par un collègue. Vos lignes non enregistrées sont toujours là ; rechargez le dossier puis enregistrez à nouveau.",
+    "useFlat": "Utiliser un prix fixe",
+    "flatReplacesLines": "Enregistrer un prix fixe remplace les lignes de vente de cette activité.",
+    "linesReplaceFlat": "Enregistrer des lignes de vente remplace le prix fixe : le total des lignes devient le prix de cette activité.",
+    "confirmFree": "Cette activité est gratuite (0 €) — confirmer",
+    "confirmFreeTitle": "Confirmer l'activité comme gratuite",
+    "confirmFreeMessage": "Le prix existant et toutes les lignes de vente de cette activité sont supprimés. L'activité est confirmée comme gratuite (0 €).",
+    "confirmFreeAction": "Confirmer comme gratuite",
+    "freeSaved": "Activité confirmée comme gratuite.",
+    "removePrice": "Supprimer le prix",
+    "removePriceMessage": "Le prix et toutes les lignes de vente de cette activité sont supprimés. L'activité n'est ensuite plus tarifée.",
+    "priceRemoved": "Prix supprimé.",
+    "actionFailed": "Le prix n'a pas pu être mis à jour."
+  },
+  "goodsLink": {
+    "label": "Concerne les marchandises",
+    "hint": "Facultatif. Rien de coché = la ligne vaut pour tout le trajet ou toute l'activité.",
+    "linked": "Marchandises : {goods}",
+    "noReasonNeeded": "Inutile si vous ne modifiez que le lien avec les marchandises."
+  },
+  "goodsCoverage": {
+    "title": "Couverture tarifaire des marchandises",
+    "colGoods": "Ligne de marchandises",
+    "colCoverage": "Couverture tarifaire",
+    "includedHint": "Une ligne de marchandises incluse dans un prix fixe de trajet ou d'activité n'est pas facturée séparément."
+  }
+}

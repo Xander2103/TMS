@@ -36,6 +36,26 @@
   font-size: 0.875rem;
 }
 
+/* Confirmation sprint 2026-09-23: confirmed/cancelled facts under the badge. */
+.dossier-header-lifecycle {
+  margin: 0 0 6px;
+  font-size: 0.875rem;
+}
+
+.dossier-header-lifecycle p {
+  margin: 0;
+}
+
+.dossier-header-lifecycle-facts {
+  color: var(--text);
+  opacity: 0.85;
+}
+
+.dossier-header-lifecycle-reason {
+  color: var(--color-text-muted, #555);
+  font-style: italic;
+}
+
 .dossier-header-chips {
   margin: 0;
   display: flex;
@@ -685,7 +705,7 @@
 /* Subnav: links inside one dossier, scrollable on narrow viewports, sticky under the topbar. */
 .dossier-subnav {
   position: sticky;
-  top: 0;
+  top: var(--app-sticky-top, 0px);
   z-index: 5;
   background: var(--bg);
   border-bottom: 1px solid var(--border);
@@ -699,6 +719,8 @@
   display: flex;
   gap: 4px;
   overflow-x: auto;
+  /* The links' -1px margin overflows by a pixel; without this the strip grows a vertical scrollbar. */
+  overflow-y: hidden;
   scrollbar-width: thin;
 }
 

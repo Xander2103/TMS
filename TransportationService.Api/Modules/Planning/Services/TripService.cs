@@ -47,7 +47,8 @@ public class TripService : ITripService
         ITripPlanningSyncService planningSyncService,
         ITripCostingService costingService,
         ITripPackageService tripPackageService,
-        Modules.Eta.Services.IEtaService? etaService = null)
+        Modules.Eta.Services.IEtaService? etaService = null,
+        Modules.Dossiers.Services.IDossierLifecycleService? dossierLifecycle = null)
     {
         _dbContext = dbContext;
         _tenantContext = tenantContext;
@@ -58,9 +59,11 @@ public class TripService : ITripService
         _costingService = costingService;
         _tripPackageService = tripPackageService;
         _etaService = etaService;
+        _dossierLifecycle = dossierLifecycle;
     }
 
     private readonly Modules.Eta.Services.IEtaService? _etaService;
+    private readonly Modules.Dossiers.Services.IDossierLifecycleService? _dossierLifecycle;
 
     /// <summary>
     /// PostgreSQL timestamptz only accepts UTC kinds. API clients may send naive ISO times
@@ -117,7 +120,8 @@ public class TripService : ITripService
                 trip.VehicleId is { } v2 ? names.Vehicles.GetValueOrDefault(v2).Plate : null,
                 trip.TrailerId, trip.TrailerId is { } tr ? names.Trailers.GetValueOrDefault(tr) : null,
                 trip.Orders.Count(o => !o.IsDeleted),
-                conflicts.Count(c => c.Blocking)));
+                conflicts.Count(c => c.Blocking),
+                trip.VehicleSelectionSource));
         }
 
         return items;
@@ -168,7 +172,13 @@ public class TripService : ITripService
             PlannedEmptyKm = request.PlannedEmptyKm,
             Notes = Trim(request.Notes),
             Orders = BuildTripOrders(request.OrderIds),
+            // D1: an explicit vehicle is a Manual choice unless the caller says it took the proposal.
+            VehicleSelectionSource = request.VehicleId is null
+                ? null
+                : request.VehicleSelectionSource ?? VehicleSelectionSource.Manual,
         };
+        // D1: no vehicle chosen → propose the driver's fixed vehicle (before sync/costing read the trip).
+        await SuggestFixedVehicleAsync(trip, cancellationToken);
 
         _dbContext.Add(trip);
         // Stage the personnel-planning projection so trip + entry land in ONE save.
@@ -235,6 +245,13 @@ public class TripService : ITripService
 
         trip.TripDate = request.TripDate;
         trip.DriverId = request.DriverId;
+        // D1: the full edit states the vehicle explicitly, so nothing is proposed here; only the
+        // origin is kept in step — a CHANGED vehicle is Manual unless the caller says otherwise.
+        trip.VehicleSelectionSource = request.VehicleId is null
+            ? null
+            : request.VehicleId != trip.VehicleId
+                ? request.VehicleSelectionSource ?? VehicleSelectionSource.Manual
+                : request.VehicleSelectionSource ?? trip.VehicleSelectionSource;
         trip.VehicleId = request.VehicleId;
         trip.TrailerId = request.TrailerId;
         trip.PlannedStart = AsUtc(request.PlannedStart);
@@ -384,6 +401,13 @@ public class TripService : ITripService
 
                 previousDriverId = trip.DriverId;
                 trip.DriverId = request.ResourceId;
+                // D1: a NEW driver brings his fixed vehicle along, unless a planner already
+                // picked the vehicle by hand (Manual is never replaced).
+                if (previousDriverId != request.ResourceId)
+                {
+                    await SuggestFixedVehicleAsync(trip, cancellationToken);
+                }
+
                 return null;
             },
             cancellationToken);
@@ -412,6 +436,11 @@ public class TripService : ITripService
 
                 changed = trip.VehicleId != request.ResourceId;
                 trip.VehicleId = request.ResourceId;
+                // D1: choosing a vehicle here is a Manual choice unless the caller says it merely
+                // accepted the proposal; clearing the slot clears the origin too.
+                trip.VehicleSelectionSource = request.ResourceId is null
+                    ? null
+                    : request.VehicleSelectionSource ?? VehicleSelectionSource.Manual;
                 return null;
             },
             cancellationToken);
@@ -817,6 +846,15 @@ public class TripService : ITripService
             new { trip.Status, Overridden = allowOverride, OverrideReason = allowOverride ? overrideReason : null }, cancellationToken);
         await AuditPlanningSyncAsync(sync, cancellationToken);
 
+        // Dossier confirmation sprint 2026-09-23: the trip completing is THE operational completion
+        // event. Every dossier owning one of its orders is evaluated; the lifecycle service is
+        // idempotent, so a repeated completion never confirms or audits twice.
+        if (target == TripStatus.Completed && _dossierLifecycle is not null)
+        {
+            var completedOrderIds = trip.Orders.Select(o => o.TransportOrderId).ToList();
+            await _dossierLifecycle.TryAutoConfirmForOrdersAsync(completedOrderIds, $"trip:{trip.TripNumber}", cancellationToken);
+        }
+
         if (departureOverrideApplied)
         {
             await _notificationService.NotifyPermissionHoldersAsync(
@@ -1092,7 +1130,8 @@ public class TripService : ITripService
                     order.Id, to.Sequence, order.OrderNumber, order.CustomerName, order.Status,
                     order.GoodsDescription,
                     orderStops.FirstOrDefault(s => s.StopType == StopType.Loading)?.City,
-                    orderStops.LastOrDefault(s => s.StopType == StopType.Unloading)?.City,
+                    // D2: on-site work has no unloading stop — its site is the destination shown.
+                    orderStops.LastOrDefault(s => s.StopType is StopType.Unloading or StopType.Site)?.City,
                     order.AdrRequired, order.CraneRequired);
             })
             .ToList();
@@ -1124,7 +1163,40 @@ public class TripService : ITripService
             trip.PlannedDistanceKm, trip.PlannedEmptyKm, trip.ActualDistanceKm, trip.ActualEmptyKm,
             trip.Notes,
             orders, conflicts, Transitions[trip.Status],
-            trip.Version, overrides);
+            trip.Version, overrides, trip.VehicleSelectionSource);
+    }
+
+    /// <summary>
+    /// D1: the driver's FIXED vehicle — the vehicle side is the single source
+    /// (<c>Vehicle.FixedDriverId</c>, written by IFleetAssignmentService). Active vehicles of this
+    /// tenant only.
+    /// </summary>
+    private async Task<Guid?> FixedVehicleIdAsync(Guid driverId, CancellationToken cancellationToken) =>
+        await _dbContext.Vehicles.AsNoTracking()
+            .Where(v => v.TenantId == _tenantContext.TenantId && v.FixedDriverId == driverId && v.IsActive)
+            .OrderBy(v => v.InternalNumber)
+            .Select(v => (Guid?)v.Id)
+            .FirstOrDefaultAsync(cancellationToken);
+
+    /// <summary>
+    /// D1: proposes the driver's fixed vehicle. Only when the trip has no vehicle yet or the
+    /// current one was itself merely proposed (<see cref="VehicleSelectionSource.Suggested"/>); a
+    /// Manual (or legacy/unknown) choice is never replaced. A driver without a fixed vehicle
+    /// changes nothing. The proposal only becomes an assignment through the save that follows.
+    /// </summary>
+    private async Task SuggestFixedVehicleAsync(Trip trip, CancellationToken cancellationToken)
+    {
+        if (trip.DriverId is not { } driverId)
+        {
+            return;
+        }
+
+        var replaceable = trip.VehicleId is null || trip.VehicleSelectionSource == VehicleSelectionSource.Suggested;
+        if (replaceable && await FixedVehicleIdAsync(driverId, cancellationToken) is { } fixedVehicleId)
+        {
+            trip.VehicleId = fixedVehicleId;
+            trip.VehicleSelectionSource = VehicleSelectionSource.Suggested;
+        }
     }
 
     private async Task AuditPlanningSyncAsync(TripPlanningSyncResult sync, CancellationToken cancellationToken)

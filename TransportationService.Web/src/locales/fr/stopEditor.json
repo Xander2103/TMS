@@ -1,0 +1,74 @@
+{
+  "address": {
+    "search": "Rechercher une adresse",
+    "name": "Nom du lieu",
+    "street": "Rue + n°",
+    "overridden": "Différent du carnet d'adresses — uniquement pour ce dossier",
+    "unlink": "Dissocier",
+    "save": "Enregistrer aussi l'adresse dans le fichier client",
+    "saveHelp": "Sans cette option, l'adresse n'est enregistrée que dans ce dossier.",
+    "duplicatesTitle": "Cette adresse existe peut-être déjà :",
+    "duplicatesUse": "Utiliser cette adresse"
+  },
+  "search": {
+    "placeholder": "Recherchez par nom, rue, code postal ou localité",
+    "placeholderLinked": "Rechercher une autre adresse…",
+    "searching": "Recherche…",
+    "failed": "La recherche a échoué. Vous pouvez simplement saisir l'adresse vous-même.",
+    "noResults": "Aucune adresse connue — saisissez l'adresse librement."
+  },
+  "postalCode": {
+    "BE": "Un code postal belge compte 4 chiffres.",
+    "NL": "Un code postal néerlandais compte 4 chiffres et 2 lettres (1234 AB).",
+    "FR": "Un code postal français compte 5 chiffres.",
+    "DE": "Un code postal allemand compte 5 chiffres.",
+    "LU": "Un code postal luxembourgeois compte 4 chiffres."
+  },
+  "site": {
+    "legend": "Adresse du chantier",
+    "date": "Date des travaux",
+    "endDate": "Date de fin",
+    "endManual": "Fin saisie manuellement.",
+    "endAuto": "Calculer automatiquement",
+    "endFollows": "La fin suit automatiquement : début + {hours} h.",
+    "endNoDuration": "La fin suit automatiquement dès que le début et la durée prévue sont connus.",
+    "endNextDay": "Se termine le {date}."
+  },
+  "stopType": {
+    "Site": "Chantier"
+  },
+  "validation": {
+    "postalCodeLabel": "Arrêt {number} — code postal",
+    "siteAddressLabel": "Adresse du chantier",
+    "siteAddressMessage": "Choisissez une adresse existante ou saisissez une localité ou une adresse pour le chantier.",
+    "siteOnlyLabel": "Arrêts",
+    "siteOnlyMessage": "Un levage sur site n'a qu'une adresse de chantier — pas d'arrêts de chargement ou de déchargement.",
+    "siteStopLabel": "Adresse du chantier",
+    "siteStopMessage": "Saisissez l'adresse du chantier.",
+    "workDescriptionLabel": "Description des travaux",
+    "workDescriptionMessage": "Décrivez les travaux à effectuer sur site."
+  },
+  "crane": {
+    "kindLegend": "Type de mission de grue",
+    "kindTransport": "Transport avec grue",
+    "kindOnSite": "Levage sur site",
+    "onSiteHint": "Levage sur site : une adresse de chantier et une description des travaux — pas d'adresse de chargement ou de déchargement et pas de marchandises.",
+    "workDescription": "Description des travaux",
+    "workDescriptionHint": "Que faut-il faire sur le chantier ? P. ex. « Placer une unité de climatisation sur le toit ».",
+    "duration": "Durée prévue (heures)",
+    "durationHint": "P. ex. 1,5 = 90 minutes. La fin découle du début + la durée.",
+    "durationReadOnly": "Durée prévue : {hours} h — à modifier via l'activité.",
+    "durationUnknown": "Pas encore de durée prévue — définissez-la sur l'activité pour calculer la fin automatiquement.",
+    "liftTitle": "Données techniques de la charge (facultatif)",
+    "liftNote": "Décrit la charge à lever — il ne s'agit pas de marchandises à transporter.",
+    "liftWeight": "Poids de la charge (kg)",
+    "liftDimensions": "Dimensions de la charge",
+    "liftRadius": "Rayon de levage (m)",
+    "liftHeight": "Hauteur de levage (m)",
+    "liftConditions": "Conditions",
+    "liftEquipment": "Matériel de levage",
+    "switchTitle": "Modifier le type de mission de grue ?",
+    "switchMessage": "Les arrêts remplis du type actuel seront supprimés. Continuer ?",
+    "switchConfirm": "Modifier"
+  }
+}

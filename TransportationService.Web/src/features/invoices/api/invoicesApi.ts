@@ -8,6 +8,7 @@ import type {
   InvoiceNumberPreview,
   InvoiceStatus,
   ManualLineInput,
+  UninvoicedActivity,
   UninvoicedOrder,
   UpdateLineInput,
 } from '../types'
@@ -36,6 +37,11 @@ export function getInvoice(id: string): Promise<InvoiceDetail> {
 
 export function listUninvoicedOrders(customerId: string): Promise<UninvoicedOrder[]> {
   return apiClient.getJson<UninvoicedOrder[]>(`/api/invoices/uninvoiced-orders?customerId=${customerId}`)
+}
+
+/** Priced dossier activities (Opslag/Kraan) of the customer that have no invoice line yet. */
+export function listUninvoicedActivities(customerId: string): Promise<UninvoicedActivity[]> {
+  return apiClient.getJson<UninvoicedActivity[]>(`/api/invoices/uninvoiced-activities?customerId=${customerId}`)
 }
 
 export interface NextInvoiceNumberParams {
@@ -71,6 +77,8 @@ export interface CreateInvoiceInput {
   customerId: string
   invoiceDate: string | null
   orderIds: string[]
+  /** Dossier activities to invoice next to the orders; omitted = none. */
+  dossierActivityIds?: string[]
   manualLines: ManualLineInput[]
   notes: string | null
   purchaseOrderNumber?: string | null

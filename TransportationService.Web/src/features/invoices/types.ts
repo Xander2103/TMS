@@ -47,6 +47,9 @@ export interface InvoiceLine {
   sequence: number
   transportOrderId: string | null
   orderNumber: string | null
+  /** Activity-backed line (Opslag/Kraan uit een dossier): transportOrderId is null, this is set. */
+  dossierActivityId: string | null
+  dossierNumber: string | null
   description: string
   quantity: number
   unitPrice: number
@@ -122,6 +125,24 @@ export interface UninvoicedOrder {
   invoiceReadiness?: string
   /** Puntkomma-gescheiden redencodes bij ReviewRequired (bv. pricing.stale;pod.missing). */
   invoiceReadinessReasons?: string | null
+}
+
+/** Mirrors UninvoicedActivityDto (GET /api/invoices/uninvoiced-activities): a priced dossier activity without an invoice line. */
+export interface UninvoicedActivity {
+  id: string
+  dossierId: string
+  dossierNumber: string
+  dossierTitle: string | null
+  activityTypeName: string
+  label: string | null
+  /** Kalenderdatum (YYYY-MM-DD) zonder tijd. */
+  plannedDate: string | null
+  agreedPrice: number
+  /** Explicitly agreed at no charge: still invoiceable as a € 0,00 line. */
+  isFree: boolean
+  pricingSource: 'OneOff' | 'Lines'
+  priceLineCount: number
+  legalEntityId: string | null
 }
 
 export interface ManualLineInput {

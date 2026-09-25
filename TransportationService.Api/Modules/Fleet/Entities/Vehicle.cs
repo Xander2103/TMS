@@ -99,6 +99,12 @@ public class Vehicle : AuditableTenantEntity
     public bool HasCrane { get; set; }
     public bool HasRefrigeration { get; set; }
     public bool HasTailLift { get; set; }
+
+    /// <summary>
+    /// D4: maximum load of the tail lift in kg. Only meaningful when <see cref="HasTailLift"/>;
+    /// null = unknown, so the planning capacity check reports "nog te controleren" (never "safe").
+    /// </summary>
+    public decimal? TailLiftCapacityKg { get; set; }
     public bool AdrSuitable { get; set; }
 
     public VehicleOwnershipType OwnershipType { get; set; } = VehicleOwnershipType.Owned;

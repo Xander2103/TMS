@@ -13,6 +13,9 @@ import { useLookupOptions } from '../../master-data/hooks/useLookupOptions'
 import type { TransportOrderDetail, TransportOrderInput } from '../types'
 import { GeneralSection } from './sections/GeneralSection'
 import { RouteSection } from './sections/RouteSection'
+import { CraneJobKindField, OnSiteWorkFields } from './sections/CraneJobFields'
+import { kindSwitchDropsData, switchStopsToKind } from './sections/craneJobStops'
+import { applyStopPatch } from '../utils/plannedEnd'
 import { GoodsSection } from './sections/GoodsSection'
 import { ServicesSection } from './sections/ServicesSection'
 import { PriceSection } from './sections/PriceSection'
@@ -25,6 +28,7 @@ import {
   cargoFromOrder,
   cargoRowFromHeader,
   computeCargoSummary,
+  duplicateCargoRowInList,
   emptyCargoRow,
   emptyStop,
   fieldErrorMap,
@@ -33,8 +37,10 @@ import {
   serviceNotesFromOrder,
   servicePalletsFromOrder,
   serviceQuantitiesFromOrder,
+  craneJobFromOrder,
   stopsFromOrder,
   validateOrderForm,
+  type CraneJobFormValues,
   type CargoFormRow,
   type OrderFormValidationError,
   type OrderFormValues,
@@ -127,6 +133,13 @@ export function TransportOrderForm({ mode, order, onSubmit, onCancel, submitLabe
   // A1a: the goods lines address their stops by POSITION, so every stop mutation renumbers those
   // links in the same step. N-1: the hook also guarantees two mutations in one tick both apply.
   const mutateStops = useStopMutation(stops, setStops, setCargoItems)
+  // D2: kind of crane job + on-site work. Owned by this form only when the order's activity type
+  // allows on-site work (capability flag) or the order already IS an on-site job; otherwise the
+  // fields are not submitted and the server keeps them as stored.
+  const [craneJob, setCraneJob] = useState<CraneJobFormValues>(() => craneJobFromOrder(order))
+  const [pendingCraneKind, setPendingCraneKind] = useState<CraneJobFormValues['kind'] | null>(null)
+  const onSite = craneJob.kind === 'OnSiteLifting'
+  const ownsCraneJob = Boolean(order?.activitySupportsOnSiteWork) || onSite
 
   const [formError, setFormError] = useState<string | null>(null)
   const [clientErrors, setClientErrors] = useState<OrderFormValidationError[]>([])
@@ -233,6 +246,7 @@ export function TransportOrderForm({ mode, order, onSubmit, onCancel, submitLabe
     extraTimeRoundingStepMinutes, extraTimeMinimumBillableMinutes,
     // Wave 1 §10: echo the loaded order's concurrency token on update.
     version: order?.version,
+    craneJob: ownsCraneJob ? craneJob : undefined,
   }
   const errors = fieldErrorMap(clientErrors)
 
@@ -254,7 +268,24 @@ export function TransportOrderForm({ mode, order, onSubmit, onCancel, submitLabe
   // Every write to the stop list — including a single-field patch — goes through the one mutation
   // path, so nothing can start from a stale list when two writes land in the same tick (N-1).
   function setStop(key: string, patch: Partial<StopFormRow>) {
-    mutateStops((rows) => rows.map((row) => (row.key === key ? { ...row, ...patch } : row)))
+    // A site stop keeps a predictable end: start + the activity's planned duration until typed.
+    mutateStops((rows) =>
+      rows.map((row) => (row.key === key ? applyStopPatch(row, patch, order?.activityDurationHours ?? null) : row)),
+    )
+  }
+
+  /** "Soort kraanopdracht": the kinds have disjoint stop sets; dropping filled stops asks first. */
+  function applyCraneKind(kind: CraneJobFormValues['kind']) {
+    mutateStops((rows) => switchStopsToKind(rows, kind === 'OnSiteLifting', emptyStop))
+    setCraneJob((job) => ({ ...job, kind }))
+    setClientErrors([])
+  }
+
+  function requestCraneKind(kind: CraneJobFormValues['kind']) {
+    const toSite = kind === 'OnSiteLifting'
+    if (toSite === onSite) return
+    if (kindSwitchDropsData(stops, toSite)) setPendingCraneKind(kind)
+    else applyCraneKind(kind)
   }
 
   function setCargo(key: string, patch: Partial<CargoFormRow>) {
@@ -337,8 +368,12 @@ export function TransportOrderForm({ mode, order, onSubmit, onCancel, submitLabe
       id: 'route',
       label: t('transportOrders.form.sections.route'),
       render: () => (
+        <>
+        {ownsCraneJob && <CraneJobKindField idPrefix="tof" kind={craneJob.kind} onChange={requestCraneKind} disabled={saving} />}
         <RouteSection
           {...{ stops, customerId, saving, locationHours, errors, setStop, moveStop }}
+          canSaveToAddressBook={canCreateLocations && Boolean(customerId)}
+          siteDurationHours={order?.activityDurationHours ?? null}
           onAddStop={(stopType) => mutateStops((rows) => [...rows, emptyStop(stopType)])}
           onRemoveStop={(key) => mutateStops((rows) => rows.filter((row) => row.key !== key))}
           onRequestRefresh={setRefreshTarget}
@@ -348,6 +383,16 @@ export function TransportOrderForm({ mode, order, onSubmit, onCancel, submitLabe
               : undefined
           }
         />
+        {onSite && (
+          <OnSiteWorkFields
+            idPrefix="tof"
+            job={craneJob}
+            onChange={(patch) => setCraneJob((job) => ({ ...job, ...patch }))}
+            disabled={saving}
+            descriptionError={errors.workDescription}
+          />
+        )}
+        </>
       ),
     },
     {
@@ -372,6 +417,7 @@ export function TransportOrderForm({ mode, order, onSubmit, onCancel, submitLabe
               cargoRowFromHeader({ quantity, quantityUnit, quantityUnitCode, weightKg, volumeM3, palletCount }),
             ])
           }
+          onDuplicateCargoRow={(key) => setCargoItems((rows) => duplicateCargoRowInList(rows, key))}
           onRemoveCargoRow={(key) => setCargoItems((rows) => rows.filter((row) => row.key !== key))}
         />
       ),
@@ -490,10 +536,25 @@ export function TransportOrderForm({ mode, order, onSubmit, onCancel, submitLabe
           message={t('transportOrders.form.refreshMessage')}
           confirmLabel={t('transportOrders.form.refreshConfirm')}
           onConfirm={() => {
-            setStop(refreshTarget, { refreshSnapshot: true })
+            // The re-copy also ends a deliberate deviation from the address book (D3).
+            setStop(refreshTarget, { refreshSnapshot: true, addressOverridden: false })
             setRefreshTarget(null)
           }}
           onCancel={() => setRefreshTarget(null)}
+        />
+      )}
+
+      {pendingCraneKind && (
+        <ConfirmDialog
+          title={t('stopEditor.crane.switchTitle')}
+          message={t('stopEditor.crane.switchMessage')}
+          confirmLabel={t('stopEditor.crane.switchConfirm')}
+          destructive
+          onConfirm={() => {
+            applyCraneKind(pendingCraneKind)
+            setPendingCraneKind(null)
+          }}
+          onCancel={() => setPendingCraneKind(null)}
         />
       )}
     </form>

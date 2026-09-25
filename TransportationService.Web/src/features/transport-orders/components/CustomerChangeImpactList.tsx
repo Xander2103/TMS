@@ -51,6 +51,9 @@ export function CustomerChangeImpactList({ impact, compact = false }: CustomerCh
       {impact.draftInvoiceLinesReleased > 0 && (
         <li className="to-impact-warning">{t(`${k}draftReleased`, { count: impact.draftInvoiceLinesReleased })}</li>
       )}
+      {impact.documentsPublicationWithdrawn > 0 && (
+        <li className="to-impact-warning">{t(`${k}publicationWithdrawn`, { count: impact.documentsPublicationWithdrawn })}</li>
+      )}
       {!compact && (
         <>
           <li>{impact.legalEntityChanges ? t(`${k}entityChanges`) : t(`${k}entitySame`)}</li>

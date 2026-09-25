@@ -33,6 +33,8 @@ public enum PlanningConflictCode
     DriverLicenceInsufficient,
     /// <summary>The vehicle's tachograph calibration is overdue.</summary>
     TachographOverdue,
+    /// <summary>D4: the heaviest single cargo unit exceeds the vehicle's tail-lift capacity (always a warning).</summary>
+    TailLiftCapacityExceeded,
 }
 
 /// <summary>
@@ -92,7 +94,9 @@ public record TripListItemDto(
     Guid? TrailerId,
     string? TrailerNumber,
     int OrderCount,
-    int BlockingConflictCount);
+    int BlockingConflictCount,
+    /// <summary>D1: Suggested | Manual; null = legacy/no vehicle (treat as Manual).</summary>
+    VehicleSelectionSource? VehicleSelectionSource = null);
 
 public record TripDetailDto(
     Guid Id,
@@ -117,7 +121,13 @@ public record TripDetailDto(
     IReadOnlyList<PlanningConflictDto> Conflicts,
     IReadOnlyList<TripStatus> AllowedTransitions,
     Guid Version,
-    IReadOnlyList<ConflictOverrideDto> Overrides);
+    IReadOnlyList<ConflictOverrideDto> Overrides,
+    /// <summary>
+    /// D1: how the vehicle was chosen — <c>Suggested</c> (the driver's fixed vehicle, proposed by the
+    /// server; a driver change may replace it) or <c>Manual</c> (never replaced automatically).
+    /// Null = legacy/no vehicle → treat as Manual.
+    /// </summary>
+    VehicleSelectionSource? VehicleSelectionSource = null);
 
 public record CreateTripRequest(
     DateOnly TripDate,
@@ -129,7 +139,12 @@ public record CreateTripRequest(
     string? Notes,
     IReadOnlyList<Guid> OrderIds,
     decimal? PlannedDistanceKm = null,
-    decimal? PlannedEmptyKm = null);
+    decimal? PlannedEmptyKm = null,
+    /// <summary>
+    /// D1: origin of <c>VehicleId</c>; omitted = Manual. Without a <c>VehicleId</c> the server
+    /// proposes the driver's fixed vehicle (then Suggested).
+    /// </summary>
+    VehicleSelectionSource? VehicleSelectionSource = null);
 
 public record UpdateTripRequest(
     DateOnly TripDate,
@@ -142,7 +157,9 @@ public record UpdateTripRequest(
     IReadOnlyList<Guid> OrderIds,
     decimal? PlannedDistanceKm = null,
     decimal? PlannedEmptyKm = null,
-    Guid? Version = null);
+    Guid? Version = null,
+    /// <summary>D1: origin of <c>VehicleId</c> when it CHANGES; omitted = Manual. An unchanged vehicle keeps its source.</summary>
+    VehicleSelectionSource? VehicleSelectionSource = null);
 
 public record ChangeTripStatusRequest(
     TripStatus Status, bool Override = false, bool ReleaseOverride = false, string? OverrideReason = null,

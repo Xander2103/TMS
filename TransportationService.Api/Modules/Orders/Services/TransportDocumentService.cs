@@ -16,7 +16,9 @@ public record CustomerDayDocumentRowDto(
 public record CustomerDayDocumentsPreviewDto(
     DateOnly Date, int TotalOrders, int OwnDeliveryNotes, int OwnCmrs,
     int CustomerDocuments, int NoneRequired, int Undecided,
-    IReadOnlyList<CustomerDayDocumentRowDto> Rows);
+    IReadOnlyList<CustomerDayDocumentRowDto> Rows,
+    /// <summary>D2: own work orders (werkbonnen) for on-site work.</summary>
+    int OwnWorkOrders = 0);
 
 /// <summary>The resolved document decision for one order, as shown in the UI.</summary>
 public record OrderDocumentStrategyDto(
@@ -27,6 +29,14 @@ public interface ITransportDocumentService
 {
     /// <summary>Null when the order does not exist in the tenant.</summary>
     Task<(byte[] Content, string FileName)?> RenderAsync(Guid orderId, string kind, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// D6: the same document through the same renderer, with the reference block of an ISSUED
+    /// document (own number, dossier, external number). The snapshot is returned next to the bytes
+    /// so callers and tests can see exactly what was printed. Null = unknown order.
+    /// </summary>
+    Task<(byte[] Content, TransportDocumentSnapshot Snapshot)?> RenderIssuedAsync(
+        Guid orderId, string kind, TransportDocumentReference reference, CancellationToken cancellationToken);
 
     /// <summary>Merged batch for every order on the trip (route order); null = unknown trip.
     /// Orders whose document strategy says "customer document" or "no document" are excluded.</summary>
@@ -72,8 +82,26 @@ public class TransportDocumentService : ITransportDocumentService
             return null;
         }
 
-        var prefix = snapshot.Kind == "Cmr" ? "cmr" : "leveringsbon";
+        var prefix = snapshot.Kind switch
+        {
+            "Cmr" => "cmr",
+            DocumentStrategyResolver.KindWorkOrder => "werkbon",
+            _ => "leveringsbon",
+        };
         return (TransportDocumentRenderer.Render(snapshot), $"{prefix}-{snapshot.OrderNumber}.pdf");
+    }
+
+    public async Task<(byte[] Content, TransportDocumentSnapshot Snapshot)?> RenderIssuedAsync(
+        Guid orderId, string kind, TransportDocumentReference reference, CancellationToken cancellationToken)
+    {
+        var snapshot = await BuildSnapshotAsync(orderId, NormalizeKind(kind), cancellationToken);
+        if (snapshot is null)
+        {
+            return null;
+        }
+
+        snapshot = snapshot with { Reference = reference };
+        return (TransportDocumentRenderer.Render(snapshot), snapshot);
     }
 
     public async Task<(byte[] Content, string FileName)?> RenderTripBatchAsync(
@@ -100,13 +128,20 @@ public class TransportDocumentService : ITransportDocumentService
                 continue;
             }
 
+            // D2: on-site work gets a work order and nothing else — it never rides along in a
+            // delivery-note/CMR run, and a work-order run prints only on-site work.
+            if ((decision.Kind == DocumentStrategyResolver.KindWorkOrder) != (normalized == DocumentStrategyResolver.KindWorkOrder))
+            {
+                continue;
+            }
+
             if (await BuildSnapshotAsync(tripOrder.TransportOrderId, normalized, cancellationToken) is { } snapshot)
             {
                 snapshots.Add(snapshot);
             }
         }
 
-        var prefix = normalized == "Cmr" ? "cmr" : "leveringsbonnen";
+        var prefix = BatchPrefix(normalized);
         return (TransportDocumentRenderer.RenderBatch(snapshots), $"{prefix}-{trip.TripNumber}.pdf");
     }
 
@@ -149,7 +184,8 @@ public class TransportDocumentService : ITransportDocumentService
             var decision = await ResolveAsync(order, customer.DocumentStrategy, cancellationToken);
             rows.Add(new CustomerDayDocumentRowDto(
                 order.Id, order.OrderNumber,
-                order.Stops.Where(s => !s.IsDeleted && s.StopType == StopType.Unloading)
+                // D2: on-site work has no unloading stop; its site is where the work is delivered.
+                order.Stops.Where(s => !s.IsDeleted && s.StopType is StopType.Unloading or StopType.Site)
                     .OrderBy(s => s.Sequence).Select(s => s.City).LastOrDefault(),
                 decision.Kind, decision.Source, decision.Reason,
                 decision.UsesCustomerDocument, decision.NoneRequired, decision.Undecided));
@@ -162,7 +198,8 @@ public class TransportDocumentService : ITransportDocumentService
             rows.Count(r => r.UsesCustomerDocument),
             rows.Count(r => r.NoneRequired),
             rows.Count(r => r.Undecided),
-            rows);
+            rows,
+            OwnWorkOrders: rows.Count(r => r.Kind == DocumentStrategyResolver.KindWorkOrder && !r.UsesCustomerDocument && !r.NoneRequired && !r.Undecided));
     }
 
     public async Task<(byte[] Content, string FileName)?> RenderCustomerDayBatchAsync(
@@ -198,7 +235,7 @@ public class TransportDocumentService : ITransportDocumentService
             }
         }
 
-        var prefix = normalized == "Cmr" ? "cmr" : "leveringsbonnen";
+        var prefix = BatchPrefix(normalized);
         var safeName = customer.CustomerNumber ?? customer.Id.ToString("N")[..8];
         return (TransportDocumentRenderer.RenderBatch(snapshots), $"{prefix}-{safeName}-{date:yyyyMMdd}.pdf");
     }
@@ -241,9 +278,11 @@ public class TransportDocumentService : ITransportDocumentService
                     return tripDate == date;
                 }
 
-                var requested = o.Stops.Where(s => !s.IsDeleted && s.StopType == StopType.Unloading)
+                // D2: an on-site order's "delivery" is its site stop (planned start when the
+                // customer requested no window).
+                var requested = o.Stops.Where(s => !s.IsDeleted && s.StopType is StopType.Unloading or StopType.Site)
                     .OrderBy(s => s.Sequence)
-                    .Select(s => s.RequestedFrom ?? s.RequestedTo)
+                    .Select(s => s.RequestedFrom ?? s.RequestedTo ?? (s.StopType == StopType.Site ? s.PlannedFrom : null))
                     .LastOrDefault(d => d is not null);
                 return requested is { } r ? TenantTimeZone.ToLocalDate(r, zone) == date : o.OrderDate == date;
             })
@@ -293,11 +332,23 @@ public class TransportDocumentService : ITransportDocumentService
             .ToListAsync(cancellationToken);
 
         return DocumentStrategyResolver.Resolve(
-            order.DocumentPreference, customerStrategy, crossBorder, order.AdrRequired, activityTypeId, rules);
+            order.DocumentPreference, customerStrategy, crossBorder, order.AdrRequired, activityTypeId, rules,
+            onSiteWork: CraneJobRules.IsOnSiteWork(order.CraneJobKind));
     }
 
     private static string NormalizeKind(string kind) =>
-        string.Equals(kind, "cmr", StringComparison.OrdinalIgnoreCase) ? "Cmr" : "DeliveryNote";
+        string.Equals(kind, "cmr", StringComparison.OrdinalIgnoreCase) ? "Cmr"
+        : string.Equals(kind, "work-order", StringComparison.OrdinalIgnoreCase)
+          || string.Equals(kind, DocumentStrategyResolver.KindWorkOrder, StringComparison.OrdinalIgnoreCase)
+            ? DocumentStrategyResolver.KindWorkOrder
+            : "DeliveryNote";
+
+    private static string BatchPrefix(string normalizedKind) => normalizedKind switch
+    {
+        "Cmr" => "cmr",
+        DocumentStrategyResolver.KindWorkOrder => "werkbonnen",
+        _ => "leveringsbonnen",
+    };
 
     private async Task<TransportDocumentSnapshot?> BuildSnapshotAsync(
         Guid orderId, string kind, CancellationToken cancellationToken)
@@ -325,14 +376,23 @@ public class TransportDocumentService : ITransportDocumentService
             .Where(c => c.TenantId == tenantId && c.TransportOrderId == orderId && !c.IsDeleted)
             .OrderBy(c => c.Sequence)
             .ToListAsync(cancellationToken);
-        var lines = cargo.Count > 0
+        // D2: on-site work carries no goods, so the legacy "1 × Goederen" fallback line would be
+        // invented data there — its document lists goods only when real goods lines exist.
+        var onSiteWork = CraneJobRules.IsOnSiteWork(order.CraneJobKind);
+        List<TransportDocumentLine> lines = cargo.Count > 0
             ? cargo.Select(c => new TransportDocumentLine(
                     string.IsNullOrWhiteSpace(c.Description) ? "Goederen" : c.Description!,
                     c.ExpectedQuantity, c.QuantityUnitCode ?? c.QuantityUnit, c.TotalWeightKg))
                 .ToList()
-            : [new TransportDocumentLine(
-                order.GoodsDescription ?? "Goederen", order.Quantity ?? 1m,
-                order.QuantityUnitCode ?? order.QuantityUnit, order.WeightKg)];
+            : onSiteWork || kind == DocumentStrategyResolver.KindWorkOrder
+                ? []
+                : [new TransportDocumentLine(
+                    order.GoodsDescription ?? "Goederen", order.Quantity ?? 1m,
+                    order.QuantityUnitCode ?? order.QuantityUnit, order.WeightKg)];
+
+        var workOrder = kind == DocumentStrategyResolver.KindWorkOrder
+            ? await BuildWorkOrderAsync(order, cancellationToken)
+            : null;
 
         static string? Address(string? street, string? number, string? postal, string? city) =>
             string.Join(" ", new[] { street, number, postal, city }.Where(p => !string.IsNullOrWhiteSpace(p))) is { Length: > 0 } joined
@@ -351,7 +411,12 @@ public class TransportDocumentService : ITransportDocumentService
                 customer?.VatNumber),
             order.Stops.Where(s => !s.IsDeleted).OrderBy(s => s.Sequence)
                 .Select(s => new TransportDocumentStop(
-                    s.StopType == StopType.Loading ? "Laden" : "Lossen",
+                    s.StopType switch
+                    {
+                        StopType.Loading => "Laden",
+                        StopType.Site => "Werf",
+                        _ => "Lossen",
+                    },
                     s.LocationName ?? s.City,
                     Address(s.Address, null, s.PostalCode, s.City),
                     s.Reference))
@@ -359,6 +424,40 @@ public class TransportDocumentService : ITransportDocumentService
             lines,
             order.WeightKg ?? (cargo.Count > 0 ? cargo.Sum(c => c.TotalWeightKg ?? 0m) : null),
             order.CustomerReference,
-            order.Notes);
+            order.Notes,
+            workOrder);
+    }
+
+    /// <summary>
+    /// D2: the work-order block — work description, planned start/end of the (first) site stop in
+    /// tenant wall-clock time, the activity's planned duration and the lift data as entered.
+    /// Nothing is derived that was not stored: an empty field stays empty on the document.
+    /// </summary>
+    private async Task<TransportDocumentWorkOrder> BuildWorkOrderAsync(TransportOrder order, CancellationToken cancellationToken)
+    {
+        var tenantId = _tenantContext.TenantId;
+        var site = order.Stops.Where(s => !s.IsDeleted && s.StopType == StopType.Site)
+            .OrderBy(s => s.Sequence)
+            .FirstOrDefault();
+        var durationHours = await _dbContext.DossierActivities.AsNoTracking()
+            .Where(a => a.TenantId == tenantId && a.LinkedTransportOrderId == order.Id)
+            .OrderBy(a => a.Sequence)
+            .Select(a => a.DurationHours)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        DateTime? plannedStart = null;
+        DateTime? plannedEnd = null;
+        if (site?.PlannedFrom is not null || site?.PlannedTo is not null)
+        {
+            // Planned times are UTC instants; a printed work order shows the tenant's wall clock.
+            var zone = await TenantTimeZone.ForTenantAsync(_dbContext, tenantId, cancellationToken);
+            plannedStart = site.PlannedFrom is { } from ? TenantTimeZone.ToWallClock(from, zone) : null;
+            plannedEnd = site.PlannedTo is { } to ? TenantTimeZone.ToWallClock(to, zone) : null;
+        }
+
+        return new TransportDocumentWorkOrder(
+            order.WorkDescription, plannedStart, plannedEnd, durationHours,
+            order.LiftLoadWeightKg, order.LiftLoadDimensions, order.LiftRadiusMeters, order.LiftHeightMeters,
+            order.LiftConditions, order.LiftEquipment);
     }
 }

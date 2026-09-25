@@ -1,0 +1,33 @@
+{
+  "title": "Notes",
+  "activityTitle": "Notes on this activity",
+  "add": "+ Add note",
+  "loading": "Loading notes...",
+  "loadFailed": "The notes could not be loaded.",
+  "retry": "Try again",
+  "legacyTitle": "Previously entered note (read-only)",
+  "newLabel": "New note",
+  "editLabel": "Edit note",
+  "empty": "No notes.",
+  "showAll": "Show all notes ({total})",
+  "showLess": "Show less",
+  "more": "Show more",
+  "less": "Show less",
+  "saveFailed": "The note could not be saved.",
+  "deleteFailed": "The note could not be deleted.",
+  "added": "Note added.",
+  "updated": "Note updated.",
+  "deleted": "Note deleted.",
+  "deleteTitle": "Delete note",
+  "deleteMessage": "Are you sure you want to delete this note? This cannot be undone.",
+  "unknownAuthor": "Unknown author",
+  "edited": "edited on {date}",
+  "counter": "{used} / {max} characters",
+  "shortcutHint": "Ctrl+Enter to save",
+  "unsavedInDrawer": "You have a note that has not been saved yet. Save or cancel the note first.",
+  "preview": {
+    "count_one": "{count} note",
+    "count_other": "{count} notes",
+    "open": "Open notes"
+  }
+}

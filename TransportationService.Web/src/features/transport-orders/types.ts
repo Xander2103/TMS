@@ -1,7 +1,10 @@
 import type { PackageUnitType } from '../packages/types'
 
 export type TransportOrderStatus = 'Draft' | 'Submitted' | 'Confirmed' | 'Planned' | 'InProgress' | 'Completed' | 'Invoiced' | 'Cancelled'
-export type StopType = 'Loading' | 'Unloading'
+/** 'Site' (D2) = the one work-site stop of an on-site lifting job; it has no loading/unloading counterpart. */
+export type StopType = 'Loading' | 'Unloading' | 'Site'
+/** D2: kind of crane job. OnSiteLifting = hijswerk op locatie (one site stop, no goods, no load/unload stops). */
+export type CraneJobKind = 'None' | 'TransportWithCrane' | 'OnSiteLifting'
 
 /** Vertaalsleutels per status — renderen als t(ORDER_STATUS_LABELS[status]). */
 export const ORDER_STATUS_LABELS: Record<TransportOrderStatus, string> = {
@@ -44,6 +47,7 @@ export const ORDER_TRANSITION_LABELS: Record<TransportOrderStatus, string> = {
 export const STOP_TYPE_LABELS: Record<StopType, string> = {
   Loading: 'transportOrders.stopType.Loading',
   Unloading: 'transportOrders.stopType.Unloading',
+  Site: 'stopEditor.stopType.Site',
 }
 
 export type OrderPriority = 'Low' | 'Normal' | 'High' | 'Urgent'
@@ -80,6 +84,10 @@ export interface TransportOrderListItem {
   adrRequired: boolean
   craneRequired: boolean
   priority: OrderPriority
+  /** D2 (absent on older payloads = None). */
+  craneJobKind?: CraneJobKind
+  /** D2: city of the first site stop — the "route" of an on-site job, which has no loading/unloading cities. */
+  firstSiteCity?: string | null
 }
 
 export interface TransportOrderStop {
@@ -131,10 +139,20 @@ export interface TransportOrderStop {
   snapshotAt?: string | null
   /** Advisory opening-hours warnings (live location hours vs planned times); never blocking. */
   warnings?: string[] | null
+  /** D2 (site stops): true = the end was entered by hand and is never recomputed from start + duration. */
+  plannedToIsManual?: boolean
+  /** D3: the stop's address deviates from its address-book record — for this dossier only. */
+  addressOverridden?: boolean
 }
 
 /** Wave 2026-08-04 §15. */
 export type StopTimeRequirementKind = 'None' | 'Before' | 'After' | 'Window'
+
+/**
+ * D4: how a goods line is covered commercially — DERIVED by the backend, never computed here.
+ * SeparatelyPriced = linked to a sales line; Included = covered by the trip/activity price.
+ */
+export type CargoCommercialCoverage = 'SeparatelyPriced' | 'Included' | 'ToReview'
 
 export interface CargoItem {
   id: string
@@ -162,6 +180,8 @@ export interface CargoItem {
   unloadingStopId: string | null
   /** Optional per-line pallet count; a commercial detail, independent of scanable colli. */
   palletCount: number | null
+  /** Absent on older payloads → unknown, nothing is rendered. */
+  commercialCoverage?: CargoCommercialCoverage | null
 }
 
 export interface CargoItemInput {
@@ -263,6 +283,21 @@ export interface TransportOrderDetail {
   /** Containing dossier (wrapper or user-created); the detail header links to it. */
   dossierId?: string | null
   dossierNumber?: string | null
+  // --- D2: crane job (absent on older payloads = None) ---
+  craneJobKind?: CraneJobKind
+  /** What has to be done on site; mandatory for OnSiteLifting. */
+  workDescription?: string | null
+  /** Lift data: the load to LIFT — never a goods line. */
+  liftLoadWeightKg?: number | null
+  liftLoadDimensions?: string | null
+  liftRadiusMeters?: number | null
+  liftHeightMeters?: number | null
+  liftConditions?: string | null
+  liftEquipment?: string | null
+  /** Read-only: planned duration of the linked dossier activity (drives the site stop's automatic end). */
+  activityDurationHours?: number | null
+  /** Read-only: the linked activity's type allows on-site work (the crane-job choice is offered). */
+  activitySupportsOnSiteWork?: boolean
 }
 
 /** Manual-editing lifecycle of a pricing line (spec ch. 24-26). */
@@ -345,6 +380,8 @@ export interface OrderPricingLine {
   unit?: string | null
   /** Frozen identity of the service option, for merge-matching (see lineKey too). */
   serviceOptionId?: string | null
+  /** D4: goods lines this sales line is linked to; null/absent = none (the whole trip/activity). */
+  cargoItemIds?: string[] | null
 }
 
 /** Badge KEY for a pricing line: an Auto line tied to a service option reads as DIENST rather than AUTO. */
@@ -462,6 +499,12 @@ export interface StopInput {
   id?: string | null
   /** True = deliberately re-copy the CURRENT master-location data onto this stop (audited). */
   refreshSnapshot?: boolean
+  /** D2 (site stops only): true = plannedTo is the planner's own value; false = server sets start + duration. */
+  plannedToIsManual?: boolean
+  /** D3: the address fields deviate from the linked address-book record — kept for this dossier only. */
+  addressOverridden?: boolean
+  /** D3 (write-only): create/link this address in the customer's address book when the order is saved. */
+  saveToAddressBook?: boolean
 }
 
 /** Dispatcher-side execution planning of one stop (separate endpoint, editable after planning). */
@@ -544,4 +587,16 @@ export interface TransportOrderInput {
   activityTypeId?: string | null
   /** One-page intake: DurationHours for the wrapper activity (AllowsDuration types only, >= 0). */
   activityDurationHours?: number | null
+  /**
+   * D2: kind of crane job. OMITTED = unchanged on update / None on create — an editor that does
+   * not own these fields never sends them, so it can never wipe the description or lift data.
+   */
+  craneJobKind?: CraneJobKind
+  workDescription?: string | null
+  liftLoadWeightKg?: number | null
+  liftLoadDimensions?: string | null
+  liftRadiusMeters?: number | null
+  liftHeightMeters?: number | null
+  liftConditions?: string | null
+  liftEquipment?: string | null
 }

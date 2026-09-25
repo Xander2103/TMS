@@ -157,7 +157,7 @@ public class DossierReadinessTests
         Assert.Equal("prijs", price.Section);
         Assert.Equal("price", price.Field);
         Assert.Equal("Commercial", price.Stage);
-        Assert.Equal("ORD-0001: nog geen verkoopprijs.", price.Message);
+        Assert.Equal("ORD-0001: verkoopprijs ontbreekt.", price.Message);
     }
 
     [Fact]

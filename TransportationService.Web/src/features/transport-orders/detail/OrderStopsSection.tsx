@@ -40,6 +40,12 @@ export function OrderStopsSection() {
         <h2>
           Stops <span className="tod-card-meta">{order.stops.length} {order.stops.length === 1 ? 'stop' : 'stops'}</span>
         </h2>
+        {/* D2: an on-site lifting job is its work site + the work to do there — shown with the stop. */}
+        {order.craneJobKind === 'OnSiteLifting' && (
+          <p className="tod-muted">
+            <strong>{t('stopEditor.crane.workDescription')}:</strong> {order.workDescription || '—'}
+          </p>
+        )}
         {order.stops.length === 0 && <p className="tod-muted">Nog geen stops ingevuld. Bewerk de opdracht om de route toe te voegen.</p>}
         {order.stops.length > 0 && (
           <div className="tod-table-wrap">
@@ -65,7 +71,10 @@ export function OrderStopsSection() {
                     <tr>
                       <td>{stop.sequence}</td>
                       <td>
-                        <Badge tone={stop.stopType === 'Loading' ? 'info' : 'success'}>{t(STOP_TYPE_LABELS[stop.stopType])}</Badge>
+                        {/* D2: a work-site stop of an on-site lifting job reads "Werf" — never a loading/unloading stop. */}
+                        <Badge tone={stop.stopType === 'Loading' ? 'info' : stop.stopType === 'Site' ? 'warning' : 'success'}>
+                          {t(STOP_TYPE_LABELS[stop.stopType])}
+                        </Badge>
                       </td>
                       <td title={stop.instructions ?? undefined}>
                         {(stop.warnings?.length ?? 0) > 0 && (

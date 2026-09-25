@@ -185,7 +185,8 @@ public class TripPlanningSyncService : ITripPlanningSyncService
             .ToList();
 
         var firstLoading = ordered.FirstOrDefault(s => s.StopType == StopType.Loading && !string.IsNullOrWhiteSpace(s.City))?.City;
-        var lastUnloading = ordered.LastOrDefault(s => s.StopType == StopType.Unloading && !string.IsNullOrWhiteSpace(s.City))?.City;
+        // D2: on-site work has no unloading stop — its site is the destination shown.
+        var lastUnloading = ordered.LastOrDefault(s => s.StopType is StopType.Unloading or StopType.Site && !string.IsNullOrWhiteSpace(s.City))?.City;
 
         return (firstLoading, lastUnloading) switch
         {

@@ -29,6 +29,7 @@ const orderImpact = (orderNumber: string, blockedReason: string | null = null) =
   automaticLinesInvalidated: 1, manualLinesKept: 0, adjustedLinesFlaggedForReview: 0, needsPricingReview: false,
   newLegalEntityId: 'ent-b', legalEntityChanges: true, newInvoiceLanguage: 'fr', newVatTreatment: 'ReverseCharge',
   stopsKept: 2, goodsKept: 1, documentsKept: 0, draftInvoiceLinesReleased: 0, owningDossierId: 'dos-1', owningDossierNumber: 'D-1',
+  documentsPublicationWithdrawn: 0,
 })
 
 function impact(overrides: Partial<DossierCustomerChangeImpact> = {}): DossierCustomerChangeImpact {
@@ -37,6 +38,7 @@ function impact(overrides: Partial<DossierCustomerChangeImpact> = {}): DossierCu
     newCustomerId: 'cust-real', newCustomerName: 'Client SA', blockedReason: null,
     newLegalEntityId: 'ent-b', newInvoiceLanguage: 'fr', newVatTreatment: 'ReverseCharge',
     orders: [orderImpact('ORD-1'), orderImpact('ORD-2')], ordersLeftOnOtherCustomer: ['ORD-3'],
+    documentsPublicationWithdrawn: 0,
     ...overrides,
   }
 }

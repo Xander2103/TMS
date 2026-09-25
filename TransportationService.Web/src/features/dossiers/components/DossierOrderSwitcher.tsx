@@ -18,10 +18,14 @@ interface DossierOrderSwitcherProps {
 /**
  * Hardening 2026-09-10: a dossier can hold several transport orders, and the inline route /
  * price editors must never silently work on "the first one". When more than one target exists
- * this segmented control makes it explicit; both sections render it with the same selection.
- * Rendered as a toolbar of toggle buttons (aria-pressed) so screen readers announce the current
- * target. Stap 13: a standalone billable activity is labelled by its type name (it has no order
- * number) with the free label as its secondary line.
+ * this segmented control makes it explicit. Rendered as a toolbar of toggle buttons
+ * (aria-pressed) so screen readers announce the current target. Stap 13: a standalone billable
+ * activity is labelled by its type name (it has no order number) with the free label as its
+ * secondary line.
+ *
+ * Master sprint 2026-09-21: the ROUTE keeps this switcher (hidden with a single target). The price
+ * tab has its own always-visible `ActivityPricePicker` (price + status per activity) on the same
+ * workspace selection — pricing a lone "Plateau" must not depend on a second activity existing.
  */
 export function DossierOrderSwitcher({ activities, selectedActivityId, onSelect, locked, label }: DossierOrderSwitcherProps) {
   const { t } = useLocale()

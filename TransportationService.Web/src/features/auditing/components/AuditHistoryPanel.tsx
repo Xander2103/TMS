@@ -25,7 +25,11 @@ interface AuditLogPage {
   pageSize: number
 }
 
-/** Translation keys per audit action; unknown actions render their raw code. */
+/**
+ * Translation keys per audit action. Unknown actions fall back to the entity's own catalogue
+ * (`dossiers.history.<action>` for a dossier — ConfirmedManually, Reopened, OrderLinked, …) and
+ * finally to their raw code.
+ */
 const ACTION_LABELS: Record<string, string> = {
   Created: 'auditing.action.Created',
   Updated: 'auditing.action.Updated',
@@ -37,6 +41,23 @@ const ACTION_LABELS: Record<string, string> = {
   Cancelled: 'auditing.action.Cancelled',
   StatusChanged: 'auditing.action.StatusChanged',
   AssignmentChanged: 'auditing.action.AssignmentChanged',
+}
+
+/** Per-entity catalogue prefix tried for actions ACTION_LABELS does not know. */
+const ENTITY_ACTION_PREFIX: Record<string, string> = {
+  TransportDossier: 'dossiers.history',
+}
+
+function actionLabel(t: (key: string) => string, entityType: string, action: string): string {
+  if (ACTION_LABELS[action]) return t(ACTION_LABELS[action])
+  const prefix = ENTITY_ACTION_PREFIX[entityType]
+  if (prefix) {
+    // `t` echoes the key itself when it is missing (same pattern as localizeApiError).
+    const key = `${prefix}.${action}`
+    const translated = t(key)
+    if (translated !== key) return translated
+  }
+  return action
 }
 
 /**
@@ -82,7 +103,7 @@ export function AuditHistoryPanel({ entityType, entityId }: { entityType: string
       key: 'action',
       header: t('auditing.panel.columns.action'),
       width: '160px',
-      render: (row) => (ACTION_LABELS[row.action] ? t(ACTION_LABELS[row.action]) : row.action),
+      render: (row) => actionLabel(t, row.entityType, row.action),
     },
     {
       key: 'changes',

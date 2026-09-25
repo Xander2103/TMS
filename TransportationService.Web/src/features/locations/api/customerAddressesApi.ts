@@ -155,6 +155,8 @@ export interface AddressPickerOption {
    * them (UX sprint 2026-09-09, additive). Absent on older payloads.
    */
   customerNames?: string | null
+  /** Master sprint 2026-09-21 (additive): the single owning customer, when the backend sends it. */
+  customerName?: string | null
 }
 
 /**

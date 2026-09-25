@@ -18,4 +18,6 @@ public record PortalDocumentDto(
     Guid? OrderId,
     string? OrderNumber,
     Guid? InvoiceId,
-    string? InvoiceNumber);
+    string? InvoiceNumber,
+    /// <summary>D6: set for a published document of a dossier as a whole (Source OrderDocument, no order).</summary>
+    string? DossierNumber = null);

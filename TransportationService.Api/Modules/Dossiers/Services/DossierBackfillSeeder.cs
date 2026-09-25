@@ -61,7 +61,7 @@ public static class DossierBackfillSeeder
             .Select(o => new
             {
                 o.Id, o.OrderNumber, o.CustomerId, o.CustomerReference, o.LegalEntityId,
-                o.OrderDate, o.Status, o.UpdatedAt,
+                o.OrderDate, o.Status, o.UpdatedAt, o.CancellationReason,
             })
             .ToListAsync(cancellationToken);
         if (orders.Count == 0)
@@ -97,6 +97,13 @@ public static class DossierBackfillSeeder
         foreach (var chunk in orders.Chunk(ChunkSize))
         {
             var pending = new List<TransportDossier>(chunk.Length);
+            // D6: a wrapper becomes the owning dossier of its order, so that order's documents get
+            // its DossierId in the same save (only the link column; no file is touched).
+            var chunkOrderIds = chunk.Select(o => (Guid?)o.Id).ToList();
+            var orphanDocuments = (await db.TransportOrderDocuments
+                    .Where(d => d.TenantId == tenantId && d.DossierId == null && chunkOrderIds.Contains(d.TransportOrderId))
+                    .ToListAsync(cancellationToken))
+                .ToLookup(d => d.TransportOrderId!.Value);
             foreach (var order in chunk)
             {
                 var customerName = order.CustomerId is { } customerId
@@ -112,12 +119,25 @@ public static class DossierBackfillSeeder
                     CustomerReference = order.CustomerReference,
                     LegalEntityId = order.LegalEntityId,
                     DossierDate = order.OrderDate,
-                    Status = ClosedStatuses.Contains(order.Status) ? DossierStatus.Closed : DossierStatus.Open,
-                    ClosedAt = ClosedStatuses.Contains(order.Status) ? order.UpdatedAt : null,
+                    // A wrapper for an order that already reached a terminal status is born CONFIRMED,
+                    // and honestly labelled: the pipeline (the order) decided it, nobody clicked.
+                    // A Cancelled order yields a CANCELLED wrapper (confirmation sprint 2026-09-23).
+                    Status = order.Status == TransportOrderStatus.Cancelled ? DossierStatus.Cancelled
+                        : ClosedStatuses.Contains(order.Status) ? DossierStatus.Closed : DossierStatus.Open,
+                    ClosedAt = order.Status != TransportOrderStatus.Cancelled && ClosedStatuses.Contains(order.Status) ? order.UpdatedAt : null,
+                    ConfirmationSource = order.Status != TransportOrderStatus.Cancelled && ClosedStatuses.Contains(order.Status) ? DossierConfirmationSource.Automatic : null,
+                    ConfirmationReason = order.Status != TransportOrderStatus.Cancelled && ClosedStatuses.Contains(order.Status) ? "Backfill: opdracht was al afgerond" : null,
+                    CancelledAt = order.Status == TransportOrderStatus.Cancelled ? order.UpdatedAt : null,
+                    CancellationReason = order.Status == TransportOrderStatus.Cancelled ? (order.CancellationReason ?? "Backfill: opdracht was geannuleerd") : null,
                     OriginTransportOrderId = order.Id,
                 };
                 pending.Add(dossier);
                 db.TransportDossiers.Add(dossier);
+                foreach (var document in orphanDocuments[order.Id])
+                {
+                    document.DossierId = dossier.Id;
+                }
+
                 db.DossierActivities.Add(new DossierActivity
                 {
                     Id = Guid.NewGuid(), TenantId = tenantId, DossierId = dossier.Id,

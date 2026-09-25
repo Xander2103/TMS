@@ -36,6 +36,36 @@ public class ActivityTypeSeederTests
         Assert.False(types.Single(t => t.Code == "KRAANWERK").HasStops);
     }
 
+    /// <summary>
+    /// Closure sprint 2026-09-23 (P1) — the standalone commercial defaults (Plateau, Opslag,
+    /// Kraanwerk) are priceable by CONFIGURATION: billable, no stops (priced on the dossier, not
+    /// through an order). Plateau additionally carries a duration. Existing rows got the same
+    /// IsBillable through the column default of migration StandaloneActivityPricing, so every
+    /// environment agrees unless a tenant deliberately edited the type. Only Positionering is
+    /// seeded as not billable.
+    /// </summary>
+    [Fact]
+    public async Task StandaloneCommercialDefaults_ArePriceableByConfiguration()
+    {
+        var (db, tenantId) = await SeedTenantAsync();
+        using var _ = db;
+
+        await new ActivityTypeSeeder(db.Context, new DevTenantContext(tenantId)).EnsureSeededAsync(CancellationToken.None);
+
+        var types = await db.Context.ActivityTypes.Where(t => t.TenantId == tenantId).ToDictionaryAsync(t => t.Code);
+        foreach (var code in new[] { "PLATEAU", "OPSLAG", "KRAANWERK" })
+        {
+            Assert.True(types[code].IsBillable, $"{code} must be billable");
+            Assert.False(types[code].HasStops, $"{code} must be standalone (no stops)");
+            Assert.True(types[code].IsActive);
+        }
+
+        Assert.True(types["PLATEAU"].AllowsDuration);
+        Assert.False(types["POSITIONERING"].IsBillable);
+        // The seed record's own default is "billable", so a future default type is priceable unless said otherwise.
+        Assert.Equal(1, types.Values.Count(t => !t.IsBillable));
+    }
+
     [Fact]
     public async Task Seeding_IsIdempotent_AndNeverResurrectsDeletedTypes()
     {

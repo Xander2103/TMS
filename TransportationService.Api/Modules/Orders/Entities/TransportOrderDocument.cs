@@ -14,14 +14,35 @@ public enum TransportOrderDocumentType
     Other,
 }
 
+/// <summary>D6: where a document hangs — on the dossier as a whole, or on one of its orders.</summary>
+public enum DossierDocumentScope
+{
+    Dossier,
+    Order,
+}
+
 /// <summary>
-/// A file attached to a transport order (customer delivery note, CMR, ...). Metadata is
-/// created first; the binary is attached through the upload endpoint (same two-step model
-/// as fleet documents).
+/// A file attached to a transport order (customer delivery note, CMR, ...) or — D6, master sprint
+/// 2026-09-21 — to a dossier as a whole. Metadata is created first; the binary is attached through
+/// the upload endpoint (same two-step model as fleet documents). ONE entity, ONE file: a document
+/// is never copied between levels, only its link changes.
 /// </summary>
 public class TransportOrderDocument : AuditableTenantEntity
 {
-    public Guid TransportOrderId { get; set; }
+    /// <summary>The order the document hangs on; NULL = a document of the dossier as a whole.</summary>
+    public Guid? TransportOrderId { get; set; }
+
+    /// <summary>
+    /// D6: the dossier the document belongs to. For an ORDER document this always equals the owning
+    /// dossier of its order (<c>OwningDossierResolver</c>) and follows it when order↔dossier links
+    /// change; NULL only for an order document whose order sits in no dossier. A check constraint
+    /// guarantees that at least one of the two links is set.
+    /// </summary>
+    public Guid? DossierId { get; set; }
+
+    public DossierDocumentScope Scope =>
+        TransportOrderId is null ? DossierDocumentScope.Dossier : DossierDocumentScope.Order;
+
     public TransportOrderDocumentType DocumentType { get; set; } = TransportOrderDocumentType.Other;
     public string? CustomTypeName { get; set; }
     public string Title { get; set; } = string.Empty;

@@ -299,7 +299,7 @@
     "adrGoods": "Marchandises ADR",
     "moreDetails": "Plus de détails",
     "barcode": "Code-barres",
-    "weightPerUnit": "Poids par pièce (kg)",
+    "weightPerUnit": "Poids par unité (kg)",
     "linePallets": "Palettes",
     "linePalletsHint": "Facultatif ; quantité commerciale, indépendante des colis scannables.",
     "reference": "Référence",
@@ -317,7 +317,40 @@
     "manual": "Manuel",
     "adrDetails": "Détails ADR",
     "adrDetailsHint": "Numéro UN, classe, groupe d'emballage…",
-    "stackable": "Gerbable"
+    "stackable": "Gerbable",
+    "separateLinesHint": "Des poids différents par unité ? Saisissez-les comme lignes de marchandises distinctes — dupliquez une ligne ou ajoutez-en une.",
+    "unitWeightUnknown": "Poids par unité inconnu — capacité par unité encore à vérifier",
+    "totalWeightAuto": "Automatique : quantité × poids par unité.",
+    "totalWeightManual": "Saisi manuellement.",
+    "recalculate": "Recalculer",
+    "duplicateLine": "Dupliquer la ligne",
+    "addAnotherLine": "+ Ajouter une ligne"
+  },
+  "capacity": {
+    "title": "Capacité opérationnelle",
+    "totalWeight": "Poids total",
+    "heaviestUnit": "Unité la plus lourde",
+    "payload": "Charge utile du véhicule",
+    "tailLift": "Capacité du hayon",
+    "unknownValue": "inconnu",
+    "linesWithoutUnitWeight": "{count} ligne(s) de marchandises sans poids par unité : leur unité la plus lourde n’est pas connue.",
+    "payloadExceeded": "Le poids total ({weight}) dépasse la charge utile du véhicule ({capacity}).",
+    "tailLiftExceeded": "L’unité la plus lourde ({weight}) dépasse la capacité du hayon ({capacity}).",
+    "toCheck": "Capacité encore à vérifier",
+    "unknownPayload": "charge utile du véhicule",
+    "unknownTailLift": "hayon",
+    "unknownHandling": "transpalette/chariot élévateur"
+  },
+  "coverageBadge": {
+    "SeparatelyPriced": "Tarifé séparément",
+    "Included": "Inclus dans le prix du trajet ou de l’activité",
+    "ToReview": "Encore à vérifier"
+  },
+  "lading": {
+    "noGoodsOnSiteLifting": "Pas de marchandises — levage sur site",
+    "weightPerUnit": "Poids/unité",
+    "totalWeight": "Poids total",
+    "coverage": "Couverture de prix"
   },
   "services": {
     "description": "Les services choisis comptent dans le calcul du prix et deviennent des lignes de facture distinctes à la facturation. Le prix effectif provient de la fiche client (tarif client) ou du standard général.",
@@ -714,6 +747,7 @@
       "adjustedReview": "{count} ligne(s) ajustée(s) sont conservée(s), marquée(s) « à vérifier ».",
       "autoInvalidated": "{count} ligne(s) de prix automatique(s) de l’ancien client sont annulée(s).",
       "draftReleased": "{count} ligne(s) sur une facture brouillon sont détachée(s).",
+      "publicationWithdrawn": "{count} document(s) visible(s) par l’ancien client repassent en interne ; republiez-les délibérément pour le nouveau client.",
       "entityChanges": "L’entité facturante passe à celle par défaut du nouveau client.",
       "entitySame": "L’entité facturante reste inchangée.",
       "kept": "Inchangé : {stops} arrêt(s), {goods} ligne(s) de marchandises, {documents} document(s).",

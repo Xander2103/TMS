@@ -1,0 +1,63 @@
+{
+  "card": {
+    "planning": "Planning",
+    "dossier": "Dossier",
+    "document": "CMR / document",
+    "driver": "Chauffeur",
+    "plate": "Kenteken",
+    "price": "Verkoopprijs",
+    "priceStatus": "Prijsstatus",
+    "notAssigned": "Niet toegewezen",
+    "suggested": "voorgesteld",
+    "sharedTrip_one": "Rit {tripNumber} · samen met {count} andere opdracht",
+    "sharedTrip_other": "Rit {tripNumber} · samen met {count} andere opdrachten"
+  },
+  "price": {
+    "free": "Gratis",
+    "notPriced": "Nog niet geprijsd",
+    "notBillable": "Niet factureerbaar"
+  },
+  "priceStatus": {
+    "NotPriced": "Niet geprijsd",
+    "PartiallyPriced": "Gedeeltelijk geprijsd",
+    "Priced": "Geprijsd",
+    "Free": "Gratis"
+  },
+  "planning": {
+    "title": "Planning",
+    "needsOrder": "Deze activiteit heeft nog geen transportopdracht. Maak eerst de opdracht aan; daarna kan ze op een rit worden gezet.",
+    "noTrip": "Nog niet op een rit. Chauffeur, voertuig en oplegger worden op de rit bewaard.",
+    "trip": "Rit {tripNumber} · {date}",
+    "openTrip": "Open rit",
+    "multipleTrips": "Deze opdracht staat op {count} ritten; hier zie je de meest relevante.",
+    "tripDate": "Ritdatum",
+    "tripDateHint": "Leeg = de datum van de activiteit of de opdracht.",
+    "vehicle": "Voertuig",
+    "trailer": "Oplegger",
+    "vehicleSuggestedHint": "Voorgesteld op basis van de vaste chauffeur-voertuigkoppeling",
+    "plan": "Rit aanmaken en toewijzen",
+    "save": "Toewijzing opslaan",
+    "optionalHint": "Chauffeur, voertuig en oplegger mogen leeg blijven zolang de planning niet definitief is.",
+    "planned": "De activiteit staat op een rit.",
+    "planFailed": "De rit kon niet worden aangemaakt.",
+    "saved": "Toewijzing van rit {tripNumber} opgeslagen.",
+    "saveFailed": "De toewijzing kon niet worden opgeslagen.",
+    "refreshFailed": "De toewijzing is opgeslagen, maar het dossier kon niet worden vernieuwd. Herlaad de pagina.",
+    "sharedTripWarning_one": "Deze wijziging geldt voor de hele rit {tripNumber} ({count} andere opdracht).",
+    "sharedTripWarning_other": "Deze wijziging geldt voor de hele rit {tripNumber} ({count} andere opdrachten).",
+    "sharedTripTitle": "Wijziging voor de hele rit",
+    "sharedTripConfirm": "Toch opslaan",
+    "readOnlyPermission": "Je hebt geen recht om de planning te wijzigen.",
+    "readOnlyClosed": "Het dossier is gesloten; de planning kan niet worden gewijzigd.",
+    "readOnlyStatus": "Deze rit is niet meer in voorbereiding; wijzig de toewijzing op de ritpagina.",
+    "tripLoadFailed": "De rit kon niet worden geladen; de toewijzing is alleen-lezen.",
+    "tripLoading": "Rit wordt geladen…",
+    "unsavedInDrawer": "De planning heeft niet-opgeslagen wijzigingen. Sla de toewijzing eerst op of maak ze ongedaan."
+  },
+  "overview": {
+    "missingPrices": "Ontbrekende prijzen",
+    "goodsNotApplicable": "Niet van toepassing",
+    "dossierNotes_one": "{count} dossiernotitie — bekijk in Historiek",
+    "dossierNotes_other": "{count} dossiernotities — bekijk in Historiek"
+  }
+}

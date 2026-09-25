@@ -177,6 +177,16 @@
       "price": "Price",
       "invoicing": "Invoicing"
     },
+    "billableActivities": "Invoiceable activities ({total})",
+    "noActivities": "No uninvoiced activities for this customer.",
+    "selectActivity": "Select activity {activity} ({dossier})",
+    "activityColumns": {
+      "dossier": "File",
+      "activity": "Activity",
+      "plannedDate": "Planned date",
+      "amount": "Amount"
+    },
+    "freeActivity": "free of charge",
     "manualTitle": "Extra lines",
     "manualDescriptionPlaceholder": "Description (e.g. waiting hours)",
     "quantityLabel": "Quantity",

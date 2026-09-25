@@ -17,7 +17,7 @@ public static class DefaultRoleUpgrades
         IReadOnlyDictionary<string, IReadOnlyList<string>> GrantsByTemplateCode);
 
     /// <summary>Version 1 = the original role creation; steps start at 2.</summary>
-    public const int CurrentVersion = 33;
+    public const int CurrentVersion = 34;
 
     public static IReadOnlyList<UpgradeStep> Steps { get; } =
     [
@@ -597,6 +597,15 @@ public static class DefaultRoleUpgrades
                     PermissionCodes.ReferenceDataView,
                     PermissionCodes.ReferenceDataManage,
                 ],
+            }),
+        new(34,
+            "Dossierbevestiging 2026-09-23: planner en management mogen een bevestigd of "
+            + "geannuleerd dossier heropenen (dossiers.reopen, met reden, geauditeerd). Bevestigen "
+            + "en annuleren blijven onder dossiers.manage.",
+            new Dictionary<string, IReadOnlyList<string>>
+            {
+                ["planner"] = [PermissionCodes.DossiersReopen],
+                ["management"] = [PermissionCodes.DossiersReopen],
             }),
     ];
 }

@@ -131,6 +131,14 @@ public class InvoiceLine : AuditableTenantEntity
 
     public Guid? TransportOrderId { get; set; }
 
+    /// <summary>
+    /// Closure sprint 2026-09-23: the standalone dossier activity this line bills (its agreed
+    /// price or one of its price lines). Null on order-backed and manual lines; never set
+    /// together with <see cref="TransportOrderId"/> — an order-backed activity is invoiced
+    /// through its order only.
+    /// </summary>
+    public Guid? DossierActivityId { get; set; }
+
     public int Sequence { get; set; }
 
     public string Description { get; set; } = string.Empty;

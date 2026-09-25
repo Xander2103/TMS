@@ -59,6 +59,8 @@ interface AssignResourceBody {
   version: string
   override: boolean
   overrideReason: string | null
+  /** Vehicle slot only (D1): 'Suggested' = the accepted fixed-vehicle proposal; omitted = Manual. */
+  vehicleSelectionSource?: 'Suggested' | 'Manual' | null
 }
 
 function assignResource(
@@ -68,15 +70,23 @@ function assignResource(
   version: string,
   override = false,
   overrideReason: string | null = null,
+  vehicleSelectionSource?: 'Suggested' | 'Manual' | null,
 ): Promise<TripDetail> {
-  return apiClient.putJson<TripDetail, AssignResourceBody>(
-    `/api/trips/${tripId}/${slot}`, { resourceId, version, override, overrideReason })
+  const body: AssignResourceBody = { resourceId, version, override, overrideReason }
+  if (slot === 'vehicle' && vehicleSelectionSource !== undefined) body.vehicleSelectionSource = vehicleSelectionSource
+  return apiClient.putJson<TripDetail, AssignResourceBody>(`/api/trips/${tripId}/${slot}`, body)
 }
 
 export const assignDriver = (tripId: string, id: string | null, version: string, override = false, reason: string | null = null) =>
   assignResource(tripId, 'driver', id, version, override, reason)
-export const assignVehicle = (tripId: string, id: string | null, version: string, override = false, reason: string | null = null) =>
-  assignResource(tripId, 'vehicle', id, version, override, reason)
+export const assignVehicle = (
+  tripId: string,
+  id: string | null,
+  version: string,
+  override = false,
+  reason: string | null = null,
+  vehicleSelectionSource?: 'Suggested' | 'Manual' | null,
+) => assignResource(tripId, 'vehicle', id, version, override, reason, vehicleSelectionSource)
 export const assignTrailer = (tripId: string, id: string | null, version: string, override = false, reason: string | null = null) =>
   assignResource(tripId, 'trailer', id, version, override, reason)
 

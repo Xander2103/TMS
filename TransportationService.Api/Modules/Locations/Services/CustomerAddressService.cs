@@ -289,21 +289,38 @@ public class CustomerAddressService : ICustomerAddressService
             .Take(limit)
             .ToListAsync(cancellationToken);
 
+        // Links AND customers are both pinned to this tenant: a name of another tenant's customer
+        // can never ride along, whatever scope the context runs in.
         var ids = rows.Select(r => r.Id).ToList();
-        var namesByLocation = ids.Count == 0
-            ? new Dictionary<Guid, string>()
-            : (await Links().AsNoTracking()
+        var linkedCustomers = ids.Count == 0
+            ? []
+            : await Links().AsNoTracking()
                 .Where(link => link.IsActive && ids.Contains(link.LocationId))
-                .Join(_dbContext.Customers, link => link.CustomerId, c => c.Id, (link, c) => new { link.LocationId, c.Name })
-                .ToListAsync(cancellationToken))
-                .GroupBy(x => x.LocationId)
-                .ToDictionary(g => g.Key, g => FormatCustomerNames(g.Select(x => x.Name)));
+                .Join(_dbContext.Customers.Where(c => c.TenantId == _tenantContext.TenantId),
+                    link => link.CustomerId, c => c.Id,
+                    (link, c) => new
+                    {
+                        link.LocationId, c.Name, link.CreatedAt,
+                        IsDefault = link.IsDefaultLoading || link.IsDefaultUnloading || link.IsDefaultBilling,
+                    })
+                .ToListAsync(cancellationToken);
+        var namesByLocation = linkedCustomers
+            .GroupBy(x => x.LocationId)
+            .ToDictionary(g => g.Key, g => FormatCustomerNames(g.Select(x => x.Name)));
+        // D3: ONE owning customer per row. With several links the default-holding link wins, then
+        // the oldest relationship (the same "original owner" rule as SyncLegacyOwnerAsync).
+        var ownerByLocation = linkedCustomers
+            .GroupBy(x => x.LocationId)
+            .ToDictionary(g => g.Key, g => g
+                .OrderByDescending(x => x.IsDefault).ThenBy(x => x.CreatedAt).ThenBy(x => x.Name, StringComparer.OrdinalIgnoreCase)
+                .First().Name);
 
         return rows
             .Select(l => new AddressPickerOptionDto(
                 l.Id, l.Code, l.Name, l.Type, l.Street, l.HouseNumber, l.PostalCode, l.City, l.CountryCode,
                 (AddressPickerGroup)l.Rank,
-                namesByLocation.GetValueOrDefault(l.Id)))
+                namesByLocation.GetValueOrDefault(l.Id),
+                ownerByLocation.GetValueOrDefault(l.Id)))
             .ToList();
     }
 

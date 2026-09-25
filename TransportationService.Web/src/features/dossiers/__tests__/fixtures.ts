@@ -21,6 +21,17 @@ export function dossierListItem(overrides: Partial<DossierListItem> = {}): Dossi
     billableActivityCount: 1,
     pricedActivityCount: 1,
     zeroPricedActivityCount: 0,
+    dossierDate: '2026-08-12',
+    confirmedAt: null,
+    confirmationSource: null,
+    activityCount: 1,
+    firstLoadingCity: 'Antwerpen',
+    lastUnloadingCity: 'Gent',
+    driverSummary: null,
+    vehicleSummary: null,
+    planningDate: null,
+    invoiceStatus: 'NotInvoiced',
+    hasCmr: false,
     ...overrides,
   }
 }
@@ -54,6 +65,13 @@ export function dossierDetail(overrides: Partial<DossierDetail> = {}): DossierDe
     documentCount: 0,
     documentTypes: [],
     lastChangedAt: '2026-08-12T09:30:00Z',
+    confirmedAt: null,
+    confirmedByUserId: null,
+    confirmedByName: null,
+    confirmationSource: null,
+    confirmationReason: null,
+    cancelledAt: null,
+    cancellationReason: null,
     ...overrides,
   }
 }

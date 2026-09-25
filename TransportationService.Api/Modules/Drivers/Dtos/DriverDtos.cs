@@ -10,7 +10,14 @@ public record DriverListItemDto(
     string? CategoryName,
     DriverAvailabilityStatus AvailabilityStatus,
     bool IsActive,
-    bool IsBlocked);
+    bool IsBlocked,
+    /// <summary>
+    /// D1: the driver's FIXED vehicle (active vehicle whose <c>FixedDriverId</c> is this driver), so
+    /// the trip page can propose it without an extra call. Null when the driver has none.
+    /// </summary>
+    Guid? FixedVehicleId = null,
+    string? FixedVehicleNumber = null,
+    string? FixedVehiclePlate = null);
 
 public record DriverReadinessDto(
     string Status,               // "Ready" | "Warning" | "NotReady" | "Blocked"

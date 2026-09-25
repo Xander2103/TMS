@@ -9,6 +9,13 @@ export interface DriverListItem {
   availabilityStatus: DriverAvailabilityStatus
   isActive: boolean
   isBlocked: boolean
+  /**
+   * Fixed vehicle (`Vehicle.FixedDriverId`, resolved from the vehicle side). Absent on older
+   * payloads → callers fall back to the driver detail; null = the driver has none.
+   */
+  fixedVehicleId?: string | null
+  fixedVehicleNumber?: string | null
+  fixedVehiclePlate?: string | null
 }
 
 export interface DriverReadiness {

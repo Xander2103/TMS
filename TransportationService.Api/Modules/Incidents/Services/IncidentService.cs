@@ -749,6 +749,14 @@ public class IncidentService : IIncidentService
             throw new DomainValidationException("De gekoppelde order bestaat niet meer.");
         }
 
+        // D2: a redelivery re-runs a loading → unloading route. On-site work has neither (site
+        // stops only), and copying it as an ordinary order would leave site stops on a transport.
+        if (original.CraneJobKind == Modules.Orders.Entities.CraneJobKind.OnSiteLifting)
+        {
+            throw new DomainValidationException(
+                "Voor kraanwerk ter plaatse kan geen herleveringsorder worden aangemaakt; er is niets geleverd.");
+        }
+
         var settings = await _dbContext.TenantSettings.FirstOrDefaultAsync(
             s => s.TenantId == tenantId, cancellationToken);
 

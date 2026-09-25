@@ -299,7 +299,7 @@
     "adrGoods": "ADR goods",
     "moreDetails": "More details",
     "barcode": "Barcode",
-    "weightPerUnit": "Weight per piece (kg)",
+    "weightPerUnit": "Weight per unit (kg)",
     "linePallets": "Pallets",
     "linePalletsHint": "Optional; commercial quantity, separate from scannable packages.",
     "reference": "Reference",
@@ -317,7 +317,40 @@
     "manual": "Manual",
     "adrDetails": "ADR details",
     "adrDetailsHint": "UN number, class, packing group…",
-    "stackable": "Stackable"
+    "stackable": "Stackable",
+    "separateLinesHint": "Different weights per unit? Enter them as separate goods lines — duplicate a line or add one.",
+    "unitWeightUnknown": "Weight per unit unknown — capacity per unit still to be checked",
+    "totalWeightAuto": "Automatic: quantity × weight per unit.",
+    "totalWeightManual": "Entered manually.",
+    "recalculate": "Recalculate",
+    "duplicateLine": "Duplicate line",
+    "addAnotherLine": "+ Add line"
+  },
+  "capacity": {
+    "title": "Operational capacity",
+    "totalWeight": "Total weight",
+    "heaviestUnit": "Heaviest unit",
+    "payload": "Vehicle payload",
+    "tailLift": "Tail lift capacity",
+    "unknownValue": "unknown",
+    "linesWithoutUnitWeight": "{count} goods line(s) without a weight per unit: their heaviest unit is not known.",
+    "payloadExceeded": "Total weight ({weight}) exceeds the vehicle payload ({capacity}).",
+    "tailLiftExceeded": "Heaviest unit ({weight}) exceeds the tail lift capacity ({capacity}).",
+    "toCheck": "Capacity still to be checked",
+    "unknownPayload": "vehicle payload",
+    "unknownTailLift": "tail lift",
+    "unknownHandling": "pallet truck/forklift"
+  },
+  "coverageBadge": {
+    "SeparatelyPriced": "Priced separately",
+    "Included": "Included in the trip or activity price",
+    "ToReview": "Still to be reviewed"
+  },
+  "lading": {
+    "noGoodsOnSiteLifting": "No goods — on-site lifting work",
+    "weightPerUnit": "Weight/unit",
+    "totalWeight": "Total weight",
+    "coverage": "Price coverage"
   },
   "services": {
     "description": "Selected services count towards the price calculation and become separate invoice lines at invoicing. The effective price comes from the customer file (customer rate) or the general default.",
@@ -714,6 +747,7 @@
       "adjustedReview": "{count} adjusted line(s) are kept, flagged 'to review'.",
       "autoInvalidated": "{count} automatic price line(s) of the old customer are invalidated.",
       "draftReleased": "{count} line(s) on a draft invoice are released.",
+      "publicationWithdrawn": "{count} customer-visible document(s) of the old customer are set back to internal; republish them deliberately for the new customer.",
       "entityChanges": "The invoicing entity changes to the new customer’s default.",
       "entitySame": "The invoicing entity stays the same.",
       "kept": "Unchanged: {stops} stop(s), {goods} goods line(s), {documents} document(s).",

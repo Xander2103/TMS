@@ -10,16 +10,18 @@ import { GoodsSection } from '../../transport-orders/components/sections/GoodsSe
 import { useOrderFormData } from '../../transport-orders/components/sections/useOrderFormData'
 import { buildSubmitPayload } from '../../transport-orders/components/sections/orderFormPayload'
 import {
+  applyUnitToCargoRow,
   cargoFromOrder,
   cargoRowFromHeader,
   computeCargoSummary,
+  duplicateCargoRowInList,
   emptyCargoRow,
   fieldErrorMap,
   stopsFromOrder,
   validateOrderForm,
   type CargoFormRow,
 } from '../../transport-orders/components/sections/orderFormState'
-import { applyUnitToCargoRow, orderValuesFromDetail } from './orderDrawerState'
+import { orderValuesFromDetail } from './orderDrawerState'
 import { SectionDrawer } from './SectionDrawer'
 import '../../transport-orders/components/transport-order-form.css'
 
@@ -28,10 +30,13 @@ interface GoodsDrawerProps {
   onClose: () => void
   /** Receives the fresh order detail after a successful save. */
   onSaved: (order: TransportOrderDetail) => void
+  /** Capacities of the planned vehicle, when the host knows one; absent → "nog te controleren". */
+  vehiclePayloadKg?: number | null
+  tailLiftCapacityKg?: number | null
 }
 
 /** §11 goods drawer: hosts the Phase-6 GoodsSection against ONE linked order (see RouteDrawer). */
-export function GoodsDrawer({ order, onClose, onSaved }: GoodsDrawerProps) {
+export function GoodsDrawer({ order, onClose, onSaved, vehiclePayloadKg, tailLiftCapacityKg }: GoodsDrawerProps) {
   const { t } = useLocale()
   const [baseOrder, setBaseOrder] = useState(order)
   const [cargoItems, setCargoItems] = useState<CargoFormRow[]>(() => cargoFromOrder(order))
@@ -166,6 +171,8 @@ export function GoodsDrawer({ order, onClose, onSaved }: GoodsDrawerProps) {
       <ValidationSummary message={error} />
       <div className="tof">
         <GoodsSection
+          vehiclePayloadKg={vehiclePayloadKg}
+          tailLiftCapacityKg={tailLiftCapacityKg}
           goodsDescription={goodsDescription}
           setGoodsDescription={touch(setGoodsDescription)}
           quantity={quantity}
@@ -209,6 +216,10 @@ export function GoodsDrawer({ order, onClose, onSaved }: GoodsDrawerProps) {
               ...rows,
               cargoRowFromHeader({ quantity, quantityUnit: baseOrder.quantityUnit ?? '', quantityUnitCode, weightKg, volumeM3, palletCount }),
             ])
+            setDirty(true)
+          }}
+          onDuplicateCargoRow={(key) => {
+            setCargoItems((rows) => duplicateCargoRowInList(rows, key))
             setDirty(true)
           }}
           onRemoveCargoRow={(key) => {

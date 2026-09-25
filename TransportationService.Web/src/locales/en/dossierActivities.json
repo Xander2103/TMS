@@ -1,0 +1,63 @@
+{
+  "card": {
+    "planning": "Planning",
+    "dossier": "Dossier",
+    "document": "CMR / document",
+    "driver": "Driver",
+    "plate": "Licence plate",
+    "price": "Sales price",
+    "priceStatus": "Price status",
+    "notAssigned": "Not assigned",
+    "suggested": "suggested",
+    "sharedTrip_one": "Trip {tripNumber} · together with {count} other order",
+    "sharedTrip_other": "Trip {tripNumber} · together with {count} other orders"
+  },
+  "price": {
+    "free": "Free",
+    "notPriced": "Not priced yet",
+    "notBillable": "Not billable"
+  },
+  "priceStatus": {
+    "NotPriced": "Not priced",
+    "PartiallyPriced": "Partially priced",
+    "Priced": "Priced",
+    "Free": "Free"
+  },
+  "planning": {
+    "title": "Planning",
+    "needsOrder": "This activity has no transport order yet. Create the order first; it can then be put on a trip.",
+    "noTrip": "Not on a trip yet. Driver, vehicle and trailer are kept on the trip.",
+    "trip": "Trip {tripNumber} · {date}",
+    "openTrip": "Open trip",
+    "multipleTrips": "This order is on {count} trips; the most relevant one is shown here.",
+    "tripDate": "Trip date",
+    "tripDateHint": "Empty = the date of the activity or the order.",
+    "vehicle": "Vehicle",
+    "trailer": "Trailer",
+    "vehicleSuggestedHint": "Suggested based on the fixed driver-vehicle link",
+    "plan": "Create trip and assign",
+    "save": "Save assignment",
+    "optionalHint": "Driver, vehicle and trailer may stay empty while the planning is not final.",
+    "planned": "The activity is on a trip.",
+    "planFailed": "The trip could not be created.",
+    "saved": "Assignment of trip {tripNumber} saved.",
+    "saveFailed": "The assignment could not be saved.",
+    "refreshFailed": "The assignment was saved, but the dossier could not be refreshed. Reload the page.",
+    "sharedTripWarning_one": "This change applies to the whole trip {tripNumber} ({count} other order).",
+    "sharedTripWarning_other": "This change applies to the whole trip {tripNumber} ({count} other orders).",
+    "sharedTripTitle": "Change for the whole trip",
+    "sharedTripConfirm": "Save anyway",
+    "readOnlyPermission": "You are not allowed to change the planning.",
+    "readOnlyClosed": "The dossier is closed; the planning cannot be changed.",
+    "readOnlyStatus": "This trip is no longer in preparation; change the assignment on the trip page.",
+    "tripLoadFailed": "The trip could not be loaded; the assignment is read-only.",
+    "tripLoading": "Loading trip…",
+    "unsavedInDrawer": "The planning has unsaved changes. Save the assignment first or undo them."
+  },
+  "overview": {
+    "missingPrices": "Missing prices",
+    "goodsNotApplicable": "Not applicable",
+    "dossierNotes_one": "{count} dossier note — view in History",
+    "dossierNotes_other": "{count} dossier notes — view in History"
+  }
+}

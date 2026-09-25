@@ -6,7 +6,8 @@ import type { InvoiceDetail, InvoiceLine } from '../types'
 
 function line(overrides: Partial<InvoiceLine> = {}): InvoiceLine {
   return {
-    id: 'l1', sequence: 1, transportOrderId: null, orderNumber: null, description: 'Transport', quantity: 1, unitPrice: 100,
+    id: 'l1', sequence: 1, transportOrderId: null, orderNumber: null, dossierActivityId: null, dossierNumber: null,
+    description: 'Transport', quantity: 1, unitPrice: 100,
     vatRatePercent: 21, lineTotal: 100, salesCategoryId: null, salesCategoryName: null, ledgerAccountNumber: null,
     ledgerAccountName: null, ledgerWarning: null, vatTreatment: 'DomesticVat', vatTreatmentSource: 'Customer',
     vatLegalText: null, salesCode: null, ...overrides,

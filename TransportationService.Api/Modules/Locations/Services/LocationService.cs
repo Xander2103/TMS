@@ -354,17 +354,10 @@ public class LocationService : ILocationService
         }
 
         await _countryValidator.NormalizeAndValidateAsync(request.CountryCode, "land", cancellationToken, "countryCode");
+        // D3: a new address must carry a postal code its country can actually have.
+        PostalCodeValidator.EnsureValid(request.CountryCode, request.PostalCode, "postalCode");
 
-        var location = new Location
-        {
-            Id = Guid.NewGuid(),
-            TenantId = _tenantContext.TenantId,
-            Code = code,
-            Name = request.Name.Trim(),
-            Type = request.Type,
-            IsActive = true,
-        };
-        ApplyEditableFields(location, ToEditableShape(request), canViewSensitive);
+        var location = NewLocation(_tenantContext.TenantId, code, request, canViewSensitive);
         location.OpeningIntervals = BuildIntervals(request.OpeningIntervals, location);
 
         // Same front door as an existing active address: enforced HERE, not only in a dialog,
@@ -449,6 +442,14 @@ public class LocationService : ILocationService
         }
 
         await _countryValidator.NormalizeAndValidateAsync(request.CountryCode, "land", cancellationToken, "countryCode");
+        // D3: only a NEW or CHANGED postal code/country is format-checked — a stored legacy value
+        // must never block an unrelated edit of the address.
+        if (!string.Equals(Trim(request.PostalCode), Trim(location.PostalCode), StringComparison.OrdinalIgnoreCase)
+            || !string.Equals(Trim(request.CountryCode), Trim(location.CountryCode), StringComparison.OrdinalIgnoreCase))
+        {
+            PostalCodeValidator.EnsureValid(request.CountryCode, request.PostalCode, "postalCode");
+        }
+
         await EnsureLegacyOwnerChangeAllowedAsync(location, request.CustomerId, cancellationToken);
 
         var before = await BuildAuditPayloadAsync(location, cancellationToken);
@@ -580,19 +581,7 @@ public class LocationService : ILocationService
                     cancellationToken);
         }
 
-        var created = new CustomerLocationLink
-        {
-            Id = Guid.NewGuid(),
-            TenantId = location.TenantId,
-            CustomerId = customerId,
-            LocationId = location.Id,
-            Role = CustomerLocationRole.Both,
-            CustomerReference = location.ExternalReference,
-            IsDefaultLoading = location.IsDefaultLoadingLocation,
-            IsDefaultUnloading = location.IsDefaultUnloadingLocation,
-            IsDefaultBilling = location.IsDefaultBillingLocation,
-            IsActive = location.IsActive,
-        };
+        var created = NewCustomerLink(location, customerId);
         _dbContext.CustomerLocationLinks.Add(created);
         await _dbContext.SaveChangesAsync(cancellationToken);
         await _auditService.RecordAsync("CustomerLocationLink", created.Id.ToString(), "Linked", null,
@@ -808,6 +797,70 @@ public class LocationService : ILocationService
     }
 
     private static string GenerateCode() => "LOC-" + Guid.NewGuid().ToString("N")[..8].ToUpperInvariant();
+
+    /// <summary>
+    /// The ONE place a new <see cref="Location"/> row is shaped from a create request (trimming,
+    /// country casing, derived duplicate keys, sensitive-field gate). Shared by
+    /// <see cref="CreateAsync"/> and the order address book (<see cref="BuildAddressBookLocation"/>).
+    /// </summary>
+    private static Location NewLocation(Guid tenantId, string code, CreateLocationRequest request, bool canViewSensitive)
+    {
+        var location = new Location
+        {
+            Id = Guid.NewGuid(),
+            TenantId = tenantId,
+            Code = code,
+            Name = request.Name.Trim(),
+            Type = request.Type,
+            IsActive = true,
+        };
+        ApplyEditableFields(location, ToEditableShape(request), canViewSensitive);
+        return location;
+    }
+
+    /// <summary>
+    /// D3 ("Opslaan in adresboek"): builds — never saves — the address-book location for an address
+    /// typed on an order stop, through the same shaping rules as <see cref="CreateAsync"/>
+    /// (generated code, normalised fields, duplicate keys, legacy owner = the dossier customer).
+    /// The CALLER stages it in its own unit of work so order and address land in one save, and
+    /// has already run the duplicate check (<see cref="AddressDuplicateFinder"/>), the country
+    /// lookup and the postal-code format check.
+    /// </summary>
+    public static Location BuildAddressBookLocation(
+        Guid tenantId, string name, string? street, string? houseNumber, string? postalCode, string? city,
+        string? countryCode, Guid? customerId) =>
+        NewLocation(tenantId, GenerateCode(),
+            new CreateLocationRequest(
+                Code: null, Name: name, Type: LocationType.CustomerLocation,
+                Street: street, HouseNumber: houseNumber, PostalCode: postalCode, City: city, CountryCode: countryCode,
+                Latitude: null, Longitude: null, ContactName: null, ContactPhone: null, ContactEmail: null,
+                OpeningHours: null, LoadingInstructions: null, UnloadingInstructions: null, AccessInstructions: null,
+                AccessRestrictions: null, VehicleRestrictions: null, TrailerRestrictions: null,
+                AlfapassRequired: false, AppointmentRequired: false, CustomerId: customerId, Notes: null),
+            canViewSensitive: false);
+
+    /// <summary>
+    /// The customer ↔ address relationship implied by an address's owner: same shape whether it
+    /// comes from the address form (<see cref="SyncCustomerLinkAsync"/>) or the order address book.
+    /// </summary>
+    /// <param name="inheritOwnerDefaults">
+    /// True (address form): the link mirrors the legacy owner fields of the address. False (an
+    /// ADDITIONAL customer starts using an existing address): a plain active link — the default
+    /// flags and reference on the address belong to its original owner, never to the newcomer.
+    /// </param>
+    public static CustomerLocationLink NewCustomerLink(Location location, Guid customerId, bool inheritOwnerDefaults = true) => new()
+    {
+        Id = Guid.NewGuid(),
+        TenantId = location.TenantId,
+        CustomerId = customerId,
+        LocationId = location.Id,
+        Role = CustomerLocationRole.Both,
+        CustomerReference = inheritOwnerDefaults ? location.ExternalReference : null,
+        IsDefaultLoading = inheritOwnerDefaults && location.IsDefaultLoadingLocation,
+        IsDefaultUnloading = inheritOwnerDefaults && location.IsDefaultUnloadingLocation,
+        IsDefaultBilling = inheritOwnerDefaults && location.IsDefaultBillingLocation,
+        IsActive = !inheritOwnerDefaults || location.IsActive,
+    };
 
     private static bool CoordinatesValid(decimal? lat, decimal? lng)
     {

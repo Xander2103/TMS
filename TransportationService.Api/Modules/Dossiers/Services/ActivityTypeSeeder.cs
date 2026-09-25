@@ -33,7 +33,9 @@ public class ActivityTypeSeeder : IActivityTypeSeeder
         bool HasStops, bool SupportsGoods, bool PlanningRelevant, bool WarehouseRelevant,
         bool AllowsDuration, bool IsQuickStart, int QuickStartOrder, bool IsDefaultTransport,
         /// <summary>Commercial unit (step 13). Only an empty positioning ride is internal by default.</summary>
-        bool IsBillable = true);
+        bool IsBillable = true,
+        /// <summary>D2: orders of this type may be on-site work (site stop + work description).</summary>
+        bool SupportsOnSiteWork = false);
 
     private static readonly Seed[] Defaults =
     [
@@ -45,7 +47,8 @@ public class ActivityTypeSeeder : IActivityTypeSeeder
             AllowsDuration: false, IsQuickStart: true, QuickStartOrder: 2, IsDefaultTransport: true),
         new("KRAANTRANSPORT", "Kraantransport", "crane", 2, "Kraan",
             HasStops: true, SupportsGoods: true, PlanningRelevant: true, WarehouseRelevant: false,
-            AllowsDuration: true, IsQuickStart: true, QuickStartOrder: 3, IsDefaultTransport: false),
+            AllowsDuration: true, IsQuickStart: true, QuickStartOrder: 3, IsDefaultTransport: false,
+            SupportsOnSiteWork: true),
         new("KRAANWERK", "Kraanwerk ter plaatse", "crane", 3, "Kraan",
             HasStops: false, SupportsGoods: false, PlanningRelevant: true, WarehouseRelevant: false,
             AllowsDuration: true, IsQuickStart: false, QuickStartOrder: 0, IsDefaultTransport: false),
@@ -110,6 +113,7 @@ public class ActivityTypeSeeder : IActivityTypeSeeder
                 QuickStartOrder = seed.QuickStartOrder,
                 IsSystemDefaultTransport = takeDefaultFlag,
                 IsBillable = seed.IsBillable,
+                SupportsOnSiteWork = seed.SupportsOnSiteWork,
                 IsActive = true,
             });
         }

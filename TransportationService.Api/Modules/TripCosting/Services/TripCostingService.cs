@@ -633,6 +633,12 @@ public class TripCostingService : ITripCostingService
         var totalMinutes = 0m;
         foreach (var stop in stops)
         {
+            // D2: time at a site stop is the (billable) work itself, never waiting time.
+            if (stop.StopType == StopType.Site)
+            {
+                continue;
+            }
+
             var handling = stop.StopType == StopType.Loading ? loadingMinutes : unloadingMinutes;
             var spent = (decimal)(stop.CompletedAt!.Value - stop.ArrivedAt!.Value).TotalMinutes;
             totalMinutes += Math.Max(0m, spent - handling);

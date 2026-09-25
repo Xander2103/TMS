@@ -23,6 +23,6 @@ export default defineConfig({
     include: ['src/**/*.test.{ts,tsx}'],
     // Layout-invariantentests lezen deze stylesheets als ?raw; zonder deze include
     // stubt Vitest CSS-imports naar een lege string.
-    css: { include: [/nav\.css/, /Sidebar\.css/, /customers\.css/, /LoginPage\.css/] },
+    css: { include: [/nav\.css/, /Sidebar\.css/, /customers\.css/, /LoginPage\.css/, /SearchableSelect\.css/, /route-section\.css/, /AddressAutocompleteInput\.css/, /dossier-detail\.css/, /order-detail\.css/, /goods-capacity\.css/, /dossier-pricing\.css/, /dossier-documents\.css/, /issued-transport-documents\.css/] },
   },
 })

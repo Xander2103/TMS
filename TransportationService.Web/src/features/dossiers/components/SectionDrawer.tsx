@@ -2,6 +2,8 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { Button } from '../../../components/ui/Button'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { UnsavedChangesGuard } from '../../../components/ui/UnsavedChangesGuard'
+import { lockBodyScroll } from '../../../components/ui/bodyScrollLock'
+import { useEscapeLayer } from '../../../components/ui/escapeLayerStack'
 import { useLocale } from '../../../i18n/localeContext'
 import './section-drawer.css'
 
@@ -27,6 +29,9 @@ interface SectionDrawerProps {
 export function SectionDrawer({ title, dirty, busy = false, onClose, onSave, saveLabel, footerExtra, children }: SectionDrawerProps) {
   const { t } = useLocale()
   const [confirmClose, setConfirmClose] = useState(false)
+  // Captured on the first render, like Modal: the element that opened the drawer gets focus back
+  // when the drawer unmounts, so Escape-Escape (dialog, then drawer) lands where the user started.
+  const [opener] = useState(() => document.activeElement as HTMLElement | null)
 
   function requestClose() {
     if (busy) return
@@ -34,19 +39,21 @@ export function SectionDrawer({ title, dirty, busy = false, onClose, onSave, sav
     else onClose()
   }
 
+  // Only the topmost overlay receives Escape (see escapeLayerStack): while the nested confirm
+  // dialog below is open it is the top layer, so Escape cancels that dialog only and the drawer
+  // stays open (and dirty) for the next press to ask again.
+  useEscapeLayer(true, requestClose)
+
   useEffect(() => {
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape') requestClose()
-    }
-    document.addEventListener('keydown', handleKeyDown)
-    document.body.style.overflow = 'hidden'
     return () => {
-      document.removeEventListener('keydown', handleKeyDown)
-      document.body.style.overflow = ''
+      if (opener && typeof opener.focus === 'function' && document.contains(opener)) opener.focus()
     }
-    // requestClose is stable enough per render; re-binding on dirty/busy keeps the guard correct.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dirty, busy])
+  }, [opener])
+
+  // Scroll lock follows open/closed only (the drawer is mounted exactly while it is open), never
+  // dirty/busy. The shared counter keeps the body locked while a nested dialog is still open and
+  // restores the original value whichever of the two unmounts first.
+  useEffect(() => lockBodyScroll(), [])
 
   return (
     <div className="section-drawer-backdrop" onClick={requestClose}>

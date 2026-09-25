@@ -51,7 +51,9 @@ public record VehicleDetailDto(
     string? Notes,
     int AxleCount = 0,
     decimal LoadingMeters = 0,
-    string? RequiredLicenceCode = null);
+    string? RequiredLicenceCode = null,
+    /// <summary>D4: tail-lift capacity in kg (null = unknown); only meaningful with HasTailLift.</summary>
+    decimal? TailLiftCapacityKg = null);
 
 public record CreateVehicleRequest(
     string LicensePlate,
@@ -82,7 +84,9 @@ public record CreateVehicleRequest(
     bool VolumeIsManual = false,
     int AxleCount = 0,
     decimal LoadingMeters = 0,
-    string? RequiredLicenceCode = null);
+    string? RequiredLicenceCode = null,
+    /// <summary>D4: tail-lift capacity in kg (null = unknown); only meaningful with HasTailLift.</summary>
+    decimal? TailLiftCapacityKg = null);
 
 public record UpdateVehicleRequest(
     string LicensePlate,
@@ -114,7 +118,9 @@ public record UpdateVehicleRequest(
     bool VolumeIsManual = false,
     int AxleCount = 0,
     decimal LoadingMeters = 0,
-    string? RequiredLicenceCode = null);
+    string? RequiredLicenceCode = null,
+    /// <summary>D4: tail-lift capacity in kg (null = unknown); only meaningful with HasTailLift.</summary>
+    decimal? TailLiftCapacityKg = null);
 
 public record SetVehicleActiveRequest(bool IsActive);
 

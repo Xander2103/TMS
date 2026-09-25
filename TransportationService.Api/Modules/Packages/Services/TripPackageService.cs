@@ -407,6 +407,12 @@ public class TripPackageService : ITripPackageService
             return [];
         }
 
+        // D2: no colli are ever expected at a site stop (on-site work moves no goods).
+        if (stop.StopType == StopType.Site)
+        {
+            return [];
+        }
+
         var isLoading = stop.StopType == StopType.Loading;
         var defaultStopId = ResolveDefaultStop(stops, stop.TransportOrderId, isLoading);
         var packages = await _dbContext.Packages
@@ -443,6 +449,12 @@ public class TripPackageService : ITripPackageService
         var stopLists = new List<TripPackageStopChecklistDto>();
         foreach (var stop in stops)
         {
+            // D2: a site stop has no package checklist — it is neither a load nor a delivery.
+            if (stop.StopType == StopType.Site)
+            {
+                continue;
+            }
+
             var isLoading = stop.StopType == StopType.Loading;
             var defaultStopId = ResolveDefaultStop(stops, stop.TransportOrderId, isLoading);
             var expected = packages

@@ -6,13 +6,17 @@ namespace TransportationService.Api.Modules.Dossiers.Entities;
 /// <summary>
 /// Provenance of a standalone activity's sales price. <see cref="None"/> = no price agreed
 /// (the activity is unpriced); <see cref="OneOff"/> = an explicit agreed amount — any amount,
-/// € 0 included. There is no engine behind standalone activities, so no "positive amount
-/// without provenance" path exists (see <c>ActivityPricingState</c>).
+/// € 0 included; <see cref="Lines"/> = the price is the total of the activity's own sales lines
+/// (<see cref="DossierActivityPriceLine"/>) or — without any line — an explicitly confirmed free
+/// activity (<see cref="DossierActivityPricing.FreeConfirmed"/>). There is no engine behind
+/// standalone activities, so no "positive amount without provenance" path exists (see
+/// <c>ActivityPricingState</c>). Stored as a string column: a new member is no schema change.
 /// </summary>
 public enum ActivityPricingSource
 {
     None,
     OneOff,
+    Lines,
 }
 
 /// <summary>
@@ -22,8 +26,10 @@ public enum ActivityPricingSource
 /// Lives 1:1 with its activity (cascade), carries its own concurrency token (a price edit
 /// must not be invalidated by an unrelated dossier mutation) and the shared pricing-status
 /// vocabulary so the invoicing wave can mark it Invoiced/Locked without a schema change.
-/// <see cref="AgreedPrice"/> equals <see cref="FixedAmount"/> today and is where a future
-/// lines total lands (docs/ux-sprint/2026-09-11-activity-pricing-design.md §2.1, §7).
+/// <see cref="AgreedPrice"/> equals <see cref="FixedAmount"/> for a fixed price and the lines
+/// total for <see cref="ActivityPricingSource.Lines"/>: the amount reaches the dossier total
+/// through this ONE column, never through the lines again — no double counting
+/// (docs/ux-sprint/2026-09-11-activity-pricing-design.md §2.1, §7; master sprint 2026-09-21 D5).
 /// </summary>
 public class DossierActivityPricing : AuditableTenantEntity, IVersionedEntity
 {
@@ -34,8 +40,15 @@ public class DossierActivityPricing : AuditableTenantEntity, IVersionedEntity
     /// <summary>The agreed amount; 0 is a deliberate price, null means none agreed.</summary>
     public decimal? FixedAmount { get; set; }
 
-    /// <summary>Effective sales price of the activity (= FixedAmount until lines exist).</summary>
+    /// <summary>Effective sales price of the activity: FixedAmount (OneOff) or the lines total (Lines).</summary>
     public decimal? AgreedPrice { get; set; }
+
+    /// <summary>
+    /// D5: the user explicitly confirmed that this activity is FREE. Only ever true together
+    /// with an effective price of exactly 0; it silences the <c>pricing.zero</c> "is this
+    /// deliberate?" warning, because that question has been answered.
+    /// </summary>
+    public bool FreeConfirmed { get; set; }
 
     /// <summary>Draft by default; Locked/Invoiced refuse further price changes (set by invoicing later).</summary>
     public OrderPricingStatus Status { get; set; } = OrderPricingStatus.Draft;

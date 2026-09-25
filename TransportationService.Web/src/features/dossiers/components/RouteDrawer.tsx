@@ -144,7 +144,7 @@ export function RouteDrawer({ order, onClose, onSaved }: RouteDrawerProps) {
           message={t('transportOrders.form.refreshMessage')}
           confirmLabel={t('transportOrders.form.refreshConfirm')}
           onConfirm={() => {
-            setStop(refreshTarget, { refreshSnapshot: true })
+            setStop(refreshTarget, { refreshSnapshot: true, addressOverridden: false })
             setRefreshTarget(null)
           }}
           onCancel={() => setRefreshTarget(null)}

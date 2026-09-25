@@ -44,6 +44,11 @@ const api = vi.hoisted(() => ({
 }))
 vi.mock('../api/dossiersApi', () => api)
 vi.mock('../api/activityTypesApi', () => ({ listActivityTypes: () => Promise.resolve([]) }))
+// Historiek hosts the notes panel; this dossier has no notes.
+vi.mock('../api/dossierNotesApi', async () => {
+  const actual = await vi.importActual<typeof import('../api/dossierNotesApi')>('../api/dossierNotesApi')
+  return { ...actual, listDossierNotes: () => Promise.resolve([]) }
+})
 
 const orders = vi.hoisted(() => ({ get: vi.fn(), update: vi.fn(), saveLines: vi.fn(), setOneOff: vi.fn() }))
 vi.mock('../../transport-orders/api/transportOrdersApi', () => ({
@@ -53,19 +58,11 @@ vi.mock('../../transport-orders/api/transportOrdersApi', () => ({
   setOrderOneOffPrice: orders.setOneOff,
   searchTransportOrders: () => Promise.resolve({ items: [], totalCount: 0 }),
 }))
-// The Documenten tab hosts the order documents panel: keep the type labels, mock the fetches.
+// The Documenten tab derives every level from ONE list, the dossier documents endpoint (D6).
 const documents = vi.hoisted(() => ({ list: vi.fn(() => Promise.resolve([])) }))
-vi.mock('../../transport-orders/api/orderDocumentsApi', async () => {
-  const actual = await vi.importActual<typeof import('../../transport-orders/api/orderDocumentsApi')>('../../transport-orders/api/orderDocumentsApi')
-  return {
-    ...actual,
-    listOrderDocuments: documents.list,
-    createOrderDocument: vi.fn(),
-    updateOrderDocument: vi.fn(),
-    deleteOrderDocument: vi.fn(),
-    uploadOrderDocumentFile: vi.fn(),
-    downloadOrderDocumentFile: vi.fn(),
-  }
+vi.mock('../api/dossierDocumentsApi', async () => {
+  const actual = await vi.importActual<typeof import('../api/dossierDocumentsApi')>('../api/dossierDocumentsApi')
+  return { ...actual, listDossierDocuments: documents.list }
 })
 vi.mock('../../customers/api/customersApi', () => ({
   searchCustomers: () => Promise.resolve({ items: [], totalCount: 0 }),
@@ -251,6 +248,8 @@ describe('Dossier navigation — the Overzicht is a read-only summary', () => {
   })
 
   it('shows "Ingevuld" with both stops and "Niet gepland" without a planned window', async () => {
+    // Both stops exist, so the readiness projection no longer flags the route either.
+    api.getDossier.mockResolvedValue(overviewDossier({ readiness: [] }))
     orders.get.mockResolvedValue(
       orderDetail({
         status: 'Draft',
@@ -297,11 +296,13 @@ describe('Dossier navigation — the Overzicht is a read-only summary', () => {
     expect(within(activities).getByText('+ 1 andere activiteit')).toBeInTheDocument()
   })
 
-  it('summarises the price: € 450,00 marked "1/2 activiteiten geprijsd" and "Gedeeltelijk"', async () => {
+  it('summarises the price: € 450,00 marked "1 van 2 activiteiten geprijsd" and "Gedeeltelijk"', async () => {
     renderPage()
     const price = await screen.findByRole('article', { name: 'Verkoop & prijs' })
     expect(within(price).getByText(/€\s450,00/)).toBeInTheDocument()
-    expect(within(price).getByText('1/2 activiteiten geprijsd')).toBeInTheDocument()
+    expect(within(price).getByText('1 van 2 activiteiten geprijsd')).toBeInTheDocument()
+    // The unit that still needs a price is named.
+    expect(within(within(price).getByRole('list', { name: 'Ontbrekende prijzen' })).getByRole('listitem')).toHaveTextContent('Opslag')
     expect(within(price).getByText('Gedeeltelijk')).toBeInTheDocument()
     expect(within(price).queryByText('Nog geen prijs')).not.toBeInTheDocument()
     expect(within(price).queryByText('⚠')).not.toBeInTheDocument()
@@ -314,7 +315,7 @@ describe('Dossier navigation — the Overzicht is a read-only summary', () => {
     const price = await screen.findByRole('article', { name: 'Verkoop & prijs' })
     expect(within(price).getByText('Nog geen prijs')).toBeInTheDocument()
     expect(within(price).getByText('Geen prijs')).toBeInTheDocument()
-    expect(within(price).getByText('0/1 activiteiten geprijsd')).toBeInTheDocument()
+    expect(within(price).getByText('0 van 1 activiteiten geprijsd')).toBeInTheDocument()
     expect(within(price).queryByText(/€\s0,00/)).not.toBeInTheDocument()
   })
 
@@ -352,7 +353,7 @@ describe('Dossier navigation — the Overzicht is a read-only summary', () => {
     expect(within(docs).getByText('Geen documenten.')).toBeInTheDocument()
   })
 
-  it('summarises notes & history: "Nog geen notities." vs the note text, plus the last change', async () => {
+  it('summarises notes & history: "Nog geen notities." vs the note count + link, never the legacy free text', async () => {
     const { unmount } = renderPage()
     let history = await screen.findByRole('article', { name: 'Notities & historiek' })
     expect(within(history).getByText('0 notities')).toBeInTheDocument()
@@ -360,11 +361,13 @@ describe('Dossier navigation — the Overzicht is a read-only summary', () => {
     expect(within(history).getByText(`Laatste wijziging ${formatDateTime('2026-08-12T09:30:00Z')}`)).toBeInTheDocument()
     unmount()
 
-    api.getDossier.mockResolvedValue(overviewDossier({ notes: 'Bel de klant vóór levering.', lastChangedAt: '2026-08-13T14:05:00Z' }))
+    // D7: the count comes from the API; the legacy free-text field is no longer shown on the overview.
+    api.getDossier.mockResolvedValue(overviewDossier({ noteCount: 1, notes: 'Bel de klant vóór levering.', lastChangedAt: '2026-08-13T14:05:00Z' }))
     renderPage()
     history = await screen.findByRole('article', { name: 'Notities & historiek' })
     expect(within(history).getByText('1 notitie')).toBeInTheDocument()
-    expect(within(history).getByText('Bel de klant vóór levering.')).toBeInTheDocument()
+    expect(within(history).getByRole('link', { name: /1 dossiernotitie/ })).toHaveAttribute('href', '/dossiers/d-1/historiek')
+    expect(within(history).queryByText('Bel de klant vóór levering.')).not.toBeInTheDocument()
     expect(within(history).queryByText('Nog geen notities.')).not.toBeInTheDocument()
     expect(within(history).getByText(`Laatste wijziging ${formatDateTime('2026-08-13T14:05:00Z')}`)).toBeInTheDocument()
   })
@@ -431,15 +434,17 @@ describe('Dossier navigation — subnav, deep links and history', () => {
     expect(subnavLink('Verkoop & prijs')).toHaveAttribute('aria-current', 'page')
   })
 
-  it('"Open documenten" navigates to the documents tab, which hosts the target order\'s documents panel', async () => {
+  it('"Open documenten" navigates to the documents tab, which opens on the dossier level', async () => {
     const user = userEvent.setup()
     const { router } = renderPage()
     await screen.findByText('Nexans site Antwerpen')
 
     await user.click(within(card('Documenten')).getAllByRole('link', { name: 'Open documenten' })[0])
     expect(router.state.location.pathname).toBe('/dossiers/d-1/documenten')
-    expect(await screen.findByText('Documenten van opdracht ORD-0001')).toBeInTheDocument()
-    await waitFor(() => expect(documents.list).toHaveBeenCalledWith('o-1'))
+    // D6: opens on "Dossier (algemeen)", with one level per linked order.
+    expect(await screen.findByRole('tab', { name: /Dossier \(algemeen\)/ })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('tab', { name: /ORD-0001/ })).toBeInTheDocument()
+    expect(documents.list).toHaveBeenCalledWith('d-1')
     expect(document.getElementById('sectie-documenten')).not.toBeNull()
   })
 
@@ -455,7 +460,7 @@ describe('Dossier navigation — subnav, deep links and history', () => {
     expect(within(history).getByRole('heading', { name: 'Wijzigingshistoriek' })).toBeInTheDocument()
     // No audit_logs.view: the panel explains instead of fetching.
     expect(within(history).getByText('Je hebt geen rechten om de historiek te bekijken.')).toBeInTheDocument()
-    expect(within(history).getByText('Geen notities.')).toBeInTheDocument()
+    expect(await within(history).findByText('Geen notities.')).toBeInTheDocument()
     expect(subnavLink('Historiek')).toHaveAttribute('aria-current', 'page')
   })
 

@@ -11,6 +11,28 @@ namespace TransportationService.Api.Modules.Locations.Services;
 /// </summary>
 public static class AddressDuplicateFinder
 {
+    /// <summary>
+    /// D3 ("Opslaan in adresboek" on an order stop): the ACTIVE address with exactly this front door,
+    /// if any — the one a save must LINK instead of creating a second copy. Same persisted key and
+    /// same "only an active exact match counts" rule as <see cref="FindAsync"/>, without the
+    /// candidate list (and therefore without its 25-row display cut-off). Oldest first, so the
+    /// answer is stable when legacy data already holds several copies.
+    /// </summary>
+    public static async Task<Guid?> FindActiveExactAsync(
+        TransportationDbContext db, Guid tenantId, string exactKey, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrEmpty(exactKey))
+        {
+            return null; // not enough address to compare on
+        }
+
+        return await db.Locations.AsNoTracking()
+            .Where(l => l.TenantId == tenantId && l.IsActive && l.AddressExactKey == exactKey)
+            .OrderBy(l => l.CreatedAt).ThenBy(l => l.Id)
+            .Select(l => (Guid?)l.Id)
+            .FirstOrDefaultAsync(cancellationToken);
+    }
+
     public static async Task<AddressDuplicateCheckResultDto> FindAsync(
         TransportationDbContext db, Guid tenantId, AddressDuplicateCheckRequest request, CancellationToken cancellationToken)
     {

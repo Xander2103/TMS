@@ -1,0 +1,82 @@
+/* Master sprint 2026-09-21 (D4/D5): goods link + commercial coverage of the shared order price
+   line editor. Tokens from styles/global.css; box-sizing set here (no global reset). */
+
+.order-cargo-link {
+  box-sizing: border-box;
+  margin: var(--space-3) 0 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.order-cargo-link legend {
+  padding: 0 var(--space-1);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.order-cargo-link-hint,
+.order-cargo-coverage-hint {
+  margin: 0 0 var(--space-1);
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+}
+
+.order-cargo-link-option {
+  display: block;
+  font-size: 0.9375rem;
+  cursor: pointer;
+}
+
+.order-cargo-coverage {
+  box-sizing: border-box;
+  margin-top: var(--space-4);
+}
+
+.order-cargo-coverage h3 {
+  margin: 0 0 var(--space-2);
+}
+
+.order-cargo-coverage-wrap {
+  overflow-x: auto;
+}
+
+.order-cargo-coverage-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9375rem;
+}
+
+.order-cargo-coverage-table th,
+.order-cargo-coverage-table td {
+  box-sizing: border-box;
+  padding: 6px var(--space-2);
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.order-cargo-coverage-table th {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.order-cargo-coverage-hint {
+  margin-top: var(--space-2);
+}
+
+.order-price-line-goods {
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+}
+
+.order-price-unpriced {
+  font-size: 1rem;
+  font-weight: 500;
+  color: var(--text-muted);
+}

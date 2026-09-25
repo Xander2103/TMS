@@ -1,0 +1,144 @@
+{
+  "levels": {
+    "dossier": "Dossier (general)",
+    "dossierShort": "Dossier"
+  },
+  "summary_one": "{count} document in this dossier",
+  "summary_other": "{count} documents in this dossier",
+  "loading": "Loading documents…",
+  "loadFailed": "The documents could not be loaded.",
+  "retry": "Try again",
+  "downloadFailed": "The document could not be downloaded.",
+  "viewFailed": "The document could not be opened.",
+  "viewBlocked": "The browser blocked the new tab. Allow pop-ups or use Download.",
+  "fileMissing": "File missing",
+  "sections": {
+    "dossier": "General documents",
+    "dossierHint": "Documents of the whole dossier. They can be consulted from every order of this dossier.",
+    "own": "Own documents",
+    "ownHint": "Documents that belong to order {number} only.",
+    "general": "General documents of the dossier",
+    "generalHint": "The same documents as on dossier level, not copies. View and download only here.",
+    "manageViaDossier": "Manage via Dossier (general)"
+  },
+  "empty": {
+    "dossier": "No general documents for this dossier yet.",
+    "order": "No own documents for this order yet.",
+    "general": "This dossier has no general documents."
+  },
+  "columns": {
+    "title": "Title",
+    "type": "Type",
+    "level": "Level",
+    "file": "File",
+    "portal": "Customer portal",
+    "actions": "Actions"
+  },
+  "actions": {
+    "view": "View: {title}",
+    "download": "Download: {title}",
+    "attachFile": "Add file: {title}",
+    "visibility": "Change visibility: {title}",
+    "move": "Move: {title}",
+    "delete": "Delete: {title}"
+  },
+  "visibility": {
+    "visible": "Visible to customer",
+    "internal": "Internal",
+    "independent": "Customer visibility is independent of the level: moving a document never makes it visible or internal.",
+    "title": "Change visibility",
+    "makeVisible": "Make visible to the customer",
+    "makeInternal": "Make internal",
+    "confirmVisible": "The customer will then be able to view and download this document in the customer portal.",
+    "confirmInternal": "The document disappears from the customer portal and can only be consulted internally.",
+    "failed": "The visibility could not be changed.",
+    "nowVisible": "The document is now visible in the customer portal.",
+    "nowInternal": "The document is no longer visible to the customer."
+  },
+  "upload": {
+    "open": "Upload document",
+    "title": "Upload document",
+    "target": "Link document to",
+    "targetHint": "A document of the whole dossier can be consulted from every order.",
+    "targetDossier": "Whole dossier",
+    "targetOrder": "Order {label}",
+    "type": "Document type",
+    "customType": "Custom type name (optional)",
+    "file": "File",
+    "fileHint": "PDF, JPG or PNG, 10 MB maximum.",
+    "documentTitle": "Title",
+    "customerVisible": "Visible to the customer",
+    "customerVisibleHint": "Documents are internal by default. Only tick this to show the document in the customer portal.",
+    "submit": "Upload",
+    "retry": "Upload the file again",
+    "retryHint": "The document details are already in the dossier. Pick another file if needed and try again, or remove the document.",
+    "closeWithoutFile": "Close without file",
+    "removeCreated": "Remove document",
+    "removed": "The document without a file was removed.",
+    "success": "Document added.",
+    "createFailed": "The document could not be created.",
+    "fileFailed": "The document details were saved, but the file was NOT uploaded: {reason}",
+    "fileFailedFallback": "The file could not be uploaded.",
+    "titleRequired": "Give the document a title.",
+    "fileRequired": "Choose a file.",
+    "fileProblem": {
+      "empty": "The file is empty.",
+      "tooLarge": "The file is larger than 10 MB.",
+      "unsupportedType": "Only PDF, JPG and PNG files are allowed."
+    }
+  },
+  "move": {
+    "title": "Move document to…",
+    "intro": "Choose the level \"{title}\" belongs to from now on.",
+    "legend": "Move to",
+    "current": "current location",
+    "explanation": "The file itself stays the same: only the link changes. Customer visibility does not change.",
+    "confirm": "Move",
+    "failed": "The document could not be moved.",
+    "success": "Document moved to {level}."
+  },
+  "delete": {
+    "title": "Delete document",
+    "confirmDossier": "Are you sure you want to delete \"{title}\"? This document is visible on all orders of this dossier and will be deleted everywhere.",
+    "confirmOrder": "Are you sure you want to delete \"{title}\"? This document belongs to order {number} only and will be deleted permanently.",
+    "confirm": "Delete",
+    "success": "Document deleted.",
+    "failed": "The document could not be deleted."
+  },
+  "issued": {
+    "title": "Transport documents",
+    "empty": "No transport document created yet.",
+    "loadFailed": "The transport documents could not be loaded.",
+    "kind": {
+      "Cmr": "Consignment note (CMR)",
+      "DeliveryNote": "Delivery note",
+      "WorkOrder": "Work order"
+    },
+    "kindLabel": "Document kind",
+    "externalNumber": "External / pre-printed number (optional)",
+    "externalNumberValue": "external no. {number}",
+    "issuedAt": "created on {date}",
+    "issuedAtBy": "created on {date} by {name}",
+    "pdfLabel": "Download PDF of {number}",
+    "pdfFailed": "The PDF could not be downloaded.",
+    "create": {
+      "Cmr": "Create consignment note",
+      "DeliveryNote": "Create delivery note",
+      "WorkOrder": "Create work order"
+    },
+    "success": "Transport document {number} created.",
+    "failed": "The transport document could not be created.",
+    "failedRetry": "{reason} Try again: a repeated attempt never produces a second number."
+  },
+  "activityStatus": {
+    "none": "Not created yet",
+    "several": {
+      "Cmr": "{count} consignment notes",
+      "DeliveryNote": "{count} delivery notes",
+      "WorkOrder": "{count} work orders",
+      "Mixed": "{count} transport documents"
+    },
+    "uploads_one": "{count} document",
+    "uploads_other": "{count} documents"
+  }
+}

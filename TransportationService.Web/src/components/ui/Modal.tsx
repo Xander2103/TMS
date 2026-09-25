@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useLocale } from '../../i18n/localeContext'
+import { lockBodyScroll } from './bodyScrollLock'
+import { useEscapeLayer } from './escapeLayerStack'
 import './Modal.css'
 
 interface ModalProps {
@@ -42,18 +44,15 @@ export function Modal({ title, onClose, children, footer, busy = false }: ModalP
     }
   }, [opener])
 
-  useEffect(() => {
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape' && !busy) onClose()
-    }
-    document.addEventListener('keydown', handleKeyDown)
-    const previousOverflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown)
-      document.body.style.overflow = previousOverflow
-    }
-  }, [onClose, busy])
+  // Only the topmost overlay receives Escape (see escapeLayerStack). While busy the dialog stays
+  // the top layer and swallows the key: it must not fall through to a drawer underneath.
+  useEscapeLayer(true, () => {
+    if (!busy) onClose()
+  })
+
+  // Held for the dialog's whole lifetime — deliberately NOT tied to onClose/busy, which change
+  // identity on most renders. The shared counter makes stacked overlays order-independent.
+  useEffect(() => lockBodyScroll(), [])
 
   const dialog = (
     <div className="ui-modal-backdrop" onClick={busy ? undefined : onClose}>

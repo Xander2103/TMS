@@ -301,6 +301,18 @@
   cursor: help;
 }
 
+/* "gratis" marker next to the € 0,00 of a free dossier activity in the builder. */
+.inv-free-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  background: #e0f2fe;
+  color: #075985;
+}
+
 /* P12: inline datum+reden invoer voor het uitstellen van een order in de facturatiecontrole. */
 .inv-snooze-editor {
   display: inline-flex;

@@ -153,7 +153,13 @@ public record AssignOrdersRequest(IReadOnlyList<Guid> OrderIds, Guid? Version = 
 public record ReorderTripOrdersRequest(IReadOnlyList<Guid> OrderIds, Guid? Version = null);
 
 /// <summary>Null id clears the slot. Override applies when the trip is Planned and blocking conflicts arise.</summary>
-public record AssignResourceRequest(Guid? ResourceId, Guid? Version = null, bool Override = false, string? OverrideReason = null);
+/// <param name="VehicleSelectionSource">
+/// D1, vehicle endpoint only: an explicit vehicle choice is <c>Manual</c> unless the caller says it
+/// merely accepted the proposal (<c>Suggested</c>). Ignored by the driver and trailer endpoints.
+/// </param>
+public record AssignResourceRequest(
+    Guid? ResourceId, Guid? Version = null, bool Override = false, string? OverrideReason = null,
+    VehicleSelectionSource? VehicleSelectionSource = null);
 
 public record RescheduleTripRequest(
     DateOnly TripDate, DateTime? PlannedStart, DateTime? PlannedEnd,

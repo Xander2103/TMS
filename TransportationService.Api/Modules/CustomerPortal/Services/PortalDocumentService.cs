@@ -50,6 +50,25 @@ public class PortalDocumentService : IPortalDocumentService
             _dbContext, _tenantContext.TenantId, userId, cancellationToken);
     }
 
+    private sealed class VisibleDossierDocument
+    {
+        public required Modules.Orders.Entities.TransportOrderDocument Document { get; init; }
+        public required string DossierNumber { get; init; }
+    }
+
+    /// <summary>
+    /// D6: THE portal predicate for a DOSSIER-level document (no order) — published, has a file, and
+    /// the dossier belongs to the portal user's customer. Used by the list AND re-checked by the
+    /// download, so the two can never drift apart.
+    /// </summary>
+    private IQueryable<VisibleDossierDocument> VisibleDossierDocuments(Guid tenantId, Guid customerId) =>
+        from d in _dbContext.TransportOrderDocuments.AsNoTracking()
+        join dossier in _dbContext.TransportDossiers.AsNoTracking() on d.DossierId equals (Guid?)dossier.Id
+        where d.TenantId == tenantId && dossier.TenantId == tenantId
+            && d.TransportOrderId == null && dossier.CustomerId == customerId
+            && d.CustomerVisible && d.DocumentPath != null
+        select new VisibleDossierDocument { Document = d, DossierNumber = dossier.DossierNumber };
+
     public async Task<PortalResult<IReadOnlyList<PortalDocumentDto>>> ListMyDocumentsAsync(CancellationToken cancellationToken)
     {
         var customerId = await MyCustomerIdAsync(cancellationToken);
@@ -62,12 +81,21 @@ public class PortalDocumentService : IPortalDocumentService
 
         var orderDocs = await (
             from d in _dbContext.TransportOrderDocuments.AsNoTracking()
-            join o in _dbContext.TransportOrders.AsNoTracking() on d.TransportOrderId equals o.Id
+            join o in _dbContext.TransportOrders.AsNoTracking() on d.TransportOrderId equals (Guid?)o.Id
             // H-14: order documents are internal until a planner publishes them explicitly.
             where d.TenantId == tenantId && o.TenantId == tenantId && o.CustomerId == customerId
                 && d.CustomerVisible && d.DocumentPath != null
             select new PortalDocumentDto(
                 d.Id, PortalDocumentSource.OrderDocument, d.Title, d.FileName, d.CreatedAt, o.Id, o.OrderNumber, null, null))
+            .ToListAsync(cancellationToken);
+
+        // D6: documents of a dossier as a whole. The level a document hangs on never implies
+        // visibility — same opt-in flag, same "has a file" rule, and the DOSSIER's customer must be
+        // the portal user's customer (an inner join on the order would silently drop these rows).
+        var dossierDocs = await VisibleDossierDocuments(tenantId, customerId.Value)
+            .Select(x => new PortalDocumentDto(
+                x.Document.Id, PortalDocumentSource.OrderDocument, x.Document.Title, x.Document.FileName,
+                x.Document.CreatedAt, null, null, null, null, x.DossierNumber))
             .ToListAsync(cancellationToken);
 
         var pods = await (
@@ -90,7 +118,7 @@ public class PortalDocumentService : IPortalDocumentService
                 null, null, i.Id, i.InvoiceNumber))
             .ToListAsync(cancellationToken);
 
-        var all = orderDocs.Concat(pods).Concat(invoiceAttachments)
+        var all = orderDocs.Concat(dossierDocs).Concat(pods).Concat(invoiceAttachments)
             .OrderByDescending(d => d.CreatedAt)
             .ToList();
         return PortalResult<IReadOnlyList<PortalDocumentDto>>.Success(all);
@@ -113,11 +141,18 @@ public class PortalDocumentService : IPortalDocumentService
             {
                 var doc = await (
                     from d in _dbContext.TransportOrderDocuments.AsNoTracking()
-                    join o in _dbContext.TransportOrders.AsNoTracking() on d.TransportOrderId equals o.Id
+                    join o in _dbContext.TransportOrders.AsNoTracking() on d.TransportOrderId equals (Guid?)o.Id
                     where d.TenantId == tenantId && o.TenantId == tenantId
                         && d.Id == id && o.CustomerId == customerId && d.CustomerVisible
                     select new { d.DocumentPath, d.FileName, d.ContentType })
-                    .FirstOrDefaultAsync(cancellationToken);
+                    .FirstOrDefaultAsync(cancellationToken)
+                    // D6: not an order document of this customer → maybe a published document of one
+                    // of this customer's dossiers. The SAME predicate as the list is re-checked here;
+                    // the id alone is never trusted.
+                    ?? await VisibleDossierDocuments(tenantId, customerId.Value)
+                        .Where(x => x.Document.Id == id)
+                        .Select(x => new { x.Document.DocumentPath, x.Document.FileName, x.Document.ContentType })
+                        .FirstOrDefaultAsync(cancellationToken);
                 if (doc?.DocumentPath is not { } path)
                 {
                     return PortalResult<PortalFileDto>.NotFound();

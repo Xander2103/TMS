@@ -418,7 +418,7 @@ public class LocationOperationalDataTests
         await h.Sut.CreateAsync(FullRequest("OPS-001"), CancellationToken.None);
         await h.Sut.CreateAsync(FullRequest("OPS-002") with
         {
-            Name = "Bouwwerf Gent", Type = LocationType.ConstructionSite, PostalCode = "9000", CountryCode = "nl",
+            Name = "Bouwwerf Gent", Type = LocationType.ConstructionSite, PostalCode = "9000 AA", CountryCode = "nl",
         }, CancellationToken.None);
 
         var byPostal = await h.Sut.SearchAsync("2030", null, null, null, null, null, null, null,

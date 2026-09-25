@@ -1,0 +1,33 @@
+{
+  "title": "Notities",
+  "activityTitle": "Notities bij deze activiteit",
+  "add": "+ Notitie toevoegen",
+  "loading": "Notities laden...",
+  "loadFailed": "Notities konden niet worden geladen.",
+  "retry": "Opnieuw proberen",
+  "legacyTitle": "Eerder ingevoerde notitie (alleen-lezen)",
+  "newLabel": "Nieuwe notitie",
+  "editLabel": "Notitie bewerken",
+  "empty": "Geen notities.",
+  "showAll": "Alle notities tonen ({total})",
+  "showLess": "Minder tonen",
+  "more": "Meer tonen",
+  "less": "Minder tonen",
+  "saveFailed": "De notitie kon niet worden opgeslagen.",
+  "deleteFailed": "De notitie kon niet worden verwijderd.",
+  "added": "Notitie toegevoegd.",
+  "updated": "Notitie bijgewerkt.",
+  "deleted": "Notitie verwijderd.",
+  "deleteTitle": "Notitie verwijderen",
+  "deleteMessage": "Weet je zeker dat je deze notitie wilt verwijderen? Dit kan niet ongedaan worden gemaakt.",
+  "unknownAuthor": "Onbekende auteur",
+  "edited": "bewerkt op {date}",
+  "counter": "{used} / {max} tekens",
+  "shortcutHint": "Ctrl+Enter om op te slaan",
+  "unsavedInDrawer": "Je hebt een notitie die nog niet is opgeslagen. Sla de notitie eerst op of annuleer ze.",
+  "preview": {
+    "count_one": "{count} notitie",
+    "count_other": "{count} notities",
+    "open": "Notities openen"
+  }
+}

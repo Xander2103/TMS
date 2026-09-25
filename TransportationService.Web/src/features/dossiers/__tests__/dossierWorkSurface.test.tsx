@@ -58,8 +58,9 @@ vi.mock('../../customers/api/customersApi', () => ({
 }))
 vi.mock('../../users/api/usersApi', () => ({ getUsers: () => Promise.resolve([]) }))
 vi.mock('../../legal-entities/api/legalEntitiesApi', () => ({ getLegalEntityOptions: () => Promise.resolve([]) }))
+const lookup = vi.hoisted(() => ({ options: [] as { id: string; code: string; name: string }[] }))
 vi.mock('../../master-data/hooks/useLookupOptions', () => ({
-  useLookupOptions: () => ({ options: [], isLoading: false, error: null }),
+  useLookupOptions: () => ({ options: lookup.options, isLoading: false, error: null }),
 }))
 vi.mock('../../locations/components/LocationSelect', () => ({
   LocationSelect: ({ id, onChange }: { id?: string; onChange: (v: string) => void }) => (
@@ -139,6 +140,17 @@ describe('Dossier work surface', () => {
     window.HTMLElement.prototype.scrollIntoView = vi.fn()
     api.getDossier.mockResolvedValue(unfinishedDossier())
     orders.get.mockResolvedValue(draftOrder())
+  })
+
+  it('the overview goods card shows the unit NAME from the catalogue, never the raw code', async () => {
+    lookup.options = [{ id: 'u-ep', code: 'EUROPALLET', name: 'Europallet (EP)' }]
+    try {
+      renderPage()
+      expect(await screen.findByText('2 × Europallet (EP)')).toBeInTheDocument()
+      expect(screen.queryByText(/2 × EUROPALLET/)).not.toBeInTheDocument()
+    } finally {
+      lookup.options = []
+    }
   })
 
   it('shows "Nog geen prijs" instead of € 0,00 for an unpriced dossier, and the amount once priced', async () => {
@@ -274,7 +286,7 @@ describe('Dossier work surface', () => {
     renderPage(PRICE_TAB)
     await screen.findByText('Nog geen verkooplijnen.')
 
-    await user.click(screen.getByRole('button', { name: '+ Verkooplijn' }))
+    await user.click(screen.getByRole('button', { name: '+ Verkooplijn toevoegen' }))
     await user.type(screen.getByLabelText(/Omschrijving/), 'Transport')
     await user.clear(screen.getByLabelText('Aantal'))
     await user.type(screen.getByLabelText('Aantal'), '1')
@@ -394,10 +406,10 @@ describe('Dossier work surface — several transport orders', () => {
     expect(within(total as HTMLElement).getByText('1 van 2 activiteiten geprijsd')).toBeInTheDocument()
     // Per-unit lines follow the backend flag, not "amount > 0".
     const rows = within(price).getAllByRole('listitem')
-    expect(rows[0]).toHaveTextContent('ORD-0001 · Direct transport')
+    expect(rows[0]).toHaveTextContent('ORD-0001 — Direct transport')
     expect(rows[0]).toHaveTextContent(/€\s450,00/)
-    expect(rows[1]).toHaveTextContent('ORD-0002 · Express')
-    expect(rows[1]).toHaveTextContent('—')
+    expect(rows[1]).toHaveTextContent('ORD-0002 — Express')
+    expect(rows[1]).toHaveTextContent('Nog niet geprijsd')
   })
 
   it('switching the target loads that order into the editors and saves to it', async () => {
@@ -774,12 +786,12 @@ describe('Dossier work surface — mixed dossier: transport + storage + crane', 
     expect(within(total).getByText('2 van 3 activiteiten geprijsd')).toBeInTheDocument()
     const rows = within(price).getAllByRole('listitem')
     expect(rows).toHaveLength(3)
-    expect(rows[0]).toHaveTextContent('ORD-0001 · Direct transport')
+    expect(rows[0]).toHaveTextContent('ORD-0001 — Direct transport')
     expect(rows[0]).toHaveTextContent(/€\s450,00/)
     expect(rows[1]).toHaveTextContent('Opslag')
     expect(rows[1]).toHaveTextContent(/€\s200,00/)
     expect(rows[2]).toHaveTextContent('Kraanwerk')
-    expect(rows[2]).toHaveTextContent('—')
+    expect(rows[2]).toHaveTextContent('Nog niet geprijsd')
     // The unit switcher lists all three units.
     const units = screen.getByRole('group', { name: 'Eenheid' })
     expect(within(units).getAllByRole('button')).toHaveLength(3)
@@ -1171,7 +1183,7 @@ describe('Dossier work surface — empty and incomplete stops in the inline rout
     renderPage(ROUTE_TAB)
     await screen.findByDisplayValue('Depot Gent')
     const unloadCard = stopCards()[1]
-    await user.clear(within(unloadCard).getByLabelText('Naam (vrij adres)'))
+    await user.clear(within(unloadCard).getByLabelText('Naam locatie'))
     await user.clear(within(unloadCard).getByLabelText(/Plaats/))
 
     await user.click(screen.getByRole('button', { name: 'Route opslaan' }))

@@ -1,0 +1,100 @@
+/* GPS-style address suggestions (master sprint 2026-09-21). The list is absolutely positioned
+   under its input, so opening it never moves the form; tokens only (global.css). */
+
+.address-autocomplete {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.address-autocomplete > input {
+  width: 100%;
+  box-sizing: border-box;
+  text-overflow: ellipsis;
+}
+
+/* Screen-reader-only result count. */
+.address-autocomplete-status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.address-autocomplete-list {
+  position: absolute;
+  top: calc(100% + var(--space-1));
+  left: 0;
+  /* At least as wide as the field, and wide enough to read a full address under a narrow
+     street field — but never wider than the phone screen it may be shown on. */
+  min-width: 100%;
+  width: max-content;
+  max-width: min(420px, calc(100vw - 2 * var(--space-4)));
+  box-sizing: border-box;
+  z-index: 60;
+  margin: 0;
+  padding: var(--space-1);
+  list-style: none;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow);
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.address-autocomplete-option {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: var(--space-2) 10px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  color: var(--text-h);
+  overflow-wrap: anywhere;
+}
+
+.address-autocomplete-option:hover {
+  background: var(--code-bg);
+}
+
+.address-autocomplete-option.is-highlighted {
+  background: var(--accent-bg);
+}
+
+.address-autocomplete-name {
+  font-size: 0.9375rem;
+  font-weight: 600;
+}
+
+.address-autocomplete-line {
+  font-size: 0.875rem;
+}
+
+.address-autocomplete-meta {
+  font-size: 0.75rem;
+  color: var(--text);
+}
+
+.address-autocomplete-note {
+  padding: 10px var(--space-3);
+  font-size: 0.875rem;
+  font-style: italic;
+  color: var(--text);
+}
+
+.address-autocomplete-note-error {
+  color: var(--danger);
+}
+
+.address-autocomplete-footer {
+  margin-top: var(--space-1);
+  border-top: 1px solid var(--border);
+  border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+  color: var(--accent);
+  font-size: 0.875rem;
+  font-weight: 600;
+}

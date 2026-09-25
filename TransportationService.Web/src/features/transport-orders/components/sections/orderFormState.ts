@@ -1,10 +1,14 @@
 import { getActiveLocale } from '../../../../i18n/activeLocale'
 import { translate } from '../../../../i18n/translations'
 import { fromWireDateTime, toDateTimeLocalInput } from '../../../../utils/dates'
+import { parseDecimalInput } from '../../../../utils/numbers'
 import { computeVolumeM3 } from '../../../../utils/volume'
+import { inferTotalWeightIsManual, recalculateTotalWeight } from './cargoWeight'
 import type { ServiceOption, UnitTypeMaster } from '../../../tarification/api/pricingApi'
 import type { PackageUnitType } from '../../../packages/types'
-import type { StopInput, TransportOrderDetail } from '../../types'
+import { fullAddressLine, streetLine, type PickedAddress } from '../../../locations/addressFields'
+import { postalCodeErrorKey } from '../../../locations/postalCode'
+import type { CraneJobKind, StopInput, TransportOrderDetail } from '../../types'
 
 /**
  * Form state types, initial-state builders and validation of the transport-order form.
@@ -27,6 +31,11 @@ export interface CargoFormRow {
   unitTypeLabel: string
   totalWeightKg: string
   weightPerUnitKg: string
+  /**
+   * D4: false = total follows quantity × weight per unit; true once the planner typed the total.
+   * Form-only (the API stores no flag) — see `cargoWeight.ts`.
+   */
+  totalWeightIsManual: boolean
   lengthMeters: string
   widthMeters: string
   heightMeters: string
@@ -55,15 +64,26 @@ export interface StopFormRow {
   snapshotAddress: string
   stopType: StopInput['stopType']
   locationId: string
+  /** D3: the address fields below are ALWAYS shown and submitted — with or without a `locationId`. */
   locationName: string
   address: string
   postalCode: string
   city: string
   countryCode: string
+  /** D3: the fields deviate from the linked address-book record — for this dossier only. */
+  addressOverridden: boolean
+  /** D3 (write-only): also store this new/deviating address in the customer's address book on save. */
+  saveToAddressBook: boolean
+  /** Form-only: the postal code was typed in THIS session — only then is its format validated. */
+  postalCodeTouched: boolean
   /** §14: one date + optional from/to time replace the raw planned datetime pair. */
   date: string
   fromTime: string
   toTime: string
+  /** D2, site stops only: end DATE of the job ('' = same day as `date`); 22:00 + 4 u ends the next day. */
+  toDate: string
+  /** D2, site stops only: false = the end follows start + duration; true = typed by the planner. */
+  plannedToIsManual: boolean
   /** §15: simple time requirement ('' = geen specifieke eis). */
   timeRequirement: '' | 'Before' | 'After' | 'Window'
   timeReqFrom: string
@@ -110,9 +130,7 @@ export const SERVICE_KIND_LABELS: Record<ServiceOption['kind'], string> = {
 }
 
 export function numberOrNullFrom(value: string): number | null {
-  if (value.trim() === '') return null
-  const parsed = Number(value.replace(',', '.'))
-  return Number.isFinite(parsed) ? parsed : null
+  return parseDecimalInput(value)
 }
 
 let rowKeyCounter = 0
@@ -138,9 +156,14 @@ export function emptyStop(stopType: StopInput['stopType']): StopFormRow {
     postalCode: '',
     city: '',
     countryCode: DEFAULT_STOP_COUNTRY,
+    addressOverridden: false,
+    saveToAddressBook: false,
+    postalCodeTouched: false,
     date: '',
     fromTime: '',
     toTime: '',
+    toDate: '',
+    plannedToIsManual: false,
     timeRequirement: '',
     timeReqFrom: '',
     timeReqTo: '',
@@ -176,6 +199,7 @@ export function emptyCargoRow(): CargoFormRow {
     unitTypeLabel: '',
     totalWeightKg: '',
     weightPerUnitKg: '',
+    totalWeightIsManual: false,
     lengthMeters: '',
     widthMeters: '',
     heightMeters: '',
@@ -212,8 +236,23 @@ export function applyUnitToCargoRow(row: CargoFormRow, code: string | null, mast
   next.heightMeters = fill(row.heightMeters, master.defaultHeightCm)
   if (master.defaultWeightKg !== null && (fixed || row.weightPerUnitKg.trim() === '')) {
     next.weightPerUnitKg = String(master.defaultWeightKg)
+    // D4: a unit default is a weight per unit like any other — an automatic total follows it.
+    if (!next.totalWeightIsManual) return recalculateTotalWeight(next)
   }
   return next
+}
+
+/**
+ * "Regel dupliceren" (D4): different weights per unit are separate goods lines, so a copy is the
+ * fast path. The copy is a NEW line — no id, and no barcode (barcodes must stay unique).
+ */
+export function duplicateCargoRow(row: CargoFormRow): CargoFormRow {
+  return { ...row, key: nextRowKey(), id: null, barcode: '' }
+}
+
+/** The copy lands right under its source, so the planner sees what was duplicated. */
+export function duplicateCargoRowInList(rows: CargoFormRow[], key: string): CargoFormRow[] {
+  return rows.flatMap((row) => (row.key === key ? [row, duplicateCargoRow(row)] : [row]))
 }
 
 /** True when a stop row was never touched (no address, no location, no planning) — intake fast path. */
@@ -267,6 +306,8 @@ export function cargoRowFromHeader(header: {
     quantityUnit: header.quantityUnit,
     quantityUnitCode: header.quantityUnitCode,
     totalWeightKg: header.weightKg,
+    // The header weight is a typed total without a weight per unit: it stays exactly as entered.
+    totalWeightIsManual: header.weightKg.trim() !== '',
     volumeM3: header.volumeM3,
     volumeIsManual: header.volumeM3 !== '',
     palletCount: header.palletCount,
@@ -308,13 +349,37 @@ export function timeRequirementBadge(stop: Pick<StopFormRow, 'timeRequirement' |
  */
 function plannedWindowFields(
   plannedFrom: string | null, plannedTo: string | null,
-): Pick<StopFormRow, 'date' | 'fromTime' | 'toTime'> {
+): Pick<StopFormRow, 'date' | 'fromTime' | 'toTime' | 'toDate'> {
   const from = fromWireDateTime(plannedFrom)
   const to = fromWireDateTime(plannedTo)
   return {
     date: from?.date ?? to?.date ?? '',
     fromTime: from && !(from.time === '00:00' && !to) ? from.time : '',
     toTime: to?.time ?? '',
+    // D2: only a site stop submits its own end date (a job may end the next day).
+    toDate: to?.date ?? '',
+  }
+}
+
+/**
+ * D3: every field an address-book record fills on a stop. The location NAME goes into the name
+ * field (never the whole address line); the link is fresh, so nothing deviates and nothing has to
+ * be stored again. Shared by every way of picking an address (search field, street suggestions,
+ * quick-create, duplicate hint, "Adres opnieuw overnemen").
+ */
+export function stopPatchFromAddress(address: PickedAddress): Partial<StopFormRow> {
+  return {
+    locationId: address.locationId,
+    locationName: address.name,
+    address: streetLine(address),
+    postalCode: address.postalCode ?? '',
+    city: address.city ?? '',
+    countryCode: address.countryCode?.trim() || DEFAULT_STOP_COUNTRY,
+    snapshotName: address.name,
+    snapshotAddress: fullAddressLine(address),
+    addressOverridden: false,
+    saveToAddressBook: false,
+    postalCodeTouched: false,
   }
 }
 
@@ -333,11 +398,16 @@ export function stopsFromOrder(order: TransportOrderDetail | undefined): StopFor
       : '',
     stopType: s.stopType,
     locationId: s.locationId ?? '',
-    locationName: s.locationId ? '' : s.locationName,
+    // D3: the stored snapshot is shown as-is the moment a dossier is reopened — name included.
+    locationName: s.locationName ?? '',
     address: s.address ?? '',
     postalCode: s.postalCode ?? '',
     city: s.city ?? '',
     countryCode: s.countryCode ?? 'BE',
+    addressOverridden: Boolean(s.locationId) && (s.addressOverridden ?? false),
+    saveToAddressBook: false,
+    postalCodeTouched: false,
+    plannedToIsManual: s.stopType === 'Site' && (s.plannedToIsManual ?? false),
     // C-03: the planned window is a UTC instant on the wire; the form edits the TENANT wall
     // clock, so date and times come from one conversion (never an ISO substring, which showed
     // 06:00 for an 08:00 stop and wrote that back on the next save).
@@ -383,6 +453,7 @@ export function cargoFromOrder(order: TransportOrderDetail | undefined): CargoFo
       unitTypeLabel: c.unitTypeLabel ?? '',
       totalWeightKg: c.totalWeightKg !== null ? String(c.totalWeightKg) : '',
       weightPerUnitKg: c.weightPerUnitKg !== null ? String(c.weightPerUnitKg) : '',
+      totalWeightIsManual: inferTotalWeightIsManual(c.expectedQuantity, c.weightPerUnitKg, c.totalWeightKg),
       lengthMeters: c.lengthMeters !== null ? String(c.lengthMeters) : '',
       widthMeters: c.widthMeters !== null ? String(c.widthMeters) : '',
       heightMeters: c.heightMeters !== null ? String(c.heightMeters) : '',
@@ -526,6 +597,59 @@ export interface OrderFormValues {
   extraTimeMinimumBillableMinutes: string
   /** Concurrency token of the loaded order; echoed on update, absent on create. */
   version?: string
+  /**
+   * D2: crane job of the order. UNDEFINED = this editor does not own the crane fields — nothing is
+   * submitted and the server keeps kind, description and lift data exactly as stored.
+   */
+  craneJob?: CraneJobFormValues
+}
+
+/** D2: kind of crane job + the on-site work it describes. The lift data is the load to LIFT, never goods. */
+export interface CraneJobFormValues {
+  kind: CraneJobKind
+  workDescription: string
+  liftLoadWeightKg: string
+  liftLoadDimensions: string
+  liftRadiusMeters: string
+  liftHeightMeters: string
+  liftConditions: string
+  liftEquipment: string
+}
+
+export function emptyCraneJob(kind: CraneJobKind = 'None'): CraneJobFormValues {
+  return {
+    kind,
+    workDescription: '',
+    liftLoadWeightKg: '',
+    liftLoadDimensions: '',
+    liftRadiusMeters: '',
+    liftHeightMeters: '',
+    liftConditions: '',
+    liftEquipment: '',
+  }
+}
+
+/** Crane-job form values of a loaded order (older payloads without the fields read as None/empty). */
+export function craneJobFromOrder(order: TransportOrderDetail | undefined): CraneJobFormValues {
+  const text = (value: number | null | undefined) => (value == null ? '' : String(value))
+  return {
+    kind: order?.craneJobKind ?? 'None',
+    workDescription: order?.workDescription ?? '',
+    liftLoadWeightKg: text(order?.liftLoadWeightKg),
+    liftLoadDimensions: order?.liftLoadDimensions ?? '',
+    liftRadiusMeters: text(order?.liftRadiusMeters),
+    liftHeightMeters: text(order?.liftHeightMeters),
+    liftConditions: order?.liftConditions ?? '',
+    liftEquipment: order?.liftEquipment ?? '',
+  }
+}
+
+/** True when the planner entered anything about the on-site job (intake "touched" detection). */
+export function isCraneJobTouched(job: CraneJobFormValues): boolean {
+  return [
+    job.workDescription, job.liftLoadWeightKg, job.liftLoadDimensions, job.liftRadiusMeters,
+    job.liftHeightMeters, job.liftConditions, job.liftEquipment,
+  ].some((value) => value.trim() !== '')
 }
 
 // --- Derived goods summary (wave 2026-08-04 §2) ---
@@ -626,13 +750,43 @@ export function validateOrderForm(values: OrderFormValues): OrderFormValidationE
     )
   }
 
+  // D2: an on-site lifting job is ONE work-site stop + a description of the work — no goods and
+  // no loading/unloading stops (mirror of the backend rules; every other order is unchanged).
+  const onSite = values.craneJob?.kind === 'OnSiteLifting'
+  if (onSite) {
+    if (!values.stops.some((stop) => stop.stopType === 'Site')) {
+      add('route', 'siteStop', tr('stopEditor.validation.siteStopLabel'), tr('stopEditor.validation.siteStopMessage'))
+    }
+    if (values.stops.some((stop) => stop.stopType !== 'Site')) {
+      add('route', 'stops', tr('stopEditor.validation.siteOnlyLabel'), tr('stopEditor.validation.siteOnlyMessage'))
+    }
+    if (!values.craneJob?.workDescription.trim()) {
+      add('route', 'workDescription', tr('stopEditor.validation.workDescriptionLabel'), tr('stopEditor.validation.workDescriptionMessage'))
+    }
+  }
+
   values.stops.forEach((stop, index) => {
     const number = index + 1
-    if (!stop.locationId && !stop.city.trim()) {
-      add('route', `stops[${index}].city`, tr('transportOrders.validation.stopCityLabel', { number }), tr('transportOrders.validation.stopCityMessage'))
+    const isSite = stop.stopType === 'Site'
+    // A work site is often a street without a known place yet: a place OR an address line will do.
+    if (!stop.locationId && !stop.city.trim() && !(isSite && stop.address.trim())) {
+      add(
+        'route', `stops[${index}].city`,
+        isSite ? tr('stopEditor.validation.siteAddressLabel') : tr('transportOrders.validation.stopCityLabel', { number }),
+        isSite ? tr('stopEditor.validation.siteAddressMessage') : tr('transportOrders.validation.stopCityMessage'),
+      )
+    }
+    // D3: a postal code typed in THIS session must match its country's format; stored values
+    // (never touched) are left alone so existing data can always be saved again.
+    const postalKey = stop.postalCodeTouched ? postalCodeErrorKey(stop.countryCode, stop.postalCode) : null
+    if (postalKey) {
+      add('route', `stops[${index}].postalCode`, tr('stopEditor.validation.postalCodeLabel', { number }), tr(postalKey))
     }
     const windowPairs: Array<[string, string]> = [
-      [stop.fromTime, stop.toTime],
+      // A site job may end the next day, so its window is compared date + time.
+      isSite && stop.fromTime && stop.toTime
+        ? [`${stop.date}T${stop.fromTime}`, `${stop.toDate || stop.date}T${stop.toTime}`]
+        : [stop.fromTime, stop.toTime],
       [stop.requestedFrom, stop.requestedTo],
       [stop.confirmedFrom, stop.confirmedTo],
     ]
@@ -670,7 +824,8 @@ export function validateOrderForm(values: OrderFormValues): OrderFormValidationE
   // Wave 2026-08-04 §3: quantity + unit, a goods line or a description — any one suffices.
   const hasHeaderQuantity =
     values.quantity !== '' && Number(values.quantity) > 0 && Boolean(values.quantityUnitCode || values.quantityUnit.trim())
-  if (!hasHeaderQuantity && values.cargoItems.length === 0 && !values.goodsDescription.trim()) {
+  // D2: an on-site lifting job moves no goods — the minimum-goods rule does not apply to it.
+  if (!onSite && !hasHeaderQuantity && values.cargoItems.length === 0 && !values.goodsDescription.trim()) {
     add(
       'goederen', 'goodsDescription', tr('transportOrders.validation.goodsLabel'),
       tr('transportOrders.validation.goodsMessage'),

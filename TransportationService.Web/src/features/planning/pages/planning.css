@@ -148,18 +148,12 @@
   color: #dc2626;
 }
 
+/* Searchable order adder: wide enough for "number — customer", never wider than the section. */
 .pl-add-order {
   margin-top: 10px;
-}
-
-.pl-add-order select {
-  min-width: 340px;
-  padding: 8px 10px;
-  font: inherit;
-  font-size: 15px;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 6px;
+  width: 100%;
+  max-width: 520px;
+  box-sizing: border-box;
 }
 
 .pl-ok {

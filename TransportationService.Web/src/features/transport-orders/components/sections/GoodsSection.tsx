@@ -5,7 +5,15 @@ import { UNIT_TYPE_LABELS, type PackageUnitType } from '../../../packages/types'
 import { computeVolumeM3 } from '../../../../utils/volume'
 import { formatQuantity } from '../../../../utils/numbers'
 import type { CustomerPreferredUnit } from '../../../tarification/api/pricingApi'
+import { GoodsCapacityHint } from '../GoodsCapacityHint'
 import { UnitSelect, type UnitOptionItem } from '../UnitSelect'
+import {
+  applyCargoWeightPatch,
+  canRecalculateTotalWeight,
+  cargoWeightTotalsFromRows,
+  isUnitWeightUnknown,
+  recalculateTotalWeight,
+} from './cargoWeight'
 import { numberOrNullFrom, type CargoFormRow, type CargoSummary, type StopFormRow } from './orderFormState'
 
 interface GoodsSectionProps {
@@ -50,6 +58,14 @@ interface GoodsSectionProps {
   onAddCargoRow: () => void
   onAddCargoRowFromHeader: () => void
   onRemoveCargoRow: (key: string) => void
+  /** D4 "Regel dupliceren": different weights per unit are separate lines. Absent → action hidden. */
+  onDuplicateCargoRow?: (key: string) => void
+  /**
+   * Capacities of the vehicle assigned in the current context, when the host knows one
+   * (`Vehicle.payloadKg` / `Vehicle.tailLiftCapacityKg`). Absent → "Capaciteit nog te controleren".
+   */
+  vehiclePayloadKg?: number | null
+  tailLiftCapacityKg?: number | null
   /** Selecting a unit auto-fills physical defaults from the unit master (composer owns the master data). */
   applyCargoUnit: (key: string, code: string | null) => void
   /** Fixed dimensions come from the unit definition and are not editable per order line. */
@@ -98,12 +114,26 @@ export function GoodsSection({
   onAddCargoRow,
   onAddCargoRowFromHeader,
   onRemoveCargoRow,
+  onDuplicateCargoRow,
+  vehiclePayloadKg,
+  tailLiftCapacityKg,
   applyCargoUnit,
   cargoDimensionsFixed,
   saving,
   errors,
 }: GoodsSectionProps) {
   const { t } = useLocale()
+  // D4: quantity, weight per unit and total weight move together — the pure helper decides
+  // whether the total follows (automatic) or stays as typed (manual).
+  const setCargoWeight = (cargo: CargoFormRow, patch: Partial<CargoFormRow>) => {
+    const next = applyCargoWeightPatch(cargo, patch)
+    setCargo(cargo.key, { ...patch, totalWeightKg: next.totalWeightKg, totalWeightIsManual: next.totalWeightIsManual })
+  }
+  const recalculateCargoWeight = (cargo: CargoFormRow) => {
+    const next = recalculateTotalWeight(cargo)
+    setCargo(cargo.key, { totalWeightKg: next.totalWeightKg, totalWeightIsManual: next.totalWeightIsManual })
+  }
+  const weightTotals = cargoWeightTotalsFromRows(cargoItems)
   return (
     <>
       <FormField
@@ -236,6 +266,9 @@ export function GoodsSection({
       <p className="tof-cargo-hint">
         {t('transportOrders.goods.commercialHint')}
       </p>
+      <p className="tof-cargo-hint">
+        {t('transportOrders.goods.separateLinesHint')}
+      </p>
       {cargoItems.length === 0 && (
         <p className="tof-cargo-hint">
           {t('transportOrders.goods.noLinesHint')}
@@ -249,7 +282,7 @@ export function GoodsSection({
         // "Meer details" opens automatically when any advanced field carries a value, so
         // existing data never disappears behind a collapsed disclosure.
         const hasDetailContent = Boolean(
-          cargo.barcode || cargo.unitType || cargo.weightPerUnitKg || cargo.palletCount ||
+          cargo.barcode || cargo.unitType || cargo.palletCount ||
           cargo.reference || cargo.notes || cargo.lengthMeters || cargo.widthMeters ||
           cargo.heightMeters || (cargo.volumeIsManual && cargo.volumeM3) || !cargo.stackable ||
           (cargo.adrRequired && cargo.adrDetails),
@@ -257,8 +290,14 @@ export function GoodsSection({
         return (
         <fieldset key={cargo.key} className="tof-stop">
           <legend>{t('transportOrders.goods.lineLegend', { number: index + 1 })}</legend>
-          <div className="tof-row tof-row-4">
-            <FormField label={t('transportOrders.goods.lineDescription')} htmlFor={`cg-desc-${cargo.key}`} hint={t('transportOrders.goods.lineDescriptionHint')}>
+          {/* D4: the five facts of a line share the main row — weight per unit is no longer hidden. */}
+          <div className="tof-row tof-row-goods">
+            <FormField
+              className="tof-goods-description"
+              label={t('transportOrders.goods.lineDescription')}
+              htmlFor={`cg-desc-${cargo.key}`}
+              hint={t('transportOrders.goods.lineDescriptionHint')}
+            >
               <input id={`cg-desc-${cargo.key}`} value={cargo.description} onChange={(e) => setCargo(cargo.key, { description: e.target.value })} disabled={saving} maxLength={300} />
             </FormField>
             <FormField
@@ -273,7 +312,7 @@ export function GoodsSection({
                 min={0.01}
                 step="0.01"
                 value={cargo.expectedQuantity}
-                onChange={(e) => setCargo(cargo.key, { expectedQuantity: e.target.value })}
+                onChange={(e) => setCargoWeight(cargo, { expectedQuantity: e.target.value })}
                 disabled={saving}
                 aria-invalid={errors[`cargoItems[${index}].expectedQuantity`] ? true : undefined}
               />
@@ -296,9 +335,50 @@ export function GoodsSection({
                 disabled={saving}
               />
             </FormField>
+            {/* A total without a weight per unit never yields one (3 pallets / 6000 kg proves
+                nothing per pallet) — the hint says so instead of showing a derived value. */}
+            <FormField
+              label={t('transportOrders.goods.weightPerUnit')}
+              htmlFor={`cg-unitweight-${cargo.key}`}
+              hint={isUnitWeightUnknown(cargo) ? t('transportOrders.goods.unitWeightUnknown') : undefined}
+            >
+              <input
+                id={`cg-unitweight-${cargo.key}`}
+                type="number"
+                min={0}
+                step="0.001"
+                value={cargo.weightPerUnitKg}
+                onChange={(e) => setCargoWeight(cargo, { weightPerUnitKg: e.target.value })}
+                disabled={saving}
+              />
+            </FormField>
             {/* Wave 1 §12: total weight feeds the weight tariffs — a default-view field. */}
             <FormField label={t('transportOrders.goods.totalWeight')} htmlFor={`cg-weight-${cargo.key}`}>
-              <input id={`cg-weight-${cargo.key}`} type="number" min={0} step="0.01" value={cargo.totalWeightKg} onChange={(e) => setCargo(cargo.key, { totalWeightKg: e.target.value })} disabled={saving} />
+              <input
+                id={`cg-weight-${cargo.key}`}
+                type="number"
+                min={0}
+                step="0.01"
+                value={cargo.totalWeightKg}
+                onChange={(e) => setCargoWeight(cargo, { totalWeightKg: e.target.value })}
+                // An emptied total is not a typed value: the line returns to automatic.
+                onBlur={() => {
+                  if (cargo.totalWeightIsManual && cargo.totalWeightKg.trim() === '') recalculateCargoWeight(cargo)
+                }}
+                disabled={saving}
+              />
+              {(cargo.totalWeightIsManual ? cargo.totalWeightKg.trim() !== '' : cargo.weightPerUnitKg.trim() !== '') && (
+                <p className="tof-weight-mode">
+                  {cargo.totalWeightIsManual
+                    ? t('transportOrders.goods.totalWeightManual')
+                    : t('transportOrders.goods.totalWeightAuto')}
+                  {canRecalculateTotalWeight(cargo) && (
+                    <button type="button" className="tof-link" onClick={() => recalculateCargoWeight(cargo)} disabled={saving}>
+                      {t('transportOrders.goods.recalculate')}
+                    </button>
+                  )}
+                </p>
+              )}
             </FormField>
           </div>
           {(loadingStopCount > 1 || unloadingStopCount > 1) && (
@@ -360,9 +440,6 @@ export function GoodsSection({
             <div className="tof-row tof-row-4">
               <FormField label={t('transportOrders.goods.barcode')} htmlFor={`cg-bc-${cargo.key}`}>
                 <input id={`cg-bc-${cargo.key}`} value={cargo.barcode} onChange={(e) => setCargo(cargo.key, { barcode: e.target.value })} disabled={saving} maxLength={100} />
-              </FormField>
-              <FormField label={t('transportOrders.goods.weightPerUnit')} htmlFor={`cg-unitweight-${cargo.key}`}>
-                <input id={`cg-unitweight-${cargo.key}`} type="number" min={0} step="0.001" value={cargo.weightPerUnitKg} onChange={(e) => setCargo(cargo.key, { weightPerUnitKg: e.target.value })} disabled={saving} />
               </FormField>
               <FormField label={t('transportOrders.goods.linePallets')} htmlFor={`cg-pallets-${cargo.key}`} hint={t('transportOrders.goods.linePalletsHint')}>
                 <input id={`cg-pallets-${cargo.key}`} type="number" min={0} step="0.01" value={cargo.palletCount} onChange={(e) => setCargo(cargo.key, { palletCount: e.target.value })} disabled={saving} />
@@ -456,6 +533,11 @@ export function GoodsSection({
             </div>
           </details>
           <div className="tof-stop-toolbar">
+            {onDuplicateCargoRow && (
+              <button type="button" className="tof-link" onClick={() => onDuplicateCargoRow(cargo.key)} disabled={saving}>
+                {t('transportOrders.goods.duplicateLine')}
+              </button>
+            )}
             <button
               type="button"
               className="tof-link tof-link-danger"
@@ -468,6 +550,22 @@ export function GoodsSection({
         </fieldset>
         )
       })}
+      {cargoItems.length > 0 && (
+        <>
+          <div className="tof-goods-footer">
+            <Button variant="secondary" onClick={onAddCargoRow} disabled={saving}>
+              {t('transportOrders.goods.addAnotherLine')}
+            </Button>
+          </div>
+          <GoodsCapacityHint
+            totalWeightKg={weightTotals.totalWeightKg}
+            heaviestUnitKg={weightTotals.heaviestUnitKg}
+            linesWithoutUnitWeight={weightTotals.linesWithoutUnitWeight}
+            payloadKg={vehiclePayloadKg}
+            tailLiftCapacityKg={tailLiftCapacityKg}
+          />
+        </>
+      )}
     </>
   )
 }

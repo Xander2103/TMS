@@ -83,7 +83,7 @@ function cancelledInvoice(): InvoiceDetail {
     allowedTransitions: [],
     lines: [
       {
-        id: 'l1', sequence: 1, transportOrderId: null, orderNumber: null,
+        id: 'l1', sequence: 1, transportOrderId: null, orderNumber: null, dossierActivityId: null, dossierNumber: null,
         description: 'Administratieve kost', customerDescription: 'Administratieve kost',
         quantity: 1, unitPrice: 25, vatRatePercent: 21, lineTotal: 25,
         salesCategoryId: null, salesCategoryName: null,

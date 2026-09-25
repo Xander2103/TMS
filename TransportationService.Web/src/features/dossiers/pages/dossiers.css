@@ -15,10 +15,12 @@
 }
 
 /* ---- Dossierlijst ---- */
-/* Vaste kolombreedtes uit de kolomdefinities respecteren; de wrapper scrollt horizontaal. */
+/* Vaste kolombreedtes respecteren; de wrapper scrollt horizontaal. min-width = som van alle
+   kolombreedtes: met table-layout: fixed zou een kleinere min-width de kolom zonder eigen
+   breedte tot 0 px laten krimpen (gevonden in de browsercheck: Klant-kolom onzichtbaar). */
 .dossier-list .data-table {
   table-layout: fixed;
-  min-width: 72rem;
+  min-width: 84.5rem;
 }
 
 .dossier-list .data-table tbody td {
@@ -53,4 +55,296 @@
   margin-left: 6px;
   color: var(--color-warning, #d97706);
   cursor: help;
+}
+
+/* Two-line cells (klant + klantnr., chauffeur + kenteken, route + aantal). */
+.dossier-list-stack,
+.dossier-list-transport {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.dossier-list-muted {
+  font-size: 0.8rem;
+  color: var(--text-muted, #6b7280);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dossier-list-number {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ---- Filterbalk (lijst-redesign 2026-09-23) ---- */
+.dossier-filters {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.dossier-filters .ui-filter-bar {
+  margin-bottom: 0;
+}
+
+.dossier-filter-status,
+.dossier-filter-quick {
+  display: inline-flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.dossier-filter-chip {
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.dossier-filter-chip:hover {
+  border-color: var(--accent, #2563eb);
+}
+
+.dossier-filter-chip[aria-pressed='true'] {
+  background: var(--accent-bg, rgba(37, 99, 235, 0.1));
+  border-color: var(--accent, #2563eb);
+  color: var(--accent, #2563eb);
+  font-weight: 600;
+}
+
+.dossier-filter-customer {
+  flex: 1 1 200px;
+  min-width: 180px;
+  max-width: 320px;
+}
+
+.dossier-filter-dates {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dossier-filter-dates input {
+  font: inherit;
+  font-size: 0.9rem;
+  padding: 7px 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.dossier-filter-more {
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.dossier-filter-more[aria-expanded='true'] {
+  border-style: solid;
+  border-color: var(--accent, #2563eb);
+  color: var(--accent, #2563eb);
+}
+
+/* Uitgebreid paneel: gegroepeerde velden, meerdere kolommen op brede schermen, gestapeld op smalle. */
+.dossier-advanced {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: 12px 20px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--code-bg, rgba(15, 23, 42, 0.03));
+}
+
+.dossier-advanced-group {
+  margin: 0;
+  padding: 0;
+  border: none;
+  min-width: 0;
+}
+
+.dossier-advanced-group legend {
+  padding: 0;
+  margin-bottom: 8px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted, #6b7280);
+}
+
+.dossier-advanced-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+  gap: 8px 12px;
+}
+
+.dossier-advanced-fields .ui-form-field {
+  margin: 0;
+}
+
+.dossier-advanced-fields input,
+.dossier-advanced-fields select {
+  width: 100%;
+  font: inherit;
+  font-size: 0.9rem;
+  padding: 7px 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  box-sizing: border-box;
+}
+
+/* Actieve filterchips + "Filters wissen". */
+.dossier-active-filters {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+
+.dossier-active-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dossier-active-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 6px 2px 10px;
+  border-radius: 999px;
+  background: var(--accent-bg, rgba(37, 99, 235, 0.1));
+  color: var(--accent, #2563eb);
+  font-size: 0.85rem;
+  max-width: 100%;
+}
+
+.dossier-active-chip > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dossier-active-chip button {
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 0.8rem;
+  line-height: 1;
+  padding: 4px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.dossier-active-chip button:hover {
+  background: rgba(37, 99, 235, 0.15);
+}
+
+.dossier-clear-filters {
+  font-size: 0.9rem;
+}
+
+/* ---- Rijacties ---- */
+.dossier-row-actions {
+  display: inline-block;
+}
+
+.dossier-row-actions-button {
+  min-width: 32px;
+  min-height: 32px;
+  padding: 0 6px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-muted, #6b7280);
+  font: inherit;
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.dossier-row-actions-button:hover,
+.dossier-row-actions-button[aria-expanded='true'] {
+  border-color: var(--border);
+  background: var(--bg);
+  color: var(--text);
+}
+
+/* Portal-popover: fixed to the viewport so the scrolling table wrapper cannot clip it. */
+.dossier-row-menu {
+  position: fixed;
+  min-width: 180px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.18);
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  z-index: 40;
+}
+
+.dossier-row-menu button {
+  border: none;
+  background: none;
+  text-align: left;
+  padding: 10px 12px;
+  min-height: 40px;
+  font: inherit;
+  color: var(--text);
+  cursor: pointer;
+  border-radius: 6px;
+}
+
+.dossier-row-menu button:hover {
+  background: rgba(37, 99, 235, 0.08);
+}
+
+.dossier-row-menu .dossier-row-menu-danger {
+  color: var(--color-danger, #dc2626);
+}
+
+.dossier-cancel-intro {
+  margin: 0 0 12px;
+  color: var(--text-muted, #6b7280);
+}
+
+.dossier-cancel-error {
+  margin: 8px 0 0;
+  color: var(--color-danger, #dc2626);
+}
+
+@media (max-width: 720px) {
+  .dossier-filter-customer {
+    max-width: none;
+  }
+
+  .dossier-advanced {
+    grid-template-columns: 1fr;
+  }
 }

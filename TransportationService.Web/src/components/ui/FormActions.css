@@ -1,3 +1,9 @@
+/* Height the sticky bar occupies at the bottom of the viewport (14px padding + ~44px buttons
+   + border, with slack for a wrapped dirty hint). Only used to keep scroll targets clear of it. */
+:root {
+  --form-actions-clearance: 88px;
+}
+
 .ui-form-actions {
   position: sticky;
   bottom: 0;
@@ -6,10 +12,24 @@
   align-items: center;
   justify-content: flex-end;
   gap: 16px;
-  padding: 14px 0;
-  margin-top: 8px;
+  /* The bar touches the viewport edge while stuck: keep the buttons above the iOS home bar. */
+  padding: 14px 0 calc(14px + env(safe-area-inset-bottom, 0px));
+  /* Bottom room for the form, given HERE instead of as extra padding on `.content`: the bar
+     sticks only inside its own form, so padding below the form can never reveal a row the bar
+     covers — it would just add dead space to every page, bar or not. The margin keeps the last
+     row clear of the bar at rest (it was 8px, which read as "cut off"). */
+  margin-top: var(--space-5);
   background: var(--bg);
   border-top: 1px solid var(--border);
+}
+
+/* While the bar is stuck it overlays the rows scrolling behind it. Tabbing to a field, a
+   validation-summary jump or scrollIntoView() would otherwise park the target underneath it.
+   Scoped with :has() so only pages that really render a sticky bottom bar reserve the room;
+   the body is the scroller, hence the rule sits on the root element. */
+html:has(.ui-form-actions:not(.ui-form-actions-top)),
+html:has(.ui-sectioned-form-actions) {
+  scroll-padding-bottom: var(--form-actions-clearance);
 }
 
 .ui-form-actions-top {

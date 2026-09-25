@@ -1,6 +1,8 @@
 import { createContext, useContext } from 'react'
 import type { TransportOrderDetail } from '../transport-orders/types'
+import type { ActivityDetailFocus } from './components/ActivityCard'
 import type { DossierActivity, DossierDetail, DossierOrder } from './types'
+import type { VehicleCapacity } from './useVehicleCapacity'
 
 /**
  * Everything a dossier subsection needs from the shell. The shell (`DossierDetailPage`) owns the
@@ -36,17 +38,25 @@ export interface DossierWorkspace {
   firstLinkedOrderId: string | null
   firstOrder: TransportOrderDetail | null
   firstOrderLoading: boolean
+  /** D4: payload / tail-lift capacity of the vehicle the route target is planned on; null = unknown. */
+  routeVehicleCapacity: VehicleCapacity
 
   routeDirty: boolean
   setRouteDirty: (dirty: boolean) => void
   selectActivity: (activityId: string) => void
 
   applyDossier: (dossier: DossierDetail) => void
+  /** Re-reads the dossier (note counts, assignments, readiness) without touching the loaded order. */
+  reloadDossier: () => void
   handleConflict: (err: unknown) => boolean
   handleOrderSaved: (order: TransportOrderDetail) => void
   retryOrderLoad: () => void
 
   openActivity: (activity: DossierActivity) => void
+  /** Opens the activity detail drawer for ANY activity, on its planning block or its notes. */
+  openActivityDetail: (activity: DossierActivity, focus: ActivityDetailFocus) => void
+  /** Activity card an attention jump pointed at (Activiteiten tab); null = none. */
+  highlightedActivityId: string | null
   openAddActivity: () => void
   openGoodsDrawer: () => void
   unlinkOrder: (orderId: string) => void

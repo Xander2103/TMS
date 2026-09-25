@@ -118,7 +118,17 @@ public class DriverService : IDriverService
                     && a.StartDate <= today && a.EndDate >= today)
                     ? DriverAvailabilityStatus.OnLeave
                     : x.d.AvailabilityStatus,
-                x.d.IsActive, x.d.IsBlocked),
+                x.d.IsActive, x.d.IsBlocked,
+                // D1: fixed vehicle (vehicle side is the source), same tenant, active only.
+                _dbContext.Vehicles
+                    .Where(v => v.TenantId == x.d.TenantId && v.FixedDriverId == x.d.Id && v.IsActive)
+                    .OrderBy(v => v.InternalNumber).Select(v => (Guid?)v.Id).FirstOrDefault(),
+                _dbContext.Vehicles
+                    .Where(v => v.TenantId == x.d.TenantId && v.FixedDriverId == x.d.Id && v.IsActive)
+                    .OrderBy(v => v.InternalNumber).Select(v => v.InternalNumber).FirstOrDefault(),
+                _dbContext.Vehicles
+                    .Where(v => v.TenantId == x.d.TenantId && v.FixedDriverId == x.d.Id && v.IsActive)
+                    .OrderBy(v => v.InternalNumber).Select(v => v.LicensePlate).FirstOrDefault()),
             cancellationToken);
     }
 

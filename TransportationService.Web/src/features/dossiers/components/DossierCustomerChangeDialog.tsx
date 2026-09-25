@@ -160,6 +160,11 @@ export function DossierCustomerChangeDialog({ dossier, onClose, onChanged }: Dos
                   {t('dossiers.customerChange.leftAlone', { orders: impactView.ordersLeftOnOtherCustomer.join(', ') })}
                 </p>
               )}
+              {impactView.documentsPublicationWithdrawn > 0 && (
+                <p className="to-impact-warning">
+                  {t('dossiers.customerChange.publicationWithdrawn', { count: impactView.documentsPublicationWithdrawn })}
+                </p>
+              )}
             </>
           )}
         </section>

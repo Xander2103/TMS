@@ -1,9 +1,14 @@
 import { Badge } from '../../../components/ui/Badge'
 import { useLocale } from '../../../i18n/localeContext'
 import { formatCurrency, formatQuantity } from '../../../utils/numbers'
+import { DossierGeneralDocuments } from '../../dossiers/documents/DossierGeneralDocuments'
 import { UNIT_TYPE_LABELS } from '../../packages/types'
+import { CargoCoverageBadge } from '../components/CargoCoverageBadge'
+import { GoodsCapacityHint } from '../components/GoodsCapacityHint'
+import { isOnSiteLiftingOrder } from '../components/onSiteLifting'
 import { OrderDocumentsPanel } from '../components/OrderDocumentsPanel'
 import { OrderDocumentStrategyPanel } from '../components/OrderDocumentStrategyPanel'
+import { computeCargoWeightTotals } from '../components/sections/cargoWeight'
 import { useOrderDetail } from './orderDetailContext'
 
 /**
@@ -14,6 +19,9 @@ import { useOrderDetail } from './orderDetailContext'
 export function OrderLadingSection() {
   const { t } = useLocale()
   const { order, unitLabel, aggregateCargo, editing } = useOrderDetail()
+  // D2: an on-site lifting job lifts a load — no goods lines is its normal state, not a gap.
+  const liftingWithoutGoods = isOnSiteLiftingOrder(order) && order.cargoItems.length === 0
+  const weightTotals = computeCargoWeightTotals(order.cargoItems)
 
   return (
     <div className="tod-section" id="sectie-lading">
@@ -34,6 +42,11 @@ export function OrderLadingSection() {
                   ))}
                 </ul>
               </dd>
+            </div>
+          ) : liftingWithoutGoods ? (
+            <div>
+              <dt>Lading</dt>
+              <dd>{t('transportOrders.lading.noGoodsOnSiteLifting')}</dd>
             </div>
           ) : (
             <div>
@@ -85,9 +98,11 @@ export function OrderLadingSection() {
                   <th>Type</th>
                   <th>Barcode</th>
                   <th>Verwacht</th>
-                  <th>Gewicht</th>
+                  <th>{t('transportOrders.lading.weightPerUnit')}</th>
+                  <th>{t('transportOrders.lading.totalWeight')}</th>
                   <th>Volume/stuk</th>
                   <th>Kenmerken</th>
+                  <th>{t('transportOrders.lading.coverage')}</th>
                   <th>Notities</th>
                 </tr>
               </thead>
@@ -101,18 +116,26 @@ export function OrderLadingSection() {
                     <td>
                       {item.expectedQuantity} {unitLabel(item.quantityUnitCode, item.quantityUnit)}
                     </td>
+                    {/* Shown only when entered — a total never yields a per-unit weight. */}
+                    <td>{item.weightPerUnitKg !== null ? `${formatQuantity(item.weightPerUnitKg)} kg` : '—'}</td>
                     <td>{item.totalWeightKg !== null ? `${formatQuantity(item.totalWeightKg)} kg` : '—'}</td>
                     <td>{item.volumeM3 !== null ? `${formatQuantity(item.volumeM3)} m³` : '—'}</td>
                     <td>
                       {item.adrRequired && <Badge tone="danger">ADR</Badge>}{' '}
                       {!item.stackable && <Badge tone="warning">Niet stapelbaar</Badge>}
                     </td>
+                    <td><CargoCoverageBadge coverage={item.commercialCoverage} /></td>
                     <td>{item.notes ?? '—'}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+          <GoodsCapacityHint
+            totalWeightKg={weightTotals.totalWeightKg}
+            heaviestUnitKg={weightTotals.heaviestUnitKg}
+            linesWithoutUnitWeight={weightTotals.linesWithoutUnitWeight}
+          />
         </section>
       )}
 
@@ -121,6 +144,8 @@ export function OrderLadingSection() {
           <h2>Foto's &amp; documenten</h2>
           <OrderDocumentStrategyPanel orderId={order.id} />
           <OrderDocumentsPanel orderId={order.id} />
+          {/* D6: the dossier's general documents — the same records, read-only here. */}
+          {order.dossierId && <DossierGeneralDocuments dossierId={order.dossierId} />}
         </section>
       )}
     </div>

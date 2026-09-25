@@ -1,0 +1,184 @@
+/* Master sprint 2026-09-21 (D5): price per activity — amount block, activity picker and the sales
+   line table of a standalone activity. Tokens from styles/global.css; box-sizing set here. */
+
+.dossier-price-summary {
+  box-sizing: border-box;
+  margin: 0 0 var(--space-3);
+}
+
+.dossier-price-summary .dossier-price-total {
+  margin: 0 0 var(--space-2);
+}
+
+.dossier-price-toprice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-3);
+  margin: 0 0 var(--space-2);
+  font-size: 0.875rem;
+  color: var(--text-muted);
+}
+
+.dossier-price-toprice .link-button {
+  font-size: inherit;
+}
+
+.dossier-price-legacy {
+  margin-top: var(--space-2);
+}
+
+/* Activity picker: one compact row per commercial activity, always shown. */
+.dossier-price-picker {
+  box-sizing: border-box;
+  margin: 0 0 var(--space-4);
+}
+
+.dossier-price-picker-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.dossier-price-picker-item {
+  box-sizing: border-box;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg);
+  color: var(--text-h);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.dossier-price-picker-item:hover:not(:disabled) {
+  border-color: var(--accent-border);
+}
+
+.dossier-price-picker-item.is-selected {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+  background: var(--accent-bg);
+}
+
+.dossier-price-picker-item:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.dossier-price-picker-name {
+  font-weight: 600;
+  min-width: 0;
+}
+
+.dossier-price-picker-secondary {
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+.dossier-price-picker-price {
+  margin-right: auto;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+
+/* Sales lines of a standalone activity. */
+.dossier-activity-lines {
+  box-sizing: border-box;
+  margin-top: var(--space-4);
+}
+
+.dossier-activity-lines h3 {
+  margin: 0 0 var(--space-2);
+}
+
+.dossier-activity-lines-wrap {
+  overflow-x: auto;
+}
+
+/* The cell inputs sit outside a FormField, so they carry the app's control look themselves —
+   without it the browser's default 2px inset boxes show up in the middle of the price tab. */
+.dossier-activity-lines-table input {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: 40px;
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 1rem;
+  line-height: 1.4;
+  color: var(--text-h);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.dossier-activity-lines-table input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-bg);
+}
+
+.dossier-activity-lines-table input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.dossier-activity-lines-table td.num input {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  min-width: 5.5rem;
+}
+
+.dossier-activity-lines-table td:first-child input {
+  min-width: 12rem;
+}
+
+/* A preview amount (unsaved draft) is visibly provisional; the server's amount replaces it. */
+.dossier-activity-lines-table td[data-preview] {
+  font-style: italic;
+  color: var(--text-muted);
+}
+
+.dossier-activity-lines-table tfoot th {
+  text-align: right;
+}
+
+.dossier-activity-lines-table tfoot td {
+  font-weight: 600;
+}
+
+.dossier-activity-lines-table .actions .link-button {
+  padding: 0 var(--space-1);
+}
+
+.dossier-activity-lines-error {
+  box-sizing: border-box;
+  margin: var(--space-2) 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--danger-border);
+  border-radius: var(--radius-sm);
+  background: var(--danger-bg);
+  color: var(--danger);
+  font-size: 0.875rem;
+}
+
+.dossier-activity-price-actions {
+  flex-wrap: wrap;
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border);
+}
+
+.dossier-order-price .tod-section {
+  margin-top: var(--space-3);
+}

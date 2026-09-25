@@ -60,6 +60,29 @@ export function buildOneOffPreviewInput(values: OrderFormValues): OneOffPreviewI
 
 // --- Submit payload ---
 
+/**
+ * D2: crane-job fields of the payload. An editor that does not own them (`craneJob` undefined)
+ * contributes NOTHING — the server then keeps kind, description and lift data as stored. The
+ * description and lift data only exist for an on-site job; any other kind submits them empty.
+ */
+function craneJobPayload(values: OrderFormValues): Partial<TransportOrderInput> {
+  const job = values.craneJob
+  if (!job) return {}
+  const onSite = job.kind === 'OnSiteLifting'
+  const text = (value: string) => (onSite ? value.trim() || null : null)
+  const number = (value: string) => (onSite ? numberOrNullFrom(value) : null)
+  return {
+    craneJobKind: job.kind,
+    workDescription: text(job.workDescription),
+    liftLoadWeightKg: number(job.liftLoadWeightKg),
+    liftLoadDimensions: text(job.liftLoadDimensions),
+    liftRadiusMeters: number(job.liftRadiusMeters),
+    liftHeightMeters: number(job.liftHeightMeters),
+    liftConditions: text(job.liftConditions),
+    liftEquipment: text(job.liftEquipment),
+  }
+}
+
 /** Maps the validated form values onto the API input (create + update share this shape). */
 export function buildSubmitPayload(values: OrderFormValues): TransportOrderInput {
   return {
@@ -126,23 +149,36 @@ export function buildSubmitPayload(values: OrderFormValues): TransportOrderInput
       values.pricingSource === 'OneOff' ? null : numberOrNullFrom(values.extraTimeMinimumBillableMinutes),
     // Wave 1 §10: concurrency token round-trip; absent on create (JSON drops undefined).
     version: values.version,
+    ...craneJobPayload(values),
     stops: values.stops.map((stop) => ({
       // Phase 7: echo the existing stop id (snapshot carry-over) + the pending re-copy flag.
       id: stop.id,
       refreshSnapshot: stop.refreshSnapshot,
       stopType: stop.stopType,
       locationId: stop.locationId || null,
-      locationName: stop.locationId ? null : stop.locationName.trim() || null,
+      // D3: the address fields are always visible and always submitted as shown — the stop
+      // snapshot IS the dossier's own copy. `addressOverridden` tells the server that a linked
+      // stop deliberately deviates from its address-book record (never the other way round).
+      locationName: stop.locationName.trim() || null,
       address: stop.address.trim() || null,
       postalCode: stop.postalCode.trim() || null,
       city: stop.city.trim() || null,
       countryCode: stop.countryCode.trim() || null,
+      addressOverridden: Boolean(stop.locationId) && stop.addressOverridden,
+      // Only a NEW address (free, or a deviating linked one) can be stored in the address book;
+      // the record itself is created by the server when — and only when — the order is saved.
+      saveToAddressBook: stop.saveToAddressBook && (!stop.locationId || stop.addressOverridden),
       // §14: one date + optional from/to time; a date without times keeps the day itself.
       // C-03: the typed date/time is TENANT wall clock — toWireDateTime converts it to the UTC
       // instant the API stores. Pasting the text straight after a "Z" (the old form) claimed the
       // dispatcher had typed UTC and silently moved every window one or two hours.
       plannedFrom: toWireDateTime(stop.date, stop.fromTime || '00:00'),
-      plannedTo: stop.toTime ? toWireDateTime(stop.date, stop.toTime) : null,
+      // D2: only a site stop carries its own end date (22:00 + 4 u ends the next day) and the
+      // manual-end flag; loading/unloading windows stay within their one date, exactly as before.
+      plannedTo: stop.toTime
+        ? toWireDateTime(stop.stopType === 'Site' ? stop.toDate || stop.date : stop.date, stop.toTime)
+        : null,
+      plannedToIsManual: stop.stopType === 'Site' && stop.plannedToIsManual,
       timeRequirement: stop.timeRequirement || 'None',
       timeRequirementFrom:
         (stop.timeRequirement === 'After' || stop.timeRequirement === 'Window') && stop.timeReqFrom
@@ -179,6 +215,7 @@ export function buildSubmitPayload(values: OrderFormValues): TransportOrderInput
       unitType: cargo.unitType || null,
       unitTypeLabel: cargo.unitType === 'Other' ? cargo.unitTypeLabel.trim() || null : null,
       totalWeightKg: numberOrNullFrom(cargo.totalWeightKg),
+      // D4: only what the planner entered — a total-only line keeps a null weight per unit.
       weightPerUnitKg: numberOrNullFrom(cargo.weightPerUnitKg),
       lengthMeters: numberOrNullFrom(cargo.lengthMeters),
       widthMeters: numberOrNullFrom(cargo.widthMeters),

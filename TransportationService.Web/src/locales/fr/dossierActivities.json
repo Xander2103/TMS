@@ -1,0 +1,63 @@
+{
+  "card": {
+    "planning": "Planification",
+    "dossier": "Dossier",
+    "document": "CMR / document",
+    "driver": "Chauffeur",
+    "plate": "Immatriculation",
+    "price": "Prix de vente",
+    "priceStatus": "Statut du prix",
+    "notAssigned": "Non attribué",
+    "suggested": "proposé",
+    "sharedTrip_one": "Tournée {tripNumber} · avec {count} autre ordre",
+    "sharedTrip_other": "Tournée {tripNumber} · avec {count} autres ordres"
+  },
+  "price": {
+    "free": "Gratuit",
+    "notPriced": "Pas encore tarifé",
+    "notBillable": "Non facturable"
+  },
+  "priceStatus": {
+    "NotPriced": "Non tarifé",
+    "PartiallyPriced": "Partiellement tarifé",
+    "Priced": "Tarifé",
+    "Free": "Gratuit"
+  },
+  "planning": {
+    "title": "Planification",
+    "needsOrder": "Cette activité n’a pas encore d’ordre de transport. Créez d’abord l’ordre ; elle pourra ensuite être placée sur une tournée.",
+    "noTrip": "Pas encore sur une tournée. Le chauffeur, le véhicule et la remorque sont enregistrés sur la tournée.",
+    "trip": "Tournée {tripNumber} · {date}",
+    "openTrip": "Ouvrir la tournée",
+    "multipleTrips": "Cet ordre figure sur {count} tournées ; la plus pertinente est affichée ici.",
+    "tripDate": "Date de la tournée",
+    "tripDateHint": "Vide = la date de l’activité ou de l’ordre.",
+    "vehicle": "Véhicule",
+    "trailer": "Remorque",
+    "vehicleSuggestedHint": "Proposé sur la base du lien fixe chauffeur-véhicule",
+    "plan": "Créer la tournée et attribuer",
+    "save": "Enregistrer l’attribution",
+    "optionalHint": "Le chauffeur, le véhicule et la remorque peuvent rester vides tant que la planification n’est pas définitive.",
+    "planned": "L’activité est placée sur une tournée.",
+    "planFailed": "La tournée n’a pas pu être créée.",
+    "saved": "Attribution de la tournée {tripNumber} enregistrée.",
+    "saveFailed": "L’attribution n’a pas pu être enregistrée.",
+    "refreshFailed": "L’attribution est enregistrée, mais le dossier n’a pas pu être actualisé. Rechargez la page.",
+    "sharedTripWarning_one": "Cette modification s’applique à toute la tournée {tripNumber} ({count} autre ordre).",
+    "sharedTripWarning_other": "Cette modification s’applique à toute la tournée {tripNumber} ({count} autres ordres).",
+    "sharedTripTitle": "Modification pour toute la tournée",
+    "sharedTripConfirm": "Enregistrer quand même",
+    "readOnlyPermission": "Vous n’avez pas le droit de modifier la planification.",
+    "readOnlyClosed": "Le dossier est clôturé ; la planification ne peut pas être modifiée.",
+    "readOnlyStatus": "Cette tournée n’est plus en préparation ; modifiez l’attribution sur la page de la tournée.",
+    "tripLoadFailed": "La tournée n’a pas pu être chargée ; l’attribution est en lecture seule.",
+    "tripLoading": "Chargement de la tournée…",
+    "unsavedInDrawer": "La planification contient des modifications non enregistrées. Enregistrez d’abord l’attribution ou annulez-les."
+  },
+  "overview": {
+    "missingPrices": "Prix manquants",
+    "goodsNotApplicable": "Sans objet",
+    "dossierNotes_one": "{count} note de dossier — voir dans l’historique",
+    "dossierNotes_other": "{count} notes de dossier — voir dans l’historique"
+  }
+}

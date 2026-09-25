@@ -82,6 +82,8 @@ function draft(overrides: Partial<InvoiceDetail> = {}): InvoiceDetail {
         sequence: 1,
         transportOrderId: null,
         orderNumber: null,
+        dossierActivityId: null,
+        dossierNumber: null,
         description: 'Administratieve kost',
         customerDescription: 'Frais administratifs',
         quantity: 1,
@@ -122,6 +124,25 @@ describe('InvoiceDetailPage — verzenden en voorbeeld', () => {
     expect(await screen.findByText('Frais administratifs')).toBeInTheDocument()
     // The internal wording stays visible underneath so the operator can still recognise it.
     expect(screen.getAllByText('Administratieve kost').length).toBeGreaterThan(0)
+  })
+
+  it('labels an activity-backed line with its dossier number, as plain text (no order link)', async () => {
+    api.getInvoice.mockResolvedValue(draft({
+      lines: [
+        {
+          ...draft().lines[0],
+          id: 'l2',
+          dossierActivityId: 'act-1',
+          dossierNumber: 'DOS-0042',
+          description: 'Opslag week 34',
+          customerDescription: null,
+        },
+      ],
+    }))
+    renderPage()
+    const number = await screen.findByText('DOS-0042')
+    expect(number.tagName).toBe('CODE')
+    expect(screen.queryByRole('button', { name: 'DOS-0042' })).not.toBeInTheDocument()
   })
 
   it('opens a summary dialog on Verzenden and only sends after explicit confirmation', async () => {

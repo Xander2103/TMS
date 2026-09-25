@@ -1,6 +1,6 @@
 .ui-sectioned-form-nav {
   position: sticky;
-  top: 0;
+  top: var(--app-sticky-top, 0px);
   z-index: 2;
   background: var(--bg);
 }

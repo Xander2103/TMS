@@ -84,6 +84,8 @@ public class PlanningProposalService : IPlanningProposalService
             ? []
             : await _dbContext.TransportOrderStops.AsNoTracking()
                 .Where(s => s.TenantId == tenantId && orderIds.Contains(s.TransportOrderId)
+                            // D2: deliberately unloading only — on-site work (site stops) is a job
+                            // of its own, never a delivery to bundle into a distribution tour.
                             && s.StopType == StopType.Unloading)
                 .OrderBy(s => s.Sequence)
                 .Select(s => new

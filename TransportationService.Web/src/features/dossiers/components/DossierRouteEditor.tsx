@@ -10,13 +10,17 @@ import { useLocale } from '../../../i18n/localeContext'
 import { LocationQuickCreateDialog } from '../../locations/components/LocationQuickCreateDialog'
 import type { LocationOption } from '../../locations/types'
 import { getTransportOrder, updateTransportOrder } from '../../transport-orders/api/transportOrdersApi'
-import type { TransportOrderDetail } from '../../transport-orders/types'
+import type { CraneJobKind, TransportOrderDetail } from '../../transport-orders/types'
 import { RouteSection } from '../../transport-orders/components/sections/RouteSection'
+import { CraneJobKindField, OnSiteWorkFields } from '../../transport-orders/components/sections/CraneJobFields'
+import { applyStopPatch } from '../../transport-orders/utils/plannedEnd'
+import { ensureStopsForKind, kindSwitchDropsData, switchStopsToKind } from '../../transport-orders/components/sections/craneJobStops'
 import { useLocationHours } from '../../transport-orders/components/sections/useOrderFormData'
 import { listServiceOptions, type ServiceOption } from '../../tarification/api/pricingApi'
 import { buildSubmitPayload } from '../../transport-orders/components/sections/orderFormPayload'
 import {
   cargoFromOrder,
+  craneJobFromOrder,
   emptyStop,
   fieldErrorMap,
   isEmptyStopRow,
@@ -24,6 +28,7 @@ import {
   stopsFromOrder,
   validateOrderForm,
   type CargoFormRow,
+  type CraneJobFormValues,
   type StopFormRow,
 } from '../../transport-orders/components/sections/orderFormState'
 import { useStopMutation } from '../../transport-orders/components/sections/useStopMutation'
@@ -41,11 +46,19 @@ import '../../transport-orders/components/transport-order-form.css'
  * is never dropped without confirmation (see `requestSave`).
  */
 function seedStops(order: TransportOrderDetail | null): StopFormRow[] {
-  const rows = order && order.stops.length > 0 ? stopsFromOrder(order) : []
-  if (!rows.some((row) => row.stopType === 'Loading')) rows.unshift({ ...emptyStop('Loading'), seeded: true })
-  if (!rows.some((row) => row.stopType === 'Unloading')) rows.push({ ...emptyStop('Unloading'), seeded: true })
-  return rows
+  return seedRows(order && order.stops.length > 0 ? stopsFromOrder(order) : [], order?.craneJobKind === 'OnSiteLifting')
 }
+
+/**
+ * D2: an on-site lifting job is ONE work-site stop — it gets a seeded "Werfadres" row when it has
+ * none yet, and never a fictitious loading/unloading placeholder. Every other order keeps the
+ * classic laad + los seeding.
+ */
+function seedRows(rows: StopFormRow[], onSite: boolean): StopFormRow[] {
+  return ensureStopsForKind(rows, onSite, seededStop)
+}
+
+const seededStop = (stopType: StopFormRow['stopType']): StopFormRow => ({ ...emptyStop(stopType), seeded: true })
 
 /** A seeded placeholder the planner never touched: not data, silently re-seeded after the save. */
 function isUntouchedSeed(row: StopFormRow): boolean {
@@ -133,6 +146,10 @@ export function DossierRouteEditor({
   const [baseOrder, setBaseOrder] = useState<TransportOrderDetail | null>(order)
   const [stops, setStops] = useState<StopFormRow[]>(() => seedStops(order))
   const [cargoItems, setCargoItems] = useState<CargoFormRow[]>(() => cargoFromOrder(order ?? undefined))
+  // D2: kind of crane job + the on-site work; edited here because it decides what the route IS.
+  const [craneJob, setCraneJob] = useState<CraneJobFormValues>(() => craneJobFromOrder(order ?? undefined))
+  // Kind switch that would drop stops holding data, awaiting confirmation.
+  const [pendingKind, setPendingKind] = useState<CraneJobKind | null>(null)
   const [dirty, setDirty] = useState(false)
   const [saving, setSaving] = useState(false)
   const [creatingOrder, setCreatingOrder] = useState(false)
@@ -183,8 +200,16 @@ export function DossierRouteEditor({
     setBaseOrder(order)
     setStops(seedStops(order))
     setCargoItems(cargoFromOrder(order ?? undefined))
+    setCraneJob(craneJobFromOrder(order ?? undefined))
     setErrors({})
   }
+
+  // Capability FLAG of the activity's type (never a type code); an order that already is an
+  // on-site job keeps its fields editable even when the flag is missing on an older payload.
+  const onSite = craneJob.kind === 'OnSiteLifting'
+  const supportsOnSiteWork = Boolean(baseOrder?.activitySupportsOnSiteWork ?? activity?.supportsOnSiteWork) || onSite
+  // Planned duration lives on the ACTIVITY (edited there); here it only drives the automatic end.
+  const durationHours = baseOrder?.activityDurationHours ?? activity?.durationHours ?? null
 
   function focusControl(id: string): boolean {
     const element = rootRef.current?.querySelector<HTMLElement>(`[id="${id}"]`)
@@ -196,7 +221,8 @@ export function DossierRouteEditor({
   function focusField(field: string | null): boolean {
     const firstUnresolved = (type: StopFormRow['stopType']) =>
       stops.find((s) => s.stopType === type && !s.locationId && !s.city.trim()) ?? stops.find((s) => s.stopType === type)
-    if (field === 'stops.loading' || field === 'stops.unloading') {
+    // An on-site job has no loading/unloading stop to resolve: every route issue points at the work site.
+    if (!onSite && (field === 'stops.loading' || field === 'stops.unloading')) {
       const type = field === 'stops.loading' ? 'Loading' : 'Unloading'
       const target = firstUnresolved(type)
       if (target) return focusControl(`st-loc-${target.key}`)
@@ -225,7 +251,28 @@ export function DossierRouteEditor({
   }, [stops])
 
   function setStop(key: string, patch: Partial<StopFormRow>) {
-    mutateStops((rows) => rows.map((row) => (row.key === key ? { ...row, ...patch } : row)))
+    // Site stops keep a predictable end (start + duration until the planner types their own).
+    mutateStops((rows) => rows.map((row) => (row.key === key ? applyStopPatch(row, patch, durationHours) : row)))
+  }
+
+  /**
+   * "Soort kraanopdracht". The two kinds have disjoint stop sets (work site vs. laden/lossen), so
+   * a switch replaces the rows of the other kind — after confirmation when any of them holds
+   * data. Nothing is sent until "Route opslaan"; "Verwerpen" restores the saved route.
+   */
+  function applyCraneJobKind(kind: CraneJobKind) {
+    const toSite = kind === 'OnSiteLifting'
+    mutateStops((rows) => switchStopsToKind(rows, toSite, seededStop))
+    setCraneJob((job) => ({ ...job, kind }))
+    setErrors({})
+    setDirty(true)
+  }
+
+  function requestCraneJobKind(kind: CraneJobKind) {
+    const toSite = kind === 'OnSiteLifting'
+    if (toSite === onSite) return
+    if (kindSwitchDropsData(stops, toSite)) setPendingKind(kind)
+    else applyCraneJobKind(kind)
   }
 
   function moveStop(index: number, delta: number) {
@@ -262,6 +309,8 @@ export function DossierRouteEditor({
     setRemoveTarget(null)
     setStops(seedStops(baseOrder))
     setCargoItems(cargoFromOrder(baseOrder ?? undefined))
+    setCraneJob(craneJobFromOrder(baseOrder ?? undefined))
+    setPendingKind(null)
     setErrors({})
     setError(null)
     setDirty(false)
@@ -333,7 +382,14 @@ export function DossierRouteEditor({
     try {
       const target = await ensureOrder()
       if (!target) return
-      const values = { ...orderValuesFromDetail(target, serviceOptions), stops: effectiveStops, cargoItems: effectiveCargo }
+      const values = {
+        ...orderValuesFromDetail(target, serviceOptions),
+        stops: effectiveStops,
+        cargoItems: effectiveCargo,
+        // Only an editor that offers the choice owns the crane-job fields; otherwise they are not
+        // sent and the server keeps kind, description and lift data as stored.
+        craneJob: supportsOnSiteWork ? craneJob : undefined,
+      }
       const routeErrors = validateOrderForm(values).filter((e) => e.section === 'route')
       setErrors(fieldErrorMap(routeErrors.map((e) => ({ ...e, field: toDisplayedField(e.field, effectiveStops, rows) }))))
       if (routeErrors.length > 0) {
@@ -345,6 +401,7 @@ export function DossierRouteEditor({
       setBaseOrder(updated)
       setStops(seedStops(updated))
       setCargoItems(cargoFromOrder(updated))
+      setCraneJob(craneJobFromOrder(updated))
       setErrors({})
       toast.showSuccess(t('dossierSheet.route.saved'))
       onOrderSaved(updated)
@@ -352,7 +409,17 @@ export function DossierRouteEditor({
       if (err instanceof ApiError && err.status === 409 && err.body && typeof err.body === 'object' && 'stops' in err.body) {
         setConflict(err.body as TransportOrderDetail)
       } else {
-        setError(describeApiError(err, t('dossierSheet.route.saveFailed')).message)
+        // No success toast on a failure — and a refusal that names a stop (e.g. storing its
+        // address in the address book) is shown ON that stop, re-indexed to the displayed rows.
+        const described = describeApiError(err, t('dossierSheet.route.saveFailed'))
+        setError(described.message)
+        setErrors(
+          Object.fromEntries(
+            Object.entries(described.fieldErrors)
+              .filter(([, messages]) => messages.length > 0)
+              .map(([field, messages]) => [toDisplayedField(field, effectiveStops, rows), messages[0]]),
+          ),
+        )
       }
     } finally {
       setSaving(false)
@@ -364,6 +431,7 @@ export function DossierRouteEditor({
     setBaseOrder(conflict)
     setStops(seedStops(conflict))
     setCargoItems(cargoFromOrder(conflict))
+    setCraneJob(craneJobFromOrder(conflict))
     setDirty(false)
     setConflict(null)
     setError(null)
@@ -407,10 +475,15 @@ export function DossierRouteEditor({
         </div>
       )}
       <ValidationSummary message={error} />
-      <p className="dossier-route-hint">{t('dossierSheet.route.hint')}</p>
+      <p className="dossier-route-hint">{onSite ? t('stopEditor.crane.onSiteHint') : t('dossierSheet.route.hint')}</p>
       <div className="tof dossier-route-sheet">
+        {supportsOnSiteWork && (
+          <CraneJobKindField idPrefix="dre" kind={craneJob.kind} onChange={requestCraneJobKind} disabled={busy} />
+        )}
         <RouteSection
           stops={stops}
+          canSaveToAddressBook={canCreateLocations && Boolean(customerId)}
+          siteDurationHours={durationHours}
           customerId={customerId}
           saving={busy}
           locationHours={locationHours}
@@ -428,15 +501,39 @@ export function DossierRouteEditor({
           sheet
           hideHeader
         />
+        {onSite && (
+          <OnSiteWorkFields
+            idPrefix="dre"
+            job={craneJob}
+            onChange={(patch) => {
+              setCraneJob((job) => ({ ...job, ...patch }))
+              setDirty(true)
+            }}
+            disabled={busy}
+            descriptionError={errors.workDescription}
+            duration={
+              <p className="dossier-route-hint">
+                {durationHours !== null
+                  ? t('stopEditor.crane.durationReadOnly', { hours: String(durationHours).replace('.', ',') })
+                  : t('stopEditor.crane.durationUnknown')}
+              </p>
+            }
+          />
+        )}
       </div>
       <div className="dossier-route-actions">
         <div className="dossier-route-add">
-          <Button variant="secondary" onClick={() => mutateStops((rows) => [...rows, emptyStop('Loading')])} disabled={busy}>
-            {t('dossierSheet.route.addLoading')}
-          </Button>
-          <Button variant="secondary" onClick={() => mutateStops((rows) => [...rows, emptyStop('Unloading')])} disabled={busy}>
-            {t('dossierSheet.route.addUnloading')}
-          </Button>
+          {/* An on-site job is one work site: no loading/unloading stops can be added to it. */}
+          {!onSite && (
+            <>
+              <Button variant="secondary" onClick={() => mutateStops((rows) => [...rows, emptyStop('Loading')])} disabled={busy}>
+                {t('dossierSheet.route.addLoading')}
+              </Button>
+              <Button variant="secondary" onClick={() => mutateStops((rows) => [...rows, emptyStop('Unloading')])} disabled={busy}>
+                {t('dossierSheet.route.addUnloading')}
+              </Button>
+            </>
+          )}
         </div>
         <div className="dossier-route-save">
           {creatingOrder && <span className="dossier-route-state">{t('dossierSheet.route.creatingOrder')}</span>}
@@ -467,10 +564,25 @@ export function DossierRouteEditor({
           message={t('transportOrders.form.refreshMessage')}
           confirmLabel={t('transportOrders.form.refreshConfirm')}
           onConfirm={() => {
-            setStop(refreshTarget, { refreshSnapshot: true })
+            // The re-copy also ends a deliberate deviation from the address book (D3).
+            setStop(refreshTarget, { refreshSnapshot: true, addressOverridden: false })
             setRefreshTarget(null)
           }}
           onCancel={() => setRefreshTarget(null)}
+        />
+      )}
+
+      {pendingKind && (
+        <ConfirmDialog
+          title={t('stopEditor.crane.switchTitle')}
+          message={t('stopEditor.crane.switchMessage')}
+          confirmLabel={t('stopEditor.crane.switchConfirm')}
+          destructive
+          onConfirm={() => {
+            applyCraneJobKind(pendingKind)
+            setPendingKind(null)
+          }}
+          onCancel={() => setPendingKind(null)}
         />
       )}
 

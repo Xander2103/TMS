@@ -48,6 +48,11 @@ export interface SearchableSelectProps {
   placeholder?: string
   disabled?: boolean
   isLoading?: boolean
+  /**
+   * Sync mode: the caller could not load `options`. Shown as an error row instead of the
+   * misleading "no results" note (async mode reports its own search failures).
+   */
+  errorMessage?: string | null
   /** Show a clear (×) button when a value is selected. Default true. */
   clearable?: boolean
   emptyMessage?: string
@@ -99,6 +104,7 @@ export function SearchableSelect({
   placeholder,
   disabled,
   isLoading,
+  errorMessage,
   clearable = true,
   emptyMessage,
   ariaLabel,
@@ -228,15 +234,19 @@ export function SearchableSelect({
     if (isAsync) return belowMinChars ? [] : (asyncOptions ?? [])
     const q = trimmedQuery.toLowerCase()
     if (!q) return allOptions
-    return allOptions.filter(
-      (o) => o.label.toLowerCase().includes(q) || (o.keywords ?? '').toLowerCase().includes(q),
-    )
+    // Every word must occur somewhere in label + keywords, in any order ("peeters jan",
+    // "volvo 1-abc"). A query that matched as one substring before still matches.
+    const words = q.split(/\s+/)
+    return allOptions.filter((o) => {
+      const haystack = `${o.label} ${o.keywords ?? ''}`.toLowerCase()
+      return words.every((word) => haystack.includes(word))
+    })
   }, [isAsync, belowMinChars, asyncOptions, allOptions, trimmedQuery])
 
   const searching = isAsync && asyncStatus === 'loading'
   // Loading note only while nothing can be shown yet; later requests keep the previous rows.
   const showLoadingNote = Boolean(isLoading) || (searching && asyncOptions === null)
-  const showErrorNote = isAsync && asyncStatus === 'error'
+  const showErrorNote = (isAsync && asyncStatus === 'error') || Boolean(errorMessage)
   const searchSettled = !isAsync || asyncStatus === 'done' || belowMinChars
 
   const createRowReady = Boolean(onCreate) && !showLoadingNote && !searching
@@ -338,6 +348,7 @@ export function SearchableSelect({
   }
 
   const displayValue = open ? query : (selected?.label ?? '')
+  const showClear = clearable && Boolean(selected) && !disabled
 
   function renderOptionContent(option: SearchableSelectOption) {
     if (!isRich(option)) {
@@ -367,11 +378,12 @@ export function SearchableSelect({
   }
 
   return (
-    <div className="ui-searchable-select" ref={rootRef}>
+    <div className={showClear ? 'ui-searchable-select has-clear' : 'ui-searchable-select'} ref={rootRef}>
       <div className="ui-searchable-select-control">
         <input
           ref={inputRef}
           id={baseId}
+          className="ui-searchable-select-input"
           type="text"
           role="combobox"
           aria-expanded={open}
@@ -392,22 +404,30 @@ export function SearchableSelect({
           }}
           onKeyDown={handleKeyDown}
         />
-        {clearable && selected && !disabled && (
-          <button
-            type="button"
-            className="ui-searchable-select-clear"
-            aria-label={t('ui.select.clear')}
-            onClick={() => {
-              onChange(null)
-              setQuery('')
-              inputRef.current?.focus()
-            }}
-          >
-            ×
-          </button>
-        )}
-        <span className="ui-searchable-select-caret" aria-hidden="true">
-          ▾
+        {/* One end-adornment zone: the input's right padding is derived from it (see the CSS),
+            so clear button, caret and text can never drift apart or overlap. */}
+        <span className="ui-searchable-select-adornments">
+          {showClear && (
+            <button
+              type="button"
+              className="ui-searchable-select-clear"
+              aria-label={t('ui.select.clear')}
+              onClick={() => {
+                onChange(null)
+                setQuery('')
+                inputRef.current?.focus()
+              }}
+            >
+              <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">
+                <path d="M4 4l8 8M12 4l-8 8" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+              </svg>
+            </button>
+          )}
+          <span className="ui-searchable-select-caret" aria-hidden="true">
+            <svg viewBox="0 0 16 16" width="12" height="12" focusable="false">
+              <path d="M3.5 6l4.5 4.5L12.5 6" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </span>
         </span>
       </div>
       {isAsync && (
@@ -441,9 +461,11 @@ export function SearchableSelect({
               </li>
             ))}
           {showErrorNote && (
-            <li className="ui-searchable-select-note ui-searchable-select-note-error">{t('ui.select.searchError')}</li>
+            <li className="ui-searchable-select-note ui-searchable-select-note-error">
+              {errorMessage || t('ui.select.searchError')}
+            </li>
           )}
-          {!showLoadingNote && searchSettled && filtered.length === 0 && (!showCreateRow || trimmedQuery.length === 0) && (
+          {!showLoadingNote && !errorMessage && searchSettled && filtered.length === 0 && (!showCreateRow || trimmedQuery.length === 0) && (
             <li className="ui-searchable-select-note">{emptyMessage ?? t('ui.select.noResults')}</li>
           )}
           {showCreateRow && (

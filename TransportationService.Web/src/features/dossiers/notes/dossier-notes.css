@@ -1,0 +1,270 @@
+/* Dossier / activity notes (spec §18/§19). Tokens from styles/global.css. */
+
+.dossier-notes,
+.dossier-notes * {
+  box-sizing: border-box;
+}
+
+.dossier-notes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.dossier-notes-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.dossier-notes-header h3 {
+  margin: 0;
+}
+
+.dossier-notes-empty {
+  margin: 0;
+}
+
+.dossier-notes-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.dossier-note {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg);
+  min-width: 0;
+}
+
+.dossier-note-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-2);
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.dossier-note-author {
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.dossier-note-edited {
+  font-style: italic;
+}
+
+.dossier-note-text {
+  margin: 0;
+  color: var(--text-h);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* Two-line preview; "Meer tonen" removes the clamp. */
+.dossier-note-text-clamped {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+}
+
+.dossier-note-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.dossier-note-actions .ui-button {
+  padding: 4px 10px;
+  font-size: 13px;
+}
+
+/* Disclosure buttons ("Meer tonen", "Alle notities tonen (N)"): link-like, still real buttons. */
+.dossier-notes-toggle {
+  align-self: flex-start;
+  padding: 4px 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.dossier-notes-toggle:hover {
+  text-decoration: underline;
+}
+
+.dossier-notes-toggle:focus-visible,
+.dossier-note-preview-button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+.dossier-note-actions .dossier-notes-toggle {
+  margin-right: auto;
+}
+
+.dossier-note-editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.dossier-note-editor label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.dossier-note-editor textarea {
+  width: 100%;
+  min-height: 96px;
+  resize: vertical;
+  font: inherit;
+  padding: var(--space-2) 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--text-h);
+}
+
+.dossier-note-editor textarea:focus-visible {
+  outline: 2px solid var(--accent-border);
+  outline-offset: 1px;
+}
+
+.dossier-note-editor-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.dossier-note-editor-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.dossier-note-counter-full {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.dossier-note-editor-actions {
+  display: flex;
+  gap: var(--space-2);
+  margin-left: auto;
+}
+
+.dossier-notes-error {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--danger-border);
+  border-radius: var(--radius-sm);
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.dossier-notes-load-error {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.dossier-notes-legacy {
+  width: 100%;
+  padding: var(--space-3);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-md);
+}
+
+.dossier-notes-legacy h4 {
+  margin: 0 0 var(--space-1);
+  font-size: 13px;
+}
+
+.dossier-notes-legacy p {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* Compact: inside a drawer or card. */
+.dossier-notes-compact {
+  gap: var(--space-2);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border);
+}
+
+.dossier-notes-compact .dossier-notes-header h3 {
+  font-size: 15px;
+}
+
+.dossier-notes-compact .dossier-note {
+  padding: var(--space-2) 10px;
+}
+
+.dossier-notes-compact .dossier-notes-add {
+  padding: 5px 12px;
+  font-size: 13px;
+}
+
+/* NotePreview: one-line teaser on an activity card. */
+.dossier-note-preview {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  box-sizing: border-box;
+  max-width: 100%;
+  min-width: 0;
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.dossier-note-preview-button {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.dossier-note-preview-count {
+  flex: none;
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.dossier-note-preview-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dossier-note-preview-button:hover .dossier-note-preview-text {
+  text-decoration: underline;
+}

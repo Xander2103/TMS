@@ -26,8 +26,8 @@ export function getVehicleOptions(): Promise<VehicleOption[]> {
   return apiClient.getJson<VehicleOption[]>('/api/vehicles/options')
 }
 
-export function getVehicle(id: string): Promise<VehicleDetail> {
-  return apiClient.getJson<VehicleDetail>(`/api/vehicles/${id}`)
+export function getVehicle(id: string, signal?: AbortSignal): Promise<VehicleDetail> {
+  return apiClient.getJson<VehicleDetail>(`/api/vehicles/${id}`, signal ? { signal } : undefined)
 }
 
 export function createVehicle(input: CreateVehicleInput): Promise<VehicleDetail> {

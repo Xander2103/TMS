@@ -337,6 +337,10 @@ builder.Services.AddScoped<TransportationService.Api.Modules.Dossiers.Services.I
     TransportationService.Api.Modules.Dossiers.Services.DossierReadinessService>();
 builder.Services.AddScoped<TransportationService.Api.Modules.Dossiers.Services.IDossierActivityPricingService,
     TransportationService.Api.Modules.Dossiers.Services.DossierActivityPricingService>();
+builder.Services.AddScoped<TransportationService.Api.Modules.Dossiers.Services.IDossierNoteService,
+    TransportationService.Api.Modules.Dossiers.Services.DossierNoteService>();
+builder.Services.AddScoped<TransportationService.Api.Modules.Dossiers.Services.IDossierActivityPlanningService,
+    TransportationService.Api.Modules.Dossiers.Services.DossierActivityPlanningService>();
 builder.Services.AddScoped<TransportationService.Api.Modules.Dossiers.Services.IActivityTypeService,
     TransportationService.Api.Modules.Dossiers.Services.ActivityTypeService>();
 builder.Services.AddScoped<TransportationService.Api.Modules.Incidents.Services.IIncidentService,
@@ -371,6 +375,11 @@ builder.Services.AddScoped<TransportationService.Api.Modules.Tarification.Servic
     TransportationService.Api.Modules.Tarification.Services.PricingExcelService>();
 builder.Services.AddScoped<TransportationService.Api.Modules.Orders.Services.ITransportOrderDocumentService,
     TransportationService.Api.Modules.Orders.Services.TransportOrderDocumentService>();
+// D6: scope → permission decision of the flat order-document routes, and issued transport documents.
+builder.Services.AddScoped<TransportationService.Api.Modules.Orders.Services.IOrderDocumentAccessResolver,
+    TransportationService.Api.Modules.Orders.Services.OrderDocumentAccessResolver>();
+builder.Services.AddScoped<TransportationService.Api.Modules.Orders.Services.IIssuedTransportDocumentService,
+    TransportationService.Api.Modules.Orders.Services.IssuedTransportDocumentService>();
 
 // Planning center read models
 builder.Services.AddScoped<TransportationService.Api.Modules.Planning.Services.IPlanningBoardService,
@@ -426,6 +435,17 @@ builder.Services.AddScoped<TransportationService.Api.Modules.Orders.Services.Ord
 builder.Services.AddScoped<TransportationService.Api.Modules.Orders.Services.IOrderCustomerChangeService>(sp =>
     sp.GetRequiredService<TransportationService.Api.Modules.Orders.Services.OrderCustomerChangeService>());
 // The dossier-level change reuses the order service inside one transaction — no second engine.
+// Dossier lifecycle (confirmation sprint 2026-09-23). IDossierService is resolved lazily: it
+// optionally depends on ITransportOrderService, which calls the lifecycle after a completion.
+builder.Services.AddScoped<TransportationService.Api.Modules.Dossiers.Services.IDossierLifecycleService>(sp =>
+    new TransportationService.Api.Modules.Dossiers.Services.DossierLifecycleService(
+        sp.GetRequiredService<TransportationDbContext>(),
+        sp.GetRequiredService<TransportationService.Api.Modules.Tenancy.Services.ITenantContext>(),
+        sp.GetRequiredService<IAuditService>(),
+        sp.GetRequiredService<TimeProvider>(),
+        sp.GetRequiredService<ICurrentUserContext>(),
+        () => sp.GetRequiredService<TransportationService.Api.Modules.Dossiers.Services.IDossierService>(),
+        sp.GetRequiredService<TransportationService.Api.Modules.Dossiers.Services.IDossierReadinessService>()));
 builder.Services.AddScoped<TransportationService.Api.Modules.Dossiers.Services.IDossierCustomerChangeService,
     TransportationService.Api.Modules.Dossiers.Services.DossierCustomerChangeService>();
 builder.Services.AddScoped<TransportationService.Api.Modules.Orders.Services.ITransportOrderService,
@@ -710,6 +730,11 @@ using (var referenceScope = app.Services.CreateScope())
     // the legacy columns are left untouched.
     await TransportationService.Api.Modules.Locations.Services.AddressMasterBackfillSeeder.SyncAsync(
         referenceDbContext);
+
+    // Release flow (every environment): the permission catalogue and the versioned role
+    // templates follow the code — new permission codes and role upgrades reach existing
+    // databases at startup, idempotently, without a manual step. Catalogue BEFORE roles.
+    await AuthorizationCatalogSync.SyncAsync(referenceDbContext, app.Logger);
 }
 
 // Development-only setup
@@ -729,12 +754,14 @@ if (app.Environment.IsDevelopment())
 
     await MasterDataSeeder.SeedAsync(dbContext);
 
-    // Idempotent every startup: keep the permission catalog in sync and seed starter lookups.
-    await PermissionCatalogSeeder.SyncAsync(dbContext);
+    // The dev tenant/admin were possibly just created by MasterDataSeeder: give them the
+    // catalogue and the template roles now (the release-flow sync above ran before they existed).
+    await AuthorizationCatalogSync.SyncAsync(dbContext, app.Logger);
+
+    // Idempotent every startup: seed starter lookups.
     await ReferenceDataSeeder.SeedAsync(dbContext);
     // Legacy rate cards convert once into pricing agreements (idempotent, data preserved).
     await TransportationService.Api.Modules.Tarification.Services.RateCardConversionService.ConvertAsync(dbContext);
-    await DefaultRoleSeeder.SyncAsync(dbContext);
     await LegalEntitySeeder.SeedAsync(dbContext);
     await ExpiryPolicySeeder.SeedAsync(dbContext);
     await IssuedItemTemplateSeeder.SeedAsync(dbContext);

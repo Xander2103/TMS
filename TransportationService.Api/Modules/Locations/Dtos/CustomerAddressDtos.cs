@@ -129,7 +129,12 @@ public record AddressPickerOptionDto(
     /// Names of the customers actively linked to this address ("Klant A, Klant B"; at most three,
     /// then "…"); null when no customer is linked. Lets the picker show who else uses a shared address.
     /// </summary>
-    string? CustomerNames = null);
+    string? CustomerNames = null,
+    /// <summary>
+    /// D3: the ONE customer this address belongs to, for display next to the address. Null when no
+    /// customer is linked; with several links the default-holding (else the oldest) link's customer.
+    /// </summary>
+    string? CustomerName = null);
 
 public enum CustomerAddressOutcome
 {

@@ -37,6 +37,7 @@ function impact(overrides: Partial<OrderCustomerChangeImpact> = {}): OrderCustom
     newLegalEntityId: 'ent-b', legalEntityChanges: true, newInvoiceLanguage: 'fr', newVatTreatment: 'ReverseCharge',
     stopsKept: 2, goodsKept: 3, documentsKept: 0, draftInvoiceLinesReleased: 1,
     owningDossierId: null, owningDossierNumber: null,
+    documentsPublicationWithdrawn: 0,
     ...overrides,
   }
 }

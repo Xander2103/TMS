@@ -260,6 +260,8 @@ public static class PermissionCodes
     /// calculated price, dossiers.manage is dossier structure — none of them IS "price a non-order".
     /// </summary>
     public const string DossiersPrice = "dossiers.price";
+    /// <summary>Confirmation sprint 2026-09-23: reopen a confirmed or cancelled dossier (reason required, audited).</summary>
+    public const string DossiersReopen = "dossiers.reopen";
 
     // --- Activity types (tenant-configurable dossier activity catalogue) ---
     public const string ActivityTypesView = "activity_types.view";
@@ -605,6 +607,7 @@ public static class PermissionCodes
         (DossiersManage, "dossiers", "manage", "Transportdossiers beheren (aanmaken, koppelen, sluiten)"),
         (DossiersOverrideEntity, "dossiers", "override_entity", "Dossier of order naar een andere facturerende entiteit dan de klantstandaard verplaatsen (met reden, geauditeerd)"),
         (DossiersPrice, "dossiers", "price", "Verkoopprijs van dossieractiviteiten beheren (afgesproken prijs van opslag, kraanwerk en andere zelfstandige activiteiten)"),
+        (DossiersReopen, "dossiers", "reopen", "Een bevestigd of geannuleerd dossier heropenen (met reden, geauditeerd)"),
         (ActivityTypesView, "activity_types", "view", "Activiteitstypes bekijken"),
         (ActivityTypesManage, "activity_types", "manage", "Activiteitstypes beheren"),
         (IncidentsView, "incidents", "view", "Incidenten bekijken"),

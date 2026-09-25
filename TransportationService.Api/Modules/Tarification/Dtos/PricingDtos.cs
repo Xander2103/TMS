@@ -442,7 +442,12 @@ public record StopTimeInput(
     TimeOnly? RequirementFrom,
     TimeOnly? RequirementTo,
     bool AppointmentRequired,
-    DateOnly? PlannedDate);
+    DateOnly? PlannedDate,
+    /// <summary>
+    /// D2: a site stop (on-site work) is neither loading nor unloading. It matches conditions
+    /// scoped to ANY stop (weekend, holiday, appointment, …) and never a Loading/Unloading-scoped one.
+    /// </summary>
+    bool IsSite = false);
 
 /// <summary>A one-off order's own price agreement: no contract is consulted (spec Phase 6).</summary>
 public record OneOffPricingInput(

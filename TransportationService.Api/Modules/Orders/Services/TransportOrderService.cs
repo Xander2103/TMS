@@ -81,6 +81,11 @@ public class TransportOrderService : ITransportOrderService
     private readonly ILogger<TransportOrderService>? _logger;
     private readonly IOpeningHoursEvaluator _openingHoursEvaluator;
 
+    /// <summary>D3: Countries lookup for stop country codes. Null (legacy construction, unit tests
+    /// without the reference data) skips the lookup; the postal-code FORMAT check needs no lookup.</summary>
+    private readonly Common.Reference.ICountryCodeValidator? _countryValidator;
+    private readonly Modules.Dossiers.Services.IDossierLifecycleService? _dossierLifecycle;
+
     /// <summary>Lazily resolved tenant zone (see <see cref="ResolveTenantTimeZoneAsync"/>); the
     /// service is request-scoped, so this caches for exactly one request.</summary>
     private TimeZoneInfo? _tenantTimeZone;
@@ -95,8 +100,12 @@ public class TransportOrderService : ITransportOrderService
         IPermissionAuthorizationService? permissionService = null,
         INotificationEventService? notificationEvents = null,
         ILogger<TransportOrderService>? logger = null,
-        IOpeningHoursEvaluator? openingHoursEvaluator = null)
+        IOpeningHoursEvaluator? openingHoursEvaluator = null,
+        Common.Reference.ICountryCodeValidator? countryValidator = null,
+        Modules.Dossiers.Services.IDossierLifecycleService? dossierLifecycle = null)
     {
+        _countryValidator = countryValidator;
+        _dossierLifecycle = dossierLifecycle;
         _dbContext = dbContext;
         _tenantContext = tenantContext;
         _auditService = auditService;
@@ -168,11 +177,12 @@ public class TransportOrderService : ITransportOrderService
             {
                 x.o.Id, x.o.OrderNumber, x.o.OrderDate, x.o.CustomerId, x.CustomerName,
                 x.o.CustomerReference, x.o.Status, x.o.GoodsDescription, x.o.AdrRequired, x.o.CraneRequired,
-                x.o.Priority,
+                x.o.Priority, x.o.CraneJobKind,
             })
             .ToListAsync(cancellationToken);
 
-        // Route summary per page row: first loading / last unloading city, resolved from stop or master location.
+        // Route summary per page row: first loading / last unloading city (first site city for
+        // on-site work, D2), resolved from stop or master location.
         var orderIds = rows.Select(r => r.Id).ToList();
         var stops = await _dbContext.Set<TransportOrderStop>().AsNoTracking()
             .Where(st => st.TenantId == _tenantContext.TenantId && orderIds.Contains(st.TransportOrderId))
@@ -197,7 +207,8 @@ public class TransportOrderService : ITransportOrderService
                 orderStops.FirstOrDefault(s => s.StopType == StopType.Loading)?.City,
                 orderStops.LastOrDefault(s => s.StopType == StopType.Unloading)?.City,
                 orderStops.Count,
-                r.AdrRequired, r.CraneRequired, r.Priority);
+                r.AdrRequired, r.CraneRequired, r.Priority, r.CraneJobKind,
+                orderStops.FirstOrDefault(s => s.StopType == StopType.Site)?.City);
         }).ToList();
 
         return new PagedResult<TransportOrderListItemDto>(items, totalCount, page.Page, page.PageSize);
@@ -214,16 +225,24 @@ public class TransportOrderService : ITransportOrderService
     public async Task<TransportOrderOperationResult> CreateAsync(
         CreateTransportOrderRequest request, CancellationToken cancellationToken)
     {
+        // D2: a non-manual site stop's end follows start + the wrapper activity's duration. Resolved
+        // on the INPUTS, up front, so validation and persistence see the value that gets stored.
+        // (An invalid duration is refused further down; an order created inside a dossier has no
+        // linked activity yet, so there is no duration to apply.)
+        var stopInputs = SiteWorkTime.Normalize(
+            request.Stops, request.DossierId is null && request.ActivityDurationHours is >= 0 ? request.ActivityDurationHours : null);
+
         var validation = await ValidateAsync(request.CustomerId, request.CustomerReference, request.GoodsDescription,
             request.Quantity, request.QuantityUnitCode ?? request.QuantityUnit,
             hasCargoLines: request.CargoItems is { Count: > 0 },
-            request.Stops, enforceCustomerIntake: true, cancellationToken);
+            stopInputs, enforceCustomerIntake: true, cancellationToken,
+            requireGoods: !CraneJobRules.IsOnSiteWork(request.CraneJobKind));
         if (validation is not null)
         {
             return validation;
         }
 
-        if (CargoItemsError(request.CargoItems, request.Stops) is { } cargoError)
+        if (CargoItemsError(request.CargoItems, stopInputs) is { } cargoError)
         {
             return TransportOrderOperationResult.Invalid(cargoError);
         }
@@ -299,11 +318,36 @@ public class TransportOrderService : ITransportOrderService
             }
         }
 
+        // D2: on-site work is a capability of the ACTIVITY TYPE (flag, never the code). Inside a
+        // dossier no activity is linked yet at create time, so the caller must name the type.
+        var onSiteType = wrapperTransportType;
+        if (targetDossier is not null && CraneJobRules.IsOnSiteWork(request.CraneJobKind)
+            && request.ActivityTypeId is { } onSiteTypeId)
+        {
+            onSiteType = await _dbContext.ActivityTypes.AsNoTracking()
+                .FirstOrDefaultAsync(t => t.TenantId == _tenantContext.TenantId && t.Id == onSiteTypeId && t.IsActive, cancellationToken);
+        }
+
+        if (CraneJobError(
+                request.CraneJobKind, request.WorkDescription, stopInputs,
+                activitySupportsOnSiteWork: onSiteType is { HasStops: true, SupportsOnSiteWork: true },
+                request.LiftLoadWeightKg, request.LiftLoadDimensions, request.LiftRadiusMeters, request.LiftHeightMeters,
+                request.LiftConditions, request.LiftEquipment) is { } craneJobError)
+        {
+            return craneJobError;
+        }
+
         var settings = await _dbContext.TenantSettings
             .FirstOrDefaultAsync(s => s.TenantId == _tenantContext.TenantId, cancellationToken);
 
+        // D3: every stop of a new order is new — country lookup + postal-code format apply.
+        await ValidateStopAddressesAsync(stopInputs, existingStops: null, cancellationToken);
+        // D3 "Opslaan in adresboek": decided here, staged right before the save (same transaction).
+        var addressBookCustomerId = targetDossier?.CustomerId ?? request.CustomerId;
+        var addressBook = await PlanAddressBookAsync(stopInputs, addressBookCustomerId, cancellationToken);
+
         // Master-location stops get their location data snapshotted at creation (Phase 7).
-        var stops = await BuildStopsAsync(request.Stops, cancellationToken);
+        var stops = await BuildStopsAsync(addressBook.Inputs, cancellationToken, addressBook.NewLocations);
 
         var order = new TransportOrder
         {
@@ -324,6 +368,7 @@ public class TransportOrderService : ITransportOrderService
             PalletCount = request.PalletCount is { } p ? Math.Max(0, p) : null,
             AdrRequired = request.AdrRequired,
             CraneRequired = request.CraneRequired,
+            CraneJobKind = request.CraneJobKind,
             PlateauRequired = request.PlateauRequired,
             MoffettRequired = request.MoffettRequired,
             IsReturnMovement = request.IsReturnMovement,
@@ -332,6 +377,9 @@ public class TransportOrderService : ITransportOrderService
             Notes = Trim(request.Notes),
             Stops = stops,
         };
+        ApplyCraneJobData(order, request.WorkDescription,
+            request.LiftLoadWeightKg, request.LiftLoadDimensions, request.LiftRadiusMeters, request.LiftHeightMeters,
+            request.LiftConditions, request.LiftEquipment);
         ApplyOneOffPricing(order, request.PricingSource, request.OneOffFixedAmount,
             request.OneOffIncludedLoadingMinutes, request.OneOffIncludedUnloadingMinutes, request.OneOffIncludedCombinedMinutes,
             request.OneOffExtraHourlyRate, request.OneOffNotes);
@@ -402,6 +450,7 @@ public class TransportOrderService : ITransportOrderService
             .Where(c => c.Id == order.CustomerId && c.TenantId == _tenantContext.TenantId)
             .Select(c => c.Name).FirstOrDefaultAsync(cancellationToken);
 
+        await StageAddressBookAsync(addressBook, addressBookCustomerId, cancellationToken);
         _dbContext.Add(order);
         _dbContext.AddRange(cargoItems);
         await TenantNumbering.SaveWithClaimedNumberAsync(
@@ -424,6 +473,7 @@ public class TransportOrderService : ITransportOrderService
 
         await _auditService.RecordAsync(EntityType, order.Id.ToString(), "Created", null,
             new { order.OrderNumber, order.CustomerId, order.OrderDate, StopCount = order.Stops.Count }, cancellationToken);
+        await AuditAddressBookAsync(addressBook, order, cancellationToken);
 
         var customerName = await _dbContext.Customers.AsNoTracking()
             .Where(c => c.Id == order.CustomerId && c.TenantId == _tenantContext.TenantId)
@@ -442,7 +492,8 @@ public class TransportOrderService : ITransportOrderService
             InAppMessage = $"{order.OrderNumber} ({customerName}) is aangemaakt.",
         }, cancellationToken);
 
-        return TransportOrderOperationResult.Success(await MapDetailAsync(order, cancellationToken));
+        return TransportOrderOperationResult.Success(
+            await MapDetailAsync(order, cancellationToken, addressBook.OutcomesByStopId(order.Stops)));
     }
 
     public async Task<OrderLegalEntityChangeImpactDto?> PreviewLegalEntityChangeAsync(
@@ -691,23 +742,56 @@ public class TransportOrderService : ITransportOrderService
             ? request.CargoItems.Count > 0
             : await _dbContext.CargoItems.AsNoTracking()
                 .AnyAsync(c => c.TenantId == _tenantContext.TenantId && c.TransportOrderId == order.Id, cancellationToken);
+        // D2: null = the client does not know the crane-job fields → kind, work description and
+        // lift data stay exactly as stored (and are validated as stored).
+        var craneJobSent = request.CraneJobKind is not null;
+        var craneJobKind = request.CraneJobKind ?? order.CraneJobKind;
+        var workDescription = craneJobSent ? request.WorkDescription : order.WorkDescription;
+
+        // D2: the linked dossier activity carries the planned duration (site-stop end time) and,
+        // through its type, the on-site-work capability.
+        var linkedActivity = await _dbContext.DossierActivities.AsNoTracking()
+            .Where(a => a.TenantId == _tenantContext.TenantId && a.LinkedTransportOrderId == order.Id)
+            .OrderBy(a => a.Sequence)
+            .Select(a => new { a.DurationHours, a.ActivityType!.HasStops, a.ActivityType!.SupportsOnSiteWork })
+            .FirstOrDefaultAsync(cancellationToken);
+        var stopInputs = SiteWorkTime.Normalize(request.Stops, linkedActivity?.DurationHours);
+
         // The guard above proves request.CustomerId == order.CustomerId, so this edit is never
         // "new work for another customer": the blocked/deactivated intake gate does not apply.
         var validation = await ValidateAsync(order.CustomerId, request.CustomerReference, request.GoodsDescription,
             request.Quantity, request.QuantityUnitCode ?? request.QuantityUnit, hasCargoLines,
-            request.Stops, enforceCustomerIntake: false, cancellationToken);
+            stopInputs, enforceCustomerIntake: false, cancellationToken,
+            requireGoods: !CraneJobRules.IsOnSiteWork(craneJobKind));
         if (validation is not null)
         {
             return validation;
         }
 
+        // The capability is checked when an order BECOMES on-site work; an order that already is
+        // stays editable even if the tenant later reshapes the activity type.
+        if (CraneJobError(
+                craneJobKind, workDescription, stopInputs,
+                activitySupportsOnSiteWork: order.CraneJobKind == CraneJobKind.OnSiteLifting
+                    || linkedActivity is { HasStops: true, SupportsOnSiteWork: true },
+                craneJobSent ? request.LiftLoadWeightKg : order.LiftLoadWeightKg,
+                craneJobSent ? request.LiftLoadDimensions : order.LiftLoadDimensions,
+                craneJobSent ? request.LiftRadiusMeters : order.LiftRadiusMeters,
+                craneJobSent ? request.LiftHeightMeters : order.LiftHeightMeters,
+                craneJobSent ? request.LiftConditions : order.LiftConditions,
+                craneJobSent ? request.LiftEquipment : order.LiftEquipment) is { } craneJobError)
+        {
+            return craneJobError;
+        }
+
         // A confirmed order must keep satisfying the confirmation rules after the edit.
-        if (order.Status == TransportOrderStatus.Confirmed && ConfirmationError(request.Stops) is { } confirmError)
+        if (order.Status == TransportOrderStatus.Confirmed
+            && CraneJobRules.ConfirmationError(craneJobKind, workDescription, stopInputs) is { } confirmError)
         {
             return TransportOrderOperationResult.Invalid(confirmError);
         }
 
-        if (CargoItemsError(request.CargoItems, request.Stops) is { } cargoError)
+        if (CargoItemsError(request.CargoItems, stopInputs) is { } cargoError)
         {
             return TransportOrderOperationResult.Invalid(cargoError);
         }
@@ -732,11 +816,18 @@ public class TransportOrderService : ITransportOrderService
         // refusal (removing/retyping an operationally referenced stop, a duplicate echoed id)
         // leaves the tracked entity exactly as it was loaded. The plan is executed further down,
         // after the header fields — it is the last guard of the fail-before-mutate block.
-        var (stopPlan, stopPlanError) = await PlanStopSyncAsync(order, request.Stops, cancellationToken);
+        var (stopPlan, stopPlanError) = await PlanStopSyncAsync(order, stopInputs, cancellationToken);
         if (stopPlanError is not null)
         {
             return stopPlanError;
         }
+
+        // D3: country lookup + postal-code format for NEW or CHANGED stop addresses only (an
+        // unchanged legacy value never blocks), then the "Opslaan in adresboek" plan. Both only
+        // read and refuse — still part of the fail-before-mutate block.
+        await ValidateStopAddressesAsync(
+            stopInputs, order.Stops.Where(s => !s.IsDeleted).ToDictionary(s => s.Id), cancellationToken);
+        var addressBook = await PlanAddressBookAsync(stopInputs, order.CustomerId, cancellationToken);
 
         // Cargo: id-matched in-place sync (loaded up front so both the audit "before" snapshot
         // and the sync below share one query). null = leave unchanged (API contract); [] = clear.
@@ -750,7 +841,7 @@ public class TransportOrderService : ITransportOrderService
         // A1b: a goods line may only be moved to another stop while its colli can follow it. Still
         // part of the fail-before-mutate block — the refusal must leave the order untouched.
         var (cargoRelink, cargoRelinkError) = await PlanCargoStopRelinkAsync(
-            order, request.CargoItems, request.Stops, stopPlan!, existingCargo, cancellationToken);
+            order, request.CargoItems, stopInputs, stopPlan!, existingCargo, cancellationToken);
         if (cargoRelinkError is not null)
         {
             return cargoRelinkError;
@@ -779,6 +870,14 @@ public class TransportOrderService : ITransportOrderService
         order.PalletCount = request.PalletCount is { } p ? Math.Max(0, p) : null;
         order.AdrRequired = request.AdrRequired;
         order.CraneRequired = request.CraneRequired;
+        if (craneJobSent)
+        {
+            order.CraneJobKind = craneJobKind;
+            ApplyCraneJobData(order, request.WorkDescription,
+                request.LiftLoadWeightKg, request.LiftLoadDimensions, request.LiftRadiusMeters, request.LiftHeightMeters,
+                request.LiftConditions, request.LiftEquipment);
+        }
+
         order.PlateauRequired = request.PlateauRequired;
         order.MoffettRequired = request.MoffettRequired;
         order.IsReturnMovement = request.IsReturnMovement;
@@ -806,7 +905,7 @@ public class TransportOrderService : ITransportOrderService
 
         // Identity-preserving stop sync (C-01) — executing the plan validated above, so this
         // phase can no longer refuse anything.
-        await ApplyStopSyncAsync(order, request.Stops, stopPlan!, cancellationToken);
+        await ApplyStopSyncAsync(order, addressBook.Inputs, stopPlan!, cancellationToken, addressBook.NewLocations);
 
         List<CargoItem> replacementCargo;
         if (request.CargoItems is not null)
@@ -865,7 +964,10 @@ public class TransportOrderService : ITransportOrderService
 
         // Wave 2 §6: pricing/coverage may have changed — keep the readiness projection current.
         await InvoiceReadinessEvaluator.EvaluateAsync(_dbContext, order, cancellationToken);
+        // D3: address-book rows ride in the SAME save as the order (all or nothing).
+        await StageAddressBookAsync(addressBook, order.CustomerId, cancellationToken);
         await _dbContext.SaveChangesAsync(cancellationToken);
+        await AuditAddressBookAsync(addressBook, order, cancellationToken);
 
         var cargoAfter = replacementCargo
             .Select(c => new { c.Description, c.ExpectedQuantity, c.QuantityUnitCode }).ToList();
@@ -902,7 +1004,8 @@ public class TransportOrderService : ITransportOrderService
                 cancellationToken);
         }
 
-        return TransportOrderOperationResult.Success(await MapDetailAsync(order, cancellationToken));
+        return TransportOrderOperationResult.Success(
+            await MapDetailAsync(order, cancellationToken, addressBook.OutcomesByStopId(order.Stops)));
     }
 
     private async Task<Guid?> ResolveOrderLegalEntityAsync(
@@ -1082,7 +1185,7 @@ public class TransportOrderService : ITransportOrderService
                     s.StopType, s.LocationId, s.LocationName, s.Address, s.PostalCode, s.City, s.CountryCode,
                     s.PlannedFrom, s.PlannedTo, s.Reference, s.Instructions))
                 .ToList();
-            if (ConfirmationError(stops) is { } confirmError)
+            if (CraneJobRules.ConfirmationError(order.CraneJobKind, order.WorkDescription, stops) is { } confirmError)
             {
                 return TransportOrderOperationResult.Invalid(confirmError);
             }
@@ -1098,6 +1201,12 @@ public class TransportOrderService : ITransportOrderService
 
         await _auditService.RecordAsync(EntityType, order.Id.ToString(), "StatusChanged", before,
             new { order.Status }, cancellationToken);
+
+        // Dossier confirmation sprint 2026-09-23: a manually completed order is a completion event too.
+        if (target == TransportOrderStatus.Completed && _dossierLifecycle is not null)
+        {
+            await _dossierLifecycle.TryAutoConfirmForOrdersAsync([order.Id], $"order:{order.OrderNumber}", cancellationToken);
+        }
 
         // Portal review outcome: a Submitted order the planner confirms or sends back to Draft.
         // Only these two ORIGINATE from a portal submission — Confirmed<->Draft transitions
@@ -1372,7 +1481,7 @@ public class TransportOrderService : ITransportOrderService
         Guid customerId, string? customerReference, string? goodsDescription,
         decimal? quantity, string? quantityUnit, bool hasCargoLines,
         IReadOnlyList<TransportOrderStopInput> stops, bool enforceCustomerIntake,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, bool requireGoods = true)
     {
         // Minimal cargo information (wave 2026-08-04 §3): quantity + unit, a commercial goods
         // line, or a general description — any one is enough. Descriptions are never required
@@ -1380,7 +1489,9 @@ public class TransportOrderService : ITransportOrderService
         var hasMeaningfulCargo = (quantity is > 0 && !string.IsNullOrWhiteSpace(quantityUnit))
             || hasCargoLines
             || !string.IsNullOrWhiteSpace(goodsDescription);
-        if (!hasMeaningfulCargo)
+        // D2: on-site work (requireGoods == false) moves nothing — the load to lift is lift data
+        // on the order, never a goods line — so the rule does not apply there.
+        if (requireGoods && !hasMeaningfulCargo)
         {
             return TransportOrderOperationResult.Invalid(
                 "Vul minstens een hoeveelheid en eenheid in, voeg een goederenlijn toe of beschrijf de goederen.");
@@ -1418,7 +1529,17 @@ public class TransportOrderService : ITransportOrderService
 
         foreach (var stop in stops)
         {
-            if (stop.LocationId is null && string.IsNullOrWhiteSpace(stop.City))
+            // D2: a site is often only known by its street address ("werf Kaai 12"), so a site stop
+            // is also locatable by address alone. Loading/unloading stops keep the city rule.
+            if (stop.StopType == StopType.Site)
+            {
+                if (!CraneJobRules.HasSitePlace(stop))
+                {
+                    return TransportOrderOperationResult.Invalid(
+                        "Elke werfstop heeft een locatie, een plaatsnaam of een adres nodig.");
+                }
+            }
+            else if (stop.LocationId is null && string.IsNullOrWhiteSpace(stop.City))
             {
                 return TransportOrderOperationResult.Invalid(
                     "Elke stop heeft een locatie of minstens een plaatsnaam nodig.");
@@ -1480,6 +1601,278 @@ public class TransportOrderService : ITransportOrderService
     }
 
     /// <summary>
+    /// D3: country lookup + postal-code format of the stop addresses, under the "new or changed"
+    /// rule — a stop is only checked when it is new or when its postal code/country differs from
+    /// the stored stop, so a legacy value that was saved before the check existed never blocks an
+    /// unrelated edit. A fresh, un-overridden master-location stop is skipped: its address is
+    /// copied from the location, whatever the client echoed. Raised as field errors.
+    /// </summary>
+    private async Task ValidateStopAddressesAsync(
+        IReadOnlyList<TransportOrderStopInput> inputs,
+        IReadOnlyDictionary<Guid, TransportOrderStop>? existingStops, CancellationToken cancellationToken)
+    {
+        for (var i = 0; i < inputs.Count; i++)
+        {
+            var input = inputs[i];
+            var freshFromLocation = NeedsFreshSnapshot(input, existingStops);
+            if (freshFromLocation && !IsAddressOverride(input))
+            {
+                continue;
+            }
+
+            var previous = input.Id is { } id && existingStops is not null && existingStops.TryGetValue(id, out var stored)
+                ? stored
+                : null;
+            // An unchanged master-location stop keeps the stored value where the input is silent
+            // (CarryOverSnapshot), so that is the value that would be saved.
+            var carriesOver = input.LocationId is not null && !freshFromLocation;
+            var country = Trim(input.CountryCode)?.ToUpperInvariant() ?? (carriesOver ? previous?.CountryCode : null);
+            var postalCode = Trim(input.PostalCode) ?? (carriesOver ? previous?.PostalCode : null);
+
+            var countryChanged = previous is null
+                || !string.Equals(country, Trim(previous.CountryCode)?.ToUpperInvariant(), StringComparison.Ordinal);
+            var postalCodeChanged = previous is null
+                || !string.Equals(postalCode, Trim(previous.PostalCode), StringComparison.OrdinalIgnoreCase);
+
+            if (countryChanged && country is not null && _countryValidator is not null)
+            {
+                await _countryValidator.NormalizeAndValidateAsync(
+                    country, $"stop {i + 1}", cancellationToken, $"stops[{i}].countryCode");
+            }
+
+            if (countryChanged || postalCodeChanged)
+            {
+                Common.Reference.PostalCodeValidator.EnsureValid(country, postalCode, $"stops[{i}].postalCode");
+            }
+        }
+    }
+
+    /// <summary>
+    /// D3 "Opslaan in adresboek" — what one save will do to the address book. Nothing here is
+    /// staged on the context yet: <see cref="StageAddressBookAsync"/> does that right before the save,
+    /// so every refusal further down leaves the tracker clean.
+    /// </summary>
+    /// <param name="Inputs">The stop inputs, index-aligned with the request; an address-book stop
+    /// now carries its <c>LocationId</c> and asks for a fresh snapshot.</param>
+    /// <param name="OutcomesByIndex">Created / LinkedExisting per stop index.</param>
+    /// <param name="NewLocations">Locations to insert with this save, by id.</param>
+    /// <param name="LinkedLocationIds">Every location (new or existing) the customer must be linked to.</param>
+    private sealed record AddressBookPlan(
+        IReadOnlyList<TransportOrderStopInput> Inputs,
+        IReadOnlyDictionary<int, AddressBookOutcome> OutcomesByIndex,
+        IReadOnlyDictionary<Guid, Location> NewLocations,
+        IReadOnlyList<Guid> LinkedLocationIds)
+    {
+        public bool IsEmpty => OutcomesByIndex.Count == 0;
+
+        public IReadOnlyDictionary<Guid, AddressBookOutcome> OutcomesByStopId(IReadOnlyList<TransportOrderStop> stops) =>
+            OutcomesByIndex.ToDictionary(o => stops[o.Key].Id, o => o.Value);
+    }
+
+    /// <summary>
+    /// D3: plans the address-book part of a save. Applies to a stop that asks for it AND has no
+    /// location yet or an overridden one — a stop that already points at the address book is left
+    /// alone, which is what makes a repeated save idempotent. Requires <c>locations.create</c>
+    /// (fail-closed). An ACTIVE address with the same front door is linked instead of duplicated,
+    /// also when two stops of the same request share the address.
+    /// </summary>
+    private async Task<AddressBookPlan> PlanAddressBookAsync(
+        IReadOnlyList<TransportOrderStopInput> inputs, Guid customerId, CancellationToken cancellationToken)
+    {
+        var outcomes = new Dictionary<int, AddressBookOutcome>();
+        var newLocations = new Dictionary<Guid, Location>();
+        var linked = new List<Guid>();
+        var candidates = Enumerable.Range(0, inputs.Count)
+            .Where(i => inputs[i].SaveToAddressBook && (inputs[i].LocationId is null || IsAddressOverride(inputs[i])))
+            .ToList();
+        if (candidates.Count == 0)
+        {
+            return new AddressBookPlan(inputs, outcomes, newLocations, linked);
+        }
+
+        if (!await CurrentUserHasAnyAsync(cancellationToken, PermissionCodes.LocationsCreate))
+        {
+            throw new Common.DomainValidationException($"stops[{candidates[0]}].saveToAddressBook",
+                "Je hebt geen recht om adressen aan het adresboek toe te voegen.");
+        }
+
+        var rewritten = inputs.ToList();
+        var plannedByKey = new Dictionary<string, Guid>(StringComparer.Ordinal);
+        foreach (var i in candidates)
+        {
+            var input = inputs[i];
+            // Every refusal of the address-book part is bound to THIS stop's checkbox
+            // (zero-based index in the request array), so the UI can show it right there.
+            var field = $"stops[{i}].saveToAddressBook";
+            var (street, houseNumber) = AddressLineSplitter.Split(input.Address);
+            var city = Trim(input.City);
+            if (street is null || city is null)
+            {
+                throw new Common.DomainValidationException(field,
+                    "Vul minstens straat en plaats in om dit adres in het adresboek op te slaan.");
+            }
+
+            if (street.Length > 150)
+            {
+                throw new Common.DomainValidationException(field,
+                    "De straat is te lang voor het adresboek (maximaal 150 tekens).");
+            }
+
+            // The same checks LocationService.CreateAsync runs on every new address — here also
+            // for an UNCHANGED legacy value: it may stay on the stop, but not enter the address book.
+            var country = Trim(input.CountryCode)?.ToUpperInvariant();
+            if (country is not null && _countryValidator is not null)
+            {
+                await _countryValidator.NormalizeAndValidateAsync(country, $"stop {i + 1}", cancellationToken, field);
+            }
+
+            var postalCode = Trim(input.PostalCode);
+            Common.Reference.PostalCodeValidator.EnsureValid(country, postalCode, field);
+
+            var exactKey = AddressNormalizer.ExactKey(country, postalCode, city, street, houseNumber);
+            Guid locationId;
+            if (plannedByKey.TryGetValue(exactKey, out var plannedId))
+            {
+                // Second stop of this request on the same front door: one address, not two.
+                locationId = plannedId;
+                outcomes[i] = AddressBookOutcome.LinkedExisting;
+            }
+            else if (await AddressDuplicateFinder.FindActiveExactAsync(
+                         _dbContext, _tenantContext.TenantId, exactKey, cancellationToken) is { } existingId)
+            {
+                locationId = existingId;
+                outcomes[i] = AddressBookOutcome.LinkedExisting;
+                linked.Add(existingId);
+            }
+            else
+            {
+                var name = Trim(input.LocationName) ?? $"{input.Address!.Trim()}, {city}";
+                var location = LocationService.BuildAddressBookLocation(
+                    _tenantContext.TenantId, name.Length > 200 ? name[..200] : name,
+                    street, houseNumber, postalCode, city, country, customerId);
+                newLocations[location.Id] = location;
+                locationId = location.Id;
+                outcomes[i] = AddressBookOutcome.Created;
+                linked.Add(location.Id);
+            }
+
+            plannedByKey[exactKey] = locationId;
+            // From here on it is an ordinary master-location stop with a fresh snapshot.
+            rewritten[i] = input with
+            {
+                LocationId = locationId, AddressOverridden = false, RefreshSnapshot = true, SaveToAddressBook = false,
+            };
+        }
+
+        return new AddressBookPlan(rewritten, outcomes, newLocations, linked.Distinct().ToList());
+    }
+
+    /// <summary>
+    /// D3: stages the planned address-book rows on the context so they are written by the SAME
+    /// SaveChanges as the order (one transaction: a failing save creates neither). The central
+    /// <see cref="Location"/> row of an existing address is never touched — only the customer's
+    /// relationship to it is ensured (an inactive link is reactivated, never duplicated).
+    /// </summary>
+    private async Task StageAddressBookAsync(AddressBookPlan plan, Guid customerId, CancellationToken cancellationToken)
+    {
+        if (plan.IsEmpty)
+        {
+            return;
+        }
+
+        _dbContext.AddRange(plan.NewLocations.Values);
+
+        var existingIds = plan.LinkedLocationIds.Where(id => !plan.NewLocations.ContainsKey(id)).ToList();
+        var existingLinks = existingIds.Count == 0
+            ? []
+            : await _dbContext.CustomerLocationLinks
+                .Where(l => l.TenantId == _tenantContext.TenantId && l.CustomerId == customerId && existingIds.Contains(l.LocationId))
+                .ToListAsync(cancellationToken);
+        var existingLocations = existingIds.Count == 0
+            ? []
+            : await _dbContext.Locations.AsNoTracking()
+                .Where(l => l.TenantId == _tenantContext.TenantId && existingIds.Contains(l.Id))
+                .ToListAsync(cancellationToken);
+
+        foreach (var locationId in plan.LinkedLocationIds)
+        {
+            if (plan.NewLocations.TryGetValue(locationId, out var created))
+            {
+                _dbContext.Add(LocationService.NewCustomerLink(created, customerId));
+            }
+            else if (existingLinks.FirstOrDefault(l => l.LocationId == locationId) is { } link)
+            {
+                link.IsActive = true;
+            }
+            else if (existingLocations.FirstOrDefault(l => l.Id == locationId) is { } location)
+            {
+                _dbContext.Add(LocationService.NewCustomerLink(location, customerId, inheritOwnerDefaults: false));
+            }
+        }
+    }
+
+    /// <summary>D3: audit trail of the addresses an order save added to the address book (after the save).</summary>
+    private async Task AuditAddressBookAsync(AddressBookPlan plan, TransportOrder order, CancellationToken cancellationToken)
+    {
+        foreach (var location in plan.NewLocations.Values)
+        {
+            await _auditService.RecordAsync("Location", location.Id.ToString(), "Created", null,
+                new
+                {
+                    location.Code, location.Name, location.Street, location.HouseNumber, location.PostalCode,
+                    location.City, location.CountryCode, location.CustomerId,
+                    Source = "TransportOrderStop", order.OrderNumber,
+                }, cancellationToken);
+        }
+
+        foreach (var locationId in plan.LinkedLocationIds.Where(id => !plan.NewLocations.ContainsKey(id)))
+        {
+            await _auditService.RecordAsync(EntityType, order.Id.ToString(), "StopLinkedToAddressBook", null,
+                new { LocationId = locationId, order.CustomerId }, cancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// D2: crane-job shape rules (<see cref="CraneJobRules"/>) as an operation result. A rule that
+    /// belongs to one input is raised as a field error, like the other field-level order rules.
+    /// </summary>
+    private static TransportOrderOperationResult? CraneJobError(
+        CraneJobKind kind, string? workDescription, IReadOnlyList<TransportOrderStopInput> stops,
+        bool activitySupportsOnSiteWork,
+        decimal? liftLoadWeightKg, string? liftLoadDimensions, decimal? liftRadiusMeters, decimal? liftHeightMeters,
+        string? liftConditions, string? liftEquipment)
+    {
+        var error = CraneJobRules.Validate(kind, workDescription, stops, activitySupportsOnSiteWork,
+            liftLoadWeightKg, liftLoadDimensions, liftRadiusMeters, liftHeightMeters, liftConditions, liftEquipment);
+        if (error is null)
+        {
+            return null;
+        }
+
+        if (error.Field is { } field)
+        {
+            throw new Common.DomainValidationException(field, error.Message);
+        }
+
+        return TransportOrderOperationResult.Invalid(error.Message);
+    }
+
+    /// <summary>D2: work description + lift data. A lift load is never turned into a goods line.</summary>
+    private static void ApplyCraneJobData(
+        TransportOrder order, string? workDescription,
+        decimal? liftLoadWeightKg, string? liftLoadDimensions, decimal? liftRadiusMeters, decimal? liftHeightMeters,
+        string? liftConditions, string? liftEquipment)
+    {
+        order.WorkDescription = Trim(workDescription);
+        order.LiftLoadWeightKg = liftLoadWeightKg;
+        order.LiftLoadDimensions = Trim(liftLoadDimensions);
+        order.LiftRadiusMeters = liftRadiusMeters;
+        order.LiftHeightMeters = liftHeightMeters;
+        order.LiftConditions = Trim(liftConditions);
+        order.LiftEquipment = Trim(liftEquipment);
+    }
+
+    /// <summary>
     /// Validates the cargo list: positive quantity per item, barcode unambiguous within the order.
     /// Line descriptions are optional (see <see cref="ValidateAsync"/> for the "at least one
     /// description somewhere" rule).
@@ -1502,6 +1895,8 @@ public class TransportOrderService : ITransportOrderService
             return "Gewichten, afmetingen en volume van een goederenlijn mogen niet negatief zijn.";
         }
 
+        // D2: a goods line links to a LOADING and an UNLOADING stop only — a site stop
+        // (StopType.Site) fails both role checks below, so cargo can never hang off one.
         foreach (var item in items)
         {
             if (item.LoadingStopIndex is { } load)
@@ -1642,8 +2037,11 @@ public class TransportOrderService : ITransportOrderService
         target.Notes = Trim(input.Notes);
         target.UnitType = input.UnitType;
         target.UnitTypeLabel = Trim(input.UnitTypeLabel);
-        target.TotalWeightKg = NonNegative(input.TotalWeightKg);
         target.WeightPerUnitKg = NonNegative(input.WeightPerUnitKg);
+        // D4: total = quantity × weight per unit as long as no total was sent. A total that WAS sent
+        // is kept as entered, and a per-unit weight is NEVER derived backwards from a total.
+        target.TotalWeightKg = NonNegative(input.TotalWeightKg)
+            ?? (target.WeightPerUnitKg is { } perUnit ? input.ExpectedQuantity * perUnit : null);
         target.LengthMeters = NonNegative(input.LengthMeters);
         target.WidthMeters = NonNegative(input.WidthMeters);
         target.HeightMeters = NonNegative(input.HeightMeters);
@@ -1665,6 +2063,7 @@ public class TransportOrderService : ITransportOrderService
     /// </summary>
     private static (Guid? DefaultLoading, Guid? DefaultUnloading) DefaultCargoStopLinks(IReadOnlyList<TransportOrderStop> stops)
     {
+        // D2: site stops are in neither set, so they are never an auto-link target.
         var loadingStops = stops.Where(s => s.StopType == StopType.Loading).ToList();
         var unloadingStops = stops.Where(s => s.StopType == StopType.Unloading).ToList();
         return (
@@ -1850,17 +2249,6 @@ public class TransportOrderService : ITransportOrderService
             ? "Het einde van een tijdvenster moet na het begin liggen."
             : null;
 
-    /// <summary>Rules an order must satisfy to be (or stay) confirmed. Returns null when satisfied.</summary>
-    private static string? ConfirmationError(IReadOnlyList<TransportOrderStopInput> stops)
-    {
-        if (!stops.Any(s => s.StopType == StopType.Loading) || !stops.Any(s => s.StopType == StopType.Unloading))
-        {
-            return "Een bevestigde opdracht heeft minstens één laad- en één losstop nodig.";
-        }
-
-        return null;
-    }
-
     /// <summary>Readable per-stop time-requirement summary for the Updated audit trail (§19).</summary>
     private static List<string> SummarizeStopRequirements(IEnumerable<TransportOrderStop> stops) =>
         stops
@@ -1899,8 +2287,12 @@ public class TransportOrderService : ITransportOrderService
         stop.PostalCode = Trim(input.PostalCode);
         stop.City = Trim(input.City);
         stop.CountryCode = Trim(input.CountryCode)?.ToUpperInvariant();
+        // D3: the flag is exactly what the client states (a refresh or a missing location clears it).
+        stop.AddressOverridden = IsAddressOverride(input);
         stop.PlannedFrom = input.PlannedFrom;
         stop.PlannedTo = input.PlannedTo;
+        // D2: only a site stop has a derived end (SiteWorkTime); the flag is meaningless elsewhere.
+        stop.PlannedToIsManual = input.StopType == StopType.Site && input.PlannedToIsManual;
         stop.RequestedFrom = input.RequestedFrom;
         stop.RequestedTo = input.RequestedTo;
         stop.ConfirmedFrom = input.ConfirmedFrom;
@@ -1955,7 +2347,19 @@ public class TransportOrderService : ITransportOrderService
         AccessInstructions = stop.AccessInstructions,
         LoadingInstructions = stop.LoadingInstructions,
         UnloadingInstructions = stop.UnloadingInstructions,
+        AddressOverridden = stop.AddressOverridden,
     };
+
+    /// <summary>
+    /// D3: the input carries this order's OWN address for a master-location stop. Needs a location
+    /// (without one the inline address simply is the address), no explicit refresh (which wins) and
+    /// at least one address field — an empty "override" would only blank the snapshot.
+    /// </summary>
+    private static bool IsAddressOverride(TransportOrderStopInput input) =>
+        input is { LocationId: not null, AddressOverridden: true, RefreshSnapshot: false }
+        && (!string.IsNullOrWhiteSpace(input.LocationName) || !string.IsNullOrWhiteSpace(input.Address)
+            || !string.IsNullOrWhiteSpace(input.PostalCode) || !string.IsNullOrWhiteSpace(input.City)
+            || !string.IsNullOrWhiteSpace(input.CountryCode));
 
     /// <summary>
     /// Resets the snapshot-only fields of a preserved stop so it starts the snapshot resolution
@@ -2231,7 +2635,7 @@ public class TransportOrderService : ITransportOrderService
     /// </summary>
     private async Task ApplyStopSyncAsync(
         TransportOrder order, IReadOnlyList<TransportOrderStopInput> inputs, StopSyncPlan plan,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, IReadOnlyDictionary<Guid, Location>? stagedLocations = null)
     {
         if (plan.PackagePinsToRelease.Count > 0)
         {
@@ -2285,7 +2689,7 @@ public class TransportOrderService : ITransportOrderService
             stops.Add(stop);
         }
 
-        await ResolveStopSnapshotsAsync(stops, inputs, previousStops, cancellationToken);
+        await ResolveStopSnapshotsAsync(stops, inputs, previousStops, cancellationToken, stagedLocations);
 
         // Removals first (explicit soft delete), so reassigning the navigation never leaves EF to
         // guess what happened to the dropped rows.
@@ -2302,10 +2706,11 @@ public class TransportOrderService : ITransportOrderService
     /// update path owns that case, via <see cref="ApplyStopSyncAsync"/>).
     /// </summary>
     private async Task<List<TransportOrderStop>> BuildStopsAsync(
-        IReadOnlyList<TransportOrderStopInput> inputs, CancellationToken cancellationToken)
+        IReadOnlyList<TransportOrderStopInput> inputs, CancellationToken cancellationToken,
+        IReadOnlyDictionary<Guid, Location>? stagedLocations = null)
     {
         var stops = BuildStops(inputs);
-        await ResolveStopSnapshotsAsync(stops, inputs, previousStops: null, cancellationToken);
+        await ResolveStopSnapshotsAsync(stops, inputs, previousStops: null, cancellationToken, stagedLocations);
         return stops;
     }
 
@@ -2315,15 +2720,21 @@ public class TransportOrderService : ITransportOrderService
     /// the previous snapshot over; a new/changed/refreshed one takes a fresh copy from the
     /// tenant's location (single batched query). Free-address stops are untouched.
     /// </summary>
+    /// <param name="stagedLocations">
+    /// D3: address-book locations created by THIS save ("Opslaan in adresboek"). They are not in
+    /// the database yet, so the snapshot is taken from the staged instance.
+    /// </param>
     private async Task ResolveStopSnapshotsAsync(
         IReadOnlyList<TransportOrderStop> stops,
         IReadOnlyList<TransportOrderStopInput> inputs,
         IReadOnlyDictionary<Guid, TransportOrderStop>? previousStops,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IReadOnlyDictionary<Guid, Location>? stagedLocations = null)
     {
         var freshLocationIds = inputs
             .Where(input => NeedsFreshSnapshot(input, previousStops))
             .Select(input => input.LocationId!.Value)
+            .Where(id => stagedLocations is null || !stagedLocations.ContainsKey(id))
             .Distinct()
             .ToList();
         var locations = freshLocationIds.Count == 0
@@ -2332,6 +2743,10 @@ public class TransportOrderService : ITransportOrderService
                 .Include(l => l.OpeningIntervals)
                 .Where(l => l.TenantId == _tenantContext.TenantId && freshLocationIds.Contains(l.Id))
                 .ToDictionaryAsync(l => l.Id, cancellationToken);
+        foreach (var staged in stagedLocations ?? new Dictionary<Guid, Location>())
+        {
+            locations[staged.Key] = staged.Value;
+        }
 
         for (var i = 0; i < inputs.Count; i++)
         {
@@ -2345,7 +2760,9 @@ public class TransportOrderService : ITransportOrderService
             {
                 if (locations.TryGetValue(locationId, out var location))
                 {
-                    ApplyLocationSnapshot(stops[i], location);
+                    // D3: an overridden stop keeps the address typed for this order; everything
+                    // else (contact, gate, hours, instructions) still comes from the location.
+                    ApplyLocationSnapshot(stops[i], location, keepInputAddress: stops[i].AddressOverridden);
                 }
             }
             else if (previousStops!.TryGetValue(input.Id!.Value, out var previous))
@@ -2355,7 +2772,11 @@ public class TransportOrderService : ITransportOrderService
         }
     }
 
-    /// <summary>Fresh copy needed for: new stop, changed LocationId, or an explicit refresh.</summary>
+    /// <summary>
+    /// Fresh copy needed for: new stop, changed LocationId, an explicit refresh, or (D3) a stop
+    /// whose address override is switched OFF — "not overridden" means the address book wins, so
+    /// the location's address is re-copied instead of trusting whatever the client echoed.
+    /// </summary>
     private static bool NeedsFreshSnapshot(
         TransportOrderStopInput input, IReadOnlyDictionary<Guid, TransportOrderStop>? previousStops)
     {
@@ -2372,7 +2793,8 @@ public class TransportOrderService : ITransportOrderService
         return previousStops is null
             || input.Id is not { } id
             || !previousStops.TryGetValue(id, out var previous)
-            || previous.LocationId != input.LocationId;
+            || previous.LocationId != input.LocationId
+            || (previous.AddressOverridden && !IsAddressOverride(input));
     }
 
     /// <summary>
@@ -2380,15 +2802,24 @@ public class TransportOrderService : ITransportOrderService
     /// fields are REPLACED (the snapshot is the agreed address); instruction fields are only
     /// filled where the input left them empty — user-entered instructions always win.
     /// </summary>
-    private void ApplyLocationSnapshot(TransportOrderStop stop, Location location)
+    private void ApplyLocationSnapshot(TransportOrderStop stop, Location location, bool keepInputAddress = false)
     {
-        stop.LocationName = location.Name;
-        var addressLine = string.Join(" ",
-            new[] { location.Street, location.HouseNumber }.Where(p => !string.IsNullOrWhiteSpace(p)));
-        stop.Address = string.IsNullOrWhiteSpace(addressLine) ? null : addressLine;
-        stop.PostalCode = Trim(location.PostalCode);
-        stop.City = Trim(location.City);
-        stop.CountryCode = Trim(location.CountryCode)?.ToUpperInvariant();
+        if (keepInputAddress)
+        {
+            // D3: the address quintet is this order's own deviation (already applied from the
+            // input); only a missing name falls back to the location's.
+            stop.LocationName ??= location.Name;
+        }
+        else
+        {
+            stop.LocationName = location.Name;
+            var addressLine = string.Join(" ",
+                new[] { location.Street, location.HouseNumber }.Where(p => !string.IsNullOrWhiteSpace(p)));
+            stop.Address = string.IsNullOrWhiteSpace(addressLine) ? null : addressLine;
+            stop.PostalCode = Trim(location.PostalCode);
+            stop.City = Trim(location.City);
+            stop.CountryCode = Trim(location.CountryCode)?.ToUpperInvariant();
+        }
 
         stop.ContactName = Trim(location.ContactName);
         stop.ContactPhone = Trim(location.ContactPhone);
@@ -2476,7 +2907,12 @@ public class TransportOrderService : ITransportOrderService
             return null; // Free-address stop or no structured hours (NoData) → no warning.
         }
 
-        var activity = stop.StopType == StopType.Loading ? "laadtijd" : "lostijd";
+        var activity = stop.StopType switch
+        {
+            StopType.Loading => "laadtijd",
+            StopType.Site => "werktijd",
+            _ => "lostijd",
+        };
         var name = stop.LocationName ?? location.Name;
         List<string>? warnings = null;
         foreach (var moment in new[] { stop.PlannedFrom, stop.PlannedTo })
@@ -2520,7 +2956,11 @@ public class TransportOrderService : ITransportOrderService
         return warnings;
     }
 
-    private async Task<TransportOrderDetailDto> MapDetailAsync(TransportOrder order, CancellationToken cancellationToken)
+    /// <param name="addressBookOutcomes">D3: per stop id, what "Opslaan in adresboek" did in the save
+    /// that produced this response; null for every plain read.</param>
+    private async Task<TransportOrderDetailDto> MapDetailAsync(
+        TransportOrder order, CancellationToken cancellationToken,
+        IReadOnlyDictionary<Guid, AddressBookOutcome>? addressBookOutcomes = null)
     {
         var customerName = await _dbContext.Customers.AsNoTracking()
             .Where(c => c.Id == order.CustomerId && c.TenantId == _tenantContext.TenantId)
@@ -2586,7 +3026,12 @@ public class TransportOrderService : ITransportOrderService
                     DefaultLoadingMinutes: s.DefaultLoadingMinutes,
                     DefaultUnloadingMinutes: s.DefaultUnloadingMinutes,
                     SnapshotAt: s.SnapshotAt,
-                    Warnings: BuildOpeningHoursWarnings(s, location, tenantZone));
+                    Warnings: BuildOpeningHoursWarnings(s, location, tenantZone),
+                    PlannedToIsManual: s.PlannedToIsManual,
+                    AddressOverridden: s.AddressOverridden,
+                    AddressBookOutcome: addressBookOutcomes is not null && addressBookOutcomes.TryGetValue(s.Id, out var outcome)
+                        ? outcome
+                        : AddressBookOutcome.None);
             })
             .ToList();
 
@@ -2632,6 +3077,10 @@ public class TransportOrderService : ITransportOrderService
                 ConfirmedWithUnpricedGoodsReason: snapshotEntity.ConfirmedWithUnpricedGoodsReason,
                 CoverageStatus: snapshotEntity.CoverageStatus,
                 IsStale: snapshotEntity.IsStale);
+
+        // D4: sales line ↔ goods line links (control relation) and the coverage derived from them.
+        (pricingLines, cargoItems) = await ApplyCargoCoverageAsync(order, pricingLines, cargoItems, pricingSnapshot, cancellationToken);
+
         var serviceLines = await _dbContext.TransportOrderServiceLines.AsNoTracking()
             .Where(l => l.TenantId == _tenantContext.TenantId && l.TransportOrderId == order.Id)
             .OrderBy(l => l.NameSnapshot)
@@ -2639,17 +3088,27 @@ public class TransportOrderService : ITransportOrderService
             .ToListAsync(cancellationToken);
 
         // Containing dossier for the header chip: the order's own wrapper wins, else the
-        // first (oldest) user-created link.
-        var dossierRef = await _dbContext.TransportDossiers.AsNoTracking()
-                .Where(d => d.TenantId == _tenantContext.TenantId && d.OriginTransportOrderId == order.Id)
-                .Select(d => new { d.Id, d.DossierNumber })
-                .FirstOrDefaultAsync(cancellationToken)
-            ?? await _dbContext.DossierOrders.AsNoTracking()
-                .Where(l => l.TenantId == _tenantContext.TenantId && l.TransportOrderId == order.Id)
-                .OrderBy(l => l.CreatedAt)
-                .Join(_dbContext.TransportDossiers.AsNoTracking(), l => l.DossierId, d => d.Id,
-                    (l, d) => new { d.Id, d.DossierNumber })
+        // first (oldest) user-created link — the one shared rule (also order documents, D6).
+        var dossierRef = await Modules.Dossiers.Services.OwningDossierResolver.ResolveAsync(
+            _dbContext, _tenantContext.TenantId, order.Id, cancellationToken);
+
+        // D2: the linked dossier activity (tracker first — at creation it is staged in the same
+        // save) carries the planned duration and, through its type, the on-site-work capability.
+        var linkedActivity = _dbContext.ChangeTracker.Entries<Modules.Dossiers.Entities.DossierActivity>()
+                .Select(e => e.Entity)
+                .Where(a => a.TenantId == order.TenantId && a.LinkedTransportOrderId == order.Id)
+                .OrderBy(a => a.Sequence)
+                .Select(a => new { a.Id, a.ActivityTypeId, a.DurationHours })
+                .FirstOrDefault()
+            ?? await _dbContext.DossierActivities.AsNoTracking()
+                .Where(a => a.TenantId == order.TenantId && a.LinkedTransportOrderId == order.Id)
+                .OrderBy(a => a.Sequence)
+                .Select(a => new { a.Id, a.ActivityTypeId, a.DurationHours })
                 .FirstOrDefaultAsync(cancellationToken);
+        var activitySupportsOnSiteWork = linkedActivity is not null
+            && await _dbContext.ActivityTypes.AsNoTracking()
+                .AnyAsync(t => t.TenantId == order.TenantId && t.Id == linkedActivity.ActivityTypeId
+                               && t.HasStops && t.SupportsOnSiteWork, cancellationToken);
 
         return new TransportOrderDetailDto(
             order.Id, order.OrderNumber, order.OrderDate, order.CustomerId, customerName,
@@ -2673,7 +3132,11 @@ public class TransportOrderService : ITransportOrderService
             order.ExtraTimeHourlyRateOverride, order.ExtraTimeRoundingStepMinutes, order.ExtraTimeMinimumBillableMinutes,
             order.Version, dossierRef?.Id, dossierRef?.DossierNumber,
             order.DistanceKm, order.LoadingMeters,
-            order.PlateauRequired, order.MoffettRequired, order.IsReturnMovement);
+            order.PlateauRequired, order.MoffettRequired, order.IsReturnMovement,
+            order.CraneJobKind, order.WorkDescription,
+            order.LiftLoadWeightKg, order.LiftLoadDimensions, order.LiftRadiusMeters, order.LiftHeightMeters,
+            order.LiftConditions, order.LiftEquipment,
+            linkedActivity?.Id, linkedActivity?.ActivityTypeId, linkedActivity?.DurationHours, activitySupportsOnSiteWork);
     }
 
     /// <summary>
@@ -2906,6 +3369,9 @@ public class TransportOrderService : ITransportOrderService
         PriceCalculationResult? result = null;
         // Coverage entries for cargo lines that never reach the engine (§7): missing/unknown unit.
         var unpricedCargoCoverage = new List<OrderPricingCoverageDto>();
+        // Which goods lines each engine unit line stands for — frozen onto the coverage entries so
+        // a later separate sales line can mark them covered (PricingCoverageReconciler).
+        var cargoIdsByUnitTypeId = new Dictionary<Guid, List<Guid>>();
         if (_pricingEngine is not null)
         {
             // Commercial cargo lines are the pricing source of truth as soon as any carries a
@@ -2927,7 +3393,8 @@ public class TransportOrderService : ITransportOrderService
                     null,
                     uncoded.UnitTypeLabel ?? uncoded.QuantityUnit ?? "stuks",
                     uncoded.ExpectedQuantity, "None",
-                    Reason: "Geen eenheid gekozen voor deze goederenlijn"));
+                    Reason: "Geen eenheid gekozen voor deze goederenlijn",
+                    CargoItemIds: [uncoded.Id]));
             }
 
             if (codedCargo.Count > 0)
@@ -2946,9 +3413,12 @@ public class TransportOrderService : ITransportOrderService
                         // Unknown code: cannot be priced per unit — pricing coverage reports it.
                         unpricedCargoCoverage.Add(new OrderPricingCoverageDto(
                             null, group.Key, group.Sum(c => c.ExpectedQuantity), "None",
-                            Reason: "Onbekende eenheid"));
+                            Reason: "Onbekende eenheid",
+                            CargoItemIds: group.Select(c => c.Id).ToList()));
                         continue;
                     }
+
+                    cargoIdsByUnitTypeId[uid] = group.Select(c => c.Id).ToList();
 
                     // Per-line dimensions feed billable-quantity contracts (oversize).
                     var details = group
@@ -2976,7 +3446,14 @@ public class TransportOrderService : ITransportOrderService
                 .Where(s => !s.IsDeleted && s.StopType == StopType.Unloading)
                 .OrderBy(s => s.Sequence)
                 .ToList();
-            var delivery = unloadingStops.LastOrDefault();
+            // D2: on-site work has no unloading stop — the place of the work is its destination, so
+            // the (last) site stop resolves the zone. StopCount stays "unloading stops only": a
+            // site stop is no delivery, so per-stop delivery services never count it.
+            var delivery = unloadingStops.LastOrDefault()
+                ?? order.Stops
+                    .Where(s => !s.IsDeleted && s.StopType == StopType.Site)
+                    .OrderBy(s => s.Sequence)
+                    .LastOrDefault();
             // Wave 3 §2: the FIRST loading stop resolves the origin zone (O/D-dimension rules).
             var origin = order.Stops
                 .Where(s => !s.IsDeleted && s.StopType == StopType.Loading)
@@ -2994,6 +3471,7 @@ public class TransportOrderService : ITransportOrderService
             // order — ValidateAsync/IncludedTimeOverrideError already rejects that combination,
             // but this stays a belt-and-braces guard against ever feeding them into the one-off
             // branch of PricingEngine.CalculateAsync).
+            // D2: a site stop belongs to neither activity, so an override on one is never summed in.
             var loadingStopOverrides = order.Stops
                 .Where(s => !s.IsDeleted && s.StopType == StopType.Loading && s.IncludedTimeMinutesOverride is not null)
                 .Select(s => s.IncludedTimeMinutesOverride!.Value)
@@ -3044,7 +3522,9 @@ public class TransportOrderService : ITransportOrderService
                     s.TimeRequirementFrom,
                     s.TimeRequirementTo,
                     s.AppointmentRequired,
-                    (s.PlannedFrom ?? s.PlannedTo) is { } planned ? TenantTimeZone.ToLocalDate(planned, pricingZone) : null))
+                    (s.PlannedFrom ?? s.PlannedTo) is { } planned ? TenantTimeZone.ToLocalDate(planned, pricingZone) : null,
+                    // D2: a site stop only matches ANY-scoped conditions (weekend, holiday, …).
+                    IsSite: s.StopType == StopType.Site))
                 .ToList();
 
             var warehouseActivity = await ResolveWarehouseActivityAsync(order, cancellationToken);
@@ -3218,6 +3698,14 @@ public class TransportOrderService : ITransportOrderService
             }
         }
 
+        // D4: sales line ↔ goods line links follow the LineKey, so every surviving key keeps its
+        // links across the rewrite above; only links whose line or goods line is gone are removed.
+        await PruneCargoLinksAsync(
+            order.Id,
+            mergedLines.Where(l => l.LineKey is not null).Select(l => l.LineKey!).ToHashSet(),
+            cargoItems?.Where(c => !c.IsDeleted).Select(c => c.Id).ToHashSet(),
+            cancellationToken);
+
         var linesTotal = decimal.Round(mergedLines.Where(CountsTowardsLinesTotal).Sum(l => l.Amount), 2);
         // A user-touched line (Manual, or AutoAdjusted surviving a merge — spec ch. 24-26) can hold
         // a real amount that a bare "nothing configured"/"no bracket for this quantity" diagnostic
@@ -3315,20 +3803,22 @@ public class TransportOrderService : ITransportOrderService
             snapshot.LinesTotal = linesTotal;
             // Wave 2026-08-04 §7: freeze per-goods-line coverage with the calculation — engine
             // coverage (per unit line it received) + cargo the engine never saw.
-            var coverage = (result.Coverage ?? [])
+            var engineCoverage = (result.Coverage ?? [])
                 .Select(c => new OrderPricingCoverageDto(
                     c.UnitTypeId, c.UnitLabel, c.Quantity, c.Status,
-                    c.BaseAmount, c.BaseRuleName, c.ServicesAmount, c.Reason))
+                    c.BaseAmount, c.BaseRuleName, c.ServicesAmount, c.Reason,
+                    CargoItemIds: c.UnitTypeId is { } utid ? cargoIdsByUnitTypeId.GetValueOrDefault(utid) : null))
                 .Concat(unpricedCargoCoverage)
                 .ToList();
+            // Closure sprint 2026-09-23: the frozen engine verdict is reconciled with what
+            // actually covers the goods (fixed price, separate sales lines) — see
+            // PricingCoverageReconciler. Wave 2 §5: CoverageStatus is the typed, queryable
+            // projection of the same entries (worst entry wins); a fresh calculation is by
+            // definition not stale.
+            var (coverage, coverageStatus) = PricingCoverageReconciler.Reconcile(
+                engineCoverage, await SeparatelyPricedCargoIdsAsync(order.Id, cancellationToken), HasFixedPrice(order));
             snapshot.CoverageJson = coverage.Count > 0 ? JsonSerializer.Serialize(coverage, CoverageJsonOptions) : null;
-            // Wave 2 §5: the typed, queryable projection of the same coverage (worst entry
-            // wins); a fresh calculation is by definition not stale.
-            snapshot.CoverageStatus = coverage.Count == 0
-                ? "NotApplicable"
-                : coverage.Any(c => c.Status == "None") ? "None"
-                : coverage.Any(c => c.Status == "Partial") ? "Partial"
-                : "Full";
+            snapshot.CoverageStatus = coverageStatus;
             snapshot.IsStale = false;
             // Status is deliberately left untouched — a save never resets Draft/Reviewed.
         }
@@ -3419,6 +3909,190 @@ public class TransportOrderService : ITransportOrderService
         {
             // A malformed historical payload must never break the order detail.
             return null;
+        }
+    }
+
+    /// <summary>
+    /// D4 (master sprint 2026-09-21): puts the sales line ↔ goods line links on the line DTOs and
+    /// derives <c>CommercialCoverage</c> per goods line — from real relations and the frozen
+    /// coverage only, never a guess:
+    /// <list type="bullet">
+    ///   <item><c>SeparatelyPriced</c> — linked to an existing, non-informational sales line;</item>
+    ///   <item><c>Included</c> — the order is priced by provenance (<see cref="OrderPricingState"/>) AND
+    ///   either carries a fixed price (one-off agreement or whole-order override: everything is in
+    ///   it) or the snapshot's unit coverage for this line's unit is "Full". A stale snapshot no
+    ///   longer vouches for unit coverage;</item>
+    ///   <item><c>ToReview</c> — everything else.</item>
+    /// </list>
+    /// Links are informational: they never create an invoice line or change an amount.
+    /// </summary>
+    private async Task<(List<OrderPricingLineDto> Lines, List<CargoItemDto> Cargo)> ApplyCargoCoverageAsync(
+        TransportOrder order, List<OrderPricingLineDto> pricingLines, List<CargoItemDto> cargoItems,
+        OrderPricingSnapshotDto? snapshot, CancellationToken cancellationToken)
+    {
+        if (cargoItems.Count == 0)
+        {
+            return (pricingLines, cargoItems);
+        }
+
+        var tenantId = _tenantContext.TenantId;
+        var cargoIds = cargoItems.Select(c => c.Id).ToHashSet();
+        // Read-time fence: a link to a goods line that was (soft-)deleted since is never shown.
+        var links = (await _dbContext.OrderPriceLineCargoLinks.AsNoTracking()
+                .Where(l => l.TenantId == tenantId && l.TransportOrderId == order.Id)
+                .Select(l => new { l.LineKey, l.CargoItemId })
+                .ToListAsync(cancellationToken))
+            .Where(l => cargoIds.Contains(l.CargoItemId))
+            .ToList();
+
+        if (links.Count > 0)
+        {
+            var idsByKey = links.ToLookup(l => l.LineKey, l => l.CargoItemId);
+            pricingLines = pricingLines
+                .Select(l => l.LineKey is not null && idsByKey.Contains(l.LineKey)
+                    ? l with { CargoItemIds = idsByKey[l.LineKey].ToList() }
+                    : l)
+                .ToList();
+        }
+
+        var pricingLineKeys = pricingLines
+            .Where(l => !l.Informational && l.LineKey is not null)
+            .Select(l => l.LineKey!)
+            .ToHashSet();
+        var separatelyPriced = links
+            .Where(l => pricingLineKeys.Contains(l.LineKey))
+            .Select(l => l.CargoItemId)
+            .ToHashSet();
+
+        var isPriced = OrderPricingState.IsPriced(order);
+        var hasFixedPrice = HasFixedPrice(order);
+
+        // Unit coverage: the snapshot's per-UNIT-TYPE entries, matched through the goods line's
+        // managed unit code — the same mapping the pricing pipeline used to build them.
+        var fullyCoveredCodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (isPriced && !hasFixedPrice && snapshot is { IsStale: false, Coverage.Count: > 0 })
+        {
+            var codes = cargoItems
+                .Where(c => !string.IsNullOrWhiteSpace(c.QuantityUnitCode))
+                .Select(c => c.QuantityUnitCode!.Trim().ToUpperInvariant())
+                .Distinct()
+                .ToList();
+            var fullUnitTypeIds = snapshot.Coverage
+                .Where(c => c.UnitTypeId is not null && c.Status == "Full")
+                .Select(c => c.UnitTypeId!.Value)
+                .ToHashSet();
+            if (codes.Count > 0 && fullUnitTypeIds.Count > 0)
+            {
+                var unitTypes = await _dbContext.UnitTypes.AsNoTracking()
+                    .Where(u => u.TenantId == tenantId && codes.Contains(u.Code))
+                    .Select(u => new { u.Code, u.Id })
+                    .ToListAsync(cancellationToken);
+                fullyCoveredCodes.UnionWith(unitTypes.Where(u => fullUnitTypeIds.Contains(u.Id)).Select(u => u.Code));
+            }
+        }
+
+        cargoItems = cargoItems
+            .Select(c =>
+            {
+                var coverage = separatelyPriced.Contains(c.Id)
+                    ? CargoCommercialCoverage.SeparatelyPriced
+                    : isPriced && (hasFixedPrice
+                                   || (c.QuantityUnitCode is { } code && fullyCoveredCodes.Contains(code.Trim())))
+                        ? CargoCommercialCoverage.Included
+                        : CargoCommercialCoverage.ToReview;
+                return c with { CommercialCoverage = coverage };
+            })
+            .ToList();
+
+        return (pricingLines, cargoItems);
+    }
+
+    /// <summary>A manual override or a one-off amount prices the whole order — every goods line is included.</summary>
+    private static bool HasFixedPrice(TransportOrder order) =>
+        order.PriceIsManual || (order.PricingSource == OrderPricingSource.OneOff && order.OneOffFixedAmount is not null);
+
+    /// <summary>
+    /// The goods lines priced through their OWN sales line (D4 link to a live, non-informational
+    /// pricing line) — the same rule ApplyCargoCoverageAsync applies at read time, evaluated on
+    /// the change tracker so links/lines removed in the current unit of work do not count.
+    /// </summary>
+    private async Task<HashSet<Guid>> SeparatelyPricedCargoIdsAsync(Guid orderId, CancellationToken cancellationToken)
+    {
+        var tenantId = _tenantContext.TenantId;
+        bool Live<T>(T entity) where T : class =>
+            _dbContext.Entry(entity).State is not (EntityState.Deleted or EntityState.Detached);
+
+        await _dbContext.OrderPriceLineCargoLinks
+            .Where(l => l.TenantId == tenantId && l.TransportOrderId == orderId)
+            .LoadAsync(cancellationToken);
+        var links = _dbContext.OrderPriceLineCargoLinks.Local
+            .Where(l => l.TransportOrderId == orderId && Live(l))
+            .ToList();
+        if (links.Count == 0)
+        {
+            return [];
+        }
+
+        await _dbContext.TransportOrderPricingLines
+            .Where(l => l.TenantId == tenantId && l.TransportOrderId == orderId)
+            .LoadAsync(cancellationToken);
+        var liveLineKeys = _dbContext.TransportOrderPricingLines.Local
+            .Where(l => l.TransportOrderId == orderId && !l.Informational && l.LineKey is not null && Live(l))
+            .Select(l => l.LineKey!)
+            .ToHashSet();
+        await _dbContext.CargoItems
+            .Where(c => c.TenantId == tenantId && c.TransportOrderId == orderId)
+            .LoadAsync(cancellationToken);
+        var liveCargoIds = _dbContext.CargoItems.Local
+            .Where(c => c.TransportOrderId == orderId && !c.IsDeleted && Live(c))
+            .Select(c => c.Id)
+            .ToHashSet();
+
+        return links
+            .Where(l => liveLineKeys.Contains(l.LineKey) && liveCargoIds.Contains(l.CargoItemId))
+            .Select(l => l.CargoItemId)
+            .ToHashSet();
+    }
+
+    /// <summary>
+    /// Re-derives the snapshot's effective coverage from its frozen engine verdict and the current
+    /// links/fixed price (PricingCoverageReconciler) and stages it — run wherever links can change
+    /// without a recalculation. Never touches IsStale. Caller saves.
+    /// </summary>
+    private async Task ReconcileSnapshotCoverageAsync(
+        TransportOrder order, TransportOrderPricingSnapshot? snapshot, CancellationToken cancellationToken)
+    {
+        if (snapshot?.CoverageJson is null)
+        {
+            return;
+        }
+
+        var entries = DeserializeCoverage(snapshot.CoverageJson) ?? [];
+        var (coverage, coverageStatus) = PricingCoverageReconciler.Reconcile(
+            entries, await SeparatelyPricedCargoIdsAsync(order.Id, cancellationToken), HasFixedPrice(order));
+        snapshot.CoverageJson = JsonSerializer.Serialize(coverage, CoverageJsonOptions);
+        snapshot.CoverageStatus = coverageStatus;
+    }
+
+    /// <summary>
+    /// D4: removes the links whose sales line (by LineKey) or goods line no longer exists. Soft
+    /// deletes never fire the cascade FK, so this runs wherever lines or goods lines can go:
+    /// after the recalculation merge and after a line save. Links of SURVIVING LineKeys are never
+    /// touched — a recalculation rewrites Auto rows but keeps their keys.
+    /// </summary>
+    private async Task PruneCargoLinksAsync(
+        Guid orderId, IReadOnlyCollection<string> liveLineKeys, IReadOnlyCollection<Guid>? liveCargoIds,
+        CancellationToken cancellationToken)
+    {
+        var links = await _dbContext.OrderPriceLineCargoLinks
+            .Where(l => l.TenantId == _tenantContext.TenantId && l.TransportOrderId == orderId)
+            .ToListAsync(cancellationToken);
+        foreach (var link in links.Where(l => _dbContext.Entry(l).State != EntityState.Deleted))
+        {
+            if (!liveLineKeys.Contains(link.LineKey) || (liveCargoIds is not null && !liveCargoIds.Contains(link.CargoItemId)))
+            {
+                _dbContext.Remove(link);
+            }
         }
     }
 
@@ -3697,6 +4371,55 @@ public class TransportOrderService : ITransportOrderService
         var auditBefore = new List<object>();
         var auditAfter = new List<object>();
 
+        // D4: every cargo id a line wants to link must be a (live) goods line OF THIS ORDER — a
+        // foreign or deleted id is refused before anything is touched.
+        var orderCargoIds = (await _dbContext.CargoItems.AsNoTracking()
+                .Where(c => c.TenantId == tenantId && c.TransportOrderId == orderId)
+                .Select(c => c.Id)
+                .ToListAsync(cancellationToken))
+            .ToHashSet();
+        if (requests.Any(r => r.CargoItemIds is not null && r.CargoItemIds.Any(id => !orderCargoIds.Contains(id))))
+        {
+            return TransportOrderOperationResult.Invalid("Een gekoppelde goederenlijn hoort niet bij deze opdracht.");
+        }
+
+        var existingLinks = await _dbContext.OrderPriceLineCargoLinks
+            .Where(l => l.TenantId == tenantId && l.TransportOrderId == orderId)
+            .ToListAsync(cancellationToken);
+        var removedLineKeys = new HashSet<string>();
+        var linksOnly = requests.Count > 0 && requests.All(r =>
+            r.LineKey is not null && byKey[r.LineKey].FirstOrDefault() is { } target && IsCargoLinkOnly(r, target));
+
+        // Replaces the links of ONE LineKey (null list = untouched).
+        void ReplaceCargoLinks(string lineKey, IReadOnlyList<Guid>? cargoItemIds)
+        {
+            if (cargoItemIds is null)
+            {
+                return;
+            }
+
+            var wanted = cargoItemIds.Distinct().ToHashSet();
+            var current = existingLinks.Where(l => l.LineKey == lineKey).ToList();
+            foreach (var link in current.Where(l => !wanted.Contains(l.CargoItemId)))
+            {
+                _dbContext.Remove(link);
+                existingLinks.Remove(link);
+            }
+
+            foreach (var cargoItemId in wanted.Where(id => current.All(l => l.CargoItemId != id)))
+            {
+                var link = new OrderPriceLineCargoLink
+                {
+                    Id = Guid.NewGuid(), TenantId = tenantId, TransportOrderId = orderId,
+                    LineKey = lineKey, CargoItemId = cargoItemId,
+                };
+                _dbContext.OrderPriceLineCargoLinks.Add(link);
+                existingLinks.Add(link);
+            }
+
+            auditAfter.Add(new { key = lineKey, cargoItemIds = wanted.OrderBy(id => id).ToList() });
+        }
+
         foreach (var request in requests)
         {
             if (request.LineKey is null)
@@ -3729,6 +4452,7 @@ public class TransportOrderService : ITransportOrderService
                     LineKey = $"manual:{Guid.NewGuid()}",
                 };
                 _dbContext.TransportOrderPricingLines.Add(newLine);
+                ReplaceCargoLinks(newLine.LineKey, request.CargoItemIds);
                 auditBefore.Add(new { key = (string?)null, label = (string?)null, amount = (decimal?)null });
                 auditAfter.Add(new { key = newLine.LineKey, label = newLine.Label, amount = newLine.Amount });
                 continue;
@@ -3746,6 +4470,7 @@ public class TransportOrderService : ITransportOrderService
                 if (existing.Kind == OrderPriceLineKind.Manual)
                 {
                     _dbContext.Remove(existing);
+                    removedLineKeys.Add(existing.LineKey!);
                     auditAfter.Add(new { key = existing.LineKey, removed = true });
                     continue;
                 }
@@ -3762,6 +4487,14 @@ public class TransportOrderService : ITransportOrderService
                 existing.AdjustedByUserId = _currentUser?.CurrentUserId;
                 existing.AdjustedAtUtc = _timeProvider.GetUtcNow().UtcDateTime;
                 auditAfter.Add(new { key = existing.LineKey, label = existing.Label, amount = existing.Amount });
+                continue;
+            }
+
+            // D4: a request that only carries cargo links is no price correction — the line keeps
+            // its amount, kind and reason (an Auto line stays Auto, no adjust reason needed).
+            if (IsCargoLinkOnly(request, existing))
+            {
+                ReplaceCargoLinks(existing.LineKey!, request.CargoItemIds);
                 continue;
             }
 
@@ -3813,15 +4546,54 @@ public class TransportOrderService : ITransportOrderService
             existing.AdjustedByUserId = _currentUser?.CurrentUserId;
             existing.AdjustedAtUtc = _timeProvider.GetUtcNow().UtcDateTime;
             auditAfter.Add(new { key = existing.LineKey, label = existing.Label, amount = existing.Amount });
+            ReplaceCargoLinks(existing.LineKey!, request.CargoItemIds);
         }
 
-        await RecomputeLinesTotalAndAgreedPriceAsync(order, cancellationToken);
+        // D4: a hard-removed Manual line takes its links along (no FK can do that for a LineKey).
+        foreach (var orphan in existingLinks.Where(l => removedLineKeys.Contains(l.LineKey)).ToList())
+        {
+            if (_dbContext.Entry(orphan).State == EntityState.Added)
+            {
+                _dbContext.Entry(orphan).State = EntityState.Detached;
+            }
+            else
+            {
+                _dbContext.Remove(orphan);
+            }
+        }
+
+        // D4: links are informational. A save that ONLY changed links must not run the totals
+        // pass — it would re-derive AgreedPrice from the lines and could move a price nobody touched.
+        if (!linksOnly)
+        {
+            await RecomputeLinesTotalAndAgreedPriceAsync(order, cancellationToken);
+        }
+
+        // Closure sprint 2026-09-23: links and removed lines change what covers the goods, so
+        // the persisted coverage (what the warning, the confirm gate and readiness read) follows.
+        // Readiness reads the PERSISTED snapshot, so it runs after the first save — on link-only
+        // saves too, since coverage reasons can appear or disappear without a price change.
+        await ReconcileSnapshotCoverageAsync(order, snapshot, cancellationToken);
+        await _dbContext.SaveChangesAsync(cancellationToken);
         await InvoiceReadinessEvaluator.EvaluateAsync(_dbContext, order, cancellationToken);
         await _dbContext.SaveChangesAsync(cancellationToken);
-        await _auditService.RecordAsync("OrderPricing", orderId.ToString(), "lines_adjusted", auditBefore, auditAfter, cancellationToken);
+        await _auditService.RecordAsync("OrderPricing", orderId.ToString(),
+            linksOnly ? "cargo_links_set" : "lines_adjusted", auditBefore, auditAfter, cancellationToken);
 
         return TransportOrderOperationResult.Success(await MapDetailAsync(order, cancellationToken));
     }
+
+    /// <summary>
+    /// D4: true when the request targets an existing line and changes NOTHING but its cargo links
+    /// (no quantity/unit price/amount/reason; label and unit absent or simply echoed).
+    /// </summary>
+    private static bool IsCargoLinkOnly(SaveOrderPriceLineRequest request, TransportOrderPricingLine existing) =>
+        request.CargoItemIds is not null
+        && !request.Remove
+        && request.Quantity is null && request.UnitPrice is null && request.Amount is null
+        && string.IsNullOrWhiteSpace(request.AdjustReason)
+        && (string.IsNullOrWhiteSpace(request.Label) || request.Label.Trim() == existing.Label)
+        && (string.IsNullOrWhiteSpace(request.Unit) || NormalizeUnitCode(request.Unit) == existing.Unit);
 
     /// <summary>Amount = explicit Amount, else Round(quantity × unitPrice, 2), else null (never invented).</summary>
     private static decimal? ResolveAmount(decimal? quantity, decimal? unitPrice, decimal? amount) =>
@@ -4318,11 +5090,13 @@ public class TransportOrderService : ITransportOrderService
             }
 
             var minutes = (decimal)(end.Value - arrived).TotalMinutes;
+            // D2: time spent at a site stop is the work itself — neither loading nor unloading
+            // time, so it never feeds the included-time / extra-time proposal.
             if (stopType == StopType.Loading)
             {
                 loadingMinutes = (loadingMinutes ?? 0m) + minutes;
             }
-            else
+            else if (stopType == StopType.Unloading)
             {
                 unloadingMinutes = (unloadingMinutes ?? 0m) + minutes;
             }

@@ -71,6 +71,17 @@ export function formatCurrency(value: number | null | undefined, currencySymbol 
 }
 
 /**
+ * Invoertekst → getal. Aanvaardt zowel ',' als '.' als decimaalteken (wat de tenant ook
+ * instelde: een planner plakt beide), leeg of onleesbaar → null. Geen groepering: dit is de
+ * tegenhanger van een formulierveld, niet van `formatDecimal`.
+ */
+export function parseDecimalInput(value: string | null | undefined): number | null {
+  if (value == null || value.trim() === '') return null
+  const parsed = Number(value.trim().replace(',', '.'))
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+/**
  * Hoeveelheid (kg, m³, aantallen, ldm …) volgens tenant-instelling, ZONDER overbodige
  * nullen: 12 → "12", 12.5 → "12,5", 1234.25 → "1.234,25". Max. `maxFractionDigits`
  * decimalen (afgerond), null → ''.

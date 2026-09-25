@@ -178,6 +178,7 @@ public class PlanningConflictService : IPlanningConflictService
         if (orderIds.Count > 0)
         {
             await EvaluateCapacityAsync(conflicts, trip, orderIds, cancellationToken);
+            await EvaluateTailLiftAsync(conflicts, trip, orderIds, cancellationToken);
         }
 
         return conflicts.Select(c => Enrich(c, trip)).ToList();
@@ -214,6 +215,7 @@ public class PlanningConflictService : IPlanningConflictService
             PlanningConflictCode.OrderRequiresCrane => (ConflictCategory.Equipment, "Kies een voertuig met kraan of verplaats de opdracht."),
             PlanningConflictCode.OrderRequiresAdr => (ConflictCategory.Equipment, "Kies ADR-geschikt materieel of verplaats de opdracht."),
             PlanningConflictCode.CapacityExceeded => (ConflictCategory.Capacity, "Verdeel de opdrachten over meerdere ritten of kies groter materieel."),
+            PlanningConflictCode.TailLiftCapacityExceeded => (ConflictCategory.Capacity, "Kies een voertuig met een zwaardere laadklep of voorzie ander laad-/losmaterieel op de stop."),
             _ => (ConflictCategory.Resource, (string?)null),
         };
 
@@ -226,6 +228,7 @@ public class PlanningConflictService : IPlanningConflictService
                 => ("Driver", trip.DriverId),
             PlanningConflictCode.VehicleNotOperational or PlanningConflictCode.VehicleInactive
                 or PlanningConflictCode.VehicleDoubleBooked or PlanningConflictCode.TachographOverdue
+                or PlanningConflictCode.TailLiftCapacityExceeded
                 => ("Vehicle", trip.VehicleId),
             PlanningConflictCode.TrailerNotOperational or PlanningConflictCode.TrailerInactive
                 or PlanningConflictCode.TrailerDoubleBooked
@@ -373,6 +376,80 @@ public class PlanningConflictService : IPlanningConflictService
         {
             conflicts.Add(new(PlanningConflictCode.CapacityCheckIncomplete, false,
                 $"Capaciteitscontrole onvolledig: {string.Join(" en ", missing)}.",
+                ConflictSeverity.Information));
+        }
+    }
+
+    /// <summary>
+    /// D4: tail-lift check. The heaviest SINGLE unit (max <c>WeightPerUnitKg</c> over the cargo
+    /// lines that carry one) is compared with the tail-lift capacity of a vehicle that has a tail
+    /// lift. Exceeding is always a warning — whether the lift is actually used at a stop is not
+    /// modelled. When cargo weight exists but the lift capacity or a per-unit weight is unknown, the
+    /// check is reported as still open; a per-unit weight is never derived from a line total and
+    /// the outcome is never "safe".
+    /// </summary>
+    private async Task EvaluateTailLiftAsync(
+        List<PlanningConflictDto> conflicts, Trip trip, List<Guid> orderIds, CancellationToken cancellationToken)
+    {
+        if (trip.VehicleId is not { } vehicleId)
+        {
+            return;
+        }
+
+        var tenantId = _tenantContext.TenantId;
+        var vehicle = await _dbContext.Vehicles.AsNoTracking()
+            .Where(v => v.Id == vehicleId && v.TenantId == tenantId)
+            .Select(v => new { v.InternalNumber, v.HasTailLift, v.TailLiftCapacityKg })
+            .FirstOrDefaultAsync(cancellationToken);
+        if (vehicle is not { HasTailLift: true })
+        {
+            return; // no tail lift → nothing to compare with (other handling equipment is not modelled)
+        }
+
+        var cargoLines = await _dbContext.CargoItems.AsNoTracking()
+            .Where(c => c.TenantId == tenantId && orderIds.Contains(c.TransportOrderId))
+            .Select(c => new { c.TotalWeightKg, c.WeightPerUnitKg })
+            .ToListAsync(cancellationToken);
+        var hasOrderWeight = await _dbContext.TransportOrders.AsNoTracking()
+            .AnyAsync(o => o.TenantId == tenantId && orderIds.Contains(o.Id) && o.WeightKg != null && o.WeightKg > 0, cancellationToken);
+
+        var unitWeights = cargoLines.Where(l => l.WeightPerUnitKg is > 0).Select(l => l.WeightPerUnitKg!.Value).ToList();
+        var linesWithoutUnitWeight = cargoLines.Count(l => l.WeightPerUnitKg is null && l.TotalWeightKg is > 0);
+        var hasCargoWeight = unitWeights.Count > 0 || linesWithoutUnitWeight > 0 || hasOrderWeight;
+        if (!hasCargoWeight)
+        {
+            return;
+        }
+
+        if (unitWeights.Count > 0 && vehicle.TailLiftCapacityKg is { } liftCapacity)
+        {
+            var heaviest = unitWeights.Max();
+            if (heaviest > liftCapacity)
+            {
+                conflicts.Add(new(PlanningConflictCode.TailLiftCapacityExceeded, false,
+                    $"De zwaarste eenheid ({heaviest:0.##} kg) overschrijdt de laadklepcapaciteit van {liftCapacity:0.##} kg van voertuig {vehicle.InternalNumber}."));
+            }
+        }
+
+        var open = new List<string>();
+        if (vehicle.TailLiftCapacityKg is null)
+        {
+            open.Add($"de laadklepcapaciteit van voertuig {vehicle.InternalNumber} is niet ingevuld");
+        }
+
+        if (linesWithoutUnitWeight > 0)
+        {
+            open.Add($"{linesWithoutUnitWeight} goederenlijn(en) zonder gewicht per eenheid");
+        }
+        else if (unitWeights.Count == 0)
+        {
+            open.Add("het gewicht per eenheid is niet gekend");
+        }
+
+        if (open.Count > 0)
+        {
+            conflicts.Add(new(PlanningConflictCode.CapacityCheckIncomplete, false,
+                $"Capaciteit nog te controleren (laadklep): {string.Join(" en ", open)}.",
                 ConflictSeverity.Information));
         }
     }

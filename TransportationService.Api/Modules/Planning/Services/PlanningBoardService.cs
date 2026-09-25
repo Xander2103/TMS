@@ -156,7 +156,9 @@ public class PlanningBoardService : IPlanningBoardService
                 .SelectMany(id => stopsByOrder[id].Where(s => s.StopType == StopType.Loading).OrderBy(s => s.Sequence))
                 .FirstOrDefault();
             var lastUnload = tripOrderIds
-                .SelectMany(id => stopsByOrder[id].Where(s => s.StopType == StopType.Unloading).OrderBy(s => s.Sequence))
+                .SelectMany(id => stopsByOrder[id]
+                    // D2: on-site work has no unloading stop — its site is the destination shown.
+                    .Where(s => s.StopType is StopType.Unloading or StopType.Site).OrderBy(s => s.Sequence))
                 .LastOrDefault();
             var route = firstLoad?.City is null && lastUnload?.City is null
                 ? null
@@ -316,7 +318,8 @@ public class PlanningBoardService : IPlanningBoardService
             return new UnplannedOrderDto(
                 r.Id, r.OrderNumber, r.OrderDate, r.CustomerId, r.CustomerName, r.Status, r.Priority,
                 orderStops.FirstOrDefault(s => s.StopType == StopType.Loading)?.City,
-                orderStops.LastOrDefault(s => s.StopType == StopType.Unloading)?.City,
+                // D2: on-site work has no unloading stop — its site is the destination shown.
+                orderStops.LastOrDefault(s => s.StopType is StopType.Unloading or StopType.Site)?.City,
                 orderStops.Min(s => s.RequestedFrom ?? s.PlannedFrom),
                 orderStops.Max(s => s.RequestedTo ?? s.PlannedTo),
                 r.GoodsDescription,

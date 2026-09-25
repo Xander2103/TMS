@@ -47,7 +47,12 @@ public record CustomerChangeImpactDto(
     int DraftInvoiceLinesReleased = 0,
     /// <summary>Set when the order belongs to a dossier whose customer it shares — change it there.</summary>
     Guid? OwningDossierId = null,
-    string? OwningDossierNumber = null);
+    string? OwningDossierNumber = null,
+    /// <summary>
+    /// Documents published to the OLD customer whose publication is withdrawn (back to internal)
+    /// by the change — they never become visible to the new customer by themselves.
+    /// </summary>
+    int DocumentsPublicationWithdrawn = 0);
 
 public record ChangeOrderCustomerRequest(Guid NewCustomerId, string Reason);
 
@@ -189,6 +194,12 @@ public class OrderCustomerChangeService : IOrderCustomerChangeService
             order.Status = TransportOrderStatus.Completed;
         }
 
+        // A document published for the OLD customer must never surface in the NEW customer's
+        // portal by itself: back to internal, audited per document, republished deliberately.
+        var withdrawn = await DocumentPublicationWithdrawal.WithdrawAsync(
+            DocumentPublicationWithdrawal.PublishedForOrder(_dbContext, TenantId, order.Id),
+            _auditService, previousCustomerId, request.NewCustomerId, cancellationToken);
+
         order.Version = Guid.NewGuid();
         await _dbContext.SaveChangesAsync(cancellationToken);
 
@@ -208,6 +219,7 @@ public class OrderCustomerChangeService : IOrderCustomerChangeService
                 context.Impact.AdjustedLinesFlaggedForReview,
                 context.Impact.NeedsPricingReview,
                 DraftInvoiceLinesReleased = context.DraftInvoiceLines.Count,
+                DocumentsPublicationWithdrawn = withdrawn,
             },
             cancellationToken);
     }
@@ -327,7 +339,9 @@ public class OrderCustomerChangeService : IOrderCustomerChangeService
                 .CountAsync(d => d.TenantId == TenantId && d.TransportOrderId == orderId, cancellationToken),
             draftLines.Count,
             owningDossier?.Id,
-            owningDossier?.DossierNumber);
+            owningDossier?.DossierNumber,
+            await DocumentPublicationWithdrawal.PublishedForOrder(_dbContext, TenantId, orderId)
+                .AsNoTracking().CountAsync(cancellationToken));
 
         return new ChangeContext(order, pricingLines, snapshot, draftLines, impact);
     }

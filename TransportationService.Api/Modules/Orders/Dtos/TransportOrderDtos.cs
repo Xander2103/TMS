@@ -16,7 +16,11 @@ public record TransportOrderListItemDto(
     int StopCount,
     bool AdrRequired,
     bool CraneRequired,
-    OrderPriority Priority = OrderPriority.Normal);
+    OrderPriority Priority = OrderPriority.Normal,
+    /// <summary>D2: kind of crane job (None | TransportWithCrane | OnSiteLifting).</summary>
+    CraneJobKind CraneJobKind = CraneJobKind.None,
+    /// <summary>D2: city of the first site stop — the route summary of an on-site order, which has no loading/unloading cities.</summary>
+    string? FirstSiteCity = null);
 
 public record TransportOrderStopDto(
     Guid Id,
@@ -69,7 +73,33 @@ public record TransportOrderStopDto(
     /// against the LIVE location hours — the warning answers "will the site be open", the
     /// snapshot answers "what did we agree". Dutch, non-blocking.
     /// </summary>
-    IReadOnlyList<string>? Warnings = null);
+    IReadOnlyList<string>? Warnings = null,
+    /// <summary>D2 (site stops): true = PlannedTo was entered by hand and is never recomputed from start + duration.</summary>
+    bool PlannedToIsManual = false,
+    /// <summary>
+    /// D3: true = this stop has a master location but its address was deliberately edited for this
+    /// order (the snapshot deviates from the address book). "Adres opnieuw overnemen"
+    /// (<c>RefreshSnapshot</c>) resets it. The central address itself is never changed by an order.
+    /// </summary>
+    bool AddressOverridden = false,
+    /// <summary>
+    /// D3: what "Opslaan in adresboek" did for this stop IN THE SAVE THAT PRODUCED THIS RESPONSE
+    /// (transient — a plain GET always reports None).
+    /// </summary>
+    AddressBookOutcome AddressBookOutcome = AddressBookOutcome.None);
+
+/// <summary>D3: per-stop result of <c>TransportOrderStopInput.SaveToAddressBook</c>.</summary>
+public enum AddressBookOutcome
+{
+    /// <summary>Nothing was asked, or nothing had to happen.</summary>
+    None = 0,
+
+    /// <summary>A new address was created in the address book and linked to the dossier customer.</summary>
+    Created = 1,
+
+    /// <summary>An identical active address already existed; the stop was linked to it instead.</summary>
+    LinkedExisting = 2,
+}
 
 public record TransportOrderDetailDto(
     Guid Id,
@@ -140,7 +170,23 @@ public record TransportOrderDetailDto(
     // P6: equipment/movement pricing dimensions.
     bool PlateauRequired = false,
     bool MoffettRequired = false,
-    bool IsReturnMovement = false);
+    bool IsReturnMovement = false,
+    /// <summary>D2: kind of crane job (None | TransportWithCrane | OnSiteLifting).</summary>
+    CraneJobKind CraneJobKind = CraneJobKind.None,
+    /// <summary>D2: what has to be done on site (mandatory for OnSiteLifting).</summary>
+    string? WorkDescription = null,
+    // D2: lift data — describes the load to lift; never a goods line.
+    decimal? LiftLoadWeightKg = null,
+    string? LiftLoadDimensions = null,
+    decimal? LiftRadiusMeters = null,
+    decimal? LiftHeightMeters = null,
+    string? LiftConditions = null,
+    string? LiftEquipment = null,
+    /// <summary>D2 (read-only): the linked dossier activity, its planned duration and whether its type allows on-site work.</summary>
+    Guid? ActivityId = null,
+    Guid? ActivityTypeId = null,
+    decimal? ActivityDurationHours = null,
+    bool ActivitySupportsOnSiteWork = false);
 
 /// <summary>Snapshot line of the price calculation stored on the order.</summary>
 public record OrderPricingLineDto(
@@ -160,7 +206,9 @@ public record OrderPricingLineDto(
     /// <summary>Managed unit code for Quantity (e.g. "COLLI"), editable on manual lines (spec Task 5).</summary>
     string? Unit = null,
     /// <summary>Frozen identity of the service option, for merge-matching (see LineKey too).</summary>
-    Guid? ServiceOptionId = null);
+    Guid? ServiceOptionId = null,
+    /// <summary>D4: goods lines this sales line prices (control relation on LineKey; never an invoice line).</summary>
+    IReadOnlyList<Guid>? CargoItemIds = null);
 
 /// <summary>Frozen header of the order's pricing snapshot (spec ch. 21).</summary>
 public record OrderPricingSnapshotDto(
@@ -193,7 +241,18 @@ public record OrderPricingSnapshotDto(
 public record OrderPricingCoverageDto(
     Guid? UnitTypeId, string UnitLabel, decimal Quantity, string Status,
     decimal BaseAmount = 0m, string? BaseRuleName = null,
-    decimal ServicesAmount = 0m, string? Reason = null);
+    decimal ServicesAmount = 0m, string? Reason = null,
+    /// <summary>
+    /// Closure sprint 2026-09-23: the goods lines this entry stands for, frozen with the
+    /// calculation, so a later separate sales line (D4 link) can mark the entry covered.
+    /// Null on snapshots frozen before this field existed (reconciled at the next calculation).
+    /// </summary>
+    IReadOnlyList<Guid>? CargoItemIds = null,
+    /// <summary>What the ENGINE said (Status/Reason before reconciliation); null = same as Status.</summary>
+    string? EngineStatus = null,
+    string? EngineReason = null,
+    /// <summary>"SeparatelyPriced" | "FixedPrice" when Status was lifted to Full by reconciliation; null otherwise.</summary>
+    string? CoveredBy = null);
 
 /// <summary>
 /// One line-level manual correction/addition (spec ch. 24-26). LineKey null = free manual line;
@@ -205,7 +264,14 @@ public record SaveOrderPriceLineRequest(
     string? LineKey, string Label, decimal? Quantity, decimal? UnitPrice, decimal? Amount,
     string? AdjustReason, bool Remove = false,
     /// <summary>Managed unit code for Quantity (e.g. "COLLI"); normalized like <c>QuantityUnitCode</c>.</summary>
-    string? Unit = null);
+    string? Unit = null,
+    /// <summary>
+    /// D4: goods lines (cargo item ids OF THIS ORDER) this sales line prices. Null = leave the
+    /// links of this line unchanged; a list (also an empty one) REPLACES them. A request that
+    /// carries only this field next to the LineKey is a link-only change: the line's amount,
+    /// kind and adjust reason stay untouched.
+    /// </summary>
+    IReadOnlyList<Guid>? CargoItemIds = null);
 
 /// <summary>Body for the pricing status transition endpoint (spec ch. 24-26).</summary>
 public record SetOrderPricingStatusRequest(OrderPricingStatus Status);
@@ -306,7 +372,13 @@ public record CargoItemDto(
     Guid? LoadingStopId = null,
     Guid? UnloadingStopId = null,
     string? QuantityUnitCode = null,
-    decimal? PalletCount = null);
+    decimal? PalletCount = null,
+    /// <summary>
+    /// D4: derived, never stored — <c>SeparatelyPriced</c> (linked to an existing non-informational
+    /// sales line) · <c>Included</c> (the order is priced by provenance AND has a fixed price
+    /// (one-off/override) or this line's unit is covered "Full") · <c>ToReview</c>.
+    /// </summary>
+    string? CommercialCoverage = null);
 
 /// <summary>
 /// Stop links use INDEXES into the request's stop list (stops receive fresh ids on every
@@ -378,7 +450,27 @@ public record TransportOrderStopInput(
     /// </summary>
     Guid? Id = null,
     /// <summary>True = deliberately re-copy the CURRENT master-location data onto this stop (audited).</summary>
-    bool RefreshSnapshot = false);
+    bool RefreshSnapshot = false,
+    /// <summary>
+    /// D2 (site stops only): true = PlannedTo is the planner's own value; false = the server sets
+    /// PlannedTo = PlannedFrom + activity duration. Ignored for loading/unloading stops.
+    /// </summary>
+    bool PlannedToIsManual = false,
+    /// <summary>
+    /// D3: only meaningful WITH a <c>LocationId</c>. True = the name/address/postal code/city/country
+    /// of this input are this order's own deviation and are stored as the stop snapshot instead of
+    /// the location's values. The central location is never modified. <c>RefreshSnapshot</c> wins
+    /// and clears the flag. False = the existing snapshot behaviour, unchanged.
+    /// </summary>
+    bool AddressOverridden = false,
+    /// <summary>
+    /// D3 (write-only): save this stop's address to the address book in the SAME save as the order.
+    /// Applies to a stop without a <c>LocationId</c> or with an overridden one; requires
+    /// <c>locations.create</c>. An identical active address is linked instead of duplicated; the
+    /// dossier customer gets a link. Afterwards the stop carries the <c>LocationId</c>, so saving
+    /// again creates nothing.
+    /// </summary>
+    bool SaveToAddressBook = false);
 
 /// <summary>
 /// Dispatcher-side execution planning of one stop: the confirmed window, hard bounds,
@@ -467,7 +559,18 @@ public record CreateTransportOrderRequest(
     /// when <see cref="DossierId"/> is null; the wrapper type must AllowsDuration and the value
     /// must be >= 0 — the same rules DossierActivityService enforces on the activity itself.
     /// </summary>
-    decimal? ActivityDurationHours = null);
+    decimal? ActivityDurationHours = null,
+    /// <summary>D2: kind of crane job. OnSiteLifting needs an activity type with SupportsOnSiteWork.</summary>
+    CraneJobKind CraneJobKind = CraneJobKind.None,
+    /// <summary>D2: mandatory for OnSiteLifting.</summary>
+    string? WorkDescription = null,
+    // D2: lift data — never turned into goods lines.
+    decimal? LiftLoadWeightKg = null,
+    string? LiftLoadDimensions = null,
+    decimal? LiftRadiusMeters = null,
+    decimal? LiftHeightMeters = null,
+    string? LiftConditions = null,
+    string? LiftEquipment = null);
 
 public record UpdateTransportOrderRequest(
     Guid CustomerId,
@@ -523,7 +626,20 @@ public record UpdateTransportOrderRequest(
     // P6: equipment/movement pricing dimensions.
     bool PlateauRequired = false,
     bool MoffettRequired = false,
-    bool IsReturnMovement = false);
+    bool IsReturnMovement = false,
+    /// <summary>
+    /// D2: kind of crane job. Null = unchanged — a client that does not know the D2 fields then
+    /// leaves the kind, work description and lift data exactly as stored. Non-null applies the
+    /// kind AND the work description / lift fields below as sent.
+    /// </summary>
+    CraneJobKind? CraneJobKind = null,
+    string? WorkDescription = null,
+    decimal? LiftLoadWeightKg = null,
+    string? LiftLoadDimensions = null,
+    decimal? LiftRadiusMeters = null,
+    decimal? LiftHeightMeters = null,
+    string? LiftConditions = null,
+    string? LiftEquipment = null);
 
 public record ChangeTransportOrderStatusRequest(TransportOrderStatus Status);
 

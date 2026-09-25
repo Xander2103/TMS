@@ -1,0 +1,117 @@
+/* D1 Planning block of the activity drawer. Tokens from styles/global.css. */
+
+.dossier-planning,
+.dossier-planning * {
+  box-sizing: border-box;
+}
+
+.dossier-planning {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: var(--space-4) 0;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent-border);
+  border-radius: var(--radius-md);
+  min-width: 0;
+}
+
+.dossier-planning h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.dossier-planning p {
+  margin: 0;
+}
+
+.dossier-planning-trip {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.dossier-planning-trip a {
+  color: var(--accent);
+}
+
+.dossier-planning-hint {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+}
+
+.dossier-planning-warning {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--warning-border);
+  border-radius: var(--radius-sm);
+  background: var(--warning-bg);
+  color: var(--warning);
+}
+
+.dossier-planning-error {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--danger-border);
+  border-radius: var(--radius-sm);
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.dossier-planning-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 var(--space-4);
+}
+
+.dossier-planning-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.dossier-planning-readonly {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2) var(--space-4);
+  margin: 0;
+}
+
+.dossier-planning-readonly dt {
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+}
+
+.dossier-planning-readonly dd {
+  margin: 0;
+  color: var(--text-h);
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  overflow-wrap: anywhere;
+}
+
+.dossier-planning-conflicts {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: 0.875rem;
+}
+
+/* Scroll/focus targets of the card actions; the focus ring would only be noise here. */
+.dossier-drawer-anchor {
+  outline: none;
+  scroll-margin-top: var(--space-4);
+}
+
+@media (max-width: 640px) {
+  .dossier-planning-fields,
+  .dossier-planning-readonly {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

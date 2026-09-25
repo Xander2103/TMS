@@ -2,10 +2,24 @@ using TransportationService.Api.Common.Abstractions;
 
 namespace TransportationService.Api.Modules.Dossiers.Entities;
 
+/// <summary>
+/// Stored as string — appending is safe. <see cref="Closed"/> IS the operationally CONFIRMED
+/// state ("Bevestigd" in the UI, kept as Closed for backward compatibility); the confirmation
+/// metadata on the dossier says how (manual/automatic) and by whom. <see cref="Cancelled"/>
+/// (confirmation sprint 2026-09-23) is the deliberate "never executed" end state.
+/// </summary>
 public enum DossierStatus
 {
     Open,
     Closed,
+    Cancelled,
+}
+
+/// <summary>How a dossier reached the confirmed (Closed) state.</summary>
+public enum DossierConfirmationSource
+{
+    Manual,
+    Automatic,
 }
 
 /// <summary>
@@ -37,7 +51,22 @@ public class TransportDossier : AuditableTenantEntity, IVersionedEntity
     public Guid? LegalEntityId { get; set; }
 
     public DossierStatus Status { get; set; } = DossierStatus.Open;
+
+    /// <summary>
+    /// Confirmation timestamp (the column predates the confirmation sprint and keeps its name):
+    /// set when the dossier becomes Closed, cleared on reopen. Legacy Closed rows keep their
+    /// value with <see cref="ConfirmationSource"/> null (source unknown, never invented).
+    /// </summary>
     public DateTime? ClosedAt { get; set; }
+
+    /// <summary>Who confirmed manually; null for an automatic confirmation and for legacy rows.</summary>
+    public Guid? ConfirmedByUserId { get; set; }
+    public DossierConfirmationSource? ConfirmationSource { get; set; }
+    public string? ConfirmationReason { get; set; }
+
+    public DateTime? CancelledAt { get; set; }
+    public Guid? CancelledByUserId { get; set; }
+    public string? CancellationReason { get; set; }
 
     public string? Notes { get; set; }
 

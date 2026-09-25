@@ -59,6 +59,15 @@ public class InvoicesController : ControllerBase
         return Ok(await _service.ListUninvoicedOrdersAsync(customerId, cancellationToken));
     }
 
+    /// <summary>Closure sprint 2026-09-23: priced standalone dossier activities of a customer, not yet invoiced.</summary>
+    [HttpGet("uninvoiced-activities")]
+    [RequirePermission(PermissionCodes.InvoicesView)]
+    public async Task<ActionResult<IReadOnlyList<UninvoicedActivityDto>>> UninvoicedActivities(
+        [FromQuery] Guid customerId, CancellationToken cancellationToken)
+    {
+        return Ok(await _service.ListUninvoicedActivitiesAsync(customerId, cancellationToken));
+    }
+
     /// <summary>Wave 10: the invoice-control workspace — proposals per grouping preference,
     /// review queue with readiness reasons, pending incident charges.</summary>
     [HttpGet("/api/invoice-control")]

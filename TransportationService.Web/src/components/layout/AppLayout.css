@@ -1,7 +1,11 @@
 .app-shell {
   display: flex;
+  /* svh on purpose: a minimum must never force a scrollbar. The sidebar itself is 100dvh. */
   min-height: 100svh;
   text-align: left;
+  /* Where page-level sticky chrome (subnavs, section tabs) may stick. 0 on desktop; below
+     900px the fixed mobile topbar covers the top of the viewport, see the media query. */
+  --app-sticky-top: 0px;
 }
 
 .app-main {
@@ -36,6 +40,8 @@
 @media (max-width: 900px) {
   .app-shell {
     flex-direction: column;
+    /* Height of .mobile-topbar: 10px padding + 44px toggle + 10px padding + 1px border. */
+    --app-sticky-top: 65px;
   }
 
   .content {

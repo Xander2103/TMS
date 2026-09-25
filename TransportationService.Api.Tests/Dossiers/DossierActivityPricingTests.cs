@@ -226,7 +226,7 @@ public class DossierActivityPricingTests
         Assert.Equal("Warning", missing.Severity);
         Assert.Equal(activity.Id, missing.ActivityId);
         Assert.Null(missing.TransportOrderId);
-        Assert.Equal("Nog geen verkoopprijs voor Opslag.", missing.Message);
+        Assert.Equal("Opslag: verkoopprijs ontbreekt.", missing.Message);
         Assert.DoesNotContain(dossier.Readiness!, i => i.Code == "pricing.zero" || i.Code == "pricing.none");
         Assert.Equal(1, await h.Readiness().CountDossiersWithAttentionAsync(CancellationToken.None));
 
@@ -285,7 +285,7 @@ public class DossierActivityPricingTests
         Assert.Equal(("Order", 450m, true), (transportUnit.PricingSource, transportUnit.AgreedPrice, transportUnit.IsPriced));
         var missing = Assert.Single(partial.Readiness!, i => i.Code == "pricing.missing");
         Assert.Equal(crane.Id, missing.ActivityId);
-        Assert.Equal("Nog geen verkoopprijs voor Kraanwerk ter plaatse.", missing.Message);
+        Assert.Equal("Kraanwerk ter plaatse: verkoopprijs ontbreekt.", missing.Message);
         var partialRow = (await h.Dossiers().ListAsync(null, null, null, CancellationToken.None)).Single(d => d.Id == dossier.Id);
         Assert.Equal(650m, partialRow.AgreedPriceTotal);
         Assert.Equal((3, 2, 1), (partialRow.BillableActivityCount, partialRow.PricedActivityCount, partialRow.OrderCount));
@@ -352,7 +352,7 @@ public class DossierActivityPricingTests
         var h = await SeedAsync();
         using var _ = h.Db;
         var dossier = await h.DossierWithAsync("OPSLAG");
-        await h.Dossiers().CloseAsync(dossier.Id, CancellationToken.None);
+        await DossierTestLifecycle.CloseAsync(h.Db.Context, h.TenantId, dossier.Id);
 
         await Assert.ThrowsAsync<DomainValidationException>(() => h.SetPriceAsync(dossier.Id, Only(dossier).Id, 100m));
     }

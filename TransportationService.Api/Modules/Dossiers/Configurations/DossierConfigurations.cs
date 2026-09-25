@@ -18,6 +18,9 @@ public class TransportDossierConfiguration : IEntityTypeConfiguration<TransportD
         builder.Property(d => d.Status).HasConversion<string>().HasMaxLength(20);
         builder.Property(d => d.Notes).HasMaxLength(4000);
         builder.Property(d => d.CustomerReference).HasMaxLength(100);
+        builder.Property(d => d.ConfirmationSource).HasConversion<string>().HasMaxLength(20);
+        builder.Property(d => d.ConfirmationReason).HasMaxLength(1000);
+        builder.Property(d => d.CancellationReason).HasMaxLength(1000);
 
         builder.HasOne<Organization.Entities.LegalEntity>().WithMany().HasForeignKey(d => d.LegalEntityId)
             .OnDelete(DeleteBehavior.Restrict);
@@ -29,6 +32,10 @@ public class TransportDossierConfiguration : IEntityTypeConfiguration<TransportD
         builder.HasIndex(d => new { d.TenantId, d.DossierNumber }).IsUnique().HasFilter("\"IsDeleted\" = false");
         builder.HasIndex(d => new { d.TenantId, d.Status });
         builder.HasIndex(d => new { d.TenantId, d.CustomerId });
+        // Confirmation sprint 2026-09-23: the dossier search sorts/filters on these per tenant.
+        builder.HasIndex(d => new { d.TenantId, d.DossierDate });
+        builder.HasIndex(d => new { d.TenantId, d.ClosedAt });
+        builder.HasIndex(d => new { d.TenantId, d.CreatedAt });
         // Idempotency key of the order-wrapper backfill/auto-wrap: at most one wrapper per order, ever.
         builder.HasIndex(d => d.OriginTransportOrderId, "UX_transport_dossiers_origin_order")
             .IsUnique()
@@ -167,5 +174,53 @@ public class DossierActivityPricingConfiguration : IEntityTypeConfiguration<Doss
         builder.HasIndex(p => new { p.TenantId, p.DossierActivityId });
 
         builder.HasQueryFilter(p => !p.IsDeleted);
+    }
+}
+
+public class DossierActivityPriceLineConfiguration : IEntityTypeConfiguration<DossierActivityPriceLine>
+{
+    public void Configure(EntityTypeBuilder<DossierActivityPriceLine> builder)
+    {
+        builder.ToTable("dossier_activity_price_lines");
+        builder.HasKey(l => l.Id);
+
+        builder.Property(l => l.Label).HasMaxLength(200).IsRequired();
+        builder.Property(l => l.Unit).HasMaxLength(30);
+        // Same precisions as the order pricing lines, so the two line kinds add up identically.
+        builder.Property(l => l.Quantity).HasPrecision(12, 3);
+        builder.Property(l => l.UnitPrice).HasPrecision(14, 4);
+        builder.Property(l => l.Amount).HasPrecision(12, 2);
+
+        // The lines live and die with their price record (and, through it, with the activity).
+        builder.HasOne<DossierActivityPricing>().WithMany().HasForeignKey(l => l.DossierActivityPricingId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasIndex(l => new { l.TenantId, l.DossierActivityPricingId });
+
+        builder.HasQueryFilter(l => !l.IsDeleted);
+    }
+}
+
+public class DossierNoteConfiguration : IEntityTypeConfiguration<DossierNote>
+{
+    public void Configure(EntityTypeBuilder<DossierNote> builder)
+    {
+        builder.ToTable("dossier_notes");
+        builder.HasKey(n => n.Id);
+
+        builder.Property(n => n.Text).HasMaxLength(4000).IsRequired();
+
+        builder.HasOne<TransportDossier>().WithMany().HasForeignKey(n => n.DossierId)
+            .OnDelete(DeleteBehavior.Cascade);
+        // Restrict avoids a second cascade path via the dossier (same reason as LinkedActivityId);
+        // activities are soft-deleted, so the FK never fires in practice.
+        builder.HasOne<DossierActivity>().WithMany().HasForeignKey(n => n.DossierActivityId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasIndex(n => new { n.TenantId, n.DossierId, n.CreatedAt });
+        builder.HasIndex(n => new { n.TenantId, n.DossierActivityId })
+            .HasFilter("\"DossierActivityId\" IS NOT NULL");
+
+        builder.HasQueryFilter(n => !n.IsDeleted);
     }
 }

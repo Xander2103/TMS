@@ -1,6 +1,21 @@
+/* End-adornment zone (sprint 2026-09-21).
+   Clear button and caret used to be two absolutely positioned glyphs with their own `right`
+   offsets plus a hard-coded 56px input padding — three numbers that had to agree by hand, and no
+   vertical anchoring at all. Now ONE flex zone is pinned to the right edge and the input padding
+   is calculated from the same custom properties, so icons and text cannot overlap. */
 .ui-searchable-select {
   position: relative;
   width: 100%;
+  --ss-edge: 8px; /* zone to the right border */
+  --ss-caret: 16px; /* caret box */
+  --ss-hit: 24px; /* clear-button hit area */
+  --ss-gap: 2px; /* between adornments */
+  --ss-text-gap: 6px; /* text to the first adornment */
+  --ss-zone: calc(var(--ss-edge) + var(--ss-caret) + var(--ss-text-gap));
+}
+
+.ui-searchable-select.has-clear {
+  --ss-zone: calc(var(--ss-edge) + var(--ss-caret) + var(--ss-gap) + var(--ss-hit) + var(--ss-text-gap));
 }
 
 .ui-searchable-select-control {
@@ -15,7 +30,7 @@
   font: inherit;
   font-size: 1rem;
   line-height: 1.4;
-  padding: 10px 56px 10px 12px;
+  padding: 10px 12px;
   min-height: 44px;
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -23,6 +38,14 @@
   color: var(--text-h);
   width: 100%;
   box-sizing: border-box;
+  text-overflow: ellipsis;
+}
+
+/* The reserved room is a longhand on a stronger selector on purpose: generic rules such as
+   `.ui-form-field input` or a page's dense `input { padding: … }` tie with the rule above and
+   may win on stylesheet order. They may restyle the control, but never the adornment room. */
+.ui-searchable-select .ui-searchable-select-control > .ui-searchable-select-input {
+  padding-right: var(--ss-zone);
 }
 
 .ui-searchable-select-control input:focus {
@@ -36,17 +59,37 @@
   cursor: not-allowed;
 }
 
-.ui-searchable-select-clear {
+/* Full-height, vertically centred. Clicks fall through to the input (opening the list) except
+   on the clear button. */
+.ui-searchable-select-adornments {
   position: absolute;
-  right: 30px;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--ss-gap);
+  padding-right: var(--ss-edge);
+  box-sizing: border-box;
+  pointer-events: none;
+}
+
+.ui-searchable-select-clear {
+  pointer-events: auto;
+  flex: 0 0 var(--ss-hit);
+  width: var(--ss-hit);
+  height: var(--ss-hit);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
   border: none;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text);
-  font-size: 18px;
-  line-height: 1;
   cursor: pointer;
-  padding: 2px 4px;
-  border-radius: 4px;
 }
 
 .ui-searchable-select-clear:hover {
@@ -54,12 +97,24 @@
   background: var(--code-bg);
 }
 
+.ui-searchable-select-clear:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
 .ui-searchable-select-caret {
-  position: absolute;
-  right: 12px;
+  flex: 0 0 var(--ss-caret);
+  width: var(--ss-caret);
+  height: var(--ss-caret);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   color: var(--text);
-  font-size: 12px;
-  pointer-events: none;
+}
+
+.ui-searchable-select-clear svg,
+.ui-searchable-select-caret svg {
+  display: block;
 }
 
 .ui-searchable-select-list {

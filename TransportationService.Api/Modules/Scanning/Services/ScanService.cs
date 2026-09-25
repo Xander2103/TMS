@@ -105,6 +105,14 @@ public class ScanService : IScanService
 
         var stop = guard.Stop!;
 
+        // D2: nothing is loaded or unloaded at a site stop (on-site work), so no load/unload scan
+        // (or return) scan can belong to it — refused instead of being booked as an unload.
+        if (stop.StopType == StopType.Site)
+        {
+            return ScanOperationResult.InvalidState(
+                "Op een werfstop wordt niet gescand: er worden geen goederen geladen of gelost.");
+        }
+
         // Scanning stays possible until the stop reaches a terminal status.
         if (!isReturnLeg)
         {
@@ -475,6 +483,8 @@ public class ScanService : IScanService
         }
 
         var stop = guard.Stop!;
+        // D2: a site stop has no scan role; its summary is empty by construction (no goods line
+        // can link to it), whichever scan type it is built for.
         var scanType = stop.StopType == StopType.Loading ? ScanType.Load : ScanType.Unload;
         return ScanSummaryResult.Success(await BuildSummaryAsync(tripId, stop, scanType, cancellationToken));
     }

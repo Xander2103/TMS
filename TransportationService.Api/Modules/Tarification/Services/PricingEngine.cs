@@ -738,7 +738,9 @@ public class PricingEngine : IPricingEngine
 
         bool ScopeMatches(ServiceConditionStopScope scope, StopTimeInput stop) =>
             scope == ServiceConditionStopScope.Any
-            || (scope == ServiceConditionStopScope.Unloading) == stop.IsUnloading;
+            // D2: a site stop has no loading/unloading role — without this guard its
+            // IsUnloading == false would silently read as "loading".
+            || (!stop.IsSite && (scope == ServiceConditionStopScope.Unloading) == stop.IsUnloading);
 
         // A stop's PROMISE matches the condition: "vóór 08:00" satisfies a "vóór 10:00" surcharge
         // (08 ≤ 10); "na 19:00" satisfies "na 18:00" (19 ≥ 18). Windows expose both bounds.

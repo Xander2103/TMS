@@ -148,11 +148,22 @@ public class DossierActivityService : IDossierActivityService
         ValidateScalars(request, activity.ActivityType!);
         await ValidateAccompanimentAsync(dossierId, request.LinkedActivityId, activityId, cancellationToken);
 
+        var durationChanged = activity.DurationHours != request.DurationHours;
         activity.Label = Trim(request.Label);
         activity.PlannedDate = request.PlannedDate;
         activity.DurationHours = request.DurationHours;
         activity.LinkedActivityId = request.LinkedActivityId;
-        activity.Notes = Trim(request.Notes);
+        // D7: the legacy free-text column is history now (notes live in DossierNote). A client that
+        // no longer sends it (null) must not wipe it; an explicit empty string still clears.
+        if (request.Notes is not null)
+        {
+            activity.Notes = Trim(request.Notes);
+        }
+        if (durationChanged)
+        {
+            await RecomputeSiteWorkEndAsync(activity, cancellationToken);
+        }
+
         dossier.Version = Guid.NewGuid();
         await _dbContext.SaveChangesAsync(cancellationToken);
 
@@ -319,6 +330,35 @@ public class DossierActivityService : IDossierActivityService
         }
 
         return orderResult.Order!.Id;
+    }
+
+    /// <summary>
+    /// D2: the duration is the single source of a site stop's planned end (end = start + duration,
+    /// <see cref="SiteWorkTime"/>), so a duration change must reach the linked order's site stops —
+    /// except an end the planner entered by hand, and except an order whose execution is over.
+    /// The order's concurrency token is bumped so an open order form rebases instead of writing
+    /// the old end back.
+    /// </summary>
+    private async Task RecomputeSiteWorkEndAsync(DossierActivity activity, CancellationToken cancellationToken)
+    {
+        if (activity.LinkedTransportOrderId is not { } orderId)
+        {
+            return;
+        }
+
+        var order = await _dbContext.TransportOrders
+            .Include(o => o.Stops)
+            .FirstOrDefaultAsync(o => o.TenantId == _tenantContext.TenantId && o.Id == orderId, cancellationToken);
+        if (order is null
+            || order.Status is TransportOrderStatus.Completed or TransportOrderStatus.Invoiced or TransportOrderStatus.Cancelled)
+        {
+            return;
+        }
+
+        if (SiteWorkTime.Recompute(order.Stops, activity.DurationHours))
+        {
+            order.Version = Guid.NewGuid();
+        }
     }
 
     private static void ValidateScalars(SaveDossierActivityRequest request, ActivityType type)

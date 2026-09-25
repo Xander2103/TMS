@@ -1,0 +1,33 @@
+{
+  "title": "Notes",
+  "activityTitle": "Notes de cette activité",
+  "add": "+ Ajouter une note",
+  "loading": "Chargement des notes...",
+  "loadFailed": "Impossible de charger les notes.",
+  "retry": "Réessayer",
+  "legacyTitle": "Note saisie précédemment (lecture seule)",
+  "newLabel": "Nouvelle note",
+  "editLabel": "Modifier la note",
+  "empty": "Aucune note.",
+  "showAll": "Afficher toutes les notes ({total})",
+  "showLess": "Afficher moins",
+  "more": "Afficher plus",
+  "less": "Afficher moins",
+  "saveFailed": "La note n'a pas pu être enregistrée.",
+  "deleteFailed": "La note n'a pas pu être supprimée.",
+  "added": "Note ajoutée.",
+  "updated": "Note mise à jour.",
+  "deleted": "Note supprimée.",
+  "deleteTitle": "Supprimer la note",
+  "deleteMessage": "Voulez-vous vraiment supprimer cette note ? Cette action est irréversible.",
+  "unknownAuthor": "Auteur inconnu",
+  "edited": "modifiée le {date}",
+  "counter": "{used} / {max} caractères",
+  "shortcutHint": "Ctrl+Entrée pour enregistrer",
+  "unsavedInDrawer": "Vous avez une note non enregistrée. Enregistrez-la ou annulez-la d'abord.",
+  "preview": {
+    "count_one": "{count} note",
+    "count_other": "{count} notes",
+    "open": "Ouvrir les notes"
+  }
+}

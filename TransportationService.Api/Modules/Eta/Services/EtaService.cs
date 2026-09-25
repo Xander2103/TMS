@@ -309,7 +309,9 @@ public class EtaService : IEtaService
         var samples = await _dbContext.StopExecutions.AsNoTracking()
             .Where(e => e.TenantId == tenantId && e.ArrivedAt != null && e.DepartedAt != null && e.ArrivedAt >= since)
             .Join(_dbContext.TransportOrderStops.AsNoTracking()
-                    .Where(s => s.LocationId != null && locationIds.Contains(s.LocationId.Value)),
+                    .Where(s => s.LocationId != null && locationIds.Contains(s.LocationId.Value)
+                        // D2: time at a site stop is work, not handling — it must not skew the averages.
+                        && s.StopType != StopType.Site),
                 e => e.TransportOrderStopId, s => s.Id,
                 (e, s) => new { LocationId = s.LocationId!.Value, e.ArrivedAt, e.DepartedAt })
             .ToListAsync(cancellationToken);
@@ -324,7 +326,14 @@ public class EtaService : IEtaService
 
     private static int EffectiveHandlingMinutes(
         TransportOrderStop stop, IReadOnlyDictionary<Guid, int> historical, int loading, int unloading) =>
-        stop.LocationId is { } locationId && historical.TryGetValue(locationId, out var measured)
+        // D2: at a site stop the dwell is the planned work itself (PlannedFrom → PlannedTo, kept in
+        // sync with the activity duration by SiteWorkTime); measured load/unload averages of the
+        // location say nothing about it. Without a planned window the generic stop default applies.
+        stop.StopType == StopType.Site
+            ? stop.PlannedFrom is { } from && stop.PlannedTo is { } to && to > from
+                ? (int)Math.Round((to - from).TotalMinutes)
+                : unloading
+        : stop.LocationId is { } locationId && historical.TryGetValue(locationId, out var measured)
             ? measured
             : HandlingMinutes(stop.StopType, loading, unloading);
 

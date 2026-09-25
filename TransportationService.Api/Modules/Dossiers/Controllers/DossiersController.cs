@@ -14,17 +14,23 @@ public class DossiersController : ControllerBase
     private readonly IDossierActivityService _activityService;
     private readonly IDossierReadinessService _readinessService;
     private readonly IDossierActivityPricingService _activityPricingService;
+    private readonly IDossierActivityPlanningService _activityPlanningService;
+    private readonly IDossierLifecycleService _lifecycle;
 
     public DossiersController(
         IDossierService service,
         IDossierActivityService activityService,
         IDossierReadinessService readinessService,
-        IDossierActivityPricingService activityPricingService)
+        IDossierActivityPricingService activityPricingService,
+        IDossierActivityPlanningService activityPlanningService,
+        IDossierLifecycleService lifecycle)
     {
+        _lifecycle = lifecycle;
         _service = service;
         _activityService = activityService;
         _readinessService = readinessService;
         _activityPricingService = activityPricingService;
+        _activityPlanningService = activityPlanningService;
     }
 
     [HttpGet]
@@ -34,6 +40,18 @@ public class DossiersController : ControllerBase
         CancellationToken cancellationToken)
     {
         return Ok(await _service.ListAsync(search, status, customerId, cancellationToken));
+    }
+
+    /// <summary>
+    /// Dossier search sprint 2026-09-23: the server-side search behind the dossier list — global
+    /// search, primary + advanced filters, whitelisted sort, bounded pagination. All tenant-scoped.
+    /// </summary>
+    [HttpGet("search")]
+    [RequirePermission(PermissionCodes.DossiersView, PermissionCodes.DossiersManage)]
+    public async Task<ActionResult<Common.Models.PagedResult<DossierListItemDto>>> Search(
+        [FromQuery] DossierSearchQuery query, CancellationToken cancellationToken)
+    {
+        return Ok(await _service.SearchAsync(query, cancellationToken));
     }
 
     [HttpPost]
@@ -59,19 +77,48 @@ public class DossiersController : ControllerBase
         return dossier is null ? NotFound() : Ok(dossier);
     }
 
+    // ------------------------------------------------------------ lifecycle (confirmation sprint 2026-09-23)
+
+    /// <summary>What confirming this dossier means right now: blockers, warnings, auto-blockers, summary.</summary>
+    [HttpGet("{id:guid}/confirmation")]
+    [RequirePermission(PermissionCodes.DossiersView, PermissionCodes.DossiersManage)]
+    public async Task<ActionResult<DossierConfirmationEvaluationDto>> Confirmation(Guid id, CancellationToken cancellationToken)
+    {
+        var evaluation = await _lifecycle.EvaluateAsync(id, cancellationToken);
+        return evaluation is null ? NotFound() : Ok(evaluation);
+    }
+
+    /// <summary>Manual confirmation (Status Closed = "Bevestigd"). Warnings must be acknowledged; blockers refuse.</summary>
+    [HttpPost("{id:guid}/confirm")]
+    [RequirePermission(PermissionCodes.DossiersManage)]
+    public async Task<ActionResult<DossierDetailDto>> Confirm(Guid id, ConfirmDossierRequest? request, CancellationToken cancellationToken)
+    {
+        var dossier = await _lifecycle.ConfirmAsync(id, request ?? new ConfirmDossierRequest(), cancellationToken);
+        return dossier is null ? NotFound() : Ok(dossier);
+    }
+
+    /// <summary>Backward-compatible alias of confirm (pre-sprint clients): warnings are acknowledged implicitly.</summary>
     [HttpPost("{id:guid}/close")]
     [RequirePermission(PermissionCodes.DossiersManage)]
     public async Task<ActionResult<DossierDetailDto>> Close(Guid id, CancellationToken cancellationToken)
     {
-        var dossier = await _service.CloseAsync(id, cancellationToken);
+        var dossier = await _lifecycle.ConfirmAsync(id, new ConfirmDossierRequest(null, AcknowledgeWarnings: true), cancellationToken);
         return dossier is null ? NotFound() : Ok(dossier);
     }
 
     [HttpPost("{id:guid}/reopen")]
-    [RequirePermission(PermissionCodes.DossiersManage)]
-    public async Task<ActionResult<DossierDetailDto>> Reopen(Guid id, CancellationToken cancellationToken)
+    [RequirePermission(PermissionCodes.DossiersReopen)]
+    public async Task<ActionResult<DossierDetailDto>> Reopen(Guid id, ReopenDossierRequest request, CancellationToken cancellationToken)
     {
-        var dossier = await _service.ReopenAsync(id, cancellationToken);
+        var dossier = await _lifecycle.ReopenAsync(id, request, cancellationToken);
+        return dossier is null ? NotFound() : Ok(dossier);
+    }
+
+    [HttpPost("{id:guid}/cancel")]
+    [RequirePermission(PermissionCodes.DossiersManage)]
+    public async Task<ActionResult<DossierDetailDto>> Cancel(Guid id, CancelDossierRequest request, CancellationToken cancellationToken)
+    {
+        var dossier = await _lifecycle.CancelAsync(id, request, cancellationToken);
         return dossier is null ? NotFound() : Ok(dossier);
     }
 
@@ -165,6 +212,33 @@ public class DossiersController : ControllerBase
         Guid id, Guid activityId, SetActivityPriceRequest request, CancellationToken cancellationToken)
     {
         var dossier = await _activityPricingService.SetAgreedPriceAsync(id, activityId, request, cancellationToken);
+        return dossier is null ? NotFound() : Ok(dossier);
+    }
+
+    /// <summary>
+    /// D5: sales LINES of a standalone billable activity (id-preserving replace; the server
+    /// computes every amount). Same commercial right as the fixed price — <c>dossiers.price</c>.
+    /// </summary>
+    [HttpPut("{id:guid}/activities/{activityId:guid}/price-lines")]
+    [RequirePermission(PermissionCodes.DossiersPrice)]
+    public async Task<ActionResult<DossierDetailDto>> SetActivityPriceLines(
+        Guid id, Guid activityId, SetActivityPriceLinesRequest request, CancellationToken cancellationToken)
+    {
+        var dossier = await _activityPricingService.SetPriceLinesAsync(id, activityId, request, cancellationToken);
+        return dossier is null ? NotFound() : Ok(dossier);
+    }
+
+    /// <summary>
+    /// D1: "Inplannen" — puts the activity's order on a Draft trip (or returns the existing open
+    /// trip unchanged; idempotent). A PLANNING right, not a dossier right: it creates a trip.
+    /// Driver/vehicle/trailer are changed afterwards through the trip endpoints.
+    /// </summary>
+    [HttpPost("{id:guid}/activities/{activityId:guid}/plan")]
+    [RequirePermission(PermissionCodes.PlanningCreate)]
+    public async Task<ActionResult<DossierDetailDto>> PlanActivity(
+        Guid id, Guid activityId, PlanDossierActivityRequest request, CancellationToken cancellationToken)
+    {
+        var dossier = await _activityPlanningService.PlanAsync(id, activityId, request, cancellationToken);
         return dossier is null ? NotFound() : Ok(dossier);
     }
 

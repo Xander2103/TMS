@@ -5,13 +5,19 @@ import { Badge, type BadgeTone } from '../../../components/ui/Badge'
 import { useLocale } from '../../../i18n/localeContext'
 import { formatDateTime } from '../../../utils/dates'
 import { euro } from '../../invoices/types'
+import { useLookupOptions } from '../../master-data/hooks/useLookupOptions'
 import { ORDER_DOCUMENT_TYPE_LABELS, type OrderDocumentType } from '../../transport-orders/api/orderDocumentsApi'
+import { isOnSiteLiftingOrder } from '../../transport-orders/components/onSiteLifting'
+import { unitLabelFrom } from '../../transport-orders/pricing/cargoLabels'
 import { ORDER_STATUS_LABELS, ORDER_STATUS_TONE, type TransportOrderStatus } from '../../transport-orders/types'
+import { PRICE_STATUS_LABEL_KEYS, PRICE_STATUS_TONE, activityPriceStatus, activityPriceText, activityReference } from '../activityDisplay'
 import { activityTypeIcon } from '../activityTypeIcons'
+import { needsPricing } from '../pricing/activityPriceDisplay'
 import { dossierTabPath, type DossierTab } from '../dossierSections'
 import { isDossierPriced } from '../dossierDisplay'
 import { useDossierWorkspace } from '../dossierWorkspace'
 import type { DossierActivity } from '../types'
+import './dossier-overview-blocks.css'
 import { stopLine, stopTiming } from '../routeStopText'
 
 interface OverviewCardProps {
@@ -64,6 +70,8 @@ export function DossierOverview() {
   const { t } = useLocale()
   const ws = useDossierWorkspace()
   const { dossier, activities, transportActivities, routeActivity, firstOrder, firstOrderLoading, firstLinkedOrderId } = ws
+  const { options: unitTypes } = useLookupOptions('/api/unit-types')
+  const unitLabel = unitLabelFrom(unitTypes)
   const hasRoute = activities.some((a) => a.hasStops)
   const hasGoods = activities.some((a) => a.supportsGoods)
 
@@ -71,8 +79,18 @@ export function DossierOverview() {
   const stops = firstOrder?.stops ?? []
   const loadingStop = stops.find((s) => s.stopType === 'Loading') ?? null
   const unloadingStop = stops.find((s) => s.stopType === 'Unloading') ?? null
+  const siteStop = stops.find((s) => s.stopType === 'Site') ?? null
   const plannedStop = stops.find((s) => s.plannedFrom || s.plannedTo) ?? null
-  const routeComplete = Boolean(loadingStop && unloadingStop)
+  // D2: an on-site lifting job has ONE applicable stop — its work site. No fictitious Laden/Lossen rows.
+  const onSite = isOnSiteLiftingOrder(firstOrder) || (siteStop !== null && !loadingStop && !unloadingStop)
+  // The readiness projection is the authority: while the DTO still flags a route (an activity
+  // without its order route, a missing stop or work site) the card never says "Ingevuld" — whatever
+  // the one loaded order happens to contain. A missing planning DATE is the Planning line's job.
+  const routeFlagged =
+    dossier.readiness.some((issue) => issue.section === 'route' && issue.severity !== 'Info' && !issue.code.endsWith('date_missing')) ||
+    // `route.order_missing` is emitted PER activity; an older payload without it still has the fact.
+    transportActivities.some((activity) => !activity.linkedTransportOrderId)
+  const routeComplete = (onSite ? Boolean(siteStop) : Boolean(loadingStop && unloadingStop)) && !routeFlagged
   const routeStatus = firstOrderLoading
     ? undefined
     : { label: routeComplete ? t('dossiers.overview.routeFilled') : t('dossiers.overview.routeIncomplete'), tone: (routeComplete ? 'success' : 'warning') as BadgeTone }
@@ -90,20 +108,28 @@ export function DossierOverview() {
       : { label: t('dossiers.overview.priceComplete'), tone: 'success' as BadgeTone }
 
   // --- Goederen ----------------------------------------------------------------------------
+  // The unit NAME from the catalogue (code while it loads, legacy free text without a code) —
+  // the same resolver as the goods tab and the order page, never the raw code.
   const cargo = firstOrder?.cargoItems ?? []
   const cargoByUnit = new Map<string, number>()
   for (const line of cargo) {
-    const unit = line.quantityUnitCode ?? line.quantityUnit ?? t('dossiers.goods.fallbackUnit')
+    const unit = unitLabel(line.quantityUnitCode, line.quantityUnit) || t('dossiers.goods.fallbackUnit')
     cargoByUnit.set(unit, (cargoByUnit.get(unit) ?? 0) + line.expectedQuantity)
   }
   const totalWeight = cargo.reduce((sum, line) => sum + (line.totalWeightKg ?? 0), 0)
+  // D2: an on-site lifting job lifts a load — no goods lines is its normal state, not an omission.
+  const liftingWithoutGoods = onSite && cargo.length === 0
 
   // --- Documenten & historiek --------------------------------------------------------------
   const documentCount = dossier.documentCount ?? 0
   const documentTypes = (dossier.documentTypes ?? []).map((type) =>
     ORDER_DOCUMENT_TYPE_LABELS[type as OrderDocumentType] ? t(ORDER_DOCUMENT_TYPE_LABELS[type as OrderDocumentType]) : type,
   )
-  const noteCount = dossier.notes ? 1 : 0
+  // D7: dossier-level notes are counted by the API; the legacy free text is no longer shown here.
+  const noteCount = dossier.noteCount ?? 0
+
+  // --- Verkoop & prijs: units still without a (complete) price, straight from each unit's status.
+  const missingPrices = ws.billableActivities.filter((activity) => needsPricing(dossier, activity))
 
   function activitySecondary(activity: DossierActivity): ReactNode {
     if (activity.linkedOrderNumber) {
@@ -119,9 +145,34 @@ export function DossierOverview() {
         </>
       )
     }
-    if (activity.hasStops) return t('dossiers.overview.activityNoOrder')
-    if (activity.isBillable === false) return null
-    return activity.isPriced && activity.agreedPrice != null ? euro(activity.agreedPrice) : t('dossiers.overview.activityNotPriced')
+    return activity.hasStops ? t('dossiers.overview.activityNoOrder') : null
+  }
+
+  /** Driver · plate · price (or price status) — the same rules as the activity card. */
+  function activityFacts(activity: DossierActivity): ReactNode {
+    const assignment = activity.assignment ?? null
+    const status = activityPriceStatus(dossier, activity)
+    return (
+      <span className="dossier-ov-facts">
+        {activity.hasStops && (
+          <>
+            <span className={assignment?.driverName ? undefined : 'is-missing'}>
+              {assignment?.driverName ?? t('dossierActivities.card.notAssigned')}
+            </span>
+            <span className={assignment?.vehiclePlate ? undefined : 'is-missing'}>
+              {assignment?.vehiclePlate ?? '—'}
+              {assignment?.vehicleId && assignment.vehicleSelectionSource === 'Suggested' && ` (${t('dossierActivities.card.suggested')})`}
+            </span>
+          </>
+        )}
+        {/* The price when there is one; else what is missing — never an amount for a missing price. */}
+        {status === 'PartiallyPriced' ? (
+          <Badge tone={PRICE_STATUS_TONE[status]}>{t(PRICE_STATUS_LABEL_KEYS[status])}</Badge>
+        ) : (
+          status !== null && <span className={status === 'NotPriced' ? 'is-missing' : undefined}>{activityPriceText(t, dossier, activity)}</span>
+        )}
+      </span>
+    )
   }
 
   return (
@@ -131,6 +182,18 @@ export function DossierOverview() {
           {transportActivities.length > 1 && routeActivity?.linkedOrderNumber && (
             <p className="dossier-ov-context">{t('dossiers.overview.routeForOrder', { number: routeActivity.linkedOrderNumber })}</p>
           )}
+          {onSite && (
+            <ol className="dossier-ov-route">
+              <li className={siteStop ? 'is-filled' : undefined}>
+                <span className="dossier-ov-route-label">{t('stopEditor.stopType.Site')}</span>
+                <span className="dossier-ov-route-value">
+                  {siteStop ? stopLine(t, siteStop) : t('dossiers.overview.notFilled')}
+                  {siteStop && stopTiming(t, siteStop) && <small>{stopTiming(t, siteStop)}</small>}
+                </span>
+              </li>
+            </ol>
+          )}
+          {!onSite && (
           <ol className="dossier-ov-route">
             <li className={loadingStop ? 'is-filled' : undefined}>
               <span className="dossier-ov-route-label">{t('dossiers.overview.loading')}</span>
@@ -147,6 +210,7 @@ export function DossierOverview() {
               </span>
             </li>
           </ol>
+          )}
           <p className="dossier-ov-inline">
             <Calendar size={16} aria-hidden />
             <span>{t('dossiers.overview.planning')}</span>
@@ -174,6 +238,7 @@ export function DossierOverview() {
                   <strong>{activity.activityTypeName}</strong>
                   {activity.label && <span className="dossier-ov-muted"> · {activity.label}</span>}
                   <span className="dossier-ov-list-sub">{activitySecondary(activity)}</span>
+                  {activityFacts(activity)}
                 </span>
               </li>
             ))}
@@ -195,7 +260,18 @@ export function DossierOverview() {
             <strong className="dossier-price-none">{t('dossierSheet.price.noPrice')}</strong>
           </p>
         )}
-        {billable > 0 && <p className="dossier-ov-muted">{t('dossiers.overview.priceProgress', { priced, total: billable })}</p>}
+        {billable > 0 && <p className="dossier-ov-muted">{t('dossierSheet.price.partialTotal', { priced, total: billable })}</p>}
+        {missingPrices.length > 0 && (
+          <ul className="dossier-ov-missing" aria-label={t('dossierActivities.overview.missingPrices')}>
+            {missingPrices.map((activity) => (
+              <li key={activity.id}>
+                {activityReference(activity)}
+                {activity.linkedOrderNumber && <span className="dossier-ov-muted"> · {activity.activityTypeName}</span>}:{' '}
+                {t(PRICE_STATUS_LABEL_KEYS[activityPriceStatus(dossier, activity) ?? 'NotPriced'])}
+              </li>
+            ))}
+          </ul>
+        )}
         {!isPriced && (
           <p className="dossier-ov-muted">
             {t('dossiers.overview.priceNoneBody')} {t('dossiers.overview.priceNoneHint')}
@@ -212,11 +288,14 @@ export function DossierOverview() {
           status={
             cargo.length > 0
               ? { label: t('dossiers.overview.goodsCount', { count: cargo.length }), tone: 'neutral' }
-              : { label: t('dossiers.overview.goodsNone'), tone: 'neutral' }
+              : liftingWithoutGoods
+                ? { label: t('dossierActivities.overview.goodsNotApplicable'), tone: 'neutral' }
+                : { label: t('dossiers.overview.goodsNone'), tone: 'neutral' }
           }
           action={t('dossiers.overview.openGoods')}
         >
-          {cargo.length === 0 && (
+          {liftingWithoutGoods && <p>{t('dossiers.goods.noGoodsOnSiteLifting')}</p>}
+          {cargo.length === 0 && !liftingWithoutGoods && (
             <>
               <p>{firstOrder?.goodsDescription ?? t('dossiers.overview.goodsNoneBody')}</p>
               {!firstLinkedOrderId && <p className="dossier-ov-muted">{t('dossiers.overview.goodsNoneHint')}</p>}
@@ -255,8 +334,10 @@ export function DossierOverview() {
         status={{ label: t('dossiers.overview.notesCount', { count: noteCount }), tone: 'neutral' }}
         action={t('dossiers.overview.openHistory')}
       >
-        {dossier.notes ? (
-          <p className="dossier-ov-note">{dossier.notes}</p>
+        {noteCount > 0 ? (
+          <p>
+            <Link to={dossierTabPath(dossier.id, 'historiek')}>{t('dossierActivities.overview.dossierNotes', { count: noteCount })}</Link>
+          </p>
         ) : (
           <>
             <p>{t('dossiers.overview.noNotes')}</p>

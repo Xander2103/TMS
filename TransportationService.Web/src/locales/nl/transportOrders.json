@@ -299,7 +299,7 @@
     "adrGoods": "ADR-goederen",
     "moreDetails": "Meer details",
     "barcode": "Barcode",
-    "weightPerUnit": "Gewicht per stuk (kg)",
+    "weightPerUnit": "Gewicht per eenheid (kg)",
     "linePallets": "Paletten",
     "linePalletsHint": "Optioneel; commercieel aantal, los van scanbare colli.",
     "reference": "Referentie",
@@ -317,7 +317,40 @@
     "manual": "Handmatig",
     "adrDetails": "ADR-details",
     "adrDetailsHint": "UN-nummer, klasse, verpakkingsgroep…",
-    "stackable": "Stapelbaar"
+    "stackable": "Stapelbaar",
+    "separateLinesHint": "Verschillende gewichten per eenheid? Voer ze in als aparte goederenlijnen — dupliceer een regel of voeg er een toe.",
+    "unitWeightUnknown": "Gewicht per eenheid onbekend — capaciteit per eenheid nog te controleren",
+    "totalWeightAuto": "Automatisch: aantal × gewicht per eenheid.",
+    "totalWeightManual": "Handmatig ingevuld.",
+    "recalculate": "Herbereken",
+    "duplicateLine": "Regel dupliceren",
+    "addAnotherLine": "+ Regel toevoegen"
+  },
+  "capacity": {
+    "title": "Operationele capaciteit",
+    "totalWeight": "Totaal gewicht",
+    "heaviestUnit": "Zwaarste eenheid",
+    "payload": "Laadvermogen voertuig",
+    "tailLift": "Capaciteit laadklep",
+    "unknownValue": "onbekend",
+    "linesWithoutUnitWeight": "{count} goederenlijn(en) zonder gewicht per eenheid: de zwaarste eenheid daarvan is niet gekend.",
+    "payloadExceeded": "Totaal gewicht ({weight}) overschrijdt het laadvermogen van het voertuig ({capacity}).",
+    "tailLiftExceeded": "Zwaarste eenheid ({weight}) overschrijdt de capaciteit van de laadklep ({capacity}).",
+    "toCheck": "Capaciteit nog te controleren",
+    "unknownPayload": "laadvermogen voertuig",
+    "unknownTailLift": "laadklep",
+    "unknownHandling": "transpallet/heftruck"
+  },
+  "coverageBadge": {
+    "SeparatelyPriced": "Afzonderlijk geprijsd",
+    "Included": "Inbegrepen in rit- of activiteitprijs",
+    "ToReview": "Nog te controleren"
+  },
+  "lading": {
+    "noGoodsOnSiteLifting": "Geen goederen — hijswerk op locatie",
+    "weightPerUnit": "Gewicht/eenheid",
+    "totalWeight": "Totaal gewicht",
+    "coverage": "Prijsdekking"
   },
   "services": {
     "description": "Gekozen diensten tellen mee in de prijsberekening en worden bij facturatie aparte factuurlijnen. De effectieve prijs komt uit de klantenfiche (klanttarief) of de algemene standaard.",
@@ -714,6 +747,7 @@
       "adjustedReview": "{count} aangepaste lijn(en) blijven staan, gemarkeerd als 'te controleren'.",
       "autoInvalidated": "{count} automatische prijslijn(en) van de oude klant vervallen.",
       "draftReleased": "{count} lijn(en) op een conceptfactuur worden losgekoppeld.",
+      "publicationWithdrawn": "{count} klantzichtbare document(en) van de oude klant worden intern gezet; maak ze bewust opnieuw zichtbaar voor de nieuwe klant.",
       "entityChanges": "De facturerende entiteit wijzigt naar de standaard van de nieuwe klant.",
       "entitySame": "De facturerende entiteit blijft gelijk.",
       "kept": "Blijft ongewijzigd: {stops} stop(s), {goods} goederenlijn(en), {documents} document(en).",

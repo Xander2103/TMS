@@ -200,5 +200,7 @@ public class TransportDocumentsController : ControllerBase
 
     private static bool IsKnownKind(string kind) =>
         string.Equals(kind, "cmr", StringComparison.OrdinalIgnoreCase)
-        || string.Equals(kind, "delivery-note", StringComparison.OrdinalIgnoreCase);
+        || string.Equals(kind, "delivery-note", StringComparison.OrdinalIgnoreCase)
+        // D2: werkbon for on-site work.
+        || string.Equals(kind, "work-order", StringComparison.OrdinalIgnoreCase);
 }

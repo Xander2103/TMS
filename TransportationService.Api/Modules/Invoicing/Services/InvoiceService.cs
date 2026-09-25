@@ -4,6 +4,7 @@ using TransportationService.Api.Common.Models;
 using TransportationService.Api.Common.Persistence;
 using TransportationService.Api.Data;
 using TransportationService.Api.Modules.Auditing.Services;
+using TransportationService.Api.Modules.Dossiers.Services;
 using TransportationService.Api.Modules.Invoicing.Dtos;
 using TransportationService.Api.Modules.Invoicing.Entities;
 using TransportationService.Api.Modules.Messaging.Entities;
@@ -214,10 +215,74 @@ public class InvoiceService : IInvoiceService
             return new UninvoicedOrderDto(
                 o.Id, o.OrderNumber, o.OrderDate, o.GoodsDescription ?? string.Empty,
                 orderStops.FirstOrDefault(s => s.StopType == StopType.Loading)?.City,
-                orderStops.LastOrDefault(s => s.StopType == StopType.Unloading)?.City,
+                // D2: on-site work has no unloading stop — its site is the destination shown.
+                orderStops.LastOrDefault(s => s.StopType is StopType.Unloading or StopType.Site)?.City,
                 o.AgreedPrice,
                 o.LegalEntityId,
                 o.InvoiceReadiness, o.InvoiceReadinessReasons);
+        }).ToList();
+    }
+
+    /// <summary>
+    /// Closure sprint 2026-09-23: standalone activities join the invoice builder next to orders.
+    /// A candidate is priced by provenance (<see cref="ActivityPricingState"/>: never "amount &gt; 0",
+    /// so an unpriced activity can never become a € 0 line), has NO linked order (an order-backed
+    /// activity is billed through its order — never twice), belongs to a dossier of this customer
+    /// and is not on a live (non-cancelled) invoice. A draft-released price (Locked) is a
+    /// candidate again, exactly like a released order.
+    /// </summary>
+    public async Task<IReadOnlyList<UninvoicedActivityDto>> ListUninvoicedActivitiesAsync(
+        Guid customerId, CancellationToken cancellationToken)
+    {
+        var tenantId = _tenantContext.TenantId;
+
+        var invoicedActivityIds = _dbContext.InvoiceLines.AsNoTracking()
+            .Where(l => l.TenantId == tenantId && l.DossierActivityId != null)
+            .Join(_dbContext.Invoices.AsNoTracking().Where(i => i.Status != InvoiceStatus.Cancelled),
+                l => l.InvoiceId, i => i.Id, (l, i) => l.DossierActivityId!.Value);
+
+        // € 0 is only invoiceable when it was CONFIRMED free; an unconfirmed zero still carries
+        // the pricing.zero warning and stays out until someone decides.
+        var rows = await _dbContext.DossierActivityPricings.AsNoTracking()
+            .Where(p => p.TenantId == tenantId && p.Status != Modules.Orders.Entities.OrderPricingStatus.Invoiced)
+            .Where(ActivityPricingState.IsPricedExpression)
+            .Where(p => p.AgreedPrice != 0m || p.FreeConfirmed)
+            .Join(_dbContext.DossierActivities.AsNoTracking()
+                    .Where(a => a.TenantId == tenantId && a.LinkedTransportOrderId == null),
+                p => p.DossierActivityId, a => a.Id, (p, a) => new { Pricing = p, Activity = a })
+            .Join(_dbContext.TransportDossiers.AsNoTracking()
+                    .Where(d => d.TenantId == tenantId && d.CustomerId == customerId),
+                x => x.Activity.DossierId, d => d.Id, (x, d) => new { x.Pricing, x.Activity, Dossier = d })
+            .Join(_dbContext.ActivityTypes.AsNoTracking().Where(t => t.TenantId == tenantId && t.IsBillable),
+                x => x.Activity.ActivityTypeId, t => t.Id, (x, t) => new { x.Pricing, x.Activity, x.Dossier, Type = t })
+            .Where(x => !invoicedActivityIds.Contains(x.Activity.Id))
+            .OrderBy(x => x.Dossier.DossierNumber).ThenBy(x => x.Activity.Sequence)
+            .Select(x => new
+            {
+                x.Activity.Id, x.Activity.DossierId, x.Dossier.DossierNumber, DossierTitle = x.Dossier.Title,
+                TypeName = x.Type.Name, x.Activity.Label, x.Activity.PlannedDate,
+                x.Pricing.AgreedPrice, x.Pricing.FreeConfirmed, x.Pricing.PricingSource, PricingId = x.Pricing.Id,
+                x.Dossier.LegalEntityId,
+            })
+            .ToListAsync(cancellationToken);
+
+        var pricingIds = rows.Select(r => r.PricingId).ToList();
+        var lineCounts = pricingIds.Count == 0
+            ? new Dictionary<Guid, int>()
+            : await _dbContext.DossierActivityPriceLines.AsNoTracking()
+                .Where(l => l.TenantId == tenantId && pricingIds.Contains(l.DossierActivityPricingId))
+                .GroupBy(l => l.DossierActivityPricingId)
+                .Select(g => new { g.Key, Count = g.Count() })
+                .ToDictionaryAsync(g => g.Key, g => g.Count, cancellationToken);
+
+        return rows.Select(r =>
+        {
+            var agreed = r.AgreedPrice ?? 0m;
+            return new UninvoicedActivityDto(
+                r.Id, r.DossierId, r.DossierNumber, r.DossierTitle, r.TypeName, r.Label, r.PlannedDate,
+                agreed, agreed == 0m && r.FreeConfirmed,
+                r.PricingSource.ToString(), lineCounts.GetValueOrDefault(r.PricingId),
+                r.LegalEntityId);
         }).ToList();
     }
 
@@ -251,7 +316,14 @@ public class InvoiceService : IInvoiceService
             }
         }
 
-        if (request.OrderIds.Count == 0 && request.ManualLines.Count == 0)
+        var requestedActivityIds = (request.DossierActivityIds ?? []).Distinct().ToList();
+        if (requestedActivityIds.Count != (request.DossierActivityIds?.Count ?? 0))
+        {
+            return InvoiceOperationResult.Invalid(
+                "Dezelfde activiteit staat meermaals in de selectie; kies elke activiteit maar één keer.");
+        }
+
+        if (request.OrderIds.Count == 0 && request.ManualLines.Count == 0 && requestedActivityIds.Count == 0)
         {
             return InvoiceOperationResult.Invalid("Een factuur heeft minstens één lijn nodig.");
         }
@@ -280,6 +352,25 @@ public class InvoiceService : IInvoiceService
                 }
 
                 orderDtos.Add(dto);
+            }
+        }
+
+        // Standalone activities: priced, of this customer, no linked order, not on a live invoice
+        // — the candidate list IS the rule, so nothing can be billed that it would not offer.
+        List<UninvoicedActivityDto> activityDtos = [];
+        if (requestedActivityIds.Count > 0)
+        {
+            var candidates = await ListUninvoicedActivitiesAsync(request.CustomerId, cancellationToken);
+            var byId = candidates.ToDictionary(a => a.Id);
+            foreach (var activityId in requestedActivityIds)
+            {
+                if (!byId.TryGetValue(activityId, out var dto))
+                {
+                    return InvoiceOperationResult.Invalid(
+                        "Een geselecteerde activiteit is niet factureerbaar (niet geprijsd, via een opdracht gefactureerd, andere klant of al gefactureerd).");
+                }
+
+                activityDtos.Add(dto);
             }
         }
 
@@ -322,21 +413,23 @@ public class InvoiceService : IInvoiceService
         var orderEntityIds = orderDtos
             .Where(o => o.LegalEntityId is not null)
             .Select(o => o.LegalEntityId!.Value)
+            .Concat(activityDtos.Where(a => a.LegalEntityId is not null).Select(a => a.LegalEntityId!.Value))
             .Distinct()
             .ToList();
         if (orderEntityIds.Count > 1)
         {
             return InvoiceOperationResult.Invalid(
-                "De geselecteerde opdrachten horen bij verschillende facturerende entiteiten en kunnen niet op één factuur gecombineerd worden.");
+                "De geselecteerde opdrachten en activiteiten horen bij verschillende facturerende entiteiten en kunnen niet op één factuur gecombineerd worden.");
         }
 
         if (orderEntityIds.Count == 1 && orderEntityIds[0] != legalEntity?.Id)
         {
             var mismatched = string.Join(", ", orderDtos
                 .Where(o => o.LegalEntityId == orderEntityIds[0])
-                .Select(o => o.OrderNumber));
+                .Select(o => o.OrderNumber)
+                .Concat(activityDtos.Where(a => a.LegalEntityId == orderEntityIds[0]).Select(a => $"{a.DossierNumber}/{a.ActivityTypeName}")));
             return InvoiceOperationResult.Invalid(
-                $"De facturerende entiteit van de factuur wijkt af van die van opdracht(en) {mismatched}. " +
+                $"De facturerende entiteit van de factuur wijkt af van die van opdracht(en)/activiteit(en) {mismatched}. " +
                 "Kies de entiteit van de opdrachten of pas de opdrachten aan.");
         }
 
@@ -486,6 +579,75 @@ public class InvoiceService : IInvoiceService
                     UnitCode = serviceLine.Kind == Modules.Tarification.Entities.SurchargeKind.PerHour ? "HUR" : "C62",
                 });
             }
+        }
+
+        // Standalone activities: a OneOff price is one line; a Lines price reproduces every
+        // sales line (quantity, unit, unit price, stamped sales code). A confirmed-free activity
+        // is an explicit € 0 line — the decision is documented, and the activity leaves the
+        // candidate list like any other. No system role fits an activity: the stamped sales code
+        // of a price line wins, otherwise the line stays uncategorised for the invoicing user.
+        var activityIdsSelected = activityDtos.Select(a => a.Id).ToList();
+        var activityPricings = activityIdsSelected.Count == 0
+            ? []
+            : await _dbContext.DossierActivityPricings
+                .Where(p => p.TenantId == tenantId && activityIdsSelected.Contains(p.DossierActivityId))
+                .ToListAsync(cancellationToken);
+        var activityPricingIds = activityPricings.Select(p => p.Id).ToList();
+        var activityPriceLines = activityPricingIds.Count == 0
+            ? new Dictionary<Guid, List<Modules.Dossiers.Entities.DossierActivityPriceLine>>()
+            : (await _dbContext.DossierActivityPriceLines.AsNoTracking()
+                .Where(l => l.TenantId == tenantId && activityPricingIds.Contains(l.DossierActivityPricingId))
+                .OrderBy(l => l.Sequence)
+                .ToListAsync(cancellationToken))
+                .GroupBy(l => l.DossierActivityPricingId)
+                .ToDictionary(g => g.Key, g => g.ToList());
+        foreach (var activity in activityDtos)
+        {
+            var pricing = activityPricings.Single(p => p.DossierActivityId == activity.Id);
+            var heading = string.IsNullOrWhiteSpace(activity.Label)
+                ? $"{activity.DossierNumber} — {activity.ActivityTypeName}"
+                : $"{activity.DossierNumber} — {activity.ActivityTypeName}: {activity.Label.Trim()}";
+            var priceLines = activityPriceLines.GetValueOrDefault(pricing.Id) ?? [];
+            if (pricing.PricingSource == Modules.Dossiers.Entities.ActivityPricingSource.Lines && priceLines.Count > 0)
+            {
+                foreach (var priceLine in priceLines)
+                {
+                    var stamped = priceLine.SalesCategoryId is { } sc && activeCategoryById.ContainsKey(sc) ? sc : (Guid?)null;
+                    invoice.Lines.Add(new InvoiceLine
+                    {
+                        Id = Guid.NewGuid(),
+                        TenantId = tenantId,
+                        DossierActivityId = activity.Id,
+                        Sequence = sequence++,
+                        Description = $"{heading} — {priceLine.Label}",
+                        Quantity = priceLine.Quantity,
+                        UnitPrice = priceLine.UnitPrice,
+                        VatRatePercent = RateFor(stamped),
+                        SalesCategoryId = stamped,
+                        UnitCode = UnEceUnitCodeMap.Resolve(priceLine.Unit),
+                    });
+                }
+            }
+            else
+            {
+                invoice.Lines.Add(new InvoiceLine
+                {
+                    Id = Guid.NewGuid(),
+                    TenantId = tenantId,
+                    DossierActivityId = activity.Id,
+                    Sequence = sequence++,
+                    Description = heading,
+                    Quantity = 1m,
+                    UnitPrice = activity.AgreedPrice,
+                    VatRatePercent = RateFor(null),
+                    SalesCategoryId = null,
+                });
+            }
+
+            // Same lifecycle as an order's pricing snapshot: invoice generation is the only
+            // path to Invoiced; every pricing guard refuses edits from here on.
+            pricing.Status = Modules.Orders.Entities.OrderPricingStatus.Invoiced;
+            pricing.Version = Guid.NewGuid();
         }
 
         foreach (var manual in request.ManualLines)
@@ -740,6 +902,20 @@ public class InvoiceService : IInvoiceService
             await ReleasePricingSnapshotsAsync(
                 releasedOrders.Select(o => o.Id).ToList(), cancellationToken);
         }
+
+        // Dropped activity lines release their activity only when NONE of its lines is kept
+        // (a Lines-priced activity spans several invoice lines).
+        var keptActivityIds = existingById.Values
+            .Where(l => keptIds.Contains(l.Id) && l.DossierActivityId is not null)
+            .Select(l => l.DossierActivityId!.Value)
+            .ToHashSet();
+        await ActivityPricingRelease.ReleaseAsync(_dbContext, _tenantContext.TenantId,
+            existingById.Values
+                .Where(l => !keptIds.Contains(l.Id) && l.DossierActivityId is { } aid && !keptActivityIds.Contains(aid))
+                .Select(l => l.DossierActivityId!.Value)
+                .Distinct()
+                .ToList(),
+            cancellationToken);
 
         var removed = existingById.Values.Where(l => !keptIds.Contains(l.Id)).ToList();
         _dbContext.RemoveRange(removed);
@@ -1190,6 +1366,12 @@ public class InvoiceService : IInvoiceService
 
     private async Task ReleaseOrdersAsync(Invoice invoice, CancellationToken cancellationToken)
     {
+        // Standalone activities on the document follow the same release rule as its orders.
+        await ActivityPricingRelease.ReleaseAsync(_dbContext, _tenantContext.TenantId,
+            invoice.Lines.Where(l => !l.IsDeleted && l.DossierActivityId is not null)
+                .Select(l => l.DossierActivityId!.Value).Distinct().ToList(),
+            cancellationToken);
+
         var orderIds = invoice.Lines
             .Where(l => !l.IsDeleted && l.TransportOrderId is not null)
             .Select(l => l.TransportOrderId!.Value)
@@ -1649,6 +1831,14 @@ public class InvoiceService : IInvoiceService
             : await _dbContext.TransportOrders.AsNoTracking()
                 .Where(o => o.TenantId == tenantId && orderIds.Contains(o.Id))
                 .ToDictionaryAsync(o => o.Id, o => o.OrderNumber, cancellationToken);
+        var activityIds = liveLines.Where(l => l.DossierActivityId is not null).Select(l => l.DossierActivityId!.Value).Distinct().ToList();
+        var dossierNumbersByActivity = activityIds.Count == 0
+            ? new Dictionary<Guid, string>()
+            : await _dbContext.DossierActivities.AsNoTracking()
+                .Where(a => a.TenantId == tenantId && activityIds.Contains(a.Id))
+                .Join(_dbContext.TransportDossiers.AsNoTracking().Where(d => d.TenantId == tenantId),
+                    a => a.DossierId, d => d.Id, (a, d) => new { a.Id, d.DossierNumber })
+                .ToDictionaryAsync(x => x.Id, x => x.DossierNumber, cancellationToken);
 
         // Live category/mapping info while Draft; frozen snapshots afterwards (§7.3).
         var lineCategoryIds = liveLines.Where(l => l.SalesCategoryId is not null)
@@ -1714,7 +1904,9 @@ public class InvoiceService : IInvoiceService
                 l.VatCategoryCode ?? Partners.Services.VatTreatmentCatalog.ResolveVatCategory(mappedTreatment, l.VatRatePercent).Code,
                 fiscalTreatment, fiscalSource, fiscalLegalText, salesCode,
                 // Draft: what Send will freeze (same rule as Send and the draft PDF); frozen: as stored.
-                frozen ? l.Description : InvoiceLineDescriptions.CustomerFacing(l.Description, live, invoice.LanguageCode));
+                frozen ? l.Description : InvoiceLineDescriptions.CustomerFacing(l.Description, live, invoice.LanguageCode),
+                l.DossierActivityId,
+                l.DossierActivityId is { } aid ? dossierNumbersByActivity.GetValueOrDefault(aid) : null);
         }).ToList();
 
         var subtotal = Math.Round(lines.Sum(l => l.LineTotal), 2);

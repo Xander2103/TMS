@@ -78,20 +78,22 @@ public class DossierReadinessService : IDossierReadinessService
             var standaloneIds = standalone.Select(a => a.Id).ToList();
             var pricings = await _dbContext.DossierActivityPricings.AsNoTracking()
                 .Where(p => p.TenantId == tenantId && standaloneIds.Contains(p.DossierActivityId))
-                .Select(p => new { p.DossierActivityId, p.PricingSource, p.FixedAmount })
+                .Select(p => new { p.DossierActivityId, p.PricingSource, p.FixedAmount, p.AgreedPrice, p.FreeConfirmed })
                 .ToDictionaryAsync(p => p.DossierActivityId, cancellationToken);
 
             foreach (var activity in standalone)
             {
                 var name = string.IsNullOrWhiteSpace(activity.Label) ? activity.TypeName : $"{activity.TypeName} · {activity.Label}";
                 if (!pricings.TryGetValue(activity.Id, out var pricing)
-                    || !ActivityPricingState.IsPriced(pricing.PricingSource, pricing.FixedAmount))
+                    || !ActivityPricingState.IsPriced(pricing.PricingSource, pricing.FixedAmount, pricing.AgreedPrice))
                 {
                     issues.Add(new ReadinessIssueDto(
-                        "pricing.missing", "Warning", $"Nog geen verkoopprijs voor {name}.",
+                        "pricing.missing", "Warning", $"{name}: verkoopprijs ontbreekt.",
                         "prijs", "price", "Commercial", ActivityId: activity.Id));
                 }
-                else if (pricing.FixedAmount == 0m)
+                // D5: a € 0 that was explicitly confirmed free answers the question — no warning.
+                else if (ActivityPricingState.IsUnconfirmedZero(
+                             pricing.PricingSource, pricing.FixedAmount, pricing.AgreedPrice, pricing.FreeConfirmed))
                 {
                     issues.Add(new ReadinessIssueDto(
                         "pricing.zero", "Warning",
@@ -134,6 +136,10 @@ public class DossierReadinessService : IDossierReadinessService
                 o.Id, o.OrderNumber, o.Status, o.PriceIsManual, o.PricingSource, o.OneOffFixedAmount, o.AgreedPrice,
                 HasLoading = o.Stops.Any(s => !s.IsDeleted && s.StopType == StopType.Loading),
                 HasUnloading = o.Stops.Any(s => !s.IsDeleted && s.StopType == StopType.Unloading),
+                // D2: on-site work confirms on a site stop + work description instead.
+                o.CraneJobKind,
+                HasSite = o.Stops.Any(s => !s.IsDeleted && s.StopType == StopType.Site),
+                HasWorkDescription = o.WorkDescription != null && o.WorkDescription != "",
                 HasDate = o.Stops.Any(s => !s.IsDeleted && s.PlannedFrom != null),
             })
             .ToListAsync(cancellationToken);
@@ -142,7 +148,26 @@ public class DossierReadinessService : IDossierReadinessService
         {
             // Blocking exactly where the existing Confirm gate blocks — shown BEFORE the user
             // presses Bevestigen, with the same rule, so the error is never a surprise.
-            if (order.Status is TransportOrderStatus.Draft or TransportOrderStatus.Submitted
+            if (order.CraneJobKind == CraneJobKind.OnSiteLifting)
+            {
+                // D2: same gate as CraneJobRules.ConfirmationError — never a missing laad-/loslocatie.
+                if (order.Status is TransportOrderStatus.Draft or TransportOrderStatus.Submitted
+                    && (!order.HasSite || !order.HasWorkDescription))
+                {
+                    var missing = (!order.HasSite, !order.HasWorkDescription) switch
+                    {
+                        (true, true) => "werflocatie en werkomschrijving ontbreken nog",
+                        (true, false) => "werflocatie is nog onbekend",
+                        _ => "werkomschrijving ontbreekt nog",
+                    };
+                    issues.Add(new ReadinessIssueDto(
+                        "order.confirm.site", "Blocking",
+                        $"{order.OrderNumber}: {missing} (nodig om te bevestigen).",
+                        "route", order.HasSite ? "workDescription" : "stops.site", "Planning",
+                        TransportOrderId: order.Id, ActivityId: carrierByOrder.GetValueOrDefault(order.Id)?.Id));
+                }
+            }
+            else if (order.Status is TransportOrderStatus.Draft or TransportOrderStatus.Submitted
                 && (!order.HasLoading || !order.HasUnloading))
             {
                 var missing = (!order.HasLoading, !order.HasUnloading) switch
@@ -164,7 +189,7 @@ public class DossierReadinessService : IDossierReadinessService
             {
                 issues.Add(new ReadinessIssueDto(
                     "route.date_missing", "Warning",
-                    $"{order.OrderNumber}: nog geen planningsdatum.",
+                    $"{order.OrderNumber}: planningsdatum ontbreekt.",
                     "route", "stops.plannedFrom", "Planning",
                     TransportOrderId: order.Id, ActivityId: carrierByOrder.GetValueOrDefault(order.Id)?.Id));
             }
@@ -216,7 +241,7 @@ public class DossierReadinessService : IDossierReadinessService
         {
             issues.Add(new ReadinessIssueDto(
                 "pricing.missing", "Warning",
-                $"{order.OrderNumber}: nog geen verkoopprijs.",
+                $"{order.OrderNumber}: verkoopprijs ontbreekt.",
                 "prijs", "price", "Commercial", TransportOrderId: order.Id, ActivityId: carrierByOrder.GetValueOrDefault(order.Id)?.Id));
         }
 
@@ -295,9 +320,10 @@ public class DossierReadinessService : IDossierReadinessService
                     .Any(x => !_dbContext.DossierActivityPricings
                                   .Where(ActivityPricingState.IsPricedExpression)
                                   .Any(p => p.DossierActivityId == x.Id)
+                              // D5: a zero confirmed as free needs no attention any more.
                               || _dbContext.DossierActivityPricings
-                                  .Where(ActivityPricingState.IsPricedExpression)
-                                  .Any(p => p.DossierActivityId == x.Id && p.FixedAmount == 0m)))
+                                  .Where(ActivityPricingState.IsUnconfirmedZeroExpression)
+                                  .Any(p => p.DossierActivityId == x.Id)))
             .CountAsync(cancellationToken);
     }
 }

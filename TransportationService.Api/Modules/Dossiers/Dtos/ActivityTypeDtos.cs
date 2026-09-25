@@ -17,7 +17,9 @@ public record ActivityTypeDto(
     int QuickStartOrder,
     bool IsSystemDefaultTransport,
     /// <summary>Commercial unit: carries a sales price and counts in pricing completeness (step 13).</summary>
-    bool IsBillable = true);
+    bool IsBillable = true,
+    /// <summary>D2: orders of this type may be on-site work (OnSiteLifting: site stop + work description).</summary>
+    bool SupportsOnSiteWork = false);
 
 /// <summary>
 /// Create/update payload for a tenant activity type. <see cref="Code"/> is immutable after
@@ -39,4 +41,6 @@ public record SaveActivityTypeRequest(
     bool IsQuickStart = false,
     int QuickStartOrder = 0,
     bool IsSystemDefaultTransport = false,
-    bool IsBillable = true);
+    bool IsBillable = true,
+    /// <summary>D2. Null = unchanged (false on create), so a client that does not know the flag never clears it.</summary>
+    bool? SupportsOnSiteWork = null);

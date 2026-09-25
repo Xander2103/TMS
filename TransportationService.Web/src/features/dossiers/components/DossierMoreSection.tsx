@@ -13,6 +13,7 @@ import {
   type IncidentStatus,
   type IncidentType,
 } from '../../incidents/types'
+import { isDossierPriced } from '../dossierDisplay'
 import { DOSSIER_RELATION_LABELS, type DossierDetail } from '../types'
 
 interface DossierMoreSectionProps {
@@ -40,7 +41,10 @@ export function DossierMoreSection({ dossier, canManage, busy, onRemoveRelation,
       <div className="db-kpis">
         <div className="db-kpi">
           <span className="db-kpi-label">{t('dossiers.more.agreedRevenue')}</span>
-          <span className="db-kpi-value">{euro(dossier.financials.agreedOrderTotal)}</span>
+          {/* A missing price is not € 0,00: same rule (and same helper) as the price tab and the overview. */}
+          <span className="db-kpi-value">
+            {isDossierPriced(dossier) ? euro(dossier.financials.agreedOrderTotal) : t('dossierSheet.price.noPrice')}
+          </span>
         </div>
         <div className="db-kpi">
           <span className="db-kpi-label">{t('dossiers.more.invoiced')}</span>

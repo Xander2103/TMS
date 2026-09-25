@@ -289,7 +289,7 @@ redesign-migraties in aflopende volgorde. Alternatief vanaf de buildmachine:
 
 ### 2.1 Startup-seeders in **elke** omgeving
 
-`Program.cs` draait bij elke start, ook in productie, drie idempotente seeders:
+`Program.cs` draait bij elke start, ook in productie, vier idempotente seeders/syncs:
 
 1. **`CountrySeeder.SyncAsync`** — synchroniseert de globale ISO-landenlijst (vereist voor
    landvalidatie en comboboxen, tenant-onafhankelijk).
@@ -302,6 +302,12 @@ redesign-migraties in aflopende volgorde. Alternatief vanaf de buildmachine:
    tenant.
 3. **`CoverageStatusBackfillSeeder.SyncAsync`** — getypeerde coverage-roll-up voor
    pre-Wave-2-prijssnapshots (idempotent).
+4. **`AuthorizationCatalogSync.SyncAsync`** (closure sprint 2026-09-23) — de release-flow voor
+   autorisatiedata: eerst `PermissionCatalogSeeder.SyncAsync` (catalogus volgt `PermissionCodes`,
+   systeemrollen krijgen de volledige catalogus), daarna `DefaultRoleSeeder.SyncAsync` (rolsjablonen
+   en versie-upgrades, zie §2.3). Idempotent en tenant-veilig; een release heeft dus **geen**
+   handmatige databasestap meer nodig voor nieuwe permissiecodes of rol-upgrades. De sync logt
+   op Information wanneer er iets veranderde (aantal permissies vóór/na, laagste sjabloonversie).
 
 `ActivityTypeSeeder` wordt daarnaast lazy aangeroepen op runtime-paden
 (`ActivityTypeService`, snelle orderaanmaak in `TransportOrderService`), dus ook een tenant
@@ -313,24 +319,23 @@ Binnen het `IsDevelopment()`-blok in `Program.cs` draaien bij elke start:
 
 - `MasterDataSeeder.SeedAsync` — maakt de dev-tenant + gebruikers aan, **alleen** als de
   database nog géén tenants bevat.
-- `PermissionCatalogSeeder.SyncAsync` — houdt de permissiecatalogus in sync met
-  `PermissionCodes`.
+- `AuthorizationCatalogSync.SyncAsync` — nogmaals, omdat de dev-tenant en -admin zonet door
+  `MasterDataSeeder` aangemaakt kunnen zijn (de release-flow-sync in §2.1 draaide daarvóór).
 - `ReferenceDataSeeder.SeedAsync` — starter-lookups.
 - `RateCardConversionService.ConvertAsync` — eenmalige conversie van legacy rate cards naar
   pricing agreements (idempotent).
-- `DefaultRoleSeeder.SyncAsync` — zie §2.3.
 - `LegalEntitySeeder`, `ExpiryPolicySeeder`, `IssuedItemTemplateSeeder`.
 - `DevAdminSeeder.EnsurePasswordAsync` — garandeert dat `admin@dev.local` een bruikbaar
   wachtwoord heeft (alleen wanneer nog geen wachtwoord gezet is; een bewust gewijzigd
   wachtwoord wordt nooit teruggezet).
 
-> **Operationele waarschuwing:** de permissiecatalogus- en rolsjabloonsynchronisatie draait
-> in de huidige code **uitsluitend in Development**. Op een productiehost worden nieuwe
-> permissies en rol-upgrades dus **niet** automatisch toegepast bij een release. Neem in het
-> releasedraaiboek een bewuste stap op om `PermissionCatalogSeeder` en `DefaultRoleSeeder`
-> tegen de productiedatabase uit te voeren (of verplaats deze aanroepen buiten het
-> Development-blok in een toekomstige release) — anders missen bestaande rollen de
-> permissies van nieuwe modules.
+> **Opgelost (closure sprint 2026-09-23):** tot deze release draaide de permissiecatalogus- en
+> rolsjabloonsynchronisatie uitsluitend in Development, waardoor productie op rolsjabloon v24
+> bleef en 20 codes (`dossiers.price`, `dossiers.override_entity`, `activity_types.*`,
+> `locations.view_sensitive`, `order_imports.manage_profiles`, `problems.approve_charge`,
+> `system_info.view`, `backups.*`, `attendance.*`) in de catalogus ontbraken. Sinds
+> `AuthorizationCatalogSync` (§2.1) gebeurt dit in elke omgeving bij de eerste start na de
+> deploy; `AuthorizationCatalogSyncTests` bewaakt het scenario en de plaats in `Program.cs`.
 
 ### 2.3 Rolsjablonen en versie-upgrades
 
@@ -341,7 +346,7 @@ Binnen het `IsDevelopment()`-blok in `Program.cs` draaien bij elke start:
 2. **Create** — ontbrekende sjabloonrollen worden per tenant aangemaakt met de volledige
    actuele permissieset; een gelijknamige tenant-eigen rol wordt met rust gelaten.
 3. **Upgrade** — versiestappen uit `DefaultRoleUpgrades` (huidige
-   `CurrentVersion = 28`) voegen nieuw geïntroduceerde standaardpermissies exact één keer
+   `CurrentVersion = 33`) voegen nieuw geïntroduceerde standaardpermissies exact één keer
    per tenant toe aan gestempelde rollen; de toegepaste versie staat in
    `role_template_states`. Er wordt nooit iets verwijderd — tenant-maatwerk (inclusief het
    naderhand weghalen van een geüpgradede permissie) overleeft elke re-run.

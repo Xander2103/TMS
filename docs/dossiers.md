@@ -75,7 +75,7 @@ UX-sprint 2026-09-09: elk aandachtspunt draagt nu een `field` dat de pagina kan 
 (de routesectie biedt inline invoer die de opdracht bij opslaan aanmaakt);
 `order.confirm.stops` → `stops.loading` als laden ontbreekt, anders `stops.unloading`;
 `route.date_missing` → `stops.plannedFrom`; `pricing.*` → `price`. Nieuwe regel
-`pricing.missing` (Warning, sectie prijs, fase Commercial, "{nr}: nog geen verkoopprijs."):
+`pricing.missing` (Warning, sectie prijs, fase Commercial, "{nr}: verkoopprijs ontbreekt." — sinds 2026-09-21; planningsdatum idem: "{nr}: planningsdatum ontbreekt."):
 gekoppelde opdracht in Draft/Submitted/Confirmed die niet geprijsd is volgens de ene
 definitie `OrderPricingState.IsPricedExpression` (provenance, hardening 2026-09-10:
 `PriceIsManual || (PricingSource == OneOff && OneOffFixedAmount != null) || AgreedPrice > 0`;
@@ -113,6 +113,42 @@ twee statuschips, [+ Activiteit]), Aandacht-paneel met sectiesprongen, activitei
 (één actie), contextuele secties Route/Goederen (alleen bij capabilities), prijssamenvatting
 met details één klik dieper, drawers met expliciet opslaan. Route-/goederendrawers hosten de
 ontlede orderformuliersecties (`features/transport-orders/components/sections/`).
+
+## Documenten (D6, master sprint 2026-09-21)
+
+Eén entiteit, één bestand: `TransportOrderDocument` hangt aan het dossier als geheel
+(`TransportOrderId = null`, scope `Dossier`) of aan één opdracht (scope `Order`). Voor een
+opdrachtdocument is `DossierId` altijd het **eigenaarsdossier** van de opdracht
+(`OwningDossierResolver`: wrapper eerst, anders de oudste koppeling) — gezet bij aanmaak en
+meegenomen bij `orders` koppelen/ontkoppelen en in de wrapper-backfill. Check-constraint: minstens
+één van beide gezet. Lijst én telling delen één definitie (`DossierDocumentQuery.ForDossier`), dus
+elk document telt precies één keer; per activiteit tellen alleen de eigen documenten van de opdracht.
+
+- `GET/POST /api/dossiers/{id}/documents` (`dossiers.view` / `dossiers.manage`); de opdrachtlijst
+  `GET /api/transport-orders/{id}/documents` blijft alleen de EIGEN documenten geven.
+- Vlakke routes `api/order-documents/{id}`: het attribuut is alleen de grove buitenpoort; de scope
+  van de rij bepaalt het recht, op één plek (`OrderDocumentAccessResolver`). Dossierdocument:
+  downloaden `dossiers.view|manage`, schrijven `dossiers.manage`; opdrachtdocument: zoals voorheen.
+  De service draait in exact de geautoriseerde scope — via een opdrachtpad is een dossierdocument
+  onvindbaar.
+- `POST /api/order-documents/{id}/move` `{ targetTransportOrderId }`: alleen de koppeling wijzigt
+  (bestand, naam, type en klantzichtbaarheid blijven), doel moet in hetzelfde dossier zitten,
+  schrijfrecht op bron- én doelscope, idempotent, audit `Moved`.
+- Gesloten dossier: schrijven op dossierniveau (en aanmaken/verplaatsen via het dossier) wordt
+  geweigerd met dezelfde melding als elke andere dossiermutatie; lezen blijft mogelijk.
+- Klantportaal: scope impliceert nooit zichtbaarheid. Een dossierdocument verschijnt alleen met
+  `CustomerVisible` + bestand + `dossier.CustomerId` = klant van de portaalgebruiker; de download
+  controleert hetzelfde predicaat opnieuw. Chauffeurs: geen toegang (ongewijzigd).
+
+**Uitgegeven transportdocumenten** (`IssuedTransportDocument`): uniek eigen nummer per tenant +
+soort + jaar — `CMR-2026-00001`, `LB-…` (leveringsbon), `WB-…` (werkbon) — via een sequentierij met
+concurrency-token (het `InvoiceNumberService`-patroon; een `TenantSettings`-teller kan geen reeks
+per soort en jaar dragen) en unieke indexen op (`TenantId`,`DocumentNumber`) en
+(`TenantId`,`RequestId`). Zelfde `requestId` = zelfde record, ook bij twee gelijktijdige identieke
+verzoeken. Extern nummer wordt bewaard zoals ingevoerd, nooit overschreven. Kraanwerk ter plaatse
+krijgt een werkbon en nooit een CMR/leveringsbon; een CMR/leveringsbon vereist een laad- of losstop.
+`GET /api/issued-transport-documents/{id}/pdf` rendert via de bestaande renderer met document-,
+dossier- en opdrachtnummer (+ "Extern nr."); de nummerloze stream-endpoints blijven ongewijzigd.
 
 ## API-overzicht
 

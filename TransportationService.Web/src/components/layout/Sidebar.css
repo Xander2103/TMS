@@ -10,8 +10,15 @@
      gereserveerd zodat de verticale scrollbar de rijen niet overlapt. */
   overflow-x: hidden;
   scrollbar-gutter: stable;
-  max-height: 100vh;
-  height: 100svh;
+  /* Exactly the VISIBLE viewport, in one unit. The old pair (height:100svh + max-height:100vh)
+     mixed the smallest and the largest viewport: with a collapsing browser toolbar the column
+     was shorter than the screen, and the 100vh cap never applied. dvh tracks what is actually
+     visible, so the user footer stays on screen and the column only scrolls when its own
+     content is taller. The plain vh line is the fallback for engines without dvh. */
+  height: 100vh;
+  height: 100dvh;
+  /* Never stretch with a long page: a stretched sticky column cannot stick. */
+  align-self: flex-start;
   position: sticky;
   top: 0;
   display: flex;

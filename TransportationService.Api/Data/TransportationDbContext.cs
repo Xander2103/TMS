@@ -53,9 +53,12 @@ public class TransportationDbContext : DbContext
     public DbSet<StopStatusHistory> StopStatusHistories => Set<StopStatusHistory>();
     public DbSet<CargoItem> CargoItems => Set<CargoItem>();
     public DbSet<TransportOrderPricingLine> TransportOrderPricingLines => Set<TransportOrderPricingLine>();
+    public DbSet<OrderPriceLineCargoLink> OrderPriceLineCargoLinks => Set<OrderPriceLineCargoLink>();
     public DbSet<TransportOrderServiceLine> TransportOrderServiceLines => Set<TransportOrderServiceLine>();
     public DbSet<TransportOrderPricingSnapshot> TransportOrderPricingSnapshots => Set<TransportOrderPricingSnapshot>();
     public DbSet<TransportOrderDocument> TransportOrderDocuments => Set<TransportOrderDocument>();
+    public DbSet<IssuedTransportDocument> IssuedTransportDocuments => Set<IssuedTransportDocument>();
+    public DbSet<TransportDocumentSequence> TransportDocumentSequences => Set<TransportDocumentSequence>();
     public DbSet<TenantDocumentRule> TenantDocumentRules => Set<TenantDocumentRule>();
     public DbSet<TransportOrderStatusHistory> TransportOrderStatusHistories => Set<TransportOrderStatusHistory>();
     public DbSet<TransportationService.Api.Modules.Exceptions.Entities.ExecutionException> ExecutionExceptions => Set<TransportationService.Api.Modules.Exceptions.Entities.ExecutionException>();
@@ -104,6 +107,8 @@ public class TransportationDbContext : DbContext
     public DbSet<TransportationService.Api.Modules.Dossiers.Entities.ActivityType> ActivityTypes => Set<TransportationService.Api.Modules.Dossiers.Entities.ActivityType>();
     public DbSet<TransportationService.Api.Modules.Dossiers.Entities.DossierActivity> DossierActivities => Set<TransportationService.Api.Modules.Dossiers.Entities.DossierActivity>();
     public DbSet<TransportationService.Api.Modules.Dossiers.Entities.DossierActivityPricing> DossierActivityPricings => Set<TransportationService.Api.Modules.Dossiers.Entities.DossierActivityPricing>();
+    public DbSet<TransportationService.Api.Modules.Dossiers.Entities.DossierActivityPriceLine> DossierActivityPriceLines => Set<TransportationService.Api.Modules.Dossiers.Entities.DossierActivityPriceLine>();
+    public DbSet<TransportationService.Api.Modules.Dossiers.Entities.DossierNote> DossierNotes => Set<TransportationService.Api.Modules.Dossiers.Entities.DossierNote>();
     public DbSet<TransportationService.Api.Modules.Incidents.Entities.Incident> Incidents => Set<TransportationService.Api.Modules.Incidents.Entities.Incident>();
     public DbSet<TransportationService.Api.Modules.Incidents.Entities.IncidentChargePolicy> IncidentChargePolicies => Set<TransportationService.Api.Modules.Incidents.Entities.IncidentChargePolicy>();
 

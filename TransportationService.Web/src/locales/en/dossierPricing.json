@@ -1,0 +1,78 @@
+{
+  "noPriceSet": "No sales price set yet.",
+  "notPricedYet": "Not priced yet",
+  "free": "Free",
+  "addLine": "+ Add sales line",
+  "status": {
+    "NotPriced": "Not priced",
+    "PartiallyPriced": "Partially priced",
+    "Priced": "Priced",
+    "Free": "Free"
+  },
+  "picker": {
+    "itemWithOrder": "{number} — {name}",
+    "lockedWhileDirty": "Save the sales lines or discard the changes to switch activity."
+  },
+  "summary": {
+    "toPrice": "Still to price:",
+    "partial": "{name} (partial)",
+    "legacyOrders": "Linked orders without an activity"
+  },
+  "activity": {
+    "readOnlyNoPermission": "You are not allowed to change activity prices.",
+    "readOnlyClosed": "The dossier is closed; the price is read-only.",
+    "freeConfirmed": "This activity is confirmed as free (€ 0).",
+    "linesTitle": "Sales lines",
+    "noLines": "No sales lines yet.",
+    "colLabel": "Description",
+    "colQuantity": "Quantity",
+    "colUnit": "Unit",
+    "colUnitPrice": "Unit price (€)",
+    "colAmount": "Amount",
+    "colActions": "Actions",
+    "rowLabel": "Description line {index}",
+    "rowQuantity": "Quantity line {index}",
+    "rowUnit": "Unit line {index}",
+    "rowUnitPrice": "Unit price line {index}",
+    "moveUp": "Move line {index} up",
+    "moveDown": "Move line {index} down",
+    "removeRow": "Remove line {index}",
+    "previewHint": "The amounts are a preview (quantity × unit price). After saving, the server's amounts and total apply.",
+    "subtotal": "Subtotal",
+    "previewSubtotal": "Provisional subtotal (preview)",
+    "saveLines": "Save sales lines",
+    "discard": "Discard changes",
+    "linesSaved": "Sales lines saved.",
+    "linesSaveFailed": "The sales lines could not be saved.",
+    "labelRequired": "Line {index}: a description is required.",
+    "quantityInvalid": "Line {index}: enter a quantity greater than zero.",
+    "unitPriceInvalid": "Line {index}: enter a valid unit price (0 or more).",
+    "noRowsToSave": "Add at least one sales line, or use \"Remove price\" to clear the price.",
+    "conflict": "This price was changed by a colleague in the meantime. The latest version has been loaded; your unsaved lines are still here. Check them and save again.",
+    "conflictReloadFailed": "This price was changed by a colleague in the meantime. Your unsaved lines are still here; reload the dossier and then save again.",
+    "useFlat": "Use a fixed price",
+    "flatReplacesLines": "Saving a fixed price replaces the sales lines of this activity.",
+    "linesReplaceFlat": "Saving sales lines replaces the fixed price: the total of the lines becomes the price of this activity.",
+    "confirmFree": "This activity is free (€ 0) — confirm",
+    "confirmFreeTitle": "Confirm activity as free",
+    "confirmFreeMessage": "The existing price and all sales lines of this activity are removed. The activity is confirmed as free (€ 0).",
+    "confirmFreeAction": "Confirm as free",
+    "freeSaved": "Activity confirmed as free.",
+    "removePrice": "Remove price",
+    "removePriceMessage": "The price and all sales lines of this activity are removed. The activity is not priced afterwards.",
+    "priceRemoved": "Price removed.",
+    "actionFailed": "The price could not be updated."
+  },
+  "goodsLink": {
+    "label": "Relates to goods",
+    "hint": "Optional. Nothing ticked = the line applies to the whole trip or activity.",
+    "linked": "Goods: {goods}",
+    "noReasonNeeded": "Not needed when you only change the goods link."
+  },
+  "goodsCoverage": {
+    "title": "Goods price coverage",
+    "colGoods": "Goods line",
+    "colCoverage": "Price coverage",
+    "includedHint": "A goods line that is included in a fixed trip or activity price is not invoiced separately."
+  }
+}

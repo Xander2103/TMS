@@ -177,6 +177,16 @@
       "price": "Prijs",
       "invoicing": "Facturatie"
     },
+    "billableActivities": "Factureerbare activiteiten ({total})",
+    "noActivities": "Geen ongefactureerde activiteiten voor deze klant.",
+    "selectActivity": "Selecteer activiteit {activity} ({dossier})",
+    "activityColumns": {
+      "dossier": "Dossier",
+      "activity": "Activiteit",
+      "plannedDate": "Geplande datum",
+      "amount": "Bedrag"
+    },
+    "freeActivity": "gratis",
     "manualTitle": "Extra lijnen",
     "manualDescriptionPlaceholder": "Omschrijving (bv. wachturen)",
     "quantityLabel": "Hoeveelheid",

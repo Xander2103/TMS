@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { apiClient, ApiError } from '../../../api/apiClient'
 import { PageHeader } from '../../../components/layout/PageHeader'
@@ -9,15 +9,10 @@ import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { FormField } from '../../../components/ui/FormField'
+import { SearchableSelect, type SearchableSelectOption } from '../../../components/ui/SearchableSelect'
 import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
 import { useLocale } from '../../../i18n/localeContext'
-import { searchDrivers } from '../../drivers/api/driversApi'
-import type { DriverListItem } from '../../drivers/types'
-import { getVehicleOptions } from '../../vehicles/api/vehiclesApi'
-import type { VehicleOption } from '../../vehicles/types'
-import { getTrailerOptions } from '../../trailers/api/trailersApi'
-import type { TrailerOption } from '../../trailers/types'
 import { searchTransportOrders } from '../../transport-orders/api/transportOrdersApi'
 import type { TransportOrderListItem } from '../../transport-orders/types'
 import { changeTripStatus, deleteTrip, getTrip, updateTrip } from '../api/planningApi'
@@ -38,6 +33,21 @@ import {
   type TripStatus,
 } from '../types'
 import { downloadTripDocuments } from '../../transport-orders/api/transportDocumentsApi'
+import {
+  EMPTY_VEHICLE_DRAFT,
+  vehicleDraftAfterDriverChange,
+  vehicleDraftAfterManualPick,
+  withVehicleSelectionSource,
+  type VehicleDraft,
+} from '../vehicleSelection'
+import {
+  buildDriverOptions,
+  buildTrailerOptions,
+  buildVehicleOptions,
+  joinParts,
+  lookupFixedVehicleId,
+} from '../resourceOptions'
+import { usePlanningResources, type ResourceListStatus } from '../usePlanningResources'
 import './planning.css'
 
 export function TripDetailPage() {
@@ -51,14 +61,19 @@ export function TripDetailPage() {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
-  const [drivers, setDrivers] = useState<DriverListItem[]>([])
-  const [vehicles, setVehicles] = useState<VehicleOption[]>([])
-  const [trailers, setTrailers] = useState<TrailerOption[]>([])
+  // Driver/vehicle/trailer lists + their per-picker status (shared with the dossier planning block).
+  const { drivers, vehicles, trailers, status: resourceStatus } = usePlanningResources()
   const [availableOrders, setAvailableOrders] = useState<TransportOrderListItem[]>([])
+  const [ordersStatus, setOrdersStatus] = useState<ResourceListStatus>('loading')
+  const listStatus = { ...resourceStatus, orders: ordersStatus }
 
   // Draft edits kept locally until "Opslaan".
   const [driverId, setDriverId] = useState('')
-  const [vehicleId, setVehicleId] = useState('')
+  // Vehicle id plus how it got there: a suggestion follows the driver, a manual pick never does.
+  const [vehicleDraft, setVehicleDraft] = useState<VehicleDraft>(EMPTY_VEHICLE_DRAFT)
+  const vehicleId = vehicleDraft.vehicleId
+  // Guards the fixed-vehicle lookup against an older driver choice answering last.
+  const driverLookupSeq = useRef(0)
   const [trailerId, setTrailerId] = useState('')
   const [tripDate, setTripDate] = useState('')
   const [notes, setNotes] = useState('')
@@ -101,7 +116,12 @@ export function TripDetailPage() {
   const applyTrip = useCallback((data: TripDetail) => {
     setTrip(data)
     setDriverId(data.driverId ?? '')
-    setVehicleId(data.vehicleId ?? '')
+    setVehicleDraft(
+      data.vehicleId
+        ? { vehicleId: data.vehicleId, source: data.vehicleSelectionSource ?? null }
+        : EMPTY_VEHICLE_DRAFT,
+    )
+    driverLookupSeq.current++
     setTrailerId(data.trailerId ?? '')
     setTripDate(data.tripDate)
     setNotes(data.notes ?? '')
@@ -203,26 +223,15 @@ export function TripDetailPage() {
 
   useEffect(() => {
     let mounted = true
-    searchDrivers({ isActive: true, page: 1, pageSize: 200 })
-      .then((data) => {
-        if (mounted) setDrivers(data.items)
-      })
-      .catch(() => {})
-    getVehicleOptions()
-      .then((data) => {
-        if (mounted) setVehicles(data)
-      })
-      .catch(() => {})
-    getTrailerOptions()
-      .then((data) => {
-        if (mounted) setTrailers(data)
-      })
-      .catch(() => {})
     searchTransportOrders({ status: 'Confirmed', page: 1, pageSize: 100 })
       .then((data) => {
-        if (mounted) setAvailableOrders(data.items)
+        if (!mounted) return
+        setAvailableOrders(data.items)
+        setOrdersStatus('ready')
       })
-      .catch(() => {})
+      .catch(() => {
+        if (mounted) setOrdersStatus('error')
+      })
     return () => {
       mounted = false
     }
@@ -232,6 +241,22 @@ export function TripDetailPage() {
 
   function markDirty() {
     setDirty(true)
+  }
+
+  function handleDriverChange(nextDriverId: string | null) {
+    setDriverId(nextDriverId ?? '')
+    markDirty()
+    const seq = ++driverLookupSeq.current
+    if (!nextDriverId) {
+      setVehicleDraft((current) => vehicleDraftAfterDriverChange(current, null))
+      return
+    }
+    // The fixed vehicle comes from the driver list (`fixedVehicleId`); an older payload without
+    // it costs one driver-detail call. A failed lookup simply means no suggestion.
+    void lookupFixedVehicleId(drivers, vehicles, nextDriverId).then((fixedId) => {
+      if (seq !== driverLookupSeq.current) return
+      setVehicleDraft((current) => vehicleDraftAfterDriverChange(current, fixedId))
+    })
   }
 
   function moveOrder(index: number, delta: number) {
@@ -251,18 +276,25 @@ export function TripDetailPage() {
     try {
       const parsedDistance = plannedDistanceKm.trim() === '' ? null : Number(plannedDistanceKm.replace(',', '.'))
       const parsedEmpty = plannedEmptyKm.trim() === '' ? null : Number(plannedEmptyKm.replace(',', '.'))
-      const updated = await updateTrip(trip.id, {
-        tripDate,
-        driverId: driverId || null,
-        vehicleId: vehicleId || null,
-        trailerId: trailerId || null,
-        plannedStart: trip.plannedStart,
-        plannedEnd: trip.plannedEnd,
-        notes: notes.trim() || null,
-        orderIds,
-        plannedDistanceKm: parsedDistance !== null && Number.isNaN(parsedDistance) ? null : parsedDistance,
-        plannedEmptyKm: parsedEmpty !== null && Number.isNaN(parsedEmpty) ? null : parsedEmpty,
-      })
+      const updated = await updateTrip(
+        trip.id,
+        withVehicleSelectionSource(
+          {
+            tripDate,
+            driverId: driverId || null,
+            vehicleId: vehicleId || null,
+            trailerId: trailerId || null,
+            plannedStart: trip.plannedStart,
+            plannedEnd: trip.plannedEnd,
+            notes: notes.trim() || null,
+            orderIds,
+            plannedDistanceKm: parsedDistance !== null && Number.isNaN(parsedDistance) ? null : parsedDistance,
+            plannedEmptyKm: parsedEmpty !== null && Number.isNaN(parsedEmpty) ? null : parsedEmpty,
+          },
+          vehicleDraft.source,
+        ),
+      )
+      // The API echoes `vehicleSelectionSource`, so a manual choice survives this save and a reload.
       applyTrip(updated)
       showSuccess(t('planning.detail.saved'))
     } catch (err) {
@@ -326,6 +358,35 @@ export function TripDetailPage() {
     }
   }
 
+  // Picker options: built by the shared builders (planning/resourceOptions.ts), so the dossier
+  // planning block searches exactly like this page.
+  const driverOptions = useMemo(() => buildDriverOptions(drivers, t), [drivers, t])
+  const vehicleOptions = useMemo(() => buildVehicleOptions(vehicles), [vehicles])
+  const trailerOptions = useMemo(() => buildTrailerOptions(trailers), [trailers])
+
+  const attachableOptions = useMemo<SearchableSelectOption[]>(
+    () =>
+      availableOrders
+        .filter((order) => !orderIds.includes(order.id))
+        .map((order) => ({
+          value: order.id,
+          label: `${order.orderNumber} — ${order.customerName}`,
+          subtitle: `${order.firstLoadingCity ?? '?'} → ${order.lastUnloadingCity ?? '?'}`,
+          meta: joinParts(
+            [
+              order.customerReference ? t('planning.detail.orderReference', { reference: order.customerReference }) : null,
+              order.goodsDescription,
+            ],
+            ' · ',
+          ),
+          keywords: joinParts(
+            [order.customerReference, order.firstLoadingCity, order.lastUnloadingCity, order.goodsDescription],
+            ' ',
+          ),
+        })),
+    [availableOrders, orderIds, t],
+  )
+
   if (loadError) return <ErrorState message={loadError} />
   if (!trip) return <LoadingState message={t('planning.detail.loading')} />
 
@@ -341,8 +402,6 @@ export function TripDetailPage() {
           : orderId,
     }
   })
-
-  const attachable = availableOrders.filter((o) => !orderIds.includes(o.id))
 
   return (
     <div>
@@ -402,58 +461,61 @@ export function TripDetailPage() {
             />
           </FormField>
           <FormField label={t('planning.detail.driver')} htmlFor="tr-driver">
-            <select
+            <SearchableSelect
               id="tr-driver"
-              value={driverId}
-              onChange={(e) => {
-                setDriverId(e.target.value)
-                markDirty()
-              }}
+              value={driverId || null}
+              onChange={handleDriverChange}
+              options={driverOptions}
+              // A driver that left the active list (or a list that failed) still shows by name.
+              selectedLabel={driverId === trip.driverId ? (trip.driverName ?? undefined) : undefined}
+              placeholder={editable ? t('planning.detail.driverSearchPlaceholder') : t('planning.detail.none')}
+              isLoading={listStatus.drivers === 'loading'}
+              errorMessage={listStatus.drivers === 'error' ? t('planning.detail.driversLoadError') : null}
               disabled={!editable || busy}
-            >
-              <option value="">{t('planning.detail.none')}</option>
-              {drivers.map((driver) => (
-                <option key={driver.id} value={driver.id}>
-                  {driver.fullName} ({driver.driverNumber})
-                </option>
-              ))}
-            </select>
+            />
           </FormField>
-          <FormField label={t('planning.detail.vehicle')} htmlFor="tr-vehicle">
-            <select
+          <FormField
+            label={t('planning.detail.vehicle')}
+            htmlFor="tr-vehicle"
+            hint={vehicleDraft.source === 'Suggested' ? t('planning.detail.vehicleSuggestedHint') : undefined}
+          >
+            <SearchableSelect
               id="tr-vehicle"
-              value={vehicleId}
-              onChange={(e) => {
-                setVehicleId(e.target.value)
+              value={vehicleId || null}
+              onChange={(next) => {
+                driverLookupSeq.current++
+                setVehicleDraft(vehicleDraftAfterManualPick(next))
                 markDirty()
               }}
+              options={vehicleOptions}
+              selectedLabel={
+                vehicleId === trip.vehicleId && trip.vehicleNumber
+                  ? trip.vehicleLicensePlate
+                    ? `${trip.vehicleNumber} (${trip.vehicleLicensePlate})`
+                    : trip.vehicleNumber
+                  : undefined
+              }
+              placeholder={editable ? t('planning.detail.vehicleSearchPlaceholder') : t('planning.detail.none')}
+              isLoading={listStatus.vehicles === 'loading'}
+              errorMessage={listStatus.vehicles === 'error' ? t('planning.detail.vehiclesLoadError') : null}
               disabled={!editable || busy}
-            >
-              <option value="">{t('planning.detail.none')}</option>
-              {vehicles.map((vehicle) => (
-                <option key={vehicle.id} value={vehicle.id}>
-                  {vehicle.internalNumber} ({vehicle.licensePlate})
-                </option>
-              ))}
-            </select>
+            />
           </FormField>
           <FormField label={t('planning.detail.trailer')} htmlFor="tr-trailer">
-            <select
+            <SearchableSelect
               id="tr-trailer"
-              value={trailerId}
-              onChange={(e) => {
-                setTrailerId(e.target.value)
+              value={trailerId || null}
+              onChange={(next) => {
+                setTrailerId(next ?? '')
                 markDirty()
               }}
+              options={trailerOptions}
+              selectedLabel={trailerId === trip.trailerId ? (trip.trailerNumber ?? undefined) : undefined}
+              placeholder={editable ? t('planning.detail.trailerSearchPlaceholder') : t('planning.detail.none')}
+              isLoading={listStatus.trailers === 'loading'}
+              errorMessage={listStatus.trailers === 'error' ? t('planning.detail.trailersLoadError') : null}
               disabled={!editable || busy}
-            >
-              <option value="">{t('planning.detail.none')}</option>
-              {trailers.map((trailer) => (
-                <option key={trailer.id} value={trailer.id}>
-                  {trailer.internalNumber} ({trailer.licensePlate})
-                </option>
-              ))}
-            </select>
+            />
           </FormField>
           <FormField label={t('planning.detail.plannedDistance')} htmlFor="tr-distance" hint={t('planning.detail.plannedDistanceHint')}>
             <input
@@ -534,26 +596,26 @@ export function TripDetailPage() {
           </ol>
         )}
 
-        {editable && attachable.length > 0 && (
+        {/* An adder, not a field: the value stays empty and every pick appends to the list. */}
+        {editable && (listStatus.orders !== 'ready' || attachableOptions.length > 0) && (
           <div className="pl-add-order">
-            <select
-              value=""
-              onChange={(e) => {
-                if (e.target.value) {
-                  setOrderIds((ids) => [...ids, e.target.value])
-                  markDirty()
-                }
+            <SearchableSelect
+              id="tr-add-order"
+              value={null}
+              onChange={(orderId) => {
+                if (!orderId) return
+                setOrderIds((ids) => (ids.includes(orderId) ? ids : [...ids, orderId]))
+                markDirty()
               }}
+              options={attachableOptions}
+              placeholder={t('planning.detail.addOrderOption')}
+              ariaLabel={t('planning.detail.addOrderLabel')}
+              emptyMessage={t('planning.detail.ordersNoneAvailable')}
+              isLoading={listStatus.orders === 'loading'}
+              errorMessage={listStatus.orders === 'error' ? t('planning.detail.ordersLoadError') : null}
+              clearable={false}
               disabled={busy}
-              aria-label={t('planning.detail.addOrderLabel')}
-            >
-              <option value="">{t('planning.detail.addOrderOption')}</option>
-              {attachable.map((order) => (
-                <option key={order.id} value={order.id}>
-                  {order.orderNumber} — {order.customerName} ({order.firstLoadingCity ?? '?'} → {order.lastUnloadingCity ?? '?'})
-                </option>
-              ))}
-            </select>
+            />
           </div>
         )}
       </section>

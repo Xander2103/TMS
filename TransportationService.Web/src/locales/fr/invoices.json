@@ -177,6 +177,16 @@
       "price": "Prix",
       "invoicing": "Facturation"
     },
+    "billableActivities": "Activités facturables ({total})",
+    "noActivities": "Aucune activité non facturée pour ce client.",
+    "selectActivity": "Sélectionner l'activité {activity} ({dossier})",
+    "activityColumns": {
+      "dossier": "Dossier",
+      "activity": "Activité",
+      "plannedDate": "Date prévue",
+      "amount": "Montant"
+    },
+    "freeActivity": "gratuit",
     "manualTitle": "Lignes supplémentaires",
     "manualDescriptionPlaceholder": "Description (p. ex. heures d'attente)",
     "quantityLabel": "Quantité",

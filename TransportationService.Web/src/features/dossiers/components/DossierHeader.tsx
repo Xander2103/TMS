@@ -12,7 +12,7 @@ import { getLegalEntityOptions } from '../../legal-entities/api/legalEntitiesApi
 import type { LegalEntityOption } from '../../legal-entities/types'
 import { changeDossierLegalEntity, getDossierLegalEntityImpact } from '../api/dossiersApi'
 import type { DossierLegalEntityChangeImpact } from '../api/dossiersApi'
-import { formatDate } from '../dossierDisplay'
+import { dossierLifecycleFacts, formatDate } from '../dossierDisplay'
 import { DOSSIER_STATUS_LABELS, DOSSIER_STATUS_TONE, type DossierDetail } from '../types'
 
 export interface DossierMenuAction {
@@ -26,14 +26,16 @@ interface DossierHeaderProps {
   dossier: DossierDetail
   canManage: boolean
   onAddActivity: () => void
-  /** Meer ▾ items: bewerken kop, sluiten/heropenen, relaties, historiek… supplied by the page. */
+  /** Confirmation sprint 2026-09-23: opens the confirm dialog (open dossier, dossiers.manage). */
+  onConfirm: () => void
+  /** Meer ▾ items: bewerken kop, heropenen/annuleren, relaties, historiek… supplied by the page. */
   menuActions: DossierMenuAction[]
   onUpdated: (dossier: DossierDetail) => void
   onConflict: (err: unknown) => boolean
 }
 
 /** §11 header: nummer + status, klant · ref · datum · entiteit, twee statuschips, primaire actie. */
-export function DossierHeader({ dossier, canManage, onAddActivity, menuActions, onUpdated, onConflict }: DossierHeaderProps) {
+export function DossierHeader({ dossier, canManage, onAddActivity, onConfirm, menuActions, onUpdated, onConflict }: DossierHeaderProps) {
   const { t } = useLocale()
   const [entityDialog, setEntityDialog] = useState(false)
   const [entities, setEntities] = useState<LegalEntityOption[]>([])
@@ -131,6 +133,7 @@ export function DossierHeader({ dossier, canManage, onAddActivity, menuActions, 
     dossier.customerReference ? t('dossiers.header.reference', { reference: dossier.customerReference }) : null,
     dossier.dossierDate ? formatDate(dossier.dossierDate) : null,
   ].filter((part): part is string => part !== null)
+  const isOpen = dossier.status === 'Open'
 
   return (
     <header className="dossier-header">
@@ -139,6 +142,7 @@ export function DossierHeader({ dossier, canManage, onAddActivity, menuActions, 
           {t('dossiers.header.title', { number: dossier.dossierNumber })}{' '}
           <Badge tone={DOSSIER_STATUS_TONE[dossier.status]}>{t(DOSSIER_STATUS_LABELS[dossier.status])}</Badge>
         </h1>
+        <DossierLifecycleFacts dossier={dossier} />
         <p className="dossier-header-meta">
           {metaParts.join(' · ')}
           {' · '}
@@ -159,7 +163,12 @@ export function DossierHeader({ dossier, canManage, onAddActivity, menuActions, 
       </div>
 
       <div className="dossier-header-actions">
-        {canManage && dossier.status === 'Open' && <Button onClick={onAddActivity}>{t('dossiers.header.addActivity')}</Button>}
+        {canManage && isOpen && (
+          <>
+            <Button variant="secondary" onClick={onAddActivity}>{t('dossiers.header.addActivity')}</Button>
+            <Button onClick={onConfirm}>{t('dossiers.lifecycle.confirm')}</Button>
+          </>
+        )}
         {menuActions.length > 0 && (
           <details className="dossier-more" ref={menuRef}>
             <summary role="button" aria-haspopup="menu">
@@ -253,5 +262,27 @@ export function DossierHeader({ dossier, canManage, onAddActivity, menuActions, 
         </Modal>
       )}
     </header>
+  )
+}
+
+/** Compact confirmed/cancelled metadata under the badge; renders nothing for an open dossier. */
+function DossierLifecycleFacts({ dossier }: { dossier: DossierDetail }) {
+  const { t } = useLocale()
+  const { facts, reason } = dossierLifecycleFacts(dossier, t)
+  if (facts.length === 0 && !reason) return null
+  return (
+    <div className="dossier-header-lifecycle" data-testid="dossier-lifecycle">
+      {facts.length > 0 && (
+        <p className="dossier-header-lifecycle-facts">
+          {facts.map((fact, index) => (
+            <span key={fact}>
+              {index > 0 && ' · '}
+              <span>{fact}</span>
+            </span>
+          ))}
+        </p>
+      )}
+      {reason && <p className="dossier-header-lifecycle-reason">{reason}</p>}
+    </div>
   )
 }

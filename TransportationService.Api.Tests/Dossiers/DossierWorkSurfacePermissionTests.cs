@@ -79,4 +79,60 @@ public class DossierWorkSurfacePermissionTests
         Assert.DoesNotContain(PermissionCodes.DossiersManage, codes);
         Assert.DoesNotContain(PermissionCodes.OrdersEdit, codes);
     }
+
+    /// <summary>
+    /// Master sprint 2026-09-21 D5: sales LINES of a standalone activity are the same commercial
+    /// act as its fixed price → <c>dossiers.price</c> only; without it the request is refused
+    /// before the service is reached.
+    /// </summary>
+    [Fact]
+    public void ActivityPriceLines_RequireTheSameCommercialRight()
+    {
+        var codes = Codes(typeof(DossiersController), nameof(DossiersController.SetActivityPriceLines));
+        Assert.Equal(new[] { PermissionCodes.DossiersPrice }, codes);
+        Assert.DoesNotContain(PermissionCodes.DossiersManage, codes);
+    }
+
+    /// <summary>D7: notes are read with the dossier and written as a dossier edit.</summary>
+    [Fact]
+    public void DossierNotes_ReadWithView_WriteWithManage()
+    {
+        Assert.Equal(
+            new[] { PermissionCodes.DossiersView, PermissionCodes.DossiersManage },
+            Codes(typeof(DossierNotesController), nameof(DossierNotesController.List)));
+        foreach (var action in new[] { nameof(DossierNotesController.Create), nameof(DossierNotesController.Update), nameof(DossierNotesController.Delete) })
+        {
+            Assert.Equal(new[] { PermissionCodes.DossiersManage }, Codes(typeof(DossierNotesController), action));
+        }
+    }
+
+    /// <summary>
+    /// D6: documents on dossier level are read with the dossier and written as a dossier edit; the
+    /// order's own list keeps its order rights. The flat by-id routes carry only the coarse outer
+    /// gate (any of both families) — the scope decides inside OrderDocumentAccessResolver
+    /// (matrix: DossierDocumentScopeTests.FlatRoutePermissionMatrix).
+    /// </summary>
+    [Fact]
+    public void DossierDocuments_ReadWithView_WriteWithManage_FlatRoutesGateOnBothFamilies()
+    {
+        var controller = typeof(TransportOrderDocumentsController);
+        Assert.Equal(new[] { PermissionCodes.DossiersView, PermissionCodes.DossiersManage }, Codes(controller, nameof(TransportOrderDocumentsController.ListForDossier)));
+        Assert.Equal(new[] { PermissionCodes.DossiersManage }, Codes(controller, nameof(TransportOrderDocumentsController.CreateForDossier)));
+        Assert.Equal(new[] { PermissionCodes.OrdersView, PermissionCodes.OrdersManage }, Codes(controller, nameof(TransportOrderDocumentsController.List)));
+
+        foreach (var action in new[]
+                 {
+                     nameof(TransportOrderDocumentsController.Update), nameof(TransportOrderDocumentsController.Delete),
+                     nameof(TransportOrderDocumentsController.RemoveFile), nameof(TransportOrderDocumentsController.Move),
+                 })
+        {
+            Assert.Equal(
+                new[] { PermissionCodes.OrdersEdit, PermissionCodes.OrdersManage, PermissionCodes.DossiersManage },
+                Codes(controller, action));
+        }
+
+        Assert.Equal(
+            new[] { PermissionCodes.OrdersView, PermissionCodes.OrdersManage, PermissionCodes.DossiersView, PermissionCodes.DossiersManage },
+            Codes(controller, nameof(TransportOrderDocumentsController.DownloadFile)));
+    }
 }

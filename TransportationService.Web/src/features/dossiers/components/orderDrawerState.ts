@@ -1,4 +1,4 @@
-import type { ServiceOption, UnitTypeMaster } from '../../tarification/api/pricingApi'
+import type { ServiceOption } from '../../tarification/api/pricingApi'
 import type { TransportOrderDetail } from '../../transport-orders/types'
 import {
   cargoFromOrder,
@@ -8,7 +8,6 @@ import {
   servicePalletsFromOrder,
   serviceQuantitiesFromOrder,
   stopsFromOrder,
-  type CargoFormRow,
   type OrderFormValues,
 } from '../../transport-orders/components/sections/orderFormState'
 
@@ -73,28 +72,4 @@ export function orderValuesFromDetail(order: TransportOrderDetail, serviceOption
     extraTimeMinimumBillableMinutes: str(order.extraTimeMinimumBillableMinutes),
     version: order.version,
   }
-}
-
-/**
- * Selecting a unit auto-fills physical defaults from the unit master data (mirrors the
- * order form's applyCargoUnit): Fixed always sets them, DefaultButOverridable only fills
- * what is still empty, Variable leaves everything to the planner.
- */
-export function applyUnitToCargoRow(row: CargoFormRow, code: string | null, master: UnitTypeMaster | null): CargoFormRow {
-  const next: CargoFormRow = { ...row, quantityUnitCode: code }
-  if (!master || master.dimensionBehavior === 'Variable') return next
-  const fixed = master.dimensionBehavior === 'Fixed'
-  const cmToM = (cm: number | null) => (cm === null ? null : String(cm / 100))
-  const fill = (current: string, cm: number | null) => {
-    const value = cmToM(cm)
-    if (value === null) return fixed ? '' : current
-    return fixed || current.trim() === '' ? value : current
-  }
-  next.lengthMeters = fill(row.lengthMeters, master.defaultLengthCm)
-  next.widthMeters = fill(row.widthMeters, master.defaultWidthCm)
-  next.heightMeters = fill(row.heightMeters, master.defaultHeightCm)
-  if (master.defaultWeightKg !== null && (fixed || row.weightPerUnitKg.trim() === '')) {
-    next.weightPerUnitKg = String(master.defaultWeightKg)
-  }
-  return next
 }

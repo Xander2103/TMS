@@ -100,6 +100,8 @@ export interface VehicleDetail {
   emissionClass: EmissionClass | null
   grossVehicleWeightKg: number | null
   payloadKg: number | null
+  /** Tail-lift capacity (D4); absent on older payloads, null = unknown. */
+  tailLiftCapacityKg?: number | null
   lengthMeters: number | null
   widthMeters: number | null
   heightMeters: number | null

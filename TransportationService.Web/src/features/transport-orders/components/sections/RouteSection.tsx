@@ -3,12 +3,14 @@ import { Button } from '../../../../components/ui/Button'
 import { FormField } from '../../../../components/ui/FormField'
 import { TimeInput } from '../../../../components/ui/TimeInput'
 import { useLocale } from '../../../../i18n/localeContext'
-import { LocationSelect } from '../../../locations/components/LocationSelect'
-import { CountryCombobox } from '../../../reference/components/CountryCombobox'
 import type { LocationOpeningInterval, LocationOption } from '../../../locations/types'
 import { openingHoursWarning } from '../../utils/openingHours'
 import { STOP_TYPE_LABELS, type StopInput } from '../../types'
 import { timeRequirementBadge, type StopFormRow } from './orderFormState'
+import { StopAddressFields } from './StopAddressFields'
+// The stop editor carries its own layout: the intake page never loads the order-form chunk.
+import '../transport-order-form.css'
+import './route-section.css'
 
 interface RouteSectionProps {
   stops: StopFormRow[]
@@ -43,6 +45,16 @@ interface RouteSectionProps {
    * window are the core operational fields a planner fills in directly on the dossier.
    */
   sheet?: boolean
+  /**
+   * D3: offer "Adres ook bewaren in klantenbestand" on a new/deviating address. Needs
+   * locations.create and a known customer; without it the option is simply not shown.
+   */
+  canSaveToAddressBook?: boolean
+  /**
+   * D2: planned duration (decimal hours) of the on-site job — only used to explain the automatic
+   * end of a SITE stop. The arithmetic itself lives in the host's `setStop` (`applyStopPatch`).
+   */
+  siteDurationHours?: number | null
 }
 
 /** Route & stops section: stop list with per-stop planning inputs and advanced disclosure. */
@@ -62,11 +74,15 @@ export function RouteSection({
   hideHeader = false,
   canRemoveStop,
   sheet = false,
+  canSaveToAddressBook = false,
+  siteDurationHours = null,
 }: RouteSectionProps) {
   const { t } = useLocale()
+  // D2: an on-site job is ONE work-site stop — no loading/unloading stops can be added to it.
+  const siteJob = stops.some((stop) => stop.stopType === 'Site')
   return (
     <>
-      {!hideHeader && (
+      {!hideHeader && !siteJob && (
         <div className="tof-stops-header">
           <h3>{t('transportOrders.route.stopsTitle')}</h3>
           <div className="tof-stops-actions">
@@ -80,7 +96,7 @@ export function RouteSection({
         </div>
       )}
 
-      <div className="tof-stops-grid">
+      <div className={siteJob ? 'tof-stops-grid tof-stops-grid-site' : 'tof-stops-grid'}>
         {stops.map((stop, index) => (
           <StopRow
             key={stop.key}
@@ -99,6 +115,8 @@ export function RouteSection({
             compact={compact}
             sheet={sheet}
             removable={!compact || (canRemoveStop?.(stop, index) ?? false)}
+            canSaveToAddressBook={canSaveToAddressBook}
+            siteDurationHours={siteDurationHours}
           />
         ))}
       </div>
@@ -122,6 +140,8 @@ interface StopRowProps {
   compact: boolean
   sheet: boolean
   removable: boolean
+  canSaveToAddressBook: boolean
+  siteDurationHours: number | null
 }
 
 /** One stop card: toolbar, location-or-address, date/time, time requirement, advanced details. */
@@ -141,14 +161,18 @@ function StopRow({
   compact,
   sheet,
   removable,
+  canSaveToAddressBook,
+  siteDurationHours,
 }: StopRowProps) {
   const { t } = useLocale()
   const isUnloading = stop.stopType === 'Unloading'
+  // D2: the work site of an on-site lifting job — one stop, no place in a route, no time requirement.
+  const isSite = stop.stopType === 'Site'
   const requirementBadge = timeRequirementBadge(stop)
   // Phase 7: immediate advisory hint when a planned time falls outside the selected
   // location's structured hours (client mirror; backend warnings are authoritative).
   const hoursHint =
-    stop.locationId && stop.date
+    !isSite && stop.locationId && stop.date
       ? ([stop.fromTime, stop.toTime]
           .filter(Boolean)
           .map((time) =>
@@ -166,7 +190,7 @@ function StopRow({
   return (
     <fieldset className="tof-stop">
       <legend>
-        {index + 1}. {t(STOP_TYPE_LABELS[stop.stopType])}
+        {isSite ? t('stopEditor.site.legend') : `${index + 1}. ${t(STOP_TYPE_LABELS[stop.stopType])}`}
         {requirementBadge && (
           <>
             {' '}
@@ -180,7 +204,7 @@ function StopRow({
           </>
         )}
       </legend>
-      {sheet ? (
+      {isSite ? null : sheet ? (
         <div className="tof-stop-toolbar">
           <button
             type="button"
@@ -269,96 +293,80 @@ function StopRow({
         </p>
       ) : (
         <>
+          <StopAddressFields
+            stop={stop}
+            index={index}
+            customerId={customerId}
+            saving={saving}
+            errors={errors}
+            setStop={setStop}
+            onRequestRefresh={onRequestRefresh}
+            onQuickCreate={onQuickCreate}
+            canSaveToAddressBook={canSaveToAddressBook}
+          />
           <div className="tof-row">
-            <FormField label={t('transportOrders.route.location')} htmlFor={`st-loc-${stop.key}`}>
-              <LocationSelect
-                id={`st-loc-${stop.key}`}
-                value={stop.locationId}
-                onChange={(locationId) =>
-                  // A different location invalidates the shown snapshot; the backend takes a
-                  // fresh copy on save, so the pending refresh flag is also reset.
-                  setStop(stop.key, { locationId, refreshSnapshot: false, snapshotName: '', snapshotAddress: '' })
-                }
-                customerId={customerId || undefined}
-                disabled={saving}
-                placeholder={t('transportOrders.route.locationPlaceholder')}
-                onCreateNew={onQuickCreate}
-              />
-            </FormField>
-            <FormField label={t('transportOrders.route.freeName')} htmlFor={`st-name-${stop.key}`}>
-              <input
-                id={`st-name-${stop.key}`}
-                value={stop.locationName}
-                onChange={(e) => setStop(stop.key, { locationName: e.target.value })}
-                disabled={saving || stop.locationId !== ''}
-                maxLength={200}
-              />
-            </FormField>
-          </div>
-          {stop.locationId !== '' && (
-            <div className="tof-snapshot-row">
-              <Badge tone="info">{t('transportOrders.route.snapshotBadge')}</Badge>
-              {stop.snapshotName && (
-                <span className="tof-snapshot-line">
-                  {stop.snapshotName}
-                  {stop.snapshotAddress ? ` — ${stop.snapshotAddress}` : ''}
-                </span>
-              )}
-              {stop.refreshSnapshot && <Badge tone="warning">{t('transportOrders.route.snapshotRefreshBadge')}</Badge>}
-            </div>
-          )}
-          {stop.locationId === '' && (
-            <div className="tof-row tof-row-4">
-              <FormField label={t('transportOrders.route.address')} htmlFor={`st-addr-${stop.key}`}>
-                <input id={`st-addr-${stop.key}`} value={stop.address} onChange={(e) => setStop(stop.key, { address: e.target.value })} disabled={saving} maxLength={300} />
-              </FormField>
-              <FormField label={t('transportOrders.route.postalCode')} htmlFor={`st-pc-${stop.key}`}>
-                <input id={`st-pc-${stop.key}`} value={stop.postalCode} onChange={(e) => setStop(stop.key, { postalCode: e.target.value })} disabled={saving} maxLength={20} />
-              </FormField>
-              <FormField label={t('transportOrders.route.city')} htmlFor={`st-city-${stop.key}`} required error={errors[`stops[${index}].city`]}>
-                <input
-                  id={`st-city-${stop.key}`}
-                  value={stop.city}
-                  onChange={(e) => setStop(stop.key, { city: e.target.value })}
-                  disabled={saving}
-                  maxLength={100}
-                  aria-invalid={errors[`stops[${index}].city`] ? true : undefined}
-                />
-              </FormField>
-              <FormField label={t('transportOrders.route.country')} htmlFor={`st-cc-${stop.key}`}>
-                <CountryCombobox
-                  id={`st-cc-${stop.key}`}
-                  value={stop.countryCode || null}
-                  onChange={(code) => setStop(stop.key, { countryCode: code ?? '' })}
-                  disabled={saving}
-                />
-              </FormField>
-            </div>
-          )}
-          <div className="tof-row tof-row-4">
             <FormField
-              label={stop.stopType === 'Loading' ? t('transportOrders.route.loadDate') : t('transportOrders.route.unloadDate')}
+              label={
+                isSite
+                  ? t('stopEditor.site.date')
+                  : stop.stopType === 'Loading' ? t('transportOrders.route.loadDate') : t('transportOrders.route.unloadDate')
+              }
               htmlFor={`st-date-${stop.key}`}
             >
               <input id={`st-date-${stop.key}`} type="date" value={stop.date} onChange={(e) => setStop(stop.key, { date: e.target.value })} disabled={saving} />
             </FormField>
+            {!compact && !isSite && (
+              <FormField label={t('transportOrders.route.reference')} htmlFor={`st-ref-${stop.key}`}>
+                <input id={`st-ref-${stop.key}`} value={stop.reference} onChange={(e) => setStop(stop.key, { reference: e.target.value })} disabled={saving} maxLength={100} />
+              </FormField>
+            )}
+            {isSite && (stop.plannedToIsManual || (stop.toDate !== '' && stop.toDate !== stop.date)) && (
+              <FormField label={t('stopEditor.site.endDate')} htmlFor={`st-todate-${stop.key}`}>
+                <input
+                  id={`st-todate-${stop.key}`}
+                  type="date"
+                  value={stop.toDate || stop.date}
+                  onChange={(e) => setStop(stop.key, { toDate: e.target.value })}
+                  disabled={saving}
+                />
+              </FormField>
+            )}
+          </div>
+          {/* Van/Tot: always two equal columns with the label above — also on a phone, where two
+              24h fields fit side by side. Both stay optional. */}
+          <div className="tof-time-pair">
             <FormField label={t('transportOrders.route.from')} htmlFor={`st-fromtime-${stop.key}`} hint={t('transportOrders.route.optional')}>
               <TimeInput id={`st-fromtime-${stop.key}`} value={stop.fromTime} onChange={(value) => setStop(stop.key, { fromTime: value })} disabled={saving} />
             </FormField>
             <FormField label={t('transportOrders.route.to')} htmlFor={`st-totime-${stop.key}`} hint={t('transportOrders.route.optional')}>
               <TimeInput id={`st-totime-${stop.key}`} value={stop.toTime} onChange={(value) => setStop(stop.key, { toTime: value })} disabled={saving} />
             </FormField>
-            {!compact && (
-              <FormField label={t('transportOrders.route.reference')} htmlFor={`st-ref-${stop.key}`}>
-                <input id={`st-ref-${stop.key}`} value={stop.reference} onChange={(e) => setStop(stop.key, { reference: e.target.value })} disabled={saving} maxLength={100} />
-              </FormField>
-            )}
           </div>
+          {isSite && (
+            <p className="tof-site-end" role="note">
+              {stop.plannedToIsManual ? (
+                <>
+                  {t('stopEditor.site.endManual')}{' '}
+                  <button type="button" className="tof-link" onClick={() => setStop(stop.key, { plannedToIsManual: false })} disabled={saving}>
+                    {t('stopEditor.site.endAuto')}
+                  </button>
+                </>
+              ) : siteDurationHours !== null && siteDurationHours > 0 ? (
+                t('stopEditor.site.endFollows', { hours: String(siteDurationHours).replace('.', ',') })
+              ) : (
+                t('stopEditor.site.endNoDuration')
+              )}
+              {stop.toTime && stop.toDate !== '' && stop.toDate !== stop.date
+                ? ` ${t('stopEditor.site.endNextDay', { date: stop.toDate.split('-').reverse().join('-') })}`
+                : ''}
+            </p>
+          )}
           {hoursHint && (
             <p className="tof-hours-warning" role="note">
               ⚠ {hoursHint}
             </p>
           )}
+          {!isSite && (
           <div className="tof-row tof-row-4">
             <FormField label={t('transportOrders.route.timeReq')} htmlFor={`st-timereq-${stop.key}`}>
               <select
@@ -410,6 +418,7 @@ function StopRow({
               </FormField>
             )}
           </div>
+          )}
           {!compact && !sheet && (
             <div className="tof-row">
               {/* Wave 1 fix B (B4): this column is a SHARED write surface — the portal writes it at
@@ -495,7 +504,7 @@ function StopRow({
               <FormField label={t('transportOrders.route.accessInstr')} htmlFor={`st-access-${stop.key}`}>
                 <input id={`st-access-${stop.key}`} value={stop.accessInstructions} onChange={(e) => setStop(stop.key, { accessInstructions: e.target.value })} disabled={saving} maxLength={2000} />
               </FormField>
-              {stop.stopType === 'Loading' ? (
+              {isSite ? null : stop.stopType === 'Loading' ? (
                 <FormField label={t('transportOrders.route.loadInstr')} htmlFor={`st-loadinstr-${stop.key}`}>
                   <input id={`st-loadinstr-${stop.key}`} value={stop.loadingInstructions} onChange={(e) => setStop(stop.key, { loadingInstructions: e.target.value })} disabled={saving} maxLength={2000} />
                 </FormField>
@@ -505,7 +514,8 @@ function StopRow({
                 </FormField>
               )}
             </div>
-            {stop.locationId !== '' && stop.id && !stop.refreshSnapshot && (
+            {/* A deviating address offers the same reset right under its hint (StopAddressFields). */}
+            {stop.locationId !== '' && stop.id && !stop.refreshSnapshot && !stop.addressOverridden && (
               <div className="tof-stop-toolbar">
                 <button
                   type="button"

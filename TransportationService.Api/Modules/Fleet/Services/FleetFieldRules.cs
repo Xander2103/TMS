@@ -55,4 +55,19 @@ public static class FleetFieldRules
 
         return (requestedVolume, false);
     }
+
+    /// <summary>
+    /// D4: the tail-lift capacity (kg) is only meaningful on a vehicle that HAS a tail lift — without
+    /// one the value is dropped. Negative values are refused; an unknown capacity stays null (the
+    /// planning check then reports "nog te controleren", a capacity is never invented).
+    /// </summary>
+    public static decimal? ResolveTailLiftCapacity(bool hasTailLift, decimal? capacityKg, string field = "tailLiftCapacityKg")
+    {
+        if (capacityKg is < 0)
+        {
+            throw new DomainValidationException(field, "De capaciteit van de laadklep mag niet negatief zijn.");
+        }
+
+        return hasTailLift ? capacityKg : null;
+    }
 }

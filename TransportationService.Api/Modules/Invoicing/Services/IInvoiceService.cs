@@ -14,6 +14,9 @@ public interface IInvoiceService
     /// <summary>Completed orders of a customer not yet on a non-cancelled invoice.</summary>
     Task<IReadOnlyList<UninvoicedOrderDto>> ListUninvoicedOrdersAsync(Guid customerId, CancellationToken cancellationToken);
 
+    /// <summary>Priced standalone dossier activities of the customer that are not yet on a live invoice.</summary>
+    Task<IReadOnlyList<UninvoicedActivityDto>> ListUninvoicedActivitiesAsync(Guid customerId, CancellationToken cancellationToken);
+
     /// <summary>Builds a draft invoice from completed orders (+ manual lines); orders move to Invoiced.</summary>
     Task<InvoiceOperationResult> CreateAsync(CreateInvoiceRequest request, CancellationToken cancellationToken);
 

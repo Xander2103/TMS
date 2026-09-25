@@ -1,0 +1,17 @@
+/* Confirmation sprint 2026-09-23 — "Dossier bevestigen" dialog (detail header + list row action). */
+.dossier-confirm-intro { margin: 0 0 0.75rem; color: var(--color-text-muted, #555); }
+.dossier-confirm-loading { color: var(--color-text-muted, #555); }
+.dossier-confirm-summary { display: grid; grid-template-columns: max-content 1fr; gap: 0.25rem 1rem; margin: 0 0 0.75rem; padding: 0.5rem 0.75rem; border-radius: 6px; background: var(--color-surface-muted, #f5f5f7); }
+.dossier-confirm-summary > div { display: contents; }
+.dossier-confirm-summary dt { font-weight: 600; }
+.dossier-confirm-summary dd { margin: 0; }
+.dossier-confirm-checks { margin: 0 0 0.75rem; padding: 0.5rem 0.75rem; border-left: 3px solid var(--color-border, #ccc); }
+.dossier-confirm-checks h4 { margin: 0 0 0.25rem; font-size: 0.95rem; }
+.dossier-confirm-checks ul { margin: 0; padding-left: 1.1rem; }
+.dossier-confirm-checks-blocking { border-color: var(--color-danger, #c62828); background: var(--color-danger-soft, #fdecea); }
+.dossier-confirm-checks-warning { border-color: var(--color-warning, #ef6c00); background: var(--color-warning-soft, #fff4e5); }
+.dossier-confirm-checks-info { border-color: var(--color-info, #1565c0); }
+.dossier-confirm-ok { color: var(--color-success, #2e7d32); }
+.dossier-confirm-ack { display: block; margin: 0.5rem 0 0.75rem; font-weight: 500; }
+.dossier-confirm-error { color: var(--color-danger, #c62828); margin: 0.5rem 0 0; }
+@media (max-width: 480px) { .dossier-confirm-summary { grid-template-columns: 1fr; } }

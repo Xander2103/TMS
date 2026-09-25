@@ -153,6 +153,8 @@ export interface SaveOrderPriceLineInput {
   remove?: boolean
   /** Managed unit code for quantity (e.g. "COLLI"); normalized like quantityUnitCode. */
   unit?: string | null
+  /** D4: goods lines this sales line is about. Omitted = leave the links alone; [] = whole trip/activity. */
+  cargoItemIds?: string[]
 }
 
 export function saveOrderPriceLines(orderId: string, lines: SaveOrderPriceLineInput[]): Promise<TransportOrderDetail> {
@@ -236,6 +238,8 @@ export interface OrderCustomerChangeImpact {
   /** Set when the order follows a dossier's customer: change it on the dossier instead. */
   owningDossierId: string | null
   owningDossierNumber: string | null
+  /** Documents published to the old customer that go back to internal (republish deliberately). */
+  documentsPublicationWithdrawn: number
 }
 
 export function getOrderCustomerChangeImpact(id: string, newCustomerId: string): Promise<OrderCustomerChangeImpact> {

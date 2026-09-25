@@ -24,7 +24,17 @@ public record DossierCustomerChangeImpactDto(
     /// <summary>Per-order consequences for the orders that will move.</summary>
     IReadOnlyList<CustomerChangeImpactDto> Orders,
     /// <summary>Linked orders already on a DIFFERENT customer than the dossier; left untouched and reported.</summary>
-    IReadOnlyList<string> OrdersLeftOnOtherCustomer);
+    IReadOnlyList<string> OrdersLeftOnOtherCustomer,
+    /// <summary>
+    /// DOSSIER-level documents published to the old customer whose publication the change
+    /// withdraws (back to internal). Order-level withdrawals are reported per order.
+    /// </summary>
+    int DocumentsPublicationWithdrawn = 0,
+    /// <summary>
+    /// Draft invoice lines of the dossier's standalone activities that are released (the
+    /// agreed prices were made under the old customer and go back to Draft).
+    /// </summary>
+    int ActivityInvoiceLinesReleased = 0);
 
 public record ChangeDossierCustomerRequest(Guid NewCustomerId, string Reason, Guid? Version = null);
 
@@ -105,6 +115,24 @@ public class DossierCustomerChangeService : IDossierCustomerChangeService
             await _orders.ApplyWithinDossierAsync(orderImpact.OrderId, request.NewCustomerId, request.Reason, cancellationToken);
         }
 
+        // Dossier-level documents published to the old customer go back to internal (the
+        // per-order change above did the same for each moved order's documents).
+        var withdrawn = await DocumentPublicationWithdrawal.WithdrawAsync(
+            DocumentPublicationWithdrawal.PublishedForDossier(_dbContext, TenantId, ctx.Dossier.Id),
+            _auditService, previousCustomerId, request.NewCustomerId, cancellationToken);
+
+        // Standalone activity prices were agreed with the OLD customer: their draft invoice
+        // lines are released (same rule as an order's, sprint 6E) and the price goes back to
+        // Draft, to be confirmed anew under the new customer. Sent invoices block the change
+        // (see LoadAsync), so nothing historical is ever touched here.
+        var activityIds = await _dbContext.DossierActivities.AsNoTracking()
+            .Where(a => a.TenantId == TenantId && a.DossierId == ctx.Dossier.Id && a.LinkedTransportOrderId == null)
+            .Select(a => a.Id)
+            .ToListAsync(cancellationToken);
+        var releasedActivityLines = await ActivityDraftInvoiceLinesAsync(activityIds, cancellationToken);
+        _dbContext.RemoveRange(releasedActivityLines);
+        await ActivityPricingRelease.ReopenAsync(_dbContext, TenantId, activityIds, cancellationToken);
+
         ctx.Dossier.CustomerId = request.NewCustomerId;
         ctx.Dossier.LegalEntityId = ctx.Impact.NewLegalEntityId;
         ctx.Dossier.Version = Guid.NewGuid();
@@ -119,11 +147,51 @@ public class DossierCustomerChangeService : IDossierCustomerChangeService
                 Reason = request.Reason.Trim(),
                 OrdersMoved = ctx.Impact.Orders.Select(o => o.OrderNumber).ToList(),
                 ctx.Impact.OrdersLeftOnOtherCustomer,
+                DocumentsPublicationWithdrawn = withdrawn,
+                ActivityInvoiceLinesReleased = releasedActivityLines.Count,
             },
             cancellationToken);
 
         await transaction.CommitAsync(cancellationToken);
-        return ctx.Impact;
+        return ctx.Impact with { DocumentsPublicationWithdrawn = withdrawn, ActivityInvoiceLinesReleased = releasedActivityLines.Count };
+    }
+
+    /// <summary>The activities' lines on invoices that are still Draft — released on a customer change.</summary>
+    private async Task<List<Modules.Invoicing.Entities.InvoiceLine>> ActivityDraftInvoiceLinesAsync(
+        IReadOnlyList<Guid> activityIds, CancellationToken cancellationToken)
+    {
+        if (activityIds.Count == 0) return [];
+
+        // Materialised first: an AsNoTracking() subquery would turn the whole query into a
+        // no-tracking one and the lines could not be removed (same pattern as the order side).
+        var draftInvoiceIds = await _dbContext.Invoices.AsNoTracking()
+            .Where(i => i.TenantId == TenantId && i.Status == Modules.Invoicing.Entities.InvoiceStatus.Draft)
+            .Select(i => i.Id)
+            .ToListAsync(cancellationToken);
+        return await _dbContext.InvoiceLines
+            .Where(l => l.TenantId == TenantId && l.DossierActivityId != null
+                        && activityIds.Contains(l.DossierActivityId.Value) && draftInvoiceIds.Contains(l.InvoiceId))
+            .ToListAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Financial safety, mirrored from the order side: a standalone activity on a FINALIZED
+    /// invoice (Sent or Paid) belongs to that customer's history — corrected via a credit note.
+    /// </summary>
+    private async Task<string?> FinalizedActivityInvoiceReasonAsync(Guid dossierId, CancellationToken cancellationToken)
+    {
+        var finalized = await _dbContext.InvoiceLines.AsNoTracking()
+            .Where(l => l.TenantId == TenantId && l.DossierActivityId != null)
+            .Join(_dbContext.DossierActivities.AsNoTracking().Where(a => a.TenantId == TenantId && a.DossierId == dossierId),
+                l => l.DossierActivityId!.Value, a => a.Id, (l, a) => l)
+            .Join(_dbContext.Invoices.AsNoTracking().Where(i => i.TenantId == TenantId),
+                l => l.InvoiceId, i => i.Id, (l, i) => i)
+            .AnyAsync(i => i.Status == Modules.Invoicing.Entities.InvoiceStatus.Sent
+                           || i.Status == Modules.Invoicing.Entities.InvoiceStatus.Paid, cancellationToken);
+        return finalized
+            ? "Een activiteit van dit dossier staat op een verzonden of geboekte factuur. Corrigeer via een creditnota; "
+              + "de historische factuur blijft ongewijzigd."
+            : null;
     }
 
     private sealed record Context(TransportDossier Dossier, DossierCustomerChangeImpactDto Impact);
@@ -155,6 +223,10 @@ public class DossierCustomerChangeService : IDossierCustomerChangeService
         else if (dossier.CustomerId == newCustomerId)
         {
             blocked = "Dit dossier staat al op deze klant.";
+        }
+        else
+        {
+            blocked = await FinalizedActivityInvoiceReasonAsync(dossierId, cancellationToken);
         }
 
         var linkedOrders = await _dbContext.DossierOrders.AsNoTracking()
@@ -201,6 +273,13 @@ public class DossierCustomerChangeService : IDossierCustomerChangeService
             target.InvoiceLanguageCode ?? target.DefaultLanguageCode,
             target.VatTreatment.ToString(),
             impacts,
-            leftAlone));
+            leftAlone,
+            await DocumentPublicationWithdrawal.PublishedForDossier(_dbContext, TenantId, dossierId)
+                .AsNoTracking().CountAsync(cancellationToken),
+            (await ActivityDraftInvoiceLinesAsync(
+                await _dbContext.DossierActivities.AsNoTracking()
+                    .Where(a => a.TenantId == TenantId && a.DossierId == dossierId && a.LinkedTransportOrderId == null)
+                    .Select(a => a.Id).ToListAsync(cancellationToken),
+                cancellationToken)).Count));
     }
 }

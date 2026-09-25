@@ -18,6 +18,8 @@ export interface ActivityType {
   isSystemDefaultTransport: boolean
   /** Stap 13: counts as a commercial unit (sales price + pricing attention on the dossier). */
   isBillable: boolean
+  /** D2 capability flag: the type allows on-site work — the kind of crane job can be chosen. Absent on older payloads. */
+  supportsOnSiteWork?: boolean
 }
 
 /** Create/update payload; `code` is immutable after creation (the backend refuses changes). */

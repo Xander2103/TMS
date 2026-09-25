@@ -138,7 +138,10 @@ export function TransportOrdersPage() {
       key: 'route',
       header: t('transportOrders.list.columns.route'),
       render: (row) =>
-        row.firstLoadingCity || row.lastUnloadingCity
+        // D2: an on-site lifting job has no route — it shows its work site ("Werf: Waver").
+        row.craneJobKind === 'OnSiteLifting'
+          ? `${t('stopEditor.stopType.Site')}: ${row.firstSiteCity ?? '—'}`
+          : row.firstLoadingCity || row.lastUnloadingCity
           ? `${row.firstLoadingCity ?? '?'} → ${row.lastUnloadingCity ?? '?'}${
               row.stopCount > 2 ? ` ${t('transportOrders.list.stopCount', { count: row.stopCount })}` : ''
             }`

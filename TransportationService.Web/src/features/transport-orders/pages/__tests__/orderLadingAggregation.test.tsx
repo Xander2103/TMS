@@ -190,6 +190,43 @@ describe('TransportOrderDetailPage Lading aggregation', () => {
     expect(within(list).getByText('5 Europallet')).toBeInTheDocument()
   })
 
+  it('D4: shows weight per unit only when entered, a coverage badge per line and the honest capacity block', async () => {
+    api.getTransportOrder.mockResolvedValue(
+      baseOrder({
+        cargoItems: [
+          cargoItem({ id: 'c1', sequence: 1, expectedQuantity: 3, weightPerUnitKg: 2000, totalWeightKg: 6000, commercialCoverage: 'SeparatelyPriced' }),
+          cargoItem({ id: 'c2', sequence: 2, expectedQuantity: 3, totalWeightKg: 4500, commercialCoverage: 'Included' }),
+          cargoItem({ id: 'c3', sequence: 3, commercialCoverage: 'ToReview' }),
+          cargoItem({ id: 'c4', sequence: 4 }),
+        ],
+      }),
+    )
+    renderPage(LADING_TAB)
+    await screen.findByText('ORD-0001 — Klant X')
+
+    const rows = within(document.querySelector('.tod-table tbody') as HTMLElement).getAllByRole('row')
+    expect(within(rows[0]).getByText('2.000 kg')).toBeInTheDocument()
+    expect(within(rows[0]).getByText('Afzonderlijk geprijsd')).toBeInTheDocument()
+    // Total-only line: 4500 / 3 is never shown as a per-unit weight.
+    expect(within(rows[1]).getByText('4.500 kg')).toBeInTheDocument()
+    expect(rows[1].textContent).not.toContain('1.500')
+    expect(within(rows[1]).getByText('Inbegrepen in rit- of activiteitprijs')).toBeInTheDocument()
+    expect(within(rows[2]).getByText('Nog te controleren')).toBeInTheDocument()
+    expect(rows[3].querySelector('.ui-badge')).toBeNull()
+
+    expect(screen.getByText('Capaciteit nog te controleren')).toBeInTheDocument()
+    expect(document.body.textContent).not.toMatch(/veilig/i)
+  })
+
+  it('D2: an on-site lifting order shows "Geen goederen — hijswerk op locatie" instead of an empty quantity', async () => {
+    api.getTransportOrder.mockResolvedValue({ ...baseOrder({ cargoItems: [], quantity: null }), craneJobKind: 'OnSiteLifting' })
+    renderPage(LADING_TAB)
+    await screen.findByText('ORD-0001 — Klant X')
+
+    expect(screen.getByText('Geen goederen — hijswerk op locatie')).toBeInTheDocument()
+    expect(screen.queryByText('Aantal')).not.toBeInTheDocument()
+  })
+
   it('falls back to the order-level "Aantal" row when there are no cargo lines', async () => {
     api.getTransportOrder.mockResolvedValue(baseOrder({ cargoItems: [] }))
     renderPage(LADING_TAB)

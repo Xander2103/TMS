@@ -125,6 +125,7 @@ public class VehicleService : IVehicleService
             request.VolumeIsManual, request.OdometerKm, request.ConsumptionLPer100Km, request.HasCrane, request.HasRefrigeration, request.HasTailLift, request.AdrSuitable,
             request.OwnershipType, request.Notes);
         ApplyMautFields(vehicle, request.AxleCount, request.LoadingMeters, request.RequiredLicenceCode);
+        vehicle.TailLiftCapacityKg = FleetFieldRules.ResolveTailLiftCapacity(request.HasTailLift, request.TailLiftCapacityKg);
 
         _dbContext.Add(vehicle);
         try
@@ -181,6 +182,7 @@ public class VehicleService : IVehicleService
             request.VolumeIsManual, request.OdometerKm, request.ConsumptionLPer100Km, request.HasCrane, request.HasRefrigeration, request.HasTailLift, request.AdrSuitable,
             request.OwnershipType, request.Notes);
         ApplyMautFields(vehicle, request.AxleCount, request.LoadingMeters, request.RequiredLicenceCode);
+        vehicle.TailLiftCapacityKg = FleetFieldRules.ResolveTailLiftCapacity(request.HasTailLift, request.TailLiftCapacityKg);
 
         try
         {
@@ -318,7 +320,7 @@ public class VehicleService : IVehicleService
             v.VolumeIsManual, v.OdometerKm, v.ConsumptionLPer100Km, v.HasCrane, v.HasRefrigeration, v.HasTailLift, v.AdrSuitable,
             v.OwnershipType, v.OperationalStatus, v.StatusReason, v.IsActive,
             v.FixedDriverId, fixedDriverName, v.CurrentDriverId, currentDriverName, v.Notes,
-            v.AxleCount, v.LoadingMeters, v.RequiredLicenceCode);
+            v.AxleCount, v.LoadingMeters, v.RequiredLicenceCode, v.TailLiftCapacityKg);
     }
 
     private async Task<string?> ResolveDriverNameAsync(Guid? driverId, CancellationToken cancellationToken)

@@ -13,8 +13,8 @@ import type { CustomerListItem } from '../../customers/types'
 import { getPoPolicy } from '../../customers/api/customerBillingConfigApi'
 import { getActiveLegalEntity, getLegalEntityOptions } from '../../legal-entities/api/legalEntitiesApi'
 import type { LegalEntityOption } from '../../legal-entities/types'
-import { createInvoice, getNextInvoiceNumber, listUninvoicedOrders } from '../api/invoicesApi'
-import { euro, type ManualLineInput, type UninvoicedOrder } from '../types'
+import { createInvoice, getNextInvoiceNumber, listUninvoicedActivities, listUninvoicedOrders } from '../api/invoicesApi'
+import { euro, type ManualLineInput, type UninvoicedActivity, type UninvoicedOrder } from '../types'
 import { comparePeriods, dateToPeriod, formatPeriod, monthInputToPeriod, periodToMonthInput } from '../utils/invoicePeriod'
 import { READINESS_REASON_KEYS } from '../utils/readiness'
 import './invoices.css'
@@ -37,7 +37,7 @@ function readinessTooltip(t: TranslateFn, reasons: string | null | undefined): s
     .join(', ')
 }
 
-/** Invoice builder: pick a customer, tick completed orders, add manual lines. */
+/** Invoice builder: pick a customer, tick completed orders and priced dossier activities, add manual lines. */
 export function NewInvoicePage() {
   const navigate = useNavigate()
   const { t } = useLocale()
@@ -47,6 +47,8 @@ export function NewInvoicePage() {
   const [customerId, setCustomerId] = useState('')
   const [orders, setOrders] = useState<UninvoicedOrder[] | null>(null)
   const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([])
+  const [activities, setActivities] = useState<UninvoicedActivity[] | null>(null)
+  const [selectedActivityIds, setSelectedActivityIds] = useState<string[]>([])
   const [manualLines, setManualLines] = useState<ManualRow[]>([])
   const [notes, setNotes] = useState('')
   const [poNumber, setPoNumber] = useState('')
@@ -130,6 +132,17 @@ export function NewInvoicePage() {
       .catch(() => {
         if (mounted) setOrders([])
       })
+    // Dossier activities (Opslag/Kraan) load next to the orders, independently: a failure on
+    // one side never hides the other.
+    listUninvoicedActivities(customerId)
+      .then((data) => {
+        if (!mounted) return
+        setActivities(data)
+        setSelectedActivityIds(data.map((a) => a.id)) // default: everything selected
+      })
+      .catch(() => {
+        if (mounted) setActivities([])
+      })
     return () => {
       mounted = false
     }
@@ -161,6 +174,8 @@ export function NewInvoicePage() {
     // Reset synchronously with the user event, not inside the effect.
     setOrders(null)
     setSelectedOrderIds([])
+    setActivities(null)
+    setSelectedActivityIds([])
     setPoNumber('')
     setPoPolicyRequired(false)
     // Wave 2 §4: hint only — the proposal engine that acts on the preference is Wave 10.
@@ -176,6 +191,10 @@ export function NewInvoicePage() {
     setSelectedOrderIds((ids) => (ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]))
   }
 
+  function toggleActivity(id: string) {
+    setSelectedActivityIds((ids) => (ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]))
+  }
+
   function setManual(key: string, patch: Partial<ManualRow>) {
     setManualLines((rows) => rows.map((row) => (row.key === key ? { ...row, ...patch } : row)))
   }
@@ -188,6 +207,9 @@ export function NewInvoicePage() {
     (orders ?? [])
       .filter((o) => selectedOrderIds.includes(o.id))
       .reduce((sum, o) => sum + (o.agreedPrice ?? 0), 0) +
+    (activities ?? [])
+      .filter((a) => selectedActivityIds.includes(a.id))
+      .reduce((sum, a) => sum + a.agreedPrice, 0) +
     manualLines.reduce((sum, l) => sum + l.quantity * l.unitPrice, 0)
 
   async function handleCreate() {
@@ -195,7 +217,7 @@ export function NewInvoicePage() {
       showError(t('invoices.new.selectCustomer'))
       return
     }
-    if (selectedOrderIds.length === 0 && manualLines.length === 0) {
+    if (selectedOrderIds.length === 0 && selectedActivityIds.length === 0 && manualLines.length === 0) {
       showError(t('invoices.new.needsSelection'))
       return
     }
@@ -211,6 +233,7 @@ export function NewInvoicePage() {
         customerId,
         invoiceDate: null,
         orderIds: selectedOrderIds,
+        dossierActivityIds: selectedActivityIds,
         manualLines: manualLines.map((line) => ({
           description: line.description.trim(),
           quantity: line.quantity,
@@ -353,6 +376,59 @@ export function NewInvoicePage() {
                           </span>
                         )}
                         {(!order.invoiceReadiness || order.invoiceReadiness === 'NotReady') && '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </section>
+        )}
+
+        {customerId && activities !== null && (
+          <section className="inv-section">
+            <h3>{t('invoices.new.billableActivities', { total: activities.length })}</h3>
+            {activities.length === 0 && (
+              <p className="placeholder-text">{t('invoices.new.noActivities')}</p>
+            )}
+            {activities.length > 0 && (
+              <table className="inv-orders-table">
+                <thead>
+                  <tr>
+                    <th aria-label={t('invoices.new.orderColumns.selection')} />
+                    <th>{t('invoices.new.activityColumns.dossier')}</th>
+                    <th>{t('invoices.new.activityColumns.activity')}</th>
+                    <th>{t('invoices.new.activityColumns.plannedDate')}</th>
+                    <th>{t('invoices.new.activityColumns.amount')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {activities.map((activity) => (
+                    <tr key={activity.id} className="inv-order-row" onClick={() => toggleActivity(activity.id)}>
+                      <td>
+                        <input
+                          type="checkbox"
+                          checked={selectedActivityIds.includes(activity.id)}
+                          onChange={() => toggleActivity(activity.id)}
+                          onClick={(e) => e.stopPropagation()}
+                          aria-label={t('invoices.new.selectActivity', {
+                            activity: activity.activityTypeName,
+                            dossier: activity.dossierNumber,
+                          })}
+                        />
+                      </td>
+                      <td>
+                        <code>{activity.dossierNumber}</code>
+                        {activity.dossierTitle && <div className="inv-goods">{activity.dossierTitle}</div>}
+                      </td>
+                      <td>
+                        {activity.activityTypeName}
+                        {activity.label && <div className="inv-goods">{activity.label}</div>}
+                      </td>
+                      <td>{activity.plannedDate ? formatDate(activity.plannedDate) : '—'}</td>
+                      <td>
+                        <span>{euro(activity.agreedPrice)}</span>
+                        {activity.isFree && <span className="inv-free-badge">{t('invoices.new.freeActivity')}</span>}
                       </td>
                     </tr>
                   ))}

@@ -152,15 +152,17 @@ describe('TransportOrderForm stop disclosure (Wave 1 §12)', () => {
 })
 
 describe('TransportOrderForm cargo disclosure (Wave 1 §12)', () => {
-  it('shows the four default line fields + ADR and keeps the rest behind "Meer details"', async () => {
+  it('shows the five default line fields + ADR and keeps the rest behind "Meer details"', async () => {
     renderForm()
     await waitFor(() => expect(screen.getByLabelText('Klant *')).toBeInTheDocument())
     await userEvent.click(screen.getByRole('tab', { name: /Goederen/ }))
     await userEvent.click(screen.getByRole('button', { name: '+ Goederenlijn' }))
 
-    // Default view: omschrijving, verwacht aantal, eenheid, totaal gewicht + ADR checkbox.
+    // Default view (D4): omschrijving, verwacht aantal, eenheid, gewicht per eenheid, totaal
+    // gewicht + ADR checkbox — the weight per unit is no longer hidden behind "Meer details".
     expect(screen.getByLabelText('Omschrijving')).toBeVisible()
     expect(screen.getByLabelText('Verwacht aantal *')).toBeVisible()
+    expect(screen.getByLabelText('Gewicht per eenheid (kg)')).toBeVisible()
     expect(screen.getByLabelText('Totaal gewicht (kg)')).toBeVisible()
     expect(screen.getByText('ADR-goederen')).toBeVisible()
 
@@ -175,7 +177,7 @@ describe('TransportOrderForm cargo disclosure (Wave 1 §12)', () => {
     // Opening the disclosure reveals them.
     details!.setAttribute('open', '')
     expect(screen.getByLabelText('Barcode')).toBeVisible()
-    expect(screen.getByLabelText('Gewicht per stuk (kg)')).toBeVisible()
+    expect(screen.getByLabelText('Verpakkingstype')).toBeVisible()
   })
 
   it('hides the stop-pinning selects while there is only one stop of each side', async () => {

@@ -1,0 +1,234 @@
+/* Stop editor additions (master sprint 2026-09-21). Imported by RouteSection itself — together
+   with transport-order-form.css — so the intake (/dossiers/new), the dossier Route sheet and the
+   order form all get the SAME side-by-side Laden/Lossen layout, whichever chunk loads first.
+   No global box-sizing reset exists: every rule that sizes a box sets it itself. */
+
+/* Laden | Lossen: two equal columns; extra stops wrap row by row in sequence order. Cards in one
+   row are equally tall, so their borders and first rows line up. */
+.tof-stops-grid {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: stretch;
+}
+
+.tof-stops-grid .tof-stop {
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* An on-site job is a single work-site card: full width, fields still in two columns. */
+.tof-stops-grid.tof-stops-grid-site {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.tof-stops-grid .tof-row,
+.tof-stops-grid .tof-row-4 {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.tof-stops-grid .tof-row.tof-row-single {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/* Grid children may shrink below their content (long placeholders, the country combobox). */
+.tof-stops-grid .ui-form-field {
+  min-width: 0;
+}
+
+/* Van | Tot: two equal columns, label above, full 24h time readable. Stays side by side on a
+   phone — two "23:59" fields fit in any realistic width. */
+.tof-time-pair {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 0 var(--space-4);
+}
+
+.tof-time-pair .ui-form-field {
+  min-width: 0;
+}
+
+/* The shared TimeInput has a fixed width; inside the pair it fills its column so Van and Tot are
+   exactly as wide and as tall as each other. */
+.tof-time-pair .ui-form-field input.ui-time-input {
+  width: 100%;
+  min-width: calc(5.5ch + 26px);
+  box-sizing: border-box;
+  text-align: left;
+}
+
+.tof-address {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.tof-address .tof-snapshot-row .tof-link {
+  padding: 0 var(--space-1);
+  font-size: 13px;
+}
+
+/* "Adres ook bewaren in klantenbestand": checkbox + help text, visually one quiet block. */
+.tof-address-save {
+  margin: 0 0 var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-md);
+  box-sizing: border-box;
+}
+
+.tof-address-save-check {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  font-size: 0.9375rem;
+  color: var(--text-h);
+  cursor: pointer;
+}
+
+.tof-address-save-check input[type='checkbox'] {
+  width: auto;
+  min-height: 0;
+  margin: 3px 0 0;
+  flex: 0 0 auto;
+}
+
+.tof-address-save-help {
+  margin: var(--space-1) 0 0;
+  font-size: 0.8125rem;
+  color: var(--text);
+}
+
+.tof-address-duplicates {
+  margin-top: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--warning-border);
+  border-radius: var(--radius-md);
+  background: var(--warning-bg);
+  color: var(--warning);
+  font-size: 0.8125rem;
+  box-sizing: border-box;
+}
+
+.tof-address-duplicates p {
+  margin: 0 0 var(--space-1);
+  font-weight: 600;
+}
+
+.tof-address-duplicates ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tof-address-duplicates li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-1) var(--space-2);
+  color: var(--text-h);
+  overflow-wrap: anywhere;
+}
+
+/* Site stop: how the end time came about (automatic / manual). */
+.tof-site-end {
+  margin: calc(-1 * var(--space-1)) 0 var(--space-2);
+  font-size: 0.8125rem;
+  color: var(--text);
+}
+
+.tof-site-end .tof-link {
+  padding: 0 var(--space-1);
+  font-size: inherit;
+}
+
+/* On-site work block: kind of crane job, description of the work, lift data. */
+.tof-crane-kind {
+  border: none;
+  margin: 0 0 var(--space-2);
+  padding: 0;
+  min-width: 0;
+}
+
+.tof-crane-kind legend {
+  padding: 0;
+  margin-bottom: var(--space-2);
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.tof-crane-kind-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-5);
+}
+
+.tof-crane-kind-options label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 32px;
+  font-size: 0.9375rem;
+  font-weight: 400;
+  color: var(--text-h);
+  cursor: pointer;
+}
+
+.tof-crane-kind-options input[type='radio'] {
+  width: auto;
+  min-height: 0;
+  margin: 0;
+}
+
+.tof-onsite {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.tof-onsite textarea {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+}
+
+.tof-onsite-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 var(--space-4);
+}
+
+.tof-onsite-lift {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3);
+  box-sizing: border-box;
+}
+
+.tof-onsite-lift > summary {
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.tof-onsite-lift-note {
+  margin: var(--space-2) 0;
+  font-size: 0.8125rem;
+  color: var(--text);
+}
+
+/* Tablet/phone: one stop per row; the address rows go to one column, Van/Tot stay a pair. */
+@media (max-width: 900px) {
+  .tof-stops-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .tof-stops-grid .tof-row,
+  .tof-stops-grid .tof-row-4,
+  .tof-onsite-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

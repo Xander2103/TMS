@@ -17,10 +17,29 @@ public enum TransportOrderStatus
     Submitted,
 }
 
+/// <summary>
+/// Stored as string — appending is safe. <see cref="Site"/> (master sprint 2026-09-21, D2) is the
+/// place where on-site work happens (e.g. a lifting job): nothing is loaded or unloaded there, so
+/// goods lines, colli, load/unload scans and included loading/unloading time never apply to it.
+/// </summary>
 public enum StopType
 {
     Loading,
     Unloading,
+    Site,
+}
+
+/// <summary>
+/// Master sprint 2026-09-21 (D2): which kind of crane job an order is. Stored as string.
+/// <see cref="TransportWithCrane"/> is an ordinary transport (loading + unloading stops, goods)
+/// executed with a crane; <see cref="OnSiteLifting"/> is lifting work at a site — site stop(s),
+/// a work description and optional lift data instead of goods lines.
+/// </summary>
+public enum CraneJobKind
+{
+    None,
+    TransportWithCrane,
+    OnSiteLifting,
 }
 
 /// <summary>Operational urgency for planning and dock queues. Stored as string — appending is safe.</summary>
@@ -115,6 +134,23 @@ public class TransportOrder : AuditableTenantEntity, IVersionedEntity
     public int? PalletCount { get; set; }
     public bool AdrRequired { get; set; }
     public bool CraneRequired { get; set; }
+
+    /// <summary>
+    /// D2: kind of crane job. OnSiteLifting is only valid when the order's activity type has
+    /// <c>SupportsOnSiteWork</c>; it swaps the goods/route rules for site stop + work description.
+    /// </summary>
+    public CraneJobKind CraneJobKind { get; set; } = CraneJobKind.None;
+
+    /// <summary>D2: what has to be done on site (mandatory for OnSiteLifting).</summary>
+    public string? WorkDescription { get; set; }
+
+    // D2: data of the load to lift. A lift load is NOT a goods line — never turned into cargo.
+    public decimal? LiftLoadWeightKg { get; set; }
+    public string? LiftLoadDimensions { get; set; }
+    public decimal? LiftRadiusMeters { get; set; }
+    public decimal? LiftHeightMeters { get; set; }
+    public string? LiftConditions { get; set; }
+    public string? LiftEquipment { get; set; }
 
     // P6: equipment/movement pricing dimensions (additive; false = legacy behavior).
     /// <summary>The delivery needs a plateau (flatbed) — drives Plateau service conditions.</summary>
@@ -225,7 +261,7 @@ public enum StopTimeRequirementKind
 }
 
 /// <summary>
-/// One loading or unloading stop of an order, ordered by <see cref="Sequence"/>. Either a master
+/// One loading, unloading or site stop of an order, ordered by <see cref="Sequence"/>. Either a master
 /// location is referenced or a free address is entered inline (ad-hoc addresses without master data).
 /// </summary>
 public class TransportOrderStop : AuditableTenantEntity
@@ -271,10 +307,27 @@ public class TransportOrderStop : AuditableTenantEntity
     /// <summary>UTC moment the location snapshot was (last) taken; null for free-address stops.</summary>
     public DateTime? SnapshotAt { get; set; }
 
+    /// <summary>
+    /// D3: true = the stop references a master location (<see cref="LocationId"/>) but its address
+    /// quintet was deliberately edited for THIS order, so the snapshot deviates from the address
+    /// book. The stop snapshot is the dossier-level override — the central location is never
+    /// modified by an order. Reset by "Adres opnieuw overnemen" (RefreshSnapshot) or by saving the
+    /// address to the address book. Always false without a location.
+    /// </summary>
+    public bool AddressOverridden { get; set; }
+
     // Four distinct time concepts (Wave "stop execution"): what planning scheduled, what the
     // customer asked for, what was confirmed back to the customer, and the hard outer bounds.
     public DateTime? PlannedFrom { get; set; }
     public DateTime? PlannedTo { get; set; }
+
+    /// <summary>
+    /// D2 (site stops only): true = the planner entered <see cref="PlannedTo"/> by hand, so the
+    /// server never recomputes it. False = the end follows start + activity duration
+    /// (<c>SiteWorkTime</c>). Ignored for loading/unloading stops.
+    /// </summary>
+    public bool PlannedToIsManual { get; set; }
+
     public DateTime? RequestedFrom { get; set; }
     public DateTime? RequestedTo { get; set; }
     public DateTime? ConfirmedFrom { get; set; }

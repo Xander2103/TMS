@@ -41,6 +41,16 @@ public class TransportOrderConfiguration : IEntityTypeConfiguration<TransportOrd
         builder.Property(o => o.OneOffNotes).HasMaxLength(1000);
         builder.Property(o => o.ExtraTimeHourlyRateOverride).HasPrecision(10, 2);
 
+        // D2 (master sprint 2026-09-21): crane job kind, work description and lift data.
+        builder.Property(o => o.CraneJobKind).HasConversion<string>().HasMaxLength(30);
+        builder.Property(o => o.WorkDescription).HasMaxLength(2000);
+        builder.Property(o => o.LiftLoadWeightKg).HasPrecision(12, 2);
+        builder.Property(o => o.LiftLoadDimensions).HasMaxLength(200);
+        builder.Property(o => o.LiftRadiusMeters).HasPrecision(8, 2);
+        builder.Property(o => o.LiftHeightMeters).HasPrecision(8, 2);
+        builder.Property(o => o.LiftConditions).HasMaxLength(1000);
+        builder.Property(o => o.LiftEquipment).HasMaxLength(500);
+
         builder.HasIndex(o => new { o.TenantId, o.OrderNumber })
             .IsUnique()
             .HasFilter("\"IsDeleted\" = false");

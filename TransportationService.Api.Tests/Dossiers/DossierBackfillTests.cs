@@ -56,7 +56,8 @@ public class DossierBackfillTests
         Assert.Equal(h.CustomerId, dossier.CustomerId);
         Assert.Equal("REF-9", dossier.CustomerReference);
         Assert.Equal(new DateOnly(2026, 7, 1), dossier.DossierDate);
-        Assert.Equal(DossierStatus.Closed, dossier.Status); // Completed order → closed wrapper
+        Assert.Equal(DossierStatus.Closed, dossier.Status); // Completed order → confirmed wrapper
+        Assert.Equal(DossierConfirmationSource.Automatic, dossier.ConfirmationSource); // honest source, never a user
 
         var activity = await h.Db.Context.DossierActivities.SingleAsync(a => a.DossierId == dossier.Id);
         Assert.Equal(order.Id, activity.LinkedTransportOrderId);

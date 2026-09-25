@@ -5,7 +5,6 @@ import { LoadingState } from '../../../components/feedback/LoadingState'
 import { ErrorState } from '../../../components/feedback/ErrorState'
 import { BackButton } from '../../../components/ui/BackButton'
 import { Button } from '../../../components/ui/Button'
-import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { FormField } from '../../../components/ui/FormField'
 import { Modal } from '../../../components/ui/Modal'
 import { SearchableSelect, type SearchableSelectOption } from '../../../components/ui/SearchableSelect'
@@ -20,7 +19,7 @@ import { getTransportOrder } from '../../transport-orders/api/transportOrdersApi
 import type { TransportOrderDetail } from '../../transport-orders/types'
 import { getUsers } from '../../users/api/usersApi'
 import {
-  closeDossier,
+  cancelDossier,
   getDossier,
   removeDossierRelation,
   reopenDossier,
@@ -28,14 +27,17 @@ import {
   updateDossier,
 } from '../api/dossiersApi'
 import { type DossierActivity, type DossierDetail, type ReadinessIssue, type ReadinessSection } from '../types'
+import type { ActivityDetailFocus } from '../components/ActivityCard'
 import { ActivityDrawer } from '../components/ActivityDrawer'
 import { AddActivityDialog } from '../components/AddActivityDialog'
 import { AttentionPanel } from '../components/AttentionPanel'
+import { DossierConfirmDialog } from '../components/DossierConfirmDialog'
 import { DossierHeader, type DossierMenuAction } from '../components/DossierHeader'
 import { DossierCustomerChangeDialog } from '../components/DossierCustomerChangeDialog'
 import { AddRelationDialog, LinkOrderDialog } from '../components/DossierLinkDialogs'
 import { DossierOverview } from '../components/DossierOverview'
 import type { DossierPricePanelHandle } from '../components/DossierPricePanel'
+import { DossierReasonDialog } from '../components/DossierReasonDialog'
 import type { DossierRouteEditorHandle } from '../components/DossierRouteEditor'
 import { DossierSubnav } from '../components/DossierSubnav'
 import { GoodsDrawer } from '../components/GoodsDrawer'
@@ -48,6 +50,8 @@ import { DossierPriceSection } from '../components/sections/DossierPriceSection'
 import { DossierRouteSection } from '../components/sections/DossierRouteSection'
 import { DOSSIER_TABS, TAB_FOR_SECTION, dossierTabPath, isDossierTab, type DossierTab } from '../dossierSections'
 import { DossierWorkspaceContext, type DossierWorkspace } from '../dossierWorkspace'
+import { issueActivity } from '../activityDisplay'
+import { useVehicleCapacity } from '../useVehicleCapacity'
 import { useDossierNavigator, type DossierSectionId } from '../sectionRegistry'
 import '../../dashboard/pages/dashboard.css'
 import './dossiers.css'
@@ -81,6 +85,8 @@ function DossierDetailContent() {
   const toast = useToast()
   const { hasPermission } = useAuth()
   const canManage = hasPermission('dossiers.manage')
+  // Confirmation sprint 2026-09-23: undoing a confirmation/cancellation is its own right.
+  const canReopen = hasPermission('dossiers.reopen')
   // The inline route/price editors write to the linked ORDER, so they follow the order's
   // permission model — not only the dossier's (a dossiers.manage user without orders.edit got a
   // 403 at save time from the old drawer).
@@ -125,8 +131,14 @@ function DossierDetailContent() {
   // Dialogs & drawers
   const [showAddActivity, setShowAddActivity] = useState(false)
   const [drawerActivity, setDrawerActivity] = useState<DossierActivity | null>(null)
+  // Part of the drawer a card action asked for ("Planning", the note preview); null = the top.
+  const [drawerFocus, setDrawerFocus] = useState<ActivityDetailFocus | null>(null)
+  // Activity card an attention jump to the Activiteiten tab points at.
+  const [highlightedActivityId, setHighlightedActivityId] = useState<string | null>(null)
   const [goodsDrawerOpen, setGoodsDrawerOpen] = useState(false)
-  const [confirmClose, setConfirmClose] = useState(false)
+  // Lifecycle dialogs: confirm (evaluation + acknowledgement), reopen/cancel (reason).
+  const [showConfirm, setShowConfirm] = useState(false)
+  const [reasonDialog, setReasonDialog] = useState<'reopen' | 'cancel' | null>(null)
   const [showLinkOrder, setShowLinkOrder] = useState(false)
   const [showAddRelation, setShowAddRelation] = useState(false)
 
@@ -134,7 +146,6 @@ function DossierDetailContent() {
   const [editing, setEditing] = useState(false)
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
-  const [notes, setNotes] = useState('')
   const [customerReference, setCustomerReference] = useState('')
   const [dossierDate, setDossierDate] = useState('')
   const [customerId, setCustomerId] = useState<string | null>(null)
@@ -235,6 +246,8 @@ function DossierDetailContent() {
   // While true, the route/goods/price bodies show a placeholder inside a RetainedHeight, so the
   // page never shrinks under the planner's scroll position.
   const firstOrderLoading = Boolean(firstLinkedOrderId) && loadedOrder?.id !== firstLinkedOrderId
+  // D4: capacities of the vehicle the route target is planned on; unknown stays "nog te controleren".
+  const routeVehicleCapacity = useVehicleCapacity(routeActivity?.assignment?.vehicleId ?? null)
 
   // --- Subsection from the URL ---------------------------------------------------------------
   const hasRoute = activities.some((a) => a.hasStops)
@@ -295,7 +308,10 @@ function DossierDetailContent() {
   // An unknown or unavailable segment lands on the overview with a clean URL.
   if (section !== undefined && activeTab !== section) return <Navigate to={dossierTabPath(id, 'overzicht')} replace />
 
+  // Open = editable; Closed (= confirmed) and Cancelled are both read-only and only reopenable.
   const isOpen = dossier.status === 'Open'
+  const isConfirmed = dossier.status === 'Closed'
+  const isCancelled = dossier.status === 'Cancelled'
   // Compat: opdrachten die (nog) niet door een activiteit vertegenwoordigd worden.
   const activityOrderIds = new Set(activities.map((a) => a.linkedTransportOrderId).filter(Boolean))
   const legacyOrders = dossier.orders.filter((o) => !activityOrderIds.has(o.orderId))
@@ -316,6 +332,8 @@ function DossierDetailContent() {
    * dialog of the editor.
    */
   function goToSection(section: ReadinessSection, field: string | null, issue?: ReadinessIssue) {
+    // The Activiteiten tab has no editor target: the card the issue is about is outlined instead.
+    setHighlightedActivityId(section === 'activiteiten' && issue ? (issueActivity(issue, activities)?.id ?? null) : null)
     const candidates = section === 'prijs' ? billableActivities : transportActivities
     const current = section === 'prijs' ? priceActivity : routeActivity
     const target =
@@ -343,6 +361,13 @@ function DossierDetailContent() {
       navigate(`/transport-orders/${activity.linkedTransportOrderId}`)
       return
     }
+    setDrawerFocus(null)
+    setDrawerActivity(activity)
+  }
+
+  /** The activity detail drawer for ANY activity (also one whose [Openen] leads to its order). */
+  function openActivityDetail(activity: DossierActivity, focus: ActivityDetailFocus) {
+    setDrawerFocus(focus)
     setDrawerActivity(activity)
   }
 
@@ -350,7 +375,6 @@ function DossierDetailContent() {
     if (!dossier) return
     setTitle(dossier.title)
     setDescription(dossier.description ?? '')
-    setNotes(dossier.notes ?? '')
     setCustomerReference(dossier.customerReference ?? '')
     setDossierDate(dossier.dossierDate ?? '')
     setCustomerId(dossier.customerId)
@@ -387,7 +411,9 @@ function DossierDetailContent() {
         description: description || null,
         customerId,
         responsibleUserId,
-        notes: notes || null,
+        // D7: the legacy free text is no longer edited (notes have their own panel); the stored
+        // value travels back unchanged so the API never clears it.
+        notes: dossier!.notes ?? null,
         customerReference: customerReference.trim() || null,
         dossierDate: dossierDate || null,
         version: dossier!.version,
@@ -408,21 +434,38 @@ function DossierDetailContent() {
     }
   }
 
+  /**
+   * Reopen/cancel from the reason dialog: success applies the returned dossier and closes the
+   * dialog; a 409 shows the banner (and closes); any other failure is thrown back into the
+   * dialog with the server's explanation (e.g. planned orders block a cancellation).
+   */
+  async function submitLifecycle(action: (reason: string) => Promise<DossierDetail>, reason: string, successMessage: string, failedMessage: string) {
+    setBusy(true)
+    try {
+      const updated = await action(reason)
+      applyDossier(updated)
+      setReasonDialog(null)
+      toast.showSuccess(successMessage)
+    } catch (err) {
+      if (handleConflict(err)) {
+        setReasonDialog(null)
+        return
+      }
+      throw new Error(describeApiError(err, failedMessage).message, { cause: err })
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const menuActions: DossierMenuAction[] = []
   if (canManage && isOpen) menuActions.push({ key: 'edit', label: t('dossiers.detail.menuEdit'), onSelect: startEdit })
   if (canManage && isOpen && dossier.customerId) {
     menuActions.push({ key: 'change-customer', label: t('dossiers.customerChange.action'), onSelect: () => setCustomerChangeOpen(true) })
   }
+  if (canReopen && (isConfirmed || isCancelled)) {
+    menuActions.push({ key: 'reopen', label: t('dossiers.lifecycle.reopen'), onSelect: () => setReasonDialog('reopen') })
+  }
   if (canManage) {
-    menuActions.push(
-      isOpen
-        ? { key: 'close', label: t('dossiers.detail.menuClose'), onSelect: () => setConfirmClose(true) }
-        : {
-            key: 'reopen',
-            label: t('dossiers.detail.menuReopen'),
-            onSelect: () => void run(() => reopenDossier(id), t('dossiers.detail.reopened')),
-          },
-    )
     menuActions.push({ key: 'relation', label: t('dossiers.detail.menuRelation'), onSelect: () => setShowAddRelation(true) })
     if (isOpen) {
       menuActions.push({ key: 'link-order', label: t('dossiers.detail.menuLinkOrder'), onSelect: () => setShowLinkOrder(true) })
@@ -440,6 +483,10 @@ function DossierDetailContent() {
     label: t('dossiers.detail.menuHistory'),
     onSelect: () => openTab('historiek'),
   })
+  // Destructive, last: cancelling is for work that was never executed.
+  if (canManage && isOpen) {
+    menuActions.push({ key: 'cancel', label: t('dossiers.lifecycle.cancel'), onSelect: () => setReasonDialog('cancel'), danger: true })
+  }
 
   const workspace: DossierWorkspace = {
     dossier,
@@ -466,10 +513,14 @@ function DossierDetailContent() {
     setRouteDirty,
     selectActivity,
     applyDossier,
+    reloadDossier: load,
     handleConflict,
     handleOrderSaved,
     retryOrderLoad: () => setOrderLoadToken((token) => token + 1),
     openActivity,
+    openActivityDetail,
+    highlightedActivityId,
+    routeVehicleCapacity,
     openAddActivity: () => setShowAddActivity(true),
     openGoodsDrawer: () => setGoodsDrawerOpen(true),
     unlinkOrder: (orderId) => void run(() => unlinkDossierOrder(id, orderId), t('dossiers.detail.unlinked')),
@@ -491,6 +542,7 @@ function DossierDetailContent() {
           dossier={dossier}
           canManage={canManage}
           onAddActivity={() => setShowAddActivity(true)}
+          onConfirm={() => setShowConfirm(true)}
           menuActions={menuActions}
           onUpdated={applyDossier}
           onConflict={handleConflict}
@@ -505,7 +557,7 @@ function DossierDetailContent() {
           </div>
         )}
 
-        <AttentionPanel issues={dossier.readiness} onNavigate={goToSection} />
+        <AttentionPanel issues={dossier.readiness} activities={orderedActivities} onNavigate={goToSection} />
 
         <DossierSubnav ref={subnavRef} dossierId={id} tabs={availableTabs} />
 
@@ -534,8 +586,12 @@ function DossierDetailContent() {
         {drawerActivity && (
           <ActivityDrawer
             dossier={dossier}
-            activity={drawerActivity}
+            // The LIVE activity: a plan/assignment applies a fresh dossier while the drawer stays open.
+            activity={dossier.activities.find((a) => a.id === drawerActivity.id) ?? drawerActivity}
             canManage={canManage && isOpen}
+            initialFocus={drawerFocus ?? undefined}
+            onApply={applyDossier}
+            onReload={load}
             onClose={() => setDrawerActivity(null)}
             onUpdated={(updated) => {
               applyDossier(updated)
@@ -549,6 +605,8 @@ function DossierDetailContent() {
           <GoodsDrawer
             order={firstOrder}
             onClose={() => setGoodsDrawerOpen(false)}
+            vehiclePayloadKg={routeVehicleCapacity.payloadKg}
+            tailLiftCapacityKg={routeVehicleCapacity.tailLiftCapacityKg}
             onSaved={(updated) => {
               setLoadedOrder({ id: updated.id, order: updated })
               toast.showSuccess(t('dossiers.detail.goodsSaved'))
@@ -627,9 +685,6 @@ function DossierDetailContent() {
                   options={userOptions}
                 />
               </FormField>
-              <FormField label={t('dossiers.detail.notesField')} htmlFor="edit-notes" error={getFieldError(fieldErrors, 'notes')}>
-                <textarea id="edit-notes" value={notes} onChange={(event) => setNotes(event.target.value)} rows={3} maxLength={4000} />
-              </FormField>
             </form>
           </Modal>
         )}
@@ -668,17 +723,53 @@ function DossierDetailContent() {
           />
         )}
 
-        {confirmClose && (
-          <ConfirmDialog
-            title={t('dossiers.detail.closeTitle')}
-            message={t('dossiers.detail.closeMessage')}
-            confirmLabel={t('dossiers.detail.closeConfirm')}
-            busy={busy}
-            onCancel={() => setConfirmClose(false)}
-            onConfirm={() =>
-              void run(() => closeDossier(id), t('dossiers.detail.closed')).then((ok) => {
-                if (ok) setConfirmClose(false)
-              })
+        {showConfirm && (
+          <DossierConfirmDialog
+            dossierId={dossier.id}
+            dossierNumber={dossier.dossierNumber}
+            version={dossier.version}
+            onClose={() => setShowConfirm(false)}
+            onConfirmed={(updated) => {
+              applyDossier(updated)
+              setShowConfirm(false)
+              toast.showSuccess(t('dossiers.lifecycle.confirmed'))
+            }}
+          />
+        )}
+
+        {reasonDialog === 'reopen' && (
+          <DossierReasonDialog
+            title={t('dossiers.lifecycle.reopenTitle')}
+            intro={t('dossiers.lifecycle.reopenIntro')}
+            reasonLabel={t('dossiers.lifecycle.reopenReason')}
+            confirmLabel={t('dossiers.lifecycle.reopen')}
+            onClose={() => setReasonDialog(null)}
+            onSubmit={(reason) =>
+              submitLifecycle(
+                (r) => reopenDossier(id, r, dossier.version),
+                reason,
+                t('dossiers.lifecycle.reopened'),
+                t('dossiers.lifecycle.reopenFailed'),
+              )
+            }
+          />
+        )}
+
+        {reasonDialog === 'cancel' && (
+          <DossierReasonDialog
+            title={t('dossiers.lifecycle.cancelTitle')}
+            intro={t('dossiers.lifecycle.cancelIntro')}
+            reasonLabel={t('dossiers.lifecycle.cancelReason')}
+            confirmLabel={t('dossiers.lifecycle.cancelTitle')}
+            destructive
+            onClose={() => setReasonDialog(null)}
+            onSubmit={(reason) =>
+              submitLifecycle(
+                (r) => cancelDossier(id, r, dossier.version),
+                reason,
+                t('dossiers.lifecycle.cancelled'),
+                t('dossiers.lifecycle.cancelFailed'),
+              )
             }
           />
         )}

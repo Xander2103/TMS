@@ -1228,6 +1228,9 @@ namespace TransportationService.Api.Migrations
                     b.Property<bool>("SupportsGoods")
                         .HasColumnType("boolean");
 
+                    b.Property<bool>("SupportsOnSiteWork")
+                        .HasColumnType("boolean");
+
                     b.Property<Guid>("TenantId")
                         .HasColumnType("uuid");
 
@@ -1333,6 +1336,75 @@ namespace TransportationService.Api.Migrations
                     b.ToTable("dossier_activities", (string)null);
                 });
 
+            modelBuilder.Entity("TransportationService.Api.Modules.Dossiers.Entities.DossierActivityPriceLine", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("DeletedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("DossierActivityPricingId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Label")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<decimal>("Quantity")
+                        .HasPrecision(12, 3)
+                        .HasColumnType("numeric(12,3)");
+
+                    b.Property<Guid?>("SalesCategoryId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Sequence")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Unit")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<decimal>("UnitPrice")
+                        .HasPrecision(14, 4)
+                        .HasColumnType("numeric(14,4)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("UpdatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DossierActivityPricingId");
+
+                    b.HasIndex("TenantId", "DossierActivityPricingId");
+
+                    b.ToTable("dossier_activity_price_lines", (string)null);
+                });
+
             modelBuilder.Entity("TransportationService.Api.Modules.Dossiers.Entities.DossierActivityPricing", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1361,6 +1433,9 @@ namespace TransportationService.Api.Migrations
                     b.Property<decimal?>("FixedAmount")
                         .HasPrecision(12, 2)
                         .HasColumnType("numeric(12,2)");
+
+                    b.Property<bool>("FreeConfirmed")
+                        .HasColumnType("boolean");
 
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
@@ -1400,6 +1475,61 @@ namespace TransportationService.Api.Migrations
                         .HasFilter("\"IsDeleted\" = false");
 
                     b.ToTable("dossier_activity_pricings", (string)null);
+                });
+
+            modelBuilder.Entity("TransportationService.Api.Modules.Dossiers.Entities.DossierNote", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("DeletedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("DossierActivityId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("DossierId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("UpdatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DossierActivityId");
+
+                    b.HasIndex("DossierId");
+
+                    b.HasIndex("TenantId", "DossierActivityId")
+                        .HasFilter("\"DossierActivityId\" IS NOT NULL");
+
+                    b.HasIndex("TenantId", "DossierId", "CreatedAt");
+
+                    b.ToTable("dossier_notes", (string)null);
                 });
 
             modelBuilder.Entity("TransportationService.Api.Modules.Dossiers.Entities.DossierOrder", b =>
@@ -1518,8 +1648,29 @@ namespace TransportationService.Api.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<string>("CancellationReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<DateTime?>("CancelledAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CancelledByUserId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTime?>("ClosedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ConfirmationReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("ConfirmationSource")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<Guid?>("ConfirmedByUserId")
+                        .HasColumnType("uuid");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -1594,7 +1745,13 @@ namespace TransportationService.Api.Migrations
 
                     b.HasIndex("LegalEntityId");
 
+                    b.HasIndex("TenantId", "ClosedAt");
+
+                    b.HasIndex("TenantId", "CreatedAt");
+
                     b.HasIndex("TenantId", "CustomerId");
+
+                    b.HasIndex("TenantId", "DossierDate");
 
                     b.HasIndex("TenantId", "DossierNumber")
                         .IsUnique()
@@ -4951,6 +5108,10 @@ namespace TransportationService.Api.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 
+                    b.Property<decimal?>("TailLiftCapacityKg")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("numeric(10,2)");
+
                     b.Property<Guid>("TenantId")
                         .HasColumnType("uuid");
 
@@ -6557,6 +6718,9 @@ namespace TransportationService.Api.Migrations
                         .HasMaxLength(10)
                         .HasColumnType("character varying(10)");
 
+                    b.Property<Guid?>("DossierActivityId")
+                        .HasColumnType("uuid");
+
                     b.Property<Guid>("InvoiceId")
                         .HasColumnType("uuid");
 
@@ -6645,6 +6809,8 @@ namespace TransportationService.Api.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("DossierActivityId");
+
                     b.HasIndex("LedgerAccountId");
 
                     b.HasIndex("SalesCategoryId");
@@ -6652,6 +6818,8 @@ namespace TransportationService.Api.Migrations
                     b.HasIndex("TransportOrderId");
 
                     b.HasIndex("InvoiceId", "Sequence");
+
+                    b.HasIndex("TenantId", "DossierActivityId");
 
                     b.HasIndex("TenantId", "LedgerAccountId");
 
@@ -8264,6 +8432,113 @@ namespace TransportationService.Api.Migrations
                     b.ToTable("order_cargo_items", (string)null);
                 });
 
+            modelBuilder.Entity("TransportationService.Api.Modules.Orders.Entities.IssuedTransportDocument", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("DeletedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("DocumentNumber")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<Guid?>("DossierId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ExternalNumber")
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime>("IssuedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<Guid>("RequestId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TransportOrderId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("UpdatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DossierId");
+
+                    b.HasIndex("TransportOrderId");
+
+                    b.HasIndex("TenantId", "DocumentNumber")
+                        .IsUnique();
+
+                    b.HasIndex("TenantId", "DossierId");
+
+                    b.HasIndex("TenantId", "RequestId")
+                        .IsUnique();
+
+                    b.HasIndex("TenantId", "TransportOrderId");
+
+                    b.ToTable("issued_transport_documents", (string)null);
+                });
+
+            modelBuilder.Entity("TransportationService.Api.Modules.Orders.Entities.OrderPriceLineCargoLink", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CargoItemId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("LineKey")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TransportOrderId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CargoItemId");
+
+                    b.HasIndex("TransportOrderId");
+
+                    b.HasIndex("TenantId", "TransportOrderId", "LineKey", "CargoItemId")
+                        .IsUnique();
+
+                    b.ToTable("order_price_line_cargo_links", (string)null);
+                });
+
             modelBuilder.Entity("TransportationService.Api.Modules.Orders.Entities.TenantDocumentRule", b =>
                 {
                     b.Property<Guid>("Id")
@@ -8318,6 +8593,57 @@ namespace TransportationService.Api.Migrations
                     b.ToTable("tenant_document_rules", (string)null);
                 });
 
+            modelBuilder.Entity("TransportationService.Api.Modules.Orders.Entities.TransportDocumentSequence", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("DeletedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<int>("NextValue")
+                        .IsConcurrencyToken()
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("UpdatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Year")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "Kind", "Year")
+                        .IsUnique()
+                        .HasFilter("\"IsDeleted\" = false");
+
+                    b.ToTable("transport_document_sequences", (string)null);
+                });
+
             modelBuilder.Entity("TransportationService.Api.Modules.Orders.Entities.TransportOrder", b =>
                 {
                     b.Property<Guid>("Id")
@@ -8337,6 +8663,11 @@ namespace TransportationService.Api.Migrations
                     b.Property<string>("CancellationReason")
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
+
+                    b.Property<string>("CraneJobKind")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
 
                     b.Property<bool>("CraneRequired")
                         .HasColumnType("boolean");
@@ -8421,6 +8752,30 @@ namespace TransportationService.Api.Migrations
 
                     b.Property<Guid?>("LegalEntityId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("LiftConditions")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("LiftEquipment")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<decimal?>("LiftHeightMeters")
+                        .HasPrecision(8, 2)
+                        .HasColumnType("numeric(8,2)");
+
+                    b.Property<string>("LiftLoadDimensions")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<decimal?>("LiftLoadWeightKg")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
+                    b.Property<decimal?>("LiftRadiusMeters")
+                        .HasPrecision(8, 2)
+                        .HasColumnType("numeric(8,2)");
 
                     b.Property<decimal?>("LoadingMeters")
                         .HasPrecision(8, 2)
@@ -8521,6 +8876,10 @@ namespace TransportationService.Api.Migrations
                         .HasPrecision(12, 2)
                         .HasColumnType("numeric(12,2)");
 
+                    b.Property<string>("WorkDescription")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
                     b.HasKey("Id");
 
                     b.HasIndex("CustomerId");
@@ -8580,6 +8939,9 @@ namespace TransportationService.Api.Migrations
                         .HasMaxLength(30)
                         .HasColumnType("character varying(30)");
 
+                    b.Property<Guid?>("DossierId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("FileName")
                         .HasMaxLength(300)
                         .HasColumnType("character varying(300)");
@@ -8602,7 +8964,7 @@ namespace TransportationService.Api.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
-                    b.Property<Guid>("TransportOrderId")
+                    b.Property<Guid?>("TransportOrderId")
                         .HasColumnType("uuid");
 
                     b.Property<DateTime>("UpdatedAt")
@@ -8613,11 +8975,18 @@ namespace TransportationService.Api.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("DossierId");
+
                     b.HasIndex("TransportOrderId");
+
+                    b.HasIndex("TenantId", "DossierId");
 
                     b.HasIndex("TenantId", "TransportOrderId");
 
-                    b.ToTable("order_documents", (string)null);
+                    b.ToTable("order_documents", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_order_documents_order_or_dossier", "\"TransportOrderId\" IS NOT NULL OR \"DossierId\" IS NOT NULL");
+                        });
                 });
 
             modelBuilder.Entity("TransportationService.Api.Modules.Orders.Entities.TransportOrderPricingLine", b =>
@@ -9023,6 +9392,9 @@ namespace TransportationService.Api.Migrations
                         .HasMaxLength(300)
                         .HasColumnType("character varying(300)");
 
+                    b.Property<bool>("AddressOverridden")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("AppointmentReference")
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
@@ -9122,6 +9494,9 @@ namespace TransportationService.Api.Migrations
 
                     b.Property<DateTime?>("PlannedTo")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("PlannedToIsManual")
+                        .HasColumnType("boolean");
 
                     b.Property<string>("PostalCode")
                         .HasMaxLength(20)
@@ -11320,6 +11695,10 @@ namespace TransportationService.Api.Migrations
 
                     b.Property<Guid?>("VehicleId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("VehicleSelectionSource")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
 
                     b.Property<Guid>("Version")
                         .IsConcurrencyToken()
@@ -15605,11 +15984,34 @@ namespace TransportationService.Api.Migrations
                     b.Navigation("ActivityType");
                 });
 
+            modelBuilder.Entity("TransportationService.Api.Modules.Dossiers.Entities.DossierActivityPriceLine", b =>
+                {
+                    b.HasOne("TransportationService.Api.Modules.Dossiers.Entities.DossierActivityPricing", null)
+                        .WithMany()
+                        .HasForeignKey("DossierActivityPricingId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("TransportationService.Api.Modules.Dossiers.Entities.DossierActivityPricing", b =>
                 {
                     b.HasOne("TransportationService.Api.Modules.Dossiers.Entities.DossierActivity", null)
                         .WithMany()
                         .HasForeignKey("DossierActivityId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("TransportationService.Api.Modules.Dossiers.Entities.DossierNote", b =>
+                {
+                    b.HasOne("TransportationService.Api.Modules.Dossiers.Entities.DossierActivity", null)
+                        .WithMany()
+                        .HasForeignKey("DossierActivityId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("TransportationService.Api.Modules.Dossiers.Entities.TransportDossier", null)
+                        .WithMany()
+                        .HasForeignKey("DossierId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
@@ -16211,6 +16613,11 @@ namespace TransportationService.Api.Migrations
 
             modelBuilder.Entity("TransportationService.Api.Modules.Invoicing.Entities.InvoiceLine", b =>
                 {
+                    b.HasOne("TransportationService.Api.Modules.Dossiers.Entities.DossierActivity", null)
+                        .WithMany()
+                        .HasForeignKey("DossierActivityId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("TransportationService.Api.Modules.Invoicing.Entities.Invoice", null)
                         .WithMany("Lines")
                         .HasForeignKey("InvoiceId")
@@ -16359,6 +16766,35 @@ namespace TransportationService.Api.Migrations
                         .OnDelete(DeleteBehavior.SetNull);
                 });
 
+            modelBuilder.Entity("TransportationService.Api.Modules.Orders.Entities.IssuedTransportDocument", b =>
+                {
+                    b.HasOne("TransportationService.Api.Modules.Dossiers.Entities.TransportDossier", null)
+                        .WithMany()
+                        .HasForeignKey("DossierId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("TransportationService.Api.Modules.Orders.Entities.TransportOrder", null)
+                        .WithMany()
+                        .HasForeignKey("TransportOrderId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("TransportationService.Api.Modules.Orders.Entities.OrderPriceLineCargoLink", b =>
+                {
+                    b.HasOne("TransportationService.Api.Modules.Orders.Entities.CargoItem", null)
+                        .WithMany()
+                        .HasForeignKey("CargoItemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("TransportationService.Api.Modules.Orders.Entities.TransportOrder", null)
+                        .WithMany()
+                        .HasForeignKey("TransportOrderId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("TransportationService.Api.Modules.Orders.Entities.TransportOrder", b =>
                 {
                     b.HasOne("TransportationService.Api.Modules.Partners.Entities.Customer", null)
@@ -16370,11 +16806,15 @@ namespace TransportationService.Api.Migrations
 
             modelBuilder.Entity("TransportationService.Api.Modules.Orders.Entities.TransportOrderDocument", b =>
                 {
+                    b.HasOne("TransportationService.Api.Modules.Dossiers.Entities.TransportDossier", null)
+                        .WithMany()
+                        .HasForeignKey("DossierId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("TransportationService.Api.Modules.Orders.Entities.TransportOrder", null)
                         .WithMany()
                         .HasForeignKey("TransportOrderId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Cascade);
                 });
 
             modelBuilder.Entity("TransportationService.Api.Modules.Orders.Entities.TransportOrderPricingLine", b =>

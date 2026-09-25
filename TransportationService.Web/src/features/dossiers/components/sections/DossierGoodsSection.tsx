@@ -31,6 +31,8 @@ export function DossierGoodsSection() {
                 loading={ws.firstOrderLoading}
                 canEdit={ws.canManage && ws.isOpen}
                 onEdit={ws.openGoodsDrawer}
+                vehiclePayloadKg={ws.routeVehicleCapacity.payloadKg}
+                tailLiftCapacityKg={ws.routeVehicleCapacity.tailLiftCapacityKg}
               />
             ) : (
               <p className="placeholder-text">{t('dossiers.detail.goodsOnOrder')}</p>

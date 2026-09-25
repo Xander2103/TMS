@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Button } from '../../../../components/ui/Button'
 import { useLocale } from '../../../../i18n/localeContext'
 import { euro } from '../../../invoices/types'
+import { dossierTabPath } from '../../dossierSections'
 import { useDossierWorkspace } from '../../dossierWorkspace'
 import { useRegisterDossierSection } from '../../sectionRegistry'
 import { ActivityList } from '../ActivityList'
@@ -19,8 +20,15 @@ export function DossierActivitiesSection({ addButtonRef }: { addButtonRef: Ref<H
       <h2 tabIndex={-1}>{t('dossiers.detail.activitiesTitle')}</h2>
       <ActivityList
         activities={ws.activities}
+        dossier={ws.dossier}
         canManage={ws.canManage && ws.isOpen}
         onOpen={ws.openActivity}
+        onOpenDetail={ws.openActivityDetail}
+        // Several documents → the Documenten tab, opened on this activity's order.
+        onOpenDocuments={(activity) =>
+          navigate(`${dossierTabPath(ws.dossier.id, 'documenten')}?opdracht=${activity.linkedTransportOrderId}`)
+        }
+        highlightedActivityId={ws.highlightedActivityId}
         onAdd={ws.openAddActivity}
         addButtonRef={addButtonRef}
       />

@@ -46,6 +46,8 @@ import './invoices.css'
 interface EditableLine extends UpdateLineInput {
   key: string
   orderNumber: string | null
+  /** Set on an activity-backed line (transportOrderId is null then). */
+  dossierNumber: string | null
 }
 
 let lineKey = 0
@@ -115,6 +117,7 @@ export function InvoiceDetailPage() {
         key: `l-${++lineKey}`,
         id: l.id,
         orderNumber: l.orderNumber,
+        dossierNumber: l.dossierNumber,
         description: l.description,
         quantity: l.quantity,
         unitPrice: l.unitPrice,
@@ -379,6 +382,7 @@ export function InvoiceDetailPage() {
                 <tr key={line.key}>
                   <td>
                     {line.orderNumber && <code className="inv-line-order">{line.orderNumber}</code>}
+                    {line.dossierNumber && <code className="inv-line-order">{line.dossierNumber}</code>}
                     <input value={line.description} onChange={(e) => setLine(line.key, { description: e.target.value })} disabled={busy} maxLength={500} />
                   </td>
                   <td>
@@ -428,7 +432,7 @@ export function InvoiceDetailPage() {
             onClick={() =>
               setLines((rows) => [
                 ...rows,
-                { key: `l-${++lineKey}`, id: null, orderNumber: null, description: '', quantity: 1, unitPrice: 0, vatRatePercent: 21, salesCategoryId: null },
+                { key: `l-${++lineKey}`, id: null, orderNumber: null, dossierNumber: null, description: '', quantity: 1, unitPrice: 0, vatRatePercent: 21, salesCategoryId: null },
               ])
             }
             disabled={busy}
@@ -470,7 +474,9 @@ export function InvoiceDetailPage() {
                       <button type="button" className="inv-link" onClick={() => navigate(`/transport-orders/${line.transportOrderId}`)}>
                         {line.orderNumber}
                       </button>
-                    )}{' '}
+                    )}
+                    {/* Activity line: the DTO carries no dossierId, so the number is a label, not a link. */}
+                    {line.dossierNumber && <code className="inv-line-order">{line.dossierNumber}</code>}{' '}
                     {line.customerDescription ?? line.description}
                     {line.customerDescription
                       && line.customerDescription !== line.description

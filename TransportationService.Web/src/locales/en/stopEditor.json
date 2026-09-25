@@ -1,0 +1,74 @@
+{
+  "address": {
+    "search": "Search address",
+    "name": "Location name",
+    "street": "Street + no.",
+    "overridden": "Differs from the address book — for this dossier only",
+    "unlink": "Unlink",
+    "save": "Also save the address in the customer file",
+    "saveHelp": "Without this option the address is stored with this dossier only.",
+    "duplicatesTitle": "This address may already exist:",
+    "duplicatesUse": "Use this address"
+  },
+  "search": {
+    "placeholder": "Search by name, street, postal code or city",
+    "placeholderLinked": "Search another address…",
+    "searching": "Searching…",
+    "failed": "The search failed. You can simply enter the address yourself.",
+    "noResults": "No known address found — enter the address freely."
+  },
+  "postalCode": {
+    "BE": "A Belgian postal code has 4 digits.",
+    "NL": "A Dutch postal code has 4 digits and 2 letters (1234 AB).",
+    "FR": "A French postal code has 5 digits.",
+    "DE": "A German postal code has 5 digits.",
+    "LU": "A Luxembourg postal code has 4 digits."
+  },
+  "site": {
+    "legend": "Site address",
+    "date": "Date of the work",
+    "endDate": "End date",
+    "endManual": "End set manually.",
+    "endAuto": "Calculate automatically",
+    "endFollows": "The end follows automatically: start + {hours} h.",
+    "endNoDuration": "The end follows automatically once the start and the planned duration are known.",
+    "endNextDay": "Ends on {date}."
+  },
+  "stopType": {
+    "Site": "Site"
+  },
+  "validation": {
+    "postalCodeLabel": "Stop {number} — postal code",
+    "siteAddressLabel": "Site address",
+    "siteAddressMessage": "Choose an existing address or enter a city or an address for the site.",
+    "siteOnlyLabel": "Stops",
+    "siteOnlyMessage": "On-site lifting only has a site address — no loading or unloading stops.",
+    "siteStopLabel": "Site address",
+    "siteStopMessage": "Enter the site address.",
+    "workDescriptionLabel": "Description of the work",
+    "workDescriptionMessage": "Describe the work to be done on site."
+  },
+  "crane": {
+    "kindLegend": "Kind of crane job",
+    "kindTransport": "Transport with crane",
+    "kindOnSite": "On-site lifting",
+    "onSiteHint": "On-site lifting: one site address and a description of the work — no loading or unloading address and no goods.",
+    "workDescription": "Description of the work",
+    "workDescriptionHint": "What has to be done on site? E.g. 'Place an air-conditioning unit on the roof'.",
+    "duration": "Planned duration (hours)",
+    "durationHint": "E.g. 1.5 = 90 minutes. The end follows from start + duration.",
+    "durationReadOnly": "Planned duration: {hours} h — change it on the activity.",
+    "durationUnknown": "No planned duration yet — set it on the activity to calculate the end automatically.",
+    "liftTitle": "Technical lift data (optional)",
+    "liftNote": "Describes the load to be lifted — these are not goods to be transported.",
+    "liftWeight": "Load weight (kg)",
+    "liftDimensions": "Load dimensions",
+    "liftRadius": "Lifting radius (m)",
+    "liftHeight": "Lifting height (m)",
+    "liftConditions": "Conditions",
+    "liftEquipment": "Lifting equipment",
+    "switchTitle": "Change the kind of crane job?",
+    "switchMessage": "The filled-in stops of the current kind will be removed. Continue?",
+    "switchConfirm": "Change"
+  }
+}

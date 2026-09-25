@@ -51,7 +51,10 @@ public record InvoiceLineDto(
     /// Send will freeze into <see cref="Description"/> (same rule, see InvoiceLineDescriptions);
     /// after Send it equals <see cref="Description"/>.
     /// </summary>
-    string? CustomerDescription = null);
+    string? CustomerDescription = null,
+    /// <summary>The standalone dossier activity this line bills (traceability); null otherwise.</summary>
+    Guid? DossierActivityId = null,
+    string? DossierNumber = null);
 
 public record InvoiceDetailDto(
     Guid Id,
@@ -107,6 +110,29 @@ public record UninvoicedOrderDto(
     /// <summary>Semicolon-separated reason codes when ReviewRequired (e.g. pricing.stale;pod.missing).</summary>
     string? InvoiceReadinessReasons = null);
 
+/// <summary>
+/// Closure sprint 2026-09-23: a priced STANDALONE dossier activity (no linked order) of the
+/// customer that is not yet on a live invoice — the activity-side twin of
+/// <see cref="UninvoicedOrderDto"/> for the invoice builder.
+/// </summary>
+public record UninvoicedActivityDto(
+    Guid Id,
+    Guid DossierId,
+    string DossierNumber,
+    string? DossierTitle,
+    string ActivityTypeName,
+    string? Label,
+    DateOnly? PlannedDate,
+    /// <summary>The agreed total (OneOff amount or the sum of the price lines); € 0 only when explicitly free.</summary>
+    decimal AgreedPrice,
+    /// <summary>Explicitly confirmed free (€ 0 by decision): invoiced as an explicit zero line.</summary>
+    bool IsFree,
+    /// <summary>"OneOff" or "Lines" — how many invoice lines the activity will produce.</summary>
+    string PricingSource,
+    int PriceLineCount,
+    /// <summary>The dossier's issuing entity; null when the dossier has none (invoiceable under any entity).</summary>
+    Guid? LegalEntityId = null);
+
 public record ManualInvoiceLineInput(
     string Description,
     decimal Quantity,
@@ -125,7 +151,9 @@ public record CreateInvoiceRequest(
     Guid? LegalEntityId = null,
     int? InvoicePeriodYear = null,
     int? InvoicePeriodMonth = null,
-    string? PurchaseOrderNumber = null);
+    string? PurchaseOrderNumber = null,
+    /// <summary>Standalone dossier activities to bill (see <see cref="UninvoicedActivityDto"/>); null = none.</summary>
+    IReadOnlyList<Guid>? DossierActivityIds = null);
 
 public record UpdateInvoiceRequest(
     DateOnly InvoiceDate,

@@ -16,6 +16,9 @@ import { activityTypeIcon, DEFAULT_ACTIVITY_TYPE_ICON } from '../activityTypeIco
 import { createDossierFast } from '../api/dossiersApi'
 import { createTransportOrder } from '../../transport-orders/api/transportOrdersApi'
 import { RouteSection } from '../../transport-orders/components/sections/RouteSection'
+import { CraneJobKindField, OnSiteWorkFields } from '../../transport-orders/components/sections/CraneJobFields'
+import { applyStopPatch, parseDurationHours, withAutoPlannedEnd } from '../../transport-orders/utils/plannedEnd'
+import type { CraneJobKind } from '../../transport-orders/types'
 import { GoodsSection } from '../../transport-orders/components/sections/GoodsSection'
 import { useOrderFormData } from '../../transport-orders/components/sections/useOrderFormData'
 import { useStopMutation } from '../../transport-orders/components/sections/useStopMutation'
@@ -27,14 +30,18 @@ import {
   applyUnitToCargoRow,
   cargoRowFromHeader,
   computeCargoSummary,
+  duplicateCargoRowInList,
   emptyCargoRow,
+  emptyCraneJob,
   emptyStop,
   fieldErrorMap,
+  isCraneJobTouched,
   isEmptyCargoRow,
   isEmptyStopRow,
   remapCargoStopIndices,
   validateOrderForm,
   type CargoFormRow,
+  type CraneJobFormValues,
   type OrderFormValidationError,
   type OrderFormValues,
   type StopFormRow,
@@ -98,6 +105,12 @@ export function NewDossierPage() {
   // legacy header-inputs-vs-lines duality never appears on a brand new dossier.
   const [cargoItems, setCargoItems] = useState<CargoFormRow[]>(() => [emptyCargoRow()])
   const mutateStops = useStopMutation(stops, setStops, setCargoItems)
+  // D2 — hijswerk op locatie: ONE work-site stop with its own list, so switching the kind of
+  // crane job back and forth never touches (or loses) the loading/unloading stops. Goods lines
+  // never link to a site stop, hence the inert cargo setter.
+  const [craneJob, setCraneJob] = useState<CraneJobFormValues>(() => emptyCraneJob('TransportWithCrane'))
+  const [siteStops, setSiteStops] = useState<StopFormRow[]>(() => [emptyStop('Site')])
+  const mutateSiteStops = useStopMutation(siteStops, setSiteStops, () => undefined)
   const [quickCreate, setQuickCreate] = useState<{ name: string; resolve: (created: LocationOption | null) => void } | null>(null)
 
   const { customers, serviceOptions, unitMaster, locationHours, customerConfig } = useOrderFormData(customerId ?? '', stops)
@@ -134,6 +147,10 @@ export function NewDossierPage() {
   const showDuration = showTransportIntake && Boolean(selectedType?.allowsDuration)
   const durationValue = showDuration && durationHours.trim() !== '' ? Number(durationHours.replace(',', '.')) : null
   const durationInvalid = durationValue !== null && (!Number.isFinite(durationValue) || durationValue < 0)
+  // Capability flag of the activity type — never a type code — decides whether the kind of crane
+  // job can be chosen at all.
+  const supportsOnSiteWork = showTransportIntake && Boolean(selectedType?.supportsOnSiteWork)
+  const onSite = supportsOnSiteWork && craneJob.kind === 'OnSiteLifting'
 
   const routeTouched = stops.some((stop) => !isEmptyStopRow(stop))
   // Every order field the intake renders counts: anything the user typed or ticked must go
@@ -145,7 +162,9 @@ export function NewDossierPage() {
     weightKg.trim() !== '' || volumeM3.trim() !== '' || palletCount.trim() !== '' ||
     distanceKm.trim() !== '' || loadingMeters.trim() !== '' ||
     adrRequired || plateauRequired || moffettRequired || isReturnMovement || craneRequired !== craneImplied
-  const intakeTouched = routeTouched || goodsTouched || durationValue !== null
+  const siteTouched = siteStops.some((stop) => !isEmptyStopRow(stop)) || isCraneJobTouched(craneJob)
+  // An on-site job has no route and no goods of its own: only the site, the work and the duration count.
+  const intakeTouched = onSite ? siteTouched || durationValue !== null : routeTouched || goodsTouched || durationValue !== null
 
   const derivedFromCargo = cargoItems.length > 0
   const cargoSummary = derivedFromCargo ? computeCargoSummary(cargoItems, unitOptions) : null
@@ -198,17 +217,52 @@ export function NewDossierPage() {
       extraTimeHourlyRateOverride: '',
       extraTimeRoundingStepMinutes: '',
       extraTimeMinimumBillableMinutes: '',
+      // Only a type with the on-site capability owns the crane-job fields; every other type
+      // submits nothing about them (server default: None).
+      craneJob: supportsOnSiteWork ? craneJob : undefined,
     }),
     [
       customerId, customerReference, dossierDate, goodsDescription, quantity, quantityUnitCode,
       weightKg, volumeM3, palletCount, distanceKm, loadingMeters, adrRequired, craneRequired,
       plateauRequired, moffettRequired, isReturnMovement, notes, stops, cargoItems, serviceOptions,
+      supportsOnSiteWork, craneJob,
     ],
   )
-  const inlineErrors = fieldErrorMap(clientErrors)
+  // Client validation first; a SERVER refusal that names a stop ("stops[1].saveToAddressBook") is
+  // shown on that stop too, re-indexed from the submitted list (empty rows dropped) to the shown one.
+  const shownStops = onSite ? siteStops : stops
+  const submittedStops = onSite ? siteStops : stops.filter((stop) => !isEmptyStopRow(stop))
+  const serverStopErrors = Object.fromEntries(
+    Object.entries(fieldErrors)
+      .filter(([field, messages]) => field.startsWith('stops[') && messages.length > 0)
+      .map(([field, messages]) => [
+        field.replace(/^stops[(d+)]/, (match, index: string) => {
+          const position = shownStops.indexOf(submittedStops[Number(index)])
+          return position >= 0 ? `stops[${position}]` : match
+        }),
+        messages[0],
+      ]),
+  )
+  const inlineErrors = { ...serverStopErrors, ...fieldErrorMap(clientErrors) }
 
   function setStop(key: string, patch: Partial<StopFormRow>) {
-    mutateStops((rows) => rows.map((row) => (row.key === key ? { ...row, ...patch } : row)))
+    // One patch path for both lists: for a site stop it also keeps the end time predictable
+    // (automatic = start + duration until the planner types an end of their own).
+    const apply = (rows: StopFormRow[]) =>
+      rows.map((row) => (row.key === key ? applyStopPatch(row, patch, parseDurationHours(durationHours)) : row))
+    if (onSite) mutateSiteStops(apply)
+    else mutateStops(apply)
+  }
+
+  /** The planned duration drives the automatic end of the site stop — recomputed right here, no effect. */
+  function changeDuration(text: string) {
+    setDurationHours(text)
+    mutateSiteStops((rows) => rows.map((row) => withAutoPlannedEnd(row, parseDurationHours(text))))
+  }
+
+  function changeCraneJobKind(kind: CraneJobKind) {
+    setCraneJob((job) => ({ ...job, kind }))
+    setClientErrors([])
   }
 
   function setCargo(key: string, patch: Partial<CargoFormRow>) {
@@ -308,7 +362,18 @@ export function NewDossierPage() {
     // so cargo keeps pointing at the SAME stop rows (the backend links by position).
     const effectiveStops = stops.filter((stop) => !isEmptyStopRow(stop))
     const effectiveCargo = remapCargoStopIndices(cargoItems, stops, effectiveStops).filter((cargo) => !isEmptyCargoRow(cargo))
-    const submitValues: OrderFormValues = { ...values, stops: effectiveStops, cargoItems: effectiveCargo }
+    // D2 — hijswerk op locatie: the work site is the ONLY stop and nothing is transported, so no
+    // goods (lines, header summary or description) and no fictitious loading/unloading stop go out.
+    const submitValues: OrderFormValues = onSite
+      ? {
+          ...values,
+          stops: siteStops,
+          cargoItems: [],
+          goodsDescription: '', quantity: '', quantityUnitCode: null, weightKg: '', volumeM3: '', palletCount: '',
+          distanceKm: '', loadingMeters: '',
+          adrRequired: false, plateauRequired: false, moffettRequired: false, isReturnMovement: false,
+        }
+      : { ...values, stops: effectiveStops, cargoItems: effectiveCargo }
 
     const validationErrors = validateOrderForm(submitValues)
     if (durationInvalid) {
@@ -484,10 +549,15 @@ export function NewDossierPage() {
                   </Button>
                 )}
               </div>
+              {supportsOnSiteWork && (
+                <CraneJobKindField idPrefix="nd" kind={craneJob.kind} onChange={changeCraneJobKind} disabled={busy} />
+              )}
               <p className="new-dossier-hint">
-                {isDistribution ? t('dossiers.new.routeHintDistribution') : t('dossiers.new.routeHintDirect')}
+                {onSite
+                  ? t('stopEditor.crane.onSiteHint')
+                  : isDistribution ? t('dossiers.new.routeHintDistribution') : t('dossiers.new.routeHintDirect')}
               </p>
-              {showDuration && (
+              {showDuration && !onSite && (
                 <div className="new-dossier-row">
                   <FormField
                     label={t('dossiers.new.durationLabel')}
@@ -501,7 +571,7 @@ export function NewDossierPage() {
                       min={0}
                       step="0.25"
                       value={durationHours}
-                      onChange={(event) => setDurationHours(event.target.value)}
+                      onChange={(event) => changeDuration(event.target.value)}
                       disabled={busy}
                       aria-invalid={durationInvalid ? true : undefined}
                     />
@@ -509,7 +579,9 @@ export function NewDossierPage() {
                 </div>
               )}
               <RouteSection
-                stops={stops}
+                stops={onSite ? siteStops : stops}
+                canSaveToAddressBook={canCreateLocations && Boolean(customerId)}
+                siteDurationHours={durationInvalid ? null : durationValue}
                 customerId={customerId ?? ''}
                 saving={busy}
                 locationHours={locationHours}
@@ -530,8 +602,40 @@ export function NewDossierPage() {
                   isDistribution && stop.stopType === 'Unloading' && stops.filter((s) => s.stopType === 'Unloading').length > 1
                 }
               />
+              {onSite && (
+                <OnSiteWorkFields
+                  idPrefix="nd"
+                  job={craneJob}
+                  onChange={(patch) => setCraneJob((job) => ({ ...job, ...patch }))}
+                  disabled={busy}
+                  descriptionError={inlineErrors.workDescription}
+                  duration={
+                    <div className="new-dossier-row">
+                      <FormField
+                        label={t('stopEditor.crane.duration')}
+                        htmlFor="nd-duration"
+                        hint={t('stopEditor.crane.durationHint')}
+                        error={durationInvalid ? t('dossiers.new.durationInvalid') : undefined}
+                      >
+                        <input
+                          id="nd-duration"
+                          type="number"
+                          min={0}
+                          step="0.25"
+                          value={durationHours}
+                          onChange={(event) => changeDuration(event.target.value)}
+                          disabled={busy}
+                          aria-invalid={durationInvalid ? true : undefined}
+                        />
+                      </FormField>
+                    </div>
+                  }
+                />
+              )}
             </section>
 
+            {/* An on-site lifting job transports nothing: no goods section, and none is required. */}
+            {!onSite && (
             <section className="new-dossier-section" aria-labelledby="nd-sectie-goederen">
               <h2 id="nd-sectie-goederen">{t('dossiers.new.sectionGoods')}</h2>
               <GoodsSection
@@ -577,12 +681,14 @@ export function NewDossierPage() {
                   ])
                 }
                 onRemoveCargoRow={(key) => setCargoItems((rows) => rows.filter((row) => row.key !== key))}
+                onDuplicateCargoRow={(key) => setCargoItems((rows) => duplicateCargoRowInList(rows, key))}
                 applyCargoUnit={applyCargoUnit}
                 cargoDimensionsFixed={cargoDimensionsFixed}
                 saving={busy}
                 errors={inlineErrors}
               />
             </section>
+            )}
 
             <section className="new-dossier-section" aria-labelledby="nd-sectie-opmerkingen">
               <h2 id="nd-sectie-opmerkingen">{t('dossiers.new.sectionNotes')}</h2>

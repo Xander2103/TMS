@@ -147,6 +147,8 @@ export interface TripDetail {
   vehicleLicensePlate: string | null
   trailerId: string | null
   trailerNumber: string | null
+  /** `Trip.VehicleSelectionSource` (D1): how the vehicle was chosen; null/absent = legacy, treated as Manual. */
+  vehicleSelectionSource?: 'Suggested' | 'Manual' | null
   plannedStart: string | null
   plannedEnd: string | null
   plannedDistanceKm: number | null
@@ -173,6 +175,8 @@ export interface TripInput {
   orderIds: string[]
   plannedDistanceKm: number | null
   plannedEmptyKm: number | null
+  /** Only ever set through `withVehicleSelectionSource` (planning/vehicleSelection.ts). */
+  vehicleSelectionSource?: 'Suggested' | 'Manual' | null
   /** Version loaded with the trip; omit only when creating. */
   version?: string
 }

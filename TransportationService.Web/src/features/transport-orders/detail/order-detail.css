@@ -192,7 +192,7 @@
 
 .tod-subnav {
   position: sticky;
-  top: 0;
+  top: var(--app-sticky-top, 0px);
   z-index: 5;
   background: var(--bg);
   border-bottom: 1px solid var(--border);
@@ -206,6 +206,8 @@
   display: flex;
   gap: 4px;
   overflow-x: auto;
+  /* The links' -1px margin overflows by a pixel; without this the strip grows a vertical scrollbar. */
+  overflow-y: hidden;
   scrollbar-width: thin;
 }
 

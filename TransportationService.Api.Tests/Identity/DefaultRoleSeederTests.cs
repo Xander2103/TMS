@@ -767,7 +767,7 @@ public class DefaultRoleSeederTests
 
         var state = await db.Context.RoleTemplateStates.SingleAsync(s => s.TenantId == tenantId);
         Assert.Equal(DefaultRoleUpgrades.CurrentVersion, state.AppliedVersion);
-        Assert.Equal(33, DefaultRoleUpgrades.CurrentVersion);
+        Assert.Equal(34, DefaultRoleUpgrades.CurrentVersion);
 
 
         var roles = await db.Context.Roles.Where(r => r.TenantId == tenantId).ToListAsync();
@@ -860,5 +860,21 @@ public class DefaultRoleSeederTests
         Assert.Equal(2, await db.Context.RoleTemplateStates.CountAsync());
         Assert.True(await db.Context.Roles.AnyAsync(r => r.TenantId == tenantB && r.TemplateCode == "planner"));
         Assert.Null((await db.Context.Roles.SingleAsync(r => r.Id == customB.Id)).TemplateCode);
+    }
+    /// <summary>Confirmation sprint 2026-09-23: reopening a confirmed dossier is an explicit right.</summary>
+    [Fact]
+    public async Task Version34_GrantsDossiersReopen_ToPlannerAndManagement_NotDispatcher()
+    {
+        var (db, tenantId) = await SeedTenantWithCatalogAsync();
+        using var _ = db;
+
+        await DefaultRoleSeeder.SyncAsync(db.Context);
+
+        var roles = await db.Context.Roles.Where(r => r.TenantId == tenantId).ToListAsync();
+        Guid RoleId(string code) => roles.Single(r => r.TemplateCode == code).Id;
+        Assert.Contains(PermissionCodes.DossiersReopen, await CodesOfAsync(db, RoleId("planner")));
+        Assert.Contains(PermissionCodes.DossiersReopen, await CodesOfAsync(db, RoleId("management")));
+        Assert.DoesNotContain(PermissionCodes.DossiersReopen, await CodesOfAsync(db, RoleId("dispatcher")));
+        Assert.DoesNotContain(PermissionCodes.DossiersReopen, await CodesOfAsync(db, RoleId("boekhouding")));
     }
 }

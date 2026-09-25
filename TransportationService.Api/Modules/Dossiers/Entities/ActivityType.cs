@@ -39,6 +39,13 @@ public class ActivityType : AuditableTenantEntity
     public bool AllowsDuration { get; set; }
 
     /// <summary>
+    /// Master sprint 2026-09-21 (D2): true → an order of this activity may be on-site work
+    /// (<c>CraneJobKind.OnSiteLifting</c>: site stop + work description instead of goods and a
+    /// loading/unloading route). Requires <see cref="HasStops"/> to mean anything.
+    /// </summary>
+    public bool SupportsOnSiteWork { get; set; }
+
+    /// <summary>
     /// True → the activity is a commercial unit: it carries a sales price (via its linked order
     /// for HasStops types, via its own <see cref="DossierActivityPricing"/> otherwise), counts in
     /// the dossier's pricing completeness and gets pricing attention items. False marks internal,

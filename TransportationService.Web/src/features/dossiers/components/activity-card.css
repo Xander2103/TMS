@@ -1,0 +1,88 @@
+/* §16 activity card: header + compact info grid. Tokens from styles/global.css. */
+
+li.dossier-activity-card,
+li.dossier-activity-card * {
+  box-sizing: border-box;
+}
+
+/* The base rule lays the card out as one row; the card now stacks header, info, hints and notes. */
+li.dossier-activity-card {
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-2);
+  border-left: 3px solid var(--accent-border);
+}
+
+li.dossier-activity-card.is-highlighted {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-bg);
+}
+
+.dossier-activity-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.dossier-activity-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-shrink: 0;
+}
+
+/* Two columns on desktop (label left, value right in each cell), stacked on a phone. */
+.dossier-activity-info {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-1) var(--space-5);
+  margin: 0;
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--border);
+}
+
+.dossier-activity-info > div {
+  display: grid;
+  grid-template-columns: minmax(0, 9rem) minmax(0, 1fr);
+  gap: var(--space-2);
+  align-items: baseline;
+  min-width: 0;
+}
+
+.dossier-activity-info dt {
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+}
+
+.dossier-activity-info dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--text-h);
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.dossier-activity-info dd.is-missing {
+  color: var(--text-muted);
+}
+
+.dossier-activity-shared {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--warning);
+}
+
+@media (max-width: 640px) {
+  .dossier-activity-info {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dossier-activity-head {
+    align-items: flex-start;
+  }
+}

@@ -189,14 +189,14 @@ public class DossierServiceTests
         await h.Db.Context.SaveChangesAsync();
 
         var blocked = await Assert.ThrowsAsync<DomainValidationException>(
-            () => sut.CloseAsync(dossier.Id, CancellationToken.None));
+            () => DossierTestLifecycle.CloseAsync(h.Db.Context, h.TenantId, dossier.Id));
         Assert.Contains("open incident", blocked.Message);
 
         var incident = h.Db.Context.Incidents.Single();
         incident.Status = IncidentStatus.Resolved;
         await h.Db.Context.SaveChangesAsync();
 
-        var closed = await sut.CloseAsync(dossier.Id, CancellationToken.None);
+        var closed = await DossierTestLifecycle.CloseAsync(h.Db.Context, h.TenantId, dossier.Id);
         Assert.Equal("Closed", closed!.Status);
         Assert.NotNull(closed.ClosedAt);
         Assert.Equal(250m, closed.Financials.EstimatedIncidentCost);
@@ -206,7 +206,7 @@ public class DossierServiceTests
         await Assert.ThrowsAsync<DomainValidationException>(
             () => sut.LinkOrderAsync(dossier.Id, new LinkDossierOrderRequest(h.OrderId), CancellationToken.None));
 
-        var reopened = await sut.ReopenAsync(dossier.Id, CancellationToken.None);
+        var reopened = await DossierTestLifecycle.ReopenAsync(h.Db.Context, h.TenantId, dossier.Id);
         Assert.Equal("Open", reopened!.Status);
         Assert.Null(reopened.ClosedAt);
         Assert.NotNull(await sut.UpdateAsync(dossier.Id, new SaveDossierRequest("Nieuwe titel"), CancellationToken.None));
@@ -234,7 +234,7 @@ public class DossierServiceTests
         await h.Db.Context.SaveChangesAsync();
         await sut.CreateAsync(new SaveDossierRequest("Retourproject", CustomerId: h.CustomerId), CancellationToken.None);
         var toClose = await sut.CreateAsync(new SaveDossierRequest("Afgerond werk", CustomerId: otherCustomerId), CancellationToken.None);
-        await sut.CloseAsync(toClose.Id, CancellationToken.None);
+        await DossierTestLifecycle.CloseAsync(h.Db.Context, h.TenantId, toClose.Id);
 
         Assert.Equal(2, (await sut.ListAsync(null, null, null, CancellationToken.None)).Count);
         Assert.Single(await sut.ListAsync(null, "Open", null, CancellationToken.None));

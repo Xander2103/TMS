@@ -1,0 +1,78 @@
+{
+  "noPriceSet": "Nog geen verkoopprijs ingesteld.",
+  "notPricedYet": "Nog niet geprijsd",
+  "free": "Gratis",
+  "addLine": "+ Verkooplijn toevoegen",
+  "status": {
+    "NotPriced": "Niet geprijsd",
+    "PartiallyPriced": "Gedeeltelijk geprijsd",
+    "Priced": "Geprijsd",
+    "Free": "Gratis"
+  },
+  "picker": {
+    "itemWithOrder": "{number} — {name}",
+    "lockedWhileDirty": "Sla de verkooplijnen op of maak de wijzigingen ongedaan om van activiteit te wisselen."
+  },
+  "summary": {
+    "toPrice": "Nog te prijzen:",
+    "partial": "{name} (gedeeltelijk)",
+    "legacyOrders": "Gekoppelde opdrachten zonder activiteit"
+  },
+  "activity": {
+    "readOnlyNoPermission": "Je hebt geen recht om activiteitprijzen te wijzigen.",
+    "readOnlyClosed": "Het dossier is afgesloten; de prijs is alleen-lezen.",
+    "freeConfirmed": "Deze activiteit is bevestigd als gratis (€ 0).",
+    "linesTitle": "Verkooplijnen",
+    "noLines": "Nog geen verkooplijnen.",
+    "colLabel": "Omschrijving",
+    "colQuantity": "Aantal",
+    "colUnit": "Eenheid",
+    "colUnitPrice": "Eenheidsprijs (€)",
+    "colAmount": "Bedrag",
+    "colActions": "Acties",
+    "rowLabel": "Omschrijving lijn {index}",
+    "rowQuantity": "Aantal lijn {index}",
+    "rowUnit": "Eenheid lijn {index}",
+    "rowUnitPrice": "Eenheidsprijs lijn {index}",
+    "moveUp": "Lijn {index} omhoog",
+    "moveDown": "Lijn {index} omlaag",
+    "removeRow": "Lijn {index} verwijderen",
+    "previewHint": "De bedragen zijn een voorbeeld (aantal × eenheidsprijs). Na het opslaan gelden de bedragen en het totaal van de server.",
+    "subtotal": "Subtotaal",
+    "previewSubtotal": "Voorlopig subtotaal (voorbeeld)",
+    "saveLines": "Verkooplijnen opslaan",
+    "discard": "Wijzigingen ongedaan maken",
+    "linesSaved": "Verkooplijnen opgeslagen.",
+    "linesSaveFailed": "De verkooplijnen konden niet worden opgeslagen.",
+    "labelRequired": "Lijn {index}: een omschrijving is verplicht.",
+    "quantityInvalid": "Lijn {index}: geef een aantal groter dan nul op.",
+    "unitPriceInvalid": "Lijn {index}: geef een geldige eenheidsprijs op (0 of meer).",
+    "noRowsToSave": "Voeg minstens één verkooplijn toe, of gebruik \"Prijs verwijderen\" om de prijs te wissen.",
+    "conflict": "Deze prijs is intussen gewijzigd door een collega. De nieuwste versie is geladen; je niet-opgeslagen lijnen staan er nog. Controleer ze en sla opnieuw op.",
+    "conflictReloadFailed": "Deze prijs is intussen gewijzigd door een collega. Je niet-opgeslagen lijnen staan er nog; herlaad het dossier en sla daarna opnieuw op.",
+    "useFlat": "Vaste prijs gebruiken",
+    "flatReplacesLines": "Een vaste prijs opslaan vervangt de verkooplijnen van deze activiteit.",
+    "linesReplaceFlat": "Verkooplijnen opslaan vervangt de vaste prijs: het totaal van de lijnen wordt de prijs van deze activiteit.",
+    "confirmFree": "Deze activiteit is gratis (€ 0) — bevestigen",
+    "confirmFreeTitle": "Activiteit als gratis bevestigen",
+    "confirmFreeMessage": "De bestaande prijs en alle verkooplijnen van deze activiteit worden verwijderd. De activiteit wordt bevestigd als gratis (€ 0).",
+    "confirmFreeAction": "Als gratis bevestigen",
+    "freeSaved": "Activiteit bevestigd als gratis.",
+    "removePrice": "Prijs verwijderen",
+    "removePriceMessage": "De prijs en alle verkooplijnen van deze activiteit worden verwijderd. De activiteit is daarna niet geprijsd.",
+    "priceRemoved": "Prijs verwijderd.",
+    "actionFailed": "De prijs kon niet worden bijgewerkt."
+  },
+  "goodsLink": {
+    "label": "Heeft betrekking op goederen",
+    "hint": "Optioneel. Niets aangevinkt = de lijn geldt voor de hele rit of activiteit.",
+    "linked": "Goederen: {goods}",
+    "noReasonNeeded": "Niet nodig wanneer je alleen de goederenkoppeling wijzigt."
+  },
+  "goodsCoverage": {
+    "title": "Prijsdekking goederen",
+    "colGoods": "Goederenlijn",
+    "colCoverage": "Prijsdekking",
+    "includedHint": "Een goederenlijn die inbegrepen is in een vaste rit- of activiteitprijs wordt niet afzonderlijk gefactureerd."
+  }
+}

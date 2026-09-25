@@ -1,0 +1,144 @@
+{
+  "levels": {
+    "dossier": "Dossier (algemeen)",
+    "dossierShort": "Dossier"
+  },
+  "summary_one": "{count} document in dit dossier",
+  "summary_other": "{count} documenten in dit dossier",
+  "loading": "Documenten laden…",
+  "loadFailed": "De documenten konden niet worden geladen.",
+  "retry": "Opnieuw proberen",
+  "downloadFailed": "Het document kon niet worden gedownload.",
+  "viewFailed": "Het document kon niet worden geopend.",
+  "viewBlocked": "De browser blokkeerde het nieuwe tabblad. Sta pop-ups toe of gebruik Downloaden.",
+  "fileMissing": "Bestand ontbreekt",
+  "sections": {
+    "dossier": "Algemene documenten",
+    "dossierHint": "Documenten van het volledige dossier. Ze zijn bij elke opdracht van dit dossier te raadplegen.",
+    "own": "Eigen documenten",
+    "ownHint": "Documenten die alleen bij opdracht {number} horen.",
+    "general": "Algemene documenten van het dossier",
+    "generalHint": "Dezelfde documenten als op dossierniveau, geen kopieën. Hier alleen bekijken en downloaden.",
+    "manageViaDossier": "Beheer via Dossier (algemeen)"
+  },
+  "empty": {
+    "dossier": "Nog geen algemene documenten bij dit dossier.",
+    "order": "Nog geen eigen documenten bij deze opdracht.",
+    "general": "Dit dossier heeft geen algemene documenten."
+  },
+  "columns": {
+    "title": "Titel",
+    "type": "Type",
+    "level": "Niveau",
+    "file": "Bestand",
+    "portal": "Klantportaal",
+    "actions": "Acties"
+  },
+  "actions": {
+    "view": "Bekijken: {title}",
+    "download": "Downloaden: {title}",
+    "attachFile": "Bestand toevoegen: {title}",
+    "visibility": "Zichtbaarheid aanpassen: {title}",
+    "move": "Verplaatsen: {title}",
+    "delete": "Verwijderen: {title}"
+  },
+  "visibility": {
+    "visible": "Zichtbaar voor klant",
+    "internal": "Intern",
+    "independent": "De zichtbaarheid voor de klant staat los van het niveau: een document wordt niet zichtbaar of intern door het te verplaatsen.",
+    "title": "Zichtbaarheid aanpassen",
+    "makeVisible": "Zichtbaar maken voor de klant",
+    "makeInternal": "Intern maken",
+    "confirmVisible": "De klant kan dit document daarna bekijken en downloaden in het klantportaal.",
+    "confirmInternal": "Het document verdwijnt uit het klantportaal en is alleen nog intern te raadplegen.",
+    "failed": "De zichtbaarheid kon niet worden aangepast.",
+    "nowVisible": "Het document is nu zichtbaar in het klantportaal.",
+    "nowInternal": "Het document is niet langer zichtbaar voor de klant."
+  },
+  "upload": {
+    "open": "Document uploaden",
+    "title": "Document uploaden",
+    "target": "Document koppelen aan",
+    "targetHint": "Een document van het volledige dossier is bij elke opdracht te raadplegen.",
+    "targetDossier": "Volledig dossier",
+    "targetOrder": "Opdracht {label}",
+    "type": "Documenttype",
+    "customType": "Eigen typenaam (optioneel)",
+    "file": "Bestand",
+    "fileHint": "PDF, JPG of PNG, maximaal 10 MB.",
+    "documentTitle": "Titel",
+    "customerVisible": "Zichtbaar voor de klant",
+    "customerVisibleHint": "Documenten zijn standaard intern. Vink dit alleen aan om het document in het klantportaal te tonen.",
+    "submit": "Uploaden",
+    "retry": "Bestand opnieuw uploaden",
+    "retryHint": "De documentgegevens staan al in het dossier. Kies zo nodig een ander bestand en probeer opnieuw, of verwijder het document.",
+    "closeWithoutFile": "Sluiten zonder bestand",
+    "removeCreated": "Document verwijderen",
+    "removed": "Het document zonder bestand is verwijderd.",
+    "success": "Document toegevoegd.",
+    "createFailed": "Het document kon niet worden aangemaakt.",
+    "fileFailed": "De documentgegevens zijn opgeslagen, maar het bestand is NIET geüpload: {reason}",
+    "fileFailedFallback": "Het bestand kon niet worden geüpload.",
+    "titleRequired": "Geef het document een titel.",
+    "fileRequired": "Kies een bestand.",
+    "fileProblem": {
+      "empty": "Het bestand is leeg.",
+      "tooLarge": "Het bestand is groter dan 10 MB.",
+      "unsupportedType": "Alleen PDF-, JPG- en PNG-bestanden zijn toegestaan."
+    }
+  },
+  "move": {
+    "title": "Document verplaatsen naar…",
+    "intro": "Kies het niveau waar \"{title}\" voortaan bij hoort.",
+    "legend": "Verplaatsen naar",
+    "current": "huidige locatie",
+    "explanation": "Het bestand zelf blijft hetzelfde: alleen de koppeling verandert. De zichtbaarheid voor de klant wijzigt niet.",
+    "confirm": "Verplaatsen",
+    "failed": "Het document kon niet worden verplaatst.",
+    "success": "Document verplaatst naar {level}."
+  },
+  "delete": {
+    "title": "Document verwijderen",
+    "confirmDossier": "Weet je zeker dat je \"{title}\" wilt verwijderen? Dit document is zichtbaar bij alle opdrachten van dit dossier en wordt overal verwijderd.",
+    "confirmOrder": "Weet je zeker dat je \"{title}\" wilt verwijderen? Dit document hoort alleen bij opdracht {number} en wordt definitief verwijderd.",
+    "confirm": "Verwijderen",
+    "success": "Document verwijderd.",
+    "failed": "Het document kon niet worden verwijderd."
+  },
+  "issued": {
+    "title": "Transportdocumenten",
+    "empty": "Nog geen transportdocument aangemaakt.",
+    "loadFailed": "De transportdocumenten konden niet worden geladen.",
+    "kind": {
+      "Cmr": "Vrachtbrief (CMR)",
+      "DeliveryNote": "Leveringsbon",
+      "WorkOrder": "Werkbon"
+    },
+    "kindLabel": "Soort document",
+    "externalNumber": "Extern / voorgedrukt nummer (optioneel)",
+    "externalNumberValue": "extern nr. {number}",
+    "issuedAt": "aangemaakt op {date}",
+    "issuedAtBy": "aangemaakt op {date} door {name}",
+    "pdfLabel": "PDF van {number} downloaden",
+    "pdfFailed": "De PDF kon niet worden gedownload.",
+    "create": {
+      "Cmr": "Vrachtbrief aanmaken",
+      "DeliveryNote": "Leveringsbon aanmaken",
+      "WorkOrder": "Werkbon aanmaken"
+    },
+    "success": "Transportdocument {number} aangemaakt.",
+    "failed": "Het transportdocument kon niet worden aangemaakt.",
+    "failedRetry": "{reason} Probeer opnieuw: een herhaalde poging levert nooit een tweede nummer op."
+  },
+  "activityStatus": {
+    "none": "Nog niet aangemaakt",
+    "several": {
+      "Cmr": "{count} vrachtbrieven",
+      "DeliveryNote": "{count} leveringsbonnen",
+      "WorkOrder": "{count} werkbonnen",
+      "Mixed": "{count} transportdocumenten"
+    },
+    "uploads_one": "{count} document",
+    "uploads_other": "{count} documenten"
+  }
+}
