@@ -44,7 +44,8 @@ export function DossierActivitiesSection({ addButtonRef }: { addButtonRef: Ref<H
                   </button>
                   <span className="db-row-main" title={order.goodsDescription ?? undefined}>
                     {order.orderDate} · {order.status}
-                    {order.agreedPrice !== null && <> · {euro(order.agreedPrice)}</>}
+                    {/* Provenance decides, never the number: an unpriced order with an engine 0 is not € 0,00. */}
+                    {order.agreedPrice !== null && order.isPriced !== false && <> · {euro(order.agreedPrice)}</>}
                   </span>
                   {ws.canManage && ws.isOpen && (
                     <Button variant="secondary" onClick={() => ws.unlinkOrder(order.orderId)} disabled={ws.busy}>

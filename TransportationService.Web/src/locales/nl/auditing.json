@@ -17,11 +17,13 @@
     "columns": {
       "timestamp": "Tijdstip",
       "action": "Actie",
-      "changes": "Wijziging"
+      "changes": "Wijziging",
+      "actor": "Door"
     },
     "before": "Voor:",
     "after": "Na:",
     "empty": "Nog geen historiek voor dit item.",
-    "loading": "Historiek laden…"
+    "loading": "Historiek laden…",
+    "system": "Systeem (automatisch)"
   }
 }

@@ -17,11 +17,13 @@
     "columns": {
       "timestamp": "Timestamp",
       "action": "Action",
-      "changes": "Change"
+      "changes": "Change",
+      "actor": "By"
     },
     "before": "Before:",
     "after": "After:",
     "empty": "No history for this item yet.",
-    "loading": "Loading history…"
+    "loading": "Loading history…",
+    "system": "System (automatic)"
   }
 }

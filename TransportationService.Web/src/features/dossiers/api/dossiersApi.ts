@@ -46,6 +46,7 @@ export interface SearchDossiersParams {
   vehicleId?: string
   licensePlate?: string
   trailerId?: string
+  transportTypeId?: string
   activityTypeId?: string
   loadingCity?: string
   unloadingCity?: string

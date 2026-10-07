@@ -216,9 +216,9 @@ public class DossierCustomerChangeService : IDossierCustomerChangeService
             : null;
 
         string? blocked = null;
-        if (dossier.Status == DossierStatus.Closed)
+        if (!DossierStateRules.IsEditable(dossier.Status))
         {
-            blocked = "Een gesloten dossier kan niet van klant wijzigen; heropen het dossier eerst.";
+            blocked = DossierStateRules.ReadOnlyMessage(dossier.Status, "van klant gewijzigd");
         }
         else if (dossier.CustomerId == newCustomerId)
         {

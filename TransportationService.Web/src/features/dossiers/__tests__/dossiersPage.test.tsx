@@ -1,13 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, waitFor, within } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import userEvent, { type UserEvent } from '@testing-library/user-event'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
+import { ApiError } from '../../../api/apiClient'
 import { DossiersPage } from '../pages/DossiersPage'
-import { weekRangeOf } from '../pages/dossierSearchParams'
+import { monthRangeOf } from '../pages/dossierSearchParams'
 import type { DossierConfirmationEvaluation, DossierListItem } from '../types'
 import { dossierDetail, dossierListItem } from './fixtures'
 
-const auth = vi.hoisted(() => ({ permissions: new Set<string>(['dossiers.view', 'dossiers.manage']) }))
+const auth = vi.hoisted(() => ({ permissions: new Set<string>() }))
 vi.mock('../../auth/authContextValue', () => ({
   useAuth: () => ({ hasPermission: (code: string) => auth.permissions.has(code) }),
 }))
@@ -20,6 +21,7 @@ const api = vi.hoisted(() => ({
   getDossierConfirmation: vi.fn(),
   confirmDossier: vi.fn(),
   cancelDossier: vi.fn(),
+  reopenDossier: vi.fn(),
 }))
 vi.mock('../api/dossiersApi', () => api)
 
@@ -29,12 +31,17 @@ const lookups = vi.hoisted(() => ({
   searchDrivers: vi.fn(),
   getVehicleOptions: vi.fn(),
   getTrailerOptions: vi.fn(),
+  getCountryOptions: vi.fn(),
 }))
 vi.mock('../../customers/api/customersApi', () => ({ searchCustomers: lookups.searchCustomers }))
 vi.mock('../api/activityTypesApi', () => ({ listActivityTypes: lookups.listActivityTypes }))
 vi.mock('../../drivers/api/driversApi', () => ({ searchDrivers: lookups.searchDrivers }))
 vi.mock('../../vehicles/api/vehiclesApi', () => ({ getVehicleOptions: lookups.getVehicleOptions }))
 vi.mock('../../trailers/api/trailersApi', () => ({ getTrailerOptions: lookups.getTrailerOptions }))
+vi.mock('../../reference/api/countriesApi', () => ({ getCountryOptions: lookups.getCountryOptions }))
+
+const SEARCH_PLACEHOLDER = 'Zoek op dossiernr., opdrachtnr., referentie, klant, chauffeur, kenteken of plaats…'
+const BASE = { page: 1, pageSize: 25 }
 
 function paged(items: DossierListItem[], totalCount = items.length) {
   return { items, totalCount, page: 1, pageSize: 25 }
@@ -94,9 +101,40 @@ async function findRow(number = 'DOS-0001'): Promise<HTMLElement> {
   return (await screen.findByText(number)).closest('tr')!
 }
 
+const filtersButton = () => screen.getByRole('button', { name: /^Filters( \(\d+\))?$/ })
+const queryPanel = () => screen.queryByRole('region', { name: 'Uitgebreide filters' })
+const chipList = () => screen.getByRole('list', { name: 'Actieve filters' })
+const chipTexts = () =>
+  within(chipList())
+    .getAllByRole('listitem')
+    .map((item) => item.querySelector('span')?.textContent)
+
+async function openPanel(user: UserEvent): Promise<HTMLElement> {
+  await user.click(filtersButton())
+  return screen.getByRole('region', { name: 'Uitgebreide filters' })
+}
+
+async function pickOption(user: UserEvent, panel: HTMLElement, label: string, option: string | RegExp) {
+  await user.click(within(panel).getByRole('combobox', { name: label }))
+  await user.click(await screen.findByRole('option', { name: option }))
+}
+
+async function openRowMenu(user: UserEvent, number = 'DOS-0001') {
+  const row = await findRow(number)
+  await user.click(within(row).getByRole('button', { name: `Acties ${number}` }))
+}
+
+const menuItems = () => screen.getAllByRole('menuitem').map((item) => item.textContent)
+
+async function expectLastSearch(params: Record<string, unknown>) {
+  await waitFor(() => {
+    expect(api.searchDossiers).toHaveBeenLastCalledWith({ ...params, ...BASE })
+  })
+}
+
 describe('DossiersPage (lijst)', () => {
   beforeEach(() => {
-    auth.permissions = new Set(['dossiers.view', 'dossiers.manage'])
+    auth.permissions = new Set(['dossiers.view', 'dossiers.manage', 'dossiers.reopen'])
     toast.showSuccess.mockReset()
     toast.showError.mockReset()
     api.searchDossiers.mockReset()
@@ -104,359 +142,998 @@ describe('DossiersPage (lijst)', () => {
     api.getDossierConfirmation.mockReset()
     api.confirmDossier.mockReset()
     api.cancelDossier.mockReset()
+    api.reopenDossier.mockReset()
     lookups.searchCustomers.mockResolvedValue({
       items: [
         { id: 'c-1', name: 'Nexans NV' },
         { id: 'c-2', name: 'Bekaert' },
+        { id: 'c-3', name: 'Van Caudenberg BV' },
       ],
-      totalCount: 2,
+      totalCount: 3,
       page: 1,
       pageSize: 200,
     })
-    lookups.listActivityTypes.mockResolvedValue([{ id: 'at-1', code: 'DIRECT', name: 'Direct transport', isActive: true }])
+    lookups.listActivityTypes.mockResolvedValue([
+      { id: 'at-1', code: 'KRAANTRANSPORT', name: 'Kraantransport', isActive: true, hasStops: true },
+      { id: 'at-2', code: 'KRAANWERK', name: 'Kraanwerk', isActive: true, hasStops: false },
+    ])
     lookups.searchDrivers.mockResolvedValue({ items: [{ id: 'dr-1', fullName: 'Jan Peeters' }], totalCount: 1, page: 1, pageSize: 200 })
     lookups.getVehicleOptions.mockResolvedValue([{ id: 'v-1', internalNumber: 'V01', licensePlate: '1-ABC-123', brand: null, model: null }])
-    lookups.getTrailerOptions.mockResolvedValue([])
-  })
-
-  it('vraagt de eerste pagina op zonder filters en toont de kolommen in volgorde', async () => {
-    renderPage()
-    await screen.findByRole('table')
-
-    expect(api.searchDossiers).toHaveBeenLastCalledWith({ page: 1, pageSize: 25 })
-    expect(headerTexts()).toEqual([
-      'Dossiernr.',
-      'Status',
-      'Klant',
-      'Referentie',
-      'Datum',
-      'Transport',
-      'Chauffeur / kenteken',
-      'Bevestigd',
-      'Prijs',
-      'Facturatie',
-      '', // rijacties
+    lookups.getTrailerOptions.mockResolvedValue([{ id: 'tr-1', internalNumber: 'OPL-3', licensePlate: 'Q-XYZ-987' }])
+    lookups.getCountryOptions.mockResolvedValue([
+      { code: 'BE', alpha3: 'BEL', name: 'België', isEuMember: true },
+      { code: 'FR', alpha3: 'FRA', name: 'Frankrijk', isEuMember: true },
     ])
-    expect(screen.queryByRole('columnheader', { name: /Verantwoordelijke/ })).toBeNull()
-    expect(screen.queryByRole('columnheader', { name: /Open incidenten/ })).toBeNull()
   })
 
-  it('toont de samenvattingen: transport, chauffeur/kenteken, bevestigingsdatum en facturatiestatus', async () => {
-    api.searchDossiers.mockResolvedValue(
-      paged([
-        dossierListItem({
-          status: 'Closed',
-          confirmedAt: '2026-09-20T10:00:00Z',
-          confirmationSource: 'Manual',
-          dossierDate: '2026-08-12',
-          firstLoadingCity: 'Antwerpen',
-          lastUnloadingCity: 'Gent',
-          orderCount: 2,
-          driverSummary: '2 chauffeurs',
-          vehicleSummary: '1-ABC-123',
-          invoiceStatus: 'Sent',
-        }),
-      ]),
-    )
-    renderPage()
-    const row = await findRow()
+  // ---- bovenbalk --------------------------------------------------------------------------------
 
-    expect(within(row).getByText('Antwerpen → Gent')).toBeInTheDocument()
-    expect(within(row).getByText('2 opdr.')).toBeInTheDocument()
-    expect(within(row).getByText('2 chauffeurs')).toBeInTheDocument()
-    expect(within(row).getByText('1-ABC-123')).toBeInTheDocument()
-    expect(within(row).getByText('Bevestigd')).toBeInTheDocument()
-    expect(within(row).getByText('20/09/2026')).toBeInTheDocument()
-    expect(within(row).getByText('12/08/2026')).toBeInTheDocument()
-    expect(within(row).getByText('Verzonden')).toBeInTheDocument()
-    expect(within(row).getByText('Nexans NV')).toBeInTheDocument()
-    expect(within(row).getByText('K-1001')).toBeInTheDocument()
-  })
+  describe('bovenbalk', () => {
+    it('toont [ zoeken ] [ status ] [ Filters ] en vraagt de eerste pagina op zonder filters', async () => {
+      renderPage()
+      await screen.findByRole('table')
 
-  it('toont — voor ontbrekende chauffeur, bevestiging en facturatie en een incidentbadge op het nummer', async () => {
-    api.searchDossiers.mockResolvedValue(
-      paged([
-        dossierListItem({
-          driverSummary: null,
-          vehicleSummary: null,
-          confirmedAt: null,
-          invoiceStatus: 'NotInvoiced',
-          openIncidentCount: 3,
-          customerReference: null,
-          agreedPriceTotal: null,
-        }),
-      ]),
-    )
-    renderPage()
-    const row = await findRow()
+      const search = screen.getByPlaceholderText(SEARCH_PLACEHOLDER)
+      const status = screen.getByRole('combobox', { name: 'Status' })
+      const toggle = screen.getByRole('button', { name: 'Filters' })
+      // Document order = visual order on desktop.
+      expect(search.compareDocumentPosition(status) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+      expect(status.compareDocumentPosition(toggle) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+      expect(within(status).getAllByRole('option').map((o) => o.textContent)).toEqual(['Alle statussen', 'Open', 'Bevestigd', 'Geannuleerd'])
+      expect(status).toHaveValue('')
 
-    const cells = within(row).getAllByRole('cell').map((cell) => cell.textContent?.trim())
-    // Kolommen: nummer, status, klant, referentie, datum, transport, chauffeur, bevestigd, prijs, facturatie, acties
-    expect(cells[3]).toBe('—')
-    expect(cells[6]).toBe('—')
-    expect(cells[7]).toBe('—')
-    expect(cells[8]).toBe('—')
-    expect(cells[9]).toBe('—')
-    expect(within(row).getByTitle('3 open incidenten')).toHaveTextContent('3')
-    expect(within(row).queryByText(/€\s0,00/)).toBeNull()
-  })
+      expect(api.searchDossiers).toHaveBeenLastCalledWith(BASE)
+      expect(screen.queryByRole('list', { name: 'Actieve filters' })).toBeNull()
+      expect(screen.queryByRole('button', { name: 'Filters wissen' })).toBeNull()
+    })
 
-  it('markeert een gedeeltelijk geprijsd dossier en een echte € 0,00 met ⚠', async () => {
-    api.searchDossiers.mockResolvedValue(
-      paged([
-        dossierListItem({ id: 'd-1', dossierNumber: 'DOS-0001', agreedPriceTotal: 450, billableActivityCount: 2, pricedActivityCount: 1 }),
-        dossierListItem({ id: 'd-2', dossierNumber: 'DOS-0002', agreedPriceTotal: 0, billableActivityCount: 1, pricedActivityCount: 1, zeroPricedActivityCount: 1 }),
-      ]),
-    )
-    renderPage()
-    const partial = await findRow('DOS-0001')
-    const zero = await findRow('DOS-0002')
+    it('zoekt server-side: de zoekterm gaat na de debounce naar searchDossiers', async () => {
+      const user = userEvent.setup()
+      const router = renderPage()
+      await screen.findByRole('table')
 
-    expect(within(partial).getByText(/€\s450,00/)).toBeInTheDocument()
-    expect(within(partial).getByText('1/2 geprijsd')).toHaveAttribute(
-      'title',
-      'Slechts 1 van 2 activiteiten hebben een prijs; het bedrag is geen dossiertotaal.',
-    )
-    expect(within(zero).getByText(/€\s0,00/)).toBeInTheDocument()
-    expect(within(zero).getByRole('img', { name: 'Verkoopprijs is € 0,00. Controleer of dit bewust is.' })).toHaveTextContent('⚠')
-  })
+      await user.type(screen.getByPlaceholderText(SEARCH_PLACEHOLDER), 'K-1001')
 
-  it('zoekt server-side: de zoekterm gaat na de debounce naar searchDossiers', async () => {
-    const user = userEvent.setup()
-    renderPage()
-    await screen.findByRole('table')
+      await expectLastSearch({ search: 'K-1001' })
+      expect(router.state.location.search).toBe('?search=K-1001')
+    })
 
-    const input = screen.getByPlaceholderText('Zoek op dossiernr., opdrachtnr., referentie, klant, chauffeur, kenteken of plaats…')
-    await user.type(input, 'K-1001')
+    it.each(['DOS-0001', 'Nexans', 'K-1001', 'ABC-458'])('geeft de zoekterm "%s" ongewijzigd door, samen met de actieve filters', async (term) => {
+      const user = userEvent.setup()
+      renderPage('/dossiers?status=Open&postalCode=2000')
+      await screen.findByRole('table')
 
-    await waitFor(() => {
-      expect(api.searchDossiers).toHaveBeenLastCalledWith({ search: 'K-1001', page: 1, pageSize: 25 })
+      await user.type(screen.getByPlaceholderText(SEARCH_PLACEHOLDER), term)
+
+      await expectLastSearch({ search: term, status: 'Open', postalCode: '2000' })
+    })
+
+    it.each([
+      ['Open', 'Open'],
+      ['Bevestigd', 'Closed'],
+      ['Geannuleerd', 'Cancelled'],
+    ])('status "%s" stuurt status=%s mee en schrijft het in de URL', async (label, status) => {
+      const user = userEvent.setup()
+      const router = renderPage()
+      await screen.findByRole('table')
+
+      await user.selectOptions(screen.getByRole('combobox', { name: 'Status' }), label)
+
+      await expectLastSearch({ status })
+      expect(router.state.location.search).toBe(`?status=${status}`)
+      expect(chipTexts()).toEqual([label])
+      expect(filtersButton()).toHaveTextContent('Filters (1)')
     })
   })
 
-  it('statuschip "Bevestigd" stuurt status=Closed mee en schrijft het in de URL', async () => {
-    const user = userEvent.setup()
-    const router = renderPage()
-    await screen.findByRole('table')
+  // ---- filterpaneel -----------------------------------------------------------------------------
 
-    await user.click(within(screen.getByRole('group', { name: 'Status' })).getByRole('button', { name: 'Bevestigd' }))
+  describe('filterpaneel', () => {
+    it('is standaard dicht — ook wanneer de URL al uitgebreide filters bevat', async () => {
+      renderPage()
+      await screen.findByRole('table')
+      expect(filtersButton()).toHaveAttribute('aria-expanded', 'false')
+      expect(queryPanel()).toBeNull()
+      cleanup()
 
-    await waitFor(() => {
-      expect(api.searchDossiers).toHaveBeenLastCalledWith({ status: 'Closed', page: 1, pageSize: 25 })
+      renderPage('/dossiers?postalCode=2000&driverId=dr-1')
+      await screen.findByRole('table')
+      expect(filtersButton()).toHaveAttribute('aria-expanded', 'false')
+      expect(queryPanel()).toBeNull()
+      expect(filtersButton()).toHaveTextContent('Filters (2)')
     })
-    expect(router.state.location.search).toBe('?status=Closed')
-    expect(within(screen.getByRole('group', { name: 'Status' })).getByRole('button', { name: 'Bevestigd' })).toHaveAttribute('aria-pressed', 'true')
+
+    it('opent en sluit met de knop "Filters" en toont de gegroepeerde velden', async () => {
+      const user = userEvent.setup()
+      renderPage()
+      await screen.findByRole('table')
+
+      const panel = await openPanel(user)
+      expect(filtersButton()).toHaveAttribute('aria-expanded', 'true')
+      expect(
+        within(panel)
+          .getAllByRole('group')
+          .map((group) => group.querySelector('legend')?.textContent),
+      ).toEqual(['Identificatie', 'Klant', 'Lifecycle', 'Datum', 'Transport', 'Planning', 'Locatie', 'Commercieel', 'Documenten'])
+      for (const label of ['Dossiernummer', 'Opdrachtnummer', 'Klantreferentie', 'Klantnummer', 'Kenteken', 'Laadplaats', 'Losplaats', 'Postcode']) {
+        expect(within(panel).getByLabelText(label)).toBeInTheDocument()
+      }
+      for (const label of ['Klant', 'Transporttype', 'Activiteitstype', 'Chauffeur', 'Voertuig', 'Oplegger', 'Land']) {
+        // Doorzoekbare keuzelijsten, geen native <select>.
+        expect(within(panel).getByRole('combobox', { name: label }).tagName).toBe('INPUT')
+      }
+
+      await user.click(filtersButton())
+      expect(queryPanel()).toBeNull()
+      expect(filtersButton()).toHaveAttribute('aria-expanded', 'false')
+    })
+
+    it('filters blijven actief na het sluiten van het paneel', async () => {
+      const user = userEvent.setup()
+      const router = renderPage()
+      await screen.findByRole('table')
+
+      const panel = await openPanel(user)
+      await user.type(within(panel).getByLabelText('Postcode'), '2000')
+      await expectLastSearch({ postalCode: '2000' })
+      const calls = api.searchDossiers.mock.calls.length
+
+      await user.click(filtersButton())
+
+      expect(queryPanel()).toBeNull()
+      expect(router.state.location.search).toBe('?postalCode=2000')
+      expect(filtersButton()).toHaveTextContent('Filters (1)')
+      expect(chipTexts()).toEqual(['Postcode: 2000'])
+      expect(api.searchDossiers).toHaveBeenLastCalledWith({ postalCode: '2000', ...BASE })
+      // Closing is not a filter change: no new request.
+      expect(api.searchDossiers.mock.calls.length).toBe(calls)
+
+      const reopened = await openPanel(user)
+      expect(within(reopened).getByLabelText('Postcode')).toHaveValue('2000')
+    })
+
+    it('"Filters (N)" telt de actieve filters — een datumbereik telt als één — en de chips tonen ze', async () => {
+      renderPage('/dossiers?status=Closed&customerId=c-3&dateFrom=2026-09-01&dateTo=2026-09-30&transportTypeId=at-1')
+      await screen.findByRole('table')
+
+      expect(filtersButton()).toHaveTextContent('Filters (4)')
+      expect(filtersButton()).toHaveAttribute('data-active', 'true')
+      await within(chipList()).findByText('Van Caudenberg BV')
+      expect(chipTexts()).toEqual(['Bevestigd', 'Van Caudenberg BV', 'September 2026', 'Kraantransport'])
+      expect(queryPanel()).toBeNull()
+    })
+
+    it('de zoekterm krijgt een eigen chip maar telt niet mee in "Filters (N)"', async () => {
+      const user = userEvent.setup()
+      const router = renderPage('/dossiers?search=nex&status=Open')
+      await screen.findByRole('table')
+
+      expect(filtersButton()).toHaveTextContent('Filters (1)')
+      expect(chipTexts()).toEqual(['Zoekterm: nex', 'Open'])
+
+      await user.click(within(chipList()).getByRole('button', { name: 'Zoekterm wissen' }))
+
+      expect(router.state.location.search).toBe('?status=Open')
+      expect(screen.getByPlaceholderText(SEARCH_PLACEHOLDER)).toHaveValue('')
+    })
+
+    it('✕ op een chip wist precies dat ene filter; een bereikchip wist beide grenzen', async () => {
+      const user = userEvent.setup()
+      const router = renderPage('/dossiers?status=Open&planningFrom=2026-09-05&planningTo=2026-09-06&postalCode=2000')
+      await screen.findByRole('table')
+      expect(chipTexts()).toEqual(['Open', 'Planningdatum: 05/09/2026 – 06/09/2026', 'Postcode: 2000'])
+
+      await user.click(within(chipList()).getByRole('button', { name: 'Filter Postcode: 2000 verwijderen' }))
+      expect(router.state.location.search).toBe('?status=Open&planningFrom=2026-09-05&planningTo=2026-09-06')
+      await expectLastSearch({ status: 'Open', planningFrom: '2026-09-05', planningTo: '2026-09-06' })
+
+      await user.click(within(chipList()).getByRole('button', { name: /Filter Planningdatum/ }))
+      expect(router.state.location.search).toBe('?status=Open')
+      await expectLastSearch({ status: 'Open' })
+      expect(chipTexts()).toEqual(['Open'])
+      expect(filtersButton()).toHaveTextContent('Filters (1)')
+    })
+
+    it('"Filters wissen" zet alles terug naar de standaard: filters, zoekterm en pagina', async () => {
+      const user = userEvent.setup()
+      const router = renderPage('/dossiers?status=Open&search=nex&customerId=c-2&hasCmr=false&page=3')
+      await screen.findByRole('table')
+
+      await user.click(screen.getByRole('button', { name: 'Filters wissen' }))
+
+      expect(router.state.location.search).toBe('')
+      await expectLastSearch({})
+      expect(screen.queryByRole('button', { name: 'Filters wissen' })).toBeNull()
+      expect(screen.queryByRole('list', { name: 'Actieve filters' })).toBeNull()
+      expect(filtersButton()).toHaveTextContent(/^Filters$/)
+      expect(screen.getByPlaceholderText(SEARCH_PLACEHOLDER)).toHaveValue('')
+      expect(screen.getByRole('combobox', { name: 'Status' })).toHaveValue('')
+    })
+
+    it('een open paneel toont na "Filters wissen" lege velden', async () => {
+      const user = userEvent.setup()
+      renderPage('/dossiers?postalCode=2000&priceStatus=Partial')
+      await screen.findByRole('table')
+      const panel = await openPanel(user)
+      expect(within(panel).getByLabelText('Prijsstatus')).toHaveValue('Partial')
+
+      await user.click(screen.getByRole('button', { name: 'Filters wissen' }))
+
+      expect(within(panel).getByLabelText('Postcode')).toHaveValue('')
+      expect(within(panel).getByLabelText('Prijsstatus')).toHaveValue('')
+    })
   })
 
-  it('klantkeuze stuurt customerId mee', async () => {
-    const user = userEvent.setup()
-    renderPage()
-    await screen.findByRole('table')
+  // ---- elk filter gaat server-side mee ----------------------------------------------------------
 
-    await user.click(screen.getByRole('combobox', { name: 'Klant' }))
-    await user.click(await screen.findByRole('option', { name: 'Bekaert' }))
+  describe('filters → GET /api/dossiers/search', () => {
+    it.each([
+      ['Dossiernummer', 'dossierNumber', 'DOS-7'],
+      ['Opdrachtnummer', 'orderNumber', 'ORD-7'],
+      ['Klantreferentie', 'customerReference', 'PO-4711'],
+      ['Klantnummer', 'customerNumber', 'KL-100'],
+      ['Kenteken', 'licensePlate', '1-ABC-123'],
+      ['Laadplaats', 'loadingCity', 'Antwerpen'],
+      ['Losplaats', 'unloadingCity', 'Gent'],
+      ['Postcode', 'postalCode', '9000'],
+    ])('tekstfilter %s → %s', async (label, param, value) => {
+      const user = userEvent.setup()
+      const router = renderPage()
+      await screen.findByRole('table')
+      const panel = await openPanel(user)
 
-    await waitFor(() => {
-      expect(api.searchDossiers).toHaveBeenLastCalledWith({ customerId: 'c-2', page: 1, pageSize: 25 })
+      await user.type(within(panel).getByLabelText(label), value)
+
+      await expectLastSearch({ [param]: value })
+      expect(router.state.location.search).toBe(`?${new URLSearchParams({ [param]: value }).toString()}`)
+    })
+
+    it.each([
+      ['Klant', 'Bekaert', 'customerId', 'c-2'],
+      ['Chauffeur', 'Jan Peeters', 'driverId', 'dr-1'],
+      ['Voertuig', /V01/, 'vehicleId', 'v-1'],
+      ['Oplegger', /OPL-3/, 'trailerId', 'tr-1'],
+      ['Transporttype', 'Kraantransport', 'transportTypeId', 'at-1'],
+      ['Activiteitstype', 'Kraanwerk', 'activityTypeId', 'at-2'],
+      ['Land', /Frankrijk/, 'countryCode', 'FR'],
+    ])('doorzoekbare keuze %s → %s', async (label, option, param, value) => {
+      const user = userEvent.setup()
+      renderPage()
+      await screen.findByRole('table')
+      const panel = await openPanel(user)
+
+      await pickOption(user, panel, label, option)
+
+      await expectLastSearch({ [param]: value })
+    })
+
+    it('transporttype biedt alleen types met stops aan; activiteitstype alle types', async () => {
+      const user = userEvent.setup()
+      renderPage()
+      await screen.findByRole('table')
+      const panel = await openPanel(user)
+
+      await user.click(within(panel).getByRole('combobox', { name: 'Transporttype' }))
+      await screen.findByRole('option', { name: 'Kraantransport' })
+      expect(screen.queryByRole('option', { name: 'Kraanwerk' })).toBeNull()
+    })
+
+    it.each([
+      ['Status', 'Bevestigd', { status: 'Closed' }],
+      ['Bevestigingswijze', 'Handmatig', { confirmationSource: 'Manual' }],
+      ['Bevestigingswijze', 'Automatisch', { confirmationSource: 'Automatic' }],
+      ['Prijsstatus', 'Geprijsd', { priceStatus: 'Priced' }],
+      ['Prijsstatus', 'Gedeeltelijk geprijsd', { priceStatus: 'Partial' }],
+      ['Prijsstatus', 'Niet geprijsd', { priceStatus: 'Unpriced' }],
+      ['Facturatiestatus', 'Niet gefactureerd', { invoiceStatus: 'NotInvoiced' }],
+      ['Facturatiestatus', 'Verzonden', { invoiceStatus: 'Sent' }],
+      ['CMR', 'Aanwezig', { hasCmr: true }],
+      ['CMR', 'Ontbreekt', { hasCmr: false }],
+    ])('keuzefilter %s = %s', async (label, option, expected) => {
+      const user = userEvent.setup()
+      renderPage()
+      await screen.findByRole('table')
+      const panel = await openPanel(user)
+
+      await user.selectOptions(within(panel).getByLabelText(label), option)
+
+      await expectLastSearch(expected)
+    })
+
+    it.each([
+      ['Dossierdatum', 'dateFrom', 'dateTo'],
+      ['Planningdatum', 'planningFrom', 'planningTo'],
+      ['Bevestigd op', 'confirmedFrom', 'confirmedTo'],
+      ['Aanmaakdatum', 'createdFrom', 'createdTo'],
+    ])('datumbereik %s → %s/%s', async (label, fromParam, toParam) => {
+      const user = userEvent.setup()
+      renderPage()
+      await screen.findByRole('table')
+      const panel = await openPanel(user)
+
+      fireEvent.change(within(panel).getByLabelText(`${label} van`), { target: { value: '2026-09-01' } })
+      fireEvent.change(within(panel).getByLabelText(`${label} tot`), { target: { value: '2026-09-30' } })
+
+      await expectLastSearch({ [fromParam]: '2026-09-01', [toParam]: '2026-09-30' })
+      // Each bound limits the other, so an inverted range cannot be picked.
+      expect(within(panel).getByLabelText(`${label} van`)).toHaveAttribute('max', '2026-09-30')
+      expect(within(panel).getByLabelText(`${label} tot`)).toHaveAttribute('min', '2026-09-01')
+      expect(filtersButton()).toHaveTextContent('Filters (1)')
+    })
+
+    it('"Deze maand" zet de dossierdatum op de lopende maand', async () => {
+      const user = userEvent.setup()
+      renderPage()
+      await screen.findByRole('table')
+      const panel = await openPanel(user)
+
+      await user.click(within(panel).getByRole('button', { name: 'Deze maand' }))
+
+      const { dateFrom, dateTo } = monthRangeOf(new Date())
+      await expectLastSearch({ dateFrom, dateTo })
+      expect(within(panel).getByLabelText('Dossierdatum van')).toHaveValue(dateFrom)
+      expect(within(panel).getByRole('button', { name: 'Deze maand' })).toHaveAttribute('aria-pressed', 'true')
+    })
+
+    it('combineert alle filters in één server-side verzoek', async () => {
+      renderPage(
+        '/dossiers?search=kraan&status=Closed&customerId=c-3&dateFrom=2026-09-01&dateTo=2026-09-30' +
+          '&driverId=dr-1&transportTypeId=at-1&invoiceStatus=NotInvoiced&hasCmr=true',
+      )
+      await screen.findByRole('table')
+
+      expect(api.searchDossiers).toHaveBeenLastCalledWith({
+        search: 'kraan',
+        status: 'Closed',
+        customerId: 'c-3',
+        dateFrom: '2026-09-01',
+        dateTo: '2026-09-30',
+        driverId: 'dr-1',
+        transportTypeId: 'at-1',
+        invoiceStatus: 'NotInvoiced',
+        hasCmr: true,
+        ...BASE,
+      })
+      // One request for the whole combination — never a page that is filtered again client-side.
+      expect(api.searchDossiers).toHaveBeenCalledTimes(1)
+      expect(filtersButton()).toHaveTextContent('Filters (7)')
+    })
+
+    it('een filterwijziging gaat terug naar pagina 1', async () => {
+      const user = userEvent.setup()
+      api.searchDossiers.mockResolvedValue(paged([dossierListItem()], 80))
+      const router = renderPage('/dossiers?status=Closed&page=3')
+      await screen.findByRole('table')
+      expect(api.searchDossiers).toHaveBeenLastCalledWith({ status: 'Closed', page: 3, pageSize: 25 })
+
+      const panel = await openPanel(user)
+      await user.selectOptions(within(panel).getByLabelText('CMR'), 'Aanwezig')
+
+      await expectLastSearch({ status: 'Closed', hasCmr: true })
+      expect(router.state.location.search).toBe('?status=Closed&hasCmr=true')
     })
   })
 
-  it('"Deze week" zet een maandag-t/m-zondagbereik op de dossierdatum', async () => {
-    const user = userEvent.setup()
-    renderPage()
-    await screen.findByRole('table')
+  // ---- URL-state, paginering, sortering ---------------------------------------------------------
 
-    await user.click(screen.getByRole('button', { name: 'Deze week' }))
+  describe('URL-state', () => {
+    it('paginering behoudt de filters in de URL en in het verzoek', async () => {
+      const user = userEvent.setup()
+      api.searchDossiers.mockResolvedValue(paged([dossierListItem()], 60))
+      const router = renderPage('/dossiers?status=Closed&postalCode=2000')
+      await screen.findByRole('table')
 
-    const { dateFrom, dateTo } = weekRangeOf(new Date())
-    await waitFor(() => {
-      expect(api.searchDossiers).toHaveBeenLastCalledWith({ dateFrom, dateTo, page: 1, pageSize: 25 })
+      await user.click(screen.getByRole('button', { name: 'Volgende' }))
+
+      expect(router.state.location.search).toBe('?status=Closed&postalCode=2000&page=2')
+      await waitFor(() => {
+        expect(api.searchDossiers).toHaveBeenLastCalledWith({ status: 'Closed', postalCode: '2000', page: 2, pageSize: 25 })
+      })
+      expect(filtersButton()).toHaveTextContent('Filters (2)')
     })
-    expect(screen.getByLabelText('Datum van')).toHaveValue(dateFrom)
-    expect(screen.getByLabelText('Datum tot')).toHaveValue(dateTo)
-  })
 
-  it('"Meer filters" toont het uitgebreide paneel en een tekstfilter wordt meegestuurd', async () => {
-    const user = userEvent.setup()
-    renderPage()
-    await screen.findByRole('table')
+    it('leest de begintoestand uit de URL (?status=Closed&page=2)', async () => {
+      api.searchDossiers.mockResolvedValue(paged([dossierListItem()], 60))
+      renderPage('/dossiers?status=Closed&page=2')
+      await screen.findByRole('table')
 
-    const toggle = screen.getByRole('button', { name: 'Meer filters' })
-    expect(toggle).toHaveAttribute('aria-expanded', 'false')
-    expect(screen.queryByLabelText('Opdrachtnr.')).toBeNull()
-
-    await user.click(toggle)
-    expect(screen.getByRole('button', { name: 'Minder filters' })).toHaveAttribute('aria-expanded', 'true')
-    expect(screen.getByText('Identificatie')).toBeInTheDocument()
-    expect(screen.getByText('Commercieel')).toBeInTheDocument()
-
-    await user.type(screen.getByLabelText('Opdrachtnr.'), 'ORD-7')
-    await waitFor(() => {
-      expect(api.searchDossiers).toHaveBeenLastCalledWith({ orderNumber: 'ORD-7', page: 1, pageSize: 25 })
-    })
-  })
-
-  it('toont actieve filterchips en ✕ wist er precies één', async () => {
-    const user = userEvent.setup()
-    const router = renderPage('/dossiers?status=Open&postalCode=2000')
-    await screen.findByRole('table')
-
-    const chips = screen.getByRole('list', { name: 'Actieve filters' })
-    expect(within(chips).getByText('Status: Open')).toBeInTheDocument()
-    expect(within(chips).getByText('Postcode: 2000')).toBeInTheDocument()
-
-    await user.click(within(chips).getByRole('button', { name: 'Filter Postcode verwijderen' }))
-
-    expect(router.state.location.search).toBe('?status=Open')
-    await waitFor(() => {
-      expect(api.searchDossiers).toHaveBeenLastCalledWith({ status: 'Open', page: 1, pageSize: 25 })
-    })
-    expect(within(chips).queryByText('Postcode: 2000')).toBeNull()
-  })
-
-  it('"Filters wissen" wist alle filters en de URL', async () => {
-    const user = userEvent.setup()
-    const router = renderPage('/dossiers?status=Open&search=nex&customerId=c-2&page=3')
-    await screen.findByRole('table')
-
-    await user.click(screen.getByRole('button', { name: 'Filters wissen' }))
-
-    expect(router.state.location.search).toBe('')
-    await waitFor(() => {
-      expect(api.searchDossiers).toHaveBeenLastCalledWith({ page: 1, pageSize: 25 })
-    })
-    expect(screen.queryByRole('button', { name: 'Filters wissen' })).toBeNull()
-  })
-
-  it('paginering behoudt de filters in de URL', async () => {
-    const user = userEvent.setup()
-    api.searchDossiers.mockResolvedValue(paged([dossierListItem()], 60))
-    const router = renderPage('/dossiers?status=Closed')
-    await screen.findByRole('table')
-
-    await user.click(screen.getByRole('button', { name: 'Volgende' }))
-
-    expect(router.state.location.search).toBe('?status=Closed&page=2')
-    await waitFor(() => {
       expect(api.searchDossiers).toHaveBeenLastCalledWith({ status: 'Closed', page: 2, pageSize: 25 })
+      expect(screen.getByRole('combobox', { name: 'Status' })).toHaveValue('Closed')
+    })
+
+    it('een ongeldige of te hoge pagina in de URL breekt de lijst niet', async () => {
+      renderPage('/dossiers?page=-4')
+      await screen.findByRole('table')
+      expect(api.searchDossiers).toHaveBeenLastCalledWith(BASE)
+      cleanup()
+
+      api.searchDossiers.mockResolvedValue(paged([], 0))
+      renderPage('/dossiers?status=Open&page=99')
+      expect(await screen.findByText('Geen dossiers gevonden. Pas de filters aan of maak een nieuw dossier.')).toBeInTheDocument()
+      expect(api.searchDossiers).toHaveBeenLastCalledWith({ status: 'Open', page: 99, pageSize: 25 })
+    })
+
+    it('een refresh (opnieuw laden met dezelfde URL) behoudt filters, sortering en pagina', async () => {
+      const user = userEvent.setup()
+      api.searchDossiers.mockResolvedValue(paged([dossierListItem()], 60))
+      const router = renderPage()
+      await screen.findByRole('table')
+      await user.selectOptions(screen.getByRole('combobox', { name: 'Status' }), 'Bevestigd')
+      const panel = await openPanel(user)
+      await pickOption(user, panel, 'Klant', 'Van Caudenberg BV')
+      await pickOption(user, panel, 'Transporttype', 'Kraantransport')
+      await expectLastSearch({ status: 'Closed', customerId: 'c-3', transportTypeId: 'at-1' })
+      const url = router.state.location.pathname + router.state.location.search
+      expect(url).toBe('/dossiers?status=Closed&customerId=c-3&transportTypeId=at-1')
+
+      cleanup()
+      api.searchDossiers.mockClear()
+      renderPage(url)
+      await screen.findByRole('table')
+
+      expect(api.searchDossiers).toHaveBeenLastCalledWith({ status: 'Closed', customerId: 'c-3', transportTypeId: 'at-1', ...BASE })
+      expect(queryPanel()).toBeNull()
+      expect(filtersButton()).toHaveTextContent('Filters (3)')
+      await within(chipList()).findByText('Van Caudenberg BV')
+      expect(chipTexts()).toEqual(['Bevestigd', 'Van Caudenberg BV', 'Kraantransport'])
+    })
+
+    it('browser Terug maakt een filterkeuze ongedaan', async () => {
+      const user = userEvent.setup()
+      const router = renderPage()
+      await screen.findByRole('table')
+      await user.selectOptions(screen.getByRole('combobox', { name: 'Status' }), 'Open')
+      await expectLastSearch({ status: 'Open' })
+
+      await router.navigate(-1)
+
+      await expectLastSearch({})
+      expect(screen.getByRole('combobox', { name: 'Status' })).toHaveValue('')
+    })
+
+    it('klik op een sorteerbare kop stuurt sort/dir mee, wisselt de richting en behoudt de filters', async () => {
+      const user = userEvent.setup()
+      const router = renderPage('/dossiers?status=Closed&postalCode=2000')
+      await screen.findByRole('table')
+
+      await user.click(screen.getByRole('button', { name: /Dossiernr\./ }))
+      await expectLastSearch({ status: 'Closed', postalCode: '2000', sort: 'number', dir: 'asc' })
+      expect(router.state.location.search).toBe('?status=Closed&postalCode=2000&sort=number&dir=asc')
+
+      await user.click(await screen.findByRole('button', { name: /Dossiernr\./ }))
+      await expectLastSearch({ status: 'Closed', postalCode: '2000', sort: 'number', dir: 'desc' })
+      expect(filtersButton()).toHaveTextContent('Filters (2)')
+    })
+
+    it.each([
+      ['Bevestigd op', 'confirmedAt'],
+      ['Planningdatum', 'planningDate'],
+      ['Klant', 'customer'],
+      ['Status', 'status'],
+      ['Dossiernummer', 'number'],
+    ])('"Sorteren op" %s stuurt sort=%s mee en behoudt de filters', async (label, key) => {
+      const user = userEvent.setup()
+      renderPage('/dossiers?status=Closed')
+      await screen.findByRole('table')
+
+      await user.selectOptions(screen.getByRole('combobox', { name: 'Sorteren op' }), label)
+
+      await expectLastSearch({ status: 'Closed', sort: key })
+    })
+
+    it('"Filters wissen" laat de gekozen sortering staan', async () => {
+      const user = userEvent.setup()
+      const router = renderPage('/dossiers?status=Open&sort=customer&dir=asc')
+      await screen.findByRole('table')
+
+      await user.click(screen.getByRole('button', { name: 'Filters wissen' }))
+
+      expect(router.state.location.search).toBe('?sort=customer&dir=asc')
     })
   })
 
-  it('leest de begintoestand uit de URL (?status=Closed&page=2)', async () => {
-    api.searchDossiers.mockResolvedValue(paged([dossierListItem()], 60))
-    renderPage('/dossiers?status=Closed&page=2')
-    await screen.findByRole('table')
+  // ---- tabel ------------------------------------------------------------------------------------
 
-    expect(api.searchDossiers).toHaveBeenLastCalledWith({ status: 'Closed', page: 2, pageSize: 25 })
-  })
+  describe('tabel', () => {
+    it('toont de kolommen in volgorde, met een resultaattelling', async () => {
+      api.searchDossiers.mockResolvedValue(paged([dossierListItem()], 42))
+      renderPage()
+      await screen.findByRole('table')
 
-  it('klik op een sorteerbare kop stuurt sort/dir mee en wisselt de richting', async () => {
-    const user = userEvent.setup()
-    const router = renderPage()
-    await screen.findByRole('table')
-
-    await user.click(screen.getByRole('button', { name: /Dossiernr\./ }))
-    await waitFor(() => {
-      expect(api.searchDossiers).toHaveBeenLastCalledWith({ sort: 'number', dir: 'asc', page: 1, pageSize: 25 })
+      expect(headerTexts()).toEqual([
+        'Dossiernr.',
+        'Status',
+        'Klant',
+        'Referentie',
+        'Dossierdatum',
+        'Transport',
+        'Planning',
+        'Prijs',
+        'Facturatie',
+        '', // rijacties
+      ])
+      expect(screen.getByText('42 dossiers')).toBeInTheDocument()
     })
-    expect(router.state.location.search).toBe('?sort=number&dir=asc')
 
-    await user.click(await screen.findByRole('button', { name: /Dossiernr\./ }))
-    await waitFor(() => {
-      expect(api.searchDossiers).toHaveBeenLastCalledWith({ sort: 'number', dir: 'desc', page: 1, pageSize: 25 })
+    it('toont de samenvattingen: dossierdatum, transport, planning en facturatiestatus', async () => {
+      api.searchDossiers.mockResolvedValue(
+        paged([
+          dossierListItem({
+            dossierDate: '2026-08-12',
+            firstLoadingCity: 'Antwerpen',
+            lastUnloadingCity: 'Gent',
+            orderCount: 2,
+            planningDate: '2026-08-14',
+            driverSummary: 'Jan Peeters',
+            vehicleSummary: '1-ABC-123',
+            invoiceStatus: 'Sent',
+          }),
+        ]),
+      )
+      renderPage()
+      const row = await findRow()
+
+      expect(within(row).getByText('12/08/2026')).toBeInTheDocument()
+      expect(within(row).getByText('Antwerpen → Gent')).toBeInTheDocument()
+      expect(within(row).getByText('2 opdr.')).toBeInTheDocument()
+      expect(within(row).getByText('14/08/2026')).toBeInTheDocument()
+      expect(within(row).getByText('Jan Peeters · 1-ABC-123')).toBeInTheDocument()
+      expect(within(row).getByText('Verzonden')).toBeInTheDocument()
+      expect(within(row).getByText('Nexans NV')).toBeInTheDocument()
+      expect(within(row).getByText('K-1001')).toBeInTheDocument()
+    })
+
+    it('meerdere chauffeurs/voertuigen: toont het aantal, nooit één willekeurige naam', async () => {
+      api.searchDossiers.mockResolvedValue(
+        paged([dossierListItem({ planningDate: '2026-08-14', driverSummary: '2 chauffeurs', vehicleSummary: '2 voertuigen' })]),
+      )
+      renderPage()
+      const row = await findRow()
+
+      expect(within(row).getByText('2 chauffeurs · 2 voertuigen')).toBeInTheDocument()
+    })
+
+    it('toont — voor ontbrekende referentie, planning en facturatie en een incidentbadge op het nummer', async () => {
+      api.searchDossiers.mockResolvedValue(
+        paged([
+          dossierListItem({
+            driverSummary: null,
+            vehicleSummary: null,
+            planningDate: null,
+            invoiceStatus: 'NotInvoiced',
+            openIncidentCount: 3,
+            customerReference: null,
+          }),
+        ]),
+      )
+      renderPage()
+      const row = await findRow()
+
+      const cells = within(row).getAllByRole('cell').map((cell) => cell.textContent?.trim())
+      // Kolommen: nummer, status, klant, referentie, datum, transport, planning, prijs, facturatie, acties
+      expect(cells[3]).toBe('—')
+      expect(cells[6]).toBe('—')
+      expect(cells[8]).toBe('—')
+      expect(within(row).getByTitle('3 open incidenten')).toHaveTextContent('3')
+    })
+
+    it('navigeert naar het dossier bij klik op een rij, maar niet bij klik op het rijmenu', async () => {
+      const user = userEvent.setup()
+      api.searchDossiers.mockResolvedValue(paged([dossierListItem({ id: 'd-42' })]))
+      const router = renderPage()
+      const row = await findRow()
+
+      await user.click(within(row).getByRole('button', { name: 'Acties DOS-0001' }))
+      expect(router.state.location.pathname).toBe('/dossiers')
+
+      await user.click(within(row).getByText('DOS-0001'))
+
+      expect(router.state.location.pathname).toBe('/dossiers/d-42')
+      expect(await screen.findByText('detail-route')).toBeInTheDocument()
+    })
+
+    it('toont de lege toestand zonder resultaten', async () => {
+      api.searchDossiers.mockResolvedValue(paged([]))
+      renderPage()
+
+      expect(await screen.findByText('Geen dossiers gevonden. Pas de filters aan of maak een nieuw dossier.')).toBeInTheDocument()
+      expect(screen.getByText('0 dossiers')).toBeInTheDocument()
     })
   })
 
-  it('rijmenu "Bevestigen" opent de bevestigingsdialoog, bevestigt en herlaadt de lijst', async () => {
-    const user = userEvent.setup()
-    api.getDossierConfirmation.mockResolvedValue(evaluation())
-    api.confirmDossier.mockResolvedValue(dossierDetail({ status: 'Closed' }))
-    renderPage()
-    const row = await findRow()
-    const callsBefore = api.searchDossiers.mock.calls.length
+  // ---- statusbenaming + bevestigingsinfo --------------------------------------------------------
 
-    await user.click(within(row).getByRole('button', { name: 'Acties DOS-0001' }))
-    await user.click(screen.getByRole('menuitem', { name: 'Bevestigen' }))
+  describe('status en bevestiging', () => {
+    it('een Closed-dossier heet "Bevestigd" — nergens "Gesloten" of "Closed"', async () => {
+      const user = userEvent.setup()
+      api.searchDossiers.mockResolvedValue(
+        paged([dossierListItem({ status: 'Closed', confirmedAt: '2026-09-20T10:00:00Z', confirmationSource: 'Manual' })]),
+      )
+      renderPage('/dossiers?status=Closed')
+      const row = await findRow()
+      await openPanel(user)
 
-    const dialog = await screen.findByRole('dialog', { name: 'Dossier bevestigen — DOS-0001' })
-    expect(api.getDossierConfirmation).toHaveBeenCalledWith('d-1')
-    await within(dialog).findByText('Alle operationele onderdelen zijn afgerond.')
-    await user.click(within(dialog).getByRole('button', { name: 'Bevestigen' }))
-
-    await waitFor(() => {
-      expect(api.confirmDossier).toHaveBeenCalledWith('d-1', { reason: null, acknowledgeWarnings: false, version: undefined })
+      expect(within(row).getByText('Bevestigd')).toBeInTheDocument()
+      expect(document.body).not.toHaveTextContent(/Gesloten/)
+      expect(document.body).not.toHaveTextContent(/Closed/)
     })
-    expect(toast.showSuccess).toHaveBeenCalledWith('Dossier bevestigd.')
-    await waitFor(() => {
-      expect(api.searchDossiers.mock.calls.length).toBeGreaterThan(callsBefore)
+
+    it.each([
+      ['Manual', '20/09/2026 · Handmatig'],
+      ['Automatic', '20/09/2026 · Automatisch'],
+    ] as const)('toont datum en wijze van een %s-bevestiging compact in de statuscel', async (source, line) => {
+      api.searchDossiers.mockResolvedValue(
+        paged([dossierListItem({ status: 'Closed', confirmedAt: '2026-09-20T10:00:00Z', confirmationSource: source })]),
+      )
+      renderPage()
+      const row = await findRow()
+
+      const cell = within(row).getAllByRole('cell')[1]
+      expect(within(cell).getByText('Bevestigd')).toBeInTheDocument()
+      expect(within(cell).getByText(line)).toBeInTheDocument()
+      expect(cell.querySelector('[title]')).toHaveAttribute('title', expect.stringMatching(/^Bevestigd op 20\/09\/2026 .+ · (Handmatig|Automatisch)$/))
     })
-    expect(screen.queryByRole('dialog')).toBeNull()
-  })
 
-  it('rijmenu "Annuleren" vraagt een reden en annuleert het dossier', async () => {
-    const user = userEvent.setup()
-    api.cancelDossier.mockResolvedValue(dossierDetail({ status: 'Cancelled' }))
-    renderPage()
-    const row = await findRow()
+    it('historisch bevestigd zonder bron: "Bron onbekend (historisch)", geen verzonnen Handmatig/Automatisch', async () => {
+      api.searchDossiers.mockResolvedValue(
+        paged([
+          dossierListItem({ id: 'd-1', dossierNumber: 'DOS-0001', status: 'Closed', confirmedAt: '2026-03-02T08:00:00Z', confirmationSource: null }),
+          dossierListItem({ id: 'd-2', dossierNumber: 'DOS-0002', status: 'Closed', confirmedAt: null, confirmationSource: null }),
+        ]),
+      )
+      renderPage()
+      const dated = within(await findRow('DOS-0001')).getAllByRole('cell')[1]
+      const undated = within(await findRow('DOS-0002')).getAllByRole('cell')[1]
 
-    await user.click(within(row).getByRole('button', { name: 'Acties DOS-0001' }))
-    await user.click(screen.getByRole('menuitem', { name: 'Annuleren' }))
-
-    const dialog = await screen.findByRole('dialog', { name: 'Dossier annuleren — DOS-0001' })
-    await user.click(within(dialog).getByRole('button', { name: 'Dossier annuleren' }))
-    expect(within(dialog).getByText('Geef een reden op.')).toBeInTheDocument()
-    expect(api.cancelDossier).not.toHaveBeenCalled()
-
-    await user.type(within(dialog).getByLabelText('Reden voor annulering'), 'Klant zegt af')
-    await user.click(within(dialog).getByRole('button', { name: 'Dossier annuleren' }))
-
-    await waitFor(() => {
-      expect(api.cancelDossier).toHaveBeenCalledWith('d-1', 'Klant zegt af')
+      expect(within(dated).getByText('02/03/2026 · Bron onbekend (historisch)')).toBeInTheDocument()
+      expect(within(undated).getByText('Bron onbekend (historisch)')).toBeInTheDocument()
+      for (const cell of [dated, undated]) {
+        expect(cell).not.toHaveTextContent(/Handmatig|Automatisch/)
+      }
     })
-    expect(toast.showSuccess).toHaveBeenCalledWith('Dossier geannuleerd.')
+
+    it('een open of geannuleerd dossier toont geen bevestigingsregel', async () => {
+      api.searchDossiers.mockResolvedValue(
+        paged([
+          dossierListItem({ id: 'd-1', dossierNumber: 'DOS-0001', status: 'Open' }),
+          dossierListItem({ id: 'd-2', dossierNumber: 'DOS-0002', status: 'Cancelled' }),
+        ]),
+      )
+      renderPage()
+
+      expect(within(await findRow('DOS-0001')).getAllByRole('cell')[1]).toHaveTextContent(/^Open$/)
+      expect(within(await findRow('DOS-0002')).getAllByRole('cell')[1]).toHaveTextContent(/^Geannuleerd$/)
+    })
   })
 
-  it('rijmenu toont "Bevestigen"/"Annuleren" niet voor een bevestigd dossier', async () => {
-    const user = userEvent.setup()
-    api.searchDossiers.mockResolvedValue(paged([dossierListItem({ status: 'Closed' })]))
-    renderPage()
-    const row = await findRow()
+  // ---- prijsweergave ----------------------------------------------------------------------------
 
-    await user.click(within(row).getByRole('button', { name: 'Acties DOS-0001' }))
+  describe('prijs', () => {
+    const priceCell = async (number: string) => within(await findRow(number)).getAllByRole('cell')[7]
 
-    expect(screen.getByRole('menuitem', { name: 'Openen' })).toBeInTheDocument()
-    expect(screen.queryByRole('menuitem', { name: 'Bevestigen' })).toBeNull()
-    expect(screen.queryByRole('menuitem', { name: 'Annuleren' })).toBeNull()
+    it('toont bedrag + één consistente status: Geprijsd, Gedeeltelijk, Niet geprijsd, Gratis', async () => {
+      api.searchDossiers.mockResolvedValue(
+        paged([
+          dossierListItem({ id: 'd-1', dossierNumber: 'DOS-0001', agreedPriceTotal: 485, billableActivityCount: 1, pricedActivityCount: 1, priceStatus: 'Priced' }),
+          dossierListItem({ id: 'd-2', dossierNumber: 'DOS-0002', agreedPriceTotal: 100, billableActivityCount: 2, pricedActivityCount: 1, priceStatus: 'PartiallyPriced' }),
+          dossierListItem({ id: 'd-3', dossierNumber: 'DOS-0003', agreedPriceTotal: null, billableActivityCount: 1, pricedActivityCount: 0, priceStatus: 'NotPriced' }),
+          dossierListItem({ id: 'd-4', dossierNumber: 'DOS-0004', agreedPriceTotal: 0, billableActivityCount: 1, pricedActivityCount: 1, priceStatus: 'Free' }),
+          dossierListItem({ id: 'd-5', dossierNumber: 'DOS-0005', agreedPriceTotal: null, billableActivityCount: 0, pricedActivityCount: 0, priceStatus: null }),
+        ]),
+      )
+      renderPage()
+
+      const priced = await priceCell('DOS-0001')
+      expect(priced).toHaveTextContent(/€\s485,00/)
+      expect(within(priced).getByText('Geprijsd')).toBeInTheDocument()
+
+      const partial = await priceCell('DOS-0002')
+      expect(partial).toHaveTextContent(/€\s100,00/)
+      expect(within(partial).getByText('Gedeeltelijk · 1/2')).toHaveAttribute(
+        'title',
+        'Slechts 1 van 2 activiteiten hebben een prijs; het bedrag is geen dossiertotaal.',
+      )
+
+      // Geen prijs is nooit € 0,00.
+      const unpriced = await priceCell('DOS-0003')
+      expect(unpriced).toHaveTextContent(/^Niet geprijsd$/)
+      expect(unpriced).not.toHaveTextContent('€')
+
+      const free = await priceCell('DOS-0004')
+      expect(free).toHaveTextContent(/€\s0,00/)
+      expect(within(free).getByText('Gratis')).toBeInTheDocument()
+
+      // Niets factureerbaar: geen bedrag en geen status.
+      expect(await priceCell('DOS-0005')).toHaveTextContent(/^—$/)
+    })
+
+    it('markeert een echte € 0,00 die nog niet als gratis bevestigd is met ⚠', async () => {
+      api.searchDossiers.mockResolvedValue(
+        paged([dossierListItem({ agreedPriceTotal: 0, billableActivityCount: 1, pricedActivityCount: 1, zeroPricedActivityCount: 1, priceStatus: 'Priced' })]),
+      )
+      renderPage()
+      const cell = await priceCell('DOS-0001')
+
+      expect(cell).toHaveTextContent(/€\s0,00/)
+      expect(within(cell).getByRole('img', { name: 'Verkoopprijs is € 0,00. Controleer of dit bewust is.' })).toHaveTextContent('⚠')
+      expect(within(cell).getByText('Geprijsd')).toBeInTheDocument()
+      expect(within(cell).queryByText('Gratis')).toBeNull()
+    })
+
+    it('zonder serverstatus (oudere payload) volgt de status uit de tellingen — nooit "Gratis"', async () => {
+      api.searchDossiers.mockResolvedValue(
+        paged([
+          dossierListItem({ id: 'd-1', dossierNumber: 'DOS-0001', agreedPriceTotal: 0, billableActivityCount: 1, pricedActivityCount: 1 }),
+          dossierListItem({ id: 'd-2', dossierNumber: 'DOS-0002', agreedPriceTotal: null, billableActivityCount: 2, pricedActivityCount: 0 }),
+        ]),
+      )
+      renderPage()
+
+      expect(within(await priceCell('DOS-0001')).getByText('Geprijsd')).toBeInTheDocument()
+      expect(await priceCell('DOS-0002')).toHaveTextContent(/^Niet geprijsd$/)
+    })
   })
 
-  it('verbergt het rijmenu zonder dossiers.manage', async () => {
-    auth.permissions = new Set(['dossiers.view'])
-    renderPage()
-    const row = await findRow()
+  // ---- rijacties --------------------------------------------------------------------------------
 
-    expect(within(row).queryByRole('button', { name: 'Acties DOS-0001' })).toBeNull()
-    expect(screen.queryByRole('button', { name: 'Nieuw dossier' })).toBeNull()
-  })
+  describe('rijacties', () => {
+    it('Open dossier: Openen, Bevestigen, Annuleren', async () => {
+      const user = userEvent.setup()
+      renderPage()
+      await openRowMenu(user)
 
-  it('toont de lege toestand zonder resultaten', async () => {
-    api.searchDossiers.mockResolvedValue(paged([]))
-    renderPage()
+      expect(menuItems()).toEqual(['Openen', 'Bevestigen', 'Annuleren'])
+    })
 
-    expect(await screen.findByText('Geen dossiers gevonden. Pas de filters aan of maak een nieuw dossier.')).toBeInTheDocument()
-  })
+    it.each(['Closed', 'Cancelled'] as const)('%s dossier: Openen, Heropenen', async (status) => {
+      const user = userEvent.setup()
+      api.searchDossiers.mockResolvedValue(paged([dossierListItem({ status })]))
+      renderPage()
+      await openRowMenu(user)
 
-  it('navigeert naar het dossier bij klik op een rij, maar niet bij klik op het rijmenu', async () => {
-    const user = userEvent.setup()
-    api.searchDossiers.mockResolvedValue(paged([dossierListItem({ id: 'd-42' })]))
-    const router = renderPage()
-    const row = await findRow()
+      expect(menuItems()).toEqual(['Openen', 'Heropenen'])
+    })
 
-    await user.click(within(row).getByRole('button', { name: 'Acties DOS-0001' }))
-    expect(router.state.location.pathname).toBe('/dossiers')
+    it('Escape sluit het rijmenu en zet de focus terug op de knop, zonder het dossier te openen', async () => {
+      const user = userEvent.setup()
+      const router = renderPage()
+      await openRowMenu(user)
+      expect(screen.getByRole('menu')).toBeInTheDocument()
 
-    await user.click(within(row).getByText('DOS-0001'))
+      await user.keyboard('{Escape}')
 
-    expect(router.state.location.pathname).toBe('/dossiers/d-42')
-    expect(await screen.findByText('detail-route')).toBeInTheDocument()
+      expect(screen.queryByRole('menu')).toBeNull()
+      const trigger = screen.getByRole('button', { name: 'Acties DOS-0001' })
+      expect(trigger).toHaveFocus()
+      expect(trigger).toHaveAttribute('aria-expanded', 'false')
+      expect(router.state.location.pathname).toBe('/dossiers')
+    })
+
+    it('"Openen" navigeert naar het dossier', async () => {
+      const user = userEvent.setup()
+      const router = renderPage()
+      await openRowMenu(user)
+
+      await user.click(screen.getByRole('menuitem', { name: 'Openen' }))
+
+      expect(router.state.location.pathname).toBe('/dossiers/d-1')
+    })
+
+    it('"Bevestigen" gebruikt de bestaande bevestigingsdialoog: gereedheid ophalen, bevestigen met de rijversie, lijst herladen', async () => {
+      const user = userEvent.setup()
+      api.searchDossiers.mockResolvedValue(paged([dossierListItem({ version: 'v-7' })]))
+      api.getDossierConfirmation.mockResolvedValue(evaluation())
+      api.confirmDossier.mockResolvedValue(dossierDetail({ status: 'Closed' }))
+      renderPage()
+      await openRowMenu(user)
+      const callsBefore = api.searchDossiers.mock.calls.length
+
+      await user.click(screen.getByRole('menuitem', { name: 'Bevestigen' }))
+
+      const dialog = await screen.findByRole('dialog', { name: 'Dossier bevestigen — DOS-0001' })
+      expect(api.getDossierConfirmation).toHaveBeenCalledWith('d-1')
+      await within(dialog).findByText('Alle operationele onderdelen zijn afgerond.')
+      await user.click(within(dialog).getByRole('button', { name: 'Bevestigen' }))
+
+      await waitFor(() => {
+        expect(api.confirmDossier).toHaveBeenCalledWith('d-1', { reason: null, acknowledgeWarnings: false, version: 'v-7' })
+      })
+      expect(toast.showSuccess).toHaveBeenCalledWith('Dossier bevestigd.')
+      await waitFor(() => {
+        expect(api.searchDossiers.mock.calls.length).toBeGreaterThan(callsBefore)
+      })
+      expect(screen.queryByRole('dialog')).toBeNull()
+    })
+
+    it('"Bevestigen" met aandachtspunten vraagt dezelfde bewuste bevestiging als op de detailpagina', async () => {
+      const user = userEvent.setup()
+      api.getDossierConfirmation.mockResolvedValue(
+        evaluation({
+          warnings: [{ code: 'pod.missing', severity: 'Warning', message: 'Eén stop heeft geen afleverbewijs.', transportOrderId: null, activityId: null }],
+        }),
+      )
+      api.confirmDossier.mockResolvedValue(dossierDetail({ status: 'Closed' }))
+      renderPage()
+      await openRowMenu(user)
+      await user.click(screen.getByRole('menuitem', { name: 'Bevestigen' }))
+
+      const dialog = await screen.findByRole('dialog', { name: 'Dossier bevestigen — DOS-0001' })
+      await within(dialog).findByText('Eén stop heeft geen afleverbewijs.')
+      const confirm = within(dialog).getByRole('button', { name: 'Bevestigen' })
+      expect(confirm).toBeDisabled()
+
+      await user.click(within(dialog).getByRole('checkbox', { name: /Ik heb de aandachtspunten bekeken/ }))
+      await user.click(confirm)
+
+      await waitFor(() => {
+        expect(api.confirmDossier).toHaveBeenCalledWith('d-1', { reason: null, acknowledgeWarnings: true, version: undefined })
+      })
+    })
+
+    it('"Bevestigen" met blokkades kan niet bevestigd worden', async () => {
+      const user = userEvent.setup()
+      api.getDossierConfirmation.mockResolvedValue(
+        evaluation({
+          canConfirmManually: false,
+          blockers: [{ code: 'orders.open', severity: 'Blocking', message: 'Opdracht ORD-1 is nog niet voltooid.', transportOrderId: null, activityId: null }],
+        }),
+      )
+      renderPage()
+      await openRowMenu(user)
+      await user.click(screen.getByRole('menuitem', { name: 'Bevestigen' }))
+
+      const dialog = await screen.findByRole('dialog', { name: 'Dossier bevestigen — DOS-0001' })
+      await within(dialog).findByText('Opdracht ORD-1 is nog niet voltooid.')
+      expect(within(dialog).getByText('Bevestigen is niet mogelijk')).toBeInTheDocument()
+      expect(within(dialog).getByRole('button', { name: 'Bevestigen' })).toBeDisabled()
+      expect(api.confirmDossier).not.toHaveBeenCalled()
+    })
+
+    it('"Annuleren" gebruikt de bestaande redendialoog: reden verplicht, annuleren met de rijversie, lijst herladen', async () => {
+      const user = userEvent.setup()
+      api.searchDossiers.mockResolvedValue(paged([dossierListItem({ version: 'v-7' })]))
+      api.cancelDossier.mockResolvedValue(dossierDetail({ status: 'Cancelled' }))
+      renderPage()
+      await openRowMenu(user)
+      const callsBefore = api.searchDossiers.mock.calls.length
+
+      await user.click(screen.getByRole('menuitem', { name: 'Annuleren' }))
+
+      const dialog = await screen.findByRole('dialog', { name: 'Dossier annuleren — DOS-0001' })
+      expect(within(dialog).getByText(/Alleen voor werk dat nooit is uitgevoerd/)).toBeInTheDocument()
+      await user.click(within(dialog).getByRole('button', { name: 'Dossier annuleren' }))
+      expect(within(dialog).getByText('Geef een reden op.')).toBeInTheDocument()
+      expect(api.cancelDossier).not.toHaveBeenCalled()
+
+      await user.type(within(dialog).getByLabelText(/Reden voor annulering/), 'Klant zegt af')
+      await user.click(within(dialog).getByRole('button', { name: 'Dossier annuleren' }))
+
+      await waitFor(() => {
+        expect(api.cancelDossier).toHaveBeenCalledWith('d-1', 'Klant zegt af', 'v-7')
+      })
+      expect(toast.showSuccess).toHaveBeenCalledWith('Dossier geannuleerd.')
+      await waitFor(() => {
+        expect(api.searchDossiers.mock.calls.length).toBeGreaterThan(callsBefore)
+      })
+      expect(screen.queryByRole('dialog')).toBeNull()
+    })
+
+    it('"Annuleren" toont de uitleg van de server in de dialoog en behoudt de reden', async () => {
+      const user = userEvent.setup()
+      api.cancelDossier.mockRejectedValue(new ApiError('Opdracht ORD-1 is al gepland; annuleer eerst de rit.', 400))
+      renderPage()
+      await openRowMenu(user)
+      await user.click(screen.getByRole('menuitem', { name: 'Annuleren' }))
+      const dialog = await screen.findByRole('dialog', { name: 'Dossier annuleren — DOS-0001' })
+      await user.type(within(dialog).getByLabelText(/Reden voor annulering/), 'Klant zegt af')
+
+      await user.click(within(dialog).getByRole('button', { name: 'Dossier annuleren' }))
+
+      expect(await within(dialog).findByRole('alert')).toHaveTextContent('Opdracht ORD-1 is al gepland; annuleer eerst de rit.')
+      expect(within(dialog).getByLabelText(/Reden voor annulering/)).toHaveValue('Klant zegt af')
+      expect(toast.showSuccess).not.toHaveBeenCalled()
+    })
+
+    it('een versieconflict (dossier intussen gewijzigd) sluit de dialoog, meldt het en herlaadt de lijst', async () => {
+      const user = userEvent.setup()
+      api.searchDossiers.mockResolvedValue(paged([dossierListItem({ version: 'v-7' })]))
+      api.cancelDossier.mockRejectedValue(new ApiError('Conflict', 409, dossierDetail({ status: 'Closed' })))
+      renderPage()
+      await openRowMenu(user)
+      await user.click(screen.getByRole('menuitem', { name: 'Annuleren' }))
+      const dialog = await screen.findByRole('dialog', { name: 'Dossier annuleren — DOS-0001' })
+      await user.type(within(dialog).getByLabelText(/Reden voor annulering/), 'Klant zegt af')
+      const callsBefore = api.searchDossiers.mock.calls.length
+
+      await user.click(within(dialog).getByRole('button', { name: 'Dossier annuleren' }))
+
+      await waitFor(() => {
+        expect(toast.showError).toHaveBeenCalledWith(
+          'Het dossier is intussen gewijzigd. De lijst is vernieuwd; controleer het dossier en probeer opnieuw.',
+        )
+      })
+      expect(screen.queryByRole('dialog')).toBeNull()
+      expect(toast.showSuccess).not.toHaveBeenCalled()
+      await waitFor(() => {
+        expect(api.searchDossiers.mock.calls.length).toBeGreaterThan(callsBefore)
+      })
+    })
+
+    it.each(['Closed', 'Cancelled'] as const)('"Heropenen" (%s) gebruikt de bestaande redendialoog en heropent met de rijversie', async (status) => {
+      const user = userEvent.setup()
+      api.searchDossiers.mockResolvedValue(paged([dossierListItem({ status, version: 'v-9' })]))
+      api.reopenDossier.mockResolvedValue(dossierDetail({ status: 'Open' }))
+      renderPage()
+      await openRowMenu(user)
+      const callsBefore = api.searchDossiers.mock.calls.length
+
+      await user.click(screen.getByRole('menuitem', { name: 'Heropenen' }))
+
+      const dialog = await screen.findByRole('dialog', { name: 'Dossier heropenen — DOS-0001' })
+      expect(within(dialog).getByText(/De eerdere bevestiging blijft in de historiek staan/)).toBeInTheDocument()
+      await user.click(within(dialog).getByRole('button', { name: 'Dossier heropenen' }))
+      expect(within(dialog).getByText('Geef een reden op.')).toBeInTheDocument()
+      expect(api.reopenDossier).not.toHaveBeenCalled()
+
+      await user.type(within(dialog).getByLabelText(/Reden voor heropenen/), 'Correctie nodig')
+      await user.click(within(dialog).getByRole('button', { name: 'Dossier heropenen' }))
+
+      await waitFor(() => {
+        expect(api.reopenDossier).toHaveBeenCalledWith('d-1', 'Correctie nodig', 'v-9')
+      })
+      expect(toast.showSuccess).toHaveBeenCalledWith('Dossier heropend.')
+      await waitFor(() => {
+        expect(api.searchDossiers.mock.calls.length).toBeGreaterThan(callsBefore)
+      })
+    })
+
+    describe('bevoegdheden', () => {
+      const rows = [
+        dossierListItem({ id: 'd-1', dossierNumber: 'DOS-0001', status: 'Open' }),
+        dossierListItem({ id: 'd-2', dossierNumber: 'DOS-0002', status: 'Closed' }),
+        dossierListItem({ id: 'd-3', dossierNumber: 'DOS-0003', status: 'Cancelled' }),
+      ]
+
+      async function menuOf(user: UserEvent, number: string): Promise<(string | null)[]> {
+        await openRowMenu(user, number)
+        const items = menuItems()
+        await user.keyboard('{Escape}')
+        return items
+      }
+
+      it('alleen dossiers.view: enkel "Openen", geen "Nieuw dossier"', async () => {
+        const user = userEvent.setup()
+        auth.permissions = new Set(['dossiers.view'])
+        api.searchDossiers.mockResolvedValue(paged(rows))
+        renderPage()
+
+        expect(await menuOf(user, 'DOS-0001')).toEqual(['Openen'])
+        expect(await menuOf(user, 'DOS-0002')).toEqual(['Openen'])
+        expect(await menuOf(user, 'DOS-0003')).toEqual(['Openen'])
+        expect(screen.queryByRole('button', { name: 'Nieuw dossier' })).toBeNull()
+      })
+
+      it('dossiers.manage zonder dossiers.reopen: bevestigen/annuleren wel, heropenen niet', async () => {
+        const user = userEvent.setup()
+        auth.permissions = new Set(['dossiers.view', 'dossiers.manage'])
+        api.searchDossiers.mockResolvedValue(paged(rows))
+        renderPage()
+
+        expect(await menuOf(user, 'DOS-0001')).toEqual(['Openen', 'Bevestigen', 'Annuleren'])
+        expect(await menuOf(user, 'DOS-0002')).toEqual(['Openen'])
+        expect(await menuOf(user, 'DOS-0003')).toEqual(['Openen'])
+      })
+
+      it('dossiers.reopen zonder dossiers.manage: alleen heropenen', async () => {
+        const user = userEvent.setup()
+        auth.permissions = new Set(['dossiers.view', 'dossiers.reopen'])
+        api.searchDossiers.mockResolvedValue(paged(rows))
+        renderPage()
+
+        expect(await menuOf(user, 'DOS-0001')).toEqual(['Openen'])
+        expect(await menuOf(user, 'DOS-0002')).toEqual(['Openen', 'Heropenen'])
+        expect(await menuOf(user, 'DOS-0003')).toEqual(['Openen', 'Heropenen'])
+      })
+    })
   })
 })

@@ -33,6 +33,8 @@ export interface DossierSearchFilters {
   vehicleId: string
   licensePlate: string
   trailerId: string
+  /** An activity type WITH stops (order-backed transport); a separate predicate from `activityTypeId`. */
+  transportTypeId: string
   activityTypeId: string
   loadingCity: string
   unloadingCity: string
@@ -71,6 +73,7 @@ export const DOSSIER_FILTER_KEYS: readonly DossierFilterKey[] = [
   'vehicleId',
   'licensePlate',
   'trailerId',
+  'transportTypeId',
   'activityTypeId',
   'loadingCity',
   'unloadingCity',
@@ -102,6 +105,7 @@ export const EMPTY_DOSSIER_FILTERS: DossierSearchFilters = {
   vehicleId: '',
   licensePlate: '',
   trailerId: '',
+  transportTypeId: '',
   activityTypeId: '',
   loadingCity: '',
   unloadingCity: '',
@@ -115,7 +119,8 @@ export const EMPTY_DOSSIER_FILTERS: DossierSearchFilters = {
   page: 1,
 }
 
-const STATUSES: readonly DossierStatus[] = ['Open', 'Closed', 'Cancelled']
+/** Status filter values, in display order. */
+export const DOSSIER_STATUSES: readonly DossierStatus[] = ['Open', 'Closed', 'Cancelled']
 const CONFIRMATION_SOURCES: readonly DossierConfirmationSource[] = ['Manual', 'Automatic']
 const PRICE_STATUSES: readonly DossierPriceStatusFilter[] = ['Priced', 'Partial', 'Unpriced']
 const INVOICE_STATUSES: readonly DossierInvoiceStatus[] = ['NotInvoiced', 'Draft', 'Sent', 'Paid']
@@ -136,7 +141,7 @@ export function parseDossierSearchParams(params: URLSearchParams): DossierSearch
   const rawPage = Number(params.get('page'))
   return {
     search: text(params.get('search')),
-    status: oneOf(STATUSES, params.get('status')),
+    status: oneOf(DOSSIER_STATUSES, params.get('status')),
     customerId: text(params.get('customerId')),
     dateFrom: text(params.get('dateFrom')),
     dateTo: text(params.get('dateTo')),
@@ -155,6 +160,7 @@ export function parseDossierSearchParams(params: URLSearchParams): DossierSearch
     vehicleId: text(params.get('vehicleId')),
     licensePlate: text(params.get('licensePlate')),
     trailerId: text(params.get('trailerId')),
+    transportTypeId: text(params.get('transportTypeId')),
     activityTypeId: text(params.get('activityTypeId')),
     loadingCity: text(params.get('loadingCity')),
     unloadingCity: text(params.get('unloadingCity')),
@@ -199,9 +205,49 @@ export function toSearchDossiersParams(filters: DossierSearchFilters, pageSize: 
   return params
 }
 
-/** Keys of the set filters, in display order (chips). */
+/** Keys of the set filters, in display order. */
 export function activeFilterKeys(filters: DossierSearchFilters): DossierFilterKey[] {
   return DOSSIER_FILTER_KEYS.filter((key) => filters[key] !== '')
+}
+
+/** The from/to pairs: one range is ONE filter to the user (one chip, one count). */
+export const DOSSIER_RANGES = [
+  { id: 'date', from: 'dateFrom', to: 'dateTo' },
+  { id: 'confirmed', from: 'confirmedFrom', to: 'confirmedTo' },
+  { id: 'planning', from: 'planningFrom', to: 'planningTo' },
+  { id: 'created', from: 'createdFrom', to: 'createdTo' },
+] as const satisfies readonly { id: string; from: DossierFilterKey; to: DossierFilterKey }[]
+
+export type DossierRangeId = (typeof DOSSIER_RANGES)[number]['id']
+
+/** One removable chip: a single filter, or a date range (both bounds). */
+export type DossierFilterChip =
+  | { kind: 'single'; id: DossierFilterKey; keys: readonly [DossierFilterKey] }
+  | { kind: 'range'; id: DossierRangeId; keys: readonly [DossierFilterKey, DossierFilterKey] }
+
+/**
+ * The active filters as the user counts them — the chips under the bar and the N of
+ * "Filters (N)" are this one list. A range with one or both bounds set is one entry, placed
+ * where its first bound sits in the display order. The global search text is not a filter.
+ */
+export function activeFilterChips(filters: DossierSearchFilters): DossierFilterChip[] {
+  const chips: DossierFilterChip[] = []
+  const seen = new Set<string>()
+  for (const key of activeFilterKeys(filters)) {
+    const range = DOSSIER_RANGES.find((r) => r.from === key || r.to === key)
+    if (!range) {
+      chips.push({ kind: 'single', id: key, keys: [key] })
+    } else if (!seen.has(range.id)) {
+      seen.add(range.id)
+      chips.push({ kind: 'range', id: range.id, keys: [range.from, range.to] })
+    }
+  }
+  return chips
+}
+
+/** Patch that clears exactly the filters behind one chip. */
+export function clearChipPatch(chip: DossierFilterChip): Partial<DossierSearchFilters> {
+  return Object.fromEntries(chip.keys.map((key) => [key, ''])) as Partial<DossierSearchFilters>
 }
 
 // --- Quick date ranges (local calendar; the dossier date is a plain date, not an instant) ---
@@ -226,4 +272,21 @@ export function weekRangeOf(now: Date = new Date()): { dateFrom: string; dateTo:
   monday.setDate(monday.getDate() - offsetFromMonday)
   const sunday = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 6)
   return { dateFrom: isoLocalDate(monday), dateTo: isoLocalDate(sunday) }
+}
+
+/** First through last day of the month containing `now`. */
+export function monthRangeOf(now: Date = new Date()): { dateFrom: string; dateTo: string } {
+  const first = new Date(now.getFullYear(), now.getMonth(), 1)
+  const last = new Date(now.getFullYear(), now.getMonth() + 1, 0)
+  return { dateFrom: isoLocalDate(first), dateTo: isoLocalDate(last) }
+}
+
+/** The month both bounds span exactly ("2026-09-01".."2026-09-30"), or null for any other range. */
+export function wholeMonthOf(from: string, to: string): { year: number; month: number } | null {
+  const match = /^(\d{4})-(\d{2})-01$/.exec(from)
+  if (!match) return null
+  const year = Number(match[1])
+  const month = Number(match[2])
+  if (month < 1 || month > 12) return null
+  return monthRangeOf(new Date(year, month - 1, 1)).dateTo === to ? { year, month } : null
 }

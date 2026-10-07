@@ -44,6 +44,10 @@ export interface DossierListItem {
   planningDate: string | null
   invoiceStatus: DossierInvoiceStatus | null
   hasCmr: boolean
+  /** Dossier concurrency token; row actions send it so a stale row is refused like on the detail page. Absent on older payloads. */
+  version?: string | null
+  /** Server roll-up over the billable units; null = nothing billable. Absent on older payloads. */
+  priceStatus?: ActivityPriceStatus | null
 }
 
 export type DossierInvoiceStatus = 'NotInvoiced' | 'Draft' | 'Sent' | 'Paid'

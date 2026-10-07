@@ -40,7 +40,9 @@
     "attachFile": "Ajouter un fichier : {title}",
     "visibility": "Modifier la visibilité : {title}",
     "move": "Déplacer : {title}",
-    "delete": "Supprimer : {title}"
+    "delete": "Supprimer : {title}",
+    "viewShort": "Consulter",
+    "downloadShort": "Télécharger"
   },
   "visibility": {
     "visible": "Visible pour le client",
@@ -139,6 +141,7 @@
       "Mixed": "{count} documents de transport"
     },
     "uploads_one": "{count} document",
-    "uploads_other": "{count} documents"
+    "uploads_other": "{count} documents",
+    "notApplicable": "Sans objet"
   }
 }

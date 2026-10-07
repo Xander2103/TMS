@@ -1,0 +1,234 @@
+/* Documenten workspace (master sprint 2026-09-21, D6): level switcher, document tables, dialogs.
+   Tokens from styles/global.css; box-sizing set here. */
+
+.ddoc-workspace {
+  box-sizing: border-box;
+  container-type: inline-size;
+}
+
+.ddoc-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-3);
+  margin: 0 0 var(--space-3);
+}
+
+.ddoc-levels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.ddoc-level {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--text-h);
+  font: inherit;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.ddoc-level:hover {
+  background: var(--bg-muted, var(--accent-bg));
+}
+
+.ddoc-level.is-active {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.ddoc-level:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.ddoc-level-count {
+  min-width: 1.25em;
+  padding: 0 0.4em;
+  border-radius: 999px;
+  background: var(--border);
+  color: var(--text-h);
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-align: center;
+}
+
+.ddoc-toolbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+}
+
+.ddoc-summary,
+.ddoc-hint,
+.ddoc-meta {
+  color: var(--text-muted);
+  font-size: 0.875rem;
+}
+
+.ddoc-hint {
+  margin: 0 0 var(--space-2);
+}
+
+.ddoc-error {
+  color: var(--danger, #b42318);
+}
+
+.ddoc-section {
+  margin: 0 0 var(--space-4);
+}
+
+.ddoc-section h3 {
+  margin: 0 0 var(--space-1);
+}
+
+.ddoc-section-general {
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border);
+}
+
+.ddoc-general {
+  margin-top: var(--space-4);
+}
+
+/* Table: desktop rows; cards below 720px of the container. */
+.ddoc-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.ddoc-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9375rem;
+}
+
+.ddoc-table th,
+.ddoc-table td {
+  padding: var(--space-2) var(--space-2);
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.ddoc-table th {
+  color: var(--text-muted);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.ddoc-title {
+  display: block;
+  font-weight: 600;
+}
+
+.ddoc-title + .ddoc-meta,
+.ddoc-meta + .ddoc-meta {
+  display: block;
+}
+
+.ddoc-file {
+  display: inline-block;
+  max-width: 16rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+
+/* The row actions stay on ONE row on desktop (sprintLayoutInvariants). */
+.ddoc-actions {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: var(--space-2);
+  white-space: nowrap;
+}
+
+.ddoc-actions .link-button {
+  font: inherit;
+  font-size: 0.875rem;
+}
+
+.link-button-danger {
+  color: var(--danger, #b42318);
+}
+
+.ddoc-checkbox {
+  display: block;
+  margin: var(--space-2) 0 0;
+}
+
+.ddoc-checkbox .ddoc-hint {
+  display: block;
+  margin: var(--space-1) 0 0;
+}
+
+.ddoc-move-options {
+  margin: var(--space-2) 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.ddoc-move-option {
+  display: block;
+  padding: var(--space-1) 0;
+}
+
+/* Activity card cell. */
+.ddoc-activity-status.is-missing,
+.ddoc-activity-status.is-not-applicable {
+  color: var(--text-muted);
+}
+
+@container (max-width: 720px) {
+  .ddoc-table thead {
+    display: none;
+  }
+
+  .ddoc-table,
+  .ddoc-table tbody,
+  .ddoc-table tr,
+  .ddoc-table td {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .ddoc-table tr {
+    margin: 0 0 var(--space-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: var(--space-2);
+  }
+
+  .ddoc-table td {
+    border-bottom: 0;
+    padding: var(--space-1) 0;
+  }
+
+  .ddoc-table td::before {
+    content: attr(data-label);
+    display: block;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+  }
+
+  .ddoc-actions {
+    flex-wrap: wrap;
+    white-space: normal;
+  }
+}

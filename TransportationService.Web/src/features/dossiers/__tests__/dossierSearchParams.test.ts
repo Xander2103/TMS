@@ -1,12 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import {
+  activeFilterChips,
   activeFilterKeys,
+  clearChipPatch,
   EMPTY_DOSSIER_FILTERS,
+  monthRangeOf,
   parseDossierSearchParams,
   toSearchDossiersParams,
   toSearchParams,
   todayRange,
   weekRangeOf,
+  wholeMonthOf,
 } from '../pages/dossierSearchParams'
 
 describe('parseDossierSearchParams', () => {
@@ -20,7 +24,7 @@ describe('parseDossierSearchParams', () => {
         'search=nexans&status=Closed&customerId=c-1&dateFrom=2026-09-01&dateTo=2026-09-30&dossierNumber=DOS-1' +
           '&orderNumber=ORD-1&customerReference=REF&customerNumber=K-1&confirmationSource=Manual&confirmedFrom=2026-09-02' +
           '&confirmedTo=2026-09-03&createdFrom=2026-08-01&createdTo=2026-08-31&planningFrom=2026-09-05&planningTo=2026-09-06' +
-          '&driverId=dr-1&vehicleId=v-1&licensePlate=1-ABC-123&trailerId=tr-1&activityTypeId=at-1&loadingCity=Antwerpen' +
+          '&driverId=dr-1&vehicleId=v-1&licensePlate=1-ABC-123&trailerId=tr-1&transportTypeId=tt-1&activityTypeId=at-1&loadingCity=Antwerpen' +
           '&unloadingCity=Gent&postalCode=2000&countryCode=BE&priceStatus=Partial&invoiceStatus=Sent&hasCmr=true' +
           '&sort=number&dir=asc&page=2',
       ),
@@ -47,6 +51,7 @@ describe('parseDossierSearchParams', () => {
       vehicleId: 'v-1',
       licensePlate: '1-ABC-123',
       trailerId: 'tr-1',
+      transportTypeId: 'tt-1',
       activityTypeId: 'at-1',
       loadingCity: 'Antwerpen',
       unloadingCity: 'Gent',
@@ -115,7 +120,48 @@ describe('activeFilterKeys', () => {
   })
 })
 
+describe('activeFilterChips', () => {
+  it('telt een datumbereik als één filter, ook met maar één grens gezet', () => {
+    const chips = activeFilterChips({
+      ...EMPTY_DOSSIER_FILTERS,
+      status: 'Closed',
+      customerId: 'c-1',
+      dateFrom: '2026-09-01',
+      dateTo: '2026-09-30',
+      transportTypeId: 'tt-1',
+      planningFrom: '2026-09-05',
+    })
+
+    expect(chips.map((chip) => chip.id)).toEqual(['status', 'customerId', 'date', 'planning', 'transportTypeId'])
+    expect(chips.find((chip) => chip.id === 'date')?.keys).toEqual(['dateFrom', 'dateTo'])
+  })
+
+  it('zoekterm, sortering en pagina zijn geen filters', () => {
+    expect(activeFilterChips({ ...EMPTY_DOSSIER_FILTERS, search: 'q', sort: 'number', dir: 'asc', page: 4 })).toEqual([])
+  })
+
+  it('clearChipPatch wist beide grenzen van een bereik en precies één los filter', () => {
+    const [status, range] = activeFilterChips({ ...EMPTY_DOSSIER_FILTERS, status: 'Open', confirmedTo: '2026-09-30' })
+
+    expect(clearChipPatch(status)).toEqual({ status: '' })
+    expect(clearChipPatch(range)).toEqual({ confirmedFrom: '', confirmedTo: '' })
+  })
+})
+
 describe('datumbereiken', () => {
+  it('monthRangeOf geeft de eerste t/m de laatste dag van de maand', () => {
+    expect(monthRangeOf(new Date(2026, 8, 23))).toEqual({ dateFrom: '2026-09-01', dateTo: '2026-09-30' })
+    expect(monthRangeOf(new Date(2028, 1, 10))).toEqual({ dateFrom: '2028-02-01', dateTo: '2028-02-29' })
+  })
+
+  it('wholeMonthOf herkent enkel een bereik dat exact één maand beslaat', () => {
+    expect(wholeMonthOf('2026-09-01', '2026-09-30')).toEqual({ year: 2026, month: 9 })
+    expect(wholeMonthOf('2026-09-01', '2026-09-29')).toBeNull()
+    expect(wholeMonthOf('2026-09-02', '2026-09-30')).toBeNull()
+    expect(wholeMonthOf('2026-09-01', '2026-10-31')).toBeNull()
+    expect(wholeMonthOf('', '2026-09-30')).toBeNull()
+  })
+
   it('todayRange geeft de lokale dag als van/tot', () => {
     expect(todayRange(new Date(2026, 8, 23, 23, 30))).toEqual({ dateFrom: '2026-09-23', dateTo: '2026-09-23' })
   })

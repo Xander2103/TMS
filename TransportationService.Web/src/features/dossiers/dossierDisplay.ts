@@ -4,7 +4,7 @@ import type { TranslateFn } from '../../i18n/localeContext'
 import { formatDate as formatDatePreference, formatDateTime } from '../../utils/dates'
 import { formatDecimal, getDecimalSeparatorPreference } from '../../utils/numbers'
 import { ORDER_STATUS_LABELS, type TransportOrderStatus } from '../transport-orders/types'
-import type { DossierDetail } from './types'
+import type { ActivityPriceStatus, DossierDetail, DossierListItem } from './types'
 
 /** "2,5 u" — tenant-decimaalteken, trailing zeros getrimd, uureenheid per taal. */
 export function formatDuration(hours: number): string {
@@ -48,6 +48,44 @@ export function dossierLifecycleFacts(dossier: DossierDetail, t: TranslateFn): {
     return { facts, reason }
   }
   return { facts: [], reason: null }
+}
+
+/**
+ * Confirmation metadata of a list row, compact: `line` for under the status badge
+ * ("23/09/2026 · Handmatig") and `title` for the tooltip (with the time). Only metadata that
+ * exists is shown — a legacy confirmed dossier without a recorded source reads "Bron onbekend
+ * (historisch)", never a guessed Manual/Automatic. Null for an open or cancelled dossier.
+ */
+export function dossierListConfirmation(
+  row: Pick<DossierListItem, 'status' | 'confirmedAt' | 'confirmationSource'>,
+  t: TranslateFn,
+): { line: string; title: string } | null {
+  if (row.status !== 'Closed') return null
+  const source =
+    row.confirmationSource === 'Manual'
+      ? t('dossiers.filters.options.sourceManual')
+      : row.confirmationSource === 'Automatic'
+        ? t('dossiers.filters.options.sourceAutomatic')
+        : t('dossiers.list.sourceUnknown')
+  if (!row.confirmedAt) return { line: source, title: source }
+  return {
+    line: `${formatDatePreference(row.confirmedAt)} · ${source}`,
+    title: `${t('dossiers.lifecycle.confirmedAt', { date: formatDateTime(row.confirmedAt) })} · ${source}`,
+  }
+}
+
+/**
+ * Price status of a list row: the server's roll-up when present. An older payload falls back to
+ * the unit counts, which can tell priced/partial/not priced apart but never "Gratis" — a missing
+ * price must not read as free. Null = nothing billable, so no status at all.
+ */
+export function dossierListPriceStatus(
+  row: Pick<DossierListItem, 'priceStatus' | 'billableActivityCount' | 'pricedActivityCount'>,
+): ActivityPriceStatus | null {
+  if (row.priceStatus !== undefined) return row.priceStatus
+  if (row.billableActivityCount === 0) return null
+  if (row.pricedActivityCount === 0) return 'NotPriced'
+  return row.pricedActivityCount < row.billableActivityCount ? 'PartiallyPriced' : 'Priced'
 }
 
 /** Worst-first ranking for the derived operational chip (§11). */

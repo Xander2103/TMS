@@ -99,6 +99,8 @@ export function ActivityCard({ activity, activities, dossier, onOpen, onOpenDeta
             <ActivityDocumentStatus
               issued={activity.issuedDocuments ?? []}
               documentCount={activity.documentCount ?? 0}
+              // A standalone activity has no order and therefore no transport document to miss.
+              applicable={activity.hasStops}
               onOpen={activity.linkedTransportOrderId && onOpenDocuments ? () => onOpenDocuments(activity) : undefined}
             />
           </dd>

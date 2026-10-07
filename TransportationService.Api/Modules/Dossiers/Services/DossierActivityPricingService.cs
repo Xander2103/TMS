@@ -252,10 +252,7 @@ public class DossierActivityPricingService : IDossierActivityPricingService
             return null;
         }
 
-        if (dossier.Status == DossierStatus.Closed)
-        {
-            throw new DomainValidationException("Een gesloten dossier kan niet worden bewerkt. Heropen het dossier eerst.");
-        }
+        DossierStateRules.RequireEditable(dossier);
 
         var activity = await _dbContext.DossierActivities
             .Include(a => a.ActivityType)

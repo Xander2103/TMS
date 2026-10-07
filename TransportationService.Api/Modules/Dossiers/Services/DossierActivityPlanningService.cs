@@ -60,10 +60,7 @@ public class DossierActivityPlanningService : IDossierActivityPlanningService
             return null;
         }
 
-        if (dossier.Status == DossierStatus.Closed)
-        {
-            throw new DomainValidationException("Een gesloten dossier kan niet worden ingepland. Heropen het dossier eerst.");
-        }
+        DossierStateRules.RequireEditable(dossier, "ingepland");
 
         if (request.Version is { } expected && expected != dossier.Version)
         {

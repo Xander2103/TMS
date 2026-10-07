@@ -40,7 +40,9 @@
     "attachFile": "Bestand toevoegen: {title}",
     "visibility": "Zichtbaarheid aanpassen: {title}",
     "move": "Verplaatsen: {title}",
-    "delete": "Verwijderen: {title}"
+    "delete": "Verwijderen: {title}",
+    "viewShort": "Bekijken",
+    "downloadShort": "Downloaden"
   },
   "visibility": {
     "visible": "Zichtbaar voor klant",
@@ -139,6 +141,7 @@
       "Mixed": "{count} transportdocumenten"
     },
     "uploads_one": "{count} document",
-    "uploads_other": "{count} documenten"
+    "uploads_other": "{count} documenten",
+    "notApplicable": "Niet van toepassing"
   }
 }

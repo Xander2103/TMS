@@ -413,10 +413,7 @@ public class DossierActivityService : IDossierActivityService
             return null;
         }
 
-        if (dossier.Status == DossierStatus.Closed)
-        {
-            throw new DomainValidationException("Een gesloten dossier kan niet worden bewerkt. Heropen het dossier eerst.");
-        }
+        DossierStateRules.RequireEditable(dossier);
 
         return dossier;
     }

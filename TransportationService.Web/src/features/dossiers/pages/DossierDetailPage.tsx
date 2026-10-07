@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
-import { ApiError } from '../../../api/apiClient'
 import { LoadingState } from '../../../components/feedback/LoadingState'
 import { ErrorState } from '../../../components/feedback/ErrorState'
 import { BackButton } from '../../../components/ui/BackButton'
@@ -49,6 +48,7 @@ import { DossierHistorySection } from '../components/sections/DossierHistorySect
 import { DossierPriceSection } from '../components/sections/DossierPriceSection'
 import { DossierRouteSection } from '../components/sections/DossierRouteSection'
 import { DOSSIER_TABS, TAB_FOR_SECTION, dossierTabPath, isDossierTab, type DossierTab } from '../dossierSections'
+import { dossierVersionConflict } from '../dossierConflict'
 import { DossierWorkspaceContext, type DossierWorkspace } from '../dossierWorkspace'
 import { issueActivity } from '../activityDisplay'
 import { useVehicleCapacity } from '../useVehicleCapacity'
@@ -56,14 +56,6 @@ import { useDossierNavigator, type DossierSectionId } from '../sectionRegistry'
 import '../../dashboard/pages/dashboard.css'
 import './dossiers.css'
 import './dossier-detail.css'
-
-/** True when a thrown error is a dossier 409 whose body carries the current state. */
-function conflictBody(err: unknown): DossierDetail | null {
-  if (err instanceof ApiError && err.status === 409 && err.body && typeof err.body === 'object' && 'dossierNumber' in err.body) {
-    return err.body as DossierDetail
-  }
-  return null
-}
 
 /**
  * Redesign 2026-09-11 — the dossier as a navigation-based workspace: a stable shell (header,
@@ -166,7 +158,7 @@ function DossierDetailContent() {
 
   /** Centrale 409-afhandeling: toont de banner en meldt de aanroeper dat het afgehandeld is. */
   const handleConflict = useCallback((err: unknown): boolean => {
-    const current = conflictBody(err)
+    const current = dossierVersionConflict(err)
     if (current) {
       setConflict(current)
       return true

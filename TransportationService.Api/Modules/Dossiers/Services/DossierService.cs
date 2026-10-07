@@ -122,7 +122,7 @@ public partial class DossierService : IDossierService
             .Select(d => new
             {
                 d.Id, d.DossierNumber, d.Title, d.Status, d.CustomerId, d.ResponsibleUserId, d.CreatedAt,
-                d.CustomerReference, d.DossierDate, d.ClosedAt, d.ConfirmationSource,
+                d.CustomerReference, d.DossierDate, d.ClosedAt, d.ConfirmationSource, d.Version,
                 ActivityCount = _dbContext.DossierActivities.Count(a => a.DossierId == d.Id),
                 CustomerName = _dbContext.Customers
                     .Where(c => c.Id == d.CustomerId).Select(c => (string?)c.Name).FirstOrDefault(),
@@ -239,8 +239,29 @@ public partial class DossierService : IDossierService
                 DossierDate: r.DossierDate,
                 ConfirmedAt: r.Status == DossierStatus.Closed ? r.ClosedAt : null,
                 ConfirmationSource: r.ConfirmationSource?.ToString(),
-                ActivityCount: r.ActivityCount))
+                ActivityCount: r.ActivityCount,
+                Version: r.Version,
+                PriceStatus: ListPriceStatus(
+                    billable: r.TransportUnitCount + r.StandaloneUnitCount + r.LegacyUnitCount,
+                    priced: r.TransportPricedCount + r.StandalonePricedCount + r.LegacyPricedCount,
+                    total: (r.TransportPricedTotal ?? 0m) + (r.StandalonePricedTotal ?? 0m) + (r.LegacyPricedTotal ?? 0m),
+                    unconfirmedZero: r.StandaloneZeroCount)))
             .ToList();
+    }
+
+    /// <summary>
+    /// Dossier-level price status from the unit counts of the list projection — the per-activity
+    /// <see cref="ActivityPriceStatus"/> vocabulary rolled up: nothing billable = no status, none
+    /// priced = NotPriced, some = PartiallyPriced, all = Priced. Free only when every unit is priced,
+    /// the total is exactly € 0 and no standalone zero still awaits its "free" confirmation — a
+    /// missing price never reads as free.
+    /// </summary>
+    private static string? ListPriceStatus(int billable, int priced, decimal total, int unconfirmedZero)
+    {
+        if (billable == 0) return null;
+        if (priced == 0) return ActivityPriceStatus.NotPriced;
+        if (priced < billable) return ActivityPriceStatus.PartiallyPriced;
+        return total == 0m && unconfirmedZero == 0 ? ActivityPriceStatus.Free : ActivityPriceStatus.Priced;
     }
 
     /// <summary>
@@ -1204,10 +1225,7 @@ public partial class DossierService : IDossierService
 
     private static void RequireOpen(TransportDossier dossier)
     {
-        if (dossier.Status == DossierStatus.Closed)
-        {
-            throw new DomainValidationException("Een gesloten dossier kan niet worden bewerkt. Heropen het dossier eerst.");
-        }
+        DossierStateRules.RequireEditable(dossier);
     }
 
     private static string GenerateDossierNumber(TenantSettings? settings)

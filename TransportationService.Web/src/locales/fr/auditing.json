@@ -17,11 +17,13 @@
     "columns": {
       "timestamp": "Horodatage",
       "action": "Action",
-      "changes": "Modification"
+      "changes": "Modification",
+      "actor": "Par"
     },
     "before": "Avant :",
     "after": "Après :",
     "empty": "Pas encore d'historique pour cet élément.",
-    "loading": "Chargement de l'historique…"
+    "loading": "Chargement de l'historique…",
+    "system": "Système (automatique)"
   }
 }

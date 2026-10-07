@@ -133,6 +133,13 @@ public partial class DossierService
             dossiers = dossiers.Where(d => _dbContext.DossierActivities.Any(a => a.DossierId == d.Id && a.ActivityTypeId == typeId));
         }
 
+        if (query.TransportTypeId is { } transportTypeId)
+        {
+            // A transport type is an activity type whose work runs through an order (HasStops).
+            dossiers = dossiers.Where(d => _dbContext.DossierActivities.Any(a => a.DossierId == d.Id && a.ActivityTypeId == transportTypeId
+                && _dbContext.ActivityTypes.Any(t => t.Id == a.ActivityTypeId && t.HasStops)));
+        }
+
         if (Term(query.LoadingCity) is { } loading)
         {
             dossiers = dossiers.Where(d => _dbContext.TransportOrderStops.Where(s => _dbContext.TransportOrders.Where(o => _dbContext.DossierOrders.Any(l => l.DossierId == d.Id && l.TransportOrderId == o.Id) || _dbContext.DossierActivities.Any(a => a.DossierId == d.Id && a.LinkedTransportOrderId == o.Id)).Any(o2 => o2.Id == s.TransportOrderId)).Any(s => s.StopType == StopType.Loading && s.City != null && s.City.ToLower().Contains(loading)));
@@ -156,11 +163,23 @@ public partial class DossierService
         // ---- commercial
         if (!string.IsNullOrWhiteSpace(query.PriceStatus))
         {
+            // The billable/priced unit counts of the list projection (transport units through their
+            // order, standalone units through their own price record, legacy links without activity),
+            // so the filter and the price column of a row can never disagree.
+            var counted = dossiers.Select(d => new
+            {
+                Dossier = d,
+                Billable = _dbContext.DossierActivities.Where(a => a.DossierId == d.Id).Join(_dbContext.ActivityTypes, a => a.ActivityTypeId, t => t.Id, (a, t) => t).Count(t => t.IsBillable)
+                    + _dbContext.DossierOrders.Count(l => l.DossierId == d.Id && !_dbContext.DossierActivities.Any(a => a.DossierId == d.Id && a.LinkedTransportOrderId == l.TransportOrderId)),
+                Priced = _dbContext.DossierActivities.Where(a => a.DossierId == d.Id && a.LinkedTransportOrderId != null).Join(_dbContext.ActivityTypes, a => a.ActivityTypeId, t => t.Id, (a, t) => new { a, t }).Where(x => x.t.IsBillable && x.t.HasStops).Join(_dbContext.TransportOrders, x => x.a.LinkedTransportOrderId, o => o.Id, (x, o) => o).Where(OrderPricingState.IsPricedExpression).Count()
+                    + _dbContext.DossierActivities.Where(a => a.DossierId == d.Id).Join(_dbContext.ActivityTypes, a => a.ActivityTypeId, t => t.Id, (a, t) => new { a, t }).Where(x => x.t.IsBillable && !x.t.HasStops).Join(_dbContext.DossierActivityPricings, x => x.a.Id, p => p.DossierActivityId, (x, p) => p).Where(ActivityPricingState.IsPricedExpression).Count()
+                    + _dbContext.DossierOrders.Where(l => l.DossierId == d.Id && !_dbContext.DossierActivities.Any(a => a.DossierId == d.Id && a.LinkedTransportOrderId == l.TransportOrderId)).Join(_dbContext.TransportOrders, l => l.TransportOrderId, o => o.Id, (l, o) => o).Where(OrderPricingState.IsPricedExpression).Count(),
+            });
             dossiers = query.PriceStatus.Trim().ToLowerInvariant() switch
             {
-                "priced" => dossiers.Where(d => (_dbContext.DossierActivities.Where(a => a.DossierId == d.Id && a.LinkedTransportOrderId != null).Join(_dbContext.ActivityTypes, a => a.ActivityTypeId, t => t.Id, (a, t) => new { a, t }).Where(x => x.t.IsBillable && x.t.HasStops).Join(_dbContext.TransportOrders, x => x.a.LinkedTransportOrderId, o => o.Id, (x, o) => o).Where(OrderPricingState.IsPricedExpression).Count() + _dbContext.DossierActivities.Where(a => a.DossierId == d.Id).Join(_dbContext.ActivityTypes, a => a.ActivityTypeId, t => t.Id, (a, t) => new { a, t }).Where(x => x.t.IsBillable && !x.t.HasStops).Join(_dbContext.DossierActivityPricings, x => x.a.Id, p => p.DossierActivityId, (x, p) => p).Where(ActivityPricingState.IsPricedExpression).Count()) > 0),
-                "unpriced" => dossiers.Where(d => (_dbContext.DossierActivities.Where(a => a.DossierId == d.Id && a.LinkedTransportOrderId != null).Join(_dbContext.ActivityTypes, a => a.ActivityTypeId, t => t.Id, (a, t) => new { a, t }).Where(x => x.t.IsBillable && x.t.HasStops).Join(_dbContext.TransportOrders, x => x.a.LinkedTransportOrderId, o => o.Id, (x, o) => o).Where(OrderPricingState.IsPricedExpression).Count() + _dbContext.DossierActivities.Where(a => a.DossierId == d.Id).Join(_dbContext.ActivityTypes, a => a.ActivityTypeId, t => t.Id, (a, t) => new { a, t }).Where(x => x.t.IsBillable && !x.t.HasStops).Join(_dbContext.DossierActivityPricings, x => x.a.Id, p => p.DossierActivityId, (x, p) => p).Where(ActivityPricingState.IsPricedExpression).Count()) == 0),
-                "partial" => dossiers.Where(d => (_dbContext.DossierActivities.Where(a => a.DossierId == d.Id && a.LinkedTransportOrderId != null).Join(_dbContext.ActivityTypes, a => a.ActivityTypeId, t => t.Id, (a, t) => new { a, t }).Where(x => x.t.IsBillable && x.t.HasStops).Join(_dbContext.TransportOrders, x => x.a.LinkedTransportOrderId, o => o.Id, (x, o) => o).Where(OrderPricingState.IsPricedExpression).Count() + _dbContext.DossierActivities.Where(a => a.DossierId == d.Id).Join(_dbContext.ActivityTypes, a => a.ActivityTypeId, t => t.Id, (a, t) => new { a, t }).Where(x => x.t.IsBillable && !x.t.HasStops).Join(_dbContext.DossierActivityPricings, x => x.a.Id, p => p.DossierActivityId, (x, p) => p).Where(ActivityPricingState.IsPricedExpression).Count()) > 0 && (_dbContext.DossierActivities.Where(a => a.DossierId == d.Id && a.LinkedTransportOrderId != null).Join(_dbContext.ActivityTypes, a => a.ActivityTypeId, t => t.Id, (a, t) => new { a, t }).Where(x => x.t.IsBillable && x.t.HasStops).Join(_dbContext.TransportOrders, x => x.a.LinkedTransportOrderId, o => o.Id, (x, o) => o).Where(OrderPricingState.IsPricedExpression).Count() + _dbContext.DossierActivities.Where(a => a.DossierId == d.Id).Join(_dbContext.ActivityTypes, a => a.ActivityTypeId, t => t.Id, (a, t) => new { a, t }).Where(x => x.t.IsBillable && !x.t.HasStops).Join(_dbContext.DossierActivityPricings, x => x.a.Id, p => p.DossierActivityId, (x, p) => p).Where(ActivityPricingState.IsPricedExpression).Count()) < _dbContext.DossierActivities.Where(a => a.DossierId == d.Id).Join(_dbContext.ActivityTypes, a => a.ActivityTypeId, t => t.Id, (a, t) => t).Count(t => t.IsBillable)),
+                "priced" => counted.Where(x => x.Priced > 0 && x.Priced >= x.Billable).Select(x => x.Dossier),
+                "partial" => counted.Where(x => x.Priced > 0 && x.Priced < x.Billable).Select(x => x.Dossier),
+                "unpriced" => counted.Where(x => x.Billable > 0 && x.Priced == 0).Select(x => x.Dossier),
                 _ => throw new DomainValidationException("priceStatus", "Onbekende prijsstatus."),
             };
         }

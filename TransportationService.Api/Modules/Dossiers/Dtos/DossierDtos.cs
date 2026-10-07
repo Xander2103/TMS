@@ -40,7 +40,14 @@ public record DossierListItemDto(
     DateOnly? PlanningDate = null,
     /// <summary>"NotInvoiced" | "Draft" | "Sent" | "Paid" over the live invoices of its orders/activities.</summary>
     string? InvoiceStatus = null,
-    bool HasCmr = false);
+    bool HasCmr = false,
+    /// <summary>Dossier concurrency token, so a row action (confirm/cancel/reopen) is checked exactly like the detail page.</summary>
+    Guid? Version = null,
+    /// <summary>
+    /// Commercial status over the billable units, in the <c>ActivityPriceStatus</c> vocabulary:
+    /// "NotPriced" | "PartiallyPriced" | "Priced" | "Free"; null when the dossier has no billable unit.
+    /// </summary>
+    string? PriceStatus = null);
 
 /// <summary>
 /// Dossier search sprint 2026-09-23 — the ONE typed query behind the dossier list. Every text
@@ -76,13 +83,19 @@ public sealed record DossierSearchQuery
     public string? LicensePlate { get; init; }
     public Guid? TrailerId { get; init; }
 
+    /// <summary>Any activity of this type on the dossier.</summary>
     public Guid? ActivityTypeId { get; init; }
+    /// <summary>An activity of this type that runs through a transport order (the type has stops); combines with <see cref="ActivityTypeId"/>.</summary>
+    public Guid? TransportTypeId { get; init; }
     public string? LoadingCity { get; init; }
     public string? UnloadingCity { get; init; }
     public string? PostalCode { get; init; }
     public string? CountryCode { get; init; }
 
-    /// <summary>Priced | Partial | Unpriced (over the billable units).</summary>
+    /// <summary>
+    /// Priced (every billable unit priced) | Partial (some, not all) | Unpriced (billable units, none priced) —
+    /// the same counts the list row shows, so filter and price column never disagree.
+    /// </summary>
     public string? PriceStatus { get; init; }
     /// <summary>NotInvoiced | Draft | Sent | Paid.</summary>
     public string? InvoiceStatus { get; init; }

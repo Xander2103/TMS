@@ -277,10 +277,7 @@ public class DossierNoteService : IDossierNoteService
 
     private static void RequireOpen(TransportDossier dossier)
     {
-        if (dossier.Status == DossierStatus.Closed)
-        {
-            throw new DomainValidationException("Een gesloten dossier kan niet worden bewerkt. Heropen het dossier eerst.");
-        }
+        DossierStateRules.RequireEditable(dossier);
     }
 
     private Task<TransportDossier?> FindDossierAsync(Guid dossierId, CancellationToken cancellationToken) =>

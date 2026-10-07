@@ -104,6 +104,9 @@ postgres-data/
 uploads/
 storage/
 documents/
+# ...but source code is never an upload directory: without this exception the feature folder
+# src/features/dossiers/documents/ stays out of git and a clean checkout does not build.
+!TransportationService.Web/src/**/documents/
 temp/
 tmp/
 

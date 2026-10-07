@@ -186,7 +186,11 @@ public class DossierSearchTests
         Assert.Equal(2, (await h.Search(new DossierSearchQuery { CustomerNumber = "KL-200" })).TotalCount);
         Assert.Equal(3, (await h.Search(Q(customerId: h.CustomerVcb))).TotalCount);
         Assert.Equal(["DOS-0002", "DOS-0001"], await h.Numbers(new DossierSearchQuery { DateFrom = new(2026, 9, 5), DateTo = new(2026, 9, 15) }));
-        Assert.Equal(5, (await h.Search(new DossierSearchQuery { CreatedFrom = new(2026, 9, 23), CreatedTo = new(2026, 9, 23) })).TotalCount);
+        // CreatedAt is stamped by the auditing interceptor at save time (wall clock), not by the fixture.
+        var createdOn = DateOnly.FromDateTime(await h.Db.Context.TransportDossiers.AsNoTracking().Where(d => d.Id == h.DossierLive).Select(d => d.CreatedAt).SingleAsync());
+        Assert.Equal(5, (await h.Search(new DossierSearchQuery { CreatedFrom = createdOn, CreatedTo = createdOn })).TotalCount);
+        Assert.Equal(0, (await h.Search(new DossierSearchQuery { CreatedTo = createdOn.AddDays(-1) })).TotalCount);
+        Assert.Equal(0, (await h.Search(new DossierSearchQuery { CreatedFrom = createdOn.AddDays(1) })).TotalCount);
     }
 
     [Fact]
@@ -206,7 +210,7 @@ public class DossierSearchTests
         Assert.Equal(["DOS-0002"], await h.Numbers(new DossierSearchQuery { UnloadingCity = "Luik" }));
         Assert.Equal(["DOS-0001"], await h.Numbers(new DossierSearchQuery { PostalCode = "9000" }));
         Assert.Equal(["DOS-0003"], await h.Numbers(new DossierSearchQuery { CountryCode = "fr" }));
-        Assert.Equal(["DOS-0001", "DOS-0003"], await h.Numbers(new DossierSearchQuery { PriceStatus = "Priced" }));
+        Assert.Equal(["DOS-0001"], await h.Numbers(new DossierSearchQuery { PriceStatus = "Priced" }));
         Assert.Equal(["DOS-0002"], await h.Numbers(new DossierSearchQuery { PriceStatus = "Unpriced", Status = "Closed" }));
         Assert.Equal(["DOS-0003"], await h.Numbers(new DossierSearchQuery { InvoiceStatus = "Sent" }));
         Assert.Equal(["DOS-0001"], await h.Numbers(new DossierSearchQuery { InvoiceStatus = "Draft" }));
@@ -299,5 +303,151 @@ public class DossierSearchTests
         Assert.Equal("2 chauffeurs", live.DriverSummary);
         Assert.Equal(new DateOnly(2026, 9, 11), live.PlanningDate);
         Assert.Equal(["DOS-0001"], await h.Numbers(new DossierSearchQuery { DriverId = driver2 }));
+    }
+
+    // ---- Correction sprint 2026-10-06: transport type, consistent price status, trailer, tenant isolation
+
+    [Fact]
+    public async Task TransportTypeFilter_MatchesOrderBackedActivitiesOnly_AndCombinesWithTheOtherFilters()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+
+        Assert.Equal(3, (await h.Search(new DossierSearchQuery { TransportTypeId = h.TypeTransport })).TotalCount);
+        // Plateau has no stops: it is an activity type, never a transport type.
+        Assert.Empty(await h.Numbers(new DossierSearchQuery { TransportTypeId = h.TypePlateau }));
+        // Transport type AND activity type are two predicates, not one overwritten parameter.
+        Assert.Equal(["DOS-0003"], await h.Numbers(new DossierSearchQuery { TransportTypeId = h.TypeTransport, ActivityTypeId = h.TypePlateau }));
+        // Acceptance combination: status + customer + dossier date month + transport type + invoice status.
+        Assert.Equal(["DOS-0002"], await h.Numbers(new DossierSearchQuery
+        {
+            Status = "Closed", CustomerId = h.CustomerVcb, DateFrom = new(2026, 9, 1), DateTo = new(2026, 9, 30),
+            TransportTypeId = h.TypeTransport, InvoiceStatus = "NotInvoiced",
+        }));
+    }
+
+    [Fact]
+    public async Task PriceStatusFilter_AgreesWithThePriceCountsOfEveryRow()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+
+        // DOS-0001: 1/1 priced; DOS-0002: 0/1; DOS-0003: order priced, billable plateau activity not → 1/2;
+        // DOS-0004/0005: nothing billable, so neither priced nor "not priced".
+        Assert.Equal(["DOS-0001"], await h.Numbers(new DossierSearchQuery { PriceStatus = "Priced" }));
+        Assert.Equal(["DOS-0003"], await h.Numbers(new DossierSearchQuery { PriceStatus = "Partial" }));
+        Assert.Equal(["DOS-0002"], await h.Numbers(new DossierSearchQuery { PriceStatus = "Unpriced" }));
+        await Assert.ThrowsAsync<DomainValidationException>(() => h.Search(new DossierSearchQuery { PriceStatus = "Weird" }));
+
+        static string? Classify(DossierListItemDto i) =>
+            i.BillableActivityCount == 0 ? null
+            : i.PricedActivityCount == 0 ? "Unpriced"
+            : i.PricedActivityCount < i.BillableActivityCount ? "Partial"
+            : "Priced";
+        var all = (await h.Search(Q())).Items;
+        Assert.Equal(
+            [("DOS-0001", "Priced"), ("DOS-0002", "NotPriced"), ("DOS-0003", "PartiallyPriced"), ("DOS-0004", null), ("DOS-0005", null)],
+            all.OrderBy(i => i.DossierNumber).Select(i => (i.DossierNumber, i.PriceStatus)));
+        foreach (var status in new[] { "Priced", "Partial", "Unpriced" })
+        {
+            var expected = all.Where(i => Classify(i) == status).Select(i => i.DossierNumber).Order().ToList();
+            Assert.Equal(expected, await h.Numbers(new DossierSearchQuery { PriceStatus = status, Sort = "number", Dir = "asc" }));
+        }
+    }
+
+    [Fact]
+    public async Task PriceStatusFilter_CountsALegacyOrderLinkWithoutActivity()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        // DOS-0005 gets a priced order that no activity represents (an old LinkOrder).
+        var orderId = Guid.NewGuid();
+        h.Db.Context.TransportOrders.Add(new TransportOrder { Id = orderId, TenantId = h.TenantId, CustomerId = h.CustomerOther, OrderNumber = "ORD-0500", OrderDate = new(2026, 9, 22), Status = TransportOrderStatus.Confirmed, AgreedPrice = 100m, PriceIsManual = true });
+        h.Db.Context.DossierOrders.Add(new DossierOrder { Id = Guid.NewGuid(), TenantId = h.TenantId, DossierId = h.DossierOther, TransportOrderId = orderId });
+        await h.Db.Context.SaveChangesAsync();
+
+        var row = (await h.Search(Q())).Items.Single(i => i.DossierNumber == "DOS-0005");
+        Assert.Equal((1, 1, 100m), (row.BillableActivityCount, row.PricedActivityCount, row.AgreedPriceTotal));
+        Assert.Contains("DOS-0005", await h.Numbers(new DossierSearchQuery { PriceStatus = "Priced" }));
+        Assert.DoesNotContain("DOS-0005", await h.Numbers(new DossierSearchQuery { PriceStatus = "Unpriced" }));
+    }
+
+    [Fact]
+    public async Task ListRow_ReadsFreeOnlyForAConfirmedFreeDossier_NeverForAMissingOrUnconfirmedZeroPrice()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        // DOS-0004: a standalone activity confirmed free; DOS-0005: one at € 0 that nobody confirmed.
+        void Standalone(Guid dossierId, bool freeConfirmed)
+        {
+            var activity = Guid.NewGuid();
+            h.Db.Context.DossierActivities.Add(new DossierActivity { Id = activity, TenantId = h.TenantId, DossierId = dossierId, ActivityTypeId = h.TypePlateau, Sequence = 1 });
+            h.Db.Context.DossierActivityPricings.Add(new DossierActivityPricing
+            {
+                Id = Guid.NewGuid(), TenantId = h.TenantId, DossierActivityId = activity,
+                PricingSource = freeConfirmed ? ActivityPricingSource.Lines : ActivityPricingSource.OneOff,
+                FixedAmount = freeConfirmed ? null : 0m, AgreedPrice = 0m, FreeConfirmed = freeConfirmed,
+            });
+        }
+        Standalone(h.DossierCancelled, freeConfirmed: true);
+        Standalone(h.DossierOther, freeConfirmed: false);
+        await h.Db.Context.SaveChangesAsync();
+
+        var items = (await h.Search(Q())).Items.ToDictionary(i => i.DossierNumber);
+
+        Assert.Equal(("Free", 0m, 0), (items["DOS-0004"].PriceStatus, items["DOS-0004"].AgreedPriceTotal, items["DOS-0004"].ZeroPricedActivityCount));
+        Assert.Equal(("Priced", 0m, 1), (items["DOS-0005"].PriceStatus, items["DOS-0005"].AgreedPriceTotal, items["DOS-0005"].ZeroPricedActivityCount));
+        // An unpriced dossier is NotPriced with a null total — never € 0, never Free.
+        Assert.Equal(("NotPriced", (decimal?)null), (items["DOS-0002"].PriceStatus, items["DOS-0002"].AgreedPriceTotal));
+    }
+
+    [Fact]
+    public async Task TrailerFilter_AndTrailerPlate_FindTheDossierOfTheTrip()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var trailer = Guid.NewGuid();
+        h.Db.Context.Trailers.Add(new Trailer { Id = trailer, TenantId = h.TenantId, InternalNumber = "OPL-3", LicensePlate = "Q-XYZ-987", IsActive = true });
+        var trip = await h.Db.Context.Trips.SingleAsync(t => t.TripNumber == "RIT-1");
+        trip.TrailerId = trailer;
+        await h.Db.Context.SaveChangesAsync();
+
+        Assert.Equal(["DOS-0001"], await h.Numbers(new DossierSearchQuery { TrailerId = trailer }));
+        Assert.Equal(["DOS-0001"], await h.Numbers(new DossierSearchQuery { LicensePlate = "xyz-987" }));
+        Assert.Empty(await h.Numbers(new DossierSearchQuery { TrailerId = Guid.NewGuid() }));
+    }
+
+    [Fact]
+    public async Task Search_NeverCrossesTenants_WhateverTheFilterOrSearchTerm()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var foreign = (await h.Db.Context.Tenants.AsNoTracking().SingleAsync(t => t.Slug == "f")).Id;
+
+        // The foreign tenant sees its own look-alike dossier and nothing of this tenant…
+        var own = await h.Search(Q("DOS-0001"), tenantId: foreign);
+        Assert.Equal(["Elders"], own.Items.Select(i => i.Title));
+        Assert.Empty((await h.Search(Q("caudenberg"), tenantId: foreign)).Items);
+        Assert.Empty((await h.Search(Q(customerId: h.CustomerVcb), tenantId: foreign)).Items);
+        Assert.Empty((await h.Search(new DossierSearchQuery { DriverId = h.DriverJan }, tenantId: foreign)).Items);
+        Assert.Empty((await h.Search(new DossierSearchQuery { VehicleId = h.VehicleId }, tenantId: foreign)).Items);
+        Assert.Empty((await h.Search(new DossierSearchQuery { TransportTypeId = h.TypeTransport }, tenantId: foreign)).Items);
+        Assert.Empty((await h.Search(new DossierSearchQuery { OrderNumber = "ORD-0100" }, tenantId: foreign)).Items);
+        Assert.Empty((await h.Search(new DossierSearchQuery { PostalCode = "9000" }, tenantId: foreign)).Items);
+        // …and this tenant never sees the foreign one.
+        Assert.Empty(await h.Numbers(Q("Elders")));
+        Assert.Equal(1, (await h.Search(new DossierSearchQuery { DossierNumber = "DOS-0001" })).TotalCount);
+    }
+
+    [Fact]
+    public async Task ListRow_CarriesTheDossierVersion_ForRowActions()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var version = (await h.Db.Context.TransportDossiers.AsNoTracking().SingleAsync(d => d.Id == h.DossierLive)).Version;
+
+        var row = (await h.Search(Q())).Items.Single(i => i.Id == h.DossierLive);
+
+        Assert.Equal(version, row.Version);
     }
 }

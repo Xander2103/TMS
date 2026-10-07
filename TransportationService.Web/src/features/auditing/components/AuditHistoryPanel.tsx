@@ -16,6 +16,8 @@ interface AuditLogEntry {
   oldValuesJson: string | null
   newValuesJson: string | null
   timestamp: string
+  /** Acting person; null = no human actor (automatic pipeline event) or unknown. Absent on older payloads. */
+  userName?: string | null
 }
 
 interface AuditLogPage {
@@ -104,6 +106,13 @@ export function AuditHistoryPanel({ entityType, entityId }: { entityType: string
       header: t('auditing.panel.columns.action'),
       width: '160px',
       render: (row) => actionLabel(t, row.entityType, row.action),
+    },
+    {
+      key: 'actor',
+      header: t('auditing.panel.columns.actor'),
+      width: '160px',
+      // No user id = no person acted (an automatic confirmation by the pipeline); never a made-up name.
+      render: (row) => (row.userId ? (row.userName ?? row.userId) : <span className="placeholder-text">{t('auditing.panel.system')}</span>),
     },
     {
       key: 'changes',

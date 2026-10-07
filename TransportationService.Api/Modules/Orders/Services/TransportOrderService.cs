@@ -276,10 +276,10 @@ public class TransportOrderService : ITransportOrderService
                 return TransportOrderOperationResult.InvalidReference("Het opgegeven dossier bestaat niet.");
             }
 
-            if (targetDossier.Status == Modules.Dossiers.Entities.DossierStatus.Closed)
+            if (!Modules.Dossiers.Services.DossierStateRules.IsEditable(targetDossier.Status))
             {
                 return TransportOrderOperationResult.InvalidState(
-                    "Dit dossier is gesloten; heropen het dossier voor je een opdracht toevoegt.");
+                    Modules.Dossiers.Services.DossierStateRules.ReadOnlyMessage(targetDossier.Status, "uitgebreid met een opdracht"));
             }
         }
         else if (request.ActivityTypeId is { } requestedTypeId)

@@ -147,7 +147,7 @@ public class DossierLifecycleService : IDossierLifecycleService
             ? []
             : await _dbContext.TransportOrders.AsNoTracking()
                 .Where(o => o.TenantId == tenantId && orderIds.Contains(o.Id))
-                .Select(o => new { o.Id, o.OrderNumber, o.Status, o.InvoiceReadinessReasons })
+                .Select(o => new { o.Id, o.OrderNumber, o.Status, o.InvoiceReadinessReasons, o.CraneJobKind })
                 .ToListAsync(cancellationToken);
 
         foreach (var activity in activities)
@@ -235,7 +235,11 @@ public class DossierLifecycleService : IDossierLifecycleService
         var hasCmr = documents.Contains(TransportOrderDocumentType.Cmr)
                      || await _dbContext.IssuedTransportDocuments.AsNoTracking()
                          .AnyAsync(d => d.TenantId == tenantId && d.DossierId == dossier.Id && d.Kind == IssuedTransportDocumentKind.Cmr, cancellationToken);
-        if (doneOrderIds.Count > 0 && !hasCmr)
+        // Capability rule, never an activity name: a consignment note only concerns executed GOODS
+        // transports. On-site lifting gets a work order (IssuedTransportDocumentService.RequireKindAllowed),
+        // so a dossier of only on-site work is never told its CMR is missing.
+        var cmrRelevantDone = orders.Count(o => DoneStatuses.Contains(o.Status) && !CraneJobRules.IsOnSiteWork(o.CraneJobKind));
+        if (cmrRelevantDone > 0 && !hasCmr)
         {
             checks.Add(new Check("documents.cmr_missing", "Geen CMR aanwezig op dit dossier.", BlocksAuto: false));
         }
@@ -416,19 +420,32 @@ public class DossierLifecycleService : IDossierLifecycleService
             dossier.CancelledByUserId,
             dossier.CancellationReason,
         };
-        dossier.Status = DossierStatus.Open;
-        dossier.ClosedAt = null;
-        dossier.ConfirmedByUserId = null;
-        dossier.ConfirmationSource = null;
-        dossier.ConfirmationReason = null;
-        dossier.CancelledAt = null;
-        dossier.CancelledByUserId = null;
-        dossier.CancellationReason = null;
-        dossier.Version = Guid.NewGuid();
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        // The same compare-and-set discipline as confirming: only a dossier that is still NOT Open
+        // is reopened, so two near-simultaneous reopen requests yield one transition and one audit.
+        var now = _timeProvider.GetUtcNow().UtcDateTime;
+        var tenantId = TenantId;
+        var affected = await _dbContext.TransportDossiers
+            .Where(d => d.TenantId == tenantId && d.Id == dossier.Id && d.Status != DossierStatus.Open)
+            .ExecuteUpdateAsync(set => set
+                .SetProperty(d => d.Status, DossierStatus.Open)
+                .SetProperty(d => d.ClosedAt, (DateTime?)null)
+                .SetProperty(d => d.ConfirmedByUserId, (Guid?)null)
+                .SetProperty(d => d.ConfirmationSource, (DossierConfirmationSource?)null)
+                .SetProperty(d => d.ConfirmationReason, (string?)null)
+                .SetProperty(d => d.CancelledAt, (DateTime?)null)
+                .SetProperty(d => d.CancelledByUserId, (Guid?)null)
+                .SetProperty(d => d.CancellationReason, (string?)null)
+                .SetProperty(d => d.Version, Guid.NewGuid())
+                .SetProperty(d => d.UpdatedAt, now), cancellationToken);
+        await _dbContext.Entry(dossier).ReloadAsync(cancellationToken);
+        if (affected == 0)
+        {
+            // Lost the race: somebody reopened it a moment ago. Nothing changed, nothing to audit.
+            throw new DomainValidationException("status", "Dit dossier is al open.");
+        }
 
         await _auditService.RecordAsync(EntityType, dossier.Id.ToString(), ActionReopened, before,
-            new { dossier.DossierNumber, Reason = request.Reason.Trim(), ReopenedByUserId = _currentUser.CurrentUserId, ReopenedAt = _timeProvider.GetUtcNow().UtcDateTime },
+            new { dossier.DossierNumber, Reason = request.Reason.Trim(), ReopenedByUserId = _currentUser.CurrentUserId, ReopenedAt = now },
             cancellationToken);
 
         return await _dossiers().GetAsync(dossierId, cancellationToken);
@@ -475,6 +492,27 @@ public class DossierLifecycleService : IDossierLifecycleService
 
         var now = _timeProvider.GetUtcNow().UtcDateTime;
         var reason = request.Reason.Trim();
+        var cancelledBy = _currentUser.CurrentUserId;
+
+        // Open → Cancelled is one compare-and-set, like confirming: the second of two near-simultaneous
+        // cancel (or cancel vs. confirm) requests matches no row and changes nothing.
+        var affected = await _dbContext.TransportDossiers
+            .Where(d => d.TenantId == tenantId && d.Id == dossier.Id && d.Status == DossierStatus.Open)
+            .ExecuteUpdateAsync(set => set
+                .SetProperty(d => d.Status, DossierStatus.Cancelled)
+                .SetProperty(d => d.CancelledAt, now)
+                .SetProperty(d => d.CancelledByUserId, cancelledBy)
+                .SetProperty(d => d.CancellationReason, reason)
+                .SetProperty(d => d.Version, Guid.NewGuid())
+                .SetProperty(d => d.UpdatedAt, now), cancellationToken);
+        await _dbContext.Entry(dossier).ReloadAsync(cancellationToken);
+        if (affected == 0)
+        {
+            throw new DomainValidationException("status", dossier.Status == DossierStatus.Cancelled
+                ? "Dit dossier is al geannuleerd."
+                : "Dit dossier is intussen bevestigd en kan niet geannuleerd worden; heropen het eerst.");
+        }
+
         // Draft orders go along with the same reason (they were only ever administrative).
         var cascaded = new List<string>();
         foreach (var draft in orders.Where(o => o.Status == TransportOrderStatus.Draft))
@@ -484,13 +522,10 @@ public class DossierLifecycleService : IDossierLifecycleService
             draft.Version = Guid.NewGuid();
             cascaded.Add(draft.OrderNumber);
         }
-
-        dossier.Status = DossierStatus.Cancelled;
-        dossier.CancelledAt = now;
-        dossier.CancelledByUserId = _currentUser.CurrentUserId;
-        dossier.CancellationReason = reason;
-        dossier.Version = Guid.NewGuid();
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        if (cascaded.Count > 0)
+        {
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
 
         foreach (var draft in orders.Where(o => cascaded.Contains(o.OrderNumber)))
         {
