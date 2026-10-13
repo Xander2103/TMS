@@ -2,17 +2,64 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { setUnauthorizedHandler } from '../../api/apiClient'
 import { resetDisplayPreferences } from '../../components/layout/displayPreferences'
 import * as authApi from './authApi'
-import { AuthContext, type AuthContextValue } from './authContextValue'
+import { AuthContext, type AuthContextValue, type SessionUnavailableReason } from './authContextValue'
 import { clearLegacyTokens, clearTokens, getAccessToken, setAccessToken } from './authStorage'
 import type { CurrentUser } from './authTypes'
 
 type AuthStatus = AuthContextValue['status']
 
-export function AuthProvider({ children }: { children: ReactNode }) {
+/**
+ * Backoff between session-restore attempts when the server cannot be reached (B01). Three
+ * retries, ~11 s in total: long enough to ride out a reload storm or a restarting API, short
+ * enough that a user with a real outage sees the "unavailable" screen before they give up.
+ */
+export const SESSION_RETRY_DELAYS_MS: readonly number[] = [1000, 3000, 7000]
+
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
+
+interface AuthProviderProps {
+  children: ReactNode
+  /** Test hook: delays between restore attempts (default SESSION_RETRY_DELAYS_MS). */
+  retryDelaysMs?: readonly number[]
+}
+
+export function AuthProvider({ children, retryDelaysMs = SESSION_RETRY_DELAYS_MS }: AuthProviderProps) {
   const [status, setStatus] = useState<AuthStatus>('loading')
+  const [unavailableReason, setUnavailableReason] = useState<SessionUnavailableReason | null>(null)
   const [user, setUser] = useState<CurrentUser | null>(null)
   const [signedOut, setSignedOut] = useState(false)
   const initialised = useRef(false)
+
+  /**
+   * Restore the session from the HttpOnly refresh cookie. A rejected credential means "not
+   * signed in"; a server that cannot answer (429 / 5xx / network) is retried with backoff and
+   * then surfaced as `unavailable` — the user keeps the chance to recover without re-entering
+   * a password, and nothing of a possibly valid session is thrown away.
+   */
+  const restoreSession = useCallback(async (delays: readonly number[]) => {
+    for (let attempt = 0; ; attempt += 1) {
+      const outcome = await authApi.refresh()
+      if (outcome.status === 'ok') {
+        setAccessToken(outcome.tokens.accessToken)
+        setUser(outcome.tokens.user)
+        setUnavailableReason(null)
+        setStatus('authenticated')
+        return
+      }
+      if (outcome.status === 'unauthenticated') {
+        clearTokens()
+        setUnavailableReason(null)
+        setStatus('unauthenticated')
+        return
+      }
+      if (attempt >= delays.length) {
+        setUnavailableReason(outcome.reason)
+        setStatus('unavailable')
+        return
+      }
+      await sleep(delays[attempt])
+    }
+  }, [])
 
   // Register the shared apiClient's "give up" handler so an unrecoverable 401 (refresh failed)
   // drops the app back to the unauthenticated state exactly once, without redirect loops.
@@ -33,23 +80,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (initialised.current) return
     initialised.current = true
 
-    void (async () => {
-      // H5 migration: any tokens the previous architecture left in localStorage are wiped.
-      clearLegacyTokens()
+    // H5 migration: any tokens the previous architecture left in localStorage are wiped.
+    clearLegacyTokens()
 
-      // The session credential is the HttpOnly refresh cookie — ask the server for a fresh
-      // access token; no cookie (or an expired one) simply means "not signed in".
-      const tokens = await authApi.refresh()
-      if (tokens) {
-        setAccessToken(tokens.accessToken)
-        setUser(tokens.user)
-        setStatus('authenticated')
-      } else {
-        clearTokens()
-        setStatus('unauthenticated')
-      }
-    })()
-  }, [])
+    // The session credential is the HttpOnly refresh cookie — ask the server for a fresh
+    // access token; no cookie (or an expired one) simply means "not signed in".
+    void restoreSession(retryDelaysMs)
+  }, [restoreSession, retryDelaysMs])
+
+  // Manual recovery from the "unavailable" screen: one attempt, no backoff (the user decides
+  // when to try again; hammering a rate-limited endpoint would only extend the block).
+  const retrySession = useCallback(async () => {
+    setStatus('loading')
+    await restoreSession([])
+  }, [restoreSession])
 
   const login = useCallback(async (email: string, password: string, signal?: AbortSignal) => {
     const tokens = await authApi.login(email, password, signal)
@@ -84,6 +128,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const permissions = new Set(user?.permissions ?? [])
     return {
       status,
+      unavailableReason,
+      retrySession,
       user,
       signedOut,
       login,
@@ -91,7 +137,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       hasPermission: (code: string) => permissions.has(code),
       hasAnyPermission: (codes: string[]) => codes.some((code) => permissions.has(code)),
     }
-  }, [status, user, signedOut, login, logout])
+  }, [status, unavailableReason, retrySession, user, signedOut, login, logout])
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

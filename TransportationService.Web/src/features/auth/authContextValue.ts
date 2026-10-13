@@ -1,8 +1,19 @@
 import { createContext, useContext } from 'react'
 import type { CurrentUser } from './authTypes'
 
+export type SessionUnavailableReason = 'network' | 'rate_limited' | 'server'
+
 export interface AuthContextValue {
-  status: 'loading' | 'authenticated' | 'unauthenticated'
+  /**
+   * `unavailable`: the session could not be restored because the server could not be reached or
+   * refused to answer (rate limit, 5xx, network). The credential was NOT rejected, so the user is
+   * neither signed in nor signed out until `retrySession()` succeeds or fails for real (B01).
+   */
+  status: 'loading' | 'authenticated' | 'unauthenticated' | 'unavailable'
+  /** Why the session is unavailable (status `unavailable` only). */
+  unavailableReason: SessionUnavailableReason | null
+  /** One more restore attempt, without backoff; the UI offers it as "Opnieuw proberen". */
+  retrySession: () => Promise<void>
   user: CurrentUser | null
   /**
    * True from an explicit `logout()` until the next sign-in. Distinguishes "the user ended the

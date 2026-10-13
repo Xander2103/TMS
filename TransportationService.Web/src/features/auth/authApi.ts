@@ -40,8 +40,19 @@ export async function login(email: string, password: string, signal?: AbortSigna
   return (await response.json()) as AuthTokens
 }
 
-/** Exchange the HttpOnly refresh cookie for a fresh token pair. Null when refresh is not possible. */
-export async function refresh(): Promise<AuthTokens | null> {
+/**
+ * Why a session refresh did not produce tokens. The distinction matters: only a REJECTED
+ * credential (401/403, or a 400 for a malformed cookie) means "not signed in". A rate limit
+ * (429), a server error or a network interruption says nothing about the session, so the app
+ * keeps it and lets the user retry instead of dropping them on the login page (B01).
+ */
+export type RefreshOutcome =
+  | { status: 'ok'; tokens: AuthTokens }
+  | { status: 'unauthenticated' }
+  | { status: 'unavailable'; reason: 'network' | 'rate_limited' | 'server'; httpStatus?: number }
+
+/** Exchange the HttpOnly refresh cookie for a fresh token pair, classifying every failure. */
+export async function refresh(): Promise<RefreshOutcome> {
   let response: Response
   try {
     response = await fetch(`${apiBaseUrl}/api/auth/refresh`, {
@@ -51,12 +62,18 @@ export async function refresh(): Promise<AuthTokens | null> {
       credentials: 'include',
     })
   } catch {
-    return null
+    return { status: 'unavailable', reason: 'network' }
   }
-  if (!response.ok) {
-    return null
+  if (response.ok) {
+    return { status: 'ok', tokens: (await response.json()) as AuthTokens }
   }
-  return (await response.json()) as AuthTokens
+  if (response.status === 401 || response.status === 403 || response.status === 400) {
+    return { status: 'unauthenticated' }
+  }
+  if (response.status === 429) {
+    return { status: 'unavailable', reason: 'rate_limited', httpStatus: 429 }
+  }
+  return { status: 'unavailable', reason: 'server', httpStatus: response.status }
 }
 
 export async function fetchCurrentUser(accessToken: string): Promise<CurrentUser | null> {

@@ -1,6 +1,6 @@
 import { apiBaseUrl } from '../config/env'
 import { getAccessToken, setAccessToken, clearTokens } from '../features/auth/authStorage'
-import { refresh as refreshTokens } from '../features/auth/authApi'
+import { refresh as refreshSession, type RefreshOutcome } from '../features/auth/authApi'
 import { extractFieldErrors, type FieldErrors } from './problemDetails'
 
 export class ApiError extends Error {
@@ -47,19 +47,34 @@ export function setUnauthorizedHandler(handler: (() => void) | null): void {
 }
 
 // Single-flight refresh: concurrent 401s share one refresh attempt instead of stampeding.
-let refreshInFlight: Promise<boolean> | null = null
+let refreshInFlight: Promise<RefreshOutcome> | null = null
 
-function attemptRefresh(): Promise<boolean> {
+function attemptRefresh(): Promise<RefreshOutcome> {
   refreshInFlight ??= (async () => {
     // H5: the refresh credential is the HttpOnly cookie — nothing to read locally.
-    const tokens = await refreshTokens()
-    if (!tokens) return false
-    setAccessToken(tokens.accessToken)
-    return true
+    const outcome = await refreshSession()
+    if (outcome.status === 'ok') setAccessToken(outcome.tokens.accessToken)
+    return outcome
   })().finally(() => {
     refreshInFlight = null
   })
   return refreshInFlight
+}
+
+/** User-facing message when the server cannot be reached for a refresh (session is kept). */
+export const SERVICE_UNAVAILABLE_MESSAGE = 'De server is tijdelijk niet bereikbaar. Probeer het zo meteen opnieuw.'
+
+/**
+ * B01: a 401 whose refresh could not even be judged (429 rate limit, 5xx, network) is NOT an
+ * authentication failure. The caller gets a transient error to show with a retry; the access
+ * token, the user and the page all stay. Only a rejected credential signs the user out.
+ */
+function unavailableError(outcome: Extract<RefreshOutcome, { status: 'unavailable' }>): ApiError {
+  return new ApiError(SERVICE_UNAVAILABLE_MESSAGE, outcome.httpStatus ?? 503, {
+    code: 'service_unavailable',
+    transient: true,
+    reason: outcome.reason,
+  })
 }
 
 function buildHeaders(hasBody: boolean): Record<string, string> {
@@ -87,8 +102,9 @@ async function request<T>(method: Method, path: string, body?: unknown, options?
   }
 
   if (response.status === 401) {
-    const refreshed = await attemptRefresh()
-    if (refreshed) {
+    const outcome = await attemptRefresh()
+    if (outcome.status === 'unavailable') throw unavailableError(outcome)
+    if (outcome.status === 'ok') {
       try {
         response = await send()
       } catch (err) {
@@ -189,8 +205,9 @@ async function fetchBlob(path: string, options?: RequestOptions): Promise<{ blob
   }
 
   if (response.status === 401) {
-    const refreshed = await attemptRefresh()
-    if (refreshed) response = await send()
+    const outcome = await attemptRefresh()
+    if (outcome.status === 'unavailable') throw unavailableError(outcome)
+    if (outcome.status === 'ok') response = await send()
     if (response.status === 401) {
       clearTokens()
       onUnauthorized?.()

@@ -56,6 +56,8 @@ function authValue(current: CurrentUser): AuthContextValue {
     status: 'authenticated',
     user: current,
     signedOut: false,
+    unavailableReason: null,
+    retrySession: vi.fn(async () => {}),
     login: vi.fn(),
     logout: vi.fn(),
     hasPermission: () => true,

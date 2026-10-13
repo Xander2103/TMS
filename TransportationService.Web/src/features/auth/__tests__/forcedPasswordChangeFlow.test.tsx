@@ -50,7 +50,7 @@ vi.mock('../authApi', () => {
     }),
     refresh: vi.fn(async () => {
       const account = backend.accounts.find((a) => a.email === backend.session)
-      return account ? tokensFor(account) : null
+      return account ? { status: 'ok', tokens: tokensFor(account) } : { status: 'unauthenticated' }
     }),
     logout: vi.fn(async () => {
       backend.session = null

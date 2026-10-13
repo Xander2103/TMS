@@ -90,7 +90,7 @@ describe('apiClient.downloadFile', () => {
     fetchSpy
       .mockResolvedValueOnce(new Response(null, { status: 401 }))
       .mockResolvedValueOnce(pdfResponse({ 'Content-Disposition': "attachment; filename*=UTF-8''ontvangstbewijs%20%C3%A9.pdf" }))
-    refreshSpy.mockResolvedValueOnce({ accessToken: 'access-2', refreshToken: '' })
+    refreshSpy.mockResolvedValueOnce({ status: 'ok', tokens: { accessToken: 'access-2', refreshToken: '' } })
 
     await apiClient.downloadFile('/api/x', 'fallback.pdf')
 
@@ -104,7 +104,7 @@ describe('apiClient.downloadFile', () => {
 
   it('gives up with a 401 ApiError when the refresh fails, without retrying', async () => {
     fetchSpy.mockResolvedValueOnce(new Response(null, { status: 401 }))
-    refreshSpy.mockResolvedValueOnce(null)
+    refreshSpy.mockResolvedValueOnce({ status: 'unauthenticated' })
 
     await expect(apiClient.downloadFile('/api/x', 'fallback.pdf')).rejects.toMatchObject({ name: 'ApiError', status: 401 })
     expect(fetchSpy).toHaveBeenCalledTimes(1)

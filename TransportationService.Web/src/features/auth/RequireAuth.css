@@ -33,3 +33,19 @@
     animation-duration: 2s;
   }
 }
+
+.auth-unavailable-icon {
+  font-size: 28px;
+  color: var(--warning);
+}
+
+.auth-unavailable-title {
+  margin: 0;
+  font-size: 20px;
+}
+
+.auth-unavailable-text {
+  margin: 0;
+  max-width: 44ch;
+  text-align: center;
+}
