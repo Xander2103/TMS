@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using TransportationService.Api.Common;
 using TransportationService.Api.Data;
 using TransportationService.Api.Modules.Orders.Entities;
 using TransportationService.Api.Modules.Reporting.Dtos;
@@ -40,8 +41,11 @@ public class ActivityKpiService : IActivityKpiService
         DateOnly from, DateOnly to, CancellationToken cancellationToken)
     {
         var tenantId = _tenantContext.TenantId;
-        var periodStart = from.ToDateTime(TimeOnly.MinValue);
-        var periodEnd = to.AddDays(1).ToDateTime(TimeOnly.MinValue); // exclusive
+        // C-03: the period is typed as tenant-local calendar days; the instant columns (CreatedAt,
+        // storage stays) are compared against the UTC window of those days. Naive midnight bounds
+        // were off by the tenant offset and, being Kind=Unspecified, rejected by Npgsql (B07).
+        var zone = await TenantTimeZone.ForTenantAsync(_dbContext, tenantId, cancellationToken);
+        var (periodStart, periodEnd) = TenantTimeZone.LocalDayRangeUtc(from, to, zone); // end exclusive
 
         // Activities in the period by effective date (PlannedDate ?? CreatedAt date).
         var activities = await _dbContext.DossierActivities.AsNoTracking()

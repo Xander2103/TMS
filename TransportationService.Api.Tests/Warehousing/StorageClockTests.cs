@@ -277,4 +277,32 @@ public class StorageClockTests
         Assert.Equal(0m, billing.TotalPalletDays);
         Assert.Empty(billing.PerOrder);
     }
+
+    /// <summary>
+    /// B07: the billing period is typed as tenant-local calendar days; its bounds must be the UTC
+    /// instants of the tenant's local midnights (Npgsql refuses the naive Kind=Unspecified bounds,
+    /// so the customer storage endpoint returned 500). A stay during the night after the last
+    /// day — 00:30 local = 22:30Z the evening before — belongs to the NEXT period.
+    /// </summary>
+    [Fact]
+    public async Task PalletDays_PeriodBoundsAreTenantLocalMidnights()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        h.Db.Context.TenantSettings.Add(new TenantSettings { Id = Guid.NewGuid(), TenantId = h.TenantId, Timezone = "Europe/Amsterdam" });
+        h.Db.Context.StorageStays.Add(new StorageStay // 11/08 00:30–01:30 local
+        {
+            Id = Guid.NewGuid(), TenantId = h.TenantId, PackageId = h.PackageId, WarehouseId = h.WarehouseId,
+            InAt = new DateTime(2026, 8, 10, 22, 30, 0, DateTimeKind.Utc), OutAt = new DateTime(2026, 8, 10, 23, 30, 0, DateTimeKind.Utc),
+        });
+        await h.Db.Context.SaveChangesAsync();
+
+        var upToTheTenth = await h.Billing.ComputeAsync(
+            h.CustomerId, new DateOnly(2026, 8, 1), new DateOnly(2026, 8, 10), CancellationToken.None);
+        var fromTheEleventh = await h.Billing.ComputeAsync(
+            h.CustomerId, new DateOnly(2026, 8, 11), new DateOnly(2026, 8, 20), CancellationToken.None);
+
+        Assert.Equal(0m, upToTheTenth.TotalPalletDays);
+        Assert.Equal(1m, fromTheEleventh.TotalPalletDays);
+    }
 }

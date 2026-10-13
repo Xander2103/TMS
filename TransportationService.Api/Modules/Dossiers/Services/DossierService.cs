@@ -264,6 +264,7 @@ public partial class DossierService : IDossierService
     public async Task<DossierDetailDto> CreateAsync(SaveDossierRequest request, CancellationToken cancellationToken)
     {
         var tenantId = _tenantContext.TenantId;
+        RequireTextLengths(request);
 
         if (request.CustomerId is not { } customerId)
         {
@@ -1212,6 +1213,7 @@ public partial class DossierService : IDossierService
 
     private async Task ValidateAsync(SaveDossierRequest request, Guid tenantId, CancellationToken cancellationToken)
     {
+        RequireTextLengths(request);
         if (request.CustomerId is { } customerId
             && !await _dbContext.Customers.AnyAsync(c => c.TenantId == tenantId && c.Id == customerId, cancellationToken))
         {
@@ -1244,6 +1246,34 @@ public partial class DossierService : IDossierService
         var number = $"{settings.DossierNumberPrefix}{settings.DossierNumberNextValue:0000}";
         settings.DossierNumberNextValue++;
         return number;
+    }
+
+    // Column lengths of transport_dossiers (TransportDossierConfiguration). Exceeding them used to
+    // surface as a PostgreSQL "value too long" 500 instead of a field error (B07). The title is not
+    // listed: a too-long title is truncated on purpose (generated "klant — datum" fallbacks).
+    private const int CustomerReferenceMaxLength = 100;
+    private const int DescriptionMaxLength = 2000;
+    private const int NotesMaxLength = 4000;
+
+    private static void RequireTextLengths(SaveDossierRequest request)
+    {
+        if (Trim(request.CustomerReference) is { Length: > CustomerReferenceMaxLength })
+        {
+            throw new DomainValidationException("customerReference",
+                $"De klantreferentie mag maximaal {CustomerReferenceMaxLength} tekens lang zijn.");
+        }
+
+        if (Trim(request.Description) is { Length: > DescriptionMaxLength })
+        {
+            throw new DomainValidationException("description",
+                $"De omschrijving mag maximaal {DescriptionMaxLength} tekens lang zijn.");
+        }
+
+        if (Trim(request.Notes) is { Length: > NotesMaxLength })
+        {
+            throw new DomainValidationException("notes",
+                $"De notities mogen maximaal {NotesMaxLength} tekens lang zijn.");
+        }
     }
 
     private static string? Trim(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();

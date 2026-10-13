@@ -86,4 +86,37 @@ public static class TenantTimeZone
     /// on the raw instant puts an early-morning stop on the previous day.</summary>
     public static DateOnly ToLocalDate(DateTime instant, TimeZoneInfo zone) =>
         DateOnly.FromDateTime(ToWallClock(instant, zone));
+
+    /// <summary>
+    /// Tenant wall clock → UTC instant: the inverse of <see cref="ToWallClock(DateTime, TimeZoneInfo)"/>,
+    /// for everything a human types as a local date and time. DST-safe: a time inside the
+    /// spring-forward gap shifts past it, an ambiguous autumn time takes its first occurrence.
+    /// Always <see cref="DateTimeKind.Utc"/>, which is what a <c>timestamp with time zone</c>
+    /// parameter requires — Npgsql refuses a <c>Kind=Unspecified</c> value outright.
+    /// </summary>
+    public static DateTime ToUtc(DateOnly day, TimeOnly time, TimeZoneInfo zone)
+    {
+        var local = day.ToDateTime(time, DateTimeKind.Unspecified);
+        if (zone.IsInvalidTime(local))
+        {
+            local = local.AddHours(1);
+        }
+        else if (zone.IsAmbiguousTime(local))
+        {
+            var offsets = zone.GetAmbiguousTimeOffsets(local);
+            return DateTime.SpecifyKind(local - offsets.Max(), DateTimeKind.Utc);
+        }
+
+        return TimeZoneInfo.ConvertTimeToUtc(local, zone);
+    }
+
+    /// <summary>
+    /// The UTC window <c>[StartUtc, EndUtc)</c> covering the inclusive tenant-local day range
+    /// <paramref name="from"/>..<paramref name="to"/>: what a query over an instant column must
+    /// compare against for a date filter typed by a human ("van 20/07 tot 24/07"). Comparing
+    /// <c>from.ToDateTime(TimeOnly.MinValue)</c> instead is the C-03 defect twice over — the
+    /// bounds are off by the tenant offset AND Npgsql rejects their <c>Kind=Unspecified</c>.
+    /// </summary>
+    public static (DateTime StartUtc, DateTime EndUtc) LocalDayRangeUtc(DateOnly from, DateOnly to, TimeZoneInfo zone) =>
+        (ToUtc(from, TimeOnly.MinValue, zone), ToUtc(to.AddDays(1), TimeOnly.MinValue, zone));
 }

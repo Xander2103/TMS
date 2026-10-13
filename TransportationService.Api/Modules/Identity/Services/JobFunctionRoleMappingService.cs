@@ -42,14 +42,17 @@ public class JobFunctionRoleMappingService : IJobFunctionRoleMappingService
     public async Task<IReadOnlyList<JobFunctionRoleMappingDto>> ListAsync(CancellationToken cancellationToken)
     {
         var tenantId = _tenantContext.TenantId;
+        // Order BEFORE projecting into the record: EF cannot translate an OrderBy over a member of
+        // a constructor-built DTO (the list endpoint threw "could not be translated" — B07).
         return await _dbContext.JobFunctionRoleMappings.AsNoTracking()
             .Where(m => m.TenantId == tenantId)
             .Join(_dbContext.JobFunctions.AsNoTracking().Where(f => f.TenantId == tenantId),
                 m => m.JobFunctionId, f => f.Id, (m, f) => new { m, FunctionName = f.Name })
             .Join(_dbContext.Roles.AsNoTracking().Where(r => r.TenantId == tenantId),
                 x => x.m.RoleId, r => r.Id,
-                (x, r) => new JobFunctionRoleMappingDto(x.m.Id, x.m.JobFunctionId, x.FunctionName, x.m.RoleId, r.Name))
-            .OrderBy(dto => dto.JobFunctionName).ThenBy(dto => dto.RoleName)
+                (x, r) => new { x.m.Id, x.m.JobFunctionId, x.FunctionName, x.m.RoleId, RoleName = r.Name })
+            .OrderBy(x => x.FunctionName).ThenBy(x => x.RoleName)
+            .Select(x => new JobFunctionRoleMappingDto(x.Id, x.JobFunctionId, x.FunctionName, x.RoleId, x.RoleName))
             .ToListAsync(cancellationToken);
     }
 

@@ -112,22 +112,10 @@ public static class AttendanceCalculator
     public static (DateTime StartUtc, DateTime EndUtc) LocalDayWindowUtc(DateOnly day, TimeZoneInfo timeZone) =>
         (LocalDayStartUtc(day, timeZone), LocalDayStartUtc(day.AddDays(1), timeZone));
 
-    /// <summary>Lokale wandkloktijd → UTC, DST-veilig (ongeldige tijden schuiven voorbij het gat, dubbele nemen de eerste instantie).</summary>
-    public static DateTime LocalToUtc(DateOnly day, TimeOnly time, TimeZoneInfo timeZone)
-    {
-        var local = day.ToDateTime(time, DateTimeKind.Unspecified);
-        if (timeZone.IsInvalidTime(local))
-        {
-            local = local.AddHours(1);
-        }
-        else if (timeZone.IsAmbiguousTime(local))
-        {
-            var offsets = timeZone.GetAmbiguousTimeOffsets(local);
-            return DateTime.SpecifyKind(local - offsets.Max(), DateTimeKind.Utc);
-        }
-
-        return TimeZoneInfo.ConvertTimeToUtc(local, timeZone);
-    }
+    /// <summary>Lokale wandkloktijd → UTC, DST-veilig (ongeldige tijden schuiven voorbij het gat, dubbele nemen de eerste instantie).
+    /// Delegeert naar <see cref="TenantTimeZone.ToUtc"/>: één conversie in de API, zodat rapportages dezelfde dagvensters hanteren.</summary>
+    public static DateTime LocalToUtc(DateOnly day, TimeOnly time, TimeZoneInfo timeZone) =>
+        TenantTimeZone.ToUtc(day, time, timeZone);
 
     private static DateTime LocalDayStartUtc(DateOnly day, TimeZoneInfo timeZone) =>
         LocalToUtc(day, TimeOnly.MinValue, timeZone);

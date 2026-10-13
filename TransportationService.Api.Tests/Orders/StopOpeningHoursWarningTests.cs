@@ -32,8 +32,8 @@ public class StopOpeningHoursWarningTests
     private static readonly DateTimeOffset Now = new(2026, 07, 18, 12, 0, 0, TimeSpan.Zero);
 
     // 2026-07-20 is a Monday; the seeded location opens Ma 08:00–12:00 and 13:00–17:00.
-    private static readonly DateTime Monday = new(2026, 7, 20);
-    private static readonly DateTime Sunday = new(2026, 7, 19);
+    private static readonly DateTime Monday = new(2026, 7, 20, 0, 0, 0, DateTimeKind.Utc);
+    private static readonly DateTime Sunday = new(2026, 7, 19, 0, 0, 0, DateTimeKind.Utc);
 
     /// <summary>An instant on the wire, i.e. what the database actually holds.</summary>
     private static DateTime Utc(int year, int month, int day, int hour, int minute = 0) =>

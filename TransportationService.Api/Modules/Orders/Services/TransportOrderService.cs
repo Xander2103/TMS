@@ -232,6 +232,11 @@ public class TransportOrderService : ITransportOrderService
         var stopInputs = SiteWorkTime.Normalize(
             request.Stops, request.DossierId is null && request.ActivityDurationHours is >= 0 ? request.ActivityDurationHours : null);
 
+        if (TextLengthError(request.CustomerReference, request.GoodsDescription, request.Notes) is { } lengthError)
+        {
+            return TransportOrderOperationResult.Invalid(lengthError);
+        }
+
         var validation = await ValidateAsync(request.CustomerId, request.CustomerReference, request.GoodsDescription,
             request.Quantity, request.QuantityUnitCode ?? request.QuantityUnit,
             hasCargoLines: request.CargoItems is { Count: > 0 },
@@ -759,6 +764,11 @@ public class TransportOrderService : ITransportOrderService
 
         // The guard above proves request.CustomerId == order.CustomerId, so this edit is never
         // "new work for another customer": the blocked/deactivated intake gate does not apply.
+        if (TextLengthError(request.CustomerReference, request.GoodsDescription, request.Notes) is { } lengthError)
+        {
+            return TransportOrderOperationResult.Invalid(lengthError);
+        }
+
         var validation = await ValidateAsync(order.CustomerId, request.CustomerReference, request.GoodsDescription,
             request.Quantity, request.QuantityUnitCode ?? request.QuantityUnit, hasCargoLines,
             stopInputs, enforceCustomerIntake: false, cancellationToken,
@@ -1379,6 +1389,11 @@ public class TransportOrderService : ITransportOrderService
             return TransportOrderOperationResult.NotFound;
         }
 
+        if (LacksTimeZone(request.ConfirmedFrom, request.ConfirmedTo, request.EarliestAllowed, request.LatestAllowed))
+        {
+            return TransportOrderOperationResult.Invalid(StopTimeZoneMissingError);
+        }
+
         if (WindowError(request.ConfirmedFrom, request.ConfirmedTo) is { } windowError)
         {
             return TransportOrderOperationResult.Invalid(windowError);
@@ -1543,6 +1558,20 @@ public class TransportOrderService : ITransportOrderService
             {
                 return TransportOrderOperationResult.Invalid(
                     "Elke stop heeft een locatie of minstens een plaatsnaam nodig.");
+            }
+
+            // B07: a moment without a time zone (JSON "2026-07-21T08:00:00" binds as Kind=Unspecified)
+            // cannot be written to a timestamptz column; refuse it here instead of failing at SaveChanges.
+            if (LacksTimeZone(stop.PlannedFrom, stop.PlannedTo, stop.RequestedFrom, stop.RequestedTo,
+                    stop.ConfirmedFrom, stop.ConfirmedTo, stop.EarliestAllowed, stop.LatestAllowed))
+            {
+                return TransportOrderOperationResult.Invalid(StopTimeZoneMissingError);
+            }
+
+            if (Trim(stop.Reference) is { Length: > StopReferenceMaxLength })
+            {
+                return TransportOrderOperationResult.Invalid(
+                    $"Een stopreferentie mag maximaal {StopReferenceMaxLength} tekens lang zijn.");
             }
 
             if ((WindowError(stop.PlannedFrom, stop.PlannedTo)
@@ -2243,6 +2272,30 @@ public class TransportOrderService : ITransportOrderService
             }
         }
     }
+
+    // Column lengths of transport_orders / transport_order_stops (TransportOrderConfiguration).
+    // Exceeding them used to surface as a PostgreSQL "value too long" 500 instead of a 400 (B07).
+    private const int CustomerReferenceMaxLength = 100;
+    private const int GoodsDescriptionMaxLength = 1000;
+    private const int NotesMaxLength = 4000;
+    private const int StopReferenceMaxLength = 100;
+
+    private const string StopTimeZoneMissingError =
+        "Een tijdstip van een stop moet een tijdzone bevatten (bv. 2026-07-21T08:00:00Z).";
+
+    private static string? TextLengthError(string? customerReference, string? goodsDescription, string? notes) =>
+        Trim(customerReference) is { Length: > CustomerReferenceMaxLength }
+            ? $"De klantreferentie mag maximaal {CustomerReferenceMaxLength} tekens lang zijn."
+            : Trim(goodsDescription) is { Length: > GoodsDescriptionMaxLength }
+                ? $"De goederenomschrijving mag maximaal {GoodsDescriptionMaxLength} tekens lang zijn."
+                : Trim(notes) is { Length: > NotesMaxLength }
+                    ? $"De notities mogen maximaal {NotesMaxLength} tekens lang zijn."
+                    : null;
+
+    /// <summary>True when any given moment is Kind=Unspecified — what System.Text.Json produces for
+    /// an ISO string without offset; Npgsql refuses to write it to timestamp with time zone.</summary>
+    private static bool LacksTimeZone(params DateTime?[] moments) =>
+        moments.Any(m => m is { Kind: DateTimeKind.Unspecified });
 
     private static string? WindowError(DateTime? from, DateTime? to) =>
         from is { } f && to is { } t && t < f

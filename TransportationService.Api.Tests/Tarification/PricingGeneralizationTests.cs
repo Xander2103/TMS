@@ -273,13 +273,13 @@ public class PricingGeneralizationTests
             ]);
 
         var onHoliday = await h.Orders.CreateAsync(
-            DatedRequest(new DateTime(2026, 11, 11, 9, 0, 0)), CancellationToken.None);
+            DatedRequest(new DateTime(2026, 11, 11, 9, 0, 0, DateTimeKind.Utc)), CancellationToken.None);
         var holidayLine = await h.Db.Context.TransportOrderServiceLines
             .SingleAsync(l => l.TransportOrderId == onHoliday.Order!.Id);
         Assert.Equal(75m, holidayLine.Amount);
 
         var ordinaryDay = await h.Orders.CreateAsync(
-            DatedRequest(new DateTime(2026, 11, 12, 9, 0, 0)), CancellationToken.None);
+            DatedRequest(new DateTime(2026, 11, 12, 9, 0, 0, DateTimeKind.Utc)), CancellationToken.None);
         Assert.Empty(await h.Db.Context.TransportOrderServiceLines
             .Where(l => l.TransportOrderId == ordinaryDay.Order!.Id).ToListAsync());
     }
