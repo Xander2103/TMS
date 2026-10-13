@@ -6,7 +6,7 @@
   border-radius: 8px;
   padding: 16px;
   margin-bottom: 20px;
-  background: var(--surface, transparent);
+  background: var(--surface);
   max-width: 860px;
 }
 
@@ -36,14 +36,14 @@
 }
 
 .oi-form-error {
-  color: var(--danger, #b91c1c);
+  color: var(--danger);
   margin-top: 8px;
 }
 
 .oi-hint {
   margin: 4px 0;
   font-size: 0.875rem;
-  color: var(--text-muted, var(--text));
+  color: var(--text-muted);
 }
 
 .oi-section-actions {
@@ -65,7 +65,7 @@
 }
 
 .oi-row-error {
-  color: var(--danger, #b91c1c);
+  color: var(--danger);
 }
 
 .oi-link {
@@ -78,7 +78,7 @@
 }
 
 .oi-link-danger {
-  color: var(--danger, #b91c1c);
+  color: var(--danger);
 }
 
 .oi-row-actions {
@@ -125,7 +125,7 @@
   font-size: 0.8125rem;
   font-weight: 600;
   border-bottom: 1px solid var(--border);
-  background: var(--surface-muted, transparent);
+  background: var(--surface-muted);
 }
 
 .oi-mapping-row + .oi-mapping-row {
@@ -134,7 +134,7 @@
 
 .oi-mapping-samples {
   font-size: 0.8125rem;
-  color: var(--text-muted, var(--text));
+  color: var(--text-muted);
   overflow-wrap: anywhere;
 }
 

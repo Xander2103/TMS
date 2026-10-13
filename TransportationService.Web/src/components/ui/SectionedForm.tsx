@@ -9,6 +9,8 @@ export interface SectionDef {
   label: string
   optional?: boolean
   hasError?: boolean
+  /** Failing-field count rendered in the tab's error badge — see {@link SectionNavItem.errorCount}. */
+  errorCount?: number
   complete?: boolean
   /** Optional "bevat gegevens" (●) / "leeg" (○) indicator — see {@link SectionNavItem.filled}. */
   filled?: boolean
@@ -43,6 +45,7 @@ export function SectionedForm({ sections, activeId, onActiveChange, actions, ori
     label: s.label,
     optional: s.optional,
     hasError: s.hasError,
+    errorCount: s.errorCount,
     complete: s.complete,
     filled: s.filled,
   }))

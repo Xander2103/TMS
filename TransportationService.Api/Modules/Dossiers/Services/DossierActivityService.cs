@@ -215,12 +215,22 @@ public class DossierActivityService : IDossierActivityService
             dependent.LinkedActivityId = null;
         }
 
+        // Documents of a standalone activity are not thrown away with it: they become documents of
+        // the dossier as a whole (the link is the only thing that changes; the file stays put).
+        var liftedDocuments = await _dbContext.TransportOrderDocuments
+            .Where(d => d.TenantId == tenantId && d.DossierActivityId == activityId)
+            .ToListAsync(cancellationToken);
+        foreach (var document in liftedDocuments)
+        {
+            document.DossierActivityId = null;
+        }
+
         _dbContext.Remove(activity);
         dossier.Version = Guid.NewGuid();
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         await _auditService.RecordAsync(EntityType, dossierId.ToString(), "ActivityRemoved", null,
-            new { activity.Id, activity.Label, activity.LinkedTransportOrderId }, cancellationToken);
+            new { activity.Id, activity.Label, activity.LinkedTransportOrderId, DocumentsLiftedToDossier = liftedDocuments.Count }, cancellationToken);
 
         return await _dossierService.GetAsync(dossierId, cancellationToken);
     }

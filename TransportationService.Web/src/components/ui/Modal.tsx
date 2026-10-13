@@ -12,6 +12,11 @@ interface ModalProps {
   footer?: ReactNode
   /** Prevents backdrop/Escape close while a mutation is in flight. */
   busy?: boolean
+  /**
+   * `wide` (760px) for dialogs that lay out choice cards or an inline table side by side;
+   * the default 560px stays right for plain field forms. Both collapse to the viewport on phones.
+   */
+  size?: 'default' | 'wide'
 }
 
 /**
@@ -23,7 +28,7 @@ interface ModalProps {
  * react to a dialog's edits wrap it in `SelfSavingPanel`.) Focus returns to the element that
  * opened the dialog when it closes.
  */
-export function Modal({ title, onClose, children, footer, busy = false }: ModalProps) {
+export function Modal({ title, onClose, children, footer, busy = false, size = 'default' }: ModalProps) {
   const { t } = useLocale()
   const dialogRef = useRef<HTMLDivElement>(null)
   // Captured during the FIRST render, before commit: content with `autoFocus` (e.g. the contact
@@ -58,7 +63,7 @@ export function Modal({ title, onClose, children, footer, busy = false }: ModalP
     <div className="ui-modal-backdrop" onClick={busy ? undefined : onClose}>
       <div
         ref={dialogRef}
-        className="ui-modal"
+        className={size === 'wide' ? 'ui-modal ui-modal-wide' : 'ui-modal'}
         role="dialog"
         aria-modal="true"
         aria-label={title}

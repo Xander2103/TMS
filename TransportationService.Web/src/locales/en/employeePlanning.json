@@ -107,10 +107,79 @@
     "title": "Copy week of {week}",
     "copy": "Copy",
     "targetLabel": "Target week (Monday)",
-    "targetHint": "All shifts in the current selection are copied as draft; conflicts are skipped.",
+    "targetHint": "All shifts of the employees in the current selection are copied as drafts; conflicts are skipped.",
     "targetRequired": "Choose a target week.",
     "success_one": "Week copied: {count} shift, {skipped} skipped.",
     "success_other": "Week copied: {count} shifts, {skipped} skipped.",
-    "failed": "The week could not be copied."
+    "failed": "The week could not be copied.",
+    "scope_one": "{count} employee in the current selection",
+    "scope_other": "{count} employees in the current selection"
+  },
+  "toolbar": {
+    "employees": "Employees",
+    "employeesWithCount": "Employees ({count})",
+    "filters": "Filters",
+    "filtersWithCount": "Filters ({count})",
+    "quickSearchPlaceholder": "Search within results…",
+    "quickSearchAria": "Search within the displayed employees",
+    "export": "Export",
+    "exportExcel": "Excel (.xlsx)",
+    "exportBusy": "Creating export…",
+    "exportFailed": "The export could not be created.",
+    "exportHint": "Exports exactly the current selection and period."
+  },
+  "filters": {
+    "title": "Filters",
+    "departments": "Departments",
+    "functions": "Job functions",
+    "contractTypes": "Contract types",
+    "status": "Employment",
+    "statusActive": "Employed",
+    "statusInactive": "Left / inactive",
+    "statusHint": "By default only employed staff are shown.",
+    "driversOnly": "Drivers only (with driver profile)",
+    "quick": "Quick selections",
+    "quickDrivers": "All drivers",
+    "quickMyDepartment": "My department",
+    "clearAll": "Clear all",
+    "close": "Close",
+    "searchPlaceholder": "Search…",
+    "optionsLoadFailed": "The filter options could not be loaded.",
+    "semantics": "Within one filter: or; between filters: and. Explicitly chosen employees always stay visible."
+  },
+  "picker": {
+    "title": "Choose employees",
+    "searchPlaceholder": "Search by name or employee number…",
+    "hint": "Searches all employees, also outside the current filters.",
+    "noResults": "No employee found.",
+    "inactiveBadge": "Left",
+    "done": "Done"
+  },
+  "chips": {
+    "count_one": "{count} employee",
+    "count_other": "{count} employees",
+    "countOfTotal_one": "{count} of {total} employees",
+    "countOfTotal_other": "{count} of {total} employees",
+    "shown_one": "{count} shown",
+    "shown_other": "{count} shown",
+    "clearFilters": "Clear filters",
+    "outsideFilters": "Outside current filters",
+    "remove": "Remove {label}",
+    "groupLabel": "Active selection",
+    "employeeChip": "Employee: {name}",
+    "driversOnly": "Drivers only",
+    "unknownEmployee": "Unknown employee"
+  },
+  "empty": {
+    "noneForSelection": "No employees found for this selection.",
+    "noneForFilters": "No employees match the current filters.",
+    "noneForQuickSearch": "No employee in the results matches \"{query}\".",
+    "noEntries": "No planning in this period for the current selection.",
+    "loadError": "The personnel planning could not be loaded.",
+    "retry": "Try again",
+    "updating": "Updating…"
+  },
+  "meta": {
+    "planned": "{duration} planned"
   }
 }

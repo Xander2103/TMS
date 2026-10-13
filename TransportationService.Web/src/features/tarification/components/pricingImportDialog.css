@@ -9,7 +9,7 @@
   border: none;
   padding: 0;
   font: inherit;
-  color: var(--accent, #2563eb);
+  color: var(--accent);
   text-decoration: underline;
   cursor: pointer;
 }
@@ -26,12 +26,12 @@
 }
 
 .customer-import-message-error {
-  background: color-mix(in srgb, #dc2626 12%, transparent);
-  color: #b91c1c;
+  background: color-mix(in srgb, var(--color-danger-strong) 12%, transparent);
+  color: var(--color-danger);
 }
 
 .customer-import-danger {
-  color: #b91c1c;
+  color: var(--color-danger);
 }
 
 .pricing-import-mode {
@@ -67,7 +67,7 @@
 .pricing-import-table-wrapper h4 {
   margin: 0;
   font-size: 13px;
-  color: var(--text-muted, var(--text));
+  color: var(--text-muted);
 }
 
 .customer-import-table-wrapper {
@@ -98,5 +98,5 @@
 }
 
 .customer-import-row-error td {
-  background: color-mix(in srgb, #dc2626 8%, transparent);
+  background: color-mix(in srgb, var(--color-danger-strong) 8%, transparent);
 }

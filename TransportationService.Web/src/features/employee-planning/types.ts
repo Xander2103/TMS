@@ -148,12 +148,43 @@ export interface ScheduleRow {
   departmentName: string | null
   plannedMinutes: number
   days: ScheduleDay[]
+  functionNames?: string[] | null
+  contractTypeName?: string | null
+  isActive?: boolean
+  /** False when the row is on screen only as an explicit pick outside the active group filters. */
+  matchesFilters?: boolean
 }
 
 export interface ScheduleGrid {
   from: string
   to: string
   rows: ScheduleRow[]
+  /** Employees in the status scope of the query, before group filters ("38 van 214"). */
+  totalInScope?: number
+}
+
+/** One hit of the global planning employee search (presentation fields only). */
+export interface PlanningEmployeeOption {
+  id: string
+  employeeNumber: string
+  firstName: string
+  lastName: string
+  departmentName: string | null
+  functionNames: string[]
+  isActive: boolean
+}
+
+export interface PlanningFilterOption {
+  id: string
+  name: string
+}
+
+export interface PlanningFilterOptions {
+  departments: PlanningFilterOption[]
+  jobFunctions: PlanningFilterOption[]
+  contractTypes: PlanningFilterOption[]
+  myDepartmentId: string | null
+  hasDrivers: boolean
 }
 
 export interface Shift {

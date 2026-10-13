@@ -189,12 +189,15 @@ public class DossierActivityPricingTests
         Assert.Equal(1, updated.Financials.ZeroPricedActivityCount);
         Assert.Equal(0m, updated.Financials.AgreedOrderTotal);
 
+        // Pricing UX sprint 2026-10-08: priced, but with its own "Controle vereist" status — the
+        // warning names the action (confirm as free) instead of contradicting a "Geprijsd" badge.
+        Assert.Equal("ZeroUnconfirmed", activity.PriceStatus);
         var zero = Assert.Single(updated.Readiness!, i => i.Code == "pricing.zero");
         Assert.Equal("Warning", zero.Severity);
         Assert.Equal("prijs", zero.Section);
         Assert.Equal("price", zero.Field);
         Assert.Equal(activity.Id, zero.ActivityId);
-        Assert.Equal("Opslag heeft een verkoopprijs van € 0,00. Controleer of dit bewust is.", zero.Message);
+        Assert.Equal("Opslag: verkoopprijs van € 0,00 vraagt bevestiging als gratis.", zero.Message);
         Assert.DoesNotContain(updated.Readiness!, i => i.Code == "pricing.missing");
         Assert.DoesNotContain(updated.Readiness!, i => i.Severity == "Blocking");
         // A priced-at-zero unit is worth a look on the dashboard tile too.
@@ -205,6 +208,7 @@ public class DossierActivityPricingTests
         Assert.Equal(0m, row.AgreedPriceTotal);
         Assert.Equal(1, row.PricedActivityCount);
         Assert.Equal(1, row.ZeroPricedActivityCount);
+        Assert.Equal("ZeroUnconfirmed", row.PriceStatus);
     }
 
     [Fact]

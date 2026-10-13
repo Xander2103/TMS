@@ -39,6 +39,14 @@ interface LookupSelectProps {
    */
   createLabel?: string
   /**
+   * Which fields the inline create dialog asks for. `full` (default) = name, code and description;
+   * `name` = only the name — the backend generates the code — for lookups a non-technical user
+   * creates on the fly (e.g. a bedrijfsmiddelcategorie from the bedrijfsmiddel form).
+   */
+  createFields?: 'full' | 'name'
+  /** Title of the inline create dialog; defaults to the registry "Nieuwe …" label. */
+  createTitle?: string
+  /**
    * What the select stores/returns: the lookup `id` (default) or its stable `code`. Use `code`
    * when the surrounding form persists a code rather than a foreign key (e.g. order unit types).
    */
@@ -114,6 +122,8 @@ export function LookupSelect({
   managePermission,
   singular,
   createLabel,
+  createFields = 'full',
+  createTitle,
   valueKey = 'id',
   excludeValues,
   value,
@@ -181,6 +191,8 @@ export function LookupSelect({
         <LookupCreateDialog
           basePath={basePath}
           singular={singular}
+          fields={createFields}
+          title={createTitle}
           initialName={pending.query}
           onCreated={async (created) => {
             createdRef.current.set(toValue(created), created)
@@ -202,12 +214,16 @@ export function LookupSelect({
 function LookupCreateDialog({
   basePath,
   singular,
+  fields,
+  title,
   initialName,
   onCreated,
   onCancel,
 }: {
   basePath: string
   singular: string
+  fields: 'full' | 'name'
+  title?: string
   initialName: string
   onCreated: (created: LookupOption) => Promise<void>
   onCancel: () => void
@@ -254,7 +270,7 @@ function LookupCreateDialog({
 
   return (
     <Modal
-      title={createTexts(t, singular).newLabel}
+      title={title ?? createTexts(t, singular).newLabel}
       onClose={onCancel}
       busy={submitting}
       footer={
@@ -283,24 +299,28 @@ function LookupCreateDialog({
             autoFocus
           />
         </FormField>
-        <FormField label={t('masterData.form.codeLabel')} htmlFor="lookup-inline-code" hint={t('masterData.select.codeAutoHint')}>
-          <input
-            id="lookup-inline-code"
-            value={code}
-            onChange={(e) => setCode(e.target.value)}
-            placeholder={suggestCode(name)}
-            maxLength={50}
-          />
-        </FormField>
-        <FormField label={t('masterData.form.descriptionLabel')} htmlFor="lookup-inline-description">
-          <textarea
-            id="lookup-inline-description"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            rows={2}
-            maxLength={1000}
-          />
-        </FormField>
+        {fields === 'full' && (
+          <>
+            <FormField label={t('masterData.form.codeLabel')} htmlFor="lookup-inline-code" hint={t('masterData.select.codeAutoHint')}>
+              <input
+                id="lookup-inline-code"
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+                placeholder={suggestCode(name)}
+                maxLength={50}
+              />
+            </FormField>
+            <FormField label={t('masterData.form.descriptionLabel')} htmlFor="lookup-inline-description">
+              <textarea
+                id="lookup-inline-description"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                rows={2}
+                maxLength={1000}
+              />
+            </FormField>
+          </>
+        )}
       </form>
     </Modal>
   )

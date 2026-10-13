@@ -33,6 +33,7 @@ function tokensFor(account: Account): AuthTokens {
     id: `id-${account.email}`, tenantId: 't1', tenantName: 'Acme', email: account.email,
     firstName: 'Test', lastName: 'User', employeeId: null, roles: [], permissions: account.permissions,
     mustChangePassword: account.mustChangePassword, customerId: null, preferredLanguage: 'nl',
+    themePreference: null,
   }
   return { accessToken: `token-${account.email}`, accessTokenExpiresAt: '', refreshToken: '', refreshTokenExpiresAt: '', user }
 }

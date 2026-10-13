@@ -7,13 +7,47 @@
     "NotPriced": "Niet geprijsd",
     "PartiallyPriced": "Gedeeltelijk geprijsd",
     "Priced": "Geprijsd",
+    "ZeroUnconfirmed": "Controle vereist",
     "Free": "Gratis"
+  },
+  "unit": {
+    "order": "Opdracht",
+    "activity": "Activiteit",
+    "standalone": "Zelfstandige activiteit"
+  },
+  "master": {
+    "title": "Prijsbare onderdelen ({count})",
+    "hint": "Elk onderdeel heeft zijn eigen prijs en verkooplijnen. Kies een onderdeel om zijn prijs te bekijken of aan te passen.",
+    "noPrice": "Nog geen prijs",
+    "listLabel": "Prijsbare onderdelen"
+  },
+  "detail": {
+    "title": "Prijsdetails",
+    "priceBlock": "Prijs",
+    "openOrder": "Volledige opdrachtprijs openen",
+    "pickHint": "Kies links een onderdeel om zijn prijs te bewerken."
+  },
+  "zeroCallout": {
+    "title": "Gratis prijs bevestigen",
+    "message": "De verkoopprijs van deze activiteit is € 0,00. Bevestig dat deze activiteit bewust gratis wordt uitgevoerd, of pas de prijs aan.",
+    "confirm": "Bevestigen als gratis",
+    "adjust": "Prijs aanpassen"
+  },
+  "order": {
+    "zeroConfirmTitle": "Opdracht als gratis bevestigen",
+    "zeroConfirmMessage": "Je stelt de afgesproken prijs van opdracht {number} in op € 0,00. Bevestig dat deze opdracht bewust gratis is.",
+    "zeroConfirmAction": "Bevestigen als gratis",
+    "freeNote": "Deze opdracht is bewust gratis (€ 0,00)."
   },
   "picker": {
     "itemWithOrder": "{number} — {name}",
     "lockedWhileDirty": "Sla de verkooplijnen op of maak de wijzigingen ongedaan om van activiteit te wisselen."
   },
   "summary": {
+    "title": "Dossiersamenvatting",
+    "handled": "{handled} van {total} onderdelen afgehandeld",
+    "toHandle": "Nog te prijzen of te controleren:",
+    "needsReview": "{name} (controle vereist)",
     "toPrice": "Nog te prijzen:",
     "partial": "{name} (gedeeltelijk)",
     "legacyOrders": "Gekoppelde opdrachten zonder activiteit"
@@ -59,7 +93,8 @@
     "confirmFreeAction": "Als gratis bevestigen",
     "freeSaved": "Activiteit bevestigd als gratis.",
     "removePrice": "Prijs verwijderen",
-    "removePriceMessage": "De prijs en alle verkooplijnen van deze activiteit worden verwijderd. De activiteit is daarna niet geprijsd.",
+    "markFree": "Markeren als gratis",
+    "removePriceMessage": "De prijs en alle verkooplijnen van {name} worden verwijderd. Dit onderdeel is daarna niet geprijsd.",
     "priceRemoved": "Prijs verwijderd.",
     "actionFailed": "De prijs kon niet worden bijgewerkt."
   },

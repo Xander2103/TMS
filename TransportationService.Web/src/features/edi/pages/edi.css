@@ -35,7 +35,7 @@
   font-size: 12px;
   white-space: pre-wrap;
   word-break: break-all;
-  background: var(--bg-subtle, var(--bg));
+  background: var(--bg-subtle);
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 10px;

@@ -130,6 +130,36 @@ public class PortalDossierDocumentTests
     }
 
     [Fact]
+    public async Task AnActivityDocument_IsListedAndDownloadable_ExactlyLikeADossierDocument()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var dossier = h.Db.Context.TransportDossiers.Single(d => d.DossierNumber == "DOS-0001");
+        var activityId = Guid.NewGuid();
+        var typeId = Guid.NewGuid();
+        h.Db.Context.ActivityTypes.Add(new ActivityType { Id = typeId, TenantId = h.TenantId, Code = "PLATEAU", Name = "Plateau", IsActive = true });
+        h.Db.Context.DossierActivities.Add(new DossierActivity { Id = activityId, TenantId = h.TenantId, DossierId = dossier.Id, ActivityTypeId = typeId, Sequence = 1, Label = "Plateau" });
+        using var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes("hijsplan-content"));
+        var path = await h.FileStorage.SaveAsync(h.TenantId, "order-documents", "hijsplan.pdf", stream, CancellationToken.None);
+        var activityDocument = new TransportOrderDocument
+        {
+            Id = Guid.NewGuid(), TenantId = h.TenantId, TransportOrderId = null, DossierId = dossier.Id, DossierActivityId = activityId,
+            DocumentType = TransportOrderDocumentType.Other, Title = "Hijsplan", DocumentPath = path, FileName = "hijsplan.pdf",
+            ContentType = "application/pdf", CustomerVisible = true,
+        };
+        h.Db.Context.TransportOrderDocuments.Add(activityDocument);
+        await h.Db.Context.SaveChangesAsync();
+
+        var mine = (await h.Portal(h.OwnUserId).ListMyDocumentsAsync(CancellationToken.None)).Value!;
+        Assert.Contains(mine, d => d.Id == activityDocument.Id && d.DossierNumber == "DOS-0001");
+        var content = await h.Portal(h.OwnUserId).GetDocumentContentAsync(PortalDocumentSource.OrderDocument, activityDocument.Id, CancellationToken.None);
+        Assert.Equal(PortalOutcomeKind.Success, content.Outcome);
+        Assert.Equal("hijsplan-content", System.Text.Encoding.UTF8.GetString(content.Value!.Content));
+        // Another customer's portal user never sees it.
+        Assert.DoesNotContain((await h.Portal(h.OtherUserId).ListMyDocumentsAsync(CancellationToken.None)).Value!, d => d.Id == activityDocument.Id);
+    }
+
+    [Fact]
     public async Task AnotherTenant_NeverReachesADossierDocument()
     {
         var h = await SeedAsync();

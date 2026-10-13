@@ -46,7 +46,7 @@
 
 .pc-view-switch .pc-tab-active,
 .pc-tabs .pc-tab-active {
-  background: var(--accent);
+  background: var(--color-primary-solid);
   color: #fff;
 }
 

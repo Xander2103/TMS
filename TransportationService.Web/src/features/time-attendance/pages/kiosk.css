@@ -37,7 +37,7 @@
 }
 
 .kiosk-lang-active {
-  background: var(--accent);
+  background: var(--color-primary-solid);
   border-color: var(--accent);
   color: #fff;
 }
@@ -123,12 +123,12 @@
 }
 
 .kiosk-key:active {
-  background: var(--accent);
+  background: var(--color-primary-solid);
   color: #fff;
 }
 
 .kiosk-key-ok {
-  background: var(--accent);
+  background: var(--color-primary-solid);
   border-color: var(--accent);
   color: #fff;
 }
@@ -153,7 +153,7 @@
 }
 
 .kiosk-action-primary {
-  background: var(--accent);
+  background: var(--color-primary-solid);
   border-color: var(--accent);
   color: #fff;
 }

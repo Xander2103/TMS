@@ -136,6 +136,46 @@ public class DossierNoteTests
     }
 
     [Fact]
+    public async Task EditedByName_NamesTheLastEditor_OnlyForANoteChangedAfterCreation()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var editorId = Guid.NewGuid();
+        h.Db.Context.Users.Add(new User
+        {
+            Id = editorId, TenantId = h.TenantId, Email = "dev@acme.test", FirstName = "Dev", LastName = "Admin", IsActive = true,
+        });
+        await h.Db.Context.SaveChangesAsync();
+        var dossier = await h.DossierWithAsync("OPSLAG");
+
+        var created = (await h.Notes().CreateAsync(dossier.Id, new CreateDossierNoteRequest("Eerste versie"), CancellationToken.None))!;
+        // A fresh note: author known, no editor — the UI shows "Aangemaakt door", never "Bewerkt door".
+        Assert.Equal("Thalie Peeters", created.AuthorName);
+        Assert.Null(created.EditedByName);
+
+        await h.Notes().UpdateAsync(dossier.Id, created.Id, new UpdateDossierNoteRequest("Tweede versie"), CancellationToken.None);
+        // Inside an HTTP request the auditing interceptor stamps the editor; the harness has no request,
+        // so the stamp is applied here the same way the interceptor would.
+        await h.Db.Context.DossierNotes.Where(n => n.Id == created.Id)
+            .ExecuteUpdateAsync(s => s.SetProperty(n => n.UpdatedByUserId, editorId));
+
+        var edited = Assert.Single((await h.Notes().ListAsync(dossier.Id, null, CancellationToken.None))!);
+        Assert.Equal("Tweede versie", edited.Text);
+        // The original author and creation time survive the edit; the editor is reported separately.
+        Assert.Equal("Thalie Peeters", edited.AuthorName);
+        Assert.Equal(created.CreatedAt, edited.CreatedAt);
+        Assert.True(edited.UpdatedAt > edited.CreatedAt);
+        Assert.Equal("Dev Admin", edited.EditedByName);
+
+        // An unknown editor (system/background change) yields no name instead of an invented one.
+        await h.Db.Context.DossierNotes.Where(n => n.Id == created.Id)
+            .ExecuteUpdateAsync(s => s.SetProperty(n => n.UpdatedByUserId, (Guid?)null));
+        var anonymous = Assert.Single((await h.Notes().ListAsync(dossier.Id, null, CancellationToken.None))!);
+        Assert.Null(anonymous.EditedByName);
+        Assert.Equal("Thalie Peeters", anonymous.AuthorName);
+    }
+
+    [Fact]
     public async Task Validation_TextRequired_Max4000()
     {
         var h = await SeedAsync();

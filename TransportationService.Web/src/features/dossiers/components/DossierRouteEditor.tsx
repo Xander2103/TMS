@@ -161,6 +161,10 @@ export function DossierRouteEditor({
   const [emptyStopPrompt, setEmptyStopPrompt] = useState<string[] | null>(null)
   // Row with data (or persisted) whose Verwijderen awaits confirmation.
   const [removeTarget, setRemoveTarget] = useState<string | null>(null)
+  // "+ Nieuw klantadres" (route UX sprint 2026-10-08): the dialog below creates the address IN
+  // THE CUSTOMER'S ADDRESS BOOK the moment it saves (POST /api/locations with the dossier
+  // customer — the same flow as Klanten → Adressen). The STOP only receives it in local state:
+  // the link, like every other stop edit, is persisted by "Route opslaan" and nothing else.
   const [quickCreate, setQuickCreate] = useState<{ name: string; resolve: (created: LocationOption | null) => void } | null>(null)
   const pendingFocus = useRef<string | null>(null)
 

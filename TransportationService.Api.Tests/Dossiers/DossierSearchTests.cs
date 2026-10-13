@@ -396,7 +396,8 @@ public class DossierSearchTests
         var items = (await h.Search(Q())).Items.ToDictionary(i => i.DossierNumber);
 
         Assert.Equal(("Free", 0m, 0), (items["DOS-0004"].PriceStatus, items["DOS-0004"].AgreedPriceTotal, items["DOS-0004"].ZeroPricedActivityCount));
-        Assert.Equal(("Priced", 0m, 1), (items["DOS-0005"].PriceStatus, items["DOS-0005"].AgreedPriceTotal, items["DOS-0005"].ZeroPricedActivityCount));
+        // Pricing UX sprint 2026-10-08: an unconfirmed € 0 rolls up to "Controle vereist" — never "Geprijsd" next to a ⚠.
+        Assert.Equal(("ZeroUnconfirmed", 0m, 1), (items["DOS-0005"].PriceStatus, items["DOS-0005"].AgreedPriceTotal, items["DOS-0005"].ZeroPricedActivityCount));
         // An unpriced dossier is NotPriced with a null total — never € 0, never Free.
         Assert.Equal(("NotPriced", (decimal?)null), (items["DOS-0002"].PriceStatus, items["DOS-0002"].AgreedPriceTotal));
     }

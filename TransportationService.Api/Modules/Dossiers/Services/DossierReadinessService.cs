@@ -92,12 +92,14 @@ public class DossierReadinessService : IDossierReadinessService
                         "prijs", "price", "Commercial", ActivityId: activity.Id));
                 }
                 // D5: a € 0 that was explicitly confirmed free answers the question — no warning.
+                // Pricing UX sprint 2026-10-08: the message names the action (confirm as free), not
+                // just the fact; the price tab shows the matching "Bevestigen als gratis" callout.
                 else if (ActivityPricingState.IsUnconfirmedZero(
                              pricing.PricingSource, pricing.FixedAmount, pricing.AgreedPrice, pricing.FreeConfirmed))
                 {
                     issues.Add(new ReadinessIssueDto(
                         "pricing.zero", "Warning",
-                        $"{name} heeft een verkoopprijs van € 0,00. Controleer of dit bewust is.",
+                        $"{name}: verkoopprijs van € 0,00 vraagt bevestiging als gratis.",
                         "prijs", "price", "Commercial", ActivityId: activity.Id));
                 }
             }
@@ -246,16 +248,19 @@ public class DossierReadinessService : IDossierReadinessService
         }
 
         // Step 13: intentional € 0 on an order — priced by PROVENANCE (override or one-off
-        // agreement at 0), never the engine's empty zero. Non-blocking; silent once the order is
-        // cancelled or invoiced, because then nobody can still act on it.
+        // agreement at 0), never the engine's empty zero. Pricing UX sprint 2026-10-08: an order
+        // has no separate "free" confirmation — the one-off price command at 0 IS the planner's
+        // explicit decision (the UI asks before sending it), so the order reads as Free and this
+        // item is purely informational (Info, never a warning that contradicts the Free status).
+        // Silent once the order is cancelled or invoiced, because then nobody can still act on it.
         foreach (var order in orders.Where(o =>
                      o.Status is not (TransportOrderStatus.Cancelled or TransportOrderStatus.Invoiced)
                      && IsBillableUnit(o.Id)
                      && OrderPricingState.IsIntentionalZero(o.PriceIsManual, o.PricingSource, o.OneOffFixedAmount, o.AgreedPrice)))
         {
             issues.Add(new ReadinessIssueDto(
-                "pricing.zero", "Warning",
-                $"Opdracht {order.OrderNumber} heeft een verkoopprijs van € 0,00. Controleer of dit bewust is.",
+                "pricing.zero", "Info",
+                $"Opdracht {order.OrderNumber} is bewust gratis (€ 0,00).",
                 "prijs", "price", "Commercial", TransportOrderId: order.Id, ActivityId: carrierByOrder.GetValueOrDefault(order.Id)?.Id));
         }
 
@@ -302,16 +307,9 @@ public class DossierReadinessService : IDossierReadinessService
                     .Any(o => o.Status == TransportOrderStatus.Draft
                               || o.Status == TransportOrderStatus.Submitted
                               || o.Status == TransportOrderStatus.Confirmed)
-                // Step 13: intentional € 0 on a linked order still in its commercial phase
-                // (OrderPricingState.IsIntentionalZero — the same tree, inlined for SQL).
-                || _dbContext.DossierActivities
-                    .Where(a => a.DossierId == d.Id && a.LinkedTransportOrderId != null)
-                    .Join(_dbContext.TransportOrders, a => a.LinkedTransportOrderId, o => o.Id, (a, o) => o)
-                    .Any(o => ((o.PricingSource == OrderPricingSource.OneOff && o.OneOffFixedAmount == 0m)
-                               || (o.PriceIsManual && o.AgreedPrice == 0m))
-                              && (o.Status == TransportOrderStatus.Draft
-                                  || o.Status == TransportOrderStatus.Submitted
-                                  || o.Status == TransportOrderStatus.Confirmed))
+                // Pricing UX sprint 2026-10-08: an intentional € 0 on a linked order is the
+                // planner's explicit decision (Free, Info-level readiness) — it no longer lights
+                // the attention tile. Only a standalone € 0 that still awaits confirmation does.
                 // Step 13: a standalone billable activity without a price, or priced at € 0.
                 || _dbContext.DossierActivities
                     .Where(a => a.DossierId == d.Id)

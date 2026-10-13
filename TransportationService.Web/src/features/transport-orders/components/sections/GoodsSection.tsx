@@ -16,7 +16,16 @@ import {
 } from './cargoWeight'
 import { numberOrNullFrom, type CargoFormRow, type CargoSummary, type StopFormRow } from './orderFormState'
 
+/**
+ * Which half of the goods section a host renders. `all` (default) keeps the classic single
+ * block. The dossier intake shows the commercial goods (`goods`: description, header summary,
+ * lines) and WHAT IS NEEDED TO MOVE THEM (`requirements`: ADR/crane/plateau/Moffett/return +
+ * the capacity hint) as two separate sections — same state, same fields, split presentation.
+ */
+export type GoodsSectionPart = 'all' | 'goods' | 'requirements'
+
 interface GoodsSectionProps {
+  part?: GoodsSectionPart
   goodsDescription: string
   setGoodsDescription: (value: string) => void
   quantity: string
@@ -77,6 +86,7 @@ interface GoodsSectionProps {
 
 /** Goederen section: header block (inputs or derived summary) + the cargo-line repeater. */
 export function GoodsSection({
+  part = 'all',
   goodsDescription,
   setGoodsDescription,
   quantity,
@@ -134,6 +144,52 @@ export function GoodsSection({
     setCargo(cargo.key, { totalWeightKg: next.totalWeightKg, totalWeightIsManual: next.totalWeightIsManual })
   }
   const weightTotals = cargoWeightTotalsFromRows(cargoItems)
+  const showGoods = part !== 'requirements'
+  const showRequirements = part !== 'goods'
+
+  const requirements = (
+    <div className="tof-row tof-row-4">
+      <label className="tof-checkbox">
+        <input type="checkbox" checked={adrRequired} onChange={(e) => setAdrRequired(e.target.checked)} disabled={saving} />
+        {t('transportOrders.goods.adr')}
+      </label>
+      <label className="tof-checkbox">
+        <input type="checkbox" checked={craneRequired} onChange={(e) => setCraneRequired(e.target.checked)} disabled={saving} />
+        {t('transportOrders.goods.crane')}
+      </label>
+      <label className="tof-checkbox">
+        <input type="checkbox" checked={plateauRequired} onChange={(e) => setPlateauRequired(e.target.checked)} disabled={saving} />
+        {t('transportOrders.goods.plateau')}
+      </label>
+      <label className="tof-checkbox">
+        <input type="checkbox" checked={moffettRequired} onChange={(e) => setMoffettRequired(e.target.checked)} disabled={saving} />
+        {t('transportOrders.goods.moffett')}
+      </label>
+      <label className="tof-checkbox">
+        <input type="checkbox" checked={isReturnMovement} onChange={(e) => setIsReturnMovement(e.target.checked)} disabled={saving} />
+        {t('transportOrders.goods.returnMovement')}
+      </label>
+    </div>
+  )
+  const capacity = cargoItems.length > 0 && (
+    <GoodsCapacityHint
+      totalWeightKg={weightTotals.totalWeightKg}
+      heaviestUnitKg={weightTotals.heaviestUnitKg}
+      linesWithoutUnitWeight={weightTotals.linesWithoutUnitWeight}
+      payloadKg={vehiclePayloadKg}
+      tailLiftCapacityKg={tailLiftCapacityKg}
+    />
+  )
+
+  if (!showGoods) {
+    return (
+      <>
+        {requirements}
+        {capacity}
+      </>
+    )
+  }
+
   return (
     <>
       <FormField
@@ -227,28 +283,7 @@ export function GoodsSection({
         </div>
       )}
 
-      <div className="tof-row tof-row-4">
-        <label className="tof-checkbox">
-          <input type="checkbox" checked={adrRequired} onChange={(e) => setAdrRequired(e.target.checked)} disabled={saving} />
-          {t('transportOrders.goods.adr')}
-        </label>
-        <label className="tof-checkbox">
-          <input type="checkbox" checked={craneRequired} onChange={(e) => setCraneRequired(e.target.checked)} disabled={saving} />
-          {t('transportOrders.goods.crane')}
-        </label>
-        <label className="tof-checkbox">
-          <input type="checkbox" checked={plateauRequired} onChange={(e) => setPlateauRequired(e.target.checked)} disabled={saving} />
-          {t('transportOrders.goods.plateau')}
-        </label>
-        <label className="tof-checkbox">
-          <input type="checkbox" checked={moffettRequired} onChange={(e) => setMoffettRequired(e.target.checked)} disabled={saving} />
-          {t('transportOrders.goods.moffett')}
-        </label>
-        <label className="tof-checkbox">
-          <input type="checkbox" checked={isReturnMovement} onChange={(e) => setIsReturnMovement(e.target.checked)} disabled={saving} />
-          {t('transportOrders.goods.returnMovement')}
-        </label>
-      </div>
+      {showRequirements && requirements}
 
       <div className="tof-stops-header">
         <h3>{t('transportOrders.goods.linesTitle')}</h3>
@@ -551,21 +586,13 @@ export function GoodsSection({
         )
       })}
       {cargoItems.length > 0 && (
-        <>
-          <div className="tof-goods-footer">
-            <Button variant="secondary" onClick={onAddCargoRow} disabled={saving}>
-              {t('transportOrders.goods.addAnotherLine')}
-            </Button>
-          </div>
-          <GoodsCapacityHint
-            totalWeightKg={weightTotals.totalWeightKg}
-            heaviestUnitKg={weightTotals.heaviestUnitKg}
-            linesWithoutUnitWeight={weightTotals.linesWithoutUnitWeight}
-            payloadKg={vehiclePayloadKg}
-            tailLiftCapacityKg={tailLiftCapacityKg}
-          />
-        </>
+        <div className="tof-goods-footer">
+          <Button variant="secondary" onClick={onAddCargoRow} disabled={saving}>
+            {t('transportOrders.goods.addAnotherLine')}
+          </Button>
+        </div>
       )}
+      {showRequirements && capacity}
     </>
   )
 }

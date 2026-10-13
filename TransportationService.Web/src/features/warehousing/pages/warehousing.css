@@ -410,13 +410,13 @@
   font-weight: 600;
 }
 
-.wh-trace-feedback-success { color: #166534; }
-.wh-trace-feedback-warning { color: #92400e; }
-.wh-trace-feedback-error { color: #dc2626; }
+.wh-trace-feedback-success { color: var(--color-success); }
+.wh-trace-feedback-warning { color: var(--color-warning-text); }
+.wh-trace-feedback-error { color: var(--color-danger-strong); }
 
 .wh-trace-alert {
   margin: 4px 0;
   font-size: 14px;
-  color: #92400e;
+  color: var(--color-warning-text);
   font-weight: 600;
 }

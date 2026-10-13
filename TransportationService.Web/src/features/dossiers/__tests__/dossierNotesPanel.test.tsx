@@ -9,6 +9,7 @@ import { DossierWorkspaceContext, type DossierWorkspace } from '../dossierWorksp
 import { DossierNotesPanel } from '../notes/DossierNotesPanel'
 import { NotePreview } from '../notes/NotePreview'
 import { useDossierNotes } from '../notes/useDossierNotes'
+import { formatDate, formatTime } from '../../../utils/dates'
 import { dossierDetail } from './fixtures'
 
 const auth = vi.hoisted(() => ({ permissions: new Set<string>() }))
@@ -47,11 +48,15 @@ function note(overrides: Partial<DossierNote> = {}): DossierNote {
     authorName: 'Sofie Peeters',
     createdAt: '2026-09-20T08:15:00Z',
     updatedAt: '2026-09-20T08:15:00Z',
+    editedByName: null,
     canEdit: true,
     canDelete: true,
     ...overrides,
   }
 }
+
+/** "20/09/2026 om 10:15" in the active date format and local time zone, exactly as the panel renders it. */
+const stamp = (iso: string) => `${formatDate(iso)} om ${formatTime(iso)}`
 
 /** n notes, newest first, texts "Notitie 1" (newest) … "Notitie n". */
 function notes(count: number): DossierNote[] {
@@ -206,6 +211,62 @@ describe('DossierNotesPanel', () => {
     await user.click(field)
     await user.paste('x'.repeat(3950))
     expect(screen.getByText('3950 / 4000 tekens')).toBeInTheDocument()
+  })
+
+  it('tells per note WHO created it and WHEN (date and time), with different authors kept apart', async () => {
+    api.listDossierNotes.mockResolvedValue([
+      note({ id: 'n-1', text: 'Poort 3 gebruiken.', authorName: 'Dev Admin', createdAt: '2026-10-08T21:04:00Z', updatedAt: '2026-10-08T21:04:00Z' }),
+      note({ id: 'n-2', text: 'Klant belt terug.', authorName: 'Sofie Peeters', createdAt: '2026-09-20T08:15:00Z', updatedAt: '2026-09-20T08:15:00Z' }),
+      note({ id: 'n-3', text: 'Oude import.', authorName: null, createdAt: '2026-09-01T06:00:00Z', updatedAt: '2026-09-01T06:00:00Z' }),
+    ])
+    render(<DossierNotesPanel dossierId="d-1" canWrite={false} />)
+    await screen.findByText('Poort 3 gebruiken.')
+
+    const [first, second, third] = noteItems()
+    expect(within(first).getByTestId('note-created')).toHaveTextContent(`Aangemaakt door Dev Admin · ${stamp('2026-10-08T21:04:00Z')}`)
+    expect(within(second).getByTestId('note-created')).toHaveTextContent(`Aangemaakt door Sofie Peeters · ${stamp('2026-09-20T08:15:00Z')}`)
+    // No user is invented for a legacy/system note.
+    expect(within(third).getByTestId('note-created')).toHaveTextContent(`Aangemaakt door Onbekende auteur · ${stamp('2026-09-01T06:00:00Z')}`)
+    // Untouched notes carry no edit line, and the ambiguous "Aangemaakt op" wording is gone.
+    expect(screen.queryAllByTestId('note-edited')).toHaveLength(0)
+    expect(screen.queryByText(/Aangemaakt op/)).not.toBeInTheDocument()
+    expect(within(first).getByRole('time')).toHaveAttribute('dateTime', '2026-10-08T21:04:00Z')
+  })
+
+  it('after an edit shows "Bewerkt door" with its own user and time, and keeps the original author and creation stamp', async () => {
+    const user = userEvent.setup()
+    api.listDossierNotes.mockResolvedValue([note({ id: 'n-mine', text: 'Mijn notitie', authorName: 'Sofie Peeters' })])
+    api.updateDossierNote.mockResolvedValue(
+      note({ id: 'n-mine', text: 'Mijn notitie (aangepast)', authorName: 'Sofie Peeters', updatedAt: '2026-10-08T21:04:00Z', editedByName: 'Dev Admin' }),
+    )
+    render(<DossierNotesPanel dossierId="d-1" canWrite />)
+    await screen.findByText('Mijn notitie')
+    expect(screen.queryByTestId('note-edited')).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Bewerken' }))
+    await user.type(screen.getByLabelText('Notitie bewerken'), ' (aangepast)')
+    await user.click(screen.getByRole('button', { name: 'Opslaan' }))
+    await screen.findByText('Mijn notitie (aangepast)')
+
+    expect(screen.getByTestId('note-created')).toHaveTextContent(`Aangemaakt door Sofie Peeters · ${stamp('2026-09-20T08:15:00Z')}`)
+    expect(screen.getByTestId('note-edited')).toHaveTextContent(`Bewerkt door Dev Admin · ${stamp('2026-10-08T21:04:00Z')}`)
+  })
+
+  it('after a reload the edit metadata comes back from the server, and an unknown editor gets no invented name', async () => {
+    // What F5 returns: the stored note with its creation AND edit stamps.
+    api.listDossierNotes.mockResolvedValue([
+      note({ id: 'n-1', text: 'Bewerkte notitie', authorName: 'Sofie Peeters', updatedAt: '2026-10-08T21:04:00Z', editedByName: 'Dev Admin' }),
+      note({ id: 'n-2', text: 'Systeemwijziging', authorName: 'Tom Janssens', createdAt: '2026-09-19T08:00:00Z', updatedAt: '2026-09-19T09:30:00Z', editedByName: null }),
+    ])
+    render(<DossierNotesPanel dossierId="d-1" canWrite={false} />)
+    await screen.findByText('Bewerkte notitie')
+
+    const [first, second] = noteItems()
+    expect(within(first).getByTestId('note-created')).toHaveTextContent(`Aangemaakt door Sofie Peeters · ${stamp('2026-09-20T08:15:00Z')}`)
+    expect(within(first).getByTestId('note-edited')).toHaveTextContent(`Bewerkt door Dev Admin · ${stamp('2026-10-08T21:04:00Z')}`)
+    expect(within(second).getByTestId('note-created')).toHaveTextContent('Aangemaakt door Tom Janssens')
+    expect(within(second).getByTestId('note-edited')).toHaveTextContent(`Bewerkt · ${stamp('2026-09-19T09:30:00Z')}`)
+    expect(within(second).getByTestId('note-edited')).not.toHaveTextContent('Bewerkt door')
   })
 
   it('offers edit/delete only where the DTO allows it, and updates the list in place', async () => {

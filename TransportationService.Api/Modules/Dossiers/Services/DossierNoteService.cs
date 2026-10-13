@@ -143,6 +143,9 @@ public class DossierNoteService : IDossierNoteService
         var text = Validate(request.Text);
         var before = AuditValues(note);
         note.Text = text;
+        // The editor is the current user; the auditing interceptor stamps the same user inside an
+        // HTTP request and the explicit assignment keeps the attribution outside one.
+        note.UpdatedByUserId = _currentUser?.CurrentUserId ?? note.UpdatedByUserId;
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         await _auditService.RecordAsync(EntityType, note.Id.ToString(), "Updated", before, AuditValues(note), cancellationToken);
@@ -225,9 +228,11 @@ public class DossierNoteService : IDossierNoteService
     private async Task<List<DossierNoteDto>> MapAsync(
         IReadOnlyList<DossierNote> notes, TransportDossier dossier, CancellationToken cancellationToken)
     {
-        // Author names in ONE query for the whole list; a note without author (migrated legacy
-        // text, system) simply has no name.
-        var authorIds = notes.Where(n => n.CreatedByUserId is not null).Select(n => n.CreatedByUserId!.Value).Distinct().ToList();
+        // Author AND editor names in ONE query for the whole list; a note without author (migrated
+        // legacy text, system) simply has no name.
+        var authorIds = notes.Where(n => n.CreatedByUserId is not null).Select(n => n.CreatedByUserId!.Value)
+            .Concat(notes.Where(n => n.UpdatedByUserId is not null).Select(n => n.UpdatedByUserId!.Value))
+            .Distinct().ToList();
         var authors = authorIds.Count == 0
             ? new Dictionary<Guid, string>()
             : await _dbContext.Users.AsNoTracking()
@@ -246,7 +251,9 @@ public class DossierNoteService : IDossierNoteService
             .Select(n => new DossierNoteDto(
                 n.Id, n.DossierId, n.DossierActivityId, n.Text,
                 n.CreatedByUserId is { } authorId ? authors.GetValueOrDefault(authorId) : null,
-                n.CreatedAt, n.UpdatedAt, canWrite, canWrite))
+                n.CreatedAt, n.UpdatedAt, canWrite, canWrite,
+                // Only a note changed after its creation has an editor; the creation stamps stay the author's.
+                n.UpdatedAt > n.CreatedAt && n.UpdatedByUserId is { } editorId ? authors.GetValueOrDefault(editorId) : null))
             .ToList();
     }
 

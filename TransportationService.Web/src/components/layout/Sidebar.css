@@ -29,6 +29,29 @@
   flex: 1;
 }
 
+/* Deeper navy than the content area in dark mode; identical to the page in light mode. */
+.sidebar {
+  background: var(--color-sidebar-bg);
+}
+
+/* Footer row: language select + appearance quick toggle side by side. */
+.sidebar-prefs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.sidebar-prefs .app-lang {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+}
+
+.sidebar-prefs .theme-switcher {
+  flex-shrink: 0;
+}
+
 .app-title {
   font-size: 22px;
   margin: 0 0 24px;
@@ -118,7 +141,7 @@
     left: 0;
     bottom: 0;
     z-index: 50;
-    background: var(--bg);
+    background: var(--color-sidebar-bg);
     transform: translateX(-100%);
     transition: transform 0.2s ease;
     box-shadow: 4px 0 18px rgba(0, 0, 0, 0.15);
@@ -248,7 +271,7 @@
   font-size: 13px;
 }
 
-.sidebar .app-lang {
+.sidebar .sidebar-prefs {
   margin: 8px 2px 2px;
 }
 

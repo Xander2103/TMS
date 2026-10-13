@@ -13,7 +13,7 @@ import { getDossier, setActivityPrice } from '../api/dossiersApi'
 import { ActivityPriceLinesEditor, type ActivityPriceLinesEditorHandle } from '../pricing/ActivityPriceLinesEditor'
 import { saveActivityPriceLines } from '../pricing/activityPriceLinesApi'
 import { activityUnitName } from '../pricing/activityPriceDisplay'
-import { PriceStatusBadge } from '../pricing/PriceStatusBadge'
+import type { ActivityPriceLineInput } from '../pricing/types'
 import type { DossierActivity, DossierDetail } from '../types'
 import '../pricing/dossier-pricing.css'
 
@@ -52,6 +52,20 @@ function currentAgreedAmount(activity: DossierActivity): string {
   return activity.isPriced && activity.agreedPrice != null ? String(activity.agreedPrice) : ''
 }
 
+/** The server's lines as the id-preserving payload — re-sent unchanged when only the free flag changes. */
+function serverLinesAsInput(activity: DossierActivity): ActivityPriceLineInput[] {
+  return [...(activity.priceLines ?? [])]
+    .sort((a, b) => a.sequence - b.sequence)
+    .map((line) => ({
+      id: line.id,
+      label: line.label,
+      quantity: line.quantity,
+      unit: line.unit,
+      unitPrice: line.unitPrice,
+      ...(line.salesCategoryId ? { salesCategoryId: line.salesCategoryId } : {}),
+    }))
+}
+
 /**
  * Stap 13 (2026-09-11): a standalone billable activity (Opslag, Kraan, …) carries its own price
  * record instead of borrowing a transport order: own concurrency token (`pricingVersion`),
@@ -59,10 +73,16 @@ function currentAgreedAmount(activity: DossierActivity): string {
  * this card re-render from the authoritative state.
  *
  * Master sprint 2026-09-21 (D5): the record can be priced in two ways — the flat "vaste prijs"
- * (one agreed amount; empty = cleared, € 0 is a deliberate price) or sales LINES whose total the
- * server computes. Switching is allowed and explained in one line. "Gratis" is an explicit
- * confirmation (empty list + freeConfirmed), "Prijs verwijderen" an empty list without it; the
- * status shown is always the server's `priceStatus`, and a missing price never reads as € 0,00.
+ * (one agreed amount; empty = cleared) or sales LINES whose total the server computes.
+ *
+ * Pricing UX sprint 2026-10-08 — the € 0 semantics are explicit: a € 0 that nobody confirmed is
+ * `ZeroUnconfirmed` ("Controle vereist") and shows ONE warning callout at the price with real
+ * actions — [Bevestigen als gratis] settles it (the fixed € 0 record stays, `freeConfirmed`
+ * travels with it; lines totalling € 0 are re-sent with the flag), [Prijs aanpassen] focuses the
+ * amount. Only after that confirmation the status is "Gratis". A unit WITHOUT a price keeps a
+ * quiet "Markeren als gratis"; "Prijs verwijderen" sits in the same action group and names the
+ * unit it clears. The status shown is always the server's `priceStatus`; a missing price never
+ * reads as € 0,00.
  */
 export function DossierActivityPricePanel({
   dossier, activity, canEdit, hasPriceRight = canEdit, onDossierUpdated, onConflict, onDirtyChange, ref,
@@ -96,9 +116,12 @@ export function DossierActivityPricePanel({
   const statusLabel = activity.pricingStatus && activity.pricingStatus in ORDER_PRICING_STATUS_LABELS
     ? t(ORDER_PRICING_STATUS_LABELS[activity.pricingStatus as OrderPricingStatus])
     : (activity.pricingStatus ?? '')
+  const unitName = activityUnitName(activity)
   const isFree = activity.priceStatus === 'Free'
-  // A confirmed-free activity is a settled € 0 — no "is this deliberate?" question any more.
-  const isZero = activity.isPriced && activity.agreedPrice === 0 && !isFree
+  // The server's status decides; an older payload without one falls back to the same facts.
+  const isZeroUnconfirmed = activity.priceStatus
+    ? activity.priceStatus === 'ZeroUnconfirmed'
+    : activity.isPriced && activity.agreedPrice === 0 && !activity.freeConfirmed
   const hasLines = (activity.priceLines?.length ?? 0) > 0
   const hasPrice = activity.isPriced || isFree || hasLines
   // The flat price is the quick option; with lines on the table it steps aside until asked for.
@@ -124,6 +147,16 @@ export function DossierActivityPricePanel({
     onDirtyChange?.(false)
   }
 
+  function reportFailure(err: unknown, fallback: string) {
+    if (err instanceof ApiError && err.status === 409) {
+      // The page banner offers "Herladen"; the inline message says why the save did not land.
+      onConflict(err)
+      setError(t('dossiers.orderDrawer.conflict'))
+    } else {
+      setError(describeApiError(err, fallback).message)
+    }
+  }
+
   async function save(event: FormEvent) {
     event.preventDefault()
     if (busy || !editable) return
@@ -140,13 +173,29 @@ export function DossierActivityPricePanel({
       dropLineDraft()
       onDossierUpdated(updated)
     } catch (err) {
-      if (err instanceof ApiError && err.status === 409) {
-        // The page banner offers "Herladen"; the inline message says why the save did not land.
-        onConflict(err)
-        setError(t('dossiers.orderDrawer.conflict'))
-      } else {
-        setError(describeApiError(err, t('dossierSheet.price.agreedSaveFailed')).message)
-      }
+      reportFailure(err, t('dossierSheet.price.agreedSaveFailed'))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  /**
+   * "Bevestigen als gratis" on an unconfirmed € 0: the record keeps its shape — a fixed € 0 is
+   * re-sent with `freeConfirmed`, lines totalling € 0 are re-sent unchanged with the flag.
+   */
+  async function confirmFree() {
+    if (busy || !editable) return
+    setBusy(true)
+    setError(null)
+    try {
+      const updated = hasLines
+        ? await saveActivityPriceLines(dossier.id, activity.id, { version: activity.pricingVersion, lines: serverLinesAsInput(activity), freeConfirmed: true })
+        : await setActivityPrice(dossier.id, activity.id, { fixedAmount: 0, version: activity.pricingVersion, freeConfirmed: true })
+      toast.showSuccess(t('dossierPricing.activity.freeSaved'))
+      dropLineDraft()
+      onDossierUpdated(updated)
+    } catch (err) {
+      reportFailure(err, t('dossierPricing.activity.actionFailed'))
     } finally {
       setBusy(false)
     }
@@ -165,23 +214,24 @@ export function DossierActivityPricePanel({
       onDossierUpdated(updated)
     } catch (err) {
       setConfirming(null)
-      if (err instanceof ApiError && err.status === 409) {
-        onConflict(err)
-        setError(t('dossiers.orderDrawer.conflict'))
-      } else {
-        setError(describeApiError(err, t('dossierPricing.activity.actionFailed')).message)
-      }
+      reportFailure(err, t('dossierPricing.activity.actionFailed'))
     } finally {
       setBusy(false)
     }
   }
 
+  /** "Prijs aanpassen": the amount input when the flat price is on screen, else the first sales line. */
+  function adjustPrice() {
+    if (showFlat && inputRef.current) {
+      inputRef.current.focus()
+      inputRef.current.select()
+      return
+    }
+    if (!linesRef.current?.focusFirstLine()) linesRef.current?.addLine()
+  }
+
   return (
     <div className="dossier-activity-price">
-      <p className="dossier-price-order-label">
-        {t('dossierSheet.price.forActivity', { name: activityUnitName(activity) })} <PriceStatusBadge status={activity.priceStatus} />
-      </p>
-
       {locked && <p className="dossier-price-note">{t('dossierSheet.price.lockedActivity', { status: statusLabel })}</p>}
       {!locked && !canEdit && (
         <p className="dossier-price-note">
@@ -189,51 +239,68 @@ export function DossierActivityPricePanel({
         </p>
       )}
 
-      {isFree && <p className="dossier-price-note">{t('dossierPricing.activity.freeConfirmed')}</p>}
-      {!isFree && activity.isPriced && activity.agreedPrice != null && (
-        <p className="dossier-price-note">{t('dossierSheet.price.agreedCurrent', { amount: euro(activity.agreedPrice) })}</p>
-      )}
-      {!hasPrice && editable && <p className="dossier-price-none">{t('dossierPricing.noPriceSet')}</p>}
-      {!hasPrice && !editable && <p className="placeholder-text">{t('dossierSheet.price.noActivityPrice')}</p>}
+      <div className="dossier-pricing-block">
+        <h4 className="dossier-pricing-block-title">{t('dossierPricing.detail.priceBlock')}</h4>
 
-      {showFlat && (
-        <form className="dossier-price-agreed" onSubmit={(event) => void save(event)}>
-          <FormField
-            label={t('dossierSheet.price.agreedLabel')}
-            htmlFor="dossier-activity-agreed-price"
-            error={error ?? undefined}
-            hint={hasLines ? t('dossierPricing.activity.flatReplacesLines') : t('dossierSheet.price.agreedHintActivity')}
-          >
-            <div className="dossier-price-agreed-row">
-              <input
-                ref={inputRef}
-                id="dossier-activity-agreed-price"
-                type="text"
-                inputMode="decimal"
-                value={input}
-                onChange={(event) => setInput(event.target.value)}
-                disabled={busy}
-                aria-invalid={error ? true : undefined}
-                placeholder="0,00"
-              />
-              <Button type="submit" disabled={busy || input.trim() === currentAgreedAmount(activity)}>
-                {t('dossierSheet.price.agreedSave')}
-              </Button>
-            </div>
-          </FormField>
-        </form>
-      )}
-      {!showFlat && error && (
-        <p className="dossier-activity-lines-error" role="alert">
-          {error}
-        </p>
-      )}
+        {isFree && <p className="dossier-price-note">{t('dossierPricing.activity.freeConfirmed')}</p>}
+        {!isFree && !isZeroUnconfirmed && activity.isPriced && activity.agreedPrice != null && (
+          <p className="dossier-price-note">{t('dossierSheet.price.agreedCurrent', { amount: euro(activity.agreedPrice) })}</p>
+        )}
+        {!hasPrice && editable && <p className="dossier-price-none">{t('dossierPricing.noPriceSet')}</p>}
+        {!hasPrice && !editable && <p className="placeholder-text">{t('dossierSheet.price.noActivityPrice')}</p>}
 
-      {isZero && (
-        <p className="dossier-price-zero-warning" role="note">
-          {t('dossierSheet.price.zeroWarningActivity')}
-        </p>
-      )}
+        {isZeroUnconfirmed && (
+          <div className="dossier-price-callout" role="alert" data-testid="zero-callout">
+            <p className="dossier-price-callout-title">
+              <span className="dossier-price-callout-icon" aria-hidden="true">⚠</span> {t('dossierPricing.zeroCallout.title')}
+            </p>
+            <p className="dossier-price-callout-text">{t('dossierPricing.zeroCallout.message')}</p>
+            {editable && (
+              <div className="dossier-price-callout-actions">
+                <Button onClick={() => void confirmFree()} disabled={busy}>
+                  {t('dossierPricing.zeroCallout.confirm')}
+                </Button>
+                <Button variant="secondary" onClick={adjustPrice} disabled={busy}>
+                  {t('dossierPricing.zeroCallout.adjust')}
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {showFlat && (
+          <form className="dossier-price-agreed" onSubmit={(event) => void save(event)}>
+            <FormField
+              label={t('dossierSheet.price.agreedLabel')}
+              htmlFor="dossier-activity-agreed-price"
+              error={error ?? undefined}
+              hint={hasLines ? t('dossierPricing.activity.flatReplacesLines') : t('dossierSheet.price.agreedHintActivity')}
+            >
+              <div className="dossier-price-agreed-row">
+                <input
+                  ref={inputRef}
+                  id="dossier-activity-agreed-price"
+                  type="text"
+                  inputMode="decimal"
+                  value={input}
+                  onChange={(event) => setInput(event.target.value)}
+                  disabled={busy}
+                  aria-invalid={error ? true : undefined}
+                  placeholder="0,00"
+                />
+                <Button type="submit" disabled={busy || input.trim() === currentAgreedAmount(activity)}>
+                  {t('dossierSheet.price.agreedSave')}
+                </Button>
+              </div>
+            </FormField>
+          </form>
+        )}
+        {!showFlat && error && (
+          <p className="dossier-activity-lines-error" role="alert">
+            {error}
+          </p>
+        )}
+      </div>
 
       <ActivityPriceLinesEditor
         key={linesReset}
@@ -250,20 +317,20 @@ export function DossierActivityPricePanel({
         reloadDossier={() => getDossier(dossier.id)}
       />
 
-      {editable && (
+      {editable && (hasLines || hasPrice || !isFree) && (
         <p className="dossier-price-actions dossier-activity-price-actions">
           {hasLines && !flatForced && (
             <Button variant="ghost" onClick={() => setFlatForced(true)} disabled={busy}>
               {t('dossierPricing.activity.useFlat')}
             </Button>
           )}
-          {!isFree && (
-            <Button variant="ghost" onClick={() => (hasPrice || linesDirty ? setConfirming('free') : void clearLines(true))} disabled={busy}>
-              {t('dossierPricing.activity.confirmFree')}
+          {!hasPrice && !isFree && (
+            <Button variant="ghost" onClick={() => (linesDirty ? setConfirming('free') : void clearLines(true))} disabled={busy}>
+              {t('dossierPricing.activity.markFree')}
             </Button>
           )}
           {hasPrice && (
-            <Button variant="ghost" onClick={() => setConfirming('remove')} disabled={busy}>
+            <Button variant="ghost" className="dossier-price-remove" onClick={() => setConfirming('remove')} disabled={busy}>
               {t('dossierPricing.activity.removePrice')}
             </Button>
           )}
@@ -283,7 +350,7 @@ export function DossierActivityPricePanel({
       {confirming === 'remove' && (
         <ConfirmDialog
           title={t('dossierPricing.activity.removePrice')}
-          message={t('dossierPricing.activity.removePriceMessage')}
+          message={t('dossierPricing.activity.removePriceMessage', { name: unitName })}
           confirmLabel={t('dossierPricing.activity.removePrice')}
           destructive
           busy={busy}

@@ -12,15 +12,16 @@ import {
   type IssuedItemTemplate,
 } from '../issuedItemsApi'
 import { formatQuantityWithUnit } from '../issuedItemUnits'
+import { MANAGEMENT_MODES, MANAGEMENT_MODE_LABELS, modeFromFlags, type ManagementMode } from '../managementMode'
 import { TemplateFormModal } from '../TemplateFormModal'
 import '../issued-items.css'
 
-type StockFilter = 'all' | 'managed' | 'unmanaged' | 'low'
+type ModeFilter = 'all' | ManagementMode | 'low'
 
 /**
- * Template list of the "Bedrijfsmiddelen" admin page (Sjablonen tab): filters, stock state,
- * create/edit/delete. Embedded without its own page header so the surrounding page owns
- * title, breadcrumbs and tabs.
+ * The "Bedrijfsmiddelen" overview: what the company issues to employees, each with its
+ * Beheerwijze (how it is tracked) instead of technical yes/no columns. Embedded without its
+ * own page header so the surrounding page owns title, breadcrumbs and tabs.
  */
 export function IssuedItemTemplatesPanel() {
   const { t } = useLocale()
@@ -33,7 +34,7 @@ export function IssuedItemTemplatesPanel() {
 
   const [categoryFilter, setCategoryFilter] = useState('')
   const [activeFilter, setActiveFilter] = useState<'all' | 'active' | 'inactive'>('active')
-  const [stockFilter, setStockFilter] = useState<StockFilter>('all')
+  const [modeFilter, setModeFilter] = useState<ModeFilter>('all')
 
   const [editorOpen, setEditorOpen] = useState(false)
   const [editing, setEditing] = useState<IssuedItemTemplate | null>(null)
@@ -66,12 +67,11 @@ export function IssuedItemTemplatesPanel() {
         if (categoryFilter && tpl.category !== categoryFilter) return false
         if (activeFilter === 'active' && !tpl.isActive) return false
         if (activeFilter === 'inactive' && tpl.isActive) return false
-        if (stockFilter === 'managed' && !tpl.stockTrackingEnabled) return false
-        if (stockFilter === 'unmanaged' && tpl.stockTrackingEnabled) return false
-        if (stockFilter === 'low' && !(tpl.stockTrackingEnabled && tpl.lowStock)) return false
+        if (modeFilter === 'low') return tpl.stockTrackingEnabled && tpl.lowStock
+        if (modeFilter !== 'all' && modeFromFlags(tpl) !== modeFilter) return false
         return true
       }),
-    [templates, categoryFilter, activeFilter, stockFilter],
+    [templates, categoryFilter, activeFilter, modeFilter],
   )
 
   async function handleDelete() {
@@ -86,8 +86,6 @@ export function IssuedItemTemplatesPanel() {
       setDeleteTarget(null)
     }
   }
-
-  const yesNo = (value: boolean) => (value ? t('issuedItems.templates.yes') : t('issuedItems.templates.no'))
 
   return (
     <div className="issued-items">
@@ -114,19 +112,22 @@ export function IssuedItemTemplatesPanel() {
             ))}
           </select>
         </FormField>
+        <FormField label={t('issuedItems.templates.filterMode')} htmlFor="tpl-filter-mode">
+          <select id="tpl-filter-mode" value={modeFilter} onChange={(e) => setModeFilter(e.target.value as ModeFilter)}>
+            <option value="all">{t('issuedItems.templates.optModeAll')}</option>
+            {MANAGEMENT_MODES.map((mode) => (
+              <option key={mode} value={mode}>
+                {t(MANAGEMENT_MODE_LABELS[mode])}
+              </option>
+            ))}
+            <option value="low">{t('issuedItems.templates.optLow')}</option>
+          </select>
+        </FormField>
         <FormField label={t('issuedItems.templates.filterStatus')} htmlFor="tpl-filter-active">
           <select id="tpl-filter-active" value={activeFilter} onChange={(e) => setActiveFilter(e.target.value as typeof activeFilter)}>
             <option value="active">{t('issuedItems.templates.optActive')}</option>
             <option value="inactive">{t('issuedItems.templates.optInactive')}</option>
             <option value="all">{t('issuedItems.templates.optAll')}</option>
-          </select>
-        </FormField>
-        <FormField label={t('issuedItems.templates.filterStock')} htmlFor="tpl-filter-stock">
-          <select id="tpl-filter-stock" value={stockFilter} onChange={(e) => setStockFilter(e.target.value as StockFilter)}>
-            <option value="all">{t('issuedItems.templates.optStockAll')}</option>
-            <option value="managed">{t('issuedItems.templates.optManaged')}</option>
-            <option value="unmanaged">{t('issuedItems.templates.optUnmanaged')}</option>
-            <option value="low">{t('issuedItems.templates.optLow')}</option>
           </select>
         </FormField>
       </div>
@@ -145,60 +146,73 @@ export function IssuedItemTemplatesPanel() {
             <tr>
               <th>{t('issuedItems.templates.colName')}</th>
               <th>{t('issuedItems.templates.colCategory')}</th>
-              <th>{t('issuedItems.templates.colStockTracking')}</th>
-              <th>{t('issuedItems.templates.colVariants')}</th>
+              <th>{t('issuedItems.templates.colMode')}</th>
               <th>{t('issuedItems.templates.colAvailable')}</th>
-              <th>{t('issuedItems.templates.colSerial')}</th>
-              <th>{t('issuedItems.templates.colReturn')}</th>
+              <th>{t('issuedItems.templates.colIssue')}</th>
               <th>{t('issuedItems.templates.colStatus')}</th>
               <th aria-label={t('issuedItems.tab.colActions')} />
             </tr>
           </thead>
           <tbody>
-            {visible.map((tpl) => (
-              <tr key={tpl.id}>
-                <td>
-                  <Link className="issued-items-link" to={`/issued-items/templates/${tpl.id}`}>
-                    {tpl.name}
-                  </Link>
-                </td>
-                <td>{tpl.category}</td>
-                <td>{yesNo(tpl.stockTrackingEnabled)}</td>
-                <td>{tpl.variantsEnabled ? tpl.variantCount : '—'}</td>
-                <td>
-                  {tpl.stockTrackingEnabled ? (
-                    <span className="issued-items-stock-cell">
-                      {formatQuantityWithUnit(t, tpl.totalAvailable, tpl.unit)}
-                      {tpl.lowStock && <Badge tone="warning">{t('issuedItems.templates.lowStock')}</Badge>}
+            {visible.map((tpl) => {
+              const mode = modeFromFlags(tpl)
+              return (
+                <tr key={tpl.id}>
+                  <td>
+                    <Link className="issued-items-link" to={`/issued-items/templates/${tpl.id}`}>
+                      {tpl.name}
+                    </Link>
+                  </td>
+                  <td>{tpl.category}</td>
+                  <td>
+                    <span className="issued-items-mode-cell">
+                      {t(MANAGEMENT_MODE_LABELS[mode])}
+                      {mode === 'variants' && <Badge tone="neutral">{t('issuedItems.templates.variantCount', { count: tpl.variantCount })}</Badge>}
                     </span>
-                  ) : (
-                    '—'
-                  )}
-                </td>
-                <td>{yesNo(tpl.requiresSerialNumber)}</td>
-                <td>{yesNo(tpl.returnRequired)}</td>
-                <td>
-                  <Badge tone={tpl.isActive ? 'success' : 'neutral'}>
-                    {tpl.isActive ? t('issuedItems.templates.active') : t('issuedItems.templates.inactive')}
-                  </Badge>
-                </td>
-                <td className="issued-items-row-actions">
-                  <button
-                    type="button"
-                    className="issued-items-link"
-                    onClick={() => {
-                      setEditing(tpl)
-                      setEditorOpen(true)
-                    }}
-                  >
-                    {t('ui.actions.edit')}
-                  </button>
-                  <button type="button" className="issued-items-link issued-items-link-danger" onClick={() => setDeleteTarget(tpl)}>
-                    {t('ui.actions.delete')}
-                  </button>
-                </td>
-              </tr>
-            ))}
+                  </td>
+                  <td>
+                    {tpl.stockTrackingEnabled ? (
+                      <span className="issued-items-stock-cell">
+                        {formatQuantityWithUnit(t, tpl.totalAvailable, tpl.unit)}
+                        {tpl.lowStock && <Badge tone="warning">{t('issuedItems.templates.lowStock')}</Badge>}
+                      </span>
+                    ) : (
+                      '—'
+                    )}
+                  </td>
+                  <td>
+                    {tpl.requiresSerialNumber || tpl.returnRequired ? (
+                      <span className="issued-items-badges">
+                        {tpl.requiresSerialNumber && <Badge tone="neutral">{t('issuedItems.templates.badgeSerial')}</Badge>}
+                        {tpl.returnRequired && <Badge tone="neutral">{t('issuedItems.templates.badgeReturn')}</Badge>}
+                      </span>
+                    ) : (
+                      '—'
+                    )}
+                  </td>
+                  <td>
+                    <Badge tone={tpl.isActive ? 'success' : 'neutral'}>
+                      {tpl.isActive ? t('issuedItems.templates.active') : t('issuedItems.templates.inactive')}
+                    </Badge>
+                  </td>
+                  <td className="issued-items-row-actions">
+                    <button
+                      type="button"
+                      className="issued-items-link"
+                      onClick={() => {
+                        setEditing(tpl)
+                        setEditorOpen(true)
+                      }}
+                    >
+                      {t('ui.actions.edit')}
+                    </button>
+                    <button type="button" className="issued-items-link issued-items-link-danger" onClick={() => setDeleteTarget(tpl)}>
+                      {t('ui.actions.delete')}
+                    </button>
+                  </td>
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       )}
@@ -206,15 +220,22 @@ export function IssuedItemTemplatesPanel() {
       {editorOpen && (
         <TemplateFormModal
           editing={editing}
+          existingItems={templates ?? []}
           onClose={() => setEditorOpen(false)}
-          onSaved={(saved) => {
-            showSuccess(editing ? t('issuedItems.templates.updated') : t('issuedItems.templates.added'))
+          onSaved={(saved, result) => {
             setEditorOpen(false)
-            // A brand-new variant template needs its variants configured — take the user there.
-            if (!editing && saved.variantsEnabled) {
+            if (result && result.variantFailures.length > 0) {
+              // The item exists; only some variants did not make it. Send the user straight to
+              // the place where the missing ones can be added, with the labels in hand.
+              showError(
+                t('issuedItems.templates.variantsPartiallyFailed', {
+                  labels: result.variantFailures.map((failure) => failure.label).join(', '),
+                }),
+              )
               navigate(`/issued-items/templates/${saved.id}?tab=varianten`)
               return
             }
+            showSuccess(editing ? t('issuedItems.templates.updated') : t('issuedItems.templates.added'))
             setReloadToken((token) => token + 1)
           }}
         />

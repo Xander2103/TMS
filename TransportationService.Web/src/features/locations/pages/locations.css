@@ -62,8 +62,8 @@
 }
 
 .locations-view-toggle-button[aria-pressed='true'] {
-  background: var(--accent, #2563eb);
-  border-color: var(--accent, #2563eb);
+  background: var(--color-primary-solid);
+  border-color: var(--accent);
   color: #fff;
   font-weight: 600;
 }
@@ -131,12 +131,12 @@
 
 .locations-group-chevron {
   font-size: 12px;
-  color: var(--text-muted, #6b7280);
+  color: var(--text-muted);
 }
 
 .locations-group-count {
   font-weight: 400;
-  color: var(--text-muted, #6b7280);
+  color: var(--text-muted);
 }
 
 /* ---- Detail: header ----------------------------------------------------------------------- */
@@ -192,7 +192,7 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--text-muted, #6b7280);
+  color: var(--text-muted);
 }
 
 .location-card-body {
@@ -212,7 +212,7 @@
 }
 
 .location-card-row dt {
-  color: var(--text-muted, #6b7280);
+  color: var(--text-muted);
   font-size: 14px;
 }
 
@@ -225,7 +225,7 @@
 
 .location-card-empty {
   margin: 0;
-  color: var(--text-muted, #6b7280);
+  color: var(--text-muted);
   font-size: 14px;
   font-style: italic;
 }
@@ -240,7 +240,7 @@
 
 .location-card-muted {
   margin: 6px 0 0;
-  color: var(--text-muted, #6b7280);
+  color: var(--text-muted);
   font-size: 14px;
 }
 
@@ -255,7 +255,7 @@
   text-align: left;
   font-weight: 600;
   width: 40px;
-  padding: 2px var(--space-2, 8px) 2px 0;
+  padding: 2px var(--space-2) 2px 0;
   vertical-align: top;
 }
 
@@ -268,15 +268,15 @@
   width: 1%;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
-  padding-right: var(--space-3, 12px);
+  padding-right: var(--space-3);
 }
 
 .location-hours-note {
-  color: var(--text-muted, #6b7280);
+  color: var(--text-muted);
 }
 
 .location-hours-closed {
-  color: var(--text-muted, #6b7280);
+  color: var(--text-muted);
   font-style: italic;
 }
 
@@ -303,14 +303,14 @@
 }
 
 .location-flag-check {
-  color: var(--success, #16a34a);
+  color: var(--success);
   font-weight: 600;
 }
 
 /* Interne informatie: visually distinct, never confused with public data. */
 .location-card-internal {
-  background: rgba(234, 179, 8, 0.08);
-  border-color: rgba(234, 179, 8, 0.45);
+  background: var(--color-warning-bg);
+  border-color: var(--color-warning-border);
 }
 
 .location-card-internal-label {
@@ -319,5 +319,5 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: #a16207;
+  color: var(--color-warning);
 }

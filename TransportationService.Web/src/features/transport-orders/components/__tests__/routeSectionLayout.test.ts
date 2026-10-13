@@ -1,18 +1,23 @@
 import { describe, expect, it } from 'vitest'
 import routeCss from '../sections/route-section.css?raw'
+import formCss from '../transport-order-form.css?raw'
 import autocompleteCss from '../../../locations/components/AddressAutocompleteInput.css?raw'
 import routeSectionSource from '../sections/RouteSection.tsx?raw'
+import dossierDetailCss from '../../../dossiers/pages/dossier-detail.css?raw'
 
 /**
- * Laden | Lossen side by side + the Van | Tot pair (master sprint 2026-09-21, spec §3/§4).
+ * Stop cards fill the width first (route UX sprint 2026-10-08) + the Van | Tot pair (master
+ * sprint 2026-09-21, spec §3/§4).
  *
- * jsdom cannot measure layout, so the stylesheet CONTRACT is guarded instead. Both stylesheets are
+ * jsdom cannot measure layout, so the stylesheet CONTRACT is guarded instead. The stylesheets are
  * listed under `test.css.include` in vitest.config.ts; without that entry `?raw` is empty.
  */
 const strip = (css: string) => css.replace(/\/\*[\s\S]*?\*\//g, '')
 const css = strip(routeCss)
 const popoverCss = strip(autocompleteCss)
-const [desktop, mobile = ''] = css.split(/@media\s*\(max-width:\s*900px\)/)
+const [desktop, mobile = ''] = css.split(/@media\s*\(max-width:\s*640px\)/)
+/** Cards never narrower than this: two field columns and the search + "+ Nieuw klantadres" row stay usable. */
+const AUTO_FILL = /grid-template-columns:\s*repeat\(auto-fill,\s*minmax\(min\(380px,\s*100%\),\s*1fr\)\)/
 
 function ruleBody(source: string, selector: string): string {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -30,17 +35,43 @@ describe('route-section.css — stop cards', () => {
     expect(routeSectionSource).toMatch(/import '\.\/route-section\.css'/)
   })
 
-  it('lays Laden and Lossen in two EQUAL columns that may shrink, cards equally tall', () => {
+  it('fills the available width first: as many ≥380px cards per row as fit, equally tall, in plain flow', () => {
     const grid = ruleBody(desktop, '.tof-stops-grid')
-    expect(grid).toMatch(/grid-template-columns:\s*minmax\(0,\s*1fr\)\s+minmax\(0,\s*1fr\)/)
+    expect(grid).toMatch(AUTO_FILL)
     expect(grid).toMatch(/align-items:\s*stretch/)
+    // No hard two-column cap anywhere: a wide desktop gets a third (and fourth) card per row.
+    expect(desktop).not.toMatch(/\.tof-stops-grid\s*\{[^}]*1fr\)\s+minmax\(0,\s*1fr\)/)
+    // Plain grid flow keeps the route sequence; nothing is laid out per stop type.
+    expect(css).not.toMatch(/grid-auto-flow|grid-template-areas|grid-column\s*:|grid-row\s*:|(^|[^a-z-])order\s*:/m)
     const card = ruleBody(desktop, '.tof-stops-grid .tof-stop')
     expect(card).toMatch(/box-sizing:\s*border-box/)
     expect(card).toMatch(/min-width:\s*0/)
   })
 
-  it('stacks to ONE column on tablet/phone — no horizontal overflow', () => {
+  it('the order form stylesheet carries the SAME rule, so the layout never depends on stylesheet order', () => {
+    const form = strip(formCss)
+    expect(ruleBody(form, '.tof-stops-grid')).toMatch(AUTO_FILL)
+    // Its old tablet cap (one column from 900px down) is gone too: the auto-fill rule decides
+    // between one and two cards there; only the phone block (≤640px) forces one column.
+    const [formDesktop, formPhone = ''] = form.split(/@media\s*\(max-width:\s*640px\)/)
+    expect(formDesktop).not.toMatch(/\.tof-stops-grid\s*\{\s*grid-template-columns:\s*1fr\s*;/)
+    expect(formDesktop).not.toMatch(/\.tof-stops-grid\s*\{\s*grid-template-columns:\s*1fr 1fr/)
+    expect(formPhone).toMatch(/\.tof-stops-grid\s*\{\s*grid-template-columns:\s*1fr\s*;/)
+  })
+
+  it('the dossier Route tab lifts the order-form 1000px cap, so a wide desktop really gets 3–4 cards per row', () => {
+    expect(ruleBody(strip(formCss), '.tof')).toMatch(/max-width:\s*1000px/)
+    expect(ruleBody(strip(dossierDetailCss), '.dossier-route-sheet.tof')).toMatch(/max-width:\s*none/)
+  })
+
+  it('keeps the on-site work card at full width', () => {
+    expect(ruleBody(desktop, '.tof-stops-grid.tof-stops-grid-site')).toMatch(/grid-template-columns:\s*minmax\(0,\s*1fr\)\s*;/)
+  })
+
+  it('stacks to ONE column on a phone — no horizontal overflow; the minmax(min(…, 100%)) keeps any narrower container at one column', () => {
     expect(ruleBody(mobile, '.tof-stops-grid')).toMatch(/grid-template-columns:\s*minmax\(0,\s*1fr\)\s*;/)
+    expect(mobile).toMatch(/\.tof-stops-grid \.tof-row,\s*\.tof-stops-grid \.tof-row-4,\s*\.tof-onsite-grid\s*\{\s*grid-template-columns:\s*minmax\(0,\s*1fr\)/)
+    expect(css).not.toMatch(/@media\s*\(max-width:\s*900px\)/)
   })
 
   it('keeps Van | Tot as two equal columns at EVERY width, the time field filling its column', () => {

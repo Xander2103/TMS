@@ -75,10 +75,10 @@
   gap: 6px;
   padding: 8px 10px;
   border: 1px solid var(--border);
-  border-radius: var(--radius-md, 8px);
-  background: var(--bg);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-raised);
   color: var(--text-h);
-  box-shadow: var(--shadow, 0 4px 12px rgba(0, 0, 0, 0.12));
+  box-shadow: var(--shadow);
   font-size: 13px;
   font-weight: 400;
   line-height: 1.45;

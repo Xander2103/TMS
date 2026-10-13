@@ -13,7 +13,7 @@
   justify-content: space-between;
   gap: 1rem;
   padding: 0.7rem 1.25rem;
-  background: var(--accent);
+  background: var(--color-primary-solid);
   color: #fff;
 }
 
@@ -90,7 +90,7 @@
   padding: 0 0.3rem;
   margin-left: 0.35rem;
   border-radius: 999px;
-  background: #d9534f;
+  background: var(--color-danger-solid);
   color: #fff;
   font-size: 0.68rem;
   font-weight: 700;

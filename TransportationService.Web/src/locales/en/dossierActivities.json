@@ -21,6 +21,7 @@
     "NotPriced": "Not priced",
     "PartiallyPriced": "Partially priced",
     "Priced": "Priced",
+    "ZeroUnconfirmed": "Review required",
     "Free": "Free"
   },
   "planning": {

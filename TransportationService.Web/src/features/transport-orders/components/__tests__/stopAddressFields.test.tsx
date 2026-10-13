@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { RouteSection } from '../sections/RouteSection'
+import { LocationQuickCreateDialog } from '../../../locations/components/LocationQuickCreateDialog'
+import type { LocationOption } from '../../../locations/types'
 import { buildSubmitPayload } from '../sections/orderFormPayload'
 import { useStopMutation } from '../sections/useStopMutation'
 import {
@@ -22,7 +24,7 @@ vi.mock('../../../locations/api/customerAddressesApi', async (importOriginal) =>
   pickAddresses: pickerApi.pickAddresses,
   checkAddressDuplicates: pickerApi.checkAddressDuplicates,
 }))
-const locationsApi = vi.hoisted(() => ({ getLocation: vi.fn() }))
+const locationsApi = vi.hoisted(() => ({ getLocation: vi.fn(), createLocation: vi.fn() }))
 vi.mock('../../../locations/api/locationsApi', () => locationsApi)
 vi.mock('../../../reference/components/CountryCombobox', () => ({
   CountryCombobox: ({ id, value, onChange }: { id?: string; value: string | null; onChange: (code: string | null) => void }) => (
@@ -63,11 +65,18 @@ function valuesFor(stops: StopFormRow[]): OrderFormValues {
 /** Last payload the harness would submit — the same builder every real editor uses. */
 const latest = {} as { payload: TransportOrderInput; stops: StopFormRow[] }
 
-function Harness({ initial, canSave = true }: { initial: StopFormRow[]; canSave?: boolean }) {
+function Harness({
+  initial,
+  canSave = true,
+  quickCreate = false,
+  showHeader = false,
+}: { initial: StopFormRow[]; canSave?: boolean; quickCreate?: boolean; showHeader?: boolean }) {
   const [stops, setStops] = useState(initial)
   const [, setCargo] = useState<CargoFormRow[]>([])
   const mutateStops = useStopMutation(stops, setStops, setCargo)
   const [errors, setErrors] = useState<Record<string, string>>({})
+  // The same promise-parking pattern every real host (DossierRouteEditor, NewDossierPage) uses.
+  const [pending, setPending] = useState<{ name: string; resolve: (created: LocationOption | null) => void } | null>(null)
   // Published after every commit (an effect — render itself stays pure).
   useEffect(() => {
     latest.payload = buildSubmitPayload(valuesFor(stops))
@@ -75,7 +84,18 @@ function Harness({ initial, canSave = true }: { initial: StopFormRow[]; canSave?
   }, [stops])
   return (
     <>
+      {pending && (
+        <LocationQuickCreateDialog
+          customerId="cust-1"
+          initialName={pending.name}
+          onClose={(created) => {
+            pending.resolve(created)
+            setPending(null)
+          }}
+        />
+      )}
       <RouteSection
+        onQuickCreate={quickCreate ? (name) => new Promise<LocationOption | null>((resolve) => setPending({ name, resolve })) : undefined}
         stops={stops}
         customerId="cust-1"
         saving={false}
@@ -94,7 +114,7 @@ function Harness({ initial, canSave = true }: { initial: StopFormRow[]; canSave?
         onRequestRefresh={(key) => mutateStops((rows) => rows.map((row) => (row.key === key ? { ...row, refreshSnapshot: true, addressOverridden: false } : row)))}
         canSaveToAddressBook={canSave}
         sheet
-        hideHeader
+        hideHeader={!showHeader}
       />
       <button
         type="button"
@@ -114,6 +134,7 @@ beforeEach(() => {
   pickerApi.pickAddresses.mockReset().mockResolvedValue([novellini])
   pickerApi.checkAddressDuplicates.mockReset().mockResolvedValue({ hasExactMatch: false, candidates: [] })
   locationsApi.getLocation.mockReset().mockRejectedValue(new Error('not needed'))
+  locationsApi.createLocation.mockReset()
 })
 
 describe('Stop address fields — always visible, filled from the real record', () => {
@@ -373,5 +394,149 @@ describe('Multiple stops — one stop edited, the others untouched (id-preservin
       expect(from).not.toBeRequired()
       expect(to).not.toBeRequired()
     }
+  })
+})
+
+/**
+ * Route UX sprint 2026-10-08: "+ Nieuw klantadres" is always available on a stop — whatever the
+ * customer already has and whatever a search returns — and lands the new CUSTOMER address in
+ * the stop at once. The address book write happens in the dialog; the stop link waits for the
+ * route save (the payload flag `saveToAddressBook` stays false: nothing to store twice).
+ */
+describe('"+ Nieuw klantadres" on a stop', () => {
+  const createdWerf = {
+    id: 'loc-new', code: 'LOC-9', name: 'Werf Dupont', type: 'CustomerLocation', city: 'Gent',
+    isDefaultLoadingLocation: false, isDefaultUnloadingLocation: false, isDefaultBillingLocation: false,
+  }
+  const werfDetail = {
+    id: 'loc-new', name: 'Werf Dupont', street: 'Kerkstraat', houseNumber: '12', postalCode: '9000', city: 'Gent', countryCode: 'BE',
+  }
+  const createAction = (card: HTMLElement) => within(card).getByRole('button', { name: '+ Nieuw klantadres' })
+
+  it('is offered on every stop: with existing customer addresses, with search results and with none', async () => {
+    const user = userEvent.setup()
+    render(<Harness initial={[emptyStop('Loading'), emptyStop('Unloading')]} quickCreate />)
+    for (const card of cards()) expect(createAction(card)).toBeVisible()
+
+    // Results shown: the action stays, and the list also ends with the shortcut.
+    const first = cards()[0]
+    await user.type(field(first, 'Adres zoeken'), 'Novel')
+    expect(await within(first).findByText('Novellini')).toBeInTheDocument()
+    expect(createAction(first)).toBeVisible()
+    expect(within(first).getByRole('option', { name: /Nieuw adres “Novel” aanmaken/ })).toBeInTheDocument()
+
+    // No results: the honest note plus the shortcut.
+    pickerApi.pickAddresses.mockResolvedValue([])
+    await user.type(field(first, 'Adres zoeken'), 'x')
+    expect(await within(first).findByText(/Geen bekend adres gevonden/)).toBeInTheDocument()
+    expect(within(first).getByRole('option', { name: /Nieuw adres “Novelx” aanmaken/ })).toBeInTheDocument()
+    expect(createAction(first)).toBeVisible()
+  })
+
+  it('is offered on the empty field of a customer WITHOUT addresses', async () => {
+    pickerApi.pickAddresses.mockResolvedValue([])
+    const user = userEvent.setup()
+    render(<Harness initial={[emptyStop('Loading')]} quickCreate />)
+    const card = cards()[0]
+    expect(createAction(card)).toBeVisible()
+    await user.click(field(card, 'Adres zoeken'))
+    expect(await within(card).findByRole('option', { name: '+ Nieuw klantadres' })).toBeInTheDocument()
+  })
+
+  it('creates the address on the current customer through the existing API, selects it for THIS stop and leaves the other stop alone', async () => {
+    locationsApi.createLocation.mockResolvedValue(createdWerf)
+    locationsApi.getLocation.mockResolvedValue(werfDetail)
+    const user = userEvent.setup()
+    render(<Harness initial={[emptyStop('Loading'), { ...emptyStop('Unloading'), city: 'Brugge', reference: 'REF-2' }]} quickCreate />)
+    const [first, second] = cards()
+    await user.type(field(first, 'Naam locatie'), 'tijdelijk')
+
+    await user.click(createAction(first))
+    const dialog = await screen.findByRole('dialog', { name: 'Nieuw adres' })
+    // The dossier customer is used as is — the planner never picks a customer here.
+    expect(within(dialog).queryByLabelText(/Klant/)).not.toBeInTheDocument()
+    await user.type(within(dialog).getByLabelText(/^Naam/), 'Werf Dupont')
+    await user.type(within(dialog).getByLabelText('Straat'), 'Kerkstraat')
+    await user.type(within(dialog).getByLabelText('Nummer'), '12')
+    await user.type(within(dialog).getByLabelText('Postcode'), '9000')
+    await user.type(within(dialog).getByLabelText('Plaats'), 'Gent')
+    await user.click(within(dialog).getByRole('button', { name: 'Adres aanmaken' }))
+
+    // Same create call as Klanten → Adressen, linked to the customer by the server.
+    await waitFor(() => expect(locationsApi.createLocation).toHaveBeenCalledTimes(1))
+    expect(locationsApi.createLocation.mock.calls[0][0]).toMatchObject({
+      name: 'Werf Dupont', street: 'Kerkstraat', houseNumber: '12', postalCode: '9000', city: 'Gent', customerId: 'cust-1',
+    })
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+
+    // Selected and filled from the real record — no second search, no reload.
+    await waitFor(() => expect(field(first, 'Naam locatie')).toHaveValue('Werf Dupont'))
+    expect(field(first, 'Straat + nr')).toHaveValue('Kerkstraat 12')
+    expect(field(first, 'Postcode')).toHaveValue('9000')
+    expect(field(first, /Plaats/)).toHaveValue('Gent')
+    expect(within(first).getByText('Overgenomen van adres')).toBeInTheDocument()
+    expect(latest.payload.stops[0]).toMatchObject({ locationId: 'loc-new', locationName: 'Werf Dupont', city: 'Gent', saveToAddressBook: false })
+    // Already in the address book: the "also store" option is not offered again.
+    expect(within(first).queryByLabelText('Adres ook bewaren in klantenbestand')).not.toBeInTheDocument()
+    // The sibling stop's unsaved edits are untouched.
+    expect(field(second, /Plaats/)).toHaveValue('Brugge')
+    expect(latest.payload.stops[1]).toMatchObject({ locationId: null, city: 'Brugge', reference: 'REF-2' })
+
+    // The next search goes back to the server and finds the new address.
+    pickerApi.pickAddresses.mockResolvedValue([{ ...novellini, locationId: 'loc-new', name: 'Werf Dupont', street: 'Kerkstraat', houseNumber: '12', postalCode: '9000', city: 'Gent' }])
+    await user.click(field(second, 'Adres zoeken'))
+    expect(await within(second).findByText('Werf Dupont')).toBeInTheDocument()
+  })
+
+  it('cancelling the dialog keeps the stop exactly as it was', async () => {
+    const user = userEvent.setup()
+    render(<Harness initial={[{ ...emptyStop('Loading'), city: 'Leuven' }]} quickCreate />)
+    const card = cards()[0]
+    await user.click(createAction(card))
+    const dialog = await screen.findByRole('dialog', { name: 'Nieuw adres' })
+    await user.click(within(dialog).getByRole('button', { name: 'Annuleren' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(locationsApi.createLocation).not.toHaveBeenCalled()
+    expect(field(card, /Plaats/)).toHaveValue('Leuven')
+    expect(latest.payload.stops[0]).toMatchObject({ locationId: null, city: 'Leuven' })
+  })
+
+  it('is absent without the create right, and a free address still works without it', async () => {
+    const user = userEvent.setup()
+    render(<Harness initial={[emptyStop('Loading')]} />)
+    const card = cards()[0]
+    expect(within(card).queryByRole('button', { name: /Nieuw klantadres/ })).not.toBeInTheDocument()
+    await user.click(field(card, 'Adres zoeken'))
+    expect(await within(card).findByText('Novellini')).toBeInTheDocument()
+    expect(within(card).queryByRole('option', { name: /Nieuw/ })).not.toBeInTheDocument()
+
+    await user.type(field(card, 'Naam locatie'), 'Werf Dupont')
+    await user.type(field(card, 'Straat + nr'), 'Kerkstraat 12')
+    await user.type(field(card, /Plaats/), 'Gent')
+    expect(latest.payload.stops[0]).toMatchObject({ locationId: null, locationName: 'Werf Dupont', address: 'Kerkstraat 12', city: 'Gent' })
+  })
+})
+
+describe('Stop cards — sequence-driven grid', () => {
+  it('renders the cards in route order inside ONE grid; a new stop joins at the end, reorder renumbers in place', async () => {
+    const user = userEvent.setup()
+    render(<Harness initial={[emptyStop('Loading'), emptyStop('Unloading')]} showHeader />)
+    const grid = document.querySelector('.tof-stops-grid')!
+    const legends = () => Array.from(grid.querySelectorAll(':scope > fieldset.tof-stop > legend')).map((l) => l.textContent?.trim())
+    expect(legends()).toEqual(['1. Laden', '2. Lossen'])
+
+    await user.click(screen.getByRole('button', { name: '+ Laadstop' }))
+    await user.click(screen.getByRole('button', { name: '+ Losstop' }))
+    // Plain grid flow: the third and fourth card follow the first two in DOM order (next free cell).
+    expect(legends()).toEqual(['1. Laden', '2. Lossen', '3. Laden', '4. Lossen'])
+    expect(grid.querySelectorAll(':scope > fieldset.tof-stop')).toHaveLength(4)
+    expect(latest.payload.stops.map((s) => s.stopType)).toEqual(['Loading', 'Unloading', 'Loading', 'Unloading'])
+
+    await user.click(screen.getByRole('button', { name: 'Stop 3 omhoog' }))
+    expect(legends()).toEqual(['1. Laden', '2. Laden', '3. Lossen', '4. Lossen'])
+    expect(latest.payload.stops.map((s) => s.stopType)).toEqual(['Loading', 'Loading', 'Unloading', 'Unloading'])
+    // Tab order follows the same sequence: the first field of card 2 comes after card 1 in the DOM.
+    const [c1, c2] = cards()
+    expect(c1.compareDocumentPosition(c2) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 })

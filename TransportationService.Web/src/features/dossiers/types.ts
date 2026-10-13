@@ -151,7 +151,12 @@ export interface DossierActivity {
   documentCount?: number
 }
 
-export type ActivityPriceStatus = 'NotPriced' | 'PartiallyPriced' | 'Priced' | 'Free'
+/**
+ * Commercial status of a billable unit, derived by the SERVER. `ZeroUnconfirmed` (pricing UX sprint
+ * 2026-10-08) = priced at exactly € 0 without the explicit "free" decision — "Controle vereist",
+ * never shown as "Geprijsd"; only an explicit confirmation turns it into `Free`.
+ */
+export type ActivityPriceStatus = 'NotPriced' | 'PartiallyPriced' | 'Priced' | 'ZeroUnconfirmed' | 'Free'
 
 /** D1: read-only projection of the trip an activity's order sits on. `otherOrderCount` > 0 = shared trip. */
 export interface DossierActivityAssignment {

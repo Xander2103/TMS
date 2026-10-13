@@ -21,6 +21,7 @@
     "NotPriced": "Non tarifé",
     "PartiallyPriced": "Partiellement tarifé",
     "Priced": "Tarifé",
+    "ZeroUnconfirmed": "Contrôle requis",
     "Free": "Gratuit"
   },
   "planning": {

@@ -41,7 +41,7 @@
 }
 
 .cpp-card-alert {
-  border-color: #d9534f;
+  border-color: var(--color-danger-strong);
 }
 
 .cpp-card-label {
@@ -126,8 +126,8 @@
 }
 
 .cpp-announcement-urgent {
-  background: color-mix(in srgb, #d9534f 12%, transparent);
-  border: 1px solid #d9534f;
+  background: color-mix(in srgb, var(--color-danger-strong) 12%, transparent);
+  border: 1px solid var(--color-danger-strong);
 }
 
 /* Staff-authored portal-messages feed (Mededelingen) */
@@ -147,7 +147,7 @@
   width: 0.55rem;
   height: 0.55rem;
   border-radius: 999px;
-  background: var(--accent);
+  background: var(--color-primary-solid);
   flex-shrink: 0;
 }
 
@@ -268,7 +268,7 @@
   height: 1.2rem;
   padding: 0 0.3rem;
   border-radius: 999px;
-  background: #d9534f;
+  background: var(--color-danger-solid);
   color: #fff;
   font-size: 0.7rem;
   font-weight: 700;

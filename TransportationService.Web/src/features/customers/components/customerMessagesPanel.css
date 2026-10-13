@@ -17,13 +17,13 @@
   max-width: 75%;
   padding: 0.55rem 0.75rem;
   border-radius: 10px;
-  background: color-mix(in srgb, var(--accent, #2563eb) 12%, transparent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
   align-self: flex-start;
 }
 
 .cmp-message-staff {
   align-self: flex-end;
-  background: var(--border, #e5e7eb);
+  background: var(--border);
 }
 
 .cmp-message-meta {
@@ -49,7 +49,7 @@
   min-height: 3rem;
   font: inherit;
   padding: 0.5rem;
-  border: 1px solid var(--border, #e5e7eb);
+  border: 1px solid var(--border);
   border-radius: 8px;
   resize: vertical;
 }

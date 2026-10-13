@@ -66,8 +66,8 @@
 .notification-admin-form-error {
   padding: 8px 10px;
   border-radius: 6px;
-  background: rgba(220, 38, 38, 0.1);
-  color: #dc2626;
+  background: var(--color-danger-bg);
+  color: var(--color-danger-strong);
   font-size: 13px;
 }
 
@@ -77,7 +77,7 @@
   gap: 8px;
   padding: 8px 10px;
   border-radius: 6px;
-  background: rgba(217, 119, 6, 0.1);
+  background: var(--color-warning-bg);
   font-size: 13px;
   margin: 0 0 12px;
 }
@@ -161,7 +161,7 @@
 }
 
 .notification-admin-segment.is-active {
-  background: var(--accent);
+  background: var(--color-primary-solid);
   color: #fff;
 }
 
@@ -206,7 +206,7 @@
 }
 
 .notification-admin-chip:hover {
-  background: var(--accent);
+  background: var(--color-primary-solid);
   color: #fff;
 }
 

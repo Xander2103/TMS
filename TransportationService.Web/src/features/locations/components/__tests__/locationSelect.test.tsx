@@ -226,3 +226,91 @@ describe('LocationSelect (address search field)', () => {
     )
   })
 })
+
+/**
+ * Route UX sprint 2026-10-08: "+ Nieuw klantadres" is always one click away when the host offers
+ * quick-create — next to the field in every state, and as the last suggestion row whether the
+ * field is empty, has results or has none. Without a create hook nothing of this is rendered.
+ */
+describe('LocationSelect — "+ Nieuw klantadres" is always reachable', () => {
+  const createdWerf = { id: 'loc-9', code: 'NEW', name: 'Nieuwe werf', type: 'CustomerLocation', city: 'Mechelen' }
+  const werfDetail = {
+    id: 'loc-9', name: 'Nieuwe werf', street: 'Stationsstraat', houseNumber: '5', postalCode: '2800', city: 'Mechelen', countryCode: 'BE',
+  }
+
+  it('renders the permanent action next to the field — also while the customer already has addresses and the search has results', async () => {
+    const onCreateNew = vi.fn().mockResolvedValue(null)
+    render(<LocationSelect value="" onChange={() => {}} customerId="cust-1" onCreateNew={onCreateNew} />)
+    const action = screen.getByRole('button', { name: '+ Nieuw klantadres' })
+    expect(action).toBeVisible()
+
+    // With results: the action stays, and the list ends with the same shortcut.
+    await userEvent.type(screen.getByRole('combobox'), 'Avenue Sab')
+    expect(await screen.findByText('Novellini')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '+ Nieuw klantadres' })).toBeVisible()
+    expect(screen.getByRole('option', { name: /Nieuw adres “Avenue Sab” aanmaken/ })).toBeInTheDocument()
+  })
+
+  it('offers the shortcut under the empty-field suggestions and under "no results"', async () => {
+    const onCreateNew = vi.fn().mockResolvedValue(null)
+    render(<LocationSelect value="" onChange={() => {}} customerId="cust-1" onCreateNew={onCreateNew} />)
+    const input = screen.getByRole('combobox')
+
+    // Click on the empty field: the customer's own addresses + the shortcut as the last row.
+    await userEvent.click(input)
+    expect(await screen.findByText('Novellini')).toBeInTheDocument()
+    const options = screen.getAllByRole('option')
+    expect(options[options.length - 1]).toHaveTextContent('+ Nieuw klantadres')
+
+    // No results for a typed name: the honest note AND the create row (carrying the name).
+    pickerApi.pickAddresses.mockResolvedValue([])
+    await userEvent.type(input, 'Onbekende werf')
+    expect(await screen.findByText('Geen bekend adres gevonden — vul het adres vrij in.')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('option', { name: /Nieuw adres “Onbekende werf” aanmaken/ }))
+    await waitFor(() => expect(onCreateNew).toHaveBeenCalledWith('Onbekende werf'))
+  })
+
+  it('a customer WITHOUT addresses still gets the shortcut on the empty field', async () => {
+    pickerApi.pickAddresses.mockResolvedValue([])
+    const onCreateNew = vi.fn().mockResolvedValue(null)
+    render(<LocationSelect value="" onChange={() => {}} customerId="cust-new" onCreateNew={onCreateNew} />)
+    await userEvent.click(screen.getByRole('combobox'))
+    expect(await screen.findByText('Geen bekend adres gevonden — vul het adres vrij in.')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('option', { name: '+ Nieuw klantadres' }))
+    await waitFor(() => expect(onCreateNew).toHaveBeenCalledWith(''))
+  })
+
+  it('the permanent action creates, selects and fills from the created record — same path as the inline row', async () => {
+    const onChange = vi.fn()
+    const onSelectAddress = vi.fn()
+    const onCreateNew = vi.fn().mockResolvedValue(createdWerf)
+    locationsApi.getLocation.mockResolvedValue(werfDetail)
+    render(<LocationSelect value="" onChange={onChange} onSelectAddress={onSelectAddress} customerId="cust-1" onCreateNew={onCreateNew} />)
+
+    await userEvent.click(screen.getByRole('button', { name: '+ Nieuw klantadres' }))
+
+    await waitFor(() => expect(onCreateNew).toHaveBeenCalledWith(''))
+    await waitFor(() => expect(onChange).toHaveBeenCalledWith('loc-9'))
+    expect(onSelectAddress).toHaveBeenCalledWith(
+      expect.objectContaining({ locationId: 'loc-9', name: 'Nieuwe werf', street: 'Stationsstraat', houseNumber: '5', postalCode: '2800', city: 'Mechelen' }),
+    )
+    // A cancelled dialog (null) selects nothing.
+    onChange.mockClear()
+    onCreateNew.mockResolvedValue(null)
+    await userEvent.click(screen.getByRole('button', { name: '+ Nieuw klantadres' }))
+    await waitFor(() => expect(onCreateNew).toHaveBeenCalledTimes(2))
+    expect(onChange).not.toHaveBeenCalled()
+  })
+
+  it('renders no create action and no create rows without a create hook (no locations.create)', async () => {
+    render(<LocationSelect value="" onChange={() => {}} customerId="cust-1" />)
+    expect(screen.queryByRole('button', { name: /Nieuw klantadres/ })).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('combobox'))
+    expect(await screen.findByText('Novellini')).toBeInTheDocument()
+    expect(screen.queryByRole('option', { name: /Nieuw/ })).not.toBeInTheDocument()
+    pickerApi.pickAddresses.mockResolvedValue([])
+    await userEvent.type(screen.getByRole('combobox'), 'Onbekend')
+    expect(await screen.findByText(/Geen bekend adres gevonden/)).toBeInTheDocument()
+    expect(screen.queryByRole('option')).not.toBeInTheDocument()
+  })
+})

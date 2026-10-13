@@ -223,7 +223,7 @@ describe('Dossier navigation — the Overzicht is a read-only summary', () => {
     expect(screen.queryByRole('button', { name: 'Opslaan' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Wijzigingen ongedaan maken' })).not.toBeInTheDocument()
     expect(screen.queryByRole('group', { name: 'Opdracht' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('group', { name: 'Eenheid' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('listbox', { name: /Prijsbare onderdelen/ })).not.toBeInTheDocument()
     // Only the overview is mounted: none of the editing subsections exist in the DOM.
     for (const id of ['sectie-route', 'sectie-goederen', 'sectie-prijs', 'sectie-activiteiten', 'sectie-documenten', 'sectie-notities']) {
       expect(document.getElementById(id)).toBeNull()
@@ -441,8 +441,8 @@ describe('Dossier navigation — subnav, deep links and history', () => {
 
     await user.click(within(card('Documenten')).getAllByRole('link', { name: 'Open documenten' })[0])
     expect(router.state.location.pathname).toBe('/dossiers/d-1/documenten')
-    // D6: opens on "Dossier (algemeen)", with one level per linked order.
-    expect(await screen.findByRole('tab', { name: /Dossier \(algemeen\)/ })).toHaveAttribute('aria-selected', 'true')
+    // D6: opens on "Dossierdocumenten", with one level per linked order.
+    expect(await screen.findByRole('tab', { name: /Dossierdocumenten/ })).toHaveAttribute('aria-selected', 'true')
     expect(screen.getByRole('tab', { name: /ORD-0001/ })).toBeInTheDocument()
     expect(documents.list).toHaveBeenCalledWith('d-1')
     expect(document.getElementById('sectie-documenten')).not.toBeNull()
@@ -589,9 +589,9 @@ describe('Dossier navigation — attention jumps land on the right tab and field
 
     await user.click(screen.getByRole('button', { name: 'Ga naar prijs' }))
     expect(router.state.location.pathname).toBe(PRICE_TAB)
-    const units = await screen.findByRole('group', { name: 'Eenheid' })
-    await waitFor(() => expect(within(units).getByRole('button', { name: /Kraanwerk/ })).toHaveAttribute('aria-pressed', 'true'))
-    expect(screen.getByText('Activiteit Kraanwerk')).toBeInTheDocument()
+    const units = await screen.findByRole('listbox', { name: /Prijsbare onderdelen/ })
+    await waitFor(() => expect(within(units).getByRole('option', { name: /Kraanwerk/ })).toHaveAttribute('aria-selected', 'true'))
+    expect(screen.getByRole('heading', { name: 'Kraanwerk' })).toBeInTheDocument()
     await waitFor(() => expect(document.activeElement).toBe(document.getElementById('dossier-activity-agreed-price')))
     expect(window.HTMLElement.prototype.scrollIntoView).toHaveBeenCalledTimes(1)
     // A standalone unit needs no order: the one load was the shell's on the overview.

@@ -246,6 +246,8 @@
   },
   "select": {
     "create": "Créer une nouvelle adresse…",
+    "createCustomerAddress": "Nouvelle adresse client",
+    "createCustomerAddressHint": "Crée une nouvelle adresse dans le carnet d'adresses de ce client et la remplit aussitôt pour cet arrêt.",
     "createWithName": "Créer la nouvelle adresse « {query} »…",
     "defaultLoading": "chargement par défaut",
     "defaultUnloading": "déchargement par défaut",

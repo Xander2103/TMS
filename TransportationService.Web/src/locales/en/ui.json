@@ -46,6 +46,7 @@
     "navLabel": "Form sections",
     "sectionLabel": "Section",
     "hasErrors": "contains errors",
+    "errorCount": "has {count} error(s)",
     "hasData": "contains data",
     "emptyOptional": "empty (optional)",
     "empty": "empty"
@@ -132,5 +133,23 @@
   },
   "time": {
     "placeholder": "hh:mm"
+  },
+  "appearance": {
+    "label": "Appearance",
+    "description": "Choose how the application looks. This preference is personal and follows you on all your devices.",
+    "system": "System",
+    "systemHint": "Follows your device setting",
+    "light": "Light",
+    "lightHint": "Always the light theme",
+    "dark": "Dark",
+    "darkHint": "Always the dark theme",
+    "saveFailed": "The appearance preference could not be saved. It still applies on this device."
+  },
+  "multiSelect": {
+    "selectedCount_one": "{count} selected",
+    "selectedCount_other": "{count} selected",
+    "selectedLabel": "Selected: {label}",
+    "remove": "Remove {label}",
+    "typeToSearch": "Type to search…"
   }
 }

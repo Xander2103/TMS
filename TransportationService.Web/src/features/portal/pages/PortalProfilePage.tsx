@@ -9,6 +9,7 @@ import { useToast } from '../../../components/ui/toastContext'
 import { ApiError } from '../../../api/apiClient'
 import { useLocale } from '../../../i18n/localeContext'
 import { changeMyPassword, getMyProfile } from '../api/portalApi'
+import { AppearanceSettings } from '../../../theme/AppearanceSettings'
 import { MyLeaveBalanceCard } from '../../leave-balance/components/MyLeaveBalanceCard'
 import type { MyProfile } from '../types'
 import './portal.css'
@@ -116,6 +117,11 @@ export function PortalProfilePage() {
           </div>
         </dl>
         <p className="portal-profile-note">{t('portalHome.profile.note')}</p>
+      </section>
+
+      <section className="to-section">
+        {/* Weergave: persoonlijke voorkeur op de gebruiker (licht/donker/systeem), geen tenantinstelling. */}
+        <AppearanceSettings />
       </section>
 
       <section className="to-section">

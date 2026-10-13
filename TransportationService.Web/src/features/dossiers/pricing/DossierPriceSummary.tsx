@@ -1,8 +1,9 @@
+import { useId } from 'react'
 import { useLocale } from '../../../i18n/localeContext'
 import { euro } from '../../invoices/types'
 import { isDossierPriced } from '../dossierDisplay'
 import type { DossierActivity, DossierDetail, DossierOrder } from '../types'
-import { activityUnitName, needsPricing } from './activityPriceDisplay'
+import { activityUnitName, needsAttention } from './activityPriceDisplay'
 import './dossier-pricing.css'
 
 interface DossierPriceSummaryProps {
@@ -21,60 +22,70 @@ function legacyOrderPriced(o: DossierOrder): boolean {
 }
 
 /**
- * Priced/total units. The server's counts when the payload carries them; an older payload only
- * gets the marker when it is PARTIAL (the amount must never read as "the dossier is priced").
+ * "x van y onderdelen afgehandeld". Settled = priced (or confirmed free) AND not waiting for a
+ * decision: a € 0 that still needs its "free" confirmation (`ZeroUnconfirmed`) is NOT settled,
+ * even though the server's `pricedActivityCount` counts it as priced. The total is the server's
+ * billable-unit count; the settled count follows the unit statuses on screen.
  */
-function unitCounts(dossier: DossierDetail, activities: DossierActivity[], legacyOrders: DossierOrder[]): { priced: number; total: number } | null {
+function settledCounts(dossier: DossierDetail, activities: DossierActivity[], legacyOrders: DossierOrder[]): { handled: number; total: number } | null {
   const f = dossier.financials
-  if (f.pricedActivityCount !== undefined) {
-    const total = f.billableActivityCount ?? activities.length + legacyOrders.length
-    return total > 0 ? { priced: f.pricedActivityCount, total } : null
+  const total = f.billableActivityCount ?? (activities.length > 0 ? activities.length + legacyOrders.length : dossier.orders.length)
+  if (total === 0) return null
+  if (activities.length === 0) {
+    return { handled: f.pricedActivityCount ?? f.pricedOrderCount ?? dossier.orders.filter(legacyOrderPriced).length, total }
   }
-  const total = activities.length > 0 ? activities.length + legacyOrders.length : dossier.orders.length
-  const pricedCount =
-    activities.length > 0
-      ? activities.filter((a) => !needsPricing(dossier, a)).length + legacyOrders.filter(legacyOrderPriced).length
-      : (f.pricedOrderCount ?? dossier.orders.filter(legacyOrderPriced).length)
-  return pricedCount > 0 && total > 1 && pricedCount < total ? { priced: pricedCount, total } : null
+  const handled = activities.filter((a) => !needsAttention(dossier, a)).length + legacyOrders.filter(legacyOrderPriced).length
+  return { handled: Math.min(handled, total), total }
 }
 
 /**
- * Dossier amount block of the price tab. The TOTAL is the server's financial summary (one column
- * per billable unit on the backend — nothing is summed here, so nothing can be counted twice),
- * "x van y activiteiten geprijsd" are the server's counts, and the activities that still need a
- * price are links that make them the price target. "Nog geen prijs" instead of € 0,00 while
+ * DOSSIER summary block of the price tab — labelled as such, so it is never mistaken for the
+ * price of the selected unit. The TOTAL is the server's financial summary (one column per
+ * billable unit on the backend — nothing is summed here), "x van y onderdelen afgehandeld"
+ * excludes the € 0 units that still await a decision, and the units that still need a price or a
+ * check are links that make them the selected unit. "Nog geen prijs" instead of € 0,00 while
  * nothing is priced.
  */
 export function DossierPriceSummary({ dossier, billableActivities, legacyOrders, onSelect, locked }: DossierPriceSummaryProps) {
   const { t } = useLocale()
+  const titleId = useId()
   const priced = isDossierPriced(dossier)
   const pricingIssues = dossier.readiness.filter((issue) => issue.code.startsWith('pricing.') && issue.severity !== 'Info')
-  const counts = unitCounts(dossier, billableActivities, legacyOrders)
-  const toPrice = billableActivities.filter((activity) => needsPricing(dossier, activity))
+  const counts = settledCounts(dossier, billableActivities, legacyOrders)
+  const toHandle = billableActivities.filter((activity) => needsAttention(dossier, activity))
 
   return (
-    <div className="dossier-price-summary">
+    <section className="dossier-price-summary" aria-labelledby={titleId}>
+      <p id={titleId} className="dossier-price-summary-title">
+        {t('dossierPricing.summary.title')}
+      </p>
       <p className="dossier-price-total">
         {priced ? (
           <strong>{euro(dossier.financials.agreedOrderTotal)}</strong>
         ) : (
           <strong className="dossier-price-none">{t('dossierSheet.price.noPrice')}</strong>
         )}
-        {counts && <span className="dossier-price-partial">{t('dossierSheet.price.partialTotal', counts)}</span>}
+        {counts && <span className="dossier-price-partial">{t('dossierPricing.summary.handled', counts)}</span>}
         {pricingIssues.length > 0 && (
           <span className="dossier-price-warning">⚠ {t('dossiers.price.attention', { count: pricingIssues.length })}</span>
         )}
       </p>
 
-      {toPrice.length > 0 && (
+      {toHandle.length > 0 && (
         <p className="dossier-price-toprice">
-          <span>{t('dossierPricing.summary.toPrice')}</span>
-          {toPrice.map((activity) => {
+          <span>{t('dossierPricing.summary.toHandle')}</span>
+          {toHandle.map((activity) => {
             const unit = activityUnitName(activity)
             const name = activity.linkedOrderNumber ? t('dossierPricing.picker.itemWithOrder', { number: activity.linkedOrderNumber, name: unit }) : unit
+            const label =
+              activity.priceStatus === 'PartiallyPriced'
+                ? t('dossierPricing.summary.partial', { name })
+                : activity.priceStatus === 'ZeroUnconfirmed'
+                  ? t('dossierPricing.summary.needsReview', { name })
+                  : name
             return (
               <button key={activity.id} type="button" className="link-button" onClick={() => onSelect(activity.id)} disabled={locked}>
-                {activity.priceStatus === 'PartiallyPriced' ? t('dossierPricing.summary.partial', { name }) : name}
+                {label}
               </button>
             )
           })}
@@ -97,6 +108,6 @@ export function DossierPriceSummary({ dossier, billableActivities, legacyOrders,
           </ul>
         </div>
       )}
-    </div>
+    </section>
   )
 }

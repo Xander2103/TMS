@@ -10,19 +10,21 @@ import { findLookupResource } from '../../master-data/lookupRegistry'
 import { IssuedItemTemplatesPanel } from '../components/IssuedItemTemplatesPanel'
 import '../issued-items.css'
 
-type AdminTab = 'categories' | 'templates'
+type AdminTab = 'templates' | 'categories'
 
-const ADMIN_TABS: AdminTab[] = ['categories', 'templates']
+// URL slugs are kept (deep links, notification LinkPaths, legacy redirects); only the order and
+// the labels follow the user's mental model: first WHAT we manage, then how it is grouped.
+const ADMIN_TABS: AdminTab[] = ['templates', 'categories']
 
 function isAdminTab(value: string | undefined): value is AdminTab {
   return value !== undefined && (ADMIN_TABS as string[]).includes(value)
 }
 
 /**
- * "Bedrijfsmiddelen" under Personeel: categories and templates side by side, since the
- * categories only exist to group the templates. Each tab is a sub-route
- * (/issued-items/categories · /issued-items/templates) so deep links and back/forward work.
- * The UI gates per tab; the backend enforces the same permissions on every call.
+ * "Bedrijfsmiddelen" under Personeel: the items themselves (default tab) and the categories that
+ * group them. Each tab is a sub-route (/issued-items/templates · /issued-items/categories) so
+ * deep links and back/forward work. The UI gates per tab; the backend enforces the same
+ * permissions on every call.
  */
 export function IssuedItemsAdminPage() {
   const { tab } = useParams<{ tab: string }>()
@@ -38,8 +40,8 @@ export function IssuedItemsAdminPage() {
   }
 
   const tabs: TabItem[] = [
+    ...(canManageTemplates ? [{ id: 'templates', label: t('issuedItems.admin.tabItems') }] : []),
     ...(canManageCategories ? [{ id: 'categories', label: t('issuedItems.admin.tabCategories') }] : []),
-    ...(canManageTemplates ? [{ id: 'templates', label: t('issuedItems.admin.tabTemplates') }] : []),
   ]
 
   const header = (
@@ -68,18 +70,18 @@ export function IssuedItemsAdminPage() {
       {header}
       <Tabs tabs={tabs} activeId={tab} onChange={(id) => navigate(`/issued-items/${id}`)} />
 
+      {tab === 'templates' && (
+        <TabPanel tabId="templates">
+          <IssuedItemTemplatesPanel />
+        </TabPanel>
+      )}
+
       {tab === 'categories' && categoriesConfig && (
         <TabPanel tabId="categories">
           {/* LookupManager brings its own header; the wrapper tones it down to a section inside this page. */}
           <div className="issued-items-embedded-lookup">
             <LookupManager key={categoriesConfig.slug} config={categoriesConfig} />
           </div>
-        </TabPanel>
-      )}
-
-      {tab === 'templates' && (
-        <TabPanel tabId="templates">
-          <IssuedItemTemplatesPanel />
         </TabPanel>
       )}
     </div>

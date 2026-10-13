@@ -6075,6 +6075,10 @@ namespace TransportationService.Api.Migrations
                     b.Property<Guid>("TenantId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("ThemePreference")
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)");
+
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -8939,6 +8943,9 @@ namespace TransportationService.Api.Migrations
                         .HasMaxLength(30)
                         .HasColumnType("character varying(30)");
 
+                    b.Property<Guid?>("DossierActivityId")
+                        .HasColumnType("uuid");
+
                     b.Property<Guid?>("DossierId")
                         .HasColumnType("uuid");
 
@@ -8975,9 +8982,14 @@ namespace TransportationService.Api.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("DossierActivityId");
+
                     b.HasIndex("DossierId");
 
                     b.HasIndex("TransportOrderId");
+
+                    b.HasIndex("TenantId", "DossierActivityId")
+                        .HasFilter("\"DossierActivityId\" IS NOT NULL");
 
                     b.HasIndex("TenantId", "DossierId");
 
@@ -8985,6 +8997,8 @@ namespace TransportationService.Api.Migrations
 
                     b.ToTable("order_documents", null, t =>
                         {
+                            t.HasCheckConstraint("CK_order_documents_activity_requires_dossier", "\"DossierActivityId\" IS NULL OR (\"TransportOrderId\" IS NULL AND \"DossierId\" IS NOT NULL)");
+
                             t.HasCheckConstraint("CK_order_documents_order_or_dossier", "\"TransportOrderId\" IS NOT NULL OR \"DossierId\" IS NOT NULL");
                         });
                 });
@@ -16806,6 +16820,11 @@ namespace TransportationService.Api.Migrations
 
             modelBuilder.Entity("TransportationService.Api.Modules.Orders.Entities.TransportOrderDocument", b =>
                 {
+                    b.HasOne("TransportationService.Api.Modules.Dossiers.Entities.DossierActivity", null)
+                        .WithMany()
+                        .HasForeignKey("DossierActivityId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("TransportationService.Api.Modules.Dossiers.Entities.TransportDossier", null)
                         .WithMany()
                         .HasForeignKey("DossierId")

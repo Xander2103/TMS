@@ -17,6 +17,11 @@ vi.mock('../../auth/authContextValue', () => ({
 }))
 
 const toast = vi.hoisted(() => ({ showToast: vi.fn(), showSuccess: vi.fn(), showError: vi.fn() }))
+// The real guard needs the data router; a marker keeps its `when` observable.
+vi.mock('../../../components/ui/UnsavedChangesGuard', () => ({
+  UnsavedChangesGuard: ({ when }: { when: boolean }) => <span data-testid="unsaved-guard" data-when={String(when)} />,
+}))
+
 vi.mock('../../../components/ui/toastContext', () => ({ useToast: () => toast }))
 
 vi.mock('../../customers/api/customersApi', () => ({
@@ -81,6 +86,11 @@ function renderPage() {
   )
 }
 
+/** Opens a section of the sectioned create flow through its subnav tab. */
+async function goTo(user: ReturnType<typeof userEvent.setup>, section: string) {
+  await user.click(screen.getByRole('tab', { name: new RegExp(`^${section}`) }))
+}
+
 // (Goods lines reuse the .tof-stop card class — only the route grid holds stop cards.)
 const stopCards = () => Array.from(document.querySelectorAll<HTMLElement>('.tof-stops-grid > fieldset.tof-stop'))
 
@@ -97,16 +107,21 @@ describe('NewDossierPage — soort kraanopdracht (D2)', () => {
     await pickCustomer(user)
 
     await user.click(await screen.findByRole('radio', { name: /Direct transport/ }))
+    await goTo(user, 'Route')
     expect(screen.queryByRole('radio', { name: 'Hijswerk op locatie' })).not.toBeInTheDocument()
+    await goTo(user, 'Basis')
     await user.click(screen.getByRole('radio', { name: /Kraantransport/ }))
+    await goTo(user, 'Route')
     expect(screen.queryByRole('radio', { name: 'Hijswerk op locatie' })).not.toBeInTheDocument()
 
+    await goTo(user, 'Basis')
     await user.click(screen.getByRole('radio', { name: /Speciaal werk/ }))
+    await goTo(user, 'Route')
     expect(screen.getByRole('radio', { name: 'Transport met kraan' })).toBeChecked()
     expect(screen.getByRole('radio', { name: 'Hijswerk op locatie' })).not.toBeChecked()
     // Transport met kraan: the classic laden + lossen pair and the goods section.
     expect(stopCards()).toHaveLength(2)
-    expect(screen.getByRole('heading', { name: 'Goederen' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: /^Goederen/ })).toBeInTheDocument()
   })
 
   it('a type without the flag submits no crane-job fields at all', async () => {
@@ -114,8 +129,10 @@ describe('NewDossierPage — soort kraanopdracht (D2)', () => {
     renderPage()
     await pickCustomer(user)
     await user.click(await screen.findByRole('radio', { name: /Direct transport/ }))
+    await goTo(user, 'Route')
     await user.type(screen.getAllByLabelText(/Plaats/)[0], 'Antwerpen')
     await user.type(screen.getAllByLabelText(/Plaats/)[1], 'Gent')
+    await goTo(user, 'Goederen')
     await user.type(screen.getByLabelText('Omschrijving'), 'Paletten')
     await user.click(screen.getByRole('button', { name: 'Dossier aanmaken' }))
 
@@ -129,6 +146,7 @@ describe('NewDossierPage — soort kraanopdracht (D2)', () => {
     renderPage()
     await pickCustomer(user)
     await user.click(await screen.findByRole('radio', { name: /Speciaal werk/ }))
+    await goTo(user, 'Route')
     await user.click(screen.getByRole('radio', { name: 'Hijswerk op locatie' }))
 
     const cards = stopCards()
@@ -140,7 +158,9 @@ describe('NewDossierPage — soort kraanopdracht (D2)', () => {
     }
     // A time requirement ("leveren vóór 08:00") is a loading/unloading concept — not on a work site.
     expect(within(site).queryByLabelText('Tijdseis')).not.toBeInTheDocument()
-    expect(screen.queryByRole('heading', { name: 'Goederen' })).not.toBeInTheDocument()
+    // No goods for a job that moves nothing: neither a Goederen section nor a tab for it.
+    expect(screen.queryByRole('tab', { name: /^Goederen/ })).not.toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: /^Opmerkingen/ })).toBeInTheDocument()
     expect(screen.getByLabelText(/Omschrijving werkzaamheden/)).toBeInTheDocument()
     expect(screen.getByText(/last die gehesen wordt/)).toBeInTheDocument()
   })
@@ -150,6 +170,7 @@ describe('NewDossierPage — soort kraanopdracht (D2)', () => {
     renderPage()
     await pickCustomer(user)
     await user.click(await screen.findByRole('radio', { name: /Speciaal werk/ }))
+    await goTo(user, 'Route')
     await user.click(screen.getByRole('radio', { name: 'Hijswerk op locatie' }))
 
     const site = stopCards()[0]
@@ -193,6 +214,7 @@ describe('NewDossierPage — soort kraanopdracht (D2)', () => {
     renderPage()
     await pickCustomer(user)
     await user.click(await screen.findByRole('radio', { name: /Speciaal werk/ }))
+    await goTo(user, 'Route')
     await user.click(screen.getByRole('radio', { name: 'Hijswerk op locatie' }))
     const site = stopCards()[0]
     await user.type(within(site).getByLabelText('Datum werkzaamheden'), '2026-09-22')
@@ -219,6 +241,7 @@ describe('NewDossierPage — soort kraanopdracht (D2)', () => {
     renderPage()
     await pickCustomer(user)
     await user.click(await screen.findByRole('radio', { name: /Speciaal werk/ }))
+    await goTo(user, 'Route')
     await user.click(screen.getByRole('radio', { name: 'Hijswerk op locatie' }))
     await user.type(within(stopCards()[0]).getByLabelText(/Plaats/), 'Waver')
     await user.click(screen.getByRole('button', { name: 'Dossier aanmaken' }))
@@ -236,6 +259,7 @@ describe('NewDossierPage — soort kraanopdracht (D2)', () => {
     renderPage()
     await pickCustomer(user)
     await user.click(await screen.findByRole('radio', { name: /Speciaal werk/ }))
+    await goTo(user, 'Route')
     await user.type(screen.getAllByLabelText(/Plaats/)[0], 'Antwerpen')
 
     await user.click(screen.getByRole('radio', { name: 'Hijswerk op locatie' }))

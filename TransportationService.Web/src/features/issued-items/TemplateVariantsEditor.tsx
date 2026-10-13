@@ -125,7 +125,7 @@ export function TemplateVariantsEditor({ templateId, unit }: TemplateVariantsEdi
           variantId: variant.id,
           newQuantity: Math.trunc(Number(raw) || 0),
           // Vaste (Nederlandse) grootboekreden — dit is opgeslagen data, geen UI-tekst.
-          reason: 'Voorraadaanpassing via sjabloonformulier',
+          reason: 'Voorraadaanpassing via bedrijfsmiddelformulier',
         }),
       t('issuedItems.variantsEditor.correctFailed'),
     )
@@ -220,17 +220,18 @@ export function TemplateVariantsEditor({ templateId, unit }: TemplateVariantsEdi
           {t('issuedItems.variantsEditor.hasAttributes')}
         </p>
       ) : (
-        <div className="issued-items-form-row">
-          <FormField label={t('issuedItems.form.variantName')} htmlFor="tpl-new-variant-label" hint={t('issuedItems.form.variantNameHint')}>
+        <div className="issued-items-form-row-3 issued-items-variant-add">
+          <FormField label={t('issuedItems.form.colVariantName')} htmlFor="tpl-new-variant-label">
             <input
               id="tpl-new-variant-label"
               value={draft.label}
+              placeholder={t('issuedItems.form.variantNamePlaceholder')}
               maxLength={150}
               disabled={busy}
               onChange={(e) => setDraft((d) => ({ ...d, label: e.target.value }))}
             />
           </FormField>
-          <FormField label={t('issuedItems.form.stock')} htmlFor="tpl-new-variant-stock">
+          <FormField label={t('issuedItems.form.colStock')} htmlFor="tpl-new-variant-stock">
             <input
               id="tpl-new-variant-stock"
               type="number"
@@ -240,7 +241,7 @@ export function TemplateVariantsEditor({ templateId, unit }: TemplateVariantsEdi
               onChange={(e) => setDraft((d) => ({ ...d, stock: e.target.value }))}
             />
           </FormField>
-          <FormField label={t('issuedItems.form.threshold')} htmlFor="tpl-new-variant-threshold" hint={t('issuedItems.form.thresholdHint')}>
+          <FormField label={t('issuedItems.form.colThreshold')} htmlFor="tpl-new-variant-threshold" hint={t('issuedItems.form.thresholdEmptyHint')}>
             <input
               id="tpl-new-variant-threshold"
               type="number"
@@ -250,9 +251,11 @@ export function TemplateVariantsEditor({ templateId, unit }: TemplateVariantsEdi
               onChange={(e) => setDraft((d) => ({ ...d, threshold: e.target.value }))}
             />
           </FormField>
-          <Button variant="secondary" onClick={addVariant} disabled={busy}>
-            {t('issuedItems.form.addVariant')}
-          </Button>
+          <div className="issued-items-variant-add-action">
+            <Button variant="secondary" onClick={addVariant} disabled={busy}>
+              {t('issuedItems.form.addVariant')}
+            </Button>
+          </div>
         </div>
       )}
     </div>

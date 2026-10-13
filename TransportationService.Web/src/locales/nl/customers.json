@@ -1,4 +1,24 @@
 {
+  "quickCreate": {
+    "title": "Nieuwe klant",
+    "intro": "Alleen de basis: de klant krijgt automatisch een klantnummer. Alle andere gegevens vul je later aan bij Klanten.",
+    "name": "Naam",
+    "namePlaceholder": "Bedrijfsnaam",
+    "vatNumber": "BTW-nummer",
+    "vatHint": "Optioneel; wordt gecontroleerd op formaat.",
+    "email": "E-mail",
+    "phone": "Telefoon",
+    "addressLegend": "Adres (optioneel)",
+    "street": "Straat",
+    "houseNumber": "Nr.",
+    "postalCode": "Postcode",
+    "city": "Plaats",
+    "country": "Land",
+    "create": "Klant aanmaken",
+    "creating": "Aanmaken…",
+    "created": "Klant {name} aangemaakt en geselecteerd.",
+    "openCustomer": "Klantgegevens openen"
+  },
   "addresses": {
     "actionsAria": "Acties",
     "addNew": "+ Nieuw adres",

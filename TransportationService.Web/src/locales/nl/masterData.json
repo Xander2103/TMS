@@ -72,7 +72,9 @@
     "codeRequired": "Code is verplicht.",
     "codeMax": "Code mag maximaal 50 tekens bevatten.",
     "nameRequired": "Naam is verplicht.",
-    "nameMax": "Naam mag maximaal 150 tekens bevatten."
+    "nameMax": "Naam mag maximaal 150 tekens bevatten.",
+    "advanced": "Meer instellingen",
+    "advancedHint": "Code en volgorde worden automatisch bepaald; pas ze alleen aan als dat nodig is."
   },
   "select": {
     "createOption": "{newLabel} \"{query}\" toevoegen",

@@ -32,7 +32,7 @@
 }
 
 .pk-mono {
-  font-family: var(--mono, monospace);
+  font-family: var(--mono);
   font-size: 12px;
   white-space: nowrap;
 }
@@ -67,7 +67,7 @@
 
 .pk-link.pk-danger,
 strong.pk-danger {
-  color: var(--danger, #dc2626);
+  color: var(--danger);
 }
 
 .pk-form {
@@ -121,7 +121,7 @@ strong.pk-danger {
 }
 
 .pk-import-error {
-  color: var(--danger, #dc2626);
+  color: var(--danger);
   margin: 4px 0 0;
 }
 
@@ -175,7 +175,7 @@ strong.pk-danger {
 }
 
 .pk-timeline li.pk-event-override {
-  border-left-color: #b45309;
+  border-left-color: var(--color-warning);
 }
 
 .pk-event-time {

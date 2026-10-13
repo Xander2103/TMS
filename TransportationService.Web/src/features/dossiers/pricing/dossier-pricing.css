@@ -182,3 +182,279 @@
 .dossier-order-price .tod-section {
   margin-top: var(--space-3);
 }
+
+/* ---- Pricing UX sprint 2026-10-08: master-detail -------------------------------------------- */
+
+/* Dossier summary: clearly the DOSSIER's numbers, never the selected unit's. */
+.dossier-price-summary-title {
+  margin: 0 0 var(--space-1);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+/* Master (list of priceable parts) beside the detail on desktop; stacked below ~1100px. */
+.dossier-pricing-layout {
+  display: grid;
+  grid-template-columns: minmax(280px, 380px) minmax(0, 1fr);
+  gap: var(--space-5);
+  align-items: start;
+}
+
+.dossier-pricing-layout-single {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/* Sticks below the sticky dossier subnav (topbar offset + subnav height) so a long line table
+   on the right never scrolls the list of parts out of view. */
+.dossier-pricing-master {
+  box-sizing: border-box;
+  min-width: 0;
+  position: sticky;
+  top: calc(var(--app-sticky-top, 0px) + 60px);
+}
+
+.dossier-pricing-detail {
+  min-width: 0;
+}
+
+@media (max-width: 1099px) {
+  .dossier-pricing-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dossier-pricing-master {
+    position: static;
+  }
+}
+
+.dossier-price-master-title {
+  margin: 0 0 var(--space-1);
+  font-size: 1rem;
+}
+
+.dossier-price-master-hint {
+  margin: 0 0 var(--space-2);
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+}
+
+.dossier-price-master-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+/* One selectable card per unit: reference + name + kind on the left, amount + status on the right. */
+.dossier-price-master-item {
+  box-sizing: border-box;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+  width: 100%;
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-left: 4px solid transparent;
+  border-radius: var(--radius-md);
+  background: var(--bg);
+  color: var(--text-h);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.dossier-price-master-item:hover:not(:disabled) {
+  border-color: var(--accent-border);
+  border-left-color: var(--accent-border);
+}
+
+.dossier-price-master-item:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Selected: filled background, accent edge AND a chevron — never colour alone. */
+.dossier-price-master-item.is-selected {
+  border-color: var(--accent);
+  border-left-color: var(--accent);
+  background: var(--accent-bg);
+}
+
+.dossier-price-master-item.is-selected .dossier-price-master-chevron {
+  color: var(--accent);
+}
+
+.dossier-price-master-item:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.dossier-price-master-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px var(--space-2);
+  min-width: 0;
+}
+
+.dossier-price-master-ref {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.dossier-price-master-name {
+  font-weight: 600;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.dossier-price-master-secondary {
+  font-weight: 400;
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+}
+
+/* Kind of unit ("Opdracht" / "Activiteit"): a quiet outlined tag, the same in the detail header. */
+.dossier-price-master-kind,
+.dossier-pricing-kind {
+  display: inline-block;
+  padding: 1px 6px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.4;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.dossier-price-master-state {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  text-align: right;
+}
+
+.dossier-price-master-amount {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.dossier-price-master-chevron {
+  font-size: 1.25rem;
+  line-height: 1;
+  color: var(--text-muted);
+}
+
+/* Detail header: which part is being edited, and its kind. */
+.dossier-pricing-detail-header {
+  margin: 0 0 var(--space-3);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--border);
+}
+
+.dossier-pricing-eyebrow {
+  margin: 0 0 2px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.dossier-pricing-detail-titlerow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.dossier-pricing-detail-name {
+  margin: 0;
+  font-size: 1.125rem;
+  min-width: 0;
+}
+
+.dossier-detail .dossier-pricing-detail-name {
+  font-size: 17px;
+}
+
+/* Blocks inside the detail (PRIJS, VERKOOPLIJNEN): small caps titles so the hierarchy reads at a glance. */
+.dossier-pricing-block {
+  margin-bottom: var(--space-3);
+}
+
+.dossier-pricing-block-title,
+.dossier-activity-lines h3 {
+  margin: 0 0 var(--space-2);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.dossier-detail .dossier-pricing-block-title,
+.dossier-detail .dossier-activity-lines h3 {
+  font-size: 13px;
+}
+
+/* The ONE € 0 callout: amber, titled, with its two real actions. Never red — it is not an error. */
+.dossier-price-callout {
+  box-sizing: border-box;
+  margin: var(--space-2) 0 var(--space-3);
+  padding: var(--space-3);
+  max-width: 640px;
+  border: 1px solid var(--warning-border);
+  border-left: 4px solid var(--warning);
+  border-radius: var(--radius-md);
+  background: var(--warning-bg);
+  color: var(--text-h);
+}
+
+.dossier-price-callout-title {
+  margin: 0 0 var(--space-1);
+  font-weight: 600;
+  color: var(--color-warning-text);
+}
+
+.dossier-price-callout-icon {
+  color: var(--warning);
+}
+
+.dossier-price-callout-text {
+  margin: 0;
+  font-size: 0.9375rem;
+}
+
+.dossier-price-callout-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+/* A settled free order: a quiet note, not a warning. */
+.dossier-price-free-note {
+  color: var(--text);
+}
+
+/* "Prijs verwijderen": destructive but secondary — red text, no red box. */
+.dossier-price-remove {
+  color: var(--danger);
+}
+
+@media (max-width: 640px) {
+  .dossier-price-master-item {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .dossier-price-master-chevron {
+    display: none;
+  }
+}

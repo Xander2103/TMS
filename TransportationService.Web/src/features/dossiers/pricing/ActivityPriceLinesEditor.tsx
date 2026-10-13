@@ -12,6 +12,8 @@ import type { ActivityPriceLineInput, DossierActivityPriceLine } from './types'
 export interface ActivityPriceLinesEditorHandle {
   /** Starts a new line and focuses its description. */
   addLine: () => void
+  /** Focuses the unit price of the first line (editable rows only); false when there is none. */
+  focusFirstLine: () => boolean
 }
 
 interface ActivityPriceLinesEditorProps {
@@ -88,6 +90,7 @@ export function ActivityPriceLinesEditor({
   const [error, setError] = useState<string | null>(null)
   const [conflict, setConflict] = useState<string | null>(null)
   const focusKey = useRef<string | null>(null)
+  const firstUnitPriceRef = useRef<HTMLInputElement>(null)
 
   const dirty = draft !== null
   const rows = draft ?? serverLines.map(toDraft)
@@ -104,7 +107,14 @@ export function ActivityPriceLinesEditor({
     update([...rows, { key, label: '', quantity: '1', unit: '', unitPrice: '', salesCategoryId: null }])
   }
 
-  useImperativeHandle(ref, () => ({ addLine }))
+  useImperativeHandle(ref, () => ({
+    addLine,
+    focusFirstLine: () => {
+      if (!firstUnitPriceRef.current) return false
+      firstUnitPriceRef.current.focus()
+      return true
+    },
+  }))
 
   function patch(key: string, change: Partial<DraftRow>) {
     update(rows.map((row) => (row.key === key ? { ...row, ...change } : row)))
@@ -258,6 +268,7 @@ export function ActivityPriceLinesEditor({
                     </td>
                     <td className="num">
                       <input
+                        ref={i === 0 ? firstUnitPriceRef : undefined}
                         aria-label={t('dossierPricing.activity.rowUnitPrice', { index })}
                         type="text"
                         inputMode="decimal"

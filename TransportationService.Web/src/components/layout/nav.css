@@ -80,7 +80,7 @@
   flex-shrink: 0;
   width: 7px; height: 7px;
   border-radius: 50%;
-  background: var(--accent);
+  background: var(--color-primary-solid);
 }
 .nav-chevron { flex-shrink: 0; opacity: 0.6; transition: transform 0.18s ease; }
 .nav-chevron-open { transform: rotate(180deg); }
@@ -135,8 +135,8 @@
   margin-left: 8px;
   padding: 1px 6px;
   border-radius: 9px;
-  background: var(--danger, #dc2626);
-  color: #fff;
+  background: var(--color-danger-solid);
+  color: var(--color-on-solid);
   font-size: 12px;
   font-weight: 600;
   line-height: 16px;
@@ -155,7 +155,7 @@
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--text-muted, var(--text-h));
+  color: var(--text-muted);
   opacity: 0.9;
   overflow: hidden;
   text-overflow: ellipsis;

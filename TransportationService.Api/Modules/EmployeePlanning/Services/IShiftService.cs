@@ -6,8 +6,17 @@ namespace TransportationService.Api.Modules.EmployeePlanning.Services;
 public interface IShiftService
 {
     /// <summary>Schedule grid: shifts merged with absences into explainable day states.</summary>
+    /// <remarks>Legacy shape: a single department narrows the group, a single employee means
+    /// "only this employee" (portal self-schedule). Both map onto <see cref="ScheduleQuery"/>.</remarks>
     Task<ScheduleGridDto> GetScheduleAsync(
         DateOnly from, DateOnly to, Guid? departmentId, Guid? employeeId, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Schedule grid for a planning selection. Server-side filtering: only the employees that
+    /// match the query (plus the explicit picks) and their planning data for the period are
+    /// returned, in a bounded number of set-based queries (no per-row round trips).
+    /// </summary>
+    Task<ScheduleGridDto> GetScheduleAsync(ScheduleQuery query, CancellationToken cancellationToken);
 
     Task<ShiftDto?> GetByIdAsync(Guid id, CancellationToken cancellationToken);
 

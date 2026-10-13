@@ -152,6 +152,15 @@ describe('IssuedItemTemplateDetailPage tabs', () => {
     await userEvent.click(screen.getByRole('tab', { name: 'Voorraad' }))
     // The stored catalogue code renders as its translated label, never as the raw code.
     expect(screen.getByText(/25 Stuk beschikbaar/)).toBeInTheDocument()
-    expect(screen.getByText('Lage-voorraadgrens: 3')).toBeInTheDocument()
+    expect(screen.getByText('Minimumvoorraad: 3')).toBeInTheDocument()
+  })
+
+  it('summarises the Beheerwijze in words instead of two technical toggles, and offers a plain Bewerken action', async () => {
+    renderPage()
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Bewerken' })).toBeInTheDocument())
+    expect(screen.getByText('Beheerwijze')).toBeInTheDocument()
+    expect(screen.getByText('Voorraad met varianten')).toBeInTheDocument()
+    expect(screen.queryByText('Voorraadbeheer')).not.toBeInTheDocument()
+    expect(screen.queryByText(/Sjabloon/)).not.toBeInTheDocument()
   })
 })

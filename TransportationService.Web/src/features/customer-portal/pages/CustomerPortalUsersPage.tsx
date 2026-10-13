@@ -284,7 +284,7 @@ function InviteUserModal({
     <Modal title={t('common.users.inviteModal.title')} onClose={onClose} busy={busy}>
       <form onSubmit={handleSubmit} noValidate>
         {error && (
-          <p role="alert" style={{ color: 'var(--danger, #b3261e)' }}>
+          <p role="alert" style={{ color: 'var(--danger)' }}>
             {error}
           </p>
         )}

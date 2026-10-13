@@ -1,14 +1,14 @@
 .ui-panel-header {
   display: flex;
   flex-direction: column;
-  gap: var(--space-3, 12px);
-  margin: 0 0 var(--space-3, 12px);
+  gap: var(--space-3);
+  margin: 0 0 var(--space-3);
 }
 
 .ui-panel-header-intro {
   display: flex;
   flex-direction: column;
-  gap: var(--space-1, 4px);
+  gap: var(--space-1);
 }
 
 .ui-panel-header-title {
@@ -22,21 +22,21 @@
 .ui-panel-header-description {
   margin: 0;
   font-size: 13.5px;
-  color: var(--text-muted, var(--text));
+  color: var(--text-muted);
 }
 
 .ui-panel-header-toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-3, 12px);
+  gap: var(--space-3);
   flex-wrap: wrap;
 }
 
 .ui-panel-header-filters {
   display: flex;
   align-items: center;
-  gap: var(--space-3, 12px);
+  gap: var(--space-3);
   flex-wrap: wrap;
   min-width: 0;
 }
@@ -44,9 +44,9 @@
 .ui-panel-header-filters label {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-2, 8px);
+  gap: var(--space-2);
   font-size: 14px;
-  color: var(--text-muted, var(--text));
+  color: var(--text-muted);
 }
 
 .ui-panel-header-filters select,
@@ -55,9 +55,9 @@
   font-size: 15px;
   padding: 6px 10px;
   min-height: 36px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md, 8px);
-  background: var(--bg);
+  border: 1px solid var(--color-input-border);
+  border-radius: var(--radius-md);
+  background: var(--color-input-bg);
   color: var(--text-h);
 }
 
@@ -71,7 +71,7 @@
 .ui-panel-header-actions {
   display: flex;
   align-items: center;
-  gap: var(--space-2, 8px);
+  gap: var(--space-2);
   margin-left: auto;
 }
 

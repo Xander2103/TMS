@@ -10,7 +10,7 @@
   align-items: center;
   gap: 8px;
   padding: 8px 14px;
-  border: 1px solid var(--border, #e5e7eb);
+  border: 1px solid var(--border);
   border-radius: 10px;
   background: none;
   font: inherit;
@@ -20,20 +20,20 @@
 }
 
 .inventory-overview-tile:hover {
-  border-color: var(--accent, #2563eb);
+  border-color: var(--accent);
 }
 
 .inventory-overview-tile-active {
-  border-color: var(--accent, #2563eb);
-  box-shadow: 0 0 0 1px var(--accent, #2563eb);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
 }
 
 .inventory-overview-tile-warning svg {
-  color: #b45309;
+  color: var(--color-warning);
 }
 
 .inventory-overview-tile-danger svg {
-  color: #b91c1c;
+  color: var(--color-danger);
 }
 
 .inventory-overview-tile-label {
@@ -47,9 +47,9 @@
   padding: 1px 8px;
   font-weight: 600;
   font-size: 13px;
-  background: var(--border, #e5e7eb);
+  background: var(--border);
 }
 
 .inventory-overview-variant {
-  color: var(--muted, #6b7280);
+  color: var(--muted);
 }

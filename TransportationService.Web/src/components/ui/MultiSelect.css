@@ -1,0 +1,219 @@
+.ui-multi-select {
+  position: relative;
+  width: 100%;
+}
+
+.ui-multi-select-control {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.ui-multi-select-input {
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.4;
+  padding: 7px 56px 7px 10px;
+  min-height: 36px;
+  border: 1px solid var(--color-input-border);
+  border-radius: var(--radius-md);
+  background: var(--color-input-bg);
+  color: var(--color-text);
+  width: 100%;
+  box-sizing: border-box;
+  text-overflow: ellipsis;
+}
+
+.ui-multi-select-input::placeholder {
+  color: var(--color-text-muted);
+  opacity: 1;
+}
+
+.ui-multi-select-input:focus {
+  outline: none;
+  border-color: var(--color-focus-ring);
+  box-shadow: 0 0 0 3px var(--color-primary-bg);
+}
+
+.ui-multi-select-input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.ui-multi-select-adornments {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  pointer-events: none;
+  color: var(--color-text-muted);
+}
+
+.ui-multi-select-count {
+  min-width: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--color-primary-solid);
+  color: var(--color-on-primary);
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 18px;
+  text-align: center;
+}
+
+.ui-multi-select-list {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 70;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.ui-multi-select-list[hidden] {
+  display: none;
+}
+
+.ui-multi-select-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 7px 8px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--color-text);
+}
+
+.ui-multi-select-option.is-highlighted {
+  background: var(--color-primary-bg);
+}
+
+.ui-multi-select-check {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-on-primary);
+  background: var(--color-input-bg);
+}
+
+.ui-multi-select-option.is-selected .ui-multi-select-check {
+  background: var(--color-primary-solid);
+  border-color: var(--color-primary-solid);
+}
+
+.ui-multi-select-option-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.ui-multi-select-option-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.ui-multi-select-option.is-selected .ui-multi-select-option-label {
+  font-weight: 600;
+}
+
+.ui-multi-select-option-description {
+  font-size: 12.5px;
+  color: var(--color-text-muted);
+}
+
+.ui-multi-select-badge {
+  display: inline-block;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--color-surface-muted);
+  color: var(--color-text-muted);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+.ui-multi-select-note {
+  padding: 8px 10px;
+  font-size: 13.5px;
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
+.ui-multi-select-note-error {
+  color: var(--color-danger);
+  font-style: normal;
+}
+
+.ui-multi-select-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ui-multi-select-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  padding: 2px 4px 2px 8px;
+  border: 1px solid var(--color-primary-border);
+  border-radius: 999px;
+  background: var(--color-primary-bg);
+  color: var(--color-text);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.ui-multi-select-chip > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ui-multi-select-chip-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.ui-multi-select-chip-remove:hover {
+  color: var(--color-text);
+  background: var(--color-hover);
+}
+
+.ui-multi-select-chip-remove:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 1px;
+}

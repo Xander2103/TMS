@@ -1,7 +1,8 @@
 {
   "levels": {
-    "dossier": "Dossier (general)",
-    "dossierShort": "Dossier"
+    "dossier": "Dossier documents",
+    "dossierShort": "Dossier",
+    "dossierHint": "Apply to the whole dossier"
   },
   "summary_one": "{count} document in this dossier",
   "summary_other": "{count} documents in this dossier",
@@ -13,18 +14,21 @@
   "viewBlocked": "The browser blocked the new tab. Allow pop-ups or use Download.",
   "fileMissing": "File missing",
   "sections": {
-    "dossier": "General documents",
-    "dossierHint": "Documents of the whole dossier. They can be consulted from every order of this dossier.",
-    "own": "Own documents",
+    "dossier": "Dossier documents",
+    "dossierHint": "These documents apply to the dossier as a whole and can be consulted from every order and activity. If a document belongs to one order or activity, upload it at that level.",
+    "own": "Documents of this order",
     "ownHint": "Documents that belong to order {number} only.",
-    "general": "General documents of the dossier",
-    "generalHint": "The same documents as on dossier level, not copies. View and download only here.",
-    "manageViaDossier": "Manage via Dossier (general)"
+    "general": "Dossier documents (also apply here)",
+    "generalHint": "The same documents as on the dossier level, no copies. View and download only here.",
+    "manageViaDossier": "Manage under Dossier documents",
+    "ownActivity": "Documents of this activity",
+    "ownActivityHint": "Documents that belong to activity {label} only."
   },
   "empty": {
-    "dossier": "No general documents for this dossier yet.",
-    "order": "No own documents for this order yet.",
-    "general": "This dossier has no general documents."
+    "dossier": "No dossier documents yet.",
+    "order": "No documents for this order yet.",
+    "general": "This dossier has no dossier documents.",
+    "activity": "No documents for this activity yet."
   },
   "columns": {
     "title": "Title",
@@ -60,9 +64,9 @@
   "upload": {
     "open": "Upload document",
     "title": "Upload document",
-    "target": "Link document to",
-    "targetHint": "A document of the whole dossier can be consulted from every order.",
-    "targetDossier": "Whole dossier",
+    "target": "Save under",
+    "targetHint": "Choose the level the document belongs to. A dossier document applies to the whole dossier.",
+    "targetDossier": "Dossier documents (whole dossier)",
     "targetOrder": "Order {label}",
     "type": "Document type",
     "customType": "Custom type name (optional)",
@@ -87,7 +91,8 @@
       "empty": "The file is empty.",
       "tooLarge": "The file is larger than 10 MB.",
       "unsupportedType": "Only PDF, JPG and PNG files are allowed."
-    }
+    },
+    "targetActivity": "Activity {label}"
   },
   "move": {
     "title": "Move document to…",
@@ -101,11 +106,12 @@
   },
   "delete": {
     "title": "Delete document",
-    "confirmDossier": "Are you sure you want to delete \"{title}\"? This document is visible on all orders of this dossier and will be deleted everywhere.",
+    "confirmDossier": "Are you sure you want to delete \"{title}\"? This dossier document applies to the whole dossier and will be removed everywhere.",
     "confirmOrder": "Are you sure you want to delete \"{title}\"? This document belongs to order {number} only and will be deleted permanently.",
     "confirm": "Delete",
     "success": "Document deleted.",
-    "failed": "The document could not be deleted."
+    "failed": "The document could not be deleted.",
+    "confirmActivity": "Are you sure you want to delete \"{title}\"? This document belongs to activity {label} only and will be deleted permanently."
   },
   "issued": {
     "title": "Transport documents",
@@ -142,6 +148,16 @@
     },
     "uploads_one": "{count} document",
     "uploads_other": "{count} documents",
-    "notApplicable": "Not applicable"
-  }
+    "noUploads": "No documents"
+  },
+  "groups": {
+    "dossier": "Dossier",
+    "orders": "Orders",
+    "activities": "Activities"
+  },
+  "kinds": {
+    "order": "Order",
+    "activity": "Activity"
+  },
+  "selector": "Document level"
 }

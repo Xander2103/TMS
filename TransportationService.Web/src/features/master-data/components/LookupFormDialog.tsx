@@ -33,6 +33,10 @@ export function LookupFormDialog({ config, api, item, onSaved, onClose }: Lookup
   const [sortOrder, setSortOrder] = useState(String(item?.sortOrder ?? 0))
   const [errors, setErrors] = useState<FormErrors>({})
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const simple = Boolean(config.simpleForm)
+  // Simple lookups fold code + sort order away; a code error must still be visible, so the
+  // disclosure opens itself in that case.
+  const [advancedOpen, setAdvancedOpen] = useState(false)
 
   function validate(): FormErrors {
     const next: FormErrors = {}
@@ -50,6 +54,7 @@ export function LookupFormDialog({ config, api, item, onSaved, onClose }: Lookup
     const validationErrors = validate()
     if (Object.keys(validationErrors).length > 0) {
       setErrors(validationErrors)
+      if (validationErrors.code) setAdvancedOpen(true)
       return
     }
 
@@ -69,12 +74,71 @@ export function LookupFormDialog({ config, api, item, onSaved, onClose }: Lookup
     } catch (error) {
       if (error instanceof ApiError && error.status === 409) {
         setErrors({ code: t('masterData.errors.duplicateCode', { code: input.code ?? '' }) })
+        setAdvancedOpen(true)
       } else {
         setErrors({ form: t('masterData.errors.saveFailed') })
       }
       setIsSubmitting(false)
     }
   }
+
+  const codeField = (
+    <FormField
+      label={t('masterData.form.codeLabel')}
+      htmlFor="lookup-code"
+      error={errors.code}
+      hint={[config.codeHint ? t(config.codeHint) : null, isEdit ? null : t('masterData.select.codeAutoHint')].filter(Boolean).join(' ') || undefined}
+      required={isEdit}
+    >
+      <input
+        id="lookup-code"
+        value={code}
+        onChange={(event) => setCode(event.target.value)}
+        aria-invalid={errors.code ? 'true' : undefined}
+        maxLength={50}
+        autoFocus={isEdit && !simple}
+      />
+    </FormField>
+  )
+  const nameField = (
+    <FormField label={t('masterData.form.nameLabel')} htmlFor="lookup-name" error={errors.name} required>
+      <input
+        id="lookup-name"
+        value={name}
+        onChange={(event) => setName(event.target.value)}
+        aria-invalid={errors.name ? 'true' : undefined}
+        maxLength={150}
+        autoFocus={!isEdit || simple}
+      />
+    </FormField>
+  )
+  const descriptionField = (
+    <FormField label={t('masterData.form.descriptionLabel')} htmlFor="lookup-description">
+      <textarea
+        id="lookup-description"
+        value={description}
+        onChange={(event) => setDescription(event.target.value)}
+        rows={3}
+        maxLength={1000}
+      />
+    </FormField>
+  )
+  const sortField = (
+    <FormField label={t('masterData.form.sortLabel')} htmlFor="lookup-sort" hint={t('masterData.form.sortHint')}>
+      <input
+        id="lookup-sort"
+        type="number"
+        value={sortOrder}
+        onChange={(event) => setSortOrder(event.target.value)}
+      />
+    </FormField>
+  )
+  const activeField = (
+    <label className="lookup-form-checkbox">
+      <input type="checkbox" checked={isActive} onChange={(event) => setIsActive(event.target.checked)} />
+      {t('masterData.form.activeLabel')}
+    </label>
+  )
 
   return (
     <Modal
@@ -98,53 +162,32 @@ export function LookupFormDialog({ config, api, item, onSaved, onClose }: Lookup
             {errors.form}
           </p>
         )}
-        <FormField
-          label={t('masterData.form.codeLabel')}
-          htmlFor="lookup-code"
-          error={errors.code}
-          hint={[config.codeHint ? t(config.codeHint) : null, isEdit ? null : t('masterData.select.codeAutoHint')].filter(Boolean).join(' ') || undefined}
-          required={isEdit}
-        >
-          <input
-            id="lookup-code"
-            value={code}
-            onChange={(event) => setCode(event.target.value)}
-            aria-invalid={errors.code ? 'true' : undefined}
-            maxLength={50}
-            autoFocus={isEdit}
-          />
-        </FormField>
-        <FormField label={t('masterData.form.nameLabel')} htmlFor="lookup-name" error={errors.name} required>
-          <input
-            id="lookup-name"
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            aria-invalid={errors.name ? 'true' : undefined}
-            maxLength={150}
-            autoFocus={!isEdit}
-          />
-        </FormField>
-        <FormField label={t('masterData.form.descriptionLabel')} htmlFor="lookup-description">
-          <textarea
-            id="lookup-description"
-            value={description}
-            onChange={(event) => setDescription(event.target.value)}
-            rows={3}
-            maxLength={1000}
-          />
-        </FormField>
-        <FormField label={t('masterData.form.sortLabel')} htmlFor="lookup-sort" hint={t('masterData.form.sortHint')}>
-          <input
-            id="lookup-sort"
-            type="number"
-            value={sortOrder}
-            onChange={(event) => setSortOrder(event.target.value)}
-          />
-        </FormField>
-        <label className="lookup-form-checkbox">
-          <input type="checkbox" checked={isActive} onChange={(event) => setIsActive(event.target.checked)} />
-          {t('masterData.form.activeLabel')}
-        </label>
+        {!simple && codeField}
+        {nameField}
+        {descriptionField}
+        {simple && activeField}
+        {simple ? (
+          <details className="lookup-form-advanced" open={advancedOpen}>
+            <summary
+              onClick={(event) => {
+                // Controlled by React state so a code error can open it; the native toggle
+                // would fight that, hence preventDefault.
+                event.preventDefault()
+                setAdvancedOpen((open) => !open)
+              }}
+            >
+              {t('masterData.form.advanced')}
+            </summary>
+            <p className="lookup-form-advanced-hint">{t('masterData.form.advancedHint')}</p>
+            {codeField}
+            {sortField}
+          </details>
+        ) : (
+          <>
+            {sortField}
+            {activeField}
+          </>
+        )}
       </form>
     </Modal>
   )

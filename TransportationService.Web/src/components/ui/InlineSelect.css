@@ -11,8 +11,8 @@
 
 .ui-inline-select:hover,
 .ui-inline-select:focus-visible {
-  border-color: var(--border);
-  background: var(--bg);
+  border-color: var(--color-input-border);
+  background: var(--color-input-bg);
 }
 
 .ui-inline-select:disabled {

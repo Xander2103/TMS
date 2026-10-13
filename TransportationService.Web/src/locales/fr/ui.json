@@ -46,6 +46,7 @@
     "navLabel": "Sections du formulaire",
     "sectionLabel": "Section",
     "hasErrors": "contient des erreurs",
+    "errorCount": "contient {count} erreur(s)",
     "hasData": "contient des données",
     "emptyOptional": "vide (facultatif)",
     "empty": "vide"
@@ -132,5 +133,23 @@
   },
   "time": {
     "placeholder": "hh:mm"
+  },
+  "appearance": {
+    "label": "Affichage",
+    "description": "Choisissez l'apparence de l'application. Cette préférence est personnelle et s'applique sur tous vos appareils.",
+    "system": "Système",
+    "systemHint": "Suit le réglage de votre appareil",
+    "light": "Clair",
+    "lightHint": "Toujours le thème clair",
+    "dark": "Sombre",
+    "darkHint": "Toujours le thème sombre",
+    "saveFailed": "La préférence d'affichage n'a pas pu être enregistrée. Elle reste appliquée sur cet appareil."
+  },
+  "multiSelect": {
+    "selectedCount_one": "{count} sélectionné",
+    "selectedCount_other": "{count} sélectionnés",
+    "selectedLabel": "Sélectionné : {label}",
+    "remove": "Supprimer {label}",
+    "typeToSearch": "Tapez pour rechercher…"
   }
 }

@@ -1,9 +1,9 @@
 .opr-panel {
-  border: 1px solid var(--border, #e5e7eb);
+  border: 1px solid var(--border);
   border-radius: 10px;
   padding: 1rem 1.1rem;
   margin: 1rem 0;
-  background: color-mix(in srgb, var(--accent, #2563eb) 6%, transparent);
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
 }
 
 .opr-panel h2 {

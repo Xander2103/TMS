@@ -149,6 +149,38 @@ describe('Dossier lifecycle — confirm', () => {
     expect(screen.queryByRole('button', { name: 'Bevestigen' })).not.toBeInTheDocument()
   })
 
+  it('orders the header actions as [+ Activiteit] [Meer ▾] … [Bevestigen]: the secondary group first, the single primary last', async () => {
+    api.getDossier.mockResolvedValue(dossierDetail())
+    renderPage()
+    await screen.findByRole('button', { name: 'Bevestigen' })
+
+    const actions = document.querySelector('.dossier-header-actions')!
+    const names = within(actions as HTMLElement).getAllByRole('button').map((button) => button.textContent?.trim())
+    expect(names).toEqual(['+ Activiteit', 'Meer ▾', 'Bevestigen'])
+    // The two secondary actions share one group; Bevestigen sits outside it, as the only primary button.
+    const secondary = actions.querySelector('.dossier-header-actions-secondary')!
+    expect(within(secondary as HTMLElement).getByRole('button', { name: '+ Activiteit' })).toHaveClass('ui-button-secondary')
+    expect(within(secondary as HTMLElement).getByRole('button', { name: 'Meer ▾' })).toBeInTheDocument()
+    expect(secondary.contains(screen.getByRole('button', { name: 'Bevestigen' }))).toBe(false)
+    expect(actions.querySelectorAll('.ui-button-primary')).toHaveLength(1)
+    expect(screen.getByRole('button', { name: 'Bevestigen' })).toHaveClass('ui-button-primary', 'dossier-header-primary')
+    // Bevestigen never hides inside Meer while the dossier is open.
+    expect(screen.queryByRole('menuitem', { name: 'Bevestigen', hidden: true })).not.toBeInTheDocument()
+  })
+
+  it('a confirmed dossier has no primary action: only Meer ▾ remains, with "Dossier heropenen" inside it', async () => {
+    auth.permissions = new Set(['dossiers.view', 'dossiers.manage', 'dossiers.reopen'])
+    api.getDossier.mockResolvedValue(confirmedDossier())
+    renderPage()
+    await screen.findByRole('heading', { level: 1 })
+
+    const actions = document.querySelector('.dossier-header-actions')!
+    expect(within(actions as HTMLElement).getAllByRole('button').map((button) => button.textContent?.trim())).toEqual(['Meer ▾'])
+    expect(actions.querySelectorAll('.ui-button-primary')).toHaveLength(0)
+    expect(screen.queryByRole('button', { name: 'Dossier heropenen' })).not.toBeInTheDocument()
+    expect(await headerMenuItem('Dossier heropenen')).toBeInTheDocument()
+  })
+
   it('renders an automatic confirmation as "automatisch" and a legacy closed dossier as source unknown', async () => {
     api.getDossier.mockResolvedValue(confirmedDossier({ confirmationSource: 'Automatic', confirmedByName: null }))
     const automatic = renderPage()

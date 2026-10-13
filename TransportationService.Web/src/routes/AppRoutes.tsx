@@ -12,6 +12,7 @@ import {
 import { AuthProvider } from '../features/auth/AuthContext'
 import { useAuth } from '../features/auth/authContextValue'
 import { LocaleProvider } from '../i18n/LocaleProvider'
+import { ThemeProvider } from '../theme/ThemeProvider'
 import { LoginPage } from '../features/auth/LoginPage'
 import { RequireAuth } from '../features/auth/RequireAuth'
 import { AppLayout } from '../components/layout/AppLayout'
@@ -165,6 +166,20 @@ function RootLocaleProvider({ children }: { children: React.ReactNode }) {
 }
 
 /**
+ * App-brede weergavevoorkeur (licht/donker/systeem): per GEBRUIKER, uit dezelfde
+ * /api/auth/me-respons. Boven RequireAuth zodat ook login- en wachtwoordschermen het
+ * juiste thema dragen; tot de sessie geladen is dekt de ts.theme-cache de start zonder flash.
+ */
+function RootThemeProvider({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth()
+  return (
+    <ThemeProvider savedPreference={user?.themePreference ?? null} sessionId={user?.id ?? null}>
+      {children}
+    </ThemeProvider>
+  )
+}
+
+/**
  * Legacy deep link (bookmarks, notification LinkPaths) for a template detail: keeps the id and
  * the query string (?tab=…) while moving the page under /issued-items.
  */
@@ -178,12 +193,14 @@ function LegacyIssuedItemTemplateRedirect() {
 function RootProviders() {
   return (
     <AuthProvider>
-      <RootLocaleProvider>
-        {/* Boundary for lazily loaded routes outside the app shell (login/password flows). */}
-        <Suspense fallback={<LoadingState message="Laden..." />}>
-          <Outlet />
-        </Suspense>
-      </RootLocaleProvider>
+      <RootThemeProvider>
+        <RootLocaleProvider>
+          {/* Boundary for lazily loaded routes outside the app shell (login/password flows). */}
+          <Suspense fallback={<LoadingState message="Laden..." />}>
+            <Outlet />
+          </Suspense>
+        </RootLocaleProvider>
+      </RootThemeProvider>
     </AuthProvider>
   )
 }

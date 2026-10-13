@@ -162,35 +162,44 @@ export function DossierHeader({ dossier, canManage, onAddActivity, onConfirm, me
         </p>
       </div>
 
+      {/* Action hierarchy: the secondary group (+ Activiteit, Meer ▾) on the left, a clear gap,
+          and the ONE primary lifecycle action — Bevestigen — right-most. A confirmed or
+          cancelled dossier has no primary action; "Heropenen" stays an exceptional item in Meer. */}
       <div className="dossier-header-actions">
+        {(canManage && isOpen) || menuActions.length > 0 ? (
+          <div className="dossier-header-actions-secondary">
+            {canManage && isOpen && (
+              <Button variant="secondary" onClick={onAddActivity}>{t('dossiers.header.addActivity')}</Button>
+            )}
+            {menuActions.length > 0 && (
+              <details className="dossier-more" ref={menuRef}>
+                <summary role="button" aria-haspopup="menu">
+                  {t('dossiers.header.more')}
+                </summary>
+                <div className="dossier-more-menu" role="menu">
+                  {menuActions.map((action) => (
+                    <button
+                      key={action.key}
+                      type="button"
+                      role="menuitem"
+                      className={action.danger ? 'dossier-more-danger' : undefined}
+                      onClick={() => {
+                        menuRef.current?.removeAttribute('open')
+                        action.onSelect()
+                      }}
+                    >
+                      {action.label}
+                    </button>
+                  ))}
+                </div>
+              </details>
+            )}
+          </div>
+        ) : null}
         {canManage && isOpen && (
-          <>
-            <Button variant="secondary" onClick={onAddActivity}>{t('dossiers.header.addActivity')}</Button>
-            <Button onClick={onConfirm}>{t('dossiers.lifecycle.confirm')}</Button>
-          </>
-        )}
-        {menuActions.length > 0 && (
-          <details className="dossier-more" ref={menuRef}>
-            <summary role="button" aria-haspopup="menu">
-              {t('dossiers.header.more')}
-            </summary>
-            <div className="dossier-more-menu" role="menu">
-              {menuActions.map((action) => (
-                <button
-                  key={action.key}
-                  type="button"
-                  role="menuitem"
-                  className={action.danger ? 'dossier-more-danger' : undefined}
-                  onClick={() => {
-                    menuRef.current?.removeAttribute('open')
-                    action.onSelect()
-                  }}
-                >
-                  {action.label}
-                </button>
-              ))}
-            </div>
-          </details>
+          <Button className="dossier-header-primary" onClick={onConfirm}>
+            {t('dossiers.lifecycle.confirm')}
+          </Button>
         )}
       </div>
 

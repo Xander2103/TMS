@@ -29,3 +29,22 @@ export function needsPricing(dossier: DossierDetail, activity: DossierActivity):
   if (activity.priceStatus != null) return activity.priceStatus === 'NotPriced' || activity.priceStatus === 'PartiallyPriced'
   return readActivityPrice(dossier, activity).kind === 'none'
 }
+
+/**
+ * Units that are not settled yet: a missing/partial price OR a € 0 that still awaits its "free"
+ * confirmation (`ZeroUnconfirmed`). The dossier summary counts the rest as "afgehandeld".
+ */
+export function needsAttention(dossier: DossierDetail, activity: DossierActivity): boolean {
+  return needsPricing(dossier, activity) || activity.priceStatus === 'ZeroUnconfirmed'
+}
+
+/**
+ * What KIND of billable unit this is — decided by the activity type's capability (`hasStops`),
+ * never by a name or code: a transport activity is priced through its order ("Opdracht"), a
+ * standalone one through its own price record ("Activiteit").
+ */
+export type ActivityUnitKind = 'order' | 'activity'
+
+export function activityUnitKind(activity: DossierActivity): ActivityUnitKind {
+  return activity.hasStops ? 'order' : 'activity'
+}

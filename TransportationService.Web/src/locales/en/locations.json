@@ -246,6 +246,8 @@
   },
   "select": {
     "create": "Create a new address…",
+    "createCustomerAddress": "New customer address",
+    "createCustomerAddressHint": "Creates a new address in this customer's address book and fills it in for this stop right away.",
     "createWithName": "Create new address “{query}”…",
     "defaultLoading": "default loading",
     "defaultUnloading": "default unloading",

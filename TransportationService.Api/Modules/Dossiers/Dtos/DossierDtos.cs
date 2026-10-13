@@ -295,7 +295,12 @@ public record PlanDossierActivityRequest(
     Guid? Version = null);
 
 /// <summary>Step 13: set (or clear with null) the agreed sales price of a standalone billable activity.</summary>
-public record SetActivityPriceRequest(decimal? FixedAmount, Guid? Version = null);
+/// <summary>
+/// Fixed price of a standalone activity. <c>FreeConfirmed</c> (pricing UX sprint 2026-10-08) only
+/// has effect with <c>FixedAmount</c> = 0: it confirms that € 0 as a deliberate free activity
+/// without replacing the price record; any other amount, or null (clear), resets it.
+/// </summary>
+public record SetActivityPriceRequest(decimal? FixedAmount, Guid? Version = null, bool FreeConfirmed = false);
 
 /// <summary>
 /// One actionable attention item (additive readiness projection — never a new order status).
@@ -393,7 +398,12 @@ public record DossierConfirmationSummaryDto(
     int Documents, bool HasCmr,
     int OpenIncidents);
 
-/// <summary>D7: one dossier note. <c>DossierActivityId</c> null = dossier-level. <c>CanEdit</c>/<c>CanDelete</c> = the caller holds dossiers.manage.</summary>
+/// <summary>
+/// D7: one dossier note. <c>DossierActivityId</c> null = dossier-level. <c>CanEdit</c>/<c>CanDelete</c> = the caller holds dossiers.manage.
+/// <c>AuthorName</c> = who created it (CreatedByUserId); <c>EditedByName</c> = who made the LAST change when the note was
+/// edited after creation (UpdatedAt later than CreatedAt), null for an untouched note or when the editor is unknown — the UI
+/// never invents a user. Creation metadata is never overwritten by an edit.
+/// </summary>
 public record DossierNoteDto(
     Guid Id,
     Guid DossierId,
@@ -403,7 +413,8 @@ public record DossierNoteDto(
     DateTime CreatedAt,
     DateTime UpdatedAt,
     bool CanEdit,
-    bool CanDelete);
+    bool CanDelete,
+    string? EditedByName = null);
 
 public record CreateDossierNoteRequest(string? Text, Guid? DossierActivityId = null);
 

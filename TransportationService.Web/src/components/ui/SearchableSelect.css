@@ -32,9 +32,9 @@
   line-height: 1.4;
   padding: 10px 12px;
   min-height: 44px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--color-input-border);
   border-radius: 8px;
-  background: var(--bg);
+  background: var(--color-input-bg);
   color: var(--text-h);
   width: 100%;
   box-sizing: border-box;
@@ -126,7 +126,7 @@
   margin: 0;
   padding: 4px;
   list-style: none;
-  background: var(--bg);
+  background: var(--color-surface-raised);
   border: 1px solid var(--border);
   border-radius: 10px;
   box-shadow: var(--shadow);
@@ -208,7 +208,7 @@
 }
 
 .ui-searchable-select-note-error {
-  color: var(--danger, #b42318);
+  color: var(--danger);
   font-style: normal;
 }
 

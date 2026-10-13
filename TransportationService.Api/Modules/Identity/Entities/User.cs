@@ -19,6 +19,14 @@ public class User
     /// </summary>
     public string? PreferredLanguageCode { get; set; }
 
+    /// <summary>
+    /// Persoonlijke weergavevoorkeur van de UI (light/dark/system, zie
+    /// <see cref="Common.ThemePreferences"/>). Null = nog niet gekozen → de frontend volgt het
+    /// systeem. Hoort bij de gebruiker, niet bij de tenant: twee collega's van hetzelfde bedrijf
+    /// kiezen onafhankelijk van elkaar.
+    /// </summary>
+    public string? ThemePreference { get; set; }
+
     /// <summary>Forces a password change at the next login (temporary/admin-set credentials).</summary>
     public bool MustChangePassword { get; set; }
 

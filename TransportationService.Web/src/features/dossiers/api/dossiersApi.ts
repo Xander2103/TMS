@@ -197,7 +197,8 @@ export function planDossierActivity(id: string, activityId: string, input: PlanD
 export function setActivityPrice(
   id: string,
   activityId: string,
-  input: { fixedAmount: number | null; version: string | null },
+  /** `freeConfirmed` only has effect with `fixedAmount` 0: it settles that € 0 as a deliberate free activity. */
+  input: { fixedAmount: number | null; version: string | null; freeConfirmed?: boolean },
 ): Promise<DossierDetail> {
   return apiClient.putJson<DossierDetail, typeof input>(`/api/dossiers/${id}/activities/${activityId}/price`, input)
 }

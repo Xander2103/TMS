@@ -114,6 +114,8 @@ function document(overrides: Partial<DossierDocument>): DossierDocument {
     dossierId: 'd-1',
     transportOrderId: null,
     orderNumber: null,
+    dossierActivityId: null,
+    activityLabel: null,
     scope: 'Dossier',
     documentType: 'Other',
     customTypeName: null,
@@ -132,6 +134,7 @@ function document(overrides: Partial<DossierDocument>): DossierDocument {
 
 const generalDoc = () => document({ id: 'doc-general', title: 'Vergunning uitzonderlijk vervoer', documentType: 'Other', customTypeName: 'Vergunning' })
 const orderDoc = () => document({ id: 'doc-order', transportOrderId: 'o-1', orderNumber: 'ORD-0001', scope: 'Order', title: 'Getekende CMR', documentType: 'Cmr', fileName: 'cmr.pdf' })
+const activityDoc = () => document({ id: 'doc-activity', dossierActivityId: 'a-2', activityLabel: 'Plateau', scope: 'Activity', title: 'Hijsplan plateau', fileName: 'hijsplan.pdf' })
 
 function dossierWithOrder() {
   return dossierDetail({
@@ -173,28 +176,28 @@ describe('Documenten tab (active route)', () => {
     toast.showError.mockReset()
   })
 
-  it('opens on "Dossier (algemeen)" with the general documents, and the order level shows its OWN documents plus the general ones read-only', async () => {
+  it('opens on "Dossierdocumenten" with the dossier documents, and the order level shows its OWN documents plus the dossier ones read-only', async () => {
     const user = userEvent.setup()
     renderPage()
 
-    expect(await screen.findByRole('tab', { name: /Dossier \(algemeen\)/ })).toHaveAttribute('aria-selected', 'true')
+    expect(await screen.findByRole('tab', { name: /Dossierdocumenten/ })).toHaveAttribute('aria-selected', 'true')
     expect(documents.list).toHaveBeenCalledWith('d-1')
-    const general = await list('Algemene documenten')
+    const general = await list('Dossierdocumenten')
     expect(await within(general).findByText('Vergunning uitzonderlijk vervoer')).toBeInTheDocument()
     // The order document is NOT a dossier document.
     expect(within(general).queryByText('Getekende CMR')).not.toBeInTheDocument()
     expect(within(section()).getByText('2 documenten in dit dossier')).toBeInTheDocument()
 
     await user.click(tab(/ORD-0001/))
-    const own = await list('Eigen documenten')
+    const own = await list('Documenten van deze opdracht')
     expect(within(own).getByText('Getekende CMR')).toBeInTheDocument()
     expect(within(own).queryByText('Vergunning uitzonderlijk vervoer')).not.toBeInTheDocument()
-    // The general document is visible from the order — the same record, read-only, no copy.
-    const shared = await list('Algemene documenten van het dossier')
+    // The dossier document is visible from the order — the same record, read-only, no copy.
+    const shared = await list('Dossierdocumenten (gelden ook hier)')
     expect(within(shared).getByText('Vergunning uitzonderlijk vervoer')).toBeInTheDocument()
     expect(within(shared).getByRole('button', { name: 'Downloaden: Vergunning uitzonderlijk vervoer' })).toBeInTheDocument()
     expect(within(shared).queryByRole('button', { name: /Verwijderen: Vergunning/ })).not.toBeInTheDocument()
-    expect(within(shared).getByRole('button', { name: 'Beheer via Dossier (algemeen)' })).toBeInTheDocument()
+    expect(within(shared).getByRole('button', { name: 'Beheren bij Dossierdocumenten' })).toBeInTheDocument()
     // Issued transport documents (CMR numbers) of the order live on its level.
     expect(within(section()).getByRole('region', { name: 'Transportdocumenten' })).toBeInTheDocument()
     expect(documents.list).toHaveBeenCalledTimes(1)
@@ -203,7 +206,7 @@ describe('Documenten tab (active route)', () => {
   it('?opdracht=<orderId> opens the order level directly', async () => {
     renderPage(`${DOCUMENTS_TAB}?opdracht=o-1`)
     expect(await screen.findByRole('tab', { name: /ORD-0001/ })).toHaveAttribute('aria-selected', 'true')
-    expect(within(await list('Eigen documenten')).getByText('Getekende CMR')).toBeInTheDocument()
+    expect(within(await list('Documenten van deze opdracht')).getByText('Getekende CMR')).toBeInTheDocument()
   })
 
   it('uploads an order document: metadata through the dossier route, the file through the order-documents route, then re-reads the list', async () => {
@@ -220,7 +223,7 @@ describe('Documenten tab (active route)', () => {
     await user.click(await screen.findByRole('button', { name: '+ Document uploaden' }))
     const dialog = screen.getByRole('dialog', { name: 'Document uploaden' })
     // Opened from the order level, the target defaults to that order.
-    expect(within(dialog).getByLabelText('Document koppelen aan')).toHaveValue('o-1')
+    expect(within(dialog).getByLabelText('Opslaan bij')).toHaveValue('o-1')
     await user.selectOptions(within(dialog).getByLabelText('Documenttype'), 'DeliveryNote')
     const file = new File(['%PDF-1.4'], 'leverbon.pdf', { type: 'application/pdf' })
     await user.upload(within(dialog).getByLabelText(/^Bestand/), file)
@@ -232,11 +235,11 @@ describe('Documenten tab (active route)', () => {
 
     await waitFor(() => expect(upload.file).toHaveBeenCalledWith('doc-new', file))
     expect(documents.create).toHaveBeenCalledWith('d-1', {
-      transportOrderId: 'o-1', documentType: 'DeliveryNote', customTypeName: null, title: 'Leverbon', issueDate: null, notes: null, customerVisible: false,
+      transportOrderId: 'o-1', dossierActivityId: null, documentType: 'DeliveryNote', customTypeName: null, title: 'Leverbon', issueDate: null, notes: null, customerVisible: false,
     })
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
     expect(toast.showSuccess).toHaveBeenCalledWith('Document toegevoegd.')
-    expect(await within(await list('Eigen documenten')).findByText('Leverbon', { selector: '.ddoc-title' })).toBeInTheDocument()
+    expect(await within(await list('Documenten van deze opdracht')).findByText('Leverbon', { selector: '.ddoc-title' })).toBeInTheDocument()
     expect(within(section()).getByText('3 documenten in dit dossier')).toBeInTheDocument()
   })
 
@@ -247,7 +250,7 @@ describe('Documenten tab (active route)', () => {
     documents.create.mockResolvedValue(created)
     upload.file.mockRejectedValue(new Error('Storage offline'))
     renderPage()
-    await screen.findByRole('tab', { name: /Dossier \(algemeen\)/ })
+    await screen.findByRole('tab', { name: /Dossierdocumenten/ })
 
     await user.click(await screen.findByRole('button', { name: '+ Document uploaden' }))
     const dialog = screen.getByRole('dialog', { name: 'Document uploaden' })
@@ -270,7 +273,7 @@ describe('Documenten tab (active route)', () => {
     const user = userEvent.setup()
     documents.update.mockResolvedValue({ customerVisible: true })
     renderPage()
-    await screen.findByRole('tab', { name: /Dossier \(algemeen\)/ })
+    await screen.findByRole('tab', { name: /Dossierdocumenten/ })
 
     await user.click(await screen.findByRole('button', { name: 'Zichtbaarheid aanpassen: Vergunning uitzonderlijk vervoer' }))
     const dialog = screen.getByRole('dialog', { name: 'Zichtbaarheid aanpassen' })
@@ -295,10 +298,12 @@ describe('Documenten tab (active route)', () => {
     const move = screen.getByRole('dialog', { name: 'Document verplaatsen naar…' })
     expect(within(move).getByRole('radio', { name: /ORD-0001/ })).toBeChecked()
     expect(within(move).getByRole('radio', { name: /ORD-0001/ }).closest('label')).toHaveTextContent('huidige locatie')
-    await user.click(within(move).getByRole('radio', { name: 'Dossier (algemeen)' }))
+    // Every level of the dossier is offered, grouped — the activity included.
+    expect(within(move).getByRole('radio', { name: 'Plateau' })).toBeInTheDocument()
+    await user.click(within(move).getByRole('radio', { name: 'Dossierdocumenten' }))
     await user.click(within(move).getByRole('button', { name: 'Verplaatsen' }))
-    await waitFor(() => expect(documents.move).toHaveBeenCalledWith('doc-order', null))
-    expect(toast.showSuccess).toHaveBeenCalledWith('Document verplaatst naar Dossier (algemeen).')
+    await waitFor(() => expect(documents.move).toHaveBeenCalledWith('doc-order', { targetTransportOrderId: null, targetDossierActivityId: null }))
+    expect(toast.showSuccess).toHaveBeenCalledWith('Document verplaatst naar Dossierdocumenten.')
 
     await user.click(await screen.findByRole('button', { name: 'Verwijderen: Getekende CMR' }))
     const remove = screen.getByRole('dialog', { name: 'Document verwijderen' })
@@ -307,11 +312,104 @@ describe('Documenten tab (active route)', () => {
     await waitFor(() => expect(documents.remove).toHaveBeenCalledWith('doc-order'))
   })
 
+  it('groups the levels as Dossier / Opdrachten / Activiteiten: the standalone Plateau is a level with its OWN count and documents', async () => {
+    const user = userEvent.setup()
+    documents.list.mockResolvedValue([generalDoc(), orderDoc(), activityDoc()])
+    renderPage()
+    await screen.findByRole('tab', { name: /Dossierdocumenten/ })
+
+    const nav = screen.getByRole('tablist', { name: 'Documentniveau' })
+    expect(within(nav).getByText('Dossier', { selector: '.ddoc-level-group-label' })).toBeInTheDocument()
+    expect(within(nav).getByText('Opdrachten', { selector: '.ddoc-level-group-label' })).toBeInTheDocument()
+    expect(within(nav).getByText('Activiteiten', { selector: '.ddoc-level-group-label' })).toBeInTheDocument()
+    // Secondary labels say what kind of level it is; the count is the level's OWN documents, never the total.
+    const plateau = within(nav).getByRole('tab', { name: /Plateau/ })
+    expect(plateau).toHaveTextContent('Activiteit')
+    expect(plateau.querySelector('.ddoc-level-count')).toHaveTextContent('1')
+    expect(within(nav).getByRole('tab', { name: /ORD-0001/ })).toHaveTextContent('Opdracht')
+    expect(within(nav).getByRole('tab', { name: /ORD-0001/ }).querySelector('.ddoc-level-count')).toHaveTextContent('1')
+    expect(within(nav).getByRole('tab', { name: /Dossierdocumenten/ }).querySelector('.ddoc-level-count')).toHaveTextContent('1')
+    expect(within(section()).getByText('3 documenten in dit dossier')).toBeInTheDocument()
+
+    // Dossier level: only the dossier document.
+    const general = await list('Dossierdocumenten')
+    expect(within(general).queryByText('Hijsplan plateau')).not.toBeInTheDocument()
+    expect(within(general).queryByText('Getekende CMR')).not.toBeInTheDocument()
+
+    // Plateau level: its own document, plus the dossier documents read-only — never the order's document.
+    await user.click(plateau)
+    expect(plateau).toHaveAttribute('aria-selected', 'true')
+    const own = await list('Documenten van deze activiteit')
+    expect(within(own).getByText('Hijsplan plateau')).toBeInTheDocument()
+    expect(within(own).queryByText('Getekende CMR')).not.toBeInTheDocument()
+    expect(within(own).queryByText('Vergunning uitzonderlijk vervoer')).not.toBeInTheDocument()
+    expect(within(await list('Dossierdocumenten (gelden ook hier)')).getByText('Vergunning uitzonderlijk vervoer')).toBeInTheDocument()
+    // An activity has no issued transport documents (no order).
+    expect(within(section()).queryByRole('region', { name: 'Transportdocumenten' })).not.toBeInTheDocument()
+
+    // Order level: never the activity's document.
+    await user.click(within(nav).getByRole('tab', { name: /ORD-0001/ }))
+    expect(within(await list('Documenten van deze opdracht')).queryByText('Hijsplan plateau')).not.toBeInTheDocument()
+  })
+
+  it('every standalone activity is a level, whatever it is called — decided by its link, not its name', async () => {
+    api.getDossier.mockResolvedValue(dossierDetail({
+      activities: [
+        dossierActivity({ id: 'a-1', sequence: 1, linkedTransportOrderId: 'o-1', linkedOrderNumber: 'ORD-0001', linkedOrderStatus: 'Draft' }),
+        dossierActivity({ id: 'a-7', sequence: 2, activityTypeCode: 'OVERIG', activityTypeName: 'Overig', label: 'Kraanwerk site B', hasStops: false }),
+        // A transport-shaped activity WITHOUT an order is not an activity level: its documents follow its (future) order.
+        dossierActivity({ id: 'a-8', sequence: 3, activityTypeCode: 'DIRECT_TRANSPORT', activityTypeName: 'Direct transport', hasStops: true }),
+      ],
+    }))
+    renderPage()
+    const nav = await screen.findByRole('tablist', { name: 'Documentniveau' })
+    expect(within(nav).getByRole('tab', { name: /Kraanwerk site B/ })).toHaveTextContent('Activiteit')
+    expect(within(nav).getAllByRole('tab')).toHaveLength(3)
+  })
+
+  it('?activiteit=<id> opens the activity level directly, and uploading from there targets that activity', async () => {
+    const user = userEvent.setup()
+    documents.list.mockResolvedValue([generalDoc(), orderDoc(), activityDoc()])
+    const created = document({ id: 'doc-new', dossierActivityId: 'a-2', activityLabel: 'Plateau', scope: 'Activity', title: 'Foto plateau', hasFile: false, fileName: null })
+    documents.create.mockResolvedValue(created)
+    upload.file.mockResolvedValue({})
+    renderPage(`${DOCUMENTS_TAB}?activiteit=a-2`)
+
+    expect(await screen.findByRole('tab', { name: /Plateau/ })).toHaveAttribute('aria-selected', 'true')
+    expect(within(await list('Documenten van deze activiteit')).getByText('Hijsplan plateau')).toBeInTheDocument()
+
+    await user.click(await screen.findByRole('button', { name: '+ Document uploaden' }))
+    const dialog = screen.getByRole('dialog', { name: 'Document uploaden' })
+    // Context-sensitive default: the level the planner is looking at.
+    const target = within(dialog).getByLabelText('Opslaan bij')
+    expect(target).toHaveValue('activity:a-2')
+    expect(within(target).getByRole('option', { name: 'Activiteit Plateau' })).toBeInTheDocument()
+    expect(within(target).getByRole('option', { name: 'Dossierdocumenten (volledig dossier)' })).toBeInTheDocument()
+    await user.upload(within(dialog).getByLabelText(/^Bestand/), new File(['%PDF-1.4'], 'foto.pdf', { type: 'application/pdf' }))
+    await user.click(within(dialog).getByRole('button', { name: 'Uploaden' }))
+
+    await waitFor(() => expect(documents.create).toHaveBeenCalledWith('d-1', expect.objectContaining({ transportOrderId: null, dossierActivityId: 'a-2', title: 'foto' })))
+  })
+
+  it('deleting an activity document says which activity it belongs to', async () => {
+    const user = userEvent.setup()
+    documents.list.mockResolvedValue([generalDoc(), orderDoc(), activityDoc()])
+    documents.remove.mockResolvedValue(undefined)
+    renderPage(`${DOCUMENTS_TAB}?activiteit=a-2`)
+    await screen.findByRole('tab', { name: /Plateau/ })
+
+    await user.click(await screen.findByRole('button', { name: 'Verwijderen: Hijsplan plateau' }))
+    const remove = screen.getByRole('dialog', { name: 'Document verwijderen' })
+    expect(within(remove).getByText(/hoort alleen bij activiteit Plateau/)).toBeInTheDocument()
+    await user.click(within(remove).getByRole('button', { name: 'Verwijderen' }))
+    await waitFor(() => expect(documents.remove).toHaveBeenCalledWith('doc-activity'))
+  })
+
   it('without write rights the tab is read-only: view/download stay, every mutation is gone', async () => {
     auth.permissions = new Set(['dossiers.view', 'orders.view'])
     renderPage()
-    await screen.findByRole('tab', { name: /Dossier \(algemeen\)/ })
-    const general = await list('Algemene documenten')
+    await screen.findByRole('tab', { name: /Dossierdocumenten/ })
+    const general = await list('Dossierdocumenten')
     expect(await within(general).findByRole('button', { name: 'Downloaden: Vergunning uitzonderlijk vervoer' })).toBeInTheDocument()
     expect(within(general).getByRole('button', { name: 'Bekijken: Vergunning uitzonderlijk vervoer' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '+ Document uploaden' })).not.toBeInTheDocument()
@@ -325,19 +423,33 @@ describe('Documenten tab (active route)', () => {
     documents.list.mockRejectedValueOnce(new Error('down')).mockResolvedValue([generalDoc()])
     renderPage()
     expect(await within(await screen.findByRole('alert')).findByText(/De documenten konden niet worden geladen/)).toBeInTheDocument()
-    expect(screen.queryByText('Nog geen algemene documenten bij dit dossier.')).not.toBeInTheDocument()
+    expect(screen.queryByText('Nog geen dossierdocumenten.')).not.toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Opnieuw proberen' }))
     expect(await screen.findByText('Vergunning uitzonderlijk vervoer')).toBeInTheDocument()
   })
 })
 
 describe('ActivityDocumentStatus on the activity card (spec §20)', () => {
-  it('a standalone activity without goods is "Niet van toepassing" — never "CMR missing"', () => {
+  it('a standalone activity without uploads is quietly "Geen documenten" — never "CMR missing"', () => {
     const plateau = dossierActivity({ id: 'a-2', activityTypeCode: 'PLATEAU', activityTypeName: 'Plateau', hasStops: false, supportsGoods: false })
     render(<ul><ActivityCard activity={plateau} activities={[plateau]} dossier={dossierDetail()} onOpen={vi.fn()} /></ul>)
     const cell = screen.getByText('CMR / document').parentElement!.querySelector('dd')!
-    expect(cell).toHaveTextContent('Niet van toepassing')
+    expect(cell).toHaveTextContent('Geen documenten')
     expect(cell).not.toHaveTextContent('Nog niet aangemaakt')
+    expect(cell).not.toHaveTextContent('Niet van toepassing')
+    expect(within(cell).queryByRole('button')).not.toBeInTheDocument()
+  })
+
+  it('a standalone activity with uploads shows their count and opens the Documenten tab on the activity', async () => {
+    const user = userEvent.setup()
+    const onOpenDocuments = vi.fn()
+    const plateau = dossierActivity({ id: 'a-2', activityTypeCode: 'PLATEAU', activityTypeName: 'Plateau', hasStops: false, supportsGoods: false, documentCount: 2 })
+    render(<ul><ActivityCard activity={plateau} activities={[plateau]} dossier={dossierDetail()} onOpen={vi.fn()} onOpenDocuments={onOpenDocuments} /></ul>)
+    const cell = screen.getByText('CMR / document').parentElement!.querySelector('dd')!
+    const status = within(cell).getByRole('button')
+    expect(status).toHaveTextContent('2 documenten')
+    await user.click(status)
+    expect(onOpenDocuments).toHaveBeenCalledWith(plateau)
   })
 
   it('an order-backed activity lists its uploads next to the issued document', () => {

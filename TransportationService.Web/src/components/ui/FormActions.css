@@ -19,7 +19,7 @@
      covers — it would just add dead space to every page, bar or not. The margin keeps the last
      row clear of the bar at rest (it was 8px, which read as "cut off"). */
   margin-top: var(--space-5);
-  background: var(--bg);
+  background: var(--color-bg);
   border-top: 1px solid var(--border);
 }
 
@@ -43,7 +43,7 @@ html:has(.ui-sectioned-form-actions) {
 
 .ui-form-actions-dirty {
   font-size: 13.5px;
-  color: #b45309;
+  color: var(--color-warning);
   font-style: italic;
 }
 

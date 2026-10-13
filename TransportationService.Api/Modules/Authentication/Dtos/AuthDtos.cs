@@ -31,7 +31,10 @@ public record CurrentUserDto(
     Guid? CustomerId = null,
     /// <summary>UI-taalvoorkeur (nl/fr/en) van de gebruiker; null = nog niet gekozen, de
     /// frontend valt dan terug op tenant-default → browser → nl.</summary>
-    string? PreferredLanguage = null);
+    string? PreferredLanguage = null,
+    /// <summary>Persoonlijke weergavevoorkeur (light/dark/system); null = nog niet gekozen,
+    /// de frontend volgt dan het systeem (of de lokaal gecachte laatste keuze).</summary>
+    string? ThemePreference = null);
 
 public enum AuthOutcome
 {

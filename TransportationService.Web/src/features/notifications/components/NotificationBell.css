@@ -28,7 +28,7 @@
   min-width: 18px;
   padding: 1px 5px;
   border-radius: 9px;
-  background: #dc2626;
+  background: var(--color-danger-solid);
   color: #fff;
   font-size: 11px;
   font-weight: 600;
@@ -44,7 +44,7 @@
   width: 340px;
   /* Mobiel: nooit breder dan het scherm minus wat marge. */
   max-width: min(340px, calc(100vw - 16px));
-  background: var(--bg);
+  background: var(--color-surface-raised);
   border: 1px solid var(--border);
   border-radius: 12px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14);
@@ -77,7 +77,7 @@
 }
 
 .ntf-bell-item:hover {
-  background: rgba(127, 127, 127, 0.08);
+  background: var(--color-hover);
 }
 
 .ntf-bell-item-body {
@@ -147,7 +147,7 @@
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: var(--accent);
+  background: var(--color-primary-solid);
 }
 
 .ntf-severity {

@@ -1,12 +1,43 @@
 import { describe, expect, it, vi } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { IssuedItemTemplatesPanel } from '../components/IssuedItemTemplatesPanel'
 import type { IssuedItemTemplate } from '../issuedItemsApi'
 
+const toast = vi.hoisted(() => ({ showToast: vi.fn(), showSuccess: vi.fn(), showError: vi.fn() }))
+
 vi.mock('../../../components/ui/toastContext', () => ({
-  useToast: () => ({ showToast: vi.fn(), showSuccess: vi.fn(), showError: vi.fn() }),
+  useToast: () => toast,
+}))
+
+// The dialog has its own suite; here it is a stub that reports the two possible outcomes.
+vi.mock('../TemplateFormModal', () => ({
+  TemplateFormModal: ({
+    editing,
+    existingItems,
+    onSaved,
+  }: {
+    editing: IssuedItemTemplate | null
+    existingItems?: IssuedItemTemplate[]
+    onSaved: (t: IssuedItemTemplate, r?: { variantFailures: { label: string; message: string }[] }) => void
+  }) => (
+    <div data-testid="form-stub" data-editing={editing?.id ?? ''} data-existing={existingItems?.length ?? -1}>
+      <button type="button" onClick={() => onSaved(makeTemplate({ id: 't-saved', variantsEnabled: true, stockTrackingEnabled: true }))}>
+        stub-save-ok
+      </button>
+      <button
+        type="button"
+        onClick={() =>
+          onSaved(makeTemplate({ id: 't-saved', variantsEnabled: true, stockTrackingEnabled: true }), {
+            variantFailures: [{ label: 'M', message: 'bestaat al' }],
+          })
+        }
+      >
+        stub-save-partial
+      </button>
+    </div>
+  ),
 }))
 
 function makeTemplate(overrides: Partial<IssuedItemTemplate>): IssuedItemTemplate {
@@ -53,31 +84,70 @@ vi.mock('../issuedItemsApi', async () => {
   }
 })
 
+function LocationProbe() {
+  const location = useLocation()
+  return <output data-testid="location">{location.pathname + location.search}</output>
+}
+
 function renderPanel() {
   return render(
-    <MemoryRouter>
-      <IssuedItemTemplatesPanel />
+    <MemoryRouter initialEntries={['/issued-items/templates']}>
+      <Routes>
+        <Route
+          path="*"
+          element={
+            <>
+              <IssuedItemTemplatesPanel />
+              <LocationProbe />
+            </>
+          }
+        />
+      </Routes>
     </MemoryRouter>,
   )
 }
 
-describe('IssuedItemTemplatesPanel stock overview', () => {
-  it('shows stock availability with the catalogue unit label, variants and a low-stock warning', async () => {
+describe('IssuedItemTemplatesPanel — the Bedrijfsmiddelen overview', () => {
+  it('describes each item by its Beheerwijze and availability instead of technical yes/no columns', async () => {
     templates.value = [
-      makeTemplate({ id: 't-1', name: 'Veiligheidsschoenen', stockTrackingEnabled: true, variantsEnabled: true, variantCount: 4, totalAvailable: 2, lowStockThreshold: 3, lowStock: true, unit: 'pair' }),
-      makeTemplate({ id: 't-2', name: 'Toegangsbadge' }),
+      makeTemplate({
+        id: 't-1',
+        name: 'Veiligheidsschoenen',
+        stockTrackingEnabled: true,
+        variantsEnabled: true,
+        variantCount: 4,
+        totalAvailable: 2,
+        lowStockThreshold: 3,
+        lowStock: true,
+        unit: 'pair',
+        returnRequired: true,
+      }),
+      makeTemplate({ id: 't-2', name: 'Toegangsbadge', requiresSerialNumber: true }),
+      makeTemplate({ id: 't-3', name: 'Helm', stockTrackingEnabled: true, totalAvailable: 12 }),
     ]
     renderPanel()
 
     await waitFor(() => expect(screen.getByText('Veiligheidsschoenen')).toBeInTheDocument())
+    expect(screen.getByRole('columnheader', { name: 'Beheerwijze' })).toBeInTheDocument()
+    expect(screen.queryByRole('columnheader', { name: 'Voorraadbeheer' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('columnheader', { name: 'Varianten' })).not.toBeInTheDocument()
+
     const shoeRow = screen.getByRole('link', { name: 'Veiligheidsschoenen' }).closest('tr')!
-    // The stored code "pair" renders as its Dutch label.
+    expect(shoeRow).toHaveTextContent('Voorraad met varianten')
+    expect(shoeRow).toHaveTextContent('4 varianten')
+    // The stored code "pair" renders as its Dutch label, with the low-stock warning.
     expect(shoeRow).toHaveTextContent('2 Paar')
     expect(shoeRow).toHaveTextContent('Lage voorraad')
-    expect(shoeRow).toHaveTextContent('4') // variant count
-    // Non-stock template shows no availability.
+    expect(shoeRow).toHaveTextContent('Terugbrengen')
+
     const badgeRow = screen.getByRole('link', { name: 'Toegangsbadge' }).closest('tr')!
-    expect(badgeRow).toHaveTextContent('Nee')
+    expect(badgeRow).toHaveTextContent('Individueel item')
+    expect(badgeRow).toHaveTextContent('Serienummer')
+    expect(badgeRow).not.toHaveTextContent('Ja')
+
+    const helmetRow = screen.getByRole('link', { name: 'Helm' }).closest('tr')!
+    expect(helmetRow).toHaveTextContent('Voorraadartikel')
+    expect(helmetRow).toHaveTextContent('12 Stuk')
   })
 
   it('renders a legacy free-text unit as "Overige" instead of leaking the raw value', async () => {
@@ -88,24 +158,61 @@ describe('IssuedItemTemplatesPanel stock overview', () => {
     expect(screen.getByRole('link', { name: 'Handschoenen' }).closest('tr')!).toHaveTextContent('7 Overige')
   })
 
-  it('filters on low stock', async () => {
+  it('filters on Beheerwijze and on low stock', async () => {
     templates.value = [
-      makeTemplate({ id: 't-1', name: 'Veiligheidsschoenen', stockTrackingEnabled: true, totalAvailable: 1, lowStockThreshold: 3, lowStock: true }),
-      makeTemplate({ id: 't-2', name: 'Toegangsbadge', stockTrackingEnabled: true, totalAvailable: 50, lowStock: false }),
+      makeTemplate({ id: 't-1', name: 'Veiligheidsschoenen', stockTrackingEnabled: true, variantsEnabled: true, totalAvailable: 1, lowStockThreshold: 3, lowStock: true }),
+      makeTemplate({ id: 't-2', name: 'Toegangsbadge' }),
+      makeTemplate({ id: 't-3', name: 'Helm', stockTrackingEnabled: true, totalAvailable: 50 }),
     ]
     renderPanel()
     await waitFor(() => expect(screen.getByText('Toegangsbadge')).toBeInTheDocument())
 
-    await userEvent.selectOptions(screen.getByLabelText('Voorraad'), 'low')
+    await userEvent.selectOptions(screen.getByLabelText('Beheerwijze'), 'individual')
+    expect(screen.getByText('Toegangsbadge')).toBeInTheDocument()
+    expect(screen.queryByText('Helm')).not.toBeInTheDocument()
+    expect(screen.queryByText('Veiligheidsschoenen')).not.toBeInTheDocument()
 
+    await userEvent.selectOptions(screen.getByLabelText('Beheerwijze'), 'low')
     expect(screen.getByText('Veiligheidsschoenen')).toBeInTheDocument()
     expect(screen.queryByText('Toegangsbadge')).not.toBeInTheDocument()
+    expect(screen.queryByText('Helm')).not.toBeInTheDocument()
   })
 
-  it('links a template to its detail page under /issued-items', async () => {
+  it('links an item to its detail page under /issued-items', async () => {
     templates.value = [makeTemplate({ id: 't-9', name: 'Scanner' })]
     renderPanel()
     await waitFor(() => expect(screen.getByText('Scanner')).toBeInTheDocument())
     expect(screen.getByRole('link', { name: 'Scanner' })).toHaveAttribute('href', '/issued-items/templates/t-9')
+  })
+
+  it('opens "Nieuw bedrijfsmiddel" with the current items for smart defaults and stays on the list after a complete save', async () => {
+    templates.value = [makeTemplate({ id: 't-1', name: 'Helm' }), makeTemplate({ id: 't-2', name: 'Badge' })]
+    toast.showSuccess.mockClear()
+    renderPanel()
+    await waitFor(() => expect(screen.getByText('Helm')).toBeInTheDocument())
+
+    await userEvent.click(screen.getByRole('button', { name: 'Nieuw bedrijfsmiddel' }))
+    const stub = screen.getByTestId('form-stub')
+    expect(stub).toHaveAttribute('data-editing', '')
+    expect(stub).toHaveAttribute('data-existing', '2')
+
+    await userEvent.click(screen.getByRole('button', { name: 'stub-save-ok' }))
+    expect(toast.showSuccess).toHaveBeenCalledWith('Bedrijfsmiddel toegevoegd.')
+    // Variants were entered inline, so there is nothing left to configure elsewhere.
+    expect(screen.getByTestId('location')).toHaveTextContent('/issued-items/templates')
+    expect(screen.queryByTestId('form-stub')).not.toBeInTheDocument()
+  })
+
+  it('sends the user to the Varianten tab with the failed labels when some variants could not be created', async () => {
+    templates.value = [makeTemplate({ id: 't-1', name: 'Helm' })]
+    toast.showError.mockClear()
+    renderPanel()
+    await waitFor(() => expect(screen.getByText('Helm')).toBeInTheDocument())
+
+    await userEvent.click(screen.getByRole('button', { name: 'Nieuw bedrijfsmiddel' }))
+    await userEvent.click(screen.getByRole('button', { name: 'stub-save-partial' }))
+
+    expect(toast.showError).toHaveBeenCalledWith(expect.stringContaining('M'))
+    expect(screen.getByTestId('location')).toHaveTextContent('/issued-items/templates/t-saved?tab=varianten')
   })
 })

@@ -99,9 +99,10 @@ export function ActivityCard({ activity, activities, dossier, onOpen, onOpenDeta
             <ActivityDocumentStatus
               issued={activity.issuedDocuments ?? []}
               documentCount={activity.documentCount ?? 0}
-              // A standalone activity has no order and therefore no transport document to miss.
-              applicable={activity.hasStops}
-              onOpen={activity.linkedTransportOrderId && onOpenDocuments ? () => onOpenDocuments(activity) : undefined}
+              // A standalone activity has no order and therefore no transport document (CMR) to
+              // miss; its uploads hang on the activity itself.
+              transportDocumentsApply={activity.hasStops}
+              onOpen={onOpenDocuments ? () => onOpenDocuments(activity) : undefined}
             />
           </dd>
         </div>

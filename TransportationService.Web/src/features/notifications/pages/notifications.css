@@ -393,7 +393,7 @@
 }
 
 .ntc-row.is-unread .ntc-row-dot {
-  background: var(--accent);
+  background: var(--color-primary-solid);
 }
 
 .ntc-row.is-resolved {
@@ -595,7 +595,7 @@
 }
 
 .ntc-detail-readstate.is-unread::before {
-  background: var(--accent);
+  background: var(--color-primary-solid);
 }
 
 .ntc-detail-close {

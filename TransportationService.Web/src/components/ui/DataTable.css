@@ -44,11 +44,11 @@
 
 .data-table-sort-indicator {
   font-size: 11px;
-  color: var(--text-muted, #6b7280);
+  color: var(--text-muted);
 }
 
 th[aria-sort] .data-table-sort-indicator {
-  color: var(--accent, #2563eb);
+  color: var(--accent);
 }
 
 .data-table tbody td {

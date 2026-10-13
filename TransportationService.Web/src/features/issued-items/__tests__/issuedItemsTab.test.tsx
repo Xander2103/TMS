@@ -293,7 +293,7 @@ describe('IssuedItemsTab', () => {
 
     await waitFor(() => expect(screen.getByText('Bedrijfsmiddel toevoegen')).toBeInTheDocument())
     await userEvent.click(screen.getByText('Bedrijfsmiddel toevoegen'))
-    await userEvent.selectOptions(screen.getByLabelText(/Uit sjabloon/i), 't-1')
+    await userEvent.selectOptions(screen.getByLabelText('Bedrijfsmiddel uit de lijst'), 't-1')
 
     // Variant list loads with stock counts.
     const variantSelect = await screen.findByLabelText(/Variant \(maat\/uitvoering\)/i)
@@ -363,7 +363,7 @@ describe('IssuedItemsTab', () => {
 
     await waitFor(() => expect(screen.getByText('Bedrijfsmiddel toevoegen')).toBeInTheDocument())
     await userEvent.click(screen.getByText('Bedrijfsmiddel toevoegen'))
-    await userEvent.selectOptions(screen.getByLabelText(/Uit sjabloon/i), 't-1')
+    await userEvent.selectOptions(screen.getByLabelText('Bedrijfsmiddel uit de lijst'), 't-1')
     await userEvent.click(screen.getByRole('button', { name: /^Opslaan/ }))
 
     // The 409 opens the confirmation modal with the server figures and the employee name.
@@ -408,7 +408,7 @@ describe('IssuedItemsTab', () => {
 
     await waitFor(() => expect(screen.getByText('Bedrijfsmiddel toevoegen')).toBeInTheDocument())
     await userEvent.click(screen.getByText('Bedrijfsmiddel toevoegen'))
-    await userEvent.selectOptions(screen.getByLabelText(/Uit sjabloon/i), 't-1')
+    await userEvent.selectOptions(screen.getByLabelText('Bedrijfsmiddel uit de lijst'), 't-1')
     await userEvent.click(screen.getByRole('button', { name: /^Opslaan/ }))
 
     await screen.findByText('Deze uitgifte brengt de voorraad onder nul.')

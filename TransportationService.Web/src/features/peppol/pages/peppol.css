@@ -4,7 +4,7 @@
   margin: 16px 0 0;
   padding: 10px 14px;
   border: 1px solid var(--border);
-  border-left: 4px solid var(--danger, #b3261e);
+  border-left: 4px solid var(--danger);
   border-radius: 6px;
   font-size: 14px;
   color: var(--text-h);
@@ -49,11 +49,11 @@
 }
 
 .peppol-check-ok {
-  color: var(--success, #1b7d3e);
+  color: var(--success);
 }
 
 .peppol-check-missing {
-  color: var(--danger, #b3261e);
+  color: var(--danger);
   font-weight: 600;
 }
 
@@ -175,7 +175,7 @@
 }
 
 .peppol-validation-ok {
-  color: var(--success, #1b7d3e);
+  color: var(--success);
   font-weight: 600;
   font-size: 14px;
 }

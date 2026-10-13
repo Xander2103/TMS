@@ -1,7 +1,8 @@
 {
   "levels": {
-    "dossier": "Dossier (algemeen)",
-    "dossierShort": "Dossier"
+    "dossier": "Dossierdocumenten",
+    "dossierShort": "Dossier",
+    "dossierHint": "Gelden voor het volledige dossier"
   },
   "summary_one": "{count} document in dit dossier",
   "summary_other": "{count} documenten in dit dossier",
@@ -13,18 +14,21 @@
   "viewBlocked": "De browser blokkeerde het nieuwe tabblad. Sta pop-ups toe of gebruik Downloaden.",
   "fileMissing": "Bestand ontbreekt",
   "sections": {
-    "dossier": "Algemene documenten",
-    "dossierHint": "Documenten van het volledige dossier. Ze zijn bij elke opdracht van dit dossier te raadplegen.",
-    "own": "Eigen documenten",
+    "dossier": "Dossierdocumenten",
+    "dossierHint": "Deze documenten gelden voor het dossier als geheel en zijn bij elke opdracht en activiteit te raadplegen. Hoort een document bij één opdracht of activiteit, upload het dan op dat niveau.",
+    "own": "Documenten van deze opdracht",
     "ownHint": "Documenten die alleen bij opdracht {number} horen.",
-    "general": "Algemene documenten van het dossier",
+    "general": "Dossierdocumenten (gelden ook hier)",
     "generalHint": "Dezelfde documenten als op dossierniveau, geen kopieën. Hier alleen bekijken en downloaden.",
-    "manageViaDossier": "Beheer via Dossier (algemeen)"
+    "manageViaDossier": "Beheren bij Dossierdocumenten",
+    "ownActivity": "Documenten van deze activiteit",
+    "ownActivityHint": "Documenten die alleen bij activiteit {label} horen."
   },
   "empty": {
-    "dossier": "Nog geen algemene documenten bij dit dossier.",
-    "order": "Nog geen eigen documenten bij deze opdracht.",
-    "general": "Dit dossier heeft geen algemene documenten."
+    "dossier": "Nog geen dossierdocumenten.",
+    "order": "Nog geen documenten bij deze opdracht.",
+    "general": "Dit dossier heeft geen dossierdocumenten.",
+    "activity": "Nog geen documenten bij deze activiteit."
   },
   "columns": {
     "title": "Titel",
@@ -60,9 +64,9 @@
   "upload": {
     "open": "Document uploaden",
     "title": "Document uploaden",
-    "target": "Document koppelen aan",
-    "targetHint": "Een document van het volledige dossier is bij elke opdracht te raadplegen.",
-    "targetDossier": "Volledig dossier",
+    "target": "Opslaan bij",
+    "targetHint": "Kies het niveau waar het document bij hoort. Een dossierdocument geldt voor het volledige dossier.",
+    "targetDossier": "Dossierdocumenten (volledig dossier)",
     "targetOrder": "Opdracht {label}",
     "type": "Documenttype",
     "customType": "Eigen typenaam (optioneel)",
@@ -87,7 +91,8 @@
       "empty": "Het bestand is leeg.",
       "tooLarge": "Het bestand is groter dan 10 MB.",
       "unsupportedType": "Alleen PDF-, JPG- en PNG-bestanden zijn toegestaan."
-    }
+    },
+    "targetActivity": "Activiteit {label}"
   },
   "move": {
     "title": "Document verplaatsen naar…",
@@ -101,11 +106,12 @@
   },
   "delete": {
     "title": "Document verwijderen",
-    "confirmDossier": "Weet je zeker dat je \"{title}\" wilt verwijderen? Dit document is zichtbaar bij alle opdrachten van dit dossier en wordt overal verwijderd.",
+    "confirmDossier": "Weet je zeker dat je \"{title}\" wilt verwijderen? Dit dossierdocument geldt voor het volledige dossier en wordt overal verwijderd.",
     "confirmOrder": "Weet je zeker dat je \"{title}\" wilt verwijderen? Dit document hoort alleen bij opdracht {number} en wordt definitief verwijderd.",
     "confirm": "Verwijderen",
     "success": "Document verwijderd.",
-    "failed": "Het document kon niet worden verwijderd."
+    "failed": "Het document kon niet worden verwijderd.",
+    "confirmActivity": "Weet je zeker dat je \"{title}\" wilt verwijderen? Dit document hoort alleen bij activiteit {label} en wordt definitief verwijderd."
   },
   "issued": {
     "title": "Transportdocumenten",
@@ -142,6 +148,16 @@
     },
     "uploads_one": "{count} document",
     "uploads_other": "{count} documenten",
-    "notApplicable": "Niet van toepassing"
-  }
+    "noUploads": "Geen documenten"
+  },
+  "groups": {
+    "dossier": "Dossier",
+    "orders": "Opdrachten",
+    "activities": "Activiteiten"
+  },
+  "kinds": {
+    "order": "Opdracht",
+    "activity": "Activiteit"
+  },
+  "selector": "Documentniveau"
 }

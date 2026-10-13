@@ -1,12 +1,17 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { PageHeader } from '../../../components/layout/PageHeader'
 import { BackButton } from '../../../components/ui/BackButton'
 import { Button } from '../../../components/ui/Button'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { FormField } from '../../../components/ui/FormField'
-import { SearchableSelect } from '../../../components/ui/SearchableSelect'
+import { SearchableSelect, type SearchableSelectOption } from '../../../components/ui/SearchableSelect'
 import { ValidationSummary } from '../../../components/ui/ValidationSummary'
+import { SectionedForm, type SectionDef } from '../../../components/ui/SectionedForm'
+import { useSectionNavigation } from '../../../components/ui/useSectionNavigation'
+import { UnsavedChangesGuard } from '../../../components/ui/UnsavedChangesGuard'
+import { NewDossierReview, type NewDossierSectionId } from '../components/NewDossierReview'
+import { cargoWeightTotalsFromRows } from '../../transport-orders/components/sections/cargoWeight'
 import { useToast } from '../../../components/ui/toastContext'
 import { describeApiError, getFieldError, type FieldErrors } from '../../../api/problemDetails'
 import { useLocale } from '../../../i18n/localeContext'
@@ -25,6 +30,8 @@ import { useStopMutation } from '../../transport-orders/components/sections/useS
 import { buildSubmitPayload } from '../../transport-orders/components/sections/orderFormPayload'
 import { useLookupOptions } from '../../master-data/hooks/useLookupOptions'
 import { LocationQuickCreateDialog } from '../../locations/components/LocationQuickCreateDialog'
+import { CustomerQuickCreateDialog } from '../../customers/components/CustomerQuickCreateDialog'
+import type { CustomerDetail } from '../../customers/types'
 import type { LocationOption } from '../../locations/types'
 import {
   applyUnitToCargoRow,
@@ -112,11 +119,25 @@ export function NewDossierPage() {
   const [siteStops, setSiteStops] = useState<StopFormRow[]>(() => [emptyStop('Site')])
   const mutateSiteStops = useStopMutation(siteStops, setSiteStops, () => undefined)
   const [quickCreate, setQuickCreate] = useState<{ name: string; resolve: (created: LocationOption | null) => void } | null>(null)
+  // "+ Nieuwe klant" without leaving the dossier: the dialog resolves the pending promise of the
+  // customer combobox (or of the standalone action) with the created customer, which is then
+  // selected at once and kept in the option list — the host form state is never touched.
+  const [customerQuickCreate, setCustomerQuickCreate] = useState<{ name: string; resolve: (created: CustomerDetail | null) => void } | null>(null)
+  const [createdCustomers, setCreatedCustomers] = useState<CustomerDetail[]>([])
 
   const { customers, serviceOptions, unitMaster, locationHours, customerConfig } = useOrderFormData(customerId ?? '', stops)
   const { options: unitOptions } = useLookupOptions('/api/unit-types')
   const preferredUnits = customerConfig?.preferredUnits ?? []
-  const customerOptions = useMemo(() => customers.map((c) => ({ value: c.id, label: c.name })), [customers])
+  // Customers created from this page come first (the one-shot list of 200 never re-fetches).
+  const customerOptions = useMemo<SearchableSelectOption[]>(
+    () => [
+      ...createdCustomers.filter((created) => !customers.some((c) => c.id === created.id)).map((c) => ({ value: c.id, label: c.name, meta: c.customerNumber })),
+      ...customers.map((c) => ({ value: c.id, label: c.name })),
+    ],
+    [customers, createdCustomers],
+  )
+  const canCreateCustomers = hasPermission('customers.create')
+  const selectedCustomerIsNew = customerId !== null && createdCustomers.some((c) => c.id === customerId)
 
   useEffect(() => {
     listActivityTypes()
@@ -156,12 +177,15 @@ export function NewDossierPage() {
   // Every order field the intake renders counts: anything the user typed or ticked must go
   // through the order create, never silently through the dossier-only fast path.
   const craneImplied = selectedType?.code === 'KRAANTRANSPORT'
-  const goodsTouched =
+  // Goederen = what is transported; Vereisten = what is needed to move it (+ remarks). Both feed
+  // the one "intake touched" rule below, and each drives its own section indicator.
+  const goodsOnlyTouched =
     cargoItems.some((cargo) => !isEmptyCargoRow(cargo)) || goodsDescription.trim() !== '' ||
-    quantity.trim() !== '' || notes.trim() !== '' || quantityUnitCode !== null ||
+    quantity.trim() !== '' || quantityUnitCode !== null ||
     weightKg.trim() !== '' || volumeM3.trim() !== '' || palletCount.trim() !== '' ||
-    distanceKm.trim() !== '' || loadingMeters.trim() !== '' ||
-    adrRequired || plateauRequired || moffettRequired || isReturnMovement || craneRequired !== craneImplied
+    distanceKm.trim() !== '' || loadingMeters.trim() !== ''
+  const requirementsTouched = adrRequired || plateauRequired || moffettRequired || isReturnMovement || craneRequired !== craneImplied
+  const goodsTouched = goodsOnlyTouched || notes.trim() !== '' || requirementsTouched
   const siteTouched = siteStops.some((stop) => !isEmptyStopRow(stop)) || isCraneJobTouched(craneJob)
   // An on-site job has no route and no goods of its own: only the site, the work and the duration count.
   const intakeTouched = onSite ? siteTouched || durationValue !== null : routeTouched || goodsTouched || durationValue !== null
@@ -244,6 +268,67 @@ export function NewDossierPage() {
       ]),
   )
   const inlineErrors = { ...serverStopErrors, ...fieldErrorMap(clientErrors) }
+
+  // ---- Subnavigation (2026-10-08 create redesign) -------------------------------------------
+  // ONE lifted form state, several sections: the subnav only decides which part renders. Which
+  // sections exist follows the transport type's capabilities (route? goods?), never a type name.
+  const sectionIds: NewDossierSectionId[] = [
+    'basis',
+    ...(showTransportIntake ? (['route'] as const) : []),
+    ...(showTransportIntake && !onSite ? (['goederen'] as const) : []),
+    ...(showTransportIntake ? (['vereisten'] as const) : []),
+    'controle',
+  ]
+  const { activeId, setActive } = useSectionNavigation(sectionIds, 'basis')
+  const activeSection = activeId as NewDossierSectionId
+  const sectionHeading = useRef<HTMLHeadingElement>(null)
+  const sectionLabel = (id: NewDossierSectionId) =>
+    id === 'vereisten' && onSite ? t('dossiers.new.sections.opmerkingen') : t(`dossiers.new.sections.${id}`)
+
+  /** Which section owns a failing field (client errors carry the order-form section; server paths are matched by prefix). */
+  function sectionForField(field: string): NewDossierSectionId {
+    const client = clientErrors.find((error) => error.field === field)
+    if (client) {
+      if (client.section === 'route') return 'route'
+      if (client.section === 'goederen') return sectionIds.includes('goederen') ? 'goederen' : 'basis'
+      return 'basis'
+    }
+    if (/^(stops|siteStop|activityDurationHours|workDescription|craneJob|lift)/.test(field)) return 'route'
+    if (/^(goodsDescription|cargoItems|cargo|quantity|weightKg|volumeM3|palletCount|distanceKm|loadingMeters)/.test(field)) {
+      return sectionIds.includes('goederen') ? 'goederen' : 'basis'
+    }
+    if (/^(adrRequired|craneRequired|plateauRequired|moffettRequired|isReturnMovement|notes)/.test(field)) {
+      return sectionIds.includes('vereisten') ? 'vereisten' : 'basis'
+    }
+    return 'basis'
+  }
+  const sectionErrorCounts = useMemo(() => {
+    const counts: Record<NewDossierSectionId, number> = { basis: 0, route: 0, goederen: 0, vereisten: 0, controle: 0 }
+    for (const error of clientErrors) counts[sectionForField(error.field)] += 1
+    for (const [field, messages] of Object.entries(fieldErrors)) {
+      if (messages.length > 0 && !clientErrors.some((error) => error.field === field)) counts[sectionForField(field)] += 1
+    }
+    return counts
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- sectionForField only reads clientErrors/sectionIds, both covered.
+  }, [clientErrors, fieldErrors, showTransportIntake, onSite])
+
+  /** Section switch from a button/link: the new section's heading takes focus (tabs keep their own focus). */
+  function goTo(section: NewDossierSectionId) {
+    setActive(section)
+    setTimeout(() => sectionHeading.current?.focus({ preventScroll: true }), 0)
+  }
+
+  /** Validation-summary click: open the owning section and focus its first invalid control. */
+  function jumpToField(field: string) {
+    setActive(sectionForField(field))
+    setTimeout(() => {
+      const invalid = document.querySelector<HTMLElement>('.ui-sectioned-form-body [aria-invalid="true"]')
+      ;(invalid ?? sectionHeading.current)?.focus({ preventScroll: true })
+    }, 0)
+  }
+
+  // Leaving the page (router or tab close) with anything filled in asks first — the shared guard.
+  const dirty = customerId !== null || selection !== null || customerReference.trim() !== '' || intakeTouched
 
   function setStop(key: string, patch: Partial<StopFormRow>) {
     // One patch path for both lists: for a site stop it also keeps the end time predictable
@@ -332,6 +417,29 @@ export function NewDossierPage() {
     applySelection(nextSelection, nextSelection === 'blanco' ? null : quickStartTypes.find((type) => type.id === nextSelection) ?? null)
   }
 
+  /** Opens the quick-create dialog; resolves with the option to select (combobox contract) or null. */
+  function quickCreateCustomer(name: string): Promise<SearchableSelectOption | null> {
+    return new Promise((resolve) =>
+      setCustomerQuickCreate({
+        name,
+        resolve: (created) => resolve(created ? { value: created.id, label: created.name, meta: created.customerNumber } : null),
+      }),
+    )
+  }
+
+  function closeCustomerQuickCreate(created: CustomerDetail | null) {
+    const pending = customerQuickCreate
+    setCustomerQuickCreate(null)
+    if (created) {
+      setCreatedCustomers((current) => [created, ...current.filter((c) => c.id !== created.id)])
+      setCustomerId(created.id)
+      toast.showSuccess(t('customers.quickCreate.created', { name: created.name }))
+    }
+    pending?.resolve(created)
+    // Focus returns to the customer field (the dialog restores focus after it unmounts).
+    setTimeout(() => document.getElementById('nd-klant')?.focus(), 0)
+  }
+
   function addUnloadAddress() {
     mutateStops((rows) => [...rows, emptyStop('Unloading')])
   }
@@ -386,8 +494,10 @@ export function NewDossierPage() {
     }
     setClientErrors(validationErrors)
     if (validationErrors.length > 0) {
-      // The ValidationSummary scrolls itself into view and lists every failing field.
+      // The ValidationSummary scrolls itself into view and lists every failing field; the subnav
+      // opens the first section that owns one (errors come section-ordered from the validator).
       setFormError(t('dossiers.new.validationIntro'))
+      setActive(validationErrors[0].section === 'route' ? 'route' : validationErrors[0].section === 'goederen' && sectionIds.includes('goederen') ? 'goederen' : 'basis')
       return
     }
 
@@ -407,6 +517,8 @@ export function NewDossierPage() {
       const described = describeApiError(err, t('dossiers.new.createFailed'))
       setFormError(described.message)
       setFieldErrors(described.fieldErrors)
+      const firstField = Object.keys(described.fieldErrors)[0]
+      if (firstField) setActive(sectionForField(firstField))
       setBusy(false)
     }
   }
@@ -416,10 +528,12 @@ export function NewDossierPage() {
     if (busy) return
     if (!customerId) {
       setFormError(t('dossiers.new.customerRequired'))
+      goTo('basis')
       return
     }
     if (!selection) {
       setFormError(t('dossiers.new.typeRequired'))
+      goTo('basis')
       return
     }
     if (showTransportIntake && intakeTouched) {
@@ -436,34 +550,139 @@ export function NewDossierPage() {
 
   const EmptyIcon = DEFAULT_ACTIVITY_TYPE_ICON
   const submitEnabled = Boolean(customerId && selection) && !busy
+  // Nothing left to fill (blanco/Opslag/no order right): creating IS the forward action; with a
+  // transport intake the forward action is the next section until Controle.
+  const createIsPrimary = activeSection === 'controle' || !showTransportIntake
+  const activeIndex = sectionIds.indexOf(activeSection)
+  const prevSection = activeIndex > 0 ? sectionIds[activeIndex - 1] : null
+  const nextSection = activeIndex < sectionIds.length - 1 ? sectionIds[activeIndex + 1] : null
+  const selectedCustomerName = customerOptions.find((option) => option.value === customerId)?.label ?? null
+  const submittedStopsForReview = onSite ? siteStops.filter((stop) => !isEmptyStopRow(stop)) : stops.filter((stop) => !isEmptyStopRow(stop))
+  const weightTotals = cargoWeightTotalsFromRows(cargoItems)
+  const reviewWarnings: string[] = []
+  if (showTransportIntake) {
+    const undated = submittedStopsForReview.filter((stop) => !stop.date).length
+    if (undated > 0) reviewWarnings.push(t('dossiers.new.review.warnStopsWithoutDate', { count: undated }))
+    if (!onSite && weightTotals.linesWithoutUnitWeight > 0 && cargoItems.some((cargo) => !isEmptyCargoRow(cargo))) {
+      reviewWarnings.push(t('dossiers.new.review.warnLinesWithoutWeight', { count: weightTotals.linesWithoutUnitWeight }))
+    }
+  }
+  const reviewHints: string[] = []
+  if (selectedType && !selectedType.hasStops) reviewHints.push(t('dossiers.new.noRouteTypeHint', { name: selectedType.name }))
+  if (selectedType?.hasStops && !canCreateOrders) reviewHints.push(t('dossiers.new.noOrderPermissionHint'))
+  if (isBlanco) reviewHints.push(t('dossiers.new.blancoHint'))
+  const tickedRequirements = [
+    adrRequired ? t('transportOrders.goods.adr') : null,
+    craneRequired ? t('transportOrders.goods.crane') : null,
+    plateauRequired ? t('transportOrders.goods.plateau') : null,
+    moffettRequired ? t('transportOrders.goods.moffett') : null,
+    isReturnMovement ? t('transportOrders.goods.returnMovement') : null,
+  ].filter((label): label is string => label !== null)
 
-  return (
-    <div className="new-dossier">
-      <BackButton to="/dossiers" label={t('dossiers.new.back')} />
-      <PageHeader title={t('dossiers.new.title')} subtitle={t('dossiers.new.subtitleIntake')} />
+  const heading = (section: NewDossierSectionId) => (
+    <h2 className="new-dossier-section-title" id={`nd-sectie-${section}`} tabIndex={-1} ref={sectionHeading}>
+      {sectionLabel(section)}
+    </h2>
+  )
 
-      <form onSubmit={(event) => void submit(event)} noValidate>
-        <ValidationSummary
-          message={formError}
-          fieldErrors={{
-            ...fieldErrors,
-            ...Object.fromEntries(clientErrors.map((error) => [error.field, [error.message]])),
-          }}
-          fieldLabels={Object.fromEntries(clientErrors.map((error) => [error.field, error.label]))}
-        />
+  const durationField = (
+    <FormField
+      label={onSite ? t('stopEditor.crane.duration') : t('dossiers.new.durationLabel')}
+      htmlFor="nd-duration"
+      hint={onSite ? t('stopEditor.crane.durationHint') : t('dossiers.new.durationHint')}
+      error={durationInvalid ? t('dossiers.new.durationInvalid') : undefined}
+    >
+      <input
+        id="nd-duration"
+        type="number"
+        min={0}
+        step="0.25"
+        value={durationHours}
+        onChange={(event) => changeDuration(event.target.value)}
+        disabled={busy}
+        aria-invalid={durationInvalid ? true : undefined}
+      />
+    </FormField>
+  )
 
-        <section className="new-dossier-section" aria-labelledby="nd-sectie-klant">
-          <h2 id="nd-sectie-klant">{t('dossiers.new.sectionCustomer')}</h2>
-          <FormField label={t('dossiers.new.customer')} htmlFor="nd-klant" required error={getFieldError(fieldErrors, 'customerId')}>
-            <SearchableSelect
-              id="nd-klant"
-              value={customerId}
-              onChange={setCustomerId}
-              options={customerOptions}
-              placeholder={t('dossiers.new.customerPlaceholder')}
-              disabled={busy}
-            />
-          </FormField>
+  const notesField = (
+    <FormField label={t('dossiers.new.notes')} htmlFor="nd-notes">
+      <textarea
+        id="nd-notes"
+        rows={3}
+        value={notes}
+        onChange={(event) => setNotes(event.target.value)}
+        disabled={busy}
+        maxLength={2000}
+      />
+    </FormField>
+  )
+
+  const sections: SectionDef[] = [
+    {
+      id: 'basis',
+      label: sectionLabel('basis'),
+      complete: Boolean(customerId && selection),
+      hasError: sectionErrorCounts.basis > 0,
+      errorCount: sectionErrorCounts.basis,
+      render: () => (
+        <section className="new-dossier-section new-dossier-basis" aria-labelledby="nd-sectie-basis">
+          {heading('basis')}
+          <div className="new-dossier-basis-grid">
+            <FormField label={t('dossiers.new.customer')} htmlFor="nd-klant" required error={getFieldError(fieldErrors, 'customerId')} className="new-dossier-basis-customer">
+              <SearchableSelect
+                id="nd-klant"
+                value={customerId}
+                onChange={setCustomerId}
+                options={customerOptions}
+                placeholder={t('dossiers.new.customerPlaceholder')}
+                emptyMessage={t('dossiers.new.noCustomerFound')}
+                disabled={busy}
+                onCreate={
+                  canCreateCustomers
+                    ? {
+                        label: (query) => t('dossiers.new.newCustomerFor', { query }),
+                        emptyQueryLabel: t('dossiers.new.newCustomer'),
+                        alwaysShow: true,
+                        create: quickCreateCustomer,
+                      }
+                    : undefined
+                }
+              />
+              {(canCreateCustomers || selectedCustomerIsNew) && (
+                <div className="new-dossier-field-actions">
+                  {canCreateCustomers && (
+                    <button type="button" className="link-button" onClick={() => void quickCreateCustomer('')} disabled={busy}>
+                      {t('dossiers.new.newCustomer')}
+                    </button>
+                  )}
+                  {selectedCustomerIsNew && (
+                    <a className="new-dossier-field-link" href={`/customers/${customerId}`} target="_blank" rel="noopener noreferrer">
+                      {t('customers.quickCreate.openCustomer')} ↗
+                    </a>
+                  )}
+                </div>
+              )}
+            </FormField>
+            <FormField label={t('dossiers.new.customerReference')} htmlFor="nd-ref" error={getFieldError(fieldErrors, 'customerReference')}>
+              <input
+                id="nd-ref"
+                value={customerReference}
+                onChange={(event) => setCustomerReference(event.target.value)}
+                maxLength={100}
+                disabled={busy}
+              />
+            </FormField>
+            <FormField label={t('dossiers.new.date')} htmlFor="nd-datum" error={getFieldError(fieldErrors, 'dossierDate')}>
+              <input
+                id="nd-datum"
+                type="date"
+                value={dossierDate}
+                onChange={(event) => setDossierDate(event.target.value)}
+                disabled={busy}
+              />
+            </FormField>
+          </div>
 
           <fieldset className="new-dossier-templates">
             <legend>{t('dossiers.new.transportType')}</legend>
@@ -506,231 +725,321 @@ export function NewDossierPage() {
               <span>{t('dossiers.new.blancoOption')}</span>
             </label>
           </fieldset>
+
+          {!selection && (
+            <p className="new-dossier-hint" role="note">
+              {t('dossiers.new.chooseTypeHint')}
+            </p>
+          )}
+          {reviewHints.map((hint) => (
+            <p key={hint} className="new-dossier-hint" role="note">
+              {hint}
+            </p>
+          ))}
         </section>
-
-        <section className="new-dossier-section" aria-labelledby="nd-sectie-ref">
-          <h2 id="nd-sectie-ref">{t('dossiers.new.sectionReference')}</h2>
-          <div className="new-dossier-row">
-            <FormField label={t('dossiers.new.customerReference')} htmlFor="nd-ref" error={getFieldError(fieldErrors, 'customerReference')}>
-              <input
-                id="nd-ref"
-                value={customerReference}
-                onChange={(event) => setCustomerReference(event.target.value)}
-                maxLength={100}
-                disabled={busy}
-              />
-            </FormField>
-            <FormField label={t('dossiers.new.date')} htmlFor="nd-datum" error={getFieldError(fieldErrors, 'dossierDate')}>
-              <input
-                id="nd-datum"
-                type="date"
-                value={dossierDate}
-                onChange={(event) => setDossierDate(event.target.value)}
-                disabled={busy}
-              />
-            </FormField>
-          </div>
+      ),
+    },
+    ...(showTransportIntake
+      ? ([
+          {
+            id: 'route',
+            label: sectionLabel('route'),
+            optional: true,
+            filled: onSite ? siteTouched : routeTouched,
+            hasError: sectionErrorCounts.route > 0,
+            errorCount: sectionErrorCounts.route,
+            render: () => (
+              <section className="new-dossier-section" aria-labelledby="nd-sectie-route">
+                <div className="new-dossier-section-header">
+                  {heading('route')}
+                  {isDistribution && (
+                    <Button variant="secondary" onClick={addUnloadAddress} disabled={busy}>
+                      {t('dossiers.new.addUnloadAddress')}
+                    </Button>
+                  )}
+                </div>
+                {supportsOnSiteWork && (
+                  <CraneJobKindField idPrefix="nd" kind={craneJob.kind} onChange={changeCraneJobKind} disabled={busy} />
+                )}
+                <p className="new-dossier-hint">
+                  {onSite
+                    ? t('stopEditor.crane.onSiteHint')
+                    : isDistribution ? t('dossiers.new.routeHintDistribution') : t('dossiers.new.routeHintDirect')}
+                </p>
+                {showDuration && !onSite && <div className="new-dossier-row new-dossier-row-narrow">{durationField}</div>}
+                <RouteSection
+                  stops={onSite ? siteStops : stops}
+                  canSaveToAddressBook={canCreateLocations && Boolean(customerId)}
+                  siteDurationHours={durationInvalid ? null : durationValue}
+                  customerId={customerId ?? ''}
+                  saving={busy}
+                  locationHours={locationHours}
+                  errors={inlineErrors}
+                  onAddStop={() => undefined}
+                  setStop={setStop}
+                  moveStop={() => undefined}
+                  onRemoveStop={(key) => mutateStops((rows) => rows.filter((row) => row.key !== key))}
+                  onRequestRefresh={() => undefined}
+                  onQuickCreate={
+                    canCreateLocations && customerId
+                      ? (name) => new Promise<LocationOption | null>((resolve) => setQuickCreate({ name, resolve }))
+                      : undefined
+                  }
+                  compact
+                  hideHeader
+                  canRemoveStop={(stop) =>
+                    isDistribution && stop.stopType === 'Unloading' && stops.filter((s) => s.stopType === 'Unloading').length > 1
+                  }
+                />
+                {onSite && (
+                  <OnSiteWorkFields
+                    idPrefix="nd"
+                    job={craneJob}
+                    onChange={(patch) => setCraneJob((job) => ({ ...job, ...patch }))}
+                    disabled={busy}
+                    descriptionError={inlineErrors.workDescription}
+                    duration={<div className="new-dossier-row new-dossier-row-narrow">{durationField}</div>}
+                  />
+                )}
+              </section>
+            ),
+          },
+        ] as SectionDef[])
+      : []),
+    ...(showTransportIntake && !onSite
+      ? ([
+          {
+            id: 'goederen',
+            label: sectionLabel('goederen'),
+            optional: true,
+            filled: goodsOnlyTouched,
+            hasError: sectionErrorCounts.goederen > 0,
+            errorCount: sectionErrorCounts.goederen,
+            render: () => (
+              <section className="new-dossier-section" aria-labelledby="nd-sectie-goederen">
+                {heading('goederen')}
+                <p className="new-dossier-hint">{t('dossiers.new.goodsHint')}</p>
+                <GoodsSection
+                  part="goods"
+                  goodsDescription={goodsDescription}
+                  setGoodsDescription={setGoodsDescription}
+                  quantity={quantity}
+                  setQuantity={setQuantity}
+                  quantityUnit=""
+                  quantityUnitCode={quantityUnitCode}
+                  setQuantityUnitCode={setQuantityUnitCode}
+                  weightKg={weightKg}
+                  setWeightKg={setWeightKg}
+                  volumeM3={volumeM3}
+                  setVolumeM3={setVolumeM3}
+                  palletCount={palletCount}
+                  setPalletCount={setPalletCount}
+                  distanceKm={distanceKm}
+                  setDistanceKm={setDistanceKm}
+                  loadingMeters={loadingMeters}
+                  setLoadingMeters={setLoadingMeters}
+                  adrRequired={adrRequired}
+                  setAdrRequired={setAdrRequired}
+                  craneRequired={craneRequired}
+                  setCraneRequired={setCraneRequiredByUser}
+                  plateauRequired={plateauRequired}
+                  setPlateauRequired={setPlateauRequired}
+                  moffettRequired={moffettRequired}
+                  setMoffettRequired={setMoffettRequired}
+                  isReturnMovement={isReturnMovement}
+                  setIsReturnMovement={setIsReturnMovement}
+                  derivedFromCargo={derivedFromCargo}
+                  cargoSummary={cargoSummary}
+                  cargoItems={cargoItems}
+                  stops={stops}
+                  unitOptions={unitOptions}
+                  preferredUnits={preferredUnits}
+                  setCargo={setCargo}
+                  onAddCargoRow={() => setCargoItems((rows) => [...rows, emptyCargoRow()])}
+                  onAddCargoRowFromHeader={() =>
+                    setCargoItems((rows) => [
+                      ...rows,
+                      cargoRowFromHeader({ quantity, quantityUnit: '', quantityUnitCode, weightKg, volumeM3, palletCount }),
+                    ])
+                  }
+                  onRemoveCargoRow={(key) => setCargoItems((rows) => rows.filter((row) => row.key !== key))}
+                  onDuplicateCargoRow={(key) => setCargoItems((rows) => duplicateCargoRowInList(rows, key))}
+                  applyCargoUnit={applyCargoUnit}
+                  cargoDimensionsFixed={cargoDimensionsFixed}
+                  saving={busy}
+                  errors={inlineErrors}
+                />
+              </section>
+            ),
+          },
+        ] as SectionDef[])
+      : []),
+    ...(showTransportIntake
+      ? ([
+          {
+            id: 'vereisten',
+            label: sectionLabel('vereisten'),
+            optional: true,
+            filled: (!onSite && requirementsTouched) || notes.trim() !== '',
+            hasError: sectionErrorCounts.vereisten > 0,
+            errorCount: sectionErrorCounts.vereisten,
+            render: () => (
+              <section className="new-dossier-section" aria-labelledby="nd-sectie-vereisten">
+                {heading('vereisten')}
+                {!onSite && (
+                  <>
+                    <h3 className="new-dossier-subtitle">{t('dossiers.new.sectionRequirements')}</h3>
+                    <p className="new-dossier-hint">{t('dossiers.new.requirementsHint')}</p>
+                    <GoodsSection
+                      part="requirements"
+                      goodsDescription={goodsDescription}
+                      setGoodsDescription={setGoodsDescription}
+                      quantity={quantity}
+                      setQuantity={setQuantity}
+                      quantityUnit=""
+                      quantityUnitCode={quantityUnitCode}
+                      setQuantityUnitCode={setQuantityUnitCode}
+                      weightKg={weightKg}
+                      setWeightKg={setWeightKg}
+                      volumeM3={volumeM3}
+                      setVolumeM3={setVolumeM3}
+                      palletCount={palletCount}
+                      setPalletCount={setPalletCount}
+                      distanceKm={distanceKm}
+                      setDistanceKm={setDistanceKm}
+                      loadingMeters={loadingMeters}
+                      setLoadingMeters={setLoadingMeters}
+                      adrRequired={adrRequired}
+                      setAdrRequired={setAdrRequired}
+                      craneRequired={craneRequired}
+                      setCraneRequired={setCraneRequiredByUser}
+                      plateauRequired={plateauRequired}
+                      setPlateauRequired={setPlateauRequired}
+                      moffettRequired={moffettRequired}
+                      setMoffettRequired={setMoffettRequired}
+                      isReturnMovement={isReturnMovement}
+                      setIsReturnMovement={setIsReturnMovement}
+                      derivedFromCargo={derivedFromCargo}
+                      cargoSummary={cargoSummary}
+                      cargoItems={cargoItems}
+                      stops={stops}
+                      unitOptions={unitOptions}
+                      preferredUnits={preferredUnits}
+                      setCargo={setCargo}
+                      onAddCargoRow={() => setCargoItems((rows) => [...rows, emptyCargoRow()])}
+                      onAddCargoRowFromHeader={() => undefined}
+                      onRemoveCargoRow={(key) => setCargoItems((rows) => rows.filter((row) => row.key !== key))}
+                      onDuplicateCargoRow={(key) => setCargoItems((rows) => duplicateCargoRowInList(rows, key))}
+                      applyCargoUnit={applyCargoUnit}
+                      cargoDimensionsFixed={cargoDimensionsFixed}
+                      saving={busy}
+                      errors={inlineErrors}
+                    />
+                    <h3 className="new-dossier-subtitle">{t('dossiers.new.sectionNotes')}</h3>
+                  </>
+                )}
+                {notesField}
+              </section>
+            ),
+          },
+        ] as SectionDef[])
+      : []),
+    {
+      id: 'controle',
+      label: sectionLabel('controle'),
+      render: () => (
+        <section className="new-dossier-section" aria-labelledby="nd-sectie-controle">
+          {heading('controle')}
+          <NewDossierReview
+            customerName={selectedCustomerName}
+            typeName={selectedType?.name ?? null}
+            isBlanco={isBlanco}
+            customerReference={customerReference}
+            dossierDate={dossierDate}
+            intake={showTransportIntake}
+            onSite={onSite}
+            stops={submittedStopsForReview}
+            workDescription={craneJob.workDescription}
+            goodsDescription={goodsDescription}
+            cargoItems={cargoItems.filter((cargo) => !isEmptyCargoRow(cargo))}
+            cargoSummary={cargoSummary}
+            requirements={tickedRequirements}
+            notes={notes}
+            warnings={reviewWarnings}
+            errors={clientErrors}
+            hints={reviewHints}
+            onEdit={goTo}
+            onErrorSelect={jumpToField}
+          />
         </section>
+      ),
+    },
+  ]
 
-        {!selection && (
-          <p className="new-dossier-hint" role="note">
-            {t('dossiers.new.chooseTypeHint')}
-          </p>
-        )}
+  return (
+    <div className="new-dossier">
+      <UnsavedChangesGuard when={dirty && !busy} />
+      <BackButton to="/dossiers" label={t('dossiers.new.back')} />
+      <PageHeader title={t('dossiers.new.title')} subtitle={t('dossiers.new.subtitleIntake')} />
 
-        {showTransportIntake && (
-          <>
-            <section className="new-dossier-section" aria-labelledby="nd-sectie-route">
-              <div className="new-dossier-section-header">
-                <h2 id="nd-sectie-route">{t('dossiers.new.sectionRoute')}</h2>
-                {isDistribution && (
-                  <Button variant="secondary" onClick={addUnloadAddress} disabled={busy}>
-                    {t('dossiers.new.addUnloadAddress')}
+      <form onSubmit={(event) => void submit(event)} noValidate>
+        <ValidationSummary
+          message={formError}
+          fieldErrors={{
+            ...fieldErrors,
+            ...Object.fromEntries(clientErrors.map((error) => [error.field, [error.message]])),
+          }}
+          fieldLabels={Object.fromEntries(clientErrors.map((error) => [error.field, error.label]))}
+          onSelect={jumpToField}
+        />
+
+        <SectionedForm
+          sections={sections}
+          activeId={activeSection}
+          onActiveChange={(id) => setActive(id)}
+          actions={
+            <div className="new-dossier-actions">
+              <div className="new-dossier-actions-side">
+                {prevSection && (
+                  <Button variant="secondary" onClick={() => goTo(prevSection)} disabled={busy}>
+                    {t('dossiers.new.nav.prev', { section: sectionLabel(prevSection) })}
                   </Button>
                 )}
               </div>
-              {supportsOnSiteWork && (
-                <CraneJobKindField idPrefix="nd" kind={craneJob.kind} onChange={changeCraneJobKind} disabled={busy} />
-              )}
-              <p className="new-dossier-hint">
-                {onSite
-                  ? t('stopEditor.crane.onSiteHint')
-                  : isDistribution ? t('dossiers.new.routeHintDistribution') : t('dossiers.new.routeHintDirect')}
-              </p>
-              {showDuration && !onSite && (
-                <div className="new-dossier-row">
-                  <FormField
-                    label={t('dossiers.new.durationLabel')}
-                    htmlFor="nd-duration"
-                    hint={t('dossiers.new.durationHint')}
-                    error={durationInvalid ? t('dossiers.new.durationInvalid') : undefined}
-                  >
-                    <input
-                      id="nd-duration"
-                      type="number"
-                      min={0}
-                      step="0.25"
-                      value={durationHours}
-                      onChange={(event) => changeDuration(event.target.value)}
-                      disabled={busy}
-                      aria-invalid={durationInvalid ? true : undefined}
-                    />
-                  </FormField>
-                </div>
-              )}
-              <RouteSection
-                stops={onSite ? siteStops : stops}
-                canSaveToAddressBook={canCreateLocations && Boolean(customerId)}
-                siteDurationHours={durationInvalid ? null : durationValue}
-                customerId={customerId ?? ''}
-                saving={busy}
-                locationHours={locationHours}
-                errors={inlineErrors}
-                onAddStop={() => undefined}
-                setStop={setStop}
-                moveStop={() => undefined}
-                onRemoveStop={(key) => mutateStops((rows) => rows.filter((row) => row.key !== key))}
-                onRequestRefresh={() => undefined}
-                onQuickCreate={
-                  canCreateLocations && customerId
-                    ? (name) => new Promise<LocationOption | null>((resolve) => setQuickCreate({ name, resolve }))
-                    : undefined
-                }
-                compact
-                hideHeader
-                canRemoveStop={(stop) =>
-                  isDistribution && stop.stopType === 'Unloading' && stops.filter((s) => s.stopType === 'Unloading').length > 1
-                }
-              />
-              {onSite && (
-                <OnSiteWorkFields
-                  idPrefix="nd"
-                  job={craneJob}
-                  onChange={(patch) => setCraneJob((job) => ({ ...job, ...patch }))}
-                  disabled={busy}
-                  descriptionError={inlineErrors.workDescription}
-                  duration={
-                    <div className="new-dossier-row">
-                      <FormField
-                        label={t('stopEditor.crane.duration')}
-                        htmlFor="nd-duration"
-                        hint={t('stopEditor.crane.durationHint')}
-                        error={durationInvalid ? t('dossiers.new.durationInvalid') : undefined}
-                      >
-                        <input
-                          id="nd-duration"
-                          type="number"
-                          min={0}
-                          step="0.25"
-                          value={durationHours}
-                          onChange={(event) => changeDuration(event.target.value)}
-                          disabled={busy}
-                          aria-invalid={durationInvalid ? true : undefined}
-                        />
-                      </FormField>
-                    </div>
-                  }
-                />
-              )}
-            </section>
-
-            {/* An on-site lifting job transports nothing: no goods section, and none is required. */}
-            {!onSite && (
-            <section className="new-dossier-section" aria-labelledby="nd-sectie-goederen">
-              <h2 id="nd-sectie-goederen">{t('dossiers.new.sectionGoods')}</h2>
-              <GoodsSection
-                goodsDescription={goodsDescription}
-                setGoodsDescription={setGoodsDescription}
-                quantity={quantity}
-                setQuantity={setQuantity}
-                quantityUnit=""
-                quantityUnitCode={quantityUnitCode}
-                setQuantityUnitCode={setQuantityUnitCode}
-                weightKg={weightKg}
-                setWeightKg={setWeightKg}
-                volumeM3={volumeM3}
-                setVolumeM3={setVolumeM3}
-                palletCount={palletCount}
-                setPalletCount={setPalletCount}
-                distanceKm={distanceKm}
-                setDistanceKm={setDistanceKm}
-                loadingMeters={loadingMeters}
-                setLoadingMeters={setLoadingMeters}
-                adrRequired={adrRequired}
-                setAdrRequired={setAdrRequired}
-                craneRequired={craneRequired}
-                setCraneRequired={setCraneRequiredByUser}
-                plateauRequired={plateauRequired}
-                setPlateauRequired={setPlateauRequired}
-                moffettRequired={moffettRequired}
-                setMoffettRequired={setMoffettRequired}
-                isReturnMovement={isReturnMovement}
-                setIsReturnMovement={setIsReturnMovement}
-                derivedFromCargo={derivedFromCargo}
-                cargoSummary={cargoSummary}
-                cargoItems={cargoItems}
-                stops={stops}
-                unitOptions={unitOptions}
-                preferredUnits={preferredUnits}
-                setCargo={setCargo}
-                onAddCargoRow={() => setCargoItems((rows) => [...rows, emptyCargoRow()])}
-                onAddCargoRowFromHeader={() =>
-                  setCargoItems((rows) => [
-                    ...rows,
-                    cargoRowFromHeader({ quantity, quantityUnit: '', quantityUnitCode, weightKg, volumeM3, palletCount }),
-                  ])
-                }
-                onRemoveCargoRow={(key) => setCargoItems((rows) => rows.filter((row) => row.key !== key))}
-                onDuplicateCargoRow={(key) => setCargoItems((rows) => duplicateCargoRowInList(rows, key))}
-                applyCargoUnit={applyCargoUnit}
-                cargoDimensionsFixed={cargoDimensionsFixed}
-                saving={busy}
-                errors={inlineErrors}
-              />
-            </section>
-            )}
-
-            <section className="new-dossier-section" aria-labelledby="nd-sectie-opmerkingen">
-              <h2 id="nd-sectie-opmerkingen">{t('dossiers.new.sectionNotes')}</h2>
-              <FormField label={t('dossiers.new.notes')} htmlFor="nd-notes">
-                <textarea
-                  id="nd-notes"
-                  rows={2}
-                  value={notes}
-                  onChange={(event) => setNotes(event.target.value)}
-                  disabled={busy}
-                  maxLength={2000}
-                />
-              </FormField>
-            </section>
-          </>
-        )}
-
-        {selectedType && !selectedType.hasStops && (
-          <p className="new-dossier-hint" role="note">
-            {t('dossiers.new.noRouteTypeHint', { name: selectedType.name })}
-          </p>
-        )}
-        {selectedType?.hasStops && !canCreateOrders && (
-          <p className="new-dossier-hint" role="note">
-            {t('dossiers.new.noOrderPermissionHint')}
-          </p>
-        )}
-        {isBlanco && (
-          <p className="new-dossier-hint" role="note">
-            {t('dossiers.new.blancoHint')}
-          </p>
-        )}
-
-        <div className="new-dossier-actions">
-          <Button variant="secondary" onClick={() => navigate('/dossiers')} disabled={busy}>
-            {t('ui.actions.cancel')}
-          </Button>
-          <Button type="submit" disabled={!submitEnabled}>
-            {busy ? t('dossiers.new.creating') : t('dossiers.new.create')}
-          </Button>
-        </div>
+              <div className="new-dossier-actions-main">
+                <Button variant="secondary" onClick={() => navigate('/dossiers')} disabled={busy}>
+                  {t('ui.actions.cancel')}
+                </Button>
+                {createIsPrimary ? (
+                  <>
+                    {nextSection && activeSection !== 'controle' && (
+                      <Button variant="secondary" onClick={() => goTo(nextSection)} disabled={busy}>
+                        {t('dossiers.new.nav.next', { section: sectionLabel(nextSection) })}
+                      </Button>
+                    )}
+                    <Button type="submit" disabled={!submitEnabled}>
+                      {busy ? t('dossiers.new.creating') : t('dossiers.new.create')}
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <Button type="submit" variant="secondary" disabled={!submitEnabled}>
+                      {busy ? t('dossiers.new.creating') : t('dossiers.new.create')}
+                    </Button>
+                    {nextSection && (
+                      <Button onClick={() => goTo(nextSection)} disabled={busy}>
+                        {t('dossiers.new.nav.next', { section: sectionLabel(nextSection) })}
+                      </Button>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          }
+        />
       </form>
+
+      {customerQuickCreate && <CustomerQuickCreateDialog initialName={customerQuickCreate.name} onClose={closeCustomerQuickCreate} />}
 
       {quickCreate && customerId && (
         <LocationQuickCreateDialog

@@ -10,9 +10,15 @@ export interface DossierNote {
   /** null = a dossier-level note; otherwise the activity the note belongs to. */
   dossierActivityId: string | null
   text: string
+  /** Who created the note (never changes on edit); null when unknown (legacy/system). */
   authorName: string | null
   createdAt: string
   updatedAt: string
+  /**
+   * Who made the LAST change, only for a note edited after creation (`updatedAt` later than
+   * `createdAt`); null for an untouched note or an unknown editor — never an invented user.
+   */
+  editedByName: string | null
   /** Per-note rights of the CURRENT user, decided by the server. */
   canEdit: boolean
   canDelete: boolean

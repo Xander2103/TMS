@@ -246,6 +246,8 @@
   },
   "select": {
     "create": "Nieuw adres aanmaken…",
+    "createCustomerAddress": "Nieuw klantadres",
+    "createCustomerAddressHint": "Maakt een nieuw adres aan in het adresboek van deze klant en vult het meteen in voor deze stop.",
     "createWithName": "Nieuw adres “{query}” aanmaken…",
     "defaultLoading": "standaard laden",
     "defaultUnloading": "standaard lossen",

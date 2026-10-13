@@ -98,7 +98,7 @@
 }
 
 .pf-tabs .pf-tab-active {
-  background: var(--accent);
+  background: var(--color-primary-solid);
   color: #fff;
 }
 

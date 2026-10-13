@@ -14,11 +14,15 @@ public enum TransportOrderDocumentType
     Other,
 }
 
-/// <summary>D6: where a document hangs — on the dossier as a whole, or on one of its orders.</summary>
+/// <summary>
+/// D6: where a document hangs — on the dossier as a whole, on one of its orders, or (dossier UX
+/// correction sprint 2026-10-08) on one of its STANDALONE activities (plateau, crane on site, …).
+/// </summary>
 public enum DossierDocumentScope
 {
     Dossier,
     Order,
+    Activity,
 }
 
 /// <summary>
@@ -40,8 +44,18 @@ public class TransportOrderDocument : AuditableTenantEntity
     /// </summary>
     public Guid? DossierId { get; set; }
 
+    /// <summary>
+    /// The STANDALONE activity (no linked order) of <see cref="DossierId"/> the document belongs
+    /// to; NULL for a dossier-wide or an order document. Mutually exclusive with
+    /// <see cref="TransportOrderId"/> — an order-backed activity keeps using the order scope. Same
+    /// pattern as <c>DossierNote.DossierActivityId</c>; a check constraint guards the combination.
+    /// </summary>
+    public Guid? DossierActivityId { get; set; }
+
     public DossierDocumentScope Scope =>
-        TransportOrderId is null ? DossierDocumentScope.Dossier : DossierDocumentScope.Order;
+        TransportOrderId is not null ? DossierDocumentScope.Order
+        : DossierActivityId is not null ? DossierDocumentScope.Activity
+        : DossierDocumentScope.Dossier;
 
     public TransportOrderDocumentType DocumentType { get; set; } = TransportOrderDocumentType.Other;
     public string? CustomTypeName { get; set; }

@@ -3,14 +3,16 @@ import { useSearchParams } from 'react-router-dom'
 import { useLocale } from '../../../../i18n/localeContext'
 import type { DossierDocument } from '../../api/dossierDocumentsApi'
 import { DossierDocumentsWorkspace } from '../../documents/DossierDocumentsWorkspace'
-import { buildOrderLevels } from '../../documents/documentLevels'
+import { buildDocumentLevels } from '../../documents/documentLevels'
 import { useDossierWorkspace } from '../../dossierWorkspace'
 import { useRegisterDossierSection } from '../../sectionRegistry'
 
 /**
- * Documenten workspace (master sprint 2026-09-21, D6): one document model with two levels. General
- * documents hang on the dossier, order documents on one of its orders; the level switcher shows
- * "Dossier (algemeen)" first and one entry per linked order. `?opdracht={orderId}` opens on an order.
+ * Documenten workspace (master sprint 2026-09-21, D6; activity scope 2026-10-08): one document model
+ * with three kinds of level. Dossier documents hang on the dossier, order documents on one of its
+ * orders, activity documents on one of its standalone activities; the level switcher groups them as
+ * Dossier / Opdrachten / Activiteiten. `?opdracht={orderId}` opens on an order, `?activiteit={id}`
+ * on a standalone activity.
  */
 export function DossierDocumentsSection() {
   const { t } = useLocale()
@@ -18,7 +20,7 @@ export function DossierDocumentsSection() {
   const register = useRegisterDossierSection('documenten')
   const [searchParams] = useSearchParams()
 
-  const orderLevels = useMemo(() => buildOrderLevels(activities, legacyOrders), [activities, legacyOrders])
+  const levels = useMemo(() => buildDocumentLevels(activities, legacyOrders), [activities, legacyOrders])
   // Only the route target's order is loaded by the shell; for the others the document strategy decides.
   const craneJobKinds = useMemo(() => (firstOrder ? { [firstOrder.id]: firstOrder.craneJobKind } : undefined), [firstOrder])
 
@@ -42,8 +44,9 @@ export function DossierDocumentsSection() {
       <DossierDocumentsWorkspace
         key={dossier.id}
         dossierId={dossier.id}
-        orderLevels={orderLevels}
-        initialLevel={searchParams.get('opdracht')}
+        levels={levels}
+        initialOrderId={searchParams.get('opdracht')}
+        initialActivityId={searchParams.get('activiteit')}
         craneJobKinds={craneJobKinds}
         onDocumentsChange={handleDocumentsChange}
       />

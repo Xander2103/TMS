@@ -5,7 +5,9 @@ import { useToast } from '../../../components/ui/toastContext'
 import { useLocale } from '../../../i18n/localeContext'
 import type { TransportOrderDetail } from '../../transport-orders/types'
 import { createOrderForActivity } from '../api/dossiersApi'
+import { activityUnitKind, activityUnitName } from '../pricing/activityPriceDisplay'
 import { DossierOrderPricePanel, type DossierOrderPricePanelHandle } from '../pricing/DossierOrderPricePanel'
+import { PriceStatusBadge } from '../pricing/PriceStatusBadge'
 import type { DossierActivity, DossierDetail } from '../types'
 import { DossierActivityPricePanel, type DossierActivityPricePanelHandle } from './DossierActivityPricePanel'
 
@@ -54,8 +56,10 @@ interface DossierPricePanelProps {
  * concepts instead of a new "price" field. Stap 13 (2026-09-11): the dossier reckons in BILLABLE
  * UNITS — one per activity of a billable type.
  *
- * Master sprint 2026-09-21 (D5): this panel is the body for the SELECTED unit (the amount block
- * and the activity picker live in the section above it):
+ * Master sprint 2026-09-21 (D5): this panel is the DETAIL for the SELECTED unit (the dossier
+ * summary and the master list live in the section around it). Pricing UX sprint 2026-10-08: it
+ * opens with a "Prijsdetails" header that names the unit and its kind (Opdracht / Activiteit —
+ * from the type's capability, never a name), so there is never any doubt which part is edited:
  *  - an order-backed activity is priced through its order — agreed (one-off) price plus THE order
  *    price line editor (`DossierOrderPricePanel`);
  *  - a standalone activity through its own price record — flat price or sales lines
@@ -124,6 +128,7 @@ export function DossierPricePanel({
 
   return (
     <div className="dossier-price-panel">
+      {activity && <PriceDetailHeader activity={activity} />}
       {standaloneTarget && (
         <DossierActivityPricePanel
           key={standaloneTarget.id}
@@ -185,5 +190,29 @@ export function DossierPricePanel({
         />
       )}
     </div>
+  )
+}
+
+/** "Prijsdetails — ORD-0005 — Direct transport · Opdracht · Geprijsd": which part the detail edits. */
+function PriceDetailHeader({ activity }: { activity: DossierActivity }) {
+  const { t } = useLocale()
+  const kind = activityUnitKind(activity)
+  const name = activityUnitName(activity)
+  return (
+    <header className="dossier-pricing-detail-header">
+      <p className="dossier-pricing-eyebrow">{t('dossierPricing.detail.title')}</p>
+      <div className="dossier-pricing-detail-titlerow">
+        <h3 className="dossier-pricing-detail-name">
+          {activity.linkedOrderNumber ? `${activity.linkedOrderNumber} — ${name}` : name}
+          {activity.hasStops && !activity.linkedOrderNumber && (
+            <span className="dossier-price-master-secondary"> ({t('dossierSheet.orderSwitch.noOrderYet')})</span>
+          )}
+        </h3>
+        <span className="dossier-pricing-kind" data-kind={kind}>
+          {t(kind === 'order' ? 'dossierPricing.unit.order' : 'dossierPricing.unit.activity')}
+        </span>
+        <PriceStatusBadge status={activity.priceStatus} />
+      </div>
+    </header>
   )
 }

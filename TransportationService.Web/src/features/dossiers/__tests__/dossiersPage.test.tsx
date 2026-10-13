@@ -717,6 +717,96 @@ describe('DossiersPage (lijst)', () => {
       expect(within(row).getByTitle('3 open incidenten')).toHaveTextContent('3')
     })
 
+    it('één dossier = één regel: nummer breekt nooit, klant/transport/planning/prijs zijn samengestelde éénregelige cellen', async () => {
+      api.searchDossiers.mockResolvedValue(
+        paged([
+          dossierListItem({
+            customerName: 'Van Caudenberg Internationale Transporten NV',
+            customerNumber: 'KL-0042',
+            customerReference: 'Zeer lange klantreferentie voor het project in Antwerpen 2026',
+            planningDate: '2026-08-14',
+            driverSummary: 'Jan Peeters',
+            vehicleSummary: '1-ABC-123',
+            agreedPriceTotal: 100,
+            billableActivityCount: 2,
+            pricedActivityCount: 1,
+            priceStatus: 'PartiallyPriced',
+            openIncidentCount: 2,
+          }),
+        ]),
+      )
+      renderPage()
+      const row = await findRow()
+      const cells = within(row).getAllByRole('cell')
+
+      // Dossiernummer + incidentbadge in één nowrap-container; geen aparte regels meer.
+      const number = cells[0].querySelector('.dossier-list-number')!
+      expect(within(number as HTMLElement).getByText('DOS-0001').tagName).toBe('CODE')
+      expect(within(number as HTMLElement).getByTitle('2 open incidenten')).toBeInTheDocument()
+      expect(row.querySelector('.dossier-list-stack')).toBeNull()
+
+      // Klant: naam · nummer in één afkapbare regel; het nummer is het secundaire deel.
+      const customer = cells[2].querySelector('.ui-truncated-text')!
+      expect(within(customer as HTMLElement).getByText('Van Caudenberg Internationale Transporten NV')).toBeInTheDocument()
+      expect(within(customer as HTMLElement).getByText('KL-0042')).toHaveClass('dossier-list-muted', 'dossier-list-sep')
+      // Referentie, transport en planning: dezelfde éénregelige cel.
+      expect(cells[3].querySelector('.ui-truncated-text')).toHaveTextContent('Zeer lange klantreferentie voor het project in Antwerpen 2026')
+      const transport = cells[5].querySelector('.ui-truncated-text')!
+      expect(within(transport as HTMLElement).getByText('Antwerpen → Gent')).toBeInTheDocument()
+      expect(within(transport as HTMLElement).getByText('1 opdr.')).toHaveClass('dossier-list-sep')
+      const planning = cells[6].querySelector('.ui-truncated-text')!
+      expect(within(planning as HTMLElement).getByText('14/08/2026')).toBeInTheDocument()
+      expect(within(planning as HTMLElement).getByText('Jan Peeters · 1-ABC-123')).toHaveClass('dossier-list-sep')
+      // Prijs: bedrag en status naast elkaar in één nowrap-cel.
+      const price = cells[7].querySelector('.dossier-list-price')!
+      expect(price).toHaveTextContent(/€\s100,00/)
+      expect(within(price as HTMLElement).getByText('Gedeeltelijk 1/2')).toHaveClass('dossier-list-sep')
+      // Rijacties blijven aanwezig in de laatste cel.
+      expect(within(cells[9]).getByRole('button', { name: 'Acties DOS-0001' })).toBeInTheDocument()
+    })
+
+    it('afgekapte waarden tonen hun volledige inhoud als tooltip; volledig zichtbare waarden niet', async () => {
+      // jsdom heeft geen layout: de overloop wordt via de prototype-getters afgedwongen.
+      const widths = { scroll: 0, client: 0 }
+      Object.defineProperty(HTMLElement.prototype, 'scrollWidth', { configurable: true, get: () => widths.scroll })
+      Object.defineProperty(HTMLElement.prototype, 'clientWidth', { configurable: true, get: () => widths.client })
+      try {
+        widths.scroll = 400
+        widths.client = 180
+        api.searchDossiers.mockResolvedValue(
+          paged([
+            dossierListItem({
+              customerName: 'Van Caudenberg Internationale Transporten NV',
+              customerNumber: 'KL-0042',
+              customerReference: 'Zeer lange klantreferentie voor het project in Antwerpen 2026',
+              planningDate: '2026-08-14',
+              driverSummary: 'Jan Peeters',
+              vehicleSummary: '1-ABC-123',
+            }),
+          ]),
+        )
+        renderPage()
+        const cells = within(await findRow()).getAllByRole('cell')
+        expect(cells[2].querySelector('.ui-truncated-text')).toHaveAttribute('title', 'Van Caudenberg Internationale Transporten NV · Klantnummer KL-0042')
+        expect(cells[3].querySelector('.ui-truncated-text')).toHaveAttribute('title', 'Zeer lange klantreferentie voor het project in Antwerpen 2026')
+        expect(cells[5].querySelector('.ui-truncated-text')).toHaveAttribute('title', 'Antwerpen → Gent · 1 opdr.')
+        expect(cells[6].querySelector('.ui-truncated-text')).toHaveAttribute('title', '14/08/2026 · Jan Peeters · 1-ABC-123')
+        cleanup()
+
+        // Ruimte genoeg: geen tooltip die de zichtbare tekst herhaalt.
+        widths.scroll = 100
+        widths.client = 180
+        renderPage()
+        const wide = within(await findRow()).getAllByRole('cell')
+        for (const index of [2, 3, 5, 6]) {
+          expect(wide[index].querySelector('.ui-truncated-text')).not.toHaveAttribute('title')
+        }
+      } finally {
+        Object.defineProperty(HTMLElement.prototype, 'scrollWidth', { configurable: true, get: () => 0 })
+        Object.defineProperty(HTMLElement.prototype, 'clientWidth', { configurable: true, get: () => 0 })
+      }
+    })
+
     it('navigeert naar het dossier bij klik op een rij, maar niet bij klik op het rijmenu', async () => {
       const user = userEvent.setup()
       api.searchDossiers.mockResolvedValue(paged([dossierListItem({ id: 'd-42' })]))
@@ -759,9 +849,9 @@ describe('DossiersPage (lijst)', () => {
     })
 
     it.each([
-      ['Manual', '20/09/2026 · Handmatig'],
-      ['Automatic', '20/09/2026 · Automatisch'],
-    ] as const)('toont datum en wijze van een %s-bevestiging compact in de statuscel', async (source, line) => {
+      ['Manual', 'Handmatig'],
+      ['Automatic', 'Automatisch'],
+    ] as const)('toont de bevestigingsdatum naast de badge op één regel; de wijze (%s) zit in de tooltip', async (source, label) => {
       api.searchDossiers.mockResolvedValue(
         paged([dossierListItem({ status: 'Closed', confirmedAt: '2026-09-20T10:00:00Z', confirmationSource: source })]),
       )
@@ -770,8 +860,12 @@ describe('DossiersPage (lijst)', () => {
 
       const cell = within(row).getAllByRole('cell')[1]
       expect(within(cell).getByText('Bevestigd')).toBeInTheDocument()
-      expect(within(cell).getByText(line)).toBeInTheDocument()
-      expect(cell.querySelector('[title]')).toHaveAttribute('title', expect.stringMatching(/^Bevestigd op 20\/09\/2026 .+ · (Handmatig|Automatisch)$/))
+      // Eén regel: badge en datum zitten samen in de nowrap-statuscel; geen gestapelde tweede regel.
+      const status = cell.querySelector('.dossier-list-status')!
+      expect(within(status as HTMLElement).getByText('20/09/2026')).toHaveClass('dossier-list-sep')
+      expect(cell.querySelector('.dossier-list-stack')).toBeNull()
+      expect(cell).not.toHaveTextContent(label)
+      expect(status).toHaveAttribute('title', expect.stringMatching(new RegExp(`^Bevestigd op 20\\/09\\/2026 .+ · ${label}$`)))
     })
 
     it('historisch bevestigd zonder bron: "Bron onbekend (historisch)", geen verzonnen Handmatig/Automatisch', async () => {
@@ -785,7 +879,8 @@ describe('DossiersPage (lijst)', () => {
       const dated = within(await findRow('DOS-0001')).getAllByRole('cell')[1]
       const undated = within(await findRow('DOS-0002')).getAllByRole('cell')[1]
 
-      expect(within(dated).getByText('02/03/2026 · Bron onbekend (historisch)')).toBeInTheDocument()
+      expect(within(dated).getByText('02/03/2026')).toBeInTheDocument()
+      expect(dated.querySelector('.dossier-list-status')).toHaveAttribute('title', expect.stringMatching(/· Bron onbekend \(historisch\)$/))
       expect(within(undated).getByText('Bron onbekend (historisch)')).toBeInTheDocument()
       for (const cell of [dated, undated]) {
         expect(cell).not.toHaveTextContent(/Handmatig|Automatisch/)
@@ -829,7 +924,7 @@ describe('DossiersPage (lijst)', () => {
 
       const partial = await priceCell('DOS-0002')
       expect(partial).toHaveTextContent(/€\s100,00/)
-      expect(within(partial).getByText('Gedeeltelijk · 1/2')).toHaveAttribute(
+      expect(within(partial).getByText('Gedeeltelijk 1/2')).toHaveAttribute(
         'title',
         'Slechts 1 van 2 activiteiten hebben een prijs; het bedrag is geen dossiertotaal.',
       )

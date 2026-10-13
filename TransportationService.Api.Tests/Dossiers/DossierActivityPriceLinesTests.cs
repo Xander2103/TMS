@@ -65,8 +65,8 @@ public class DossierActivityPriceLinesTests
             Pricing().SetPriceLinesAsync(dossierId, activityId,
                 new SetActivityPriceLinesRequest(version, lines, freeConfirmed), CancellationToken.None);
 
-        public Task<DossierDetailDto?> SetPriceAsync(Guid dossierId, Guid activityId, decimal? amount, Guid? version = null) =>
-            Pricing().SetAgreedPriceAsync(dossierId, activityId, new SetActivityPriceRequest(amount, version), CancellationToken.None);
+        public Task<DossierDetailDto?> SetPriceAsync(Guid dossierId, Guid activityId, decimal? amount, Guid? version = null, bool freeConfirmed = false) =>
+            Pricing().SetAgreedPriceAsync(dossierId, activityId, new SetActivityPriceRequest(amount, version, freeConfirmed), CancellationToken.None);
     }
 
     private static async Task<Harness> SeedAsync()
@@ -217,9 +217,16 @@ public class DossierActivityPriceLinesTests
 
         var updated = (await h.SetLinesAsync(dossier.Id, Only(dossier).Id, [Line("Kosteloos", 1m, 0m)]))!;
 
-        Assert.Equal("Priced", Only(updated).PriceStatus);
+        // Pricing UX sprint 2026-10-08: an unconfirmed € 0 is its own state — never plain "Priced"
+        // next to a warning that says the price still needs a decision.
+        Assert.Equal("ZeroUnconfirmed", Only(updated).PriceStatus);
+        Assert.True(Only(updated).IsPriced);
         Assert.Equal(1, updated.Financials.ZeroPricedActivityCount);
-        Assert.Contains(updated.Readiness!, i => i.Code == "pricing.zero" && i.ActivityId == Only(updated).Id);
+        var zero = Assert.Single(updated.Readiness!, i => i.Code == "pricing.zero" && i.ActivityId == Only(updated).Id);
+        Assert.Equal("Warning", zero.Severity);
+        Assert.Equal("Plateau: verkoopprijs van € 0,00 vraagt bevestiging als gratis.", zero.Message);
+        var row = (await h.Dossiers().ListAsync(null, null, null, CancellationToken.None)).Single(d => d.Id == dossier.Id);
+        Assert.Equal("ZeroUnconfirmed", row.PriceStatus);
     }
 
     [Fact]
@@ -289,8 +296,46 @@ public class DossierActivityPriceLinesTests
         var fixedZero = (await h.SetPriceAsync(dossier.Id, activityId, 0m, free.PricingVersion))!;
 
         Assert.False(Only(fixedZero).FreeConfirmed);
-        Assert.Equal("Priced", Only(fixedZero).PriceStatus);
+        Assert.Equal("ZeroUnconfirmed", Only(fixedZero).PriceStatus);
         Assert.Contains(fixedZero.Readiness!, i => i.Code == "pricing.zero");
+    }
+
+    /// <summary>
+    /// Pricing UX sprint 2026-10-08: "Bevestigen als gratis" on a fixed € 0 keeps the fixed record
+    /// (no detour through the lines command) and settles it: Free, no warning, no ⚠ — and the
+    /// confirmation is dropped again as soon as the amount changes or the price is cleared.
+    /// </summary>
+    [Fact]
+    public async Task AFixedZero_CanBeConfirmedFree_KeepingTheFixedRecord()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var dossier = await h.DossierWithAsync("PLATEAU");
+        var activityId = Only(dossier).Id;
+        var unconfirmed = Only((await h.SetPriceAsync(dossier.Id, activityId, 0m))!);
+        Assert.Equal("ZeroUnconfirmed", unconfirmed.PriceStatus);
+
+        var confirmed = (await h.SetPriceAsync(dossier.Id, activityId, 0m, unconfirmed.PricingVersion, freeConfirmed: true))!;
+
+        var activity = Only(confirmed);
+        Assert.Equal(("Free", true, true, 0m, "OneOff"), (activity.PriceStatus, activity.IsPriced, activity.FreeConfirmed, activity.AgreedPrice, activity.PricingSource));
+        Assert.Equal((1, 0), (confirmed.Financials.PricedActivityCount, confirmed.Financials.ZeroPricedActivityCount));
+        Assert.DoesNotContain(confirmed.Readiness!, i => i.Code is "pricing.zero" or "pricing.missing");
+        Assert.Equal(0, await new DossierReadinessService(h.Db.Context, new DevTenantContext(h.TenantId)).CountDossiersWithAttentionAsync(CancellationToken.None));
+        var record = await h.Db.Context.DossierActivityPricings.AsNoTracking().SingleAsync();
+        Assert.Equal((0m, true), (record.FixedAmount, record.FreeConfirmed));
+        var row = (await h.Dossiers().ListAsync(null, null, null, CancellationToken.None)).Single(d => d.Id == dossier.Id);
+        Assert.Equal(("Free", 0m, 0), (row.PriceStatus, row.AgreedPriceTotal, row.ZeroPricedActivityCount));
+
+        // The confirmation never survives a real amount: € 0 → € 275 is simply priced …
+        var priced = (await h.SetPriceAsync(dossier.Id, activityId, 275m, activity.PricingVersion, freeConfirmed: true))!;
+        Assert.Equal(("Priced", false, 275m), (Only(priced).PriceStatus, Only(priced).FreeConfirmed, Only(priced).AgreedPrice));
+        Assert.DoesNotContain(priced.Readiness!, i => i.Code.StartsWith("pricing."));
+
+        // … and clearing the price drops it too (back to NotPriced, never a stale "Gratis").
+        var cleared = (await h.SetPriceAsync(dossier.Id, activityId, null, Only(priced).PricingVersion))!;
+        Assert.Equal(("NotPriced", false, (decimal?)null), (Only(cleared).PriceStatus, Only(cleared).FreeConfirmed, Only(cleared).AgreedPrice));
+        Assert.Contains(cleared.Readiness!, i => i.Code == "pricing.missing" && i.ActivityId == activityId);
     }
 
     // ------------------------------------------------------------ refusals

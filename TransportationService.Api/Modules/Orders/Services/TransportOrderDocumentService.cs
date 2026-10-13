@@ -21,7 +21,8 @@ public record TransportOrderDocumentDto(
     /// <summary>H-14: whether this document is published to the customer portal (default false).</summary>
     bool CustomerVisible = false,
     Guid? DossierId = null,
-    DossierDocumentScope Scope = DossierDocumentScope.Order);
+    DossierDocumentScope Scope = DossierDocumentScope.Order,
+    Guid? DossierActivityId = null);
 
 public record SaveTransportOrderDocumentRequest(
     TransportOrderDocumentType DocumentType, string? CustomTypeName, string Title,
@@ -34,20 +35,30 @@ public record SaveTransportOrderDocumentRequest(
     /// </summary>
     bool? CustomerVisible = null);
 
-/// <summary>D6 (contract 4.2): one document of a dossier — of the dossier as a whole, or of one of its orders.</summary>
+/// <summary>
+/// D6 (contract 4.2): one document of a dossier — of the dossier as a whole, of one of its orders,
+/// or (2026-10-08) of one of its standalone activities (<c>DossierActivityId</c> + <c>ActivityLabel</c>).
+/// </summary>
 public record DossierDocumentDto(
     Guid Id, Guid? DossierId, Guid? TransportOrderId, string? OrderNumber, DossierDocumentScope Scope,
     TransportOrderDocumentType DocumentType, string? CustomTypeName, string Title,
     string? FileName, string? ContentType, DateOnly? IssueDate, string? Notes,
-    bool CustomerVisible, bool HasFile, DateTime CreatedAt, string? CreatedByName);
+    bool CustomerVisible, bool HasFile, DateTime CreatedAt, string? CreatedByName,
+    Guid? DossierActivityId = null,
+    /// <summary>Planner label of the activity, or its type name — there is no activity number.</summary>
+    string? ActivityLabel = null);
 
-/// <summary>D6: <c>TransportOrderId</c> null = a document of the dossier as a whole. A new document is internal unless the uploader says otherwise.</summary>
+/// <summary>
+/// D6: neither an order nor an activity = a document of the dossier as a whole; an order OF THIS
+/// dossier; or a STANDALONE activity OF THIS dossier (never both). A new document is internal
+/// unless the uploader says otherwise.
+/// </summary>
 public record CreateDossierDocumentRequest(
     Guid? TransportOrderId, TransportOrderDocumentType DocumentType, string? CustomTypeName, string Title,
-    DateOnly? IssueDate, string? Notes, bool? CustomerVisible = null);
+    DateOnly? IssueDate, string? Notes, bool? CustomerVisible = null, Guid? DossierActivityId = null);
 
-/// <summary>D6: null = to dossier level; else an order of the SAME dossier.</summary>
-public record MoveOrderDocumentRequest(Guid? TargetTransportOrderId);
+/// <summary>D6: no target = to dossier level; else an order OR a standalone activity of the SAME dossier.</summary>
+public record MoveOrderDocumentRequest(Guid? TargetTransportOrderId, Guid? TargetDossierActivityId = null);
 
 public interface ITransportOrderDocumentService
 {
@@ -76,14 +87,16 @@ public interface ITransportOrderDocumentService
     Task<DossierDocumentDto?> CreateForDossierAsync(Guid dossierId, CreateDossierDocumentRequest request, CancellationToken cancellationToken);
 
     /// <summary>D6: changes the LINK only (file, name, type and visibility stay untouched). Null = unknown document.</summary>
-    Task<DossierDocumentDto?> MoveAsync(Guid id, Guid? targetTransportOrderId, CancellationToken cancellationToken);
+    Task<DossierDocumentDto?> MoveAsync(Guid id, Guid? targetTransportOrderId, CancellationToken cancellationToken,
+        Guid? targetDossierActivityId = null);
 }
 
 /// <summary>
 /// Order and dossier documents (customer delivery note, CMR, ...) using the shared file storage.
 /// Same two-step model as fleet documents: metadata first, binary via the upload endpoint.
 /// <para>
-/// D6 (master sprint 2026-09-21): ONE entity for both levels. An order document's
+/// D6 (master sprint 2026-09-21): ONE entity for every level — dossier, order and (2026-10-08)
+/// standalone activity, the last one a dossier child exactly like a dossier document. An order document's
 /// <c>DossierId</c> always equals the owning dossier of its order (set here on create, followed by
 /// <see cref="OrderDocumentDossierSync"/> when order↔dossier links change). Writing a DOSSIER-level
 /// document — and creating or moving through the dossier — is refused on a closed dossier with the
@@ -247,11 +260,12 @@ public class TransportOrderDocumentService : ITransportOrderDocumentService
     {
         var row = await _dbContext.TransportOrderDocuments.AsNoTracking()
             .Where(d => d.TenantId == _tenantContext.TenantId && d.Id == id)
-            .Select(d => new { d.TransportOrderId })
+            .Select(d => new { d.TransportOrderId, d.DossierActivityId })
             .FirstOrDefaultAsync(cancellationToken);
-        return row is null
-            ? null
-            : row.TransportOrderId is null ? DossierDocumentScope.Dossier : DossierDocumentScope.Order;
+        return row is null ? null
+            : row.TransportOrderId is not null ? DossierDocumentScope.Order
+            : row.DossierActivityId is not null ? DossierDocumentScope.Activity
+            : DossierDocumentScope.Dossier;
     }
 
     public async Task<IReadOnlyList<DossierDocumentDto>?> ListForDossierAsync(Guid dossierId, CancellationToken cancellationToken)
@@ -282,6 +296,11 @@ public class TransportOrderDocumentService : ITransportOrderDocumentService
 
         if (request.TransportOrderId is { } orderId)
         {
+            if (request.DossierActivityId is not null)
+            {
+                throw new DomainValidationException("dossierActivityId", "Een document hoort bij een opdracht óf bij een activiteit, niet bij beide.");
+            }
+
             // Never an order of another tenant, and never an order of another dossier: the
             // document's DossierId must equal the owning dossier of its order.
             await _dbContext.TransportOrders.EnsureBelongsToTenantAsync(orderId, tenantId, "De gekozen opdracht", cancellationToken);
@@ -291,8 +310,13 @@ public class TransportOrderDocumentService : ITransportOrderDocumentService
                 throw new DomainValidationException("transportOrderId", "Deze opdracht hoort niet bij dit dossier.");
             }
         }
+        else if (request.DossierActivityId is { } activityId)
+        {
+            await RequireStandaloneActivityOfDossierAsync(dossierId, activityId, cancellationToken);
+        }
 
         var document = NewDocument(request.TransportOrderId, dossierId);
+        document.DossierActivityId = request.DossierActivityId;
         Apply(document, new SaveTransportOrderDocumentRequest(
             request.DocumentType, request.CustomTypeName, request.Title, request.IssueDate, request.Notes, request.CustomerVisible));
         _dbContext.TransportOrderDocuments.Add(document);
@@ -302,7 +326,8 @@ public class TransportOrderDocumentService : ITransportOrderDocumentService
         return (await MapForDossierAsync([document], dossierId, cancellationToken))[0];
     }
 
-    public async Task<DossierDocumentDto?> MoveAsync(Guid id, Guid? targetTransportOrderId, CancellationToken cancellationToken)
+    public async Task<DossierDocumentDto?> MoveAsync(Guid id, Guid? targetTransportOrderId, CancellationToken cancellationToken,
+        Guid? targetDossierActivityId = null)
     {
         var tenantId = _tenantContext.TenantId;
         var document = await _dbContext.TransportOrderDocuments
@@ -312,16 +337,21 @@ public class TransportOrderDocumentService : ITransportOrderDocumentService
             return null;
         }
 
+        if (targetTransportOrderId is not null && targetDossierActivityId is not null)
+        {
+            throw new DomainValidationException("targetDossierActivityId", "Een document hoort bij een opdracht óf bij een activiteit, niet bij beide.");
+        }
+
         await _dbContext.TransportOrders.EnsureBelongsToTenantAsync(targetTransportOrderId, tenantId, "De gekozen opdracht", cancellationToken);
 
         // Idempotent: already there = nothing to do (and nothing to audit).
-        if (document.TransportOrderId == targetTransportOrderId)
+        if (document.TransportOrderId == targetTransportOrderId && document.DossierActivityId == targetDossierActivityId)
         {
             return (await MapForDossierAsync([document], document.DossierId, cancellationToken))[0];
         }
 
         // Moving happens INSIDE one dossier. An order document of an order without dossier has no
-        // dossier level to move to, and no sibling orders.
+        // dossier level to move to, and no sibling orders or activities.
         if (document.DossierId is not { } dossierId)
         {
             throw new DomainValidationException("targetTransportOrderId", "Dit document hoort niet bij een dossier en kan niet verplaatst worden.");
@@ -335,6 +365,10 @@ public class TransportOrderDocumentService : ITransportOrderDocumentService
                 throw new DomainValidationException("targetTransportOrderId", "De doelopdracht moet in hetzelfde dossier zitten als het document.");
             }
         }
+        else if (targetDossierActivityId is { } targetActivityId)
+        {
+            await RequireStandaloneActivityOfDossierAsync(dossierId, targetActivityId, cancellationToken);
+        }
 
         var dossier = await FindDossierAsync(dossierId, cancellationToken);
         if (dossier is not null)
@@ -342,14 +376,36 @@ public class TransportOrderDocumentService : ITransportOrderDocumentService
             RequireOpen(dossier);
         }
 
-        // ONLY the link changes — DocumentPath, FileName, ContentType and CustomerVisible are not
+        // ONLY the links change — DocumentPath, FileName, ContentType and CustomerVisible are not
         // touched, the stored file is neither moved nor copied.
-        var before = new { Scope = document.Scope.ToString(), document.TransportOrderId, document.DossierId };
+        var before = new { Scope = document.Scope.ToString(), document.TransportOrderId, document.DossierActivityId, document.DossierId };
         document.TransportOrderId = targetTransportOrderId;
+        document.DossierActivityId = targetDossierActivityId;
         await _dbContext.SaveChangesAsync(cancellationToken);
         await _auditService.RecordAsync(EntityType, document.Id.ToString(), "Moved", before,
-            new { Scope = document.Scope.ToString(), document.TransportOrderId, document.DossierId }, cancellationToken);
+            new { Scope = document.Scope.ToString(), document.TransportOrderId, document.DossierActivityId, document.DossierId }, cancellationToken);
         return (await MapForDossierAsync([document], dossierId, cancellationToken))[0];
+    }
+
+    /// <summary>
+    /// The activity must be an activity OF THIS dossier (and tenant) WITHOUT a linked order: an
+    /// order-backed activity keeps its documents on the order scope, so the two never diverge.
+    /// </summary>
+    private async Task RequireStandaloneActivityOfDossierAsync(Guid dossierId, Guid activityId, CancellationToken cancellationToken)
+    {
+        var activity = await _dbContext.DossierActivities.AsNoTracking()
+            .Where(a => a.TenantId == _tenantContext.TenantId && a.DossierId == dossierId && a.Id == activityId)
+            .Select(a => new { a.LinkedTransportOrderId })
+            .FirstOrDefaultAsync(cancellationToken);
+        if (activity is null)
+        {
+            throw new DomainValidationException("dossierActivityId", "Deze activiteit hoort niet bij dit dossier.");
+        }
+
+        if (activity.LinkedTransportOrderId is not null)
+        {
+            throw new DomainValidationException("dossierActivityId", "Deze activiteit heeft een transportopdracht: koppel het document aan die opdracht.");
+        }
     }
 
     private static void Validate(string? title)
@@ -388,9 +444,9 @@ public class TransportOrderDocumentService : ITransportOrderDocumentService
 
     private static TransportOrderDocumentDto Map(TransportOrderDocument d) => new(
         d.Id, d.TransportOrderId, d.DocumentType, d.CustomTypeName, d.Title,
-        d.DocumentPath != null, d.FileName, d.IssueDate, d.Notes, d.CustomerVisible, d.DossierId, d.Scope);
+        d.DocumentPath != null, d.FileName, d.IssueDate, d.Notes, d.CustomerVisible, d.DossierId, d.Scope, d.DossierActivityId);
 
-    /// <summary>Order numbers and uploader names in ONE query each for the whole list.</summary>
+    /// <summary>Order numbers, activity labels and uploader names in ONE query each for the whole list.</summary>
     private async Task<List<DossierDocumentDto>> MapForDossierAsync(
         IReadOnlyList<TransportOrderDocument> documents, Guid? dossierId, CancellationToken cancellationToken)
     {
@@ -402,6 +458,15 @@ public class TransportOrderDocumentService : ITransportOrderDocumentService
                 .Where(o => o.TenantId == tenantId && orderIds.Contains(o.Id))
                 .Select(o => new { o.Id, o.OrderNumber })
                 .ToDictionaryAsync(o => o.Id, o => o.OrderNumber, cancellationToken);
+
+        var activityIds = documents.Where(d => d.DossierActivityId is not null).Select(d => d.DossierActivityId!.Value).Distinct().ToList();
+        var activityLabels = activityIds.Count == 0
+            ? new Dictionary<Guid, string>()
+            : await _dbContext.DossierActivities.AsNoTracking()
+                .Where(a => a.TenantId == tenantId && activityIds.Contains(a.Id))
+                .Join(_dbContext.ActivityTypes.AsNoTracking(), a => a.ActivityTypeId, t => t.Id,
+                    (a, t) => new { a.Id, a.Label, TypeName = t.Name })
+                .ToDictionaryAsync(a => a.Id, a => string.IsNullOrWhiteSpace(a.Label) ? a.TypeName : a.Label!.Trim(), cancellationToken);
 
         var userIds = documents.Where(d => d.CreatedByUserId is not null).Select(d => d.CreatedByUserId!.Value).Distinct().ToList();
         var userNames = userIds.Count == 0
@@ -418,7 +483,9 @@ public class TransportOrderDocumentService : ITransportOrderDocumentService
                 d.TransportOrderId is { } orderId ? orderNumbers.GetValueOrDefault(orderId) : null,
                 d.Scope, d.DocumentType, d.CustomTypeName, d.Title, d.FileName, d.ContentType, d.IssueDate, d.Notes,
                 d.CustomerVisible, d.DocumentPath != null, d.CreatedAt,
-                d.CreatedByUserId is { } userId ? userNames.GetValueOrDefault(userId) : null))
+                d.CreatedByUserId is { } userId ? userNames.GetValueOrDefault(userId) : null,
+                d.DossierActivityId,
+                d.DossierActivityId is { } activityId ? activityLabels.GetValueOrDefault(activityId) : null))
             .ToList();
     }
 
@@ -430,10 +497,10 @@ public class TransportOrderDocumentService : ITransportOrderDocumentService
         return document is not null && document.Scope == scope ? document : null;
     }
 
-    /// <summary>A DOSSIER-level document follows the dossier: no writes while it is closed. Order documents are unchanged.</summary>
+    /// <summary>A DOSSIER-level or ACTIVITY document follows the dossier: no writes while it is closed. Order documents are unchanged.</summary>
     private async Task RequireWritableAsync(TransportOrderDocument document, CancellationToken cancellationToken)
     {
-        if (document.Scope == DossierDocumentScope.Dossier
+        if (document.Scope is DossierDocumentScope.Dossier or DossierDocumentScope.Activity
             && document.DossierId is { } dossierId
             && await FindDossierAsync(dossierId, cancellationToken) is { } dossier)
         {

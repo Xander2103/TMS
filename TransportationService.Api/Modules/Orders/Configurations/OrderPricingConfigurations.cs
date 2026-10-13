@@ -84,8 +84,13 @@ public class TransportOrderDocumentConfiguration : IEntityTypeConfiguration<Tran
     {
         // D6: a document hangs on an order, on a dossier, or on an order INSIDE a dossier — never on nothing.
         builder.ToTable("order_documents", table =>
+        {
             table.HasCheckConstraint("CK_order_documents_order_or_dossier",
-                "\"TransportOrderId\" IS NOT NULL OR \"DossierId\" IS NOT NULL"));
+                "\"TransportOrderId\" IS NOT NULL OR \"DossierId\" IS NOT NULL");
+            // An activity document hangs on a standalone activity OF a dossier: never on an order as well.
+            table.HasCheckConstraint("CK_order_documents_activity_requires_dossier",
+                "\"DossierActivityId\" IS NULL OR (\"TransportOrderId\" IS NULL AND \"DossierId\" IS NOT NULL)");
+        });
         builder.HasKey(d => d.Id);
         builder.Property(d => d.DocumentType).HasConversion<string>().HasMaxLength(30);
         builder.Property(d => d.CustomTypeName).HasMaxLength(150);
@@ -98,6 +103,7 @@ public class TransportOrderDocumentConfiguration : IEntityTypeConfiguration<Tran
         builder.Property(d => d.CustomerVisible).HasDefaultValue(false);
         builder.HasIndex(d => new { d.TenantId, d.TransportOrderId });
         builder.HasIndex(d => new { d.TenantId, d.DossierId });
+        builder.HasIndex(d => new { d.TenantId, d.DossierActivityId }).HasFilter("\"DossierActivityId\" IS NOT NULL");
         // Optional since D6 (null = dossier document); an order document still dies with its order.
         builder.HasOne<TransportOrder>().WithMany().HasForeignKey(d => d.TransportOrderId)
             .IsRequired(false).OnDelete(DeleteBehavior.Cascade);
@@ -105,6 +111,10 @@ public class TransportOrderDocumentConfiguration : IEntityTypeConfiguration<Tran
         // silently take documents (and their stored files) with it.
         builder.HasOne<Modules.Dossiers.Entities.TransportDossier>().WithMany().HasForeignKey(d => d.DossierId)
             .OnDelete(DeleteBehavior.Restrict);
+        // Restrict, like DossierNote: activities are soft-deleted (the service lifts their documents
+        // to dossier level first), so the FK never fires — and never takes a stored file along.
+        builder.HasOne<Modules.Dossiers.Entities.DossierActivity>().WithMany().HasForeignKey(d => d.DossierActivityId)
+            .IsRequired(false).OnDelete(DeleteBehavior.Restrict);
         builder.HasQueryFilter(d => !d.IsDeleted);
     }
 }

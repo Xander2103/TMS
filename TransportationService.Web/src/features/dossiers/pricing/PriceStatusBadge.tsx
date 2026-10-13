@@ -6,6 +6,8 @@ const STATUS: Record<ActivityPriceStatus, { label: string; tone: BadgeTone }> = 
   NotPriced: { label: 'dossierPricing.status.NotPriced', tone: 'warning' },
   PartiallyPriced: { label: 'dossierPricing.status.PartiallyPriced', tone: 'warning' },
   Priced: { label: 'dossierPricing.status.Priced', tone: 'success' },
+  // An unconfirmed € 0 asks for a decision: amber, never the green "Geprijsd".
+  ZeroUnconfirmed: { label: 'dossierPricing.status.ZeroUnconfirmed', tone: 'warning' },
   Free: { label: 'dossierPricing.status.Free', tone: 'info' },
 }
 

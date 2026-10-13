@@ -82,7 +82,10 @@ export function LookupManager({ config }: { config: LookupResourceConfig }) {
   }
 
   const columns: Column<LookupItem>[] = [
-    { key: 'code', header: t('masterData.list.columns.code'), render: (row) => <code>{row.code}</code>, width: '140px' },
+    // Technical code stays out of sight for simple lookups (it lives under "Meer instellingen").
+    ...(config.simpleForm
+      ? []
+      : [{ key: 'code', header: t('masterData.list.columns.code'), render: (row) => <code>{row.code}</code>, width: '140px' } satisfies Column<LookupItem>]),
     { key: 'name', header: t('masterData.list.columns.name'), render: (row) => row.name },
     {
       key: 'description',

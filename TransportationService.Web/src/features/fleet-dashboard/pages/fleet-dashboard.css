@@ -119,7 +119,7 @@
 }
 
 .fd-row:hover {
-  background: rgba(0, 0, 0, 0.03);
+  background: var(--color-surface-subtle);
 }
 
 li:last-child > .fd-row {

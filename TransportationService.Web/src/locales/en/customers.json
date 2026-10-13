@@ -1,4 +1,24 @@
 {
+  "quickCreate": {
+    "title": "New customer",
+    "intro": "Just the basics: the customer gets a customer number automatically. Everything else can be completed later under Customers.",
+    "name": "Name",
+    "namePlaceholder": "Company name",
+    "vatNumber": "VAT number",
+    "vatHint": "Optional; the format is validated.",
+    "email": "Email",
+    "phone": "Phone",
+    "addressLegend": "Address (optional)",
+    "street": "Street",
+    "houseNumber": "No.",
+    "postalCode": "Postal code",
+    "city": "City",
+    "country": "Country",
+    "create": "Create customer",
+    "creating": "Creating…",
+    "created": "Customer {name} created and selected.",
+    "openCustomer": "Open customer details"
+  },
   "addresses": {
     "actionsAria": "Actions",
     "addNew": "+ New address",

@@ -78,7 +78,11 @@ function renderPage(initialPath = '/dossiers/d-1/prijs') {
 }
 
 const priceSection = () => document.getElementById('sectie-prijs')!
-const picker = () => screen.getByRole('group', { name: 'Eenheid' })
+/** The order price editor is on screen (the detail header already shows the unit while the order still loads). */
+const orderEditorLoaded = () => screen.findByLabelText('Afgesproken prijs (€)')
+const picker = () => screen.getByRole('listbox', { name: /Prijsbare onderdelen/ })
+/** The detail header names the selected unit: "ORD-0005 — Direct transport" or "Plateau". */
+const detailHeading = (name: RegExp | string) => screen.getByRole('heading', { name })
 
 const noFinancials = { agreedOrderTotal: 0, invoicedTotal: 0, estimatedIncidentCost: 0, actualIncidentCost: 0 }
 
@@ -127,60 +131,91 @@ describe('Price per activity — the picker is always there', () => {
     )
   })
 
-  it('shows the picker with a single commercial activity, its price text and the server status badge', async () => {
+  it('shows the master list with a single commercial activity: "Prijsbare onderdelen (1)", its kind and the server status badge', async () => {
     api.getDossier.mockResolvedValue(plateauOnly())
     renderPage()
-    const group = await screen.findByRole('group', { name: 'Eenheid' })
-    const buttons = within(group).getAllByRole('button')
-    expect(buttons).toHaveLength(1)
-    expect(buttons[0]).toHaveAttribute('aria-pressed', 'true')
-    expect(buttons[0]).toHaveTextContent('Plateau · Nog niet geprijsd')
-    expect(within(buttons[0]).getByText('Niet geprijsd')).toBeInTheDocument()
+    const list = await screen.findByRole('listbox', { name: 'Prijsbare onderdelen (1)' })
+    const options = within(list).getAllByRole('option')
+    expect(options).toHaveLength(1)
+    expect(options[0]).toHaveAttribute('aria-selected', 'true')
+    expect(within(options[0]).getByText('Plateau')).toBeInTheDocument()
+    expect(within(options[0]).getByText('Activiteit')).toBeInTheDocument()
+    expect(within(options[0]).getByText('Niet geprijsd')).toBeInTheDocument()
+    expect(options[0]).not.toHaveTextContent('€')
     expect(within(priceSection()).queryByText(/€\s0,00/)).not.toBeInTheDocument()
+    // The detail says which part it edits.
+    expect(screen.getByText('Prijsdetails')).toBeInTheDocument()
+    expect(detailHeading('Plateau')).toBeInTheDocument()
   })
 
-  it('lists every commercial activity as "number — type · price" and selecting Plateau offers a price and "+ Verkooplijn toevoegen"', async () => {
+  it('lists every commercial activity as its own card (reference, name, Opdracht/Activiteit) and selecting Plateau offers a price and "+ Verkooplijn toevoegen"', async () => {
     const user = userEvent.setup()
     api.getDossier.mockResolvedValue(mixedDossier())
     renderPage()
-    await screen.findByText('Opdracht ORD-0005')
-    const buttons = within(picker()).getAllByRole('button')
-    expect(buttons.map((b) => b.textContent)).toEqual([
-      expect.stringMatching(/^ORD-0005 — Direct transport · €\s102,37Geprijsd$/),
-      'ORD-0006 — Distributie · Nog niet geprijsdNiet geprijsd',
-      'Plateau · Nog niet geprijsdNiet geprijsd',
-    ])
+    await screen.findByRole('heading', { name: /^ORD-0005/ })
+    expect(screen.getByRole('listbox', { name: 'Prijsbare onderdelen (3)' })).toBeInTheDocument()
+    const options = within(picker()).getAllByRole('option')
+    expect(options).toHaveLength(3)
+    expect(options[0]).toHaveTextContent('ORD-0005')
+    expect(options[0]).toHaveTextContent('Direct transport')
+    expect(within(options[0]).getByText('Opdracht')).toBeInTheDocument()
+    expect(options[0]).toHaveTextContent(/€\s102,37/)
+    expect(within(options[0]).getByText('Geprijsd')).toBeInTheDocument()
+    expect(options[1]).toHaveTextContent('ORD-0006')
+    expect(options[1]).toHaveTextContent('Distributie')
+    expect(within(options[1]).getByText('Niet geprijsd')).toBeInTheDocument()
+    expect(options[1]).not.toHaveTextContent('€')
+    expect(options[2]).toHaveTextContent('Plateau')
+    expect(within(options[2]).getByText('Activiteit')).toBeInTheDocument()
+    expect(within(options[2]).getByText('Niet geprijsd')).toBeInTheDocument()
 
-    await user.click(within(picker()).getByRole('button', { name: /Plateau/ }))
-    expect(within(picker()).getByRole('button', { name: /Plateau/ })).toHaveAttribute('aria-pressed', 'true')
-    expect(screen.getByText('Activiteit Plateau')).toBeInTheDocument()
+    await user.click(within(picker()).getByRole('option', { name: /Plateau/ }))
+    expect(within(picker()).getByRole('option', { name: /Plateau/ })).toHaveAttribute('aria-selected', 'true')
+    expect(within(picker()).getByRole('option', { name: /ORD-0005/ })).toHaveAttribute('aria-selected', 'false')
+    expect(detailHeading('Plateau')).toBeInTheDocument()
     expect(screen.getByText('Nog geen verkoopprijs ingesteld.')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '+ Verkooplijn toevoegen' })).toBeInTheDocument()
     // The quick flat price stays available next to the lines.
     expect(screen.getByLabelText('Afgesproken prijs (€)')).toHaveValue('')
   })
 
-  it('the amount block shows the server total, "1 van 3 activiteiten geprijsd" and the unpriced activities as links that select them', async () => {
+  it('the dossier summary shows the server total, "1 van 3 onderdelen afgehandeld" and the open units as links that select them', async () => {
     const user = userEvent.setup()
     api.getDossier.mockResolvedValue(mixedDossier())
     renderPage()
-    await screen.findByText('Opdracht ORD-0005')
+    await screen.findByRole('heading', { name: /^ORD-0005/ })
+    expect(screen.getByText('Dossiersamenvatting')).toBeInTheDocument()
     const total = priceSection().querySelector<HTMLElement>('.dossier-price-total')!
     expect(within(total).getByText(/€\s102,37/)).toBeInTheDocument()
-    expect(within(total).getByText('1 van 3 activiteiten geprijsd')).toBeInTheDocument()
+    expect(within(total).getByText('1 van 3 onderdelen afgehandeld')).toBeInTheDocument()
 
     const toPrice = priceSection().querySelector<HTMLElement>('.dossier-price-toprice')!
+    expect(toPrice).toHaveTextContent('Nog te prijzen of te controleren:')
     expect(within(toPrice).getAllByRole('button').map((b) => b.textContent)).toEqual(['ORD-0006 — Distributie', 'Plateau'])
     await user.click(within(toPrice).getByRole('button', { name: 'Plateau' }))
-    expect(within(picker()).getByRole('button', { name: /Plateau/ })).toHaveAttribute('aria-pressed', 'true')
-    expect(screen.getByText('Activiteit Plateau')).toBeInTheDocument()
+    expect(within(picker()).getByRole('option', { name: /Plateau/ })).toHaveAttribute('aria-selected', 'true')
+    expect(detailHeading('Plateau')).toBeInTheDocument()
   })
 
   it('a deep link ?activiteit=<id> lands on that activity', async () => {
     api.getDossier.mockResolvedValue(mixedDossier())
     renderPage('/dossiers/d-1/prijs?activiteit=a-p')
-    expect(await screen.findByText('Activiteit Plateau')).toBeInTheDocument()
-    expect(within(picker()).getByRole('button', { name: /Plateau/ })).toHaveAttribute('aria-pressed', 'true')
+    expect(await screen.findByRole('heading', { name: 'Plateau' })).toBeInTheDocument()
+    expect(within(picker()).getByRole('option', { name: /Plateau/ })).toHaveAttribute('aria-selected', 'true')
+  })
+
+  it('arrow keys move through the master list and select', async () => {
+    const user = userEvent.setup()
+    api.getDossier.mockResolvedValue(mixedDossier())
+    renderPage()
+    await screen.findByRole('heading', { name: /^ORD-0005/ })
+    within(picker()).getByRole('option', { name: /ORD-0005/ }).focus()
+    await user.keyboard('{ArrowDown}')
+    expect(within(picker()).getByRole('option', { name: /ORD-0006/ })).toHaveAttribute('aria-selected', 'true')
+    expect(within(picker()).getByRole('option', { name: /ORD-0006/ })).toHaveFocus()
+    await user.keyboard('{End}')
+    expect(within(picker()).getByRole('option', { name: /Plateau/ })).toHaveAttribute('aria-selected', 'true')
+    expect(detailHeading('Plateau')).toBeInTheDocument()
   })
 
   /** ORD-0005 (transport, priced) + a standalone Plateau: the Plateau is the ONLY standalone priceable unit. */
@@ -202,41 +237,42 @@ describe('Price per activity — the picker is always there', () => {
     })
   }
 
-  it('a billable Plateau next to ONE transport activity is offered in the picker with its NotPriced badge and prices as a standalone activity', async () => {
+  it('a billable Plateau next to ONE transport activity is offered as an "Activiteit" card with its NotPriced badge and prices as a standalone activity', async () => {
     const user = userEvent.setup()
     api.getDossier.mockResolvedValue(transportPlusPlateau())
     renderPage()
-    await screen.findByText('Opdracht ORD-0005')
+    await screen.findByRole('heading', { name: /^ORD-0005/ })
 
     // Both commercial units are listed; the route target (the order) is pre-selected today.
-    const buttons = within(picker()).getAllByRole('button')
-    expect(buttons.map((b) => b.textContent)).toEqual([
-      expect.stringMatching(/^ORD-0005 — Direct transport · €\s102,37Geprijsd$/),
-      'Plateau · Nog niet geprijsdNiet geprijsd',
-    ])
-    const plateauButton = within(picker()).getByRole('button', { name: /Plateau/ })
-    expect(within(plateauButton).getByText('Niet geprijsd')).toBeInTheDocument()
-    expect(within(picker()).getByRole('button', { name: /ORD-0005/ })).toHaveAttribute('aria-pressed', 'true')
-    expect(plateauButton).toHaveAttribute('aria-pressed', 'false')
+    const options = within(picker()).getAllByRole('option')
+    expect(options).toHaveLength(2)
+    expect(within(options[0]).getByText('Opdracht')).toBeInTheDocument()
+    expect(within(options[1]).getByText('Activiteit')).toBeInTheDocument()
+    const plateauOption = within(picker()).getByRole('option', { name: /Plateau/ })
+    expect(within(plateauOption).getByText('Niet geprijsd')).toBeInTheDocument()
+    expect(within(picker()).getByRole('option', { name: /ORD-0005/ })).toHaveAttribute('aria-selected', 'true')
+    expect(plateauOption).toHaveAttribute('aria-selected', 'false')
 
     // Selecting it swaps the order editor for the standalone activity price panel.
-    await user.click(plateauButton)
-    expect(within(picker()).getByRole('button', { name: /Plateau/ })).toHaveAttribute('aria-pressed', 'true')
-    expect(screen.getByText('Activiteit Plateau')).toBeInTheDocument()
+    await user.click(plateauOption)
+    expect(within(picker()).getByRole('option', { name: /Plateau/ })).toHaveAttribute('aria-selected', 'true')
+    expect(detailHeading('Plateau')).toBeInTheDocument()
     expect(screen.getByText('Nog geen verkoopprijs ingesteld.')).toBeInTheDocument()
-    expect(screen.queryByText('Opdracht ORD-0005')).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Deze activiteit is gratis (€ 0) — bevestigen' })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: /^ORD-0005/ })).not.toBeInTheDocument()
+    // A unit without a price keeps a quiet "mark as free"; the loose "— bevestigen" text action is gone.
+    expect(screen.getByRole('button', { name: 'Markeren als gratis' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Deze activiteit is gratis/ })).not.toBeInTheDocument()
   })
 
   it('a NON-billable Plateau next to the transport activity is not offered at all', async () => {
     api.getDossier.mockResolvedValue(transportPlusPlateau({ isBillable: false, priceStatus: null }))
     renderPage()
-    await screen.findByText('Opdracht ORD-0005')
-    const buttons = within(picker()).getAllByRole('button')
-    expect(buttons).toHaveLength(1)
-    expect(buttons[0]).toHaveTextContent(/^ORD-0005 — Direct transport/)
-    expect(within(picker()).queryByRole('button', { name: /Plateau/ })).not.toBeInTheDocument()
-    expect(within(priceSection()).queryByText('Activiteit Plateau')).not.toBeInTheDocument()
+    await screen.findByRole('heading', { name: /^ORD-0005/ })
+    const options = within(picker()).getAllByRole('option')
+    expect(options).toHaveLength(1)
+    expect(options[0]).toHaveTextContent('ORD-0005')
+    expect(within(picker()).queryByRole('option', { name: /Plateau/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Plateau' })).not.toBeInTheDocument()
   })
 })
 
@@ -290,8 +326,10 @@ describe('Price per activity — sales lines of a standalone activity', () => {
     // The returned dossier replaced the workspace state: total block, picker and editor agree.
     const total = priceSection().querySelector<HTMLElement>('.dossier-price-total')!
     expect(await within(total).findByText(/€\s125,00/)).toBeInTheDocument()
-    expect(within(total).getByText('1 van 1 activiteiten geprijsd')).toBeInTheDocument()
-    expect(within(picker()).getByRole('button', { name: /Plateau/ })).toHaveTextContent(/Plateau · €\s125,00Geprijsd/)
+    expect(within(total).getByText('1 van 1 onderdelen afgehandeld')).toBeInTheDocument()
+    const option = within(picker()).getByRole('option', { name: /Plateau/ })
+    expect(option).toHaveTextContent(/€\s125,00/)
+    expect(within(option).getByText('Geprijsd')).toBeInTheDocument()
     expect(screen.getByText('Subtotaal')).toBeInTheDocument()
     expect(screen.queryByText('Voorlopig subtotaal (voorbeeld)')).not.toBeInTheDocument()
     expect(screen.queryByText('Nog geen verkoopprijs ingesteld.')).not.toBeInTheDocument()
@@ -330,20 +368,23 @@ describe('Price per activity — sales lines of a standalone activity', () => {
     expect(lines.save).not.toHaveBeenCalled()
   })
 
-  it('free confirmation sends an empty list with freeConfirmed: true and shows "Gratis"', async () => {
+  it('"Markeren als gratis" on an unpriced unit sends an empty list with freeConfirmed: true and shows "Gratis"', async () => {
     const user = userEvent.setup()
     api.getDossier.mockResolvedValue(plateauOnly(plateau({ pricingVersion: 'pv-1' })))
     lines.save.mockResolvedValue(
       plateauOnly(plateau({ isPriced: true, agreedPrice: 0, pricingVersion: 'pv-2', priceStatus: 'Free', freeConfirmed: true }), 0),
     )
     renderPage()
-    await user.click(await screen.findByRole('button', { name: 'Deze activiteit is gratis (€ 0) — bevestigen' }))
+    await user.click(await screen.findByRole('button', { name: 'Markeren als gratis' }))
 
     await waitFor(() => expect(lines.save).toHaveBeenCalledWith('d-1', 'a-p', { version: 'pv-1', lines: [], freeConfirmed: true }))
     expect(await screen.findByText('Deze activiteit is bevestigd als gratis (€ 0).')).toBeInTheDocument()
-    expect(within(picker()).getByRole('button', { name: /Plateau/ })).toHaveTextContent('Plateau · GratisGratis')
-    // A confirmed free activity is settled: no "is € 0 deliberate?" warning.
-    expect(within(priceSection()).queryByRole('note')).not.toBeInTheDocument()
+    const option = within(picker()).getByRole('option', { name: /Plateau/ })
+    expect(option).toHaveTextContent(/€\s0,00/)
+    expect(within(option).getByText('Gratis')).toBeInTheDocument()
+    // A confirmed free activity is settled: no callout, no "mark as free" any more.
+    expect(within(priceSection()).queryByTestId('zero-callout')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Markeren als gratis' })).not.toBeInTheDocument()
   })
 
   it('"Prijs verwijderen" asks first, sends freeConfirmed: false and shows "Nog niet geprijsd" — never € 0,00', async () => {
@@ -358,11 +399,15 @@ describe('Price per activity — sales lines of a standalone activity', () => {
     renderPage()
     await user.click(await screen.findByRole('button', { name: 'Prijs verwijderen' }))
     expect(lines.save).not.toHaveBeenCalled()
+    // The confirmation names the unit whose price goes.
+    expect(screen.getByRole('dialog')).toHaveTextContent('De prijs en alle verkooplijnen van Plateau worden verwijderd.')
     await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Prijs verwijderen' }))
 
     await waitFor(() => expect(lines.save).toHaveBeenCalledWith('d-1', 'a-p', { version: 'pv-2', lines: [], freeConfirmed: false }))
     expect(await screen.findByText('Nog geen verkoopprijs ingesteld.')).toBeInTheDocument()
-    expect(within(picker()).getByRole('button', { name: /Plateau/ })).toHaveTextContent('Plateau · Nog niet geprijsd')
+    const option = within(picker()).getByRole('option', { name: /Plateau/ })
+    expect(within(option).getByText('Niet geprijsd')).toBeInTheDocument()
+    expect(option).not.toHaveTextContent('€')
     expect(screen.getByText('Nog geen prijs')).toBeInTheDocument()
     expect(within(priceSection()).queryByText(/€\s0,00/)).not.toBeInTheDocument()
   })
@@ -398,12 +443,12 @@ describe('Price per activity — sales lines of a standalone activity', () => {
     orders.get.mockResolvedValue(orderDetail({ status: 'Draft' }))
     api.getDossier.mockResolvedValue(mixedDossier())
     renderPage('/dossiers/d-1/prijs?activiteit=a-p')
-    await screen.findByText('Activiteit Plateau')
+    await screen.findByRole('heading', { name: 'Plateau' })
     await addRow(user, 1, 'Transport', '100')
-    expect(within(picker()).getByRole('button', { name: /ORD-0005/ })).toBeDisabled()
+    expect(within(picker()).getByRole('option', { name: /ORD-0005/ })).toBeDisabled()
     expect(screen.getByText('Sla de verkooplijnen op of maak de wijzigingen ongedaan om van activiteit te wisselen.')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Wijzigingen ongedaan maken' }))
-    expect(within(picker()).getByRole('button', { name: /ORD-0005/ })).toBeEnabled()
+    expect(within(picker()).getByRole('option', { name: /ORD-0005/ })).toBeEnabled()
   })
 
   it('is read-only without dossiers.price, with a short explanation', async () => {
@@ -415,7 +460,7 @@ describe('Price per activity — sales lines of a standalone activity', () => {
     expect(await screen.findByText('Je hebt geen recht om activiteitprijzen te wijzigen.')).toBeInTheDocument()
     expect(screen.getByRole('cell', { name: 'Transport' })).toBeInTheDocument()
     expect(within(priceSection()).queryAllByRole('textbox')).toHaveLength(0)
-    for (const name of ['+ Verkooplijn toevoegen', 'Prijs verwijderen', 'Deze activiteit is gratis (€ 0) — bevestigen', 'Verkooplijnen opslaan']) {
+    for (const name of ['+ Verkooplijn toevoegen', 'Prijs verwijderen', 'Markeren als gratis', 'Bevestigen als gratis', 'Verkooplijnen opslaan']) {
       expect(screen.queryByRole('button', { name })).not.toBeInTheDocument()
     }
   })
@@ -441,7 +486,7 @@ describe('Price per activity — sales lines of a standalone activity', () => {
     lines.save.mockResolvedValue(response)
     const applyDossier = vi.fn()
     render(<DossierActivityPricePanel dossier={plateauOnly(activity)} activity={activity} canEdit onDossierUpdated={applyDossier} onConflict={() => false} />)
-    await user.click(screen.getByRole('button', { name: 'Deze activiteit is gratis (€ 0) — bevestigen' }))
+    await user.click(screen.getByRole('button', { name: 'Markeren als gratis' }))
     await waitFor(() => expect(applyDossier).toHaveBeenCalledTimes(1))
     expect(applyDossier).toHaveBeenCalledWith(response)
   })
@@ -452,6 +497,7 @@ describe('Price per activity — the server status is rendered, never derived', 
     ['NotPriced', 'Niet geprijsd'],
     ['PartiallyPriced', 'Gedeeltelijk geprijsd'],
     ['Priced', 'Geprijsd'],
+    ['ZeroUnconfirmed', 'Controle vereist'],
     ['Free', 'Gratis'],
   ] as const)('%s → "%s"', (status, label) => {
     render(<PriceStatusBadge status={status} />)
@@ -504,7 +550,7 @@ describe('Price per activity — an order-backed activity uses THE order price l
 
   it('renders the shared editor (total, price lines, line actions) inside the dossier tab', async () => {
     renderPage()
-    await screen.findByText('Opdracht ORD-0005')
+    await orderEditorLoaded()
     expect(screen.getByText('Totaalprijs')).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: /Prijsregels/ })).toBeInTheDocument()
     expect(screen.getByRole('cell', { name: 'Transport' })).toBeInTheDocument()
@@ -524,7 +570,7 @@ describe('Price per activity — an order-backed activity uses THE order price l
       }),
     )
     renderPage()
-    await screen.findByText('Opdracht ORD-0005')
+    await orderEditorLoaded()
     expect(screen.getByRole('cell', { name: 'Geen tarief geconfigureerd voor Europallet' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Bewerken' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Verwijderen' })).not.toBeInTheDocument()
@@ -544,7 +590,7 @@ describe('Price per activity — an order-backed activity uses THE order price l
       }),
     )
     renderPage()
-    await screen.findByText('Opdracht ORD-0005')
+    await orderEditorLoaded()
     await user.click(screen.getByRole('button', { name: '+ Verkooplijn toevoegen' }))
     const dialog = screen.getByRole('dialog')
     const goods = within(dialog).getByRole('group', { name: 'Heeft betrekking op goederen' })
@@ -568,7 +614,7 @@ describe('Price per activity — an order-backed activity uses THE order price l
     const user = userEvent.setup()
     orders.saveLines.mockResolvedValue(pricedOrder({ version: 'ov-2' }))
     renderPage()
-    await screen.findByText('Opdracht ORD-0005')
+    await orderEditorLoaded()
     await user.click(screen.getByRole('button', { name: '+ Verkooplijn toevoegen' }))
     const dialog = screen.getByRole('dialog')
     await user.type(within(dialog).getByLabelText(/Omschrijving/), 'Toeslag')
@@ -583,7 +629,7 @@ describe('Price per activity — an order-backed activity uses THE order price l
     const user = userEvent.setup()
     orders.saveLines.mockResolvedValue(pricedOrder({ version: 'ov-2' }))
     renderPage()
-    await screen.findByText('Opdracht ORD-0005')
+    await orderEditorLoaded()
     await user.click(screen.getByRole('button', { name: 'Bewerken' }))
     const dialog = screen.getByRole('dialog')
     await user.click(within(dialog).getByLabelText('Kabelhaspels · 2 Europallet · 480 kg'))
@@ -619,7 +665,7 @@ describe('Price per activity — an order-backed activity uses THE order price l
 
   it('renders no coverage table — and guesses nothing — when the server sends no coverage', async () => {
     renderPage()
-    await screen.findByText('Opdracht ORD-0005')
+    await orderEditorLoaded()
     expect(screen.queryByRole('heading', { name: 'Prijsdekking goederen' })).not.toBeInTheDocument()
     for (const label of ['Afzonderlijk geprijsd', 'Inbegrepen in rit- of activiteitprijs', 'Nog te controleren']) {
       expect(screen.queryByText(label)).not.toBeInTheDocument()
@@ -634,7 +680,7 @@ describe('Price per activity — an order-backed activity uses THE order price l
     api.getDossier.mockResolvedValue(dossier)
     orders.get.mockResolvedValue(pricedOrder({ agreedPrice: 0, pricingLines: null }))
     renderPage()
-    await screen.findByText('Opdracht ORD-0005')
+    await orderEditorLoaded()
     expect(screen.getByText('Nog geen verkoopprijs ingesteld.')).toBeInTheDocument()
     expect(within(priceSection()).queryByText(/€\s0,00/)).not.toBeInTheDocument()
   })
@@ -648,6 +694,214 @@ describe('Price per activity — an order-backed activity uses THE order price l
     )
     renderPage()
     expect(await screen.findByRole('button', { name: 'Transportopdracht aanmaken' })).toBeInTheDocument()
-    expect(within(picker()).getByRole('button', { name: /Direct transport/ })).toHaveTextContent('Direct transport (nog geen opdracht) · Nog niet geprijsd')
+    const option = within(picker()).getByRole('option', { name: /Direct transport/ })
+    expect(option).toHaveTextContent('nog geen opdracht')
+    expect(within(option).getByText('Niet geprijsd')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /Direct transport/ })).toHaveTextContent('nog geen opdracht')
+  })
+})
+
+// ---------------------------------------------------------------- pricing UX sprint 2026-10-08
+
+/**
+ * Pricing UX sprint 2026-10-08: € 0 is never "Geprijsd" by accident. A € 0 nobody confirmed is
+ * "Controle vereist" with ONE callout and real actions; only "Bevestigen als gratis" makes it
+ * "Gratis". The master list keeps every unit apart (Opdracht vs Activiteit) and the detail never
+ * mixes their price, lines, free state or warning.
+ */
+describe('Pricing UX — € 0 needs an explicit decision; master-detail keeps every unit apart', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    auth.permissions = new Set(['dossiers.view', 'dossiers.manage', 'dossiers.price', 'orders.edit', 'orders.override_price'])
+    window.HTMLElement.prototype.scrollIntoView = vi.fn()
+    orders.get.mockImplementation((id: string) =>
+      Promise.resolve(orderDetail({ id, orderNumber: 'ORD-0005', status: 'Draft', pricingSource: 'OneOff', oneOffFixedAmount: 102.37, agreedPrice: 102.37 })),
+    )
+  })
+
+  const zeroIssue = {
+    code: 'pricing.zero', severity: 'Warning' as const, message: 'Plateau: verkoopprijs van € 0,00 vraagt bevestiging als gratis.',
+    section: 'prijs' as const, field: 'price', stage: 'Commercial', activityId: 'a-p',
+  }
+
+  /** Plateau with a fixed, unconfirmed € 0 — the acceptance case. */
+  const unconfirmedZero = () =>
+    plateau({ pricingSource: 'OneOff', isPriced: true, agreedPrice: 0, pricingStatus: 'Draft', pricingVersion: 'pv-1', priceStatus: 'ZeroUnconfirmed', freeConfirmed: false })
+  const zeroDossier = () =>
+    dossierDetail({
+      financials: { ...noFinancials, agreedOrderTotal: 0, billableActivityCount: 1, pricedActivityCount: 1, zeroPricedActivityCount: 1 },
+      activities: [unconfirmedZero()],
+      readiness: [zeroIssue],
+    })
+  const freeDossier = () =>
+    plateauOnly(plateau({ pricingSource: 'OneOff', isPriced: true, agreedPrice: 0, pricingStatus: 'Draft', pricingVersion: 'pv-2', priceStatus: 'Free', freeConfirmed: true }), 0)
+  /** ORD-0005 (€ 102,37, priced) next to the unconfirmed-zero Plateau. */
+  const orderPlusZero = () =>
+    dossierDetail({
+      orders: [{ linkId: 'l-1', orderId: 'o-1', orderNumber: 'ORD-0005', orderDate: '2026-08-12', status: 'Draft', goodsDescription: null, agreedPrice: 102.37, isPriced: true }],
+      financials: { ...noFinancials, agreedOrderTotal: 102.37, pricedOrderCount: 1, billableActivityCount: 2, pricedActivityCount: 2, zeroPricedActivityCount: 1 },
+      activities: [
+        dossierActivity({ id: 'a-1', sequence: 1, linkedTransportOrderId: 'o-1', linkedOrderNumber: 'ORD-0005', linkedOrderStatus: 'Draft', isPriced: true, agreedPrice: 102.37, priceStatus: 'Priced' }),
+        unconfirmedZero(),
+      ],
+      readiness: [zeroIssue],
+    })
+
+  it('an unconfirmed € 0 reads "Controle vereist" — never "Geprijsd" — with ONE callout that names the decision', async () => {
+    api.getDossier.mockResolvedValue(zeroDossier())
+    renderPage()
+    const option = await screen.findByRole('option', { name: /Plateau/ })
+    expect(option).toHaveTextContent(/€\s0,00/)
+    expect(within(option).getByText('Controle vereist')).toBeInTheDocument()
+    expect(within(priceSection()).queryByText('Geprijsd')).not.toBeInTheDocument()
+    // Dossier summary: nothing settled yet; the unit is listed as "controle vereist".
+    expect(screen.getByText('0 van 1 onderdelen afgehandeld')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Plateau (controle vereist)' })).toBeInTheDocument()
+    expect(screen.getByText('⚠ 1 onderdeel vraagt aandacht')).toBeInTheDocument()
+    // The attention strip carries the compact version; the detail the single callout — nothing else.
+    expect(screen.getByRole('button', { name: 'Plateau: verkoopprijs van € 0,00 vraagt bevestiging als gratis.' })).toBeInTheDocument()
+    const callouts = within(priceSection()).getAllByTestId('zero-callout')
+    expect(callouts).toHaveLength(1)
+    expect(callouts[0]).toHaveAttribute('role', 'alert')
+    expect(callouts[0]).toHaveTextContent('Gratis prijs bevestigen')
+    expect(callouts[0]).toHaveTextContent('De verkoopprijs van deze activiteit is € 0,00. Bevestig dat deze activiteit bewust gratis wordt uitgevoerd')
+    expect(within(callouts[0]).getByRole('button', { name: 'Bevestigen als gratis' })).toBeInTheDocument()
+    expect(within(callouts[0]).getByRole('button', { name: 'Prijs aanpassen' })).toBeInTheDocument()
+    expect(within(priceSection()).queryByRole('button', { name: 'Markeren als gratis' })).not.toBeInTheDocument()
+    expect(within(priceSection()).queryByRole('button', { name: /Deze activiteit is gratis/ })).not.toBeInTheDocument()
+  })
+
+  it('"Bevestigen als gratis" on a fixed € 0 keeps the record (fixedAmount 0 + freeConfirmed) and settles it: Gratis, callout gone, summary and attention updated without a refetch', async () => {
+    const user = userEvent.setup()
+    api.getDossier.mockResolvedValue(zeroDossier())
+    api.setActivityPrice.mockResolvedValue(freeDossier())
+    renderPage()
+    await user.click(await screen.findByRole('button', { name: 'Bevestigen als gratis' }))
+
+    await waitFor(() => expect(api.setActivityPrice).toHaveBeenCalledWith('d-1', 'a-p', { fixedAmount: 0, version: 'pv-1', freeConfirmed: true }))
+    expect(lines.save).not.toHaveBeenCalled()
+    const option = await screen.findByRole('option', { name: /Plateau/ })
+    expect(within(option).getByText('Gratis')).toBeInTheDocument()
+    expect(within(option).queryByText('Controle vereist')).not.toBeInTheDocument()
+    expect(within(priceSection()).queryByTestId('zero-callout')).not.toBeInTheDocument()
+    expect(screen.getByText('Deze activiteit is bevestigd als gratis (€ 0).')).toBeInTheDocument()
+    expect(screen.getByText('1 van 1 onderdelen afgehandeld')).toBeInTheDocument()
+    expect(screen.queryByText(/vraagt aandacht/)).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /vraagt bevestiging als gratis/ })).not.toBeInTheDocument()
+    // State came from the save response — the server's authoritative dossier — not a second GET.
+    expect(api.getDossier).toHaveBeenCalledTimes(1)
+  })
+
+  it('lines totalling € 0 are confirmed by re-sending the same lines with freeConfirmed: true', async () => {
+    const user = userEvent.setup()
+    const zeroLines = plateau({
+      pricingSource: 'Lines', isPriced: true, agreedPrice: 0, pricingVersion: 'pv-1', priceStatus: 'ZeroUnconfirmed',
+      priceLines: [line('pl-1', 1, 'Kosteloos', 1, 0, 0)],
+    })
+    api.getDossier.mockResolvedValue(
+      dossierDetail({ financials: { ...noFinancials, billableActivityCount: 1, pricedActivityCount: 1, zeroPricedActivityCount: 1 }, activities: [zeroLines], readiness: [zeroIssue] }),
+    )
+    lines.save.mockResolvedValue(
+      plateauOnly(
+        plateau({ pricingSource: 'Lines', isPriced: true, agreedPrice: 0, pricingVersion: 'pv-2', priceStatus: 'Free', freeConfirmed: true, priceLines: [line('pl-1', 1, 'Kosteloos', 1, 0, 0)] }),
+        0,
+      ),
+    )
+    renderPage()
+    await user.click(await screen.findByRole('button', { name: 'Bevestigen als gratis' }))
+    await waitFor(() =>
+      expect(lines.save).toHaveBeenCalledWith('d-1', 'a-p', {
+        version: 'pv-1',
+        lines: [{ id: 'pl-1', label: 'Kosteloos', quantity: 1, unit: null, unitPrice: 0 }],
+        freeConfirmed: true,
+      }),
+    )
+    expect(api.setActivityPrice).not.toHaveBeenCalled()
+    expect(within(await screen.findByRole('option', { name: /Plateau/ })).getByText('Gratis')).toBeInTheDocument()
+  })
+
+  it('"Prijs aanpassen" puts the cursor in the amount; € 0 → € 275 saves without any confirmation and reads "Geprijsd"', async () => {
+    const user = userEvent.setup()
+    api.getDossier.mockResolvedValue(zeroDossier())
+    api.setActivityPrice.mockResolvedValue(plateauOnly(plateau({ pricingSource: 'OneOff', isPriced: true, agreedPrice: 275, pricingVersion: 'pv-2', priceStatus: 'Priced' }), 275))
+    renderPage()
+    await user.click(await screen.findByRole('button', { name: 'Prijs aanpassen' }))
+    const agreed = screen.getByLabelText('Afgesproken prijs (€)')
+    expect(agreed).toHaveFocus()
+    await user.clear(agreed)
+    await user.type(agreed, '275')
+    await user.click(screen.getByRole('button', { name: 'Opslaan' }))
+    await waitFor(() => expect(api.setActivityPrice).toHaveBeenCalledWith('d-1', 'a-p', { fixedAmount: 275, version: 'pv-1' }))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    const option = await screen.findByRole('option', { name: /Plateau/ })
+    expect(option).toHaveTextContent(/€\s275,00/)
+    expect(within(option).getByText('Geprijsd')).toBeInTheDocument()
+    expect(within(priceSection()).queryByTestId('zero-callout')).not.toBeInTheDocument()
+    expect(within(priceSection().querySelector<HTMLElement>('.dossier-price-total')!).getByText(/€\s275,00/)).toBeInTheDocument()
+    expect(screen.getByText('1 van 1 onderdelen afgehandeld')).toBeInTheDocument()
+  })
+
+  it('"Prijs verwijderen" on a confirmed free unit resets it to "Niet geprijsd" — no stale "Gratis"', async () => {
+    const user = userEvent.setup()
+    api.getDossier.mockResolvedValue(freeDossier())
+    lines.save.mockResolvedValue(plateauOnly(plateau({ pricingVersion: 'pv-3' })))
+    renderPage()
+    expect(within(await screen.findByRole('option', { name: /Plateau/ })).getByText('Gratis')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Prijs verwijderen' }))
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Prijs verwijderen' }))
+    await waitFor(() => expect(lines.save).toHaveBeenCalledWith('d-1', 'a-p', { version: 'pv-2', lines: [], freeConfirmed: false }))
+    const option = await screen.findByRole('option', { name: /Plateau/ })
+    expect(within(option).getByText('Niet geprijsd')).toBeInTheDocument()
+    expect(within(priceSection()).queryByText('Gratis')).not.toBeInTheDocument()
+    expect(screen.getByText('Nog geen prijs')).toBeInTheDocument()
+    expect(screen.getByText('0 van 1 onderdelen afgehandeld')).toBeInTheDocument()
+  })
+
+  it('ORD-0005 and Plateau never share price, lines, free state or warning when switching', async () => {
+    const user = userEvent.setup()
+    api.getDossier.mockResolvedValue(orderPlusZero())
+    renderPage()
+    await screen.findByRole('heading', { name: /^ORD-0005/ })
+    // The order's detail: its own price, the order line editor, no callout.
+    expect(await screen.findByLabelText('Afgesproken prijs (€)')).toHaveValue('102.37')
+    expect(within(priceSection()).queryByTestId('zero-callout')).not.toBeInTheDocument()
+    expect(screen.getByText('Totaalprijs')).toBeInTheDocument()
+    expect(screen.getByText('1 van 2 onderdelen afgehandeld')).toBeInTheDocument()
+    expect(within(within(picker()).getByRole('option', { name: /ORD-0005/ })).getByText('Opdracht')).toBeInTheDocument()
+    expect(within(within(picker()).getByRole('option', { name: /Plateau/ })).getByText('Activiteit')).toBeInTheDocument()
+
+    await user.click(within(picker()).getByRole('option', { name: /Plateau/ }))
+    expect(screen.getByRole('heading', { name: 'Plateau' })).toBeInTheDocument()
+    expect(screen.getByLabelText('Afgesproken prijs (€)')).toHaveValue('0')
+    expect(within(priceSection()).getByTestId('zero-callout')).toBeInTheDocument()
+    // The sales lines block belongs to the SELECTED unit.
+    expect(screen.getByRole('heading', { name: 'Verkooplijnen' })).toBeInTheDocument()
+    expect(screen.queryByText('Totaalprijs')).not.toBeInTheDocument()
+
+    await user.click(within(picker()).getByRole('option', { name: /ORD-0005/ }))
+    expect(await screen.findByRole('heading', { name: /^ORD-0005/ })).toBeInTheDocument()
+    expect(screen.getByLabelText('Afgesproken prijs (€)')).toHaveValue('102.37')
+    expect(within(priceSection()).queryByTestId('zero-callout')).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Verkooplijnen' })).not.toBeInTheDocument()
+  })
+
+  it('the attention strip item selects the unit it is about', async () => {
+    const user = userEvent.setup()
+    api.getDossier.mockResolvedValue(orderPlusZero())
+    renderPage()
+    await screen.findByRole('heading', { name: /^ORD-0005/ })
+    await user.click(screen.getByRole('button', { name: 'Plateau: verkoopprijs van € 0,00 vraagt bevestiging als gratis.' }))
+    await waitFor(() => expect(within(picker()).getByRole('option', { name: /Plateau/ })).toHaveAttribute('aria-selected', 'true'))
+    expect(within(priceSection()).getByTestId('zero-callout')).toBeInTheDocument()
+  })
+
+  it('without dossiers.price the callout explains the state but offers no actions', async () => {
+    auth.permissions = new Set(['dossiers.view', 'dossiers.manage'])
+    api.getDossier.mockResolvedValue(zeroDossier())
+    renderPage()
+    const callout = await screen.findByTestId('zero-callout')
+    expect(callout).toHaveTextContent('Gratis prijs bevestigen')
+    expect(within(callout).queryByRole('button')).not.toBeInTheDocument()
+    expect(within(await screen.findByRole('option', { name: /Plateau/ })).getByText('Controle vereist')).toBeInTheDocument()
   })
 })

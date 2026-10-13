@@ -12,7 +12,7 @@
   align-items: center;
   justify-content: space-between;
   padding: 0.6rem 1rem;
-  background: var(--accent);
+  background: var(--color-primary-solid);
   color: #fff;
 }
 
@@ -33,7 +33,7 @@
 }
 
 .drv-sync-badge {
-  background: #fff;
+  background: var(--color-surface);
   color: var(--accent);
   border-radius: 999px;
   padding: 0 0.45rem;
@@ -102,7 +102,7 @@
 .drv-big-link {
   display: block;
   text-align: center;
-  background: var(--accent);
+  background: var(--color-primary-solid);
   color: #fff;
   border-radius: 12px;
   padding: 0.8rem;
@@ -160,13 +160,13 @@
   font-size: 1rem;
   padding: 0.55rem 0.6rem;
   border-radius: 8px;
-  border: 1px solid var(--border);
-  background: var(--bg);
-  color: var(--text);
+  border: 1px solid var(--color-input-border);
+  background: var(--color-input-bg);
+  color: var(--text-h);
 }
 
 .drv-submit {
-  background: var(--accent);
+  background: var(--color-primary-solid);
   color: #fff;
   border: none;
   border-radius: 12px;

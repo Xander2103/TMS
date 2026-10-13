@@ -295,13 +295,14 @@ public class DossierServiceTests
         // Step 13: the EFFECTIVE price of a one-off agreement the engine has not derived yet is
         // the agreed amount itself (OrderPricingState.EffectiveAgreedPrice): 500 + 0 + 0 + 120.
         Assert.Equal(620m, row.AgreedPriceTotal);
-        // Legacy links without an activity are billable units too (compat); two are priced at € 0 by provenance.
-        Assert.Equal((6, 4, 2), (row.BillableActivityCount, row.PricedActivityCount, row.ZeroPricedActivityCount));
+        // Legacy links without an activity are billable units too (compat); two are priced at € 0 by
+        // provenance — an order's intentional € 0 is settled (Free), so none awaits a decision (2026-10-08).
+        Assert.Equal((6, 4, 0), (row.BillableActivityCount, row.PricedActivityCount, row.ZeroPricedActivityCount));
 
         var detail = (await sut.GetAsync(dossier.Id, CancellationToken.None))!;
         Assert.Equal(4, detail.Financials.PricedOrderCount);
         Assert.Equal(620m, detail.Financials.AgreedOrderTotal);
-        Assert.Equal((6, 4, 2), (detail.Financials.BillableActivityCount, detail.Financials.PricedActivityCount, detail.Financials.ZeroPricedActivityCount));
+        Assert.Equal((6, 4, 0), (detail.Financials.BillableActivityCount, detail.Financials.PricedActivityCount, detail.Financials.ZeroPricedActivityCount));
         foreach (var order in detail.Orders)
         {
             Assert.Equal(expected[order.OrderId], order.IsPriced);

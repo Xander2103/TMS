@@ -26,6 +26,12 @@ interface AddressAutocompleteInputProps {
   suggestWhenEmpty?: boolean
   /** Optional last row of the popover (e.g. "+ Nieuw adres «query»"); runs with the typed text. */
   footerAction?: { label: (query: string) => string; run: (query: string) => void }
+  /**
+   * Also offer the footer row while the field is EMPTY (with `suggestWhenEmpty`: under the
+   * customer's own addresses, or under the "no results" note when they have none). Off by
+   * default: the street field and other hosts keep the typed-name-only row.
+   */
+  footerWhenEmpty?: boolean
 }
 
 /**
@@ -50,6 +56,7 @@ export function AddressAutocompleteInput({
   ariaInvalid,
   suggestWhenEmpty = false,
   footerAction,
+  footerWhenEmpty = false,
 }: AddressAutocompleteInputProps) {
   const { t } = useLocale()
   const generatedId = useId()
@@ -61,8 +68,9 @@ export function AddressAutocompleteInput({
   const [highlighted, setHighlighted] = useState(-1)
 
   const { results, status, active } = useAddressSearch(value, open && !disabled, { customerId, suggestWhenEmpty })
-  // The create row needs a typed name; the empty-field suggestions (`suggestWhenEmpty`) never offer it.
-  const showFooter = Boolean(footerAction) && active && value.trim() !== ''
+  // The create row carries the typed name; on an empty field it is only offered when the host
+  // asks for it (`footerWhenEmpty`), so a planner who just clicks the field sees the shortcut too.
+  const showFooter = Boolean(footerAction) && active && (value.trim() !== '' || footerWhenEmpty)
   const rowCount = results.length + (showFooter ? 1 : 0)
   const visible = open && active
   const activeIndex = highlighted >= rowCount ? -1 : highlighted

@@ -14,7 +14,7 @@
 .fleet-compliance-note {
   margin: 0;
   font-size: 14px;
-  color: var(--text-muted, #666);
+  color: var(--text-muted);
 }
 
 .fleet-compliance-table {
@@ -25,7 +25,7 @@
 .fleet-compliance-table th,
 .fleet-compliance-table td {
   padding: 8px 10px;
-  border-bottom: 1px solid var(--border, #e5e7eb);
+  border-bottom: 1px solid var(--border);
   text-align: left;
   font-size: 14px;
 }
@@ -57,7 +57,7 @@
 }
 
 .fleet-compliance-link-danger {
-  color: #dc2626;
+  color: var(--color-danger-strong);
 }
 
 .fleet-compliance-form {
@@ -73,7 +73,7 @@
 }
 
 .fleet-compliance-form-error {
-  color: #dc2626;
+  color: var(--color-danger-strong);
   font-size: 14px;
 }
 

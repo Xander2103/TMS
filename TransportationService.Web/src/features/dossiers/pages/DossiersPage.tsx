@@ -9,6 +9,7 @@ import { FilterBar } from '../../../components/ui/FilterBar'
 import { Pagination } from '../../../components/ui/Pagination'
 import type { SearchableSelectOption } from '../../../components/ui/SearchableSelect'
 import { useToast } from '../../../components/ui/toastContext'
+import { TruncatedText } from '../../../components/ui/TruncatedText'
 import { describeApiError } from '../../../api/problemDetails'
 import { usePagedQuery } from '../../../hooks/usePagedQuery'
 import { getActiveLocale } from '../../../i18n/activeLocale'
@@ -74,14 +75,10 @@ function isLookupKey(key: DossierFilterKey): key is LookupKey {
 
 type RowDialog = { kind: 'confirm' | 'cancel' | 'reopen'; row: DossierListItem }
 
-/** Tekstcel die bij overloop afkapt met een ellipsis en de volledige waarde als tooltip toont. */
+/** Tekstcel op één regel: afgekapt met een ellipsis, de volledige waarde als tooltip zodra ze afgekapt is. */
 function TruncatedCell({ value }: { value: string | null }) {
   if (!value) return <>{EMPTY}</>
-  return (
-    <span className="dossier-list-truncate" title={value}>
-      {value}
-    </span>
-  )
+  return <TruncatedText tooltip={value}>{value}</TruncatedText>
 }
 
 /** "september 2026" in the active language. */
@@ -234,13 +231,13 @@ export function DossiersPage() {
   }
 
   // --- columns ---------------------------------------------------------------------------------
-  // Widths in px (the table text has a fixed px size). Klant and Transport have none: they share
-  // what the fixed columns leave — see the budget in dossiers.css.
+  // One dossier = ONE row: every cell is a single line that cuts off with an ellipsis and shows
+  // its full value on hover. Column widths live in dossiers.css (per nth-child), together with
+  // the container queries that drop the least critical columns first on narrower screens.
   const columns: Column<DossierListItem>[] = [
     {
       key: 'number',
       header: t('dossiers.list.columns.number'),
-      width: '108px',
       sortKey: 'number',
       render: (row) => (
         <span className="dossier-list-number">
@@ -256,7 +253,6 @@ export function DossiersPage() {
     {
       key: 'status',
       header: t('dossiers.list.columns.status'),
-      width: '190px',
       sortKey: 'status',
       render: (row) => <StatusCell row={row} />,
     },
@@ -264,25 +260,18 @@ export function DossiersPage() {
       key: 'customer',
       header: t('dossiers.list.columns.customer'),
       sortKey: 'customer',
-      render: (row) => (
-        <span className="dossier-list-stack">
-          <TruncatedCell value={row.customerName} />
-          {row.customerNumber && <span className="dossier-list-muted">{row.customerNumber}</span>}
-        </span>
-      ),
+      render: (row) => <CustomerCell row={row} />,
     },
     {
       key: 'reference',
       header: t('dossiers.list.columns.reference'),
-      width: '112px',
       render: (row) => <TruncatedCell value={row.customerReference} />,
     },
     {
       key: 'date',
       header: t('dossiers.list.columns.date'),
-      width: '136px',
       sortKey: 'date',
-      render: (row) => (row.dossierDate ? formatDate(row.dossierDate) : EMPTY),
+      render: (row) => <span className="dossier-list-nowrap">{row.dossierDate ? formatDate(row.dossierDate) : EMPTY}</span>,
     },
     {
       key: 'transport',
@@ -292,27 +281,23 @@ export function DossiersPage() {
     {
       key: 'planning',
       header: t('dossiers.list.columns.planning'),
-      width: '144px',
       sortKey: 'planningDate',
       render: (row) => <PlanningCell row={row} />,
     },
     {
       key: 'price',
       header: t('dossiers.list.columns.price'),
-      width: '140px',
       align: 'right',
       render: (row) => <PriceCell row={row} />,
     },
     {
       key: 'invoice',
       header: t('dossiers.list.columns.invoice'),
-      width: '100px',
-      render: (row) => (row.invoiceStatus ? t(`dossiers.list.invoice.${row.invoiceStatus}`) : EMPTY),
+      render: (row) => <span className="dossier-list-nowrap">{row.invoiceStatus ? t(`dossiers.list.invoice.${row.invoiceStatus}`) : EMPTY}</span>,
     },
     {
       key: 'actions',
       header: '',
-      width: '48px',
       align: 'right',
       render: (row) => {
         const isOpen = row.status === 'Open'
@@ -493,21 +478,38 @@ export function DossiersPage() {
   )
 }
 
-/** Status badge with the confirmation metadata of a confirmed dossier on a compact second line. */
+/**
+ * Status badge plus, for a confirmed dossier, the confirmation date on the SAME line. How it was
+ * confirmed (handmatig/automatisch, exact time) sits in the tooltip; a legacy row without a date
+ * shows its "bron onbekend" source instead.
+ */
 function StatusCell({ row }: { row: DossierListItem }) {
   const { t } = useLocale()
   const confirmation = dossierListConfirmation(row, t)
+  const compact = confirmation ? (row.confirmedAt ? formatDate(row.confirmedAt) : confirmation.line) : null
   return (
-    <span className="dossier-list-stack" title={confirmation?.title}>
-      <span>
-        <Badge tone={DOSSIER_STATUS_TONE[row.status]}>{t(DOSSIER_STATUS_LABELS[row.status])}</Badge>
-      </span>
-      {confirmation && <span className="dossier-list-muted">{confirmation.line}</span>}
+    <span className="dossier-list-status" title={confirmation?.title}>
+      <Badge tone={DOSSIER_STATUS_TONE[row.status]}>{t(DOSSIER_STATUS_LABELS[row.status])}</Badge>
+      {compact && <span className="dossier-list-muted dossier-list-sep">{compact}</span>}
     </span>
   )
 }
 
-/** "Antwerpen → Gent · 2 opdr." — the route ends plus a compact unit count. */
+/** "Nexans NV · K-1001" on one line: the name leads, the number is muted; the tooltip spells both out. */
+function CustomerCell({ row }: { row: DossierListItem }) {
+  const { t } = useLocale()
+  if (!row.customerName && !row.customerNumber) return <>{EMPTY}</>
+  const name = row.customerName ?? EMPTY
+  const tooltip = row.customerNumber ? `${name} · ${t('dossiers.list.customerNumber', { number: row.customerNumber })}` : name
+  return (
+    <TruncatedText tooltip={tooltip}>
+      <span>{name}</span>
+      {row.customerNumber && <span className="dossier-list-muted dossier-list-sep">{row.customerNumber}</span>}
+    </TruncatedText>
+  )
+}
+
+/** "Antwerpen → Gent · 2 opdr." — the route ends plus a compact unit count, on one line. */
 function TransportCell({ row }: { row: DossierListItem }) {
   const { t } = useLocale()
   const route =
@@ -520,49 +522,47 @@ function TransportCell({ row }: { row: DossierListItem }) {
         : null
   if (!route && !count) return <>{EMPTY}</>
   return (
-    <span className="dossier-list-transport" title={route ?? undefined}>
-      {route && <span className="dossier-list-truncate">{route}</span>}
-      {count && <span className="dossier-list-muted">{count}</span>}
-    </span>
+    <TruncatedText tooltip={[route, count].filter(Boolean).join(' · ')}>
+      {route && <span>{route}</span>}
+      {count && <span className={route ? 'dossier-list-muted dossier-list-sep' : 'dossier-list-muted'}>{count}</span>}
+    </TruncatedText>
   )
 }
 
 /**
- * Planning date with who/what drives. The summaries come from the server: one name/plate when
- * exactly one driver/vehicle is assigned, "2 chauffeurs"/"2 voertuigen" otherwise — never one
- * arbitrary driver presented as THE driver of the dossier.
+ * Planning date with who/what drives, on one line. The summaries come from the server: one
+ * name/plate when exactly one driver/vehicle is assigned, "2 chauffeurs"/"2 voertuigen" otherwise —
+ * never one arbitrary driver presented as THE driver of the dossier.
  */
 function PlanningCell({ row }: { row: DossierListItem }) {
+  const date = row.planningDate ? formatDate(row.planningDate) : null
   const assignment = [row.driverSummary, row.vehicleSummary].filter(Boolean).join(' · ')
-  if (!row.planningDate && !assignment) return <>{EMPTY}</>
+  if (!date && !assignment) return <>{EMPTY}</>
   return (
-    <span className="dossier-list-stack">
-      <span>{row.planningDate ? formatDate(row.planningDate) : EMPTY}</span>
-      {assignment && (
-        <span className="dossier-list-muted" title={assignment}>
-          {assignment}
-        </span>
-      )}
-    </span>
+    <TruncatedText tooltip={[date ?? EMPTY, assignment].filter(Boolean).join(' · ')}>
+      <span>{date ?? EMPTY}</span>
+      {assignment && <span className="dossier-list-muted dossier-list-sep">{assignment}</span>}
+    </TruncatedText>
   )
 }
 
 /**
- * Amount plus one consistent status line (Geprijsd / Gedeeltelijk / Niet geprijsd / Gratis).
+ * Amount plus one consistent status on the SAME line ("€ 125,00 · Gedeeltelijk 1/2").
  * `agreedPriceTotal === null` means not priced and never renders as € 0,00; a real € 0,00 stays
  * visible and keeps its ⚠ ("bewust?"). A partially priced amount is a sum over the priced units,
- * not a dossier total — the status line says so.
+ * not a dossier total — the status says so (tooltip).
  */
 function PriceCell({ row }: { row: DossierListItem }) {
   const { t } = useLocale()
   const status = dossierListPriceStatus(row)
   if (row.agreedPriceTotal === null && !status) return <>{EMPTY}</>
   const counts = { priced: row.pricedActivityCount, total: row.billableActivityCount }
+  const hasAmount = row.agreedPriceTotal !== null
   return (
     <span className="dossier-list-price">
-      {row.agreedPriceTotal !== null && (
+      {hasAmount && (
         <span className="dossier-list-amount">
-          {euro(row.agreedPriceTotal)}
+          {euro(row.agreedPriceTotal!)}
           {row.zeroPricedActivityCount > 0 && (
             <span
               className="dossier-list-zero"
@@ -577,7 +577,7 @@ function PriceCell({ row }: { row: DossierListItem }) {
       )}
       {status && (
         <span
-          className="dossier-list-price-status"
+          className={hasAmount ? 'dossier-list-price-status dossier-list-sep' : 'dossier-list-price-status'}
           data-status={status}
           title={status === 'PartiallyPriced' ? t('dossierSheet.list.partialPricedTitle', counts) : undefined}
         >

@@ -4,6 +4,7 @@ import { getLocation } from '../api/locationsApi'
 import type { PickedAddress } from '../addressFields'
 import type { LocationOption } from '../types'
 import { AddressAutocompleteInput } from './AddressAutocompleteInput'
+import './LocationSelect.css'
 
 interface LocationSelectProps {
   id?: string
@@ -21,8 +22,11 @@ interface LocationSelectProps {
   disabled?: boolean
   placeholder?: string
   /**
-   * Inline-create hook: called with the typed name, resolves with the created location (to
-   * link it) or null when the user cancels. The caller owns the creation UI.
+   * Inline-create hook: called with the typed name ('' from the permanent action), resolves with
+   * the created location (to link it) or null when the user cancels. The caller owns the
+   * creation UI (the customer-address quick-create dialog) AND the persistence: the address is
+   * stored on the customer the moment that dialog saves; linking it to the stop only happens
+   * when the route itself is saved.
    */
   onCreateNew?: (name: string) => Promise<LocationOption | null>
 }
@@ -40,6 +44,11 @@ type LocationOptionWithAddress = LocationOption & {
  * first). It is a search box, not a select: the text is a transient query that is cleared after
  * a choice, and what was chosen is shown — and stays editable — in the address fields below it.
  * Nothing is ever chosen on the planner's behalf; leaving the field alone keeps a free address.
+ *
+ * Route UX sprint 2026-10-08: when the host offers quick-create, "+ Nieuw klantadres" is ALWAYS
+ * one click away — as a permanent action next to the field (whatever the customer already has
+ * and whatever the search returns) and as the last row of the suggestion list in every state:
+ * the empty-field suggestions, a result list and the "no results" note.
  */
 export function LocationSelect({
   id,
@@ -82,21 +91,41 @@ export function LocationSelect({
     }
   }
 
+  const createLabel = t('locations.select.createCustomerAddress')
+
   return (
-    <AddressAutocompleteInput
-      id={id}
-      value={query}
-      onChange={setQuery}
-      onSelect={choose}
-      customerId={customerId}
-      disabled={disabled}
-      suggestWhenEmpty
-      placeholder={placeholder ?? (value ? t('stopEditor.search.placeholderLinked') : t('stopEditor.search.placeholder'))}
-      footerAction={
-        onCreateNew
-          ? { label: (typed) => t('locations.select.createWithName', { query: typed }), run: (typed) => void createNew(typed) }
-          : undefined
-      }
-    />
+    <div className="location-select">
+      <AddressAutocompleteInput
+        id={id}
+        value={query}
+        onChange={setQuery}
+        onSelect={choose}
+        customerId={customerId}
+        disabled={disabled}
+        suggestWhenEmpty
+        placeholder={placeholder ?? (value ? t('stopEditor.search.placeholderLinked') : t('stopEditor.search.placeholder'))}
+        footerAction={
+          onCreateNew
+            ? {
+                // A typed name travels into the dialog; the empty-field row is the plain shortcut.
+                label: (typed) => (typed ? t('locations.select.createWithName', { query: typed }) : createLabel),
+                run: (typed) => void createNew(typed),
+              }
+            : undefined
+        }
+        footerWhenEmpty={Boolean(onCreateNew)}
+      />
+      {onCreateNew && (
+        <button
+          type="button"
+          className="location-select-create"
+          onClick={() => void createNew(query.trim())}
+          disabled={disabled}
+          title={t('locations.select.createCustomerAddressHint')}
+        >
+          + {createLabel}
+        </button>
+      )}
+    </div>
   )
 }

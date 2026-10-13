@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { ApiError } from '../../../api/apiClient'
 import { describeApiError } from '../../../api/problemDetails'
 import { Button } from '../../../components/ui/Button'
+import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { FormField } from '../../../components/ui/FormField'
 import { useToast } from '../../../components/ui/toastContext'
 import { useLocale } from '../../../i18n/localeContext'
@@ -16,7 +17,6 @@ import { OrderPricingPanel } from '../../transport-orders/pricing/OrderPricingPa
 import { useOrderPricingEditor } from '../../transport-orders/pricing/useOrderPricingEditor'
 import { ORDER_PRICING_STATUS_LABELS, type TransportOrderDetail } from '../../transport-orders/types'
 import type { DossierActivity, DossierDetail } from '../types'
-import { PriceStatusBadge } from './PriceStatusBadge'
 import './dossier-pricing.css'
 
 export interface DossierOrderPricePanelHandle {
@@ -81,6 +81,11 @@ function calculatedTariffTotal(order: TransportOrderDetail): number | null {
  * editor (`useOrderPricingEditor` + `OrderPricingPanel` + `OrderPricingDialogs`), exactly as on
  * the order page: free lines, line adjust/remove with reason, proposals, recalculation, coverage
  * and stale warnings, confirm/reopen, and the goods ↔ sales-line link (D4).
+ *
+ * Pricing UX sprint 2026-10-08: an order has no separate "free" confirmation — the one-off price
+ * command at € 0 IS the planner's explicit decision. So entering 0 asks for that confirmation
+ * BEFORE it is sent (cancelling keeps the previous value), and a deliberate € 0 reads as "Gratis"
+ * with a quiet note instead of a warning that would contradict the status.
  */
 export function DossierOrderPricePanel({ dossier, activity, order, canEditPrice, isOpen, onOrderSaved, ref }: DossierOrderPricePanelProps) {
   const { t } = useLocale()
@@ -93,6 +98,8 @@ export function DossierOrderPricePanel({ dossier, activity, order, canEditPrice,
   const [agreedInput, setAgreedInput] = useState(() => currentAgreedAmount(order))
   const [agreedError, setAgreedError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  // A typed € 0 waits here for the planner's explicit "yes, free" before it is sent.
+  const [confirmZero, setConfirmZero] = useState(false)
 
   // The agreed-price field follows the order it belongs to (adjusted during render, see React's
   // "storing information from previous renders" pattern).
@@ -110,10 +117,10 @@ export function DossierOrderPricePanel({ dossier, activity, order, canEditPrice,
   const agreedEditable = canEditPrice && !locked && !overridden
   const linesEditable = editor.canEditPricingLines && !locked
   const calculatedTotal = calculatedTariffTotal(order)
-  // Intentional € 0 on the target order: priced (provenance from the dossier payload) AND amount 0.
-  // Not a blocker — a deliberate free delivery exists — but it must never pass unnoticed.
+  // Intentional € 0 on the target order: priced (provenance from the dossier payload) AND amount 0
+  // — a deliberate free delivery, settled by the planner's own one-off decision ("Gratis").
   const orderIsPriced = isOrderPriced(dossier, order)
-  const orderIsZero = orderIsPriced && order.agreedPrice === 0
+  const orderIsFree = activity?.priceStatus === 'Free' || (orderIsPriced && order.agreedPrice === 0)
   const hasLines = (order.pricingLines ?? []).length > 0
 
   useImperativeHandle(ref, () => ({
@@ -138,6 +145,15 @@ export function DossierOrderPricePanel({ dossier, activity, order, canEditPrice,
       setAgreedError(t('dossierSheet.price.agreedInvalid'))
       return
     }
+    // € 0 is never sent silently: the planner confirms that the order is deliberately free first.
+    if (amount === 0 && currentAgreedAmount(order) !== '0') {
+      setConfirmZero(true)
+      return
+    }
+    await persistAgreed(amount)
+  }
+
+  async function persistAgreed(amount: number | null) {
     setBusy(true)
     setAgreedError(null)
     try {
@@ -146,8 +162,10 @@ export function DossierOrderPricePanel({ dossier, activity, order, canEditPrice,
       // price must never depend on unrelated route data. Route rules stay on the route save.
       const updated = await setOrderOneOffPrice(order.id, { fixedAmount: amount, version: order.version })
       toast.showSuccess(amount === null ? t('dossierSheet.price.agreedCleared') : t('dossierSheet.price.agreedSaved'))
+      setConfirmZero(false)
       onOrderSaved(updated)
     } catch (err) {
+      setConfirmZero(false)
       if (err instanceof ApiError && err.status === 409) {
         setAgreedError(t('dossiers.orderDrawer.conflict'))
       } else {
@@ -160,9 +178,7 @@ export function DossierOrderPricePanel({ dossier, activity, order, canEditPrice,
 
   return (
     <div className="dossier-order-price">
-      <p className="dossier-price-order-label">
-        {t('dossierSheet.price.forOrder', { number: order.orderNumber })} <PriceStatusBadge status={activity?.priceStatus} />
-      </p>
+      <h4 className="dossier-pricing-block-title">{t('dossierPricing.detail.priceBlock')}</h4>
 
       {overridden && (
         <p className="dossier-price-note">
@@ -212,11 +228,7 @@ export function DossierOrderPricePanel({ dossier, activity, order, canEditPrice,
       {!agreedEditable && orderIsPriced && order.agreedPrice != null && !overridden && (
         <p className="dossier-price-note">{t('dossierSheet.price.agreedCurrent', { amount: euro(order.agreedPrice) })}</p>
       )}
-      {orderIsZero && (
-        <p className="dossier-price-zero-warning" role="note">
-          {t('dossierSheet.price.zeroWarningOrder')}
-        </p>
-      )}
+      {orderIsFree && <p className="dossier-price-note dossier-price-free-note">{t('dossierPricing.order.freeNote')}</p>}
 
       <OrderPricingPanel
         ws={{ ...editor, order }}
@@ -227,11 +239,26 @@ export function DossierOrderPricePanel({ dossier, activity, order, canEditPrice,
       {!hasLines && <p className="placeholder-text">{t('dossierSheet.price.noLinesYet')}</p>}
       {!linesEditable && !locked && isOpen && <p className="dossier-price-note">{t('dossierSheet.price.linesPermission')}</p>}
 
-      <p className="dossier-price-actions">
+      <p className="dossier-price-actions dossier-activity-price-actions">
         <Button variant="ghost" onClick={() => navigate(`/transport-orders/${order.id}`)}>
-          {t('dossiers.price.details')}
+          {t('dossierPricing.detail.openOrder')}
         </Button>
       </p>
+
+      {confirmZero && (
+        <ConfirmDialog
+          title={t('dossierPricing.order.zeroConfirmTitle')}
+          message={t('dossierPricing.order.zeroConfirmMessage', { number: order.orderNumber })}
+          confirmLabel={t('dossierPricing.order.zeroConfirmAction')}
+          busy={busy}
+          onConfirm={() => void persistAgreed(0)}
+          onCancel={() => {
+            // Cancelling keeps the previous agreement on screen, never a half-typed € 0.
+            setConfirmZero(false)
+            setAgreedInput(currentAgreedAmount(order))
+          }}
+        />
+      )}
 
       <OrderPricingDialogs editor={editor} unitTypes={unitTypes} />
     </div>

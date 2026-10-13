@@ -72,7 +72,9 @@
     "codeRequired": "Code is required.",
     "codeMax": "Code may contain at most 50 characters.",
     "nameRequired": "Name is required.",
-    "nameMax": "Name may contain at most 150 characters."
+    "nameMax": "Name may contain at most 150 characters.",
+    "advanced": "More settings",
+    "advancedHint": "Code and order are set automatically; change them only when needed."
   },
   "select": {
     "createOption": "{newLabel} \"{query}\"",

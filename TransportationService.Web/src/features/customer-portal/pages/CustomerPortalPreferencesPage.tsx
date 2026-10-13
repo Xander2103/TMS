@@ -5,6 +5,7 @@ import { Button } from '../../../components/ui/Button'
 import { LoadingState } from '../../../components/feedback/LoadingState'
 import { ErrorState } from '../../../components/feedback/ErrorState'
 import { useLocale } from '../../../i18n/localeContext'
+import { AppearanceSettings } from '../../../theme/AppearanceSettings'
 import {
   getPortalNotificationPreferences,
   savePortalNotificationPreferences,
@@ -77,6 +78,11 @@ export function CustomerPortalPreferencesPage() {
         items={[{ label: t('navigation.portalName'), to: '/klantportaal' }, { label: t('notifications.preferences.title') }]}
       />
       <PageHeader title={t('notifications.preferences.title')} subtitle={t('notifications.preferences.subtitle')} />
+
+      <section className="cpp-panel">
+        {/* Weergave: per portaalgebruiker (eigen User-rij), past direct toe en bewaart zichzelf. */}
+        <AppearanceSettings />
+      </section>
 
       <section className="cpp-panel">
         <h2>{t('notifications.preferences.channelsTitle')}</h2>

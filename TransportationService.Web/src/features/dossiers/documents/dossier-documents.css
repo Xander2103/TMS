@@ -6,6 +6,19 @@
   container-type: inline-size;
 }
 
+/* Layout: the level selector as a rail beside the documents on desktop, stacked above them in a
+   narrow container (container query, so a side panel or 125% zoom degrades on its own). */
+.ddoc-layout {
+  display: grid;
+  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.ddoc-main {
+  min-width: 0;
+}
+
 .ddoc-toolbar {
   display: flex;
   flex-wrap: wrap;
@@ -15,36 +28,62 @@
   margin: 0 0 var(--space-3);
 }
 
+/* Level selector: labelled groups (Dossier / Opdrachten / Activiteiten) of selectable levels. */
 .ddoc-levels {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.ddoc-level-group {
+  display: flex;
+  flex-direction: column;
   gap: var(--space-1);
+}
+
+.ddoc-level-group-label {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .ddoc-level {
   box-sizing: border-box;
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: var(--space-1);
-  padding: var(--space-1) var(--space-3);
+  justify-content: space-between;
+  gap: var(--space-2);
+  width: 100%;
+  min-height: 44px;
+  padding: var(--space-1) var(--space-2) var(--space-1) var(--space-3);
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-left: 3px solid transparent;
+  border-radius: var(--radius-md);
   background: var(--bg);
   color: var(--text-h);
   font: inherit;
   font-size: 0.875rem;
+  text-align: left;
   cursor: pointer;
 }
 
 .ddoc-level:hover {
-  background: var(--bg-muted, var(--accent-bg));
+  background: var(--bg-muted);
 }
 
+/* Selected: fill + accent edge + weight + ✓ — never colour alone. */
 .ddoc-level.is-active {
-  border-color: var(--accent);
+  border-color: var(--accent-border, var(--accent));
+  border-left-color: var(--accent);
   background: var(--accent-bg);
   color: var(--accent);
   font-weight: 600;
+}
+
+.ddoc-level.is-active .ddoc-level-title::after {
+  content: ' ✓';
 }
 
 .ddoc-level:focus-visible {
@@ -52,15 +91,70 @@
   outline-offset: 2px;
 }
 
+.ddoc-level-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.ddoc-level-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ddoc-level-subtitle {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  font-weight: 400;
+}
+
 .ddoc-level-count {
-  min-width: 1.25em;
-  padding: 0 0.4em;
+  flex: 0 0 auto;
+  min-width: 1.5em;
+  padding: 0 0.45em;
   border-radius: 999px;
   background: var(--border);
   color: var(--text-h);
   font-size: 0.75rem;
   font-weight: 600;
+  line-height: 1.6;
   text-align: center;
+}
+
+.ddoc-level.is-active .ddoc-level-count {
+  background: var(--accent);
+  color: var(--bg);
+}
+
+@container (max-width: 820px) {
+  .ddoc-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* Stacked: each group is one wrapping row of levels, the group label above it. */
+  .ddoc-level-group {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .ddoc-level-group-label {
+    flex: 0 0 100%;
+  }
+
+  .ddoc-level {
+    width: auto;
+    min-width: 12rem;
+    flex: 0 1 auto;
+  }
+}
+
+.ddoc-move-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin: 0 0 var(--space-2);
 }
 
 .ddoc-toolbar-actions {
@@ -82,7 +176,7 @@
 }
 
 .ddoc-error {
-  color: var(--danger, #b42318);
+  color: var(--danger);
 }
 
 .ddoc-section {
@@ -163,7 +257,7 @@
 }
 
 .link-button-danger {
-  color: var(--danger, #b42318);
+  color: var(--danger);
 }
 
 .ddoc-checkbox {
@@ -188,9 +282,9 @@
   padding: var(--space-1) 0;
 }
 
-/* Activity card cell. */
+/* Activity card cell: a missing transport document and a standalone activity without uploads are both quiet. */
 .ddoc-activity-status.is-missing,
-.ddoc-activity-status.is-not-applicable {
+.ddoc-activity-status.is-empty {
   color: var(--text-muted);
 }
 

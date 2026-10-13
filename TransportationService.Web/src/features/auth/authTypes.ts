@@ -14,6 +14,12 @@ export interface CurrentUser {
   customerId: string | null
   /** UI-taalvoorkeur (nl/fr/en); null = nog niet gekozen → tenant-default → browser → nl. */
   preferredLanguage: 'nl' | 'fr' | 'en' | null
+  /**
+   * Persoonlijke weergavevoorkeur (light/dark/system); null = nog niet gekozen → systeem.
+   * Hoort bij de gebruiker, niet bij de tenant: de server is de bron van waarheid, de
+   * localStorage-cache dient alleen om een thema-flash bij het opstarten te vermijden.
+   */
+  themePreference: 'light' | 'dark' | 'system' | null
 }
 
 export interface AuthTokens {

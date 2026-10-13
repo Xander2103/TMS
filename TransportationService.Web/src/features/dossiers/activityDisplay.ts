@@ -16,6 +16,7 @@ export const PRICE_STATUS_LABEL_KEYS: Record<ActivityPriceStatus, string> = {
   NotPriced: 'dossierActivities.priceStatus.NotPriced',
   PartiallyPriced: 'dossierActivities.priceStatus.PartiallyPriced',
   Priced: 'dossierActivities.priceStatus.Priced',
+  ZeroUnconfirmed: 'dossierActivities.priceStatus.ZeroUnconfirmed',
   Free: 'dossierActivities.priceStatus.Free',
 }
 
@@ -23,6 +24,7 @@ export const PRICE_STATUS_TONE: Record<ActivityPriceStatus, BadgeTone> = {
   NotPriced: 'danger',
   PartiallyPriced: 'warning',
   Priced: 'success',
+  ZeroUnconfirmed: 'warning',
   Free: 'info',
 }
 

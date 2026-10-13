@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom'
 import { useAuth } from '../../features/auth/authContextValue'
 import { useLocale } from '../../i18n/localeContext'
 import { AppLanguageSwitcher } from './AppLanguageSwitcher'
+import { ThemeSwitcher } from '../../theme/ThemeSwitcher'
 import { LegalEntitySwitcher } from '../../features/legal-entities/components/LegalEntitySwitcher'
 import { useUnreadNotifications } from '../../features/notifications/notificationsContextValue'
 import { getNavModules } from './nav/navConfig'
@@ -65,7 +66,11 @@ export function Sidebar({ open = false, onNavigate }: { open?: boolean; onNaviga
         )}
       </nav>
 
-      <AppLanguageSwitcher />
+      {/* Personal preferences (language, appearance): per USER, never tenant settings. */}
+      <div className="sidebar-prefs">
+        <AppLanguageSwitcher />
+        <ThemeSwitcher />
+      </div>
 
       {user && (
         <div className="sidebar-user">

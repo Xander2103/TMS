@@ -26,7 +26,7 @@
 .issued-items-table th,
 .issued-items-table td {
   padding: 8px 10px;
-  border-bottom: 1px solid var(--border, #e5e7eb);
+  border-bottom: 1px solid var(--border);
   text-align: left;
   font-size: 14px;
 }
@@ -51,7 +51,7 @@
 }
 
 .issued-items-link-danger {
-  color: #dc2626;
+  color: var(--color-danger-strong);
 }
 
 .issued-items-form {
@@ -67,7 +67,7 @@
 }
 
 .issued-items-form-error {
-  color: #dc2626;
+  color: var(--color-danger-strong);
   font-size: 14px;
 }
 
@@ -86,12 +86,12 @@
 .issued-items-computed-stock {
   margin: 0;
   font-size: 13px;
-  color: var(--text, #374151);
+  color: var(--text);
   font-weight: normal;
 }
 
 .issued-items-generate-dimension {
-  border: 1px solid var(--border, #e5e7eb);
+  border: 1px solid var(--border);
   border-radius: 8px;
   padding: 8px 12px;
   display: flex;
@@ -120,7 +120,7 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
-  border-left: 3px solid var(--border, #e5e7eb);
+  border-left: 3px solid var(--border);
   padding-left: 12px;
 }
 
@@ -142,7 +142,7 @@
 }
 
 .issued-items-card {
-  border: 1px solid var(--border, #e5e7eb);
+  border: 1px solid var(--border);
   border-radius: 10px;
   padding: 16px;
   margin-bottom: 16px;
@@ -178,7 +178,7 @@
 
 .issued-items-summary dt {
   font-size: 12px;
-  color: var(--muted, #6b7280);
+  color: var(--muted);
 }
 
 .issued-items-summary dd {
@@ -187,7 +187,7 @@
 }
 
 .issued-items-attribute {
-  border-top: 1px solid var(--border, #e5e7eb);
+  border-top: 1px solid var(--border);
   padding: 10px 0;
 }
 
@@ -207,7 +207,7 @@
 }
 
 .issued-items-chip {
-  border: 1px solid var(--border, #e5e7eb);
+  border: 1px solid var(--border);
   border-radius: 999px;
   padding: 2px 10px;
   font-size: 13px;
@@ -240,11 +240,11 @@
 
 .issued-items-stock-preview {
   font-size: 13px;
-  color: var(--muted, #6b7280);
+  color: var(--muted);
 }
 
 .issued-items-stock-preview-warning {
-  color: #b45309;
+  color: var(--color-warning);
 }
 
 .bulk-issue-form {
@@ -260,7 +260,7 @@
 }
 
 .bulk-issue-category {
-  border: 1px solid var(--border, #e5e7eb);
+  border: 1px solid var(--border);
   border-radius: 8px;
   padding: 10px 14px;
   display: flex;
@@ -275,7 +275,7 @@
 }
 
 .bulk-issue-row {
-  border-top: 1px solid var(--border, #e5e7eb);
+  border-top: 1px solid var(--border);
   padding-top: 8px;
 }
 
@@ -310,7 +310,7 @@
 .issued-items-panel-intro {
   margin: 0;
   font-size: 14px;
-  color: var(--muted, #6b7280);
+  color: var(--muted);
   max-width: 64ch;
 }
 
@@ -329,8 +329,8 @@
 
 /* Teruggebrachte uitgiftes blijven zichtbaar als historiek, maar treden terug (geen display:none). */
 .issued-items-table tr.is-returned > td {
-  color: var(--muted, #6b7280);
-  background: var(--surface-muted, #f9fafb);
+  color: var(--muted);
+  background: var(--surface-muted);
 }
 
 .issued-items-table tr.is-returned > td:not(.issued-items-row-actions) {
@@ -340,5 +340,409 @@
 .issued-items-returned-by {
   display: block;
   font-size: 12px;
-  color: var(--muted, #6b7280);
+  color: var(--muted);
+}
+
+/* ---------------------------------------------------------------------------------------------
+   Bedrijfsmiddel create/edit form (redesign 2026-10-07): calm sections, three "Beheerwijze"
+   cards, an inline variants table and a folded "Meer instellingen". Every colour is a theme
+   token so light and dark stay consistent. */
+
+.issued-items-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.issued-items-item-form .ui-form-section-flat {
+  margin-bottom: var(--space-5);
+}
+
+.issued-items-item-form .ui-form-section-flat + .ui-form-section-flat {
+  padding-top: var(--space-4);
+}
+
+.issued-items-section-hint {
+  margin: 0 0 12px;
+  font-size: 13.5px;
+  color: var(--text-muted);
+}
+
+.issued-items-mode-fieldset {
+  border: none;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+
+.issued-items-mode-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+@media (max-width: 720px) {
+  .issued-items-mode-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.issued-items-mode-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg);
+  cursor: pointer;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
+}
+
+.issued-items-mode-card:hover {
+  border-color: var(--accent-border);
+}
+
+.issued-items-mode-card.is-selected {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.issued-items-mode-card:focus-within {
+  box-shadow: 0 0 0 3px var(--accent-bg), inset 0 0 0 1px var(--accent);
+  border-color: var(--accent);
+}
+
+.issued-items-mode-card.is-disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.issued-items-mode-radio {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  pointer-events: none;
+}
+
+.issued-items-mode-title {
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--text-h);
+}
+
+.issued-items-mode-description {
+  font-size: 13.5px;
+  color: var(--text-h);
+}
+
+.issued-items-mode-examples {
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+
+.issued-items-mode-locked {
+  margin: 12px 0 0;
+}
+
+.issued-items-suggestion {
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: var(--accent);
+}
+
+/* Fields that only exist for the chosen mode: visually attached to the cards above. */
+.issued-items-mode-detail {
+  margin-top: 16px;
+  padding: 16px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-lg);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.issued-items-mode-detail-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.issued-items-form-row-3 {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+@media (max-width: 720px) {
+  .issued-items-form-row,
+  .issued-items-form-row-3 {
+    grid-template-columns: 1fr;
+  }
+}
+
+.issued-items-checkbox-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.issued-items-checkbox input[type='checkbox'] {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+}
+
+.issued-items-checkbox-hint {
+  margin: -6px 0 0 26px;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+
+.issued-items-radio-row {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.issued-items-radio {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.issued-items-radio input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+}
+
+.issued-items-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+  min-height: 26px;
+}
+
+.issued-items-chips-empty {
+  font-size: 13.5px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.issued-items-chip-remove {
+  border: none;
+  background: transparent;
+  color: inherit;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 0 0 2px;
+}
+
+/* Bare inputs inside the variants tables (pending rows and the live editor). */
+.issued-items-table input {
+  font: inherit;
+  font-size: 1rem;
+  line-height: 1.4;
+  padding: 8px 10px;
+  min-height: 40px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text-h);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.issued-items-table input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-bg);
+}
+
+.issued-items-table input[aria-invalid='true'] {
+  border-color: var(--danger);
+}
+
+.issued-items-table input:disabled {
+  opacity: 0.6;
+}
+
+.issued-items-col-number {
+  width: 120px;
+}
+
+.issued-items-variant-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.issued-items-variant-tools {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.issued-items-quick-add {
+  flex: 1 1 260px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.issued-items-quick-add-label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.issued-items-quick-add-controls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.issued-items-quick-add-controls input {
+  font: inherit;
+  font-size: 1rem;
+  line-height: 1.4;
+  padding: 8px 10px;
+  min-height: 40px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text-h);
+  flex: 1;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.issued-items-quick-add-controls input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-bg);
+}
+
+.issued-items-quick-add-hint {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+
+.issued-items-inactive-notice {
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--warning-bg);
+  color: var(--warning);
+  border: 1px solid var(--warning-border);
+  font-size: 14px;
+}
+
+/* Overview: one "Beheerwijze" cell instead of two technical yes/no columns. */
+.issued-items-mode-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.issued-items-badges {
+  display: inline-flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+/* Live variants editor (existing item): the add row ends with its action aligned to the inputs. */
+.issued-items-variant-add {
+  align-items: end;
+}
+
+.issued-items-variant-add-action {
+  grid-column: 1 / -1;
+}
+
+/* Narrow screens: the variants table scrolls inside the dialog instead of widening it. */
+.issued-items-table-scroll {
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+/* Pending variants: the preset chooser ("Beginnen met") sits above the table as a plain radio row. */
+.issued-items-preset {
+  margin: 0;
+  padding: 0;
+  border: none;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.issued-items-preset legend {
+  padding: 0;
+  margin-bottom: 2px;
+}
+
+.issued-items-preset .issued-items-radio-row {
+  margin-bottom: 0;
+}
+
+/* One-click sizes that are not in the list yet (XS, XXL, …): small outlined chips. */
+.issued-items-size-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.issued-items-size-suggestions-label {
+  font-size: 12.5px;
+  color: var(--text-muted);
+  margin-right: 2px;
+}
+
+.issued-items-size-chip {
+  font: inherit;
+  font-size: 13px;
+  line-height: 1;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--text-h);
+  cursor: pointer;
+}
+
+.issued-items-size-chip:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.issued-items-size-chip:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-bg);
+}
+
+.issued-items-size-chip:disabled {
+  opacity: 0.6;
+  cursor: default;
 }

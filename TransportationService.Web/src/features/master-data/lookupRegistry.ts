@@ -22,6 +22,12 @@ export interface LookupResourceConfig {
    * LookupManager/LookupSelect resolve their config through it.
    */
   hiddenFromNav?: boolean
+  /**
+   * Non-technical lookup: the admin dialog leads with name, description and active state and
+   * folds code + sort order under "Meer instellingen"; the list hides the code column. Codes are
+   * still generated and stored exactly as before.
+   */
+  simpleForm?: boolean
 }
 
 /** Vertaalsleutels — renderen als t(LOOKUP_GROUP_LABELS[group]). */
@@ -39,7 +45,7 @@ export const LOOKUP_RESOURCES: LookupResourceConfig[] = [
   { slug: 'driver-categories', title: 'navigation.lookups.driver-categories', singular: 'masterData.singular.driver-categories', basePath: '/api/driver-categories', group: 'categorieen', viewPermission: 'driver_categories.view', managePermission: 'driver_categories.manage' },
   { slug: 'customer-categories', title: 'navigation.lookups.customer-categories', singular: 'masterData.singular.customer-categories', basePath: '/api/customer-categories', group: 'categorieen', viewPermission: 'customer_categories.view', managePermission: 'customer_categories.manage' },
   // Managed under Personeel → Bedrijfsmiddelen (/issued-items/categories), next to the templates they group.
-  { slug: 'issued-item-categories', title: 'navigation.lookups.issued-item-categories', singular: 'masterData.singular.issued-item-categories', basePath: '/api/issued-item-categories', group: 'categorieen', viewPermission: 'issued_items.view', managePermission: 'inventory.manage', hiddenFromNav: true },
+  { slug: 'issued-item-categories', title: 'navigation.lookups.issued-item-categories', singular: 'masterData.singular.issued-item-categories', basePath: '/api/issued-item-categories', group: 'categorieen', viewPermission: 'issued_items.view', managePermission: 'inventory.manage', hiddenFromNav: true, simpleForm: true },
   { slug: 'task-categories', title: 'navigation.lookups.task-categories', singular: 'masterData.singular.task-categories', basePath: '/api/task-categories', group: 'categorieen', viewPermission: 'tasks.view_own', managePermission: 'tasks.manage_categories' },
   // Countries are deliberately absent: they are global ISO reference data (seeded, read-only),
   // not tenant master data. Country selection happens through the CountryCombobox everywhere.

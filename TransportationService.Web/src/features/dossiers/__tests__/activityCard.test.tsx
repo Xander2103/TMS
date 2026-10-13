@@ -111,6 +111,15 @@ describe('ActivityCard', () => {
     expect(screen.getByRole('listitem')).not.toHaveTextContent(/€\s?0,00/)
   })
 
+  it('shows € 0,00 with "Controle vereist" for a € 0 that still awaits its free confirmation (never "Geprijsd")', () => {
+    const { card } = renderCard(
+      dossierActivity({ hasStops: false, activityTypeName: 'Plateau', agreedPrice: 0, isPriced: true, priceStatus: 'ZeroUnconfirmed', freeConfirmed: false }),
+    )
+    expect(cell(card, 'Verkoopprijs')).toHaveTextContent(/€\s?0,00/)
+    expect(cell(card, 'Prijsstatus')).toHaveTextContent('Controle vereist')
+    expect(cell(card, 'Prijsstatus')).not.toHaveTextContent('Geprijsd')
+  })
+
   it('shows "Gratis" for an activity that was confirmed as free', () => {
     const { card } = renderCard(
       dossierActivity({ hasStops: false, activityTypeName: 'Opslag', agreedPrice: 0, isPriced: true, priceStatus: 'Free', freeConfirmed: true }),

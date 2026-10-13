@@ -80,7 +80,7 @@ public class DossierActivityPricingService : IDossierActivityPricingService
 
         var before = pricing is null
             ? null
-            : new { PricingSource = pricing.PricingSource.ToString(), pricing.FixedAmount, pricing.AgreedPrice };
+            : new { PricingSource = pricing.PricingSource.ToString(), pricing.FixedAmount, pricing.AgreedPrice, pricing.FreeConfirmed };
 
         var created = pricing is null;
         pricing ??= NewPricing(activityId);
@@ -98,14 +98,16 @@ public class DossierActivityPricingService : IDossierActivityPricingService
         pricing.FixedAmount = amount;
         // A fixed price has no lines: the agreed amount IS the effective price.
         pricing.AgreedPrice = amount;
-        // "Free" is confirmed through the lines command only; a fixed € 0 keeps its pricing.zero check.
-        pricing.FreeConfirmed = false;
+        // A fixed € 0 is "free" only when the caller confirms it explicitly (pricing UX sprint
+        // 2026-10-08: "Bevestigen als gratis" keeps the € 0 record and settles it); any other amount
+        // — and an unconfirmed € 0 — keeps its "Controle vereist" state.
+        pricing.FreeConfirmed = request.FreeConfirmed && amount == 0m;
         pricing.Version = Guid.NewGuid();
 
         await SaveAsync(pricing, created, dossierId, cancellationToken);
 
         await _auditService.RecordAsync(EntityType, activityId.ToString(), "agreedPriceSet", before,
-            new { PricingSource = pricing.PricingSource.ToString(), pricing.FixedAmount, pricing.AgreedPrice, DossierId = dossierId },
+            new { PricingSource = pricing.PricingSource.ToString(), pricing.FixedAmount, pricing.AgreedPrice, pricing.FreeConfirmed, DossierId = dossierId },
             cancellationToken);
 
         return await _dossierService.GetAsync(dossierId, cancellationToken);

@@ -42,7 +42,8 @@ public interface IOrderDocumentAccessResolver
 /// D6: THE permission decision for the flat order-document routes. One entity serves two levels, so
 /// the required right depends on the row: a DOSSIER document follows the dossier
 /// (<c>dossiers.view</c> / <c>dossiers.manage</c>), an ORDER document keeps the order rights it
-/// always had. The controller attributes are only the coarse outer gate (any of both families);
+/// always had, an ACTIVITY document (standalone activity, no order) follows the dossier like a
+/// dossier document. The controller attributes are only the coarse outer gate (any of both families);
 /// this resolver is the single place where scope → permission is decided. Fail-closed: no user or
 /// no matching right = Forbidden; an unknown (or foreign-tenant) document = NotFound.
 /// </summary>
@@ -64,8 +65,9 @@ public class OrderDocumentAccessResolver : IOrderDocumentAccessResolver
     public static IReadOnlyList<string> RequiredPermissions(DossierDocumentScope scope, OrderDocumentOperation operation) =>
         (scope, operation) switch
         {
-            (DossierDocumentScope.Dossier, OrderDocumentOperation.Download) => [PermissionCodes.DossiersView, PermissionCodes.DossiersManage],
-            (DossierDocumentScope.Dossier, _) => [PermissionCodes.DossiersManage],
+            // An activity document is a dossier child without an order: it follows the dossier rights.
+            (DossierDocumentScope.Dossier or DossierDocumentScope.Activity, OrderDocumentOperation.Download) => [PermissionCodes.DossiersView, PermissionCodes.DossiersManage],
+            (DossierDocumentScope.Dossier or DossierDocumentScope.Activity, _) => [PermissionCodes.DossiersManage],
             (_, OrderDocumentOperation.Download) => [PermissionCodes.OrdersView, PermissionCodes.OrdersManage],
             (_, OrderDocumentOperation.Upload) => [PermissionCodes.OrdersCreate, PermissionCodes.OrdersEdit, PermissionCodes.OrdersManage],
             _ => [PermissionCodes.OrdersEdit, PermissionCodes.OrdersManage],

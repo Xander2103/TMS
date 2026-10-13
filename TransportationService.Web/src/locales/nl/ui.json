@@ -46,6 +46,7 @@
     "navLabel": "Formuliersecties",
     "sectionLabel": "Sectie",
     "hasErrors": "bevat fouten",
+    "errorCount": "bevat {count} fout(en)",
     "hasData": "bevat gegevens",
     "emptyOptional": "leeg (optioneel)",
     "empty": "leeg"
@@ -132,5 +133,23 @@
   },
   "time": {
     "placeholder": "uu:mm"
+  },
+  "appearance": {
+    "label": "Weergave",
+    "description": "Kies hoe de applicatie eruitziet. Deze voorkeur is persoonlijk en geldt op al je apparaten.",
+    "system": "Systeem",
+    "systemHint": "Volgt de instelling van je apparaat",
+    "light": "Licht",
+    "lightHint": "Altijd het lichte thema",
+    "dark": "Donker",
+    "darkHint": "Altijd het donkere thema",
+    "saveFailed": "De weergavevoorkeur kon niet worden opgeslagen. Ze geldt wel op dit apparaat."
+  },
+  "multiSelect": {
+    "selectedCount_one": "{count} geselecteerd",
+    "selectedCount_other": "{count} geselecteerd",
+    "selectedLabel": "Geselecteerd: {label}",
+    "remove": "{label} verwijderen",
+    "typeToSearch": "Typ om te zoeken…"
   }
 }

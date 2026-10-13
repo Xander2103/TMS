@@ -3,17 +3,22 @@ import type { OrderDocumentType } from '../../transport-orders/api/orderDocument
 
 /**
  * Dossier documents (master sprint 2026-09-21, D6 / contract 4.2). ONE entity, ONE file: a document
- * either hangs on the dossier as a whole (`scope: 'Dossier'`, `transportOrderId: null`) or on one of
- * its orders. The dossier list returns both scopes, so every view is derived from that single list —
- * a general document is never copied to an order.
+ * hangs on the dossier as a whole (`scope: 'Dossier'`), on one of its orders (`'Order'`) or — dossier
+ * UX correction sprint 2026-10-08 — on one of its STANDALONE activities (`'Activity'`,
+ * `dossierActivityId` set, no order). The dossier list returns every scope, so every view is derived
+ * from that single list — a dossier document is never copied to an order or an activity.
  */
-export type DossierDocumentScope = 'Dossier' | 'Order'
+export type DossierDocumentScope = 'Dossier' | 'Order' | 'Activity'
 
 export interface DossierDocument {
   id: string
   dossierId: string
   transportOrderId: string | null
   orderNumber: string | null
+  /** The standalone activity the document belongs to; null for dossier-wide and order documents. */
+  dossierActivityId: string | null
+  /** Planner label of that activity, or its type name (there is no activity number). */
+  activityLabel: string | null
   scope: DossierDocumentScope
   documentType: OrderDocumentType
   customTypeName: string | null
@@ -30,8 +35,10 @@ export interface DossierDocument {
 }
 
 export interface CreateDossierDocumentInput {
-  /** null = document of the whole dossier. */
+  /** The order the document belongs to; null together with `dossierActivityId` null = document of the whole dossier. */
   transportOrderId: string | null
+  /** The standalone activity the document belongs to (never together with an order). */
+  dossierActivityId: string | null
   documentType: OrderDocumentType
   customTypeName: string | null
   title: string
@@ -61,9 +68,15 @@ export const listDossierDocuments = (dossierId: string): Promise<DossierDocument
 export const createDossierDocument = (dossierId: string, input: CreateDossierDocumentInput): Promise<DossierDocument> =>
   apiClient.postJson(`/api/dossiers/${dossierId}/documents`, input)
 
-/** Moves the record to another level of the SAME dossier (null = dossier level). The file is not touched. */
-export const moveDossierDocument = (id: string, targetTransportOrderId: string | null): Promise<DossierDocument> =>
-  apiClient.postJson(`/api/order-documents/${id}/move`, { targetTransportOrderId })
+/** Where a document is moved to inside its dossier: an order, a standalone activity, or (both null) the dossier level. */
+export interface DossierDocumentMoveTarget {
+  targetTransportOrderId: string | null
+  targetDossierActivityId: string | null
+}
+
+/** Moves the record to another level of the SAME dossier. The file is not touched. */
+export const moveDossierDocument = (id: string, target: DossierDocumentMoveTarget): Promise<DossierDocument> =>
+  apiClient.postJson(`/api/order-documents/${id}/move`, target)
 
 /**
  * Metadata update through the existing route. The response shape of that shared route is not part of

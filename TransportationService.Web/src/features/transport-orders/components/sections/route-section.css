@@ -3,10 +3,16 @@
    order form all get the SAME side-by-side Laden/Lossen layout, whichever chunk loads first.
    No global box-sizing reset exists: every rule that sizes a box sets it itself. */
 
-/* Laden | Lossen: two equal columns; extra stops wrap row by row in sequence order. Cards in one
-   row are equally tall, so their borders and first rows line up. */
+/* Stop cards fill the available width first (route UX sprint 2026-10-08): as many cards per row
+   as comfortably fit — a wide desktop gets three or four, a normal desktop two, a tablet one or
+   two — and only then a new row. Plain grid flow in route sequence (1, 2, 3, …): DOM and tab
+   order never change, nothing is laid out per stop type. 380px is the narrowest a card stays
+   comfortable: its two-column field rows (Naam | Straat, Postcode | Plaats, Van | Tot) keep
+   usable inputs and the search field keeps "+ Nieuw klantadres" beside it. `min(…, 100%)`
+   keeps a narrower container at one full-width column instead of overflowing. Cards in one row
+   are equally tall, so their borders and first rows line up. */
 .tof-stops-grid {
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: repeat(auto-fill, minmax(min(380px, 100%), 1fr));
   align-items: stretch;
 }
 
@@ -220,8 +226,9 @@
   color: var(--text);
 }
 
-/* Tablet/phone: one stop per row; the address rows go to one column, Van/Tot stay a pair. */
-@media (max-width: 900px) {
+/* Phone: one stop per row; the address rows go to one column, Van/Tot stay a pair. (A tablet
+   still gets two cards when 2 × 380px fit — the auto-fill rule above decides.) */
+@media (max-width: 640px) {
   .tof-stops-grid {
     grid-template-columns: minmax(0, 1fr);
   }

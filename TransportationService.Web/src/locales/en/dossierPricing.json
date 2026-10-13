@@ -7,13 +7,47 @@
     "NotPriced": "Not priced",
     "PartiallyPriced": "Partially priced",
     "Priced": "Priced",
+    "ZeroUnconfirmed": "Review required",
     "Free": "Free"
+  },
+  "unit": {
+    "order": "Order",
+    "activity": "Activity",
+    "standalone": "Standalone activity"
+  },
+  "master": {
+    "title": "Priceable parts ({count})",
+    "hint": "Each part has its own price and sales lines. Pick a part to view or change its price.",
+    "noPrice": "No price yet",
+    "listLabel": "Priceable parts"
+  },
+  "detail": {
+    "title": "Price details",
+    "priceBlock": "Price",
+    "openOrder": "Open the full order price",
+    "pickHint": "Pick a part on the left to edit its price."
+  },
+  "zeroCallout": {
+    "title": "Confirm free price",
+    "message": "The sales price of this activity is € 0.00. Confirm that this activity is deliberately carried out for free, or adjust the price.",
+    "confirm": "Confirm as free",
+    "adjust": "Adjust price"
+  },
+  "order": {
+    "zeroConfirmTitle": "Confirm order as free",
+    "zeroConfirmMessage": "You are setting the agreed price of order {number} to € 0.00. Confirm that this order is deliberately free.",
+    "zeroConfirmAction": "Confirm as free",
+    "freeNote": "This order is deliberately free (€ 0.00)."
   },
   "picker": {
     "itemWithOrder": "{number} — {name}",
     "lockedWhileDirty": "Save the sales lines or discard the changes to switch activity."
   },
   "summary": {
+    "title": "Dossier summary",
+    "handled": "{handled} of {total} parts settled",
+    "toHandle": "Still to price or to review:",
+    "needsReview": "{name} (review required)",
     "toPrice": "Still to price:",
     "partial": "{name} (partial)",
     "legacyOrders": "Linked orders without an activity"
@@ -59,7 +93,8 @@
     "confirmFreeAction": "Confirm as free",
     "freeSaved": "Activity confirmed as free.",
     "removePrice": "Remove price",
-    "removePriceMessage": "The price and all sales lines of this activity are removed. The activity is not priced afterwards.",
+    "markFree": "Mark as free",
+    "removePriceMessage": "The price and all sales lines of {name} will be removed. This part is then not priced.",
     "priceRemoved": "Price removed.",
     "actionFailed": "The price could not be updated."
   },

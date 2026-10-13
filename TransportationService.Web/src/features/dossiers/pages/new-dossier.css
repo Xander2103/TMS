@@ -1,11 +1,61 @@
 /* One-page transport intake (2026-09): compact operational layout, ≥44px controls.
    Selected states use the app accent tokens (--accent*, global.css) — never a hardcoded blue. */
 
+/* 2026-10-08 redesign: subnavigation (Basis · Route · Goederen · Vereisten · Controle) over ONE
+   lifted form state. The form uses the content width (wide desktops get 3–4 stop cards per row);
+   the Basis fields keep a readable cap of their own. */
 .new-dossier form {
-  max-width: 960px;
+  max-width: 1600px;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 16px;
+}
+
+.new-dossier .ui-sectioned-form-body {
+  padding-top: 12px;
+}
+
+.new-dossier-section-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.new-dossier-section-title:focus {
+  outline: none;
+}
+
+.new-dossier-section-title:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+  border-radius: 4px;
+}
+
+.new-dossier-subtitle {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  margin: 8px 0 0;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* Basis: klant (wide) · referentie · datum on one row; the type tiles below use the full width. */
+.new-dossier-basis-grid {
+  display: grid;
+  grid-template-columns: minmax(280px, 2fr) minmax(180px, 1fr) minmax(160px, 1fr);
+  gap: 16px;
+  align-items: start;
+  max-width: 1100px;
+}
+
+@media (max-width: 900px) {
+  .new-dossier-basis-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.new-dossier-row-narrow {
+  max-width: 480px;
 }
 
 .new-dossier-section {
@@ -131,7 +181,7 @@
   min-height: 44px;
   padding: 6px 8px;
   font-size: 0.875rem;
-  color: var(--text-muted, var(--text));
+  color: var(--text-muted);
   cursor: pointer;
   border-radius: 6px;
 }
@@ -149,13 +199,124 @@
 .new-dossier-hint {
   margin: 0;
   font-size: 0.875rem;
-  color: var(--text-muted, var(--text));
+  color: var(--text-muted);
 }
 
+/* Sticky footer of the active section: "← Vorige" left, Annuleren · Dossier aanmaken · "Naar … →" right. */
 .new-dossier-actions {
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
+  align-items: center;
   gap: 12px;
-  padding-top: 8px;
-  border-top: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+
+.new-dossier-actions-side,
+.new-dossier-actions-main {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.new-dossier-actions-main {
+  margin-left: auto;
+  justify-content: flex-end;
+}
+
+/* Controle: a scannable grid of recap blocks, each linking back to its section. */
+.new-dossier-review {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.new-dossier-review-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr));
+  gap: 12px;
+}
+
+.new-dossier-review-block {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.new-dossier-review-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.new-dossier-review-head h3 {
+  margin: 0;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--text-muted);
+}
+
+.new-dossier-review-lines {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow-wrap: anywhere;
+}
+
+.new-dossier-review-empty {
+  margin: 0;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.new-dossier-review-errors,
+.new-dossier-review-warnings {
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.new-dossier-review-errors {
+  border: 1px solid var(--color-danger);
+  background: var(--color-danger-bg, transparent);
+}
+
+.new-dossier-review-warnings {
+  border: 1px solid var(--color-warning);
+  background: var(--color-warning-bg, transparent);
+}
+
+.new-dossier-review-errors-title,
+.new-dossier-review-warnings-title {
+  margin: 0 0 4px;
+  font-weight: 600;
+}
+
+.new-dossier-review-errors ul,
+.new-dossier-review-warnings ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+/* Quiet actions under the customer field: "+ Nieuwe klant" and the link to a just-created customer. */
+.new-dossier-field-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin-top: 6px;
+  font-size: 0.875rem;
+}
+
+.new-dossier-field-link {
+  color: var(--color-primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }

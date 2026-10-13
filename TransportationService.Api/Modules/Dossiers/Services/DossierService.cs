@@ -158,14 +158,6 @@ public partial class DossierService : IDossierService
                     .Where(OrderPricingState.IsPricedExpression)
                     // OrderPricingState.EffectiveAgreedPrice — the same tree, inlined for SQL.
                     .Sum(o => o.AgreedPrice ?? (o.PricingSource == OrderPricingSource.OneOff ? o.OneOffFixedAmount : null)),
-                TransportZeroCount = _dbContext.DossierActivities
-                    .Where(a => a.DossierId == d.Id && a.LinkedTransportOrderId != null)
-                    .Join(_dbContext.ActivityTypes, a => a.ActivityTypeId, t => t.Id, (a, t) => new { a, t })
-                    .Where(x => x.t.IsBillable && x.t.HasStops)
-                    .Join(_dbContext.TransportOrders, x => x.a.LinkedTransportOrderId, o => o.Id, (x, o) => o)
-                    // OrderPricingState.IsIntentionalZero — the same tree, inlined for SQL.
-                    .Count(o => (o.PricingSource == OrderPricingSource.OneOff && o.OneOffFixedAmount == 0m)
-                                || (o.PriceIsManual && o.AgreedPrice == 0m)),
                 // (b) standalone billable activities, priced through their own record;
                 StandaloneUnitCount = _dbContext.DossierActivities
                     .Where(a => a.DossierId == d.Id)
@@ -185,6 +177,9 @@ public partial class DossierService : IDossierService
                     .Join(_dbContext.DossierActivityPricings, x => x.a.Id, p => p.DossierActivityId, (x, p) => p)
                     .Where(ActivityPricingState.IsPricedExpression)
                     .Sum(p => p.AgreedPrice),
+                // Pricing UX sprint 2026-10-08: the ONLY zeros that still need a decision. An
+                // intentional € 0 on an order (one-off/override at 0) is the planner's explicit
+                // decision and reads as Free — it is not counted here any more.
                 StandaloneZeroCount = _dbContext.DossierActivities
                     .Where(a => a.DossierId == d.Id)
                     .Join(_dbContext.ActivityTypes, a => a.ActivityTypeId, t => t.Id, (a, t) => new { a, t })
@@ -210,13 +205,6 @@ public partial class DossierService : IDossierService
                     .Where(OrderPricingState.IsPricedExpression)
                     // OrderPricingState.EffectiveAgreedPrice — the same tree, inlined for SQL.
                     .Sum(o => o.AgreedPrice ?? (o.PricingSource == OrderPricingSource.OneOff ? o.OneOffFixedAmount : null)),
-                LegacyZeroCount = _dbContext.DossierOrders
-                    .Where(l => l.DossierId == d.Id
-                                && !_dbContext.DossierActivities.Any(a => a.DossierId == d.Id && a.LinkedTransportOrderId == l.TransportOrderId))
-                    .Join(_dbContext.TransportOrders, l => l.TransportOrderId, o => o.Id, (l, o) => o)
-                    // OrderPricingState.IsIntentionalZero — the same tree, inlined for SQL.
-                    .Count(o => (o.PricingSource == OrderPricingSource.OneOff && o.OneOffFixedAmount == 0m)
-                                || (o.PriceIsManual && o.AgreedPrice == 0m)),
                 OpenIncidentCount = _dbContext.Incidents.Count(i =>
                     i.DossierId == d.Id && (i.Status == IncidentStatus.New || i.Status == IncidentStatus.InProgress)),
             })
@@ -235,7 +223,7 @@ public partial class DossierService : IDossierService
                 PricedOrderCount: r.PricedOrderCount,
                 BillableActivityCount: r.TransportUnitCount + r.StandaloneUnitCount + r.LegacyUnitCount,
                 PricedActivityCount: r.TransportPricedCount + r.StandalonePricedCount + r.LegacyPricedCount,
-                ZeroPricedActivityCount: r.TransportZeroCount + r.StandaloneZeroCount + r.LegacyZeroCount,
+                ZeroPricedActivityCount: r.StandaloneZeroCount,
                 DossierDate: r.DossierDate,
                 ConfirmedAt: r.Status == DossierStatus.Closed ? r.ClosedAt : null,
                 ConfirmationSource: r.ConfirmationSource?.ToString(),
@@ -252,16 +240,18 @@ public partial class DossierService : IDossierService
     /// <summary>
     /// Dossier-level price status from the unit counts of the list projection — the per-activity
     /// <see cref="ActivityPriceStatus"/> vocabulary rolled up: nothing billable = no status, none
-    /// priced = NotPriced, some = PartiallyPriced, all = Priced. Free only when every unit is priced,
-    /// the total is exactly € 0 and no standalone zero still awaits its "free" confirmation — a
-    /// missing price never reads as free.
+    /// priced = NotPriced, some = PartiallyPriced, all priced but a standalone € 0 still awaiting
+    /// its "free" confirmation = ZeroUnconfirmed ("Controle vereist" — never "Geprijsd" next to a
+    /// ⚠), all priced at a total of exactly € 0 = Free, otherwise Priced. A missing price never
+    /// reads as free.
     /// </summary>
     private static string? ListPriceStatus(int billable, int priced, decimal total, int unconfirmedZero)
     {
         if (billable == 0) return null;
         if (priced == 0) return ActivityPriceStatus.NotPriced;
         if (priced < billable) return ActivityPriceStatus.PartiallyPriced;
-        return total == 0m && unconfirmedZero == 0 ? ActivityPriceStatus.Free : ActivityPriceStatus.Priced;
+        if (unconfirmedZero > 0) return ActivityPriceStatus.ZeroUnconfirmed;
+        return total == 0m ? ActivityPriceStatus.Free : ActivityPriceStatus.Priced;
     }
 
     /// <summary>
@@ -507,11 +497,16 @@ public partial class DossierService : IDossierService
         // D6: ONE query for every document of the dossier (both levels, each once) and one for the
         // issued transport documents of its activities' orders — none per activity.
         var documentRows = await Modules.Orders.Services.DossierDocumentQuery.ForDossier(_dbContext, tenantId, id)
-            .Select(d => new { d.TransportOrderId, d.DocumentType })
+            .Select(d => new { d.TransportOrderId, d.DossierActivityId, d.DocumentType })
             .ToListAsync(cancellationToken);
         var documentCountByOrder = documentRows
             .Where(d => d.TransportOrderId is not null)
             .GroupBy(d => d.TransportOrderId!.Value)
+            .ToDictionary(g => g.Key, g => g.Count());
+        // Documents of a STANDALONE activity (no order) hang on the activity itself.
+        var documentCountByActivity = documentRows
+            .Where(d => d.DossierActivityId is not null)
+            .GroupBy(d => d.DossierActivityId!.Value)
             .ToDictionary(g => g.Key, g => g.Count());
         var activityOrderIds = activityRows.Where(a => a.LinkedTransportOrderId is not null)
             .Select(a => a.LinkedTransportOrderId!.Value).Distinct().ToList();
@@ -555,12 +550,16 @@ public partial class DossierService : IDossierService
                         pricingSource = "Order";
                         agreedPrice = OrderPricingState.EffectiveAgreedPrice(linked.PricingSource, linked.OneOffFixedAmount, linked.AgreedPrice);
                         isPriced = OrderPricingState.IsPriced(linked.PriceIsManual, linked.PricingSource, linked.OneOffFixedAmount, linked.AgreedPrice);
-                        isZero = OrderPricingState.IsIntentionalZero(linked.PriceIsManual, linked.PricingSource, linked.OneOffFixedAmount, linked.AgreedPrice);
                         pricingStatus = snapshot?.Status.ToString();
                     }
 
+                    // An intentional € 0 on the order reads as Free (the one-off command at 0 IS the
+                    // explicit decision); it is NOT a zero that still needs a decision, so `isZero`
+                    // — the "needs attention" counter — stays false for order-backed units.
+                    var intentionalZero = linked is not null
+                        && OrderPricingState.IsIntentionalZero(linked.PriceIsManual, linked.PricingSource, linked.OneOffFixedAmount, linked.AgreedPrice);
                     priceStatus = ActivityPriceStatus.ForOrder(
-                        a.IsBillable, linked is not null, isPriced, isZero, snapshot?.CoverageStatus, snapshot?.IsStale ?? false);
+                        a.IsBillable, linked is not null, isPriced, intentionalZero, snapshot?.CoverageStatus, snapshot?.IsStale ?? false);
                 }
                 else
                 {
@@ -599,14 +598,14 @@ public partial class DossierService : IDossierService
                     NoteCount: activityNotes?.Count ?? 0,
                     LatestNotePreview: activityNotes?.LatestPreview,
                     LatestNoteAt: activityNotes?.LatestAt,
-                    // D6: the OWN documents of the activity's order — dossier-level documents are
-                    // counted on the dossier, never per activity.
+                    // D6: the OWN documents of the activity's order, or of the standalone activity
+                    // itself — dossier-level documents are counted on the dossier, never per activity.
                     IssuedDocuments: a.LinkedTransportOrderId is { } issuedOrderId
                         ? issuedByOrder.GetValueOrDefault(issuedOrderId) ?? []
                         : [],
                     DocumentCount: a.LinkedTransportOrderId is { } documentOrderId
                         ? documentCountByOrder.GetValueOrDefault(documentOrderId)
-                        : 0);
+                        : documentCountByActivity.GetValueOrDefault(a.Id));
                 return (Dto: dto, IsZero: isZero);
             })
             .ToList();
@@ -622,10 +621,12 @@ public partial class DossierService : IDossierService
             .Select(a => new BillableUnit(a.Dto.IsPriced, a.Dto.AgreedPrice, a.IsZero))
             .Concat(orderRows
                 .Where(o => !representedOrderIds.Contains(o.Id))
+                // Legacy links: an intentional € 0 on the order is settled (Free), never an
+                // unconfirmed zero that still needs attention.
                 .Select(o => new BillableUnit(
                     OrderPricingState.IsPriced(o.PriceIsManual, o.PricingSource, o.OneOffFixedAmount, o.AgreedPrice),
                     OrderPricingState.EffectiveAgreedPrice(o.PricingSource, o.OneOffFixedAmount, o.AgreedPrice),
-                    OrderPricingState.IsIntentionalZero(o.PriceIsManual, o.PricingSource, o.OneOffFixedAmount, o.AgreedPrice))))
+                    IsUnconfirmedZero: false)))
             .ToList();
         var financials = await BuildFinancialsAsync(id, orderIds, orders.Count(o => o.IsPriced), units, cancellationToken);
 
@@ -1154,8 +1155,12 @@ public partial class DossierService : IDossierService
         return await GetAsync(id, cancellationToken);
     }
 
-    /// <summary>One billable unit of a dossier as the financials see it (step 13).</summary>
-    private sealed record BillableUnit(bool IsPriced, decimal? Amount, bool IsIntentionalZero);
+    /// <summary>
+    /// One billable unit of a dossier as the financials see it (step 13). <c>IsUnconfirmedZero</c>:
+    /// priced at exactly € 0 WITHOUT a "free" decision (standalone activities only — an order's
+    /// one-off € 0 is that decision).
+    /// </summary>
+    private sealed record BillableUnit(bool IsPriced, decimal? Amount, bool IsUnconfirmedZero);
 
     /// <param name="units">Billable units: activities of a billable type (priced via order or own record) + legacy links.</param>
     private async Task<DossierFinancialSummaryDto> BuildFinancialsAsync(
@@ -1165,10 +1170,11 @@ public partial class DossierService : IDossierService
         var tenantId = _tenantContext.TenantId;
 
         // The dossier total is a SUM over the PRICED units only (an intentional € 0 contributes 0);
-        // the frontend shows "Nog geen prijs" while PricedActivityCount is 0.
+        // the frontend shows "Nog geen prijs" while PricedActivityCount is 0. ZeroPricedActivityCount
+        // = the € 0 units that still await their "free" confirmation (the ⚠ of list and overview).
         var pricedUnits = units.Where(u => u.IsPriced).ToList();
         var agreed = pricedUnits.Sum(u => u.Amount ?? 0m);
-        var zeroPriced = pricedUnits.Count(u => u.IsIntentionalZero);
+        var zeroPriced = pricedUnits.Count(u => u.IsUnconfirmedZero);
 
         // Invoiced revenue: order-backed lines of the dossier's orders + (closure sprint
         // 2026-09-23) the lines that bill its standalone activities. Cancelled documents do not

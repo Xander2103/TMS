@@ -59,7 +59,7 @@ public class TransportOrderDocumentsController : ControllerBase
         return documents is null ? NotFound() : Ok(documents);
     }
 
-    /// <summary><c>transportOrderId: null</c> = a document of the dossier as a whole; else an order OF THIS dossier.</summary>
+    /// <summary>No order and no activity = a document of the dossier as a whole; an order OF THIS dossier; or a standalone activity OF THIS dossier.</summary>
     [HttpPost("api/dossiers/{dossierId:guid}/documents")]
     [RequirePermission(PermissionCodes.DossiersManage)]
     public async Task<ActionResult<DossierDocumentDto>> CreateForDossier(
@@ -70,8 +70,9 @@ public class TransportOrderDocumentsController : ControllerBase
     }
 
     /// <summary>
-    /// Changes the level a document hangs on inside ITS dossier (null = dossier level). Needs the
-    /// write right of BOTH the source and the target scope; the file is not touched.
+    /// Changes the level a document hangs on inside ITS dossier (no target = dossier level, an order
+    /// id = that order, an activity id = that standalone activity). Needs the write right of BOTH the
+    /// source and the target scope; the file is not touched.
     /// </summary>
     [HttpPost("api/order-documents/{id:guid}/move")]
     [RequirePermission(PermissionCodes.OrdersEdit, PermissionCodes.OrdersManage, PermissionCodes.DossiersManage)]
@@ -84,14 +85,16 @@ public class TransportOrderDocumentsController : ControllerBase
             return sourceRefusal;
         }
 
-        var targetScope = request.TargetTransportOrderId is null ? DossierDocumentScope.Dossier : DossierDocumentScope.Order;
+        var targetScope = request.TargetTransportOrderId is not null ? DossierDocumentScope.Order
+            : request.TargetDossierActivityId is not null ? DossierDocumentScope.Activity
+            : DossierDocumentScope.Dossier;
         var target = await _access.AuthorizeScopeAsync(targetScope, OrderDocumentOperation.Write, cancellationToken);
         if (Refusal(target) is { } targetRefusal)
         {
             return targetRefusal;
         }
 
-        var moved = await _service.MoveAsync(id, request.TargetTransportOrderId, cancellationToken);
+        var moved = await _service.MoveAsync(id, request.TargetTransportOrderId, cancellationToken, request.TargetDossierActivityId);
         return moved is null ? NotFound() : Ok(moved);
     }
 

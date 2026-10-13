@@ -26,8 +26,9 @@ public static class DocumentPublicationWithdrawal
             .Where(d => d.TenantId == tenantId && d.TransportOrderId == orderId && d.CustomerVisible);
 
     /// <summary>
-    /// Published DOSSIER-level documents (TransportOrderId null). Order-level documents of the
-    /// linked orders are withdrawn by the per-order change that the dossier change runs for them.
+    /// Published DOSSIER-level and ACTIVITY documents (TransportOrderId null — both hang on the
+    /// dossier, not on an order). Order-level documents of the linked orders are withdrawn by the
+    /// per-order change that the dossier change runs for them.
     /// </summary>
     public static IQueryable<TransportOrderDocument> PublishedForDossier(TransportationDbContext db, Guid tenantId, Guid dossierId) =>
         db.TransportOrderDocuments

@@ -33,3 +33,48 @@
   width: 18px;
   height: 18px;
 }
+
+/* Simple lookups (e.g. bedrijfsmiddelcategorieën): code + sort order folded away. */
+.lookup-form-advanced {
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.lookup-form-advanced > summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--text-h);
+  font-size: 15px;
+  list-style: none;
+}
+
+.lookup-form-advanced > summary::-webkit-details-marker {
+  display: none;
+}
+
+.lookup-form-advanced > summary::before {
+  content: '▸';
+  display: inline-block;
+  width: 14px;
+  color: var(--text);
+  font-size: 12px;
+}
+
+.lookup-form-advanced[open] > summary::before {
+  content: '▾';
+}
+
+.lookup-form-advanced > summary:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent-bg);
+  border-radius: 6px;
+}
+
+.lookup-form-advanced-hint {
+  margin: -8px 0 0;
+  font-size: 13px;
+  color: var(--text-muted);
+}

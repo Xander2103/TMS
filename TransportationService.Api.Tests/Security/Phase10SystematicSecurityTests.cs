@@ -33,6 +33,9 @@ public class Phase10SystematicSecurityTests
         // UI-taalvoorkeur (i18n-wave): strikt self-scoped write van User.PreferredLanguageCode
         // (eigen rij + eigen tenant, geaudit). Presentatie-only — taal geeft nooit rechten.
         "MyLanguageController.Set",
+        // Persoonlijke weergavevoorkeur (licht/donker/systeem): zelfde contract als de
+        // taalvoorkeur — eigen User-rij, eigen tenant, geaudit, presentatie-only.
+        "MyThemeController.Set",
 
         // Regional display preferences (settings/system wave): presentation configuration
         // only (date format, separators, timezone, language) — deliberately available to

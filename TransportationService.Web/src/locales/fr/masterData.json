@@ -72,7 +72,9 @@
     "codeRequired": "Le code est obligatoire.",
     "codeMax": "Le code ne peut pas dépasser 50 caractères.",
     "nameRequired": "Le nom est obligatoire.",
-    "nameMax": "Le nom ne peut pas dépasser 150 caractères."
+    "nameMax": "Le nom ne peut pas dépasser 150 caractères.",
+    "advanced": "Plus de paramètres",
+    "advancedHint": "Le code et l'ordre sont définis automatiquement ; ne les modifiez qu'en cas de besoin."
   },
   "select": {
     "createOption": "{newLabel} « {query} »",

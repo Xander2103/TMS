@@ -39,6 +39,7 @@ import {
 } from '../inventoryApi'
 import { formatDateTime } from '../../../utils/dates'
 import { formatQuantityWithUnit } from '../issuedItemUnits'
+import { MANAGEMENT_MODE_LABELS, modeFromFlags } from '../managementMode'
 import { TemplateFormModal } from '../TemplateFormModal'
 import { NegativeStockConfirmModal } from '../components/NegativeStockConfirmModal'
 import { StockThresholdsCard } from '../components/StockThresholdsCard'
@@ -397,12 +398,8 @@ export function IssuedItemTemplateDetailPage() {
             <dd>{template.category}</dd>
           </div>
           <div>
-            <dt>{t('issuedItems.detail.stockTracking')}</dt>
-            <dd>{template.stockTrackingEnabled ? t('issuedItems.detail.on') : t('issuedItems.detail.off')}</dd>
-          </div>
-          <div>
-            <dt>{t('issuedItems.detail.variants')}</dt>
-            <dd>{template.variantsEnabled ? t('issuedItems.detail.on') : t('issuedItems.detail.off')}</dd>
+            <dt>{t('issuedItems.detail.mode')}</dt>
+            <dd>{t(MANAGEMENT_MODE_LABELS[modeFromFlags(template)])}</dd>
           </div>
           <div>
             <dt>{t('issuedItems.detail.serialRequired')}</dt>

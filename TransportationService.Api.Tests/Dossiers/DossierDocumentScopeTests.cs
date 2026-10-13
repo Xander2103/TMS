@@ -133,6 +133,9 @@ public class DossierDocumentScopeTests : IDisposable
     private static CreateDossierDocumentRequest General(string title, Guid? orderId = null, bool? visible = null) =>
         new(orderId, TransportOrderDocumentType.Other, null, title, null, null, visible);
 
+    private static CreateDossierDocumentRequest ForActivity(string title, Guid activityId, bool? visible = null) =>
+        new(null, TransportOrderDocumentType.Other, null, title, null, null, visible, activityId);
+
     private static async Task AttachAsync(TransportOrderDocumentService documents, Guid id, DossierDocumentScope scope, string fileName = "plan.pdf")
     {
         using var upload = new MemoryStream(Encoding.UTF8.GetBytes("pdf-bytes"));
@@ -406,6 +409,10 @@ public class DossierDocumentScopeTests : IDisposable
     [InlineData(DossierDocumentScope.Order, OrderDocumentOperation.Download, new[] { PermissionCodes.OrdersView, PermissionCodes.OrdersManage })]
     [InlineData(DossierDocumentScope.Order, OrderDocumentOperation.Upload, new[] { PermissionCodes.OrdersCreate, PermissionCodes.OrdersEdit, PermissionCodes.OrdersManage })]
     [InlineData(DossierDocumentScope.Order, OrderDocumentOperation.Write, new[] { PermissionCodes.OrdersEdit, PermissionCodes.OrdersManage })]
+    // An activity document is a dossier child without an order: dossier rights, never order rights.
+    [InlineData(DossierDocumentScope.Activity, OrderDocumentOperation.Download, new[] { PermissionCodes.DossiersView, PermissionCodes.DossiersManage })]
+    [InlineData(DossierDocumentScope.Activity, OrderDocumentOperation.Upload, new[] { PermissionCodes.DossiersManage })]
+    [InlineData(DossierDocumentScope.Activity, OrderDocumentOperation.Write, new[] { PermissionCodes.DossiersManage })]
     public void FlatRoutePermissionMatrix(DossierDocumentScope scope, OrderDocumentOperation operation, string[] expected) =>
         Assert.Equal(expected, OrderDocumentAccessResolver.RequiredPermissions(scope, operation));
 
@@ -578,5 +585,230 @@ public class DossierDocumentScopeTests : IDisposable
         Assert.Equal(wrapper, (await OwningDossierResolver.ResolveAsync(context, h.TenantId, wrapped, CancellationToken.None))!.Id);
         Assert.Equal(userDossier, (await OwningDossierResolver.ResolveAsync(context, h.TenantId, linkedTwice, CancellationToken.None))!.Id);
         Assert.Null(await OwningDossierResolver.ResolveAsync(context, h.TenantId, loose, CancellationToken.None));
+    }
+
+    // ---- activity scope (dossier UX correction sprint 2026-10-08): standalone activities own documents ----
+
+    /// <summary>The seeded dossier starts with ONE standalone activity (OPSLAG); this adds a labelled plateau next to it.</summary>
+    private static async Task<(DossierActivityDto Storage, DossierActivityDto Plateau)> StandalonePairAsync(Harness h, Guid dossierId)
+    {
+        var withPlateau = (await h.Activities().AddAsync(dossierId,
+            new SaveDossierActivityRequest(await h.TypeIdAsync("PLATEAU"), "Plateau Nexans"), CancellationToken.None))!;
+        var standalone = withPlateau.Activities!.Where(a => a.LinkedTransportOrderId is null).OrderBy(a => a.Sequence).ToList();
+        return (standalone[0], standalone[1]);
+    }
+
+    [Fact]
+    public async Task ActivityDocument_HangsOnItsStandaloneActivityOnly_AndIsCountedThere()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var (dossier, orders) = await h.DossierWithOrdersAsync(1);
+        var (storage, plateau) = await StandalonePairAsync(h, dossier.Id);
+
+        var document = (await h.Documents().CreateForDossierAsync(dossier.Id, ForActivity("Hijsplan", plateau.Id), CancellationToken.None))!;
+
+        Assert.Equal((DossierDocumentScope.Activity, dossier.Id, null, plateau.Id, "Plateau Nexans"),
+            (document.Scope, document.DossierId, document.TransportOrderId, document.DossierActivityId, document.ActivityLabel));
+        // Listed once on the dossier endpoint, never as an order's own document.
+        var listed = Assert.Single((await h.Documents().ListForDossierAsync(dossier.Id, CancellationToken.None))!);
+        Assert.Equal(document.Id, listed.Id);
+        Assert.Empty((await h.Documents().ListAsync(orders[0], CancellationToken.None))!);
+        Assert.Equal(DossierDocumentScope.Activity, await h.Documents().GetScopeAsync(document.Id, CancellationToken.None));
+
+        // Counted on the dossier total and on THAT activity — not on the sibling activity, not on the order.
+        var detail = (await h.Dossiers().GetAsync(dossier.Id, CancellationToken.None))!;
+        Assert.Equal(1, detail.DocumentCount);
+        var counts = detail.Activities!.ToDictionary(a => a.Id, a => a.DocumentCount);
+        Assert.Equal(1, counts[plateau.Id]);
+        Assert.Equal(0, counts[storage.Id]);
+        Assert.All(detail.Activities!.Where(a => a.LinkedTransportOrderId is not null), a => Assert.Equal(0, a.DocumentCount));
+
+        // A label-less activity is named after its type.
+        var storageDocument = (await h.Documents().CreateForDossierAsync(dossier.Id, ForActivity("Opslagcontract", storage.Id), CancellationToken.None))!;
+        Assert.Equal("Opslag", storageDocument.ActivityLabel);
+    }
+
+    [Fact]
+    public async Task Create_ForAnOrderBackedActivity_BothLinks_OrAForeignActivity_IsRefused()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var (dossier, orders) = await h.DossierWithOrdersAsync(1);
+        var (_, plateau) = await StandalonePairAsync(h, dossier.Id);
+        var transportActivity = dossier.Activities!.Single(a => a.LinkedTransportOrderId == orders[0]);
+        var (otherDossier, _) = await h.DossierWithOrdersAsync(0);
+        var otherStandalone = otherDossier.Activities!.Single();
+
+        // An order-backed activity keeps its documents on the order scope.
+        var orderBacked = await Assert.ThrowsAsync<DomainValidationException>(() =>
+            h.Documents().CreateForDossierAsync(dossier.Id, ForActivity("Fout", transportActivity.Id), CancellationToken.None));
+        Assert.Contains("transportopdracht", orderBacked.Message);
+
+        // Never both links at once.
+        await Assert.ThrowsAsync<DomainValidationException>(() => h.Documents().CreateForDossierAsync(dossier.Id,
+            new CreateDossierDocumentRequest(orders[0], TransportOrderDocumentType.Other, null, "Fout", null, null, null, plateau.Id), CancellationToken.None));
+
+        // Never an activity of another dossier, never an unknown (or foreign-tenant) one.
+        var wrongDossier = await Assert.ThrowsAsync<DomainValidationException>(() =>
+            h.Documents().CreateForDossierAsync(dossier.Id, ForActivity("Fout", otherStandalone.Id), CancellationToken.None));
+        Assert.Contains("hoort niet bij dit dossier", wrongDossier.Message);
+        await Assert.ThrowsAsync<DomainValidationException>(() =>
+            h.Documents().CreateForDossierAsync(dossier.Id, ForActivity("Fout", Guid.NewGuid()), CancellationToken.None));
+        // Another tenant does not even find the dossier.
+        Assert.Null(await h.Documents(tenantId: Guid.NewGuid()).CreateForDossierAsync(dossier.Id, ForActivity("Fout", plateau.Id), CancellationToken.None));
+        Assert.Empty(h.Db.Context.TransportOrderDocuments);
+    }
+
+    [Fact]
+    public async Task Move_BetweenDossierActivityAndOrder_ChangesOnlyTheLinks_WithTheRightOfBothScopes()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var (dossier, orders) = await h.DossierWithOrdersAsync(1);
+        var (_, plateau) = await StandalonePairAsync(h, dossier.Id);
+        var document = (await h.Documents().CreateForDossierAsync(dossier.Id, General("Hijsplan", visible: true), CancellationToken.None))!;
+        await AttachAsync(h.Documents(), document.Id, DossierDocumentScope.Dossier);
+        var pathBefore = (await h.Db.Context.TransportOrderDocuments.AsNoTracking().SingleAsync()).DocumentPath;
+
+        // dossiers.manage alone moves between the dossier level and an activity (both dossier scope).
+        h.Permissions.Codes.Add(PermissionCodes.DossiersManage);
+        var toActivity = Assert.IsType<OkObjectResult>((await h.Controller().Move(document.Id,
+            new MoveOrderDocumentRequest(null, plateau.Id), CancellationToken.None)).Result);
+        var moved = Assert.IsType<DossierDocumentDto>(toActivity.Value);
+        Assert.Equal((DossierDocumentScope.Activity, plateau.Id, true, true), (moved.Scope, moved.DossierActivityId, moved.HasFile, moved.CustomerVisible));
+        Assert.Equal(pathBefore, (await h.Db.Context.TransportOrderDocuments.AsNoTracking().SingleAsync()).DocumentPath);
+
+        // ... but not to an order without the order write right.
+        var refused = (await h.Controller().Move(document.Id, new MoveOrderDocumentRequest(orders[0]), CancellationToken.None)).Result;
+        Assert.Equal(403, Assert.IsType<ObjectResult>(refused).StatusCode);
+        Assert.Equal(plateau.Id, (await h.Db.Context.TransportOrderDocuments.AsNoTracking().SingleAsync()).DossierActivityId);
+
+        // Order rights alone cannot touch the activity-scoped source either.
+        h.Permissions.Codes.Clear();
+        h.Permissions.Codes.Add(PermissionCodes.OrdersEdit);
+        refused = (await h.Controller().Move(document.Id, new MoveOrderDocumentRequest(orders[0]), CancellationToken.None)).Result;
+        Assert.Equal(403, Assert.IsType<ObjectResult>(refused).StatusCode);
+
+        // Both rights: activity → order clears the activity link; order → dossier clears both.
+        h.Permissions.Codes.Add(PermissionCodes.DossiersManage);
+        var toOrder = Assert.IsType<DossierDocumentDto>(Assert.IsType<OkObjectResult>(
+            (await h.Controller().Move(document.Id, new MoveOrderDocumentRequest(orders[0]), CancellationToken.None)).Result).Value);
+        Assert.Equal((DossierDocumentScope.Order, orders[0], null), (toOrder.Scope, toOrder.TransportOrderId, toOrder.DossierActivityId));
+        var toDossier = Assert.IsType<DossierDocumentDto>(Assert.IsType<OkObjectResult>(
+            (await h.Controller().Move(document.Id, new MoveOrderDocumentRequest(null), CancellationToken.None)).Result).Value);
+        Assert.Equal((DossierDocumentScope.Dossier, null, null), (toDossier.Scope, toDossier.TransportOrderId, toDossier.DossierActivityId));
+
+        // Never both targets, never an activity of another dossier.
+        await Assert.ThrowsAsync<DomainValidationException>(() => h.Documents().MoveAsync(document.Id, orders[0], CancellationToken.None, plateau.Id));
+        var (otherDossier, _) = await h.DossierWithOrdersAsync(0);
+        await Assert.ThrowsAsync<DomainValidationException>(() =>
+            h.Documents().MoveAsync(document.Id, null, CancellationToken.None, otherDossier.Activities!.Single().Id));
+        Assert.Equal(DossierDocumentScope.Dossier, await h.Documents().GetScopeAsync(document.Id, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task FlatRoutes_AnActivityDocument_FollowsTheDossierRights()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var (dossier, _) = await h.DossierWithOrdersAsync(1);
+        var (_, plateau) = await StandalonePairAsync(h, dossier.Id);
+        var document = (await h.Documents().CreateForDossierAsync(dossier.Id, ForActivity("Hijsplan", plateau.Id), CancellationToken.None))!;
+        await AttachAsync(h.Documents(), document.Id, DossierDocumentScope.Activity);
+        var rename = new SaveTransportOrderDocumentRequest(TransportOrderDocumentType.Other, null, "Hijsplan v2", null, null);
+
+        // Full ORDER rights say nothing about an activity document.
+        h.Permissions.Codes.UnionWith([PermissionCodes.OrdersView, PermissionCodes.OrdersEdit, PermissionCodes.OrdersManage, PermissionCodes.OrdersCreate]);
+        Assert.Equal(403, Assert.IsType<ObjectResult>(await h.Controller().DownloadFile(document.Id, CancellationToken.None)).StatusCode);
+        Assert.Equal(403, Assert.IsType<ObjectResult>((await h.Controller().Update(document.Id, rename, CancellationToken.None)).Result).StatusCode);
+        Assert.Equal(403, Assert.IsType<ObjectResult>(await h.Controller().Delete(document.Id, CancellationToken.None)).StatusCode);
+        // ... and the order-scoped service path does not even find it.
+        Assert.Null(await h.Documents().UpdateAsync(document.Id, rename, CancellationToken.None));
+        Assert.False(await h.Documents().DeleteAsync(document.Id, CancellationToken.None));
+
+        // dossiers.view downloads, dossiers.manage writes.
+        h.Permissions.Codes.Clear();
+        h.Permissions.Codes.Add(PermissionCodes.DossiersView);
+        await Assert.IsType<FileStreamResult>(await h.Controller().DownloadFile(document.Id, CancellationToken.None)).FileStream.DisposeAsync();
+        Assert.Equal(403, Assert.IsType<ObjectResult>((await h.Controller().Update(document.Id, rename, CancellationToken.None)).Result).StatusCode);
+        h.Permissions.Codes.Add(PermissionCodes.DossiersManage);
+        var updated = Assert.IsType<TransportOrderDocumentDto>(Assert.IsType<OkObjectResult>(
+            (await h.Controller().Update(document.Id, rename, CancellationToken.None)).Result).Value);
+        Assert.Equal((DossierDocumentScope.Activity, plateau.Id, "Hijsplan v2"), (updated.Scope, updated.DossierActivityId, updated.Title));
+        Assert.IsType<NoContentResult>(await h.Controller().Delete(document.Id, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task ClosedDossier_RefusesActivityDocumentWrites_ButStillReads()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var (dossier, _) = await h.DossierWithOrdersAsync(0);
+        var (_, plateau) = await StandalonePairAsync(h, dossier.Id);
+        var document = (await h.Documents().CreateForDossierAsync(dossier.Id, ForActivity("Hijsplan", plateau.Id), CancellationToken.None))!;
+        await h.Db.Context.TransportDossiers.Where(d => d.Id == dossier.Id)
+            .ExecuteUpdateAsync(s => s.SetProperty(d => d.Status, DossierStatus.Closed));
+
+        await Assert.ThrowsAsync<DomainValidationException>(() =>
+            h.Documents().CreateForDossierAsync(dossier.Id, ForActivity("Nieuw", plateau.Id), CancellationToken.None));
+        await Assert.ThrowsAsync<DomainValidationException>(() =>
+            h.Documents().DeleteAsync(document.Id, CancellationToken.None, DossierDocumentScope.Activity));
+        await Assert.ThrowsAsync<DomainValidationException>(() =>
+            h.Documents().MoveAsync(document.Id, null, CancellationToken.None));
+
+        var listed = Assert.Single((await h.Documents().ListForDossierAsync(dossier.Id, CancellationToken.None))!);
+        Assert.Equal(DossierDocumentScope.Activity, listed.Scope);
+    }
+
+    [Fact]
+    public async Task DeletingAStandaloneActivity_LiftsItsDocumentsToTheDossierLevel()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var (dossier, _) = await h.DossierWithOrdersAsync(0);
+        var (storage, plateau) = await StandalonePairAsync(h, dossier.Id);
+        var plateauDocument = (await h.Documents().CreateForDossierAsync(dossier.Id, ForActivity("Hijsplan", plateau.Id), CancellationToken.None))!;
+        var storageDocument = (await h.Documents().CreateForDossierAsync(dossier.Id, ForActivity("Opslagcontract", storage.Id), CancellationToken.None))!;
+        await AttachAsync(h.Documents(), plateauDocument.Id, DossierDocumentScope.Activity);
+        var version = (await h.Dossiers().GetAsync(dossier.Id, CancellationToken.None))!.Version;
+
+        var after = (await h.Activities().DeleteAsync(dossier.Id, plateau.Id, version, CancellationToken.None))!;
+
+        Assert.DoesNotContain(after.Activities!, a => a.Id == plateau.Id);
+        var rows = await h.Db.Context.TransportOrderDocuments.AsNoTracking().OrderBy(d => d.Title).ToListAsync();
+        var lifted = Assert.Single(rows, d => d.Id == plateauDocument.Id);
+        Assert.Equal((null, dossier.Id, DossierDocumentScope.Dossier, false), (lifted.DossierActivityId, lifted.DossierId, lifted.Scope, lifted.IsDeleted));
+        Assert.NotNull(lifted.DocumentPath); // the file stays where it is
+        // The sibling activity keeps its own document.
+        Assert.Equal(storage.Id, Assert.Single(rows, d => d.Id == storageDocument.Id).DossierActivityId);
+        Assert.Equal(2, after.DocumentCount);
+        Assert.Equal(1, after.Activities!.Single(a => a.Id == storage.Id).DocumentCount);
+    }
+
+    [Fact]
+    public async Task ActivityDocument_CustomerVisibility_IsIndependentOfTheScope_AndWithdrawnLikeADossierDocument()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var (dossier, orders) = await h.DossierWithOrdersAsync(1);
+        var (_, plateau) = await StandalonePairAsync(h, dossier.Id);
+        var published = (await h.Documents().CreateForDossierAsync(dossier.Id, ForActivity("Hijsplan", plateau.Id, visible: true), CancellationToken.None))!;
+        var internalOnly = (await h.Documents().CreateForDossierAsync(dossier.Id, ForActivity("Intern", plateau.Id), CancellationToken.None))!;
+        var orderDocument = (await h.Documents().CreateForDossierAsync(dossier.Id, General("CMR", orders[0], visible: true), CancellationToken.None))!;
+
+        Assert.True(published.CustomerVisible);
+        Assert.False(internalOnly.CustomerVisible);
+        // Moving never publishes or withdraws.
+        var moved = (await h.Documents().MoveAsync(published.Id, null, CancellationToken.None))!;
+        Assert.True(moved.CustomerVisible);
+        var back = (await h.Documents().MoveAsync(published.Id, null, CancellationToken.None, plateau.Id))!;
+        Assert.True(back.CustomerVisible);
+
+        // On a customer change, the activity document is withdrawn with the dossier-level documents;
+        // the order document belongs to the per-order withdrawal.
+        var dossierScoped = DocumentPublicationWithdrawal.PublishedForDossier(h.Db.Context, h.TenantId, dossier.Id).Select(d => d.Id).ToList();
+        Assert.Equal(new[] { published.Id }, dossierScoped);
+        Assert.DoesNotContain(orderDocument.Id, dossierScoped);
     }
 }

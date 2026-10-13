@@ -24,9 +24,14 @@ export function DossierActivitiesSection({ addButtonRef }: { addButtonRef: Ref<H
         canManage={ws.canManage && ws.isOpen}
         onOpen={ws.openActivity}
         onOpenDetail={ws.openActivityDetail}
-        // Several documents → the Documenten tab, opened on this activity's order.
+        // The Documenten tab, opened on this activity's level: its order when it has one, else the
+        // standalone activity itself (decided by the link, never by the activity's name or type).
         onOpenDocuments={(activity) =>
-          navigate(`${dossierTabPath(ws.dossier.id, 'documenten')}?opdracht=${activity.linkedTransportOrderId}`)
+          navigate(
+            `${dossierTabPath(ws.dossier.id, 'documenten')}?${
+              activity.linkedTransportOrderId ? `opdracht=${activity.linkedTransportOrderId}` : `activiteit=${activity.id}`
+            }`,
+          )
         }
         highlightedActivityId={ws.highlightedActivityId}
         onAdd={ws.openAddActivity}

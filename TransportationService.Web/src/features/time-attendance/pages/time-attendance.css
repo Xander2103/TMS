@@ -17,7 +17,7 @@
 }
 
 .ta-period-btn-active {
-  background: var(--accent);
+  background: var(--color-primary-solid);
   border-color: var(--accent);
   color: #fff;
 }

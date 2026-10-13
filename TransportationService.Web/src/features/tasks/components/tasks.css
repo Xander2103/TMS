@@ -18,7 +18,7 @@
 }
 
 .task-due-overdue {
-  color: var(--color-danger, #b91c1c);
+  color: var(--color-danger);
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
@@ -74,13 +74,13 @@
 }
 
 .task-detail-note {
-  border-left: 3px solid var(--border-color, #d1d5db);
+  border-left: 3px solid var(--border-color);
   padding: 0.4rem 0.75rem;
   margin: 0.5rem 0;
 }
 
 .task-detail-note.is-danger {
-  border-left-color: var(--color-danger, #b91c1c);
+  border-left-color: var(--color-danger);
 }
 
 .task-detail-actions {
@@ -89,7 +89,7 @@
   flex-wrap: wrap;
   margin-top: 1rem;
   padding-top: 0.75rem;
-  border-top: 1px solid var(--border-color, #e5e7eb);
+  border-top: 1px solid var(--border-color);
 }
 
 .task-detail-section {
@@ -154,7 +154,7 @@
   gap: 0.3rem;
   padding: 0.15rem 0.6rem;
   border-radius: 999px;
-  background: var(--surface-muted, #eef2f7);
+  background: var(--surface-muted);
   font-size: 0.85rem;
 }
 
@@ -177,7 +177,7 @@
 }
 
 .task-template-item {
-  border: 1px solid var(--border-color, #e5e7eb);
+  border: 1px solid var(--border-color);
   border-radius: 8px;
   padding: 0.75rem;
 }

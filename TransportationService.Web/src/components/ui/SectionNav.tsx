@@ -11,6 +11,8 @@ export interface SectionNavItem {
   label: string
   optional?: boolean
   hasError?: boolean
+  /** Number of failing fields in the section; shown inside the error badge when given ("Route 2"). */
+  errorCount?: number
   complete?: boolean
   /**
    * Optional third state between `complete` and untouched: the section holds (optional)
@@ -77,7 +79,14 @@ export function SectionNav({ items, activeId, onActiveChange, orientation = 'hor
             onKeyDown={(e) => onKeyDown(e, index)}
           >
             <span className="ui-section-tab-label">{item.label}</span>
-            {item.hasError && <span className="ui-section-tab-error" aria-label={t('ui.sections.hasErrors')}>!</span>}
+            {item.hasError && (
+              <span
+                className="ui-section-tab-error"
+                aria-label={item.errorCount ? t('ui.sections.errorCount', { count: item.errorCount }) : t('ui.sections.hasErrors')}
+              >
+                {item.errorCount ? item.errorCount : '!'}
+              </span>
+            )}
             {!item.hasError && item.complete && (
               <span className="ui-section-tab-complete" aria-hidden="true">✓</span>
             )}

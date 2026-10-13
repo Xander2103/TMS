@@ -38,8 +38,8 @@
 }
 
 .ops-kpi-alert {
-  border-color: var(--danger-border, var(--danger));
-  background: var(--danger-bg, transparent);
+  border-color: var(--danger-border);
+  background: var(--danger-bg);
 }
 
 .ops-kpi-value {

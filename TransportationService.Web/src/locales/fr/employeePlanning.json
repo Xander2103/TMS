@@ -107,10 +107,79 @@
     "title": "Copier la semaine du {week}",
     "copy": "Copier",
     "targetLabel": "Semaine cible (lundi)",
-    "targetHint": "Tous les postes de la sélection actuelle sont copiés comme brouillon ; les conflits sont ignorés.",
+    "targetHint": "Tous les shifts des collaborateurs de la sélection actuelle sont copiés comme brouillon ; les conflits sont ignorés.",
     "targetRequired": "Choisissez une semaine cible.",
     "success_one": "Semaine copiée : {count} poste, {skipped} ignorés.",
     "success_other": "Semaine copiée : {count} postes, {skipped} ignorés.",
-    "failed": "La semaine n'a pas pu être copiée."
+    "failed": "La semaine n'a pas pu être copiée.",
+    "scope_one": "{count} collaborateur dans la sélection actuelle",
+    "scope_other": "{count} collaborateurs dans la sélection actuelle"
+  },
+  "toolbar": {
+    "employees": "Collaborateurs",
+    "employeesWithCount": "Collaborateurs ({count})",
+    "filters": "Filtres",
+    "filtersWithCount": "Filtres ({count})",
+    "quickSearchPlaceholder": "Rechercher dans les résultats…",
+    "quickSearchAria": "Rechercher parmi les collaborateurs affichés",
+    "export": "Exporter",
+    "exportExcel": "Excel (.xlsx)",
+    "exportBusy": "Export en cours…",
+    "exportFailed": "L'export n'a pas pu être créé.",
+    "exportHint": "Exporte exactement la sélection et la période actuelles."
+  },
+  "filters": {
+    "title": "Filtres",
+    "departments": "Départements",
+    "functions": "Fonctions",
+    "contractTypes": "Types de contrat",
+    "status": "Emploi",
+    "statusActive": "En service",
+    "statusInactive": "Hors service / inactif",
+    "statusHint": "Par défaut, seuls les collaborateurs en service sont affichés.",
+    "driversOnly": "Chauffeurs uniquement (avec profil chauffeur)",
+    "quick": "Sélections rapides",
+    "quickDrivers": "Tous les chauffeurs",
+    "quickMyDepartment": "Mon département",
+    "clearAll": "Tout effacer",
+    "close": "Fermer",
+    "searchPlaceholder": "Rechercher…",
+    "optionsLoadFailed": "Les options de filtre n'ont pas pu être chargées.",
+    "semantics": "Au sein d'un filtre : ou ; entre filtres : et. Les collaborateurs choisis explicitement restent toujours visibles."
+  },
+  "picker": {
+    "title": "Choisir des collaborateurs",
+    "searchPlaceholder": "Rechercher par nom ou numéro de personnel…",
+    "hint": "Recherche parmi tous les collaborateurs, aussi en dehors des filtres actuels.",
+    "noResults": "Aucun collaborateur trouvé.",
+    "inactiveBadge": "Hors service",
+    "done": "Terminé"
+  },
+  "chips": {
+    "count_one": "{count} collaborateur",
+    "count_other": "{count} collaborateurs",
+    "countOfTotal_one": "{count} sur {total} collaborateurs",
+    "countOfTotal_other": "{count} sur {total} collaborateurs",
+    "shown_one": "{count} affiché",
+    "shown_other": "{count} affichés",
+    "clearFilters": "Effacer les filtres",
+    "outsideFilters": "Hors des filtres actuels",
+    "remove": "Supprimer {label}",
+    "groupLabel": "Sélection active",
+    "employeeChip": "Collaborateur : {name}",
+    "driversOnly": "Chauffeurs uniquement",
+    "unknownEmployee": "Collaborateur inconnu"
+  },
+  "empty": {
+    "noneForSelection": "Aucun collaborateur trouvé pour cette sélection.",
+    "noneForFilters": "Aucun collaborateur ne correspond aux filtres actuels.",
+    "noneForQuickSearch": "Aucun collaborateur des résultats ne correspond à « {query} ».",
+    "noEntries": "Aucune planification sur cette période pour la sélection actuelle.",
+    "loadError": "Le planning du personnel n'a pas pu être chargé.",
+    "retry": "Réessayer",
+    "updating": "Mise à jour…"
+  },
+  "meta": {
+    "planned": "{duration} planifié"
   }
 }

@@ -7,13 +7,47 @@
     "NotPriced": "Non tarifé",
     "PartiallyPriced": "Partiellement tarifé",
     "Priced": "Tarifé",
+    "ZeroUnconfirmed": "Contrôle requis",
     "Free": "Gratuit"
+  },
+  "unit": {
+    "order": "Commande",
+    "activity": "Activité",
+    "standalone": "Activité autonome"
+  },
+  "master": {
+    "title": "Éléments tarifables ({count})",
+    "hint": "Chaque élément a son propre prix et ses lignes de vente. Choisissez un élément pour voir ou modifier son prix.",
+    "noPrice": "Pas encore de prix",
+    "listLabel": "Éléments tarifables"
+  },
+  "detail": {
+    "title": "Détails du prix",
+    "priceBlock": "Prix",
+    "openOrder": "Ouvrir le prix complet de la commande",
+    "pickHint": "Choisissez un élément à gauche pour modifier son prix."
+  },
+  "zeroCallout": {
+    "title": "Confirmer le prix gratuit",
+    "message": "Le prix de vente de cette activité est de 0,00 €. Confirmez que cette activité est volontairement gratuite, ou ajustez le prix.",
+    "confirm": "Confirmer comme gratuit",
+    "adjust": "Ajuster le prix"
+  },
+  "order": {
+    "zeroConfirmTitle": "Confirmer la commande comme gratuite",
+    "zeroConfirmMessage": "Vous fixez le prix convenu de la commande {number} à 0,00 €. Confirmez que cette commande est volontairement gratuite.",
+    "zeroConfirmAction": "Confirmer comme gratuit",
+    "freeNote": "Cette commande est volontairement gratuite (0,00 €)."
   },
   "picker": {
     "itemWithOrder": "{number} — {name}",
     "lockedWhileDirty": "Enregistrez les lignes de vente ou annulez les modifications pour changer d'activité."
   },
   "summary": {
+    "title": "Résumé du dossier",
+    "handled": "{handled} sur {total} éléments réglés",
+    "toHandle": "Encore à tarifer ou à contrôler :",
+    "needsReview": "{name} (contrôle requis)",
     "toPrice": "Encore à tarifer :",
     "partial": "{name} (partiel)",
     "legacyOrders": "Ordres liés sans activité"
@@ -59,7 +93,8 @@
     "confirmFreeAction": "Confirmer comme gratuite",
     "freeSaved": "Activité confirmée comme gratuite.",
     "removePrice": "Supprimer le prix",
-    "removePriceMessage": "Le prix et toutes les lignes de vente de cette activité sont supprimés. L'activité n'est ensuite plus tarifée.",
+    "markFree": "Marquer comme gratuit",
+    "removePriceMessage": "Le prix et toutes les lignes de vente de {name} seront supprimés. Cet élément ne sera alors plus tarifé.",
     "priceRemoved": "Prix supprimé.",
     "actionFailed": "Le prix n'a pas pu être mis à jour."
   },

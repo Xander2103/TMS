@@ -6,7 +6,7 @@ import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { SelfSavingPanel } from '../../../components/ui/SelfSavingPanel'
 import { useToast } from '../../../components/ui/toastContext'
 import { useLocale } from '../../../i18n/localeContext'
-import { formatDateTime } from '../../../utils/dates'
+import { formatDate, formatTime } from '../../../utils/dates'
 import { MAX_DOSSIER_NOTE_LENGTH, type DossierNote } from '../api/dossierNotesApi'
 import { useDossierNotes } from './useDossierNotes'
 import './dossier-notes.css'
@@ -286,13 +286,32 @@ function NoteItem({ note, canEdit, canDelete, onEdit, onDelete }: NoteItemProps)
   )
 
   const edited = note.updatedAt !== note.createdAt
+  // "08/10/2026 om 23:04": date and time stay separate parts so the wording reads naturally.
+  const stamp = (value: string) => t('dossierNotes.dateAtTime', { date: formatDate(value), time: formatTime(value) })
 
   return (
     <>
+      {/* WHO wrote WHAT WHEN: the creation line never changes; an edit adds its own line with
+          its own user, so the original author and time stay visible. */}
       <div className="dossier-note-meta">
-        <span className="dossier-note-author">{note.authorName ?? t('dossierNotes.unknownAuthor')}</span>
-        <time dateTime={note.createdAt}>{formatDateTime(note.createdAt)}</time>
-        {edited && <span className="dossier-note-edited">{t('dossierNotes.edited', { date: formatDateTime(note.updatedAt) })}</span>}
+        <span className="dossier-note-stamp" data-testid="note-created">
+          {t('dossierNotes.createdByPrefix')} <span className="dossier-note-author">{note.authorName ?? t('dossierNotes.unknownAuthor')}</span>
+          {' · '}
+          <time dateTime={note.createdAt}>{stamp(note.createdAt)}</time>
+        </span>
+        {edited && (
+          <span className="dossier-note-stamp dossier-note-edited" data-testid="note-edited">
+            {note.editedByName ? (
+              <>
+                {t('dossierNotes.editedByPrefix')} <span className="dossier-note-author">{note.editedByName}</span>
+              </>
+            ) : (
+              t('dossierNotes.editedPrefix')
+            )}
+            {' · '}
+            <time dateTime={note.updatedAt}>{stamp(note.updatedAt)}</time>
+          </span>
+        )}
       </div>
       <p id={textId} ref={measure} className={expanded ? 'dossier-note-text' : 'dossier-note-text dossier-note-text-clamped'}>
         {note.text}

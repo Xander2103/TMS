@@ -107,10 +107,79 @@
     "title": "Week van {week} kopiëren",
     "copy": "Kopiëren",
     "targetLabel": "Doelweek (maandag)",
-    "targetHint": "Alle shifts van de huidige selectie worden als concept gekopieerd; conflicten worden overgeslagen.",
+    "targetHint": "Alle shifts van de medewerkers in de huidige selectie worden als concept gekopieerd; conflicten worden overgeslagen.",
     "targetRequired": "Kies een doelweek.",
     "success_one": "Week gekopieerd: {count} shift, {skipped} overgeslagen.",
     "success_other": "Week gekopieerd: {count} shifts, {skipped} overgeslagen.",
-    "failed": "De week kon niet worden gekopieerd."
+    "failed": "De week kon niet worden gekopieerd.",
+    "scope_one": "{count} medewerker in de huidige selectie",
+    "scope_other": "{count} medewerkers in de huidige selectie"
+  },
+  "toolbar": {
+    "employees": "Medewerkers",
+    "employeesWithCount": "Medewerkers ({count})",
+    "filters": "Filters",
+    "filtersWithCount": "Filters ({count})",
+    "quickSearchPlaceholder": "Zoeken in resultaten…",
+    "quickSearchAria": "Zoeken in de getoonde medewerkers",
+    "export": "Exporteren",
+    "exportExcel": "Excel (.xlsx)",
+    "exportBusy": "Export wordt gemaakt…",
+    "exportFailed": "De export kon niet worden gemaakt.",
+    "exportHint": "Exporteert exact de huidige selectie en periode."
+  },
+  "filters": {
+    "title": "Filters",
+    "departments": "Afdelingen",
+    "functions": "Functies",
+    "contractTypes": "Contracttypes",
+    "status": "Dienstverband",
+    "statusActive": "In dienst",
+    "statusInactive": "Uit dienst / inactief",
+    "statusHint": "Standaard worden alleen medewerkers in dienst getoond.",
+    "driversOnly": "Alleen chauffeurs (met chauffeursprofiel)",
+    "quick": "Snelle selecties",
+    "quickDrivers": "Alle chauffeurs",
+    "quickMyDepartment": "Mijn afdeling",
+    "clearAll": "Alles wissen",
+    "close": "Sluiten",
+    "searchPlaceholder": "Zoeken…",
+    "optionsLoadFailed": "De filteropties konden niet worden geladen.",
+    "semantics": "Binnen één filter geldt óf/óf, tussen filters én. Expliciet gekozen medewerkers blijven altijd zichtbaar."
+  },
+  "picker": {
+    "title": "Medewerkers kiezen",
+    "searchPlaceholder": "Zoek op naam of personeelsnummer…",
+    "hint": "Zoekt in alle medewerkers, ook buiten de huidige filters.",
+    "noResults": "Geen medewerker gevonden.",
+    "inactiveBadge": "Uit dienst",
+    "done": "Klaar"
+  },
+  "chips": {
+    "count_one": "{count} medewerker",
+    "count_other": "{count} medewerkers",
+    "countOfTotal_one": "{count} van {total} medewerkers",
+    "countOfTotal_other": "{count} van {total} medewerkers",
+    "shown_one": "{count} getoond",
+    "shown_other": "{count} getoond",
+    "clearFilters": "Filters wissen",
+    "outsideFilters": "Buiten huidige filters",
+    "remove": "{label} verwijderen",
+    "groupLabel": "Actieve selectie",
+    "employeeChip": "Medewerker: {name}",
+    "driversOnly": "Alleen chauffeurs",
+    "unknownEmployee": "Onbekende medewerker"
+  },
+  "empty": {
+    "noneForSelection": "Geen medewerkers gevonden voor deze selectie.",
+    "noneForFilters": "Geen medewerkers voldoen aan de huidige filters.",
+    "noneForQuickSearch": "Geen medewerker in de resultaten voldoet aan \"{query}\".",
+    "noEntries": "Geen planning in deze periode voor de huidige selectie.",
+    "loadError": "De personeelsplanning kon niet worden geladen.",
+    "retry": "Opnieuw proberen",
+    "updating": "Bijwerken…"
+  },
+  "meta": {
+    "planned": "{duration} gepland"
   }
 }

@@ -1,4 +1,24 @@
 {
+  "quickCreate": {
+    "title": "Nouveau client",
+    "intro": "Juste l'essentiel : le client reçoit automatiquement un numéro de client. Le reste se complète plus tard sous Clients.",
+    "name": "Nom",
+    "namePlaceholder": "Nom de l'entreprise",
+    "vatNumber": "Numéro de TVA",
+    "vatHint": "Facultatif ; le format est vérifié.",
+    "email": "E-mail",
+    "phone": "Téléphone",
+    "addressLegend": "Adresse (facultatif)",
+    "street": "Rue",
+    "houseNumber": "N°",
+    "postalCode": "Code postal",
+    "city": "Localité",
+    "country": "Pays",
+    "create": "Créer le client",
+    "creating": "Création…",
+    "created": "Client {name} créé et sélectionné.",
+    "openCustomer": "Ouvrir la fiche client"
+  },
   "addresses": {
     "actionsAria": "Actions",
     "addNew": "+ Nouvelle adresse",

@@ -21,6 +21,7 @@
     "NotPriced": "Niet geprijsd",
     "PartiallyPriced": "Gedeeltelijk geprijsd",
     "Priced": "Geprijsd",
+    "ZeroUnconfirmed": "Controle vereist",
     "Free": "Gratis"
   },
   "planning": {
