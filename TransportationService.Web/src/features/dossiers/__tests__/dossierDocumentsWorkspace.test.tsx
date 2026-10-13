@@ -317,6 +317,8 @@ describe('Documenten tab (active route)', () => {
     documents.list.mockResolvedValue([generalDoc(), orderDoc(), activityDoc()])
     renderPage()
     await screen.findByRole('tab', { name: /Dossierdocumenten/ })
+    // Counts derive from the document list: wait for it before asserting them.
+    await within(section()).findByText('3 documenten in dit dossier')
 
     const nav = screen.getByRole('tablist', { name: 'Documentniveau' })
     expect(within(nav).getByText('Dossier', { selector: '.ddoc-level-group-label' })).toBeInTheDocument()
