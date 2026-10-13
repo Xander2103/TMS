@@ -16,6 +16,7 @@ import type { TrailerOption } from '../../trailers/types'
 import { deleteDriver, getDriver, setDriverBlocked, setDriverVehicle, updateDriver } from '../api/driversApi'
 import { AVAILABILITY_LABELS, type DriverAvailabilityStatus, type DriverDetail } from '../types'
 import '../pages/driver-detail.css'
+import { formatDate } from '../../../utils/dates'
 
 const READINESS_TONE: Record<DriverDetail['readiness']['status'], BadgeTone> = {
   Ready: 'success',
@@ -408,7 +409,7 @@ export function DriverProfilePanel({ driverId, onChanged, onDeleted }: DriverPro
                       {QUAL_STATUS_LABELS[q.status] ? t(QUAL_STATUS_LABELS[q.status]) : q.status}
                     </Badge>
                   </td>
-                  <td>{q.expiryDate ?? '—'}</td>
+                  <td>{q.expiryDate ? formatDate(q.expiryDate) : '—'}</td>
                 </tr>
               ))}
             </tbody>

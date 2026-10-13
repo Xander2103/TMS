@@ -13,7 +13,7 @@ import { useAuth } from '../../auth/authContextValue'
 import { useLocale } from '../../../i18n/localeContext'
 import { ApiError } from '../../../api/apiClient'
 import { localizeApiError } from '../../../api/problemDetails'
-import { formatTime } from '../../../utils/dates'
+import { formatTime, formatDate } from '../../../utils/dates'
 import { OfflineQueuedError } from '../../driver/offlineActions'
 import { TRIP_STATUS_LABELS, TRIP_STATUS_TONE } from '../../planning/types'
 import { STOP_TYPE_LABELS } from '../../transport-orders/types'
@@ -260,7 +260,7 @@ export function TripExecutionPage() {
     <div>
       <Breadcrumbs items={[{ label: t('myTrips.list.title'), to: '/my-trips' }, { label: execution.tripNumber }]} />
       <PageHeader
-        title={`${execution.tripNumber} — ${execution.tripDate}`}
+        title={`${execution.tripNumber} — ${formatDate(execution.tripDate)}`}
         subtitle={`${execution.vehicleNumber ? `${execution.vehicleNumber} (${execution.vehicleLicensePlate})` : t('myTrips.execution.noVehicle')} · ${t('myTrips.execution.stopsHandled', { completed: execution.completedCount, total: execution.totalCount })}`}
         action={<Badge tone={TRIP_STATUS_TONE[execution.tripStatus]}>{t(TRIP_STATUS_LABELS[execution.tripStatus])}</Badge>}
       />

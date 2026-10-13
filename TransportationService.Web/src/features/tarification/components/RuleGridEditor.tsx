@@ -30,6 +30,7 @@ import { listSalesCategories, type SalesCategory } from '../../accounting/api/ac
 import { listActivityTypes, type ActivityType } from '../../dossiers/api/activityTypesApi'
 import { BracketOverrideDialog } from './BracketOverrideDialog'
 import './ruleGridEditor.css'
+import { formatDate } from '../../../utils/dates'
 
 interface RuleGridEditorProps {
   agreementId: string
@@ -731,8 +732,8 @@ export function RuleGridEditor({ agreementId, agreementCustomerId, canManage }: 
                             <td>{override.pricePerExtraUnit !== null ? formatCurrency(override.pricePerExtraUnit) : '—'}</td>
                             <td colSpan={5}>—</td>
                             <td colSpan={5}>—</td>
-                            <td>{override.effectiveFrom ?? '—'}</td>
-                            <td>{override.effectiveUntil ?? '—'}</td>
+                            <td>{override.effectiveFrom ? formatDate(override.effectiveFrom) : '—'}</td>
+                            <td>{override.effectiveUntil ? formatDate(override.effectiveUntil) : '—'}</td>
                             <td>—</td>
                             {canManage && (
                               <td className="issued-items-row-actions">

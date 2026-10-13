@@ -14,6 +14,7 @@ import {
   uploadQualificationDocument,
 } from '../api/qualificationsApi'
 import { useEmployeeQualifications } from '../hooks/useEmployeeQualifications'
+import { formatDate } from '../../../utils/dates'
 import { useQualificationMutations } from '../hooks/useQualificationMutations'
 import { QualificationDialog } from './QualificationDialog'
 import {
@@ -91,8 +92,8 @@ export function QualificationsTab({ employeeId, highlightQualificationId, onChan
         </div>
       ),
     },
-    { key: 'obtained', header: t('employees.qualifications.columnObtained'), width: '110px', render: (row) => row.obtainedDate },
-    { key: 'expiry', header: t('employees.qualifications.columnExpiry'), width: '110px', render: (row) => row.expiryDate ?? '—' },
+    { key: 'obtained', header: t('employees.qualifications.columnObtained'), width: '110px', render: (row) => formatDate(row.obtainedDate) },
+    { key: 'expiry', header: t('employees.qualifications.columnExpiry'), width: '110px', render: (row) => (row.expiryDate ? formatDate(row.expiryDate) : '—') },
     { key: 'country', header: t('employees.qualifications.columnCountry'), width: '70px', render: (row) => row.issuingCountryCode ?? '—' },
     {
       key: 'status',

@@ -49,6 +49,7 @@ import {
 } from '../resourceOptions'
 import { usePlanningResources, type ResourceListStatus } from '../usePlanningResources'
 import './planning.css'
+import { formatDate } from '../../../utils/dates'
 
 export function TripDetailPage() {
   const { id = '' } = useParams<{ id: string }>()
@@ -407,7 +408,7 @@ export function TripDetailPage() {
     <div>
       <Breadcrumbs items={[{ label: t('planning.title'), to: '/planning' }, { label: trip.tripNumber }]} />
       <PageHeader
-        title={`${trip.tripNumber} — ${trip.tripDate}`}
+        title={`${trip.tripNumber} — ${formatDate(trip.tripDate)}`}
         action={
           <span className="pl-header-actions">
             <Badge tone={TRIP_STATUS_TONE[trip.status]}>{t(TRIP_STATUS_LABELS[trip.status])}</Badge>

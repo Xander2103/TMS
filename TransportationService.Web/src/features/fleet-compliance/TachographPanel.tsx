@@ -20,6 +20,7 @@ import {
   type TachographStatus,
 } from './tachographApi'
 import './fleet-compliance.css'
+import { formatDate } from '../../utils/dates'
 
 const ACCEPT = '.pdf,.jpg,.jpeg,.png'
 
@@ -210,7 +211,7 @@ export function TachographPanel({ vehicleId }: { vehicleId: string }) {
             {items.map((item) => (
               <tr key={item.id}>
                 <td>{item.tachographType ?? '—'}</td>
-                <td>{item.calibrationDate}</td>
+                <td>{formatDate(item.calibrationDate)}</td>
                 <td>{item.nextCalibrationDue}</td>
                 <td>{item.workshop ?? '—'}</td>
                 <td>

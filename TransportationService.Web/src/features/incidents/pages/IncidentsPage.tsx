@@ -20,6 +20,7 @@ import {
   type IncidentSeverity,
   type IncidentStatus,
 } from '../types'
+import { formatDate } from '../../../utils/dates'
 
 /** Incidentenregister: schade, vertragingen, klachten en andere operationele meldingen. */
 export function IncidentsPage() {
@@ -74,9 +75,9 @@ export function IncidentsPage() {
       render: (row) =>
         row.dueDate ? (
           row.isOverdue ? (
-            <Badge tone="danger">{row.dueDate} · {t('incidents.list.overdueSuffix')}</Badge>
+            <Badge tone="danger">{formatDate(row.dueDate)} · {t('incidents.list.overdueSuffix')}</Badge>
           ) : (
-            row.dueDate
+            formatDate(row.dueDate)
           )
         ) : (
           '—'

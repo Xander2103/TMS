@@ -17,6 +17,7 @@ import {
   type AbsenceType,
 } from '../types'
 import './absences-page.css'
+import { formatDate } from '../../../utils/dates'
 
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10)
@@ -137,8 +138,8 @@ export function AbsencesPage() {
                   {t(`absences.type.${absence.type}`)}
                   {absence.hasAttachment && ' 📎'}
                 </td>
-                <td>{absence.startDate}</td>
-                <td>{absence.endDate}</td>
+                <td className="nowrap">{formatDate(absence.startDate)}</td>
+                <td className="nowrap">{formatDate(absence.endDate)}</td>
                 <td>
                   <Badge tone={ABSENCE_STATUS_TONE[absence.status]}>{t(`absences.status.${absence.status}`)}</Badge>
                 </td>

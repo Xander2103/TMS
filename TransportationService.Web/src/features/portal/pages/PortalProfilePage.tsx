@@ -13,6 +13,7 @@ import { AppearanceSettings } from '../../../theme/AppearanceSettings'
 import { MyLeaveBalanceCard } from '../../leave-balance/components/MyLeaveBalanceCard'
 import type { MyProfile } from '../types'
 import './portal.css'
+import { formatDate } from '../../../utils/dates'
 
 /** Own profile (read-only; HR beheert wijzigingen) plus self-service password change. */
 export function PortalProfilePage() {
@@ -109,7 +110,7 @@ export function PortalProfilePage() {
           </div>
           <div>
             <dt>{t('portalHome.profile.employedSince')}</dt>
-            <dd>{profile.employmentStartDate}</dd>
+            <dd>{profile.employmentStartDate ? formatDate(profile.employmentStartDate) : '—'}</dd>
           </div>
           <div>
             <dt>{t('portalHome.profile.jobFunctions')}</dt>

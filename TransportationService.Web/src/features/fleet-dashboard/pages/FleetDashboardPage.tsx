@@ -15,6 +15,7 @@ import { maintenanceDisplayName } from '../../maintenance/types'
 import { getFleetDashboard } from '../api/fleetDashboardApi'
 import type { FleetDashboard } from '../types'
 import './fleet-dashboard.css'
+import { formatDate } from '../../../utils/dates'
 
 const URGENCY_TONE: Record<string, BadgeTone> = {
   Ok: 'info',
@@ -164,7 +165,7 @@ export function FleetDashboardPage() {
                       <span className="fd-row-owner">{item.ownerNumber}</span>
                       <span className="fd-row-main">{t(maintenanceDisplayName(item))}</span>
                       <span className="fd-row-meta">
-                        {item.scheduledDate ?? '—'}
+                        {item.scheduledDate ? formatDate(item.scheduledDate) : '—'}
                         {item.isOverdue && <Badge tone="danger">{t('maintenance.overdue')}</Badge>}
                       </span>
                     </button>
@@ -185,7 +186,7 @@ export function FleetDashboardPage() {
                       <span className="fd-row-owner">{item.ownerNumber}</span>
                       <span className="fd-row-main">{t(inspectionDisplayName(item))}</span>
                       <span className="fd-row-meta">
-                        {item.dueDate}
+                        {formatDate(item.dueDate)}
                         <Badge tone={URGENCY_TONE[item.urgency] ?? 'info'}>{t(INSPECTION_URGENCY_LABELS[item.urgency])}</Badge>
                       </span>
                     </button>
@@ -206,7 +207,7 @@ export function FleetDashboardPage() {
                       <span className="fd-row-owner">{item.ownerNumber}</span>
                       <span className="fd-row-main">{t(fleetDocumentDisplayName(item))}</span>
                       <span className="fd-row-meta">
-                        {item.expiryDate}
+                        {formatDate(item.expiryDate)}
                         <Badge tone={DOCUMENT_TONE[item.status] ?? 'info'}>{t(FLEET_DOCUMENT_STATUS_LABELS[item.status])}</Badge>
                       </span>
                     </button>
@@ -229,7 +230,7 @@ export function FleetDashboardPage() {
                         {item.description}
                       </span>
                       <span className="fd-row-meta">
-                        {item.incidentDate}
+                        {formatDate(item.incidentDate)}
                         <Badge tone={SEVERITY_TONE[item.severity] ?? 'info'}>{t(DAMAGE_SEVERITY_LABELS[item.severity])}</Badge>
                         <Badge tone="neutral">{t(DAMAGE_STATUS_LABELS[item.status])}</Badge>
                       </span>
@@ -252,7 +253,7 @@ export function FleetDashboardPage() {
                       <span className="fd-row-owner">{item.vehicleInternalNumber}</span>
                       <span className="fd-row-main">{item.warnings.map((w) => t(FUEL_WARNING_LABELS[w])).join(', ')}</span>
                       <span className="fd-row-meta">
-                        {item.transactionDate}
+                        {formatDate(item.transactionDate)}
                         {item.consumptionLPer100Km !== null && (
                           <Badge tone="warning">{formatDecimal(item.consumptionLPer100Km, Number.isInteger(item.consumptionLPer100Km) ? 0 : 1)} l/100km</Badge>
                         )}

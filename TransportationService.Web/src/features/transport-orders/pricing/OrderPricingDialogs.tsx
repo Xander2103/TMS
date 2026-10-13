@@ -11,6 +11,7 @@ import { PRICING_COVERAGE_LABELS, PRICING_COVERAGE_TONE } from '../types'
 import { CargoLinkSelect } from './CargoLinkSelect'
 import type { OrderPricingEditor } from './useOrderPricingEditor'
 import './order-pricing.css'
+import { formatDate } from '../../../utils/dates'
 
 interface OrderPricingDialogsProps {
   editor: OrderPricingEditor
@@ -269,7 +270,7 @@ export function OrderPricingDialogs({ editor, unitTypes }: OrderPricingDialogsPr
       {calcDetailsOpen && order.pricingSnapshot && (
         <Modal title="Berekeningsdetails" onClose={editor.closeCalcDetails}>
           <p className="customer-form-muted">
-            Tariefdatum: {order.pricingSnapshot.tariffDate}
+            Tariefdatum: {formatDate(order.pricingSnapshot.tariffDate)}
             {order.pricingSnapshot.zoneName ? ` · Zone: ${order.pricingSnapshot.zoneName} (${order.pricingSnapshot.zoneCode})` : ''}
             {order.pricingSnapshot.agreementNames ? ` · Tarief: ${order.pricingSnapshot.agreementNames}` : ''}
           </p>

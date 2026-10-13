@@ -28,6 +28,7 @@ import {
   type InspectionType,
 } from '../types'
 import './inspections.css'
+import { formatDate } from '../../../utils/dates'
 
 const URGENCY_TONE: Record<Inspection['urgency'], BadgeTone> = {
   Ok: 'info',
@@ -227,11 +228,11 @@ export function InspectionsPanel({ ownerType, ownerId }: InspectionsPanelProps) 
             {inspections.map((inspection) => (
               <tr key={inspection.id}>
                 <td>{t(inspectionDisplayName(inspection))}</td>
-                <td>{inspection.dueDate}</td>
+                <td>{formatDate(inspection.dueDate)}</td>
                 <td>
                   <Badge tone={URGENCY_TONE[inspection.urgency]}>{t(INSPECTION_URGENCY_LABELS[inspection.urgency])}</Badge>
                 </td>
-                <td>{inspection.completedDate ?? '—'}</td>
+                <td>{inspection.completedDate ? formatDate(inspection.completedDate) : '—'}</td>
                 <td>
                   {inspection.result ? (
                     <Badge tone={RESULT_TONE[inspection.result]}>{t(INSPECTION_RESULT_LABELS[inspection.result])}</Badge>

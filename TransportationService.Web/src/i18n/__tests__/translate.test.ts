@@ -67,7 +67,7 @@ describe('detectBrowserLocale', () => {
 
 describe('formatters', () => {
   it('formats date-only values without timezone day-shifts', () => {
-    expect(formatDate('nl', '2026-07-20')).toBe('20/7/2026')
+    expect(formatDate('nl', '2026-07-20')).toBe('20/07/2026')
     expect(formatDate('en', '2026-07-20')).toBe('20/07/2026')
   })
 

@@ -7,6 +7,7 @@ import { dossierTabPath } from '../../dossierSections'
 import { useDossierWorkspace } from '../../dossierWorkspace'
 import { useRegisterDossierSection } from '../../sectionRegistry'
 import { ActivityList } from '../ActivityList'
+import { formatDate } from '../../../../utils/dates'
 
 /** Activiteiten workspace: the ordered activity cards, legacy linked orders and the add action. */
 export function DossierActivitiesSection({ addButtonRef }: { addButtonRef: Ref<HTMLButtonElement> }) {
@@ -48,7 +49,7 @@ export function DossierActivitiesSection({ addButtonRef }: { addButtonRef: Ref<H
                     <code>{order.orderNumber}</code>
                   </button>
                   <span className="db-row-main" title={order.goodsDescription ?? undefined}>
-                    {order.orderDate} · {order.status}
+                    {formatDate(order.orderDate)} · {t(`orders.status.${order.status}`)}
                     {/* Provenance decides, never the number: an unpriced order with an engine 0 is not € 0,00. */}
                     {order.agreedPrice !== null && order.isPriced !== false && <> · {euro(order.agreedPrice)}</>}
                   </span>

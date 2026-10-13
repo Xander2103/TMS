@@ -6,6 +6,7 @@ import { listTrips } from '../../planning/api/planningApi'
 import { TRIP_STATUS_LABELS, TRIP_STATUS_TONE, type TripListItem } from '../../planning/types'
 import { toIsoDate } from '../../employee-planning/types'
 import '../../planning/pages/planning.css'
+import { formatDate } from '../../../utils/dates'
 
 /**
  * Trip history for an employee with a driver profile: 90 days back, 30 days ahead.
@@ -53,7 +54,7 @@ export function EmployeeTripsTab({ driverId }: { driverId: string }) {
         {trips.map((trip) => (
           <tr key={trip.id} className="pl-row" onClick={() => navigate(`/planning/${trip.id}`)}>
             <td>{trip.tripNumber}</td>
-            <td>{trip.tripDate}</td>
+            <td>{formatDate(trip.tripDate)}</td>
             <td>
               <Badge tone={TRIP_STATUS_TONE[trip.status]}>{t(TRIP_STATUS_LABELS[trip.status])}</Badge>
             </td>

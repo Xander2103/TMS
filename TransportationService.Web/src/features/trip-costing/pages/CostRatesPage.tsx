@@ -18,6 +18,7 @@ import {
 } from '../api/tripCostingApi'
 import type { CostRateSet, CostRateSetInput } from '../types'
 import '../components/trip-costing.css'
+import { formatDate } from '../../../utils/dates'
 
 interface RateField {
   key: keyof CostRateSetInput
@@ -178,7 +179,7 @@ export function CostRatesPage() {
           <tbody>
             {sets.map((set) => (
               <tr key={set.id}>
-                <td>{set.effectiveFrom}</td>
+                <td>{formatDate(set.effectiveFrom)}</td>
                 <td>{set.name ?? '—'}</td>
                 <td className="tc-num">{set.fuelPricePerLitre.toLocaleString('nl-BE', { minimumFractionDigits: 3 })}</td>
                 <td className="tc-num">{euro(set.driverCostPerHour)}</td>

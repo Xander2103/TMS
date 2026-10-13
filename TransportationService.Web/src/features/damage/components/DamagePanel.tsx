@@ -26,6 +26,7 @@ import {
   type UpdateDamageInput,
 } from '../types'
 import './damage.css'
+import { formatDate } from '../../../utils/dates'
 
 const SEVERITY_TONE: Record<DamageSeverity, BadgeTone> = {
   Minor: 'info',
@@ -246,7 +247,7 @@ export function DamagePanel({ ownerType, ownerId }: DamagePanelProps) {
           <tbody>
             {reports.map((report) => (
               <tr key={report.id}>
-                <td>{report.incidentDate}</td>
+                <td>{formatDate(report.incidentDate)}</td>
                 <td className="dmg-description" title={report.location ?? undefined}>
                   {report.description}
                 </td>

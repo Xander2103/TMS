@@ -37,7 +37,7 @@ import {
   type StockMovement,
   type VariantValueInput,
 } from '../inventoryApi'
-import { formatDateTime } from '../../../utils/dates'
+import { formatDateTime, formatDate } from '../../../utils/dates'
 import { formatQuantityWithUnit } from '../issuedItemUnits'
 import { MANAGEMENT_MODE_LABELS, modeFromFlags } from '../managementMode'
 import { TemplateFormModal } from '../TemplateFormModal'
@@ -729,7 +729,7 @@ export function IssuedItemTemplateDetailPage() {
                   <td>{holder.employeeNumber}</td>
                   <td>{holder.variantLabel ?? '—'}</td>
                   <td>{holder.quantity}</td>
-                  <td>{holder.issuedDate ?? '—'}</td>
+                  <td>{holder.issuedDate ? formatDate(holder.issuedDate) : '—'}</td>
                   <td>{holder.serialNumber ?? '—'}</td>
                 </tr>
               ))}

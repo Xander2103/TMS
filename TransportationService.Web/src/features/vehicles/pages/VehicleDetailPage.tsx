@@ -38,6 +38,7 @@ import {
   type VehicleInput,
 } from '../types'
 import './vehicle-form.css'
+import { formatDate } from '../../../utils/dates'
 
 const TAB_IDS = ['overzicht', 'techniek', 'toewijzing', 'documenten', 'tachograaf', 'leasing', 'onderhoud', 'keuringen', 'schade', 'brandstof', 'kpi', 'historiek'] as const
 type TabId = (typeof TAB_IDS)[number]
@@ -244,7 +245,7 @@ export function VehicleDetailPage() {
                 <FormField label={t('vehicles.detail.vin')}><span>{vehicle.vin ?? '—'}</span></FormField>
                 <FormField label={t('fleet.form.category')}><span>{vehicle.categoryName ?? '—'}</span></FormField>
                 <FormField label={t('fleet.form.year')}><span>{vehicle.year ?? '—'}</span></FormField>
-                <FormField label={t('vehicles.form.firstRegistration')}><span>{vehicle.firstRegistrationDate ?? '—'}</span></FormField>
+                <FormField label={t('vehicles.form.firstRegistration')}><span>{vehicle.firstRegistrationDate ? formatDate(vehicle.firstRegistrationDate) : '—'}</span></FormField>
                 <FormField label={t('fleet.form.ownership')}><span>{t(OWNERSHIP_TYPE_LABELS[vehicle.ownershipType])}</span></FormField>
                 <FormField label={t('vehicles.form.odometer')}><span>{formatInteger(vehicle.odometerKm)} km</span></FormField>
                 <FormField label={t('vehicles.detail.fixedDriver')}><span>{vehicle.fixedDriverName ?? '—'}</span></FormField>

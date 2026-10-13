@@ -12,6 +12,7 @@ import {
   type ExpiringQualification,
 } from '../../employees/types/qualification'
 import './qualifications-overview.css'
+import { formatDate } from '../../../utils/dates'
 
 const WINDOW_OPTIONS = [30, 60, 90] as const
 
@@ -60,7 +61,7 @@ export function QualificationsOverviewPage() {
       ),
     },
     { key: 'type', header: t('qualifications.page.colQualification'), render: (row) => row.qualificationTypeName },
-    { key: 'expiry', header: t('qualifications.page.colExpiry'), width: '130px', render: (row) => row.expiryDate ?? '—' },
+    { key: 'expiry', header: t('qualifications.page.colExpiry'), width: '130px', render: (row) => (row.expiryDate ? formatDate(row.expiryDate) : '—') },
     {
       key: 'status',
       header: t('qualifications.page.colStatus'),

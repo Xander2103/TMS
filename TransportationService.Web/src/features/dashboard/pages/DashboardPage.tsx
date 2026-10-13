@@ -11,7 +11,7 @@ import { getDashboard } from '../api/dashboardApi'
 import { WorkStatusCard } from '../../time-attendance/components/WorkStatusCard'
 import { DASHBOARD_TILE_GROUPS, type DashboardExtras, type DashboardTile } from '../dashboardConfig'
 import type { Dashboard } from '../types'
-import { formatDateTime } from '../../../utils/dates'
+import { formatDateTime, formatDate } from '../../../utils/dates'
 import './dashboard.css'
 
 /** Translation keys per status code; resolved via t() at render time. */
@@ -214,7 +214,7 @@ export function DashboardPage() {
                           {order.customerName}
                         </span>
                         <span className="db-row-meta">
-                          {order.orderDate}
+                          {formatDate(order.orderDate)}
                           <Badge tone={ORDER_STATUS_TONE[order.status]}>{t(ORDER_STATUS_KEYS[order.status])}</Badge>
                         </span>
                       </button>

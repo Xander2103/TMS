@@ -18,6 +18,7 @@ import {
 import { euro } from '../types'
 import { READINESS_REASON_KEYS } from '../utils/readiness'
 import './invoices.css'
+import { formatDate } from '../../../utils/dates'
 
 /**
  * Wave 10: de facturatiecontrole-werkplek. Voorstellen volgen de groeperingsvoorkeur van de
@@ -210,7 +211,7 @@ export function InvoiceControlPage() {
                         />
                       </td>
                       <td><code>{order.orderNumber}</code></td>
-                      <td>{order.orderDate}</td>
+                      <td className="nowrap">{formatDate(order.orderDate)}</td>
                       <td>{order.dossierNumber ?? '—'}</td>
                       <td>{order.agreedPrice !== null ? euro(order.agreedPrice) : '—'}</td>
                       <td className="issued-items-row-actions">
@@ -250,7 +251,7 @@ export function InvoiceControlPage() {
                 {control.needsReview.map((order) => (
                   <tr key={order.transportOrderId}>
                     <td><code>{order.orderNumber}</code></td>
-                    <td>{order.orderDate}</td>
+                    <td className="nowrap">{formatDate(order.orderDate)}</td>
                     <td>{order.dossierNumber ?? '—'}</td>
                     <td>{order.agreedPrice !== null ? euro(order.agreedPrice) : '—'}</td>
                     <td>
@@ -294,10 +295,10 @@ export function InvoiceControlPage() {
               {control.snoozed.map((order) => (
                 <tr key={order.transportOrderId}>
                   <td><code>{order.orderNumber}</code></td>
-                  <td>{order.orderDate}</td>
+                  <td className="nowrap">{formatDate(order.orderDate)}</td>
                   <td>{order.dossierNumber ?? '—'}</td>
                   <td>{order.agreedPrice !== null ? euro(order.agreedPrice) : '—'}</td>
-                  <td>{order.snoozedUntil ?? '—'}</td>
+                  <td className="nowrap">{order.snoozedUntil ? formatDate(order.snoozedUntil) : '—'}</td>
                   <td>{order.snoozeReason ?? '—'}</td>
                   <td className="issued-items-row-actions">
                     <button

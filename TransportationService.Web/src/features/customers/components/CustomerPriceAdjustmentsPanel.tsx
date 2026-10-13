@@ -20,6 +20,7 @@ import {
   type ScheduledPriceAdjustment,
   ADJUSTMENT_STATUS_LABELS,
 } from '../../tarification/api/pricingApi'
+import { formatDate } from '../../../utils/dates'
 
 interface CustomerPriceAdjustmentsPanelProps {
   customerId: string
@@ -160,7 +161,7 @@ export function CustomerPriceAdjustmentsPanel({ customerId }: CustomerPriceAdjus
           <tbody>
             {adjustments.map((adjustment) => (
               <tr key={adjustment.id}>
-                <td>{adjustment.effectiveDate}</td>
+                <td>{formatDate(adjustment.effectiveDate)}</td>
                 <td>{adjustmentSummary(adjustment)}</td>
                 <td>{adjustment.ruleCount}</td>
                 <td>{adjustment.reason ?? '—'}</td>

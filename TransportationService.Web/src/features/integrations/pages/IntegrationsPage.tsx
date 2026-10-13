@@ -8,7 +8,7 @@ import { useToast } from '../../../components/ui/toastContext'
 import { apiClient, ApiError } from '../../../api/apiClient'
 import type { PagedResult } from '../../../api/types'
 import { useLocale } from '../../../i18n/localeContext'
-import { formatDateTime } from '../../../utils/dates'
+import { formatDateTime, formatDate } from '../../../utils/dates'
 
 type SyncStatus = 'Pending' | 'Synced' | 'Failed' | 'Cancelled'
 type SyncOperation = 'Upsert' | 'Cancel'
@@ -141,7 +141,7 @@ export function IntegrationsPage() {
               </td>
               <td>{row.employeeName}</td>
               <td>
-                {row.startDate === row.endDate ? row.startDate : `${row.startDate} – ${row.endDate}`}
+                {row.startDate === row.endDate ? formatDate(row.startDate) : `${formatDate(row.startDate)} – ${formatDate(row.endDate)}`}
               </td>
               <td>{row.title}</td>
               <td>

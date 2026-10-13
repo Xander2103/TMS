@@ -23,6 +23,7 @@ import {
   type ScheduledPriceAdjustment,
   type UnitTypeSettings,
 } from '../api/pricingApi'
+import { formatDate } from '../../../utils/dates'
 
 interface AgreementAdjustmentsPanelProps {
   agreementId: string
@@ -171,7 +172,7 @@ export function AgreementAdjustmentsPanel({ agreementId, canManage }: AgreementA
           <tbody>
             {adjustments.map((a) => (
               <tr key={a.id}>
-                <td>{a.effectiveDate}</td>
+                <td>{formatDate(a.effectiveDate)}</td>
                 <td>{adjustmentSummary(a)}</td>
                 <td>{a.roundingStep !== null ? formatEuro(a.roundingStep) : '—'}</td>
                 <td>

@@ -28,6 +28,7 @@ import {
   type FleetDocumentType,
 } from '../types'
 import './fleet-documents.css'
+import { formatDate } from '../../../utils/dates'
 
 const STATUS_TONE: Record<FleetDocument['status'], BadgeTone> = {
   NoExpiry: 'neutral',
@@ -231,8 +232,8 @@ export function FleetDocumentsPanel({ ownerType, ownerId }: FleetDocumentsPanelP
               <tr key={doc.id}>
                 <td>{t(fleetDocumentDisplayName(doc))}</td>
                 <td>{doc.documentNumber ?? '—'}</td>
-                <td>{doc.issueDate ?? '—'}</td>
-                <td>{doc.expiryDate ?? '—'}</td>
+                <td className="nowrap">{doc.issueDate ? formatDate(doc.issueDate) : '—'}</td>
+                <td className="nowrap">{doc.expiryDate ? formatDate(doc.expiryDate) : '—'}</td>
                 <td>
                   <Badge tone={STATUS_TONE[doc.status]}>{t(FLEET_DOCUMENT_STATUS_LABELS[doc.status])}</Badge>
                 </td>

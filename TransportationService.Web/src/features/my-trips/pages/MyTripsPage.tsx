@@ -8,6 +8,7 @@ import { TRIP_STATUS_LABELS, TRIP_STATUS_TONE } from '../../planning/types'
 import { listMyTrips } from '../api/myTripsApi'
 import type { MyTrip } from '../types'
 import './my-trips.css'
+import { formatDate } from '../../../utils/dates'
 
 /** Driver view: own upcoming trips (planned + in progress + recently completed). */
 export function MyTripsPage() {
@@ -51,7 +52,7 @@ export function MyTripsPage() {
                 <code>{trip.tripNumber}</code>
                 <Badge tone={TRIP_STATUS_TONE[trip.status]}>{t(TRIP_STATUS_LABELS[trip.status])}</Badge>
               </div>
-              <div className="mt-card-date">{trip.tripDate}</div>
+              <div className="mt-card-date">{formatDate(trip.tripDate)}</div>
               <div className="mt-card-meta">
                 {trip.vehicleNumber ? `${trip.vehicleNumber} (${trip.vehicleLicensePlate})` : t('myTrips.list.noVehicle')}
                 {trip.trailerNumber ? ` + ${trip.trailerNumber}` : ''}

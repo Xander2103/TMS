@@ -21,6 +21,7 @@ import {
   type AbsenceReviewContext,
 } from '../types'
 import './absences.css'
+import { formatDate } from '../../../utils/dates'
 
 interface ReviewAbsenceDialogProps {
   absence: Absence
@@ -127,7 +128,7 @@ export function ReviewAbsenceDialog({ absence, onClose, onChanged }: ReviewAbsen
                   ? t('absences.review.noTrips')
                   : t('absences.review.trips', {
                       count: context.overlappingTrips.length,
-                      list: context.overlappingTrips.map((trip) => `${trip.tripNumber} (${trip.tripDate})`).join(', '),
+                      list: context.overlappingTrips.map((trip) => `${trip.tripNumber} (${formatDate(trip.tripDate)})`).join(', '),
                     })}
               </li>
               <li>
@@ -137,7 +138,7 @@ export function ReviewAbsenceDialog({ absence, onClose, onChanged }: ReviewAbsen
                       list: context.overlappingColleagues
                         .map(
                           (c) =>
-                            `${c.employeeName} (${c.startDate}–${c.endDate}, ${t(`absences.status.${c.status}`)})`,
+                            `${c.employeeName} (${formatDate(c.startDate)}–${formatDate(c.endDate)}, ${t(`absences.status.${c.status}`)})`,
                         )
                         .join(', '),
                     })}

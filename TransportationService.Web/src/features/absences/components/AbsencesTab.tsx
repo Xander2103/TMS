@@ -25,6 +25,7 @@ import {
   type AbsenceType,
 } from '../types'
 import './absences.css'
+import { formatDate } from '../../../utils/dates'
 
 interface AbsenceForm {
   type: AbsenceType
@@ -254,8 +255,8 @@ export function AbsencesTab({ employeeId, highlightAbsenceId }: AbsencesTabProps
                 }
               >
                 <td>{t(`absences.type.${absence.type}`)}</td>
-                <td>{absence.startDate}</td>
-                <td>{absence.endDate}</td>
+                <td className="nowrap">{formatDate(absence.startDate)}</td>
+                <td className="nowrap">{formatDate(absence.endDate)}</td>
                 <td>
                   <span title={absence.decisionNote ?? undefined}>
                     <Badge tone={ABSENCE_STATUS_TONE[absence.status]}>{t(`absences.status.${absence.status}`)}</Badge>

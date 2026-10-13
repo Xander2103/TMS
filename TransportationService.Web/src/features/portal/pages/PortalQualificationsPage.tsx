@@ -6,6 +6,7 @@ import { Badge } from '../../../components/ui/Badge'
 import { useToast } from '../../../components/ui/toastContext'
 import { useLocale } from '../../../i18n/localeContext'
 import { fetchMyQualificationDocumentUrl, listMyQualifications } from '../api/portalApi'
+import { formatDate } from '../../../utils/dates'
 import {
   MY_QUALIFICATION_STATUS_LABELS,
   MY_QUALIFICATION_STATUS_TONE,
@@ -64,8 +65,8 @@ export function PortalQualificationsPage() {
               </Badge>
             </div>
             <div className="portal-absence-dates">
-              {t('portalHome.qualifications.obtained', { date: qualification.obtainedDate })}
-              {qualification.expiryDate && ` · ${t('portalHome.qualifications.expires', { date: qualification.expiryDate })}`}
+              {t('portalHome.qualifications.obtained', { date: formatDate(qualification.obtainedDate) })}
+              {qualification.expiryDate && ` · ${t('portalHome.qualifications.expires', { date: formatDate(qualification.expiryDate) })}`}
               {qualification.documentNumber && ` · ${t('portalHome.qualifications.documentNumber', { number: qualification.documentNumber })}`}
             </div>
             {qualification.hasDocument && (

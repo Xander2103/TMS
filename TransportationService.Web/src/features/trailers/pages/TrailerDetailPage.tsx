@@ -31,6 +31,7 @@ import {
   type TrailerInput,
 } from '../types'
 import './trailer-form.css'
+import { formatDate } from '../../../utils/dates'
 
 const TAB_IDS = ['overzicht', 'techniek', 'documenten', 'leasing', 'onderhoud', 'keuringen', 'schade', 'kpi', 'historiek'] as const
 type TabId = (typeof TAB_IDS)[number]
@@ -207,7 +208,7 @@ export function TrailerDetailPage() {
                 <FormField label={t('vehicles.detail.vin')}><span>{trailer.vin ?? '—'}</span></FormField>
                 <FormField label={t('fleet.form.category')}><span>{trailer.categoryName ?? '—'}</span></FormField>
                 <FormField label={t('fleet.form.year')}><span>{trailer.year ?? '—'}</span></FormField>
-                <FormField label={t('vehicles.form.firstRegistration')}><span>{trailer.firstRegistrationDate ?? '—'}</span></FormField>
+                <FormField label={t('vehicles.form.firstRegistration')}><span>{trailer.firstRegistrationDate ? formatDate(trailer.firstRegistrationDate) : '—'}</span></FormField>
                 <FormField label={t('fleet.form.ownership')}><span>{t(TRAILER_OWNERSHIP_LABELS[trailer.ownershipType])}</span></FormField>
                 <FormField label={t('fleet.sections.notes')} className="trailer-detail-full"><span>{trailer.notes ?? '—'}</span></FormField>
               </div>
