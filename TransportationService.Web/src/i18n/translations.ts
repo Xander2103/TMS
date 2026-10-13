@@ -69,6 +69,14 @@ export function translateFrom(
   key: string,
   params?: Record<string, string | number>,
 ): string {
+  // A missing label map entry (an enum value the frontend does not know yet) must never take
+  // the whole page down: render nothing, and shout in development.
+  if (typeof key !== 'string') {
+    if (import.meta.env.DEV) {
+      console.warn(`[i18n] Vertaalsleutel ontbreekt (${String(key)})`)
+    }
+    return ''
+  }
   let value: string | undefined
   if (params && typeof params.count === 'number') {
     const pluralKey = `${key}_${params.count === 1 ? 'one' : 'other'}`

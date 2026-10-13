@@ -3,7 +3,8 @@
     "Pending": "Queued",
     "Sent": "Sent",
     "Failed": "Failed",
-    "Suppressed": "Suppressed"
+    "Suppressed": "Suppressed",
+    "AwaitingReview": "Awaiting review"
   },
   "page": {
     "title": "Messages",

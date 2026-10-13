@@ -3,7 +3,8 @@
     "Pending": "In wachtrij",
     "Sent": "Verzonden",
     "Failed": "Mislukt",
-    "Suppressed": "Onderdrukt"
+    "Suppressed": "Onderdrukt",
+    "AwaitingReview": "Wacht op controle"
   },
   "page": {
     "title": "Berichten",

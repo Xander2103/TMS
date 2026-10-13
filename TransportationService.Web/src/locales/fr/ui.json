@@ -82,7 +82,9 @@
     "pageLoading": "Chargement de la page...",
     "shortcuts": "Raccourcis clavier",
     "notFoundTitle": "Page introuvable",
-    "notFoundMessage": "La page demandée n'existe pas."
+    "notFoundMessage": "La page demandée n'existe pas.",
+    "notFoundBack": "Retour",
+    "notFoundHome": "Vers l'écran d'accueil"
   },
   "shortcutList": {
     "globalSearch": "Recherche globale / commandes",
@@ -151,5 +153,26 @@
     "selectedLabel": "Sélectionné : {label}",
     "remove": "Supprimer {label}",
     "typeToSearch": "Tapez pour rechercher…"
+  },
+  "errorPage": {
+    "title": "Une erreur est survenue.",
+    "message": "Cette page n'a pas pu être affichée. Vos données ne sont pas perdues : réessayez ou revenez en arrière.",
+    "retry": "Réessayer",
+    "back": "Retour",
+    "home": "Vers l'écran d'accueil",
+    "details": "Détails techniques"
+  },
+  "session": {
+    "unavailableTitle": "Le serveur est temporairement indisponible",
+    "network": "Pas de connexion au serveur. Vérifiez votre réseau et réessayez.",
+    "rateLimited": "Le serveur refuse temporairement les nouvelles tentatives de connexion (trop de demandes). Attendez une minute et réessayez.",
+    "server": "Le serveur a renvoyé une erreur. Votre session est conservée ; réessayez dans un instant.",
+    "retry": "Réessayer",
+    "retrying": "Reconnexion…"
+  },
+  "feedback": {
+    "retry": "Réessayer",
+    "backToList": "Retour à la liste",
+    "back": "Retour"
   }
 }

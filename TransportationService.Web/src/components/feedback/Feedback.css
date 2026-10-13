@@ -1,3 +1,50 @@
 .error-text {
   color: var(--color-danger-strong);
 }
+
+/* Recoverable error states: message first, then the way out (retry / back). */
+.error-state {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 0;
+}
+
+.error-state-actions,
+.route-error-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.route-error {
+  max-width: 560px;
+  margin: 48px auto;
+  padding: 24px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.route-error-title {
+  margin: 0 0 8px;
+  font-size: 22px;
+}
+
+.route-error-message {
+  margin: 0 0 16px;
+  color: var(--text);
+}
+
+.route-error-details {
+  margin-top: 16px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.route-error-details pre {
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 240px;
+  overflow: auto;
+}

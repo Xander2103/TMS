@@ -9,7 +9,8 @@
       "not_found": "Introuvable.",
       "rate_limited": "Trop de tentatives. Réessayez dans quelques minutes.",
       "unsupported_language": "Choisissez néerlandais, français ou anglais.",
-      "invalid_reference": "Référence invalide."
+      "invalid_reference": "Référence invalide.",
+      "service_unavailable": "Le serveur est temporairement indisponible. Réessayez dans un instant."
     },
     "attendance": {
       "already_clocked_in": "Vous avez déjà pointé votre entrée.",

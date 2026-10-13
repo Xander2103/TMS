@@ -3,7 +3,8 @@
     "Pending": "En file d'attente",
     "Sent": "Envoyé",
     "Failed": "En échec",
-    "Suppressed": "Supprimé"
+    "Suppressed": "Supprimé",
+    "AwaitingReview": "En attente de contrôle"
   },
   "page": {
     "title": "Messages",

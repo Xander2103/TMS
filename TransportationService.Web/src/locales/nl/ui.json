@@ -82,7 +82,9 @@
     "pageLoading": "Pagina laden...",
     "shortcuts": "Sneltoetsen",
     "notFoundTitle": "Pagina niet gevonden",
-    "notFoundMessage": "De opgevraagde pagina bestaat niet."
+    "notFoundMessage": "De opgevraagde pagina bestaat niet.",
+    "notFoundBack": "Terug",
+    "notFoundHome": "Naar het startscherm"
   },
   "shortcutList": {
     "globalSearch": "Globaal zoeken / commando's",
@@ -151,5 +153,26 @@
     "selectedLabel": "Geselecteerd: {label}",
     "remove": "{label} verwijderen",
     "typeToSearch": "Typ om te zoeken…"
+  },
+  "errorPage": {
+    "title": "Er ging iets mis.",
+    "message": "Deze pagina kon niet worden getoond. Je gegevens zijn niet verloren: probeer het opnieuw of ga terug.",
+    "retry": "Opnieuw proberen",
+    "back": "Terug",
+    "home": "Naar het startscherm",
+    "details": "Technische details"
+  },
+  "session": {
+    "unavailableTitle": "De server is tijdelijk niet bereikbaar",
+    "network": "Er is geen verbinding met de server. Controleer je netwerk en probeer het opnieuw.",
+    "rateLimited": "De server weigert tijdelijk nieuwe aanmeldpogingen omdat het te druk is. Wacht een minuut en probeer het opnieuw.",
+    "server": "De server gaf een fout terug. Je sessie blijft bewaard; probeer het zo meteen opnieuw.",
+    "retry": "Opnieuw proberen",
+    "retrying": "Opnieuw verbinden…"
+  },
+  "feedback": {
+    "retry": "Opnieuw proberen",
+    "backToList": "Terug naar de lijst",
+    "back": "Terug"
   }
 }

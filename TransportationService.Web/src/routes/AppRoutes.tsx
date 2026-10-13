@@ -19,6 +19,7 @@ import { AppLayout } from '../components/layout/AppLayout'
 import { InternalOnly, RootRedirect } from './portalRouting'
 import { LoadingState } from '../components/feedback/LoadingState'
 import { NotFoundPage } from '../components/feedback/NotFoundPage'
+import { RouteErrorPage } from '../components/feedback/RouteErrorPage'
 import { LOOKUP_RESOURCES } from '../features/master-data/lookupRegistry'
 
 /**
@@ -208,7 +209,7 @@ function RootProviders() {
 // Data router (createBrowserRouter) is required for useBlocker-based unsaved-changes guards.
 const router = createBrowserRouter(
   createRoutesFromElements(
-    <Route element={<RootProviders />}>
+    <Route element={<RootProviders />} errorElement={<RouteErrorPage />}>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
@@ -221,12 +222,15 @@ const router = createBrowserRouter(
         <Route path="/change-password" element={<ChangePasswordPage />} />
         {/* Mobile-first driver shell (bottom tabs); execution pages stay shared under /my-trips. */}
         <Route element={<DriverLayout />}>
-          <Route path="/driver" element={<DriverHomePage />} />
-          <Route path="/driver/documents" element={<DriverDocumentsPage />} />
-          <Route path="/driver/incidents" element={<DriverIncidentsPage />} />
+          <Route errorElement={<RouteErrorPage />}>
+            <Route path="/driver" element={<DriverHomePage />} />
+            <Route path="/driver/documents" element={<DriverDocumentsPage />} />
+            <Route path="/driver/incidents" element={<DriverIncidentsPage />} />
+          </Route>
         </Route>
         {/* Customer-portal shell: portal users never render the internal AppLayout sidebar. */}
         <Route element={<CustomerPortalLayout />}>
+          <Route errorElement={<RouteErrorPage />}>
           <Route path="/klantportaal" element={<CustomerPortalOrdersPage />} />
           <Route path="/klantportaal/dashboard" element={<CustomerPortalDashboardPage />} />
           <Route path="/klantportaal/new" element={<CustomerPortalNewOrderPage />} />
@@ -238,9 +242,12 @@ const router = createBrowserRouter(
           <Route path="/klantportaal/mededelingen" element={<CustomerPortalNoticesPage />} />
           <Route path="/klantportaal/gebruikers" element={<CustomerPortalUsersPage />} />
           <Route path="/klantportaal/voorkeuren" element={<CustomerPortalPreferencesPage />} />
+          </Route>
         </Route>
         <Route element={<InternalOnly />}>
         <Route element={<AppLayout />}>
+        {/* Pathless boundary INSIDE the shell: a crashing page keeps the sidebar and the bell. */}
+        <Route errorElement={<RouteErrorPage />}>
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/transport-orders" element={<TransportOrdersPage />} />
           <Route path="/transport-orders/new" element={<NewTransportOrderPage />} />
@@ -362,6 +369,7 @@ const router = createBrowserRouter(
           <Route path="/settings/portal-announcements" element={<PortalAnnouncementsSettingsPage />} />
           <Route path="/settings/portal-messages" element={<PortalMessagesPage />} />
           <Route path="*" element={<NotFoundPage />} />
+        </Route>
         </Route>
         </Route>
       </Route>

@@ -34,6 +34,10 @@ interface DataTableProps<TRow> {
   isLoading?: boolean
   error?: string | null
   emptyMessage?: string
+  /** Next step offered inside the empty state (e.g. a "Nieuw dossier" button). */
+  emptyAction?: ReactNode
+  /** Re-runs the failed load; the error state offers "Opnieuw proberen" when given. */
+  onRetry?: () => void
   loadingMessage?: string
   /** Invoked when a row is clicked; makes rows keyboard-focusable. */
   onRowClick?: (row: TRow) => void
@@ -58,6 +62,8 @@ export function DataTable<TRow>({
   isLoading = false,
   error = null,
   emptyMessage,
+  emptyAction,
+  onRetry,
   loadingMessage,
   onRowClick,
   rowClassName,
@@ -67,8 +73,8 @@ export function DataTable<TRow>({
 }: DataTableProps<TRow>) {
   const { t } = useLocale()
   if (isLoading) return <LoadingState message={loadingMessage ?? t('ui.table.loading')} />
-  if (error) return <ErrorState message={error} />
-  if (rows.length === 0) return <EmptyState message={emptyMessage ?? t('ui.table.empty')} />
+  if (error) return <ErrorState message={error} onRetry={onRetry} />
+  if (rows.length === 0) return <EmptyState message={emptyMessage ?? t('ui.table.empty')} action={emptyAction} />
 
   function handleSortClick(sortKey: string) {
     if (!onSortChange) return

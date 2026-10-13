@@ -82,7 +82,9 @@
     "pageLoading": "Loading page...",
     "shortcuts": "Keyboard shortcuts",
     "notFoundTitle": "Page not found",
-    "notFoundMessage": "The requested page does not exist."
+    "notFoundMessage": "The requested page does not exist.",
+    "notFoundBack": "Back",
+    "notFoundHome": "Go to the start screen"
   },
   "shortcutList": {
     "globalSearch": "Global search / commands",
@@ -151,5 +153,26 @@
     "selectedLabel": "Selected: {label}",
     "remove": "Remove {label}",
     "typeToSearch": "Type to search…"
+  },
+  "errorPage": {
+    "title": "Something went wrong.",
+    "message": "This page could not be shown. Your data is not lost: try again or go back.",
+    "retry": "Try again",
+    "back": "Back",
+    "home": "Go to the start screen",
+    "details": "Technical details"
+  },
+  "session": {
+    "unavailableTitle": "The server is temporarily unavailable",
+    "network": "No connection to the server. Check your network and try again.",
+    "rateLimited": "The server is temporarily refusing new sign-in attempts because it is busy. Wait a minute and try again.",
+    "server": "The server returned an error. Your session is kept; try again in a moment.",
+    "retry": "Try again",
+    "retrying": "Reconnecting…"
+  },
+  "feedback": {
+    "retry": "Try again",
+    "backToList": "Back to the list",
+    "back": "Back"
   }
 }
