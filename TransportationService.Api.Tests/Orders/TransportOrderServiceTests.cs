@@ -56,6 +56,350 @@ public class TransportOrderServiceTests
         customerId, "PO-777", new DateOnly(2026, 7, 20), "20 paletten bouwmateriaal",
         20, "paletten", 12500, null, 20, false, false, 1450m, null, stops);
 
+    /// <summary>
+    /// Maps a detail DTO back into an update request, carrying stops AND cargo items (reused by
+    /// later tasks). Cargo stop links are re-resolved from ids to indexes via the detail DTO's
+    /// stop list order, since CargoItemInput addresses stops by index. Stop ids are echoed the
+    /// way the real client does (wave 1 blocker C-01): an echoed id identifies an EXISTING stop,
+    /// which is then updated in place instead of replaced.
+    /// </summary>
+    private static UpdateTransportOrderRequest BuildUpdateFrom(TransportOrderDetailDto d)
+    {
+        var stopIndexById = d.Stops
+            .Select((s, i) => (s.Id, Index: i))
+            .ToDictionary(x => x.Id, x => x.Index);
+
+        return new UpdateTransportOrderRequest(
+            d.CustomerId, d.CustomerReference, d.OrderDate, d.GoodsDescription, d.Quantity,
+            d.QuantityUnit, d.WeightKg, d.VolumeM3, d.PalletCount, d.AdrRequired, d.CraneRequired,
+            d.AgreedPrice, d.Notes,
+            d.Stops.Select(s => new TransportOrderStopInput(
+                    s.StopType, s.LocationId, s.LocationName, s.Address, s.PostalCode, s.City, s.CountryCode,
+                    s.PlannedFrom, s.PlannedTo, s.Reference, s.Instructions, Id: s.Id))
+                .ToList(),
+            CargoItems: d.CargoItems.Select(c => new CargoItemInput(
+                    c.Description, c.Barcode, c.ExpectedQuantity, c.QuantityUnit, c.Notes,
+                    c.UnitType, c.UnitTypeLabel, c.TotalWeightKg, c.WeightPerUnitKg,
+                    c.LengthMeters, c.WidthMeters, c.HeightMeters, c.VolumeM3, c.VolumeIsManual,
+                    c.AdrRequired, c.AdrDetails, c.Stackable, c.Reference,
+                    c.LoadingStopId is { } lid && stopIndexById.TryGetValue(lid, out var li) ? li : null,
+                    c.UnloadingStopId is { } uid && stopIndexById.TryGetValue(uid, out var ui) ? ui : null,
+                    c.QuantityUnitCode, Id: c.Id, PalletCount: c.PalletCount))
+                .ToList(),
+            QuantityUnitCode: d.QuantityUnitCode);
+    }
+
+    [Fact]
+    public async Task Update_ChangedCargoUnit_RoundTripsThroughDetailDto()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var create = Request(h.CustomerId,
+            Stop(StopType.Loading, h.LocationId), Stop(StopType.Unloading, city: "Gent")) with
+        {
+            CargoItems = [new CargoItemInput("Onderdelen", null, 2, null, null, QuantityUnitCode: "EUROPALLET")],
+        };
+        var created = await h.Sut.CreateAsync(create, CancellationToken.None);
+        Assert.Equal(TransportOrderOperationOutcome.Success, created.Outcome);
+        Assert.Equal("EUROPALLET", Assert.Single(created.Order!.CargoItems).QuantityUnitCode);
+
+        h.Db.Context.ChangeTracker.Clear();
+        var update = BuildUpdateFrom(created.Order!) with
+        {
+            CargoItems = [new CargoItemInput("Onderdelen", null, 2, null, null, QuantityUnitCode: "COLLI")],
+        };
+        var updated = await h.Sut.UpdateAsync(created.Order!.Id, update, CancellationToken.None);
+        Assert.Equal(TransportOrderOperationOutcome.Success, updated.Outcome);
+        Assert.Equal("COLLI", Assert.Single(updated.Order!.CargoItems).QuantityUnitCode);
+
+        h.Db.Context.ChangeTracker.Clear();
+        var reloaded = await h.Sut.GetByIdAsync(created.Order!.Id, CancellationToken.None);
+        Assert.Equal("COLLI", Assert.Single(reloaded!.CargoItems).QuantityUnitCode);
+    }
+
+    [Fact]
+    public async Task Create_CargoWithPalletCount_RoundTripsThroughDetailDto_AndSurvivesUpdate()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var create = Request(h.CustomerId,
+            Stop(StopType.Loading, h.LocationId), Stop(StopType.Unloading, city: "Gent")) with
+        {
+            CargoItems =
+            [
+                new CargoItemInput("Pallets", null, 2, null, null, QuantityUnitCode: "EUROPALLET", PalletCount: 2),
+                new CargoItemInput("Dozen", null, 4, null, null, QuantityUnitCode: "COLLI"),
+            ],
+        };
+        var created = await h.Sut.CreateAsync(create, CancellationToken.None);
+        Assert.Equal(TransportOrderOperationOutcome.Success, created.Outcome);
+        var createdEuro = created.Order!.CargoItems.Single(c => c.QuantityUnitCode == "EUROPALLET");
+        var createdColli = created.Order!.CargoItems.Single(c => c.QuantityUnitCode == "COLLI");
+        Assert.Equal(2m, createdEuro.PalletCount);
+        Assert.Null(createdColli.PalletCount);
+
+        h.Db.Context.ChangeTracker.Clear();
+        var baseUpdate = BuildUpdateFrom(created.Order!);
+        var update = baseUpdate with
+        {
+            CargoItems = baseUpdate.CargoItems!.Select(c =>
+                    c.QuantityUnitCode == "EUROPALLET" ? c with { PalletCount = 3m } : c)
+                .ToList(),
+        };
+        var updated = await h.Sut.UpdateAsync(created.Order!.Id, update, CancellationToken.None);
+        Assert.Equal(TransportOrderOperationOutcome.Success, updated.Outcome);
+        var updatedEuro = updated.Order!.CargoItems.Single(c => c.QuantityUnitCode == "EUROPALLET");
+        Assert.Equal(3m, updatedEuro.PalletCount);
+
+        h.Db.Context.ChangeTracker.Clear();
+        var reloaded = await h.Sut.GetByIdAsync(created.Order!.Id, CancellationToken.None);
+        var reloadedEuro = reloaded!.CargoItems.Single(c => c.QuantityUnitCode == "EUROPALLET");
+        Assert.Equal(3m, reloadedEuro.PalletCount);
+    }
+
+    [Fact]
+    public async Task Update_MatchingCargoId_UpdatesInPlace_KeepsGuid_AndAuditsUnitChange()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var create = Request(h.CustomerId,
+            Stop(StopType.Loading, h.LocationId), Stop(StopType.Unloading, city: "Gent")) with
+        {
+            CargoItems = [new CargoItemInput("Onderdelen", null, 2, null, null, QuantityUnitCode: "EUROPALLET")],
+        };
+        var created = await h.Sut.CreateAsync(create, CancellationToken.None);
+        var lineId = created.Order!.CargoItems.Single().Id;
+        h.Db.Context.ChangeTracker.Clear();
+
+        var update = BuildUpdateFrom(created.Order!) with
+        {
+            CargoItems = [new CargoItemInput("Onderdelen", null, 2, null, null,
+                QuantityUnitCode: "COLLI", Id: lineId)],
+        };
+        var updated = await h.Sut.UpdateAsync(created.Order!.Id, update, CancellationToken.None);
+
+        Assert.Equal(lineId, Assert.Single(updated.Order!.CargoItems).Id); // id preserved
+        var entity = await h.Db.Context.CargoItems.SingleAsync(c => c.Id == lineId);
+        Assert.Equal("COLLI", entity.QuantityUnitCode);
+
+        var audit = await h.Db.Context.AuditLogs
+            .Where(a => a.EntityType == "TransportOrder" && a.Action == "Updated")
+            .OrderByDescending(a => a.Id).FirstAsync();
+        Assert.Contains("EUROPALLET", audit.OldValuesJson);
+        Assert.Contains("COLLI", audit.NewValuesJson);
+    }
+
+    [Fact]
+    public async Task Update_NullCargoItems_LeavesExistingLinesUntouched()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var create = Request(h.CustomerId,
+            Stop(StopType.Loading, h.LocationId), Stop(StopType.Unloading, city: "Gent")) with
+        {
+            CargoItems = [new CargoItemInput("Onderdelen", null, 2, null, null, QuantityUnitCode: "EUROPALLET")],
+        };
+        var created = await h.Sut.CreateAsync(create, CancellationToken.None);
+        h.Db.Context.ChangeTracker.Clear();
+
+        var updated = await h.Sut.UpdateAsync(created.Order!.Id,
+            BuildUpdateFrom(created.Order!) with { CargoItems = null }, CancellationToken.None);
+        Assert.Single(updated.Order!.CargoItems); // not wiped
+    }
+
+    /// <summary>
+    /// INVARIANT CHANGED (wave 1 blocker C-01): stops are no longer wholesale-replaced. A client
+    /// that echoes a stop id addresses the SAME stop, which is updated in place — so its id, and
+    /// with it every package pin / stop execution / POD / scan / ETA hanging off it, survives the
+    /// edit. This test used to assert the opposite (Assert.NotEqual on the stop ids, plus a cargo
+    /// re-link to the freshly generated ids); it now asserts identity preservation and that the
+    /// preserved cargo keeps its (still valid) links. The legacy id-less client path — where
+    /// stops really are replaced and the cargo re-link is what saves the row from dangling on a
+    /// soft-deleted stop — is covered by
+    /// OrderUpdateIntegrityTests.Update_WithoutStopIds_ReplacesStops_AndRelinksPreservedCargo.
+    /// </summary>
+    [Fact]
+    public async Task Update_NullCargoItems_PreservesStopIdentityAndCargoLinks()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var create = Request(h.CustomerId,
+            Stop(StopType.Loading, h.LocationId), Stop(StopType.Unloading, city: "Gent")) with
+        {
+            CargoItems = [new CargoItemInput("Onderdelen", null, 2, null, null, QuantityUnitCode: "EUROPALLET")],
+        };
+        var created = await h.Sut.CreateAsync(create, CancellationToken.None);
+        var cargoLine = created.Order!.CargoItems.Single();
+        var loadingStopId = created.Order.Stops.Single(s => s.StopType == StopType.Loading).Id;
+        var unloadingStopId = created.Order.Stops.Single(s => s.StopType == StopType.Unloading).Id;
+        Assert.Equal(loadingStopId, cargoLine.LoadingStopId); // auto-linked on create (unambiguous)
+        Assert.Equal(unloadingStopId, cargoLine.UnloadingStopId);
+        h.Db.Context.ChangeTracker.Clear();
+
+        var updated = await h.Sut.UpdateAsync(created.Order.Id,
+            BuildUpdateFrom(created.Order) with { CargoItems = null }, CancellationToken.None);
+
+        Assert.Equal(TransportOrderOperationOutcome.Success, updated.Outcome);
+        Assert.Equal(loadingStopId, updated.Order!.Stops.Single(s => s.StopType == StopType.Loading).Id);
+        Assert.Equal(unloadingStopId, updated.Order.Stops.Single(s => s.StopType == StopType.Unloading).Id);
+
+        var preservedCargo = Assert.Single(updated.Order.CargoItems);
+        Assert.Equal(cargoLine.Id, preservedCargo.Id);
+        Assert.Equal(loadingStopId, preservedCargo.LoadingStopId);
+        Assert.Equal(unloadingStopId, preservedCargo.UnloadingStopId);
+
+        var persistedCargo = await h.Db.Context.CargoItems.AsNoTracking().SingleAsync(c => c.Id == cargoLine.Id);
+        Assert.Equal(loadingStopId, persistedCargo.LoadingStopId);
+        Assert.Equal(unloadingStopId, persistedCargo.UnloadingStopId);
+
+        // No soft-deleted twin was left behind: the two live rows ARE the original two.
+        var stopRows = await h.Db.Context.TransportOrderStops.IgnoreQueryFilters().AsNoTracking()
+            .Where(s => s.TransportOrderId == created.Order.Id).ToListAsync();
+        Assert.Equal(2, stopRows.Count);
+        Assert.All(stopRows, s => Assert.False(s.IsDeleted));
+    }
+
+    /// <summary>
+    /// The description rule must fall back to the PERSISTED cargo lines when CargoItems is null
+    /// (= "leave unchanged" per the API contract) rather than only looking at the request — the
+    /// persisted line here carries the only description left once GoodsDescription is cleared.
+    /// </summary>
+    [Fact]
+    public async Task Update_ClearsGoodsDescription_WithNullCargoItems_SucceedsWhenPersistedLineHasDescription()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var create = Request(h.CustomerId,
+            Stop(StopType.Loading, h.LocationId), Stop(StopType.Unloading, city: "Gent")) with
+        {
+            CargoItems = [new CargoItemInput("Onderdelen", null, 2, null, null, QuantityUnitCode: "EUROPALLET")],
+        };
+        var created = await h.Sut.CreateAsync(create, CancellationToken.None);
+        h.Db.Context.ChangeTracker.Clear();
+
+        var updated = await h.Sut.UpdateAsync(created.Order!.Id,
+            BuildUpdateFrom(created.Order!) with { GoodsDescription = null, CargoItems = null },
+            CancellationToken.None);
+
+        Assert.Equal(TransportOrderOperationOutcome.Success, updated.Outcome);
+        Assert.Null(updated.Order!.GoodsDescription);
+    }
+
+    /// <summary>
+    /// Wave 2026-08-04 §3: a persisted descriptionless cargo line IS meaningful cargo info, so
+    /// clearing the general description with CargoItems = null (leave unchanged) stays valid.
+    /// The rejection only fires when the update would leave no quantity+unit, no lines and no
+    /// description at all — and then the persisted state must stay untouched.
+    /// </summary>
+    [Fact]
+    public async Task Update_RemovingAllCargoInformation_IsRejected_AndPersistedStateUntouched()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var create = Request(h.CustomerId,
+            Stop(StopType.Loading, h.LocationId), Stop(StopType.Unloading, city: "Gent")) with
+        {
+            CargoItems = [new CargoItemInput(null, null, 4, null, null, QuantityUnitCode: "COLLI")],
+        };
+        var created = await h.Sut.CreateAsync(create, CancellationToken.None);
+        h.Db.Context.ChangeTracker.Clear();
+
+        // Persisted line survives a null-CargoItems update even without any description.
+        var stillValid = await h.Sut.UpdateAsync(created.Order!.Id,
+            BuildUpdateFrom(created.Order!) with { GoodsDescription = null, CargoItems = null },
+            CancellationToken.None);
+        Assert.Equal(TransportOrderOperationOutcome.Success, stillValid.Outcome);
+        h.Db.Context.ChangeTracker.Clear();
+
+        // Wiping the lines AND the header pair AND the description leaves nothing meaningful.
+        var rejected = await h.Sut.UpdateAsync(created.Order!.Id,
+            BuildUpdateFrom(created.Order!) with
+            {
+                GoodsDescription = null,
+                Quantity = null,
+                QuantityUnit = null,
+                QuantityUnitCode = null,
+                CargoItems = [],
+            },
+            CancellationToken.None);
+
+        Assert.Equal(TransportOrderOperationOutcome.ValidationFailed, rejected.Outcome);
+        Assert.Contains("hoeveelheid", rejected.Error!, StringComparison.OrdinalIgnoreCase);
+
+        var persistedCargo = await h.Db.Context.CargoItems.AsNoTracking()
+            .Where(c => c.TransportOrderId == created.Order.Id)
+            .ToListAsync();
+        Assert.Single(persistedCargo); // rejected update touched nothing
+    }
+
+    [Fact]
+    public async Task Update_EmptyCargoItems_ClearsLines()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var create = Request(h.CustomerId,
+            Stop(StopType.Loading, h.LocationId), Stop(StopType.Unloading, city: "Gent")) with
+        {
+            CargoItems = [new CargoItemInput("Onderdelen", null, 2, null, null, QuantityUnitCode: "EUROPALLET")],
+        };
+        var created = await h.Sut.CreateAsync(create, CancellationToken.None);
+        h.Db.Context.ChangeTracker.Clear();
+
+        var updated = await h.Sut.UpdateAsync(created.Order!.Id,
+            BuildUpdateFrom(created.Order!) with { CargoItems = [] }, CancellationToken.None);
+        Assert.Empty(updated.Order!.CargoItems);
+    }
+
+    [Fact]
+    public async Task Update_DuplicateCargoId_IsRejected()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var create = Request(h.CustomerId,
+            Stop(StopType.Loading, h.LocationId), Stop(StopType.Unloading, city: "Gent")) with
+        {
+            CargoItems = [new CargoItemInput("Onderdelen", null, 2, null, null, QuantityUnitCode: "EUROPALLET")],
+        };
+        var created = await h.Sut.CreateAsync(create, CancellationToken.None);
+        var lineId = created.Order!.CargoItems.Single().Id;
+        h.Db.Context.ChangeTracker.Clear();
+
+        var update = BuildUpdateFrom(created.Order!) with
+        {
+            CargoItems =
+            [
+                new CargoItemInput("Onderdelen", null, 2, null, null, QuantityUnitCode: "EUROPALLET", Id: lineId),
+                new CargoItemInput("Andere lijn", null, 1, null, null, QuantityUnitCode: "COLLI", Id: lineId),
+            ],
+        };
+        var result = await h.Sut.UpdateAsync(created.Order!.Id, update, CancellationToken.None);
+
+        Assert.Equal(TransportOrderOperationOutcome.ValidationFailed, result.Outcome);
+        // The rejected request must never touch the existing line.
+        var entity = await h.Db.Context.CargoItems.SingleAsync(c => c.Id == lineId);
+        Assert.Equal("EUROPALLET", entity.QuantityUnitCode);
+    }
+
+    [Fact]
+    public async Task Priority_DefaultsToNormal_InlineChangeIsAuditedAndGuarded()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var created = await h.Sut.CreateAsync(Request(h.CustomerId,
+            Stop(StopType.Loading, h.LocationId), Stop(StopType.Unloading, city: "Gent")), CancellationToken.None);
+        Assert.Equal(OrderPriority.Normal, created.Order!.Priority);
+
+        var changed = await h.Sut.ChangePriorityAsync(created.Order.Id, OrderPriority.Urgent, CancellationToken.None);
+        Assert.Equal(TransportOrderOperationOutcome.Success, changed.Outcome);
+        Assert.Equal(OrderPriority.Urgent, changed.Order!.Priority);
+        Assert.Contains(h.Db.Context.AuditLogs, a => a.Action == "PriorityChanged" && a.EntityId == created.Order.Id.ToString());
+
+        // Final statuses refuse a priority change.
+        await h.Sut.CancelAsync(created.Order.Id, "Klant heeft geannuleerd.", CancellationToken.None);
+        var refused = await h.Sut.ChangePriorityAsync(created.Order.Id, OrderPriority.Low, CancellationToken.None);
+        Assert.Equal(TransportOrderOperationOutcome.InvalidState, refused.Outcome);
+    }
+
     [Fact]
     public async Task Create_ClaimsSequentialNumber_AndStartsDraft()
     {
@@ -199,6 +543,34 @@ public class TransportOrderServiceTests
     }
 
     [Fact]
+    public async Task Create_DeactivatedCustomer_IsRejected_ButExistingOrderStaysEditable()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var existing = await h.Sut.CreateAsync(Request(h.CustomerId,
+            Stop(StopType.Loading, h.LocationId), Stop(StopType.Unloading, city: "Gent")), CancellationToken.None);
+        Assert.Equal(TransportOrderOperationOutcome.Success, existing.Outcome);
+
+        var customer = await h.Db.Context.Customers.FindAsync(h.CustomerId);
+        customer!.IsActive = false;
+        await h.Db.Context.SaveChangesAsync();
+        h.Db.Context.ChangeTracker.Clear();
+
+        var rejected = await h.Sut.CreateAsync(Request(h.CustomerId,
+            Stop(StopType.Loading, h.LocationId), Stop(StopType.Unloading, city: "Gent")), CancellationToken.None);
+        Assert.Equal(TransportOrderOperationOutcome.ValidationFailed, rejected.Outcome);
+        Assert.Contains("gedeactiveerd", rejected.Error);
+
+        // Updating an existing order for the SAME (now inactive) customer stays possible.
+        h.Db.Context.ChangeTracker.Clear();
+        var updated = await h.Sut.UpdateAsync(existing.Order!.Id, new UpdateTransportOrderRequest(
+            h.CustomerId, "PO-777", new DateOnly(2026, 7, 20), "20 paletten bouwmateriaal",
+            20, "paletten", 12500, null, 20, false, false, 1450m, null,
+            [Stop(StopType.Loading, h.LocationId), Stop(StopType.Unloading, city: "Brugge")]), CancellationToken.None);
+        Assert.Equal(TransportOrderOperationOutcome.Success, updated.Outcome);
+    }
+
+    [Fact]
     public async Task Create_ForeignCustomer_IsRejected()
     {
         var h = await SeedAsync();
@@ -338,6 +710,26 @@ public class TransportOrderServiceTests
         Assert.Equal(TransportOrderOperationOutcome.Success,
             (await h.Sut.DeleteAsync(id, CancellationToken.None)).Outcome);
         Assert.Null(await h.Sut.GetByIdAsync(id, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Delete_SoftDeletesCargoItems()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var create = Request(h.CustomerId,
+            Stop(StopType.Loading, h.LocationId), Stop(StopType.Unloading, city: "Gent")) with
+        {
+            CargoItems = [new CargoItemInput("Onderdelen", null, 2, null, null, QuantityUnitCode: "COLLI")],
+        };
+        var created = await h.Sut.CreateAsync(create, CancellationToken.None);
+        h.Db.Context.ChangeTracker.Clear();
+
+        await h.Sut.DeleteAsync(created.Order!.Id, CancellationToken.None);
+
+        var cargo = await h.Db.Context.CargoItems.IgnoreQueryFilters()
+            .SingleAsync(c => c.TransportOrderId == created.Order!.Id);
+        Assert.True(cargo.IsDeleted);
     }
 
     [Fact]
@@ -519,6 +911,507 @@ public class TransportOrderServiceTests
 
         var result = await h.Sut.UpdateStopExecutionPlanAsync(order.Order.Id, order.Order.Stops[0].Id,
             new UpdateStopExecutionPlanRequest(null, null, null, null, false, null, null, null, null), CancellationToken.None);
+
+        Assert.Equal(TransportOrderOperationOutcome.InvalidState, result.Outcome);
+    }
+
+    /// <summary>
+    /// Was "Create_WithoutGoodsDescription_Succeeds": an order with no description anywhere
+    /// (general blank, no cargo lines) used to be accepted. This is the wave's one deliberate
+    /// behavior change — see Create_NoDescriptionAnywhere_IsRejected below — so this test now
+    /// carries one described cargo line to keep proving the general field stays optional.
+    /// </summary>
+    [Fact]
+    public async Task Create_WithoutGoodsDescription_ButWithDescribedLine_Succeeds()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+
+        var created = await h.Sut.CreateAsync(Request(h.CustomerId,
+            Stop(StopType.Loading, h.LocationId), Stop(StopType.Unloading, city: "Gent")) with
+        {
+            GoodsDescription = "  ",
+            CargoItems = [new CargoItemInput("Onderdelen", null, 2, null, null, QuantityUnitCode: "EUROPALLET")],
+        },
+            CancellationToken.None);
+
+        Assert.Equal(TransportOrderOperationOutcome.Success, created.Outcome);
+        Assert.Null(created.Order!.GoodsDescription);
+    }
+
+    [Fact]
+    public async Task Create_LineDescriptionOnly_Succeeds_GeneralOptional()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+
+        var result = await h.Sut.CreateAsync(Request(h.CustomerId,
+            Stop(StopType.Loading, h.LocationId), Stop(StopType.Unloading, city: "Gent")) with
+        {
+            GoodsDescription = null,
+            CargoItems = [new CargoItemInput("2 europallets onderdelen", null, 2, null, null, QuantityUnitCode: "EUROPALLET")],
+        },
+            CancellationToken.None);
+
+        Assert.Equal(TransportOrderOperationOutcome.Success, result.Outcome);
+    }
+
+    [Fact]
+    public async Task Create_GeneralDescriptionOnly_WithDescriptionlessLine_Succeeds()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+
+        var result = await h.Sut.CreateAsync(Request(h.CustomerId,
+            Stop(StopType.Loading, h.LocationId), Stop(StopType.Unloading, city: "Gent")) with
+        {
+            GoodsDescription = "Gemengde goederen",
+            CargoItems = [new CargoItemInput(null, null, 4, null, null, QuantityUnitCode: "COLLI")],
+        },
+            CancellationToken.None);
+
+        Assert.Equal(TransportOrderOperationOutcome.Success, result.Outcome);
+    }
+
+    /// <summary>
+    /// Wave 2026-08-04 §3 (intentional change, was "Create_NoDescriptionAnywhere_IsRejected"):
+    /// quantity + unit describe a meaningful commercial line on their own — a descriptionless
+    /// cargo line is enough, no description anywhere is required.
+    /// </summary>
+    [Fact]
+    public async Task Create_CargoLineOnly_NoDescriptionAnywhere_Succeeds()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+
+        var result = await h.Sut.CreateAsync(Request(h.CustomerId,
+            Stop(StopType.Loading, h.LocationId), Stop(StopType.Unloading, city: "Gent")) with
+        {
+            GoodsDescription = null,
+            CargoItems = [new CargoItemInput(null, null, 4, null, null, QuantityUnitCode: "COLLI")],
+        },
+            CancellationToken.None);
+
+        Assert.Equal(TransportOrderOperationOutcome.Success, result.Outcome);
+    }
+
+    [Fact]
+    public async Task Create_QuantityAndUnitOnly_NoDescription_Succeeds()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+
+        var result = await h.Sut.CreateAsync(Request(h.CustomerId,
+            Stop(StopType.Loading, h.LocationId), Stop(StopType.Unloading, city: "Gent")) with
+        {
+            GoodsDescription = null,
+            CargoItems = null,
+        },
+            CancellationToken.None);
+
+        Assert.Equal(TransportOrderOperationOutcome.Success, result.Outcome);
+    }
+
+    [Fact]
+    public async Task Create_GeneralDescriptionOnly_NoQuantityNoLines_Succeeds()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+
+        var result = await h.Sut.CreateAsync(Request(h.CustomerId,
+            Stop(StopType.Loading, h.LocationId), Stop(StopType.Unloading, city: "Gent")) with
+        {
+            GoodsDescription = "Gemengde goederen",
+            Quantity = null,
+            QuantityUnit = null,
+            QuantityUnitCode = null,
+            CargoItems = null,
+        },
+            CancellationToken.None);
+
+        Assert.Equal(TransportOrderOperationOutcome.Success, result.Outcome);
+    }
+
+    [Fact]
+    public async Task Create_NoCargoInformationAtAll_IsRejected()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+
+        var result = await h.Sut.CreateAsync(Request(h.CustomerId,
+            Stop(StopType.Loading, h.LocationId), Stop(StopType.Unloading, city: "Gent")) with
+        {
+            GoodsDescription = null,
+            Quantity = null,
+            QuantityUnit = null,
+            QuantityUnitCode = null,
+            CargoItems = null,
+        },
+            CancellationToken.None);
+
+        Assert.Equal(TransportOrderOperationOutcome.ValidationFailed, result.Outcome);
+        Assert.Equal(
+            "Vul minstens een hoeveelheid en eenheid in, voeg een goederenlijn toe of beschrijf de goederen.",
+            result.Error);
+    }
+
+    /// <summary>Quantity without a unit is not meaningful cargo information on its own.</summary>
+    [Fact]
+    public async Task Create_QuantityWithoutUnit_NoDescription_IsRejected()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+
+        var result = await h.Sut.CreateAsync(Request(h.CustomerId,
+            Stop(StopType.Loading, h.LocationId), Stop(StopType.Unloading, city: "Gent")) with
+        {
+            GoodsDescription = null,
+            QuantityUnit = null,
+            QuantityUnitCode = null,
+            CargoItems = null,
+        },
+            CancellationToken.None);
+
+        Assert.Equal(TransportOrderOperationOutcome.ValidationFailed, result.Outcome);
+    }
+
+    // ---- Goods source of truth: summary derived from commercial lines (wave 2026-08-04 §2) ----
+
+    [Fact]
+    public async Task Create_MultiUnitCargo_DerivesSummary_WeightSummed_HeaderPairCleared()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+
+        var created = await h.Sut.CreateAsync(Request(h.CustomerId,
+            Stop(StopType.Loading, h.LocationId), Stop(StopType.Unloading, city: "Gent")) with
+        {
+            CargoItems =
+            [
+                new CargoItemInput(null, null, 2, null, null, TotalWeightKg: 150, QuantityUnitCode: "EUROPALLET"),
+                new CargoItemInput(null, null, 6, null, null, TotalWeightKg: 40, QuantityUnitCode: "COLLI"),
+            ],
+        },
+            CancellationToken.None);
+
+        Assert.Equal(TransportOrderOperationOutcome.Success, created.Outcome);
+        var order = created.Order!;
+        // Mixed units: the single header pair cannot represent "2 Europallet + 6 Colli".
+        Assert.Null(order.Quantity);
+        Assert.Null(order.QuantityUnitCode);
+        Assert.Equal(190m, order.WeightKg);
+    }
+
+    [Fact]
+    public async Task Create_SingleUnitCargo_DerivesSummary_QuantitySummedWithUnit()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+
+        var created = await h.Sut.CreateAsync(Request(h.CustomerId,
+            Stop(StopType.Loading, h.LocationId), Stop(StopType.Unloading, city: "Gent")) with
+        {
+            // Header says something contradictory on purpose — the lines must win.
+            Quantity = 99,
+            QuantityUnitCode = "EUROPALLET",
+            CargoItems =
+            [
+                new CargoItemInput(null, null, 2, null, null, QuantityUnitCode: "COLLI"),
+                new CargoItemInput(null, null, 3, null, null, QuantityUnitCode: "colli"),
+            ],
+        },
+            CancellationToken.None);
+
+        Assert.Equal(TransportOrderOperationOutcome.Success, created.Outcome);
+        Assert.Equal(5m, created.Order!.Quantity);
+        Assert.Equal("COLLI", created.Order!.QuantityUnitCode);
+    }
+
+    [Fact]
+    public async Task Update_CargoPalletCounts_DeriveOrderPalletCount_Ceiling()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var created = await h.Sut.CreateAsync(Request(h.CustomerId,
+            Stop(StopType.Loading, h.LocationId), Stop(StopType.Unloading, city: "Gent")) with
+        {
+            CargoItems = [new CargoItemInput("Onderdelen", null, 2, null, null, QuantityUnitCode: "EUROPALLET")],
+        }, CancellationToken.None);
+        h.Db.Context.ChangeTracker.Clear();
+
+        var updated = await h.Sut.UpdateAsync(created.Order!.Id, BuildUpdateFrom(created.Order!) with
+        {
+            CargoItems =
+            [
+                new CargoItemInput(null, null, 2, null, null, QuantityUnitCode: "EUROPALLET", PalletCount: 1.5m),
+                new CargoItemInput(null, null, 4, null, null, QuantityUnitCode: "COLLI", PalletCount: 1m),
+            ],
+        }, CancellationToken.None);
+
+        Assert.Equal(TransportOrderOperationOutcome.Success, updated.Outcome);
+        Assert.Equal(3, updated.Order!.PalletCount); // ceil(2.5)
+    }
+
+    [Fact]
+    public async Task Create_NoCargoLines_KeepsLegacyHeaderSummary()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+
+        var created = await h.Sut.CreateAsync(Request(h.CustomerId,
+            Stop(StopType.Loading, h.LocationId), Stop(StopType.Unloading, city: "Gent")), CancellationToken.None);
+
+        Assert.Equal(TransportOrderOperationOutcome.Success, created.Outcome);
+        Assert.Equal(20m, created.Order!.Quantity);
+        Assert.Equal("paletten", created.Order!.QuantityUnit);
+        Assert.Equal(12500m, created.Order!.WeightKg);
+        Assert.Equal(20, created.Order!.PalletCount);
+    }
+
+    // ---- Wave 2026-08-04 §15: simple stop time requirements ------------------------------------
+
+    [Fact]
+    public async Task Create_StopTimeRequirementBefore_RoundTrips_AndDropsIrrelevantTime()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+
+        var created = await h.Sut.CreateAsync(Request(h.CustomerId,
+            Stop(StopType.Loading, h.LocationId),
+            Stop(StopType.Unloading, city: "Gent") with
+            {
+                TimeRequirement = StopTimeRequirementKind.Before,
+                TimeRequirementTo = new TimeOnly(10, 0),
+                // A stale "from" of a previously chosen kind must not persist for Before.
+                TimeRequirementFrom = new TimeOnly(8, 0),
+            }), CancellationToken.None);
+
+        Assert.Equal(TransportOrderOperationOutcome.Success, created.Outcome);
+        var unloading = created.Order!.Stops.Single(s => s.StopType == StopType.Unloading);
+        Assert.Equal(StopTimeRequirementKind.Before, unloading.TimeRequirement);
+        Assert.Equal(new TimeOnly(10, 0), unloading.TimeRequirementTo);
+        Assert.Null(unloading.TimeRequirementFrom);
+
+        h.Db.Context.ChangeTracker.Clear();
+        var reloaded = await h.Sut.GetByIdAsync(created.Order.Id, CancellationToken.None);
+        Assert.Equal(new TimeOnly(10, 0), reloaded!.Stops.Single(s => s.StopType == StopType.Unloading).TimeRequirementTo);
+    }
+
+    [Fact]
+    public async Task Create_StopWindowRequirement_EndBeforeStart_IsRejected()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+
+        var result = await h.Sut.CreateAsync(Request(h.CustomerId,
+            Stop(StopType.Loading, h.LocationId),
+            Stop(StopType.Unloading, city: "Gent") with
+            {
+                TimeRequirement = StopTimeRequirementKind.Window,
+                TimeRequirementFrom = new TimeOnly(16, 0),
+                TimeRequirementTo = new TimeOnly(14, 0),
+            }), CancellationToken.None);
+
+        Assert.Equal(TransportOrderOperationOutcome.ValidationFailed, result.Outcome);
+        Assert.Contains("tijdvenster", result.Error!, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Create_StopTimeRequirementBefore_WithoutTime_IsRejected()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+
+        var result = await h.Sut.CreateAsync(Request(h.CustomerId,
+            Stop(StopType.Loading, h.LocationId),
+            Stop(StopType.Unloading, city: "Gent") with
+            {
+                TimeRequirement = StopTimeRequirementKind.Before,
+            }), CancellationToken.None);
+
+        Assert.Equal(TransportOrderOperationOutcome.ValidationFailed, result.Outcome);
+    }
+
+    [Fact]
+    public async Task StatusChanges_AreRecordedInImmutableHistory()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var order = await h.Sut.CreateAsync(Request(h.CustomerId,
+            Stop(StopType.Loading, h.LocationId), Stop(StopType.Unloading, city: "Gent")), CancellationToken.None);
+        var id = order.Order!.Id;
+
+        await h.Sut.ChangeStatusAsync(id, TransportOrderStatus.Confirmed, CancellationToken.None);
+        await h.Sut.CancelAsync(id, "Klant heeft afgezegd", CancellationToken.None);
+
+        var history = h.Db.Context.TransportOrderStatusHistories
+            .Where(x => x.TransportOrderId == id).OrderBy(x => x.ChangedAt).ThenBy(x => x.ToStatus).ToList();
+        Assert.Equal(2, history.Count);
+        Assert.Contains(history, x => x.FromStatus == TransportOrderStatus.Draft && x.ToStatus == TransportOrderStatus.Confirmed && x.Reason == null);
+        Assert.Contains(history, x => x.ToStatus == TransportOrderStatus.Cancelled && x.Reason == "Klant heeft afgezegd" && !x.IsCorrection);
+    }
+
+    [Fact]
+    public async Task CorrectStatus_RequiresReason_FollowsCorrectiveMap_AndRecordsCorrection()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var order = await h.Sut.CreateAsync(Request(h.CustomerId,
+            Stop(StopType.Loading, h.LocationId), Stop(StopType.Unloading, city: "Gent")), CancellationToken.None);
+        var id = order.Order!.Id;
+        await h.Sut.ChangeStatusAsync(id, TransportOrderStatus.Confirmed, CancellationToken.None);
+        await h.Sut.ChangeStatusAsync(id, TransportOrderStatus.InProgress, CancellationToken.None);
+        await h.Sut.ChangeStatusAsync(id, TransportOrderStatus.Completed, CancellationToken.None);
+
+        var withoutReason = await h.Sut.CorrectStatusAsync(id, TransportOrderStatus.InProgress, " ", CancellationToken.None);
+        Assert.Equal(TransportOrderOperationOutcome.ValidationFailed, withoutReason.Outcome);
+
+        // Completed → Draft is not a defined correction.
+        var invalidTarget = await h.Sut.CorrectStatusAsync(id, TransportOrderStatus.Draft, "Vergissing", CancellationToken.None);
+        Assert.Equal(TransportOrderOperationOutcome.InvalidState, invalidTarget.Outcome);
+
+        var corrected = await h.Sut.CorrectStatusAsync(id, TransportOrderStatus.InProgress, "Verkeerd afgevinkt", CancellationToken.None);
+        Assert.Equal(TransportOrderOperationOutcome.Success, corrected.Outcome);
+        Assert.Equal(TransportOrderStatus.InProgress, corrected.Order!.Status);
+
+        var correction = h.Db.Context.TransportOrderStatusHistories
+            .Single(x => x.TransportOrderId == id && x.IsCorrection);
+        Assert.Equal(TransportOrderStatus.Completed, correction.FromStatus);
+        Assert.Equal(TransportOrderStatus.InProgress, correction.ToStatus);
+        Assert.Equal("Verkeerd afgevinkt", correction.Reason);
+        Assert.Contains(h.Db.Context.AuditLogs, a => a.Action == "StatusCorrected");
+    }
+
+    [Fact]
+    public async Task CorrectStatus_FromCancelled_ReactivatesToDraft_AndClearsCancellationReason()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var order = await h.Sut.CreateAsync(Request(h.CustomerId,
+            Stop(StopType.Loading, h.LocationId), Stop(StopType.Unloading, city: "Gent")), CancellationToken.None);
+        await h.Sut.CancelAsync(order.Order!.Id, "Per ongeluk geannuleerd", CancellationToken.None);
+
+        var corrected = await h.Sut.CorrectStatusAsync(order.Order.Id, TransportOrderStatus.Draft, "Annulatie was een vergissing", CancellationToken.None);
+
+        Assert.Equal(TransportOrderOperationOutcome.Success, corrected.Outcome);
+        Assert.Equal(TransportOrderStatus.Draft, corrected.Order!.Status);
+        Assert.Null(corrected.Order.CancellationReason);
+        Assert.Contains(TransportOrderStatus.Confirmed, corrected.Order.AllowedTransitions);
+    }
+
+    [Fact]
+    public async Task Cargo_RichLine_RoundTrips_WithDerivedVolume_AndExplicitStopLinks()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+
+        var created = await h.Sut.CreateAsync(Request(h.CustomerId,
+            Stop(StopType.Loading, h.LocationId), Stop(StopType.Unloading, city: "Gent"), Stop(StopType.Unloading, city: "Brugge")) with
+        {
+            CargoItems =
+            [
+                new CargoItemInput("Europalletten bouwmateriaal", "PAL-1", 10, "paletten", null,
+                    UnitType: Modules.Packages.Entities.PackageUnitType.EuroPallet,
+                    TotalWeightKg: 8000, WeightPerUnitKg: 800,
+                    LengthMeters: 1.2m, WidthMeters: 0.8m, HeightMeters: 1.5m,
+                    AdrRequired: true, AdrDetails: "UN 1263, klasse 3", Stackable: false, Reference: "LIJN-1",
+                    LoadingStopIndex: 0, UnloadingStopIndex: 2),
+            ],
+        }, CancellationToken.None);
+
+        Assert.Equal(TransportOrderOperationOutcome.Success, created.Outcome);
+        var line = Assert.Single(created.Order!.CargoItems);
+        Assert.Equal(Modules.Packages.Entities.PackageUnitType.EuroPallet, line.UnitType);
+        Assert.Equal(1.44m, line.VolumeM3);
+        Assert.False(line.VolumeIsManual);
+        Assert.True(line.AdrRequired);
+        Assert.False(line.Stackable);
+        Assert.Equal(created.Order.Stops[0].Id, line.LoadingStopId);
+        Assert.Equal(created.Order.Stops[2].Id, line.UnloadingStopId);
+    }
+
+    [Fact]
+    public async Task Cargo_OmittedStopLinks_AutoLink_WhenUnambiguous()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+
+        var created = await h.Sut.CreateAsync(Request(h.CustomerId,
+            Stop(StopType.Loading, h.LocationId), Stop(StopType.Unloading, city: "Gent")) with
+        {
+            CargoItems = [new CargoItemInput("Colli", null, 5, "colli", null)],
+        }, CancellationToken.None);
+
+        var line = Assert.Single(created.Order!.CargoItems);
+        Assert.Equal(created.Order.Stops[0].Id, line.LoadingStopId);
+        Assert.Equal(created.Order.Stops[1].Id, line.UnloadingStopId);
+    }
+
+    [Fact]
+    public async Task Cargo_InvalidStopLinks_AndNegativeWeights_AreRejected()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var stops = new[] { Stop(StopType.Loading, h.LocationId), Stop(StopType.Unloading, city: "Gent") };
+
+        var wrongType = await h.Sut.CreateAsync(Request(h.CustomerId, stops) with
+        {
+            CargoItems = [new CargoItemInput("X", null, 1, null, null, UnloadingStopIndex: 0)],
+        }, CancellationToken.None);
+        Assert.Equal(TransportOrderOperationOutcome.ValidationFailed, wrongType.Outcome);
+
+        var wrongOrder = await h.Sut.CreateAsync(Request(h.CustomerId,
+            Stop(StopType.Unloading, city: "Gent"), Stop(StopType.Loading, h.LocationId)) with
+        {
+            CargoItems = [new CargoItemInput("X", null, 1, null, null, LoadingStopIndex: 1, UnloadingStopIndex: 0)],
+        }, CancellationToken.None);
+        Assert.Equal(TransportOrderOperationOutcome.ValidationFailed, wrongOrder.Outcome);
+
+        var negative = await h.Sut.CreateAsync(Request(h.CustomerId, stops) with
+        {
+            CargoItems = [new CargoItemInput("X", null, 1, null, null, TotalWeightKg: -5)],
+        }, CancellationToken.None);
+        Assert.Equal(TransportOrderOperationOutcome.ValidationFailed, negative.Outcome);
+    }
+
+    [Fact]
+    public async Task Timeline_MergesAuditAndStatusHistory_Chronologically()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var order = await h.Sut.CreateAsync(Request(h.CustomerId,
+            Stop(StopType.Loading, h.LocationId), Stop(StopType.Unloading, city: "Gent")), CancellationToken.None);
+        var id = order.Order!.Id;
+        await h.Sut.ChangeStatusAsync(id, TransportOrderStatus.Confirmed, CancellationToken.None);
+        await h.Sut.CancelAsync(id, "Klant heeft afgezegd", CancellationToken.None);
+
+        var timeline = new TransportOrderTimelineService(h.Db.Context, new DevTenantContext(h.TenantId));
+        var events = await timeline.GetTimelineAsync(id, CancellationToken.None);
+
+        Assert.NotNull(events);
+        Assert.Contains(events!, e => e.Category == "order" && e.Title == "Opdracht aangemaakt");
+        Assert.Contains(events!, e => e.Category == "status" && e.Title.Contains("Concept → Bevestigd"));
+        Assert.Contains(events!, e => e.Category == "status" && e.Title.Contains("Geannuleerd") && e.Detail == "Klant heeft afgezegd");
+        // Chronological (ascending) and free of the duplicate raw StatusChanged audit rows.
+        Assert.True(events!.Zip(events.Skip(1)).All(pair => pair.First.Timestamp <= pair.Second.Timestamp));
+        Assert.DoesNotContain(events, e => e.Title == "StatusChanged");
+
+        Assert.Null(await timeline.GetTimelineAsync(Guid.NewGuid(), CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task CorrectStatus_OnInvoicedOrder_IsRefused()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var order = await h.Sut.CreateAsync(Request(h.CustomerId,
+            Stop(StopType.Loading, h.LocationId), Stop(StopType.Unloading, city: "Gent")), CancellationToken.None);
+        var stored = await h.Db.Context.TransportOrders.FindAsync(order.Order!.Id);
+        stored!.Status = TransportOrderStatus.Invoiced;
+        await h.Db.Context.SaveChangesAsync();
+        h.Db.Context.ChangeTracker.Clear();
+
+        var result = await h.Sut.CorrectStatusAsync(order.Order.Id, TransportOrderStatus.Completed, "Toch niet klaar", CancellationToken.None);
 
         Assert.Equal(TransportOrderOperationOutcome.InvalidState, result.Outcome);
     }

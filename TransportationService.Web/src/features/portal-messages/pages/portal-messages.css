@@ -1,0 +1,58 @@
+.pm-actions {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.pm-lang-section {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 12px 4px;
+  margin: 0 0 12px;
+}
+
+.pm-lang-section legend {
+  font-weight: 600;
+  font-size: 13.5px;
+  padding: 0 4px;
+}
+
+.pm-customer-list {
+  max-height: 180px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pm-bulk-warning {
+  color: var(--text);
+  font-size: 13.5px;
+  font-style: italic;
+  margin: -6px 0 12px;
+}
+
+.pm-status-meta {
+  color: var(--text);
+  font-size: 13.5px;
+}
+
+.pm-status-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13.5px;
+}
+
+.pm-status-table th,
+.pm-status-table td {
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.pm-email-failure {
+  color: var(--text);
+  font-style: italic;
+}

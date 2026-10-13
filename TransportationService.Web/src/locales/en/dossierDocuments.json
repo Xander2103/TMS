@@ -1,0 +1,163 @@
+{
+  "levels": {
+    "dossier": "Dossier documents",
+    "dossierShort": "Dossier",
+    "dossierHint": "Apply to the whole dossier"
+  },
+  "summary_one": "{count} document in this dossier",
+  "summary_other": "{count} documents in this dossier",
+  "loading": "Loading documents…",
+  "loadFailed": "The documents could not be loaded.",
+  "retry": "Try again",
+  "downloadFailed": "The document could not be downloaded.",
+  "viewFailed": "The document could not be opened.",
+  "viewBlocked": "The browser blocked the new tab. Allow pop-ups or use Download.",
+  "fileMissing": "File missing",
+  "sections": {
+    "dossier": "Dossier documents",
+    "dossierHint": "These documents apply to the dossier as a whole and can be consulted from every order and activity. If a document belongs to one order or activity, upload it at that level.",
+    "own": "Documents of this order",
+    "ownHint": "Documents that belong to order {number} only.",
+    "general": "Dossier documents (also apply here)",
+    "generalHint": "The same documents as on the dossier level, no copies. View and download only here.",
+    "manageViaDossier": "Manage under Dossier documents",
+    "ownActivity": "Documents of this activity",
+    "ownActivityHint": "Documents that belong to activity {label} only."
+  },
+  "empty": {
+    "dossier": "No dossier documents yet.",
+    "order": "No documents for this order yet.",
+    "general": "This dossier has no dossier documents.",
+    "activity": "No documents for this activity yet."
+  },
+  "columns": {
+    "title": "Title",
+    "type": "Type",
+    "level": "Level",
+    "file": "File",
+    "portal": "Customer portal",
+    "actions": "Actions"
+  },
+  "actions": {
+    "view": "View: {title}",
+    "download": "Download: {title}",
+    "attachFile": "Add file: {title}",
+    "visibility": "Change visibility: {title}",
+    "move": "Move: {title}",
+    "delete": "Delete: {title}",
+    "viewShort": "View",
+    "downloadShort": "Download"
+  },
+  "visibility": {
+    "visible": "Visible to customer",
+    "internal": "Internal",
+    "independent": "Customer visibility is independent of the level: moving a document never makes it visible or internal.",
+    "title": "Change visibility",
+    "makeVisible": "Make visible to the customer",
+    "makeInternal": "Make internal",
+    "confirmVisible": "The customer will then be able to view and download this document in the customer portal.",
+    "confirmInternal": "The document disappears from the customer portal and can only be consulted internally.",
+    "failed": "The visibility could not be changed.",
+    "nowVisible": "The document is now visible in the customer portal.",
+    "nowInternal": "The document is no longer visible to the customer."
+  },
+  "upload": {
+    "open": "Upload document",
+    "title": "Upload document",
+    "target": "Save under",
+    "targetHint": "Choose the level the document belongs to. A dossier document applies to the whole dossier.",
+    "targetDossier": "Dossier documents (whole dossier)",
+    "targetOrder": "Order {label}",
+    "type": "Document type",
+    "customType": "Custom type name (optional)",
+    "file": "File",
+    "fileHint": "PDF, JPG or PNG, 10 MB maximum.",
+    "documentTitle": "Title",
+    "customerVisible": "Visible to the customer",
+    "customerVisibleHint": "Documents are internal by default. Only tick this to show the document in the customer portal.",
+    "submit": "Upload",
+    "retry": "Upload the file again",
+    "retryHint": "The document details are already in the dossier. Pick another file if needed and try again, or remove the document.",
+    "closeWithoutFile": "Close without file",
+    "removeCreated": "Remove document",
+    "removed": "The document without a file was removed.",
+    "success": "Document added.",
+    "createFailed": "The document could not be created.",
+    "fileFailed": "The document details were saved, but the file was NOT uploaded: {reason}",
+    "fileFailedFallback": "The file could not be uploaded.",
+    "titleRequired": "Give the document a title.",
+    "fileRequired": "Choose a file.",
+    "fileProblem": {
+      "empty": "The file is empty.",
+      "tooLarge": "The file is larger than 10 MB.",
+      "unsupportedType": "Only PDF, JPG and PNG files are allowed."
+    },
+    "targetActivity": "Activity {label}"
+  },
+  "move": {
+    "title": "Move document to…",
+    "intro": "Choose the level \"{title}\" belongs to from now on.",
+    "legend": "Move to",
+    "current": "current location",
+    "explanation": "The file itself stays the same: only the link changes. Customer visibility does not change.",
+    "confirm": "Move",
+    "failed": "The document could not be moved.",
+    "success": "Document moved to {level}."
+  },
+  "delete": {
+    "title": "Delete document",
+    "confirmDossier": "Are you sure you want to delete \"{title}\"? This dossier document applies to the whole dossier and will be removed everywhere.",
+    "confirmOrder": "Are you sure you want to delete \"{title}\"? This document belongs to order {number} only and will be deleted permanently.",
+    "confirm": "Delete",
+    "success": "Document deleted.",
+    "failed": "The document could not be deleted.",
+    "confirmActivity": "Are you sure you want to delete \"{title}\"? This document belongs to activity {label} only and will be deleted permanently."
+  },
+  "issued": {
+    "title": "Transport documents",
+    "empty": "No transport document created yet.",
+    "loadFailed": "The transport documents could not be loaded.",
+    "kind": {
+      "Cmr": "Consignment note (CMR)",
+      "DeliveryNote": "Delivery note",
+      "WorkOrder": "Work order"
+    },
+    "kindLabel": "Document kind",
+    "externalNumber": "External / pre-printed number (optional)",
+    "externalNumberValue": "external no. {number}",
+    "issuedAt": "created on {date}",
+    "issuedAtBy": "created on {date} by {name}",
+    "pdfLabel": "Download PDF of {number}",
+    "pdfFailed": "The PDF could not be downloaded.",
+    "create": {
+      "Cmr": "Create consignment note",
+      "DeliveryNote": "Create delivery note",
+      "WorkOrder": "Create work order"
+    },
+    "success": "Transport document {number} created.",
+    "failed": "The transport document could not be created.",
+    "failedRetry": "{reason} Try again: a repeated attempt never produces a second number."
+  },
+  "activityStatus": {
+    "none": "Not created yet",
+    "several": {
+      "Cmr": "{count} consignment notes",
+      "DeliveryNote": "{count} delivery notes",
+      "WorkOrder": "{count} work orders",
+      "Mixed": "{count} transport documents"
+    },
+    "uploads_one": "{count} document",
+    "uploads_other": "{count} documents",
+    "noUploads": "No documents"
+  },
+  "groups": {
+    "dossier": "Dossier",
+    "orders": "Orders",
+    "activities": "Activities"
+  },
+  "kinds": {
+    "order": "Order",
+    "activity": "Activity"
+  },
+  "selector": "Document level"
+}

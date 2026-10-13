@@ -1,0 +1,240 @@
+import { fromDateTimeLocalInput, toWireDateTime } from '../../../../utils/dates'
+import { computeVolumeM3 } from '../../../../utils/volume'
+import type { TransportOrderInput } from '../../types'
+import { numberOrNullFrom, type OrderFormValues } from './orderFormState'
+
+/**
+ * Submit-payload mapping of the transport-order form (Wave 1 phase 6). Split from
+ * orderFormState.ts to respect the per-file size budget; consumes the same OrderFormValues
+ * snapshot the validation reads.
+ */
+
+/** Service selections (id + quantities + note) as submitted and previewed. */
+export function buildServiceSelections(values: OrderFormValues): NonNullable<TransportOrderInput['services']> {
+  const { selectedServiceOptionIds, serviceOptions, serviceQuantities, servicePallets, serviceDays, serviceNotes } = values
+  return selectedServiceOptionIds.map((id) => {
+    const kind = serviceOptions.find((o) => o.id === id)?.kind
+    const quantity = serviceQuantities[id]?.trim() ? Number(serviceQuantities[id]) : null
+    const pallets = servicePallets[id]?.trim() ? Number(servicePallets[id]) : null
+    const days = serviceDays[id]?.trim() ? Number(serviceDays[id]) : null
+    const note = serviceNotes[id]?.trim() ? serviceNotes[id].trim() : null
+    if (kind === 'PerDay') {
+      // The day count IS the billable quantity for a per-day service.
+      return { serviceOptionId: id, quantity: days, dayCount: days, note }
+    }
+    if (kind === 'PerPalletDay') {
+      return { serviceOptionId: id, quantity, palletCount: pallets, dayCount: days, note }
+    }
+    return { serviceOptionId: id, quantity, note }
+  })
+}
+
+export interface OneOffPreviewInput {
+  fixedAmount: number
+  includedLoadingMinutes: number | null
+  includedUnloadingMinutes: number | null
+  includedCombinedMinutes: number | null
+  extraHourlyRate: number | null
+  notes: string | null
+}
+
+/** One-off pricing input built from the form state; null when Contract mode (nothing to send). */
+export function buildOneOffPreviewInput(values: OrderFormValues): OneOffPreviewInput | null {
+  if (values.pricingSource !== 'OneOff' || values.oneOffFixedAmount.trim() === '') return null
+  return {
+    fixedAmount: Number(values.oneOffFixedAmount),
+    includedLoadingMinutes: values.oneOffTimeMode === 'separate' && values.oneOffIncludedLoadingMinutes.trim()
+      ? Number(values.oneOffIncludedLoadingMinutes)
+      : null,
+    includedUnloadingMinutes: values.oneOffTimeMode === 'separate' && values.oneOffIncludedUnloadingMinutes.trim()
+      ? Number(values.oneOffIncludedUnloadingMinutes)
+      : null,
+    includedCombinedMinutes: values.oneOffTimeMode === 'combined' && values.oneOffIncludedCombinedMinutes.trim()
+      ? Number(values.oneOffIncludedCombinedMinutes)
+      : null,
+    extraHourlyRate: values.oneOffExtraHourlyRate.trim() ? Number(values.oneOffExtraHourlyRate) : null,
+    notes: values.oneOffNotes.trim() || null,
+  }
+}
+
+
+// --- Submit payload ---
+
+/**
+ * D2: crane-job fields of the payload. An editor that does not own them (`craneJob` undefined)
+ * contributes NOTHING — the server then keeps kind, description and lift data as stored. The
+ * description and lift data only exist for an on-site job; any other kind submits them empty.
+ */
+function craneJobPayload(values: OrderFormValues): Partial<TransportOrderInput> {
+  const job = values.craneJob
+  if (!job) return {}
+  const onSite = job.kind === 'OnSiteLifting'
+  const text = (value: string) => (onSite ? value.trim() || null : null)
+  const number = (value: string) => (onSite ? numberOrNullFrom(value) : null)
+  return {
+    craneJobKind: job.kind,
+    workDescription: text(job.workDescription),
+    liftLoadWeightKg: number(job.liftLoadWeightKg),
+    liftLoadDimensions: text(job.liftLoadDimensions),
+    liftRadiusMeters: number(job.liftRadiusMeters),
+    liftHeightMeters: number(job.liftHeightMeters),
+    liftConditions: text(job.liftConditions),
+    liftEquipment: text(job.liftEquipment),
+  }
+}
+
+/** Maps the validated form values onto the API input (create + update share this shape). */
+export function buildSubmitPayload(values: OrderFormValues): TransportOrderInput {
+  return {
+    customerId: values.customerId,
+    customerReference: values.customerReference.trim() || null,
+    orderDate: values.orderDate || null,
+    goodsDescription: values.goodsDescription.trim() || null,
+    quantity: values.quantity === '' ? null : Number(values.quantity),
+    quantityUnit: values.quantityUnit.trim() || null,
+    quantityUnitCode: values.quantityUnitCode,
+    weightKg: values.weightKg === '' ? null : Number(values.weightKg),
+    volumeM3: values.volumeM3 === '' ? null : Number(values.volumeM3),
+    palletCount: values.palletCount === '' ? null : Number(values.palletCount),
+    distanceKm: values.distanceKm === '' ? null : Number(values.distanceKm),
+    loadingMeters: values.loadingMeters === '' ? null : Number(values.loadingMeters),
+    adrRequired: values.adrRequired,
+    craneRequired: values.craneRequired,
+    plateauRequired: values.plateauRequired,
+    moffettRequired: values.moffettRequired,
+    isReturnMovement: values.isReturnMovement,
+    agreedPrice: values.agreedPrice === '' ? null : Number(values.agreedPrice),
+    notes: values.notes.trim() || null,
+    legalEntityId: values.legalEntityId || null,
+    dieselSurchargeOverride: values.dieselSurchargeOverride,
+    dieselSurchargePercentOverride: values.dieselSurchargeOverride
+      ? numberOrNullFrom(values.dieselSurchargePercentOverride)
+      : null,
+    dieselSurchargeOverrideReason: values.dieselSurchargeOverride
+      ? values.dieselSurchargeOverrideReason.trim() || null
+      : null,
+    serviceOptionIds: values.selectedServiceOptionIds,
+    services: buildServiceSelections(values),
+    priceIsManual: values.priceIsManual,
+    priceOverrideReason: values.priceIsManual ? values.priceOverrideReason.trim() || null : null,
+    pricingSource: values.pricingSource,
+    oneOffFixedAmount: values.pricingSource === 'OneOff' && values.oneOffFixedAmount.trim()
+      ? Number(values.oneOffFixedAmount)
+      : null,
+    oneOffIncludedLoadingMinutes:
+      values.pricingSource === 'OneOff' && values.oneOffTimeMode === 'separate' && values.oneOffIncludedLoadingMinutes.trim()
+        ? Number(values.oneOffIncludedLoadingMinutes)
+        : null,
+    oneOffIncludedUnloadingMinutes:
+      values.pricingSource === 'OneOff' && values.oneOffTimeMode === 'separate' && values.oneOffIncludedUnloadingMinutes.trim()
+        ? Number(values.oneOffIncludedUnloadingMinutes)
+        : null,
+    oneOffIncludedCombinedMinutes:
+      values.pricingSource === 'OneOff' && values.oneOffTimeMode === 'combined' && values.oneOffIncludedCombinedMinutes.trim()
+        ? Number(values.oneOffIncludedCombinedMinutes)
+        : null,
+    oneOffExtraHourlyRate: values.pricingSource === 'OneOff' && values.oneOffExtraHourlyRate.trim()
+      ? Number(values.oneOffExtraHourlyRate)
+      : null,
+    oneOffNotes: values.pricingSource === 'OneOff' ? values.oneOffNotes.trim() || null : null,
+    includedLoadingMinutesOverride:
+      values.pricingSource === 'OneOff' ? null : numberOrNullFrom(values.includedLoadingMinutesOverride),
+    includedUnloadingMinutesOverride:
+      values.pricingSource === 'OneOff' ? null : numberOrNullFrom(values.includedUnloadingMinutesOverride),
+    extraTimeHourlyRateOverride:
+      values.pricingSource === 'OneOff' ? null : numberOrNullFrom(values.extraTimeHourlyRateOverride),
+    extraTimeRoundingStepMinutes:
+      values.pricingSource === 'OneOff' ? null : numberOrNullFrom(values.extraTimeRoundingStepMinutes),
+    extraTimeMinimumBillableMinutes:
+      values.pricingSource === 'OneOff' ? null : numberOrNullFrom(values.extraTimeMinimumBillableMinutes),
+    // Wave 1 §10: concurrency token round-trip; absent on create (JSON drops undefined).
+    version: values.version,
+    ...craneJobPayload(values),
+    stops: values.stops.map((stop) => ({
+      // Phase 7: echo the existing stop id (snapshot carry-over) + the pending re-copy flag.
+      id: stop.id,
+      refreshSnapshot: stop.refreshSnapshot,
+      stopType: stop.stopType,
+      locationId: stop.locationId || null,
+      // D3: the address fields are always visible and always submitted as shown — the stop
+      // snapshot IS the dossier's own copy. `addressOverridden` tells the server that a linked
+      // stop deliberately deviates from its address-book record (never the other way round).
+      locationName: stop.locationName.trim() || null,
+      address: stop.address.trim() || null,
+      postalCode: stop.postalCode.trim() || null,
+      city: stop.city.trim() || null,
+      countryCode: stop.countryCode.trim() || null,
+      addressOverridden: Boolean(stop.locationId) && stop.addressOverridden,
+      // Only a NEW address (free, or a deviating linked one) can be stored in the address book;
+      // the record itself is created by the server when — and only when — the order is saved.
+      saveToAddressBook: stop.saveToAddressBook && (!stop.locationId || stop.addressOverridden),
+      // §14: one date + optional from/to time; a date without times keeps the day itself.
+      // C-03: the typed date/time is TENANT wall clock — toWireDateTime converts it to the UTC
+      // instant the API stores. Pasting the text straight after a "Z" (the old form) claimed the
+      // dispatcher had typed UTC and silently moved every window one or two hours.
+      plannedFrom: toWireDateTime(stop.date, stop.fromTime || '00:00'),
+      // D2: only a site stop carries its own end date (22:00 + 4 u ends the next day) and the
+      // manual-end flag; loading/unloading windows stay within their one date, exactly as before.
+      plannedTo: stop.toTime
+        ? toWireDateTime(stop.stopType === 'Site' ? stop.toDate || stop.date : stop.date, stop.toTime)
+        : null,
+      plannedToIsManual: stop.stopType === 'Site' && stop.plannedToIsManual,
+      timeRequirement: stop.timeRequirement || 'None',
+      timeRequirementFrom:
+        (stop.timeRequirement === 'After' || stop.timeRequirement === 'Window') && stop.timeReqFrom
+          ? stop.timeReqFrom
+          : null,
+      timeRequirementTo:
+        (stop.timeRequirement === 'Before' || stop.timeRequirement === 'Window') && stop.timeReqTo
+          ? stop.timeReqTo
+          : null,
+      includedTimeMinutesOverride: numberOrNullFrom(stop.includedTimeMinutesOverride),
+      // C-03: datetime-local values are tenant wall clock too — same conversion, one helper.
+      requestedFrom: fromDateTimeLocalInput(stop.requestedFrom),
+      requestedTo: fromDateTimeLocalInput(stop.requestedTo),
+      confirmedFrom: fromDateTimeLocalInput(stop.confirmedFrom),
+      confirmedTo: fromDateTimeLocalInput(stop.confirmedTo),
+      earliestAllowed: fromDateTimeLocalInput(stop.earliestAllowed),
+      latestAllowed: fromDateTimeLocalInput(stop.latestAllowed),
+      appointmentRequired: stop.appointmentRequired,
+      appointmentReference: stop.appointmentReference.trim() || null,
+      reference: stop.reference.trim() || null,
+      instructions: stop.instructions.trim() || null,
+      accessInstructions: stop.accessInstructions.trim() || null,
+      loadingInstructions: stop.loadingInstructions.trim() || null,
+      unloadingInstructions: stop.unloadingInstructions.trim() || null,
+    })),
+    cargoItems: values.cargoItems.map((cargo) => ({
+      id: cargo.id,
+      description: cargo.description.trim() || null,
+      barcode: cargo.barcode.trim() || null,
+      expectedQuantity: Number(cargo.expectedQuantity),
+      quantityUnit: cargo.quantityUnit.trim() || null,
+      quantityUnitCode: cargo.quantityUnitCode,
+      notes: cargo.notes.trim() || null,
+      unitType: cargo.unitType || null,
+      unitTypeLabel: cargo.unitType === 'Other' ? cargo.unitTypeLabel.trim() || null : null,
+      totalWeightKg: numberOrNullFrom(cargo.totalWeightKg),
+      // D4: only what the planner entered — a total-only line keeps a null weight per unit.
+      weightPerUnitKg: numberOrNullFrom(cargo.weightPerUnitKg),
+      lengthMeters: numberOrNullFrom(cargo.lengthMeters),
+      widthMeters: numberOrNullFrom(cargo.widthMeters),
+      heightMeters: numberOrNullFrom(cargo.heightMeters),
+      volumeM3: cargo.volumeIsManual
+        ? numberOrNullFrom(cargo.volumeM3)
+        : computeVolumeM3(
+            numberOrNullFrom(cargo.lengthMeters),
+            numberOrNullFrom(cargo.widthMeters),
+            numberOrNullFrom(cargo.heightMeters),
+          ),
+      volumeIsManual: cargo.volumeIsManual,
+      adrRequired: cargo.adrRequired,
+      adrDetails: cargo.adrRequired ? cargo.adrDetails.trim() || null : null,
+      stackable: cargo.stackable,
+      reference: cargo.reference.trim() || null,
+      loadingStopIndex: cargo.loadingStopIndex === '' ? null : Number(cargo.loadingStopIndex),
+      unloadingStopIndex: cargo.unloadingStopIndex === '' ? null : Number(cargo.unloadingStopIndex),
+      palletCount: numberOrNullFrom(cargo.palletCount),
+    })),
+  }
+}

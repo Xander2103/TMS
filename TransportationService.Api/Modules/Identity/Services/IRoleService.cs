@@ -13,6 +13,14 @@ public interface IRoleService
     Task<IReadOnlyList<PermissionDto>> ListPermissionsAsync(CancellationToken cancellationToken);
 }
 
-public enum RoleOperationOutcome { Success, NotFound, SystemRoleProtected }
+public enum RoleOperationOutcome { Success, NotFound, SystemRoleProtected, Forbidden, ValidationFailed }
 
-public record RoleOperationResult(RoleOperationOutcome Outcome, RoleDto? Role);
+/// <summary>Optional human-readable reason attached to a Forbidden/ValidationFailed outcome.</summary>
+public static class RoleOperationMessages
+{
+    public const string PrivilegeEscalation = "You cannot grant permissions you do not hold yourself.";
+    public const string PortalRoleInternalPermission = "Customer-portal roles may only hold customer_portal.* permissions.";
+    public const string UnknownPermission = "One or more permission codes are unknown.";
+}
+
+public record RoleOperationResult(RoleOperationOutcome Outcome, RoleDto? Role, string? Error = null);

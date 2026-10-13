@@ -10,7 +10,14 @@ public record DriverListItemDto(
     string? CategoryName,
     DriverAvailabilityStatus AvailabilityStatus,
     bool IsActive,
-    bool IsBlocked);
+    bool IsBlocked,
+    /// <summary>
+    /// D1: the driver's FIXED vehicle (active vehicle whose <c>FixedDriverId</c> is this driver), so
+    /// the trip page can propose it without an extra call. Null when the driver has none.
+    /// </summary>
+    Guid? FixedVehicleId = null,
+    string? FixedVehicleNumber = null,
+    string? FixedVehiclePlate = null);
 
 public record DriverReadinessDto(
     string Status,               // "Ready" | "Warning" | "NotReady" | "Blocked"
@@ -46,21 +53,29 @@ public record DriverDetailDto(
     string? FixedTrailerLabel,
     string? Notes,
     DriverReadinessDto Readiness,
-    IReadOnlyList<DriverQualificationDto> Qualifications);
+    IReadOnlyList<DriverQualificationDto> Qualifications,
+    IReadOnlyList<Guid>? CategoryIds = null,
+    IReadOnlyList<string>? CategoryNames = null);
 
 public record CreateDriverRequest(
     Guid EmployeeId,
     Guid? DriverCategoryId,
     DriverAvailabilityStatus AvailabilityStatus = DriverAvailabilityStatus.Available,
     Guid? FixedTrailerId = null,
-    string? Notes = null);
+    string? Notes = null,
+    /// <summary>Multi-category selection; when provided, the first entry is the primary.</summary>
+    IReadOnlyList<Guid>? DriverCategoryIds = null);
 
 public record UpdateDriverRequest(
     Guid? DriverCategoryId,
     DriverAvailabilityStatus AvailabilityStatus,
     bool IsActive,
     Guid? FixedTrailerId = null,
-    string? Notes = null);
+    string? Notes = null,
+    /// <summary>Ordered multi-category selection; the first entry is the primary and mirrors
+    /// DriverCategoryId. Empty list clears all categories (primary becomes null); null leaves
+    /// the categories unchanged unless the legacy single DriverCategoryId is set.</summary>
+    IReadOnlyList<Guid>? DriverCategoryIds = null);
 
 /// <summary>Body for the driver-side assignment endpoints; null VehicleId clears the slot.</summary>
 public record AssignDriverVehicleRequest(Guid? VehicleId, bool ReplaceExisting = false);

@@ -1,0 +1,25 @@
+{
+  "title": "Aandachtspunten",
+  "kind": {
+    "document": "Document",
+    "qualification": "Kwalificatie"
+  },
+  "summary": {
+    "days_one": "{count} dag",
+    "days_other": "{count} dagen",
+    "documentsExpiring_one": "{count} document verloopt over {period}",
+    "documentsExpiring_other": "{count} documenten verlopen binnenkort",
+    "documentsExpiringToday": "1 document verloopt vandaag",
+    "documentsExpired_one": "{count} document is verlopen",
+    "documentsExpired_other": "{count} documenten zijn verlopen",
+    "qualificationsExpiring_one": "{count} kwalificatie verloopt over {period}",
+    "qualificationsExpiring_other": "{count} kwalificaties verlopen binnenkort",
+    "qualificationsExpiringToday": "1 kwalificatie verloopt vandaag",
+    "qualificationsExpired_one": "{count} kwalificatie is verlopen",
+    "qualificationsExpired_other": "{count} kwalificaties zijn verlopen"
+  },
+  "item": {
+    "expires": "{label} — vervalt op {date}",
+    "expired": "{label} — verlopen op {date}"
+  }
+}

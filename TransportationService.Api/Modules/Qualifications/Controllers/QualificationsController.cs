@@ -97,6 +97,11 @@ public class QualificationsController : ControllerBase
             return BadRequest(new { message = "Alleen PDF-, JPG- en PNG-bestanden zijn toegestaan." });
         }
 
+        if (Modules.Security.UploadValidation.SignatureError(file) is { } signatureError)
+        {
+            return BadRequest(new { message = signatureError });
+        }
+
         await using var stream = file.OpenReadStream();
         var updated = await _qualificationService.AttachDocumentAsync(employeeId, id, file.FileName, stream, cancellationToken);
         return updated is null ? NotFound() : Ok(updated);

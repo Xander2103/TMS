@@ -1,0 +1,148 @@
+{
+  "page": {
+    "title": "Peppol",
+    "subtitle": "E-invoicing via the Peppol network: delivery status per invoice, incoming documents and configuration per own company.",
+    "noPermission": "You do not have permission to view Peppol.",
+    "tabs": {
+      "overview": "Overview",
+      "outgoing": "Outgoing",
+      "incoming": "Incoming",
+      "settings": "Configuration",
+      "validation": "Validation issues"
+    }
+  },
+  "kind": {
+    "Invoice": "Invoice",
+    "CreditNote": "Credit note"
+  },
+  "incomingKind": {
+    "SupplierInvoice": "Supplier invoice",
+    "SupplierCreditNote": "Supplier credit note",
+    "StatusMessage": "Status message"
+  },
+  "incomingStatus": {
+    "Received": "Received",
+    "NeedsReview": "Needs review",
+    "Linked": "Processed",
+    "Rejected": "Rejected"
+  },
+  "environment": {
+    "Sandbox": "Sandbox",
+    "Live": "Live"
+  },
+  "fields": {
+    "peppolId": "Peppol ID",
+    "vatNumber": "VAT number",
+    "iban": "IBAN"
+  },
+  "overview": {
+    "loadFailed": "The Peppol overview could not be loaded.",
+    "loading": "Loading overview…",
+    "kpiReceivedIncoming": "Incoming received",
+    "customersEnabledWithoutId_one": "{count} customer with Peppol enabled but without a Peppol ID",
+    "customersEnabledWithoutId_other": "{count} customers with Peppol enabled but without a Peppol ID",
+    "customersMissingData_one": "{count} active customer without Peppol details",
+    "customersMissingData_other": "{count} active customers without Peppol details",
+    "checklistTitle": "Configuration per own company",
+    "noEntities": "No own companies configured yet."
+  },
+  "outgoing": {
+    "loadFailed": "The Peppol transmissions could not be loaded.",
+    "retryQueued": "Transmission queued again.",
+    "retryFailed": "The transmission could not be resubmitted.",
+    "cancelled": "Transmission cancelled.",
+    "cancelFailed": "The transmission could not be cancelled.",
+    "colInvoice": "Invoice",
+    "colKind": "Type",
+    "colCustomer": "Customer",
+    "colAmount": "Amount",
+    "colDate": "Date",
+    "colEnvironment": "Environment",
+    "colStatus": "Status",
+    "colProviderRef": "Provider reference",
+    "colError": "Error",
+    "colAttempts": "Attempt/version",
+    "colActions": "Actions",
+    "retry": "Retry",
+    "searchPlaceholder": "Search by invoice number or customer...",
+    "statusFilterLabel": "Status",
+    "empty": "No Peppol transmissions found.",
+    "cancelTitle": "Cancel transmission",
+    "cancelMessage": "Are you sure you want to cancel the Peppol delivery of invoice {invoiceNumber}?"
+  },
+  "incoming": {
+    "loadFailed": "The incoming Peppol documents could not be loaded.",
+    "reviewed": "Document marked as processed.",
+    "rejected": "Document rejected.",
+    "actionFailed": "The action could not be completed.",
+    "colSupplier": "Supplier",
+    "colDocumentNumber": "Document no.",
+    "colKind": "Type",
+    "colAmount": "Amount",
+    "colReceivedAt": "Received",
+    "colStatus": "Status",
+    "colNote": "Note",
+    "colActions": "Actions",
+    "markReviewed": "Mark as processed",
+    "reject": "Reject",
+    "rejectTitle": "Reject document",
+    "statusFilterLabel": "Status",
+    "empty": "No incoming Peppol documents found.",
+    "busy": "Working…",
+    "confirmReview": "Mark document {documentNumber} as processed?",
+    "confirmReject": "Reject document {documentNumber}?",
+    "noteLabel": "Note (optional)"
+  },
+  "settings": {
+    "entitiesLoadFailed": "The own companies could not be loaded.",
+    "loadFailed": "The Peppol settings could not be loaded.",
+    "saved": "Peppol settings saved.",
+    "saveFailed": "The settings could not be saved.",
+    "testFailed": "The connection test could not be completed.",
+    "entityLabel": "Own company",
+    "peppolId": "Peppol ID: {id}",
+    "peppolIdMissing": "Peppol ID missing",
+    "vat": "VAT: {vatNumber}",
+    "vatMissing": "VAT number missing",
+    "iban": "IBAN: {iban}",
+    "ibanMissing": "IBAN missing",
+    "manageHintPrefix": "You manage these details via",
+    "manageHintLink": "Settings → Own companies",
+    "loading": "Loading settings…",
+    "enabled": "Enabled",
+    "environmentLabel": "Environment",
+    "providerLabel": "Provider",
+    "providerSandbox": "Sandbox (test environment)",
+    "emailFallbackLabel": "Email fallback",
+    "emailFallbackHint": "Email address the invoice is delivered to when the customer cannot be reached via Peppol.",
+    "defaultNoteLabel": "Default note",
+    "saving": "Saving…",
+    "testConnection": "Test connection",
+    "testing": "Testing…",
+    "found": "Found",
+    "notFound": "Not found",
+    "providerReference": "Provider reference:",
+    "supportedDocTypes": "Supported document types: {types}"
+  },
+  "validation": {
+    "loadFailed": "The validation issues could not be loaded.",
+    "loading": "Loading validation issues…",
+    "intro": "Before an invoice can be sent via Peppol, both the sending own company and the receiving customer must have complete Peppol details. The outstanding issues are listed below.",
+    "entitiesTitle": "Incomplete own companies",
+    "entitiesComplete": "All own companies are fully configured.",
+    "missing": "missing: {fields}",
+    "entitiesHintPrefix": "Complete the missing details via",
+    "entitiesHintLink": "Settings → Own companies",
+    "customersTitle": "Customers",
+    "customersOk": "No customer issues found.",
+    "enabledWithoutId_one": "customer with Peppol enabled but without a Peppol ID — sending fails for these customers until the Peppol ID is filled in.",
+    "enabledWithoutId_other": "customers with Peppol enabled but without a Peppol ID — sending fails for these customers until the Peppol ID is filled in.",
+    "missingData_one": "active customer without Peppol details (informational — Peppol may not be wanted for these customers).",
+    "missingData_other": "active customers without Peppol details (informational — Peppol may not be wanted for these customers).",
+    "customersHintPrefix": "You manage a customer's Peppol details on the customer record via",
+    "customersHintLink": "Customers"
+  },
+  "xml": {
+    "downloadFailed": "The Peppol XML could not be downloaded."
+  }
+}

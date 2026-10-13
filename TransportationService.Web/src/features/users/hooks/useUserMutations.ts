@@ -1,9 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
+import { useLocale } from '../../../i18n/localeContext'
 import { assignUserRoles, createUser, setUserActive, setUserBlocked, updateUser } from '../api/usersApi'
 import type { CreateUserInput, UpdateUserInput, User } from '../types/user'
-
-const SUBMIT_ERROR_MESSAGE = 'De actie kon niet worden uitgevoerd. Probeer het opnieuw.'
-const LAST_ADMIN_ERROR_MESSAGE = 'Dit is de laatste actieve beheerder en kan niet worden gewijzigd.'
 
 interface UseUserMutationsResult {
   isSubmitting: boolean
@@ -16,6 +14,7 @@ interface UseUserMutationsResult {
 }
 
 export function useUserMutations(): UseUserMutationsResult {
+  const { t } = useLocale()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const isMountedRef = useRef(true)
@@ -40,7 +39,7 @@ export function useUserMutations(): UseUserMutationsResult {
     } catch (err) {
       if (isMountedRef.current) {
         const status = (err as { status?: number }).status
-        setError(status === 409 ? LAST_ADMIN_ERROR_MESSAGE : SUBMIT_ERROR_MESSAGE)
+        setError(status === 409 ? t('usersRoles.users.mutations.lastAdmin') : t('usersRoles.users.mutations.submitFailed'))
         setIsSubmitting(false)
       }
       return null

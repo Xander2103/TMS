@@ -5,6 +5,7 @@ import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { FormField } from '../../../components/ui/FormField'
 import { Modal } from '../../../components/ui/Modal'
 import { useToast } from '../../../components/ui/toastContext'
+import { useLocale } from '../../../i18n/localeContext'
 import { useAuth } from '../../auth/authContextValue'
 import {
   completeInspection,
@@ -57,6 +58,7 @@ interface InspectionsPanelProps {
 
 /** Inspections section for a vehicle or trailer detail page: plan, edit, register result, delete. */
 export function InspectionsPanel({ ownerType, ownerId }: InspectionsPanelProps) {
+  const { t } = useLocale()
   const { showSuccess, showError } = useToast()
   const { hasPermission } = useAuth()
 
@@ -83,12 +85,12 @@ export function InspectionsPanel({ ownerType, ownerId }: InspectionsPanelProps) 
         setLoadError(null)
       })
       .catch(() => {
-        if (mounted) setLoadError('Keuringen konden niet worden geladen.')
+        if (mounted) setLoadError(t('maintenance.insp.panel.loadFailed'))
       })
     return () => {
       mounted = false
     }
-  }, [ownerType, ownerId, reloadToken])
+  }, [ownerType, ownerId, reloadToken, t])
 
   function set<K extends keyof InspectionInput>(key: K, value: InspectionInput[K]) {
     setForm((f) => ({ ...f, [key]: value }))
@@ -131,26 +133,26 @@ export function InspectionsPanel({ ownerType, ownerId }: InspectionsPanelProps) 
     event.preventDefault()
     setFormError(null)
     if (!form.dueDate) {
-      setFormError('Een vervaldatum is verplicht.')
+      setFormError(t('maintenance.insp.panel.dueRequired'))
       return
     }
     if (form.inspectionType === 'Other' && !form.customTypeName?.trim()) {
-      setFormError('Geef een naam op voor het aangepaste keuringstype.')
+      setFormError(t('maintenance.insp.panel.customNameRequired'))
       return
     }
     setSaving(true)
     try {
       if (editing) {
         await updateInspection(editing.id, form)
-        showSuccess('Keuring bijgewerkt.')
+        showSuccess(t('maintenance.insp.panel.updated'))
       } else {
         await createInspection(ownerType, ownerId, form)
-        showSuccess('Keuring gepland.')
+        showSuccess(t('maintenance.insp.panel.planned'))
       }
       setEditorOpen(false)
-      setReloadToken((t) => t + 1)
+      setReloadToken((token) => token + 1)
     } catch {
-      setFormError('De keuring kon niet worden opgeslagen.')
+      setFormError(t('maintenance.insp.panel.saveFailed'))
     } finally {
       setSaving(false)
     }
@@ -164,14 +166,14 @@ export function InspectionsPanel({ ownerType, ownerId }: InspectionsPanelProps) 
       const result = await completeInspection(completeTarget.id, completeForm)
       showSuccess(
         result.followUp
-          ? `Keuring geregistreerd — volgende keuring gepland op ${result.followUp.dueDate}.`
-          : 'Keuring geregistreerd.',
+          ? t('maintenance.insp.panel.registeredWithFollowUp', { date: result.followUp.dueDate })
+          : t('maintenance.insp.panel.registered'),
       )
       setCompleteTarget(null)
       setCompleteForm(null)
-      setReloadToken((t) => t + 1)
+      setReloadToken((token) => token + 1)
     } catch {
-      showError('De keuring kon niet worden geregistreerd.')
+      showError(t('maintenance.insp.panel.registerFailed'))
     } finally {
       setSaving(false)
     }
@@ -181,11 +183,11 @@ export function InspectionsPanel({ ownerType, ownerId }: InspectionsPanelProps) 
     if (!deleteTarget) return
     try {
       await deleteInspection(deleteTarget.id)
-      showSuccess('Keuring verwijderd.')
+      showSuccess(t('maintenance.insp.panel.deleted'))
       setDeleteTarget(null)
-      setReloadToken((t) => t + 1)
+      setReloadToken((token) => token + 1)
     } catch {
-      showError('De keuring kon niet worden verwijderd.')
+      showError(t('maintenance.insp.panel.deleteFailed'))
       setDeleteTarget(null)
     }
   }
@@ -195,44 +197,44 @@ export function InspectionsPanel({ ownerType, ownerId }: InspectionsPanelProps) 
   return (
     <section className="insp">
       <div className="insp-header">
-        <h2>Keuringen</h2>
+        <h2>{t('maintenance.insp.panel.title')}</h2>
         {hasPermission('inspections.create') && (
           <Button variant="secondary" onClick={openCreate}>
-            Keuring plannen
+            {t('maintenance.insp.panel.plan')}
           </Button>
         )}
       </div>
 
       {loadError && <p className="placeholder-text">{loadError}</p>}
-      {!loadError && inspections === null && <p className="placeholder-text">Keuringen laden…</p>}
+      {!loadError && inspections === null && <p className="placeholder-text">{t('maintenance.insp.panel.loading')}</p>}
       {!loadError && inspections !== null && inspections.length === 0 && (
-        <p className="placeholder-text">Nog geen keuringen geregistreerd.</p>
+        <p className="placeholder-text">{t('maintenance.insp.panel.empty')}</p>
       )}
 
       {!loadError && inspections !== null && inspections.length > 0 && (
         <table className="insp-table">
           <thead>
             <tr>
-              <th>Keuring</th>
-              <th>Vervaldatum</th>
-              <th>Status</th>
-              <th>Uitgevoerd</th>
-              <th>Resultaat</th>
-              <th aria-label="Acties" />
+              <th>{t('maintenance.insp.panel.colInspection')}</th>
+              <th>{t('maintenance.insp.panel.colDue')}</th>
+              <th>{t('maintenance.insp.panel.colStatus')}</th>
+              <th>{t('maintenance.insp.panel.colCompleted')}</th>
+              <th>{t('maintenance.insp.panel.colResult')}</th>
+              <th aria-label={t('fleet.common.actions')} />
             </tr>
           </thead>
           <tbody>
             {inspections.map((inspection) => (
               <tr key={inspection.id}>
-                <td>{inspectionDisplayName(inspection)}</td>
+                <td>{t(inspectionDisplayName(inspection))}</td>
                 <td>{inspection.dueDate}</td>
                 <td>
-                  <Badge tone={URGENCY_TONE[inspection.urgency]}>{INSPECTION_URGENCY_LABELS[inspection.urgency]}</Badge>
+                  <Badge tone={URGENCY_TONE[inspection.urgency]}>{t(INSPECTION_URGENCY_LABELS[inspection.urgency])}</Badge>
                 </td>
                 <td>{inspection.completedDate ?? '—'}</td>
                 <td>
                   {inspection.result ? (
-                    <Badge tone={RESULT_TONE[inspection.result]}>{INSPECTION_RESULT_LABELS[inspection.result]}</Badge>
+                    <Badge tone={RESULT_TONE[inspection.result]}>{t(INSPECTION_RESULT_LABELS[inspection.result])}</Badge>
                   ) : (
                     '—'
                   )}
@@ -241,16 +243,16 @@ export function InspectionsPanel({ ownerType, ownerId }: InspectionsPanelProps) 
                   {canEdit && inspection.completedDate === null && (
                     <>
                       <button type="button" className="insp-link" onClick={() => openComplete(inspection)}>
-                        Registreren
+                        {t('maintenance.insp.panel.register')}
                       </button>
                       <button type="button" className="insp-link" onClick={() => openEdit(inspection)}>
-                        Bewerken
+                        {t('ui.actions.edit')}
                       </button>
                     </>
                   )}
                   {hasPermission('inspections.delete') && (
                     <button type="button" className="insp-link insp-link-danger" onClick={() => setDeleteTarget(inspection)}>
-                      Verwijderen
+                      {t('ui.actions.delete')}
                     </button>
                   )}
                 </td>
@@ -262,16 +264,16 @@ export function InspectionsPanel({ ownerType, ownerId }: InspectionsPanelProps) 
 
       {editorOpen && (
         <Modal
-          title={editing ? 'Keuring bewerken' : 'Keuring plannen'}
+          title={editing ? t('maintenance.insp.panel.editTitle') : t('maintenance.insp.panel.planTitle')}
           onClose={() => setEditorOpen(false)}
           busy={saving}
           footer={
             <>
               <Button variant="secondary" onClick={() => setEditorOpen(false)} disabled={saving}>
-                Annuleren
+                {t('ui.actions.cancel')}
               </Button>
               <Button type="submit" form="insp-form" disabled={saving}>
-                {saving ? 'Opslaan…' : 'Opslaan'}
+                {saving ? t('fleet.common.saving') : t('ui.actions.save')}
               </Button>
             </>
           }
@@ -282,7 +284,7 @@ export function InspectionsPanel({ ownerType, ownerId }: InspectionsPanelProps) 
                 {formError}
               </div>
             )}
-            <FormField label="Keuringstype" htmlFor="in-type" required>
+            <FormField label={t('maintenance.insp.panel.typeField')} htmlFor="in-type" required>
               <select
                 id="in-type"
                 value={form.inspectionType}
@@ -291,13 +293,13 @@ export function InspectionsPanel({ ownerType, ownerId }: InspectionsPanelProps) 
               >
                 {INSPECTION_TYPES.map((type) => (
                   <option key={type} value={type}>
-                    {INSPECTION_TYPE_LABELS[type]}
+                    {t(INSPECTION_TYPE_LABELS[type])}
                   </option>
                 ))}
               </select>
             </FormField>
             {form.inspectionType === 'Other' && (
-              <FormField label="Naam keuringstype" htmlFor="in-custom" required>
+              <FormField label={t('maintenance.insp.panel.customName')} htmlFor="in-custom" required>
                 <input
                   id="in-custom"
                   value={form.customTypeName ?? ''}
@@ -308,7 +310,7 @@ export function InspectionsPanel({ ownerType, ownerId }: InspectionsPanelProps) 
               </FormField>
             )}
             <div className="insp-form-row">
-              <FormField label="Vervaldatum" htmlFor="in-due" required>
+              <FormField label={t('maintenance.insp.panel.dueDate')} htmlFor="in-due" required>
                 <input
                   id="in-due"
                   type="date"
@@ -318,9 +320,9 @@ export function InspectionsPanel({ ownerType, ownerId }: InspectionsPanelProps) 
                 />
               </FormField>
               <FormField
-                label="Herhaal elke (maanden)"
+                label={t('maintenance.insp.panel.repeatMonths')}
                 htmlFor="in-interval"
-                hint={form.inspectionType === 'CraneInspection' ? 'Leeg = standaard 3 maanden' : 'Leeg = eenmalig'}
+                hint={form.inspectionType === 'CraneInspection' ? t('maintenance.insp.panel.craneHint') : t('maintenance.insp.panel.onceHint')}
               >
                 <input
                   id="in-interval"
@@ -333,7 +335,7 @@ export function InspectionsPanel({ ownerType, ownerId }: InspectionsPanelProps) 
                 />
               </FormField>
             </div>
-            <FormField label="Waarschuwing (dagen vóór verval)" htmlFor="in-warning" hint="Leeg = standaard 30 dagen">
+            <FormField label={t('maintenance.insp.panel.warningDays')} htmlFor="in-warning" hint={t('maintenance.insp.panel.warningHint')}>
               <input
                 id="in-warning"
                 type="number"
@@ -344,7 +346,7 @@ export function InspectionsPanel({ ownerType, ownerId }: InspectionsPanelProps) 
                 disabled={saving}
               />
             </FormField>
-            <FormField label="Notities" htmlFor="in-notes">
+            <FormField label={t('maintenance.insp.panel.notes')} htmlFor="in-notes">
               <textarea
                 id="in-notes"
                 rows={2}
@@ -359,22 +361,22 @@ export function InspectionsPanel({ ownerType, ownerId }: InspectionsPanelProps) 
 
       {completeTarget && completeForm && (
         <Modal
-          title="Keuring registreren"
+          title={t('maintenance.insp.panel.registerTitle')}
           onClose={() => setCompleteTarget(null)}
           busy={saving}
           footer={
             <>
               <Button variant="secondary" onClick={() => setCompleteTarget(null)} disabled={saving}>
-                Annuleren
+                {t('ui.actions.cancel')}
               </Button>
               <Button type="submit" form="insp-complete-form" disabled={saving}>
-                {saving ? 'Bezig…' : 'Registreren'}
+                {saving ? t('fleet.common.busy') : t('maintenance.insp.panel.register')}
               </Button>
             </>
           }
         >
           <form id="insp-complete-form" className="insp-form" onSubmit={handleComplete} noValidate>
-            <FormField label="Datum uitgevoerd" htmlFor="ic-date" required>
+            <FormField label={t('maintenance.insp.panel.completedDate')} htmlFor="ic-date" required>
               <input
                 id="ic-date"
                 type="date"
@@ -383,7 +385,7 @@ export function InspectionsPanel({ ownerType, ownerId }: InspectionsPanelProps) 
                 disabled={saving}
               />
             </FormField>
-            <FormField label="Resultaat" htmlFor="ic-result" required>
+            <FormField label={t('maintenance.insp.panel.result')} htmlFor="ic-result" required>
               <select
                 id="ic-result"
                 value={completeForm.result}
@@ -392,12 +394,12 @@ export function InspectionsPanel({ ownerType, ownerId }: InspectionsPanelProps) 
               >
                 {(Object.keys(INSPECTION_RESULT_LABELS) as InspectionResult[]).map((result) => (
                   <option key={result} value={result}>
-                    {INSPECTION_RESULT_LABELS[result]}
+                    {t(INSPECTION_RESULT_LABELS[result])}
                   </option>
                 ))}
               </select>
             </FormField>
-            <FormField label="Notities" htmlFor="ic-notes">
+            <FormField label={t('maintenance.insp.panel.notes')} htmlFor="ic-notes">
               <textarea
                 id="ic-notes"
                 rows={2}
@@ -412,9 +414,9 @@ export function InspectionsPanel({ ownerType, ownerId }: InspectionsPanelProps) 
 
       {deleteTarget && (
         <ConfirmDialog
-          title="Keuring verwijderen"
-          message={`Weet je zeker dat je "${inspectionDisplayName(deleteTarget)}" (vervaldatum ${deleteTarget.dueDate}) wilt verwijderen?`}
-          confirmLabel="Verwijderen"
+          title={t('maintenance.insp.panel.deleteTitle')}
+          message={t('maintenance.insp.panel.deleteMessage', { name: t(inspectionDisplayName(deleteTarget)), date: deleteTarget.dueDate })}
+          confirmLabel={t('ui.actions.delete')}
           destructive
           onConfirm={handleDelete}
           onCancel={() => setDeleteTarget(null)}

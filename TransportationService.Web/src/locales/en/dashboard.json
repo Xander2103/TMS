@@ -1,0 +1,18 @@
+{
+  "welcome": "Welcome",
+  "welcomeNamed": "Welcome, {name}",
+  "loading": "Loading dashboard...",
+  "loadError": "The dashboard could not be loaded.",
+  "acknowledge": "I confirm",
+  "acknowledging": "Confirming…",
+  "cards": {
+    "activeOrders": "Active orders",
+    "attention": "Needs attention",
+    "unreadMessages": "Unread messages",
+    "recentInvoices": "Recent invoices"
+  },
+  "upcomingTitle": "Upcoming deliveries (7 days)",
+  "noDeliveries": "No deliveries planned.",
+  "recentInvoicesTitle": "Recent invoices",
+  "noInvoices": "No invoices yet."
+}

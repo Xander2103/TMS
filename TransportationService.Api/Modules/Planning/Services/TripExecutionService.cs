@@ -35,7 +35,8 @@ public class TripExecutionService : ITripExecutionService
         ITripPlanningSyncService planningSyncService,
         ITripPackageService tripPackageService,
         INotificationService notificationService,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        Modules.Incidents.Services.IFailedDeliveryHandler? failedDeliveryHandler = null)
     {
         _dbContext = dbContext;
         _tenantContext = tenantContext;
@@ -46,7 +47,10 @@ public class TripExecutionService : ITripExecutionService
         _tripPackageService = tripPackageService;
         _notificationService = notificationService;
         _timeProvider = timeProvider;
+        _failedDeliveryHandler = failedDeliveryHandler;
     }
+
+    private readonly Modules.Incidents.Services.IFailedDeliveryHandler? _failedDeliveryHandler;
 
     /// <summary>Driver id of the logged-in user, resolved via the user's employee link; null when not a driver.</summary>
     private async Task<Guid?> CurrentDriverIdAsync(CancellationToken cancellationToken)
@@ -149,7 +153,8 @@ public class TripExecutionService : ITripExecutionService
                 var numbers = string.Join(", ", unresolved.Select(p => p.PackageNumber).Take(5));
                 return ExecutionResult.Invalid(
                     $"Er zijn nog {unresolved.Count} verplichte colli zonder uitkomst ({numbers}); "
-                    + "scan of registreer ze, of rond af met een vrijgave en reden.");
+                    + "scan of registreer ze, of rond af met een vrijgave en reden.",
+                    Common.ErrorCodes.TripPackagesUnresolved);
             }
             // The override custody trail commits atomically with the completion below.
             _tripPackageService.StageCompletionOverride(tripId, stopId, unresolved, reason);
@@ -157,7 +162,8 @@ public class TripExecutionService : ITripExecutionService
         }
 
         var result = await TransitionCoreAsync(tripId, stopId,
-            new TransitionStopRequest(StopExecutionStatus.Completed, Reason: request.Reason, Notes: request.Remarks),
+            new TransitionStopRequest(StopExecutionStatus.Completed, Reason: request.Reason, Notes: request.Remarks,
+                ClientRequestId: request.ClientRequestId),
             restrictToOwnDriver,
             beforeSave: execution => execution.PodSignedBy = Trim(request.PodSignedBy),
             cancellationToken);
@@ -177,7 +183,8 @@ public class TripExecutionService : ITripExecutionService
     public Task<ExecutionResult> SkipAsync(
         Guid tripId, Guid stopId, SkipStopRequest request, bool restrictToOwnDriver, CancellationToken cancellationToken) =>
         TransitionCoreAsync(tripId, stopId,
-            new TransitionStopRequest(StopExecutionStatus.Skipped, Reason: request.Remarks),
+            new TransitionStopRequest(StopExecutionStatus.Skipped, Reason: request.Remarks,
+                ClientRequestId: request.ClientRequestId),
             restrictToOwnDriver, beforeSave: null, cancellationToken);
 
     public async Task<StopHistoryResult> GetStopHistoryAsync(
@@ -233,6 +240,15 @@ public class TripExecutionService : ITripExecutionService
             return guard;
         }
 
+        // Offline replay: a transition we already recorded under this key returns the current
+        // state as success instead of re-running (and re-failing) the transition.
+        if (request.ClientRequestId is { } clientRequestId
+            && await _dbContext.StopStatusHistories.AsNoTracking().AnyAsync(
+                h => h.TenantId == _tenantContext.TenantId && h.ClientRequestId == clientRequestId, cancellationToken))
+        {
+            return await GetExecutionAsync(tripId, restrictToOwnDriver: false, cancellationToken);
+        }
+
         if (trip!.Status != TripStatus.InProgress)
         {
             return ExecutionResult.InvalidState("Stops kunnen alleen worden geregistreerd terwijl de rit onderweg is.");
@@ -280,7 +296,7 @@ public class TripExecutionService : ITripExecutionService
                 StopExecutionStatus.Failed => "een mislukte stop",
                 _ => "een gedeeltelijk afgewerkte stop",
             };
-            return ExecutionResult.Invalid($"Een reden is verplicht bij {noun}.");
+            return ExecutionResult.Invalid($"Een reden is verplicht bij {noun}.", Common.ErrorCodes.TripReasonRequired);
         }
 
         var now = _timeProvider.GetUtcNow().UtcDateTime;
@@ -294,7 +310,8 @@ public class TripExecutionService : ITripExecutionService
                 if (reason is null)
                 {
                     return ExecutionResult.Invalid(
-                        "Je komt aan na het uiterste tijdstip van deze stop; een reden voor de late aankomst is verplicht.");
+                        "Je komt aan na het uiterste tijdstip van deze stop; een reden voor de late aankomst is verplicht.",
+                        Common.ErrorCodes.TripReasonRequired);
                 }
 
                 execution.LateArrivalReason = reason;
@@ -330,8 +347,10 @@ public class TripExecutionService : ITripExecutionService
                 OccurredAt = now,
                 UserId = userId,
                 // The reason belongs to the requested step; the bridged arrival step only
-                // carries it when it explains a late arrival.
+                // carries it when it explains a late arrival. The idempotency key marks the
+                // requested step only, so a bridged pair can never double-claim it.
                 Reason = step.To == target ? reason : execution.LateArrivalReason,
+                ClientRequestId = step.To == target ? request.ClientRequestId : null,
             });
         }
 
@@ -360,6 +379,13 @@ public class TripExecutionService : ITripExecutionService
         await _auditService.RecordAsync(EntityType, execution.Id.ToString(), target.ToString(),
             new { Status = from },
             new { execution.TripId, execution.TransportOrderStopId, execution.Status, Reason = reason }, cancellationToken);
+
+        // P4: a failed stop triggers the failed-delivery automation (idempotent, never throws).
+        if (target == StopExecutionStatus.Failed && _failedDeliveryHandler is not null)
+        {
+            await _failedDeliveryHandler.HandleStopFailureAsync(
+                trip.Id, execution.TransportOrderStopId, reason, cancellationToken);
+        }
 
         // Keep the personnel-planning entry's actual times fresh while the trip runs.
         var actualsSync = await _planningSyncService.ApplyActualsAsync(trip.Id, cancellationToken);
@@ -419,7 +445,9 @@ public class TripExecutionService : ITripExecutionService
         string? Instructions, string? AccessInstructions, string? LoadingInstructions, string? UnloadingInstructions,
         StopExecutionStatus Status, DateTime? ArrivedAt, DateTime? DepartedAt, DateTime? CompletedAt,
         int? WaitingMinutes, string? LateArrivalReason, string? StatusReason,
-        bool HasPod, string? PodSignedBy, string? Remarks);
+        bool HasPod, string? PodSignedBy, string? Remarks,
+        string? ContactName, string? ContactPhone, string? ContactMobile,
+        string? Gate, string? AccessCode, string? Dock, string? RouteDescription, string? OpeningHoursSummary);
 
     private async Task<List<ExecutionStopRow>> LoadExecutionStopsAsync(Trip trip, CancellationToken cancellationToken)
     {
@@ -495,26 +523,32 @@ public class TripExecutionService : ITripExecutionService
 
                 var status = execution?.Status ?? StopExecutionStatus.Planned;
 
+                // Phase 7 (master-data wave 2026-08-05): the stop's location snapshot is
+                // authoritative — instructions and AppointmentRequired are no longer live-joined
+                // from the master location. The name/address coalesce below is only a LEGACY
+                // fallback for rows created before the snapshot backfill.
                 return new ExecutionStopRow(
                     x.Stop.Id, x.Stop.TransportOrderId, order.OrderNumber, order.CustomerName,
                     orderSequence[x.Stop.TransportOrderId], x.Stop.Sequence, x.Stop.StopType,
-                    x.Location?.Name ?? x.Stop.LocationName ?? x.Stop.City ?? string.Empty,
+                    x.Stop.LocationName ?? x.Location?.Name ?? x.Stop.City ?? string.Empty,
                     x.Stop.Address ?? (string.IsNullOrWhiteSpace(locationAddress) ? null : locationAddress),
                     x.Stop.PostalCode ?? x.Location?.PostalCode,
                     x.Stop.City ?? x.Location?.City,
                     x.Stop.PlannedFrom, x.Stop.PlannedTo, x.Stop.RequestedFrom, x.Stop.RequestedTo,
                     x.Stop.ConfirmedFrom, x.Stop.ConfirmedTo, x.Stop.EarliestAllowed, x.Stop.LatestAllowed,
-                    x.Stop.AppointmentRequired || (x.Location?.AppointmentRequired ?? false),
+                    x.Stop.AppointmentRequired,
                     x.Stop.AppointmentReference,
                     x.Stop.Instructions,
-                    x.Stop.AccessInstructions ?? x.Location?.AccessInstructions,
-                    x.Stop.LoadingInstructions ?? x.Location?.LoadingInstructions,
-                    x.Stop.UnloadingInstructions ?? x.Location?.UnloadingInstructions,
+                    x.Stop.AccessInstructions,
+                    x.Stop.LoadingInstructions,
+                    x.Stop.UnloadingInstructions,
                     status,
                     execution?.ArrivedAt, execution?.DepartedAt, execution?.CompletedAt,
                     waitingMinutes, execution?.LateArrivalReason, execution?.StatusReason,
                     execution?.PodPath is not null || podStopIds.Contains(x.Stop.Id),
-                    execution?.PodSignedBy, execution?.Remarks);
+                    execution?.PodSignedBy, execution?.Remarks,
+                    x.Stop.ContactName, x.Stop.ContactPhone, x.Stop.ContactMobile,
+                    x.Stop.Gate, x.Stop.AccessCode, x.Stop.Dock, x.Stop.RouteDescription, x.Stop.OpeningHoursSummary);
             })
             .OrderBy(r => r.OrderSequence).ThenBy(r => r.StopSequence)
             .ToList();
@@ -560,7 +594,9 @@ public class TripExecutionService : ITripExecutionService
                 r.Status, r.ArrivedAt, r.DepartedAt, r.CompletedAt,
                 r.WaitingMinutes, r.LateArrivalReason, r.StatusReason,
                 StopStatusMachine.AllowedTargets(r.Status, r.StopType),
-                r.HasPod, r.PodSignedBy, r.Remarks)).ToList(),
+                r.HasPod, r.PodSignedBy, r.Remarks,
+                r.ContactName, r.ContactPhone, r.ContactMobile,
+                r.Gate, r.AccessCode, r.Dock, r.RouteDescription, r.OpeningHoursSummary)).ToList(),
             stops.Count(s => StopStatusMachine.IsTerminal(s.Status)),
             stops.Count);
     }

@@ -8,6 +8,7 @@ import { Pagination } from '../../../components/ui/Pagination'
 import { Badge, type BadgeTone } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { usePagedQuery } from '../../../hooks/usePagedQuery'
+import { useLocale } from '../../../i18n/localeContext'
 import { useAuth } from '../../auth/authContextValue'
 import { searchVehicles } from '../api/vehiclesApi'
 import { OPERATIONAL_STATUS_LABELS, OPERATIONAL_STATUS_TONES, type VehicleListItem } from '../types'
@@ -16,6 +17,7 @@ const STATUS_TONE: Record<VehicleListItem['operationalStatus'], BadgeTone> = OPE
 
 export function VehiclesPage() {
   const navigate = useNavigate()
+  const { t } = useLocale()
   const { hasPermission } = useAuth()
   const [search, setSearch] = useState('')
   const [activeFilter, setActiveFilter] = useState<boolean | undefined>(undefined)
@@ -23,34 +25,34 @@ export function VehiclesPage() {
 
   const { items, totalCount, pageSize, isLoading, error } = usePagedQuery<VehicleListItem>(
     (args) => searchVehicles(args),
-    { search, isActive: activeFilter, page, errorMessage: 'Voertuigen konden niet worden geladen.' },
+    { search, isActive: activeFilter, page, errorMessage: t('vehicles.list.loadFailed') },
   )
 
   const columns: Column<VehicleListItem>[] = [
-    { key: 'number', header: 'Nummer', width: '120px', render: (row) => <code>{row.internalNumber}</code> },
-    { key: 'plate', header: 'Kenteken', width: '130px', render: (row) => <code>{row.licensePlate}</code> },
-    { key: 'brand', header: 'Merk / model', render: (row) => [row.brand, row.model].filter(Boolean).join(' ') || '—' },
-    { key: 'category', header: 'Categorie', render: (row) => row.categoryName ?? '—' },
+    { key: 'number', header: t('fleet.list.colNumber'), width: '120px', render: (row) => <code>{row.internalNumber}</code> },
+    { key: 'plate', header: t('fleet.list.colPlate'), width: '130px', render: (row) => <code>{row.licensePlate}</code> },
+    { key: 'brand', header: t('fleet.list.colBrandModel'), render: (row) => [row.brand, row.model].filter(Boolean).join(' ') || '—' },
+    { key: 'category', header: t('fleet.list.colCategory'), render: (row) => row.categoryName ?? '—' },
     {
       key: 'status',
-      header: 'Status',
+      header: t('fleet.list.colStatus'),
       width: '150px',
-      render: (row) => <Badge tone={STATUS_TONE[row.operationalStatus]}>{OPERATIONAL_STATUS_LABELS[row.operationalStatus]}</Badge>,
+      render: (row) => <Badge tone={STATUS_TONE[row.operationalStatus]}>{t(OPERATIONAL_STATUS_LABELS[row.operationalStatus])}</Badge>,
     },
     {
       key: 'active',
-      header: 'Actief',
+      header: t('fleet.list.colActive'),
       width: '90px',
-      render: (row) => (row.isActive ? <Badge tone="success">Ja</Badge> : <Badge tone="neutral">Nee</Badge>),
+      render: (row) => (row.isActive ? <Badge tone="success">{t('fleet.common.yes')}</Badge> : <Badge tone="neutral">{t('fleet.common.no')}</Badge>),
     },
   ]
 
   return (
     <div>
-      <Breadcrumbs items={[{ label: 'Voertuigen' }]} />
+      <Breadcrumbs items={[{ label: t('navigation.menu.vehicles') }]} />
       <PageHeader
-        title="Voertuigen"
-        action={hasPermission('vehicles.create') ? <Button onClick={() => navigate('/vehicles/new')}>Nieuw voertuig</Button> : undefined}
+        title={t('navigation.menu.vehicles')}
+        action={hasPermission('vehicles.create') ? <Button onClick={() => navigate('/vehicles/new')}>{t('vehicles.list.new')}</Button> : undefined}
       />
       <FilterBar
         search={search}
@@ -58,7 +60,7 @@ export function VehiclesPage() {
           setSearch(value)
           setPage(1)
         }}
-        searchPlaceholder="Zoeken op nummer, kenteken, merk of model..."
+        searchPlaceholder={t('fleet.list.searchPlaceholder')}
         activeFilter={activeFilter}
         onActiveFilterChange={(value) => {
           setActiveFilter(value)
@@ -71,8 +73,8 @@ export function VehiclesPage() {
         rowKey={(row) => row.id}
         isLoading={isLoading}
         error={error}
-        emptyMessage="Nog geen voertuigen."
-        loadingMessage="Voertuigen laden..."
+        emptyMessage={t('vehicles.list.empty')}
+        loadingMessage={t('vehicles.list.loading')}
         onRowClick={(row) => navigate(`/vehicles/${row.id}`)}
       />
       <Pagination page={page} pageSize={pageSize} totalCount={totalCount} onPageChange={setPage} />

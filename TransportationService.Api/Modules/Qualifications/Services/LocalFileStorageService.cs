@@ -1,17 +1,37 @@
+using TransportationService.Api.Modules.Security;
+
 namespace TransportationService.Api.Modules.Qualifications.Services;
 
 public class LocalFileStorageService : IFileStorageService
 {
     private readonly string _rootPath;
+    private readonly IUploadScanner? _scanner;
 
-    public LocalFileStorageService(string rootPath)
+    public LocalFileStorageService(string rootPath, IUploadScanner? scanner = null)
     {
         _rootPath = rootPath;
+        _scanner = scanner;
         Directory.CreateDirectory(_rootPath);
     }
 
     public async Task<string> SaveAsync(Guid tenantId, string category, string fileName, Stream content, CancellationToken cancellationToken)
     {
+        // L10: the storage layer is the chokepoint every upload passes through, so the malware
+        // scan lives here — an infected file is refused before a single byte hits disk.
+        if (_scanner is not null)
+        {
+            var scan = await _scanner.ScanAsync(fileName, content, cancellationToken);
+            if (scan.Verdict == UploadScanVerdict.Infected)
+            {
+                throw new InfectedUploadException(fileName, scan.Detail);
+            }
+
+            if (content.CanSeek)
+            {
+                content.Position = 0;
+            }
+        }
+
         var sanitizedFileName = SanitizeFileName(fileName);
         var storageKey = $"tenant-{tenantId}/{SanitizeSegment(category)}/{Guid.NewGuid()}-{sanitizedFileName}";
         var fullPath = ResolveFullPath(storageKey);
@@ -43,8 +63,11 @@ public class LocalFileStorageService : IFileStorageService
         if (normalized.Contains("..")) throw new ArgumentException("Invalid storage key.", nameof(storageKey));
 
         var fullPath = Path.GetFullPath(Path.Combine(_rootPath, normalized));
-        var rootFullPath = Path.GetFullPath(_rootPath);
-        if (!fullPath.StartsWith(rootFullPath, StringComparison.OrdinalIgnoreCase))
+        // Compare with a trailing separator (L4): a bare StartsWith would accept a SIBLING
+        // directory whose name merely starts with the root ("C:\data" matching "C:\database").
+        var rootWithSeparator = Path.GetFullPath(_rootPath)
+            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        if (!fullPath.StartsWith(rootWithSeparator, StringComparison.OrdinalIgnoreCase))
         {
             throw new ArgumentException("Storage key escapes the storage root.", nameof(storageKey));
         }

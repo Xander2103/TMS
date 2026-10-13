@@ -11,6 +11,26 @@ public record RecentOrderDto(
     TransportOrderStatus Status,
     string GoodsDescription);
 
+/// <summary>One personnel note pinned to the dashboard — only ever populated for callers
+/// holding employee_notes.view (see DashboardService.GetAsync).</summary>
+public record PinnedEmployeeNoteDto(
+    Guid NoteId,
+    Guid EmployeeId,
+    string EmployeeName,
+    string Excerpt,
+    DateTime PinnedAt,
+    string? AuthorName);
+
+/// <summary>Inventory tiles; null when the caller lacks inventory.view (frontend hides them).</summary>
+public record InventoryDashboardSectionDto(
+    int LowStock, int CriticalStock, int OutOfStock, int NegativeStock,
+    int OpenReorderProposals, int OverdueReturns);
+
+/// <summary>Task tiles: personal counters always, team counters only with tasks.view_team/all.</summary>
+public record TaskDashboardSectionDto(
+    int MyOpen, int MyDueToday, int MyOverdue, int MyToAcknowledge,
+    int? TeamOpen, int? TeamOverdue, int? TeamBlocked, int? TeamWaitingReview);
+
 /// <summary>One-call aggregate for the company dashboard; heavier module views have their own endpoints.</summary>
 public record DashboardDto(
     int OrdersOpenCount,
@@ -30,5 +50,13 @@ public record DashboardDto(
     int OpenDamageCount,
     int QualificationsExpiring30d,
     int QualificationsExpired,
+    int OpenIncidentCount,
+    int MissingPodCount,
+    int FailedScanCount,
+    int OverdueMaintenanceCount,
     IReadOnlyList<RecentOrderDto> RecentOrders,
-    IReadOnlyList<TripListItemDto> TripsToday);
+    IReadOnlyList<TripListItemDto> TripsToday,
+    IReadOnlyList<PinnedEmployeeNoteDto> PinnedEmployeeNotes,
+    InventoryDashboardSectionDto? Inventory = null,
+    TaskDashboardSectionDto? Tasks = null,
+    int UnreadInternalMessages = 0);

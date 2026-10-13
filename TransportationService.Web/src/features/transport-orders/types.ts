@@ -1,20 +1,28 @@
-export type TransportOrderStatus = 'Draft' | 'Confirmed' | 'Planned' | 'InProgress' | 'Completed' | 'Invoiced' | 'Cancelled'
-export type StopType = 'Loading' | 'Unloading'
+import type { PackageUnitType } from '../packages/types'
 
+export type TransportOrderStatus = 'Draft' | 'Submitted' | 'Confirmed' | 'Planned' | 'InProgress' | 'Completed' | 'Invoiced' | 'Cancelled'
+/** 'Site' (D2) = the one work-site stop of an on-site lifting job; it has no loading/unloading counterpart. */
+export type StopType = 'Loading' | 'Unloading' | 'Site'
+/** D2: kind of crane job. OnSiteLifting = hijswerk op locatie (one site stop, no goods, no load/unload stops). */
+export type CraneJobKind = 'None' | 'TransportWithCrane' | 'OnSiteLifting'
+
+/** Vertaalsleutels per status — renderen als t(ORDER_STATUS_LABELS[status]). */
 export const ORDER_STATUS_LABELS: Record<TransportOrderStatus, string> = {
-  Draft: 'Concept',
-  Confirmed: 'Bevestigd',
-  Planned: 'Gepland',
-  InProgress: 'In uitvoering',
-  Completed: 'Afgerond',
-  Invoiced: 'Gefactureerd',
-  Cancelled: 'Geannuleerd',
+  Draft: 'transportOrders.status.Draft',
+  Submitted: 'transportOrders.status.Submitted',
+  Confirmed: 'transportOrders.status.Confirmed',
+  Planned: 'transportOrders.status.Planned',
+  InProgress: 'transportOrders.status.InProgress',
+  Completed: 'transportOrders.status.Completed',
+  Invoiced: 'transportOrders.status.Invoiced',
+  Cancelled: 'transportOrders.status.Cancelled',
 }
 
-export const ORDER_STATUSES: TransportOrderStatus[] = ['Draft', 'Confirmed', 'Planned', 'InProgress', 'Completed', 'Invoiced', 'Cancelled']
+export const ORDER_STATUSES: TransportOrderStatus[] = ['Draft', 'Submitted', 'Confirmed', 'Planned', 'InProgress', 'Completed', 'Invoiced', 'Cancelled']
 
 export const ORDER_STATUS_TONE: Record<TransportOrderStatus, 'neutral' | 'success' | 'warning' | 'danger' | 'info'> = {
   Draft: 'neutral',
+  Submitted: 'warning',
   Confirmed: 'info',
   Planned: 'info',
   InProgress: 'warning',
@@ -23,20 +31,42 @@ export const ORDER_STATUS_TONE: Record<TransportOrderStatus, 'neutral' | 'succes
   Cancelled: 'danger',
 }
 
-/** Action labels for the guarded transitions offered by the backend. */
+/** Action label KEYS for the guarded transitions offered by the backend — render via t(). */
 export const ORDER_TRANSITION_LABELS: Record<TransportOrderStatus, string> = {
-  Draft: 'Terug naar concept',
-  Confirmed: 'Bevestigen',
-  Planned: 'Plannen',
-  Invoiced: 'Factureren',
-  InProgress: 'Start uitvoering',
-  Completed: 'Afronden',
-  Cancelled: 'Annuleren',
+  Draft: 'transportOrders.transition.Draft',
+  Submitted: 'transportOrders.transition.Submitted',
+  Confirmed: 'transportOrders.transition.Confirmed',
+  Planned: 'transportOrders.transition.Planned',
+  Invoiced: 'transportOrders.transition.Invoiced',
+  InProgress: 'transportOrders.transition.InProgress',
+  Completed: 'transportOrders.transition.Completed',
+  Cancelled: 'transportOrders.transition.Cancelled',
 }
 
+/** Vertaalsleutels per stoptype — renderen als t(STOP_TYPE_LABELS[type]). */
 export const STOP_TYPE_LABELS: Record<StopType, string> = {
-  Loading: 'Laden',
-  Unloading: 'Lossen',
+  Loading: 'transportOrders.stopType.Loading',
+  Unloading: 'transportOrders.stopType.Unloading',
+  Site: 'stopEditor.stopType.Site',
+}
+
+export type OrderPriority = 'Low' | 'Normal' | 'High' | 'Urgent'
+
+export const ORDER_PRIORITIES: OrderPriority[] = ['Low', 'Normal', 'High', 'Urgent']
+
+/** Vertaalsleutels per prioriteit — renderen als t(ORDER_PRIORITY_LABELS[priority]). */
+export const ORDER_PRIORITY_LABELS: Record<OrderPriority, string> = {
+  Low: 'transportOrders.priority.Low',
+  Normal: 'transportOrders.priority.Normal',
+  High: 'transportOrders.priority.High',
+  Urgent: 'transportOrders.priority.Urgent',
+}
+
+export const ORDER_PRIORITY_TONE: Record<OrderPriority, 'neutral' | 'info' | 'warning' | 'danger'> = {
+  Low: 'neutral',
+  Normal: 'neutral',
+  High: 'warning',
+  Urgent: 'danger',
 }
 
 export interface TransportOrderListItem {
@@ -47,12 +77,17 @@ export interface TransportOrderListItem {
   customerName: string
   customerReference: string | null
   status: TransportOrderStatus
-  goodsDescription: string
+  goodsDescription: string | null
   firstLoadingCity: string | null
   lastUnloadingCity: string | null
   stopCount: number
   adrRequired: boolean
   craneRequired: boolean
+  priority: OrderPriority
+  /** D2 (absent on older payloads = None). */
+  craneJobKind?: CraneJobKind
+  /** D2: city of the first site stop — the "route" of an on-site job, which has no loading/unloading cities. */
+  firstSiteCity?: string | null
 }
 
 export interface TransportOrderStop {
@@ -81,25 +116,104 @@ export interface TransportOrderStop {
   accessInstructions: string | null
   loadingInstructions: string | null
   unloadingInstructions: string | null
+  /** Wave 2026-08-04 §15: simple time requirement ("Leveren vóór 10:00"). */
+  timeRequirement?: StopTimeRequirementKind
+  /** "HH:mm:ss" wire format (TimeOnly). */
+  timeRequirementFrom?: string | null
+  timeRequirementTo?: string | null
+  /** Wave 2026-08-04 §18: stop-level included-minutes override (stop → order → contract). */
+  includedTimeMinutesOverride?: number | null
+  // --- Location snapshot (master-data wave 2026-08-05, Phase 7): frozen at order time ---
+  contactName?: string | null
+  contactPhone?: string | null
+  contactMobile?: string | null
+  contactEmail?: string | null
+  openingHoursSummary?: string | null
+  gate?: string | null
+  /** Sensitive: null unless the caller holds locations.view_sensitive. */
+  accessCode?: string | null
+  dock?: string | null
+  routeDescription?: string | null
+  defaultLoadingMinutes?: number | null
+  defaultUnloadingMinutes?: number | null
+  snapshotAt?: string | null
+  /** Advisory opening-hours warnings (live location hours vs planned times); never blocking. */
+  warnings?: string[] | null
+  /** D2 (site stops): true = the end was entered by hand and is never recomputed from start + duration. */
+  plannedToIsManual?: boolean
+  /** D3: the stop's address deviates from its address-book record — for this dossier only. */
+  addressOverridden?: boolean
 }
+
+/** Wave 2026-08-04 §15. */
+export type StopTimeRequirementKind = 'None' | 'Before' | 'After' | 'Window'
+
+/**
+ * D4: how a goods line is covered commercially — DERIVED by the backend, never computed here.
+ * SeparatelyPriced = linked to a sales line; Included = covered by the trip/activity price.
+ */
+export type CargoCommercialCoverage = 'SeparatelyPriced' | 'Included' | 'ToReview'
 
 export interface CargoItem {
   id: string
   sequence: number
-  description: string
+  description: string | null
   barcode: string | null
   expectedQuantity: number
   quantityUnit: string | null
+  quantityUnitCode: string | null
   notes: string | null
+  unitType: PackageUnitType | null
+  unitTypeLabel: string | null
+  totalWeightKg: number | null
+  weightPerUnitKg: number | null
+  lengthMeters: number | null
+  widthMeters: number | null
+  heightMeters: number | null
+  volumeM3: number | null
+  volumeIsManual: boolean
+  adrRequired: boolean
+  adrDetails: string | null
+  stackable: boolean
+  reference: string | null
+  loadingStopId: string | null
+  unloadingStopId: string | null
+  /** Optional per-line pallet count; a commercial detail, independent of scanable colli. */
+  palletCount: number | null
+  /** Absent on older payloads → unknown, nothing is rendered. */
+  commercialCoverage?: CargoCommercialCoverage | null
 }
 
 export interface CargoItemInput {
-  description: string
+  /** Matches an existing cargo line on update (id-preserving sync); omitted/unmatched = new line. */
+  id?: string | null
+  description: string | null
   barcode: string | null
   expectedQuantity: number
   quantityUnit: string | null
+  quantityUnitCode: string | null
   notes: string | null
+  unitType: PackageUnitType | null
+  unitTypeLabel: string | null
+  totalWeightKg: number | null
+  weightPerUnitKg: number | null
+  lengthMeters: number | null
+  widthMeters: number | null
+  heightMeters: number | null
+  volumeM3: number | null
+  volumeIsManual: boolean
+  adrRequired: boolean
+  adrDetails: string | null
+  stackable: boolean
+  reference: string | null
+  /** Index into the submitted stops list (stops get fresh ids on every save). */
+  loadingStopIndex: number | null
+  unloadingStopIndex: number | null
+  /** Optional per-line pallet count; a commercial detail, independent of scanable colli. */
+  palletCount?: number | null
 }
+
+export type OrderPricingSource = 'Contract' | 'OneOff'
 
 export interface TransportOrderDetail {
   id: string
@@ -109,21 +223,244 @@ export interface TransportOrderDetail {
   customerName: string
   customerReference: string | null
   status: TransportOrderStatus
-  goodsDescription: string
+  goodsDescription: string | null
   quantity: number | null
   quantityUnit: string | null
+  quantityUnitCode: string | null
   weightKg: number | null
   volumeM3: number | null
   palletCount: number | null
+  /** Wave 3 §1: geplande afstand in km (PerKm-tarieven en km-diensten). */
+  distanceKm?: number | null
+  /** Wave 3 §1: laadmeters (PerLdm-tarieven en ldm-staffelgrenzen). */
+  loadingMeters?: number | null
   adrRequired: boolean
   craneRequired: boolean
+  /** P6: uitrusting/beweging-prijsdimensies (naast ADR/kraan). */
+  plateauRequired?: boolean
+  moffettRequired?: boolean
+  isReturnMovement?: boolean
   agreedPrice: number | null
   notes: string | null
   cancellationReason: string | null
   stops: TransportOrderStop[]
   cargoItems: CargoItem[]
   allowedTransitions: TransportOrderStatus[]
+  allowedCorrections: TransportOrderStatus[]
   canCancel: boolean
+  priority: OrderPriority
+  /** Facturerende entiteit voor deze opdracht; null = klantstandaard. */
+  legalEntityId: string | null
+  /** Afwijkend dieseltoeslagpercentage voor deze opdracht (los van de klantconfiguratie). */
+  dieselSurchargeOverride: boolean
+  dieselSurchargePercentOverride: number | null
+  dieselSurchargeOverrideReason: string | null
+  /** Engine result at last save; null when nothing could be calculated. */
+  calculatedPrice: number | null
+  priceIsManual: boolean
+  priceOverrideReason: string | null
+  pricingLines: OrderPricingLine[] | null
+  serviceLines: OrderServiceLine[] | null
+  pricingSnapshot: OrderPricingSnapshot | null
+  /** Contract (default) or OneOff (Phase 6): this order carries its own price agreement. */
+  pricingSource: OrderPricingSource
+  oneOffFixedAmount: number | null
+  oneOffIncludedLoadingMinutes: number | null
+  oneOffIncludedUnloadingMinutes: number | null
+  oneOffIncludedCombinedMinutes: number | null
+  oneOffExtraHourlyRate: number | null
+  oneOffNotes: string | null
+  /** CalculatedPrice + proposed (unconfirmed) extra-time charges; null when nothing could be calculated. */
+  totalWithProposed: number | null
+  /** Task 11: order-level overrides of the engaged contract agreement's included time/rate (contract mode only). */
+  includedLoadingMinutesOverride: number | null
+  includedUnloadingMinutesOverride: number | null
+  extraTimeHourlyRateOverride: number | null
+  extraTimeRoundingStepMinutes: number | null
+  extraTimeMinimumBillableMinutes: number | null
+  /** Wave 1 §10: concurrency token; echoed on update — a mismatch yields 409 with the current state. */
+  version: string
+  /** Containing dossier (wrapper or user-created); the detail header links to it. */
+  dossierId?: string | null
+  dossierNumber?: string | null
+  // --- D2: crane job (absent on older payloads = None) ---
+  craneJobKind?: CraneJobKind
+  /** What has to be done on site; mandatory for OnSiteLifting. */
+  workDescription?: string | null
+  /** Lift data: the load to LIFT — never a goods line. */
+  liftLoadWeightKg?: number | null
+  liftLoadDimensions?: string | null
+  liftRadiusMeters?: number | null
+  liftHeightMeters?: number | null
+  liftConditions?: string | null
+  liftEquipment?: string | null
+  /** Read-only: planned duration of the linked dossier activity (drives the site stop's automatic end). */
+  activityDurationHours?: number | null
+  /** Read-only: the linked activity's type allows on-site work (the crane-job choice is offered). */
+  activitySupportsOnSiteWork?: boolean
+}
+
+/** Manual-editing lifecycle of a pricing line (spec ch. 24-26). */
+export type OrderPriceLineKind = 'Auto' | 'AutoAdjusted' | 'Manual' | 'Proposed'
+
+/** Vertaalsleutels per lijnsoort — renderen als t(ORDER_PRICE_LINE_KIND_LABELS[kind]). */
+export const ORDER_PRICE_LINE_KIND_LABELS: Record<OrderPriceLineKind, string> = {
+  Auto: 'transportOrders.lineKind.Auto',
+  AutoAdjusted: 'transportOrders.lineKind.AutoAdjusted',
+  Manual: 'transportOrders.lineKind.Manual',
+  Proposed: 'transportOrders.lineKind.Proposed',
+}
+
+export const ORDER_PRICE_LINE_KIND_TONE: Record<OrderPriceLineKind, 'neutral' | 'warning' | 'info' | 'success' | 'danger'> = {
+  Auto: 'neutral',
+  AutoAdjusted: 'warning',
+  Manual: 'info',
+  Proposed: 'warning',
+}
+
+/** Draft → Reviewed → Locked → Invoiced (spec ch. 24-26); Invoiced is set only by invoicing. */
+export type OrderPricingStatus = 'Draft' | 'Reviewed' | 'Locked' | 'Invoiced'
+
+/**
+ * Wave 2026-08-04 §8: the visible workflow speaks in confirmation terms — the technical
+ * Draft/Reviewed/Locked lifecycle stays underneath but is never shown to normal users.
+ */
+export const ORDER_PRICING_STATUS_LABELS: Record<OrderPricingStatus, string> = {
+  Draft: 'transportOrders.pricingStatus.Draft',
+  Reviewed: 'transportOrders.pricingStatus.Reviewed',
+  Locked: 'transportOrders.pricingStatus.Locked',
+  Invoiced: 'transportOrders.pricingStatus.Invoiced',
+}
+
+export const ORDER_PRICING_STATUS_TONE: Record<OrderPricingStatus, 'neutral' | 'info' | 'warning' | 'success'> = {
+  Draft: 'warning',
+  Reviewed: 'warning',
+  Locked: 'success',
+  Invoiced: 'success',
+}
+
+/**
+ * Visible price status (wave 2026-08-04 §9): Bevestigd (green) / Gefactureerd / Onvolledig
+ * (red, unconfirmed with unpriced goods) / Nog te bevestigen (orange).
+ * `labelKey` is a translation key — render via t().
+ */
+export function priceStatusDisplay(
+  status: OrderPricingStatus | undefined,
+  hasUnpricedGoods: boolean,
+): { labelKey: string; tone: 'neutral' | 'warning' | 'success' | 'danger' } {
+  if (status === 'Invoiced') return { labelKey: 'transportOrders.priceStatus.invoiced', tone: 'success' }
+  if (status === 'Locked') return { labelKey: 'transportOrders.priceStatus.confirmed', tone: 'success' }
+  if (hasUnpricedGoods) return { labelKey: 'transportOrders.priceStatus.incomplete', tone: 'danger' }
+  return { labelKey: 'transportOrders.priceStatus.toConfirm', tone: 'warning' }
+}
+
+export interface OrderPricingLine {
+  /** Persisted line id; needed to target the confirm endpoint on a VOORSTEL line. */
+  id?: string | null
+  label: string
+  amount: number
+  source: string
+  informational: boolean
+  ruleName?: string | null
+  agreementName?: string | null
+  actualQuantity?: number | null
+  billableQuantity?: number | null
+  /** An unconfirmed extra-time charge (Phase 6): excluded from AgreedPrice, shown as a proposal ("VOORSTEL"). */
+  proposed?: boolean
+  kind: OrderPriceLineKind
+  quantity?: number | null
+  unitPrice?: number | null
+  originalQuantity?: number | null
+  originalUnitPrice?: number | null
+  originalAmount?: number | null
+  adjustReason?: string | null
+  /** Stable merge key ("rule:{id}", "service:{id}", "manual:{guid}", ...); null only for a brand-new free line. */
+  lineKey?: string | null
+  /** Managed unit code for quantity (e.g. "COLLI"), editable on manual lines (spec Task 5/6). */
+  unit?: string | null
+  /** Frozen identity of the service option, for merge-matching (see lineKey too). */
+  serviceOptionId?: string | null
+  /** D4: goods lines this sales line is linked to; null/absent = none (the whole trip/activity). */
+  cargoItemIds?: string[] | null
+}
+
+/** Badge KEY for a pricing line: an Auto line tied to a service option reads as DIENST rather than AUTO. */
+export function lineBadge(line: Pick<OrderPricingLine, 'kind' | 'serviceOptionId'>): string {
+  return line.kind === 'Auto' && line.serviceOptionId
+    ? 'transportOrders.lineKindService'
+    : ORDER_PRICE_LINE_KIND_LABELS[line.kind]
+}
+
+/** Pricing coverage of one commercial goods line/unit (wave 2026-08-04 §7). */
+export type PricingCoverageStatus = 'Full' | 'Partial' | 'None'
+
+export interface OrderPricingCoverage {
+  unitTypeId: string | null
+  unitLabel: string
+  quantity: number
+  status: PricingCoverageStatus
+  baseAmount: number
+  baseRuleName: string | null
+  servicesAmount: number
+  reason: string | null
+}
+
+/** Vertaalsleutels per dekkingsstatus — renderen als t(PRICING_COVERAGE_LABELS[status]). */
+export const PRICING_COVERAGE_LABELS: Record<PricingCoverageStatus, string> = {
+  Full: 'transportOrders.coverage.Full',
+  Partial: 'transportOrders.coverage.Partial',
+  None: 'transportOrders.coverage.None',
+}
+
+export const PRICING_COVERAGE_TONE: Record<PricingCoverageStatus, 'success' | 'warning' | 'danger'> = {
+  Full: 'success',
+  Partial: 'warning',
+  None: 'danger',
+}
+
+/** Frozen header of the order's pricing snapshot (spec ch. 21, extended ch. 24-26). */
+export interface OrderPricingSnapshot {
+  tariffDate: string
+  currency: string
+  zoneCode: string | null
+  zoneName: string | null
+  agreementNames: string | null
+  unitSummary: string | null
+  calculatedTotal: number | null
+  overrideAmount: number | null
+  overrideReason: string | null
+  overriddenByUserId: string | null
+  overriddenAtUtc: string | null
+  explanation: string | null
+  status: OrderPricingStatus
+  linesTotal: number | null
+  /** Wave 2026-08-04 §7: per-goods-line pricing coverage frozen with the calculation. */
+  coverage?: OrderPricingCoverage[] | null
+  /** Wave 2026-08-04 §8: confirmation metadata ("Bevestigd op … door …"). */
+  confirmedAtUtc?: string | null
+  confirmedByUserId?: string | null
+  confirmedByName?: string | null
+  /** Non-null: confirmed despite unpriced goods — keep a visible warning attached. */
+  confirmedWithUnpricedGoodsReason?: string | null
+  /** Wave 2 §5: typed coverage projection (Full | Partial | None | NotApplicable). */
+  coverageStatus?: string | null
+  /** Wave 2 §5: pricing inputs changed without a recalculation — "Prijs verouderd". */
+  isStale?: boolean
+}
+
+export interface OrderServiceLine {
+  serviceOptionId: string | null
+  name: string
+  kind: 'Percent' | 'Fixed' | 'PerHour' | 'PerStop' | 'PerUnit' | 'PerOrderLine' | 'PerKg' | 'PerM3' | 'PerLdm' | 'PerDay' | 'PerPalletDay' | 'PerKm'
+  value: number
+  amount: number
+  quantity?: number | null
+  /** Per-pallet-day input: quantity = palletCount × dayCount unless manually corrected. */
+  palletCount?: number | null
+  /** Per-day / per-pallet-day input: number of days. */
+  dayCount?: number | null
+  /** Optional free-text note the user attached to a manually selected service. */
+  note?: string | null
 }
 
 export interface StopInput {
@@ -149,6 +486,25 @@ export interface StopInput {
   accessInstructions: string | null
   loadingInstructions: string | null
   unloadingInstructions: string | null
+  /** Wave 2026-08-04 §15: simple time requirement; "HH:mm" times. */
+  timeRequirement?: StopTimeRequirementKind
+  timeRequirementFrom?: string | null
+  timeRequirementTo?: string | null
+  /** Wave 2026-08-04 §18: stop-level included-minutes override (stop → order → contract). */
+  includedTimeMinutesOverride?: number | null
+  /**
+   * Existing stop id echoed on update (Phase 7): a matching id with an unchanged locationId
+   * carries the location snapshot over instead of re-copying live master data.
+   */
+  id?: string | null
+  /** True = deliberately re-copy the CURRENT master-location data onto this stop (audited). */
+  refreshSnapshot?: boolean
+  /** D2 (site stops only): true = plannedTo is the planner's own value; false = server sets start + duration. */
+  plannedToIsManual?: boolean
+  /** D3: the address fields deviate from the linked address-book record — kept for this dossier only. */
+  addressOverridden?: boolean
+  /** D3 (write-only): create/link this address in the customer's address book when the order is saved. */
+  saveToAddressBook?: boolean
 }
 
 /** Dispatcher-side execution planning of one stop (separate endpoint, editable after planning). */
@@ -168,16 +524,79 @@ export interface TransportOrderInput {
   customerId: string
   customerReference: string | null
   orderDate: string | null
-  goodsDescription: string
+  goodsDescription: string | null
   quantity: number | null
   quantityUnit: string | null
+  quantityUnitCode: string | null
   weightKg: number | null
   volumeM3: number | null
   palletCount: number | null
+  distanceKm?: number | null
+  loadingMeters?: number | null
   adrRequired: boolean
   craneRequired: boolean
+  /** P6: uitrusting/beweging-prijsdimensies; weggelaten = false op de server. */
+  plateauRequired?: boolean
+  moffettRequired?: boolean
+  isReturnMovement?: boolean
   agreedPrice: number | null
   notes: string | null
   stops: StopInput[]
   cargoItems: CargoItemInput[]
+  /** Omitted = Normal on create, unchanged on update. */
+  priority?: OrderPriority
+  /** Facturerende entiteit; null = klantstandaard. */
+  legalEntityId: string | null
+  dieselSurchargeOverride: boolean
+  dieselSurchargePercentOverride: number | null
+  dieselSurchargeOverrideReason: string | null
+  /** Selected delivery services/supplements; priced by the engine and snapshotted. */
+  serviceOptionIds?: string[]
+  /** Preferred over serviceOptionIds: selections incl. quantities (per-hour/per-stop/per-day/per-pallet-day services). */
+  services?: {
+    serviceOptionId: string
+    quantity: number | null
+    palletCount?: number | null
+    dayCount?: number | null
+    /** Optional free-text note the user attaches to a manually selected service. */
+    note?: string | null
+  }[]
+  /** Explicit authorized override of the calculated price (orders.override_price). */
+  priceIsManual?: boolean
+  priceOverrideReason?: string | null
+  /** Contract (default) or OneOff (Phase 6): this order carries its own price agreement. */
+  pricingSource?: OrderPricingSource
+  oneOffFixedAmount?: number | null
+  oneOffIncludedLoadingMinutes?: number | null
+  oneOffIncludedUnloadingMinutes?: number | null
+  oneOffIncludedCombinedMinutes?: number | null
+  oneOffExtraHourlyRate?: number | null
+  oneOffNotes?: string | null
+  /** Task 11: order-level overrides of the engaged contract agreement's included time/rate (contract mode only). */
+  includedLoadingMinutesOverride?: number | null
+  includedUnloadingMinutesOverride?: number | null
+  extraTimeHourlyRateOverride?: number | null
+  extraTimeRoundingStepMinutes?: number | null
+  extraTimeMinimumBillableMinutes?: number | null
+  /** Wave 1 §10: expected concurrency token on update; omitted on create (server skips the check). */
+  version?: string
+  /**
+   * One-page dossier intake (2026-09): the activity type of the auto-created wrapper dossier's
+   * activity (Distributie/Direct/Kraantransport). Create-only; null/omitted = system default.
+   */
+  activityTypeId?: string | null
+  /** One-page intake: DurationHours for the wrapper activity (AllowsDuration types only, >= 0). */
+  activityDurationHours?: number | null
+  /**
+   * D2: kind of crane job. OMITTED = unchanged on update / None on create — an editor that does
+   * not own these fields never sends them, so it can never wipe the description or lift data.
+   */
+  craneJobKind?: CraneJobKind
+  workDescription?: string | null
+  liftLoadWeightKg?: number | null
+  liftLoadDimensions?: string | null
+  liftRadiusMeters?: number | null
+  liftHeightMeters?: number | null
+  liftConditions?: string | null
+  liftEquipment?: string | null
 }

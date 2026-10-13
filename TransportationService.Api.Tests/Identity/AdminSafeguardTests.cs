@@ -29,7 +29,7 @@ public class AdminSafeguardTests
     {
         var (db, tenantId, _, userId) = await SeedSingleAdministratorAsync();
         using var _ = db;
-        var sut = new UserService(db.Context, new DevTenantContext(tenantId), new AuditService(db.Context, new DevTenantContext(tenantId), new DevCurrentUserContext(userId)), new TransportationService.Api.Modules.Authentication.Services.PasswordHasher());
+        var sut = IdentityTestFactory.UserService(db, tenantId, userId);
 
         var result = await sut.SetActiveAsync(userId, false, CancellationToken.None);
 
@@ -48,7 +48,7 @@ public class AdminSafeguardTests
         db.Context.UserRoles.Add(new UserRole { UserId = secondAdminId, RoleId = adminRoleId });
         await db.Context.SaveChangesAsync();
 
-        var sut = new UserService(db.Context, new DevTenantContext(tenantId), new AuditService(db.Context, new DevTenantContext(tenantId), new DevCurrentUserContext(userId)), new TransportationService.Api.Modules.Authentication.Services.PasswordHasher());
+        var sut = IdentityTestFactory.UserService(db, tenantId, userId);
 
         var result = await sut.SetActiveAsync(userId, false, CancellationToken.None);
 
@@ -60,7 +60,7 @@ public class AdminSafeguardTests
     {
         var (db, tenantId, _, userId) = await SeedSingleAdministratorAsync();
         using var _ = db;
-        var sut = new UserService(db.Context, new DevTenantContext(tenantId), new AuditService(db.Context, new DevTenantContext(tenantId), new DevCurrentUserContext(userId)), new TransportationService.Api.Modules.Authentication.Services.PasswordHasher());
+        var sut = IdentityTestFactory.UserService(db, tenantId, userId);
 
         var result = await sut.SetBlockedAsync(userId, true, CancellationToken.None);
 
@@ -68,19 +68,21 @@ public class AdminSafeguardTests
     }
 
     [Fact]
-    public async Task AssignRolesAsync_RejectsRemovingAdministratorRole_FromLastActiveAdministrator()
+    public async Task AssignRolesAsync_RejectsChangingOwnRoles_SelfGuard()
     {
+        // A user may never change their own role membership (self-escalation / self-demotion) —
+        // which also structurally protects the last administrator from self-demotion.
         var (db, tenantId, _, userId) = await SeedSingleAdministratorAsync();
         using var _ = db;
-        var sut = new UserService(db.Context, new DevTenantContext(tenantId), new AuditService(db.Context, new DevTenantContext(tenantId), new DevCurrentUserContext(userId)), new TransportationService.Api.Modules.Authentication.Services.PasswordHasher());
+        var sut = IdentityTestFactory.UserService(db, tenantId, actorUserId: userId);
 
         var result = await sut.AssignRolesAsync(userId, new AssignRolesRequest([]), CancellationToken.None);
 
-        Assert.Equal(UserOperationOutcome.LastActiveAdministrator, result.Outcome);
+        Assert.Equal(UserOperationOutcome.Forbidden, result.Outcome);
     }
 
     [Fact]
-    public async Task AssignRolesAsync_AllowsRemovingAdministratorRole_WhenAnotherActiveAdministratorExists()
+    public async Task AssignRolesAsync_AllowsAnotherAdministratorToRemoveAdminRole_WhenAnotherActiveAdministratorExists()
     {
         var (db, tenantId, adminRoleId, userId) = await SeedSingleAdministratorAsync();
         using var _ = db;
@@ -89,7 +91,9 @@ public class AdminSafeguardTests
         db.Context.UserRoles.Add(new UserRole { UserId = secondAdminId, RoleId = adminRoleId });
         await db.Context.SaveChangesAsync();
 
-        var sut = new UserService(db.Context, new DevTenantContext(tenantId), new AuditService(db.Context, new DevTenantContext(tenantId), new DevCurrentUserContext(userId)), new TransportationService.Api.Modules.Authentication.Services.PasswordHasher());
+        // The acting administrator (secondAdminId) removes the OTHER administrator's role; another
+        // active administrator remains, so the last-administrator guard does not trip.
+        var sut = IdentityTestFactory.UserService(db, tenantId, actorUserId: secondAdminId);
 
         var result = await sut.AssignRolesAsync(userId, new AssignRolesRequest([]), CancellationToken.None);
 

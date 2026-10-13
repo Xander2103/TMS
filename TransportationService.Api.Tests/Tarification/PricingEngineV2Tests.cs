@@ -1,0 +1,476 @@
+using TransportationService.Api.Modules.Auditing.Services;
+using TransportationService.Api.Modules.Identity.Services;
+using TransportationService.Api.Modules.Partners.Entities;
+using TransportationService.Api.Modules.Reference.Entities;
+using TransportationService.Api.Modules.Tarification.Dtos;
+using TransportationService.Api.Modules.Tarification.Entities;
+using TransportationService.Api.Modules.Tarification.Services;
+using TransportationService.Api.Modules.Tenancy.Entities;
+using TransportationService.Api.Modules.Tenancy.Services;
+using TransportationService.Api.Tests.TestSupport;
+
+namespace TransportationService.Api.Tests.Tarification;
+
+/// <summary>
+/// Coherent pricing architecture: deterministic precedence with explicit priority and
+/// blocking ambiguity, billable quantity, agreements (minimum/surcharges/components),
+/// order-measure bases and no-tariff diagnostics.
+/// </summary>
+public class PricingEngineV2Tests
+{
+    private static readonly DateOnly Today = new(2026, 7, 25);
+
+    private sealed record Harness(
+        SqliteTestDbContext Db, PricingEngine Engine, PricingAdminService Admin,
+        Guid TenantId, Guid CustomerAId, Guid CustomerBId, Guid PalletUnitId);
+
+    private static async Task<Harness> SeedAsync()
+    {
+        var db = new SqliteTestDbContext();
+        var tenantId = Guid.NewGuid();
+        var customerAId = Guid.NewGuid();
+        var customerBId = Guid.NewGuid();
+        var palletUnitId = Guid.NewGuid();
+
+        db.Context.Tenants.Add(new Tenant { Id = tenantId, Name = "Acme", Slug = "acme", IsActive = true, CreatedAt = DateTime.UtcNow });
+        db.Context.Customers.Add(new Customer { Id = customerAId, TenantId = tenantId, Name = "Klant A", CustomerNumber = "KL-A", IsActive = true });
+        db.Context.Customers.Add(new Customer { Id = customerBId, TenantId = tenantId, Name = "Klant B", CustomerNumber = "KL-B", IsActive = true });
+        db.Context.UnitTypes.Add(new UnitType { Id = palletUnitId, TenantId = tenantId, Code = "EUROPALLET", Name = "Europallet", IsActive = true });
+        await db.Context.SaveChangesAsync();
+
+        var tenant = new DevTenantContext(tenantId);
+        var audit = new AuditService(db.Context, tenant, new DevCurrentUserContext(null));
+        var admin = new PricingAdminService(db.Context, tenant, audit);
+        var engine = new PricingEngine(db.Context, tenant);
+        return new Harness(db, engine, admin, tenantId, customerAId, customerBId, palletUnitId);
+    }
+
+    private static PriceCalculationRequest Request(
+        Harness h, decimal quantity, Guid? customerId = null,
+        IReadOnlyList<PriceCalculationLineDetail>? details = null,
+        decimal? weightKg = null, decimal? distanceKm = null, int? palletCount = null,
+        DateOnly? date = null) =>
+        new(customerId ?? h.CustomerAId, date ?? Today,
+            [new PriceCalculationLineInput(h.PalletUnitId, quantity, details)],
+            "BE", null, weightKg, distanceKm, palletCount, []);
+
+    private static SavePriceRuleRequest PerUnitRule(
+        Harness h, Guid? customerId, decimal unitPrice, decimal? minimum = null,
+        string name = "Pallets", int priority = 0,
+        DateOnly? from = null, DateOnly? until = null,
+        decimal? oversizeLengthCm = null, decimal? oversizeWidthCm = null, decimal? oversizeFactor = null,
+        Guid? agreementId = null, decimal? baseAmount = null) =>
+        new(customerId, h.PalletUnitId, PriceRuleBasis.PerUnit, null,
+            name, from ?? Today.AddMonths(-1), until, true, unitPrice, minimum, null,
+            AgreementId: agreementId, Priority: priority, BaseAmount: baseAmount,
+            OversizeLengthCm: oversizeLengthCm, OversizeWidthCm: oversizeWidthCm, OversizeBillableFactor: oversizeFactor);
+
+    [Fact]
+    public async Task PerUnit_WithMinimum_PricesSpecExample()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        // €22 per pallet, minimum €60 (spec §7.2).
+        await h.Admin.CreateRuleAsync(PerUnitRule(h, h.CustomerAId, 22m, minimum: 60m), CancellationToken.None);
+
+        Assert.Equal(88m, (await h.Engine.CalculateAsync(Request(h, 4), CancellationToken.None)).Total);
+        Assert.Equal(60m, (await h.Engine.CalculateAsync(Request(h, 2), CancellationToken.None)).Total);
+    }
+
+    [Fact]
+    public async Task CustomersGetDifferentPrices_ForIdenticalShipment()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        await h.Admin.CreateRuleAsync(PerUnitRule(h, h.CustomerAId, 30m, name: "Pallets A"), CancellationToken.None);
+        await h.Admin.CreateRuleAsync(PerUnitRule(h, h.CustomerBId, 35m, name: "Pallets B"), CancellationToken.None);
+        await h.Admin.CreateRuleAsync(PerUnitRule(h, null, 40m, name: "Standaard"), CancellationToken.None);
+
+        Assert.Equal(90m, (await h.Engine.CalculateAsync(Request(h, 3, h.CustomerAId), CancellationToken.None)).Total);
+        Assert.Equal(105m, (await h.Engine.CalculateAsync(Request(h, 3, h.CustomerBId), CancellationToken.None)).Total);
+    }
+
+    [Fact]
+    public async Task Priority_BreaksSpecificityTies()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        await h.Admin.CreateRuleAsync(PerUnitRule(h, h.CustomerAId, 30m, name: "Laag", priority: 0), CancellationToken.None);
+        await h.Admin.CreateRuleAsync(PerUnitRule(h, h.CustomerAId, 25m, name: "Hoog", priority: 10), CancellationToken.None);
+
+        var result = await h.Engine.CalculateAsync(Request(h, 2), CancellationToken.None);
+        Assert.Equal(50m, result.Total);
+        Assert.Contains(result.Lines, l => l.RuleName == "Hoog");
+        Assert.Null(result.ConfigurationError);
+    }
+
+    [Fact]
+    public async Task ExactTie_IsABlockingConfigurationError_NamingBothRules()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        await h.Admin.CreateRuleAsync(PerUnitRule(h, h.CustomerAId, 30m, name: "Regel X"), CancellationToken.None);
+        await h.Admin.CreateRuleAsync(PerUnitRule(h, h.CustomerAId, 25m, name: "Regel Y"), CancellationToken.None);
+
+        var result = await h.Engine.CalculateAsync(Request(h, 2), CancellationToken.None);
+
+        Assert.True(result.RequiresManualPrice);
+        Assert.NotNull(result.ConfigurationError);
+        Assert.Contains("Regel X", result.ConfigurationError);
+        Assert.Contains("Regel Y", result.ConfigurationError);
+        Assert.Equal(0m, result.Total);
+    }
+
+    [Fact]
+    public async Task Oversize_OneActualPallet_BillsTwoPalletPlaces()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        // Contract: above 125×85 a pallet counts as two pallet places.
+        await h.Admin.CreateRuleAsync(PerUnitRule(h, h.CustomerAId, 45m,
+            oversizeLengthCm: 125m, oversizeWidthCm: 85m, oversizeFactor: 2m), CancellationToken.None);
+
+        var result = await h.Engine.CalculateAsync(Request(h, 1,
+            details: [new PriceCalculationLineDetail(1, 160m, 120m)]), CancellationToken.None);
+
+        var line = Assert.Single(result.Lines, l => l.RuleName is not null);
+        Assert.Equal(1m, line.ActualQuantity);       // the physical order still has ONE pallet
+        Assert.Equal(2m, line.BillableQuantity);     // the commercial calculation uses two places
+        Assert.Equal(90m, result.Total);
+
+        // A normal pallet keeps billing 1:1.
+        var normal = await h.Engine.CalculateAsync(Request(h, 1,
+            details: [new PriceCalculationLineDetail(1, 120m, 80m)]), CancellationToken.None);
+        Assert.Equal(45m, normal.Total);
+    }
+
+    [Fact]
+    public async Task Agreement_ComponentModel_MinimumAndSurcharges()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var agreement = await h.Admin.CreateAgreementAsync(new SavePricingAgreementRequest(
+            h.CustomerAId, "Distributie 2026", Today.AddMonths(-1), null, true, 200m, null,
+            [new SavePricingAgreementSurchargeRequest("Duurtoeslag", SurchargeKind.Percent, 10m)]), CancellationToken.None);
+        await h.Admin.CreateRuleAsync(PerUnitRule(h, h.CustomerAId, 22m, agreementId: agreement.Id), CancellationToken.None);
+
+        var result = await h.Engine.CalculateAsync(Request(h, 3), CancellationToken.None);
+
+        // 3 × 22 = 66 → minimum 200 → +10% = 220.
+        Assert.Contains(result.Lines, l => l.Label.StartsWith("Minimumtarief") && l.Amount == 134m);
+        Assert.Contains(result.Lines, l => l.Label == "Duurtoeslag" && l.Amount == 20m);
+        Assert.Equal(220m, result.Total);
+        Assert.Contains(result.Lines, l => l.AgreementName == "Distributie 2026");
+    }
+
+    [Fact]
+    public async Task Agreement_ComponentModel_OrderLevelRuleFiresAlongsideMatchedUnitLine()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        // Doc §3 step 2(a): a shared table carrying BOTH a per-unit rule (matched by the pallet
+        // line) AND an order-level PerKm rule — once the unit rule engages this agreement, the
+        // km rule fires TOO, as its own line alongside the matched unit line (never only when no
+        // unit rule matched — that is the separate fallback branch, step 2(b)).
+        var agreement = await h.Admin.CreateAgreementAsync(new SavePricingAgreementRequest(
+            null, "Colli + km", Today.AddMonths(-1), null, true, null, null, null,
+            IsShared: true), CancellationToken.None);
+        await h.Admin.CreateRuleAsync(PerUnitRule(h, null, 22m, agreementId: agreement.Id), CancellationToken.None);
+        await h.Admin.CreateRuleAsync(new SavePriceRuleRequest(
+            null, null, PriceRuleBasis.PerKm, null, "Kilometertarief",
+            Today.AddMonths(-1), null, true, 1.2m, null, null,
+            AgreementId: agreement.Id, BaseAmount: 25m), CancellationToken.None);
+        // Only customer A is assigned to the shared table — customer B has no access at all.
+        await h.Admin.SaveAssignmentsAsync(agreement.Id,
+            [new SavePricingAssignmentRequest(h.CustomerAId, null, null, null, null, null)], CancellationToken.None);
+
+        var result = await h.Engine.CalculateAsync(Request(h, 3, h.CustomerAId, distanceKm: 100m), CancellationToken.None);
+
+        // Unit line: 3 × 22 = 66. Km component: 25 + 1.2 × 100 = 145. Both fire → total 211.
+        Assert.False(result.RequiresManualPrice);
+        Assert.Contains(result.Lines, l => l.RuleName == "Pallets" && l.Amount == 66m);
+        Assert.Contains(result.Lines, l => l.Label.StartsWith("Kilometertarief") && l.Amount == 145m);
+        Assert.Equal(211m, result.Total);
+
+        // Customer B has no assignment to this shared table: the agreement is never "engaged" for
+        // them, so neither the unit rule nor its order-level km component ever fire.
+        var resultB = await h.Engine.CalculateAsync(Request(h, 3, h.CustomerBId, distanceKm: 100m), CancellationToken.None);
+        Assert.True(resultB.RequiresManualPrice);
+        Assert.DoesNotContain(resultB.Lines, l => l.Label.StartsWith("Kilometertarief"));
+        Assert.Equal(0m, resultB.Total);
+    }
+
+    [Fact]
+    public async Task ConvertedRateCardShape_PricesFromOrderMeasures()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        // The shape a converted legacy rate card takes: agreement + order-level components.
+        var agreement = await h.Admin.CreateAgreementAsync(new SavePricingAgreementRequest(
+            h.CustomerAId, "Tarievenkaart 2026", Today.AddMonths(-1), null, true, null, null, null), CancellationToken.None);
+        await h.Admin.CreateRuleAsync(new SavePriceRuleRequest(
+            h.CustomerAId, null, PriceRuleBasis.Fixed, null, "Basisbedrag",
+            Today.AddMonths(-1), null, true, 50m, null, null, AgreementId: agreement.Id), CancellationToken.None);
+        await h.Admin.CreateRuleAsync(new SavePriceRuleRequest(
+            h.CustomerAId, null, PriceRuleBasis.PerPallet, null, "Palletprijs",
+            Today.AddMonths(-1), null, true, 8m, null, null, AgreementId: agreement.Id), CancellationToken.None);
+        await h.Admin.CreateRuleAsync(new SavePriceRuleRequest(
+            h.CustomerAId, null, PriceRuleBasis.PerTon, null, "Tonprijs",
+            Today.AddMonths(-1), null, true, 12m, null, null, AgreementId: agreement.Id), CancellationToken.None);
+
+        // No unit rules exist → the agreement's order-level components price the order.
+        var result = await h.Engine.CalculateAsync(
+            Request(h, 3, weightKg: 1500m, palletCount: 3), CancellationToken.None);
+
+        // 50 + 3×8 + 1.5×12 = 92.
+        Assert.Equal(92m, result.Total);
+        Assert.False(result.RequiresManualPrice);
+        Assert.Contains(result.Lines, l => l.Label == "Basisbedrag" && l.Amount == 50m);
+        Assert.Contains(result.Lines, l => l.Label.StartsWith("Palletprijs") && l.Amount == 24m);
+        Assert.Contains(result.Lines, l => l.Label.StartsWith("Tonprijs") && l.Amount == 18m);
+    }
+
+    [Fact]
+    public async Task StandalonePerKm_WithBaseAmount()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        await h.Admin.CreateRuleAsync(new SavePriceRuleRequest(
+            h.CustomerAId, null, PriceRuleBasis.PerKm, null, "Kilometertarief",
+            Today.AddMonths(-1), null, true, 1.2m, null, null, BaseAmount: 25m), CancellationToken.None);
+
+        var result = await h.Engine.CalculateAsync(Request(h, 3, distanceKm: 100m), CancellationToken.None);
+
+        // 25 + 100 × 1.2 = 145; the unmatched unit line is replaced by the order tariff.
+        Assert.Equal(145m, result.Total);
+        Assert.False(result.RequiresManualPrice);
+
+        // Without a known distance the rule is skipped with an explanation and pricing is manual.
+        var noDistance = await h.Engine.CalculateAsync(Request(h, 3), CancellationToken.None);
+        Assert.True(noDistance.RequiresManualPrice);
+        Assert.Contains(noDistance.Lines, l => l.Label.Contains("overgeslagen"));
+    }
+
+    [Fact]
+    public async Task VolumeAndLoadingMeterBases_PriceFromOrderMeasures()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        await h.Admin.CreateRuleAsync(new SavePriceRuleRequest(
+            h.CustomerAId, null, PriceRuleBasis.PerVolume, null, "Volumetarief",
+            Today.AddMonths(-1), null, true, 12.5m, null, null), CancellationToken.None);
+
+        var request = new PriceCalculationRequest(h.CustomerAId, Today,
+            [new PriceCalculationLineInput(h.PalletUnitId, 3)], "BE", null, null, null, null, [],
+            VolumeM3: 4.32m);
+        var result = await h.Engine.CalculateAsync(request, CancellationToken.None);
+
+        // 4.32 m³ × 12.50 = 54.
+        Assert.Equal(54m, result.Total);
+        Assert.Contains(result.Lines, l => l.Label.Contains("4,32 m³") || l.Label.Contains("4.32 m³"));
+    }
+
+    [Fact]
+    public async Task ProgressiveStopPricing_UsesBrackets()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        // 1e stop €65, 2e €105 cumulatief, volgende €30 per extra stop.
+        await h.Admin.CreateRuleAsync(new SavePriceRuleRequest(
+            h.CustomerAId, null, PriceRuleBasis.PerStop, null, "Stoptarief",
+            Today.AddMonths(-1), null, true, null, null,
+            [
+                new SavePriceRuleBracketRequest(1, 1, 65m, null),
+                new SavePriceRuleBracketRequest(2, null, 105m, 30m),
+            ]), CancellationToken.None);
+
+        var request = new PriceCalculationRequest(h.CustomerAId, Today,
+            [new PriceCalculationLineInput(h.PalletUnitId, 3)], "BE", null, null, null, null, [],
+            StopCount: 3);
+        var result = await h.Engine.CalculateAsync(request, CancellationToken.None);
+
+        // 105 + 1 × 30 = 135 for three stops.
+        Assert.Equal(135m, result.Total);
+        Assert.False(result.RequiresManualPrice);
+    }
+
+    [Fact]
+    public async Task Hourly_RoundsUpPerStartedInterval_AndAppliesMinimumDuration()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var hourUnitId = Guid.NewGuid();
+        h.Db.Context.UnitTypes.Add(new UnitType { Id = hourUnitId, TenantId = h.TenantId, Code = "UUR", Name = "Uur", IsActive = true });
+        await h.Db.Context.SaveChangesAsync();
+        // €72/uur, minimum 3 uur, afronden per begonnen kwartier (spec §13).
+        await h.Admin.CreateRuleAsync(new SavePriceRuleRequest(
+            h.CustomerAId, hourUnitId, PriceRuleBasis.Hourly, null, "Uurtarief",
+            Today.AddMonths(-1), null, true, 72m, null, null,
+            MinimumQuantity: 3m, QuantityRoundingStep: 0.25m), CancellationToken.None);
+
+        PriceCalculationRequest HourRequest(decimal hours) => new(h.CustomerAId, Today,
+            [new PriceCalculationLineInput(hourUnitId, hours)], "BE", null, null, null, null, []);
+
+        // 2u10 → rounds up to 2.25 → minimum 3 → 3 × 72.
+        Assert.Equal(216m, (await h.Engine.CalculateAsync(HourRequest(2.17m), CancellationToken.None)).Total);
+        // 3u40 → rounds up to 3.75 → 3.75 × 72 = 270.
+        Assert.Equal(270m, (await h.Engine.CalculateAsync(HourRequest(3.7m), CancellationToken.None)).Total);
+    }
+
+    [Fact]
+    public async Task StandaloneRules_NeverSumAcrossBases()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        // Two equally specific standalone order-level rules with DIFFERENT bases: the engine
+        // must refuse to sum them (spec §18) and flag the configuration instead.
+        await h.Admin.CreateRuleAsync(new SavePriceRuleRequest(
+            h.CustomerAId, null, PriceRuleBasis.PerKm, null, "Kilometertarief",
+            Today.AddMonths(-1), null, true, 1.2m, null, null), CancellationToken.None);
+        await h.Admin.CreateRuleAsync(new SavePriceRuleRequest(
+            h.CustomerAId, null, PriceRuleBasis.Fixed, null, "Forfait",
+            Today.AddMonths(-1), null, true, 350m, null, null), CancellationToken.None);
+
+        var result = await h.Engine.CalculateAsync(
+            Request(h, 3, distanceKm: 100m), CancellationToken.None);
+
+        Assert.True(result.RequiresManualPrice);
+        Assert.NotNull(result.ConfigurationError);
+        Assert.Contains("Kilometertarief", result.ConfigurationError);
+        Assert.Contains("Forfait", result.ConfigurationError);
+
+        // Priority resolves the choice deterministically — one basis, no sum.
+        var rules = await h.Admin.ListRulesAsync(h.CustomerAId, CancellationToken.None);
+        var forfait = rules.Single(r => r.Name == "Forfait");
+        await h.Admin.UpdateRuleAsync(forfait.Id, new SavePriceRuleRequest(
+            h.CustomerAId, null, PriceRuleBasis.Fixed, null, "Forfait",
+            Today.AddMonths(-1), null, true, 350m, null, null, Priority: 10), CancellationToken.None);
+
+        var resolved = await h.Engine.CalculateAsync(Request(h, 3, distanceKm: 100m), CancellationToken.None);
+        Assert.Equal(350m, resolved.Total);
+        Assert.Null(resolved.ConfigurationError);
+    }
+
+    [Fact]
+    public async Task EffectiveWindows_VersionPricesByTariffDate()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        // Version 1 until the end of September, version 2 (+4%) from 1 October (spec §12/15).
+        await h.Admin.CreateRuleAsync(PerUnitRule(h, h.CustomerAId, 30m, name: "Distributie 2026",
+            from: new DateOnly(2026, 1, 1), until: new DateOnly(2026, 9, 30)), CancellationToken.None);
+        await h.Admin.CreateRuleAsync(PerUnitRule(h, h.CustomerAId, 31.20m, name: "Distributie 2026 (+4%)",
+            from: new DateOnly(2026, 10, 1)), CancellationToken.None);
+
+        var before = await h.Engine.CalculateAsync(Request(h, 3, date: new DateOnly(2026, 9, 15)), CancellationToken.None);
+        var after = await h.Engine.CalculateAsync(Request(h, 3, date: new DateOnly(2026, 10, 15)), CancellationToken.None);
+
+        Assert.Equal(90m, before.Total);
+        Assert.Equal(93.60m, after.Total);
+        Assert.Contains(after.Lines, l => l.RuleName == "Distributie 2026 (+4%)");
+    }
+
+    [Fact]
+    public async Task NoTariff_NeverSilentZero_WithDiagnostics()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+
+        var result = await h.Engine.CalculateAsync(Request(h, 3, weightKg: 1350m), CancellationToken.None);
+
+        Assert.True(result.RequiresManualPrice);
+        Assert.Contains(result.Lines, l => l.Label == "Geen geldig tarief gevonden voor deze order.");
+        Assert.NotNull(result.Diagnostics);
+        Assert.Contains(result.Diagnostics!, d => d.StartsWith("Klant: Klant A"));
+        Assert.Contains(result.Diagnostics!, d => d.Contains("Tariefdatum"));
+        Assert.Contains(result.Diagnostics!, d => d.Contains("3 × Europallet"));
+        Assert.Contains(result.Diagnostics!, d => d.Contains("1350"));
+        Assert.Equal(Today, result.TariffDate);
+    }
+
+    // --- Phase 6: included-time extra-time proposal helper (static, unit-testable) -------------
+
+    [Fact]
+    public void ExtraTime_SeparateMode_ExactMinuteMath_AndRounding()
+    {
+        var lines = PricingEngine.ComputeExtraTimeLines(
+            includedLoadingMinutes: 30, includedUnloadingMinutes: null, includedCombinedMinutes: null,
+            extraHourlyRate: 75m, actualLoadingMinutes: 60m, actualUnloadingMinutes: null);
+
+        var line = Assert.Single(lines);
+        Assert.Equal("Extra laadtijd: 60 min (inbegrepen 30 min)", line.Label);
+        Assert.Equal(37.50m, line.Amount); // 30 min extra / 60 × 75
+        Assert.True(line.Proposed);
+        Assert.Equal("Extra tijd", line.Source);
+        Assert.False(line.Informational);
+    }
+
+    [Fact]
+    public void ExtraTime_SeparateMode_BothSides_EachProduceTheirOwnLine()
+    {
+        var lines = PricingEngine.ComputeExtraTimeLines(
+            includedLoadingMinutes: 20, includedUnloadingMinutes: 15, includedCombinedMinutes: null,
+            extraHourlyRate: 60m, actualLoadingMinutes: 50m, actualUnloadingMinutes: 45m);
+
+        Assert.Equal(2, lines.Count);
+        Assert.Contains(lines, l => l.Label == "Extra laadtijd: 50 min (inbegrepen 20 min)" && l.Amount == 30m); // 30/60×60
+        Assert.Contains(lines, l => l.Label == "Extra lostijd: 45 min (inbegrepen 15 min)" && l.Amount == 30m); // 30/60×60
+    }
+
+    [Fact]
+    public void ExtraTime_CombinedMode_SumsBothSides()
+    {
+        var lines = PricingEngine.ComputeExtraTimeLines(
+            includedLoadingMinutes: null, includedUnloadingMinutes: null, includedCombinedMinutes: 60,
+            extraHourlyRate: 75m, actualLoadingMinutes: 45m, actualUnloadingMinutes: 45m);
+
+        var line = Assert.Single(lines);
+        Assert.Equal("Extra laad-/lostijd: 90 min (inbegrepen 60 min)", line.Label);
+        Assert.Equal(37.50m, line.Amount);
+    }
+
+    [Fact]
+    public void ExtraTime_CombinedMode_WithBothActualsNull_ProducesNoLines()
+    {
+        var lines = PricingEngine.ComputeExtraTimeLines(
+            includedLoadingMinutes: null, includedUnloadingMinutes: null, includedCombinedMinutes: 60,
+            extraHourlyRate: 75m, actualLoadingMinutes: null, actualUnloadingMinutes: null);
+
+        Assert.Empty(lines);
+    }
+
+    [Fact]
+    public void ExtraTime_NegativeClamp_ActualBelowIncluded_ProducesNoLine()
+    {
+        var lines = PricingEngine.ComputeExtraTimeLines(
+            includedLoadingMinutes: 60, includedUnloadingMinutes: 60, includedCombinedMinutes: null,
+            extraHourlyRate: 75m, actualLoadingMinutes: 40m, actualUnloadingMinutes: 60m);
+
+        Assert.Empty(lines);
+    }
+
+    [Fact]
+    public void ExtraTime_NoRate_IsInformational_NeverCharged()
+    {
+        var lines = PricingEngine.ComputeExtraTimeLines(
+            includedLoadingMinutes: 30, includedUnloadingMinutes: null, includedCombinedMinutes: null,
+            extraHourlyRate: null, actualLoadingMinutes: 60m, actualUnloadingMinutes: null);
+
+        var line = Assert.Single(lines);
+        Assert.Equal("Extra tijd: geef het uurtarief voor extra tijd op", line.Label);
+        Assert.Equal(0m, line.Amount);
+        Assert.True(line.Informational);
+        Assert.False(line.Proposed);
+    }
+
+    [Fact]
+    public void ExtraTime_MissingActualOnOneSide_OnlyTheKnownSideIsEvaluated()
+    {
+        var lines = PricingEngine.ComputeExtraTimeLines(
+            includedLoadingMinutes: 10, includedUnloadingMinutes: 10, includedCombinedMinutes: null,
+            extraHourlyRate: 60m, actualLoadingMinutes: 40m, actualUnloadingMinutes: null);
+
+        var line = Assert.Single(lines);
+        Assert.Equal("Extra laadtijd: 40 min (inbegrepen 10 min)", line.Label);
+    }
+}

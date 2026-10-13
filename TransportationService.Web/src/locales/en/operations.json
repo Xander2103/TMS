@@ -1,0 +1,80 @@
+{
+  "locationSource": {
+    "LiveGps": "Live GPS",
+    "LastKnownGps": "Last known GPS",
+    "ScanLocation": "Scan location",
+    "StopLocation": "Last stop",
+    "PlannedLocation": "Planned stop",
+    "Unavailable": "No location"
+  },
+  "etaSource": {
+    "Heuristic": "estimate",
+    "Provider": "route provider",
+    "DispatcherOverride": "manual"
+  },
+  "etaStatus": {
+    "OnTime": "On time",
+    "AtRisk": "At risk",
+    "Late": "Late"
+  },
+  "alertSeverity": {
+    "Information": "Info",
+    "Warning": "Warning",
+    "Critical": "Critical"
+  },
+  "alertCategory": {
+    "Delay": "Delay",
+    "Pod": "Proof of delivery",
+    "Incident": "Incident",
+    "Exception": "Exception",
+    "Maintenance": "Maintenance",
+    "Inspection": "Inspection",
+    "Document": "Document"
+  },
+  "page": {
+    "title": "Operations centre",
+    "overviewLoadFailed": "Loading the overview failed.",
+    "loading": "Loading…",
+    "updatedAt": "Updated {time}",
+    "refreshEvery": "refreshes every 30 s",
+    "alertAcknowledged": "Alert acknowledged.",
+    "alertResolved": "Alert resolved.",
+    "actionFailed": "Action failed.",
+    "kpiActiveTrips": "Active trips",
+    "kpiDelayed": "Delayed",
+    "kpiOpenExceptions": "Open exceptions",
+    "kpiCriticalIncidents": "Critical incidents",
+    "kpiMissingPods": "POD missing",
+    "kpiOpenAlerts": "Open alerts",
+    "tripsLabel": "Active trips",
+    "tripsTitle": "Trips today & en route",
+    "colTrip": "Trip",
+    "colStatus": "Status",
+    "colDriverEquipment": "Driver / equipment",
+    "colProgress": "Progress",
+    "colCurrentStop": "Current stop",
+    "colNextStop": "Next stop",
+    "colEta": "ETA",
+    "colLastScan": "Last scan",
+    "colSignals": "Signals",
+    "stopsProgress": "{completed}/{total} stops",
+    "etaSourcePrefix": "source: {source}",
+    "noEta": "no ETA",
+    "exceptions_one": "1 exception",
+    "exceptions_other": "{count} exceptions",
+    "missingPod": "POD missing",
+    "noActiveTrips": "No active trips.",
+    "alertsLabel": "Alerts",
+    "alertsTitle": "Alerts",
+    "alertsFilterLabel": "Filter alerts",
+    "filterOpen": "Open",
+    "filterActive": "New",
+    "filterAcknowledged": "Acknowledged",
+    "filterResolved": "Resolved",
+    "acknowledgedBy": "Acknowledged by {name}",
+    "open": "Open",
+    "acknowledge": "Acknowledge",
+    "resolve": "Resolve",
+    "noAlerts": "No alerts."
+  }
+}

@@ -2,6 +2,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
   margin-bottom: 24px;
 }
 
@@ -20,8 +22,8 @@
   font-size: 15px;
   padding: 8px 16px;
   border-radius: 6px;
-  color: #fff;
-  background: var(--accent);
+  color: var(--color-on-primary);
+  background: var(--color-primary-solid);
   border: none;
   text-decoration: none;
   cursor: pointer;

@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using TransportationService.Api.Data;
 using TransportationService.Api.Modules.Identity;
+using TransportationService.Api.Modules.Identity.Services;
 using TransportationService.Api.Modules.Messaging.Entities;
 using TransportationService.Api.Modules.Notifications.Entities;
 using TransportationService.Api.Modules.Notifications.Services;
@@ -90,6 +91,7 @@ public class MessageDispatcher
                 message.Status = OutboxStatus.Sent;
                 message.SentAt = now;
                 message.FailureReason = null;
+                ScrubCredentialBody(message);
                 sent += 1;
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
@@ -98,6 +100,7 @@ public class MessageDispatcher
                 if (message.AttemptCount >= MaxAttempts)
                 {
                     message.Status = OutboxStatus.Failed;
+                    ScrubCredentialBody(message);
                     await HandlePermanentFailureAsync(message, cancellationToken);
                 }
                 else
@@ -116,13 +119,31 @@ public class MessageDispatcher
         return sent;
     }
 
+    /// <summary>Marker left in place of a scrubbed one-time-credential body.</summary>
+    public const string ScrubbedBodyMarker = "[inhoud met eenmalige link verwijderd na afhandeling]";
+
+    /// <summary>
+    /// C3 token-persistence hygiene: once delivery is decided, an activation/reset link has no
+    /// business staying in the database. The row itself remains as the audit trail of the send.
+    /// </summary>
+    private static void ScrubCredentialBody(OutboxMessage message)
+    {
+        if (MessageKinds.CarriesOneTimeCredential(message.Kind))
+        {
+            message.Body = ScrubbedBodyMarker;
+        }
+    }
+
     private async Task HandlePermanentFailureAsync(OutboxMessage message, CancellationToken cancellationToken)
     {
         // Alert the back office in-app. The dispatcher runs tenant-agnostic (no request scope),
         // so the rows are written directly for the message's own tenant; Critical bypasses
         // preferences by definition.
+        // H-14 (I-3): back office only — a customer-linked account holding a legacy orders.manage
+        // grant is not staff and must never be told that a customer mail failed.
         var holders = await (from ur in _dbContext.UserRoles.AsNoTracking()
                              join u in _dbContext.Users.AsNoTracking().Where(u => u.TenantId == message.TenantId && u.IsActive)
+                                 .Where(PortalPermissionScope.InternalIdentityOnly)
                                  on ur.UserId equals u.Id
                              join r in _dbContext.Roles.AsNoTracking().Where(r => r.TenantId == message.TenantId && r.IsActive)
                                  on ur.RoleId equals r.Id

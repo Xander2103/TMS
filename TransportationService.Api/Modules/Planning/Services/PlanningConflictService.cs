@@ -114,6 +114,25 @@ public class PlanningConflictService : IPlanningConflictService
                     conflicts.Add(new(PlanningConflictCode.VehicleDoubleBooked, true,
                         $"Voertuig {vehicle.InternalNumber} is op {trip.TripDate:dd-MM-yyyy} al ingepland op rit {doubleBooked}."));
                 }
+
+                // Tachograph: overdue calibration is a warning (overrideable) on planning.
+                var tachoOverdue = await _dbContext.TachographCalibrations.AsNoTracking()
+                    .Where(c => c.TenantId == tenantId && c.VehicleId == vehicleId)
+                    .OrderByDescending(c => c.CalibrationDate)
+                    .Select(c => (DateOnly?)c.NextCalibrationDue)
+                    .FirstOrDefaultAsync(cancellationToken);
+                if (tachoOverdue is { } due && due < DateOnly.FromDateTime(_timeProvider.GetUtcNow().UtcDateTime))
+                {
+                    conflicts.Add(new(PlanningConflictCode.TachographOverdue, false,
+                        $"De tachograaf-ijking van {vehicle.InternalNumber} is vervallen ({due:dd-MM-yyyy})."));
+                }
+
+                // Driving-licence rank: the driver must hold a valid licence of at least the
+                // rank the vehicle requires (e.g. a CE tractor needs a CE driver).
+                if (trip.DriverId is { } licenceDriverId && vehicle.RequiredLicenceCode is { Length: > 0 } required)
+                {
+                    await EvaluateLicenceRankAsync(conflicts, licenceDriverId, vehicle.InternalNumber, required, cancellationToken);
+                }
             }
         }
 
@@ -156,7 +175,356 @@ public class PlanningConflictService : IPlanningConflictService
             }
         }
 
-        return conflicts;
+        if (orderIds.Count > 0)
+        {
+            await EvaluateCapacityAsync(conflicts, trip, orderIds, cancellationToken);
+            await EvaluateTailLiftAsync(conflicts, trip, orderIds, cancellationToken);
+        }
+
+        return conflicts.Select(c => Enrich(c, trip)).ToList();
+    }
+
+    /// <summary>
+    /// Fills the structured fields (category, related entity, override metadata) from one central
+    /// table so the rule sites above stay code + description only. Every blocking planning conflict
+    /// is overrideable with <c>planning.override_restriction</c> plus a mandatory reason.
+    /// </summary>
+    internal static PlanningConflictDto Enrich(PlanningConflictDto conflict, Trip trip)
+    {
+        var (category, suggestedAction) = conflict.Code switch
+        {
+            PlanningConflictCode.MissingDriver => (ConflictCategory.Data, "Wijs een chauffeur toe."),
+            PlanningConflictCode.MissingVehicle => (ConflictCategory.Data, "Wijs een voertuig toe."),
+            PlanningConflictCode.NoOrders => (ConflictCategory.Data, "Koppel minstens één opdracht."),
+            PlanningConflictCode.CapacityCheckIncomplete => (ConflictCategory.Data, "Vul gewicht/volume aan op de opdrachten."),
+            PlanningConflictCode.DriverAbsent => (ConflictCategory.Availability, "Kies een andere chauffeur of datum."),
+            PlanningConflictCode.DriverTraining => (ConflictCategory.Availability, "Controleer de opleiding of kies een andere chauffeur."),
+            PlanningConflictCode.DriverShiftOverlap => (ConflictCategory.Timing, "Pas de shift of de rittijden aan."),
+            PlanningConflictCode.DriverDoubleBooked => (ConflictCategory.Availability, "Kies een andere chauffeur of verplaats één van de ritten."),
+            PlanningConflictCode.VehicleDoubleBooked => (ConflictCategory.Availability, "Kies een ander voertuig of verplaats één van de ritten."),
+            PlanningConflictCode.TrailerDoubleBooked => (ConflictCategory.Availability, "Kies een andere oplegger of verplaats één van de ritten."),
+            PlanningConflictCode.DriverBlocked => (ConflictCategory.Resource, "Deblokkeer de chauffeur of kies een andere."),
+            PlanningConflictCode.DriverInactive => (ConflictCategory.Resource, "Activeer de chauffeur of kies een andere."),
+            PlanningConflictCode.VehicleInactive => (ConflictCategory.Resource, "Activeer het voertuig of kies een ander."),
+            PlanningConflictCode.TrailerInactive => (ConflictCategory.Resource, "Activeer de oplegger of kies een andere."),
+            PlanningConflictCode.VehicleNotOperational => (ConflictCategory.Resource, "Plan het onderhoud of kies een ander voertuig."),
+            PlanningConflictCode.TrailerNotOperational => (ConflictCategory.Resource, "Plan het onderhoud of kies een andere oplegger."),
+            PlanningConflictCode.DriverNotReady => (ConflictCategory.Qualification, "Werk de kwalificatie bij of kies een andere chauffeur."),
+            PlanningConflictCode.DriverLicenceInsufficient => (ConflictCategory.Qualification, "Kies een chauffeur met het juiste rijbewijs of een ander voertuig."),
+            PlanningConflictCode.TachographOverdue => (ConflictCategory.Document, "Laat de tachograaf opnieuw ijken of kies een ander voertuig."),
+            PlanningConflictCode.OrderRequiresCrane => (ConflictCategory.Equipment, "Kies een voertuig met kraan of verplaats de opdracht."),
+            PlanningConflictCode.OrderRequiresAdr => (ConflictCategory.Equipment, "Kies ADR-geschikt materieel of verplaats de opdracht."),
+            PlanningConflictCode.CapacityExceeded => (ConflictCategory.Capacity, "Verdeel de opdrachten over meerdere ritten of kies groter materieel."),
+            PlanningConflictCode.TailLiftCapacityExceeded => (ConflictCategory.Capacity, "Kies een voertuig met een zwaardere laadklep of voorzie ander laad-/losmaterieel op de stop."),
+            _ => (ConflictCategory.Resource, (string?)null),
+        };
+
+        var (relatedType, relatedId) = conflict.Code switch
+        {
+            PlanningConflictCode.DriverAbsent or PlanningConflictCode.DriverBlocked or PlanningConflictCode.DriverInactive
+                or PlanningConflictCode.DriverNotReady or PlanningConflictCode.DriverDoubleBooked
+                or PlanningConflictCode.DriverShiftOverlap or PlanningConflictCode.DriverTraining
+                or PlanningConflictCode.DriverLicenceInsufficient
+                => ("Driver", trip.DriverId),
+            PlanningConflictCode.VehicleNotOperational or PlanningConflictCode.VehicleInactive
+                or PlanningConflictCode.VehicleDoubleBooked or PlanningConflictCode.TachographOverdue
+                or PlanningConflictCode.TailLiftCapacityExceeded
+                => ("Vehicle", trip.VehicleId),
+            PlanningConflictCode.TrailerNotOperational or PlanningConflictCode.TrailerInactive
+                or PlanningConflictCode.TrailerDoubleBooked
+                => ("Trailer", trip.TrailerId),
+            _ => ((string?)null, (Guid?)null),
+        };
+
+        return conflict with
+        {
+            Category = category,
+            SuggestedAction = suggestedAction,
+            RelatedEntityType = relatedId is null ? null : relatedType,
+            RelatedEntityId = relatedId,
+            OverrideAllowed = conflict.Severity == ConflictSeverity.Blocking,
+            RequiredPermission = conflict.Severity == ConflictSeverity.Blocking
+                ? Identity.PermissionCodes.PlanningOverrideRestriction
+                : null,
+        };
+    }
+
+    /// <summary>
+    /// Compares the trip's cargo totals with the assigned asset's capacity. The load rides
+    /// the trailer when one is assigned, otherwise the vehicle. Measures without a configured
+    /// capacity are skipped; orders without data never get invented values — they make the
+    /// check explicitly incomplete. Exceeding blocks or warns per the tenant setting.
+    /// </summary>
+    private async Task EvaluateCapacityAsync(
+        List<PlanningConflictDto> conflicts, Trip trip, List<Guid> orderIds, CancellationToken cancellationToken)
+    {
+        var tenantId = _tenantContext.TenantId;
+
+        // Capacity source: trailer when assigned, else vehicle.
+        string? assetLabel = null;
+        decimal? weightCapacity = null;
+        decimal? volumeCapacity = null;
+        if (trip.TrailerId is { } trailerId)
+        {
+            var trailer = await _dbContext.Trailers.AsNoTracking()
+                .Where(t => t.Id == trailerId && t.TenantId == tenantId)
+                .Select(t => new { t.InternalNumber, t.CapacityKg, t.VolumeM3 })
+                .FirstOrDefaultAsync(cancellationToken);
+            if (trailer is not null)
+            {
+                assetLabel = $"oplegger {trailer.InternalNumber}";
+                weightCapacity = trailer.CapacityKg;
+                volumeCapacity = trailer.VolumeM3;
+            }
+        }
+        else if (trip.VehicleId is { } vehicleId)
+        {
+            var vehicle = await _dbContext.Vehicles.AsNoTracking()
+                .Where(v => v.Id == vehicleId && v.TenantId == tenantId)
+                .Select(v => new { v.InternalNumber, v.PayloadKg, v.VolumeM3 })
+                .FirstOrDefaultAsync(cancellationToken);
+            if (vehicle is not null)
+            {
+                assetLabel = $"voertuig {vehicle.InternalNumber}";
+                weightCapacity = vehicle.PayloadKg;
+                volumeCapacity = vehicle.VolumeM3;
+            }
+        }
+
+        if (assetLabel is null || (weightCapacity is null && volumeCapacity is null))
+        {
+            return; // no configured capacity → the measure is skipped entirely
+        }
+
+        var orderTotals = await _dbContext.TransportOrders.AsNoTracking()
+            .Where(o => o.TenantId == tenantId && orderIds.Contains(o.Id))
+            .Select(o => new { o.Id, o.WeightKg, o.VolumeM3 })
+            .ToListAsync(cancellationToken);
+        var cargoLines = await _dbContext.CargoItems.AsNoTracking()
+            .Where(c => c.TenantId == tenantId && orderIds.Contains(c.TransportOrderId))
+            .Select(c => new { c.TransportOrderId, c.TotalWeightKg, c.WeightPerUnitKg, c.ExpectedQuantity, c.VolumeM3 })
+            .ToListAsync(cancellationToken);
+        var cargoByOrder = cargoLines.ToLookup(c => c.TransportOrderId);
+
+        decimal totalWeight = 0;
+        decimal totalVolume = 0;
+        var ordersWithoutWeight = 0;
+        var ordersWithoutVolume = 0;
+        foreach (var order in orderTotals)
+        {
+            // Structured cargo lines win over the order-level totals; nothing is invented.
+            var lines = cargoByOrder[order.Id].ToList();
+            var lineWeights = lines
+                .Select(l => l.TotalWeightKg ?? l.WeightPerUnitKg * l.ExpectedQuantity)
+                .Where(w => w is not null)
+                .Sum(w => w!.Value);
+            var orderWeight = lineWeights > 0 ? lineWeights : order.WeightKg;
+            if (orderWeight is { } weight)
+            {
+                totalWeight += weight;
+            }
+            else
+            {
+                ordersWithoutWeight += 1;
+            }
+
+            var lineVolumes = lines
+                .Select(l => l.VolumeM3 * l.ExpectedQuantity)
+                .Where(v => v is not null)
+                .Sum(v => v!.Value);
+            var orderVolume = lineVolumes > 0 ? lineVolumes : order.VolumeM3;
+            if (orderVolume is { } volume)
+            {
+                totalVolume += volume;
+            }
+            else
+            {
+                ordersWithoutVolume += 1;
+            }
+        }
+
+        var severitySetting = await _dbContext.TenantSettings.AsNoTracking()
+            .Where(s => s.TenantId == tenantId)
+            .Select(s => s.CapacityConflictSeverity)
+            .FirstOrDefaultAsync(cancellationToken);
+        var blocking = string.Equals(severitySetting, "Blocking", StringComparison.OrdinalIgnoreCase);
+
+        if (weightCapacity is { } maxWeight && totalWeight > maxWeight)
+        {
+            conflicts.Add(new(PlanningConflictCode.CapacityExceeded, blocking,
+                $"Totaalgewicht {totalWeight:0.##} kg overschrijdt het laadvermogen van {maxWeight:0.##} kg van {assetLabel}."));
+        }
+
+        if (volumeCapacity is { } maxVolume && totalVolume > maxVolume)
+        {
+            conflicts.Add(new(PlanningConflictCode.CapacityExceeded, blocking,
+                $"Totaalvolume {totalVolume:0.###} m³ overschrijdt het volume van {maxVolume:0.###} m³ van {assetLabel}."));
+        }
+
+        var missing = new List<string>();
+        if (weightCapacity is not null && ordersWithoutWeight > 0)
+        {
+            missing.Add($"{ordersWithoutWeight} opdracht(en) zonder gewicht");
+        }
+
+        if (volumeCapacity is not null && ordersWithoutVolume > 0)
+        {
+            missing.Add($"{ordersWithoutVolume} opdracht(en) zonder volume");
+        }
+
+        if (missing.Count > 0)
+        {
+            conflicts.Add(new(PlanningConflictCode.CapacityCheckIncomplete, false,
+                $"Capaciteitscontrole onvolledig: {string.Join(" en ", missing)}.",
+                ConflictSeverity.Information));
+        }
+    }
+
+    /// <summary>
+    /// D4: tail-lift check. The heaviest SINGLE unit (max <c>WeightPerUnitKg</c> over the cargo
+    /// lines that carry one) is compared with the tail-lift capacity of a vehicle that has a tail
+    /// lift. Exceeding is always a warning — whether the lift is actually used at a stop is not
+    /// modelled. When cargo weight exists but the lift capacity or a per-unit weight is unknown, the
+    /// check is reported as still open; a per-unit weight is never derived from a line total and
+    /// the outcome is never "safe".
+    /// </summary>
+    private async Task EvaluateTailLiftAsync(
+        List<PlanningConflictDto> conflicts, Trip trip, List<Guid> orderIds, CancellationToken cancellationToken)
+    {
+        if (trip.VehicleId is not { } vehicleId)
+        {
+            return;
+        }
+
+        var tenantId = _tenantContext.TenantId;
+        var vehicle = await _dbContext.Vehicles.AsNoTracking()
+            .Where(v => v.Id == vehicleId && v.TenantId == tenantId)
+            .Select(v => new { v.InternalNumber, v.HasTailLift, v.TailLiftCapacityKg })
+            .FirstOrDefaultAsync(cancellationToken);
+        if (vehicle is not { HasTailLift: true })
+        {
+            return; // no tail lift → nothing to compare with (other handling equipment is not modelled)
+        }
+
+        var cargoLines = await _dbContext.CargoItems.AsNoTracking()
+            .Where(c => c.TenantId == tenantId && orderIds.Contains(c.TransportOrderId))
+            .Select(c => new { c.TotalWeightKg, c.WeightPerUnitKg })
+            .ToListAsync(cancellationToken);
+        var hasOrderWeight = await _dbContext.TransportOrders.AsNoTracking()
+            .AnyAsync(o => o.TenantId == tenantId && orderIds.Contains(o.Id) && o.WeightKg != null && o.WeightKg > 0, cancellationToken);
+
+        var unitWeights = cargoLines.Where(l => l.WeightPerUnitKg is > 0).Select(l => l.WeightPerUnitKg!.Value).ToList();
+        var linesWithoutUnitWeight = cargoLines.Count(l => l.WeightPerUnitKg is null && l.TotalWeightKg is > 0);
+        var hasCargoWeight = unitWeights.Count > 0 || linesWithoutUnitWeight > 0 || hasOrderWeight;
+        if (!hasCargoWeight)
+        {
+            return;
+        }
+
+        if (unitWeights.Count > 0 && vehicle.TailLiftCapacityKg is { } liftCapacity)
+        {
+            var heaviest = unitWeights.Max();
+            if (heaviest > liftCapacity)
+            {
+                conflicts.Add(new(PlanningConflictCode.TailLiftCapacityExceeded, false,
+                    $"De zwaarste eenheid ({heaviest:0.##} kg) overschrijdt de laadklepcapaciteit van {liftCapacity:0.##} kg van voertuig {vehicle.InternalNumber}."));
+            }
+        }
+
+        var open = new List<string>();
+        if (vehicle.TailLiftCapacityKg is null)
+        {
+            open.Add($"de laadklepcapaciteit van voertuig {vehicle.InternalNumber} is niet ingevuld");
+        }
+
+        if (linesWithoutUnitWeight > 0)
+        {
+            open.Add($"{linesWithoutUnitWeight} goederenlijn(en) zonder gewicht per eenheid");
+        }
+        else if (unitWeights.Count == 0)
+        {
+            open.Add("het gewicht per eenheid is niet gekend");
+        }
+
+        if (open.Count > 0)
+        {
+            conflicts.Add(new(PlanningConflictCode.CapacityCheckIncomplete, false,
+                $"Capaciteit nog te controleren (laadklep): {string.Join(" en ", open)}.",
+                ConflictSeverity.Information));
+        }
+    }
+
+    /// <summary>Licence rank order (higher covers lower). Unknown codes rank 0.</summary>
+    private static int LicenceRank(string code) => code.Trim().ToUpperInvariant() switch
+    {
+        "B" => 1,
+        "C1" => 2,
+        "C" => 3,
+        "C1E" => 4,
+        "CE" => 5,
+        _ => 0,
+    };
+
+    private static readonly IReadOnlyDictionary<string, string> LicenceQualificationCodes = new Dictionary<string, string>
+    {
+        ["B"] = QualificationTypeCodes.DrivingLicenceB,
+        ["C"] = QualificationTypeCodes.DrivingLicenceC,
+        ["CE"] = QualificationTypeCodes.DrivingLicenceCE,
+    };
+
+    private async Task EvaluateLicenceRankAsync(
+        List<PlanningConflictDto> conflicts, Guid driverId, string vehicleNumber, string requiredCode, CancellationToken cancellationToken)
+    {
+        var tenantId = _tenantContext.TenantId;
+        var requiredRank = LicenceRank(requiredCode);
+        if (requiredRank == 0)
+        {
+            return;
+        }
+
+        var employeeId = await _dbContext.Drivers.AsNoTracking()
+            .Where(d => d.Id == driverId && d.TenantId == tenantId)
+            .Select(d => (Guid?)d.EmployeeId)
+            .FirstOrDefaultAsync(cancellationToken);
+        if (employeeId is not { } empId)
+        {
+            return;
+        }
+
+        // Held licence qualifications that are not expired/rejected/suspended.
+        var warningDays = await _dbContext.TenantSettings.AsNoTracking()
+            .Where(s => s.TenantId == tenantId).Select(s => (int?)s.QualificationExpiryWarningDays)
+            .FirstOrDefaultAsync(cancellationToken) ?? DefaultExpiryWarningDays;
+        var today = DateOnly.FromDateTime(_timeProvider.GetUtcNow().UtcDateTime);
+
+        var licenceTypeCodes = LicenceQualificationCodes.Values.ToList();
+        var licences = await _dbContext.EmployeeQualifications.AsNoTracking()
+            .Where(q => q.TenantId == tenantId && q.EmployeeId == empId)
+            .Join(_dbContext.QualificationTypes.AsNoTracking().Where(t => licenceTypeCodes.Contains(t.Code)),
+                q => q.QualificationTypeId, t => t.Id, (q, t) => new { Qualification = q, t.Code })
+            .ToListAsync(cancellationToken);
+
+        var highestHeldRank = 0;
+        foreach (var licence in licences)
+        {
+            var status = _statusCalculator.CalculateEffectiveStatus(licence.Qualification, today, warningDays);
+            if (status is QualificationStatus.Expired or QualificationStatus.Rejected or QualificationStatus.Suspended)
+            {
+                continue;
+            }
+
+            var code = LicenceQualificationCodes.FirstOrDefault(kv => kv.Value == licence.Code).Key;
+            if (code is not null)
+            {
+                highestHeldRank = Math.Max(highestHeldRank, LicenceRank(code));
+            }
+        }
+
+        if (highestHeldRank < requiredRank)
+        {
+            conflicts.Add(new(PlanningConflictCode.DriverLicenceInsufficient, true,
+                $"De chauffeur heeft geen geldig rijbewijs {requiredCode.ToUpperInvariant()} dat vereist is voor voertuig {vehicleNumber}."));
+        }
     }
 
     private async Task EvaluateDriverAsync(
@@ -270,6 +638,27 @@ public class PlanningConflictService : IPlanningConflictService
                     conflicts.Add(new(PlanningConflictCode.DriverNotReady, false,
                         $"{entry.Name} van {driverName} verloopt binnenkort."));
                     break;
+            }
+        }
+
+        // P10: an ADR order needs a driver actually HOLDING a valid ADR certificate — not just
+        // "no expired qualifications". Name-matched ("ADR") because qualification types are
+        // tenant-defined; a tenant without any ADR type gets the explicit warning instead.
+        var tripNeedsAdr = await _dbContext.TripOrders.AsNoTracking()
+            .Where(to => to.TenantId == tenantId && to.TripId == trip.Id && !to.IsDeleted)
+            .Join(_dbContext.TransportOrders.AsNoTracking().Where(o => o.TenantId == tenantId),
+                to => to.TransportOrderId, o => o.Id, (to, o) => o.AdrRequired)
+            .AnyAsync(adr => adr, cancellationToken);
+        if (tripNeedsAdr)
+        {
+            var hasValidAdr = qualifications.Any(q =>
+                q.Name.Contains("ADR", StringComparison.OrdinalIgnoreCase)
+                && _statusCalculator.CalculateEffectiveStatus(q.Qualification, today, warningDays)
+                    is QualificationStatus.Valid or QualificationStatus.ExpiringSoon);
+            if (!hasValidAdr)
+            {
+                conflicts.Add(new(PlanningConflictCode.DriverNotReady, true,
+                    $"ADR-transport: {driverName} heeft geen geldig ADR-certificaat."));
             }
         }
 

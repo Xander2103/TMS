@@ -1,0 +1,63 @@
+.cd-message {
+  margin: 0 0 0.75rem;
+  color: var(--text);
+}
+
+.cd-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  max-height: 40vh;
+  overflow-y: auto;
+}
+
+.cd-item {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.6rem 0.75rem;
+}
+
+.cd-item-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.cd-category {
+  font-size: 0.85rem;
+  color: var(--text);
+  opacity: 0.75;
+}
+
+.cd-description {
+  margin: 0.35rem 0 0;
+}
+
+.cd-suggestion {
+  margin: 0.25rem 0 0;
+  font-size: 0.85rem;
+  opacity: 0.75;
+  font-style: italic;
+}
+
+.cd-override {
+  margin-top: 0.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.cd-override textarea {
+  width: 100%;
+  resize: vertical;
+}
+
+.cd-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}

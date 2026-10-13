@@ -1,0 +1,18 @@
+{
+  "title": "Documenten",
+  "source": {
+    "OrderDocument": "Opdrachtdocument",
+    "Pod": "Afleverbewijs",
+    "InvoiceAttachment": "Factuurbijlage"
+  },
+  "columns": {
+    "document": "Document",
+    "type": "Type",
+    "order": "Opdracht",
+    "invoice": "Factuur",
+    "date": "Datum"
+  },
+  "empty": "Nog geen documenten beschikbaar.",
+  "loading": "Documenten laden...",
+  "loadError": "De documenten konden niet worden geladen."
+}

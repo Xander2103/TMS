@@ -2,13 +2,14 @@ import type { BadgeTone } from '../../../components/ui/Badge'
 
 export type QualificationStatus = 'Pending' | 'Valid' | 'ExpiringSoon' | 'Expired' | 'Rejected' | 'Suspended'
 
+/** Vertaalsleutels — renderen als t(QUALIFICATION_STATUS_LABELS[status]). */
 export const QUALIFICATION_STATUS_LABELS: Record<QualificationStatus, string> = {
-  Pending: 'In behandeling',
-  Valid: 'Geldig',
-  ExpiringSoon: 'Verloopt binnenkort',
-  Expired: 'Verlopen',
-  Rejected: 'Afgewezen',
-  Suspended: 'Ingetrokken',
+  Pending: 'employees.qualificationStatus.Pending',
+  Valid: 'employees.qualificationStatus.Valid',
+  ExpiringSoon: 'employees.qualificationStatus.ExpiringSoon',
+  Expired: 'employees.qualificationStatus.Expired',
+  Rejected: 'employees.qualificationStatus.Rejected',
+  Suspended: 'employees.qualificationStatus.Suspended',
 }
 
 export const QUALIFICATION_STATUS_TONES: Record<QualificationStatus, BadgeTone> = {

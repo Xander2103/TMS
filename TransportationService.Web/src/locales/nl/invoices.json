@@ -1,0 +1,341 @@
+{
+  "status": {
+    "Draft": "Concept",
+    "Sent": "Verzonden",
+    "Paid": "Betaald",
+    "Cancelled": "Geannuleerd"
+  },
+  "peppolStatus": {
+    "Draft": "Concept",
+    "Validated": "Gevalideerd",
+    "Queued": "In wachtrij",
+    "SubmittedToProvider": "Aangeboden aan provider",
+    "AcceptedByProvider": "Aanvaard door provider",
+    "Delivered": "Afgeleverd",
+    "Failed": "Mislukt",
+    "Rejected": "Geweigerd",
+    "Cancelled": "Geannuleerd"
+  },
+  "creditNote": "Creditnota",
+  "transition": {
+    "Draft": "Terug naar concept",
+    "Sent": "Verzenden",
+    "Paid": "Markeer als betaald",
+    "Cancelled": "Factuur annuleren"
+  },
+  "common": {
+    "busy": "Bezig…",
+    "saving": "Opslaan…",
+    "none": "— Geen —",
+    "yes": "Ja",
+    "no": "Nee",
+    "reason": "Reden"
+  },
+  "fields": {
+    "customer": "Klant",
+    "invoiceDate": "Factuurdatum",
+    "dueDate": "Vervaldag",
+    "period": "Factuurperiode",
+    "poNumber": "PO-nummer",
+    "notes": "Notities",
+    "billingEntity": "Facturerende entiteit"
+  },
+  "internalList": {
+    "loadError": "Facturen konden niet worden geladen.",
+    "searchPlaceholder": "Zoeken op nummer of klant...",
+    "newInvoice": "Nieuwe factuur",
+    "empty": "Nog geen facturen.",
+    "columns": {
+      "number": "Nummer",
+      "date": "Datum",
+      "due": "Vervaldag",
+      "customer": "Klant",
+      "total": "Totaal (incl. btw)",
+      "status": "Status"
+    }
+  },
+  "export": {
+    "title": "Boekhoudexport",
+    "description": "Exporteert alle verzonden en betaalde factuurlijnen (factuurdatum in de periode) met hun vastgelegde grootboekrekening. Ontbreekt er een rekening, dan wordt de export geblokkeerd met de betrokken facturen.",
+    "from": "Van (factuurdatum)",
+    "to": "Tot en met",
+    "action": "Exporteren",
+    "missingDates": "Kies een begin- en einddatum.",
+    "success": "Boekhoudexport gedownload.",
+    "error": "De boekhoudexport kon niet worden gemaakt."
+  },
+  "internalDetail": {
+    "subtitle": "Factuurdatum {date} · vervalt {dueDate}",
+    "manualNumber": "handmatig nummer",
+    "periodLabel": "Periode",
+    "statusChanged": "Factuur is nu: {status}.",
+    "statusError": "De status kon niet worden gewijzigd.",
+    "needsLine": "Een factuur heeft minstens één lijn nodig.",
+    "updated": "Factuur bijgewerkt.",
+    "saveError": "De factuur kon niet worden opgeslagen.",
+    "deleted": "Factuur verwijderd.",
+    "deleteError": "De factuur kon niet worden verwijderd.",
+    "vat": "Btw",
+    "cancelTitle": "Factuur annuleren",
+    "cancelMessage": "Weet je zeker dat je factuur {number} wilt annuleren? Gefactureerde opdrachten komen weer vrij.",
+    "deleteTitle": "Factuur verwijderen",
+    "deleteMessage": "Weet je zeker dat je factuur {number} wilt verwijderen?",
+    "ledgerAction": "Grootboekgegevens aanvullen",
+    "ledgerCompleted": "Ontbrekende grootboekgegevens aangevuld waar een koppeling bestaat.",
+    "ledgerError": "De grootboekgegevens konden niet worden aangevuld.",
+    "creditNoteAction": "Creditnota maken",
+    "creditNoteHint": "Maakt een conceptcreditnota die deze factuur volledig crediteert. De verzonden factuur zelf blijft ongewijzigd.",
+    "creditNoteCreated": "Conceptcreditnota {number} aangemaakt.",
+    "creditNoteError": "De creditnota kon niet worden aangemaakt.",
+    "creditsInvoice": "Crediteert factuur",
+    "creditNotesTitle": "Creditnota's op deze factuur",
+    "cancelSentMessage": "Factuur {number} is al verzonden. Annuleren maakt ze ongeldig zonder correctiedocument en geeft de opdrachten weer vrij. Gebruik normaal 'Creditnota maken' om een verzonden factuur te corrigeren.",
+    "pdfPreview": "Voorbeeld (pdf)",
+    "pdfPreviewHint": "Opent de factuur zoals de klant ze ontvangt, in de factuurtaal. Verzendt niets.",
+    "pdfError": "Het pdf-voorbeeld kon niet worden geopend.",
+    "customerReads": "Klant leest",
+    "sendConfirm": {
+      "title": "Factuur verzenden",
+      "intro": "Controleer de gegevens. Verzenden maakt deze factuur definitief: nummer, klant, entiteit, btw-behandeling en omschrijvingen worden vastgelegd en kunnen daarna niet meer gewijzigd worden.",
+      "number": "Factuurnummer",
+      "customer": "Klant",
+      "entity": "Facturerende entiteit",
+      "total": "Totaalbedrag (incl. btw)",
+      "language": "Factuurtaal",
+      "treatment": "Btw-behandeling",
+      "confirm": "Factuur verzenden",
+      "busy": "Verzenden…"
+    }
+  },
+  "internalLines": {
+    "addLine": "+ Lijn toevoegen",
+    "categoryFor": "Verkoopcategorie voor {name}",
+    "newLine": "nieuwe lijn",
+    "columns": {
+      "description": "Omschrijving",
+      "category": "Verkoopcategorie",
+      "quantity": "Aantal",
+      "price": "Prijs",
+      "vat": "Btw %",
+      "amount": "Bedrag",
+      "actions": "Acties"
+    }
+  },
+  "override": {
+    "title": "Factuurnummer corrigeren",
+    "open": "Nummer corrigeren",
+    "confirm": "Nummer aanpassen",
+    "numberLabel": "Nieuw factuurnummer",
+    "missingFields": "Vul een nieuw factuurnummer en een reden in.",
+    "success": "Factuurnummer aangepast naar {number}.",
+    "error": "Het factuurnummer kon niet worden aangepast."
+  },
+  "attachments": {
+    "loadError": "De bijlagen konden niet worden geladen.",
+    "tooLarge": "Het bestand is te groot (maximaal 10 MB).",
+    "uploaded": "Bijlage geüpload.",
+    "uploadError": "De bijlage kon niet worden geüpload.",
+    "updateError": "De bijlage kon niet worden bijgewerkt.",
+    "choose": "Bijlage kiezen",
+    "empty": "Nog geen bijlagen.",
+    "download": "Download",
+    "removeTitle": "Bijlage verwijderen",
+    "removeMessage": "Bijlage '{name}' verwijderen?",
+    "removed": "Bijlage verwijderd.",
+    "removeError": "De bijlage kon niet worden verwijderd.",
+    "columns": {
+      "file": "Bestand",
+      "size": "Grootte",
+      "uploadedAt": "Geüpload op",
+      "include": "Meesturen"
+    }
+  },
+  "new": {
+    "subtitle": "Gebaseerd op afgeronde, nog niet gefactureerde opdrachten.",
+    "customerPlaceholder": "Selecteer een klant…",
+    "grouping": {
+      "PerDossier": "Deze klant verwacht één factuur per dossier.",
+      "Weekly": "Deze klant verwacht een wekelijkse verzamelfactuur.",
+      "Monthly": "Deze klant verwacht een maandelijkse verzamelfactuur.",
+      "ByReference": "Deze klant verwacht één factuur per klantreferentie."
+    },
+    "noEntity": "Geen entiteit beschikbaar",
+    "defaultSuffix": "(standaard)",
+    "nextNumber": "Volgend factuurnummer:",
+    "pastPeriod": "Je factureert in een eerdere periode ({period}).",
+    "poHint": "Optioneel referentienummer van de klant.",
+    "poRequired": "Deze klant vereist een PO-nummer.",
+    "billableOrders": "Factureerbare opdrachten ({total})",
+    "noOrders": "Geen afgeronde, ongefactureerde opdrachten voor deze klant.",
+    "selectOrder": "Selecteer {number}",
+    "orderColumns": {
+      "selection": "Selectie",
+      "number": "Nummer",
+      "date": "Datum",
+      "goods": "Goederen",
+      "route": "Route",
+      "price": "Prijs",
+      "invoicing": "Facturatie"
+    },
+    "billableActivities": "Factureerbare activiteiten ({total})",
+    "noActivities": "Geen ongefactureerde activiteiten voor deze klant.",
+    "selectActivity": "Selecteer activiteit {activity} ({dossier})",
+    "activityColumns": {
+      "dossier": "Dossier",
+      "activity": "Activiteit",
+      "plannedDate": "Geplande datum",
+      "amount": "Bedrag"
+    },
+    "freeActivity": "gratis",
+    "manualTitle": "Extra lijnen",
+    "manualDescriptionPlaceholder": "Omschrijving (bv. wachturen)",
+    "quantityLabel": "Hoeveelheid",
+    "unitPriceLabel": "Eenheidsprijs",
+    "estimatedSubtotal": "Geschat subtotaal (excl. btw):",
+    "create": "Factuur aanmaken",
+    "created": "Factuur {number} aangemaakt.",
+    "createError": "De factuur kon niet worden aangemaakt.",
+    "selectCustomer": "Selecteer eerst een klant.",
+    "needsSelection": "Selecteer minstens één opdracht of voeg een lijn toe.",
+    "invalidManualLine": "Elke handmatige lijn heeft een omschrijving en een hoeveelheid groter dan nul nodig."
+  },
+  "readiness": {
+    "ready": "Klaar",
+    "review": "Nakijken",
+    "tooltipFallback": "Nakijken vóór facturatie.",
+    "reasons": {
+      "pricingNone": "nog geen prijs",
+      "pricingCoveragePartial": "niet alle onderdelen geprijsd",
+      "pricingCoverageNone": "geen onderdeel volledig geprijsd",
+      "pricingStale": "prijs verouderd — herbereken",
+      "podMissing": "afleverbewijs ontbreekt"
+    }
+  },
+  "control": {
+    "title": "Facturatiecontrole",
+    "subtitle": "Voorstellen volgens de klantvoorkeur, en per order waarom die nog niet factureerbaar is.",
+    "loading": "Werkplek laden…",
+    "pendingChargesTitle": "Goedgekeurde doorrekeningen — handmatig toe te voegen",
+    "proposalsTitle": "Factuurvoorstellen ({total})",
+    "noProposals": "Geen orders klaar voor facturatie.",
+    "selectedSummary": "{selected} van {total} orders aangevinkt · {amount}",
+    "createInvoice": "Maak factuur",
+    "includeOrder": "Order {number} meenemen op de factuur",
+    "needsOrder": "Vink minstens één order aan voor de factuur.",
+    "created": "Factuur {number} aangemaakt ({total} orders).",
+    "snoozeAction": "Uitstellen",
+    "toOrder": "Naar opdracht",
+    "reviewTitle": "Nakijken vóór facturatie ({total})",
+    "reviewEmpty": "Niets na te kijken — alles is klaar of nog onderweg.",
+    "snoozedTitle": "Uitgesteld ({total})",
+    "snoozeUntilFor": "Uitstellen tot voor {number}",
+    "snoozeReasonFor": "Reden van uitstel voor {number}",
+    "confirmSnooze": "Bevestig uitstel",
+    "snoozeMissingDate": "Kies een datum tot wanneer de facturatie wordt uitgesteld.",
+    "snoozed": "Facturatie uitgesteld.",
+    "snoozeError": "Het uitstel kon niet worden opgeslagen.",
+    "snoozeCleared": "Uitstel opgeheven — de order telt weer mee.",
+    "snoozeClearError": "Het uitstel kon niet worden opgeheven.",
+    "clearSnooze": "Uitstel opheffen",
+    "columns": {
+      "order": "Order",
+      "date": "Datum",
+      "dossier": "Dossier",
+      "amount": "Bedrag",
+      "reasons": "Redenen",
+      "snoozedUntil": "Uitgesteld tot"
+    }
+  },
+  "peppolPanel": {
+    "title": "Peppol",
+    "loadError": "De Peppol-transmissies konden niet worden geladen.",
+    "notSent": "Nog niet via Peppol verzonden.",
+    "providerRef": "Provider-referentie:",
+    "validate": "Valideren",
+    "preview": "Voorbeeld",
+    "downloadXml": "XML downloaden",
+    "send": "Versturen via Peppol",
+    "sendableHint": "Alleen verzonden of betaalde facturen kunnen via Peppol verstuurd worden.",
+    "readyToSend": "Klaar voor verzending",
+    "validateError": "De factuur kon niet worden gevalideerd.",
+    "previewError": "Het Peppol-voorbeeld kon niet worden geladen.",
+    "xmlError": "De Peppol-XML kon niet worden gedownload.",
+    "sent": "Factuur aangeboden voor verzending via Peppol.",
+    "sendError": "De factuur kon niet via Peppol worden verstuurd.",
+    "offeredTimes": "({times}× aangeboden)",
+    "previewTitle": "Peppol-voorbeeld — {number}",
+    "seller": "Verzender",
+    "buyer": "Ontvanger",
+    "vat": "BTW: {number}",
+    "participant": "Peppol: {id}",
+    "unitColumn": "Eenheid",
+    "vatColumns": {
+      "category": "Btw-categorie",
+      "rate": "Tarief",
+      "base": "Grondslag",
+      "vat": "Btw"
+    },
+    "type": "Type",
+    "date": "Datum",
+    "buyerReference": "Kopersreferentie",
+    "creditsInvoice": "Crediteert factuur"
+  },
+  "list": {
+    "title": "Facturen",
+    "columns": {
+      "invoice": "Factuur",
+      "date": "Datum",
+      "dueDate": "Vervaldatum",
+      "amount": "Bedrag",
+      "status": "Status",
+      "peppol": "Peppol"
+    },
+    "empty": "Nog geen facturen beschikbaar.",
+    "loading": "Facturen laden...",
+    "loadError": "De facturen konden niet worden geladen."
+  },
+  "detail": {
+    "back": "Terug naar facturen",
+    "subtitle": "{date} · vervaldatum {dueDate}",
+    "downloadPdf": "PDF downloaden",
+    "pdfError": "De factuur-PDF kon niet worden gedownload.",
+    "attachmentError": "De bijlage kon niet worden gedownload.",
+    "peppolLabel": "Peppol: {status}",
+    "poNumber": "PO-nummer: {number}",
+    "linesTitle": "Regels",
+    "lineColumns": {
+      "description": "Omschrijving",
+      "quantity": "Aantal",
+      "price": "Prijs",
+      "vat": "BTW%",
+      "total": "Totaal"
+    },
+    "subtotal": "Subtotaal",
+    "vatAmount": "BTW",
+    "total": "Totaal",
+    "attachmentsTitle": "Bijlagen",
+    "loading": "Factuur laden...",
+    "loadError": "De factuur kon niet worden geladen."
+  },
+  "fiscal": {
+    "draftNote": "Voorbeeld — wordt vastgelegd bij verzenden.",
+    "frozenNote": "Vastgelegd bij verzenden.",
+    "language": "Factuurtaal",
+    "languages": {
+      "de": "Duits",
+      "en": "Engels",
+      "fr": "Frans",
+      "nl": "Nederlands"
+    },
+    "legalText": "Wettelijke vermelding",
+    "lineException": "Afwijkend: {treatment} via {source}",
+    "source": {
+      "Customer": "klant",
+      "LineOverride": "afwijking op deze lijn",
+      "SalesCode": "verkoopcategorie",
+      "TenantDefault": "bedrijfsstandaard"
+    },
+    "sourceLabel": "bron",
+    "treatment": "Btw-behandeling"
+  }
+}

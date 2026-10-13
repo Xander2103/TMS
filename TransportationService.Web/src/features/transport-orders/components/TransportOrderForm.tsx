@@ -1,207 +1,312 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useState, type FormEvent, type ReactNode } from 'react'
 import { ApiError } from '../../../api/apiClient'
 import { Button } from '../../../components/ui/Button'
-import { FormField } from '../../../components/ui/FormField'
-import { getCustomer, searchCustomers } from '../../customers/api/customersApi'
-import type { CustomerDetail, CustomerListItem } from '../../customers/types'
-import { LocationSelect } from '../../locations/components/LocationSelect'
-import { CountryCombobox } from '../../reference/components/CountryCombobox'
-import { STOP_TYPE_LABELS, type StopInput, type TransportOrderDetail, type TransportOrderInput } from '../types'
+import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
+import { SectionedForm, type SectionDef } from '../../../components/ui/SectionedForm'
+import { ValidationSummary } from '../../../components/ui/ValidationSummary'
+import { useSectionNavigation } from '../../../components/ui/useSectionNavigation'
+import { useLocale } from '../../../i18n/localeContext'
+import { LocationQuickCreateDialog } from '../../locations/components/LocationQuickCreateDialog'
+import type { LocationOption } from '../../locations/types'
+import { useAuth } from '../../auth/authContextValue'
+import { useLookupOptions } from '../../master-data/hooks/useLookupOptions'
+import type { TransportOrderDetail, TransportOrderInput } from '../types'
+import { GeneralSection } from './sections/GeneralSection'
+import { RouteSection } from './sections/RouteSection'
+import { CraneJobKindField, OnSiteWorkFields } from './sections/CraneJobFields'
+import { kindSwitchDropsData, switchStopsToKind } from './sections/craneJobStops'
+import { applyStopPatch } from '../utils/plannedEnd'
+import { GoodsSection } from './sections/GoodsSection'
+import { ServicesSection } from './sections/ServicesSection'
+import { PriceSection } from './sections/PriceSection'
+import { SummarySection } from './sections/SummarySection'
+import { useOrderFormData, useOrderPricePreview } from './sections/useOrderFormData'
+import { buildSubmitPayload } from './sections/orderFormPayload'
+import { useStopMutation } from './sections/useStopMutation'
+import {
+  applyUnitToCargoRow,
+  cargoFromOrder,
+  cargoRowFromHeader,
+  computeCargoSummary,
+  duplicateCargoRowInList,
+  emptyCargoRow,
+  emptyStop,
+  fieldErrorMap,
+  serviceDaysFromOrder,
+  serviceIdsFromOrder,
+  serviceNotesFromOrder,
+  servicePalletsFromOrder,
+  serviceQuantitiesFromOrder,
+  craneJobFromOrder,
+  stopsFromOrder,
+  validateOrderForm,
+  type CraneJobFormValues,
+  type CargoFormRow,
+  type OrderFormValidationError,
+  type OrderFormValues,
+  type StopFormRow,
+} from './sections/orderFormState'
 import './transport-order-form.css'
 
-interface CargoFormRow {
-  key: string
-  description: string
-  barcode: string
-  expectedQuantity: string
-  quantityUnit: string
-  notes: string
-}
-
-interface StopFormRow {
-  key: string
-  stopType: StopInput['stopType']
-  locationId: string
-  locationName: string
-  address: string
-  postalCode: string
-  city: string
-  countryCode: string
-  plannedFrom: string
-  plannedTo: string
-  requestedFrom: string
-  requestedTo: string
-  confirmedFrom: string
-  confirmedTo: string
-  earliestAllowed: string
-  latestAllowed: string
-  appointmentRequired: boolean
-  appointmentReference: string
-  reference: string
-  instructions: string
-  accessInstructions: string
-  loadingInstructions: string
-  unloadingInstructions: string
-}
-
-let stopKeyCounter = 0
-function nextStopKey(): string {
-  stopKeyCounter += 1
-  return `stop-${stopKeyCounter}`
-}
-
-function emptyStop(stopType: StopInput['stopType']): StopFormRow {
-  return {
-    key: nextStopKey(),
-    stopType,
-    locationId: '',
-    locationName: '',
-    address: '',
-    postalCode: '',
-    city: '',
-    countryCode: 'BE',
-    plannedFrom: '',
-    plannedTo: '',
-    requestedFrom: '',
-    requestedTo: '',
-    confirmedFrom: '',
-    confirmedTo: '',
-    earliestAllowed: '',
-    latestAllowed: '',
-    appointmentRequired: false,
-    appointmentReference: '',
-    reference: '',
-    instructions: '',
-    accessInstructions: '',
-    loadingInstructions: '',
-    unloadingInstructions: '',
-  }
-}
-
-/** ISO datetime → value usable by <input type="datetime-local"> (minute precision). */
-function toLocalInput(value: string | null): string {
-  return value ? value.slice(0, 16) : ''
-}
-
 interface TransportOrderFormProps {
+  /**
+   * Create a new order or edit a persisted one. Required (never defaulted) because `order` alone
+   * cannot answer it: the create page passes an existing order as a TEMPLATE. Sections that must
+   * behave differently per mode — e.g. the C-02 customer/entity lock — read this, not `order`.
+   */
+  mode: 'create' | 'edit'
+  /** The order being edited, or the order this new one is based on (create-from-template). */
   order?: TransportOrderDetail
   onSubmit: (input: TransportOrderInput) => Promise<void>
   onCancel?: () => void
   submitLabel: string
+  /** Documenten section body: create → PreparedOrderDocumentsEditor, edit → OrderDocumentsPanel. */
+  documentsSection?: ReactNode
+  /** True when the documents section saves itself (edit-mode panel). */
+  documentsSectionIsPanel?: boolean
 }
 
-/** Shared create/edit form: order header, cargo fields and the multi-stop editor. */
-export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel }: TransportOrderFormProps) {
-  const [customers, setCustomers] = useState<CustomerListItem[]>([])
+const SECTION_IDS = ['algemeen', 'route', 'goederen', 'services', 'documenten', 'prijs', 'samenvatting']
+
+/**
+ * Shared create/edit form, structured as internal subnavigation (Algemeen / Route & stops /
+ * Goederen / Services & toeslagen / Documenten / Prijs / Samenvatting). All state is lifted
+ * here — the section bodies live in `./sections/` — so switching tabs preserves values and
+ * never touches the router.
+ */
+export function TransportOrderForm({ mode, order, onSubmit, onCancel, submitLabel, documentsSection, documentsSectionIsPanel }: TransportOrderFormProps) {
+  const { t } = useLocale()
+  const { hasPermission } = useAuth()
+  const canCreateLocations = hasPermission('locations.create')
+  const canOverridePrice = hasPermission('orders.override_price')
+  const { activeId, setActive } = useSectionNavigation(SECTION_IDS, 'algemeen')
+  // Inline location creation from a stop's location picker: the promise resolves when the
+  // dialog closes, so the SearchableSelect can auto-select the new location.
+  const [quickCreate, setQuickCreate] = useState<{
+    name: string
+    resolve: (created: LocationOption | null) => void
+  } | null>(null)
+  // Pending "Adres opnieuw overnemen" confirmation for one stop row (keyed by row key).
+  const [refreshTarget, setRefreshTarget] = useState<string | null>(null)
 
   const [customerId, setCustomerId] = useState(order?.customerId ?? '')
   const [customerReference, setCustomerReference] = useState(order?.customerReference ?? '')
   const [orderDate, setOrderDate] = useState(order?.orderDate ?? new Date().toISOString().slice(0, 10))
   const [goodsDescription, setGoodsDescription] = useState(order?.goodsDescription ?? '')
   const [quantity, setQuantity] = useState(order?.quantity === null || order === undefined ? '' : String(order.quantity))
-  const [quantityUnit, setQuantityUnit] = useState(order?.quantityUnit ?? '')
+  // Legacy free-text unit is preserved (still submitted) but no longer editable — the managed
+  // unit-type code replaces it as the input.
+  const [quantityUnit] = useState(order?.quantityUnit ?? '')
+  const [quantityUnitCode, setQuantityUnitCode] = useState<string | null>(order?.quantityUnitCode ?? null)
   const [weightKg, setWeightKg] = useState(order?.weightKg === null || order === undefined ? '' : String(order.weightKg))
   const [volumeM3, setVolumeM3] = useState(order?.volumeM3 === null || order === undefined ? '' : String(order.volumeM3))
   const [palletCount, setPalletCount] = useState(
     order?.palletCount === null || order === undefined ? '' : String(order.palletCount),
   )
+  const [distanceKm, setDistanceKm] = useState(
+    order?.distanceKm === null || order?.distanceKm === undefined ? '' : String(order.distanceKm),
+  )
+  const [loadingMeters, setLoadingMeters] = useState(
+    order?.loadingMeters === null || order?.loadingMeters === undefined ? '' : String(order.loadingMeters),
+  )
   const [adrRequired, setAdrRequired] = useState(order?.adrRequired ?? false)
   const [craneRequired, setCraneRequired] = useState(order?.craneRequired ?? false)
+  const [plateauRequired, setPlateauRequired] = useState(order?.plateauRequired ?? false)
+  const [moffettRequired, setMoffettRequired] = useState(order?.moffettRequired ?? false)
+  const [isReturnMovement, setIsReturnMovement] = useState(order?.isReturnMovement ?? false)
   const [agreedPrice, setAgreedPrice] = useState(
     order?.agreedPrice === null || order === undefined ? '' : String(order.agreedPrice),
   )
   const [notes, setNotes] = useState(order?.notes ?? '')
-  const [stops, setStops] = useState<StopFormRow[]>(() =>
-    order && order.stops.length > 0
-      ? order.stops.map((s) => ({
-          key: nextStopKey(),
-          stopType: s.stopType,
-          locationId: s.locationId ?? '',
-          locationName: s.locationId ? '' : s.locationName,
-          address: s.address ?? '',
-          postalCode: s.postalCode ?? '',
-          city: s.city ?? '',
-          countryCode: s.countryCode ?? 'BE',
-          plannedFrom: toLocalInput(s.plannedFrom),
-          plannedTo: toLocalInput(s.plannedTo),
-          requestedFrom: toLocalInput(s.requestedFrom),
-          requestedTo: toLocalInput(s.requestedTo),
-          confirmedFrom: toLocalInput(s.confirmedFrom),
-          confirmedTo: toLocalInput(s.confirmedTo),
-          earliestAllowed: toLocalInput(s.earliestAllowed),
-          latestAllowed: toLocalInput(s.latestAllowed),
-          appointmentRequired: s.appointmentRequired,
-          appointmentReference: s.appointmentReference ?? '',
-          reference: s.reference ?? '',
-          instructions: s.instructions ?? '',
-          accessInstructions: s.accessInstructions ?? '',
-          loadingInstructions: s.loadingInstructions ?? '',
-          unloadingInstructions: s.unloadingInstructions ?? '',
-        }))
-      : [emptyStop('Loading'), emptyStop('Unloading')],
-  )
 
-  const [cargoItems, setCargoItems] = useState<CargoFormRow[]>(() =>
-    (order?.cargoItems ?? []).map((c) => ({
-      key: nextStopKey(),
-      description: c.description,
-      barcode: c.barcode ?? '',
-      expectedQuantity: String(c.expectedQuantity),
-      quantityUnit: c.quantityUnit ?? '',
-      notes: c.notes ?? '',
-    })),
+  const [legalEntityId, setLegalEntityId] = useState(order?.legalEntityId ?? '')
+  const [dieselSurchargeOverride, setDieselSurchargeOverride] = useState(order?.dieselSurchargeOverride ?? false)
+  const [dieselSurchargePercentOverride, setDieselSurchargePercentOverride] = useState(
+    order?.dieselSurchargePercentOverride === null || order?.dieselSurchargePercentOverride === undefined
+      ? ''
+      : String(order.dieselSurchargePercentOverride),
   )
+  const [dieselSurchargeOverrideReason, setDieselSurchargeOverrideReason] = useState(order?.dieselSurchargeOverrideReason ?? '')
+
+  const [stops, setStops] = useState<StopFormRow[]>(() => stopsFromOrder(order))
+  const [cargoItems, setCargoItems] = useState<CargoFormRow[]>(() => cargoFromOrder(order))
+  // A1a: the goods lines address their stops by POSITION, so every stop mutation renumbers those
+  // links in the same step. N-1: the hook also guarantees two mutations in one tick both apply.
+  const mutateStops = useStopMutation(stops, setStops, setCargoItems)
+  // D2: kind of crane job + on-site work. Owned by this form only when the order's activity type
+  // allows on-site work (capability flag) or the order already IS an on-site job; otherwise the
+  // fields are not submitted and the server keeps them as stored.
+  const [craneJob, setCraneJob] = useState<CraneJobFormValues>(() => craneJobFromOrder(order))
+  const [pendingCraneKind, setPendingCraneKind] = useState<CraneJobFormValues['kind'] | null>(null)
+  const onSite = craneJob.kind === 'OnSiteLifting'
+  const ownsCraneJob = Boolean(order?.activitySupportsOnSiteWork) || onSite
 
   const [formError, setFormError] = useState<string | null>(null)
+  const [clientErrors, setClientErrors] = useState<OrderFormValidationError[]>([])
   const [saving, setSaving] = useState(false)
-  const [loadedCustomerDetail, setLoadedCustomerDetail] = useState<{ id: string; detail: CustomerDetail } | null>(null)
 
-  useEffect(() => {
-    let mounted = true
-    searchCustomers({ isActive: true, page: 1, pageSize: 200 })
-      .then((data) => {
-        if (mounted) setCustomers(data.items)
-      })
-      .catch(() => {})
-    return () => {
-      mounted = false
-    }
-  }, [])
+  // --- Pricing state (spec 7): configured units, service options, live preview, override ---
+  const { options: unitOptions } = useLookupOptions('/api/unit-types')
+  const [selectedServiceOptionIds, setSelectedServiceOptionIds] = useState<string[]>(() => serviceIdsFromOrder(order))
+  // Entered quantities for per-hour/per-stop services — and the billable pallet-days for
+  // per-pallet-day services (auto-filled from pallets × days, manually correctable).
+  const [serviceQuantities, setServiceQuantities] = useState<Record<string, string>>(() => serviceQuantitiesFromOrder(order))
+  // Per-pallet-day inputs: pallet count and day count, keyed by service option id.
+  const [servicePallets, setServicePallets] = useState<Record<string, string>>(() => servicePalletsFromOrder(order))
+  const [serviceDays, setServiceDays] = useState<Record<string, string>>(() => serviceDaysFromOrder(order))
+  // Optional free-text note per manually selected service (e.g. "Afgesproken met klant").
+  const [serviceNotes, setServiceNotes] = useState<Record<string, string>>(() => serviceNotesFromOrder(order))
+  // "+ Dienst of toeslag toevoegen" panel: the option being configured before it joins the
+  // manually-selected set. Its quantity/pallet/day/note inputs write directly into the same state
+  // maps used once selected, so nothing needs copying on "Toevoegen" — only the id moves.
+  const [addServicePanelOpen, setAddServicePanelOpen] = useState(false)
+  const [draftServiceOptionId, setDraftServiceOptionId] = useState('')
+  const [priceIsManual, setPriceIsManual] = useState(order?.priceIsManual ?? false)
+  const [priceOverrideReason, setPriceOverrideReason] = useState(order?.priceOverrideReason ?? '')
 
-  // Surface the selected customer's intake requirements (reference/PO/signed CMR) as hints.
-  useEffect(() => {
-    if (!customerId) return
-    let mounted = true
-    getCustomer(customerId)
-      .then((detail) => {
-        if (mounted) setLoadedCustomerDetail({ id: customerId, detail })
-      })
-      .catch(() => {})
-    return () => {
-      mounted = false
-    }
-  }, [customerId])
+  // --- One-off order pricing (Phase 6): the order carries its own price agreement, no contract ---
+  const [pricingSource, setPricingSource] = useState<'Contract' | 'OneOff'>(order?.pricingSource ?? 'Contract')
+  const [oneOffFixedAmount, setOneOffFixedAmount] = useState(
+    order?.oneOffFixedAmount === null || order?.oneOffFixedAmount === undefined ? '' : String(order.oneOffFixedAmount),
+  )
+  const [oneOffTimeMode, setOneOffTimeMode] = useState<'none' | 'separate' | 'combined'>(() =>
+    order?.oneOffIncludedCombinedMinutes != null
+      ? 'combined'
+      : order?.oneOffIncludedLoadingMinutes != null || order?.oneOffIncludedUnloadingMinutes != null
+        ? 'separate'
+        : 'none',
+  )
+  const [oneOffIncludedLoadingMinutes, setOneOffIncludedLoadingMinutes] = useState(
+    order?.oneOffIncludedLoadingMinutes == null ? '' : String(order.oneOffIncludedLoadingMinutes),
+  )
+  const [oneOffIncludedUnloadingMinutes, setOneOffIncludedUnloadingMinutes] = useState(
+    order?.oneOffIncludedUnloadingMinutes == null ? '' : String(order.oneOffIncludedUnloadingMinutes),
+  )
+  const [oneOffIncludedCombinedMinutes, setOneOffIncludedCombinedMinutes] = useState(
+    order?.oneOffIncludedCombinedMinutes == null ? '' : String(order.oneOffIncludedCombinedMinutes),
+  )
+  const [oneOffExtraHourlyRate, setOneOffExtraHourlyRate] = useState(
+    order?.oneOffExtraHourlyRate == null ? '' : String(order.oneOffExtraHourlyRate),
+  )
+  const [oneOffNotes, setOneOffNotes] = useState(order?.oneOffNotes ?? '')
 
-  // Derive so a stale detail (from a previously selected customer) is never shown.
-  const customerRequirements = loadedCustomerDetail?.id === customerId ? loadedCustomerDetail.detail : null
+  // --- Task 11: order-level included-time overrides (contract mode) — "Laad- en lostijd" ---
+  const [includedLoadingMinutesOverride, setIncludedLoadingMinutesOverride] = useState(
+    order?.includedLoadingMinutesOverride == null ? '' : String(order.includedLoadingMinutesOverride),
+  )
+  const [includedUnloadingMinutesOverride, setIncludedUnloadingMinutesOverride] = useState(
+    order?.includedUnloadingMinutesOverride == null ? '' : String(order.includedUnloadingMinutesOverride),
+  )
+  const [extraTimeHourlyRateOverride, setExtraTimeHourlyRateOverride] = useState(
+    order?.extraTimeHourlyRateOverride == null ? '' : String(order.extraTimeHourlyRateOverride),
+  )
+  const [extraTimeRoundingStepMinutes, setExtraTimeRoundingStepMinutes] = useState(
+    order?.extraTimeRoundingStepMinutes == null ? '' : String(order.extraTimeRoundingStepMinutes),
+  )
+  const [extraTimeMinimumBillableMinutes, setExtraTimeMinimumBillableMinutes] = useState(
+    order?.extraTimeMinimumBillableMinutes == null ? '' : String(order.extraTimeMinimumBillableMinutes),
+  )
+  // "Afwijken voor deze order" panel: starts open when the order already carries an override.
+  const [includedTimeOverrideOpen, setIncludedTimeOverrideOpen] = useState(
+    () => order?.includedLoadingMinutesOverride != null || order?.includedUnloadingMinutesOverride != null
+      || order?.extraTimeHourlyRateOverride != null || order?.extraTimeRoundingStepMinutes != null
+      || order?.extraTimeMinimumBillableMinutes != null,
+  )
+
+  // Reference data (customers, entities, services, unit master, warehouses, customer config +
+  // requirements, structured location hours) — fetched by the extracted hook.
+  const { customers, legalEntities, serviceOptions, unitMaster, warehouses, locationHours, customerConfig, customerRequirements } =
+    useOrderFormData(customerId, stops)
+  const preferredUnits = customerConfig?.preferredUnits ?? []
+  const customerServiceById = new Map(
+    (customerConfig?.serviceOptions ?? []).map((o) => [o.serviceOptionId, o]),
+  )
   const requirementHints = customerRequirements
     ? [
-        customerRequirements.customerReferenceRequired ? 'een klantreferentie is verplicht' : null,
-        customerRequirements.purchaseOrderRequired ? 'een bestelbon (PO) is vereist' : null,
-        customerRequirements.signedDeliveryNoteRequired ? 'een getekende leverbon (CMR) is vereist' : null,
+        customerRequirements.customerReferenceRequired ? t('transportOrders.form.hintReferenceRequired') : null,
+        customerRequirements.purchaseOrderRequired ? t('transportOrders.form.hintPoRequired') : null,
+        customerRequirements.signedDeliveryNoteRequired ? t('transportOrders.form.hintCmrRequired') : null,
       ].filter((hint): hint is string => hint !== null)
     : []
 
+  // Whole-form value snapshot: validation, submit payload and preview inputs read this.
+  const values: OrderFormValues = {
+    customerId, customerReference, orderDate, goodsDescription,
+    quantity, quantityUnit, quantityUnitCode, weightKg, volumeM3, palletCount,
+    distanceKm, loadingMeters,
+    adrRequired, craneRequired, plateauRequired, moffettRequired, isReturnMovement,
+    agreedPrice, notes, legalEntityId,
+    dieselSurchargeOverride, dieselSurchargePercentOverride, dieselSurchargeOverrideReason,
+    stops, cargoItems,
+    serviceOptions, selectedServiceOptionIds, serviceQuantities, servicePallets, serviceDays, serviceNotes,
+    priceIsManual, priceOverrideReason,
+    pricingSource, oneOffFixedAmount, oneOffTimeMode, oneOffIncludedLoadingMinutes,
+    oneOffIncludedUnloadingMinutes, oneOffIncludedCombinedMinutes, oneOffExtraHourlyRate, oneOffNotes,
+    includedLoadingMinutesOverride, includedUnloadingMinutesOverride, extraTimeHourlyRateOverride,
+    extraTimeRoundingStepMinutes, extraTimeMinimumBillableMinutes,
+    // Wave 1 §10: echo the loaded order's concurrency token on update.
+    version: order?.version,
+    craneJob: ownsCraneJob ? craneJob : undefined,
+  }
+  const errors = fieldErrorMap(clientErrors)
+
+  // Wave 2026-08-04 §2: commercial goods lines are the source of truth as soon as any row
+  // exists — the order summary derives from them and the header inputs disappear.
+  const derivedFromCargo = cargoItems.length > 0
+  const cargoSummary = derivedFromCargo ? computeCargoSummary(cargoItems, unitOptions) : null
+  const effectiveWeightKg = cargoSummary?.weight ?? (weightKg === '' ? null : Number(weightKg))
+  const effectivePalletCount = cargoSummary?.pallets ?? (palletCount === '' ? null : Number(palletCount))
+
+  // Warehouses the order touches (stop at a warehouse's master location) — mirrors the
+  // save-time derivation so warehouse-conditioned services preview identically.
+  const touchedWarehouseIds = warehouses
+    .filter((w) => stops.some((s) => s.locationId !== null && s.locationId === w.locationId))
+    .map((w) => w.id)
+  // Live price preview, debounced on the pricing-relevant inputs (extracted hook).
+  const preview = useOrderPricePreview(values, unitOptions, touchedWarehouseIds, effectiveWeightKg, effectivePalletCount)
+
+  // Every write to the stop list — including a single-field patch — goes through the one mutation
+  // path, so nothing can start from a stale list when two writes land in the same tick (N-1).
   function setStop(key: string, patch: Partial<StopFormRow>) {
-    setStops((rows) => rows.map((row) => (row.key === key ? { ...row, ...patch } : row)))
+    // A site stop keeps a predictable end: start + the activity's planned duration until typed.
+    mutateStops((rows) =>
+      rows.map((row) => (row.key === key ? applyStopPatch(row, patch, order?.activityDurationHours ?? null) : row)),
+    )
+  }
+
+  /** "Soort kraanopdracht": the kinds have disjoint stop sets; dropping filled stops asks first. */
+  function applyCraneKind(kind: CraneJobFormValues['kind']) {
+    mutateStops((rows) => switchStopsToKind(rows, kind === 'OnSiteLifting', emptyStop))
+    setCraneJob((job) => ({ ...job, kind }))
+    setClientErrors([])
+  }
+
+  function requestCraneKind(kind: CraneJobFormValues['kind']) {
+    const toSite = kind === 'OnSiteLifting'
+    if (toSite === onSite) return
+    if (kindSwitchDropsData(stops, toSite)) setPendingCraneKind(kind)
+    else applyCraneKind(kind)
   }
 
   function setCargo(key: string, patch: Partial<CargoFormRow>) {
     setCargoItems((rows) => rows.map((row) => (row.key === key ? { ...row, ...patch } : row)))
   }
 
+  const masterByCode = (code: string | null) =>
+    code ? unitMaster.find((u) => u.code.toUpperCase() === code.toUpperCase()) ?? null : null
+
+  /** Fixed dimensions come from the unit definition and are not editable per order line. */
+  const cargoDimensionsFixed = (cargo: CargoFormRow) =>
+    masterByCode(cargo.quantityUnitCode)?.dimensionBehavior === 'Fixed'
+
+  /** Selecting a unit auto-fills physical defaults from the unit master (shared pure helper). */
+  function applyCargoUnit(key: string, code: string | null) {
+    const master = masterByCode(code)
+    setCargoItems((rows) => rows.map((row) => (row.key === key ? applyUnitToCargoRow(row, code, master) : row)))
+  }
+
   function moveStop(index: number, delta: number) {
-    setStops((rows) => {
+    mutateStops((rows) => {
       const target = index + delta
       if (target < 0 || target >= rows.length) return rows
       const next = [...rows]
@@ -213,404 +318,245 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel }: T
   async function handleSubmit(event: FormEvent) {
     event.preventDefault()
     setFormError(null)
-    if (!customerId) {
-      setFormError('Selecteer een klant.')
-      return
-    }
-    if (!goodsDescription.trim()) {
-      setFormError('Een omschrijving van de goederen is verplicht.')
-      return
-    }
-    for (const stop of stops) {
-      if (!stop.locationId && !stop.city.trim()) {
-        setFormError('Elke stop heeft een locatie of minstens een plaatsnaam nodig.')
-        return
-      }
-      const windowPairs: Array<[string, string]> = [
-        [stop.plannedFrom, stop.plannedTo],
-        [stop.requestedFrom, stop.requestedTo],
-        [stop.confirmedFrom, stop.confirmedTo],
-      ]
-      if (windowPairs.some(([from, to]) => from && to && to < from)) {
-        setFormError('Het einde van een tijdvenster moet na het begin liggen.')
-        return
-      }
-      if (stop.earliestAllowed && stop.latestAllowed && stop.latestAllowed < stop.earliestAllowed) {
-        setFormError('Het uiterste tijdstip moet na het vroegst toegelaten tijdstip liggen.')
-        return
-      }
-    }
-    for (const cargo of cargoItems) {
-      if (!cargo.description.trim()) {
-        setFormError('Elke goederenlijn heeft een omschrijving nodig.')
-        return
-      }
-      if (cargo.expectedQuantity === '' || Number(cargo.expectedQuantity) <= 0) {
-        setFormError('De verwachte hoeveelheid van een goederenlijn moet groter dan nul zijn.')
-        return
-      }
-    }
-    const barcodes = cargoItems.map((c) => c.barcode.trim().toLowerCase()).filter(Boolean)
-    if (barcodes.length !== new Set(barcodes).size) {
-      setFormError('Een barcode mag maar één keer voorkomen binnen dezelfde opdracht.')
+    // Wave 1 §12: one validate() pass listing EVERY failing field, rendered by the
+    // ValidationSummary; submit jumps to the first failing section automatically.
+    const validationErrors = validateOrderForm(values)
+    setClientErrors(validationErrors)
+    if (validationErrors.length > 0) {
+      setActive(validationErrors[0].section)
       return
     }
 
-    const input: TransportOrderInput = {
-      customerId,
-      customerReference: customerReference.trim() || null,
-      orderDate: orderDate || null,
-      goodsDescription: goodsDescription.trim(),
-      quantity: quantity === '' ? null : Number(quantity),
-      quantityUnit: quantityUnit.trim() || null,
-      weightKg: weightKg === '' ? null : Number(weightKg),
-      volumeM3: volumeM3 === '' ? null : Number(volumeM3),
-      palletCount: palletCount === '' ? null : Number(palletCount),
-      adrRequired,
-      craneRequired,
-      agreedPrice: agreedPrice === '' ? null : Number(agreedPrice),
-      notes: notes.trim() || null,
-      stops: stops.map((stop) => ({
-        stopType: stop.stopType,
-        locationId: stop.locationId || null,
-        locationName: stop.locationId ? null : stop.locationName.trim() || null,
-        address: stop.address.trim() || null,
-        postalCode: stop.postalCode.trim() || null,
-        city: stop.city.trim() || null,
-        countryCode: stop.countryCode.trim() || null,
-        plannedFrom: stop.plannedFrom ? `${stop.plannedFrom}:00Z` : null,
-        plannedTo: stop.plannedTo ? `${stop.plannedTo}:00Z` : null,
-        requestedFrom: stop.requestedFrom ? `${stop.requestedFrom}:00Z` : null,
-        requestedTo: stop.requestedTo ? `${stop.requestedTo}:00Z` : null,
-        confirmedFrom: stop.confirmedFrom ? `${stop.confirmedFrom}:00Z` : null,
-        confirmedTo: stop.confirmedTo ? `${stop.confirmedTo}:00Z` : null,
-        earliestAllowed: stop.earliestAllowed ? `${stop.earliestAllowed}:00Z` : null,
-        latestAllowed: stop.latestAllowed ? `${stop.latestAllowed}:00Z` : null,
-        appointmentRequired: stop.appointmentRequired,
-        appointmentReference: stop.appointmentReference.trim() || null,
-        reference: stop.reference.trim() || null,
-        instructions: stop.instructions.trim() || null,
-        accessInstructions: stop.accessInstructions.trim() || null,
-        loadingInstructions: stop.loadingInstructions.trim() || null,
-        unloadingInstructions: stop.unloadingInstructions.trim() || null,
-      })),
-      cargoItems: cargoItems.map((cargo) => ({
-        description: cargo.description.trim(),
-        barcode: cargo.barcode.trim() || null,
-        expectedQuantity: Number(cargo.expectedQuantity),
-        quantityUnit: cargo.quantityUnit.trim() || null,
-        notes: cargo.notes.trim() || null,
-      })),
-    }
-
+    const input = buildSubmitPayload(values)
     setSaving(true)
     try {
       await onSubmit(input)
     } catch (err) {
       setFormError(
-        err instanceof ApiError && err.status === 400
-          ? 'De opdracht kon niet worden opgeslagen — controleer de invoer.'
-          : 'De opdracht kon niet worden opgeslagen.',
+        err instanceof ApiError && err.status === 409
+          ? t('transportOrders.form.conflict')
+          : err instanceof ApiError && err.status === 400
+            ? t('transportOrders.form.badRequest')
+            : t('transportOrders.form.saveFailed'),
       )
     } finally {
       setSaving(false)
     }
   }
 
+  const documentenContent = documentsSection ?? (
+    <p className="placeholder-text">{t('transportOrders.form.docsAfterCreate')}</p>
+  )
+
+  const sections: SectionDef[] = [
+    {
+      id: 'algemeen',
+      label: t('transportOrders.form.sections.algemeen'),
+      render: () => (
+        <GeneralSection
+          {...{
+            mode, order, customers, legalEntities, customerRequirements, requirementHints,
+            customerId, setCustomerId, customerReference, setCustomerReference, orderDate, setOrderDate,
+            legalEntityId, setLegalEntityId, dieselSurchargeOverride, setDieselSurchargeOverride,
+            dieselSurchargePercentOverride, setDieselSurchargePercentOverride,
+            dieselSurchargeOverrideReason, setDieselSurchargeOverrideReason, saving, errors,
+          }}
+        />
+      ),
+    },
+    {
+      id: 'route',
+      label: t('transportOrders.form.sections.route'),
+      render: () => (
+        <>
+        {ownsCraneJob && <CraneJobKindField idPrefix="tof" kind={craneJob.kind} onChange={requestCraneKind} disabled={saving} />}
+        <RouteSection
+          {...{ stops, customerId, saving, locationHours, errors, setStop, moveStop }}
+          canSaveToAddressBook={canCreateLocations && Boolean(customerId)}
+          siteDurationHours={order?.activityDurationHours ?? null}
+          onAddStop={(stopType) => mutateStops((rows) => [...rows, emptyStop(stopType)])}
+          onRemoveStop={(key) => mutateStops((rows) => rows.filter((row) => row.key !== key))}
+          onRequestRefresh={setRefreshTarget}
+          onQuickCreate={
+            customerId && canCreateLocations
+              ? (name) => new Promise<LocationOption | null>((resolve) => setQuickCreate({ name, resolve }))
+              : undefined
+          }
+        />
+        {onSite && (
+          <OnSiteWorkFields
+            idPrefix="tof"
+            job={craneJob}
+            onChange={(patch) => setCraneJob((job) => ({ ...job, ...patch }))}
+            disabled={saving}
+            descriptionError={errors.workDescription}
+          />
+        )}
+        </>
+      ),
+    },
+    {
+      id: 'goederen',
+      label: t('transportOrders.form.sections.goederen'),
+      render: () => (
+        <GoodsSection
+          {...{
+            goodsDescription, setGoodsDescription, quantity, setQuantity, quantityUnit,
+            quantityUnitCode, setQuantityUnitCode, weightKg, setWeightKg, volumeM3, setVolumeM3,
+            palletCount, setPalletCount, distanceKm, setDistanceKm, loadingMeters, setLoadingMeters,
+            adrRequired, setAdrRequired, craneRequired, setCraneRequired,
+            plateauRequired, setPlateauRequired, moffettRequired, setMoffettRequired,
+            isReturnMovement, setIsReturnMovement,
+            derivedFromCargo, cargoSummary, cargoItems, stops, unitOptions, preferredUnits,
+            setCargo, applyCargoUnit, cargoDimensionsFixed, saving, errors,
+          }}
+          onAddCargoRow={() => setCargoItems((rows) => [...rows, emptyCargoRow()])}
+          onAddCargoRowFromHeader={() =>
+            setCargoItems((rows) => [
+              ...rows,
+              cargoRowFromHeader({ quantity, quantityUnit, quantityUnitCode, weightKg, volumeM3, palletCount }),
+            ])
+          }
+          onDuplicateCargoRow={(key) => setCargoItems((rows) => duplicateCargoRowInList(rows, key))}
+          onRemoveCargoRow={(key) => setCargoItems((rows) => rows.filter((row) => row.key !== key))}
+        />
+      ),
+    },
+    {
+      id: 'services',
+      label: t('transportOrders.form.sections.services'),
+      optional: true,
+      render: () => (
+        <ServicesSection
+          {...{
+            saving, serviceOptions, customerServiceById, preview, stops, palletCount, pricingSource,
+            selectedServiceOptionIds, setSelectedServiceOptionIds,
+            serviceQuantities, setServiceQuantities, servicePallets, setServicePallets,
+            serviceDays, setServiceDays, serviceNotes, setServiceNotes,
+            addServicePanelOpen, setAddServicePanelOpen, draftServiceOptionId, setDraftServiceOptionId,
+            includedLoadingMinutesOverride, setIncludedLoadingMinutesOverride,
+            includedUnloadingMinutesOverride, setIncludedUnloadingMinutesOverride,
+            extraTimeHourlyRateOverride, setExtraTimeHourlyRateOverride,
+            extraTimeRoundingStepMinutes, setExtraTimeRoundingStepMinutes,
+            extraTimeMinimumBillableMinutes, setExtraTimeMinimumBillableMinutes,
+            includedTimeOverrideOpen, setIncludedTimeOverrideOpen,
+          }}
+        />
+      ),
+    },
+    {
+      id: 'documenten',
+      label: t('transportOrders.form.sections.documenten'),
+      optional: true,
+      panel: documentsSectionIsPanel,
+      render: () => documentenContent,
+    },
+    {
+      id: 'prijs',
+      label: t('transportOrders.form.sections.prijs'),
+      render: () => (
+        <PriceSection
+          {...{
+            saving, orderDate, preview, canOverridePrice, pricingSource, setPricingSource,
+            oneOffFixedAmount, setOneOffFixedAmount, oneOffTimeMode, setOneOffTimeMode,
+            oneOffIncludedLoadingMinutes, setOneOffIncludedLoadingMinutes,
+            oneOffIncludedUnloadingMinutes, setOneOffIncludedUnloadingMinutes,
+            oneOffIncludedCombinedMinutes, setOneOffIncludedCombinedMinutes,
+            oneOffExtraHourlyRate, setOneOffExtraHourlyRate, oneOffNotes, setOneOffNotes,
+            priceIsManual, setPriceIsManual, priceOverrideReason, setPriceOverrideReason,
+            agreedPrice, setAgreedPrice, errors,
+          }}
+        />
+      ),
+    },
+    {
+      id: 'samenvatting',
+      label: t('transportOrders.form.sections.samenvatting'),
+      render: () => (
+        <SummarySection
+          {...{
+            order, customers, customerId, stops, cargoItems, quantity, quantityUnit, quantityUnitCode,
+            weightKg, unitOptions, serviceOptions, selectedServiceOptionIds, preview,
+            priceIsManual, agreedPrice, notes, setNotes, saving,
+          }}
+        />
+      ),
+    },
+  ]
+
+  const summaryFieldErrors = Object.fromEntries(
+    clientErrors.map((error) => [error.field, clientErrors.filter((e) => e.field === error.field).map((e) => e.message)]),
+  )
+  const summaryFieldLabels = Object.fromEntries(clientErrors.map((error) => [error.field, error.label]))
+
   return (
     <form className="tof" onSubmit={handleSubmit} noValidate>
-      {formError && (
-        <div className="tof-error" role="alert">
-          {formError}
-        </div>
-      )}
+      <ValidationSummary
+        message={formError}
+        fieldErrors={summaryFieldErrors}
+        fieldLabels={summaryFieldLabels}
+        onSelect={(path) => {
+          const target = clientErrors.find((error) => error.field === path)
+          if (target) setActive(target.section)
+        }}
+      />
 
-      <div className="tof-row">
-        <FormField label="Klant" htmlFor="to-customer" required>
-          <select id="to-customer" value={customerId} onChange={(e) => setCustomerId(e.target.value)} disabled={saving}>
-            <option value="">Selecteer een klant…</option>
-            {customers.map((customer) => (
-              <option key={customer.id} value={customer.id}>
-                {customer.name} ({customer.customerNumber})
-              </option>
-            ))}
-          </select>
-        </FormField>
-        <FormField label="Klantreferentie" htmlFor="to-ref">
-          <input id="to-ref" value={customerReference} onChange={(e) => setCustomerReference(e.target.value)} disabled={saving} maxLength={100} />
-        </FormField>
-        <FormField label="Opdrachtdatum" htmlFor="to-date">
-          <input id="to-date" type="date" value={orderDate} onChange={(e) => setOrderDate(e.target.value)} disabled={saving} />
-        </FormField>
-      </div>
-
-      {requirementHints.length > 0 && (
-        <p className="tof-customer-requirements" role="note">
-          Let op voor deze klant: {requirementHints.join(', ')}.
-        </p>
-      )}
-      {customerRequirements?.isBlocked && (
-        <p className="tof-error" role="alert">
-          Deze klant is geblokkeerd{customerRequirements.blockReason ? ` (${customerRequirements.blockReason})` : ''}; er
-          kunnen geen nieuwe opdrachten voor worden aangemaakt.
-        </p>
-      )}
-
-      <FormField label="Omschrijving goederen" htmlFor="to-goods" required>
-        <textarea id="to-goods" rows={2} value={goodsDescription} onChange={(e) => setGoodsDescription(e.target.value)} disabled={saving} maxLength={1000} />
-      </FormField>
-
-      <div className="tof-row tof-row-4">
-        <FormField label="Aantal" htmlFor="to-qty">
-          <input id="to-qty" type="number" min={0} step="0.01" value={quantity} onChange={(e) => setQuantity(e.target.value)} disabled={saving} />
-        </FormField>
-        <FormField label="Eenheid" htmlFor="to-unit">
-          <input id="to-unit" value={quantityUnit} onChange={(e) => setQuantityUnit(e.target.value)} disabled={saving} maxLength={50} placeholder="bv. paletten" />
-        </FormField>
-        <FormField label="Gewicht (kg)" htmlFor="to-weight">
-          <input id="to-weight" type="number" min={0} step="0.01" value={weightKg} onChange={(e) => setWeightKg(e.target.value)} disabled={saving} />
-        </FormField>
-        <FormField label="Volume (m³)" htmlFor="to-volume">
-          <input id="to-volume" type="number" min={0} step="0.01" value={volumeM3} onChange={(e) => setVolumeM3(e.target.value)} disabled={saving} />
-        </FormField>
-      </div>
-
-      <div className="tof-row tof-row-4">
-        <FormField label="Paletten" htmlFor="to-pallets">
-          <input id="to-pallets" type="number" min={0} value={palletCount} onChange={(e) => setPalletCount(e.target.value)} disabled={saving} />
-        </FormField>
-        <FormField label="Afgesproken prijs (€)" htmlFor="to-price">
-          <input id="to-price" type="number" min={0} step="0.01" value={agreedPrice} onChange={(e) => setAgreedPrice(e.target.value)} disabled={saving} />
-        </FormField>
-        <label className="tof-checkbox">
-          <input type="checkbox" checked={adrRequired} onChange={(e) => setAdrRequired(e.target.checked)} disabled={saving} />
-          ADR-transport
-        </label>
-        <label className="tof-checkbox">
-          <input type="checkbox" checked={craneRequired} onChange={(e) => setCraneRequired(e.target.checked)} disabled={saving} />
-          Kraan vereist
-        </label>
-      </div>
-
-      <div className="tof-stops-header">
-        <h3>Stops</h3>
-        <div className="tof-stops-actions">
-          <Button variant="secondary" onClick={() => setStops((rows) => [...rows, emptyStop('Loading')])} disabled={saving}>
-            + Laadstop
-          </Button>
-          <Button variant="secondary" onClick={() => setStops((rows) => [...rows, emptyStop('Unloading')])} disabled={saving}>
-            + Losstop
-          </Button>
-        </div>
-      </div>
-
-      {stops.map((stop, index) => (
-        <fieldset key={stop.key} className="tof-stop">
-          <legend>
-            {index + 1}. {STOP_TYPE_LABELS[stop.stopType]}
-          </legend>
-          <div className="tof-stop-toolbar">
-            <select
-              value={stop.stopType}
-              onChange={(e) => setStop(stop.key, { stopType: e.target.value as StopInput['stopType'] })}
-              disabled={saving}
-              aria-label="Stoptype"
-            >
-              <option value="Loading">Laden</option>
-              <option value="Unloading">Lossen</option>
-            </select>
-            <button type="button" className="tof-link" onClick={() => moveStop(index, -1)} disabled={saving || index === 0}>
-              ↑
-            </button>
-            <button type="button" className="tof-link" onClick={() => moveStop(index, 1)} disabled={saving || index === stops.length - 1}>
-              ↓
-            </button>
-            <button
-              type="button"
-              className="tof-link tof-link-danger"
-              onClick={() => setStops((rows) => rows.filter((row) => row.key !== stop.key))}
-              disabled={saving}
-            >
-              Verwijderen
-            </button>
-          </div>
-          <div className="tof-row">
-            <FormField label="Locatie (stamgegevens)" htmlFor={`st-loc-${stop.key}`}>
-              <LocationSelect
-                id={`st-loc-${stop.key}`}
-                value={stop.locationId}
-                onChange={(locationId) => setStop(stop.key, { locationId })}
-                disabled={saving}
-                placeholder="Geen — adres hieronder"
-              />
-            </FormField>
-            <FormField label="Naam (vrij adres)" htmlFor={`st-name-${stop.key}`}>
-              <input
-                id={`st-name-${stop.key}`}
-                value={stop.locationName}
-                onChange={(e) => setStop(stop.key, { locationName: e.target.value })}
-                disabled={saving || stop.locationId !== ''}
-                maxLength={200}
-              />
-            </FormField>
-          </div>
-          {stop.locationId === '' && (
-            <div className="tof-row tof-row-4">
-              <FormField label="Adres" htmlFor={`st-addr-${stop.key}`}>
-                <input id={`st-addr-${stop.key}`} value={stop.address} onChange={(e) => setStop(stop.key, { address: e.target.value })} disabled={saving} maxLength={300} />
-              </FormField>
-              <FormField label="Postcode" htmlFor={`st-pc-${stop.key}`}>
-                <input id={`st-pc-${stop.key}`} value={stop.postalCode} onChange={(e) => setStop(stop.key, { postalCode: e.target.value })} disabled={saving} maxLength={20} />
-              </FormField>
-              <FormField label="Plaats" htmlFor={`st-city-${stop.key}`} required>
-                <input id={`st-city-${stop.key}`} value={stop.city} onChange={(e) => setStop(stop.key, { city: e.target.value })} disabled={saving} maxLength={100} />
-              </FormField>
-              <FormField label="Land" htmlFor={`st-cc-${stop.key}`}>
-                <CountryCombobox
-                  id={`st-cc-${stop.key}`}
-                  value={stop.countryCode || null}
-                  onChange={(code) => setStop(stop.key, { countryCode: code ?? '' })}
-                  disabled={saving}
-                />
-              </FormField>
-            </div>
-          )}
-          <div className="tof-row tof-row-4">
-            <FormField label="Venster van" htmlFor={`st-from-${stop.key}`}>
-              <input id={`st-from-${stop.key}`} type="datetime-local" value={stop.plannedFrom} onChange={(e) => setStop(stop.key, { plannedFrom: e.target.value })} disabled={saving} />
-            </FormField>
-            <FormField label="Venster tot" htmlFor={`st-to-${stop.key}`}>
-              <input id={`st-to-${stop.key}`} type="datetime-local" value={stop.plannedTo} onChange={(e) => setStop(stop.key, { plannedTo: e.target.value })} disabled={saving} />
-            </FormField>
-            <FormField label="Referentie" htmlFor={`st-ref-${stop.key}`}>
-              <input id={`st-ref-${stop.key}`} value={stop.reference} onChange={(e) => setStop(stop.key, { reference: e.target.value })} disabled={saving} maxLength={100} />
-            </FormField>
-            <FormField label="Instructies" htmlFor={`st-instr-${stop.key}`}>
-              <input id={`st-instr-${stop.key}`} value={stop.instructions} onChange={(e) => setStop(stop.key, { instructions: e.target.value })} disabled={saving} maxLength={2000} />
-            </FormField>
-          </div>
-          <details
-            className="tof-stop-extended"
-            open={Boolean(
-              stop.requestedFrom || stop.requestedTo || stop.confirmedFrom || stop.confirmedTo ||
-              stop.earliestAllowed || stop.latestAllowed || stop.appointmentRequired ||
-              stop.accessInstructions || stop.loadingInstructions || stop.unloadingInstructions,
+      <SectionedForm
+        sections={sections}
+        activeId={activeId}
+        onActiveChange={setActive}
+        actions={
+          <div className="tof-actions">
+            {onCancel && (
+              <Button variant="secondary" onClick={onCancel} disabled={saving}>
+                {t('ui.actions.cancel')}
+              </Button>
             )}
-          >
-            <summary>Tijdvensters, afspraak &amp; instructies</summary>
-            <div className="tof-row tof-row-4">
-              <FormField label="Gevraagd van" htmlFor={`st-reqfrom-${stop.key}`} hint="Venster gevraagd door de klant">
-                <input id={`st-reqfrom-${stop.key}`} type="datetime-local" value={stop.requestedFrom} onChange={(e) => setStop(stop.key, { requestedFrom: e.target.value })} disabled={saving} />
-              </FormField>
-              <FormField label="Gevraagd tot" htmlFor={`st-reqto-${stop.key}`}>
-                <input id={`st-reqto-${stop.key}`} type="datetime-local" value={stop.requestedTo} onChange={(e) => setStop(stop.key, { requestedTo: e.target.value })} disabled={saving} />
-              </FormField>
-              <FormField label="Bevestigd van" htmlFor={`st-conffrom-${stop.key}`} hint="Venster bevestigd aan de klant">
-                <input id={`st-conffrom-${stop.key}`} type="datetime-local" value={stop.confirmedFrom} onChange={(e) => setStop(stop.key, { confirmedFrom: e.target.value })} disabled={saving} />
-              </FormField>
-              <FormField label="Bevestigd tot" htmlFor={`st-confto-${stop.key}`}>
-                <input id={`st-confto-${stop.key}`} type="datetime-local" value={stop.confirmedTo} onChange={(e) => setStop(stop.key, { confirmedTo: e.target.value })} disabled={saving} />
-              </FormField>
-            </div>
-            <div className="tof-row tof-row-4">
-              <FormField label="Vroegst toegelaten" htmlFor={`st-earliest-${stop.key}`}>
-                <input id={`st-earliest-${stop.key}`} type="datetime-local" value={stop.earliestAllowed} onChange={(e) => setStop(stop.key, { earliestAllowed: e.target.value })} disabled={saving} />
-              </FormField>
-              <FormField label="Uiterste tijdstip" htmlFor={`st-latest-${stop.key}`} hint="Na dit tijdstip is een reden voor late aankomst verplicht">
-                <input id={`st-latest-${stop.key}`} type="datetime-local" value={stop.latestAllowed} onChange={(e) => setStop(stop.key, { latestAllowed: e.target.value })} disabled={saving} />
-              </FormField>
-              <label className="tof-checkbox">
-                <input type="checkbox" checked={stop.appointmentRequired} onChange={(e) => setStop(stop.key, { appointmentRequired: e.target.checked })} disabled={saving} />
-                Afspraak verplicht
-              </label>
-              <FormField label="Afspraakreferentie" htmlFor={`st-appref-${stop.key}`}>
-                <input id={`st-appref-${stop.key}`} value={stop.appointmentReference} onChange={(e) => setStop(stop.key, { appointmentReference: e.target.value })} disabled={saving} maxLength={100} placeholder="bv. slotnummer" />
-              </FormField>
-            </div>
-            <div className="tof-row">
-              <FormField label="Toegangsinstructies" htmlFor={`st-access-${stop.key}`}>
-                <input id={`st-access-${stop.key}`} value={stop.accessInstructions} onChange={(e) => setStop(stop.key, { accessInstructions: e.target.value })} disabled={saving} maxLength={2000} />
-              </FormField>
-              {stop.stopType === 'Loading' ? (
-                <FormField label="Laadinstructies" htmlFor={`st-loadinstr-${stop.key}`}>
-                  <input id={`st-loadinstr-${stop.key}`} value={stop.loadingInstructions} onChange={(e) => setStop(stop.key, { loadingInstructions: e.target.value })} disabled={saving} maxLength={2000} />
-                </FormField>
-              ) : (
-                <FormField label="Losinstructies" htmlFor={`st-unloadinstr-${stop.key}`}>
-                  <input id={`st-unloadinstr-${stop.key}`} value={stop.unloadingInstructions} onChange={(e) => setStop(stop.key, { unloadingInstructions: e.target.value })} disabled={saving} maxLength={2000} />
-                </FormField>
-              )}
-            </div>
-          </details>
-        </fieldset>
-      ))}
+            <Button type="submit" disabled={saving}>
+              {saving ? t('transportOrders.form.saving') : submitLabel}
+            </Button>
+          </div>
+        }
+      />
 
-      <div className="tof-stops-header">
-        <h3>Goederenlijnen (scanbaar)</h3>
-        <div className="tof-stops-actions">
-          <Button
-            variant="secondary"
-            onClick={() =>
-              setCargoItems((rows) => [
-                ...rows,
-                { key: nextStopKey(), description: '', barcode: '', expectedQuantity: '1', quantityUnit: '', notes: '' },
-              ])
-            }
-            disabled={saving}
-          >
-            + Goederenlijn
-          </Button>
-        </div>
-      </div>
-      {cargoItems.length === 0 && (
-        <p className="tof-cargo-hint">
-          Zonder goederenlijnen kan de chauffeur niet scannen; de opdracht blijft wel gewoon uitvoerbaar.
-        </p>
+      {quickCreate && customerId && (
+        <LocationQuickCreateDialog
+          customerId={customerId}
+          initialName={quickCreate.name}
+          onClose={(created) => {
+            quickCreate.resolve(created)
+            setQuickCreate(null)
+          }}
+        />
       )}
-      {cargoItems.map((cargo, index) => (
-        <fieldset key={cargo.key} className="tof-stop">
-          <legend>Lijn {index + 1}</legend>
-          <div className="tof-row tof-row-4">
-            <FormField label="Omschrijving" htmlFor={`cg-desc-${cargo.key}`} required>
-              <input id={`cg-desc-${cargo.key}`} value={cargo.description} onChange={(e) => setCargo(cargo.key, { description: e.target.value })} disabled={saving} maxLength={300} />
-            </FormField>
-            <FormField label="Barcode" htmlFor={`cg-bc-${cargo.key}`}>
-              <input id={`cg-bc-${cargo.key}`} value={cargo.barcode} onChange={(e) => setCargo(cargo.key, { barcode: e.target.value })} disabled={saving} maxLength={100} />
-            </FormField>
-            <FormField label="Verwacht aantal" htmlFor={`cg-qty-${cargo.key}`} required>
-              <input id={`cg-qty-${cargo.key}`} type="number" min={0.01} step="0.01" value={cargo.expectedQuantity} onChange={(e) => setCargo(cargo.key, { expectedQuantity: e.target.value })} disabled={saving} />
-            </FormField>
-            <FormField label="Eenheid" htmlFor={`cg-unit-${cargo.key}`}>
-              <input id={`cg-unit-${cargo.key}`} value={cargo.quantityUnit} onChange={(e) => setCargo(cargo.key, { quantityUnit: e.target.value })} disabled={saving} maxLength={50} placeholder="bv. colli" />
-            </FormField>
-          </div>
-          <div className="tof-stop-toolbar">
-            <button
-              type="button"
-              className="tof-link tof-link-danger"
-              onClick={() => setCargoItems((rows) => rows.filter((row) => row.key !== cargo.key))}
-              disabled={saving}
-            >
-              Verwijderen
-            </button>
-          </div>
-        </fieldset>
-      ))}
 
-      <FormField label="Notities" htmlFor="to-notes">
-        <textarea id="to-notes" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} disabled={saving} maxLength={4000} />
-      </FormField>
+      {refreshTarget && (
+        <ConfirmDialog
+          title={t('transportOrders.form.refreshTitle')}
+          message={t('transportOrders.form.refreshMessage')}
+          confirmLabel={t('transportOrders.form.refreshConfirm')}
+          onConfirm={() => {
+            // The re-copy also ends a deliberate deviation from the address book (D3).
+            setStop(refreshTarget, { refreshSnapshot: true, addressOverridden: false })
+            setRefreshTarget(null)
+          }}
+          onCancel={() => setRefreshTarget(null)}
+        />
+      )}
 
-      <div className="tof-actions">
-        {onCancel && (
-          <Button variant="secondary" onClick={onCancel} disabled={saving}>
-            Annuleren
-          </Button>
-        )}
-        <Button type="submit" disabled={saving}>
-          {saving ? 'Opslaan…' : submitLabel}
-        </Button>
-      </div>
+      {pendingCraneKind && (
+        <ConfirmDialog
+          title={t('stopEditor.crane.switchTitle')}
+          message={t('stopEditor.crane.switchMessage')}
+          confirmLabel={t('stopEditor.crane.switchConfirm')}
+          destructive
+          onConfirm={() => {
+            applyCraneKind(pendingCraneKind)
+            setPendingCraneKind(null)
+          }}
+          onCancel={() => setPendingCraneKind(null)}
+        />
+      )}
     </form>
   )
 }

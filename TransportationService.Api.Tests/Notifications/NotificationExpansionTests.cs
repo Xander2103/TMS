@@ -2,6 +2,7 @@ using TransportationService.Api.Modules.Employees.Entities;
 using TransportationService.Api.Modules.Fleet.Entities;
 using TransportationService.Api.Modules.Identity.Entities;
 using TransportationService.Api.Modules.Identity.Services;
+using TransportationService.Api.Modules.Messaging.Entities;
 using TransportationService.Api.Modules.Notifications.Entities;
 using TransportationService.Api.Modules.Notifications.Services;
 using TransportationService.Api.Modules.Qualifications.Entities;
@@ -198,8 +199,8 @@ public class NotificationExpansionTests
         var producer = new ExpiryNotificationProducer(h.Db.Context, new TestClock(Now));
         await producer.ProduceForTenantAsync(h.TenantId, CancellationToken.None);
 
-        Assert.Contains(h.Db.Context.Notifications, n => n.Type == "qualification_expiring" && n.UserId == h.Me);
-        Assert.Contains(h.Db.Context.Notifications, n => n.Type == "document_expiring");
+        Assert.Contains(h.Db.Context.Notifications, n => n.Type == MessageKinds.PersonnelQualificationExpiry && n.UserId == h.Me);
+        Assert.Contains(h.Db.Context.Notifications, n => n.Type == MessageKinds.FleetDocumentExpiry);
         var firstRunCount = h.Db.Context.Notifications.Count();
 
         // Second run inside the dedupe window produces nothing new.

@@ -2,18 +2,20 @@ import { useState } from 'react'
 import { Button } from '../../../components/ui/Button'
 import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
+import { useLocale } from '../../../i18n/localeContext'
 import { apiBaseUrl } from '../../../config/env'
 import { getAccessToken } from '../../auth/authStorage'
 
+/** Vertaalsleutels per rapportcode — renderen als t(label). */
 const REPORTS: Array<{ key: string; label: string }> = [
-  { key: 'order-packages', label: 'Colli per opdracht' },
-  { key: 'trip-packages', label: 'Colli per rit' },
-  { key: 'scan-activity', label: 'Scanactiviteit' },
-  { key: 'package-exceptions', label: 'Colli-meldingen' },
-  { key: 'missing-packages', label: 'Vermiste colli' },
-  { key: 'damaged-packages', label: 'Beschadigde colli' },
-  { key: 'returns', label: 'Retouren' },
-  { key: 'delivery-performance', label: 'Leverprestatie per dag' },
+  { key: 'order-packages', label: 'packages.reports.orderPackages' },
+  { key: 'trip-packages', label: 'packages.reports.tripPackages' },
+  { key: 'scan-activity', label: 'packages.reports.scanActivity' },
+  { key: 'package-exceptions', label: 'packages.reports.packageExceptions' },
+  { key: 'missing-packages', label: 'packages.reports.missingPackages' },
+  { key: 'damaged-packages', label: 'packages.reports.damagedPackages' },
+  { key: 'returns', label: 'packages.reports.returns' },
+  { key: 'delivery-performance', label: 'packages.reports.deliveryPerformance' },
 ]
 
 function isoDaysAgo(days: number): string {
@@ -24,6 +26,7 @@ function isoDaysAgo(days: number): string {
 
 /** XLSX download for the eight package reports (package_reports.export). */
 export function PackageReportsControl() {
+  const { t } = useLocale()
   const { hasPermission } = useAuth()
   const { showError } = useToast()
   const [report, setReport] = useState(REPORTS[0].key)
@@ -51,7 +54,7 @@ export function PackageReportsControl() {
       anchor.click()
       URL.revokeObjectURL(url)
     } catch {
-      showError('De export is mislukt.')
+      showError(t('packages.reports.exportFailed'))
     } finally {
       setBusy(false)
     }
@@ -59,17 +62,17 @@ export function PackageReportsControl() {
 
   return (
     <span className="pk-reports-control">
-      <select value={report} onChange={(e) => setReport(e.target.value)} disabled={busy} aria-label="Colli-rapport">
+      <select value={report} onChange={(e) => setReport(e.target.value)} disabled={busy} aria-label={t('packages.reports.reportAria')}>
         {REPORTS.map((item) => (
           <option key={item.key} value={item.key}>
-            {item.label}
+            {t(item.label)}
           </option>
         ))}
       </select>
-      <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} disabled={busy} aria-label="Van" />
-      <input type="date" value={to} onChange={(e) => setTo(e.target.value)} disabled={busy} aria-label="Tot" />
+      <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} disabled={busy} aria-label={t('packages.reports.fromAria')} />
+      <input type="date" value={to} onChange={(e) => setTo(e.target.value)} disabled={busy} aria-label={t('packages.reports.toAria')} />
       <Button variant="secondary" onClick={() => void download()} disabled={busy}>
-        {busy ? 'Exporteren…' : 'Colli-rapport (Excel)'}
+        {busy ? t('packages.reports.exportBusy') : t('packages.reports.exportButton')}
       </Button>
     </span>
   )

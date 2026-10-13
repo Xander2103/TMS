@@ -1,0 +1,53 @@
+{
+  "setup": {
+    "title": "Configurer la pointeuse",
+    "hint": "Collez la clé de provisioning depuis Paramètres → Enregistrement des heures.",
+    "keyPlaceholder": "Clé de provisioning",
+    "keyLabel": "Clé de provisioning",
+    "register": "Enregistrer",
+    "invalidKey": "Clé non reconnue. Vérifiez la clé de provisioning.",
+    "deviceRemoved": "Cette pointeuse n'est pas (plus) enregistrée. Saisissez une nouvelle clé.",
+    "offline": "Pas de connexion au serveur. Réessayez."
+  },
+  "pin": {
+    "prompt": "Entrez votre code",
+    "digitsEntered": "{count} chiffres saisis",
+    "erase": "Effacer",
+    "confirm": "Confirmer"
+  },
+  "welcome": {
+    "title": "Bienvenue, {name}",
+    "workingSince": "Au travail depuis {time} · aujourd'hui {duration}",
+    "breakSince": "En pause depuis {time}",
+    "notClockedIn": "Vous n'avez pas encore pointé.",
+    "alreadyClockedOut": "Vous avez déjà pointé votre sortie aujourd'hui.",
+    "cancel": "Annuler"
+  },
+  "actions": {
+    "clockIn": "Pointer l'entrée",
+    "clockOut": "Pointer la sortie",
+    "startBreak": "Commencer la pause",
+    "endBreak": "Terminer la pause"
+  },
+  "confirm": {
+    "clockedIn": "Entrée pointée à {time}",
+    "clockedInDetail": "Bonne journée de travail !",
+    "clockedOut": "Sortie pointée à {time}",
+    "clockedOutDetail": "À la prochaine !",
+    "breakStarted": "Pause commencée à {time}",
+    "breakStartedDetail": "Bon appétit !",
+    "breakEnded": "Pause terminée à {time}",
+    "breakEndedDetail": "Bon travail !"
+  },
+  "errors": {
+    "invalidCode": "Code invalide.",
+    "sessionExpired": "La session a expiré. Entrez à nouveau votre code.",
+    "kioskDisabled": "La pointeuse est désactivée.",
+    "notConfigured": "La pointeuse n'est pas configurée sur le serveur.",
+    "unavailable": "La pointeuse n'est pas disponible.",
+    "offlineIdentify": "Pas de connexion au serveur. Le pointage ne peut pas être enregistré de manière fiable pour le moment. Réessayez.",
+    "offlinePunch": "Pas de connexion au serveur. L'action n'a PAS été enregistrée. Réessayez.",
+    "generic": "Une erreur s'est produite. Réessayez.",
+    "punchRejected": "L'action n'a pas pu être enregistrée."
+  }
+}

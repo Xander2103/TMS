@@ -4,6 +4,20 @@
   flex-wrap: wrap;
 }
 
+/* Header row when the driver profile is embedded as a tab in the personnel dossier. */
+.driver-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.driver-panel-number code {
+  font-size: 15px;
+}
+
 .driver-form {
   max-width: 560px;
   display: flex;
@@ -28,9 +42,9 @@
 }
 
 .driver-form-error {
-  background: rgba(220, 38, 38, 0.1);
-  border: 1px solid rgba(220, 38, 38, 0.4);
-  color: #dc2626;
+  background: var(--color-danger-bg);
+  border: 1px solid var(--color-danger-border);
+  color: var(--color-danger-strong);
   border-radius: 8px;
   padding: 10px 12px;
   font-size: 14px;
@@ -46,6 +60,13 @@
 
 .driver-checkbox input {
   width: auto;
+}
+
+/* Multi-category picker in the inline edit form: compact vertical checkbox list. */
+.driver-category-options {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .driver-form-actions {
@@ -77,11 +98,11 @@
 }
 
 .driver-reasons-blocking {
-  color: #dc2626;
+  color: var(--color-danger-strong);
 }
 
 .driver-reasons-warning {
-  color: #b45309;
+  color: var(--color-warning);
 }
 
 .driver-reasons-ok {

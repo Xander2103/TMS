@@ -32,8 +32,10 @@ public class AbsenceService : IAbsenceService
     private readonly INotificationService _notificationService;
     private readonly IFileStorageService _fileStorageService;
     private readonly ICalendarSyncService _calendarSyncService;
-    private readonly IMessageOutboxService _messageOutbox;
     private readonly TimeProvider _timeProvider;
+    private readonly INotificationEventService? _notificationEvents;
+    private readonly Microsoft.Extensions.Logging.ILogger<AbsenceService>? _logger;
+    private readonly IPermissionAuthorizationService? _authorization;
 
     public AbsenceService(
         TransportationDbContext dbContext,
@@ -43,8 +45,10 @@ public class AbsenceService : IAbsenceService
         INotificationService notificationService,
         IFileStorageService fileStorageService,
         ICalendarSyncService calendarSyncService,
-        IMessageOutboxService messageOutbox,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        INotificationEventService? notificationEvents = null,
+        Microsoft.Extensions.Logging.ILogger<AbsenceService>? logger = null,
+        IPermissionAuthorizationService? authorization = null)
     {
         _dbContext = dbContext;
         _tenantContext = tenantContext;
@@ -53,8 +57,58 @@ public class AbsenceService : IAbsenceService
         _notificationService = notificationService;
         _fileStorageService = fileStorageService;
         _calendarSyncService = calendarSyncService;
-        _messageOutbox = messageOutbox;
         _timeProvider = timeProvider;
+        _notificationEvents = notificationEvents;
+        _logger = logger;
+        _authorization = authorization;
+    }
+
+    /// <summary>
+    /// GDPR art. 9 gate (M7): sick-leave reasons, the HR-internal note and the medical
+    /// certificate are health data. A caller sees them only when holding
+    /// <see cref="PermissionCodes.AbsencesViewMedical"/> or when the absence is their own
+    /// (the data subject always sees what they submitted themselves). A missing authorization
+    /// service means fail-closed: nobody but the subject sees health fields.
+    /// </summary>
+    private sealed record MedicalScope(bool CanViewMedical, Guid? OwnEmployeeId)
+    {
+        public bool CanSee(Guid absenceEmployeeId) =>
+            CanViewMedical || (OwnEmployeeId is { } own && own == absenceEmployeeId);
+    }
+
+    private async Task<MedicalScope> MedicalScopeAsync(CancellationToken cancellationToken)
+    {
+        if (_currentUserContext.CurrentUserId is not { } userId)
+        {
+            return new MedicalScope(false, null);
+        }
+
+        var canViewMedical = _authorization is not null
+            && await _authorization.UserHasPermissionAsync(userId, PermissionCodes.AbsencesViewMedical, cancellationToken);
+        var ownEmployeeId = await _dbContext.Users.AsNoTracking()
+            .Where(u => u.TenantId == _tenantContext.TenantId && u.Id == userId)
+            .Select(u => u.EmployeeId)
+            .FirstOrDefaultAsync(cancellationToken);
+        return new MedicalScope(canViewMedical, ownEmployeeId);
+    }
+
+    /// <summary>Fire-and-forget event publication: a notification failure never breaks the
+    /// already-committed business operation.</summary>
+    private async Task PublishEventAsync(string eventKey, NotificationEventContext context, CancellationToken cancellationToken)
+    {
+        if (_notificationEvents is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await _notificationEvents.PublishAsync(eventKey, context, cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            _logger?.LogError(exception, "Notification event '{EventKey}' failed to publish; business operation already committed.", eventKey);
+        }
     }
 
     private static string? PartDayError(CreateAbsenceRequest request) =>
@@ -78,10 +132,12 @@ public class AbsenceService : IAbsenceService
         var rows = await Joined(TenantScoped().AsNoTracking().Where(a => a.EmployeeId == employeeId))
             .ToListAsync(cancellationToken);
 
+        var scope = await MedicalScopeAsync(cancellationToken);
+
         // Bounded per-employee set; ordering through the record projection does not translate to SQL.
         return rows
             .OrderByDescending(r => r.Absence.StartDate)
-            .Select(Map)
+            .Select(r => Map(r, scope))
             .ToList();
     }
 
@@ -111,10 +167,12 @@ public class AbsenceService : IAbsenceService
 
         var rows = await Joined(query).ToListAsync(cancellationToken);
 
+        var scope = await MedicalScopeAsync(cancellationToken);
+
         // Window-bounded set; ordering through the record projection does not translate to SQL.
         return rows
             .OrderBy(r => r.Absence.StartDate).ThenBy(r => r.EmployeeName)
-            .Select(Map)
+            .Select(r => Map(r, scope))
             .ToList();
     }
 
@@ -142,12 +200,20 @@ public class AbsenceService : IAbsenceService
             return AbsenceOperationResult.Overlap;
         }
 
+        var (resolvedType, leaveTypeId, leaveTypeError) =
+            await ResolveLeaveTypeAsync(request.LeaveTypeId, request.Type, request.Reason, request.PartDay, cancellationToken);
+        if (leaveTypeError is { } ltError)
+        {
+            return AbsenceOperationResult.Invalid(ltError);
+        }
+
         var absence = new Absence
         {
             Id = Guid.NewGuid(),
             TenantId = _tenantContext.TenantId,
             EmployeeId = employeeId,
-            Type = request.Type,
+            Type = resolvedType,
+            LeaveTypeId = leaveTypeId,
             StartDate = request.StartDate,
             EndDate = request.EndDate,
             PartDay = request.PartDay,
@@ -163,11 +229,22 @@ public class AbsenceService : IAbsenceService
 
         var dto = await RequireDtoAsync(absence.Id, cancellationToken);
 
-        await _notificationService.NotifyPermissionHoldersAsync(
-            PermissionCodes.AbsencesApprove, "absence_requested",
-            "Afwezigheid aangevraagd",
-            $"{dto.EmployeeName}: {absence.Type} van {absence.StartDate:dd-MM-yyyy} t/m {absence.EndDate:dd-MM-yyyy}.",
-            "/absences", cancellationToken);
+        // Notification ownership moved to the configurable event (Phase 6): NotificationEventCatalog's
+        // leave_requested default recipient is InternalPermission(AbsencesApprove), replacing what
+        // used to be a hardcoded NotifyPermissionHoldersAsync call here.
+        await PublishEventAsync(MessageKinds.LeaveRequested, new NotificationEventContext(
+            EntityType, absence.Id.ToString(),
+            new Dictionary<string, string>
+            {
+                ["employeeName"] = dto.EmployeeName,
+                ["period"] = $"{absence.StartDate:dd-MM-yyyy} t/m {absence.EndDate:dd-MM-yyyy}",
+            })
+        {
+            EmployeeId = absence.EmployeeId,
+            LinkPath = "/absences",
+            InAppTitle = "Afwezigheid aangevraagd",
+            InAppMessage = $"{dto.EmployeeName}: {absence.Type} van {absence.StartDate:dd-MM-yyyy} t/m {absence.EndDate:dd-MM-yyyy}.",
+        }, cancellationToken);
 
         return AbsenceOperationResult.Success(dto);
     }
@@ -244,16 +321,6 @@ public class AbsenceService : IAbsenceService
             request.Approve ? "Approved" : "Rejected", before,
             new { absence.Status, absence.DecisionNote }, cancellationToken);
 
-        // Tell the employee's own user account (if it exists) about the decision.
-        var recipient = await _dbContext.Users.AsNoTracking()
-            .Where(u => u.TenantId == _tenantContext.TenantId && u.EmployeeId == absence.EmployeeId)
-            .Select(u => (Guid?)u.Id)
-            .FirstOrDefaultAsync(cancellationToken);
-        await _notificationService.NotifyAsync(recipient, "absence_decided",
-            request.Approve ? "Afwezigheid goedgekeurd" : "Afwezigheid afgewezen",
-            $"Je {absence.Type} van {absence.StartDate:dd-MM-yyyy} t/m {absence.EndDate:dd-MM-yyyy} is {(request.Approve ? "goedgekeurd" : "afgewezen")}.",
-            "/portal/absences", cancellationToken);
-
         // Approved leave flows towards the (future) external calendar through the sync seam.
         if (request.Approve)
         {
@@ -262,22 +329,30 @@ public class AbsenceService : IAbsenceService
                 $"Afwezigheid: {absence.Type}"), cancellationToken);
         }
 
-        // The e-mail leaves through the provider-neutral outbox (profile decides channel/opt-out).
+        // Notification ownership moved to the configurable event (Phase 6): leave_decided covers
+        // both the in-app notice (was a hardcoded NotifyAsync) and the e-mail (was a direct
+        // LeaveApproved/LeaveRejected outbox queue) in one call; its default recipient resolves
+        // to the employee themselves (Driver = "subject employee of this event").
         var employeeName = await _dbContext.Employees.AsNoTracking()
             .Where(e => e.Id == absence.EmployeeId && e.TenantId == _tenantContext.TenantId)
             .Select(e => e.FirstName + " " + e.LastName)
             .FirstOrDefaultAsync(cancellationToken) ?? string.Empty;
-        await _messageOutbox.QueueAsync(new MessageRequest(
-            request.Approve ? MessageKinds.LeaveApproved : MessageKinds.LeaveRejected,
-            MessageOwnerType.Employee, absence.EmployeeId,
+        var decisionLabel = request.Approve ? "Goedgekeurd" : "Afgewezen";
+        await PublishEventAsync(MessageKinds.LeaveDecided, new NotificationEventContext(
+            EntityType, absence.Id.ToString(),
             new Dictionary<string, string>
             {
                 ["employeeName"] = employeeName,
                 ["period"] = $"{absence.StartDate:dd-MM-yyyy} t/m {absence.EndDate:dd-MM-yyyy}",
                 ["note"] = absence.DecisionNote ?? string.Empty,
-            },
-            EntityType, absence.Id.ToString(),
-            $"leave_decided:{absence.Id}"), cancellationToken);
+                ["decision"] = decisionLabel,
+            })
+        {
+            EmployeeId = absence.EmployeeId,
+            LinkPath = "/portal/absences",
+            InAppTitle = request.Approve ? "Afwezigheid goedgekeurd" : "Afwezigheid afgewezen",
+            InAppMessage = $"Je {absence.Type} van {absence.StartDate:dd-MM-yyyy} t/m {absence.EndDate:dd-MM-yyyy} is {(request.Approve ? "goedgekeurd" : "afgewezen")}.",
+        }, cancellationToken);
 
         return AbsenceOperationResult.Success(await RequireDtoAsync(absence.Id, cancellationToken));
     }
@@ -437,7 +512,13 @@ public class AbsenceService : IAbsenceService
             return a.PartDay == AbsencePartDay.FullDay ? days : days - 0;
         });
 
-        return new AbsenceReviewContextDto(shifts, trips, colleagueRows, usedDays, absence.AttachmentPath is not null);
+        // The certificate on a sick absence is health data: its existence is only shown to
+        // callers who are allowed to open it (M7).
+        var hasVisibleAttachment = absence.AttachmentPath is not null
+            && (absence.Type != AbsenceType.Sick
+                || (await MedicalScopeAsync(cancellationToken)).CanSee(absence.EmployeeId));
+
+        return new AbsenceReviewContextDto(shifts, trips, colleagueRows, usedDays, hasVisibleAttachment);
     }
 
     public async Task<AbsenceOperationResult> AttachDocumentAsync(
@@ -453,6 +534,12 @@ public class AbsenceService : IAbsenceService
         if (!AllowedAttachmentExtensions.Contains(extension))
         {
             return AbsenceOperationResult.Invalid("Alleen pdf-, jpg- of png-bestanden zijn toegestaan.");
+        }
+
+        // Defence-in-depth behind the controller gate: content must actually be the claimed type.
+        if (!Modules.Security.UploadValidation.MatchesSignature(fileName, content))
+        {
+            return AbsenceOperationResult.Invalid(Modules.Security.UploadValidation.SignatureMismatchMessage);
         }
 
         if (absence.AttachmentPath is { } existing)
@@ -471,7 +558,7 @@ public class AbsenceService : IAbsenceService
         return AbsenceOperationResult.Success(await RequireDtoAsync(absence.Id, cancellationToken));
     }
 
-    public async Task<(Stream Content, string FileName)?> OpenDocumentAsync(Guid id, CancellationToken cancellationToken)
+    public async Task<AbsenceAttachmentResult?> OpenDocumentAsync(Guid id, CancellationToken cancellationToken)
     {
         var absence = await TenantScoped().AsNoTracking().FirstOrDefaultAsync(a => a.Id == id, cancellationToken);
         if (absence?.AttachmentPath is not { } path)
@@ -479,8 +566,30 @@ public class AbsenceService : IAbsenceService
             return null;
         }
 
+        var isMedical = absence.Type == AbsenceType.Sick;
+        var scope = await MedicalScopeAsync(cancellationToken);
+        if (isMedical && !scope.CanSee(absence.EmployeeId))
+        {
+            return AbsenceAttachmentResult.MedicalAccessDenied;
+        }
+
         var stream = await _fileStorageService.OpenReadAsync(path, cancellationToken);
-        return (stream, absence.AttachmentFileName ?? "bijlage");
+
+        // Read-audit (M6/M14): a medical certificate opened by anyone but the data subject leaves
+        // a HealthDataViewed trace — for health data, who LOOKED matters as much as who changed it.
+        if (isMedical && scope.OwnEmployeeId != absence.EmployeeId)
+        {
+            await _auditService.RecordAsync(EntityType, absence.Id.ToString(),
+                SecurityAuditEvents.HealthDataViewed, null,
+                new
+                {
+                    absence.EmployeeId,
+                    FileName = absence.AttachmentFileName,
+                    Classification = SecurityAuditEvents.Classification.Health,
+                }, cancellationToken);
+        }
+
+        return AbsenceAttachmentResult.Open(stream, absence.AttachmentFileName ?? "bijlage");
     }
 
     private async Task<Guid?> EmployeeUserIdAsync(Guid employeeId, CancellationToken cancellationToken) =>
@@ -559,19 +668,45 @@ public class AbsenceService : IAbsenceService
             e.EmployeeNumber,
             _dbContext.Drivers.Any(d => d.TenantId == _tenantContext.TenantId && d.EmployeeId == e.Id));
 
-    private static AbsenceDto Map(JoinedAbsence r) => new(
-        r.Absence.Id, r.Absence.EmployeeId, r.EmployeeName, r.EmployeeNumber, r.IsDriver,
-        r.Absence.Type, r.Absence.StartDate, r.Absence.EndDate, r.Absence.Status,
-        r.Absence.Reason, r.Absence.DecisionNote, r.Absence.DecidedAt,
-        r.Absence.PartDay, r.Absence.InternalNote,
-        r.Absence.AttachmentPath != null, r.Absence.AttachmentFileName);
+    private static AbsenceDto Map(JoinedAbsence r, MedicalScope scope)
+    {
+        var redactMedical = r.Absence.Type == AbsenceType.Sick && !scope.CanSee(r.Absence.EmployeeId);
+        return new(
+            r.Absence.Id, r.Absence.EmployeeId, r.EmployeeName, r.EmployeeNumber, r.IsDriver,
+            r.Absence.Type, r.Absence.StartDate, r.Absence.EndDate, r.Absence.Status,
+            redactMedical ? null : r.Absence.Reason, r.Absence.DecisionNote, r.Absence.DecidedAt,
+            r.Absence.PartDay, redactMedical ? null : r.Absence.InternalNote,
+            !redactMedical && r.Absence.AttachmentPath != null,
+            redactMedical ? null : r.Absence.AttachmentFileName, r.Absence.LeaveTypeId);
+    }
+
+    /// <summary>
+    /// Resolves an optional configurable leave type to the effective <see cref="AbsenceType"/>
+    /// (leave type is the source of truth) and validates its per-request rules. Returns an error
+    /// message when the type is unknown/inactive or a rule is violated; null leave type keeps the
+    /// caller's fallback type (legacy/backward-compatible path).
+    /// </summary>
+    private async Task<(AbsenceType Type, Guid? LeaveTypeId, string? Error)> ResolveLeaveTypeAsync(
+        Guid? leaveTypeId, AbsenceType fallbackType, string? reason, AbsencePartDay partDay, CancellationToken cancellationToken)
+    {
+        if (leaveTypeId is not { } id) return (fallbackType, null, null);
+        var leaveType = await _dbContext.LeaveTypes
+            .FirstOrDefaultAsync(t => t.TenantId == _tenantContext.TenantId && t.Id == id, cancellationToken);
+        if (leaveType is null) return (fallbackType, null, "Onbekend verloftype.");
+        if (!leaveType.IsActive) return (fallbackType, null, "Dit verloftype is niet meer actief.");
+        if (leaveType.RequiresReason && string.IsNullOrWhiteSpace(reason))
+            return (leaveType.AbsenceType, id, "Voor dit verloftype is een reden verplicht.");
+        if (!leaveType.AllowsHalfDays && partDay != AbsencePartDay.FullDay)
+            return (leaveType.AbsenceType, id, "Halve dagen zijn niet toegestaan voor dit verloftype.");
+        return (leaveType.AbsenceType, id, null);
+    }
 
     private async Task<AbsenceDto> RequireDtoAsync(Guid id, CancellationToken cancellationToken)
     {
         var row = await Joined(TenantScoped().AsNoTracking().Where(a => a.Id == id))
             .FirstOrDefaultAsync(cancellationToken)
             ?? throw new InvalidOperationException($"Absence {id} disappeared after save.");
-        return Map(row);
+        return Map(row, await MedicalScopeAsync(cancellationToken));
     }
 
     private static string? Trim(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();

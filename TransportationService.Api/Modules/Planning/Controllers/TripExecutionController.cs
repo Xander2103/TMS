@@ -92,7 +92,9 @@ public class TripExecutionController : ControllerBase
     public async Task<ActionResult<TripExecutionDto>> Arrive(Guid tripId, Guid stopId, CancellationToken cancellationToken)
     {
         var restrict = !await IsDispatcherAsync(cancellationToken);
-        return Handle(await _service.ArriveAsync(tripId, stopId, restrict, cancellationToken));
+        var result = await _service.ArriveAsync(tripId, stopId, restrict, cancellationToken);
+        await RefreshEtaAsync(tripId, result, cancellationToken);
+        return Handle(result);
     }
 
     [HttpPost("api/trips/{tripId:guid}/stops/{stopId:guid}/complete")]
@@ -104,7 +106,9 @@ public class TripExecutionController : ControllerBase
         // Completing with unresolved packages is a separately guarded capability.
         var allowPackageOverride = _currentUserContext.CurrentUserId is { } userId
             && await _permissionService.UserHasPermissionAsync(userId, PermissionCodes.ScanningOverride, cancellationToken);
-        return Handle(await _service.CompleteAsync(tripId, stopId, request, restrict, allowPackageOverride, cancellationToken));
+        var result = await _service.CompleteAsync(tripId, stopId, request, restrict, allowPackageOverride, cancellationToken);
+        await RefreshEtaAsync(tripId, result, cancellationToken);
+        return Handle(result);
     }
 
     [HttpPost("api/trips/{tripId:guid}/stops/{stopId:guid}/skip")]
@@ -113,7 +117,9 @@ public class TripExecutionController : ControllerBase
         Guid tripId, Guid stopId, SkipStopRequest request, CancellationToken cancellationToken)
     {
         var restrict = !await IsDispatcherAsync(cancellationToken);
-        return Handle(await _service.SkipAsync(tripId, stopId, request, restrict, cancellationToken));
+        var result = await _service.SkipAsync(tripId, stopId, request, restrict, cancellationToken);
+        await RefreshEtaAsync(tripId, result, cancellationToken);
+        return Handle(result);
     }
 
     private ActionResult<TripExecutionDto> Handle(ExecutionResult result) => result.Outcome switch
@@ -121,8 +127,8 @@ public class TripExecutionController : ControllerBase
         ExecutionOutcome.Success => Ok(result.Execution),
         ExecutionOutcome.NotFound => NotFound(),
         ExecutionOutcome.NotYourTrip => StatusCode(StatusCodes.Status403Forbidden, new { message = result.Error }),
-        ExecutionOutcome.InvalidState => BadRequest(new { message = result.Error }),
-        ExecutionOutcome.ValidationFailed => BadRequest(new { message = result.Error }),
+        ExecutionOutcome.InvalidState => BadRequest(new { message = result.Error, code = result.Code }),
+        ExecutionOutcome.ValidationFailed => BadRequest(new { message = result.Error, code = result.Code }),
         _ => Conflict(),
     };
 }

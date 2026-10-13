@@ -60,7 +60,8 @@ public class CompanySettingsServiceTests
         var result = await Build(db, tenantId).GetAsync(CancellationToken.None);
 
         Assert.Equal("EUR", result.DefaultCurrency);
-        Assert.Equal("dd-MM-yyyy", result.DateFormat);
+        // Regional-settings wave: Belgian default for NEW tenants; existing rows keep their value.
+        Assert.Equal("dd/MM/yyyy", result.DateFormat);
         Assert.Equal(1, await db.Context.TenantSettings.CountAsync());
     }
 
@@ -124,5 +125,29 @@ public class CompanySettingsServiceTests
 
         Assert.Equal("Tenant A", (await Build(db, tenantId).GetAsync(CancellationToken.None)).CompanyLegalName);
         Assert.Equal("Tenant B", (await Build(db, otherTenant).GetAsync(CancellationToken.None)).CompanyLegalName);
+    }
+
+    [Fact]
+    public async Task DateFormat_IsAClosedCatalog_UnknownValuesAreRejected_EmptyKeepsCurrent()
+    {
+        var (db, tenantId) = await SeedTenantAsync();
+        using var _ = db;
+        var sut = Build(db, tenantId);
+
+        // Every supported option round-trips.
+        foreach (var format in CompanySettingsService.SupportedDateFormats)
+        {
+            var saved = await sut.UpdateAsync(ValidRequest() with { DateFormat = format }, CancellationToken.None);
+            Assert.Equal(format, saved.DateFormat);
+        }
+
+        // Free text is refused — the whole frontend renders through this value.
+        await Assert.ThrowsAsync<TransportationService.Api.Common.DomainValidationException>(() =>
+            sut.UpdateAsync(ValidRequest() with { DateFormat = "d MMM yy" }, CancellationToken.None));
+
+        // Empty input keeps the current value instead of silently resetting.
+        await sut.UpdateAsync(ValidRequest() with { DateFormat = "yyyy-MM-dd" }, CancellationToken.None);
+        var kept = await sut.UpdateAsync(ValidRequest() with { DateFormat = "" }, CancellationToken.None);
+        Assert.Equal("yyyy-MM-dd", kept.DateFormat);
     }
 }

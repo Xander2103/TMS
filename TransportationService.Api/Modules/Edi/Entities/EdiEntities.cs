@@ -71,6 +71,15 @@ public class EdiMessage : AuditableTenantEntity
     public string? ErrorDetail { get; set; }
     public string? ValidationErrorsJson { get; set; }
 
+    /// <summary>
+    /// Machine-readable failure category set by <c>Fail()</c> going forward: "mapping" (unknown
+    /// location/customer mapping), "validation" (payload/parse errors) or "processing" (order
+    /// creation failed). Null on rows created before this column existed or on non-failed
+    /// messages; callers fall back to a text match on <see cref="ErrorDetail"/>/
+    /// <see cref="ValidationErrorsJson"/> for those.
+    /// </summary>
+    public string? FailureKind { get; set; }
+
     public string? ResultEntityType { get; set; }
     public string? ResultEntityId { get; set; }
 }

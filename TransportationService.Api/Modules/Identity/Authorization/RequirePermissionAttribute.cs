@@ -24,18 +24,23 @@ public class RequirePermissionAttribute : Attribute, IAsyncActionFilter
         _permissionCodes = permissionCodes;
     }
 
+    /// <summary>The any-of permission codes this endpoint accepts, in declaration order.</summary>
+    public IReadOnlyList<string> PermissionCodes => _permissionCodes;
+
     public async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
     {
         var currentUser = context.HttpContext.RequestServices.GetRequiredService<ICurrentUserContext>();
 
         if (currentUser.CurrentUserId is not { } userId)
         {
-            context.Result = new ObjectResult(new ProblemDetails
+            var unauthorized = new ProblemDetails
             {
                 Title = "Unauthorized",
                 Detail = "Authentication is required to access this resource.",
                 Status = StatusCodes.Status401Unauthorized,
-            })
+            };
+            unauthorized.Extensions["code"] = Common.ErrorCodes.Unauthenticated;
+            context.Result = new ObjectResult(unauthorized)
             {
                 StatusCode = StatusCodes.Status401Unauthorized,
                 ContentTypes = { "application/problem+json" },
@@ -56,12 +61,14 @@ public class RequirePermissionAttribute : Attribute, IAsyncActionFilter
 
         if (!hasPermission)
         {
-            context.Result = new ObjectResult(new ProblemDetails
+            var forbidden = new ProblemDetails
             {
                 Title = "Forbidden",
                 Detail = $"Missing permission: {string.Join(" or ", _permissionCodes)}",
                 Status = StatusCodes.Status403Forbidden,
-            })
+            };
+            forbidden.Extensions["code"] = Common.ErrorCodes.Forbidden;
+            context.Result = new ObjectResult(forbidden)
             {
                 StatusCode = StatusCodes.Status403Forbidden,
                 ContentTypes = { "application/problem+json" },

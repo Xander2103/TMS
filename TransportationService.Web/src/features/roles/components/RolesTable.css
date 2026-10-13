@@ -37,9 +37,9 @@
 }
 
 .roles-table .status-active {
-  color: #15803d;
+  color: var(--color-success);
 }
 
 .roles-table .status-inactive {
-  color: #a16207;
+  color: var(--color-warning);
 }

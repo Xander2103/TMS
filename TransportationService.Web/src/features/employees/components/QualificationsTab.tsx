@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { LoadingState } from '../../../components/feedback/LoadingState'
 import { ErrorState } from '../../../components/feedback/ErrorState'
 import { Badge } from '../../../components/ui/Badge'
@@ -6,6 +6,7 @@ import { Button } from '../../../components/ui/Button'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { DataTable, type Column } from '../../../components/ui/DataTable'
 import { useToast } from '../../../components/ui/toastContext'
+import { useLocale } from '../../../i18n/localeContext'
 import { useAuth } from '../../auth/authContextValue'
 import {
   deleteQualificationDocument,
@@ -16,7 +17,6 @@ import { useEmployeeQualifications } from '../hooks/useEmployeeQualifications'
 import { useQualificationMutations } from '../hooks/useQualificationMutations'
 import { QualificationDialog } from './QualificationDialog'
 import {
-  QUALIFICATION_STATUS_LABELS,
   QUALIFICATION_STATUS_TONES,
   type EmployeeQualification,
   type QualificationStatus,
@@ -25,14 +25,20 @@ import './QualificationsTab.css'
 
 interface QualificationsTabProps {
   employeeId: string
+  /** Deep-link target (`?qualificationId=`): that row is highlighted and scrolled into view. */
+  highlightQualificationId?: string | null
+  /** Fired after a successful create/edit/verify/suspend so the host can refresh derived data
+   * (the expiry-warning strip). */
+  onChanged?: () => void
 }
 
 const STATUS_FILTERS: Array<QualificationStatus | 'all'> = ['all', 'Valid', 'ExpiringSoon', 'Expired', 'Pending', 'Suspended']
 
-export function QualificationsTab({ employeeId }: QualificationsTabProps) {
+export function QualificationsTab({ employeeId, highlightQualificationId, onChanged }: QualificationsTabProps) {
   const { qualifications, isLoading, error, reload } = useEmployeeQualifications(employeeId)
   const mutations = useQualificationMutations()
   const toast = useToast()
+  const { t } = useLocale()
   const { hasPermission } = useAuth()
   const canCreate = hasPermission('employee_documents.create')
   const canEdit = hasPermission('employee_documents.edit')
@@ -49,26 +55,35 @@ export function QualificationsTab({ employeeId }: QualificationsTabProps) {
     return [...rows].sort((a, b) => (a.expiryDate ?? '9999').localeCompare(b.expiryDate ?? '9999'))
   }, [qualifications, statusFilter])
 
+  // Scroll the deep-linked row into view once the table is there (and again when the target
+  // changes). Optional call: jsdom has no scrollIntoView implementation.
+  useEffect(() => {
+    if (!highlightQualificationId || isLoading) return
+    document
+      .getElementById(`employee-qualification-${highlightQualificationId}`)
+      ?.scrollIntoView?.({ block: 'center', behavior: 'smooth' })
+  }, [highlightQualificationId, isLoading, visible])
+
   async function handleUpload(qualification: EmployeeQualification, file: File) {
     setDocumentBusyId(qualification.id)
     try {
-      await uploadQualificationDocument(employeeId, qualification.id, file)
-      toast.showSuccess('Document opgeslagen.')
+      await uploadQualificationDocument(employeeId, qualification.id, file, t)
+      toast.showSuccess(t('employees.qualifications.documentSaved'))
       reload()
     } catch (err) {
-      toast.showError(err instanceof Error ? err.message : 'Uploaden is mislukt.')
+      toast.showError(err instanceof Error ? err.message : t('employees.errors.uploadFailed'))
     } finally {
       setDocumentBusyId(null)
     }
   }
 
-  if (isLoading) return <LoadingState message="Kwalificaties laden..." />
+  if (isLoading) return <LoadingState message={t('employees.qualifications.loading')} />
   if (error) return <ErrorState message={error} />
 
   const columns: Column<EmployeeQualification>[] = [
     {
       key: 'type',
-      header: 'Type',
+      header: t('employees.qualifications.columnType'),
       render: (row) => (
         <div>
           <div className="qualification-type-name">{row.qualificationTypeName}</div>
@@ -76,22 +91,22 @@ export function QualificationsTab({ employeeId }: QualificationsTabProps) {
         </div>
       ),
     },
-    { key: 'obtained', header: 'Behaald', width: '110px', render: (row) => row.obtainedDate },
-    { key: 'expiry', header: 'Vervalt', width: '110px', render: (row) => row.expiryDate ?? '—' },
-    { key: 'country', header: 'Land', width: '70px', render: (row) => row.issuingCountryCode ?? '—' },
+    { key: 'obtained', header: t('employees.qualifications.columnObtained'), width: '110px', render: (row) => row.obtainedDate },
+    { key: 'expiry', header: t('employees.qualifications.columnExpiry'), width: '110px', render: (row) => row.expiryDate ?? '—' },
+    { key: 'country', header: t('employees.qualifications.columnCountry'), width: '70px', render: (row) => row.issuingCountryCode ?? '—' },
     {
       key: 'status',
-      header: 'Status',
+      header: t('employees.qualifications.columnStatus'),
       width: '170px',
       render: (row) => (
         <Badge tone={QUALIFICATION_STATUS_TONES[row.effectiveStatus]}>
-          {QUALIFICATION_STATUS_LABELS[row.effectiveStatus]}
+          {t(`employees.qualificationStatus.${row.effectiveStatus}`)}
         </Badge>
       ),
     },
     {
       key: 'document',
-      header: 'Document',
+      header: t('employees.qualifications.columnDocument'),
       width: '210px',
       render: (row) => (
         <div className="qualification-doc-actions">
@@ -99,14 +114,18 @@ export function QualificationsTab({ employeeId }: QualificationsTabProps) {
             <button
               type="button"
               className="qualification-link"
-              onClick={() => downloadQualificationDocument(employeeId, row.id).catch(() => toast.showError('Download mislukt.'))}
+              onClick={() => downloadQualificationDocument(employeeId, row.id, t).catch(() => toast.showError(t('employees.errors.downloadFailed')))}
             >
-              Downloaden
+              {t('employees.qualifications.download')}
             </button>
           )}
           {canEdit && (
             <label className={documentBusyId === row.id ? 'qualification-link is-busy' : 'qualification-link'}>
-              {documentBusyId === row.id ? 'Bezig…' : row.hasDocument ? 'Vervangen' : 'Uploaden'}
+              {documentBusyId === row.id
+                ? t('employees.qualifications.busy')
+                : row.hasDocument
+                  ? t('employees.qualifications.replace')
+                  : t('employees.qualifications.upload')}
               <input
                 type="file"
                 accept=".pdf,.jpg,.jpeg,.png"
@@ -127,14 +146,14 @@ export function QualificationsTab({ employeeId }: QualificationsTabProps) {
               onClick={async () => {
                 try {
                   await deleteQualificationDocument(employeeId, row.id)
-                  toast.showSuccess('Document verwijderd.')
+                  toast.showSuccess(t('employees.qualifications.documentDeleted'))
                   reload()
                 } catch {
-                  toast.showError('Document kon niet worden verwijderd.')
+                  toast.showError(t('employees.qualifications.documentDeleteFailed'))
                 }
               }}
             >
-              Verwijderen
+              {t('employees.qualifications.remove')}
             </button>
           )}
         </div>
@@ -148,7 +167,7 @@ export function QualificationsTab({ employeeId }: QualificationsTabProps) {
         <div className="qualification-actions">
           {canEdit && (
             <Button variant="ghost" onClick={() => setDialog({ mode: 'edit', qualification: row })} disabled={mutations.isSubmitting}>
-              Bewerken
+              {t('employees.qualifications.edit')}
             </Button>
           )}
           {canApprove && row.storedStatus !== 'Valid' && (
@@ -157,18 +176,19 @@ export function QualificationsTab({ employeeId }: QualificationsTabProps) {
               onClick={async () => {
                 const saved = await mutations.verify(employeeId, row.id)
                 if (saved) {
-                  toast.showSuccess('Kwalificatie geverifieerd.')
+                  toast.showSuccess(t('employees.qualifications.verified'))
                   reload()
+                  onChanged?.()
                 }
               }}
               disabled={mutations.isSubmitting}
             >
-              Verifiëren
+              {t('employees.qualifications.verify')}
             </Button>
           )}
           {canEdit && row.storedStatus !== 'Suspended' && (
             <Button variant="ghost" onClick={() => setSuspendTarget(row)} disabled={mutations.isSubmitting}>
-              Intrekken
+              {t('employees.qualifications.suspend')}
             </Button>
           )}
         </div>
@@ -179,7 +199,7 @@ export function QualificationsTab({ employeeId }: QualificationsTabProps) {
   return (
     <div className="qualifications-tab">
       <div className="qualifications-toolbar">
-        <div className="qualifications-filters" role="group" aria-label="Filter op status">
+        <div className="qualifications-filters" role="group" aria-label={t('employees.qualifications.filterLabel')}>
           {STATUS_FILTERS.map((status) => (
             <button
               key={status}
@@ -187,19 +207,21 @@ export function QualificationsTab({ employeeId }: QualificationsTabProps) {
               className={statusFilter === status ? 'qualification-filter is-active' : 'qualification-filter'}
               onClick={() => setStatusFilter(status)}
             >
-              {status === 'all' ? 'Alle' : QUALIFICATION_STATUS_LABELS[status]}
+              {status === 'all' ? t('employees.qualifications.filterAll') : t(`employees.qualificationStatus.${status}`)}
             </button>
           ))}
         </div>
-        {canCreate && <Button onClick={() => setDialog({ mode: 'create' })}>Kwalificatie toevoegen</Button>}
+        {canCreate && <Button onClick={() => setDialog({ mode: 'create' })}>{t('employees.qualifications.add')}</Button>}
       </div>
 
       <DataTable
         columns={columns}
         rows={visible}
         rowKey={(row) => row.id}
+        rowId={(row) => `employee-qualification-${row.id}`}
+        rowClassName={(row) => (row.id === highlightQualificationId ? 'is-highlighted' : undefined)}
         emptyMessage={
-          statusFilter === 'all' ? 'Er zijn nog geen kwalificaties geregistreerd.' : 'Geen kwalificaties met deze status.'
+          statusFilter === 'all' ? t('employees.qualifications.empty') : t('employees.qualifications.emptyFiltered')
         }
       />
 
@@ -209,8 +231,9 @@ export function QualificationsTab({ employeeId }: QualificationsTabProps) {
           existing={dialog.mode === 'edit' ? dialog.qualification : undefined}
           onSaved={() => {
             setDialog(null)
-            toast.showSuccess('Kwalificatie opgeslagen.')
+            toast.showSuccess(t('employees.qualifications.saved'))
             reload()
+            onChanged?.()
           }}
           onCancel={() => setDialog(null)}
         />
@@ -218,17 +241,18 @@ export function QualificationsTab({ employeeId }: QualificationsTabProps) {
 
       {suspendTarget && (
         <ConfirmDialog
-          title="Kwalificatie intrekken"
-          message={`'${suspendTarget.qualificationTypeName}' intrekken? De kwalificatie telt dan niet meer mee voor inzetbaarheid.`}
-          confirmLabel="Intrekken"
+          title={t('employees.qualifications.suspendTitle')}
+          message={t('employees.qualifications.suspendMessage', { name: suspendTarget.qualificationTypeName })}
+          confirmLabel={t('employees.qualifications.suspendConfirm')}
           destructive
           busy={mutations.isSubmitting}
           onConfirm={async () => {
             const saved = await mutations.suspend(employeeId, suspendTarget.id)
             if (saved) {
-              toast.showSuccess('Kwalificatie ingetrokken.')
+              toast.showSuccess(t('employees.qualifications.suspended'))
               setSuspendTarget(null)
               reload()
+              onChanged?.()
             }
           }}
           onCancel={() => setSuspendTarget(null)}

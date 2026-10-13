@@ -1,9 +1,10 @@
 export type FuelWarningCode = 'OdometerLowerThanPrevious' | 'ConsumptionAboveAverage' | 'ConsumptionBelowAverage'
 
+/** i18n-keys (fuel.warning.*) — render via t(FUEL_WARNING_LABELS[code]). */
 export const FUEL_WARNING_LABELS: Record<FuelWarningCode, string> = {
-  OdometerLowerThanPrevious: 'Kilometerstand lager dan vorige tankbeurt',
-  ConsumptionAboveAverage: 'Verbruik ver boven het gemiddelde',
-  ConsumptionBelowAverage: 'Verbruik ver onder het gemiddelde',
+  OdometerLowerThanPrevious: 'fuel.warning.OdometerLowerThanPrevious',
+  ConsumptionAboveAverage: 'fuel.warning.ConsumptionAboveAverage',
+  ConsumptionBelowAverage: 'fuel.warning.ConsumptionBelowAverage',
 }
 
 export interface FuelTransaction {

@@ -17,11 +17,15 @@ public class TripConfiguration : IEntityTypeConfiguration<Trip>
 
         builder.Property(t => t.TripNumber).IsRequired().HasMaxLength(30);
         builder.Property(t => t.Status).HasConversion<string>().HasMaxLength(20);
+        builder.Property(t => t.VehicleSelectionSource).HasConversion<string>().HasMaxLength(20);
         builder.Property(t => t.Notes).HasMaxLength(4000);
         builder.Property(t => t.PlannedDistanceKm).HasPrecision(8, 1);
         builder.Property(t => t.PlannedEmptyKm).HasPrecision(8, 1);
         builder.Property(t => t.ActualDistanceKm).HasPrecision(8, 1);
         builder.Property(t => t.ActualEmptyKm).HasPrecision(8, 1);
+        // Race backstop on top of the explicit service-level version check (works on Npgsql AND
+        // the SQLite test harness, unlike xmin).
+        builder.Property(t => t.Version).IsConcurrencyToken();
 
         builder.HasIndex(t => new { t.TenantId, t.TripNumber })
             .IsUnique()

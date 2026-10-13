@@ -14,6 +14,10 @@ public enum OutboxStatus
     Sent,
     Failed,
     Suppressed,
+
+    /// <summary>P9: held for human review (sensitive kinds); a dispatcher releases or rejects.
+    /// The background dispatcher only ever sends Pending rows, so held mail cannot leak.</summary>
+    AwaitingReview,
 }
 
 public enum MessageOwnerType
@@ -37,11 +41,107 @@ public static class MessageKinds
     public const string LeaveRejected = "leave_rejected";
     public const string PlanningChanged = "planning_changed";
     public const string QualificationExpiry = "qualification_expiry";
+    public const string HrBirthday = "hr_birthday";
+    public const string HrSeniority = "hr_seniority";
+    public const string HrEmploymentEnd = "hr_employment_end";
+
+    // Notification-event kinds (corrections wave 4, phase 6): one kind per NotificationEventCatalog
+    // entry, named identically to the event key so outbox rows and rule resolution line up 1:1.
+    public const string OrderCreated = "order_created";
+    public const string OrderSubmittedPortal = "order_submitted_portal";
+    public const string OrderAccepted = "order_accepted";
+    public const string OrderRejected = "order_rejected";
+    public const string OrderInfoRequested = "order_info_requested";
+    public const string OrderPlanned = "order_planned";
+    public const string OrderPickupWindow = "order_pickup_window";
+    public const string OrderDeliveryWindow = "order_delivery_window";
+    public const string OrderPickupCompleted = "order_pickup_completed";
+    public const string OrderDeliveryCompleted = "order_delivery_completed";
+    public const string OrderDelayDetected = "order_delay_detected";
+    public const string OrderFailedDelivery = "order_failed_delivery";
+    public const string OrderDamageRegistered = "order_damage_registered";
+    public const string OrderPodAvailable = "order_pod_available";
+    public const string InvoiceDraftReady = "invoice_draft_ready";
+    public const string InvoiceSent = "invoice_sent";
+    public const string InvoicePeppolQueued = "invoice_peppol_queued";
+    public const string InvoicePeppolDelivered = "invoice_peppol_delivered";
+    public const string InvoicePeppolFailed = "invoice_peppol_failed";
+    public const string InvoiceCreditNote = "invoice_credit_note";
+    public const string PersonnelQualificationExpiry = "personnel_qualification_expiry";
+    public const string PersonnelMedicalExpiry = "personnel_medical_expiry";
+    public const string PersonnelDocumentExpiry = "personnel_document_expiry";
+    public const string LeaveRequested = "leave_requested";
+    public const string LeaveDecided = "leave_decided";
+    public const string EmployeeNotePinned = "employee_note_pinned";
+    public const string FleetMaintenanceDue = "fleet_maintenance_due";
+    public const string FleetInspectionDue = "fleet_inspection_due";
+    public const string FleetDocumentExpiry = "fleet_document_expiry";
+    public const string FleetDamageCreated = "fleet_damage_created";
+
+    /// <summary>HR maturity wave, task 8: staged tank-card expiry reminders (90/30/7 days).</summary>
+    public const string TankCardExpiry = "tank_card_expiry";
+
+    /// <summary>Cataloged so admins see/disable it, but delivered by a direct
+    /// <see cref="Services.IMessageOutboxService"/> queue call (see CustomerPortalUserService) —
+    /// the recipient (the invited address) is intrinsic to the invite, not resolved via a
+    /// <see cref="Services.NotificationEventService"/> recipient type.</summary>
+    public const string PortalUserInvited = "portal_user_invited";
+
+    // Customer portal messages (corrections wave 4, phase 9).
+    /// <summary>A customer wrote a message via the portal — in-app only, to internal staff.</summary>
+    public const string CustomerMessageReceived = "customer_message_received";
+    /// <summary>Staff replied to a customer via the portal messages thread — e-mail to the customer.</summary>
+    public const string CustomerMessageReply = "customer_message_reply";
+
+    // Inventory-tasks-notifications sprint: broadcast messages (direct queue calls, like
+    // PortalUserInvited — the recipient is intrinsic, not resolved via the event service).
+    /// <summary>E-mail copy of an internal employee message.</summary>
+    public const string EmployeeMessageReceived = "employee_message_received";
+    /// <summary>E-mail copy of a published customer-portal message, in the recipient's language.</summary>
+    public const string PortalMessagePublished = "portal_message_published";
+
+    // HR maturity wave, task 4: automatic dossier-completeness follow-up (in-app only, like
+    // HrEmploymentEnd — no outbox e-mail is queued for these, cataloged so admins see them).
+    public const string EmployeeDossierIncomplete = "employee_dossier_incomplete";
+    public const string EmployeeDossierIncompleteEscalated = "employee_dossier_incomplete_escalated";
 
     public static readonly IReadOnlyList<string> All =
     [
         OrderConfirmation, TimeWindowConfirmation, DriverEnRoute, EtaUpdate, Delay, DeliveryCompleted,
         PodAvailable, LeaveSubmitted, LeaveApproved, LeaveRejected, PlanningChanged, QualificationExpiry,
+        HrBirthday, HrSeniority, HrEmploymentEnd,
+        OrderCreated, OrderSubmittedPortal, OrderAccepted, OrderRejected, OrderInfoRequested, OrderPlanned,
+        OrderPickupWindow, OrderDeliveryWindow, OrderPickupCompleted, OrderDeliveryCompleted,
+        OrderDelayDetected, OrderFailedDelivery, OrderDamageRegistered, OrderPodAvailable,
+        InvoiceDraftReady, InvoiceSent, InvoicePeppolQueued, InvoicePeppolDelivered, InvoicePeppolFailed,
+        InvoiceCreditNote, PersonnelQualificationExpiry, PersonnelMedicalExpiry, PersonnelDocumentExpiry,
+        LeaveRequested, LeaveDecided, EmployeeNotePinned,
+        FleetMaintenanceDue, FleetInspectionDue, FleetDocumentExpiry, FleetDamageCreated, TankCardExpiry,
+        PortalUserInvited, CustomerMessageReceived, CustomerMessageReply,
+        EmployeeMessageReceived, PortalMessagePublished,
+        EmployeeDossierIncomplete, EmployeeDossierIncompleteEscalated,
+    ];
+
+    /// <summary>
+    /// Kinds whose rendered body embeds a one-time credential (activation/reset link). The
+    /// dispatcher scrubs the body of these rows as soon as delivery is decided (sent or
+    /// permanently failed), so the raw token never outlives its one send attempt window in
+    /// durable storage (C3).
+    /// </summary>
+    public static bool CarriesOneTimeCredential(string kind) => kind == PortalUserInvited;
+
+    /// <summary>
+    /// The ONLY kinds a customer may toggle through the portal preference screen. A customer
+    /// profile's EnabledKinds list is interpreted strictly against this set: kinds outside it
+    /// (order acceptance, portal replies, invites, …) are never suppressed by the list, so a
+    /// customer restricting the configurable kinds can never unknowingly silence system events
+    /// the preference UI does not even show. Single source of truth — the portal preference
+    /// endpoint exposes exactly this catalog.
+    /// </summary>
+    public static readonly IReadOnlyList<string> CustomerConfigurable =
+    [
+        OrderConfirmation, TimeWindowConfirmation, DriverEnRoute, EtaUpdate,
+        Delay, DeliveryCompleted, PodAvailable, InvoiceSent,
     ];
 }
 
@@ -111,15 +211,27 @@ public class MessagingProfile : AuditableTenantEntity
     public MessageChannel? FallbackChannel { get; set; }
 }
 
-/// <summary>Tenant-specific template override for (kind, channel, language); built-ins cover the rest.</summary>
+/// <summary>
+/// Tenant-specific template override for (kind, channel, language); built-ins cover the rest.
+/// <see cref="CustomerId"/> null = tenant-wide default; set = an override scoped to one customer,
+/// consulted before the tenant default (resolution chain lives in <c>MessageOutboxService</c>).
+/// </summary>
 public class MessageTemplate : AuditableTenantEntity
 {
     public string Kind { get; set; } = string.Empty;
     public MessageChannel Channel { get; set; }
     public string Language { get; set; } = "nl";
 
+    /// <summary>Null = tenant-wide default template; set = override for one customer.</summary>
+    public Guid? CustomerId { get; set; }
+
     public string? Subject { get; set; }
     public string Body { get; set; } = string.Empty;
+
+    /// <summary>Optional rich-text authoring surface, sanitized on save (see HtmlSanitizer). Not
+    /// yet consumed by outbound rendering (plain Body drives the outbox) — reserved for the
+    /// admin preview/rich-email pipeline.</summary>
+    public string? BodyHtml { get; set; }
 
     public bool IsActive { get; set; } = true;
 }

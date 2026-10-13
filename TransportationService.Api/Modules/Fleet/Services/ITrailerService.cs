@@ -18,5 +18,7 @@ public interface ITrailerService
 
     Task<TrailerOperationResult> UpdateAsync(Guid id, UpdateTrailerRequest request, CancellationToken cancellationToken);
 
+    Task<bool> SetActiveAsync(Guid id, SetTrailerActiveRequest request, CancellationToken cancellationToken);
+
     Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken);
 }

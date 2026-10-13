@@ -14,7 +14,8 @@ public record InvoiceListItemDto(
     decimal Subtotal,
     decimal VatAmount,
     decimal Total,
-    int LineCount);
+    int LineCount,
+    InvoiceKind Kind = InvoiceKind.Invoice);
 
 public record InvoiceLineDto(
     Guid Id,
@@ -25,7 +26,35 @@ public record InvoiceLineDto(
     decimal Quantity,
     decimal UnitPrice,
     decimal VatRatePercent,
-    decimal LineTotal);
+    decimal LineTotal,
+    /// <summary>Verkoopcategorie: live while Draft, frozen name/account after Send (§7.3).</summary>
+    Guid? SalesCategoryId = null,
+    string? SalesCategoryName = null,
+    string? LedgerAccountNumber = null,
+    string? LedgerAccountName = null,
+    /// <summary>Draft-stage warning when the category is missing or unmapped; null = ok.</summary>
+    string? LedgerWarning = null,
+    /// <summary>UN/ECE rec 20 unit code for the quantity (default C62 = stuk).</summary>
+    string UnitCode = "C62",
+    /// <summary>UNCL5305 VAT category: frozen after Send, live-derived while Draft.</summary>
+    string? VatCategoryCode = null,
+    /// <summary>Fiscal treatment of this line (VatTreatment name): snapshot after Send, live while Draft.</summary>
+    string? VatTreatment = null,
+    /// <summary>Where the treatment came from (FiscalTreatmentSource name): LineOverride, SalesCode, Customer, TenantDefault.</summary>
+    string? VatTreatmentSource = null,
+    /// <summary>Statutory text printed for an exempt/reverse-charged line.</summary>
+    string? VatLegalText = null,
+    /// <summary>The sales code (article code) on the line: snapshot after Send, live while Draft.</summary>
+    string? SalesCode = null,
+    /// <summary>
+    /// What the CUSTOMER reads for this line in the invoice language. While Draft this is what
+    /// Send will freeze into <see cref="Description"/> (same rule, see InvoiceLineDescriptions);
+    /// after Send it equals <see cref="Description"/>.
+    /// </summary>
+    string? CustomerDescription = null,
+    /// <summary>The standalone dossier activity this line bills (traceability); null otherwise.</summary>
+    Guid? DossierActivityId = null,
+    string? DossierNumber = null);
 
 public record InvoiceDetailDto(
     Guid Id,
@@ -42,7 +71,28 @@ public record InvoiceDetailDto(
     decimal Subtotal,
     decimal VatAmount,
     decimal Total,
-    IReadOnlyList<InvoiceStatus> AllowedTransitions);
+    IReadOnlyList<InvoiceStatus> AllowedTransitions,
+    Guid? LegalEntityId,
+    string? LegalEntityName,
+    int InvoicePeriodYear,
+    int InvoicePeriodMonth,
+    bool NumberIsManual,
+    string? PurchaseOrderNumber = null,
+    InvoiceKind Kind = InvoiceKind.Invoice,
+    Guid? CreditedInvoiceId = null,
+    string? CreditedInvoiceNumber = null,
+    string? PaymentReference = null,
+    /// <summary>The customer treatment frozen on the invoice header (VatTreatment name).</summary>
+    string? CustomerVatTreatment = null,
+    /// <summary>Document language frozen at creation.</summary>
+    string? LanguageCode = null,
+    /// <summary>Statutory text for the header treatment, when it has one.</summary>
+    string? VatLegalText = null,
+    /// <summary>Credit notes issued against THIS invoice (any status), so the relation is visible both ways.</summary>
+    IReadOnlyList<InvoiceReferenceDto>? CreditNotes = null);
+
+/// <summary>A related document reference (original ↔ credit note).</summary>
+public record InvoiceReferenceDto(Guid Id, string InvoiceNumber, InvoiceStatus Status);
 
 /// <summary>Completed, not-yet-invoiced order offered in the invoice builder.</summary>
 public record UninvoicedOrderDto(
@@ -52,26 +102,73 @@ public record UninvoicedOrderDto(
     string GoodsDescription,
     string? FirstLoadingCity,
     string? LastUnloadingCity,
-    decimal? AgreedPrice);
+    decimal? AgreedPrice,
+    /// <summary>The order's issuing entity; null on pre-entity legacy orders (invoiceable under any entity).</summary>
+    Guid? LegalEntityId = null,
+    /// <summary>Wave 2 §6: NotReady | ReadyForInvoice | ReviewRequired — informational, never a gate.</summary>
+    string InvoiceReadiness = "NotReady",
+    /// <summary>Semicolon-separated reason codes when ReviewRequired (e.g. pricing.stale;pod.missing).</summary>
+    string? InvoiceReadinessReasons = null);
+
+/// <summary>
+/// Closure sprint 2026-09-23: a priced STANDALONE dossier activity (no linked order) of the
+/// customer that is not yet on a live invoice — the activity-side twin of
+/// <see cref="UninvoicedOrderDto"/> for the invoice builder.
+/// </summary>
+public record UninvoicedActivityDto(
+    Guid Id,
+    Guid DossierId,
+    string DossierNumber,
+    string? DossierTitle,
+    string ActivityTypeName,
+    string? Label,
+    DateOnly? PlannedDate,
+    /// <summary>The agreed total (OneOff amount or the sum of the price lines); € 0 only when explicitly free.</summary>
+    decimal AgreedPrice,
+    /// <summary>Explicitly confirmed free (€ 0 by decision): invoiced as an explicit zero line.</summary>
+    bool IsFree,
+    /// <summary>"OneOff" or "Lines" — how many invoice lines the activity will produce.</summary>
+    string PricingSource,
+    int PriceLineCount,
+    /// <summary>The dossier's issuing entity; null when the dossier has none (invoiceable under any entity).</summary>
+    Guid? LegalEntityId = null);
 
 public record ManualInvoiceLineInput(
     string Description,
     decimal Quantity,
     decimal UnitPrice,
-    decimal? VatRatePercent);
+    decimal? VatRatePercent,
+    Guid? SalesCategoryId = null,
+    /// <summary>UN/ECE rec 20 unit code; null = C62 (stuk).</summary>
+    string? UnitCode = null);
 
 public record CreateInvoiceRequest(
     Guid CustomerId,
     DateOnly? InvoiceDate,
     IReadOnlyList<Guid> OrderIds,
     IReadOnlyList<ManualInvoiceLineInput> ManualLines,
-    string? Notes);
+    string? Notes,
+    Guid? LegalEntityId = null,
+    int? InvoicePeriodYear = null,
+    int? InvoicePeriodMonth = null,
+    string? PurchaseOrderNumber = null,
+    /// <summary>Standalone dossier activities to bill (see <see cref="UninvoicedActivityDto"/>); null = none.</summary>
+    IReadOnlyList<Guid>? DossierActivityIds = null);
 
 public record UpdateInvoiceRequest(
     DateOnly InvoiceDate,
     DateOnly DueDate,
     IReadOnlyList<UpdateInvoiceLineInput> Lines,
-    string? Notes);
+    string? Notes,
+    int? InvoicePeriodYear = null,
+    int? InvoicePeriodMonth = null,
+    string? PurchaseOrderNumber = null,
+    string? PaymentReference = null);
+
+/// <summary>Draft-only manual invoice-number correction; requires invoices.override_number + reason.</summary>
+public record OverrideInvoiceNumberRequest(string InvoiceNumber, string Reason);
+
+public record InvoiceNumberPreviewDto(string InvoiceNumber, Guid LegalEntityId, int Year, int Month);
 
 /// <summary>Existing lines keep their id; new manual lines come without one. Order-backed lines cannot be added here.</summary>
 public record UpdateInvoiceLineInput(
@@ -79,7 +176,11 @@ public record UpdateInvoiceLineInput(
     string Description,
     decimal Quantity,
     decimal UnitPrice,
-    decimal VatRatePercent);
+    decimal VatRatePercent,
+    /// <summary>The line's sales category; null explicitly clears it (the editor round-trips the current value).</summary>
+    Guid? SalesCategoryId = null,
+    /// <summary>UN/ECE rec 20 unit code; null keeps the current value (new lines: C62).</summary>
+    string? UnitCode = null);
 
 public record ChangeInvoiceStatusRequest(InvoiceStatus Status);
 

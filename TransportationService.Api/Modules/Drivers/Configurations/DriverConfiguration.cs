@@ -29,5 +29,26 @@ public class DriverConfiguration : IEntityTypeConfiguration<Driver>
         // A trailer being deleted merely clears the preference (SetNull) rather than blocking
         // the delete or removing the driver. Vehicle assignment lives on the Vehicle side only.
         builder.HasOne<Trailer>().WithMany().HasForeignKey(d => d.FixedTrailerId).OnDelete(DeleteBehavior.SetNull);
+
+        builder.HasMany(d => d.Categories)
+            .WithOne()
+            .HasForeignKey(c => c.DriverId)
+            .OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
+public class DriverDriverCategoryConfiguration : IEntityTypeConfiguration<DriverDriverCategory>
+{
+    public void Configure(EntityTypeBuilder<DriverDriverCategory> builder)
+    {
+        builder.ToTable("driver_driver_categories");
+        builder.HasKey(c => c.Id);
+
+        builder.HasIndex(c => new { c.TenantId, c.DriverId, c.DriverCategoryId }).IsUnique();
+
+        builder.HasOne<DriverCategory>().WithMany()
+            .HasForeignKey(c => c.DriverCategoryId).OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasQueryFilter(c => !c.IsDeleted);
     }
 }

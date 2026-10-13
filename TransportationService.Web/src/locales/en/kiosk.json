@@ -1,0 +1,53 @@
+{
+  "setup": {
+    "title": "Set up time clock",
+    "hint": "Paste the provisioning key from Settings → Time registration.",
+    "keyPlaceholder": "Provisioning key",
+    "keyLabel": "Provisioning key",
+    "register": "Register",
+    "invalidKey": "Key not recognised. Check the provisioning key.",
+    "deviceRemoved": "This time clock is not (or no longer) registered. Enter a new key.",
+    "offline": "No connection to the server. Try again."
+  },
+  "pin": {
+    "prompt": "Enter your code",
+    "digitsEntered": "{count} digits entered",
+    "erase": "Erase",
+    "confirm": "Confirm"
+  },
+  "welcome": {
+    "title": "Welcome, {name}",
+    "workingSince": "Working since {time} · today {duration}",
+    "breakSince": "On break since {time}",
+    "notClockedIn": "You have not clocked in yet.",
+    "alreadyClockedOut": "You have already clocked out today.",
+    "cancel": "Cancel"
+  },
+  "actions": {
+    "clockIn": "Clock in",
+    "clockOut": "Clock out",
+    "startBreak": "Start break",
+    "endBreak": "End break"
+  },
+  "confirm": {
+    "clockedIn": "Clocked in at {time}",
+    "clockedInDetail": "Have a good workday!",
+    "clockedOut": "Clocked out at {time}",
+    "clockedOutDetail": "See you next time!",
+    "breakStarted": "Break started at {time}",
+    "breakStartedDetail": "Enjoy!",
+    "breakEnded": "Break ended at {time}",
+    "breakEndedDetail": "Keep it up!"
+  },
+  "errors": {
+    "invalidCode": "Invalid code.",
+    "sessionExpired": "The session has expired. Enter your code again.",
+    "kioskDisabled": "The time clock is disabled.",
+    "notConfigured": "The time clock has not been configured on the server.",
+    "unavailable": "The time clock is not available.",
+    "offlineIdentify": "No connection to the server. Clocking in cannot be registered safely right now. Try again.",
+    "offlinePunch": "No connection to the server. The action was NOT registered. Try again.",
+    "generic": "Something went wrong. Try again.",
+    "punchRejected": "The action could not be registered."
+  }
+}

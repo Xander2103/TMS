@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import { useLocale } from '../../i18n/localeContext'
 import './Breadcrumbs.css'
 
 export interface Crumb {
@@ -8,10 +9,11 @@ export interface Crumb {
 
 /** Simple breadcrumb trail. The last crumb is rendered as the current (non-link) page. */
 export function Breadcrumbs({ items }: { items: Crumb[] }) {
+  const { t } = useLocale()
   if (items.length === 0) return null
 
   return (
-    <nav className="ui-breadcrumbs" aria-label="Kruimelpad">
+    <nav className="ui-breadcrumbs" aria-label={t('ui.nav.breadcrumbs')}>
       <ol>
         {items.map((item, index) => {
           const isLast = index === items.length - 1

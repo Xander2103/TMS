@@ -1,0 +1,93 @@
+{
+  "priority": {
+    "Normal": "Normaal",
+    "High": "Hoog",
+    "Urgent": "Dringend"
+  },
+  "displayMode": {
+    "Notification": "Melding",
+    "DashboardBanner": "Dashboardbanner",
+    "BlockingAcknowledgement": "Blokkerende bevestiging"
+  },
+  "displayModeHint": {
+    "Notification": "Verschijnt in de mededelingenlijst van het portaal.",
+    "DashboardBanner": "Verschijnt bovendien als banner bovenaan het portaaldashboard.",
+    "BlockingAcknowledgement": "Blokkerend: het dashboard wordt afgedekt tot de gebruiker bevestigt — spaarzaam gebruiken."
+  },
+  "status": {
+    "cancelled": "Ingetrokken",
+    "expired": "Verlopen",
+    "scheduled": "Gepland",
+    "active": "Actief"
+  },
+  "page": {
+    "breadcrumbAdmin": "Beheer",
+    "title": "Portaalberichten",
+    "subtitle": "Berichten aan klantportaalgebruikers, met vertalingen en bezorgopvolging.",
+    "newMessage": "Nieuw bericht",
+    "loadFailed": "De portaalberichten konden niet worden geladen.",
+    "empty": "Nog geen portaalberichten.",
+    "loading": "Portaalberichten laden...",
+    "sent": "Portaalbericht verzonden."
+  },
+  "columns": {
+    "title": "Titel (NL)",
+    "customers": "Klanten",
+    "displayMode": "Weergave",
+    "priority": "Prioriteit",
+    "status": "Status"
+  },
+  "actions": {
+    "deliveryStatus": "Bezorgstatus",
+    "cancel": "Intrekken"
+  },
+  "cancelDialog": {
+    "title": "Bericht intrekken",
+    "message": "Weet u zeker dat u \"{title}\" wilt intrekken? Portaalgebruikers zien het bericht daarna niet meer.",
+    "confirm": "Intrekken",
+    "cancelled": "Bericht ingetrokken.",
+    "cancelFailed": "Het bericht kon niet worden ingetrokken."
+  },
+  "compose": {
+    "title": "Nieuw portaalbericht",
+    "customersLoadFailed": "De klantenlijst kon niet worden geladen.",
+    "sendFailed": "Het portaalbericht kon niet worden verzonden.",
+    "sending": "Verzenden…",
+    "send": "Verzenden",
+    "legendNl": "Nederlands (verplicht)",
+    "legendFr": "Frans (optioneel)",
+    "legendEn": "Engels (optioneel)",
+    "titleNl": "Titel (NL)",
+    "bodyNl": "Inhoud (NL)",
+    "titleFr": "Titel (FR)",
+    "bodyFr": "Inhoud (FR)",
+    "titleEn": "Titel (EN)",
+    "bodyEn": "Inhoud (EN)",
+    "customers": "Klanten",
+    "customersHint": "Meerdere klanten selecteren vereist de bulkpermissie (portal_messages.send_bulk).",
+    "bulkWarning": "Let op: u verstuurt naar meerdere klanten. Dit vereist de permissie portal_messages.send_bulk.",
+    "displayMode": "Weergavemodus",
+    "priority": "Prioriteit",
+    "options": "Opties",
+    "requiresAck": "Bevestiging vereist",
+    "sendEmail": "Ook per e-mail versturen",
+    "visibleFrom": "Zichtbaar vanaf",
+    "visibleFromHint": "Leeg = direct zichtbaar",
+    "expiresAt": "Verloopt op",
+    "expiresAtHint": "Leeg = geen einddatum"
+  },
+  "delivery": {
+    "title": "Bezorgstatus",
+    "loadFailed": "De bezorgstatus kon niet worden geladen.",
+    "loading": "Bezorgstatus laden...",
+    "createdAt": "aangemaakt {dateTime}",
+    "cancelledAt": "Ingetrokken op {dateTime}",
+    "columns": {
+      "name": "Naam",
+      "customer": "Klant",
+      "read": "Gelezen",
+      "acknowledged": "Bevestigd",
+      "email": "E-mail"
+    }
+  }
+}

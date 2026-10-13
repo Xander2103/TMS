@@ -27,6 +27,7 @@ public class TrailerConfiguration : IEntityTypeConfiguration<Trailer>
         builder.Property(t => t.WidthMeters).HasPrecision(6, 2);
         builder.Property(t => t.HeightMeters).HasPrecision(6, 2);
         builder.Property(t => t.VolumeM3).HasPrecision(8, 2);
+        builder.Property(t => t.LoadingMeters).HasPrecision(5, 2);
 
         builder.HasIndex(t => new { t.TenantId, t.InternalNumber }).IsUnique().HasFilter("\"IsDeleted\" = false");
         builder.HasIndex(t => new { t.TenantId, t.LicensePlate }).IsUnique().HasFilter("\"IsDeleted\" = false");

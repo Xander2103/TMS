@@ -1,0 +1,14 @@
+{
+  "title": "Messages",
+  "general": "Général",
+  "orderSubtitle": "Commande {orderId}",
+  "loading": "Chargement des messages...",
+  "loadError": "Les messages n'ont pas pu être chargés.",
+  "sendError": "Le message n'a pas pu être envoyé.",
+  "empty": "Pas encore de messages dans cette conversation.",
+  "you": "Vous",
+  "threadLabel": "Aperçu des messages",
+  "newMessageLabel": "Nouveau message",
+  "placeholder": "Saisissez votre message...",
+  "send": "Envoyer"
+}

@@ -1,0 +1,58 @@
+{
+  "status": {
+    "Pending": "In wachtrij",
+    "Sent": "Verzonden",
+    "Failed": "Mislukt",
+    "Suppressed": "Onderdrukt"
+  },
+  "page": {
+    "title": "Berichten",
+    "subtitle": "E-mail/SMS-outbox met bezorgstatus — providers worden pas gekoppeld zodra er inloggegevens zijn (nu: ontwikkelsink).",
+    "editTemplate": "Sjabloon bewerken",
+    "statusAria": "Status",
+    "allStatuses": "Alle statussen",
+    "loadFailed": "De outbox kon niet worden geladen.",
+    "empty": "Geen berichten gevonden."
+  },
+  "columns": {
+    "created": "Aangemaakt",
+    "channel": "Kanaal",
+    "kind": "Type",
+    "recipient": "Ontvanger",
+    "status": "Status",
+    "attempts": "Pogingen",
+    "detail": "Detail",
+    "actionsAria": "Acties"
+  },
+  "outbox": {
+    "fallback": "fallback",
+    "sentAtTime": "verzonden {time}",
+    "retry": "Opnieuw",
+    "retried": "Bericht opnieuw in de wachtrij gezet.",
+    "retryFailed": "Opnieuw verzenden mislukt."
+  },
+  "templates": {
+    "heading": "Eigen sjablonen",
+    "inactive": "inactief",
+    "edit": "bewerken",
+    "delete": "verwijderen",
+    "deleted": "Sjabloon verwijderd — het ingebouwde sjabloon geldt weer.",
+    "deleteFailed": "Het sjabloon kon niet worden verwijderd.",
+    "bodyRequired": "De inhoud van het sjabloon is verplicht.",
+    "saved": "Sjabloon opgeslagen.",
+    "saveFailed": "Het sjabloon kon niet worden opgeslagen.",
+    "previewFailed": "De preview kon niet worden geladen.",
+    "modalTitle": "Berichtsjabloon",
+    "preview": "Voorbeeld",
+    "form": {
+      "kind": "Type",
+      "channel": "Kanaal",
+      "channelEmail": "E-mail",
+      "channelSms": "SMS",
+      "language": "Taal",
+      "subject": "Onderwerp",
+      "subjectHint": "Tokens zoals {{orderNumber}} worden ingevuld.",
+      "body": "Inhoud"
+    }
+  }
+}

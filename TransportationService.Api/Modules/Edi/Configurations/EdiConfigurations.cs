@@ -67,6 +67,7 @@ public class EdiMessageConfiguration : IEntityTypeConfiguration<EdiMessage>
         builder.Property(m => m.Status).HasConversion<string>().HasMaxLength(20);
         builder.Property(m => m.ErrorDetail).HasMaxLength(2000);
         builder.Property(m => m.ValidationErrorsJson).HasMaxLength(4000);
+        builder.Property(m => m.FailureKind).HasMaxLength(20);
         builder.Property(m => m.ResultEntityType).HasMaxLength(100);
         builder.Property(m => m.ResultEntityId).HasMaxLength(100);
 

@@ -1,0 +1,35 @@
+{
+  "kind": {
+    "NegativeStockUnresolved": "Negatieve voorraad onopgelost",
+    "CriticalStockUnhandled": "Kritieke voorraad onbehandeld",
+    "TaskOverdue": "Taak achterstallig",
+    "AcknowledgementMissing": "Bevestiging ontbreekt",
+    "ReturnOverdue": "Retour te laat"
+  },
+  "page": {
+    "title": "Escalatieregels",
+    "subtitle": "Wie wordt na hoeveel uur verwittigd wanneer een signaal blijft liggen.",
+    "noPermission": "Je hebt geen rechten om escalatieregels te beheren.",
+    "loadFailed": "De escalatieregels konden niet worden geladen.",
+    "empty": "Geen escalatieregels gevonden."
+  },
+  "columns": {
+    "kind": "Soort",
+    "active": "Actief",
+    "delay": "Termijn (uren)",
+    "target": "Doel-permissie",
+    "actionsAria": "Acties"
+  },
+  "aria": {
+    "active": "Actief: {kind}",
+    "delay": "Termijn in uren: {kind}",
+    "target": "Doel-permissie: {kind}"
+  },
+  "form": {
+    "invalidDelay": "Geef een geldige termijn in uren op (geheel getal, 0 of meer).",
+    "targetRequired": "Kies een doel-permissie.",
+    "saved": "Escalatieregel \"{kind}\" opgeslagen.",
+    "saveFailed": "De escalatieregel kon niet worden opgeslagen.",
+    "saving": "Opslaan…"
+  }
+}

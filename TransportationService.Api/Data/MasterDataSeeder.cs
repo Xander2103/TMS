@@ -37,10 +37,15 @@ public static class MasterDataSeeder
             EmployeeNumberNextValue = 1,
         });
 
+        // The release-flow AuthorizationCatalogSync may already have filled the catalogue on
+        // this empty database (it runs before this seeder, in every environment): reuse rows.
+        var existingPermissions = await dbContext.Permissions.ToDictionaryAsync(p => p.Code, StringComparer.OrdinalIgnoreCase);
         var permissions = PermissionCodes.All
-            .Select(p => new Permission { Id = Guid.NewGuid(), Code = p.Code, Module = p.Module, Action = p.Action, Description = p.Description })
+            .Select(p => existingPermissions.TryGetValue(p.Code, out var existing)
+                ? existing
+                : new Permission { Id = Guid.NewGuid(), Code = p.Code, Module = p.Module, Action = p.Action, Description = p.Description })
             .ToList();
-        dbContext.Permissions.AddRange(permissions);
+        dbContext.Permissions.AddRange(permissions.Where(p => !existingPermissions.ContainsKey(p.Code)));
 
         var adminRole = new Role
         {

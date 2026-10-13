@@ -1,5 +1,6 @@
 import { Modal } from './Modal'
 import { Button } from './Button'
+import { useLocale } from '../../i18n/localeContext'
 
 interface ConfirmDialogProps {
   title: string
@@ -16,13 +17,14 @@ interface ConfirmDialogProps {
 export function ConfirmDialog({
   title,
   message,
-  confirmLabel = 'Bevestigen',
-  cancelLabel = 'Annuleren',
+  confirmLabel,
+  cancelLabel,
   destructive = false,
   busy = false,
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
+  const { t } = useLocale()
   return (
     <Modal
       title={title}
@@ -31,10 +33,10 @@ export function ConfirmDialog({
       footer={
         <>
           <Button variant="secondary" onClick={onCancel} disabled={busy}>
-            {cancelLabel}
+            {cancelLabel ?? t('ui.actions.cancel')}
           </Button>
           <Button variant={destructive ? 'danger' : 'primary'} onClick={onConfirm} disabled={busy}>
-            {busy ? 'Bezig...' : confirmLabel}
+            {busy ? t('ui.actions.busy') : (confirmLabel ?? t('ui.actions.confirm'))}
           </Button>
         </>
       }

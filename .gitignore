@@ -104,6 +104,9 @@ postgres-data/
 uploads/
 storage/
 documents/
+# ...but source code is never an upload directory: without this exception the feature folder
+# src/features/dossiers/documents/ stays out of git and a clean checkout does not build.
+!TransportationService.Web/src/**/documents/
 temp/
 tmp/
 
@@ -134,6 +137,11 @@ Desktop.ini
 !.vscode/extensions.json
 !.vscode/settings.example.json
 
-# Local startup notes
+# Local startup notes (may contain credentials — never commit)
 StartUp.txt
 StartUp
+StartUp.local.txt
+
+# Database dumps (production snapshots for migration validation) must never be committed
+*.dump
+*.pgdump

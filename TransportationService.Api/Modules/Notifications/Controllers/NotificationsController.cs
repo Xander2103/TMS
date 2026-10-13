@@ -52,6 +52,12 @@ public class NotificationsController : ControllerBase
         return NoContent();
     }
 
+    [HttpPost("{id:guid}/acknowledge")]
+    public async Task<IActionResult> Acknowledge(Guid id, CancellationToken cancellationToken)
+    {
+        return await _service.AcknowledgeAsync(id, cancellationToken) ? NoContent() : NotFound();
+    }
+
     [HttpPost("{id:guid}/archive")]
     public async Task<IActionResult> Archive(Guid id, CancellationToken cancellationToken)
     {

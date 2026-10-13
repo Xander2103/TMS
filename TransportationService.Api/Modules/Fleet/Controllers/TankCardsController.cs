@@ -24,11 +24,13 @@ public class TankCardsController : ControllerBase
     public async Task<ActionResult<PagedResult<TankCardDto>>> Search(
         [FromQuery] string? search,
         [FromQuery] TankCardStatus? status,
+        [FromQuery] bool? available,
         [FromQuery] int? page,
         [FromQuery] int? pageSize,
         CancellationToken cancellationToken)
     {
-        return Ok(await _service.SearchAsync(search, status, PageRequest.Of(page, pageSize), cancellationToken));
+        return Ok(await _service.SearchAsync(
+            search, status, available ?? false, PageRequest.Of(page, pageSize), cancellationToken));
     }
 
     [HttpGet("{id:guid}")]
@@ -37,6 +39,13 @@ public class TankCardsController : ControllerBase
     {
         var card = await _service.GetByIdAsync(id, cancellationToken);
         return card is null ? NotFound() : Ok(card);
+    }
+
+    [HttpGet("~/api/employees/{employeeId:guid}/tank-cards")]
+    [RequirePermission(PermissionCodes.TankCardsView)]
+    public async Task<ActionResult<IReadOnlyList<TankCardDto>>> ListForEmployee(Guid employeeId, CancellationToken cancellationToken)
+    {
+        return Ok(await _service.ListForEmployeeAsync(employeeId, cancellationToken));
     }
 
     [HttpPost]

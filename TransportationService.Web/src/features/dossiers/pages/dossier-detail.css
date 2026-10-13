@@ -1,0 +1,1238 @@
+/* §11 dossierpagina — één kolom, secties in vaste volgorde, UX-baseline §18. */
+
+.dossier-detail {
+  /* Redesign 2026-09-11: an operational desktop tool uses its width (two-column overview). */
+  max-width: 1440px;
+}
+
+/* --- Kop --- */
+
+.dossier-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.dossier-header-title h1 {
+  font-size: 2rem; /* §18: 32px pagina-kop */
+  margin: 0 0 4px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.dossier-header-meta {
+  margin: 0 0 8px;
+  color: var(--text);
+  opacity: 0.85;
+}
+
+.dossier-header-entity .link-button {
+  margin-left: 6px;
+  font-size: 0.875rem;
+}
+
+/* Confirmation sprint 2026-09-23: confirmed/cancelled facts under the badge. */
+.dossier-header-lifecycle {
+  margin: 0 0 6px;
+  font-size: 0.875rem;
+}
+
+.dossier-header-lifecycle p {
+  margin: 0;
+}
+
+.dossier-header-lifecycle-facts {
+  color: var(--text);
+  opacity: 0.85;
+}
+
+.dossier-header-lifecycle-reason {
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
+.dossier-header-chips {
+  margin: 0;
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+/* Actions: [ + Activiteit ] [ Meer ▾ ]  ·  gap  ·  [ Bevestigen ]. The secondary group sits
+   left, the ONE primary lifecycle action right-most with extra weight; on a narrow screen the
+   groups wrap and Bevestigen keeps the last, full-width spot so it stays obvious. */
+.dossier-header-actions {
+  display: flex;
+  gap: 8px 20px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.dossier-header-actions-secondary {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.dossier-header-actions .dossier-header-primary {
+  min-width: 132px;
+  font-weight: 700;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.18);
+}
+
+@media (max-width: 640px) {
+  .dossier-header-actions {
+    width: 100%;
+  }
+
+  .dossier-header-actions .dossier-header-primary {
+    flex: 1 1 100%;
+  }
+}
+
+/* Meer ▾ menu */
+
+.dossier-more {
+  position: relative;
+}
+
+.dossier-more summary {
+  list-style: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 1rem;
+  user-select: none;
+}
+
+.dossier-more summary::-webkit-details-marker {
+  display: none;
+}
+
+.dossier-more-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  min-width: 220px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.18);
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  z-index: 40;
+}
+
+.dossier-more-menu button {
+  border: none;
+  background: none;
+  text-align: left;
+  padding: 10px 12px;
+  min-height: 44px;
+  font-size: 1rem;
+  color: var(--text);
+  cursor: pointer;
+  border-radius: 6px;
+}
+
+.dossier-more-menu button:hover {
+  background: var(--color-info-bg);
+}
+
+.dossier-more-menu .dossier-more-danger {
+  color: var(--color-danger);
+}
+
+/* --- Conflict (409) banner --- */
+
+.dossier-conflict-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  border: 1px solid var(--color-warning);
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin: 0 0 16px;
+}
+
+/* --- Aandacht --- */
+
+.dossier-attention {
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--color-warning);
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 24px;
+}
+
+.dossier-attention h2 {
+  font-size: 1rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: 0 0 8px;
+}
+
+.dossier-attention ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dossier-attention li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.dossier-attention-message {
+  flex: 1;
+  min-width: 200px;
+}
+
+/* --- Secties --- */
+
+.dossier-section {
+  margin-bottom: 32px; /* §18 sectie-afstand */
+}
+
+.dossier-section h2 {
+  font-size: 1.25rem; /* §18: 20px sectiekop */
+  margin: 0 0 12px;
+}
+
+.dossier-section h3,
+.dossier-collapsed h3 {
+  font-size: 1rem;
+  margin: 16px 0 8px;
+}
+
+/* Activiteitenkaarten */
+
+.dossier-activity-list {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dossier-activity-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 16px;
+  flex-wrap: wrap;
+}
+
+.dossier-activity-main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.dossier-activity-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.dossier-activity-title svg {
+  flex-shrink: 0;
+  opacity: 0.75;
+}
+
+.dossier-activity-label {
+  opacity: 0.85;
+}
+
+.dossier-activity-context {
+  font-size: 0.875rem;
+  opacity: 0.75;
+}
+
+.dossier-legacy-orders {
+  margin-top: 16px;
+}
+
+/* Route-samenvatting */
+
+.dossier-route-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.dossier-route-columns h3 {
+  margin: 0 0 6px;
+}
+
+.dossier-route-stop {
+  margin: 0 0 4px;
+}
+
+.dossier-route-timing {
+  display: block;
+  font-size: 0.875rem;
+  opacity: 0.75;
+}
+
+/* Goederen & prijs */
+
+.dossier-goods-lines,
+.dossier-price-lines {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.dossier-price-lines li {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.dossier-price-total {
+  font-size: 1.25rem;
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.dossier-price-warning {
+  font-size: 0.875rem;
+  color: var(--color-warning);
+}
+
+.dossier-price-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* Ingeklapte secties */
+
+.dossier-collapsed {
+  border-top: 1px solid var(--border);
+  padding: 12px 0;
+}
+
+.dossier-collapsed summary {
+  cursor: pointer;
+  font-weight: 600;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+}
+
+/* Activiteitstype-picker (AddActivityDialog) */
+
+.dossier-type-picker {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.dossier-type-hint {
+  display: block;
+  font-size: 0.75rem;
+  opacity: 0.7;
+}
+
+.dossier-activity-order-cta {
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+}
+
+/* --- Responsief: één kolom onder 900px, gestapelde route-kolommen onder 640px --- */
+
+@media (max-width: 899px) {
+  .dossier-header {
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 640px) {
+  .dossier-route-columns {
+    grid-template-columns: 1fr;
+  }
+
+  .dossier-activity-card {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+/* --- UX-sprint 2026-09-09: sectienavigatie, route-werkblad, prijspaneel --- */
+
+.dossier-section,
+.dossier-collapsed {
+  scroll-margin-top: var(--space-4);
+}
+
+.dossier-section h2:focus-visible,
+.dossier-collapsed summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Bestemmingsmarkering na "Ga naar …": korte accentgloed, geen blijvend kader. */
+.dossier-section[data-highlight],
+.dossier-collapsed[data-highlight] {
+  animation: dossier-section-highlight 1.6s ease-out;
+}
+
+@keyframes dossier-section-highlight {
+  0% {
+    box-shadow: 0 0 0 4px var(--accent-bg);
+    border-radius: var(--radius-md);
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+
+/* Route-werkblad */
+
+.dossier-route-hint {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  margin: 0 0 var(--space-2);
+}
+
+/* The shared order-form shell caps itself at 1000px (fine for the order page); the dossier
+   Route tab is a work surface and uses the full content width so the auto-fill stop grid can
+   place three or four cards per row on a wide desktop. */
+.dossier-route-sheet.tof {
+  max-width: none;
+}
+
+.dossier-route-sheet .tof-stops-grid {
+  gap: var(--space-3);
+}
+
+.dossier-route-sheet .tof-stop {
+  margin: 0;
+  padding: var(--space-2) var(--space-4) var(--space-3);
+}
+
+.dossier-route-sheet .tof-stop legend {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 0.8125rem;
+}
+
+.dossier-route-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  margin-top: var(--space-3);
+}
+
+.dossier-route-add,
+.dossier-route-save {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.dossier-route-state {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+}
+
+.dossier-route-state-dirty {
+  color: var(--warning);
+  font-style: italic;
+}
+
+.dossier-route-readonly .placeholder-text {
+  margin-top: var(--space-2);
+  font-size: 0.875rem;
+}
+
+/* Prijspaneel */
+
+.dossier-price-none {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.dossier-price-note {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  margin: 0 0 var(--space-2);
+}
+
+.dossier-price-order-label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  margin: var(--space-2) 0;
+}
+
+.dossier-price-agreed {
+  margin: var(--space-3) 0 var(--space-4);
+  max-width: 480px;
+}
+
+.dossier-price-agreed-row {
+  display: flex;
+  gap: var(--space-2);
+  align-items: stretch;
+}
+
+.dossier-price-agreed-row input {
+  flex: 1;
+  min-width: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.dossier-price-lines-block h3 {
+  margin: var(--space-4) 0 var(--space-2);
+}
+
+.dossier-price-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9375rem;
+  margin-bottom: var(--space-2);
+}
+
+.dossier-price-table th,
+.dossier-price-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.dossier-price-table th {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.dossier-price-table .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.dossier-price-table .actions {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.dossier-price-table tr.is-muted td {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.dossier-price-addline {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--space-3);
+  align-items: start;
+  margin-top: var(--space-2);
+}
+
+.dossier-price-addline-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.dossier-price-noorder {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  align-items: flex-start;
+}
+
+@media (max-width: 640px) {
+  .dossier-price-addline {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Hardening 2026-09-10: explicit target order when a dossier holds several transport orders. */
+.dossier-order-switch {
+  margin: 0 0 var(--space-3);
+}
+
+.dossier-order-switch-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.dossier-order-switch-caption {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+}
+
+.dossier-order-switch-button {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+}
+
+.dossier-order-switch-button.is-selected {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.dossier-order-switch-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.dossier-order-switch-secondary {
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+}
+
+.dossier-order-switch-hint {
+  margin: 6px 0 0;
+  font-size: 0.8125rem;
+  color: var(--color-warning);
+}
+
+.dossier-price-partial {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--color-warning);
+}
+
+/* Stap 13: an intentional € 0 on the selected unit — amber (attention), never red (it is not an error). */
+.dossier-price-zero-warning {
+  margin: var(--space-2) 0 0;
+  padding: 6px 10px;
+  font-size: 0.875rem;
+  color: var(--color-warning);
+  border-left: 4px solid var(--color-warning);
+  max-width: 480px;
+}
+
+/* --- Redesign 2026-09-11: navigation-based workspace ---------------------------------------- */
+
+/* Compact header: title row + one meta line; the old KPI chips are gone. */
+.dossier-header {
+  margin-bottom: var(--space-3);
+}
+
+.dossier-header-title h1 {
+  margin-bottom: 2px;
+}
+
+.dossier-header-meta {
+  margin: 0;
+}
+
+/* Aandacht as a horizontal strip. */
+.dossier-attention-strip {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: 8px 14px;
+  margin-bottom: var(--space-3);
+  border-left-width: 1px;
+  background: color-mix(in srgb, var(--color-warning) 7%, var(--bg));
+  border-color: color-mix(in srgb, var(--color-warning) 45%, var(--border));
+}
+
+.dossier-attention-strip.is-blocking {
+  background: color-mix(in srgb, var(--color-danger) 6%, var(--bg));
+  border-color: color-mix(in srgb, var(--color-danger) 40%, var(--border));
+}
+
+.dossier-attention-strip.is-info {
+  background: var(--bg);
+}
+
+.dossier-attention-strip h2 {
+  margin: 0;
+  padding-top: 2px;
+  font-size: 0.9375rem;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  white-space: nowrap;
+  color: var(--color-warning);
+}
+
+.dossier-attention-strip.is-blocking h2 {
+  color: var(--color-danger);
+}
+
+.dossier-attention-strip ul {
+  flex: 1;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 4px 0;
+  min-width: 0;
+}
+
+.dossier-attention-strip li {
+  flex-wrap: nowrap;
+  gap: 8px;
+  padding: 2px 14px 2px 0;
+  margin-right: 14px;
+  border-right: 1px solid var(--border);
+}
+
+.dossier-attention-strip li:last-child {
+  border-right: none;
+  margin-right: 0;
+}
+
+.dossier-attention-strip .dossier-attention-message {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.dossier-attention-strip .link-button {
+  white-space: nowrap;
+}
+
+/* Subnav: links inside one dossier, scrollable on narrow viewports, sticky under the topbar. */
+.dossier-subnav {
+  position: sticky;
+  top: var(--app-sticky-top, 0px);
+  z-index: 5;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  margin-bottom: var(--space-4);
+}
+
+.dossier-subnav ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  /* The links' -1px margin overflows by a pixel; without this the strip grows a vertical scrollbar. */
+  overflow-y: hidden;
+  scrollbar-width: thin;
+}
+
+.dossier-subnav-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  min-height: 44px;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  color: var(--text);
+  text-decoration: none;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.dossier-subnav-link svg {
+  opacity: 0.75;
+}
+
+.dossier-subnav-link:hover {
+  color: var(--text-h);
+}
+
+.dossier-subnav-link.is-active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+.dossier-subnav-link.is-active svg {
+  opacity: 1;
+}
+
+.dossier-subnav-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  border-radius: 4px;
+}
+
+/* Overzicht: two-column grid of read-only summary cards. */
+.dossier-overview {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.dossier-ov-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 14px 18px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.dossier-ov-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.dossier-ov-head svg {
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.dossier-ov-head h2 {
+  flex: 1;
+  margin: 0;
+  font-size: 1.125rem;
+}
+
+.dossier-ov-chevron {
+  display: inline-flex;
+  color: var(--text-muted);
+  padding: 4px;
+  border-radius: 4px;
+}
+
+.dossier-ov-chevron:focus-visible {
+  outline: 2px solid var(--accent);
+}
+
+.dossier-ov-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 56px;
+}
+
+.dossier-ov-body p {
+  margin: 0;
+}
+
+.dossier-ov-muted {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+}
+
+.dossier-ov-context {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.dossier-ov-amount {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font-size: 1.25rem;
+}
+
+.dossier-ov-zero {
+  color: var(--color-warning);
+}
+
+.dossier-ov-note {
+  white-space: pre-line;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+}
+
+.dossier-ov-inline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dossier-ov-inline svg {
+  color: var(--text-muted);
+}
+
+/* Route timeline (Laden -> Lossen) */
+.dossier-ov-route {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.dossier-ov-route li {
+  position: relative;
+  display: grid;
+  grid-template-columns: 16px 1fr;
+  column-gap: 12px;
+  align-items: start;
+}
+
+.dossier-ov-route li::before {
+  content: "";
+  width: 12px;
+  height: 12px;
+  margin-top: 4px;
+  border-radius: 50%;
+  border: 2px solid var(--text-muted);
+  background: var(--bg);
+  box-sizing: border-box;
+}
+
+.dossier-ov-route li.is-filled::before {
+  border-color: var(--accent);
+  background: var(--color-primary-solid);
+}
+
+.dossier-ov-route li + li::after {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: -12px;
+  height: 14px;
+  border-left: 2px solid var(--border);
+}
+
+.dossier-ov-route-label {
+  grid-column: 2;
+  font-weight: 600;
+}
+
+.dossier-ov-route-value {
+  grid-column: 2;
+  display: flex;
+  flex-direction: column;
+  color: var(--text);
+}
+
+.dossier-ov-route-value small {
+  color: var(--text-muted);
+}
+
+/* Activity preview list */
+.dossier-ov-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dossier-ov-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--text) 4%, var(--bg));
+}
+
+.dossier-ov-list li svg {
+  margin-top: 2px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.dossier-ov-list-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.dossier-ov-list-sub {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.875rem;
+  color: var(--text-muted);
+}
+
+.dossier-ov-foot {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.dossier-ov-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-md);
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.dossier-ov-action:hover {
+  background: var(--accent-bg);
+}
+
+.dossier-ov-action:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Workspaces: the dedicated editors get the full width; the history splits notes/audit. */
+.dossier-workspace {
+  margin-bottom: var(--space-4);
+}
+
+.dossier-history-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+  gap: var(--space-5);
+  margin-bottom: var(--space-4);
+}
+
+@media (max-width: 1099px) {
+  .dossier-overview,
+  .dossier-history-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .dossier-attention-strip {
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .dossier-attention-strip li {
+    flex-wrap: wrap;
+    border-right: none;
+    margin-right: 0;
+    padding-right: 0;
+  }
+}
+
+/* --- Desktop density pass (2026-09-11) ------------------------------------------------------
+   The app root is 18px on desktop and this page sized everything in rem, so at 100% zoom the
+   overview read like a zoomed-in page (36px title, 18px body, 42px actions). The dossier is an
+   operational desktop surface: it gets its own 15px scale, a wider cap and tighter card
+   spacing. Real sizes only — no zoom/transform. Everything below is in px on purpose. */
+
+.dossier-detail {
+  max-width: 1600px;
+  font-size: 15px;
+  line-height: 1.45;
+}
+
+.dossier-detail .dossier-header-title h1 {
+  font-size: 28px;
+  letter-spacing: -0.5px;
+  line-height: 1.15;
+  gap: 10px;
+}
+
+.dossier-detail .dossier-header-meta {
+  font-size: 14px;
+}
+
+.dossier-detail .dossier-header-entity .link-button {
+  font-size: 13px;
+}
+
+.dossier-detail .dossier-header-actions .ui-button,
+.dossier-detail .dossier-more summary {
+  min-height: 38px;
+  padding: 7px 14px;
+  font-size: 14px;
+}
+
+.dossier-detail .dossier-header-actions .dossier-header-primary {
+  min-height: 40px;
+  padding: 8px 20px;
+}
+
+.dossier-detail .dossier-attention-strip {
+  font-size: 14px;
+  padding: 6px 12px;
+  margin-bottom: 10px;
+}
+
+.dossier-detail .dossier-attention-strip h2 {
+  font-size: 14px;
+}
+
+.dossier-detail .dossier-subnav-link {
+  font-size: 14px;
+  min-height: 40px;
+  padding: 8px 14px;
+  gap: 7px;
+}
+
+.dossier-detail .dossier-subnav-link svg {
+  width: 16px;
+  height: 16px;
+}
+
+.dossier-detail .dossier-subnav {
+  margin-bottom: 14px;
+}
+
+/* Overview cards: denser, but every element keeps its own readable size. */
+.dossier-detail .dossier-overview {
+  gap: 14px;
+}
+
+.dossier-detail .dossier-ov-card {
+  padding: 12px 16px 10px;
+  gap: 8px;
+}
+
+.dossier-detail .dossier-ov-head {
+  gap: 8px;
+}
+
+.dossier-detail .dossier-ov-head svg {
+  width: 18px;
+  height: 18px;
+}
+
+.dossier-detail .dossier-ov-head h2 {
+  font-size: 16px;
+  letter-spacing: -0.1px;
+}
+
+.dossier-detail .dossier-ov-body {
+  font-size: 14px;
+  gap: 4px;
+  min-height: 44px;
+}
+
+.dossier-detail .dossier-ov-muted,
+.dossier-detail .dossier-ov-list-sub,
+.dossier-detail .dossier-ov-route-value small {
+  font-size: 13px;
+}
+
+.dossier-detail .dossier-ov-context {
+  font-size: 12px;
+}
+
+.dossier-detail .dossier-ov-amount {
+  font-size: 18px;
+  gap: 8px;
+}
+
+.dossier-detail .dossier-ov-route {
+  gap: 8px;
+}
+
+.dossier-detail .dossier-ov-route li + li::after {
+  top: -10px;
+  height: 12px;
+}
+
+.dossier-detail .dossier-ov-list li {
+  padding: 6px 10px;
+  gap: 8px;
+}
+
+.dossier-detail .dossier-ov-action {
+  font-size: 14px;
+  min-height: 34px;
+  padding: 0 12px;
+  gap: 6px;
+}
+
+.dossier-detail .dossier-ov-action svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* Workspaces: section titles and inline notes follow the same scale. */
+.dossier-detail .dossier-section h2 {
+  font-size: 18px;
+}
+
+.dossier-detail .dossier-section h3,
+.dossier-detail .dossier-collapsed h3 {
+  font-size: 15px;
+}
+
+.dossier-detail .dossier-price-total {
+  font-size: 18px;
+}
+
+.dossier-detail .dossier-price-zero-warning,
+.dossier-detail .dossier-price-note,
+.dossier-detail .dossier-route-hint,
+.dossier-detail .dossier-route-state,
+.dossier-detail .dossier-order-switch-caption,
+.dossier-detail .dossier-order-switch-secondary,
+.dossier-detail .dossier-price-partial {
+  font-size: 13px;
+}
+
+.dossier-detail .dossier-price-table {
+  font-size: 14px;
+}
+
+/* Wide desktops: three overview columns from 1700px of content width, so a 2560px monitor
+   does not show two oversized halves; the two-column layout stays the default desktop case. */
+@media (min-width: 2000px) {
+  .dossier-detail .dossier-overview {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+/* Rows share their height and the action sits at the card's bottom-right, so two cards in one
+   row line up like the reference instead of one ending mid-row with dead space below it. */
+.dossier-detail .dossier-overview {
+  align-items: stretch;
+}
+
+.dossier-detail .dossier-ov-body {
+  flex: 1;
+}
+
+.dossier-detail .dossier-ov-foot {
+  margin-top: auto;
+}

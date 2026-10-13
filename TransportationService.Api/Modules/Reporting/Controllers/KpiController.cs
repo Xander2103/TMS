@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using TransportationService.Api.Modules.Auditing.Services;
 using TransportationService.Api.Modules.Identity;
 using TransportationService.Api.Modules.Identity.Authorization;
 using TransportationService.Api.Modules.Reporting.Dtos;
@@ -15,11 +16,17 @@ public class KpiController : ControllerBase
 
     private readonly IKpiQueryService _service;
     private readonly IKpiExportService _exportService;
+    private readonly IActivityKpiService _activityKpiService;
+    private readonly IAuditService _auditService;
 
-    public KpiController(IKpiQueryService service, IKpiExportService exportService)
+    public KpiController(
+        IKpiQueryService service, IKpiExportService exportService,
+        IActivityKpiService activityKpiService, IAuditService auditService)
     {
         _service = service;
         _exportService = exportService;
+        _activityKpiService = activityKpiService;
+        _auditService = auditService;
     }
 
     private static string? ValidateRange(DateOnly from, DateOnly to) =>
@@ -59,6 +66,21 @@ public class KpiController : ControllerBase
             new KpiFilter(from, to, customerId, driverId, vehicleId), cancellationToken));
     }
 
+    /// <summary>P11: counts/revenue per activity type. Period filters on the activity's
+    /// effective date (PlannedDate ?? creation date); see ActivityKpiService.</summary>
+    [HttpGet("activities")]
+    [RequirePermission(PermissionCodes.KpiView)]
+    public async Task<ActionResult<ActivityKpiReportDto>> Activities(
+        [FromQuery] DateOnly from, [FromQuery] DateOnly to, CancellationToken cancellationToken)
+    {
+        if (ValidateRange(from, to) is { } error)
+        {
+            return BadRequest(new { message = error });
+        }
+
+        return Ok(await _activityKpiService.GetActivityKpisAsync(from, to, cancellationToken));
+    }
+
     [HttpGet("export")]
     [RequirePermission(PermissionCodes.KpiExport)]
     public async Task<IActionResult> Export(
@@ -81,6 +103,9 @@ public class KpiController : ControllerBase
                 message = $"Onbekend rapport '{report}'. Beschikbaar: {string.Join(", ", _exportService.ReportKeys)}.",
             });
         }
+
+        await _auditService.RecordExportAsync(
+            $"kpi:{report}", new { from, to, customerId, driverId, vehicleId }, cancellationToken);
 
         return File(result.Value.Content,
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

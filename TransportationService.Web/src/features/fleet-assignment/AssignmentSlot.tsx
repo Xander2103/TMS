@@ -7,6 +7,7 @@ import { FormField } from '../../components/ui/FormField'
 import { Modal } from '../../components/ui/Modal'
 import { SearchableSelect, type SearchableSelectOption } from '../../components/ui/SearchableSelect'
 import { useToast } from '../../components/ui/toastContext'
+import { useLocale } from '../../i18n/localeContext'
 import './assignment-slot.css'
 
 interface AssignmentSlotProps {
@@ -35,6 +36,7 @@ interface AssignmentSlotProps {
  */
 export function AssignmentSlot({ title, description, assigned, canEdit, loadOptions, assign, onChanged, pickerLabel }: AssignmentSlotProps) {
   const toast = useToast()
+  const { t } = useLocale()
   const [pickerOpen, setPickerOpen] = useState(false)
   const [options, setOptions] = useState<SearchableSelectOption[] | null>(null)
   const [selection, setSelection] = useState<string | null>(null)
@@ -50,18 +52,18 @@ export function AssignmentSlot({ title, description, assigned, canEdit, loadOpti
         if (mounted) setOptions(data)
       })
       .catch(() => {
-        if (mounted) toast.showError('Opties konden niet worden geladen.')
+        if (mounted) toast.showError(t('fleet.assignmentSlot.optionsLoadFailed'))
       })
     return () => {
       mounted = false
     }
-  }, [pickerOpen, options, loadOptions, toast])
+  }, [pickerOpen, options, loadOptions, toast, t])
 
   async function run(id: string | null, replaceExisting: boolean) {
     setBusy(true)
     try {
       await assign(id, replaceExisting)
-      toast.showSuccess(id === null ? 'Toewijzing verwijderd.' : 'Toewijzing opgeslagen.')
+      toast.showSuccess(id === null ? t('fleet.assignmentSlot.removed') : t('fleet.assignmentSlot.saved'))
       setPickerOpen(false)
       setReplacePrompt(null)
       setConfirmUnassign(false)
@@ -71,7 +73,7 @@ export function AssignmentSlot({ title, description, assigned, canEdit, loadOpti
       if (err instanceof ApiError && err.status === 409 && !replaceExisting) {
         setReplacePrompt({ id, message: err.message })
       } else {
-        toast.showError(err instanceof ApiError ? err.message : 'Toewijzing kon niet worden opgeslagen.')
+        toast.showError(err instanceof ApiError ? err.message : t('fleet.assignmentSlot.saveFailed'))
       }
     } finally {
       setBusy(false)
@@ -94,17 +96,17 @@ export function AssignmentSlot({ title, description, assigned, canEdit, loadOpti
             <span>{assigned.label}</span>
           )
         ) : (
-          <span className="assignment-slot-empty">Niet toegewezen</span>
+          <span className="assignment-slot-empty">{t('fleet.assignmentSlot.notAssigned')}</span>
         )}
       </div>
       {canEdit && (
         <div className="assignment-slot-actions">
           <Button variant="ghost" onClick={() => setPickerOpen(true)} disabled={busy}>
-            {assigned ? 'Wijzigen' : 'Toewijzen'}
+            {assigned ? t('fleet.assignmentSlot.change') : t('fleet.assignmentSlot.assign')}
           </Button>
           {assigned && (
             <Button variant="ghost" onClick={() => setConfirmUnassign(true)} disabled={busy}>
-              Ontkoppelen
+              {t('fleet.assignmentSlot.unassign')}
             </Button>
           )}
         </div>
@@ -118,10 +120,10 @@ export function AssignmentSlot({ title, description, assigned, canEdit, loadOpti
           footer={
             <>
               <Button variant="secondary" onClick={() => setPickerOpen(false)} disabled={busy}>
-                Annuleren
+                {t('ui.actions.cancel')}
               </Button>
               <Button onClick={() => void run(selection, false)} disabled={busy || !selection}>
-                {busy ? 'Opslaan…' : 'Toewijzen'}
+                {busy ? t('fleet.common.saving') : t('fleet.assignmentSlot.assign')}
               </Button>
             </>
           }
@@ -133,7 +135,7 @@ export function AssignmentSlot({ title, description, assigned, canEdit, loadOpti
               onChange={setSelection}
               options={options ?? []}
               isLoading={options === null}
-              placeholder="— Selecteer —"
+              placeholder={t('ui.select.placeholder')}
             />
           </FormField>
         </Modal>
@@ -141,10 +143,10 @@ export function AssignmentSlot({ title, description, assigned, canEdit, loadOpti
 
       {replacePrompt && (
         <ConfirmDialog
-          title="Bestaande toewijzing vervangen?"
-          message={`${replacePrompt.message} Wil je die toewijzing vervangen?`}
-          confirmLabel="Vervangen"
-          cancelLabel="Annuleren"
+          title={t('fleet.assignmentSlot.replaceTitle')}
+          message={t('fleet.assignmentSlot.replaceMessage', { message: replacePrompt.message })}
+          confirmLabel={t('fleet.assignmentSlot.replaceConfirm')}
+          cancelLabel={t('ui.actions.cancel')}
           busy={busy}
           onConfirm={() => void run(replacePrompt.id, true)}
           onCancel={() => setReplacePrompt(null)}
@@ -153,9 +155,9 @@ export function AssignmentSlot({ title, description, assigned, canEdit, loadOpti
 
       {confirmUnassign && (
         <ConfirmDialog
-          title="Toewijzing verwijderen"
-          message={`${title} ontkoppelen? Dit heeft geen invloed op geplande ritten.`}
-          confirmLabel="Ontkoppelen"
+          title={t('fleet.assignmentSlot.unassignTitle')}
+          message={t('fleet.assignmentSlot.unassignMessage', { title })}
+          confirmLabel={t('fleet.assignmentSlot.unassign')}
           busy={busy}
           onConfirm={() => void run(null, false)}
           onCancel={() => setConfirmUnassign(false)}

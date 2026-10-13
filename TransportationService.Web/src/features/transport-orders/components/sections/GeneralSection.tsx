@@ -1,0 +1,208 @@
+import { FormField } from '../../../../components/ui/FormField'
+import { useLocale } from '../../../../i18n/localeContext'
+import type { CustomerDetail, CustomerListItem } from '../../../customers/types'
+import type { LegalEntityOption } from '../../../legal-entities/types'
+import type { TransportOrderDetail } from '../../types'
+
+interface GeneralSectionProps {
+  /**
+   * Whether the form CREATES a new order or EDITS a persisted one. Deliberately not derived from
+   * `order`: the create page passes an existing order as a TEMPLATE ("nieuwe opdracht op basis
+   * van deze"), and that flow must keep the customer and entity free.
+   */
+  mode: 'create' | 'edit'
+  /** The order being edited, or the order this new one is based on (create-from-template). */
+  order?: TransportOrderDetail
+  customers: CustomerListItem[]
+  legalEntities: LegalEntityOption[]
+  /** Selected customer's detail (intake requirements + block status); null while unknown. */
+  customerRequirements: CustomerDetail | null
+  requirementHints: string[]
+  customerId: string
+  setCustomerId: (value: string) => void
+  customerReference: string
+  setCustomerReference: (value: string) => void
+  orderDate: string
+  setOrderDate: (value: string) => void
+  legalEntityId: string
+  setLegalEntityId: (value: string) => void
+  dieselSurchargeOverride: boolean
+  setDieselSurchargeOverride: (value: boolean) => void
+  dieselSurchargePercentOverride: string
+  setDieselSurchargePercentOverride: (value: string) => void
+  dieselSurchargeOverrideReason: string
+  setDieselSurchargeOverrideReason: (value: string) => void
+  saving: boolean
+  /** First validation message per field path (inline errors + aria-invalid). */
+  errors: Record<string, string>
+}
+
+/** Algemeen section: customer, reference, date, invoicing entity, diesel-surcharge exception. */
+export function GeneralSection({
+  mode,
+  order,
+  customers,
+  legalEntities,
+  customerRequirements,
+  requirementHints,
+  customerId,
+  setCustomerId,
+  customerReference,
+  setCustomerReference,
+  orderDate,
+  setOrderDate,
+  legalEntityId,
+  setLegalEntityId,
+  dieselSurchargeOverride,
+  setDieselSurchargeOverride,
+  dieselSurchargePercentOverride,
+  setDieselSurchargePercentOverride,
+  dieselSurchargeOverrideReason,
+  setDieselSurchargeOverrideReason,
+  saving,
+  errors,
+}: GeneralSectionProps) {
+  const { t } = useLocale()
+  // Wave 1 blocker C-02: on a PERSISTED order the customer and the invoicing entity may only be
+  // moved through their dedicated flows ("Klant wijzigen" / "Entiteit wijzigen" on the detail
+  // page), which demand a reason and re-evaluate pricing, entity policy and draft invoices. The
+  // plain update refuses a different value server-side; the selects are locked here so the user
+  // never types a change the API will reject. Creating a new order — including from a template,
+  // which also carries an `order` — is deliberately unaffected.
+  const editingExisting = mode === 'edit'
+  return (
+    <>
+      <div className="tof-row">
+        <FormField
+          label={t('transportOrders.general.customer')}
+          htmlFor="to-customer"
+          required
+          hint={editingExisting ? t('transportOrders.general.customerLockedHint') : undefined}
+          error={errors.customerId}
+        >
+          <select
+            id="to-customer"
+            value={customerId}
+            onChange={(e) => setCustomerId(e.target.value)}
+            disabled={saving || editingExisting}
+            aria-invalid={errors.customerId ? true : undefined}
+          >
+            <option value="">{t('transportOrders.general.selectCustomer')}</option>
+            {/* The list offers only active customers; an existing order keeps its (possibly
+                deactivated) customer selectable so editing never silently switches customers. */}
+            {order && !customers.some((customer) => customer.id === order.customerId) && (
+              <option value={order.customerId}>
+                {order.customerName} {t('transportOrders.general.deactivatedSuffix')}
+              </option>
+            )}
+            {customers.map((customer) => (
+              <option key={customer.id} value={customer.id}>
+                {customer.name} ({customer.customerNumber})
+              </option>
+            ))}
+          </select>
+        </FormField>
+        <FormField label={t('transportOrders.general.customerReference')} htmlFor="to-ref">
+          <input id="to-ref" value={customerReference} onChange={(e) => setCustomerReference(e.target.value)} disabled={saving} maxLength={100} />
+        </FormField>
+        <FormField label={t('transportOrders.general.orderDate')} htmlFor="to-date">
+          <input id="to-date" type="date" value={orderDate} onChange={(e) => setOrderDate(e.target.value)} disabled={saving} />
+        </FormField>
+      </div>
+
+      {requirementHints.length > 0 && (
+        <p className="tof-customer-requirements" role="note">
+          {t('transportOrders.general.requirementsNote', { hints: requirementHints.join(', ') })}
+        </p>
+      )}
+      {customerRequirements?.isBlocked && (
+        <p className="tof-error" role="alert">
+          {customerRequirements.blockReason
+            ? t('transportOrders.general.blockedWithReason', { reason: customerRequirements.blockReason })
+            : t('transportOrders.general.blocked')}
+        </p>
+      )}
+
+      <div className="tof-row">
+        <FormField
+          label={t('transportOrders.general.legalEntity')}
+          htmlFor="to-legal-entity"
+          hint={
+            editingExisting
+              ? t('transportOrders.general.legalEntityLockedHint')
+              : t('transportOrders.general.legalEntityHint')
+          }
+        >
+          <select
+            id="to-legal-entity"
+            value={legalEntityId}
+            onChange={(e) => setLegalEntityId(e.target.value)}
+            disabled={saving || editingExisting}
+          >
+            <option value="">{t('transportOrders.general.customerDefault')}</option>
+            {/* Sprint 6: only the entities this customer allows (empty set = no restriction); the
+                current value stays listed so an existing order never loses its entity silently. */}
+            {legalEntities
+              .filter((entity) => {
+                const allowed = customerRequirements?.allowedLegalEntityIds ?? []
+                return allowed.length === 0 || allowed.includes(entity.id) || entity.id === legalEntityId
+              })
+              .map((entity) => (
+              <option key={entity.id} value={entity.id}>
+                {entity.displayName}
+                {entity.isDefault ? ` ${t('transportOrders.general.defaultSuffix')}` : ''}
+                {!entity.isActive ? ` ${t('transportOrders.general.inactiveSuffix')}` : ''}
+              </option>
+              ))}
+          </select>
+        </FormField>
+      </div>
+
+      <details className="tof-stop-extended" open={dieselSurchargeOverride}>
+        <summary>{t('transportOrders.general.dieselSummary')}</summary>
+        <label className="tof-checkbox">
+          <input
+            type="checkbox"
+            checked={dieselSurchargeOverride}
+            onChange={(e) => setDieselSurchargeOverride(e.target.checked)}
+            disabled={saving}
+          />
+          {t('transportOrders.general.dieselOverride')}
+        </label>
+        {dieselSurchargeOverride && (
+          <div className="tof-row">
+            <FormField label={t('transportOrders.general.percent')} htmlFor="to-diesel-pct">
+              <input
+                id="to-diesel-pct"
+                type="number"
+                min={0}
+                max={100}
+                step="0.01"
+                value={dieselSurchargePercentOverride}
+                onChange={(e) => setDieselSurchargePercentOverride(e.target.value)}
+                disabled={saving}
+              />
+            </FormField>
+            <FormField
+              label={t('transportOrders.general.reason')}
+              htmlFor="to-diesel-reason"
+              required
+              hint={t('transportOrders.general.dieselReasonHint')}
+              error={errors.dieselSurchargeOverrideReason}
+            >
+              <textarea
+                id="to-diesel-reason"
+                rows={2}
+                value={dieselSurchargeOverrideReason}
+                onChange={(e) => setDieselSurchargeOverrideReason(e.target.value)}
+                disabled={saving}
+                maxLength={500}
+                aria-invalid={errors.dieselSurchargeOverrideReason ? true : undefined}
+              />
+            </FormField>
+          </div>
+        )}
+      </details>
+    </>
+  )
+}

@@ -1,0 +1,148 @@
+{
+  "page": {
+    "title": "Peppol",
+    "subtitle": "Facturation électronique via le réseau Peppol : statut d'envoi par facture, documents entrants et configuration par entité propre.",
+    "noPermission": "Vous n'avez pas les droits nécessaires pour consulter Peppol.",
+    "tabs": {
+      "overview": "Aperçu",
+      "outgoing": "Sortant",
+      "incoming": "Entrant",
+      "settings": "Configuration",
+      "validation": "Problèmes de validation"
+    }
+  },
+  "kind": {
+    "Invoice": "Facture",
+    "CreditNote": "Note de crédit"
+  },
+  "incomingKind": {
+    "SupplierInvoice": "Facture fournisseur",
+    "SupplierCreditNote": "Note de crédit fournisseur",
+    "StatusMessage": "Message de statut"
+  },
+  "incomingStatus": {
+    "Received": "Reçu",
+    "NeedsReview": "À vérifier",
+    "Linked": "Traité",
+    "Rejected": "Rejeté"
+  },
+  "environment": {
+    "Sandbox": "Sandbox",
+    "Live": "Live"
+  },
+  "fields": {
+    "peppolId": "Identifiant Peppol",
+    "vatNumber": "Numéro de TVA",
+    "iban": "IBAN"
+  },
+  "overview": {
+    "loadFailed": "L'aperçu Peppol n'a pas pu être chargé.",
+    "loading": "Chargement de l'aperçu…",
+    "kpiReceivedIncoming": "Entrants reçus",
+    "customersEnabledWithoutId_one": "{count} client avec Peppol activé mais sans identifiant Peppol",
+    "customersEnabledWithoutId_other": "{count} clients avec Peppol activé mais sans identifiant Peppol",
+    "customersMissingData_one": "{count} client actif sans données Peppol",
+    "customersMissingData_other": "{count} clients actifs sans données Peppol",
+    "checklistTitle": "Configuration par entité propre",
+    "noEntities": "Aucune entité propre configurée pour le moment."
+  },
+  "outgoing": {
+    "loadFailed": "Les transmissions Peppol n'ont pas pu être chargées.",
+    "retryQueued": "Transmission remise en file d'attente.",
+    "retryFailed": "La transmission n'a pas pu être soumise à nouveau.",
+    "cancelled": "Transmission annulée.",
+    "cancelFailed": "La transmission n'a pas pu être annulée.",
+    "colInvoice": "Facture",
+    "colKind": "Type",
+    "colCustomer": "Client",
+    "colAmount": "Montant",
+    "colDate": "Date",
+    "colEnvironment": "Environnement",
+    "colStatus": "Statut",
+    "colProviderRef": "Référence prestataire",
+    "colError": "Erreur",
+    "colAttempts": "Tentative/version",
+    "colActions": "Actions",
+    "retry": "Réessayer",
+    "searchPlaceholder": "Rechercher par numéro de facture ou client...",
+    "statusFilterLabel": "Statut",
+    "empty": "Aucune transmission Peppol trouvée.",
+    "cancelTitle": "Annuler la transmission",
+    "cancelMessage": "Voulez-vous vraiment annuler l'envoi Peppol de la facture {invoiceNumber} ?"
+  },
+  "incoming": {
+    "loadFailed": "Les documents Peppol entrants n'ont pas pu être chargés.",
+    "reviewed": "Document marqué comme traité.",
+    "rejected": "Document rejeté.",
+    "actionFailed": "L'action n'a pas pu être exécutée.",
+    "colSupplier": "Fournisseur",
+    "colDocumentNumber": "N° de document",
+    "colKind": "Type",
+    "colAmount": "Montant",
+    "colReceivedAt": "Reçu le",
+    "colStatus": "Statut",
+    "colNote": "Note",
+    "colActions": "Actions",
+    "markReviewed": "Marquer comme traité",
+    "reject": "Rejeter",
+    "rejectTitle": "Rejeter le document",
+    "statusFilterLabel": "Statut",
+    "empty": "Aucun document Peppol entrant trouvé.",
+    "busy": "En cours…",
+    "confirmReview": "Marquer le document {documentNumber} comme traité ?",
+    "confirmReject": "Rejeter le document {documentNumber} ?",
+    "noteLabel": "Note (facultative)"
+  },
+  "settings": {
+    "entitiesLoadFailed": "Les entités propres n'ont pas pu être chargées.",
+    "loadFailed": "Les paramètres Peppol n'ont pas pu être chargés.",
+    "saved": "Paramètres Peppol enregistrés.",
+    "saveFailed": "Les paramètres n'ont pas pu être enregistrés.",
+    "testFailed": "Le test de connexion n'a pas pu être exécuté.",
+    "entityLabel": "Entité propre",
+    "peppolId": "Identifiant Peppol : {id}",
+    "peppolIdMissing": "Identifiant Peppol manquant",
+    "vat": "TVA : {vatNumber}",
+    "vatMissing": "Numéro de TVA manquant",
+    "iban": "IBAN : {iban}",
+    "ibanMissing": "IBAN manquant",
+    "manageHintPrefix": "Vous gérez ces données via",
+    "manageHintLink": "Paramètres → Entités propres",
+    "loading": "Chargement des paramètres…",
+    "enabled": "Actif",
+    "environmentLabel": "Environnement",
+    "providerLabel": "Prestataire",
+    "providerSandbox": "Sandbox (environnement de test)",
+    "emailFallbackLabel": "E-mail de repli",
+    "emailFallbackHint": "Adresse e-mail à laquelle la facture est envoyée lorsque le client n'est pas joignable via Peppol.",
+    "defaultNoteLabel": "Note par défaut",
+    "saving": "Enregistrement…",
+    "testConnection": "Tester la connexion",
+    "testing": "Test en cours…",
+    "found": "Trouvé",
+    "notFound": "Introuvable",
+    "providerReference": "Référence prestataire :",
+    "supportedDocTypes": "Types de documents pris en charge : {types}"
+  },
+  "validation": {
+    "loadFailed": "Les problèmes de validation n'ont pas pu être chargés.",
+    "loading": "Chargement des problèmes de validation…",
+    "intro": "Avant qu'une facture puisse être envoyée via Peppol, l'entité propre émettrice et le client destinataire doivent tous deux disposer de données Peppol complètes. Les problèmes en suspens sont listés ci-dessous.",
+    "entitiesTitle": "Entités propres incomplètes",
+    "entitiesComplete": "Toutes les entités propres sont entièrement configurées.",
+    "missing": "manque : {fields}",
+    "entitiesHintPrefix": "Complétez les données manquantes via",
+    "entitiesHintLink": "Paramètres → Entités propres",
+    "customersTitle": "Clients",
+    "customersOk": "Aucun problème client trouvé.",
+    "enabledWithoutId_one": "client avec Peppol activé mais sans identifiant Peppol — l'envoi échouera pour ces clients tant que l'identifiant Peppol n'est pas renseigné.",
+    "enabledWithoutId_other": "clients avec Peppol activé mais sans identifiant Peppol — l'envoi échouera pour ces clients tant que l'identifiant Peppol n'est pas renseigné.",
+    "missingData_one": "client actif sans données Peppol (à titre informatif — Peppol n'est peut-être pas souhaité pour ces clients).",
+    "missingData_other": "clients actifs sans données Peppol (à titre informatif — Peppol n'est peut-être pas souhaité pour ces clients).",
+    "customersHintPrefix": "Vous gérez les données Peppol d'un client sur sa fiche via",
+    "customersHintLink": "Clients"
+  },
+  "xml": {
+    "downloadFailed": "Le fichier XML Peppol n'a pas pu être téléchargé."
+  }
+}

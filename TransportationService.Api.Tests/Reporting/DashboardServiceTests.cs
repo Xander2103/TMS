@@ -1,6 +1,11 @@
+using Microsoft.EntityFrameworkCore;
 using TransportationService.Api.Modules.Auditing.Services;
 using TransportationService.Api.Modules.EmployeePlanning.Services;
+using TransportationService.Api.Modules.Employees.Entities;
+using TransportationService.Api.Modules.Employees.Services;
 using TransportationService.Api.Modules.Fleet.Services;
+using TransportationService.Api.Modules.Identity;
+using TransportationService.Api.Modules.Identity.Entities;
 using TransportationService.Api.Modules.Identity.Services;
 using TransportationService.Api.Modules.Notifications.Services;
 using TransportationService.Api.Modules.Invoicing.Entities;
@@ -37,7 +42,7 @@ public class DashboardServiceTests
         var fleet = new FleetDashboardService(db.Context, tenant,
             new MaintenanceService(db.Context, tenant, audit, clock),
             new InspectionService(db.Context, tenant, audit, clock),
-            new FleetDocumentService(db.Context, tenant, audit, clock),
+            new FleetDocumentService(db.Context, tenant, audit, clock, new TransportationService.Api.Modules.Qualifications.Services.LocalFileStorageService(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "ts-tests", System.Guid.NewGuid().ToString("N")))),
             new DamageReportService(db.Context, tenant, audit),
             new FuelService(db.Context, tenant, audit));
         var trips = new TripService(db.Context, tenant, audit,
@@ -46,7 +51,8 @@ public class DashboardServiceTests
             new TripPlanningSyncService(db.Context, tenant),
             CostingTestFactory.Create(db.Context, tenant, clock),
             TripPackageTestFactory.Create(db.Context, tenant, clock));
-        var sut = new DashboardService(db.Context, tenant, fleet, trips, clock);
+        var sut = new DashboardService(db.Context, tenant, fleet, trips, clock,
+            new DevCurrentUserContext(null), new PermissionAuthorizationService(db.Context));
         return new Harness(db, sut, tenantId, customerId);
     }
 
@@ -95,6 +101,166 @@ public class DashboardServiceTests
         Assert.Equal(1, dashboard.OverdueInvoiceCount); // vervaldag 1 juli < vandaag 18 juli
         Assert.Equal(4, dashboard.RecentOrders.Count);
         Assert.Equal("ORD-4", dashboard.RecentOrders[0].OrderNumber);
+    }
+
+    private async Task<Guid> SeedUserWithPermissionAsync(Harness h, params string[] permissionCodes)
+    {
+        var userId = Guid.NewGuid();
+        h.Db.Context.Users.Add(new User
+        {
+            Id = userId, TenantId = h.TenantId, Email = $"{userId}@acme.example", FirstName = "Ann", LastName = "HR", IsActive = true,
+        });
+        var role = new Role
+        {
+            Id = Guid.NewGuid(), TenantId = h.TenantId, Name = "Testrol", IsActive = true,
+            CreatedAt = Now.UtcDateTime, UpdatedAt = Now.UtcDateTime,
+        };
+        h.Db.Context.Roles.Add(role);
+        h.Db.Context.UserRoles.Add(new UserRole { UserId = userId, RoleId = role.Id });
+        foreach (var code in permissionCodes)
+        {
+            var permission = await h.Db.Context.Permissions.FirstOrDefaultAsync(p => p.Code == code);
+            if (permission is null)
+            {
+                permission = new Permission { Id = Guid.NewGuid(), Code = code, Module = "test", Action = "test", Description = "test" };
+                h.Db.Context.Permissions.Add(permission);
+            }
+            h.Db.Context.RolePermissions.Add(new RolePermission { RoleId = role.Id, PermissionId = permission.Id });
+        }
+        await h.Db.Context.SaveChangesAsync();
+        return userId;
+    }
+
+    [Fact]
+    public async Task Get_WithEmployeeNotesViewPermission_IncludesPinnedNotes()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var employeeId = Guid.NewGuid();
+        h.Db.Context.Employees.Add(new Employee
+        {
+            Id = employeeId, TenantId = h.TenantId, EmployeeNumber = "MED-1", FirstName = "Jan", LastName = "Janssen",
+            DateOfBirth = new(1990, 1, 1), Email = "jan@acme.example", PhoneNumber = "+3231112233",
+            Street = "Straat", HouseNumber = "1", PostalCode = "2000", City = "Antwerpen",
+            EmploymentStartDate = new(2020, 1, 1), EmploymentStatus = TransportationService.Api.Modules.Employees.Entities.EmploymentStatus.Active, IsActive = true,
+        });
+        await h.Db.Context.SaveChangesAsync();
+        var tenant = new DevTenantContext(h.TenantId);
+        var pinnedByUserId = Guid.NewGuid();
+        var noteClock = new TestClock(Now.AddDays(-30));
+        var notes = new EmployeeNoteService(h.Db.Context, tenant,
+            new AuditService(h.Db.Context, tenant, new DevCurrentUserContext(pinnedByUserId)),
+            new DevCurrentUserContext(pinnedByUserId), noteClock);
+        h.Db.Context.Users.Add(new User
+        {
+            Id = pinnedByUserId, TenantId = h.TenantId, Email = "ann@acme.example", FirstName = "Ann", LastName = "HR", IsActive = true,
+        });
+        await h.Db.Context.SaveChangesAsync();
+        // The note is written 30 days before "now" but pinned only just now — the pinned block
+        // must reflect the pin action's time/author, not the original write's.
+        var note = await notes.CreateAsync(employeeId, "Heeft hoogtevrees — nooit op kraanwerk.", CancellationToken.None);
+        noteClock.Advance(TimeSpan.FromDays(30));
+        await notes.SetPinnedAsync(employeeId, note!.Id, true, CancellationToken.None);
+
+        var userId = await SeedUserWithPermissionAsync(h, PermissionCodes.DashboardView, PermissionCodes.EmployeeNotesView);
+        var dashboard = await BuildWithUser(h, userId).GetAsync(CancellationToken.None);
+
+        var pinned = Assert.Single(dashboard.PinnedEmployeeNotes);
+        Assert.Equal(note.Id, pinned.NoteId);
+        Assert.Equal(employeeId, pinned.EmployeeId);
+        Assert.Equal("Jan Janssen", pinned.EmployeeName);
+        Assert.Equal("Heeft hoogtevrees — nooit op kraanwerk.", pinned.Excerpt);
+        Assert.Equal(Now.UtcDateTime, pinned.PinnedAt);
+        Assert.Equal("Ann HR", pinned.AuthorName);
+    }
+
+    [Fact]
+    public async Task Get_SortsPinnedNotes_ByPinnedAt_NotCreatedAt()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var employeeId = Guid.NewGuid();
+        h.Db.Context.Employees.Add(new Employee
+        {
+            Id = employeeId, TenantId = h.TenantId, EmployeeNumber = "MED-1", FirstName = "Jan", LastName = "Janssen",
+            DateOfBirth = new(1990, 1, 1), Email = "jan@acme.example", PhoneNumber = "+3231112233",
+            Street = "Straat", HouseNumber = "1", PostalCode = "2000", City = "Antwerpen",
+            EmploymentStartDate = new(2020, 1, 1), EmploymentStatus = TransportationService.Api.Modules.Employees.Entities.EmploymentStatus.Active, IsActive = true,
+        });
+        await h.Db.Context.SaveChangesAsync();
+        var tenant = new DevTenantContext(h.TenantId);
+        var noteClock = new TestClock(Now.AddDays(-60));
+        var notes = new EmployeeNoteService(h.Db.Context, tenant,
+            new AuditService(h.Db.Context, tenant, new DevCurrentUserContext(null)), new DevCurrentUserContext(null), noteClock);
+
+        // "Old" is written first (30 days before "New") but pinned last (just now); "New" is
+        // written later but pinned earlier. Sorting by CreatedAt would rank New above Old —
+        // sorting by PinnedAt must rank Old (pinned most recently) first.
+        var old = await notes.CreateAsync(employeeId, "Old note", CancellationToken.None);
+        noteClock.Advance(TimeSpan.FromDays(30));
+        var recent = await notes.CreateAsync(employeeId, "New note", CancellationToken.None);
+        noteClock.Advance(TimeSpan.FromDays(29));
+        await notes.SetPinnedAsync(employeeId, recent!.Id, true, CancellationToken.None);
+        noteClock.Advance(TimeSpan.FromDays(1));
+        await notes.SetPinnedAsync(employeeId, old!.Id, true, CancellationToken.None);
+
+        var userId = await SeedUserWithPermissionAsync(h, PermissionCodes.DashboardView, PermissionCodes.EmployeeNotesView);
+        var dashboard = await BuildWithUser(h, userId).GetAsync(CancellationToken.None);
+
+        Assert.Equal(2, dashboard.PinnedEmployeeNotes.Count);
+        Assert.Equal(old.Id, dashboard.PinnedEmployeeNotes[0].NoteId);
+        Assert.Equal(recent.Id, dashboard.PinnedEmployeeNotes[1].NoteId);
+    }
+
+    [Fact]
+    public async Task Get_WithoutEmployeeNotesViewPermission_OmitsPinnedNotes()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var employeeId = Guid.NewGuid();
+        h.Db.Context.Employees.Add(new Employee
+        {
+            Id = employeeId, TenantId = h.TenantId, EmployeeNumber = "MED-1", FirstName = "Jan", LastName = "Janssen",
+            DateOfBirth = new(1990, 1, 1), Email = "jan@acme.example", PhoneNumber = "+3231112233",
+            Street = "Straat", HouseNumber = "1", PostalCode = "2000", City = "Antwerpen",
+            EmploymentStartDate = new(2020, 1, 1), EmploymentStatus = TransportationService.Api.Modules.Employees.Entities.EmploymentStatus.Active, IsActive = true,
+        });
+        await h.Db.Context.SaveChangesAsync();
+        var tenant = new DevTenantContext(h.TenantId);
+        var notes = new EmployeeNoteService(h.Db.Context, tenant,
+            new AuditService(h.Db.Context, tenant, new DevCurrentUserContext(null)), new DevCurrentUserContext(null), new TestClock(Now));
+        var note = await notes.CreateAsync(employeeId, "Vertrouwelijk.", CancellationToken.None);
+        await notes.SetPinnedAsync(employeeId, note!.Id, true, CancellationToken.None);
+
+        // A user with dashboard.view but NOT employee_notes.view never sees the note.
+        var withoutNotesPermission = await SeedUserWithPermissionAsync(h, PermissionCodes.DashboardView);
+        var dashboard = await BuildWithUser(h, withoutNotesPermission).GetAsync(CancellationToken.None);
+        Assert.Empty(dashboard.PinnedEmployeeNotes);
+
+        // No authenticated user at all → also empty, never throws.
+        var anonymous = await BuildWithUser(h, null).GetAsync(CancellationToken.None);
+        Assert.Empty(anonymous.PinnedEmployeeNotes);
+    }
+
+    private static DashboardService BuildWithUser(Harness h, Guid? userId)
+    {
+        var tenant = new DevTenantContext(h.TenantId);
+        var audit = new AuditService(h.Db.Context, tenant, new DevCurrentUserContext(null));
+        var clock = new TestClock(Now);
+        var fleet = new FleetDashboardService(h.Db.Context, tenant,
+            new TransportationService.Api.Modules.Fleet.Services.MaintenanceService(h.Db.Context, tenant, audit, clock),
+            new TransportationService.Api.Modules.Fleet.Services.InspectionService(h.Db.Context, tenant, audit, clock),
+            new TransportationService.Api.Modules.Fleet.Services.FleetDocumentService(h.Db.Context, tenant, audit, clock, new LocalFileStorageService(Path.Combine(Path.GetTempPath(), "ts-tests", Guid.NewGuid().ToString("N")))),
+            new TransportationService.Api.Modules.Fleet.Services.DamageReportService(h.Db.Context, tenant, audit),
+            new TransportationService.Api.Modules.Fleet.Services.FuelService(h.Db.Context, tenant, audit));
+        var trips = new TripService(h.Db.Context, tenant, audit,
+            new PlanningConflictService(h.Db.Context, tenant, new QualificationStatusCalculator(), clock),
+            new NotificationService(h.Db.Context, tenant, new DevCurrentUserContext(null), clock),
+            new TripPlanningSyncService(h.Db.Context, tenant),
+            CostingTestFactory.Create(h.Db.Context, tenant, clock),
+            TripPackageTestFactory.Create(h.Db.Context, tenant, clock));
+        return new DashboardService(h.Db.Context, tenant, fleet, trips, clock,
+            new DevCurrentUserContext(userId), new PermissionAuthorizationService(h.Db.Context));
     }
 
     [Fact]

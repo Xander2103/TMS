@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { setUnauthorizedHandler } from '../../api/apiClient'
+import { resetDisplayPreferences } from '../../components/layout/displayPreferences'
 import * as authApi from './authApi'
 import { AuthContext, type AuthContextValue } from './authContextValue'
-import { clearTokens, getAccessToken, getRefreshToken, storeTokens } from './authStorage'
+import { clearLegacyTokens, clearTokens, getAccessToken, setAccessToken } from './authStorage'
 import type { CurrentUser } from './authTypes'
 
 type AuthStatus = AuthContextValue['status']
@@ -10,12 +11,16 @@ type AuthStatus = AuthContextValue['status']
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<AuthStatus>('loading')
   const [user, setUser] = useState<CurrentUser | null>(null)
+  const [signedOut, setSignedOut] = useState(false)
   const initialised = useRef(false)
 
   // Register the shared apiClient's "give up" handler so an unrecoverable 401 (refresh failed)
   // drops the app back to the unauthenticated state exactly once, without redirect loops.
   useEffect(() => {
     setUnauthorizedHandler(() => {
+      // C-03: an unrecoverable 401 never passes through logout(), so the regional preferences
+      // are dropped here too — nothing of this account may colour the next one's screens.
+      resetDisplayPreferences()
       setUser(null)
       setStatus('unauthenticated')
     })
@@ -29,26 +34,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     initialised.current = true
 
     void (async () => {
-      const refreshToken = getRefreshToken()
-      if (!refreshToken) {
-        setStatus('unauthenticated')
-        return
-      }
+      // H5 migration: any tokens the previous architecture left in localStorage are wiped.
+      clearLegacyTokens()
 
-      // Prefer a rotation-refresh so a stale access token is replaced up front.
-      const tokens = await authApi.refresh(refreshToken)
+      // The session credential is the HttpOnly refresh cookie — ask the server for a fresh
+      // access token; no cookie (or an expired one) simply means "not signed in".
+      const tokens = await authApi.refresh()
       if (tokens) {
-        storeTokens(tokens)
+        setAccessToken(tokens.accessToken)
         setUser(tokens.user)
-        setStatus('authenticated')
-        return
-      }
-
-      // Refresh token no longer valid — fall back to the access token if one is still good.
-      const accessToken = getAccessToken()
-      const me = accessToken ? await authApi.fetchCurrentUser(accessToken) : null
-      if (me) {
-        setUser(me)
         setStatus('authenticated')
       } else {
         clearTokens()
@@ -59,19 +53,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(async (email: string, password: string, signal?: AbortSignal) => {
     const tokens = await authApi.login(email, password, signal)
-    storeTokens(tokens)
+    setAccessToken(tokens.accessToken)
     setUser(tokens.user)
+    setSignedOut(false)
     setStatus('authenticated')
   }, [])
 
   const logout = useCallback(async () => {
     const accessToken = getAccessToken()
-    const refreshToken = getRefreshToken()
     if (accessToken) {
-      await authApi.logout(accessToken, refreshToken)
+      await authApi.logout(accessToken)
     }
     clearTokens()
+    // Secure cleanup: queued offline actions and cached driver snapshots never
+    // survive for the next account on this device.
+    const { clearDriverOfflineState } = await import('../driver/offlineActions')
+    clearDriverOfflineState()
+    // C-03: the tenant's date format, decimal separator and TIME ZONE go with it. The cache in
+    // DisplayPreferencesProvider is session-keyed as well, so this is belt-and-braces — it is
+    // what keeps the *unauthenticated* screens off the previous tenant's notation.
+    resetDisplayPreferences()
     setUser(null)
+    // Same render as the status flip, so RequireAuth never records the page being left as the
+    // place to return to (it did: after a forced password change that was /change-password).
+    setSignedOut(true)
     setStatus('unauthenticated')
   }, [])
 
@@ -80,12 +85,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return {
       status,
       user,
+      signedOut,
       login,
       logout,
       hasPermission: (code: string) => permissions.has(code),
       hasAnyPermission: (codes: string[]) => codes.some((code) => permissions.has(code)),
     }
-  }, [status, user, login, logout])
+  }, [status, user, signedOut, login, logout])
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

@@ -1,3 +1,4 @@
+import { useLocale } from '../../i18n/localeContext'
 import './Pagination.css'
 
 interface PaginationProps {
@@ -9,6 +10,7 @@ interface PaginationProps {
 
 /** Shared pager. Renders nothing when everything fits on a single page. */
 export function Pagination({ page, pageSize, totalCount, onPageChange }: PaginationProps) {
+  const { t } = useLocale()
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize))
 
   if (totalPages <= 1) {
@@ -19,19 +21,19 @@ export function Pagination({ page, pageSize, totalCount, onPageChange }: Paginat
   const rangeEnd = Math.min(page * pageSize, totalCount)
 
   return (
-    <nav className="ui-pagination" aria-label="Paginering">
+    <nav className="ui-pagination" aria-label={t('ui.pagination.label')}>
       <span className="ui-pagination-summary">
-        {rangeStart}–{rangeEnd} van {totalCount}
+        {t('ui.pagination.range', { start: rangeStart, end: rangeEnd, total: totalCount })}
       </span>
       <div className="ui-pagination-controls">
         <button type="button" onClick={() => onPageChange(page - 1)} disabled={page <= 1}>
-          Vorige
+          {t('ui.pagination.previous')}
         </button>
         <span>
-          Pagina {page} / {totalPages}
+          {t('ui.pagination.page', { page, totalPages })}
         </span>
         <button type="button" onClick={() => onPageChange(page + 1)} disabled={page >= totalPages}>
-          Volgende
+          {t('ui.pagination.next')}
         </button>
       </div>
     </nav>

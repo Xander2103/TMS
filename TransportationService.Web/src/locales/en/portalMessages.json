@@ -1,0 +1,93 @@
+{
+  "priority": {
+    "Normal": "Normal",
+    "High": "High",
+    "Urgent": "Urgent"
+  },
+  "displayMode": {
+    "Notification": "Notification",
+    "DashboardBanner": "Dashboard banner",
+    "BlockingAcknowledgement": "Blocking acknowledgement"
+  },
+  "displayModeHint": {
+    "Notification": "Appears in the portal's announcements list.",
+    "DashboardBanner": "Additionally appears as a banner at the top of the portal dashboard.",
+    "BlockingAcknowledgement": "Blocking: the dashboard is covered until the user acknowledges — use sparingly."
+  },
+  "status": {
+    "cancelled": "Withdrawn",
+    "expired": "Expired",
+    "scheduled": "Scheduled",
+    "active": "Active"
+  },
+  "page": {
+    "breadcrumbAdmin": "Administration",
+    "title": "Portal messages",
+    "subtitle": "Messages to customer-portal users, with translations and delivery follow-up.",
+    "newMessage": "New message",
+    "loadFailed": "The portal messages could not be loaded.",
+    "empty": "No portal messages yet.",
+    "loading": "Loading portal messages...",
+    "sent": "Portal message sent."
+  },
+  "columns": {
+    "title": "Title (NL)",
+    "customers": "Customers",
+    "displayMode": "Display",
+    "priority": "Priority",
+    "status": "Status"
+  },
+  "actions": {
+    "deliveryStatus": "Delivery status",
+    "cancel": "Withdraw"
+  },
+  "cancelDialog": {
+    "title": "Withdraw message",
+    "message": "Are you sure you want to withdraw \"{title}\"? Portal users will no longer see the message.",
+    "confirm": "Withdraw",
+    "cancelled": "Message withdrawn.",
+    "cancelFailed": "The message could not be withdrawn."
+  },
+  "compose": {
+    "title": "New portal message",
+    "customersLoadFailed": "The customer list could not be loaded.",
+    "sendFailed": "The portal message could not be sent.",
+    "sending": "Sending…",
+    "send": "Send",
+    "legendNl": "Dutch (required)",
+    "legendFr": "French (optional)",
+    "legendEn": "English (optional)",
+    "titleNl": "Title (NL)",
+    "bodyNl": "Content (NL)",
+    "titleFr": "Title (FR)",
+    "bodyFr": "Content (FR)",
+    "titleEn": "Title (EN)",
+    "bodyEn": "Content (EN)",
+    "customers": "Customers",
+    "customersHint": "Selecting multiple customers requires the bulk permission (portal_messages.send_bulk).",
+    "bulkWarning": "Note: you are sending to multiple customers. This requires the portal_messages.send_bulk permission.",
+    "displayMode": "Display mode",
+    "priority": "Priority",
+    "options": "Options",
+    "requiresAck": "Acknowledgement required",
+    "sendEmail": "Also send by email",
+    "visibleFrom": "Visible from",
+    "visibleFromHint": "Empty = visible immediately",
+    "expiresAt": "Expires on",
+    "expiresAtHint": "Empty = no end date"
+  },
+  "delivery": {
+    "title": "Delivery status",
+    "loadFailed": "The delivery status could not be loaded.",
+    "loading": "Loading delivery status...",
+    "createdAt": "created {dateTime}",
+    "cancelledAt": "Withdrawn on {dateTime}",
+    "columns": {
+      "name": "Name",
+      "customer": "Customer",
+      "read": "Read",
+      "acknowledged": "Acknowledged",
+      "email": "Email"
+    }
+  }
+}

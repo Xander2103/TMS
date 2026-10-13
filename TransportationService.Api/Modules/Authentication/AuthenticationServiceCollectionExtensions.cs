@@ -1,6 +1,8 @@
 using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using TransportationService.Api.Modules.Authentication.Services;
 
@@ -18,17 +20,52 @@ public static class AuthenticationServiceCollectionExtensions
             .ValidateDataAnnotations()
             .ValidateOnStart();
 
+        // Rejects the burned committed dev key, placeholders and too-short keys in every
+        // environment (runs as part of ValidateOnStart above).
+        services.AddSingleton<IValidateOptions<JwtOptions>, JwtOptionsValidator>();
+
         var jwt = configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>() ?? new JwtOptions();
+
+        // Sign-in/session security knobs and the shared password policy.
+        services.AddOptions<AuthenticationSecurityOptions>()
+            .Bind(configuration.GetSection(AuthenticationSecurityOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+        services.AddOptions<PasswordPolicyOptions>()
+            .Bind(configuration.GetSection(PasswordPolicyOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+        services.AddSingleton<IPasswordPolicy, PasswordPolicy>();
 
         services.AddSingleton<ITokenService, TokenService>();
         services.AddSingleton<IPasswordHasher, PasswordHasher>();
         services.AddScoped<IAuthService, AuthService>();
+        services.AddHostedService<TokenRetentionHostedService>();
 
         services
             .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             .AddJwtBearer(options =>
             {
                 options.MapInboundClaims = false;
+
+                // Current key plus (optionally) the previous one, so a signing-key rotation does
+                // not invalidate every outstanding token at once. Each carries its kid.
+                var signingKeys = new List<SecurityKey>
+                {
+                    new SymmetricSecurityKey(Encoding.UTF8.GetBytes(
+                        string.IsNullOrEmpty(jwt.SigningKey)
+                            ? new string('0', 32) // placeholder; ValidateOnStart already rejects this config
+                            : jwt.SigningKey))
+                    { KeyId = jwt.KeyId },
+                };
+                if (!string.IsNullOrWhiteSpace(jwt.PreviousSigningKey))
+                {
+                    signingKeys.Add(new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwt.PreviousSigningKey))
+                    {
+                        KeyId = jwt.PreviousKeyId,
+                    });
+                }
+
                 options.TokenValidationParameters = new TokenValidationParameters
                 {
                     ValidateIssuer = true,
@@ -36,11 +73,10 @@ public static class AuthenticationServiceCollectionExtensions
                     ValidateAudience = true,
                     ValidAudience = jwt.Audience,
                     ValidateIssuerSigningKey = true,
-                    IssuerSigningKey = new SymmetricSecurityKey(
-                        Encoding.UTF8.GetBytes(
-                            string.IsNullOrEmpty(jwt.SigningKey)
-                                ? new string('0', 32) // placeholder; ValidateOnStart already rejects this config
-                                : jwt.SigningKey)),
+                    IssuerSigningKeys = signingKeys,
+                    // Pin the algorithm: never accept a token signed with anything else, so a
+                    // future asymmetric migration cannot be downgraded into algorithm confusion.
+                    ValidAlgorithms = [SecurityAlgorithms.HmacSha256],
                     ValidateLifetime = true,
                     ClockSkew = TimeSpan.FromSeconds(30),
                     NameClaimType = System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub,
@@ -67,7 +103,16 @@ public static class AuthenticationServiceCollectionExtensions
                 };
             });
 
-        services.AddAuthorization();
+        // Fail-closed authorization: EVERY endpoint requires an authenticated principal unless it
+        // explicitly opts out with [AllowAnonymous]. Function-level permission checks
+        // (RequirePermissionAttribute) run on top of this. This closes the ambient-context
+        // authentication bypass — an unauthenticated request can no longer reach a business action.
+        services.AddAuthorization(options =>
+        {
+            options.FallbackPolicy = new AuthorizationPolicyBuilder()
+                .RequireAuthenticatedUser()
+                .Build();
+        });
         return services;
     }
 

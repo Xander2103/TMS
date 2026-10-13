@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useLocale } from '../../../i18n/localeContext'
 import { useRoles } from '../../roles/hooks/useRoles'
 import { useUserMutations } from '../hooks/useUserMutations'
 import type { User } from '../types/user'
@@ -15,6 +16,7 @@ interface RoleAssignmentPanelProps {
  * of syncing local state from a prop via an effect.
  */
 export function RoleAssignmentPanel({ user, onSaved }: RoleAssignmentPanelProps) {
+  const { t } = useLocale()
   const { roles, isLoading, error: loadError } = useRoles()
   const { isSubmitting, error: saveError, assignRoles } = useUserMutations()
   const [selectedRoleIds, setSelectedRoleIds] = useState<string[]>(() => user.roles.map((role) => role.id))
@@ -34,7 +36,7 @@ export function RoleAssignmentPanel({ user, onSaved }: RoleAssignmentPanelProps)
   }
 
   if (isLoading) {
-    return <p>Rollen laden...</p>
+    return <p>{t('usersRoles.users.rolesPanel.loading')}</p>
   }
 
   if (loadError) {
@@ -54,7 +56,7 @@ export function RoleAssignmentPanel({ user, onSaved }: RoleAssignmentPanelProps)
                 disabled={isSubmitting}
               />
               {role.name}
-              {role.isSystemRole && <span className="badge">Systeemrol</span>}
+              {role.isSystemRole && <span className="badge">{t('usersRoles.users.rolesPanel.systemRole')}</span>}
             </label>
           </li>
         ))}
@@ -65,7 +67,7 @@ export function RoleAssignmentPanel({ user, onSaved }: RoleAssignmentPanelProps)
         </p>
       )}
       <button type="button" className="primary-button" onClick={handleSave} disabled={isSubmitting}>
-        {isSubmitting ? 'Opslaan...' : 'Rollen opslaan'}
+        {isSubmitting ? t('usersRoles.users.rolesPanel.saving') : t('usersRoles.users.rolesPanel.save')}
       </button>
     </div>
   )

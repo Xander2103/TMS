@@ -1,0 +1,20 @@
+{
+  "page": {
+    "breadcrumb": "Qualifications",
+    "title": "Qualifications",
+    "subtitle": "Expiring and expired qualifications, licences and inspections of all employees.",
+    "loadFailed": "The qualifications could not be loaded.",
+    "expiringTitle": "Expiring soon",
+    "expiredTitle": "Expired",
+    "windowAria": "Period",
+    "windowDays": "{days} days",
+    "colEmployee": "Employee",
+    "driverSuffix": "· driver",
+    "colQualification": "Qualification",
+    "colExpiry": "Expiry date",
+    "colStatus": "Status",
+    "emptyExpiring": "No qualifications expiring within {days} days.",
+    "emptyExpired": "No expired qualifications. 🎉",
+    "loading": "Loading…"
+  }
+}

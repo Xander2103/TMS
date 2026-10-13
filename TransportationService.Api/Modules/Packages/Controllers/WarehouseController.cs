@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using TransportationService.Api.Modules.Auditing.Services;
 using TransportationService.Api.Modules.Identity;
 using TransportationService.Api.Modules.Identity.Authorization;
 using TransportationService.Api.Modules.Packages.Services;
@@ -46,11 +47,13 @@ public class PackageReportsController : ControllerBase
 {
     private readonly IPackageReportService _service;
     private readonly TimeProvider _timeProvider;
+    private readonly IAuditService _auditService;
 
-    public PackageReportsController(IPackageReportService service, TimeProvider timeProvider)
+    public PackageReportsController(IPackageReportService service, TimeProvider timeProvider, IAuditService auditService)
     {
         _service = service;
         _timeProvider = timeProvider;
+        _auditService = auditService;
     }
 
     [HttpGet("api/reports/packages")]
@@ -68,6 +71,8 @@ public class PackageReportsController : ControllerBase
         {
             return NotFound(new { message = "Onbekend rapport." });
         }
+
+        await _auditService.RecordExportAsync($"packages:{report}", new { from, to }, cancellationToken);
         return File(result.Value.Content,
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", result.Value.FileName);
     }

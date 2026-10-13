@@ -60,22 +60,42 @@ public class TenantSettings
     public decimal DefaultVatRatePercent { get; set; } = 21m;
 
     // Localisation / formatting
-    public string DateFormat { get; set; } = "dd-MM-yyyy";
+    /// <summary>Regional display preference; closed catalog (CompanySettingsService.
+    /// SupportedDateFormats). Belgian default dd/MM/yyyy; existing tenants keep their value.</summary>
+    public string DateFormat { get; set; } = "dd/MM/yyyy";
     public string DecimalSeparator { get; set; } = ",";
     public string DefaultWeightUnit { get; set; } = "kg";
     public string DefaultDistanceUnit { get; set; } = "km";
 
     // Transport operation defaults
     public int DefaultLoadingMinutes { get; set; } = 30;
+
+    /// <summary>Wave 8: message the customer when a stop's ETA shifts by at least this many
+    /// minutes (also while still on time). Null = only the existing outside-window messaging.</summary>
+    public int? EtaShiftNotifyMinutes { get; set; }
     public int DefaultUnloadingMinutes { get; set; } = 30;
 
     // Schedule-conflict severities (ConflictSeverity names; unknown values fall back to Warning)
     public string TrainingConflictSeverity { get; set; } = "Warning";
     public string ShiftOverlapConflictSeverity { get; set; } = "Warning";
 
+    /// <summary>How exceeding vehicle/trailer capacity behaves in planning: Warning or Blocking.</summary>
+    public string CapacityConflictSeverity { get; set; } = "Warning";
+
+    /// <summary>
+    /// Follow-up wave P4: what a failed delivery stop triggers. Manual (default) = incident
+    /// only; Propose = incident carries a redelivery recommendation for dispatch; Automatic =
+    /// the linked redelivery order is created immediately (next working day, same dossier).
+    /// </summary>
+    public string RedeliveryMode { get; set; } = "Manual";
+
     // Package (colli) numbering
     public string? PackageNumberPrefix { get; set; } = "PKG-";
     public int PackageNumberNextValue { get; set; } = 1;
+
+    // Transport dossier numbering
+    public string? DossierNumberPrefix { get; set; } = "DOS-";
+    public int DossierNumberNextValue { get; set; } = 1;
 
     /// <summary>
     /// What happens when a trip departs with mandatory packages not loaded:

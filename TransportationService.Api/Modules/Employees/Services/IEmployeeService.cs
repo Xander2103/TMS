@@ -7,9 +7,16 @@ namespace TransportationService.Api.Modules.Employees.Services;
 public interface IEmployeeService
 {
     /// <param name="excludeDrivers">Only employees WITHOUT a driver profile (link-driver picker).</param>
+    /// <param name="hasDriverProfile">When set, restrict to employees WITH (true) or WITHOUT (false) a driver profile — drives the personnel "Chauffeurs" view.</param>
+    /// <param name="sort">One of name_asc|name_desc|number|recent|department|function|status; an
+    /// unrecognised or missing value falls back to name_asc. Secondary order is always
+    /// LastName, FirstName for stable paging.</param>
+    /// <param name="incompleteOnly">HR maturity wave, task 9: restrict to employees whose dossier
+    /// is not (yet) complete.</param>
     Task<PagedResult<EmployeeListItemDto>> SearchAsync(
         string? searchText, bool? isActive, Guid? jobFunctionId, Guid? departmentId,
-        EmploymentStatus? employmentStatus, bool excludeDrivers, PageRequest page, CancellationToken cancellationToken);
+        EmploymentStatus? employmentStatus, bool excludeDrivers, bool? hasDriverProfile, string? sort,
+        bool incompleteOnly, PageRequest page, CancellationToken cancellationToken);
 
     /// <param name="includeConfidential">When false, confidential fields (NRN/IBAN/BIC) are nulled.</param>
     Task<EmployeeDetailDto?> GetByIdAsync(Guid id, bool includeConfidential, CancellationToken cancellationToken);
@@ -20,6 +27,8 @@ public interface IEmployeeService
     Task<EmployeeDetailDto?> UpdateAsync(Guid id, UpdateEmployeeRequest request, bool canEditConfidential, CancellationToken cancellationToken);
 
     Task<bool> DeactivateAsync(Guid id, CancellationToken cancellationToken);
+    /// <summary>Tenant-scoped existence check (no DTO mapping).</summary>
+    Task<bool> ExistsAsync(Guid id, CancellationToken cancellationToken);
 
     Task<bool> ReactivateAsync(Guid id, CancellationToken cancellationToken);
 }

@@ -18,5 +18,7 @@ public interface IVehicleService
 
     Task<VehicleOperationResult> UpdateAsync(Guid id, UpdateVehicleRequest request, CancellationToken cancellationToken);
 
+    Task<bool> SetActiveAsync(Guid id, SetVehicleActiveRequest request, CancellationToken cancellationToken);
+
     Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken);
 }

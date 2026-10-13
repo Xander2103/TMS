@@ -1,0 +1,67 @@
+{
+  "actions": {
+    "cancel": "Annuleren",
+    "close": "Sluiten",
+    "back": "Terug",
+    "busy": "Bezig..."
+  },
+  "languageSwitcher": {
+    "label": "Taalkeuze"
+  },
+  "users": {
+    "title": "Gebruikers",
+    "subtitle": "Beheer wie namens uw bedrijf toegang heeft tot het klantportaal.",
+    "invite": "Gebruiker uitnodigen",
+    "empty": "Nog geen gebruikers uitgenodigd.",
+    "loading": "Gebruikers laden...",
+    "loadError": "De gebruikers konden niet worden geladen.",
+    "columns": {
+      "name": "Naam",
+      "email": "E-mailadres",
+      "status": "Status",
+      "grants": "Extra rechten"
+    },
+    "status": {
+      "active": "Actief",
+      "deactivated": "Gedeactiveerd",
+      "pendingInvite": "Uitnodiging openstaand"
+    },
+    "grants": {
+      "documents": "Documenten",
+      "invoices": "Facturen",
+      "manageUsers": "Gebruikersbeheer"
+    },
+    "actions": {
+      "deactivate": "Deactiveren",
+      "reactivate": "Reactiveren",
+      "resendInvite": "Uitnodiging opnieuw sturen"
+    },
+    "toasts": {
+      "deactivated": "{name} is gedeactiveerd.",
+      "reactivated": "{name} is opnieuw actief.",
+      "inviteResent": "Uitnodiging opnieuw verstuurd naar {email}.",
+      "inviteSent": "Uitnodiging verstuurd naar {email}."
+    },
+    "errors": {
+      "deactivateFailed": "Deactiveren is mislukt.",
+      "reactivateFailed": "Reactiveren is mislukt.",
+      "resendFailed": "Opnieuw uitnodigen is mislukt.",
+      "grantsFailed": "De rechten konden niet worden aangepast.",
+      "inviteFailed": "De uitnodiging kon niet worden verstuurd.",
+      "validation": "Vul voornaam, achternaam en e-mailadres in."
+    },
+    "devActivationLink": "Ontwikkelomgeving: activeringslink voor {email} —",
+    "inviteModal": {
+      "title": "Gebruiker uitnodigen",
+      "firstName": "Voornaam",
+      "lastName": "Achternaam",
+      "email": "E-mailadres",
+      "extraRights": "Extra rechten",
+      "extraRightsHint": "Opdrachten indienen en berichten zijn altijd beschikbaar.",
+      "viewDocuments": "Documenten bekijken",
+      "viewInvoices": "Facturen bekijken",
+      "manageUsers": "Gebruikers beheren",
+      "submit": "Uitnodigen"
+    }
+  }
+}

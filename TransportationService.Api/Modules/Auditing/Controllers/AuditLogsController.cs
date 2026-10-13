@@ -58,6 +58,19 @@ public class AuditLogsController : ControllerBase
             .Select(a => new AuditLogDto(a.Id, a.UserId, a.EntityType, a.EntityId, a.Action, a.OldValuesJson, a.NewValuesJson, a.Timestamp))
             .ToListAsync(cancellationToken);
 
+        // Actor names (product acceptance 2026-10-07): the history must say WHO confirmed, reopened or
+        // cancelled. Resolved within the tenant only; a foreign or deleted user stays nameless.
+        var userIds = items.Where(i => i.UserId is not null).Select(i => i.UserId!.Value).Distinct().ToList();
+        if (userIds.Count > 0)
+        {
+            var tenantId = _tenantContext.TenantId;
+            var names = await _dbContext.Users.AsNoTracking()
+                .Where(u => u.TenantId == tenantId && userIds.Contains(u.Id))
+                .Select(u => new { u.Id, u.FirstName, u.LastName, u.Email })
+                .ToDictionaryAsync(u => u.Id, u => string.IsNullOrWhiteSpace(u.FirstName + u.LastName) ? u.Email : (u.FirstName + " " + u.LastName).Trim(), cancellationToken);
+            items = items.Select(i => i.UserId is { } id && names.TryGetValue(id, out var name) ? i with { UserName = name } : i).ToList();
+        }
+
         return Ok(new AuditLogPagedResult(items, totalCount, page, pageSize));
     }
 }

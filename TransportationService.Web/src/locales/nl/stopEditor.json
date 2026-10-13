@@ -1,0 +1,74 @@
+{
+  "address": {
+    "search": "Adres zoeken",
+    "name": "Naam locatie",
+    "street": "Straat + nr",
+    "overridden": "Afwijkend van adresboek — alleen voor dit dossier",
+    "unlink": "Loskoppelen",
+    "save": "Adres ook bewaren in klantenbestand",
+    "saveHelp": "Zonder deze optie wordt het adres alleen bij dit dossier opgeslagen.",
+    "duplicatesTitle": "Dit adres bestaat mogelijk al:",
+    "duplicatesUse": "Dit adres gebruiken"
+  },
+  "search": {
+    "placeholder": "Zoek op naam, straat, postcode of plaats",
+    "placeholderLinked": "Ander adres zoeken…",
+    "searching": "Zoeken…",
+    "failed": "Zoeken is mislukt. Je kan het adres gewoon zelf invullen.",
+    "noResults": "Geen bekend adres gevonden — vul het adres vrij in."
+  },
+  "postalCode": {
+    "BE": "Een Belgische postcode heeft 4 cijfers.",
+    "NL": "Een Nederlandse postcode heeft 4 cijfers en 2 letters (1234 AB).",
+    "FR": "Een Franse postcode heeft 5 cijfers.",
+    "DE": "Een Duitse postcode heeft 5 cijfers.",
+    "LU": "Een Luxemburgse postcode heeft 4 cijfers."
+  },
+  "site": {
+    "legend": "Werfadres",
+    "date": "Datum werkzaamheden",
+    "endDate": "Einddatum",
+    "endManual": "Einde handmatig ingesteld.",
+    "endAuto": "Automatisch berekenen",
+    "endFollows": "Einde volgt automatisch: start + {hours} u.",
+    "endNoDuration": "Einde volgt automatisch zodra start en geplande duur bekend zijn.",
+    "endNextDay": "Eindigt op {date}."
+  },
+  "stopType": {
+    "Site": "Werf"
+  },
+  "validation": {
+    "postalCodeLabel": "Stop {number} — postcode",
+    "siteAddressLabel": "Werfadres",
+    "siteAddressMessage": "Kies een bestaand adres of vul een plaats of adres in voor de werf.",
+    "siteOnlyLabel": "Stops",
+    "siteOnlyMessage": "Hijswerk op locatie heeft alleen een werfadres — geen laad- of losstops.",
+    "siteStopLabel": "Werfadres",
+    "siteStopMessage": "Vul het werfadres in.",
+    "workDescriptionLabel": "Omschrijving werkzaamheden",
+    "workDescriptionMessage": "Beschrijf de werkzaamheden op locatie."
+  },
+  "crane": {
+    "kindLegend": "Soort kraanopdracht",
+    "kindTransport": "Transport met kraan",
+    "kindOnSite": "Hijswerk op locatie",
+    "onSiteHint": "Hijswerk op locatie: één werfadres en een omschrijving van de werkzaamheden — geen laad- of losadres en geen goederen.",
+    "workDescription": "Omschrijving werkzaamheden",
+    "workDescriptionHint": "Wat moet er op de werf gebeuren? Bv. 'Airco-unit op dak plaatsen'.",
+    "duration": "Geplande duur (uren)",
+    "durationHint": "Bv. 1,5 = 90 minuten. Het einde volgt uit start + duur.",
+    "durationReadOnly": "Geplande duur: {hours} u — aanpassen via de activiteit.",
+    "durationUnknown": "Nog geen geplande duur — stel die in op de activiteit om het einde automatisch te berekenen.",
+    "liftTitle": "Technische lastgegevens (optioneel)",
+    "liftNote": "Beschrijft de last die gehesen wordt — dit zijn geen goederen die vervoerd worden.",
+    "liftWeight": "Gewicht last (kg)",
+    "liftDimensions": "Afmetingen last",
+    "liftRadius": "Hijsradius (m)",
+    "liftHeight": "Hijshoogte (m)",
+    "liftConditions": "Omstandigheden",
+    "liftEquipment": "Hijsmateriaal",
+    "switchTitle": "Soort kraanopdracht wijzigen?",
+    "switchMessage": "De ingevulde stops van de huidige soort worden verwijderd. Doorgaan?",
+    "switchConfirm": "Wijzigen"
+  }
+}

@@ -32,7 +32,8 @@ export async function downloadLabelVersion(id: string, version: number): Promise
     headers: { Authorization: `Bearer ${getAccessToken() ?? ''}` },
   })
   if (!response.ok) {
-    throw new Error('Het etiket kon niet worden gedownload.')
+    // Geen user-facing tekst hier: de aanroepende component toont zijn eigen vertaalde fallback.
+    throw new Error('label download failed')
   }
   const blob = await response.blob()
   const url = URL.createObjectURL(blob)
@@ -91,6 +92,23 @@ export function bulkCreatePackages(
   )
 }
 
+export interface PackageGenerationResult {
+  created: number
+  cancelled: number
+  unchanged: number
+  requiresAttention: number
+  createdPackages: Package[]
+  message: string | null
+}
+
+/** Idempotent cargo-driven generation (also runs automatically when the order is confirmed). */
+export function generatePackages(orderId: string): Promise<PackageGenerationResult> {
+  return apiClient.postJson<PackageGenerationResult, Record<string, never>>(
+    `/api/transport-orders/${orderId}/packages/generate`,
+    {},
+  )
+}
+
 export function cancelPackage(id: string, reason: string): Promise<Package> {
   return apiClient.postJson<Package, { reason: string }>(`/api/packages/${id}/cancel`, { reason })
 }
@@ -123,7 +141,9 @@ async function postWorkbook<T>(path: string, file: File): Promise<T> {
   })
   const data = (await response.json().catch(() => null)) as T | { message?: string } | null
   if (!response.ok) {
-    throw new Error((data as { message?: string } | null)?.message ?? 'Import mislukt.')
+    // Servermessage wint; zonder message vertaalt de component zijn eigen fallback (lege
+    // message → describeApiError kiest de fallback).
+    throw new Error((data as { message?: string } | null)?.message ?? '')
   }
 
   return data as T
@@ -160,7 +180,8 @@ export async function printLabels(
   })
   if (!response.ok) {
     const data = (await response.json().catch(() => null)) as { message?: string } | null
-    throw new Error(data?.message ?? 'Etiketten afdrukken mislukt.')
+    // Servermessage wint; zonder message vertaalt de component zijn eigen fallback.
+    throw new Error(data?.message ?? '')
   }
   const blob = await response.blob()
   const url = URL.createObjectURL(blob)

@@ -19,5 +19,12 @@ public class RefreshToken
     public DateTime? RevokedAt { get; set; }
     public string? ReplacedByTokenHash { get; set; }
 
+    /// <summary>
+    /// Identifies the rotation chain this token belongs to. Every rotation keeps the family id of
+    /// its predecessor, so presenting an already-rotated token lets us revoke the whole lineage
+    /// (refresh-token reuse detection) instead of only the presented row.
+    /// </summary>
+    public Guid FamilyId { get; set; }
+
     public bool IsActive(DateTime nowUtc) => RevokedAt is null && ExpiresAt > nowUtc;
 }

@@ -1,15 +1,34 @@
 import { apiClient } from '../../../api/apiClient'
 
-export type NotificationCategory = 'General' | 'Orders' | 'Planning' | 'Execution' | 'Hr' | 'System'
-export type NotificationSeverity = 'Info' | 'Warning' | 'Critical'
+export type NotificationCategory =
+  | 'General'
+  | 'Orders'
+  | 'Planning'
+  | 'Execution'
+  | 'Hr'
+  | 'System'
+  | 'Inventory'
+  | 'Task'
+  | 'CustomerPortal'
+  | 'Fleet'
+  | 'Document'
+  | 'Approval'
+export type NotificationSeverity = 'Info' | 'Warning' | 'Critical' | 'Success'
 
+/** Translation keys per category; render sites resolve them via t(). */
 export const NOTIFICATION_CATEGORY_LABELS: Record<NotificationCategory, string> = {
-  General: 'Algemeen',
-  Orders: 'Opdrachten',
-  Planning: 'Planning',
-  Execution: 'Uitvoering',
-  Hr: 'HR',
-  System: 'Systeem',
+  General: 'notificationCenter.categories.General',
+  Orders: 'notificationCenter.categories.Orders',
+  Planning: 'notificationCenter.categories.Planning',
+  Execution: 'notificationCenter.categories.Execution',
+  Hr: 'notificationCenter.categories.Hr',
+  System: 'notificationCenter.categories.System',
+  Inventory: 'notificationCenter.categories.Inventory',
+  Task: 'notificationCenter.categories.Task',
+  CustomerPortal: 'notificationCenter.categories.CustomerPortal',
+  Fleet: 'notificationCenter.categories.Fleet',
+  Document: 'notificationCenter.categories.Document',
+  Approval: 'notificationCenter.categories.Approval',
 }
 
 export const NOTIFICATION_CATEGORIES: NotificationCategory[] = [
@@ -19,12 +38,19 @@ export const NOTIFICATION_CATEGORIES: NotificationCategory[] = [
   'Execution',
   'Hr',
   'System',
+  'Inventory',
+  'Task',
+  'CustomerPortal',
+  'Fleet',
+  'Document',
+  'Approval',
 ]
 
 export const NOTIFICATION_SEVERITY_ICONS: Record<NotificationSeverity, string> = {
   Info: 'ℹ',
   Warning: '⚠',
   Critical: '⛔',
+  Success: '✅',
 }
 
 export interface Notification {
@@ -38,6 +64,10 @@ export interface Notification {
   isRead: boolean
   isArchived: boolean
   createdAt: string
+  requiresAcknowledgement: boolean
+  acknowledgedAt: string | null
+  resolvedAt: string | null
+  expiresAt: string | null
 }
 
 export interface NotificationPreference {
@@ -66,6 +96,10 @@ export function markNotificationRead(id: string): Promise<void> {
 
 export function markAllNotificationsRead(): Promise<void> {
   return apiClient.postJson<void, Record<string, never>>('/api/notifications/read-all', {})
+}
+
+export function acknowledgeNotification(id: string): Promise<void> {
+  return apiClient.postJson<void, Record<string, never>>(`/api/notifications/${id}/acknowledge`, {})
 }
 
 export function archiveNotification(id: string): Promise<void> {

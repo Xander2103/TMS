@@ -1,0 +1,9 @@
+/* One line, cut with an ellipsis; the full value lives in the title (see TruncatedText.tsx). */
+.ui-truncated-text {
+  display: block;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

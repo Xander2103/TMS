@@ -27,3 +27,125 @@
   color: var(--text);
   font-style: italic;
 }
+
+/* Non-blocking duplicate-name warning (task 10), rendered under the name fields. */
+.employee-form-duplicate-hint {
+  margin-top: -8px;
+  font-size: 13px;
+  color: var(--warning);
+}
+
+/* End-date input + quick-duration preset buttons (task 10: contracttype-gedreven einddatum). */
+.employee-form-enddate-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.employee-form-enddate-row input[type='date'] {
+  flex: 1 1 160px;
+}
+
+.employee-form-enddate-presets {
+  display: flex;
+  gap: 4px;
+}
+
+.employee-form-enddate-presets .ui-button {
+  padding: 4px 8px;
+  font-size: 12.5px;
+}
+
+.ne-qualification-row {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr auto;
+  gap: 12px 16px;
+  align-items: end;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 12px;
+}
+
+@media (max-width: 900px) {
+  .ne-qualification-row {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.employee-emergency-row {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 1fr 1fr 90px auto;
+  gap: 10px 16px;
+  align-items: end;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 12px;
+}
+
+.employee-emergency-row .employee-emergency-row-actions {
+  display: flex;
+  align-items: end;
+  padding-bottom: 2px;
+}
+
+.employee-emergency-row .employee-emergency-notes {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 900px) {
+  .employee-emergency-row {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.ne-driver-categories {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+}
+
+.ne-driver-categories-empty {
+  font-size: 13.5px;
+  color: var(--text);
+  font-style: italic;
+}
+
+/* Create-mode prepared-follow-up editors (documents, company assets). */
+.prepared-editor-row {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin: 8px 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.prepared-editor-file {
+  grid-column: 1 / -1;
+}
+.prepared-editor-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+@media (max-width: 640px) {
+  .prepared-editor-row {
+    grid-template-columns: 1fr;
+  }
+}
+.followup-results {
+  list-style: none;
+  padding: 0;
+  margin: 12px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.followup-ok {
+  color: var(--success);
+}
+.followup-failed {
+  color: var(--danger);
+}

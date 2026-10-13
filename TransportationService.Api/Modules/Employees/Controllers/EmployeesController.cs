@@ -15,15 +15,18 @@ namespace TransportationService.Api.Modules.Employees.Controllers;
 public class EmployeesController : ControllerBase
 {
     private readonly IEmployeeService _employeeService;
+    private readonly IEmployeeHistoryService _historyService;
     private readonly ICurrentUserContext _currentUser;
     private readonly IPermissionAuthorizationService _authorization;
 
     public EmployeesController(
         IEmployeeService employeeService,
+        IEmployeeHistoryService historyService,
         ICurrentUserContext currentUser,
         IPermissionAuthorizationService authorization)
     {
         _employeeService = employeeService;
+        _historyService = historyService;
         _currentUser = currentUser;
         _authorization = authorization;
     }
@@ -32,6 +35,21 @@ public class EmployeesController : ControllerBase
     private async Task<bool> HasConfidentialAccessAsync(CancellationToken cancellationToken)
         => _currentUser.CurrentUserId is { } userId
            && await _authorization.UserHasPermissionAsync(userId, PermissionCodes.EmployeesViewConfidential, cancellationToken);
+
+    /// <summary>The dossier history mirrors the live screens: every gated field/category needs
+    /// the same permission through its history as through the screen itself (M14).</summary>
+    private async Task<EmployeeHistoryAccess> HistoryAccessAsync(CancellationToken cancellationToken)
+    {
+        if (_currentUser.CurrentUserId is not { } userId)
+        {
+            return new EmployeeHistoryAccess(false, false, false);
+        }
+
+        return new EmployeeHistoryAccess(
+            await _authorization.UserHasPermissionAsync(userId, PermissionCodes.EmployeesViewConfidential, cancellationToken),
+            await _authorization.UserHasPermissionAsync(userId, PermissionCodes.AbsencesViewMedical, cancellationToken),
+            await _authorization.UserHasPermissionAsync(userId, PermissionCodes.EmployeeDocumentsViewSensitive, cancellationToken));
+    }
 
     [HttpGet]
     [RequirePermission(PermissionCodes.EmployeesView)]
@@ -42,13 +60,16 @@ public class EmployeesController : ControllerBase
         [FromQuery] Guid? departmentId,
         [FromQuery] EmploymentStatus? employmentStatus,
         [FromQuery] bool excludeDrivers = false,
+        [FromQuery] bool? hasDriverProfile = null,
+        [FromQuery] string? sort = null,
+        [FromQuery] bool incompleteOnly = false,
         [FromQuery] int? page = null,
         [FromQuery] int? pageSize = null,
         CancellationToken cancellationToken = default)
     {
         var result = await _employeeService.SearchAsync(
-            search, isActive, jobFunctionId, departmentId, employmentStatus, excludeDrivers,
-            PageRequest.Of(page, pageSize), cancellationToken);
+            search, isActive, jobFunctionId, departmentId, employmentStatus, excludeDrivers, hasDriverProfile, sort,
+            incompleteOnly, PageRequest.Of(page, pageSize), cancellationToken);
         return Ok(result);
     }
 
@@ -60,10 +81,48 @@ public class EmployeesController : ControllerBase
         return employee is null ? NotFound() : Ok(employee);
     }
 
+    /// <summary>Expiry warnings (documents/qualifications) for the dossier header; refreshable without reloading the employee.</summary>
+    [HttpGet("{id:guid}/attention")]
+    [RequirePermission(PermissionCodes.EmployeesView)]
+    public async Task<ActionResult<EmployeeAttentionDto>> GetAttention(Guid id, [FromServices] IEmployeeAttentionService attentionService, CancellationToken cancellationToken)
+    {
+        if (!await _employeeService.ExistsAsync(id, cancellationToken))
+        {
+            return NotFound();
+        }
+
+        return Ok(await attentionService.GetForEmployeeAsync(id, cancellationToken));
+    }
+
+    /// <summary>
+    /// Complete readable change history of the personnel dossier (profile + qualifications,
+    /// documents, issued items, absences, leave balances, driver profile), newest first.
+    /// </summary>
+    [HttpGet("{id:guid}/history")]
+    [RequirePermission(PermissionCodes.EmployeesView)]
+    public async Task<ActionResult<EmployeeHistoryPageDto>> GetHistory(
+        Guid id, [FromQuery] int? page = null, [FromQuery] int? pageSize = null,
+        [FromQuery] string? category = null, CancellationToken cancellationToken = default)
+    {
+        var pageRequest = PageRequest.Of(page, pageSize);
+        var access = await HistoryAccessAsync(cancellationToken);
+        var history = await _historyService.GetHistoryAsync(id, pageRequest.Page, pageRequest.PageSize, category, access, cancellationToken);
+        return history is null ? NotFound() : Ok(history);
+    }
+
     [HttpPost]
     [RequirePermission(PermissionCodes.EmployeesCreate)]
     public async Task<ActionResult<EmployeeDetailDto>> Create(CreateEmployeeRequest request, CancellationToken cancellationToken)
     {
+        // Inline qualifications ride the same permission as the qualifications tab.
+        if (request.Qualifications is { Count: > 0 }
+            && (_currentUser.CurrentUserId is not { } userId
+                || !await _authorization.UserHasPermissionAsync(userId, PermissionCodes.EmployeeDocumentsCreate, cancellationToken)))
+        {
+            return StatusCode(StatusCodes.Status403Forbidden,
+                new { message = "Je hebt geen rechten om kwalificaties toe te voegen." });
+        }
+
         try
         {
             var created = await _employeeService.CreateAsync(request, await HasConfidentialAccessAsync(cancellationToken), cancellationToken);

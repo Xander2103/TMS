@@ -1,0 +1,148 @@
+.ui-sectioned-form-nav {
+  position: sticky;
+  top: var(--app-sticky-top, 0px);
+  z-index: 2;
+  background: var(--color-bg);
+}
+.ui-section-nav {
+  display: flex;
+  gap: 0.25rem;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 0.25rem;
+}
+.ui-section-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  white-space: nowrap;
+  padding: 0.5rem 0.85rem;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  color: var(--text);
+  font: inherit;
+}
+.ui-section-tab:hover {
+  color: var(--text-h);
+}
+.ui-section-tab[aria-selected='true'] {
+  color: var(--text-h);
+  border-bottom-color: var(--accent);
+  font-weight: 600;
+}
+.ui-section-tab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  border-radius: 4px;
+}
+.ui-section-tab-error {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1rem;
+  padding: 0 0.25rem;
+  box-sizing: border-box;
+  height: 1rem;
+  border-radius: 999px;
+  background: var(--danger);
+  color: #fff;
+  font-size: 0.7rem;
+  line-height: 1;
+}
+.ui-section-tab-complete {
+  color: var(--success);
+}
+.ui-section-tab-filled {
+  color: var(--accent);
+  font-size: 0.65rem;
+  line-height: 1;
+}
+.ui-section-tab-empty {
+  color: var(--text-muted);
+  font-size: 0.65rem;
+  line-height: 1;
+}
+.ui-sectioned-form-body {
+  padding-top: 1rem;
+}
+.ui-sectioned-form-actions {
+  position: sticky;
+  bottom: 0;
+  background: var(--color-bg);
+  border-top: 1px solid var(--border);
+  padding-top: 0.75rem;
+  margin-top: 1rem;
+}
+.ui-section-select {
+  display: none;
+}
+@media (max-width: 640px) {
+  .ui-section-nav {
+    display: none;
+  }
+  .ui-section-select {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    padding: 0.5rem 0;
+  }
+  .ui-section-select-label {
+    font-size: 0.85rem;
+    color: var(--text);
+  }
+  .ui-section-select select {
+    padding: 0.5rem;
+    font: inherit;
+    background: var(--color-input-bg);
+    color: var(--text-h);
+    border: 1px solid var(--color-input-border);
+    border-radius: 6px;
+  }
+}
+
+/* orientation="left": sticky vertical rail beside the body at >=900px. Below that it falls
+   back to the same horizontal subnav as orientation="top" (the rules above already collapse
+   it further to the <select> at <=640px). */
+@media (min-width: 900px) {
+  .ui-sectioned-form-left {
+    display: grid;
+    grid-template-columns: 220px minmax(0, 1fr);
+    align-items: start;
+    gap: 2rem;
+  }
+  .ui-sectioned-form-left .ui-sectioned-form-nav-left {
+    position: sticky;
+    top: 1rem;
+    align-self: start;
+  }
+  .ui-sectioned-form-left .ui-section-nav {
+    flex-direction: column;
+    align-items: stretch;
+    overflow-x: visible;
+    overflow-y: auto;
+    max-height: calc(100vh - 2rem);
+    border-bottom: none;
+    border-right: 1px solid var(--border);
+    padding-bottom: 0;
+    padding-right: 0.5rem;
+  }
+  .ui-sectioned-form-left .ui-section-tab {
+    justify-content: flex-start;
+    width: 100%;
+    border-bottom: none;
+    border-right: 2px solid transparent;
+    margin-bottom: 0;
+    border-radius: 4px 0 0 4px;
+  }
+  .ui-sectioned-form-left .ui-section-tab[aria-selected='true'] {
+    border-bottom-color: transparent;
+    border-right-color: var(--accent);
+    background: var(--code-bg);
+  }
+  .ui-sectioned-form-left .ui-sectioned-form-main {
+    min-width: 0;
+  }
+}

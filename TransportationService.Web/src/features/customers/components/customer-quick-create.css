@@ -1,0 +1,52 @@
+/* Quick-create customer dialog: two-column rows that collapse on phones; theme tokens only. */
+.customer-quick-create {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.customer-quick-create-intro {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--text-muted);
+}
+
+.customer-quick-create-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.customer-quick-create-row-street {
+  grid-template-columns: minmax(0, 3fr) minmax(0, 1fr);
+}
+
+.customer-quick-create-row-city {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) minmax(0, 1.4fr);
+}
+
+.customer-quick-create-address {
+  margin: 0;
+  padding: 0;
+  border: none;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.customer-quick-create-address legend {
+  padding: 0;
+  margin-bottom: 4px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+@media (max-width: 560px) {
+  .customer-quick-create-row,
+  .customer-quick-create-row-street,
+  .customer-quick-create-row-city {
+    grid-template-columns: 1fr;
+  }
+}

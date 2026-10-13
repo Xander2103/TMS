@@ -2,10 +2,11 @@ export type PodOutcome = 'Complete' | 'Partial' | 'Refused'
 
 export type PodPhotoCategory = 'Delivery' | 'Package' | 'Document'
 
+/** Vertaalsleutels (i18n-wave): render via t(POD_OUTCOME_LABELS[outcome]). */
 export const POD_OUTCOME_LABELS: Record<PodOutcome, string> = {
-  Complete: 'Volledig geleverd',
-  Partial: 'Gedeeltelijk geleverd',
-  Refused: 'Geweigerd',
+  Complete: 'pod.outcome.Complete',
+  Partial: 'pod.outcome.Partial',
+  Refused: 'pod.outcome.Refused',
 }
 
 export const POD_OUTCOME_TONE: Record<PodOutcome, 'neutral' | 'success' | 'warning' | 'danger' | 'info'> = {
@@ -21,9 +22,9 @@ export const POD_OUTCOME_ICONS: Record<PodOutcome, string> = {
 }
 
 export const POD_PHOTO_CATEGORY_LABELS: Record<PodPhotoCategory, string> = {
-  Delivery: 'Levering',
-  Package: 'Colli',
-  Document: 'Documenten',
+  Delivery: 'pod.photoCategory.Delivery',
+  Package: 'pod.photoCategory.Package',
+  Document: 'pod.photoCategory.Document',
 }
 
 export interface PodScanLine {

@@ -8,7 +8,7 @@
   display: flex;
   flex-direction: column;
   gap: 20px;
-  max-width: 900px;
+  max-width: 1100px; /* same width as EmployeeForm; 900px squeezed the left rail + fields */
 }
 
 .customer-form-section {
@@ -70,11 +70,76 @@
   gap: 10px;
 }
 
-.customer-vat-summary {
-  margin-top: 20px;
+/* Non-blocking inline warning (e.g. missing VAT number for a treatment that requires one). */
+.customer-form-warning {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--color-warning);
 }
 
-.customer-vat-summary h3 {
+.customer-form-muted {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+/* Company-registry lookup block inside the fiscal section. */
+.customer-form-lookup {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.customer-form-lookup-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.customer-form-lookup-panel {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.customer-form-lookup-panel h4 {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-h);
+}
+
+.customer-form-lookup-panel dl {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 4px 16px;
+}
+
+.customer-form-lookup-panel dl > div {
+  display: flex;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.customer-form-lookup-panel dt {
+  color: var(--text);
+}
+
+.customer-form-lookup-panel dd {
+  margin: 0;
+  color: var(--text-h);
+}
+
+.customer-form-lookup-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* Eén gedeeld kop-patroon voor elke samenvattingskaart. */
+.customer-summary h3 {
   margin: 0 0 12px;
   font-size: 16px;
   color: var(--text-h);
@@ -94,6 +159,9 @@
 }
 
 .customer-summary {
+  /* Vaste labelkolom: elke kaart is een eigen grid, dus met 'auto' berekent elke
+     kaart zijn eigen labelbreedte en starten de waardekolommen niet gelijk. */
+  --customer-summary-label: 11rem;
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 20px;
@@ -101,7 +169,7 @@
 
 .customer-summary dl {
   display: grid;
-  grid-template-columns: auto 1fr;
+  grid-template-columns: var(--customer-summary-label) minmax(0, 1fr);
   gap: 8px 16px;
   margin: 0;
   font-size: 15px;
@@ -113,11 +181,22 @@
 
 .customer-summary dd {
   margin: 0;
+  min-width: 0;
   color: var(--text-h);
+  /* Lange IBAN's/e-mailadressen breken af i.p.v. de kaart open te duwen. */
+  overflow-wrap: anywhere;
 }
 
+@media (max-width: 700px) {
+  .customer-summary {
+    --customer-summary-label: 8rem;
+  }
+}
+
+/* Contacts panel: one toolbar row (PanelHeader, own bottom margin) above the table, which is
+   the only container — no extra card or second heading. */
 .customer-contacts {
-  margin-top: 8px;
+  margin: 0;
 }
 
 .customer-contact-card {
@@ -147,8 +226,293 @@
   flex-shrink: 0;
 }
 
+.customer-contact-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+/* Contact-person repeater (create flow): fixed-column grid, wraps instead of scrolling. */
+.customer-contact-repeater-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px 16px;
+  align-items: end;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 16px;
+  margin-bottom: 12px;
+}
+
+@media (max-width: 1100px) {
+  .customer-contact-repeater-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .customer-contact-repeater-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+.customer-contact-repeater-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  grid-column: 1 / -1;
+}
+
+/* Staged locations (create flow): compact cards, created after the customer is saved. */
+.customer-staged-locations {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.customer-staged-location-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 16px;
+}
+
+.customer-staged-location-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
 .customer-detail-toolbar {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+.customer-locations-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin: 0 0 16px;
+  flex-wrap: wrap;
+}
+
+.customer-locations-toolbar input[type='search'] {
+  font: inherit;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text-h);
+  min-width: 260px;
+}
+
+.customer-locations-code {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.customer-locations-badges {
+  display: inline-flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.customer-locations-actions {
+  display: inline-flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.customer-detail-tabs {
+  margin: 0 0 20px;
+}
+
+/* Customer Excel import dialog */
+
+.customer-import-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+.customer-import-intro {
+  margin: 0;
+}
+
+.customer-import-template-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: var(--accent);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.customer-import-template-link:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.customer-import-options {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.customer-import-hint {
+  margin: 0 0 0 24px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.customer-import-message {
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 8px;
+}
+
+.customer-import-message-error {
+  background: color-mix(in srgb, var(--color-danger-strong) 12%, transparent);
+  color: var(--color-danger);
+}
+
+.customer-import-summary {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.customer-import-summary p {
+  margin: 0;
+}
+
+.customer-import-danger {
+  color: var(--color-danger);
+}
+
+.customer-import-table-wrapper {
+  max-height: 320px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.customer-import-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.customer-import-table th,
+.customer-import-table td {
+  text-align: left;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+
+.customer-import-table thead th {
+  position: sticky;
+  top: 0;
+  background: var(--bg);
+}
+
+.customer-import-row-error td {
+  background: color-mix(in srgb, var(--color-danger-strong) 8%, transparent);
+}
+
+.customer-number-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* Grouped Peppol control (one combined Peppol-ID field) with provenance status chip. */
+.peppol-group {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin: 0;
+}
+.peppol-group-legend {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 600;
+  padding: 0 4px;
+}
+.peppol-group-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.peppol-advanced-toggle {
+  align-self: flex-start;
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--primary);
+  font-size: 0.85rem;
+  cursor: pointer;
+  text-decoration: underline;
+}
+.peppol-advanced-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+  border-top: 1px dashed var(--border);
+  padding-top: 10px;
+}
+@media (max-width: 720px) {
+  .peppol-advanced-fields {
+    grid-template-columns: 1fr;
+  }
+}
+.peppol-status {
+  font-size: 0.75rem;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+.peppol-status-auto {
+  color: var(--success);
+  background: var(--success-bg);
+  border-color: var(--success-border);
+}
+.peppol-status-manual {
+  color: var(--text);
+}
+.peppol-status-not-found {
+  color: var(--warning);
+  background: var(--warning-bg);
+  border-color: var(--warning-border);
+}
+.peppol-status-not-validated {
+  color: var(--text);
+}
+
+/* Documenten per dag (documentstrategie): datum + voorvertoning + batch-downloads. */
+.customer-day-documents {
+  margin-top: 16px;
+}
+.customer-day-documents-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  margin-bottom: 12px;
 }

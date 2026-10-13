@@ -12,12 +12,18 @@ public class RoleService : IRoleService
     private readonly TransportationDbContext _dbContext;
     private readonly ITenantContext _tenantContext;
     private readonly IAuditService _auditService;
+    private readonly ICurrentUserContext _currentUser;
+    private readonly IAccountSecurityService _accountSecurity;
 
-    public RoleService(TransportationDbContext dbContext, ITenantContext tenantContext, IAuditService auditService)
+    public RoleService(
+        TransportationDbContext dbContext, ITenantContext tenantContext, IAuditService auditService,
+        ICurrentUserContext currentUser, IAccountSecurityService accountSecurity)
     {
         _dbContext = dbContext;
         _tenantContext = tenantContext;
         _auditService = auditService;
+        _currentUser = currentUser;
+        _accountSecurity = accountSecurity;
     }
 
     public async Task<IReadOnlyList<RoleDto>> ListAsync(CancellationToken cancellationToken)
@@ -110,11 +116,51 @@ public class RoleService : IRoleService
         var role = await _dbContext.Roles.FirstOrDefaultAsync(r => r.Id == id && r.TenantId == _tenantContext.TenantId, cancellationToken);
         if (role is null) return new RoleOperationResult(RoleOperationOutcome.NotFound, null);
 
-        var requestedCodes = request.PermissionCodes.Distinct().ToList();
-        var permissionIds = await _dbContext.Permissions
+        // System roles (Administrator etc.) are immutable through the ordinary management flow —
+        // this prevents both hollowing out Administrator (tenant-wide lockout) and re-seeding it.
+        if (role.IsSystemRole)
+        {
+            return new RoleOperationResult(RoleOperationOutcome.SystemRoleProtected, await MapAsync(role, cancellationToken));
+        }
+
+        if (_currentUser.CurrentUserId is null)
+        {
+            return new RoleOperationResult(RoleOperationOutcome.Forbidden, null, "Authenticatie is vereist voor deze actie.");
+        }
+
+        var requestedCodes = request.PermissionCodes
+            .Where(c => !string.IsNullOrWhiteSpace(c)).Select(c => c.Trim())
+            .Distinct(StringComparer.Ordinal).ToList();
+
+        var knownPermissions = await _dbContext.Permissions
             .Where(p => requestedCodes.Contains(p.Code))
-            .Select(p => p.Id)
             .ToListAsync(cancellationToken);
+
+        // Unknown codes (including wrong-casing variants of internal permissions) are rejected —
+        // never silently dropped — so a caller can't smuggle intent past validation.
+        if (knownPermissions.Count != requestedCodes.Count)
+        {
+            return new RoleOperationResult(RoleOperationOutcome.ValidationFailed, await MapAsync(role, cancellationToken),
+                RoleOperationMessages.UnknownPermission);
+        }
+
+        // Customer-portal roles may ONLY carry customer_portal.* permissions — an internal
+        // permission on a portal role would hand every portal user of every customer that right.
+        if (_accountSecurity.IsPortalTemplateRole(role) && !_accountSecurity.IsPortalPermissionSet(requestedCodes))
+        {
+            return new RoleOperationResult(RoleOperationOutcome.Forbidden, await MapAsync(role, cancellationToken),
+                RoleOperationMessages.PortalRoleInternalPermission);
+        }
+
+        // The caller may only grant permissions they themselves effectively hold — no indirect
+        // creation of a higher privilege set via a role.
+        if (!await _accountSecurity.ActorHoldsAllAsync(requestedCodes, cancellationToken))
+        {
+            return new RoleOperationResult(RoleOperationOutcome.Forbidden, await MapAsync(role, cancellationToken),
+                RoleOperationMessages.PrivilegeEscalation);
+        }
+
+        var permissionIds = knownPermissions.Select(p => p.Id).ToList();
 
         var existing = await _dbContext.RolePermissions.Where(rp => rp.RoleId == id).ToListAsync(cancellationToken);
         var oldPermissionIds = existing.Select(rp => rp.PermissionId).ToList();

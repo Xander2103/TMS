@@ -63,7 +63,7 @@ public class TenantReferenceTests
         h.Db.Context.Drivers.Add(new Driver { Id = foreignDriver, TenantId = h.ForeignTenantId, DriverNumber = "CH-X", EmployeeId = foreignEmployee, IsActive = true });
         await h.Db.Context.SaveChangesAsync();
 
-        var sut = new VehicleService(h.Db.Context, new DevTenantContext(h.TenantId), Audit(h.Db, h.TenantId));
+        var sut = new VehicleService(h.Db.Context, new DevTenantContext(h.TenantId), Audit(h.Db, h.TenantId), TimeProvider.System);
         var result = await sut.CreateAsync(new CreateVehicleRequest(
             "1-AAA-1", null, null, null, null, null, null, FuelType.Diesel, null,
             null, null, null, null, null, null, 0, null, false, false, false, false,
@@ -128,7 +128,7 @@ public class TenantReferenceTests
         h.Db.Context.Vehicles.Add(new Vehicle { Id = vehicleId, TenantId = h.TenantId, InternalNumber = "VRT-1", LicensePlate = "1-B-2", CurrentDriverId = foreignDriver, IsActive = true });
         await h.Db.Context.SaveChangesAsync();
 
-        var sut = new VehicleService(h.Db.Context, new DevTenantContext(h.TenantId), Audit(h.Db, h.TenantId));
+        var sut = new VehicleService(h.Db.Context, new DevTenantContext(h.TenantId), Audit(h.Db, h.TenantId), TimeProvider.System);
         var detail = await sut.GetByIdAsync(vehicleId, CancellationToken.None);
 
         Assert.NotNull(detail);
@@ -164,7 +164,7 @@ public class TenantReferenceTests
         h.Db.Context.Roles.Add(new Role { Id = foreignRole, TenantId = h.ForeignTenantId, Name = "ForeignAdmin", IsActive = true, CreatedAt = Now.UtcDateTime, UpdatedAt = Now.UtcDateTime });
         await h.Db.Context.SaveChangesAsync();
 
-        var sut = new UserService(h.Db.Context, new DevTenantContext(h.TenantId), Audit(h.Db, h.TenantId), new TransportationService.Api.Modules.Authentication.Services.PasswordHasher());
+        var sut = TransportationService.Api.Tests.TestSupport.IdentityTestFactory.UserService(h.Db, h.TenantId, Guid.NewGuid());
         var request = new CreateUserRequest("a@b.com", "A", "B", null, null, new[] { foreignRole });
 
         await Assert.ThrowsAsync<InvalidTenantReferenceException>(
@@ -177,7 +177,7 @@ public class TenantReferenceTests
         var h = await SeedTwoTenantsAsync();
         using var _ = h.Db;
 
-        var sut = new VehicleService(h.Db.Context, new DevTenantContext(h.TenantId), Audit(h.Db, h.TenantId));
+        var sut = new VehicleService(h.Db.Context, new DevTenantContext(h.TenantId), Audit(h.Db, h.TenantId), TimeProvider.System);
         await sut.CreateAsync(new CreateVehicleRequest(
             "1-CCC-3", null, null, "Volvo", "FH16", null, null, FuelType.Diesel, null,
             null, null, null, null, null, null, 0, null, false, false, false, false,

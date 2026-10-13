@@ -1,0 +1,83 @@
+{
+  "availability": {
+    "Available": "Beschikbaar",
+    "Unavailable": "Niet beschikbaar",
+    "OnLeave": "Afwezig",
+    "OnTrip": "Onderweg"
+  },
+  "readiness": {
+    "Ready": "Inzetbaar",
+    "Warning": "Let op",
+    "NotReady": "Niet inzetbaar",
+    "Blocked": "Geblokkeerd"
+  },
+  "qualStatus": {
+    "Valid": "Geldig",
+    "ExpiringSoon": "Verloopt binnenkort",
+    "Expired": "Verlopen",
+    "Suspended": "Geschorst",
+    "Rejected": "Afgekeurd",
+    "Pending": "In behandeling"
+  },
+  "fields": {
+    "availability": "Beschikbaarheid",
+    "notes": "Notities"
+  },
+  "panel": {
+    "loading": "Chauffeur laden…",
+    "loadFailed": "Chauffeur kon niet worden geladen.",
+    "reloadFailed": "Chauffeur kon niet opnieuw worden geladen.",
+    "updated": "Chauffeur bijgewerkt.",
+    "blocked": "Chauffeur geblokkeerd.",
+    "unblocked": "Blokkering opgeheven.",
+    "blockFailed": "De blokkeerstatus kon niet worden gewijzigd.",
+    "deleted": "Chauffeur verwijderd.",
+    "deleteFailed": "Chauffeur kon niet worden verwijderd.",
+    "block": "Blokkeren",
+    "unblock": "Deblokkeren",
+    "readinessTitle": "Inzetbaarheid",
+    "readinessOk": "Geen belemmeringen. Chauffeur is inzetbaar.",
+    "blockReasonPlaceholder": "Reden voor blokkade (optioneel)",
+    "categories": "Categorieën",
+    "categoriesHint": "De eerst aangevinkte categorie is de primaire.",
+    "noCategories": "Geen categorieën beschikbaar.",
+    "primary": "(primair)",
+    "active": "Actief",
+    "activeCheckbox": "Chauffeur is actief",
+    "fixedTrailer": "Vaste oplegger",
+    "fixedTrailerHint": "Langetermijnvoorkeur; geen operationele koppeling.",
+    "noteFixedLead": "Vast voertuig",
+    "noteFixedText": "is een langetermijnvoorkeur;",
+    "noteCurrentLead": "actueel voertuig",
+    "noteCurrentText": "is de tijdelijke operationele toewijzing. De rittoewijzing voor een specifieke dag gebeurt in de planning. Wijzigingen hier worden ook op de voertuigpagina zichtbaar — het is dezelfde koppeling.",
+    "fixedVehicle": "Vast voertuig",
+    "fixedVehicleDesc": "Voorkeursvoertuig op lange termijn.",
+    "currentVehicle": "Actueel voertuig",
+    "currentVehicleDesc": "Tijdelijke operationele toewijzing (bv. tijdens vervanging).",
+    "pickerVehicle": "Voertuig",
+    "qualNote": "Rijbewijs- en vakbekwaamheidsgegevens worden beheerd via het tabblad",
+    "qualEmpty": "Nog geen kwalificaties geregistreerd.",
+    "colQualification": "Kwalificatie",
+    "colStatus": "Status",
+    "colExpiry": "Vervaldatum",
+    "deleteTitle": "Chauffeur verwijderen",
+    "deleteMessage": "Weet je zeker dat je chauffeur {number} wilt verwijderen? Het personeelsdossier blijft behouden."
+  },
+  "newPage": {
+    "breadcrumb": "Chauffeurs",
+    "title": "Nieuwe chauffeur",
+    "employeesLoadFailed": "Medewerkers konden niet worden geladen.",
+    "selectEmployee": "Selecteer een medewerker.",
+    "created": "Chauffeur {number} aangemaakt.",
+    "duplicate": "Deze medewerker is al gekoppeld aan een chauffeur.",
+    "createFailed": "Chauffeur kon niet worden aangemaakt.",
+    "employee": "Medewerker",
+    "employeeHint": "Alleen medewerkers zonder bestaand chauffeursprofiel; persoonsgegevens komen van het personeelsdossier.",
+    "employeePlaceholder": "— Selecteer een medewerker —",
+    "category": "Chauffeurcategorie",
+    "create": "Chauffeur aanmaken"
+  },
+  "redirect": {
+    "opening": "Chauffeursprofiel openen…"
+  }
+}

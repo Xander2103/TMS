@@ -1,0 +1,105 @@
+{
+  "layout": {
+    "title": "Chauffeur",
+    "online": "Online",
+    "offline": "Offline",
+    "navLabel": "Chauffeursnavigatie",
+    "tabToday": "Vandaag",
+    "tabTrips": "Ritten",
+    "tabIncident": "Incident",
+    "tabDocuments": "Documenten",
+    "tabMessages": "Berichten"
+  },
+  "home": {
+    "loadFailedNoCache": "Dashboard laden mislukt en er is geen offline kopie beschikbaar.",
+    "loading": "Laden…",
+    "cachedNotice": "Offline kopie — wordt ververst zodra er verbinding is.",
+    "currentTrip": "Huidige rit",
+    "vehicle": "Voertuig",
+    "progress": "Voortgang",
+    "progressStops": "{completed}/{total} stops",
+    "nextStop": "Volgende stop",
+    "eta": "ETA",
+    "openTrip": "Rit openen",
+    "noActiveTrip": "Geen actieve rit.",
+    "nextTripAt": "Volgende: {tripNumber} op {date}.",
+    "nothingPlanned": "Er staat niets gepland.",
+    "attentionTitle": "Aandachtspunten",
+    "openStops": "Openstaande stops",
+    "unresolvedExceptions": "Onopgeloste afwijkingen",
+    "activeIncidents": "Actieve incidenten",
+    "tripsToday": "Ritten vandaag",
+    "nextTrip": "Volgende rit"
+  },
+  "etaSource": {
+    "Heuristic": "raming",
+    "Provider": "routeprovider",
+    "DispatcherOverride": "handmatig"
+  },
+  "tripStatus": {
+    "Draft": "Concept",
+    "Planned": "Gepland",
+    "InProgress": "Onderweg",
+    "Completed": "Afgerond",
+    "Cancelled": "Geannuleerd"
+  },
+  "documents": {
+    "title": "Documenten",
+    "loading": "Laden…",
+    "loadFailed": "Documenten laden mislukt.",
+    "empty": "Geen documenten voor jouw actieve ritten.",
+    "numberLabel": "Nummer",
+    "expires": "Vervalt {date}",
+    "download": "Downloaden",
+    "noFile": "Geen bestand"
+  },
+  "documentType": {
+    "Registration": "Inschrijving",
+    "Insurance": "Verzekering",
+    "TechnicalInspection": "Technische keuring",
+    "Conformity": "Gelijkvormigheid",
+    "CraneInspection": "Kraankeuring",
+    "RefrigerationCertificate": "Koelcertificaat",
+    "AdrCertificate": "ADR-certificaat",
+    "Other": "Ander document"
+  },
+  "incidents": {
+    "title": "Incident melden",
+    "titleField": "Titel",
+    "descriptionField": "Wat is er gebeurd?",
+    "typeField": "Type",
+    "customTypeField": "Omschrijf het type",
+    "severityField": "Ernst",
+    "tripField": "Rit (optioneel)",
+    "noTrip": "Geen rit",
+    "submit": "Incident melden",
+    "submitting": "Versturen…",
+    "reported": "Incident gemeld.",
+    "reportFailed": "Melden mislukt.",
+    "myIncidents": "Mijn incidenten",
+    "empty": "Nog geen incidenten gemeld."
+  },
+  "incidentType": {
+    "VehicleBreakdown": "Voertuigpech",
+    "Accident": "Ongeval",
+    "Damage": "Schade",
+    "Delay": "Vertraging",
+    "Theft": "Diefstal",
+    "Other": "Anders…"
+  },
+  "incidentSeverity": {
+    "Low": "Laag",
+    "Medium": "Gemiddeld",
+    "High": "Hoog",
+    "Critical": "Kritiek"
+  },
+  "incidentStatus": {
+    "New": "Nieuw",
+    "InProgress": "In behandeling",
+    "Resolved": "Afgehandeld",
+    "Cancelled": "Geannuleerd"
+  },
+  "offline": {
+    "queued": "Geen verbinding — de actie staat in de wachtrij en wordt automatisch gesynchroniseerd."
+  }
+}

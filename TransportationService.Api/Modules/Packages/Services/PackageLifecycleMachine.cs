@@ -39,12 +39,16 @@ public static class PackageLifecycleMachine
             [PackageLifecycleStatus.PartiallyDelivered] =
                 [PackageLifecycleStatus.Delivered, PackageLifecycleStatus.ReturnPending,
                  PackageLifecycleStatus.RedeliveryPlanned, PackageLifecycleStatus.Quarantined],
+            // Wave 4 §3: ReturnedToDepot appended — a trip-less return check-in registers the
+            // physical arrival at the depot without a return trip ever being planned.
             [PackageLifecycleStatus.DeliveryFailed] =
                 [PackageLifecycleStatus.ReturnPending, PackageLifecycleStatus.RedeliveryPlanned,
-                 PackageLifecycleStatus.Quarantined, PackageLifecycleStatus.ReturnLoaded],
+                 PackageLifecycleStatus.Quarantined, PackageLifecycleStatus.ReturnLoaded,
+                 PackageLifecycleStatus.ReturnedToDepot],
             [PackageLifecycleStatus.Refused] =
                 [PackageLifecycleStatus.ReturnPending, PackageLifecycleStatus.RedeliveryPlanned,
-                 PackageLifecycleStatus.Quarantined, PackageLifecycleStatus.ReturnLoaded],
+                 PackageLifecycleStatus.Quarantined, PackageLifecycleStatus.ReturnLoaded,
+                 PackageLifecycleStatus.ReturnedToDepot],
             [PackageLifecycleStatus.Missing] =
                 [PackageLifecycleStatus.AwaitingLoading, PackageLifecycleStatus.Loaded,
                  PackageLifecycleStatus.Cancelled, PackageLifecycleStatus.ReturnPending],
@@ -55,7 +59,8 @@ public static class PackageLifecycleMachine
             [PackageLifecycleStatus.Cancelled] = [],
             [PackageLifecycleStatus.ReturnPending] =
                 [PackageLifecycleStatus.ReturnLoaded, PackageLifecycleStatus.RedeliveryPlanned,
-                 PackageLifecycleStatus.Quarantined, PackageLifecycleStatus.Cancelled],
+                 PackageLifecycleStatus.Quarantined, PackageLifecycleStatus.Cancelled,
+                 PackageLifecycleStatus.ReturnedToDepot],
             [PackageLifecycleStatus.ReturnLoaded] =
                 [PackageLifecycleStatus.ReturnedToDepot, PackageLifecycleStatus.ReturnedToSender],
             [PackageLifecycleStatus.ReturnedToDepot] =

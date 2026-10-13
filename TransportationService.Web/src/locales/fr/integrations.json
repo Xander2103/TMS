@@ -1,0 +1,35 @@
+{
+  "status": {
+    "Pending": "En file d'attente",
+    "Synced": "Synchronisé",
+    "Failed": "En échec",
+    "Cancelled": "Annulé"
+  },
+  "event": {
+    "leave_approved": "Congé approuvé",
+    "shift_confirmed": "Poste confirmé"
+  },
+  "page": {
+    "title": "Intégrations",
+    "subtitle": "Synchronisation d'agenda Outlook/Exchange — congés approuvés et postes confirmés. En développement, un fournisseur factice est utilisé ; la véritable liaison Microsoft suivra dès que les identifiants seront disponibles.",
+    "loadFailed": "La file de synchronisation n'a pas pu être chargée.",
+    "statusAria": "Statut",
+    "allStatuses": "Tous les statuts",
+    "retried": "Élément soumis à nouveau — le prochain traitement le prendra en charge.",
+    "retryFailed": "La nouvelle soumission a échoué.",
+    "retry": "Réessayer",
+    "cancellationSuffix": "(annulation)",
+    "empty": "Aucun élément de synchronisation pour le moment."
+  },
+  "columns": {
+    "created": "Créé",
+    "kind": "Type",
+    "employee": "Collaborateur",
+    "period": "Période",
+    "title": "Titre",
+    "status": "Statut",
+    "externalEvent": "Événement externe",
+    "error": "Erreur",
+    "actionsAria": "Actions"
+  }
+}

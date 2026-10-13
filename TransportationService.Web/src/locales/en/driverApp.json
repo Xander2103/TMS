@@ -1,0 +1,105 @@
+{
+  "layout": {
+    "title": "Driver",
+    "online": "Online",
+    "offline": "Offline",
+    "navLabel": "Driver navigation",
+    "tabToday": "Today",
+    "tabTrips": "Trips",
+    "tabIncident": "Incident",
+    "tabDocuments": "Documents",
+    "tabMessages": "Messages"
+  },
+  "home": {
+    "loadFailedNoCache": "Loading the dashboard failed and no offline copy is available.",
+    "loading": "Loading…",
+    "cachedNotice": "Offline copy — refreshes as soon as there is a connection.",
+    "currentTrip": "Current trip",
+    "vehicle": "Vehicle",
+    "progress": "Progress",
+    "progressStops": "{completed}/{total} stops",
+    "nextStop": "Next stop",
+    "eta": "ETA",
+    "openTrip": "Open trip",
+    "noActiveTrip": "No active trip.",
+    "nextTripAt": "Next: {tripNumber} on {date}.",
+    "nothingPlanned": "Nothing is planned.",
+    "attentionTitle": "Attention points",
+    "openStops": "Open stops",
+    "unresolvedExceptions": "Unresolved exceptions",
+    "activeIncidents": "Active incidents",
+    "tripsToday": "Trips today",
+    "nextTrip": "Next trip"
+  },
+  "etaSource": {
+    "Heuristic": "estimate",
+    "Provider": "route provider",
+    "DispatcherOverride": "manual"
+  },
+  "tripStatus": {
+    "Draft": "Draft",
+    "Planned": "Planned",
+    "InProgress": "En route",
+    "Completed": "Completed",
+    "Cancelled": "Cancelled"
+  },
+  "documents": {
+    "title": "Documents",
+    "loading": "Loading…",
+    "loadFailed": "Loading documents failed.",
+    "empty": "No documents for your active trips.",
+    "numberLabel": "Number",
+    "expires": "Expires {date}",
+    "download": "Download",
+    "noFile": "No file"
+  },
+  "documentType": {
+    "Registration": "Registration",
+    "Insurance": "Insurance",
+    "TechnicalInspection": "Technical inspection",
+    "Conformity": "Conformity",
+    "CraneInspection": "Crane inspection",
+    "RefrigerationCertificate": "Refrigeration certificate",
+    "AdrCertificate": "ADR certificate",
+    "Other": "Other document"
+  },
+  "incidents": {
+    "title": "Report incident",
+    "titleField": "Title",
+    "descriptionField": "What happened?",
+    "typeField": "Type",
+    "customTypeField": "Describe the type",
+    "severityField": "Severity",
+    "tripField": "Trip (optional)",
+    "noTrip": "No trip",
+    "submit": "Report incident",
+    "submitting": "Sending…",
+    "reported": "Incident reported.",
+    "reportFailed": "Reporting failed.",
+    "myIncidents": "My incidents",
+    "empty": "No incidents reported yet."
+  },
+  "incidentType": {
+    "VehicleBreakdown": "Vehicle breakdown",
+    "Accident": "Accident",
+    "Damage": "Damage",
+    "Delay": "Delay",
+    "Theft": "Theft",
+    "Other": "Other…"
+  },
+  "incidentSeverity": {
+    "Low": "Low",
+    "Medium": "Medium",
+    "High": "High",
+    "Critical": "Critical"
+  },
+  "incidentStatus": {
+    "New": "New",
+    "InProgress": "In progress",
+    "Resolved": "Resolved",
+    "Cancelled": "Cancelled"
+  },
+  "offline": {
+    "queued": "No connection — the action is queued and will be synchronised automatically."
+  }
+}

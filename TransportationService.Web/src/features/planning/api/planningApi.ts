@@ -22,6 +22,43 @@ export function getTrip(id: string): Promise<TripDetail> {
   return apiClient.getJson<TripDetail>(`/api/trips/${id}`)
 }
 
+// --- Wave 7: transparante ritvoorstellen ---
+
+export interface ProposalOrder {
+  transportOrderId: string
+  orderNumber: string
+  customerName: string
+  orderDate: string
+  deliveryCity: string | null
+  deliveryPostalCode: string | null
+  weightKg: number | null
+  loadingMeters: number | null
+  palletCount: number | null
+  overdue: boolean
+  /** P10: haalbaarheidsvoorwaarden per order (ADR/uitrusting/venster/openingsuren) — nooit verborgen. */
+  constraints: string[]
+}
+
+export interface TourProposal {
+  zoneCode: string
+  zoneName: string
+  orders: ProposalOrder[]
+  totalWeightKg: number
+  totalLoadingMeters: number
+  totalPallets: number
+  explanations: string[]
+}
+
+export interface PlanningProposals {
+  date: string
+  proposals: TourProposal[]
+  excluded: string[]
+}
+
+export function getPlanningProposals(date: string): Promise<PlanningProposals> {
+  return apiClient.getJson(`/api/planning/proposals?date=${date}`)
+}
+
 export function createTrip(input: TripInput): Promise<TripDetail> {
   return apiClient.postJson<TripDetail, TripInput>('/api/trips', input)
 }

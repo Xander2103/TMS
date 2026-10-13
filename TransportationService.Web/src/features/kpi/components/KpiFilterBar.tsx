@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { SearchableSelect, type SearchableSelectOption } from '../../../components/ui/SearchableSelect'
+import { useLocale } from '../../../i18n/localeContext'
 import { searchCustomers } from '../../customers/api/customersApi'
 import { searchDrivers } from '../../drivers/api/driversApi'
 import { getVehicleOptions } from '../../vehicles/api/vehiclesApi'
@@ -21,8 +22,16 @@ function activePreset(filter: KpiFilterState): Preset {
   return 'custom'
 }
 
+/** Vertaalsleutels per preset — renderen als t(label). */
+const PRESETS: ReadonlyArray<readonly ['today' | 'week' | 'month', string]> = [
+  ['today', 'kpiReports.filter.today'],
+  ['week', 'kpiReports.filter.thisWeek'],
+  ['month', 'kpiReports.filter.thisMonth'],
+]
+
 /** One filter row above the KPI views: period presets + custom range + dimension selects. */
 export function KpiFilterBar({ filter, onChange }: KpiFilterBarProps) {
+  const { t } = useLocale()
   const [customers, setCustomers] = useState<SearchableSelectOption[]>([])
   const [drivers, setDrivers] = useState<SearchableSelectOption[]>([])
   const [vehicles, setVehicles] = useState<SearchableSelectOption[]>([])
@@ -46,36 +55,30 @@ export function KpiFilterBar({ filter, onChange }: KpiFilterBarProps) {
 
   return (
     <div className="kpi-filterbar">
-      <div className="kpi-presets" role="group" aria-label="Periode">
-        {(
-          [
-            ['today', 'Vandaag'],
-            ['week', 'Deze week'],
-            ['month', 'Deze maand'],
-          ] as const
-        ).map(([key, label]) => (
+      <div className="kpi-presets" role="group" aria-label={t('kpiReports.filter.periodAria')}>
+        {PRESETS.map(([key, label]) => (
           <button
             key={key}
             type="button"
             className={preset === key ? 'kpi-preset-active' : undefined}
             onClick={() => onChange({ ...filter, ...presetRange(key) })}
           >
-            {label}
+            {t(label)}
           </button>
         ))}
       </div>
       <label>
-        Van
+        {t('kpiReports.filter.from')}
         <input type="date" value={filter.from} onChange={(e) => onChange({ ...filter, from: e.target.value })} />
       </label>
       <label>
-        Tot
+        {t('kpiReports.filter.to')}
         <input type="date" value={filter.to} onChange={(e) => onChange({ ...filter, to: e.target.value })} />
       </label>
       <div className="kpi-filter-select">
         <SearchableSelect
-          ariaLabel="Klant"
-          placeholder="Alle klanten"
+          ariaLabel={t('kpiReports.filter.customerAria')}
+          placeholder={t('kpiReports.filter.allCustomers')}
           value={filter.customerId}
           onChange={(value) => onChange({ ...filter, customerId: value })}
           options={customers}
@@ -83,8 +86,8 @@ export function KpiFilterBar({ filter, onChange }: KpiFilterBarProps) {
       </div>
       <div className="kpi-filter-select">
         <SearchableSelect
-          ariaLabel="Chauffeur"
-          placeholder="Alle chauffeurs"
+          ariaLabel={t('kpiReports.filter.driverAria')}
+          placeholder={t('kpiReports.filter.allDrivers')}
           value={filter.driverId}
           onChange={(value) => onChange({ ...filter, driverId: value })}
           options={drivers}
@@ -92,8 +95,8 @@ export function KpiFilterBar({ filter, onChange }: KpiFilterBarProps) {
       </div>
       <div className="kpi-filter-select">
         <SearchableSelect
-          ariaLabel="Voertuig"
-          placeholder="Alle voertuigen"
+          ariaLabel={t('kpiReports.filter.vehicleAria')}
+          placeholder={t('kpiReports.filter.allVehicles')}
           value={filter.vehicleId}
           onChange={(value) => onChange({ ...filter, vehicleId: value })}
           options={vehicles}

@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using TransportationService.Api.Common;
 using TransportationService.Api.Data;
 using TransportationService.Api.Modules.Auditing.Services;
 using TransportationService.Api.Modules.Authentication.Services;
@@ -33,6 +34,7 @@ public class PortalService : IPortalService
     private readonly IPasswordHasher _passwordHasher;
     private readonly IAuditService _auditService;
     private readonly IShiftService _shiftService;
+    private readonly TransportationService.Api.Modules.Hr.Services.ILeaveBalanceService _leaveBalanceService;
     private readonly TimeProvider _timeProvider;
 
     public PortalService(
@@ -46,9 +48,11 @@ public class PortalService : IPortalService
         IPasswordHasher passwordHasher,
         IAuditService auditService,
         IShiftService shiftService,
+        TransportationService.Api.Modules.Hr.Services.ILeaveBalanceService leaveBalanceService,
         TimeProvider timeProvider)
     {
         _shiftService = shiftService;
+        _leaveBalanceService = leaveBalanceService;
         _dbContext = dbContext;
         _tenantContext = tenantContext;
         _currentUserContext = currentUserContext;
@@ -218,7 +222,17 @@ public class PortalService : IPortalService
         var belongsToMe = await _dbContext.Absences.AsNoTracking()
             .AnyAsync(a => a.Id == absenceId && a.TenantId == _tenantContext.TenantId
                            && a.EmployeeId == employeeId, cancellationToken);
-        return belongsToMe ? await _absenceService.OpenDocumentAsync(absenceId, cancellationToken) : null;
+        if (!belongsToMe)
+        {
+            return null;
+        }
+
+        // Own certificate: the data subject is always allowed to see their own upload, so a
+        // MedicalRestricted result cannot occur on this path (the service self-exempts).
+        var document = await _absenceService.OpenDocumentAsync(absenceId, cancellationToken);
+        return document is { MedicalRestricted: false, Content: { } content, FileName: { } fileName }
+            ? (content, fileName)
+            : null;
     }
 
     public async Task<PortalAbsenceResult> CreateMyAbsenceAsync(
@@ -229,8 +243,30 @@ public class PortalService : IPortalService
             return PortalAbsenceResult.NoEmployeeLink;
         }
 
+        // Self-service over-request guard: for a balance-deducting leave type, block a request
+        // that would go below zero unless the tenant allows negative balances. (HR-side creation
+        // via AbsencesController is unaffected — those users are authorised to overdraw.)
+        if (request.LeaveTypeId is { } leaveTypeId)
+        {
+            var availability = await _leaveBalanceService.CheckRequestAsync(
+                employeeId, leaveTypeId, request.StartDate, request.EndDate, request.PartDay, cancellationToken);
+            if (!availability.Allowed)
+            {
+                return PortalAbsenceResult.InvalidState(availability.Message ?? "Onvoldoende verlofsaldo voor deze aanvraag.");
+            }
+        }
+
         var result = await _absenceService.CreateForEmployeeAsync(employeeId, request, cancellationToken);
         return Map(result);
+    }
+
+    public async Task<EmployeeLeaveBalanceDto?> GetMyLeaveBalanceAsync(int year, CancellationToken cancellationToken)
+    {
+        if (await MyEmployeeIdAsync(cancellationToken) is not { } employeeId)
+        {
+            return null;
+        }
+        return await _leaveBalanceService.GetForEmployeeAsync(employeeId, year, cancellationToken);
     }
 
     public async Task<PortalAbsenceResult> CancelMyAbsenceAsync(Guid absenceId, CancellationToken cancellationToken)
@@ -296,9 +332,9 @@ public class PortalService : IPortalService
             return PortalOperationResult.NotFound;
         }
 
-        if (string.IsNullOrWhiteSpace(request.NewPassword) || request.NewPassword.Length < MinPasswordLength)
+        if (TransportationService.Api.Modules.Authentication.PasswordPolicy.Default.Validate(request.NewPassword) is { } policyError)
         {
-            return PortalOperationResult.Invalid($"Het nieuwe wachtwoord moet minstens {MinPasswordLength} tekens lang zijn.");
+            return PortalOperationResult.Invalid(policyError);
         }
 
         var user = await _dbContext.Users
@@ -314,6 +350,7 @@ public class PortalService : IPortalService
         }
 
         user.PasswordHash = _passwordHasher.Hash(request.NewPassword);
+        user.MustChangePassword = false; // the user now owns their credential
         user.UpdatedAt = _timeProvider.GetUtcNow().UtcDateTime;
         await _dbContext.SaveChangesAsync(cancellationToken);
 
@@ -331,8 +368,150 @@ public class PortalService : IPortalService
             return null;
         }
 
-        return await _shiftService.GetEmployeeScheduleAsync(employeeId, from, to, cancellationToken);
+        var days = await _shiftService.GetEmployeeScheduleAsync(employeeId, from, to, cancellationToken);
+
+        // Personal notes are merged HERE (self-service feed only) so they never leak into the
+        // shared schedule used by planners.
+        var notes = await _dbContext.Set<Entities.PersonalCalendarNote>().AsNoTracking()
+            .Where(n => n.TenantId == _tenantContext.TenantId && n.EmployeeId == employeeId
+                        && n.Date >= from && n.Date <= to)
+            .OrderBy(n => n.StartTime)
+            .ToListAsync(cancellationToken);
+        if (notes.Count == 0)
+        {
+            return days;
+        }
+
+        var notesByDate = notes.ToLookup(n => n.Date);
+        return days
+            .Select(day => notesByDate[day.Date].Any()
+                ? day with
+                {
+                    Entries =
+                    [
+                        .. day.Entries,
+                        .. notesByDate[day.Date].Select(note => new ScheduleEntryDto(
+                            ScheduleEntryState.Note, null, null, null, "Note",
+                            note.Title,
+                            note.AllDay ? null : note.StartTime,
+                            note.AllDay ? null : note.EndTime,
+                            null, null, null, note.Description,
+                            Colour: note.Colour, NoteId: note.Id)),
+                    ],
+                }
+                : day)
+            .ToList();
     }
+
+    public async Task<IReadOnlyList<PersonalCalendarNoteDto>?> ListMyCalendarNotesAsync(
+        DateOnly from, DateOnly to, CancellationToken cancellationToken)
+    {
+        if (await MyEmployeeIdAsync(cancellationToken) is not { } employeeId)
+        {
+            return null;
+        }
+
+        return await _dbContext.Set<Entities.PersonalCalendarNote>().AsNoTracking()
+            .Where(n => n.TenantId == _tenantContext.TenantId && n.EmployeeId == employeeId
+                        && n.Date >= from && n.Date <= to)
+            .OrderBy(n => n.Date).ThenBy(n => n.StartTime)
+            .Select(n => new PersonalCalendarNoteDto(n.Id, n.Title, n.Description, n.Date, n.StartTime, n.EndTime, n.AllDay, n.Colour))
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<PersonalCalendarNoteDto?> CreateMyCalendarNoteAsync(
+        SavePersonalCalendarNoteRequest request, CancellationToken cancellationToken)
+    {
+        if (await MyEmployeeIdAsync(cancellationToken) is not { } employeeId)
+        {
+            return null;
+        }
+
+        ValidateNote(request);
+        var note = new Entities.PersonalCalendarNote
+        {
+            Id = Guid.NewGuid(),
+            TenantId = _tenantContext.TenantId,
+            EmployeeId = employeeId,
+        };
+        ApplyNote(note, request);
+        _dbContext.Add(note);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        return Map(note);
+    }
+
+    public async Task<PersonalCalendarNoteDto?> UpdateMyCalendarNoteAsync(
+        Guid id, SavePersonalCalendarNoteRequest request, CancellationToken cancellationToken)
+    {
+        if (await MyEmployeeIdAsync(cancellationToken) is not { } employeeId)
+        {
+            return null;
+        }
+
+        // Self-only: another employee's note is simply not found.
+        var note = await _dbContext.Set<Entities.PersonalCalendarNote>()
+            .FirstOrDefaultAsync(n => n.TenantId == _tenantContext.TenantId && n.Id == id && n.EmployeeId == employeeId, cancellationToken);
+        if (note is null)
+        {
+            return null;
+        }
+
+        ValidateNote(request);
+        ApplyNote(note, request);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        return Map(note);
+    }
+
+    public async Task<bool> DeleteMyCalendarNoteAsync(Guid id, CancellationToken cancellationToken)
+    {
+        if (await MyEmployeeIdAsync(cancellationToken) is not { } employeeId)
+        {
+            return false;
+        }
+
+        var note = await _dbContext.Set<Entities.PersonalCalendarNote>()
+            .FirstOrDefaultAsync(n => n.TenantId == _tenantContext.TenantId && n.Id == id && n.EmployeeId == employeeId, cancellationToken);
+        if (note is null)
+        {
+            return false;
+        }
+
+        _dbContext.Remove(note);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        return true;
+    }
+
+    private static void ValidateNote(SavePersonalCalendarNoteRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.Title))
+        {
+            throw new DomainValidationException("title", "De titel is verplicht.");
+        }
+
+        if (!Entities.CalendarNotePalette.IsValid(request.Colour))
+        {
+            throw new DomainValidationException("colour", "Kies een kleur uit het palet.");
+        }
+
+        if (!request.AllDay && request.StartTime is { } start && request.EndTime is { } end && end < start)
+        {
+            throw new DomainValidationException("endTime", "Het einde moet na het begin liggen.");
+        }
+    }
+
+    private static void ApplyNote(Entities.PersonalCalendarNote note, SavePersonalCalendarNoteRequest request)
+    {
+        note.Title = request.Title.Trim();
+        note.Description = string.IsNullOrWhiteSpace(request.Description) ? null : request.Description.Trim();
+        note.Date = request.Date;
+        note.AllDay = request.AllDay;
+        note.StartTime = request.AllDay ? null : request.StartTime;
+        note.EndTime = request.AllDay ? null : request.EndTime;
+        note.Colour = request.Colour;
+    }
+
+    private static PersonalCalendarNoteDto Map(Entities.PersonalCalendarNote n) =>
+        new(n.Id, n.Title, n.Description, n.Date, n.StartTime, n.EndTime, n.AllDay, n.Colour);
 
     private static PortalAbsenceResult Map(AbsenceOperationResult result) => result.Outcome switch
     {

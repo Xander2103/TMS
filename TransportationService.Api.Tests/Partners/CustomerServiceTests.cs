@@ -188,4 +188,58 @@ public class CustomerServiceTests
 
         Assert.Empty(resultForB.Items);
     }
+
+    [Fact]
+    public async Task SetActiveAsync_TogglesLifecycle_AndAudits()
+    {
+        using var db = new SqliteTestDbContext();
+        var tenantId = await SeedTenantAsync(db, "t", "KL-");
+        var sut = CreateSut(db, tenantId);
+        var customer = await sut.CreateAsync(NewCustomer("Acme"), CancellationToken.None);
+
+        var ok = await sut.SetActiveAsync(customer.Id, new SetCustomerActiveRequest(false), CancellationToken.None);
+
+        Assert.True(ok);
+        Assert.False((await sut.GetByIdAsync(customer.Id, CancellationToken.None))!.IsActive);
+        Assert.Single(db.Context.AuditLogs, l => l.EntityType == "Customer" && l.Action == "Deactivated");
+
+        await sut.SetActiveAsync(customer.Id, new SetCustomerActiveRequest(true), CancellationToken.None);
+        Assert.True((await sut.GetByIdAsync(customer.Id, CancellationToken.None))!.IsActive);
+        Assert.Single(db.Context.AuditLogs, l => l.EntityType == "Customer" && l.Action == "Activated");
+    }
+
+    [Fact]
+    public async Task CreateAsync_WithInitialContact_PersistsContactInSameTransaction()
+    {
+        using var db = new SqliteTestDbContext();
+        var tenantId = await SeedTenantAsync(db, "t", "KL-");
+        var sut = CreateSut(db, tenantId);
+
+        var created = await sut.CreateAsync(NewCustomer("Acme") with
+        {
+            InitialContact = new CreateCustomerContactRequest("Ann", "Peeters", "Aankoop", "ann@acme.be", null, true, null),
+        }, CancellationToken.None);
+
+        var contact = Assert.Single(created.Contacts);
+        Assert.Equal("Ann", contact.FirstName);
+        Assert.True(contact.IsPrimary);
+        Assert.Single(db.Context.AuditLogs, l => l.Action == "ContactAdded");
+    }
+
+    [Fact]
+    public async Task CreateAsync_WithIncompleteInitialContact_FailsWithFieldError_AndCreatesNothing()
+    {
+        using var db = new SqliteTestDbContext();
+        var tenantId = await SeedTenantAsync(db, "t", "KL-");
+        var sut = CreateSut(db, tenantId);
+
+        var ex = await Assert.ThrowsAsync<DomainValidationException>(() => sut.CreateAsync(NewCustomer("Acme") with
+        {
+            InitialContact = new CreateCustomerContactRequest("Ann", " ", null, null, null, false, null),
+        }, CancellationToken.None));
+
+        Assert.Contains("initialContact.lastName", ex.FieldErrors!.Keys);
+        Assert.Empty(await db.Context.Customers.ToListAsync());
+        Assert.Empty(await db.Context.CustomerContacts.ToListAsync());
+    }
 }

@@ -20,13 +20,31 @@ public class TransportOrdersController : ControllerBase
 {
     private readonly ITransportOrderService _service;
     private readonly TransportationService.Api.Modules.Edi.Services.IEdiService _ediService;
+    private readonly ITransportOrderTimelineService _timelineService;
+    private readonly TransportationService.Api.Modules.Packages.Services.IPackageGenerationService _packageGeneration;
+    private readonly TransportationService.Api.Modules.CustomerPortal.Services.IOrderPortalReviewService _portalReviewService;
 
     public TransportOrdersController(
         ITransportOrderService service,
-        TransportationService.Api.Modules.Edi.Services.IEdiService ediService)
+        TransportationService.Api.Modules.Edi.Services.IEdiService ediService,
+        ITransportOrderTimelineService timelineService,
+        TransportationService.Api.Modules.Packages.Services.IPackageGenerationService packageGeneration,
+        TransportationService.Api.Modules.CustomerPortal.Services.IOrderPortalReviewService portalReviewService)
     {
         _service = service;
         _ediService = ediService;
+        _timelineService = timelineService;
+        _packageGeneration = packageGeneration;
+        _portalReviewService = portalReviewService;
+    }
+
+    [HttpPost("{id:guid}/portal-review")]
+    [RequirePermission(PermissionCodes.OrdersChangeStatus, PermissionCodes.OrdersManage)]
+    public async Task<ActionResult<TransportOrderDetailDto>> PortalReview(
+        Guid id, TransportationService.Api.Modules.CustomerPortal.Services.PortalReviewRequest request, CancellationToken cancellationToken)
+    {
+        var result = await _portalReviewService.ReviewAsync(id, request, cancellationToken);
+        return Handle(result, created: false);
     }
 
     [HttpGet]
@@ -131,6 +149,16 @@ public class TransportOrdersController : ControllerBase
         return Handle(result, created: false);
     }
 
+    /// <summary>Inline priority edit; lighter permission than a full order edit on purpose.</summary>
+    [HttpPost("{id:guid}/priority")]
+    [RequirePermission(PermissionCodes.OrdersEdit, PermissionCodes.OrdersManage)]
+    public async Task<ActionResult<TransportOrderDetailDto>> ChangePriority(
+        Guid id, ChangeOrderPriorityRequest request, CancellationToken cancellationToken)
+    {
+        var result = await _service.ChangePriorityAsync(id, request.Priority, cancellationToken);
+        return Handle(result, created: false);
+    }
+
     [HttpPost("{id:guid}/status")]
     [RequirePermission(PermissionCodes.OrdersChangeStatus, PermissionCodes.OrdersManage)]
     public async Task<ActionResult<TransportOrderDetailDto>> ChangeStatus(
@@ -141,9 +169,58 @@ public class TransportOrdersController : ControllerBase
         {
             // Orders that entered via EDI report their status back (no-op for the rest).
             await _ediService.QueueOutboundStatusAsync(id, request.Status.ToString(), cancellationToken);
+
+            if (request.Status == Entities.TransportOrderStatus.Confirmed)
+            {
+                // Confirmation generates the packages the cargo lines call for (idempotent —
+                // re-confirming after a Draft correction never duplicates).
+                await _packageGeneration.GenerateForOrderAsync(id, cancellationToken);
+            }
         }
 
         return Handle(result, created: false);
+    }
+
+    /// <summary>
+    /// Bulk status change: each order runs through the exact same transition rules and side
+    /// effects as a single change; failures are reported per order and never block the rest.
+    /// </summary>
+    [HttpPost("bulk-status")]
+    [RequirePermission(PermissionCodes.OrdersChangeStatus, PermissionCodes.OrdersManage)]
+    public async Task<ActionResult<BulkStatusResultDto>> BulkChangeStatus(
+        BulkChangeStatusRequest request, CancellationToken cancellationToken)
+    {
+        var ids = (request.OrderIds ?? []).Distinct().Take(100).ToList();
+        if (ids.Count == 0)
+        {
+            return BadRequest(new { message = "Geen opdrachten geselecteerd." });
+        }
+
+        var results = new List<BulkStatusItemResultDto>();
+        foreach (var orderId in ids)
+        {
+            var result = await _service.ChangeStatusAsync(orderId, request.Status, cancellationToken);
+            if (result.Outcome == TransportOrderOperationOutcome.Success)
+            {
+                await _ediService.QueueOutboundStatusAsync(orderId, request.Status.ToString(), cancellationToken);
+                if (request.Status == Entities.TransportOrderStatus.Confirmed)
+                {
+                    await _packageGeneration.GenerateForOrderAsync(orderId, cancellationToken);
+                }
+
+                results.Add(new BulkStatusItemResultDto(orderId, true, null));
+            }
+            else
+            {
+                results.Add(new BulkStatusItemResultDto(orderId, false,
+                    result.Outcome == TransportOrderOperationOutcome.NotFound
+                        ? "Opdracht niet gevonden."
+                        : result.Error ?? "De statuswijziging is niet toegestaan."));
+            }
+        }
+
+        return Ok(new BulkStatusResultDto(
+            results.Count(r => r.Success), results.Count(r => !r.Success), results));
     }
 
     [HttpPost("{id:guid}/cancel")]
@@ -152,6 +229,119 @@ public class TransportOrdersController : ControllerBase
         Guid id, CancelTransportOrderRequest request, CancellationToken cancellationToken)
     {
         var result = await _service.CancelAsync(id, request.Reason, cancellationToken);
+        return Handle(result, created: false);
+    }
+
+    /// <summary>Sprint 6 (completion): what moving this order to another invoicing entity would do.</summary>
+    [HttpGet("{id:guid}/legal-entity/impact")]
+    [RequirePermission(PermissionCodes.OrdersEdit, PermissionCodes.OrdersManage)]
+    public async Task<ActionResult<OrderLegalEntityChangeImpactDto>> LegalEntityChangeImpact(
+        Guid id, [FromQuery] Guid legalEntityId, CancellationToken cancellationToken)
+    {
+        var impact = await _service.PreviewLegalEntityChangeAsync(id, legalEntityId, cancellationToken);
+        return impact is null ? NotFound() : Ok(impact);
+    }
+
+    [HttpPut("{id:guid}/legal-entity")]
+    [RequirePermission(PermissionCodes.OrdersEdit, PermissionCodes.OrdersManage)]
+    public async Task<ActionResult<TransportOrderDetailDto>> ChangeLegalEntity(
+        Guid id, ChangeOrderLegalEntityRequest request, CancellationToken cancellationToken)
+    {
+        var result = await _service.ChangeLegalEntityAsync(id, request, cancellationToken);
+        return Handle(result, created: false);
+    }
+
+    [HttpGet("{id:guid}/timeline")]
+    [RequirePermission(PermissionCodes.OrdersView, PermissionCodes.OrdersManage)]
+    public async Task<ActionResult<IReadOnlyList<OrderTimelineEventDto>>> Timeline(Guid id, CancellationToken cancellationToken)
+    {
+        var timeline = await _timelineService.GetTimelineAsync(id, cancellationToken);
+        return timeline is null ? NotFound() : Ok(timeline);
+    }
+
+    [HttpPost("{id:guid}/correct-status")]
+    [RequirePermission(PermissionCodes.OrdersCorrectStatus, PermissionCodes.OrdersManage)]
+    public async Task<ActionResult<TransportOrderDetailDto>> CorrectStatus(
+        Guid id, CorrectTransportOrderStatusRequest request, CancellationToken cancellationToken)
+    {
+        var result = await _service.CorrectStatusAsync(id, request.TargetStatus, request.Reason, cancellationToken);
+        return Handle(result, created: false);
+    }
+
+    /// <summary>Manual line-level corrections/removals/free additions (spec ch. 24-26).</summary>
+    [HttpPut("{id:guid}/pricing/lines")]
+    [RequirePermission(PermissionCodes.OrdersOverridePrice, PermissionCodes.OrdersManage)]
+    public async Task<ActionResult<TransportOrderDetailDto>> SaveOrderPriceLines(
+        Guid id, IReadOnlyList<SaveOrderPriceLineRequest> request, CancellationToken cancellationToken)
+    {
+        var result = await _service.SaveOrderPriceLinesAsync(id, request, cancellationToken);
+        return Handle(result, created: false);
+    }
+
+    /// <summary>Explicit re-run of the pricing engine; refused while the price is Locked/Invoiced.</summary>
+    [HttpPost("{id:guid}/pricing/recalculate")]
+    [RequirePermission(PermissionCodes.OrdersEdit, PermissionCodes.OrdersManage)]
+    public async Task<ActionResult<TransportOrderDetailDto>> RecalculateOrderPricing(Guid id, CancellationToken cancellationToken)
+    {
+        var result = await _service.RecalculateOrderPricingAsync(id, cancellationToken);
+        return Handle(result, created: false);
+    }
+
+    /// <summary>
+    /// Hardening 2026-09-11: price-only mutation for the dossier's "Afgesproken prijs" (one-off
+    /// agreement). Same gate as the order PUT it replaces for this purpose (commercial intake data
+    /// → orders.edit); an existing whole-order override still needs orders.override_price, checked
+    /// service-side. Never validates or touches the route.
+    /// </summary>
+    [HttpPost("{id:guid}/pricing/one-off")]
+    [RequirePermission(PermissionCodes.OrdersEdit, PermissionCodes.OrdersManage)]
+    public async Task<ActionResult<TransportOrderDetailDto>> SetOneOffPrice(
+        Guid id, SetOneOffPriceRequest request, CancellationToken cancellationToken)
+    {
+        var result = await _service.SetOneOffPriceAsync(id, request, cancellationToken);
+        return Handle(result, created: false);
+    }
+
+    /// <summary>Pricing status transition; fine-grained permission per transition is enforced service-side.</summary>
+    [HttpPost("{id:guid}/pricing/status")]
+    [RequirePermission(PermissionCodes.OrdersEdit, PermissionCodes.OrdersLockPrice, PermissionCodes.OrdersManage)]
+    public async Task<ActionResult<TransportOrderDetailDto>> SetOrderPricingStatus(
+        Guid id, SetOrderPricingStatusRequest request, CancellationToken cancellationToken)
+    {
+        var result = await _service.SetOrderPricingStatusAsync(id, request.Status, cancellationToken);
+        return Handle(result, created: false);
+    }
+
+    /// <summary>
+    /// Wave 2026-08-04 §8/§10: "Prijs bevestigen". Locks the snapshot and stamps who/when;
+    /// coverage gate + override permission are enforced service-side.
+    /// </summary>
+    [HttpPost("{id:guid}/pricing/confirm")]
+    [RequirePermission(PermissionCodes.OrdersLockPrice, PermissionCodes.OrdersManage)]
+    public async Task<ActionResult<TransportOrderDetailDto>> ConfirmOrderPricing(
+        Guid id, ConfirmOrderPricingRequest request, CancellationToken cancellationToken)
+    {
+        var result = await _service.ConfirmOrderPricingAsync(id, request.UnpricedGoodsReason, cancellationToken);
+        return Handle(result, created: false);
+    }
+
+    /// <summary>Wave 2026-08-04 §8: "Prijs aanpassen" — reopen a confirmed price (reason required).</summary>
+    [HttpPost("{id:guid}/pricing/reopen")]
+    [RequirePermission(PermissionCodes.OrdersLockPrice, PermissionCodes.OrdersManage)]
+    public async Task<ActionResult<TransportOrderDetailDto>> ReopenOrderPricing(
+        Guid id, ReopenOrderPricingRequest request, CancellationToken cancellationToken)
+    {
+        var result = await _service.ReopenOrderPricingAsync(id, request.Reason, cancellationToken);
+        return Handle(result, created: false);
+    }
+
+    /// <summary>Confirms an unconfirmed (VOORSTEL) extra-time line so it counts towards the price.</summary>
+    [HttpPost("{id:guid}/pricing/lines/{lineId:guid}/confirm")]
+    [RequirePermission(PermissionCodes.OrdersEdit, PermissionCodes.OrdersManage)]
+    public async Task<ActionResult<TransportOrderDetailDto>> ConfirmOrderPriceLine(
+        Guid id, Guid lineId, CancellationToken cancellationToken)
+    {
+        var result = await _service.ConfirmOrderPriceLineAsync(id, lineId, cancellationToken);
         return Handle(result, created: false);
     }
 
@@ -179,6 +369,8 @@ public class TransportOrdersController : ControllerBase
             TransportOrderOperationOutcome.InvalidReference => BadRequest(new { message = result.Error }),
             TransportOrderOperationOutcome.InvalidState => BadRequest(new { message = result.Error }),
             TransportOrderOperationOutcome.ValidationFailed => BadRequest(new { message = result.Error }),
+            // Stale concurrency token: 409 carries the CURRENT state so the client can rebase.
+            TransportOrderOperationOutcome.VersionConflict => Conflict(result.Order),
             _ => Conflict(),
         };
 }

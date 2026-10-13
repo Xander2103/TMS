@@ -36,11 +36,16 @@ public class PackageConfiguration : IEntityTypeConfiguration<Package>
         builder.HasIndex(p => new { p.TenantId, p.TransportOrderId });
         builder.HasIndex(p => new { p.TenantId, p.CurrentLifecycleStatus });
         builder.HasIndex(p => p.ParentPackageId);
+        builder.HasIndex(p => p.CargoItemId);
 
         builder.HasOne<TransportationService.Api.Modules.Orders.Entities.TransportOrder>()
             .WithMany()
             .HasForeignKey(p => p.TransportOrderId)
             .OnDelete(DeleteBehavior.Cascade);
+        builder.HasOne<TransportationService.Api.Modules.Orders.Entities.CargoItem>()
+            .WithMany()
+            .HasForeignKey(p => p.CargoItemId)
+            .OnDelete(DeleteBehavior.SetNull);
         builder.HasOne<TransportationService.Api.Modules.Orders.Entities.TransportOrderStop>()
             .WithMany()
             .HasForeignKey(p => p.LoadingStopId)

@@ -1,0 +1,80 @@
+{
+  "locationSource": {
+    "LiveGps": "Live GPS",
+    "LastKnownGps": "Laatst gekende GPS",
+    "ScanLocation": "Scanlocatie",
+    "StopLocation": "Laatste stop",
+    "PlannedLocation": "Geplande stop",
+    "Unavailable": "Geen locatie"
+  },
+  "etaSource": {
+    "Heuristic": "raming",
+    "Provider": "routeprovider",
+    "DispatcherOverride": "handmatig"
+  },
+  "etaStatus": {
+    "OnTime": "Op tijd",
+    "AtRisk": "Risico",
+    "Late": "Te laat"
+  },
+  "alertSeverity": {
+    "Information": "Info",
+    "Warning": "Waarschuwing",
+    "Critical": "Kritiek"
+  },
+  "alertCategory": {
+    "Delay": "Vertraging",
+    "Pod": "Afleverbewijs",
+    "Incident": "Incident",
+    "Exception": "Afwijking",
+    "Maintenance": "Onderhoud",
+    "Inspection": "Keuring",
+    "Document": "Document"
+  },
+  "page": {
+    "title": "Operationeel centrum",
+    "overviewLoadFailed": "Overzicht laden mislukt.",
+    "loading": "Laden…",
+    "updatedAt": "Bijgewerkt {time}",
+    "refreshEvery": "ververst elke 30 s",
+    "alertAcknowledged": "Melding bevestigd.",
+    "alertResolved": "Melding afgehandeld.",
+    "actionFailed": "Actie mislukt.",
+    "kpiActiveTrips": "Actieve ritten",
+    "kpiDelayed": "Vertraagd",
+    "kpiOpenExceptions": "Open afwijkingen",
+    "kpiCriticalIncidents": "Kritieke incidenten",
+    "kpiMissingPods": "POD ontbreekt",
+    "kpiOpenAlerts": "Open meldingen",
+    "tripsLabel": "Actieve ritten",
+    "tripsTitle": "Ritten vandaag & onderweg",
+    "colTrip": "Rit",
+    "colStatus": "Status",
+    "colDriverEquipment": "Chauffeur / materieel",
+    "colProgress": "Voortgang",
+    "colCurrentStop": "Huidige stop",
+    "colNextStop": "Volgende stop",
+    "colEta": "ETA",
+    "colLastScan": "Laatste scan",
+    "colSignals": "Signalen",
+    "stopsProgress": "{completed}/{total} stops",
+    "etaSourcePrefix": "bron: {source}",
+    "noEta": "geen ETA",
+    "exceptions_one": "1 afwijking",
+    "exceptions_other": "{count} afwijkingen",
+    "missingPod": "POD ontbreekt",
+    "noActiveTrips": "Geen actieve ritten.",
+    "alertsLabel": "Meldingen",
+    "alertsTitle": "Meldingen",
+    "alertsFilterLabel": "Filter meldingen",
+    "filterOpen": "Open",
+    "filterActive": "Nieuw",
+    "filterAcknowledged": "Bevestigd",
+    "filterResolved": "Afgehandeld",
+    "acknowledgedBy": "Bevestigd door {name}",
+    "open": "Openen",
+    "acknowledge": "Bevestigen",
+    "resolve": "Afhandelen",
+    "noAlerts": "Geen meldingen."
+  }
+}

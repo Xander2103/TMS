@@ -1,3 +1,4 @@
+import type { TranslateFn } from '../../../i18n/localeContext'
 import type { CreateUserInput, UpdateUserInput } from '../types/user'
 
 export interface UserFormValues {
@@ -18,7 +19,7 @@ const MAX_LENGTHS = {
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
-export function validateUserForm(values: UserFormValues): UserFormErrors {
+export function validateUserForm(t: TranslateFn, values: UserFormValues): UserFormErrors {
   const errors: UserFormErrors = {}
 
   const email = values.email.trim()
@@ -26,23 +27,23 @@ export function validateUserForm(values: UserFormValues): UserFormErrors {
   const lastName = values.lastName.trim()
 
   if (!email) {
-    errors.email = 'E-mail is verplicht.'
+    errors.email = t('usersRoles.users.validation.emailRequired')
   } else if (email.length > MAX_LENGTHS.email) {
-    errors.email = `E-mail mag maximaal ${MAX_LENGTHS.email} tekens bevatten.`
+    errors.email = t('usersRoles.users.validation.emailMax', { max: MAX_LENGTHS.email })
   } else if (!EMAIL_PATTERN.test(email)) {
-    errors.email = 'Ongeldig e-mailadres.'
+    errors.email = t('usersRoles.users.validation.emailInvalid')
   }
 
   if (!firstName) {
-    errors.firstName = 'Voornaam is verplicht.'
+    errors.firstName = t('usersRoles.users.validation.firstNameRequired')
   } else if (firstName.length > MAX_LENGTHS.firstName) {
-    errors.firstName = `Voornaam mag maximaal ${MAX_LENGTHS.firstName} tekens bevatten.`
+    errors.firstName = t('usersRoles.users.validation.firstNameMax', { max: MAX_LENGTHS.firstName })
   }
 
   if (!lastName) {
-    errors.lastName = 'Achternaam is verplicht.'
+    errors.lastName = t('usersRoles.users.validation.lastNameRequired')
   } else if (lastName.length > MAX_LENGTHS.lastName) {
-    errors.lastName = `Achternaam mag maximaal ${MAX_LENGTHS.lastName} tekens bevatten.`
+    errors.lastName = t('usersRoles.users.validation.lastNameMax', { max: MAX_LENGTHS.lastName })
   }
 
   return errors

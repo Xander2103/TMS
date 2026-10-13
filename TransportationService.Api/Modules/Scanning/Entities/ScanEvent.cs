@@ -9,6 +9,14 @@ public enum ScanType
     Return,
     Depot,
     Exception,
+
+    // Wave 4 §3 — standalone warehouse scans (append-only: stored values must never shift).
+    /// <summary>Arrival registration at the warehouse (trip-less).</summary>
+    Received = 5,
+    /// <summary>Location move inside the warehouse (trip-less).</summary>
+    Moved = 6,
+    /// <summary>Staged for outbound (operational marker, trip-less).</summary>
+    Staged = 7,
 }
 
 /// <summary>
@@ -35,10 +43,16 @@ public enum ScanResult
 /// </summary>
 public class ScanEvent : AuditableTenantEntity
 {
-    public Guid TripId { get; set; }
-    public Guid TransportOrderId { get; set; }
-    public Guid TransportOrderStopId { get; set; }
+    /// <summary>Null since Wave 4 §3 for standalone warehouse scans (Received/Moved/Staged
+    /// and trip-less Return) — per-trip tallies filter by TripId and never see them.</summary>
+    public Guid? TripId { get; set; }
+    /// <summary>Null only for a standalone scan of an UNKNOWN barcode (warning row — recorded, never dropped).</summary>
+    public Guid? TransportOrderId { get; set; }
+    public Guid? TransportOrderStopId { get; set; }
     public Guid? CargoItemId { get; set; }
+
+    /// <summary>Wave 4 §2: warehouse location involved (FK-less snapshot id).</summary>
+    public Guid? WarehouseLocationId { get; set; }
 
     /// <summary>Resolved tracked package, when the barcode belongs to the package registry.</summary>
     public Guid? PackageId { get; set; }

@@ -1,32 +1,142 @@
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { PageHeader } from '../../../components/layout/PageHeader'
 import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { useToast } from '../../../components/ui/toastContext'
+import { useAuth } from '../../auth/authContextValue'
+import { useLocale } from '../../../i18n/localeContext'
 import { CustomerForm } from '../components/CustomerForm'
+import { PreparedLocationsEditor } from '../components/PreparedLocationsEditor'
+import { CustomerCreateFollowUpDialog } from '../components/CustomerCreateFollowUpDialog'
 import { useCustomerMutations } from '../hooks/useCustomerMutations'
+import {
+  createPreparedLocations,
+  type LocationFollowUpResult,
+  type PreparedLocation,
+} from '../utils/preparedLocations'
+import type { CustomerDetail } from '../types'
 
 export function NewCustomerPage() {
+  // "Opslaan en nieuwe klant" resets the entire create flow (form fields, contact rows,
+  // staged locations) by remounting the inner page with a fresh key.
+  const [formInstance, setFormInstance] = useState(0)
+  return <NewCustomerPageContent key={formInstance} onSavedAndNew={() => setFormInstance((k) => k + 1)} />
+}
+
+function NewCustomerPageContent({ onSavedAndNew }: { onSavedAndNew: () => void }) {
   const navigate = useNavigate()
   const toast = useToast()
-  const { create, isSubmitting, error } = useCustomerMutations()
+  const { t } = useLocale()
+  const { hasPermission } = useAuth()
+  const { create, isSubmitting, error, fieldErrors } = useCustomerMutations()
+  const canCreateLocations = hasPermission('locations.create')
+
+  // Staged locations: held in form state until the customer exists, then POSTed one by one.
+  const [stagedLocations, setStagedLocations] = useState<PreparedLocation[]>([])
+  // After creation: the created customer + any follow-up results awaiting retry/dismissal.
+  const [createdCustomer, setCreatedCustomer] = useState<CustomerDetail | null>(null)
+  const [followUpResults, setFollowUpResults] = useState<LocationFollowUpResult[] | null>(null)
+  const [followUpBusy, setFollowUpBusy] = useState(false)
+
+  function goToCustomer(customer: CustomerDetail) {
+    navigate(`/customers/${customer.id}`)
+  }
+
+  // Runs after the customer create succeeds. On full success it navigates to the detail page —
+  // or, for "Opslaan en nieuwe klant", resets the create page for the next entry. On partial
+  // failure it keeps the customer + staged rows and surfaces the retry dialog.
+  async function processFollowUps(customer: CustomerDetail, startNextEntry: boolean) {
+    const finish = startNextEntry ? onSavedAndNew : () => goToCustomer(customer)
+    if (stagedLocations.length === 0) {
+      toast.showSuccess(t('customers.create.created', { number: customer.customerNumber }))
+      finish()
+      return
+    }
+    setFollowUpBusy(true)
+    try {
+      const results = await createPreparedLocations(customer.id, stagedLocations, {
+        label: t('customers.staged.fallbackLabel'),
+        error: t('customers.staged.createFailed'),
+      })
+      if (results.every((r) => r.ok)) {
+        toast.showSuccess(
+          t('customers.create.createdWithLocations', { number: customer.customerNumber, count: results.length }),
+        )
+        finish()
+      } else {
+        toast.showError(t('customers.create.locationsPartlyFailed'))
+        setCreatedCustomer(customer)
+        setFollowUpResults(results)
+      }
+    } finally {
+      setFollowUpBusy(false)
+    }
+  }
+
+  async function retryFailedFollowUps() {
+    if (!createdCustomer || !followUpResults) return
+    setFollowUpBusy(true)
+    try {
+      const failedKeys = new Set(followUpResults.filter((r) => !r.ok).map((r) => r.key))
+      const retried = await createPreparedLocations(
+        createdCustomer.id,
+        stagedLocations.filter((row) => failedKeys.has(row.key)),
+        { label: t('customers.staged.fallbackLabel'), error: t('customers.staged.createFailed') },
+      )
+      const merged = followUpResults.map((r) => retried.find((n) => n.key === r.key) ?? r)
+      if (merged.every((r) => r.ok)) {
+        const customer = createdCustomer
+        toast.showSuccess(t('customers.create.allLocationsCreated'))
+        setFollowUpResults(null)
+        setCreatedCustomer(null)
+        goToCustomer(customer)
+      } else {
+        setFollowUpResults(merged)
+      }
+    } finally {
+      setFollowUpBusy(false)
+    }
+  }
+
+  function dismissFollowUp() {
+    const customer = createdCustomer
+    setFollowUpResults(null)
+    setCreatedCustomer(null)
+    if (customer) goToCustomer(customer)
+  }
 
   return (
     <div>
-      <Breadcrumbs items={[{ label: 'Klanten', to: '/customers' }, { label: 'Nieuwe klant' }]} />
-      <PageHeader title="Nieuwe klant" />
+      <Breadcrumbs items={[{ label: t('navigation.menu.customers'), to: '/customers' }, { label: t('customers.list.newCustomer') }]} />
+      <PageHeader title={t('customers.list.newCustomer')} />
       <CustomerForm
         mode="create"
-        isSubmitting={isSubmitting}
+        isSubmitting={isSubmitting || followUpBusy}
         submitError={error}
+        serverFieldErrors={fieldErrors}
         onCancel={() => navigate('/customers')}
-        onSubmit={async (values) => {
+        stagedLocationsSlot={
+          canCreateLocations ? (
+            <PreparedLocationsEditor value={stagedLocations} onChange={setStagedLocations} disabled={isSubmitting || followUpBusy} />
+          ) : (
+            <p className="customer-form-muted">{t('customers.create.noLocationRights')}</p>
+          )
+        }
+        onSubmit={async (values, intent) => {
           const created = await create(values)
-          if (created) {
-            toast.showSuccess('Klant aangemaakt.')
-            navigate(`/customers/${created.id}`)
-          }
+          // Creation failed → no locations posted, nothing orphaned.
+          if (created) await processFollowUps(created, intent === 'saveAndNew')
         }}
       />
+      {createdCustomer && followUpResults && (
+        <CustomerCreateFollowUpDialog
+          customerLabel={t('customers.create.customerLabel', { number: createdCustomer.customerNumber })}
+          results={followUpResults}
+          busy={followUpBusy}
+          onRetry={retryFailedFollowUps}
+          onClose={dismissFollowUp}
+        />
+      )}
     </div>
   )
 }

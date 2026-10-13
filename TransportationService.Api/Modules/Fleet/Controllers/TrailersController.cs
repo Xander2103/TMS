@@ -13,10 +13,12 @@ namespace TransportationService.Api.Modules.Fleet.Controllers;
 public class TrailersController : ControllerBase
 {
     private readonly ITrailerService _service;
+    private readonly IMaintenancePolicyService _maintenancePolicies;
 
-    public TrailersController(ITrailerService service)
+    public TrailersController(ITrailerService service, IMaintenancePolicyService maintenancePolicies)
     {
         _service = service;
+        _maintenancePolicies = maintenancePolicies;
     }
 
     [HttpGet]
@@ -59,6 +61,13 @@ public class TrailersController : ControllerBase
         }
 
         var result = await _service.CreateAsync(request, cancellationToken);
+        if (result.Outcome == TrailerOperationOutcome.Success)
+        {
+            // Plan the initial maintenance/inspection from the applicable policy (idempotent).
+            await _maintenancePolicies.ApplyDefaultsAsync(
+                FleetAssetKind.Trailer, result.Trailer!.Id, result.Trailer.CategoryId, currentOdometerKm: 0, cancellationToken);
+        }
+
         return Handle(result, created: true);
     }
 
@@ -73,6 +82,13 @@ public class TrailersController : ControllerBase
 
         var result = await _service.UpdateAsync(id, request, cancellationToken);
         return Handle(result, created: false);
+    }
+
+    [HttpPost("{id:guid}/active")]
+    [RequirePermission(PermissionCodes.TrailersEdit)]
+    public async Task<IActionResult> SetActive(Guid id, SetTrailerActiveRequest request, CancellationToken cancellationToken)
+    {
+        return await _service.SetActiveAsync(id, request, cancellationToken) ? NoContent() : NotFound();
     }
 
     [HttpDelete("{id:guid}")]

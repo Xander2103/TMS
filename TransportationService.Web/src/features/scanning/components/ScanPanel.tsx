@@ -6,6 +6,7 @@ import { FormField } from '../../../components/ui/FormField'
 import { Modal } from '../../../components/ui/Modal'
 import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
+import { useLocale } from '../../../i18n/localeContext'
 import { getTripPackageChecklist, markPackageMissing } from '../../packages/api/packagesApi'
 import {
   PACKAGE_STATUS_LABELS,
@@ -34,10 +35,6 @@ import './scanning.css'
 const PRE_TRANSIT: string[] = ['Created', 'Labelled', 'AwaitingLoading']
 const RETURN_PHASE: string[] = ['ReturnPending', 'Refused', 'DeliveryFailed', 'ReturnLoaded']
 
-function outcomeLabel(outcome: string): string {
-  return PACKAGE_SCAN_OUTCOME_LABELS[outcome as PackageScanOutcome] ?? outcome
-}
-
 const RECENT_LIMIT = 8
 
 interface ScanPanelProps {
@@ -57,6 +54,13 @@ interface ScanPanelProps {
 export function ScanPanel({ tripId, stopId, stopLabel, scanType, canCorrect, onClose }: ScanPanelProps) {
   const { showError, showSuccess } = useToast()
   const { hasPermission } = useAuth()
+  const { t } = useLocale()
+
+  /** Outcome via de vertaalsleutelmap; onbekende (nieuwe) outcomes tonen hun code. */
+  function outcomeLabel(outcome: string): string {
+    const key = PACKAGE_SCAN_OUTCOME_LABELS[outcome as PackageScanOutcome]
+    return key ? t(key) : outcome
+  }
 
   const [summary, setSummary] = useState<StopScanSummary | null>(null)
   const [recent, setRecent] = useState<ScanEventEntry[]>([])
@@ -119,7 +123,7 @@ export function ScanPanel({ tripId, stopId, stopLabel, scanType, canCorrect, onC
         setRecent(events.slice(0, RECENT_LIMIT))
       })
       .catch(() => {
-        if (mounted) setLoadError('De scanstatus kon niet worden geladen.')
+        if (mounted) setLoadError(t('scanning.panel.loadError'))
       })
     getTripPackageChecklist(tripId, stopId)
       .then((checklist) => {
@@ -131,7 +135,7 @@ export function ScanPanel({ tripId, stopId, stopLabel, scanType, canCorrect, onC
     return () => {
       mounted = false
     }
-  }, [tripId, stopId])
+  }, [tripId, stopId, t])
 
   const executable = hasPermission('scanning.execute')
 
@@ -154,7 +158,7 @@ export function ScanPanel({ tripId, stopId, stopLabel, scanType, canCorrect, onC
     }
     const qty = Number(quantity)
     if (!qty || qty <= 0) {
-      showError('De hoeveelheid moet groter dan nul zijn.')
+      showError(t('scanning.panel.qtyPositive'))
       return
     }
     const input = {
@@ -174,7 +178,7 @@ export function ScanPanel({ tripId, stopId, stopLabel, scanType, canCorrect, onC
     if (!navigator.onLine) {
       scanQueue.enqueue(tripId, stopId, input)
       deviceScanSignal.warning()
-      showSuccess(`Scan van ${code} in wachtrij; wordt verstuurd zodra er weer verbinding is.`)
+      showSuccess(t('scanning.panel.queuedOffline', { code }))
       setBarcode('')
       barcodeRef.current?.focus()
       return
@@ -232,7 +236,7 @@ export function ScanPanel({ tripId, stopId, stopLabel, scanType, canCorrect, onC
         // Network dropped mid-request: queue it — the ClientEventId makes the retry safe
         // even if the original request did reach the server.
         scanQueue.enqueue(tripId, stopId, input)
-        showSuccess(`Geen verbinding; scan van ${code} staat in de wachtrij.`)
+        showSuccess(t('scanning.panel.queuedDropped', { code }))
         setBarcode('')
       }
     } finally {
@@ -247,12 +251,12 @@ export function ScanPanel({ tripId, stopId, stopLabel, scanType, canCorrect, onC
     setBusy(true)
     try {
       await markPackageMissing(tripId, missingFor.packageId, stopId, missingNote.trim() || null)
-      showSuccess(`${missingFor.packageNumber} als vermist gemeld; planning is op de hoogte.`)
+      showSuccess(t('scanning.panel.markedMissing', { packageNumber: missingFor.packageNumber }))
       setMissingFor(null)
       setMissingNote('')
       refreshPackages()
     } catch (err) {
-      showError(err instanceof ApiError ? err.message : 'Het colli kon niet als vermist worden gemeld.')
+      showError(err instanceof ApiError ? err.message : t('scanning.panel.markMissingFailed'))
     } finally {
       setBusy(false)
     }
@@ -262,12 +266,12 @@ export function ScanPanel({ tripId, stopId, stopLabel, scanType, canCorrect, onC
     event.preventDefault()
     if (!correctionFor) return
     if (!correctionReason.trim()) {
-      showError('Een reden is verplicht bij een correctie.')
+      showError(t('scanning.panel.correctionReasonRequired'))
       return
     }
     const qty = Number(correctionQty)
     if (correctionQty === '' || qty < 0) {
-      showError('Geef de juiste totale hoeveelheid op.')
+      showError(t('scanning.panel.correctionQtyRequired'))
       return
     }
     setBusy(true)
@@ -284,14 +288,14 @@ export function ScanPanel({ tripId, stopId, stopLabel, scanType, canCorrect, onC
       setCorrectionQty('')
       setCorrectionReason('')
     } catch (err) {
-      showError(err instanceof ApiError ? err.message : 'De correctie kon niet worden doorgevoerd.')
+      showError(err instanceof ApiError ? err.message : t('scanning.panel.correctionFailed'))
     } finally {
       setBusy(false)
     }
   }
 
   return (
-    <Modal title={`Scannen — ${stopLabel}`} onClose={onClose} busy={busy}>
+    <Modal title={t('scanning.panel.title', { stop: stopLabel })} onClose={onClose} busy={busy}>
       <div className="scan-panel">
         {loadError && (
           <p className="scan-error" role="alert">
@@ -311,10 +315,10 @@ export function ScanPanel({ tripId, stopId, stopLabel, scanType, canCorrect, onC
               </span>
               <span>
                 <strong>
-                  {feedback.package ? outcomeLabel(feedback.package.outcome) : SCAN_RESULT_LABELS[feedback.result]}
+                  {feedback.package ? outcomeLabel(feedback.package.outcome) : t(SCAN_RESULT_LABELS[feedback.result])}
                 </strong>{' '}
                 — {feedback.message}
-                {feedback.replayed && <span className="scan-feedback-count"> (al verwerkt)</span>}
+                {feedback.replayed && <span className="scan-feedback-count"> {t('scanning.panel.replayed')}</span>}
                 {feedback.cargoItemId && (
                   <span className="scan-feedback-count">
                     {' '}
@@ -324,13 +328,13 @@ export function ScanPanel({ tripId, stopId, stopLabel, scanType, canCorrect, onC
               </span>
             </>
           ) : (
-            <span>Scan of typ een barcode om te beginnen.</span>
+            <span>{t('scanning.panel.startHint')}</span>
           )}
         </div>
 
         {feedback?.package && feedback.package.children.length > 0 && (
-          <section className="scan-group-results" aria-label="Groepsresultaat">
-            <h3>Groep {feedback.package.packageNumber}</h3>
+          <section className="scan-group-results" aria-label={t('scanning.panel.groupResultLabel')}>
+            <h3>{t('scanning.panel.groupTitle', { number: feedback.package.packageNumber })}</h3>
             <ul>
               {feedback.package.children.map((child) => (
                 <li key={child.packageId} className={child.succeeded ? 'scan-child-ok' : 'scan-child-failed'}>
@@ -346,11 +350,11 @@ export function ScanPanel({ tripId, stopId, stopLabel, scanType, canCorrect, onC
         )}
 
         {executable && packages.some((p) => RETURN_PHASE.includes(p.status)) && (
-          <div className="scan-mode-toggle" role="radiogroup" aria-label="Scanmodus">
+          <div className="scan-mode-toggle" role="radiogroup" aria-label={t('scanning.panel.scanModeLabel')}>
             {([
-              [scanType, scanType === 'Load' ? 'Laden' : 'Lossen'],
-              ['Return', 'Retour'],
-              ['Depot', 'Depot'],
+              [scanType, scanType === 'Load' ? t('scanning.panel.modeLoad') : t('scanning.panel.modeUnload')],
+              ['Return', t('scanning.panel.modeReturn')],
+              ['Depot', t('scanning.panel.modeDepot')],
             ] as Array<[ScanType, string]>).map(([mode, label]) => (
               <label key={mode} className={`scan-mode ${activeType === mode ? 'scan-mode-active' : ''}`}>
                 <input
@@ -370,7 +374,7 @@ export function ScanPanel({ tripId, stopId, stopLabel, scanType, canCorrect, onC
           <form className="scan-form" onSubmit={handleSubmit} noValidate>
             <CameraScanner disabled={busy} onDetected={(value) => void doSubmit(value)} />
             <label className="scan-barcode-label" htmlFor="scan-barcode">
-              Barcode
+              {t('scanning.panel.barcodeLabel')}
             </label>
             <input
               id="scan-barcode"
@@ -378,49 +382,49 @@ export function ScanPanel({ tripId, stopId, stopLabel, scanType, canCorrect, onC
               className="scan-barcode-input"
               value={barcode}
               onChange={(e) => setBarcode(e.target.value)}
-              placeholder="Scan of typ…"
+              placeholder={t('scanning.panel.barcodePlaceholder')}
               autoFocus
               autoComplete="off"
               disabled={busy}
             />
             <div className="scan-controls">
-              <div className="scan-qty" role="group" aria-label="Hoeveelheid">
-                <button type="button" onClick={() => setQuantity((q) => String(Math.max(1, Number(q || '1') - 1)))} disabled={busy} aria-label="Minder">
+              <div className="scan-qty" role="group" aria-label={t('scanning.panel.quantityLabel')}>
+                <button type="button" onClick={() => setQuantity((q) => String(Math.max(1, Number(q || '1') - 1)))} disabled={busy} aria-label={t('scanning.panel.less')}>
                   −
                 </button>
                 <input
-                  aria-label="Hoeveelheid"
+                  aria-label={t('scanning.panel.quantityLabel')}
                   inputMode="decimal"
                   value={quantity}
                   onChange={(e) => setQuantity(e.target.value)}
                   disabled={busy}
                 />
-                <button type="button" onClick={() => setQuantity((q) => String(Number(q || '0') + 1))} disabled={busy} aria-label="Meer">
+                <button type="button" onClick={() => setQuantity((q) => String(Number(q || '0') + 1))} disabled={busy} aria-label={t('scanning.panel.more')}>
                   +
                 </button>
               </div>
               <label className="scan-damaged">
                 <input type="checkbox" checked={damaged} onChange={(e) => setDamaged(e.target.checked)} disabled={busy} />
-                Schade
+                {t('scanning.panel.damage')}
               </label>
               <Button type="submit" className="scan-submit" disabled={busy}>
-                {busy ? 'Bezig…' : 'Registreren'}
+                {busy ? t('scanning.panel.busy') : t('scanning.panel.submit')}
               </Button>
             </div>
             {damaged && (
-              <FormField label="Schadenotitie" htmlFor="scan-damage-note">
+              <FormField label={t('scanning.panel.damageNoteLabel')} htmlFor="scan-damage-note">
                 <input
                   id="scan-damage-note"
                   value={damageNote}
                   onChange={(e) => setDamageNote(e.target.value)}
                   disabled={busy}
                   maxLength={500}
-                  placeholder="bv. hoek ingedeukt"
+                  placeholder={t('scanning.panel.damageNotePlaceholder')}
                 />
               </FormField>
             )}
             {activeType === 'Unload' && (
-              <div className="scan-unload-outcomes" role="group" aria-label="Afleveruitkomst">
+              <div className="scan-unload-outcomes" role="group" aria-label={t('scanning.panel.unloadOutcomeLabel')}>
                 <label className="scan-damaged">
                   <input
                     type="checkbox"
@@ -431,7 +435,7 @@ export function ScanPanel({ tripId, stopId, stopLabel, scanType, canCorrect, onC
                     }}
                     disabled={busy}
                   />
-                  Geweigerd
+                  {t('scanning.panel.refused')}
                 </label>
                 <label className="scan-damaged">
                   <input
@@ -443,12 +447,12 @@ export function ScanPanel({ tripId, stopId, stopLabel, scanType, canCorrect, onC
                     }}
                     disabled={busy}
                   />
-                  Gedeeltelijk
+                  {t('scanning.panel.partial')}
                 </label>
               </div>
             )}
             {(refused || partial) && (
-              <FormField label={refused ? 'Reden van weigering' : 'Toelichting gedeeltelijke levering'} htmlFor="scan-outcome-note">
+              <FormField label={refused ? t('scanning.panel.refusedReasonLabel') : t('scanning.panel.partialNoteLabel')} htmlFor="scan-outcome-note">
                 <input
                   id="scan-outcome-note"
                   value={outcomeNote}
@@ -462,10 +466,10 @@ export function ScanPanel({ tripId, stopId, stopLabel, scanType, canCorrect, onC
         )}
 
         {queued.length > 0 && (
-          <section className="scan-queue" aria-label="Wachtrij">
+          <section className="scan-queue" aria-label={t('scanning.panel.queueLabel')}>
             <h3>
-              Wachtrij ({queued.length})
-              {!navigator.onLine && <span className="scan-queue-offline"> · offline</span>}
+              {t('scanning.panel.queueTitle', { count: queued.length })}
+              {!navigator.onLine && <span className="scan-queue-offline"> · {t('scanning.panel.offline')}</span>}
             </h3>
             <ul>
               {queued.map((item) => (
@@ -473,16 +477,16 @@ export function ScanPanel({ tripId, stopId, stopLabel, scanType, canCorrect, onC
                   <code>{item.input.barcode}</code>
                   <span className="scan-queue-state">
                     {item.state === 'failed'
-                      ? `Afgekeurd: ${item.lastError ?? 'onbekende fout'}`
-                      : `Wacht op verbinding (${item.attempts} pogingen)`}
+                      ? t('scanning.panel.queueFailed', { error: item.lastError ?? t('scanning.panel.unknownError') })
+                      : t('scanning.panel.queuePending', { count: item.attempts })}
                   </span>
                   {item.state === 'failed' && (
                     <>
                       <button type="button" className="scan-correct-link" onClick={() => scanQueue.retry(item.clientEventId)}>
-                        Opnieuw
+                        {t('scanning.panel.retry')}
                       </button>
                       <button type="button" className="scan-correct-link" onClick={() => scanQueue.remove(item.clientEventId)}>
-                        Verwijderen
+                        {t('scanning.panel.remove')}
                       </button>
                     </>
                   )}
@@ -494,19 +498,19 @@ export function ScanPanel({ tripId, stopId, stopLabel, scanType, canCorrect, onC
 
         {packages.length > 0 && (
           <section className="scan-packages">
-            <h3>Colli op deze stop</h3>
+            <h3>{t('scanning.panel.packagesTitle')}</h3>
             <ul className="scan-items">
               {packages.map((item) => (
                 <li key={item.packageId}>
                   <div className="scan-item-row">
                     <span className="scan-item-desc">
                       {item.packageNumber}
-                      {item.isGroup && ' (groep)'}
-                      {!item.isMandatory && ' (optioneel)'}
+                      {item.isGroup && ` ${t('scanning.panel.groupSuffix')}`}
+                      {!item.isMandatory && ` ${t('scanning.panel.optionalSuffix')}`}
                       <code className="scan-item-code">{item.description}</code>
                     </span>
-                    <Badge tone={PACKAGE_STATUS_TONE[item.status]}>{PACKAGE_STATUS_LABELS[item.status]}</Badge>
-                    {item.exceptionState === 'Open' && <Badge tone="danger">Melding open</Badge>}
+                    <Badge tone={PACKAGE_STATUS_TONE[item.status]}>{t(PACKAGE_STATUS_LABELS[item.status])}</Badge>
+                    {item.exceptionState === 'Open' && <Badge tone="danger">{t('scanning.panel.exceptionOpen')}</Badge>}
                     {executable &&
                       scanType === 'Load' &&
                       !item.isGroup &&
@@ -520,31 +524,31 @@ export function ScanPanel({ tripId, stopId, stopLabel, scanType, canCorrect, onC
                           }}
                           disabled={busy}
                         >
-                          Ontbreekt
+                          {t('scanning.panel.markMissing')}
                         </button>
                       )}
                   </div>
                   {missingFor?.packageId === item.packageId && (
                     <form className="scan-correction" onSubmit={handleMarkMissing}>
                       <p className="scan-missing-hint">
-                        Meld {item.packageNumber} als vermist. Planning ontvangt direct een melding.
+                        {t('scanning.panel.missingHint', { packageNumber: item.packageNumber })}
                       </p>
-                      <FormField label="Toelichting" htmlFor={`missing-note-${item.packageId}`}>
+                      <FormField label={t('scanning.panel.noteLabel')} htmlFor={`missing-note-${item.packageId}`}>
                         <input
                           id={`missing-note-${item.packageId}`}
                           value={missingNote}
                           onChange={(e) => setMissingNote(e.target.value)}
                           disabled={busy}
                           maxLength={500}
-                          placeholder="bv. niet gevonden in het magazijn"
+                          placeholder={t('scanning.panel.missingNotePlaceholder')}
                         />
                       </FormField>
                       <div className="scan-correction-actions">
                         <Button variant="secondary" onClick={() => setMissingFor(null)} disabled={busy}>
-                          Annuleren
+                          {t('scanning.panel.cancel')}
                         </Button>
                         <Button type="submit" disabled={busy}>
-                          Vermist melden
+                          {t('scanning.panel.reportMissing')}
                         </Button>
                       </div>
                     </form>
@@ -558,12 +562,12 @@ export function ScanPanel({ tripId, stopId, stopLabel, scanType, canCorrect, onC
         {summary && (
           <section className="scan-summary">
             <h3>
-              Verwacht ({summary.scanType === 'Load' ? 'laden' : 'lossen'})
+              {summary.scanType === 'Load' ? t('scanning.panel.expectedLoad') : t('scanning.panel.expectedUnload')}
               {summary.unexpectedScanCount > 0 && (
-                <span className="scan-unexpected"> · {summary.unexpectedScanCount} onbekende scan(s)</span>
+                <span className="scan-unexpected"> · {t('scanning.panel.unexpectedScans', { count: summary.unexpectedScanCount })}</span>
               )}
             </h3>
-            {summary.items.length === 0 && <p className="scan-empty">Geen goederenlijnen op deze opdracht.</p>}
+            {summary.items.length === 0 && <p className="scan-empty">{t('scanning.panel.noCargoLines')}</p>}
             <ul className="scan-items">
               {summary.items.map((item) => (
                 <li key={item.cargoItemId}>
@@ -576,7 +580,7 @@ export function ScanPanel({ tripId, stopId, stopLabel, scanType, canCorrect, onC
                       {item.scannedQuantity}/{item.expectedQuantity} {item.quantityUnit ?? ''}
                     </span>
                     <Badge tone={SCAN_STATE_TONE[item.state]}>
-                      {SCAN_STATE_ICONS[item.state]} {SCAN_STATE_LABELS[item.state]}
+                      {SCAN_STATE_ICONS[item.state]} {t(SCAN_STATE_LABELS[item.state])}
                     </Badge>
                     {canCorrect && (
                       <button
@@ -589,16 +593,16 @@ export function ScanPanel({ tripId, stopId, stopLabel, scanType, canCorrect, onC
                         }}
                         disabled={busy}
                       >
-                        Corrigeren
+                        {t('scanning.panel.correct')}
                       </button>
                     )}
                   </div>
                   {item.damagedQuantity > 0 && (
-                    <div className="scan-item-damage">⚠ {item.damagedQuantity} met schade</div>
+                    <div className="scan-item-damage">⚠ {t('scanning.panel.withDamage', { count: item.damagedQuantity })}</div>
                   )}
                   {correctionFor === item.cargoItemId && (
                     <form className="scan-correction" onSubmit={handleCorrection}>
-                      <FormField label="Juiste totale hoeveelheid" htmlFor={`corr-qty-${item.cargoItemId}`} required>
+                      <FormField label={t('scanning.panel.correctionQtyLabel')} htmlFor={`corr-qty-${item.cargoItemId}`} required>
                         <input
                           id={`corr-qty-${item.cargoItemId}`}
                           inputMode="decimal"
@@ -607,7 +611,7 @@ export function ScanPanel({ tripId, stopId, stopLabel, scanType, canCorrect, onC
                           disabled={busy}
                         />
                       </FormField>
-                      <FormField label="Reden" htmlFor={`corr-reason-${item.cargoItemId}`} required>
+                      <FormField label={t('scanning.panel.reasonLabel')} htmlFor={`corr-reason-${item.cargoItemId}`} required>
                         <input
                           id={`corr-reason-${item.cargoItemId}`}
                           value={correctionReason}
@@ -618,10 +622,10 @@ export function ScanPanel({ tripId, stopId, stopLabel, scanType, canCorrect, onC
                       </FormField>
                       <div className="scan-correction-actions">
                         <Button variant="secondary" onClick={() => setCorrectionFor(null)} disabled={busy}>
-                          Annuleren
+                          {t('scanning.panel.cancel')}
                         </Button>
                         <Button type="submit" disabled={busy}>
-                          Corrigeren
+                          {t('scanning.panel.correct')}
                         </Button>
                       </div>
                     </form>
@@ -634,7 +638,7 @@ export function ScanPanel({ tripId, stopId, stopLabel, scanType, canCorrect, onC
 
         {recent.length > 0 && (
           <section className="scan-recent">
-            <h3>Recente scans</h3>
+            <h3>{t('scanning.panel.recentTitle')}</h3>
             <ul>
               {recent.map((entry) => (
                 <li key={entry.id}>
@@ -646,7 +650,7 @@ export function ScanPanel({ tripId, stopId, stopLabel, scanType, canCorrect, onC
                     {entry.packageNumber ?? entry.cargoDescription ?? entry.barcode ?? '—'} ×{entry.quantity}
                   </span>
                   <span className="scan-recent-result">
-                    {entry.packageOutcome ? outcomeLabel(entry.packageOutcome) : SCAN_RESULT_LABELS[entry.result]}
+                    {entry.packageOutcome ? outcomeLabel(entry.packageOutcome) : t(SCAN_RESULT_LABELS[entry.result])}
                   </span>
                 </li>
               ))}

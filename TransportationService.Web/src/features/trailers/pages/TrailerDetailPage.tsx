@@ -2,48 +2,43 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { PageHeader } from '../../../components/layout/PageHeader'
 import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
+import { BackButton } from '../../../components/ui/BackButton'
 import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
-import { FormActions } from '../../../components/ui/FormActions'
 import { FormField } from '../../../components/ui/FormField'
-import { FormSection } from '../../../components/ui/FormSection'
 import { StatusBadges } from '../../../components/ui/StatusBadges'
 import { TabPanel, Tabs } from '../../../components/ui/Tabs'
-import { UnsavedChangesGuard } from '../../../components/ui/UnsavedChangesGuard'
 import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
 import { ApiError } from '../../../api/apiClient'
+import { useLocale } from '../../../i18n/localeContext'
 import { AuditHistoryPanel } from '../../auditing/components/AuditHistoryPanel'
-import { LookupSelect } from '../../master-data/components/LookupSelect'
 import { FleetDocumentsPanel } from '../../fleet-documents/components/FleetDocumentsPanel'
 import { MaintenancePanel } from '../../maintenance/components/MaintenancePanel'
+import { MaintenancePolicySummary } from '../../maintenance-policies/components/MaintenancePolicySummary'
 import { DamagePanel } from '../../damage/components/DamagePanel'
 import { InspectionsPanel } from '../../inspections/components/InspectionsPanel'
-import { deleteTrailer, getTrailer, updateTrailer } from '../api/trailersApi'
+import { FleetKpiPanel } from '../../fleet-kpi/FleetKpiPanel'
+import { LeasingPanel } from '../../fleet-compliance/LeasingPanel'
+import { deleteTrailer, getTrailer, setTrailerActive, updateTrailer } from '../api/trailersApi'
+import { TrailerForm } from '../components/TrailerForm'
 import {
   TRAILER_OWNERSHIP_LABELS,
   TRAILER_STATUS_LABELS,
   TRAILER_STATUS_TONES,
   type TrailerDetail,
   type TrailerInput,
-  type TrailerOperationalStatus,
-  type TrailerOwnershipType,
 } from '../types'
 import './trailer-form.css'
 
-const TAB_IDS = ['overzicht', 'techniek', 'documenten', 'onderhoud', 'keuringen', 'schade', 'historiek'] as const
+const TAB_IDS = ['overzicht', 'techniek', 'documenten', 'leasing', 'onderhoud', 'keuringen', 'schade', 'kpi', 'historiek'] as const
 type TabId = (typeof TAB_IDS)[number]
-
-function numberOrNull(value: string): number | null {
-  if (value.trim() === '') return null
-  const parsed = Number(value.replace(',', '.'))
-  return Number.isFinite(parsed) ? parsed : null
-}
 
 export function TrailerDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const { t } = useLocale()
   const { showSuccess, showError } = useToast()
   const { hasPermission } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -52,9 +47,9 @@ export function TrailerDetailPage() {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [editing, setEditing] = useState(false)
   const [form, setForm] = useState<TrailerInput | null>(null)
-  const [dirty, setDirty] = useState(false)
   const [saving, setSaving] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [confirmActive, setConfirmActive] = useState<null | 'activate' | 'deactivate'>(null)
 
   const requestedTab = searchParams.get('tab')
   const tab: TabId = TAB_IDS.includes(requestedTab as TabId) ? (requestedTab as TabId) : 'overzicht'
@@ -69,12 +64,12 @@ export function TrailerDetailPage() {
         setLoadError(null)
       })
       .catch(() => {
-        if (mounted) setLoadError('Oplegger kon niet worden geladen.')
+        if (mounted) setLoadError(t('trailers.detail.loadFailed'))
       })
     return () => {
       mounted = false
     }
-  }, [id])
+  }, [id, t])
 
   const loading = trailer === null && loadError === null
   const canEdit = hasPermission('trailers.edit')
@@ -98,6 +93,8 @@ export function TrailerDetailPage() {
       widthMeters: trailer.widthMeters,
       heightMeters: trailer.heightMeters,
       volumeM3: trailer.volumeM3,
+      axleCount: trailer.axleCount,
+      loadingMeters: trailer.loadingMeters,
       hasRefrigeration: trailer.hasRefrigeration,
       adrSuitable: trailer.adrSuitable,
       ownershipType: trailer.ownershipType,
@@ -105,28 +102,21 @@ export function TrailerDetailPage() {
       statusReason: trailer.statusReason,
       isActive: trailer.isActive,
       notes: trailer.notes,
+      volumeIsManual: trailer.volumeIsManual,
     })
-    setDirty(false)
     setEditing(true)
   }
 
-  function set<K extends keyof TrailerInput>(key: K, value: TrailerInput[K]) {
-    setForm((f) => (f ? { ...f, [key]: value } : f))
-    setDirty(true)
-  }
-
-  async function saveEdit() {
-    if (!id || !form) return
+  async function saveEdit(values: TrailerInput) {
+    if (!id) return
     setSaving(true)
-    setDirty(false)
     try {
-      const updated = await updateTrailer(id, form)
+      const updated = await updateTrailer(id, values)
       setTrailer(updated)
       setEditing(false)
-      showSuccess('Oplegger bijgewerkt.')
+      showSuccess(t('trailers.detail.updated'))
     } catch (err) {
-      setDirty(true)
-      showError(err instanceof ApiError ? err.message : 'Wijzigingen konden niet worden opgeslagen.')
+      showError(err instanceof ApiError ? err.message : t('fleet.common.saveChangesFailed'))
     } finally {
       setSaving(false)
     }
@@ -136,28 +126,34 @@ export function TrailerDetailPage() {
     if (!id) return
     try {
       await deleteTrailer(id)
-      showSuccess('Oplegger verwijderd.')
+      showSuccess(t('trailers.detail.deleted'))
       navigate('/trailers')
     } catch {
-      showError('Oplegger kon niet worden verwijderd.')
+      showError(t('trailers.detail.deleteFailed'))
       setConfirmDelete(false)
     }
   }
 
-  if (loading) return <p className="placeholder-text">Oplegger laden…</p>
-  if (loadError || !trailer) return <p className="placeholder-text">{loadError ?? 'Niet gevonden.'}</p>
+  if (loading) return <p className="placeholder-text">{t('trailers.detail.loading')}</p>
+  if (loadError || !trailer) return <p className="placeholder-text">{loadError ?? t('fleet.common.notFound')}</p>
 
   return (
     <div>
-      <Breadcrumbs items={[{ label: 'Opleggers', to: '/trailers' }, { label: trailer.internalNumber }]} />
+      <Breadcrumbs items={[{ label: t('navigation.menu.trailers'), to: '/trailers' }, { label: trailer.internalNumber }]} />
+      <BackButton to="/trailers" label={t('trailers.detail.back')} />
       <PageHeader
         title={`${trailer.brand ?? ''} ${trailer.model ?? ''}`.trim() || trailer.internalNumber}
         subtitle={`${trailer.internalNumber} · ${trailer.licensePlate}`}
         action={
           <div className="trailer-detail-actions">
-            {canEdit && !editing && <Button variant="secondary" onClick={startEdit}>Bewerken</Button>}
+            {canEdit && !editing && <Button variant="secondary" onClick={startEdit}>{t('ui.actions.edit')}</Button>}
+            {canEdit && !editing && (
+              <Button variant="secondary" onClick={() => setConfirmActive(trailer.isActive ? 'deactivate' : 'activate')}>
+                {trailer.isActive ? t('vehicles.detail.deactivate') : t('vehicles.detail.reactivate')}
+              </Button>
+            )}
             {hasPermission('trailers.delete') && !editing && (
-              <Button variant="danger" onClick={() => setConfirmDelete(true)}>Verwijderen</Button>
+              <Button variant="danger" onClick={() => setConfirmDelete(true)}>{t('ui.actions.delete')}</Button>
             )}
           </div>
         }
@@ -167,144 +163,38 @@ export function TrailerDetailPage() {
         <StatusBadges
           active={trailer.isActive}
           operational={{
-            label: TRAILER_STATUS_LABELS[trailer.operationalStatus],
+            label: t(TRAILER_STATUS_LABELS[trailer.operationalStatus]),
             tone: TRAILER_STATUS_TONES[trailer.operationalStatus],
             reason: trailer.statusReason,
           }}
         />
-        {trailer.adrSuitable && <Badge tone="warning">ADR</Badge>}
-        {trailer.hasRefrigeration && <Badge tone="info">Koeling</Badge>}
+        {trailer.adrSuitable && <Badge tone="warning">{t('fleet.common.equipment.adrShort')}</Badge>}
+        {trailer.hasRefrigeration && <Badge tone="info">{t('fleet.common.equipment.refrigeration')}</Badge>}
       </div>
 
       {editing && form ? (
-        <form
-          className="trailer-form"
-          onSubmit={(e) => {
-            e.preventDefault()
-            void saveEdit()
-          }}
-        >
-          <UnsavedChangesGuard when={dirty && !saving} />
-
-          <FormSection title="Status" columns={3} description="Administratief actief en operationele status zijn twee aparte begrippen.">
-            <FormField label="Operationele status" htmlFor="t-status">
-              <select id="t-status" value={form.operationalStatus} onChange={(e) => set('operationalStatus', e.target.value as TrailerOperationalStatus)} disabled={saving}>
-                {Object.entries(TRAILER_STATUS_LABELS).map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-            </FormField>
-            {form.operationalStatus !== 'Available' && (
-              <FormField label="Reden" htmlFor="t-status-reason" hint="Waarom is de oplegger niet beschikbaar?">
-                <input id="t-status-reason" value={form.statusReason ?? ''} onChange={(e) => set('statusReason', e.target.value || null)} maxLength={500} disabled={saving} />
-              </FormField>
-            )}
-            <FormField label="Administratief actief" htmlFor="t-active" hint="Inactieve opleggers verdwijnen uit keuzelijsten en planning.">
-              <label className="trailer-checkbox">
-                <input id="t-active" type="checkbox" checked={form.isActive} onChange={(e) => set('isActive', e.target.checked)} disabled={saving} />
-                <span>Oplegger is actief</span>
-              </label>
-            </FormField>
-          </FormSection>
-
-          <FormSection title="Basisgegevens" columns={3}>
-            <FormField label="Kenteken" htmlFor="t-plate" required>
-              <input id="t-plate" value={form.licensePlate} onChange={(e) => set('licensePlate', e.target.value)} disabled={saving} maxLength={20} />
-            </FormField>
-            <FormField label="VIN" htmlFor="t-vin">
-              <input id="t-vin" value={form.vin ?? ''} onChange={(e) => set('vin', e.target.value || null)} disabled={saving} maxLength={50} />
-            </FormField>
-            <FormField label="Categorie" htmlFor="t-category">
-              <LookupSelect
-                id="t-category"
-                basePath="/api/trailer-categories"
-                managePermission="trailer_categories.manage"
-                singular="opleggercategorie"
-                value={form.categoryId}
-                onChange={(v) => set('categoryId', v)}
-                placeholder="— Geen —"
-                disabled={saving}
-              />
-            </FormField>
-            <FormField label="Merk" htmlFor="t-brand">
-              <input id="t-brand" value={form.brand ?? ''} onChange={(e) => set('brand', e.target.value || null)} disabled={saving} maxLength={100} />
-            </FormField>
-            <FormField label="Model" htmlFor="t-model">
-              <input id="t-model" value={form.model ?? ''} onChange={(e) => set('model', e.target.value || null)} disabled={saving} maxLength={100} />
-            </FormField>
-            <FormField label="Bouwjaar" htmlFor="t-year">
-              <input id="t-year" type="number" value={form.year ?? ''} onChange={(e) => set('year', e.target.value ? Number(e.target.value) : null)} disabled={saving} />
-            </FormField>
-            <FormField label="Eerste inschrijving" htmlFor="t-firstreg">
-              <input id="t-firstreg" type="date" value={form.firstRegistrationDate ?? ''} onChange={(e) => set('firstRegistrationDate', e.target.value || null)} disabled={saving} />
-            </FormField>
-            <FormField label="Eigendomsvorm" htmlFor="t-ownership">
-              <select id="t-ownership" value={form.ownershipType} onChange={(e) => set('ownershipType', e.target.value as TrailerOwnershipType)} disabled={saving}>
-                {Object.entries(TRAILER_OWNERSHIP_LABELS).map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-            </FormField>
-          </FormSection>
-
-          <FormSection title="Techniek" columns={3}>
-            <FormField label="Laadvermogen (kg)" htmlFor="t-capacity">
-              <input id="t-capacity" inputMode="decimal" value={form.capacityKg ?? ''} onChange={(e) => set('capacityKg', numberOrNull(e.target.value))} disabled={saving} />
-            </FormField>
-            <FormField label="Lengte (m)" htmlFor="t-length">
-              <input id="t-length" inputMode="decimal" value={form.lengthMeters ?? ''} onChange={(e) => set('lengthMeters', numberOrNull(e.target.value))} disabled={saving} />
-            </FormField>
-            <FormField label="Breedte (m)" htmlFor="t-width">
-              <input id="t-width" inputMode="decimal" value={form.widthMeters ?? ''} onChange={(e) => set('widthMeters', numberOrNull(e.target.value))} disabled={saving} />
-            </FormField>
-            <FormField label="Hoogte (m)" htmlFor="t-height">
-              <input id="t-height" inputMode="decimal" value={form.heightMeters ?? ''} onChange={(e) => set('heightMeters', numberOrNull(e.target.value))} disabled={saving} />
-            </FormField>
-            <FormField label="Volume (m³)" htmlFor="t-volume">
-              <input id="t-volume" inputMode="decimal" value={form.volumeM3 ?? ''} onChange={(e) => set('volumeM3', numberOrNull(e.target.value))} disabled={saving} />
-            </FormField>
-            <div className="vehicle-form-equipment form-span-all">
-              <label className="trailer-checkbox">
-                <input type="checkbox" checked={form.hasRefrigeration} onChange={(e) => set('hasRefrigeration', e.target.checked)} disabled={saving} />
-                <span>Koeling</span>
-              </label>
-              <label className="trailer-checkbox">
-                <input type="checkbox" checked={form.adrSuitable} onChange={(e) => set('adrSuitable', e.target.checked)} disabled={saving} />
-                <span>ADR-geschikt</span>
-              </label>
-            </div>
-          </FormSection>
-
-          <FormSection title="Notities" columns={1}>
-            <FormField label="Interne notities" htmlFor="t-notes" className="form-span-all">
-              <textarea id="t-notes" rows={3} value={form.notes ?? ''} onChange={(e) => set('notes', e.target.value || null)} disabled={saving} maxLength={2000} />
-            </FormField>
-          </FormSection>
-
-          <FormActions dirty={dirty}>
-            <Button type="button" variant="secondary" onClick={() => setEditing(false)} disabled={saving}>
-              Annuleren
-            </Button>
-            <Button type="submit" disabled={saving}>
-              {saving ? 'Opslaan…' : 'Opslaan'}
-            </Button>
-          </FormActions>
-        </form>
+        <TrailerForm
+          mode="edit"
+          initial={form}
+          isSubmitting={saving}
+          onSubmit={saveEdit}
+          onCancel={() => setEditing(false)}
+          documentsSection={<FleetDocumentsPanel ownerType="trailer" ownerId={trailer.id} />}
+          maintenanceSection={<MaintenancePolicySummary assetKind="Trailer" assetId={trailer.id} />}
+        />
       ) : (
         <>
           <Tabs
             tabs={[
-              { id: 'overzicht', label: 'Overzicht' },
-              { id: 'techniek', label: 'Techniek' },
-              { id: 'documenten', label: 'Documenten' },
-              { id: 'onderhoud', label: 'Onderhoud' },
-              { id: 'keuringen', label: 'Keuringen' },
-              { id: 'schade', label: 'Schade' },
-              { id: 'historiek', label: 'Historiek' },
+              { id: 'overzicht', label: t('fleet.tabs.overview') },
+              { id: 'techniek', label: t('fleet.tabs.technical') },
+              { id: 'documenten', label: t('fleet.tabs.documents') },
+              { id: 'leasing', label: t('fleet.tabs.leasing') },
+              { id: 'onderhoud', label: t('fleet.tabs.maintenance') },
+              { id: 'keuringen', label: t('fleet.tabs.inspections') },
+              { id: 'schade', label: t('fleet.tabs.damage') },
+              { id: 'kpi', label: t('fleet.tabs.kpi') },
+              { id: 'historiek', label: t('fleet.tabs.history') },
             ]}
             activeId={tab}
             onChange={setTab}
@@ -313,13 +203,13 @@ export function TrailerDetailPage() {
           {tab === 'overzicht' && (
             <TabPanel tabId="overzicht">
               <div className="trailer-detail-grid">
-                <FormField label="Kenteken"><span>{trailer.licensePlate}</span></FormField>
-                <FormField label="VIN"><span>{trailer.vin ?? '—'}</span></FormField>
-                <FormField label="Categorie"><span>{trailer.categoryName ?? '—'}</span></FormField>
-                <FormField label="Bouwjaar"><span>{trailer.year ?? '—'}</span></FormField>
-                <FormField label="Eerste inschrijving"><span>{trailer.firstRegistrationDate ?? '—'}</span></FormField>
-                <FormField label="Eigendomsvorm"><span>{TRAILER_OWNERSHIP_LABELS[trailer.ownershipType]}</span></FormField>
-                <FormField label="Notities" className="trailer-detail-full"><span>{trailer.notes ?? '—'}</span></FormField>
+                <FormField label={t('fleet.form.plate')}><span>{trailer.licensePlate}</span></FormField>
+                <FormField label={t('vehicles.detail.vin')}><span>{trailer.vin ?? '—'}</span></FormField>
+                <FormField label={t('fleet.form.category')}><span>{trailer.categoryName ?? '—'}</span></FormField>
+                <FormField label={t('fleet.form.year')}><span>{trailer.year ?? '—'}</span></FormField>
+                <FormField label={t('vehicles.form.firstRegistration')}><span>{trailer.firstRegistrationDate ?? '—'}</span></FormField>
+                <FormField label={t('fleet.form.ownership')}><span>{t(TRAILER_OWNERSHIP_LABELS[trailer.ownershipType])}</span></FormField>
+                <FormField label={t('fleet.sections.notes')} className="trailer-detail-full"><span>{trailer.notes ?? '—'}</span></FormField>
               </div>
             </TabPanel>
           )}
@@ -327,18 +217,20 @@ export function TrailerDetailPage() {
           {tab === 'techniek' && (
             <TabPanel tabId="techniek">
               <div className="trailer-detail-grid">
-                <FormField label="Laadvermogen"><span>{trailer.capacityKg !== null ? `${trailer.capacityKg} kg` : '—'}</span></FormField>
-                <FormField label="Afmetingen (L×B×H)">
+                <FormField label={t('fleet.form.axles')} hint={t('fleet.form.axlesHint')}><span>{trailer.axleCount || '—'}</span></FormField>
+                <FormField label={t('fleet.form.loadingMeters')}><span>{trailer.loadingMeters ? `${trailer.loadingMeters} ldm` : '—'}</span></FormField>
+                <FormField label={t('trailers.detail.payload')}><span>{trailer.capacityKg !== null ? `${trailer.capacityKg} kg` : '—'}</span></FormField>
+                <FormField label={t('vehicles.detail.dimensions')}>
                   <span>
                     {trailer.lengthMeters ?? '—'} × {trailer.widthMeters ?? '—'} × {trailer.heightMeters ?? '—'} m
                   </span>
                 </FormField>
-                <FormField label="Volume"><span>{trailer.volumeM3 !== null ? `${trailer.volumeM3} m³` : '—'}</span></FormField>
-                <FormField label="Uitrusting" className="trailer-detail-full">
+                <FormField label={t('vehicles.detail.volume')}><span>{trailer.volumeM3 !== null ? `${trailer.volumeM3} m³` : '—'}</span></FormField>
+                <FormField label={t('vehicles.detail.equipment')} className="trailer-detail-full">
                   <span>
-                    {[trailer.hasRefrigeration ? 'Koeling' : null, trailer.adrSuitable ? 'ADR' : null]
+                    {[trailer.hasRefrigeration ? t('fleet.common.equipment.refrigeration') : null, trailer.adrSuitable ? t('fleet.common.equipment.adrShort') : null]
                       .filter(Boolean)
-                      .join(' · ') || 'Geen bijzondere uitrusting'}
+                      .join(' · ') || t('vehicles.detail.noEquipment')}
                   </span>
                 </FormField>
               </div>
@@ -350,8 +242,14 @@ export function TrailerDetailPage() {
               <FleetDocumentsPanel ownerType="trailer" ownerId={id} />
             </TabPanel>
           )}
+          {tab === 'leasing' && id && (
+            <TabPanel tabId="leasing">
+              <LeasingPanel ownerType="trailer" ownerId={id} />
+            </TabPanel>
+          )}
           {tab === 'onderhoud' && id && (
             <TabPanel tabId="onderhoud">
+              <MaintenancePolicySummary assetKind="Trailer" assetId={id} />
               <MaintenancePanel ownerType="trailer" ownerId={id} />
             </TabPanel>
           )}
@@ -365,6 +263,11 @@ export function TrailerDetailPage() {
               <DamagePanel ownerType="trailer" ownerId={id} />
             </TabPanel>
           )}
+          {tab === 'kpi' && id && (
+            <TabPanel tabId="kpi">
+              <FleetKpiPanel ownerType="trailer" ownerId={id} />
+            </TabPanel>
+          )}
           {tab === 'historiek' && (
             <TabPanel tabId="historiek">
               <AuditHistoryPanel entityType="Trailer" entityId={trailer.id} />
@@ -375,12 +278,38 @@ export function TrailerDetailPage() {
 
       {confirmDelete && (
         <ConfirmDialog
-          title="Oplegger verwijderen"
-          message={`Weet je zeker dat je oplegger ${trailer.internalNumber} wilt verwijderen?`}
-          confirmLabel="Verwijderen"
+          title={t('trailers.detail.confirmDeleteTitle')}
+          message={t('trailers.detail.confirmDeleteMessage', { number: trailer.internalNumber })}
+          confirmLabel={t('ui.actions.delete')}
           destructive
           onConfirm={handleDelete}
           onCancel={() => setConfirmDelete(false)}
+        />
+      )}
+
+      {confirmActive && (
+        <ConfirmDialog
+          title={confirmActive === 'deactivate' ? t('trailers.detail.deactivateTitle') : t('trailers.detail.reactivateTitle')}
+          message={
+            confirmActive === 'deactivate'
+              ? t('trailers.detail.deactivateMessage', { number: trailer.internalNumber })
+              : t('trailers.detail.reactivateMessage', { number: trailer.internalNumber })
+          }
+          confirmLabel={confirmActive === 'deactivate' ? t('vehicles.detail.deactivate') : t('vehicles.detail.reactivate')}
+          onConfirm={async () => {
+            if (!id) return
+            try {
+              await setTrailerActive(id, confirmActive === 'activate')
+              showSuccess(confirmActive === 'activate' ? t('trailers.detail.reactivated') : t('trailers.detail.deactivated'))
+              setConfirmActive(null)
+              const refreshed = await getTrailer(id)
+              setTrailer(refreshed)
+            } catch (err) {
+              showError(err instanceof ApiError ? err.message : t('fleet.common.actionFailed'))
+              setConfirmActive(null)
+            }
+          }}
+          onCancel={() => setConfirmActive(null)}
         />
       )}
     </div>

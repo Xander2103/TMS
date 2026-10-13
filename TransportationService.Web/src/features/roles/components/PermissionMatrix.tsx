@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useLocale } from '../../../i18n/localeContext'
 import { usePermissions } from '../hooks/usePermissions'
 import { useRoleMutations } from '../hooks/useRoleMutations'
 import type { Role } from '../types/role'
@@ -15,6 +16,7 @@ interface PermissionMatrixProps {
  * of syncing local state from a prop via an effect.
  */
 export function PermissionMatrix({ role, onSaved }: PermissionMatrixProps) {
+  const { t } = useLocale()
   const { permissions, isLoading, error: loadError } = usePermissions()
   const { isSubmitting, error: saveError, assignPermissions } = useRoleMutations()
   const [checkedCodes, setCheckedCodes] = useState<string[]>(() => role.permissionCodes)
@@ -38,7 +40,7 @@ export function PermissionMatrix({ role, onSaved }: PermissionMatrixProps) {
   }
 
   if (isLoading) {
-    return <p>Rechten laden...</p>
+    return <p>{t('usersRoles.roles.matrix.loading')}</p>
   }
 
   if (loadError) {
@@ -95,7 +97,7 @@ export function PermissionMatrix({ role, onSaved }: PermissionMatrixProps) {
       )}
 
       <button type="button" className="primary-button" onClick={handleSave} disabled={isSubmitting}>
-        {isSubmitting ? 'Opslaan...' : 'Rechten opslaan'}
+        {isSubmitting ? t('usersRoles.roles.matrix.saving') : t('usersRoles.roles.matrix.save')}
       </button>
     </div>
   )

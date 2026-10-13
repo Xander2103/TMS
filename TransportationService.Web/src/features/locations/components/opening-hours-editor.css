@@ -1,0 +1,172 @@
+/* Opening-hours editor.
+   One subtle container (.ohe-grid); every day is its own grid with the SAME fixed column template
+   so columns line up across days:   day | from | – | to | note | remove.
+   Each interval is one grid row; its error message is a separate row spanning columns 2..6, so it
+   never shifts the note or the remove button sideways. Every cell has an explicit column, which
+   keeps column 1 (day label) empty below the first row of a day. */
+
+.ohe {
+  --ohe-col-day: 40px;
+  --ohe-col-remove: 32px;
+  --ohe-row-gap: var(--space-1);
+  --ohe-col-gap: var(--space-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.ohe-toolbar {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.ohe-grid {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.ohe-day {
+  display: grid;
+  grid-template-columns: var(--ohe-col-day) max-content max-content max-content minmax(120px, 1fr) var(--ohe-col-remove);
+  grid-auto-rows: auto;
+  gap: var(--ohe-row-gap) var(--ohe-col-gap);
+  align-items: center;
+  padding: var(--space-2) var(--space-3);
+}
+
+.ohe-day + .ohe-day {
+  border-top: 1px solid var(--border);
+}
+
+/* The interval wrapper only exists for structure/tests; its children are the grid cells. */
+.ohe-interval {
+  display: contents;
+}
+
+.ohe-day-label {
+  grid-column: 1;
+  grid-row: 1;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text-h);
+}
+
+.ohe-from {
+  grid-column: 2;
+}
+
+.ohe-sep {
+  grid-column: 3;
+  color: var(--text-muted);
+  font-size: 14px;
+  text-align: center;
+  width: 10px;
+}
+
+.ohe-to {
+  grid-column: 4;
+}
+
+.ohe-note {
+  grid-column: 5;
+  min-width: 0;
+  min-height: 36px;
+  box-sizing: border-box;
+  padding: 4px 8px;
+  font: inherit;
+  font-size: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg);
+  color: var(--text-h);
+}
+
+.ohe-note:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-bg);
+}
+
+.ohe-remove {
+  grid-column: 6;
+  justify-self: center;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 14px;
+  line-height: 1;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: var(--radius-sm);
+}
+
+.ohe-remove:hover:not(:disabled) {
+  color: var(--color-danger-strong);
+  background: rgba(220, 38, 38, 0.08);
+}
+
+.ohe-remove:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent-bg);
+}
+
+/* Full-width rows right of the day label: closed, error, add. */
+.ohe-closed,
+.ohe-error,
+.ohe-add {
+  grid-column: 2 / -1;
+}
+
+.ohe-closed {
+  font-size: 14px;
+  color: var(--text-muted);
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+}
+
+.ohe-error {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-danger-strong);
+}
+
+.ohe-add {
+  justify-self: start;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: var(--accent);
+  font: inherit;
+  font-size: 13px;
+  padding: 2px 0;
+}
+
+.ohe-add:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent-bg);
+  border-radius: var(--radius-sm);
+}
+
+.ohe-add:disabled,
+.ohe-remove:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Narrow screens: keep the fixed columns but let the note drop under the times. */
+@media (max-width: 560px) {
+  .ohe-day {
+    grid-template-columns: var(--ohe-col-day) max-content max-content max-content minmax(0, 1fr) var(--ohe-col-remove);
+  }
+
+  .ohe-note {
+    grid-column: 2 / 6;
+  }
+}

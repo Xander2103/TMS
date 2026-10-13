@@ -1,0 +1,124 @@
+/* Goods weight row, capacity hint and coverage badge (master sprint 2026-09-21, D4).
+   Own file: imported by the components themselves, so every host (order form, dossier intake,
+   goods drawer, read-only summaries) gets it without touching its own stylesheet. */
+
+/* Main goods row: description (double width) + quantity, unit, weight per unit, total weight.
+   auto-fit lets the same row work in the full-width form and in the narrower drawer. */
+.tof-row.tof-row-goods {
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  align-items: start;
+}
+
+.tof-row-goods > .tof-goods-description {
+  grid-column: span 2;
+}
+
+/* A label that wraps ("Gewicht per eenheid (kg)" in a narrow column) must not push its input below
+   the neighbours': label / control / hint share the row's tracks, so the controls stay on one line. */
+@media (min-width: 641px) {
+  .tof-row-goods > .ui-form-field {
+    display: grid;
+    grid-template-rows: subgrid;
+    grid-row: span 3;
+    row-gap: 6px;
+  }
+
+  .tof-row-goods > .ui-form-field > label,
+  .tof-row-goods > .ui-form-field > .ui-form-field-label-row {
+    align-self: end;
+  }
+}
+
+@media (max-width: 640px) {
+  .tof-row.tof-row-goods {
+    grid-template-columns: 1fr;
+  }
+
+  .tof-row-goods > .tof-goods-description {
+    grid-column: auto;
+  }
+}
+
+.tof-weight-mode {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 var(--space-1);
+  margin: 2px 0 0;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.tof-weight-mode .tof-link {
+  padding: 0 2px;
+  font-size: 13px;
+}
+
+.tof-goods-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  margin: var(--space-3) 0 0;
+}
+
+.tof-goods-footer .tof-cargo-hint {
+  margin: 0;
+}
+
+.goods-capacity {
+  box-sizing: border-box;
+  margin: var(--space-3) 0 0;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  color: var(--text-h);
+}
+
+.goods-capacity h4 {
+  margin: 0 0 var(--space-2);
+  font-size: 14px;
+}
+
+.goods-capacity dl {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-5);
+  margin: 0;
+}
+
+.goods-capacity dt {
+  font-size: 12px;
+  color: var(--text);
+}
+
+.goods-capacity dd {
+  margin: 0;
+  font-weight: 600;
+}
+
+.goods-capacity p {
+  margin: var(--space-2) 0 0;
+}
+
+.goods-capacity-note {
+  color: var(--text);
+}
+
+.goods-capacity-warning {
+  box-sizing: border-box;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--danger-border);
+  border-radius: var(--radius-sm);
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.goods-capacity-unknown {
+  color: var(--warning);
+}
+
+.goods-empty-lifting {
+  margin: 0;
+}

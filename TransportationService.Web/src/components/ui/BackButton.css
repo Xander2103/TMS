@@ -1,0 +1,22 @@
+.ui-back-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  text-decoration: none;
+  padding: 6px 10px;
+  margin-left: -10px;
+  border-radius: 8px;
+}
+
+.ui-back-button:hover {
+  color: var(--text-h);
+  background: var(--accent-bg);
+}
+
+.ui-back-button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent-bg);
+}

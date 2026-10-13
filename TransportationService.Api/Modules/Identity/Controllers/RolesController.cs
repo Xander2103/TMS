@@ -91,7 +91,9 @@ public class RolesController : ControllerBase
         {
             RoleOperationOutcome.Success => Ok(result.Role),
             RoleOperationOutcome.NotFound => NotFound(),
-            RoleOperationOutcome.SystemRoleProtected => Conflict("System roles cannot be renamed or deactivated."),
+            RoleOperationOutcome.SystemRoleProtected => Conflict("System roles cannot be modified through role management."),
+            RoleOperationOutcome.Forbidden => StatusCode(StatusCodes.Status403Forbidden, new { message = result.Error }),
+            RoleOperationOutcome.ValidationFailed => BadRequest(new { message = result.Error }),
             _ => Conflict(),
         };
     }

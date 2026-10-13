@@ -1,0 +1,14 @@
+{
+  "title": "Messages",
+  "general": "General",
+  "orderSubtitle": "Order {orderId}",
+  "loading": "Loading messages...",
+  "loadError": "The messages could not be loaded.",
+  "sendError": "The message could not be sent.",
+  "empty": "No messages in this conversation yet.",
+  "you": "You",
+  "threadLabel": "Message overview",
+  "newMessageLabel": "New message",
+  "placeholder": "Type your message...",
+  "send": "Send"
+}

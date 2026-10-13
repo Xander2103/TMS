@@ -61,6 +61,15 @@ public class TripsController : ControllerBase
     private ObjectResult AssignForbidden() => StatusCode(StatusCodes.Status403Forbidden,
         new { message = "Je hebt geen recht om opdrachten aan ritten te koppelen (orders.assign)." });
 
+    /// <summary>Wave 7: transparent tour proposals — accepting one is simply POST /api/trips
+    /// with the proposal's order ids (all existing conflict/permission machinery applies).</summary>
+    [HttpGet("/api/planning/proposals")]
+    [RequirePermission(PermissionCodes.PlanningView)]
+    public async Task<ActionResult<PlanningProposalsDto>> Proposals(
+        [FromQuery] DateOnly? date, [FromServices] IPlanningProposalService proposals, CancellationToken cancellationToken)
+        => Ok(await proposals.GetProposalsAsync(
+            date ?? DateOnly.FromDateTime(DateTime.UtcNow), cancellationToken));
+
     [HttpPost]
     [RequirePermission(PermissionCodes.PlanningCreate)]
     public async Task<ActionResult<TripDetailDto>> Create(CreateTripRequest request, CancellationToken cancellationToken)
@@ -138,8 +147,129 @@ public class TripsController : ControllerBase
         }
 
         var result = await _service.ChangeStatusAsync(
-            id, request.Status, allowOverride, releaseOverride, request.OverrideReason, cancellationToken);
+            id, request.Status, allowOverride, releaseOverride, request.OverrideReason, request.Version, cancellationToken);
         return Handle(result, created: false);
+    }
+
+    /// <summary>Overriding blocking conflicts on a Planned trip is separately guarded.</summary>
+    private async Task<ObjectResult?> GuardOverrideAsync(bool requested, CancellationToken cancellationToken)
+    {
+        if (!requested)
+        {
+            return null;
+        }
+
+        var allowed = _currentUserContext.CurrentUserId is { } userId
+            && await _permissionService.UserHasPermissionAsync(
+                userId, PermissionCodes.PlanningOverrideRestriction, cancellationToken);
+        return allowed
+            ? null
+            : StatusCode(StatusCodes.Status403Forbidden,
+                new { message = "Je hebt geen recht om planningsconflicten te overschrijven." });
+    }
+
+    // --- Targeted planning-center commands (drag-and-drop mutations) ---
+
+    [HttpPost("{id:guid}/orders")]
+    [RequirePermission(PermissionCodes.PlanningEdit)]
+    public async Task<ActionResult<TripDetailDto>> AssignOrders(
+        Guid id, AssignOrdersRequest request, CancellationToken cancellationToken)
+    {
+        if (!await MayAssignOrdersAsync(cancellationToken))
+        {
+            return AssignForbidden();
+        }
+
+        return Handle(await _service.AssignOrdersAsync(id, request, cancellationToken), created: false);
+    }
+
+    [HttpDelete("{id:guid}/orders/{orderId:guid}")]
+    [RequirePermission(PermissionCodes.PlanningEdit)]
+    public async Task<ActionResult<TripDetailDto>> RemoveOrder(
+        Guid id, Guid orderId, [FromQuery] Guid? version, CancellationToken cancellationToken)
+    {
+        if (!await MayAssignOrdersAsync(cancellationToken))
+        {
+            return AssignForbidden();
+        }
+
+        return Handle(await _service.RemoveOrderAsync(id, orderId, version, cancellationToken), created: false);
+    }
+
+    [HttpPost("{id:guid}/orders/reorder")]
+    [RequirePermission(PermissionCodes.PlanningEdit)]
+    public async Task<ActionResult<TripDetailDto>> ReorderOrders(
+        Guid id, ReorderTripOrdersRequest request, CancellationToken cancellationToken)
+    {
+        return Handle(await _service.ReorderOrdersAsync(id, request, cancellationToken), created: false);
+    }
+
+    [HttpPut("{id:guid}/driver")]
+    [RequirePermission(PermissionCodes.PlanningEdit)]
+    public async Task<ActionResult<TripDetailDto>> AssignDriver(
+        Guid id, AssignResourceRequest request, CancellationToken cancellationToken)
+    {
+        if (await GuardOverrideAsync(request.Override, cancellationToken) is { } forbidden)
+        {
+            return forbidden;
+        }
+
+        return Handle(await _service.AssignDriverAsync(id, request, cancellationToken), created: false);
+    }
+
+    [HttpPut("{id:guid}/vehicle")]
+    [RequirePermission(PermissionCodes.PlanningEdit)]
+    public async Task<ActionResult<TripDetailDto>> AssignVehicle(
+        Guid id, AssignResourceRequest request, CancellationToken cancellationToken)
+    {
+        if (await GuardOverrideAsync(request.Override, cancellationToken) is { } forbidden)
+        {
+            return forbidden;
+        }
+
+        return Handle(await _service.AssignVehicleAsync(id, request, cancellationToken), created: false);
+    }
+
+    [HttpPut("{id:guid}/trailer")]
+    [RequirePermission(PermissionCodes.PlanningEdit)]
+    public async Task<ActionResult<TripDetailDto>> AssignTrailer(
+        Guid id, AssignResourceRequest request, CancellationToken cancellationToken)
+    {
+        if (await GuardOverrideAsync(request.Override, cancellationToken) is { } forbidden)
+        {
+            return forbidden;
+        }
+
+        return Handle(await _service.AssignTrailerAsync(id, request, cancellationToken), created: false);
+    }
+
+    [HttpPost("{id:guid}/reschedule")]
+    [RequirePermission(PermissionCodes.PlanningEdit)]
+    public async Task<ActionResult<TripDetailDto>> Reschedule(
+        Guid id, RescheduleTripRequest request, CancellationToken cancellationToken)
+    {
+        if (await GuardOverrideAsync(request.Override, cancellationToken) is { } forbidden)
+        {
+            return forbidden;
+        }
+
+        return Handle(await _service.RescheduleAsync(id, request, cancellationToken), created: false);
+    }
+
+    /// <summary>Dry-run for drag-over feedback: which conflicts WOULD this assignment create?</summary>
+    [HttpPost("{id:guid}/validate-assignment")]
+    [RequirePermission(PermissionCodes.PlanningView)]
+    public async Task<ActionResult<ValidateAssignmentResultDto>> ValidateAssignment(
+        Guid id, ValidateAssignmentRequest request, CancellationToken cancellationToken)
+    {
+        var result = await _service.ValidateAssignmentAsync(id, request, cancellationToken);
+        if (result.Outcome == TripOperationOutcome.NotFound)
+        {
+            return NotFound();
+        }
+
+        var conflicts = result.Conflicts ?? [];
+        return Ok(new ValidateAssignmentResultDto(conflicts, conflicts.Any(c => c.Blocking)));
     }
 
     [HttpDelete("{id:guid}")]
@@ -169,6 +299,9 @@ public class TripsController : ControllerBase
             Conflict(new { message = result.Error, conflicts = result.Conflicts }),
         TripOperationOutcome.PackagesBlock =>
             Conflict(new { message = result.Error, packageReadiness = result.PackageReadiness }),
+        // 409 with the CURRENT server state so the client can rebase its edit.
+        TripOperationOutcome.StaleVersion =>
+            Conflict(new { message = result.Error, staleVersion = true, current = result.Trip }),
         _ => Conflict(),
     };
 }

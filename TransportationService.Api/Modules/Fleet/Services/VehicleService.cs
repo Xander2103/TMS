@@ -17,12 +17,15 @@ public class VehicleService : IVehicleService
     private readonly TransportationDbContext _dbContext;
     private readonly ITenantContext _tenantContext;
     private readonly IAuditService _auditService;
+    private readonly TimeProvider _timeProvider;
 
-    public VehicleService(TransportationDbContext dbContext, ITenantContext tenantContext, IAuditService auditService)
+    public VehicleService(TransportationDbContext dbContext, ITenantContext tenantContext, IAuditService auditService,
+        TimeProvider timeProvider)
     {
         _dbContext = dbContext;
         _tenantContext = tenantContext;
         _auditService = auditService;
+        _timeProvider = timeProvider;
     }
 
     private IQueryable<Vehicle> TenantScoped() =>
@@ -119,8 +122,10 @@ public class VehicleService : IVehicleService
         ApplyEditableFields(vehicle, request.Vin, request.CategoryId, request.Brand, request.Model, request.Year,
             request.FirstRegistrationDate, request.FuelType, request.EmissionClass,
             request.GrossVehicleWeightKg, request.PayloadKg, request.LengthMeters, request.WidthMeters, request.HeightMeters, request.VolumeM3,
-            request.OdometerKm, request.ConsumptionLPer100Km, request.HasCrane, request.HasRefrigeration, request.HasTailLift, request.AdrSuitable,
+            request.VolumeIsManual, request.OdometerKm, request.ConsumptionLPer100Km, request.HasCrane, request.HasRefrigeration, request.HasTailLift, request.AdrSuitable,
             request.OwnershipType, request.Notes);
+        ApplyMautFields(vehicle, request.AxleCount, request.LoadingMeters, request.RequiredLicenceCode);
+        vehicle.TailLiftCapacityKg = FleetFieldRules.ResolveTailLiftCapacity(request.HasTailLift, request.TailLiftCapacityKg);
 
         _dbContext.Add(vehicle);
         try
@@ -174,8 +179,10 @@ public class VehicleService : IVehicleService
         ApplyEditableFields(vehicle, request.Vin, request.CategoryId, request.Brand, request.Model, request.Year,
             request.FirstRegistrationDate, request.FuelType, request.EmissionClass,
             request.GrossVehicleWeightKg, request.PayloadKg, request.LengthMeters, request.WidthMeters, request.HeightMeters, request.VolumeM3,
-            request.OdometerKm, request.ConsumptionLPer100Km, request.HasCrane, request.HasRefrigeration, request.HasTailLift, request.AdrSuitable,
+            request.VolumeIsManual, request.OdometerKm, request.ConsumptionLPer100Km, request.HasCrane, request.HasRefrigeration, request.HasTailLift, request.AdrSuitable,
             request.OwnershipType, request.Notes);
+        ApplyMautFields(vehicle, request.AxleCount, request.LoadingMeters, request.RequiredLicenceCode);
+        vehicle.TailLiftCapacityKg = FleetFieldRules.ResolveTailLiftCapacity(request.HasTailLift, request.TailLiftCapacityKg);
 
         try
         {
@@ -190,6 +197,27 @@ public class VehicleService : IVehicleService
             new { vehicle.LicensePlate, vehicle.OperationalStatus, vehicle.StatusReason, vehicle.IsActive }, cancellationToken);
 
         return VehicleOperationResult.Success(await MapToDetailAsync(vehicle, cancellationToken));
+    }
+
+    public async Task<bool> SetActiveAsync(Guid id, SetVehicleActiveRequest request, CancellationToken cancellationToken)
+    {
+        var vehicle = await TenantScoped().FirstOrDefaultAsync(v => v.Id == id, cancellationToken);
+        if (vehicle is null)
+        {
+            return false;
+        }
+
+        if (vehicle.IsActive != request.IsActive)
+        {
+            vehicle.IsActive = request.IsActive;
+            await _dbContext.SaveChangesAsync(cancellationToken);
+
+            await _auditService.RecordAsync(EntityType, vehicle.Id.ToString(),
+                request.IsActive ? "Activated" : "Deactivated", null,
+                new { vehicle.IsActive }, cancellationToken);
+        }
+
+        return true;
     }
 
     public async Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken)
@@ -209,13 +237,16 @@ public class VehicleService : IVehicleService
         return true;
     }
 
-    private static void ApplyEditableFields(
+    private void ApplyEditableFields(
         Vehicle v, string? vin, Guid? categoryId, string? brand, string? model, int? year,
         DateOnly? firstRegistration, FuelType fuelType, EmissionClass? emissionClass,
         decimal? grossWeight, decimal? payload, decimal? length, decimal? width, decimal? height, decimal? volume,
-        int odometer, decimal? consumptionLPer100Km, bool crane, bool refrigeration, bool tailLift, bool adr,
+        bool volumeIsManual, int odometer, decimal? consumptionLPer100Km, bool crane, bool refrigeration, bool tailLift, bool adr,
         VehicleOwnershipType ownership, string? notes)
     {
+        FleetFieldRules.ValidateConstructionYear(year, _timeProvider.GetUtcNow().Year);
+        var (resolvedVolume, isManual) = FleetFieldRules.ResolveVolume(length, width, height, volume, volumeIsManual);
+
         v.Vin = Trim(vin);
         v.CategoryId = categoryId;
         v.Brand = Trim(brand);
@@ -229,7 +260,8 @@ public class VehicleService : IVehicleService
         v.LengthMeters = length;
         v.WidthMeters = width;
         v.HeightMeters = height;
-        v.VolumeM3 = volume;
+        v.VolumeM3 = resolvedVolume;
+        v.VolumeIsManual = isManual;
         v.OdometerKm = odometer < 0 ? 0 : odometer;
         v.ConsumptionLPer100Km = consumptionLPer100Km is < 0 ? null : consumptionLPer100Km;
         v.HasCrane = crane;
@@ -238,6 +270,13 @@ public class VehicleService : IVehicleService
         v.AdrSuitable = adr;
         v.OwnershipType = ownership;
         v.Notes = Trim(notes);
+    }
+
+    private static void ApplyMautFields(Vehicle v, int axleCount, decimal loadingMeters, string? requiredLicenceCode)
+    {
+        v.AxleCount = Math.Clamp(axleCount, 0, 12);
+        v.LoadingMeters = loadingMeters < 0 ? 0 : Math.Round(loadingMeters, 2);
+        v.RequiredLicenceCode = string.IsNullOrWhiteSpace(requiredLicenceCode) ? null : requiredLicenceCode.Trim().ToUpperInvariant();
     }
 
     /// <summary>All optional references on a vehicle must resolve within the current tenant.</summary>
@@ -278,9 +317,10 @@ public class VehicleService : IVehicleService
         return new VehicleDetailDto(
             v.Id, v.InternalNumber, v.LicensePlate, v.Vin, v.CategoryId, categoryName, v.Brand, v.Model, v.Year, v.FirstRegistrationDate,
             v.FuelType, v.EmissionClass, v.GrossVehicleWeightKg, v.PayloadKg, v.LengthMeters, v.WidthMeters, v.HeightMeters, v.VolumeM3,
-            v.OdometerKm, v.ConsumptionLPer100Km, v.HasCrane, v.HasRefrigeration, v.HasTailLift, v.AdrSuitable,
+            v.VolumeIsManual, v.OdometerKm, v.ConsumptionLPer100Km, v.HasCrane, v.HasRefrigeration, v.HasTailLift, v.AdrSuitable,
             v.OwnershipType, v.OperationalStatus, v.StatusReason, v.IsActive,
-            v.FixedDriverId, fixedDriverName, v.CurrentDriverId, currentDriverName, v.Notes);
+            v.FixedDriverId, fixedDriverName, v.CurrentDriverId, currentDriverName, v.Notes,
+            v.AxleCount, v.LoadingMeters, v.RequiredLicenceCode, v.TailLiftCapacityKg);
     }
 
     private async Task<string?> ResolveDriverNameAsync(Guid? driverId, CancellationToken cancellationToken)

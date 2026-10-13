@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useLocale } from '../../../i18n/localeContext'
 import { getRole } from '../api/rolesApi'
 import type { Role } from '../types/role'
 
@@ -9,9 +10,8 @@ interface UseRoleResult {
   reload: () => void
 }
 
-const LOAD_ERROR_MESSAGE = 'Rol kon niet worden geladen.'
-
 export function useRole(id: string): UseRoleResult {
+  const { t } = useLocale()
   const [role, setRole] = useState<Role | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -29,13 +29,14 @@ export function useRole(id: string): UseRoleResult {
       })
       .catch(() => {
         if (!isMounted) return
-        setError(LOAD_ERROR_MESSAGE)
+        setError(t('usersRoles.roles.detail.loadFailed'))
         setIsLoading(false)
       })
 
     return () => {
       isMounted = false
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, reloadToken])
 
   function reload() {

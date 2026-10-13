@@ -1,0 +1,46 @@
+/* Address-search field + the permanent "+ Nieuw klantadres" action (route UX sprint 2026-10-08).
+   The action sits to the right of the field and wraps under it when the card is narrow, so the
+   search box never gets squeezed. Tokens only (global.css). */
+
+.location-select {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+  min-width: 0;
+}
+
+.location-select > .address-autocomplete {
+  flex: 1 1 180px;
+  width: auto;
+}
+
+.location-select-create {
+  flex: 0 0 auto;
+  min-height: 36px;
+  padding: 0 var(--space-2);
+  border: 1px dashed var(--accent-border);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.location-select-create:hover:not(:disabled) {
+  background: var(--accent-bg);
+  border-style: solid;
+}
+
+.location-select-create:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.location-select-create:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

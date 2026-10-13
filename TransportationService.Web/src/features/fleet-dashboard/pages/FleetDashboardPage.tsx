@@ -4,6 +4,8 @@ import { PageHeader } from '../../../components/layout/PageHeader'
 import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { Badge, type BadgeTone } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
+import { useLocale } from '../../../i18n/localeContext'
+import { formatDecimal } from '../../../utils/numbers'
 import { useAuth } from '../../auth/authContextValue'
 import { DAMAGE_SEVERITY_LABELS, DAMAGE_STATUS_LABELS } from '../../damage/types'
 import { FLEET_DOCUMENT_STATUS_LABELS, fleetDocumentDisplayName } from '../../fleet-documents/types'
@@ -37,6 +39,7 @@ const SEVERITY_TONE: Record<string, BadgeTone> = {
 
 export function FleetDashboardPage() {
   const navigate = useNavigate()
+  const { t } = useLocale()
   const { hasPermission } = useAuth()
 
   const [dashboard, setDashboard] = useState<FleetDashboard | null>(null)
@@ -51,12 +54,12 @@ export function FleetDashboardPage() {
         setLoadError(null)
       })
       .catch(() => {
-        if (mounted) setLoadError('Het vlootoverzicht kon niet worden geladen.')
+        if (mounted) setLoadError(t('fleet.dashboard.loadFailed'))
       })
     return () => {
       mounted = false
     }
-  }, [])
+  }, [t])
 
   function ownerLink(vehicleId: string | null, trailerId: string | null): string {
     return vehicleId ? `/vehicles/${vehicleId}` : `/trailers/${trailerId}`
@@ -64,24 +67,24 @@ export function FleetDashboardPage() {
 
   return (
     <div>
-      <Breadcrumbs items={[{ label: 'Vloot' }]} />
+      <Breadcrumbs items={[{ label: t('navigation.menu.modules.vloot') }]} />
       <PageHeader
-        title="Vloot"
+        title={t('navigation.menu.modules.vloot')}
         action={
           <span className="fd-quick-actions">
             {hasPermission('vehicles.create') && (
               <Button variant="secondary" onClick={() => navigate('/vehicles/new')}>
-                Nieuw voertuig
+                {t('vehicles.list.new')}
               </Button>
             )}
             {hasPermission('trailers.create') && (
               <Button variant="secondary" onClick={() => navigate('/trailers/new')}>
-                Nieuwe oplegger
+                {t('trailers.list.new')}
               </Button>
             )}
             {hasPermission('tank_cards.view') && (
               <Button variant="secondary" onClick={() => navigate('/tank-cards')}>
-                Tankkaarten
+                {t('navigation.menu.tankCards')}
               </Button>
             )}
           </span>
@@ -89,59 +92,59 @@ export function FleetDashboardPage() {
       />
 
       {loadError && <p className="placeholder-text">{loadError}</p>}
-      {!loadError && dashboard === null && <p className="placeholder-text">Vlootoverzicht laden…</p>}
+      {!loadError && dashboard === null && <p className="placeholder-text">{t('fleet.dashboard.loading')}</p>}
 
       {!loadError && dashboard !== null && (
         <>
           <div className="fd-counts">
             <button type="button" className="fd-count-card" onClick={() => navigate('/vehicles')}>
-              <h3>Voertuigen</h3>
+              <h3>{t('navigation.menu.vehicles')}</h3>
               <div className="fd-count-total">{dashboard.vehicles.total}</div>
               <dl>
                 <div>
-                  <dt>Beschikbaar</dt>
+                  <dt>{t('vehicles.status.Available')}</dt>
                   <dd>{dashboard.vehicles.available}</dd>
                 </div>
                 <div>
-                  <dt>In gebruik</dt>
+                  <dt>{t('vehicles.status.InUse')}</dt>
                   <dd>{dashboard.vehicles.inUse}</dd>
                 </div>
                 <div>
-                  <dt>In onderhoud</dt>
+                  <dt>{t('vehicles.status.InMaintenance')}</dt>
                   <dd>{dashboard.vehicles.inMaintenance}</dd>
                 </div>
                 <div>
-                  <dt>Buiten dienst</dt>
+                  <dt>{t('vehicles.status.OutOfService')}</dt>
                   <dd>{dashboard.vehicles.outOfService}</dd>
                 </div>
                 <div>
-                  <dt>Inactief</dt>
+                  <dt>{t('fleet.dashboard.inactive')}</dt>
                   <dd>{dashboard.vehicles.inactive}</dd>
                 </div>
               </dl>
             </button>
             <button type="button" className="fd-count-card" onClick={() => navigate('/trailers')}>
-              <h3>Opleggers</h3>
+              <h3>{t('navigation.menu.trailers')}</h3>
               <div className="fd-count-total">{dashboard.trailers.total}</div>
               <dl>
                 <div>
-                  <dt>Beschikbaar</dt>
+                  <dt>{t('trailers.status.Available')}</dt>
                   <dd>{dashboard.trailers.available}</dd>
                 </div>
                 <div>
-                  <dt>In gebruik</dt>
+                  <dt>{t('trailers.status.InUse')}</dt>
                   <dd>{dashboard.trailers.inUse}</dd>
                 </div>
                 <div>
-                  <dt>In onderhoud</dt>
+                  <dt>{t('trailers.status.InMaintenance')}</dt>
                   <dd>{dashboard.trailers.inMaintenance}</dd>
                 </div>
                 <div>
-                  <dt>Buiten dienst</dt>
+                  <dt>{t('trailers.status.OutOfService')}</dt>
                   <dd>{dashboard.trailers.outOfService}</dd>
                 </div>
                 <div>
-                  <dt>Inactief</dt>
+                  <dt>{t('fleet.dashboard.inactive')}</dt>
                   <dd>{dashboard.trailers.inactive}</dd>
                 </div>
               </dl>
@@ -151,18 +154,18 @@ export function FleetDashboardPage() {
           <div className="fd-grid">
             <section className="fd-panel">
               <h3>
-                Onderhoud gepland <Badge tone={dashboard.maintenanceDueCount > 0 ? 'warning' : 'success'}>{dashboard.maintenanceDueCount}</Badge>
+                {t('fleet.dashboard.maintenancePlanned')} <Badge tone={dashboard.maintenanceDueCount > 0 ? 'warning' : 'success'}>{dashboard.maintenanceDueCount}</Badge>
               </h3>
-              {dashboard.maintenanceDue.length === 0 && <p className="fd-empty">Geen onderhoud binnen 30 dagen.</p>}
+              {dashboard.maintenanceDue.length === 0 && <p className="fd-empty">{t('fleet.dashboard.emptyMaintenance')}</p>}
               <ul>
                 {dashboard.maintenanceDue.map((item) => (
                   <li key={item.id}>
                     <button type="button" className="fd-row" onClick={() => navigate(ownerLink(item.vehicleId, item.trailerId))}>
                       <span className="fd-row-owner">{item.ownerNumber}</span>
-                      <span className="fd-row-main">{maintenanceDisplayName(item)}</span>
+                      <span className="fd-row-main">{t(maintenanceDisplayName(item))}</span>
                       <span className="fd-row-meta">
                         {item.scheduledDate ?? '—'}
-                        {item.isOverdue && <Badge tone="danger">Te laat</Badge>}
+                        {item.isOverdue && <Badge tone="danger">{t('maintenance.overdue')}</Badge>}
                       </span>
                     </button>
                   </li>
@@ -172,18 +175,18 @@ export function FleetDashboardPage() {
 
             <section className="fd-panel">
               <h3>
-                Keuringen <Badge tone={dashboard.inspectionsDueCount > 0 ? 'warning' : 'success'}>{dashboard.inspectionsDueCount}</Badge>
+                {t('fleet.tabs.inspections')} <Badge tone={dashboard.inspectionsDueCount > 0 ? 'warning' : 'success'}>{dashboard.inspectionsDueCount}</Badge>
               </h3>
-              {dashboard.inspectionsDue.length === 0 && <p className="fd-empty">Geen keuringen binnen 30 dagen.</p>}
+              {dashboard.inspectionsDue.length === 0 && <p className="fd-empty">{t('fleet.dashboard.emptyInspections')}</p>}
               <ul>
                 {dashboard.inspectionsDue.map((item) => (
                   <li key={item.id}>
                     <button type="button" className="fd-row" onClick={() => navigate(ownerLink(item.vehicleId, item.trailerId))}>
                       <span className="fd-row-owner">{item.ownerNumber}</span>
-                      <span className="fd-row-main">{inspectionDisplayName(item)}</span>
+                      <span className="fd-row-main">{t(inspectionDisplayName(item))}</span>
                       <span className="fd-row-meta">
                         {item.dueDate}
-                        <Badge tone={URGENCY_TONE[item.urgency] ?? 'info'}>{INSPECTION_URGENCY_LABELS[item.urgency]}</Badge>
+                        <Badge tone={URGENCY_TONE[item.urgency] ?? 'info'}>{t(INSPECTION_URGENCY_LABELS[item.urgency])}</Badge>
                       </span>
                     </button>
                   </li>
@@ -193,18 +196,18 @@ export function FleetDashboardPage() {
 
             <section className="fd-panel">
               <h3>
-                Documenten <Badge tone={dashboard.documentsExpiringCount > 0 ? 'warning' : 'success'}>{dashboard.documentsExpiringCount}</Badge>
+                {t('fleet.tabs.documents')} <Badge tone={dashboard.documentsExpiringCount > 0 ? 'warning' : 'success'}>{dashboard.documentsExpiringCount}</Badge>
               </h3>
-              {dashboard.documentsExpiring.length === 0 && <p className="fd-empty">Geen documenten die binnen 60 dagen verlopen.</p>}
+              {dashboard.documentsExpiring.length === 0 && <p className="fd-empty">{t('fleet.dashboard.emptyDocuments')}</p>}
               <ul>
                 {dashboard.documentsExpiring.map((item) => (
                   <li key={item.id}>
                     <button type="button" className="fd-row" onClick={() => navigate(ownerLink(item.vehicleId, item.trailerId))}>
                       <span className="fd-row-owner">{item.ownerNumber}</span>
-                      <span className="fd-row-main">{fleetDocumentDisplayName(item)}</span>
+                      <span className="fd-row-main">{t(fleetDocumentDisplayName(item))}</span>
                       <span className="fd-row-meta">
                         {item.expiryDate}
-                        <Badge tone={DOCUMENT_TONE[item.status] ?? 'info'}>{FLEET_DOCUMENT_STATUS_LABELS[item.status]}</Badge>
+                        <Badge tone={DOCUMENT_TONE[item.status] ?? 'info'}>{t(FLEET_DOCUMENT_STATUS_LABELS[item.status])}</Badge>
                       </span>
                     </button>
                   </li>
@@ -214,9 +217,9 @@ export function FleetDashboardPage() {
 
             <section className="fd-panel">
               <h3>
-                Open schade <Badge tone={dashboard.openDamageCount > 0 ? 'warning' : 'success'}>{dashboard.openDamageCount}</Badge>
+                {t('fleet.dashboard.openDamage')} <Badge tone={dashboard.openDamageCount > 0 ? 'warning' : 'success'}>{dashboard.openDamageCount}</Badge>
               </h3>
-              {dashboard.recentDamage.length === 0 && <p className="fd-empty">Geen recente schademeldingen.</p>}
+              {dashboard.recentDamage.length === 0 && <p className="fd-empty">{t('fleet.dashboard.emptyDamage')}</p>}
               <ul>
                 {dashboard.recentDamage.map((item) => (
                   <li key={item.id}>
@@ -227,8 +230,8 @@ export function FleetDashboardPage() {
                       </span>
                       <span className="fd-row-meta">
                         {item.incidentDate}
-                        <Badge tone={SEVERITY_TONE[item.severity] ?? 'info'}>{DAMAGE_SEVERITY_LABELS[item.severity]}</Badge>
-                        <Badge tone="neutral">{DAMAGE_STATUS_LABELS[item.status]}</Badge>
+                        <Badge tone={SEVERITY_TONE[item.severity] ?? 'info'}>{t(DAMAGE_SEVERITY_LABELS[item.severity])}</Badge>
+                        <Badge tone="neutral">{t(DAMAGE_STATUS_LABELS[item.status])}</Badge>
                       </span>
                     </button>
                   </li>
@@ -238,20 +241,20 @@ export function FleetDashboardPage() {
 
             <section className="fd-panel fd-panel-wide">
               <h3>
-                Brandstofwaarschuwingen{' '}
+                {t('fleet.dashboard.fuelWarnings')}{' '}
                 <Badge tone={dashboard.fuelWarnings.length > 0 ? 'warning' : 'success'}>{dashboard.fuelWarnings.length}</Badge>
               </h3>
-              {dashboard.fuelWarnings.length === 0 && <p className="fd-empty">Geen afwijkende tankbeurten.</p>}
+              {dashboard.fuelWarnings.length === 0 && <p className="fd-empty">{t('fleet.dashboard.emptyFuel')}</p>}
               <ul>
                 {dashboard.fuelWarnings.map((item) => (
                   <li key={item.transactionId}>
                     <button type="button" className="fd-row" onClick={() => navigate(`/vehicles/${item.vehicleId}`)}>
                       <span className="fd-row-owner">{item.vehicleInternalNumber}</span>
-                      <span className="fd-row-main">{item.warnings.map((w) => FUEL_WARNING_LABELS[w]).join(', ')}</span>
+                      <span className="fd-row-main">{item.warnings.map((w) => t(FUEL_WARNING_LABELS[w])).join(', ')}</span>
                       <span className="fd-row-meta">
                         {item.transactionDate}
                         {item.consumptionLPer100Km !== null && (
-                          <Badge tone="warning">{item.consumptionLPer100Km.toLocaleString('nl-BE')} l/100km</Badge>
+                          <Badge tone="warning">{formatDecimal(item.consumptionLPer100Km, Number.isInteger(item.consumptionLPer100Km) ? 0 : 1)} l/100km</Badge>
                         )}
                       </span>
                     </button>

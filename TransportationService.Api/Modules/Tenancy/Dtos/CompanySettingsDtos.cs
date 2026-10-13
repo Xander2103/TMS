@@ -1,6 +1,10 @@
 namespace TransportationService.Api.Modules.Tenancy.Dtos;
 
 /// <summary>Full company/tenant settings, returned to the settings screen.</summary>
+/// <summary>Regional display preferences, safe for every signed-in user (presentation only).</summary>
+public record DisplayPreferencesDto(
+    string DateFormat, string DecimalSeparator, string Timezone, string DefaultLanguage);
+
 public record CompanySettingsDto(
     // Company profile
     string? CompanyLegalName,
@@ -42,6 +46,11 @@ public record CompanySettingsDto(
     // Schedule-conflict severities (Information | Warning | Blocking)
     string TrainingConflictSeverity,
     string ShiftOverlapConflictSeverity,
+    string CapacityConflictSeverity,
+    // P4: Manual | Propose | Automatic — what a failed delivery stop triggers.
+    string RedeliveryMode,
+    // P8: message the customer when a stop ETA shifts ≥ X minutes; null = off.
+    int? EtaShiftNotifyMinutes,
     // Qualifications
     int QualificationExpiryWarningDays,
     // Numbering
@@ -101,4 +110,8 @@ public record UpdateCompanySettingsRequest(
     string? VehicleNumberPrefix, int VehicleNumberNextValue,
     string? TrailerNumberPrefix, int TrailerNumberNextValue,
     int DefaultPageSize,
-    string? LogoReference);
+    string? LogoReference,
+    // Trailing default: existing positional callers keep compiling; the JSON binder maps by name.
+    string CapacityConflictSeverity = "Warning",
+    string RedeliveryMode = "Manual",
+    int? EtaShiftNotifyMinutes = null);

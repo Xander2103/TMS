@@ -45,6 +45,10 @@ public interface IEtaService
     Task<TripEtaDto?> ClearStopEtaOverrideAsync(Guid tripId, Guid stopId, CancellationToken cancellationToken);
 
     Task<IReadOnlyList<StopEtaHistoryDto>?> GetStopEtaHistoryAsync(Guid tripId, Guid stopId, CancellationToken cancellationToken);
+
+    /// <summary>P8: route start — seeds/refreshes the trip's ETAs and queues one
+    /// driver_en_route message per customer order on the trip (idempotent per trip+order).</summary>
+    Task NotifyTripStartedAsync(Guid tripId, CancellationToken cancellationToken);
 }
 
 public class EtaService : IEtaService
@@ -117,6 +121,9 @@ public class EtaService : IEtaService
             .FirstOrDefaultAsync(s => s.TenantId == tenantId, cancellationToken);
         var loadingMinutes = settings?.DefaultLoadingMinutes ?? 30;
         var unloadingMinutes = settings?.DefaultUnloadingMinutes ?? 30;
+        // Wave 8: historical stop-duration estimates — measured reality per LOCATION beats the
+        // tenant default (≥3 samples over the last 90 days, clamped to a sane band).
+        var historicalMinutes = await HistoricalHandlingMinutesAsync(pending, cancellationToken);
 
         var providerMinutes = await _routeProvider.EstimateTravelMinutesAsync(
             new RouteEstimationRequest(pending
@@ -141,7 +148,7 @@ public class EtaService : IEtaService
             if (eta?.Source == EtaSource.DispatcherOverride)
             {
                 // Overrides stay; the cursor continues from the override so later stops follow it.
-                cursor = eta.CurrentEta.AddMinutes(HandlingMinutes(stop.StopType, loadingMinutes, unloadingMinutes));
+                cursor = eta.CurrentEta.AddMinutes(EffectiveHandlingMinutes(stop, historicalMinutes, loadingMinutes, unloadingMinutes));
                 results.Add(Map(stop, eta));
                 continue;
             }
@@ -176,7 +183,7 @@ public class EtaService : IEtaService
                 await RecordChangeAsync(eta, stop, previousStatus, cancellationToken);
             }
 
-            cursor = eta.CurrentEta.AddMinutes(HandlingMinutes(stop.StopType, loadingMinutes, unloadingMinutes));
+            cursor = eta.CurrentEta.AddMinutes(EffectiveHandlingMinutes(stop, historicalMinutes, loadingMinutes, unloadingMinutes));
             results.Add(Map(stop, eta));
         }
 
@@ -286,6 +293,50 @@ public class EtaService : IEtaService
             .ToListAsync(cancellationToken);
     }
 
+    /// <summary>Wave 8: measured average handling minutes per LOCATION (DepartedAt − ArrivedAt,
+    /// last 90 days, ≥3 samples, clamped 5..240) — reality beats the tenant default.</summary>
+    private async Task<IReadOnlyDictionary<Guid, int>> HistoricalHandlingMinutesAsync(
+        IReadOnlyList<TransportOrderStop> pending, CancellationToken cancellationToken)
+    {
+        var locationIds = pending.Where(s => s.LocationId != null).Select(s => s.LocationId!.Value).Distinct().ToList();
+        if (locationIds.Count == 0)
+        {
+            return new Dictionary<Guid, int>();
+        }
+
+        var tenantId = _tenantContext.TenantId;
+        var since = _timeProvider.GetUtcNow().UtcDateTime.AddDays(-90);
+        var samples = await _dbContext.StopExecutions.AsNoTracking()
+            .Where(e => e.TenantId == tenantId && e.ArrivedAt != null && e.DepartedAt != null && e.ArrivedAt >= since)
+            .Join(_dbContext.TransportOrderStops.AsNoTracking()
+                    .Where(s => s.LocationId != null && locationIds.Contains(s.LocationId.Value)
+                        // D2: time at a site stop is work, not handling — it must not skew the averages.
+                        && s.StopType != StopType.Site),
+                e => e.TransportOrderStopId, s => s.Id,
+                (e, s) => new { LocationId = s.LocationId!.Value, e.ArrivedAt, e.DepartedAt })
+            .ToListAsync(cancellationToken);
+
+        return samples
+            .Select(s => new { s.LocationId, Minutes = (s.DepartedAt!.Value - s.ArrivedAt!.Value).TotalMinutes })
+            .Where(s => s.Minutes is > 0 and < 600)
+            .GroupBy(s => s.LocationId)
+            .Where(g => g.Count() >= 3)
+            .ToDictionary(g => g.Key, g => Math.Clamp((int)Math.Round(g.Average(s => s.Minutes)), 5, 240));
+    }
+
+    private static int EffectiveHandlingMinutes(
+        TransportOrderStop stop, IReadOnlyDictionary<Guid, int> historical, int loading, int unloading) =>
+        // D2: at a site stop the dwell is the planned work itself (PlannedFrom → PlannedTo, kept in
+        // sync with the activity duration by SiteWorkTime); measured load/unload averages of the
+        // location say nothing about it. Without a planned window the generic stop default applies.
+        stop.StopType == StopType.Site
+            ? stop.PlannedFrom is { } from && stop.PlannedTo is { } to && to > from
+                ? (int)Math.Round((to - from).TotalMinutes)
+                : unloading
+        : stop.LocationId is { } locationId && historical.TryGetValue(locationId, out var measured)
+            ? measured
+            : HandlingMinutes(stop.StopType, loading, unloading);
+
     private static int HandlingMinutes(StopType stopType, int loading, int unloading) =>
         stopType == StopType.Loading ? loading : unloading;
 
@@ -324,8 +375,32 @@ public class EtaService : IEtaService
             ChangedByUserId = _currentUserContext.CurrentUserId,
         });
 
-        if (eta.Status != EtaStatus.Late || previousStatus == EtaStatus.Late)
+        // Wave 8: shift-threshold messaging — a configured tenant threshold also messages the
+        // customer when the ETA moves ≥ X minutes while still on time (previous history row =
+        // the previous ETA). The existing outside-window messaging below stays unchanged.
+        var becameLate = eta.Status == EtaStatus.Late && previousStatus != EtaStatus.Late;
+        if (!becameLate)
         {
+            var threshold = await _dbContext.TenantSettings.AsNoTracking()
+                .Where(s => s.TenantId == _tenantContext.TenantId)
+                .Select(s => s.EtaShiftNotifyMinutes)
+                .FirstOrDefaultAsync(cancellationToken);
+            if (threshold is { } shiftMinutes && previousStatus is not null)
+            {
+                // The row staged above is unsaved and invisible here — the newest PERSISTED
+                // history row is by definition the previous ETA (no time filter: equal
+                // timestamps within one second would otherwise hide it).
+                var previousEta = await _dbContext.StopEtaHistories.AsNoTracking()
+                    .Where(h => h.StopEtaId == eta.Id)
+                    .OrderByDescending(h => h.RecordedAt)
+                    .Select(h => (DateTime?)h.Eta)
+                    .FirstOrDefaultAsync(cancellationToken);
+                if (previousEta is { } prior && Math.Abs((eta.CurrentEta - prior).TotalMinutes) >= shiftMinutes)
+                {
+                    await QueueCustomerEtaMessageAsync(eta, stop, cancellationToken);
+                }
+            }
+
             return;
         }
 
@@ -336,6 +411,12 @@ public class EtaService : IEtaService
             $"De verwachte aankomst aan {stopLabel} is nu {eta.CurrentEta:HH:mm} en valt buiten het venster.",
             $"/planning/{eta.TripId}", cancellationToken);
 
+        await QueueCustomerEtaMessageAsync(eta, stop, cancellationToken);
+    }
+
+    private async Task QueueCustomerEtaMessageAsync(
+        StopEta eta, TransportOrderStop stop, CancellationToken cancellationToken)
+    {
         var customer = await _dbContext.TransportOrders.AsNoTracking()
             .Where(o => o.Id == stop.TransportOrderId && o.TenantId == _tenantContext.TenantId)
             .Join(_dbContext.Customers.AsNoTracking().Where(c => c.TenantId == _tenantContext.TenantId),
@@ -353,6 +434,46 @@ public class EtaService : IEtaService
                 },
                 EntityType, eta.Id.ToString(),
                 $"eta_update:{stop.Id}:{eta.CurrentEta:yyyyMMddHHmm}"), cancellationToken);
+        }
+    }
+
+    public async Task NotifyTripStartedAsync(Guid tripId, CancellationToken cancellationToken)
+    {
+        // Seed the ETAs the moment the wheels start turning — the portal and dispatch see a
+        // live expectation instead of waiting for the first manual ETA view.
+        var eta = await RecalculateTripAsync(tripId, cancellationToken);
+        if (eta is null)
+        {
+            return;
+        }
+
+        var tenantId = _tenantContext.TenantId;
+        var orders = await _dbContext.TripOrders.AsNoTracking()
+            .Where(to => to.TenantId == tenantId && to.TripId == tripId && !to.IsDeleted)
+            .Join(_dbContext.TransportOrders.AsNoTracking().Where(o => o.TenantId == tenantId),
+                to => to.TransportOrderId, o => o.Id, (to, o) => new { o.Id, o.OrderNumber, o.CustomerId })
+            .ToListAsync(cancellationToken);
+        foreach (var order in orders)
+        {
+            var customerName = await _dbContext.Customers.AsNoTracking()
+                .Where(c => c.TenantId == tenantId && c.Id == order.CustomerId)
+                .Select(c => c.Name)
+                .FirstOrDefaultAsync(cancellationToken);
+            var firstEta = eta.Stops
+                .OrderBy(s => s.CurrentEta)
+                .Select(s => (DateTime?)s.CurrentEta)
+                .FirstOrDefault();
+            await _messageOutbox.QueueAsync(new MessageRequest(
+                MessageKinds.DriverEnRoute, MessageOwnerType.Customer, order.CustomerId,
+                new Dictionary<string, string>
+                {
+                    ["orderNumber"] = order.OrderNumber,
+                    ["customerName"] = customerName ?? "",
+                    ["eta"] = firstEta?.ToString("dd-MM-yyyy HH:mm") ?? "-",
+                },
+                "Trip", tripId.ToString(),
+                // Idempotent per trip+order: restarting a trip never re-mails the customer.
+                $"driver_en_route:{tripId}:{order.Id}"), cancellationToken);
         }
     }
 

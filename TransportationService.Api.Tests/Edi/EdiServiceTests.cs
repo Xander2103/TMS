@@ -95,6 +95,136 @@ public class EdiServiceTests
         Assert.Single(h.Db.Context.CargoItems.Where(c => c.Barcode == "EDI-BC-1"));
     }
 
+    private static string PayloadWithWindow(object from, object to, string key = "plannedFrom") => JsonSerializer.Serialize(new
+    {
+        externalOrderId = "EXT-TIME",
+        goodsDescription = "Tijdvenster",
+        stops = new object[]
+        {
+            new Dictionary<string, object>
+            {
+                ["type"] = "Loading", ["externalLocationCode"] = "TERMINAL-77",
+                [key] = from, [key == "plannedFrom" ? "plannedTo" : "requestedTo"] = to,
+            },
+            new { type = "Unloading", city = "Gent" },
+        },
+        cargoItems = new object[] { new { description = "Pallet", quantity = 1 } },
+    });
+
+    /// <summary>
+    /// C-03: a partner window is a REQUEST, and it is parsed as an instant. An offset-carrying
+    /// value converts to UTC (08:00+02:00 → 06:00Z) instead of picking up the server's zone, and
+    /// it lands in RequestedFrom/To — planning stays empty until a dispatcher plans the stop.
+    /// </summary>
+    [Fact]
+    public async Task Ingest_PartnerWindowWithOffset_BecomesUtcRequestedWindow_NotPlanned()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+
+        var result = await h.Sut.IngestAsync(
+            "haven-edi", "order",
+            PayloadWithWindow("2026-07-15T08:00:00+02:00", "2026-07-15T10:00:00+02:00"),
+            CancellationToken.None);
+
+        Assert.Equal(EdiProcessingStatus.Processed, result.Message!.Status);
+        var stop = h.Db.Context.TransportOrderStops.OrderBy(s => s.Sequence).First();
+
+        Assert.Equal(new DateTime(2026, 07, 15, 6, 0, 0, DateTimeKind.Utc), stop.RequestedFrom);
+        Assert.Equal(new DateTime(2026, 07, 15, 8, 0, 0, DateTimeKind.Utc), stop.RequestedTo);
+        Assert.Equal(DateTimeKind.Utc, stop.RequestedFrom!.Value.Kind);
+        Assert.Null(stop.PlannedFrom);
+        Assert.Null(stop.PlannedTo);
+    }
+
+    /// <summary>An offset-LESS partner value is taken to be UTC already (documented contract).</summary>
+    [Fact]
+    public async Task Ingest_PartnerWindowWithoutOffset_IsReadAsUtc()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+
+        var result = await h.Sut.IngestAsync(
+            "haven-edi", "order",
+            PayloadWithWindow("2026-07-15T06:00:00", "2026-07-15T08:00:00"),
+            CancellationToken.None);
+
+        Assert.Equal(EdiProcessingStatus.Processed, result.Message!.Status);
+        var stop = h.Db.Context.TransportOrderStops.OrderBy(s => s.Sequence).First();
+
+        Assert.Equal(new DateTime(2026, 07, 15, 6, 0, 0, DateTimeKind.Utc), stop.RequestedFrom);
+        Assert.Equal(DateTimeKind.Utc, stop.RequestedFrom!.Value.Kind);
+        Assert.Null(stop.PlannedFrom);
+    }
+
+    /// <summary>`requestedFrom`/`requestedTo` are accepted as the clearer aliases of the keys.</summary>
+    [Fact]
+    public async Task Ingest_AcceptsRequestedWindowKeys()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+
+        var result = await h.Sut.IngestAsync(
+            "haven-edi", "order",
+            PayloadWithWindow("2026-07-15T08:00:00+02:00", "2026-07-15T10:00:00+02:00", "requestedFrom"),
+            CancellationToken.None);
+
+        Assert.Equal(EdiProcessingStatus.Processed, result.Message!.Status);
+        var stop = h.Db.Context.TransportOrderStops.OrderBy(s => s.Sequence).First();
+
+        Assert.Equal(new DateTime(2026, 07, 15, 6, 0, 0, DateTimeKind.Utc), stop.RequestedFrom);
+        Assert.Equal(new DateTime(2026, 07, 15, 8, 0, 0, DateTimeKind.Utc), stop.RequestedTo);
+        Assert.Null(stop.PlannedFrom);
+    }
+
+    [Fact]
+    public async Task Ingest_ResolvesUnits_ViaCustomerEdiCode_ThenGlobalCode()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var palletUnitId = Guid.NewGuid();
+        h.Db.Context.UnitTypes.Add(new TransportationService.Api.Modules.Reference.Entities.UnitType
+        {
+            Id = palletUnitId, TenantId = h.TenantId, Code = "EUROPALLET", Name = "Europallet", IsActive = true,
+        });
+        h.Db.Context.UnitTypes.Add(new TransportationService.Api.Modules.Reference.Entities.UnitType
+        {
+            Id = Guid.NewGuid(), TenantId = h.TenantId, Code = "COLLI", Name = "Colli", IsActive = true,
+        });
+        h.Db.Context.CustomerPreferredUnits.Add(new TransportationService.Api.Modules.Tarification.Entities.CustomerPreferredUnit
+        {
+            Id = Guid.NewGuid(), TenantId = h.TenantId, CustomerId = h.CustomerId,
+            UnitTypeId = palletUnitId, SortOrder = 1, EdiCode = "EPAL", IsFavourite = true,
+        });
+        await h.Db.Context.SaveChangesAsync();
+
+        var payload = JsonSerializer.Serialize(new
+        {
+            externalOrderId = "EXT-UNITS",
+            goodsDescription = "Eenheden via EDI",
+            stops = new object[]
+            {
+                new { type = "Loading", externalLocationCode = "TERMINAL-77" },
+                new { type = "Unloading", city = "Gent" },
+            },
+            cargoItems = new object[]
+            {
+                new { description = "Pallets", quantity = 3, unit = "EPAL" },     // customer EDI code
+                new { description = "Dozen", quantity = 5, unit = "colli" },      // global unit code
+                new { description = "Onbekend", quantity = 1, unit = "XYZ" },     // unresolvable
+            },
+        });
+
+        var result = await h.Sut.IngestAsync("haven-edi", "order", payload, CancellationToken.None);
+
+        Assert.Equal(EdiProcessingStatus.Processed, result.Message!.Status);
+        var cargo = h.Db.Context.CargoItems.OrderBy(c => c.Sequence).ToList();
+        Assert.Equal("EUROPALLET", cargo[0].QuantityUnitCode);   // resolved via the customer's EDI mapping
+        Assert.Equal("COLLI", cargo[1].QuantityUnitCode);        // resolved via the global unit code
+        Assert.Null(cargo[2].QuantityUnitCode);                  // stays free-text only
+        Assert.Equal("XYZ", cargo[2].QuantityUnit);
+    }
+
     [Fact]
     public async Task Ingest_DetectsDuplicates()
     {

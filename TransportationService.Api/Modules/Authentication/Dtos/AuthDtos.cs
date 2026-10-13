@@ -2,7 +2,8 @@ namespace TransportationService.Api.Modules.Authentication.Dtos;
 
 public record LoginRequest(string Email, string Password);
 
-public record RefreshRequest(string RefreshToken);
+/// <summary>Body token is the legacy/API-client path; browsers use the HttpOnly cookie (H5).</summary>
+public record RefreshRequest(string? RefreshToken);
 
 public record LogoutRequest(string? RefreshToken);
 
@@ -22,7 +23,18 @@ public record CurrentUserDto(
     string LastName,
     Guid? EmployeeId,
     IReadOnlyList<string> Roles,
-    IReadOnlyList<string> Permissions);
+    IReadOnlyList<string> Permissions,
+    /// <summary>True while a temporary/admin-set credential is active: the UI forces a change first.</summary>
+    bool MustChangePassword = false,
+    /// <summary>Set for customer-portal users only; drives the frontend's post-login routing
+    /// into the /klantportaal shell instead of the internal app.</summary>
+    Guid? CustomerId = null,
+    /// <summary>UI-taalvoorkeur (nl/fr/en) van de gebruiker; null = nog niet gekozen, de
+    /// frontend valt dan terug op tenant-default → browser → nl.</summary>
+    string? PreferredLanguage = null,
+    /// <summary>Persoonlijke weergavevoorkeur (light/dark/system); null = nog niet gekozen,
+    /// de frontend volgt dan het systeem (of de lokaal gecachte laatste keuze).</summary>
+    string? ThemePreference = null);
 
 public enum AuthOutcome
 {

@@ -1,9 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
+import { useLocale } from '../../../i18n/localeContext'
 import { assignRolePermissions, createRole, deactivateRole, updateRole } from '../api/rolesApi'
 import type { CreateRoleInput, Role, UpdateRoleInput } from '../types/role'
-
-const SUBMIT_ERROR_MESSAGE = 'De actie kon niet worden uitgevoerd. Probeer het opnieuw.'
-const SYSTEM_ROLE_ERROR_MESSAGE = 'Deze actie is niet toegestaan voor een systeemrol.'
 
 interface UseRoleMutationsResult {
   isSubmitting: boolean
@@ -15,6 +13,7 @@ interface UseRoleMutationsResult {
 }
 
 export function useRoleMutations(): UseRoleMutationsResult {
+  const { t } = useLocale()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const isMountedRef = useRef(true)
@@ -39,7 +38,9 @@ export function useRoleMutations(): UseRoleMutationsResult {
     } catch (err) {
       if (isMountedRef.current) {
         const status = (err as { status?: number }).status
-        setError(status === 409 ? SYSTEM_ROLE_ERROR_MESSAGE : SUBMIT_ERROR_MESSAGE)
+        setError(
+          status === 409 ? t('usersRoles.roles.mutations.systemRoleConflict') : t('usersRoles.roles.mutations.submitFailed'),
+        )
         setIsSubmitting(false)
       }
       return null

@@ -1,8 +1,10 @@
 import { Link, useNavigate } from 'react-router-dom'
 import { PageHeader } from '../../../components/layout/PageHeader'
+import { useLocale } from '../../../i18n/localeContext'
 import { UserForm } from '../components/UserForm'
 
 export function NewUserPage() {
+  const { t } = useLocale()
   const navigate = useNavigate()
 
   function handleSaved() {
@@ -11,12 +13,12 @@ export function NewUserPage() {
 
   return (
     <>
-      <PageHeader title="Nieuwe gebruiker" />
+      <PageHeader title={t('usersRoles.users.page.newUser')} />
       <UserForm
         onSaved={handleSaved}
         secondaryAction={
           <Link to="/users" className="secondary-link">
-            Annuleren
+            {t('ui.actions.cancel')}
           </Link>
         }
       />

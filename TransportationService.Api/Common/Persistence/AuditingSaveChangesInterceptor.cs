@@ -62,6 +62,14 @@ public sealed class AuditingSaveChangesInterceptor : SaveChangesInterceptor
             {
                 ApplyAuditStamps(entry, auditable, now, userId);
             }
+
+            // Central optimistic-concurrency bump: every modification (including soft deletes,
+            // which were just converted to Modified above) gets a fresh token, so no mutation
+            // path can forget it. Added entities keep their initializer-assigned token.
+            if (entry.Entity is IVersionedEntity versioned && entry.State == EntityState.Modified)
+            {
+                versioned.Version = Guid.NewGuid();
+            }
         }
     }
 

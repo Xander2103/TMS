@@ -15,6 +15,13 @@ interface UsePagedQueryOptions {
   pageSize?: number
   debounceMs?: number
   errorMessage?: string
+  /**
+   * Extra filter values (selects, checkboxes, sort, ...) that the fetcher closes over but that
+   * usePagedQuery itself doesn't know about. Fold them in here so the request key changes when
+   * they do — otherwise a filter change silently reuses the previous page's data until something
+   * else (search/page) happens to change too.
+   */
+  extra?: Record<string, unknown>
 }
 
 interface UsePagedQueryResult<T> {
@@ -44,6 +51,7 @@ export function usePagedQuery<T>(
     pageSize = DEFAULT_PAGE_SIZE,
     debounceMs = DEFAULT_DEBOUNCE_MS,
     errorMessage = 'Gegevens konden niet worden geladen.',
+    extra,
   } = options
 
   const [state, setState] = useState<{ items: T[]; totalCount: number; error: string | null; loadedKey: string }>({
@@ -58,7 +66,7 @@ export function usePagedQuery<T>(
 
   // Identifies the current request. Loading is derived from whether the loaded result matches it,
   // so state is only ever mutated inside async callbacks (never synchronously in the effect body).
-  const requestKey = JSON.stringify({ search, isActive, page, pageSize, reloadToken })
+  const requestKey = JSON.stringify({ search, isActive, page, pageSize, reloadToken, extra })
 
   useEffect(() => {
     let isMounted = true

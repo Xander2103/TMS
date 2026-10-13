@@ -33,6 +33,7 @@ public record VehicleDetailDto(
     decimal? WidthMeters,
     decimal? HeightMeters,
     decimal? VolumeM3,
+    bool VolumeIsManual,
     int OdometerKm,
     decimal? ConsumptionLPer100Km,
     bool HasCrane,
@@ -47,7 +48,12 @@ public record VehicleDetailDto(
     string? FixedDriverName,
     Guid? CurrentDriverId,
     string? CurrentDriverName,
-    string? Notes);
+    string? Notes,
+    int AxleCount = 0,
+    decimal LoadingMeters = 0,
+    string? RequiredLicenceCode = null,
+    /// <summary>D4: tail-lift capacity in kg (null = unknown); only meaningful with HasTailLift.</summary>
+    decimal? TailLiftCapacityKg = null);
 
 public record CreateVehicleRequest(
     string LicensePlate,
@@ -74,7 +80,13 @@ public record CreateVehicleRequest(
     VehicleOwnershipType OwnershipType,
     Guid? FixedDriverId,
     Guid? CurrentDriverId,
-    string? Notes);
+    string? Notes,
+    bool VolumeIsManual = false,
+    int AxleCount = 0,
+    decimal LoadingMeters = 0,
+    string? RequiredLicenceCode = null,
+    /// <summary>D4: tail-lift capacity in kg (null = unknown); only meaningful with HasTailLift.</summary>
+    decimal? TailLiftCapacityKg = null);
 
 public record UpdateVehicleRequest(
     string LicensePlate,
@@ -102,7 +114,15 @@ public record UpdateVehicleRequest(
     VehicleOperationalStatus OperationalStatus,
     bool IsActive,
     string? Notes,
-    string? StatusReason = null);
+    string? StatusReason = null,
+    bool VolumeIsManual = false,
+    int AxleCount = 0,
+    decimal LoadingMeters = 0,
+    string? RequiredLicenceCode = null,
+    /// <summary>D4: tail-lift capacity in kg (null = unknown); only meaningful with HasTailLift.</summary>
+    decimal? TailLiftCapacityKg = null);
+
+public record SetVehicleActiveRequest(bool IsActive);
 
 /// <summary>Body for the vehicle-side assignment endpoints; null DriverId clears the slot.</summary>
 public record AssignVehicleDriverRequest(Guid? DriverId, bool ReplaceExisting = false);

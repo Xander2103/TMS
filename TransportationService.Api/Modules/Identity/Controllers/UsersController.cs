@@ -14,10 +14,38 @@ public class UsersController : ControllerBase
     private const int NameMaxLength = 100;
 
     private readonly IUserService _userService;
+    private readonly IUserAccountFlowService _accountFlows;
+    private readonly IJobFunctionRoleMappingService _roleMappings;
 
-    public UsersController(IUserService userService)
+    public UsersController(
+        IUserService userService,
+        IUserAccountFlowService accountFlows,
+        IJobFunctionRoleMappingService roleMappings)
     {
         _userService = userService;
+        _accountFlows = accountFlows;
+        _roleMappings = roleMappings;
+    }
+
+    /// <summary>
+    /// Starts the secure activation flow. The raw single-use token is returned ONCE for the
+    /// administrator to hand over; it is stored hashed and expires automatically.
+    /// </summary>
+    [HttpPost("{id:guid}/activation")]
+    [RequirePermission(PermissionCodes.UsersEdit)]
+    public async Task<ActionResult<StartedTokenDto>> StartActivation(Guid id, CancellationToken cancellationToken)
+    {
+        var started = await _accountFlows.StartActivationAsync(id, cancellationToken);
+        return started is null ? NotFound() : Ok(started);
+    }
+
+    /// <summary>Roles the function→role mappings suggest for an employee; the admin confirms the final set.</summary>
+    [HttpGet("suggested-roles")]
+    [RequirePermission(PermissionCodes.UsersCreate, PermissionCodes.UsersEdit)]
+    public async Task<ActionResult<IReadOnlyList<SuggestedRoleDto>>> SuggestedRoles(
+        [FromQuery] Guid employeeId, CancellationToken cancellationToken)
+    {
+        return Ok(await _roleMappings.SuggestForEmployeeAsync(employeeId, cancellationToken));
     }
 
     [HttpGet]
@@ -92,9 +120,13 @@ public class UsersController : ControllerBase
 
     public record SetPasswordRequest(string Password);
 
-    /// <summary>Administrative password (re)set so an employee/driver account can log in to the portal.</summary>
+    /// <summary>
+    /// Administrative password (re)set of ANOTHER user. Gated by the sensitive
+    /// users.reset_password permission (separate from users.edit) and fail-closed against
+    /// resetting higher-privileged or protected system accounts (see UserService).
+    /// </summary>
     [HttpPut("{id:guid}/password")]
-    [RequirePermission(PermissionCodes.UsersEdit)]
+    [RequirePermission(PermissionCodes.UsersResetPassword)]
     public async Task<IActionResult> SetPassword(Guid id, SetPasswordRequest request, CancellationToken cancellationToken)
     {
         var result = await _userService.SetPasswordAsync(id, request.Password, cancellationToken);
@@ -102,6 +134,7 @@ public class UsersController : ControllerBase
         {
             UserOperationOutcome.Success => NoContent(),
             UserOperationOutcome.NotFound => NotFound(),
+            UserOperationOutcome.Forbidden => StatusCode(StatusCodes.Status403Forbidden, new { message = result.Error }),
             _ => BadRequest(new { message = result.Error }),
         };
     }
@@ -140,6 +173,7 @@ public class UsersController : ControllerBase
         {
             UserOperationOutcome.Success => Ok(result.User),
             UserOperationOutcome.NotFound => NotFound(),
+            UserOperationOutcome.Forbidden => StatusCode(StatusCodes.Status403Forbidden, new { message = result.Error }),
             UserOperationOutcome.LastActiveAdministrator => Conflict("The last active administrator cannot be deactivated, blocked, or lose the administrator role."),
             _ => Conflict(),
         };

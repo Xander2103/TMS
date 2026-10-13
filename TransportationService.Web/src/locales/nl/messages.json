@@ -1,0 +1,14 @@
+{
+  "title": "Berichten",
+  "general": "Algemeen",
+  "orderSubtitle": "Opdracht {orderId}",
+  "loading": "Berichten laden...",
+  "loadError": "De berichten konden niet worden geladen.",
+  "sendError": "Het bericht kon niet worden verstuurd.",
+  "empty": "Nog geen berichten in dit gesprek.",
+  "you": "U",
+  "threadLabel": "Berichtenoverzicht",
+  "newMessageLabel": "Nieuw bericht",
+  "placeholder": "Typ uw bericht...",
+  "send": "Versturen"
+}

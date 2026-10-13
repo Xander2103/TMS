@@ -1,5 +1,5 @@
 import { apiClient } from '../../../api/apiClient'
-import type { KpiDashboard, KpiFilterState, TripProfitabilityRow } from '../types'
+import type { ActivityKpiReport, KpiDashboard, KpiFilterState, TripProfitabilityRow } from '../types'
 
 function query(filter: KpiFilterState): string {
   const params = new URLSearchParams({ from: filter.from, to: filter.to })
@@ -15,6 +15,13 @@ export function getKpiDashboard(filter: KpiFilterState): Promise<KpiDashboard> {
 
 export function getTripProfitability(filter: KpiFilterState): Promise<TripProfitabilityRow[]> {
   return apiClient.getJson<TripProfitabilityRow[]>(`/api/kpi/trip-profitability?${query(filter)}`)
+}
+
+/** P11: activity-based KPIs (counts/revenue per activity type) for the period. */
+export function getActivityKpis(from: string, to: string): Promise<ActivityKpiReport> {
+  return apiClient.getJson<ActivityKpiReport>(
+    `/api/kpi/activities?${new URLSearchParams({ from, to }).toString()}`,
+  )
 }
 
 export function kpiExportUrl(report: string, filter: KpiFilterState): string {

@@ -1,0 +1,173 @@
+{
+  "phase": {
+    "Estimated": "Estimé",
+    "Actual": "Réel"
+  },
+  "costType": {
+    "Fuel": "Carburant",
+    "Toll": "Péage/Maut",
+    "DriverLabour": "Chauffeur",
+    "Overtime": "Heures supplémentaires",
+    "WaitingTime": "Temps d'attente",
+    "VehicleDistance": "Véhicule par km",
+    "VehicleTime": "Véhicule par heure",
+    "Maintenance": "Entretien",
+    "Depreciation": "Amortissement",
+    "Trailer": "Semi-remorque",
+    "Equipment": "Équipement",
+    "Subcontractor": "Sous-traitant",
+    "FerryTunnelParking": "Ferry/tunnel/parking",
+    "Manual": "Manuel",
+    "Correction": "Correction/crédit"
+  },
+  "panel": {
+    "title": "Coûts & rentabilité",
+    "loading": "Chargement des coûts…",
+    "loadForbidden": "Vous n'avez pas accès aux données de coûts.",
+    "loadFailed": "Les coûts n'ont pas pu être chargés.",
+    "actionFailed": "L'opération a échoué.",
+    "totals": {
+      "projected": "Projeté",
+      "final": "Définitif",
+      "finalized": "Clôturé"
+    },
+    "profitability": {
+      "title": "Rentabilité",
+      "revenue": "Chiffre d'affaires",
+      "costs": "Coûts",
+      "profit": "Bénéfice",
+      "margin": "Marge",
+      "revenuePerKm": "CA/km",
+      "costPerKm": "Coûts/km",
+      "revenuePerHour": "CA/heure",
+      "costPerHour": "Coûts/heure",
+      "colOrder": "Commande",
+      "colCustomer": "Client",
+      "colRevenue": "Chiffre d'affaires",
+      "colAllocatedCost": "Coût imputé",
+      "colProfit": "Bénéfice",
+      "colMargin": "Marge"
+    },
+    "phaseTablist": "Phase de coût",
+    "distances": "Prévu : {planned} km ({plannedEmpty} à vide) · Réel : {actual} km ({actualEmpty} à vide)",
+    "actions": {
+      "recalcEstimate": "Recalculer l'estimation",
+      "recalcActual": "Recalculer le réel",
+      "actualKm": "Km réels",
+      "addLine": "+ Ligne de coût",
+      "finalize": "Clôturer",
+      "reopen": "Rouvrir",
+      "override": "Remplacer"
+    },
+    "toasts": {
+      "estimateRecalculated": "Estimation recalculée.",
+      "actualRecalculated": "Coûts réels recalculés.",
+      "lineAdded": "Ligne de coût ajoutée.",
+      "lineOverridden": "Ligne de coût remplacée.",
+      "lineDeleted": "Ligne de coût supprimée.",
+      "actualsUpdated": "Distances réelles mises à jour.",
+      "finalized": "Coûts définitivement clôturés.",
+      "reopened": "Coûts rouverts."
+    },
+    "emptyLines": {
+      "Estimated": "Aucune ligne de coût estimée.",
+      "Actual": "Aucune ligne de coût réelle."
+    },
+    "table": {
+      "colType": "Type",
+      "colDescription": "Description",
+      "colQuantity": "Quantité",
+      "colUnit": "Unité",
+      "colRate": "Tarif",
+      "colAmount": "Montant",
+      "colSource": "Source",
+      "colActions": "Actions"
+    },
+    "overriddenNote": "· remplacée",
+    "overriddenNoteReason": "· remplacée : {reason}",
+    "lineDialog": {
+      "title": "Ajouter une ligne de coût",
+      "phase": "Phase",
+      "type": "Type",
+      "description": "Description",
+      "quantity": "Quantité",
+      "unit": "Unité",
+      "rate": "Tarif (€)",
+      "rateHint": "Négatif uniquement pour une correction/un crédit.",
+      "validation": "La description, la quantité et le tarif sont obligatoires."
+    },
+    "overrideDialog": {
+      "title": "Remplacer la ligne — {type}",
+      "current": "Montant actuel :",
+      "newAmount": "Nouveau montant (€)",
+      "reason": "Motif",
+      "reasonHint": "Obligatoire ; sera consigné dans l'historique.",
+      "validation": "Le montant et le motif sont obligatoires."
+    },
+    "actualsDialog": {
+      "title": "Distances réelles",
+      "distance": "Distance réelle (km)",
+      "empty": "Dont à vide (km)",
+      "validation": "Veuillez saisir des kilomètres valides."
+    }
+  },
+  "rates": {
+    "title": "Barèmes de coûts",
+    "subtitle": "Les barèmes de coûts avec date d'entrée en vigueur alimentent le calcul des coûts de tournée. Les tournées historiques conservent leurs instantanés calculés.",
+    "newSet": "Nouveau barème de coûts",
+    "loading": "Chargement des barèmes…",
+    "loadFailed": "Les barèmes n'ont pas pu être chargés.",
+    "empty": "Pas encore de barème de coûts. Sans barème, aucun coût de tournée n'est calculé.",
+    "effectiveFromRequired": "Une date d'entrée en vigueur est obligatoire.",
+    "saveFailed": "Le barème de coûts n'a pas pu être enregistré.",
+    "deleteFailed": "Le barème de coûts n'a pas pu être supprimé.",
+    "toasts": {
+      "created": "Barème de coûts créé.",
+      "updated": "Barème de coûts mis à jour.",
+      "deleted": "Barème de coûts supprimé."
+    },
+    "table": {
+      "effectiveFrom": "Date d'entrée en vigueur",
+      "name": "Nom",
+      "fuel": "Carburant €/l",
+      "driver": "Chauffeur €/h",
+      "vehicleKm": "Véhicule €/km",
+      "vehicleHour": "Véhicule €/h",
+      "depreciation": "Amortissement €/jour",
+      "actions": "Actions"
+    },
+    "editor": {
+      "editTitle": "Modifier le barème — à partir du {date}",
+      "busy": "En cours…",
+      "effectiveFrom": "Date d'entrée en vigueur",
+      "effectiveFromHint": "Les tournées à partir de cette date utilisent ces tarifs.",
+      "name": "Nom"
+    },
+    "deleteDialog": {
+      "title": "Supprimer le barème de coûts",
+      "message": "Supprimer le barème en vigueur à partir du {date} ? Les coûts de tournée déjà calculés restent inchangés."
+    },
+    "fields": {
+      "fuelPricePerLitre": "Prix du carburant (€/l)",
+      "defaultConsumptionLPer100Km": "Consommation par défaut (l/100km)",
+      "defaultConsumptionLPer100KmHint": "Utilisée si le véhicule n'a pas de consommation normée.",
+      "vehicleCostPerKm": "Coût du véhicule (€/km)",
+      "vehicleCostPerHour": "Coût du véhicule (€/heure)",
+      "driverCostPerHour": "Salaire du chauffeur (€/heure)",
+      "employerCostMultiplier": "Facteur de charges patronales",
+      "employerCostMultiplierHint": "Par ex. 1,35 = salaire + 35 % de charges.",
+      "maintenanceCostPerKm": "Entretien (€/km)",
+      "depreciationPerDay": "Amortissement (€/jour)",
+      "trailerCostPerDay": "Semi-remorque (€/jour)",
+      "equipmentCostPerDay": "Équipement grue/frigo (€/jour)",
+      "defaultTollPerTrip": "Péage par défaut par tournée (€)",
+      "overtimeThresholdMinutesPerDay": "Seuil d'heures supplémentaires (min/jour)",
+      "overtimeThresholdMinutesPerDayHint": "480 = 8 heures.",
+      "overtimeRateMultiplier": "Facteur d'heures supplémentaires",
+      "overtimeRateMultiplierHint": "Par ex. 1,5 = 150 % du salaire horaire.",
+      "waitingTimeCostPerHour": "Temps d'attente (€/heure)",
+      "co2KgPerLitreDiesel": "CO₂ diesel (kg/l)",
+      "co2KgPerLitreOther": "CO₂ essence/autres (kg/l)"
+    }
+  }
+}

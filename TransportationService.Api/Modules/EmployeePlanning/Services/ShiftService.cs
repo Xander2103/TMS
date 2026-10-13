@@ -4,6 +4,7 @@ using TransportationService.Api.Data;
 using TransportationService.Api.Modules.Auditing.Services;
 using TransportationService.Api.Modules.EmployeePlanning.Dtos;
 using TransportationService.Api.Modules.EmployeePlanning.Entities;
+using TransportationService.Api.Modules.Employees.Entities;
 using TransportationService.Api.Modules.Hr.Entities;
 using TransportationService.Api.Modules.Integrations.Services;
 using TransportationService.Api.Modules.Notifications.Services;
@@ -237,6 +238,14 @@ public class ShiftService : IShiftService
             query = query.Where(s => departmentEmployees.Contains(s.EmployeeId));
         }
 
+        if (request.HasSelectionFilters)
+        {
+            // Exactly the employees the grid shows for this selection (same resolver as the grid
+            // and the export) — never a second filter implementation.
+            var selected = SelectedEmployees(request.ToScheduleQuery(request.SourceWeekStart, sourceEnd)).Select(e => e.Id);
+            query = query.Where(s => selected.Contains(s.EmployeeId));
+        }
+
         var sourceShifts = await query.ToListAsync(cancellationToken);
 
         var copied = 0;
@@ -301,48 +310,149 @@ public class ShiftService : IShiftService
         return true;
     }
 
-    public async Task<ScheduleGridDto> GetScheduleAsync(
+    public Task<ScheduleGridDto> GetScheduleAsync(
         DateOnly from, DateOnly to, Guid? departmentId, Guid? employeeId, CancellationToken cancellationToken)
     {
+        // Legacy shape. A single employee id means "only this employee" — exactly what an explicit
+        // pick without group filters means in the selection model.
+        var query = new ScheduleQuery(
+            from, to,
+            departmentId is { } d ? [d] : [],
+            [], [], [], false,
+            employeeId is { } e ? [e] : []);
+        return GetScheduleAsync(query, cancellationToken);
+    }
+
+    /// <summary>
+    /// THE employee resolver of the planning selection — shared by the grid, "week kopiëren" and
+    /// the Excel export (see <see cref="ScheduleQuery"/> for the semantics). Tenant scoping is
+    /// unconditional; everything else is presentation filtering.
+    /// </summary>
+    private IQueryable<Employee> SelectedEmployees(ScheduleQuery query)
+    {
         var tenantId = _tenantContext.TenantId;
+        var statuses = query.EffectiveStatuses;
+        var includeActive = statuses.Contains(PlanningEmployeeStatus.Active);
+        var includeInactive = statuses.Contains(PlanningEmployeeStatus.Inactive);
+        var departmentIds = query.DepartmentIds;
+        var jobFunctionIds = query.JobFunctionIds;
+        var contractTypeIds = query.ContractTypeIds;
+        var explicitIds = query.EmployeeIds;
+        var noDepartments = departmentIds.Count == 0;
+        var noFunctions = jobFunctionIds.Count == 0;
+        var noContracts = contractTypeIds.Count == 0;
+        var driversOnly = query.DriversOnly;
 
-        var employeesQuery = _dbContext.Employees.AsNoTracking()
-            .Where(e => e.TenantId == tenantId && e.IsActive);
-        if (departmentId is { } d)
+        var employees = _dbContext.Employees.AsNoTracking().Where(e => e.TenantId == tenantId);
+
+        if (query.HasExplicitEmployees && !query.HasGroupFilters)
         {
-            employeesQuery = employeesQuery.Where(e => e.DepartmentId == d);
+            // "These people": the explicit picks ARE the selection, whatever their status.
+            return employees.Where(e => explicitIds.Contains(e.Id));
         }
 
-        if (employeeId is { } emp)
-        {
-            employeesQuery = employeesQuery.Where(e => e.Id == emp);
-        }
+        // Group result (status scope AND every active dimension, OR within a dimension) …
+        var group = employees.Where(e =>
+            ((includeActive && e.IsActive) || (includeInactive && !e.IsActive))
+            && (noDepartments || (e.DepartmentId != null && departmentIds.Contains(e.DepartmentId.Value)))
+            && (noFunctions || e.JobFunctions.Any(j => jobFunctionIds.Contains(j.JobFunctionId)))
+            && (noContracts || (e.ContractTypeId != null && contractTypeIds.Contains(e.ContractTypeId.Value)))
+            && (!driversOnly || _dbContext.Drivers.Any(d => d.EmployeeId == e.Id && d.TenantId == tenantId)));
 
-        var employees = await employeesQuery
+        // … plus the explicit picks pinned on top of it.
+        return query.HasExplicitEmployees
+            ? employees.Where(e => explicitIds.Contains(e.Id)).Union(group)
+            : group;
+    }
+
+    /// <summary>In-memory twin of the group predicate, to mark pinned rows that fall outside it.</summary>
+    private static bool MatchesGroupFilters(
+        ScheduleQuery query, bool isActive, Guid? departmentId, Guid? contractTypeId,
+        IReadOnlyCollection<Guid> jobFunctionIds, bool isDriver)
+    {
+        var statuses = query.EffectiveStatuses;
+        var statusOk = (statuses.Contains(PlanningEmployeeStatus.Active) && isActive)
+                       || (statuses.Contains(PlanningEmployeeStatus.Inactive) && !isActive);
+        return statusOk
+               && (query.DepartmentIds.Count == 0 || (departmentId is { } d && query.DepartmentIds.Contains(d)))
+               && (query.JobFunctionIds.Count == 0 || jobFunctionIds.Any(query.JobFunctionIds.Contains))
+               && (query.ContractTypeIds.Count == 0 || (contractTypeId is { } c && query.ContractTypeIds.Contains(c)))
+               && (!query.DriversOnly || isDriver);
+    }
+
+    public async Task<ScheduleGridDto> GetScheduleAsync(ScheduleQuery query, CancellationToken cancellationToken)
+    {
+        var tenantId = _tenantContext.TenantId;
+        var (from, to) = (query.From, query.To);
+
+        // 1. The selected employees — one set-based query, ordered for display.
+        var employees = await SelectedEmployees(query)
             .OrderBy(e => e.LastName).ThenBy(e => e.FirstName)
-            .Select(e => new { e.Id, e.FirstName, e.LastName, e.EmployeeNumber, e.DepartmentId })
+            .Select(e => new
+            {
+                e.Id, e.FirstName, e.LastName, e.EmployeeNumber, e.DepartmentId, e.ContractTypeId, e.IsActive,
+                IsDriver = _dbContext.Drivers.Any(d => d.EmployeeId == e.Id && d.TenantId == tenantId),
+            })
             .ToListAsync(cancellationToken);
         var employeeIds = employees.Select(e => e.Id).ToList();
 
+        // 2. Scope count for "38 van 214": the status dimension only, before group filters.
+        var statuses = query.EffectiveStatuses;
+        var includeActive = statuses.Contains(PlanningEmployeeStatus.Active);
+        var includeInactive = statuses.Contains(PlanningEmployeeStatus.Inactive);
+        var totalInScope = await _dbContext.Employees.AsNoTracking()
+            .CountAsync(e => e.TenantId == tenantId && ((includeActive && e.IsActive) || (includeInactive && !e.IsActive)),
+                cancellationToken);
+
+        // 3. Reference names: departments and contract types (tiny tables), job functions per employee.
         var departments = await _dbContext.Departments.AsNoTracking()
             .Where(x => x.TenantId == tenantId)
             .ToDictionaryAsync(x => x.Id, x => x.Name, cancellationToken);
+        var contractTypes = await _dbContext.ContractTypes.AsNoTracking()
+            .Where(x => x.TenantId == tenantId)
+            .ToDictionaryAsync(x => x.Id, x => x.Name, cancellationToken);
+        var jobFunctionLinks = employeeIds.Count == 0
+            ? []
+            : await _dbContext.Set<EmployeeJobFunction>().AsNoTracking()
+                .Where(j => employeeIds.Contains(j.EmployeeId) && j.JobFunction != null)
+                .Select(j => new { j.EmployeeId, j.JobFunctionId, j.JobFunction!.Name, j.JobFunction.SortOrder })
+                .ToListAsync(cancellationToken);
+        var jobFunctionsByEmployee = jobFunctionLinks
+            .GroupBy(j => j.EmployeeId)
+            .ToDictionary(
+                g => g.Key,
+                g => g.OrderBy(j => j.SortOrder).ThenBy(j => j.Name).Select(j => (j.JobFunctionId, j.Name)).ToList());
 
-        var shifts = await Scoped().AsNoTracking()
-            .Where(s => s.Date >= from && s.Date <= to && employeeIds.Contains(s.EmployeeId))
-            .ToListAsync(cancellationToken);
+        // 4. Planning data for exactly these employees and this period — three set-based queries.
+        var shifts = employeeIds.Count == 0
+            ? []
+            : await Scoped().AsNoTracking()
+                .Where(s => s.Date >= from && s.Date <= to && employeeIds.Contains(s.EmployeeId))
+                .ToListAsync(cancellationToken);
 
-        var absences = await _dbContext.Absences.AsNoTracking()
-            .Where(a => a.TenantId == tenantId && employeeIds.Contains(a.EmployeeId)
-                        && a.StartDate <= to && a.EndDate >= from
-                        && (a.Status == AbsenceStatus.Requested || a.Status == AbsenceStatus.Approved
-                            || a.Status == AbsenceStatus.Rejected))
-            .ToListAsync(cancellationToken);
+        var absences = employeeIds.Count == 0
+            ? []
+            : await _dbContext.Absences.AsNoTracking()
+                .Where(a => a.TenantId == tenantId && employeeIds.Contains(a.EmployeeId)
+                            && a.StartDate <= to && a.EndDate >= from
+                            && (a.Status == AbsenceStatus.Requested || a.Status == AbsenceStatus.Approved
+                                || a.Status == AbsenceStatus.Rejected))
+                .ToListAsync(cancellationToken);
 
-        var tripEntries = await _dbContext.TripPlanningEntries.AsNoTracking()
-            .Where(t => t.TenantId == tenantId && employeeIds.Contains(t.EmployeeId)
-                        && t.Date >= from && t.Date <= to)
-            .ToListAsync(cancellationToken);
+        var tripEntries = employeeIds.Count == 0
+            ? []
+            : await _dbContext.TripPlanningEntries.AsNoTracking()
+                .Where(t => t.TenantId == tenantId && employeeIds.Contains(t.EmployeeId)
+                            && t.Date >= from && t.Date <= to)
+                .ToListAsync(cancellationToken);
+
+        // Configurable leave-type colours flow into the calendar; enum-state CSS stays the fallback.
+        var leaveTypeIds = absences.Where(a => a.LeaveTypeId.HasValue).Select(a => a.LeaveTypeId!.Value).Distinct().ToList();
+        var leaveTypeColours = leaveTypeIds.Count == 0
+            ? new Dictionary<Guid, string?>()
+            : await _dbContext.LeaveTypes.AsNoTracking()
+                .Where(t => t.TenantId == tenantId && leaveTypeIds.Contains(t.Id))
+                .ToDictionaryAsync(t => t.Id, t => t.Colour, cancellationToken);
 
         var severitySettings = await _dbContext.TenantSettings.AsNoTracking()
             .Where(s => s.TenantId == tenantId)
@@ -351,20 +461,33 @@ public class ShiftService : IShiftService
         var trainingSeverity = ScheduleConflictRules.Parse(severitySettings?.TrainingConflictSeverity);
         var shiftOverlapSeverity = ScheduleConflictRules.Parse(severitySettings?.ShiftOverlapConflictSeverity);
 
+        // 5. Assemble in memory with O(1) lookups per employee (a 500-row grid must not scan every
+        //    shift list 500 times).
+        var shiftsByEmployee = shifts.ToLookup(s => s.EmployeeId);
+        var absencesByEmployee = absences.ToLookup(a => a.EmployeeId);
+        var tripsByEmployee = tripEntries.ToLookup(t => t.EmployeeId);
+        // Pinned rows outside the group filters are marked, never dropped. Without group filters
+        // the explicit picks ARE the selection, so nothing is "outside".
+        var markOutsiders = query.HasGroupFilters && query.HasExplicitEmployees;
+
         var rows = employees.Select(employee =>
         {
-            var employeeShifts = shifts.Where(s => s.EmployeeId == employee.Id).ToList();
-            var employeeAbsences = absences.Where(a => a.EmployeeId == employee.Id).ToList();
-            var employeeTrips = tripEntries.Where(t => t.EmployeeId == employee.Id).ToList();
+            var employeeShifts = shiftsByEmployee[employee.Id].ToList();
+            var employeeAbsences = absencesByEmployee[employee.Id].ToList();
+            var employeeTrips = tripsByEmployee[employee.Id].ToList();
+            var functions = jobFunctionsByEmployee.GetValueOrDefault(employee.Id) ?? [];
 
             var days = new List<ScheduleDayDto>();
             for (var date = from; date <= to; date = date.AddDays(1))
             {
-                var entries = BuildEntries(date, employeeShifts, employeeAbsences, employeeTrips);
+                var entries = BuildEntries(date, employeeShifts, employeeAbsences, employeeTrips, leaveTypeColours);
                 days.Add(new ScheduleDayDto(date, AnnotateConflicts(entries, trainingSeverity, shiftOverlapSeverity)));
             }
 
             var plannedMinutes = employeeShifts.Sum(s => PlannedMinutes(s.StartTime, s.EndTime, s.BreakMinutes));
+            var matches = !markOutsiders || MatchesGroupFilters(
+                query, employee.IsActive, employee.DepartmentId, employee.ContractTypeId,
+                functions.Select(f => f.JobFunctionId).ToList(), employee.IsDriver);
 
             return new ScheduleRowDto(
                 employee.Id,
@@ -372,10 +495,14 @@ public class ShiftService : IShiftService
                 employee.EmployeeNumber,
                 employee.DepartmentId is { } dep ? departments.GetValueOrDefault(dep) : null,
                 plannedMinutes,
-                days);
+                days,
+                functions.Select(f => f.Name).ToList(),
+                employee.ContractTypeId is { } ct ? contractTypes.GetValueOrDefault(ct) : null,
+                employee.IsActive,
+                matches);
         }).ToList();
 
-        return new ScheduleGridDto(from, to, rows);
+        return new ScheduleGridDto(from, to, rows, totalInScope);
     }
 
     public async Task<IReadOnlyList<ScheduleDayDto>> GetEmployeeScheduleAsync(
@@ -387,7 +514,8 @@ public class ShiftService : IShiftService
 
     private static IReadOnlyList<ScheduleEntryDto> BuildEntries(
         DateOnly date, IReadOnlyList<Shift> shifts, IReadOnlyList<Absence> absences,
-        IReadOnlyList<TripPlanningEntry> tripEntries)
+        IReadOnlyList<TripPlanningEntry> tripEntries,
+        IReadOnlyDictionary<Guid, string?> leaveTypeColours)
     {
         var entries = new List<ScheduleEntryDto>();
 
@@ -441,8 +569,10 @@ public class ShiftService : IShiftService
                     _ => ScheduleEntryState.LeaveApproved,
                 },
             };
+            var colour = absence.LeaveTypeId is { } leaveTypeId ? leaveTypeColours.GetValueOrDefault(leaveTypeId) : null;
             entries.Add(new ScheduleEntryDto(state, null, absence.Id, null, "Absence",
-                AbsenceLabel(absence.Type), null, null, null, null, null, AbsenceStatusLabel(absence.Status)));
+                AbsenceLabel(absence.Type), null, null, null, null, null, AbsenceStatusLabel(absence.Status),
+                Colour: colour));
         }
 
         return entries;

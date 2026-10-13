@@ -34,8 +34,8 @@ public class CompanySettingsService : ICompanySettingsService
 
     public async Task<CompanySettingsDto> UpdateAsync(UpdateCompanySettingsRequest request, CancellationToken cancellationToken)
     {
-        await _countryValidator.NormalizeAndValidateAsync(request.CountryCode, "land (maatschappelijke zetel)", cancellationToken);
-        await _countryValidator.NormalizeAndValidateAsync(request.OperationalCountryCode, "land (operationeel adres)", cancellationToken);
+        await _countryValidator.NormalizeAndValidateAsync(request.CountryCode, "land (maatschappelijke zetel)", cancellationToken, "countryCode");
+        await _countryValidator.NormalizeAndValidateAsync(request.OperationalCountryCode, "land (operationeel adres)", cancellationToken, "operationalCountryCode");
 
         var settings = await GetOrCreateAsync(cancellationToken);
 
@@ -87,10 +87,11 @@ public class CompanySettingsService : ICompanySettingsService
         settings.PhoneNumber = Trim(request.PhoneNumber);
         settings.Website = Trim(request.Website);
 
-        settings.DefaultLanguage = Fallback(request.DefaultLanguage, "nl").ToLowerInvariant();
+        // Gesloten productcatalogus (nl/fr/en) — onbekende waarden vallen terug op nl.
+        settings.DefaultLanguage = Common.SupportedLanguages.Normalize(request.DefaultLanguage);
         settings.Timezone = Fallback(request.Timezone, "Europe/Amsterdam");
         settings.DefaultCurrency = Fallback(request.DefaultCurrency, "EUR").ToUpperInvariant();
-        settings.DateFormat = Fallback(request.DateFormat, "dd-MM-yyyy");
+        settings.DateFormat = NormalizeDateFormat(request.DateFormat, settings.DateFormat);
         settings.DecimalSeparator = request.DecimalSeparator is "," or "." ? request.DecimalSeparator : ",";
         settings.DefaultWeightUnit = Fallback(request.DefaultWeightUnit, "kg");
         settings.DefaultDistanceUnit = Fallback(request.DefaultDistanceUnit, "km");
@@ -104,6 +105,11 @@ public class CompanySettingsService : ICompanySettingsService
         settings.DefaultUnloadingMinutes = Clamp(request.DefaultUnloadingMinutes, 0, 1440);
         settings.TrainingConflictSeverity = NormalizeSeverity(request.TrainingConflictSeverity);
         settings.ShiftOverlapConflictSeverity = NormalizeSeverity(request.ShiftOverlapConflictSeverity);
+        settings.CapacityConflictSeverity = NormalizeSeverity(request.CapacityConflictSeverity);
+        settings.RedeliveryMode = request.RedeliveryMode is "Propose" or "Automatic" ? request.RedeliveryMode : "Manual";
+        settings.EtaShiftNotifyMinutes = request.EtaShiftNotifyMinutes is >= 1 and <= 720
+            ? request.EtaShiftNotifyMinutes
+            : null;
         settings.QualificationExpiryWarningDays = Clamp(request.QualificationExpiryWarningDays, 0, 365);
 
         settings.EmployeeNumberPrefix = Trim(request.EmployeeNumberPrefix);
@@ -160,7 +166,8 @@ public class CompanySettingsService : ICompanySettingsService
         s.DefaultLanguage, s.Timezone, s.DefaultCurrency, s.DateFormat, s.DecimalSeparator, s.DefaultWeightUnit, s.DefaultDistanceUnit,
         s.Iban, s.InvoiceEmail, s.PaymentTermDays, s.DefaultVatRatePercent,
         s.DefaultLoadingMinutes, s.DefaultUnloadingMinutes,
-        s.TrainingConflictSeverity, s.ShiftOverlapConflictSeverity,
+        s.TrainingConflictSeverity, s.ShiftOverlapConflictSeverity, s.CapacityConflictSeverity,
+        s.RedeliveryMode, s.EtaShiftNotifyMinutes,
         s.QualificationExpiryWarningDays,
         s.EmployeeNumberPrefix, s.EmployeeNumberNextValue,
         s.CustomerNumberPrefix, s.CustomerNumberNextValue,
@@ -174,6 +181,33 @@ public class CompanySettingsService : ICompanySettingsService
 
     private static string? Trim(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
     private static string Fallback(string? value, string fallback) => string.IsNullOrWhiteSpace(value) ? fallback : value.Trim();
+
+    /// <summary>
+    /// Regional-settings wave: the date format is a closed catalog, not free text — the whole
+    /// frontend renders through ONE formatter driven by this value, so an arbitrary string
+    /// would silently break every date on screen. "dd-MM-yyyy" stays supported for existing
+    /// tenants (pre-wave default); new preference options are slash/ISO styles. Empty input
+    /// keeps the current value; an unknown format is a validation error, never a silent reset.
+    /// </summary>
+    public static readonly IReadOnlyList<string> SupportedDateFormats =
+        ["dd/MM/yyyy", "MM/dd/yyyy", "yyyy-MM-dd", "dd-MM-yyyy"];
+
+    private static string NormalizeDateFormat(string? requested, string current)
+    {
+        if (string.IsNullOrWhiteSpace(requested))
+        {
+            return string.IsNullOrWhiteSpace(current) ? "dd/MM/yyyy" : current;
+        }
+
+        var trimmed = requested.Trim();
+        if (!SupportedDateFormats.Contains(trimmed, StringComparer.Ordinal))
+        {
+            throw new Common.DomainValidationException("dateFormat",
+                $"Onbekende datumnotatie. Toegestaan: {string.Join(", ", SupportedDateFormats)}.");
+        }
+
+        return trimmed;
+    }
     private static string? Upper(string? value, int maxLength) =>
         string.IsNullOrWhiteSpace(value) ? null : value.Trim().ToUpperInvariant()[..Math.Min(value.Trim().Length, maxLength)];
     private static int Clamp(int value, int min, int max) => value < min ? min : value > max ? max : value;

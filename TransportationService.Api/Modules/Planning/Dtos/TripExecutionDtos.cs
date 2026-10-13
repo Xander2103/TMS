@@ -41,7 +41,18 @@ public record ExecutionStopDto(
     IReadOnlyList<StopExecutionStatus> AllowedTransitions,
     bool HasPod,
     string? PodSignedBy,
-    string? Remarks);
+    string? Remarks,
+    // --- Location snapshot on the stop (master-data wave 2026-08-05, Phase 7). Drivers on the
+    // trip legitimately need gate/access data; the customer portal must NEVER receive these. ---
+    string? ContactName = null,
+    string? ContactPhone = null,
+    string? ContactMobile = null,
+    string? Gate = null,
+    /// <summary>Driver-facing by design: the assigned driver needs the code at the gate.</summary>
+    string? AccessCode = null,
+    string? Dock = null,
+    string? RouteDescription = null,
+    string? OpeningHoursSummary = null);
 
 public record TripExecutionDto(
     Guid TripId,
@@ -73,14 +84,18 @@ public record MyTripDto(
 /// PartiallyCompleted, and for an arrival past the latest allowed bound. Notes update the
 /// free-form stop remarks.
 /// </summary>
-public record TransitionStopRequest(StopExecutionStatus ToStatus, string? Reason = null, string? Notes = null);
+public record TransitionStopRequest(
+    StopExecutionStatus ToStatus, string? Reason = null, string? Notes = null,
+    /// <summary>Offline-replay idempotency key; a repeated key returns the current state instead of re-transitioning.</summary>
+    Guid? ClientRequestId = null);
 
 public record CompleteStopRequest(
     string? PodSignedBy, string? Remarks, string? Reason = null,
     /// <summary>Reason for completing despite unresolved mandatory packages (requires scanning.override).</summary>
-    string? PackageOverrideReason = null);
+    string? PackageOverrideReason = null,
+    Guid? ClientRequestId = null);
 
-public record SkipStopRequest(string Remarks);
+public record SkipStopRequest(string Remarks, Guid? ClientRequestId = null);
 
 public record StopStatusHistoryDto(
     StopExecutionStatus FromStatus,
@@ -98,14 +113,20 @@ public enum ExecutionOutcome
     ValidationFailed,
 }
 
-public record ExecutionResult(ExecutionOutcome Outcome, TripExecutionDto? Execution, string? Error = null)
+public record ExecutionResult(
+    ExecutionOutcome Outcome, TripExecutionDto? Execution, string? Error = null,
+    /// <summary>Stabiele machine-leesbare foutcode (Common.ErrorCodes) — de frontend
+    /// vertaalt/branch hierop, nooit op de Nederlandse fouttekst.</summary>
+    string? Code = null)
 {
     public static ExecutionResult Success(TripExecutionDto execution) => new(ExecutionOutcome.Success, execution);
     public static readonly ExecutionResult NotFound = new(ExecutionOutcome.NotFound, null);
     public static readonly ExecutionResult NotYourTrip = new(ExecutionOutcome.NotYourTrip, null,
         "Deze rit is niet aan jou toegewezen.");
-    public static ExecutionResult InvalidState(string error) => new(ExecutionOutcome.InvalidState, null, error);
-    public static ExecutionResult Invalid(string error) => new(ExecutionOutcome.ValidationFailed, null, error);
+    public static ExecutionResult InvalidState(string error, string? code = null) =>
+        new(ExecutionOutcome.InvalidState, null, error, code);
+    public static ExecutionResult Invalid(string error, string? code = null) =>
+        new(ExecutionOutcome.ValidationFailed, null, error, code);
 }
 
 public record StopHistoryResult(ExecutionOutcome Outcome, IReadOnlyList<StopStatusHistoryDto>? History, string? Error = null)

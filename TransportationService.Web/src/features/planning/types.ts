@@ -2,12 +2,13 @@ import type { TransportOrderStatus } from '../transport-orders/types'
 
 export type TripStatus = 'Draft' | 'Planned' | 'InProgress' | 'Completed' | 'Cancelled'
 
+/** Vertaalsleutels (i18n-wave): render altijd via t(TRIP_STATUS_LABELS[status]). */
 export const TRIP_STATUS_LABELS: Record<TripStatus, string> = {
-  Draft: 'Concept',
-  Planned: 'Gepland',
-  InProgress: 'Onderweg',
-  Completed: 'Afgerond',
-  Cancelled: 'Geannuleerd',
+  Draft: 'planning.tripStatus.Draft',
+  Planned: 'planning.tripStatus.Planned',
+  InProgress: 'planning.tripStatus.InProgress',
+  Completed: 'planning.tripStatus.Completed',
+  Cancelled: 'planning.tripStatus.Cancelled',
 }
 
 export const TRIP_STATUSES: TripStatus[] = ['Draft', 'Planned', 'InProgress', 'Completed', 'Cancelled']
@@ -21,11 +22,11 @@ export const TRIP_STATUS_TONE: Record<TripStatus, 'neutral' | 'success' | 'warni
 }
 
 export const TRIP_TRANSITION_LABELS: Record<TripStatus, string> = {
-  Draft: 'Terug naar concept',
-  Planned: 'Inplannen',
-  InProgress: 'Start rit',
-  Completed: 'Afronden',
-  Cancelled: 'Annuleren',
+  Draft: 'planning.tripTransition.Draft',
+  Planned: 'planning.tripTransition.Planned',
+  InProgress: 'planning.tripTransition.InProgress',
+  Completed: 'planning.tripTransition.Completed',
+  Cancelled: 'planning.tripTransition.Cancelled',
 }
 
 export type PlanningConflictCode =
@@ -47,6 +48,8 @@ export type PlanningConflictCode =
   | 'MissingDriver'
   | 'MissingVehicle'
   | 'NoOrders'
+  | 'CapacityExceeded'
+  | 'CapacityCheckIncomplete'
 
 export type PlanningConflictSeverity = 'Information' | 'Warning' | 'Blocking'
 
@@ -54,9 +57,30 @@ export const CONFLICT_SEVERITY_META: Record<
   PlanningConflictSeverity,
   { label: string; tone: 'danger' | 'warning' | 'info' }
 > = {
-  Blocking: { label: 'Blokkerend', tone: 'danger' },
-  Warning: { label: 'Waarschuwing', tone: 'warning' },
-  Information: { label: 'Ter info', tone: 'info' },
+  Blocking: { label: 'planning.conflictSeverity.Blocking', tone: 'danger' },
+  Warning: { label: 'planning.conflictSeverity.Warning', tone: 'warning' },
+  Information: { label: 'planning.conflictSeverity.Information', tone: 'info' },
+}
+
+export type ConflictCategory =
+  | 'Resource'
+  | 'Availability'
+  | 'Qualification'
+  | 'Capacity'
+  | 'Timing'
+  | 'Equipment'
+  | 'Document'
+  | 'Data'
+
+export const CONFLICT_CATEGORY_LABELS: Record<ConflictCategory, string> = {
+  Resource: 'planning.conflictCategory.Resource',
+  Availability: 'planning.conflictCategory.Availability',
+  Qualification: 'planning.conflictCategory.Qualification',
+  Capacity: 'planning.conflictCategory.Capacity',
+  Timing: 'planning.conflictCategory.Timing',
+  Equipment: 'planning.conflictCategory.Equipment',
+  Document: 'planning.conflictCategory.Document',
+  Data: 'planning.conflictCategory.Data',
 }
 
 export interface PlanningConflict {
@@ -64,6 +88,22 @@ export interface PlanningConflict {
   blocking: boolean
   description: string
   severity: PlanningConflictSeverity
+  category: ConflictCategory
+  relatedEntityType: string | null
+  relatedEntityId: string | null
+  /** Only blocking conflicts can be overridden, with the named permission and a reason. */
+  overrideAllowed: boolean
+  requiredPermission: string | null
+  suggestedAction: string | null
+}
+
+export interface ConflictOverrideEntry {
+  id: string
+  conflictCodes: string
+  reason: string
+  actorUserId: string | null
+  actorName: string | null
+  occurredAt: string
 }
 
 export interface TripOrderSummary {
@@ -107,6 +147,8 @@ export interface TripDetail {
   vehicleLicensePlate: string | null
   trailerId: string | null
   trailerNumber: string | null
+  /** `Trip.VehicleSelectionSource` (D1): how the vehicle was chosen; null/absent = legacy, treated as Manual. */
+  vehicleSelectionSource?: 'Suggested' | 'Manual' | null
   plannedStart: string | null
   plannedEnd: string | null
   plannedDistanceKm: number | null
@@ -117,6 +159,9 @@ export interface TripDetail {
   orders: TripOrderSummary[]
   conflicts: PlanningConflict[]
   allowedTransitions: TripStatus[]
+  /** Optimistic-concurrency token; echo it on mutations so parallel edits surface as 409. */
+  version: string
+  overrides: ConflictOverrideEntry[]
 }
 
 export interface TripInput {
@@ -130,4 +175,8 @@ export interface TripInput {
   orderIds: string[]
   plannedDistanceKm: number | null
   plannedEmptyKm: number | null
+  /** Only ever set through `withVehicleSelectionSource` (planning/vehicleSelection.ts). */
+  vehicleSelectionSource?: 'Suggested' | 'Manual' | null
+  /** Version loaded with the trip; omit only when creating. */
+  version?: string
 }

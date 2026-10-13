@@ -19,7 +19,10 @@ public class FleetDocumentConfiguration : IEntityTypeConfiguration<FleetDocument
         builder.Property(d => d.DocumentType).HasConversion<string>().HasMaxLength(30);
         builder.Property(d => d.CustomTypeName).HasMaxLength(100);
         builder.Property(d => d.DocumentNumber).HasMaxLength(100);
-        builder.Property(d => d.DocumentPath).HasMaxLength(300);
+        builder.Property(d => d.DocumentPath).HasMaxLength(500);
+        builder.Property(d => d.IssuingAuthority).HasMaxLength(150);
+        builder.Property(d => d.FileName).HasMaxLength(255);
+        builder.Property(d => d.ContentType).HasMaxLength(100);
         builder.Property(d => d.Notes).HasMaxLength(2000);
 
         builder.HasIndex(d => new { d.TenantId, d.VehicleId });

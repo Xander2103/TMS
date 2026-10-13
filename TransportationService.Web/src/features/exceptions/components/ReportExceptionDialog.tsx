@@ -4,6 +4,7 @@ import { Button } from '../../../components/ui/Button'
 import { FormField } from '../../../components/ui/FormField'
 import { Modal } from '../../../components/ui/Modal'
 import { useToast } from '../../../components/ui/toastContext'
+import { useLocale } from '../../../i18n/localeContext'
 import { reportException, uploadExceptionPhoto } from '../api/exceptionsApi'
 import {
   EXCEPTION_SEVERITIES,
@@ -30,6 +31,7 @@ interface ReportExceptionDialogProps {
  */
 export function ReportExceptionDialog({ tripId, stopId, stopLabel, cargoOptions, onClose, onReported }: ReportExceptionDialogProps) {
   const { showSuccess, showError } = useToast()
+  const { t } = useLocale()
 
   const [type, setType] = useState<ExecutionExceptionType>('DamagedPackage')
   const [severity, setSeverity] = useState<ExceptionSeverity>('Medium')
@@ -42,7 +44,7 @@ export function ReportExceptionDialog({ tripId, stopId, stopLabel, cargoOptions,
   async function handleSubmit(event: FormEvent) {
     event.preventDefault()
     if (!description.trim()) {
-      showError('Een omschrijving van het probleem is verplicht.')
+      showError(t('exceptions.report.descriptionRequired'))
       return
     }
     setBusy(true)
@@ -66,14 +68,14 @@ export function ReportExceptionDialog({ tripId, stopId, stopLabel, cargoOptions,
         }
       }
       if (photoFailures > 0) {
-        showError(`Melding aangemaakt, maar ${photoFailures} foto('s) konden niet worden geüpload.`)
+        showError(t('exceptions.report.photosFailed', { count: photoFailures }))
       } else {
-        showSuccess('Afwijking gemeld — planning is verwittigd.')
+        showSuccess(t('exceptions.report.reported'))
       }
       onReported()
       onClose()
     } catch (err) {
-      showError(err instanceof ApiError ? err.message : 'De melding kon niet worden aangemaakt.')
+      showError(err instanceof ApiError ? err.message : t('exceptions.report.createFailed'))
     } finally {
       setBusy(false)
     }
@@ -81,40 +83,40 @@ export function ReportExceptionDialog({ tripId, stopId, stopLabel, cargoOptions,
 
   return (
     <Modal
-      title={stopLabel ? `Afwijking melden — ${stopLabel}` : 'Afwijking melden (rit)'}
+      title={stopLabel ? t('exceptions.report.titleWithStop', { stop: stopLabel }) : t('exceptions.report.titleTrip')}
       onClose={onClose}
       busy={busy}
       footer={
         <>
           <Button variant="secondary" onClick={onClose} disabled={busy}>
-            Annuleren
+            {t('exceptions.report.cancel')}
           </Button>
           <Button type="submit" form="exc-report-form" disabled={busy}>
-            {busy ? 'Bezig…' : 'Melden'}
+            {busy ? t('exceptions.report.busy') : t('exceptions.report.submit')}
           </Button>
         </>
       }
     >
       <form id="exc-report-form" className="exc-form" onSubmit={handleSubmit} noValidate>
-        <FormField label="Type" htmlFor="exc-type" required>
+        <FormField label={t('exceptions.report.typeLabel')} htmlFor="exc-type" required>
           <select id="exc-type" value={type} onChange={(e) => setType(e.target.value as ExecutionExceptionType)} disabled={busy}>
-            {EXCEPTION_TYPES.map((t) => (
-              <option key={t} value={t}>
-                {EXCEPTION_TYPE_LABELS[t]}
+            {EXCEPTION_TYPES.map((option) => (
+              <option key={option} value={option}>
+                {t(EXCEPTION_TYPE_LABELS[option])}
               </option>
             ))}
           </select>
         </FormField>
-        <FormField label="Ernst" htmlFor="exc-severity" required>
+        <FormField label={t('exceptions.report.severityLabel')} htmlFor="exc-severity" required>
           <select id="exc-severity" value={severity} onChange={(e) => setSeverity(e.target.value as ExceptionSeverity)} disabled={busy}>
             {EXCEPTION_SEVERITIES.map((s) => (
               <option key={s} value={s}>
-                {EXCEPTION_SEVERITY_LABELS[s]}
+                {t(EXCEPTION_SEVERITY_LABELS[s])}
               </option>
             ))}
           </select>
         </FormField>
-        <FormField label="Omschrijving" htmlFor="exc-description" required>
+        <FormField label={t('exceptions.report.descriptionLabel')} htmlFor="exc-description" required>
           <textarea
             id="exc-description"
             rows={3}
@@ -122,12 +124,12 @@ export function ReportExceptionDialog({ tripId, stopId, stopLabel, cargoOptions,
             onChange={(e) => setDescription(e.target.value)}
             disabled={busy}
             maxLength={2000}
-            placeholder="Wat is er aan de hand?"
+            placeholder={t('exceptions.report.descriptionPlaceholder')}
             autoFocus
           />
         </FormField>
         {cargoOptions && cargoOptions.length > 0 && (
-          <FormField label="Goederenlijn (optioneel)" htmlFor="exc-cargo">
+          <FormField label={t('exceptions.report.cargoLabel')} htmlFor="exc-cargo">
             <select id="exc-cargo" value={cargoItemId} onChange={(e) => setCargoItemId(e.target.value)} disabled={busy}>
               <option value="">—</option>
               {cargoOptions.map((c) => (
@@ -138,7 +140,7 @@ export function ReportExceptionDialog({ tripId, stopId, stopLabel, cargoOptions,
             </select>
           </FormField>
         )}
-        <FormField label="Aantal (optioneel)" htmlFor="exc-quantity">
+        <FormField label={t('exceptions.report.quantityLabel')} htmlFor="exc-quantity">
           <input
             id="exc-quantity"
             inputMode="decimal"
@@ -147,7 +149,7 @@ export function ReportExceptionDialog({ tripId, stopId, stopLabel, cargoOptions,
             disabled={busy}
           />
         </FormField>
-        <FormField label="Foto's" htmlFor="exc-photos" hint="Maak een foto of kies uit de galerij (max 10 MB per foto).">
+        <FormField label={t('exceptions.report.photosLabel')} htmlFor="exc-photos" hint={t('exceptions.report.photosHint')}>
           <input
             id="exc-photos"
             type="file"
@@ -158,7 +160,7 @@ export function ReportExceptionDialog({ tripId, stopId, stopLabel, cargoOptions,
             disabled={busy}
           />
         </FormField>
-        {files.length > 0 && <p className="exc-photo-count">{files.length} foto('s) geselecteerd</p>}
+        {files.length > 0 && <p className="exc-photo-count">{t('exceptions.report.photosSelected', { count: files.length })}</p>}
       </form>
     </Modal>
   )

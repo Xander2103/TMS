@@ -1,4 +1,5 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
+using TransportationService.Api.Common.Persistence;
 using TransportationService.Api.Common.Reference;
 using TransportationService.Api.Data;
 using TransportationService.Api.Modules.Auditing.Services;
@@ -59,6 +60,17 @@ public class QualificationService : IQualificationService
 
     public async Task<EmployeeQualificationDto> CreateAsync(Guid employeeId, CreateEmployeeQualificationRequest request, CancellationToken cancellationToken)
     {
+        // Client-supplied references must be validated before they are stored, otherwise a guessed
+        // foreign id creates a dangling or cross-tenant attachment. QualificationType is a GLOBAL
+        // reference table (no TenantId), so it only needs an existence check.
+        await _dbContext.Employees.EnsureBelongsToTenantAsync(
+            employeeId, _tenantContext.TenantId, "medewerker", cancellationToken);
+        if (!await _dbContext.QualificationTypes.AsNoTracking()
+                .AnyAsync(t => t.Id == request.QualificationTypeId, cancellationToken))
+        {
+            throw new Common.InvalidTenantReferenceException("kwalificatietype");
+        }
+
         var qualification = new EmployeeQualification
         {
             Id = Guid.NewGuid(),
@@ -68,7 +80,7 @@ public class QualificationService : IQualificationService
             DocumentNumber = request.DocumentNumber,
             ObtainedDate = request.ObtainedDate,
             ExpiryDate = request.ExpiryDate,
-            IssuingCountryCode = await _countryValidator.NormalizeAndValidateAsync(request.IssuingCountryCode, "uitgifteland", cancellationToken),
+            IssuingCountryCode = await _countryValidator.NormalizeAndValidateAsync(request.IssuingCountryCode, "uitgifteland", cancellationToken, "issuingCountryCode"),
             Status = QualificationStatus.Pending,
             Notes = request.Notes,
             CreatedAt = DateTime.UtcNow,
@@ -89,14 +101,29 @@ public class QualificationService : IQualificationService
         var qualification = await _dbContext.EmployeeQualifications.FirstOrDefaultAsync(q => q.Id == id && q.TenantId == _tenantContext.TenantId, cancellationToken);
         if (qualification is null) return null;
 
+        // Before-image for the personnel history â€” this update path recorded nothing until the
+        // corrections wave (Â§4) while every sibling action (create/verify/suspend) already did.
+        var oldValues = new
+        {
+            qualification.DocumentNumber, qualification.ObtainedDate, qualification.ExpiryDate,
+            qualification.IssuingCountryCode, qualification.Notes,
+        };
+
         qualification.DocumentNumber = request.DocumentNumber;
         qualification.ObtainedDate = request.ObtainedDate;
         qualification.ExpiryDate = request.ExpiryDate;
-        qualification.IssuingCountryCode = await _countryValidator.NormalizeAndValidateAsync(request.IssuingCountryCode, "uitgifteland", cancellationToken);
+        qualification.IssuingCountryCode = await _countryValidator.NormalizeAndValidateAsync(request.IssuingCountryCode, "uitgifteland", cancellationToken, "issuingCountryCode");
         qualification.Notes = request.Notes;
         qualification.UpdatedAt = DateTime.UtcNow;
 
         await _dbContext.SaveChangesAsync(cancellationToken);
+
+        await _auditService.RecordAsync("EmployeeQualification", qualification.Id.ToString(), "Updated", oldValues,
+            new
+            {
+                qualification.DocumentNumber, qualification.ObtainedDate, qualification.ExpiryDate,
+                qualification.IssuingCountryCode, qualification.Notes,
+            }, cancellationToken);
 
         return await MapAsync(qualification, cancellationToken);
     }

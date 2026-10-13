@@ -26,8 +26,8 @@ export function getVehicleOptions(): Promise<VehicleOption[]> {
   return apiClient.getJson<VehicleOption[]>('/api/vehicles/options')
 }
 
-export function getVehicle(id: string): Promise<VehicleDetail> {
-  return apiClient.getJson<VehicleDetail>(`/api/vehicles/${id}`)
+export function getVehicle(id: string, signal?: AbortSignal): Promise<VehicleDetail> {
+  return apiClient.getJson<VehicleDetail>(`/api/vehicles/${id}`, signal ? { signal } : undefined)
 }
 
 export function createVehicle(input: CreateVehicleInput): Promise<VehicleDetail> {
@@ -36,6 +36,10 @@ export function createVehicle(input: CreateVehicleInput): Promise<VehicleDetail>
 
 export function updateVehicle(id: string, input: VehicleInput): Promise<VehicleDetail> {
   return apiClient.putJson<VehicleDetail, VehicleInput>(`/api/vehicles/${id}`, input)
+}
+
+export function setVehicleActive(id: string, isActive: boolean): Promise<void> {
+  return apiClient.postJson<void, { isActive: boolean }>(`/api/vehicles/${id}/active`, { isActive })
 }
 
 export function deleteVehicle(id: string): Promise<void> {

@@ -19,21 +19,25 @@ public record AbsenceDto(
     /// <summary>HR-only; the portal blanks this before it reaches the employee.</summary>
     string? InternalNote = null,
     bool HasAttachment = false,
-    string? AttachmentFileName = null);
+    string? AttachmentFileName = null,
+    /// <summary>Configurable leave type (source of truth for balance deduction); null on legacy rows.</summary>
+    Guid? LeaveTypeId = null);
 
 public record CreateAbsenceRequest(
     AbsenceType Type,
     DateOnly StartDate,
     DateOnly EndDate,
     string? Reason,
-    AbsencePartDay PartDay = AbsencePartDay.FullDay);
+    AbsencePartDay PartDay = AbsencePartDay.FullDay,
+    Guid? LeaveTypeId = null);
 
 public record UpdateAbsenceRequest(
     AbsenceType Type,
     DateOnly StartDate,
     DateOnly EndDate,
     string? Reason,
-    AbsencePartDay PartDay = AbsencePartDay.FullDay);
+    AbsencePartDay PartDay = AbsencePartDay.FullDay,
+    Guid? LeaveTypeId = null);
 
 public record DecideAbsenceRequest(bool Approve, string? Note);
 
@@ -69,6 +73,17 @@ public enum AbsenceOperationOutcome
     Overlap,
     InvalidState,
     ValidationFailed,
+}
+
+/// <summary>
+/// Opened absence attachment. <see cref="MedicalRestricted"/> distinguishes "exists but the
+/// caller may not see health data" (403) from "no attachment" (null result, 404).
+/// </summary>
+public sealed record AbsenceAttachmentResult(Stream? Content, string? FileName, bool MedicalRestricted)
+{
+    public static readonly AbsenceAttachmentResult MedicalAccessDenied = new(null, null, true);
+
+    public static AbsenceAttachmentResult Open(Stream content, string fileName) => new(content, fileName, false);
 }
 
 public record AbsenceOperationResult(AbsenceOperationOutcome Outcome, AbsenceDto? Absence, string? Error = null)

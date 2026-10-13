@@ -1,0 +1,155 @@
+{
+  "actions": {
+    "save": "Enregistrer",
+    "cancel": "Annuler",
+    "confirm": "Confirmer",
+    "close": "Fermer",
+    "back": "Retour",
+    "busy": "En cours...",
+    "add": "Ajouter",
+    "edit": "Modifier",
+    "delete": "Supprimer",
+    "search": "Rechercher"
+  },
+  "table": {
+    "empty": "Aucune donnée trouvée.",
+    "loading": "Chargement..."
+  },
+  "filter": {
+    "searchPlaceholder": "Rechercher...",
+    "searchLabel": "Rechercher",
+    "statusLabel": "Filtre de statut",
+    "allStatuses": "Tous les statuts",
+    "active": "Actif",
+    "inactive": "Inactif"
+  },
+  "pagination": {
+    "label": "Pagination",
+    "range": "{start}–{end} sur {total}",
+    "previous": "Précédent",
+    "next": "Suivant",
+    "page": "Page {page} / {totalPages}"
+  },
+  "infoTip": {
+    "ariaLabel": "Plus d'informations"
+  },
+  "select": {
+    "placeholder": "— Sélectionner —",
+    "noResults": "Aucun résultat",
+    "loading": "Chargement…",
+    "clear": "Effacer la sélection",
+    "adding": "Ajout en cours…",
+    "searchError": "La recherche a échoué.",
+    "resultCount": "{count} résultats"
+  },
+  "sections": {
+    "navLabel": "Sections du formulaire",
+    "sectionLabel": "Section",
+    "hasErrors": "contient des erreurs",
+    "errorCount": "contient {count} erreur(s)",
+    "hasData": "contient des données",
+    "emptyOptional": "vide (facultatif)",
+    "empty": "vide"
+  },
+  "statusBadges": {
+    "active": "Actif",
+    "inactive": "Inactif",
+    "blocked": "Bloqué"
+  },
+  "toast": {
+    "region": "Notifications",
+    "close": "Fermer la notification"
+  },
+  "unsaved": {
+    "title": "Modifications non enregistrées",
+    "message": "Vous avez des modifications non enregistrées. Voulez-vous vraiment quitter cette page ?",
+    "leave": "Quitter la page",
+    "stay": "Continuer la modification"
+  },
+  "validation": {
+    "saveFailed": "L'enregistrement a échoué"
+  },
+  "modal": {
+    "close": "Fermer"
+  },
+  "nav": {
+    "mainNavigation": "Navigation principale",
+    "noMenuItems": "Aucun élément de menu pour « {query} ».",
+    "filterMenu": "Filtrer le menu",
+    "breadcrumbs": "Fil d'Ariane",
+    "openMenu": "Ouvrir le menu",
+    "closeMenu": "Fermer le menu",
+    "pageLoading": "Chargement de la page...",
+    "shortcuts": "Raccourcis clavier",
+    "notFoundTitle": "Page introuvable",
+    "notFoundMessage": "La page demandée n'existe pas."
+  },
+  "shortcutList": {
+    "globalSearch": "Recherche globale / commandes",
+    "focusSearch": "Activer la recherche",
+    "showHelp": "Afficher cette aide",
+    "planningBoard": "Tableau de planification",
+    "operations": "Centre opérationnel",
+    "dossiers": "Dossiers",
+    "incidents": "Incidents",
+    "profitability": "Rentabilité",
+    "warehouses": "Entrepôts"
+  },
+  "palette": {
+    "globalSearch": "Recherche globale",
+    "placeholder": "Recherchez ou tapez une commande… (Échap pour fermer)",
+    "searchTerm": "Terme de recherche",
+    "commands": "Commandes",
+    "favorites": "Favoris",
+    "recent": "Consultés récemment",
+    "typeMore": "Tapez au moins 2 caractères pour rechercher.",
+    "searching": "Recherche...",
+    "removeFavorite": "Retirer des favoris",
+    "addFavorite": "Ajouter aux favoris",
+    "groupCreate": "Créer",
+    "groupNavigate": "Naviguer",
+    "noResults": "Aucun résultat pour « {term} »."
+  },
+  "offline": {
+    "banner": "Hors ligne — les scans, actions d'arrêt et déclarations d'incident sont mis en file d'attente et se synchronisent automatiquement.",
+    "pendingSync_one": "1 action en attente de synchronisation…",
+    "pendingSync_other": "{count} actions en attente de synchronisation…",
+    "queued_one": "Hors ligne — 1 action en file d'attente ; elle se synchronisera automatiquement dès le retour de la connexion.",
+    "queued_other": "Hors ligne — {count} actions en file d'attente ; elles se synchroniseront automatiquement dès le retour de la connexion."
+  },
+  "calendar": {
+    "month": "Mois",
+    "week": "Semaine",
+    "list": "Liste",
+    "today": "Aujourd'hui",
+    "previousPeriod": "Période précédente",
+    "nextPeriod": "Période suivante",
+    "previous": "‹ précédent",
+    "next": "suivant ›",
+    "view": "Affichage",
+    "more": "+{count} de plus",
+    "free": "libre",
+    "weekOf": "semaine du"
+  },
+  "time": {
+    "placeholder": "hh:mm"
+  },
+  "appearance": {
+    "label": "Affichage",
+    "description": "Choisissez l'apparence de l'application. Cette préférence est personnelle et s'applique sur tous vos appareils.",
+    "system": "Système",
+    "systemHint": "Suit le réglage de votre appareil",
+    "light": "Clair",
+    "lightHint": "Toujours le thème clair",
+    "dark": "Sombre",
+    "darkHint": "Toujours le thème sombre",
+    "saveFailed": "La préférence d'affichage n'a pas pu être enregistrée. Elle reste appliquée sur cet appareil."
+  },
+  "multiSelect": {
+    "selectedCount_one": "{count} sélectionné",
+    "selectedCount_other": "{count} sélectionnés",
+    "selectedLabel": "Sélectionné : {label}",
+    "remove": "Supprimer {label}",
+    "typeToSearch": "Tapez pour rechercher…"
+  }
+}

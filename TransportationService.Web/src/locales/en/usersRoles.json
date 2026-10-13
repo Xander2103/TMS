@@ -1,0 +1,140 @@
+{
+  "users": {
+    "page": {
+      "title": "Users",
+      "newUser": "New user",
+      "loading": "Loading users...",
+      "loadFailed": "The users could not be loaded."
+    },
+    "table": {
+      "empty": "There are no users yet.",
+      "name": "Name",
+      "email": "Email",
+      "roles": "Roles",
+      "status": "Status",
+      "noRoles": "No roles",
+      "active": "Active",
+      "inactive": "Inactive",
+      "blocked": "Blocked"
+    },
+    "form": {
+      "email": "Email",
+      "firstName": "First name",
+      "lastName": "Last name",
+      "employeeId": "Linked employee (id)",
+      "customerId": "Linked customer (id)",
+      "saving": "Saving...",
+      "saveChanges": "Save changes",
+      "create": "Create user"
+    },
+    "validation": {
+      "emailRequired": "Email is required.",
+      "emailMax": "Email may contain at most {max} characters.",
+      "emailInvalid": "Invalid email address.",
+      "firstNameRequired": "First name is required.",
+      "firstNameMax": "First name may contain at most {max} characters.",
+      "lastNameRequired": "Last name is required.",
+      "lastNameMax": "Last name may contain at most {max} characters."
+    },
+    "mutations": {
+      "submitFailed": "The action could not be carried out. Please try again.",
+      "lastAdmin": "This is the last active administrator and cannot be changed."
+    },
+    "detail": {
+      "loading": "Loading user...",
+      "loadFailed": "The user could not be loaded.",
+      "notFound": "User not found.",
+      "confirmDeactivate": "Are you sure you want to deactivate {name}?",
+      "confirmBlock": "Are you sure you want to block {name}?",
+      "sectionData": "Details",
+      "sectionStatus": "Status",
+      "sectionRoles": "Roles",
+      "deactivate": "Deactivate",
+      "activate": "Activate",
+      "unblock": "Unblock",
+      "block": "Block"
+    },
+    "rolesPanel": {
+      "loading": "Loading roles...",
+      "systemRole": "System role",
+      "saving": "Saving...",
+      "save": "Save roles"
+    }
+  },
+  "roles": {
+    "page": {
+      "title": "Roles and permissions",
+      "newRole": "New role",
+      "name": "Name",
+      "description": "Description",
+      "nameRequired": "Name is required.",
+      "nameMax": "Name may contain at most {max} characters.",
+      "creating": "Creating...",
+      "create": "Create role",
+      "loading": "Loading roles...",
+      "loadFailed": "The roles could not be loaded."
+    },
+    "table": {
+      "empty": "There are no roles yet.",
+      "name": "Name",
+      "description": "Description",
+      "status": "Status",
+      "systemRole": "System role",
+      "noDescription": "No description",
+      "active": "Active",
+      "inactive": "Inactive"
+    },
+    "detail": {
+      "loading": "Loading role...",
+      "loadFailed": "The role could not be loaded.",
+      "notFound": "Role not found.",
+      "sectionData": "Details",
+      "sectionPermissions": "Permissions",
+      "sectionDeactivate": "Deactivate",
+      "systemRoleRenameHint": "System roles cannot be renamed.",
+      "saveChanges": "Save changes",
+      "saving": "Saving...",
+      "confirmDeactivate": "Are you sure you want to deactivate this role?",
+      "alreadyInactive": "This role is already inactive.",
+      "deactivateRole": "Deactivate role",
+      "systemRoleDeactivateHint": "System roles cannot be deactivated."
+    },
+    "matrix": {
+      "loading": "Loading permissions...",
+      "loadFailed": "The permissions could not be loaded.",
+      "saving": "Saving...",
+      "save": "Save permissions"
+    },
+    "mutations": {
+      "submitFailed": "The action could not be carried out. Please try again.",
+      "systemRoleConflict": "This action is not allowed for a system role."
+    },
+    "mappings": {
+      "breadcrumbRoles": "Roles",
+      "title": "Job function→role mappings",
+      "subtitle": "When creating an account from an employee these roles are suggested; the administrator always confirms.",
+      "newMapping": "New mapping",
+      "loadFailed": "The mappings could not be loaded.",
+      "loading": "Loading mappings...",
+      "empty": "No mappings yet — accounts will then receive no suggested roles.",
+      "columnFunction": "Job function",
+      "columnRole": "Suggested role",
+      "columnActions": "Actions",
+      "added": "Mapping added.",
+      "deleteTitle": "Delete mapping",
+      "deleteMessage": "Delete mapping '{functionName} → {roleName}'? Existing accounts keep their roles.",
+      "deleted": "Mapping deleted.",
+      "deleteFailed": "The mapping could not be deleted.",
+      "dialogTitle": "New job function→role mapping",
+      "adding": "Adding…",
+      "add": "Add",
+      "rolesLoadFailed": "The roles could not be loaded.",
+      "chooseBoth": "Choose both a job function and a role.",
+      "addFailed": "The mapping could not be added.",
+      "function": "Job function",
+      "chooseFunction": "— Choose job function —",
+      "role": "Role",
+      "chooseRole": "— Choose role —"
+    }
+  }
+}

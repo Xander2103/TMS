@@ -30,7 +30,8 @@ public class FleetDocumentServiceTests
 
         var tenant = new DevTenantContext(tenantId);
         var sut = new FleetDocumentService(db.Context, tenant,
-            new AuditService(db.Context, tenant, new DevCurrentUserContext(null)), new TestClock(Now));
+            new AuditService(db.Context, tenant, new DevCurrentUserContext(null)), new TestClock(Now),
+            new TransportationService.Api.Modules.Qualifications.Services.LocalFileStorageService(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "ts-tests", System.Guid.NewGuid().ToString("N"))));
         return new Harness(db, sut, tenantId, vehicleId, trailerId);
     }
 
@@ -183,5 +184,26 @@ public class FleetDocumentServiceTests
         Assert.True(await h.Sut.DeleteAsync(created.Document.Id, CancellationToken.None));
         var docs = await h.Sut.ListForVehicleAsync(h.VehicleId, CancellationToken.None);
         Assert.Empty(docs!);
+    }
+
+    [Fact]
+    public async Task UploadDownloadRemove_Attachment_Roundtrip()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var created = await h.Sut.CreateForVehicleAsync(h.VehicleId, Request(FleetDocumentType.LeasingContract), CancellationToken.None);
+        var id = created.Document!.Id;
+
+        using var upload = new MemoryStream(new byte[] { 1, 2, 3, 4 });
+        var attached = await h.Sut.AttachFileAsync(id, "contract.pdf", "application/pdf", upload, CancellationToken.None);
+        Assert.True(attached.Document!.HasAttachment);
+
+        var opened = await h.Sut.OpenFileAsync(id, CancellationToken.None);
+        Assert.NotNull(opened);
+        await opened!.Value.Content.DisposeAsync();
+
+        var removed = await h.Sut.RemoveFileAsync(id, CancellationToken.None);
+        Assert.False(removed.Document!.HasAttachment);
+        Assert.Null(await h.Sut.OpenFileAsync(id, CancellationToken.None));
     }
 }

@@ -1,0 +1,35 @@
+{
+  "status": {
+    "Pending": "In wachtrij",
+    "Synced": "Gesynchroniseerd",
+    "Failed": "Mislukt",
+    "Cancelled": "Geannuleerd"
+  },
+  "event": {
+    "leave_approved": "Goedgekeurd verlof",
+    "shift_confirmed": "Bevestigde shift"
+  },
+  "page": {
+    "title": "Integraties",
+    "subtitle": "Outlook/Exchange-agendasynchronisatie — goedgekeurd verlof en bevestigde shifts. In ontwikkeling draait een fake provider; echte Microsoft-koppeling volgt zodra er referenties zijn.",
+    "loadFailed": "De synchronisatiewachtrij kon niet worden geladen.",
+    "statusAria": "Status",
+    "allStatuses": "Alle statussen",
+    "retried": "Item opnieuw aangeboden — de volgende verwerking pakt het op.",
+    "retryFailed": "Opnieuw aanbieden mislukte.",
+    "retry": "Opnieuw",
+    "cancellationSuffix": "(annulering)",
+    "empty": "Nog geen synchronisatie-items."
+  },
+  "columns": {
+    "created": "Aangemaakt",
+    "kind": "Soort",
+    "employee": "Medewerker",
+    "period": "Periode",
+    "title": "Titel",
+    "status": "Status",
+    "externalEvent": "Extern event",
+    "error": "Fout",
+    "actionsAria": "Acties"
+  }
+}

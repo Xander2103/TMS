@@ -1,0 +1,10 @@
+.fleet-kpi-filter {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+
+.fleet-kpi-filter > * {
+  max-width: 200px;
+}

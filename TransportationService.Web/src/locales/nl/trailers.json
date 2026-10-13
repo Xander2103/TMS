@@ -1,0 +1,47 @@
+{
+  "ownership": {
+    "Owned": "Eigendom",
+    "Rented": "Huur",
+    "Leased": "Lease"
+  },
+  "status": {
+    "Available": "Beschikbaar",
+    "InUse": "In gebruik",
+    "InMaintenance": "In onderhoud",
+    "OutOfService": "Buiten dienst"
+  },
+  "list": {
+    "new": "Nieuwe oplegger",
+    "loadFailed": "Opleggers konden niet worden geladen.",
+    "empty": "Nog geen opleggers.",
+    "loading": "Opleggers laden..."
+  },
+  "form": {
+    "firstRegistration": "Eerste registratie",
+    "maintenanceInfo": "Na het aanmaken worden onderhoud en keuringen automatisch ingepland volgens het geldende onderhoudsbeleid (opleggerregel → categorieregel → bedrijfsstandaard).",
+    "create": "Oplegger aanmaken"
+  },
+  "new": {
+    "created": "Oplegger {number} aangemaakt.",
+    "followUpLabel": "Oplegger {number}",
+    "duplicate": "Er bestaat al een oplegger met dit kenteken.",
+    "createFailed": "Oplegger kon niet worden aangemaakt."
+  },
+  "detail": {
+    "loading": "Oplegger laden…",
+    "loadFailed": "Oplegger kon niet worden geladen.",
+    "back": "Terug naar opleggers",
+    "updated": "Oplegger bijgewerkt.",
+    "deleted": "Oplegger verwijderd.",
+    "deleteFailed": "Oplegger kon niet worden verwijderd.",
+    "payload": "Laadvermogen",
+    "confirmDeleteTitle": "Oplegger verwijderen",
+    "confirmDeleteMessage": "Weet je zeker dat je oplegger {number} wilt verwijderen?",
+    "deactivateTitle": "Oplegger deactiveren",
+    "reactivateTitle": "Oplegger heractiveren",
+    "deactivateMessage": "{number} deactiveren? Historiek blijft behouden, maar de oplegger is niet meer inzetbaar voor nieuwe ritten.",
+    "reactivateMessage": "{number} heractiveren? De oplegger is daarna weer inzetbaar.",
+    "deactivated": "Oplegger gedeactiveerd.",
+    "reactivated": "Oplegger geheractiveerd."
+  }
+}

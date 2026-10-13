@@ -46,6 +46,9 @@ public static class StopStatusMachine
     public static bool RequiresReason(StopExecutionStatus target) =>
         target is StopExecutionStatus.Skipped or StopExecutionStatus.Failed or StopExecutionStatus.PartiallyCompleted;
 
+    // D2: a site stop (StopType.Site) matches neither handling state, so its execution is
+    // Planned → EnRoute → Arrived → Completed/PartiallyCompleted/Failed (or Skipped) — the driver
+    // never "loads" or "unloads" on-site work.
     private static bool MatchesStopType(StopExecutionStatus target, StopType stopType) => target switch
     {
         StopExecutionStatus.Loading or StopExecutionStatus.Loaded => stopType == StopType.Loading,

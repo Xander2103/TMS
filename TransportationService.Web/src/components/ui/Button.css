@@ -19,8 +19,8 @@
 }
 
 .ui-button-primary {
-  background: var(--accent);
-  color: #fff;
+  background: var(--color-primary-solid);
+  color: var(--color-on-primary);
 }
 
 .ui-button-primary:hover:not(:disabled) {
@@ -38,8 +38,8 @@
 }
 
 .ui-button-danger {
-  background: #dc2626;
-  color: #fff;
+  background: var(--color-danger-solid);
+  color: var(--color-on-solid);
 }
 
 .ui-button-danger:hover:not(:disabled) {

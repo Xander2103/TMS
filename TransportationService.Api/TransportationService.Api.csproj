@@ -4,10 +4,15 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <!-- Local development secrets (Jwt:SigningKey, dev connection string) live in user-secrets,
+         never in tracked configuration. See docs/security/dev-setup.md. -->
+    <UserSecretsId>transportation-service-api</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="AngleSharp" Version="1.6.0" />
     <PackageReference Include="ClosedXML" Version="0.105.0" />
+    <PackageReference Include="MailKit" Version="4.17.0" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.10" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.10" />
     <!-- Pinned to patch transitive advisory GHSA-v5pm-xwqc-g5wc (Microsoft.OpenApi &lt; 2.7.5). -->
@@ -21,6 +26,15 @@
     <PackageReference Include="PDFsharp" Version="6.2.4" />
     <PackageReference Include="QRCoder" Version="1.8.0" />
     <PackageReference Include="Scalar.AspNetCore" Version="2.16.15" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Cross-platform PDF fallback fonts (DejaVu Sans, Bitstream Vera licence); see Modules/Pdf/PdfFontResolver.cs. -->
+    <EmbeddedResource Include="Modules\Pdf\Fonts\DejaVuSans.ttf" />
+    <EmbeddedResource Include="Modules\Pdf\Fonts\DejaVuSans-Bold.ttf" />
+    <!-- The licence requires its copyright and permission notice to accompany every copy of the
+         fonts. They travel inside the assembly, so the notice ships with the build/publish output. -->
+    <None Update="Modules\Pdf\Fonts\LICENSE-DejaVu.txt" Link="licenses\DejaVu-LICENSE.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

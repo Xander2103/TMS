@@ -75,6 +75,14 @@ public class StopExecutionTransitionTests
                 StopType = StopType.Loading, LocationId = locationId,
                 RequestedFrom = Now.UtcDateTime.AddHours(-2), RequestedTo = Now.UtcDateTime.AddHours(4),
                 AppointmentRequired = true, AppointmentReference = "SLOT-77",
+                // Phase 7 location snapshot: the stop carries its own frozen copy; note the
+                // loading instructions deliberately DIFFER from the live location above and the
+                // access instructions are left empty to prove no live fallback happens.
+                LoadingInstructions = "Stop-instructie: dok 7",
+                ContactName = "Magazijnier Piet", ContactPhone = "+32 3 123 45 67",
+                Gate = "Poort B", AccessCode = "1234#", Dock = "Kade 7",
+                RouteDescription = "Via de Noorderlaan", OpeningHoursSummary = "Ma 07:00–17:00",
+                SnapshotAt = Now.UtcDateTime,
             },
             new TransportOrderStop
             {
@@ -110,6 +118,31 @@ public class StopExecutionTransitionTests
 
     private static ExecutionStopDto StopOf(ExecutionResult result, Guid stopId) =>
         result.Execution!.Stops.Single(s => s.TransportOrderStopId == stopId);
+
+    [Fact]
+    public async Task Transition_ReplayWithSameClientRequestId_DoesNotDoubleTransition()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var key = Guid.NewGuid();
+
+        var first = await h.Sut.TransitionAsync(h.TripId, h.LoadStopId,
+            new TransitionStopRequest(StopExecutionStatus.EnRoute, ClientRequestId: key), true, CancellationToken.None);
+        Assert.Equal(ExecutionOutcome.Success, first.Outcome);
+
+        // Offline replay: same key → success with current state, no second history row,
+        // and no invalid-transition error even though EnRoute → EnRoute is not allowed.
+        var replay = await h.Sut.TransitionAsync(h.TripId, h.LoadStopId,
+            new TransitionStopRequest(StopExecutionStatus.EnRoute, ClientRequestId: key), true, CancellationToken.None);
+        Assert.Equal(ExecutionOutcome.Success, replay.Outcome);
+        Assert.Equal(StopExecutionStatus.EnRoute, StopOf(replay, h.LoadStopId).Status);
+        Assert.Equal(1, h.Db.Context.StopStatusHistories.Count());
+
+        // A NEW key continues the flow normally.
+        var next = await h.Sut.TransitionAsync(h.TripId, h.LoadStopId,
+            new TransitionStopRequest(StopExecutionStatus.Arrived, ClientRequestId: Guid.NewGuid()), true, CancellationToken.None);
+        Assert.Equal(StopExecutionStatus.Arrived, StopOf(next, h.LoadStopId).Status);
+    }
 
     [Fact]
     public async Task HappyPath_LoadingStop_StampsActualsAndWritesHistory()
@@ -280,7 +313,7 @@ public class StopExecutionTransitionTests
     }
 
     [Fact]
-    public async Task ExecutionDto_ExposesWindowsAppointmentAndLocationInstructionFallback()
+    public async Task ExecutionDto_ExposesWindowsAppointmentAndStopSnapshot()
     {
         var h = await SeedAsync();
         using var _ = h.Db;
@@ -292,9 +325,18 @@ public class StopExecutionTransitionTests
         Assert.Equal(Now.UtcDateTime.AddHours(4), load.RequestedTo);
         Assert.True(load.AppointmentRequired);
         Assert.Equal("SLOT-77", load.AppointmentReference);
-        // Stop-level instructions win; otherwise the master location's instructions apply.
-        Assert.Equal("Aanmelden aan dok 5", load.LoadingInstructions);
-        Assert.Equal("Alfapass verplicht", load.AccessInstructions);
+        // Phase 7: the stop's snapshot is authoritative — the live location's instructions
+        // ("Aanmelden aan dok 5" / "Alfapass verplicht") must NOT leak in anymore.
+        Assert.Equal("Stop-instructie: dok 7", load.LoadingInstructions);
+        Assert.Null(load.AccessInstructions);
+        // Snapshot fields the driver needs on site (access code is driver-facing by design).
+        Assert.Equal("Magazijnier Piet", load.ContactName);
+        Assert.Equal("+32 3 123 45 67", load.ContactPhone);
+        Assert.Equal("Poort B", load.Gate);
+        Assert.Equal("1234#", load.AccessCode);
+        Assert.Equal("Kade 7", load.Dock);
+        Assert.Equal("Via de Noorderlaan", load.RouteDescription);
+        Assert.Equal("Ma 07:00–17:00", load.OpeningHoursSummary);
 
         Assert.Equal(
             new[]

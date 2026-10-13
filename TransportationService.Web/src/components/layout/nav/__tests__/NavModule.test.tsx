@@ -1,0 +1,107 @@
+import { describe, expect, it, vi } from 'vitest'
+import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
+import { Truck } from 'lucide-react'
+import { NavModule } from '../NavModule'
+import { getNavModules } from '../navConfig'
+import type { VisibleModule } from '../navState'
+
+const vm: VisibleModule = {
+  module: { id: 'vloot', label: 'Vloot', icon: Truck, items: [] },
+  items: [
+    { label: 'Voertuigen', to: '/vehicles' },
+    { label: 'Meldingen', to: '/notifications', badge: 'notifications' },
+  ],
+  subgroups: [],
+}
+
+function renderModule(props: Partial<Parameters<typeof NavModule>[0]> = {}) {
+  return render(
+    <MemoryRouter initialEntries={['/vehicles']}>
+      <NavModule vm={vm} expanded active={false} unreadCount={0} onToggle={vi.fn()} {...props} />
+    </MemoryRouter>,
+  )
+}
+
+describe('NavModule', () => {
+  it('renders an accessible header reflecting expanded state', () => {
+    renderModule({ expanded: false })
+    const header = screen.getByRole('button', { name: /Vloot/ })
+    expect(header).toHaveAttribute('aria-expanded', 'false')
+  })
+
+  it('toggles via the header button', async () => {
+    const onToggle = vi.fn()
+    renderModule({ onToggle })
+    await userEvent.click(screen.getByRole('button', { name: /Vloot/ }))
+    expect(onToggle).toHaveBeenCalledWith('vloot')
+  })
+
+  it('renders item links when expanded', () => {
+    renderModule({ expanded: true })
+    expect(screen.getByRole('link', { name: 'Voertuigen' })).toHaveAttribute('href', '/vehicles')
+  })
+
+  it('shows the unread badge on a badged item', () => {
+    renderModule({ expanded: true, unreadCount: 5 })
+    expect(screen.getByText('5')).toBeInTheDocument()
+  })
+
+  it('marks the header active when the active prop is set', () => {
+    const { container } = renderModule({ active: true })
+    expect(container.querySelector('.nav-module-active')).not.toBeNull()
+  })
+
+  it('renders a nested submenu for an item with children (future-proofing)', async () => {
+    const nested: VisibleModule = {
+      module: { id: 'x', label: 'X', icon: Truck, items: [] },
+      items: [{ label: 'Ouder', to: '/parent', children: [{ label: 'Kind', to: '/parent/child' }] }],
+      subgroups: [],
+    }
+    render(
+      <MemoryRouter>
+        <NavModule vm={nested} expanded active={false} unreadCount={0} onToggle={vi.fn()} />
+      </MemoryRouter>,
+    )
+    const parentToggle = screen.getByRole('button', { name: /Ouder/ })
+    expect(screen.queryByRole('link', { name: 'Kind' })).toBeNull()
+    await userEvent.click(parentToggle)
+    expect(screen.getByRole('link', { name: 'Kind' })).toHaveAttribute('href', '/parent/child')
+  })
+
+  it('honours end:true so a parent route is not active on a descendant route', () => {
+    // Regression guard: /settings must NOT highlight while on /settings/legal-entities.
+    const settings: VisibleModule = {
+      module: { id: 'beheer', label: 'Beheer', icon: Truck, items: [] },
+      items: [
+        { label: 'Instellingen', to: '/settings', end: true },
+        { label: 'Eigen bedrijven', to: '/settings/legal-entities' },
+      ],
+      subgroups: [],
+    }
+    render(
+      <MemoryRouter initialEntries={['/settings/legal-entities']}>
+        <NavModule vm={settings} expanded active={false} unreadCount={0} onToggle={vi.fn()} />
+      </MemoryRouter>,
+    )
+    expect(screen.getByRole('link', { name: 'Instellingen' })).not.toHaveClass('active')
+    expect(screen.getByRole('link', { name: 'Eigen bedrijven' })).toHaveClass('active')
+  })
+
+  it.each(['/issued-items/categories', '/issued-items/templates', '/issued-items/templates/abc-123'])(
+    'keeps the real Bedrijfsmiddelen (beheer) entry active on %s',
+    (path) => {
+      // Regression guard: the entry pointed at the templates tab, so it lost its highlight on Categorieën.
+      const personeel = getNavModules().find((m) => m.id === 'personeel')!
+      const real: VisibleModule = { module: personeel, items: personeel.items ?? [], subgroups: [] }
+      render(
+        <MemoryRouter initialEntries={[path]}>
+          <NavModule vm={real} expanded active unreadCount={0} onToggle={vi.fn()} />
+        </MemoryRouter>,
+      )
+      const active = screen.getAllByRole('link').filter((link) => link.classList.contains('active'))
+      expect(active.map((link) => link.getAttribute('href'))).toEqual(['/issued-items'])
+    },
+  )
+})

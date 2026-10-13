@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations.Schema;
 using TransportationService.Api.Common.Abstractions;
 
 namespace TransportationService.Api.Modules.Orders.Entities;
@@ -12,12 +13,52 @@ public enum TransportOrderStatus
     /// <summary>Set by the invoicing module (Phase 8); not reachable via the manual transition map.</summary>
     Invoiced,
     Cancelled,
+    /// <summary>Submitted through the customer portal; awaiting planner review. Stored as string — appending is safe.</summary>
+    Submitted,
 }
 
+/// <summary>
+/// Stored as string — appending is safe. <see cref="Site"/> (master sprint 2026-09-21, D2) is the
+/// place where on-site work happens (e.g. a lifting job): nothing is loaded or unloaded there, so
+/// goods lines, colli, load/unload scans and included loading/unloading time never apply to it.
+/// </summary>
 public enum StopType
 {
     Loading,
     Unloading,
+    Site,
+}
+
+/// <summary>
+/// Master sprint 2026-09-21 (D2): which kind of crane job an order is. Stored as string.
+/// <see cref="TransportWithCrane"/> is an ordinary transport (loading + unloading stops, goods)
+/// executed with a crane; <see cref="OnSiteLifting"/> is lifting work at a site — site stop(s),
+/// a work description and optional lift data instead of goods lines.
+/// </summary>
+public enum CraneJobKind
+{
+    None,
+    TransportWithCrane,
+    OnSiteLifting,
+}
+
+/// <summary>Operational urgency for planning and dock queues. Stored as string — appending is safe.</summary>
+public enum OrderPriority
+{
+    Low,
+    Normal,
+    High,
+    Urgent,
+}
+
+/// <summary>
+/// Where an order's price agreement comes from: the customer's contract (rules/agreements) or a
+/// one-off price agreement carried on the order itself (spec Phase 6). Stored as string.
+/// </summary>
+public enum OrderPricingSource
+{
+    Contract,
+    OneOff,
 }
 
 /// <summary>
@@ -25,7 +66,7 @@ public enum StopType
 /// (trip assignment, Phase 6) and pricing/invoicing (Phase 8) build on top of this entity.
 /// The order number is claimed from TenantSettings via the retry-safe numbering helper.
 /// </summary>
-public class TransportOrder : AuditableTenantEntity
+public class TransportOrder : AuditableTenantEntity, IVersionedEntity
 {
     public string OrderNumber { get; set; } = string.Empty;
 
@@ -34,21 +75,166 @@ public class TransportOrder : AuditableTenantEntity
     /// <summary>The customer's own reference for this order (PO number, booking id, ...).</summary>
     public string? CustomerReference { get; set; }
 
+    /// <summary>
+    /// Selling own company. Inherits the customer's default at creation; may be overridden
+    /// per order. The invoice snapshot freezes the final entity data at invoicing time.
+    /// </summary>
+    public Guid? LegalEntityId { get; set; }
+
     public DateOnly OrderDate { get; set; }
+
+    /// <summary>
+    /// Optimistic-concurrency token, bumped centrally by the auditing interceptor on every
+    /// modification (see IVersionedEntity). Clients echo it; a mismatch yields HTTP 409
+    /// carrying the current state. Null from a client skips the check so legacy/EDI/portal
+    /// callers keep working.
+    /// </summary>
+    public Guid Version { get; set; } = Guid.NewGuid();
 
     public TransportOrderStatus Status { get; set; } = TransportOrderStatus.Draft;
 
-    public string GoodsDescription { get; set; } = string.Empty;
+    /// <summary>
+    /// Persisted invoice-readiness projection (Wave 2): NotReady | ReadyForInvoice |
+    /// ReviewRequired. Maintained by InvoiceReadinessEvaluator on completion/pricing/POD
+    /// transitions — deterministic and idempotent; the Wave-10 workspace filters on it.
+    /// Never a member of TransportOrderStatus (additive projection by design).
+    /// </summary>
+    public string InvoiceReadiness { get; set; } = "NotReady";
+
+    /// <summary>Semicolon-separated reason codes when ReviewRequired (e.g. "pricing.incomplete;pod.missing").</summary>
+    public string? InvoiceReadinessReasons { get; set; }
+
+    public OrderPriority Priority { get; set; } = OrderPriority.Normal;
+
+    /// <summary>
+    /// Transient context for the status-history interceptor: reason and correction marker of
+    /// the status change staged in the current SaveChanges. Cleared once recorded.
+    /// </summary>
+    [NotMapped]
+    public string? PendingStatusChangeReason { get; set; }
+
+    [NotMapped]
+    public bool PendingStatusChangeIsCorrection { get; set; }
+
+    /// <summary>Optional free-text description of the goods (structured data lives in cargo items).</summary>
+    public string? GoodsDescription { get; set; }
     public decimal? Quantity { get; set; }
     public string? QuantityUnit { get; set; }
+
+    /// <summary>Managed unit-type code (from the UnitType lookup); QuantityUnit is the legacy free-text fallback.</summary>
+    public string? QuantityUnitCode { get; set; }
     public decimal? WeightKg { get; set; }
     public decimal? VolumeM3 { get; set; }
+
+    /// <summary>Wave 3 §1: planned distance in km — feeds PerKm rule bases and PerKm services (Maut).</summary>
+    public decimal? DistanceKm { get; set; }
+
+    /// <summary>Wave 3 §1: loading meters — feeds PerLoadingMeter bases and LoadingMetersTo bracket caps.</summary>
+    public decimal? LoadingMeters { get; set; }
     public int? PalletCount { get; set; }
     public bool AdrRequired { get; set; }
     public bool CraneRequired { get; set; }
 
-    /// <summary>Simple agreed price; the real pricing/invoicing engine is Phase 8.</summary>
+    /// <summary>
+    /// D2: kind of crane job. OnSiteLifting is only valid when the order's activity type has
+    /// <c>SupportsOnSiteWork</c>; it swaps the goods/route rules for site stop + work description.
+    /// </summary>
+    public CraneJobKind CraneJobKind { get; set; } = CraneJobKind.None;
+
+    /// <summary>D2: what has to be done on site (mandatory for OnSiteLifting).</summary>
+    public string? WorkDescription { get; set; }
+
+    // D2: data of the load to lift. A lift load is NOT a goods line — never turned into cargo.
+    public decimal? LiftLoadWeightKg { get; set; }
+    public string? LiftLoadDimensions { get; set; }
+    public decimal? LiftRadiusMeters { get; set; }
+    public decimal? LiftHeightMeters { get; set; }
+    public string? LiftConditions { get; set; }
+    public string? LiftEquipment { get; set; }
+
+    // P6: equipment/movement pricing dimensions (additive; false = legacy behavior).
+    /// <summary>The delivery needs a plateau (flatbed) — drives Plateau service conditions.</summary>
+    public bool PlateauRequired { get; set; }
+
+    /// <summary>The delivery needs a truck-mounted forklift (Moffett/kooiaap).</summary>
+    public bool MoffettRequired { get; set; }
+
+    /// <summary>This order is a return movement (retour) — drives ReturnMovement pricing.</summary>
+    public bool IsReturnMovement { get; set; }
+
+    // P12: invoice postponement (snooze) — the order stays out of the invoice proposals
+    // until the date passes; visible in its own workspace section, never silently hidden.
+    public DateOnly? InvoiceSnoozeUntil { get; set; }
+    public string? InvoiceSnoozeReason { get; set; }
+
+    /// <summary>
+    /// Follow-up wave P1: per-order transport-document choice, overriding the customer's
+    /// DocumentStrategy. Null = inherit (or "decide later" when the customer strategy is
+    /// PerOrder); Own = generate our document; CustomerDocument = customer paperwork is
+    /// used (own generation excluded from batches); NoneRequired = no document needed.
+    /// </summary>
+    public string? DocumentPreference { get; set; }
+
+    /// <summary>
+    /// The effective order price used by invoicing. Equal to <see cref="CalculatedPrice"/>
+    /// unless a manual override was applied (<see cref="PriceIsManual"/>) or no pricing
+    /// configuration exists (legacy manual entry).
+    /// </summary>
     public decimal? AgreedPrice { get; set; }
+
+    /// <summary>Engine result at last save; null when nothing could be calculated.</summary>
+    public decimal? CalculatedPrice { get; set; }
+
+    /// <summary>True when AgreedPrice was explicitly overridden (orders.override_price).</summary>
+    public bool PriceIsManual { get; set; }
+
+    public string? PriceOverrideReason { get; set; }
+
+    /// <summary>
+    /// Contract (default): priced by the customer's rules/agreements. OneOff: no contract is
+    /// consulted — the order carries its own fixed price + included-time agreement below.
+    /// Choosing OneOff and entering its fields needs NO special permission: it is the order's own
+    /// price agreement, not an override of a calculated price. <c>orders.override_price</c>
+    /// (<see cref="PriceIsManual"/>) is a SEPARATE, narrower gate that only applies when someone
+    /// overwrites whatever the engine calculated (contract OR one-off) with a different number.
+    /// </summary>
+    public OrderPricingSource PricingSource { get; set; } = OrderPricingSource.Contract;
+
+    /// <summary>OneOff only: the agreed fixed price for this single order.</summary>
+    public decimal? OneOffFixedAmount { get; set; }
+
+    /// <summary>OneOff only: included loading/unloading minutes, per activity. Mutually exclusive with the combined variant.</summary>
+    public int? OneOffIncludedLoadingMinutes { get; set; }
+    public int? OneOffIncludedUnloadingMinutes { get; set; }
+
+    /// <summary>OneOff only: included loading+unloading minutes combined. Mutually exclusive with the per-activity fields.</summary>
+    public int? OneOffIncludedCombinedMinutes { get; set; }
+
+    /// <summary>OneOff only: hourly rate charged for time beyond the included allowance (proposal until confirmed).</summary>
+    public decimal? OneOffExtraHourlyRate { get; set; }
+
+    /// <summary>OneOff only: free-text context for how the one-off price was agreed (e.g. "Afgesproken via telefoon").</summary>
+    public string? OneOffNotes { get; set; }
+
+    /// <summary>
+    /// Task 10: order-level overrides of the ENGAGED CONTRACT AGREEMENT's included loading/
+    /// unloading time and extra-time rate/rounding/minimum. Contract pricing only — rejected in
+    /// combination with <see cref="OrderPricingSource.OneOff"/> (which has its own included-time
+    /// fields above). Resolution rule (order override wins over the agreement value, per activity;
+    /// switching a combined-mode agreement to per-activity when only one side is overridden) lives
+    /// in <c>PricingEngine.ComputeExtraTimeLines</c>. Stop-level overrides are a deferred limitation.
+    /// </summary>
+    public int? IncludedLoadingMinutesOverride { get; set; }
+    public int? IncludedUnloadingMinutesOverride { get; set; }
+    public decimal? ExtraTimeHourlyRateOverride { get; set; }
+    public int? ExtraTimeRoundingStepMinutes { get; set; }
+    public int? ExtraTimeMinimumBillableMinutes { get; set; }
+
+    // Diesel-surcharge override (customer config is the default). Overriding requires a
+    // reason; the inherited value, override, actor and timestamp are audited.
+    public bool DieselSurchargeOverride { get; set; }
+    public decimal? DieselSurchargePercentOverride { get; set; }
+    public string? DieselSurchargeOverrideReason { get; set; }
 
     public string? Notes { get; set; }
 
@@ -58,8 +244,24 @@ public class TransportOrder : AuditableTenantEntity
     public List<TransportOrderStop> Stops { get; set; } = [];
 }
 
+/// <summary>Wave 2026-08-04 §15: simple per-stop time requirement kinds.</summary>
+public enum StopTimeRequirementKind
+{
+    /// <summary>Geen specifieke eis.</summary>
+    None = 0,
+
+    /// <summary>Vóór een uur (leveren/laden vóór TimeRequirementTo).</summary>
+    Before = 1,
+
+    /// <summary>Na een uur (niet vóór TimeRequirementFrom).</summary>
+    After = 2,
+
+    /// <summary>Exact tijdvenster (TimeRequirementFrom – TimeRequirementTo).</summary>
+    Window = 3,
+}
+
 /// <summary>
-/// One loading or unloading stop of an order, ordered by <see cref="Sequence"/>. Either a master
+/// One loading, unloading or site stop of an order, ordered by <see cref="Sequence"/>. Either a master
 /// location is referenced or a free address is entered inline (ad-hoc addresses without master data).
 /// </summary>
 public class TransportOrderStop : AuditableTenantEntity
@@ -72,17 +274,60 @@ public class TransportOrderStop : AuditableTenantEntity
 
     public Guid? LocationId { get; set; }
 
-    // Inline fallback when no master location is linked.
+    // Address as agreed at order time. Free-address stops enter these inline; master-location
+    // stops get them COPIED from the location at snapshot time (master-data wave 2026-08-05),
+    // so editing a location never rewrites historical orders.
     public string? LocationName { get; set; }
     public string? Address { get; set; }
     public string? PostalCode { get; set; }
     public string? City { get; set; }
     public string? CountryCode { get; set; }
 
+    // --- Location snapshot (master-data wave 2026-08-05, Phase 7) ---
+    // Frozen copy of the master location's operational data, taken when the stop is created
+    // with (or switched to) a master location, or explicitly refreshed (RefreshSnapshot).
+    public string? ContactName { get; set; }
+    public string? ContactPhone { get; set; }
+    public string? ContactMobile { get; set; }
+    public string? ContactEmail { get; set; }
+
+    /// <summary>Compact weekly summary, e.g. "Ma 07:00–12:00, 13:00–17:00; Di 07:00–17:00".</summary>
+    public string? OpeningHoursSummary { get; set; }
+
+    public string? Gate { get; set; }
+
+    /// <summary>SENSITIVE: exposed in order DTOs only to locations.view_sensitive holders; drivers on the trip see it by design.</summary>
+    public string? AccessCode { get; set; }
+
+    public string? Dock { get; set; }
+    public string? RouteDescription { get; set; }
+    public int? DefaultLoadingMinutes { get; set; }
+    public int? DefaultUnloadingMinutes { get; set; }
+
+    /// <summary>UTC moment the location snapshot was (last) taken; null for free-address stops.</summary>
+    public DateTime? SnapshotAt { get; set; }
+
+    /// <summary>
+    /// D3: true = the stop references a master location (<see cref="LocationId"/>) but its address
+    /// quintet was deliberately edited for THIS order, so the snapshot deviates from the address
+    /// book. The stop snapshot is the dossier-level override — the central location is never
+    /// modified by an order. Reset by "Adres opnieuw overnemen" (RefreshSnapshot) or by saving the
+    /// address to the address book. Always false without a location.
+    /// </summary>
+    public bool AddressOverridden { get; set; }
+
     // Four distinct time concepts (Wave "stop execution"): what planning scheduled, what the
     // customer asked for, what was confirmed back to the customer, and the hard outer bounds.
     public DateTime? PlannedFrom { get; set; }
     public DateTime? PlannedTo { get; set; }
+
+    /// <summary>
+    /// D2 (site stops only): true = the planner entered <see cref="PlannedTo"/> by hand, so the
+    /// server never recomputes it. False = the end follows start + activity duration
+    /// (<c>SiteWorkTime</c>). Ignored for loading/unloading stops.
+    /// </summary>
+    public bool PlannedToIsManual { get; set; }
+
     public DateTime? RequestedFrom { get; set; }
     public DateTime? RequestedTo { get; set; }
     public DateTime? ConfirmedFrom { get; set; }
@@ -93,12 +338,36 @@ public class TransportOrderStop : AuditableTenantEntity
     public bool AppointmentRequired { get; set; }
     public string? AppointmentReference { get; set; }
 
+    /// <summary>
+    /// Wave 2026-08-04 §15: the user-friendly time requirement of this stop ("Leveren vóór
+    /// 10:00"). Distinct from the four raw window pairs above: this is the COMMERCIAL promise
+    /// that also drives time-based surcharges (§16). Before uses <see cref="TimeRequirementTo"/>,
+    /// After uses <see cref="TimeRequirementFrom"/>, Window uses both. "Afspraak verplicht"
+    /// remains the existing <see cref="AppointmentRequired"/> flag.
+    /// </summary>
+    public StopTimeRequirementKind TimeRequirement { get; set; } = StopTimeRequirementKind.None;
+
+    /// <summary>Not before this time (After / start of Window).</summary>
+    public TimeOnly? TimeRequirementFrom { get; set; }
+
+    /// <summary>Before this time (Before / end of Window).</summary>
+    public TimeOnly? TimeRequirementTo { get; set; }
+
+    /// <summary>
+    /// Wave 2026-08-04 §18: stop-level override of the included loading/unloading minutes for
+    /// THIS stop's activity. Resolution: stop override → order override → contract value. When
+    /// any stop of an activity carries an override, the activity's effective included minutes
+    /// are the sum of the overriding stops' values (a stop without one contributes 0).
+    /// </summary>
+    public int? IncludedTimeMinutesOverride { get; set; }
+
     /// <summary>Stop-level reference (dossier, container number, booking slot, ...).</summary>
     public string? Reference { get; set; }
 
     public string? Instructions { get; set; }
 
-    // Stop-level overrides; when empty the master location's instructions apply.
+    // Instructions as agreed at order time. Empty fields are filled from the master location at
+    // snapshot time (never live-joined anymore); user-entered values always win.
     public string? AccessInstructions { get; set; }
     public string? LoadingInstructions { get; set; }
     public string? UnloadingInstructions { get; set; }

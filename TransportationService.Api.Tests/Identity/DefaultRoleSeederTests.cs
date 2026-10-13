@@ -19,8 +19,10 @@ public class DefaultRoleSeederTests
 
     private static readonly string[] Version3Codes =
     [
+        // packages.export is uit de catalogus verwijderd (L5): de historische upgrade-stap
+        // vermeldt hem nog, maar de seeder slaat onbekende codes over.
         PermissionCodes.PackagesView, PermissionCodes.PackagesCreate, PermissionCodes.PackagesManage,
-        PermissionCodes.PackagesCancel, PermissionCodes.PackagesRelabel, PermissionCodes.PackagesExport,
+        PermissionCodes.PackagesCancel, PermissionCodes.PackagesRelabel,
         PermissionCodes.PackageExceptionsCreate, PermissionCodes.PackageExceptionsManage,
         PermissionCodes.ScanningOverride,
         PermissionCodes.WarehouseView, PermissionCodes.WarehouseReleaseTrip,
@@ -87,7 +89,12 @@ public class DefaultRoleSeederTests
 
         var roles = await db.Context.Roles.Where(r => r.TenantId == tenantId).ToListAsync();
         Assert.Equal(
-            new[] { "Boekhouding", "Chauffeur", "Dispatcher", "HR", "Klantportaal", "Magazijn", "Management", "Planner" },
+            new[]
+            {
+                "Boekhouding", "Chauffeur", "Dispatcher", "HR", "Klantportaal",
+                "Klantportaal - Documenten", "Klantportaal - Facturen", "Klantportaal - Gebruikersbeheer",
+                "Magazijn", "Management", "Planner",
+            },
             roles.Select(r => r.Name).OrderBy(n => n).ToArray());
         Assert.All(roles, r => Assert.False(r.IsSystemRole));
 
@@ -131,6 +138,15 @@ public class DefaultRoleSeederTests
                                  select p.Code).ToListAsync();
         Assert.Contains(PermissionCodes.DriverWorkflowExecute, driverCodes);
         Assert.DoesNotContain(PermissionCodes.OrdersEdit, driverCodes);
+
+        // Leave-balance permissions (v10): HR manages, driver views own, management views only.
+        Assert.Contains(PermissionCodes.LeaveBalancesManage, hrCodes);
+        Assert.Contains(PermissionCodes.LeaveBalancesAdjust, hrCodes);
+        Assert.Contains(PermissionCodes.LeaveTypesManage, hrCodes);
+        Assert.Contains(PermissionCodes.LeaveBalancesViewOwn, driverCodes);
+        Assert.DoesNotContain(PermissionCodes.LeaveBalancesManage, driverCodes);
+        Assert.Contains(PermissionCodes.LeaveBalancesView, managementCodes);
+        Assert.DoesNotContain(PermissionCodes.LeaveBalancesManage, managementCodes);
     }
 
     [Fact]
@@ -151,7 +167,7 @@ public class DefaultRoleSeederTests
         // …and the next startup must NOT re-grant it or duplicate roles.
         await DefaultRoleSeeder.SyncAsync(db.Context);
 
-        Assert.Equal(8, await db.Context.Roles.CountAsync(r => r.TenantId == tenantId));
+        Assert.Equal(11, await db.Context.Roles.CountAsync(r => r.TenantId == tenantId));
         Assert.False(await db.Context.RolePermissions
             .AnyAsync(rp => rp.RoleId == planner.Id && rp.PermissionId == cancelPermission.Id));
     }
@@ -192,7 +208,17 @@ public class DefaultRoleSeederTests
         var plannerAfter = (await CodesOfAsync(db, planner.Id)).ToHashSet();
         Assert.True(plannerBefore.IsSubsetOf(plannerAfter), "no permission may ever be removed");
         Assert.Equal(
-            new[] { PermissionCodes.EmployeePlanningConflictOverride, PermissionCodes.TripCostsView }
+            new[]
+            {
+                PermissionCodes.EmployeePlanningConflictOverride, PermissionCodes.TripCostsView,
+                PermissionCodes.OrdersOverridePrice, PermissionCodes.OrdersLockPrice,
+                // v23 (sprint): personal tasks for every employee-facing template.
+                PermissionCodes.TasksViewOwn, PermissionCodes.TasksManageOwn,
+                // v25 (master-data wave): sensitive location data for the planning side.
+                PermissionCodes.LocationsViewSensitive,
+                // v31 (Excel-importprofielen): planner beheert importprofielen.
+                PermissionCodes.OrderImportsManageProfiles,
+            }
                 .Concat(Version3Codes).OrderBy(c => c),
             plannerAfter.Except(plannerBefore).OrderBy(c => c));
 
@@ -307,6 +333,510 @@ public class DefaultRoleSeederTests
     }
 
     [Fact]
+    public async Task Version14_GrantsOrdersLockPrice_ToPlannerManagementBoekhoudingOnly()
+    {
+        var (db, tenantId) = await SeedTenantWithCatalogAsync();
+        using var _ = db;
+
+        await DefaultRoleSeeder.SyncAsync(db.Context);
+
+        var state = await db.Context.RoleTemplateStates.SingleAsync(s => s.TenantId == tenantId);
+        Assert.Equal(DefaultRoleUpgrades.CurrentVersion, state.AppliedVersion);
+
+        var roles = await db.Context.Roles.Where(r => r.TenantId == tenantId).ToListAsync();
+        var planner = roles.Single(r => r.TemplateCode == "planner");
+        var management = roles.Single(r => r.TemplateCode == "management");
+        var boekhouding = roles.Single(r => r.TemplateCode == "boekhouding");
+        var others = roles.Where(r => r.TemplateCode is not ("planner" or "management" or "boekhouding")).ToList();
+
+        Assert.Contains(PermissionCodes.OrdersLockPrice, await CodesOfAsync(db, planner.Id));
+        Assert.Contains(PermissionCodes.OrdersLockPrice, await CodesOfAsync(db, management.Id));
+        Assert.Contains(PermissionCodes.OrdersLockPrice, await CodesOfAsync(db, boekhouding.Id));
+        foreach (var other in others)
+        {
+            Assert.DoesNotContain(PermissionCodes.OrdersLockPrice, await CodesOfAsync(db, other.Id));
+        }
+    }
+
+    [Fact]
+    public async Task Version15_GrantsTariffsImport_ToManagementBoekhoudingOnly()
+    {
+        var (db, tenantId) = await SeedTenantWithCatalogAsync();
+        using var _ = db;
+
+        await DefaultRoleSeeder.SyncAsync(db.Context);
+
+        var roles = await db.Context.Roles.Where(r => r.TenantId == tenantId).ToListAsync();
+        var management = roles.Single(r => r.TemplateCode == "management");
+        var boekhouding = roles.Single(r => r.TemplateCode == "boekhouding");
+        var others = roles.Where(r => r.TemplateCode is not ("management" or "boekhouding")).ToList();
+
+        Assert.Contains(PermissionCodes.TariffsImport, await CodesOfAsync(db, management.Id));
+        Assert.Contains(PermissionCodes.TariffsImport, await CodesOfAsync(db, boekhouding.Id));
+        foreach (var other in others)
+        {
+            Assert.DoesNotContain(PermissionCodes.TariffsImport, await CodesOfAsync(db, other.Id));
+        }
+    }
+
+    [Fact]
+    public async Task Version16_GrantsAccounting_ToBoekhoudingManageAndManagementViewOnly()
+    {
+        var (db, tenantId) = await SeedTenantWithCatalogAsync();
+        using var _ = db;
+
+        await DefaultRoleSeeder.SyncAsync(db.Context);
+
+        var state = await db.Context.RoleTemplateStates.SingleAsync(s => s.TenantId == tenantId);
+        Assert.Equal(DefaultRoleUpgrades.CurrentVersion, state.AppliedVersion);
+
+        var roles = await db.Context.Roles.Where(r => r.TenantId == tenantId).ToListAsync();
+        var management = roles.Single(r => r.TemplateCode == "management");
+        var boekhouding = roles.Single(r => r.TemplateCode == "boekhouding");
+        var others = roles.Where(r => r.TemplateCode is not ("management" or "boekhouding")).ToList();
+
+        Assert.Contains(PermissionCodes.AccountingView, await CodesOfAsync(db, boekhouding.Id));
+        Assert.Contains(PermissionCodes.AccountingManage, await CodesOfAsync(db, boekhouding.Id));
+        Assert.Contains(PermissionCodes.AccountingView, await CodesOfAsync(db, management.Id));
+        Assert.DoesNotContain(PermissionCodes.AccountingManage, await CodesOfAsync(db, management.Id));
+        foreach (var other in others)
+        {
+            Assert.DoesNotContain(PermissionCodes.AccountingView, await CodesOfAsync(db, other.Id));
+            Assert.DoesNotContain(PermissionCodes.AccountingManage, await CodesOfAsync(db, other.Id));
+        }
+    }
+
+    [Fact]
+    public async Task Version17_GrantsEmployeeNotes_ToHrAndManagementOnly()
+    {
+        var (db, tenantId) = await SeedTenantWithCatalogAsync();
+        using var _ = db;
+
+        await DefaultRoleSeeder.SyncAsync(db.Context);
+
+        var state = await db.Context.RoleTemplateStates.SingleAsync(s => s.TenantId == tenantId);
+        Assert.Equal(DefaultRoleUpgrades.CurrentVersion, state.AppliedVersion);
+
+        var roles = await db.Context.Roles.Where(r => r.TenantId == tenantId).ToListAsync();
+        var hr = roles.Single(r => r.TemplateCode == "hr");
+        var management = roles.Single(r => r.TemplateCode == "management");
+        var others = roles.Where(r => r.TemplateCode is not ("hr" or "management")).ToList();
+
+        foreach (var role in new[] { hr, management })
+        {
+            var codes = await CodesOfAsync(db, role.Id);
+            Assert.Contains(PermissionCodes.EmployeeNotesView, codes);
+            Assert.Contains(PermissionCodes.EmployeeNotesManage, codes);
+            Assert.Contains(PermissionCodes.EmployeeNotesPin, codes);
+        }
+
+        foreach (var other in others)
+        {
+            var codes = await CodesOfAsync(db, other.Id);
+            Assert.DoesNotContain(PermissionCodes.EmployeeNotesView, codes);
+            Assert.DoesNotContain(PermissionCodes.EmployeeNotesManage, codes);
+            Assert.DoesNotContain(PermissionCodes.EmployeeNotesPin, codes);
+        }
+    }
+
+    [Fact]
+    public async Task Version18_GrantsNotificationRules_ToManagementHrAndBoekhouding()
+    {
+        var (db, tenantId) = await SeedTenantWithCatalogAsync();
+        using var _ = db;
+
+        await DefaultRoleSeeder.SyncAsync(db.Context);
+
+        var state = await db.Context.RoleTemplateStates.SingleAsync(s => s.TenantId == tenantId);
+        Assert.Equal(DefaultRoleUpgrades.CurrentVersion, state.AppliedVersion);
+
+        var roles = await db.Context.Roles.Where(r => r.TenantId == tenantId).ToListAsync();
+        var management = roles.Single(r => r.TemplateCode == "management");
+        var hr = roles.Single(r => r.TemplateCode == "hr");
+        var boekhouding = roles.Single(r => r.TemplateCode == "boekhouding");
+        var others = roles.Where(r => r.TemplateCode is not ("management" or "hr" or "boekhouding")).ToList();
+
+        Assert.Contains(PermissionCodes.NotificationRulesView, await CodesOfAsync(db, management.Id));
+        Assert.Contains(PermissionCodes.NotificationRulesManage, await CodesOfAsync(db, management.Id));
+
+        Assert.Contains(PermissionCodes.NotificationRulesView, await CodesOfAsync(db, hr.Id));
+        Assert.DoesNotContain(PermissionCodes.NotificationRulesManage, await CodesOfAsync(db, hr.Id));
+
+        Assert.Contains(PermissionCodes.NotificationRulesView, await CodesOfAsync(db, boekhouding.Id));
+        Assert.DoesNotContain(PermissionCodes.NotificationRulesManage, await CodesOfAsync(db, boekhouding.Id));
+
+        foreach (var other in others)
+        {
+            var codes = await CodesOfAsync(db, other.Id);
+            Assert.DoesNotContain(PermissionCodes.NotificationRulesView, codes);
+            Assert.DoesNotContain(PermissionCodes.NotificationRulesManage, codes);
+        }
+    }
+
+    [Fact]
+    public async Task Version19_GrantsPortalMessagesAndCustomerMessages_AndSeedsAddOnTemplates()
+    {
+        var (db, tenantId) = await SeedTenantWithCatalogAsync();
+        using var _ = db;
+
+        await DefaultRoleSeeder.SyncAsync(db.Context);
+
+        var state = await db.Context.RoleTemplateStates.SingleAsync(s => s.TenantId == tenantId);
+        Assert.Equal(DefaultRoleUpgrades.CurrentVersion, state.AppliedVersion);
+
+        var roles = await db.Context.Roles.Where(r => r.TenantId == tenantId).ToListAsync();
+        var klantportaal = roles.Single(r => r.TemplateCode == "klantportaal");
+        var planner = roles.Single(r => r.TemplateCode == "planner");
+        var dispatcher = roles.Single(r => r.TemplateCode == "dispatcher");
+        var management = roles.Single(r => r.TemplateCode == "management");
+
+        Assert.Contains(PermissionCodes.CustomerPortalMessages, await CodesOfAsync(db, klantportaal.Id));
+        // Documents/invoices/manage_users are NEVER on the base role — only the add-on templates.
+        Assert.DoesNotContain(PermissionCodes.CustomerPortalViewDocuments, await CodesOfAsync(db, klantportaal.Id));
+        Assert.DoesNotContain(PermissionCodes.CustomerPortalViewInvoices, await CodesOfAsync(db, klantportaal.Id));
+        Assert.DoesNotContain(PermissionCodes.CustomerPortalManageUsers, await CodesOfAsync(db, klantportaal.Id));
+
+        foreach (var role in new[] { planner, dispatcher })
+        {
+            var codes = await CodesOfAsync(db, role.Id);
+            Assert.Contains(PermissionCodes.CustomerMessagesView, codes);
+            Assert.Contains(PermissionCodes.CustomerMessagesSend, codes);
+        }
+
+        var managementCodes = await CodesOfAsync(db, management.Id);
+        Assert.Contains(PermissionCodes.CustomerMessagesView, managementCodes);
+        Assert.Contains(PermissionCodes.CustomerMessagesSend, managementCodes);
+        Assert.Contains(PermissionCodes.PortalAnnouncementsManage, managementCodes);
+
+        // The three add-on templates are seeded fresh with exactly their one permission each.
+        var documenten = roles.Single(r => r.TemplateCode == "klantportaal_documenten");
+        var facturen = roles.Single(r => r.TemplateCode == "klantportaal_facturen");
+        var gebruikersbeheer = roles.Single(r => r.TemplateCode == "klantportaal_gebruikersbeheer");
+        Assert.Equal([PermissionCodes.CustomerPortalViewDocuments], await CodesOfAsync(db, documenten.Id));
+        Assert.Equal([PermissionCodes.CustomerPortalViewInvoices], await CodesOfAsync(db, facturen.Id));
+        Assert.Equal([PermissionCodes.CustomerPortalManageUsers], await CodesOfAsync(db, gebruikersbeheer.Id));
+    }
+
+    [Fact]
+    public async Task Version20_GrantsEdiViewTestRetry_ToTheSameTemplateAsEdiManage()
+    {
+        var (db, tenantId) = await SeedTenantWithCatalogAsync();
+        using var _ = db;
+
+        await DefaultRoleSeeder.SyncAsync(db.Context);
+
+        var roles = await db.Context.Roles.Where(r => r.TenantId == tenantId).ToListAsync();
+        var management = roles.Single(r => r.TemplateCode == "management");
+        var managementCodes = await CodesOfAsync(db, management.Id);
+        Assert.Contains(PermissionCodes.EdiView, managementCodes);
+        Assert.Contains(PermissionCodes.EdiManage, managementCodes);
+        Assert.Contains(PermissionCodes.EdiTest, managementCodes);
+        Assert.Contains(PermissionCodes.EdiRetry, managementCodes);
+
+        // edi.manage is the only pre-existing holder; every other template stays untouched.
+        var others = roles.Where(r => r.TemplateCode != "management" && r.TemplateCode != null);
+        foreach (var other in others)
+        {
+            var codes = await CodesOfAsync(db, other.Id);
+            Assert.DoesNotContain(PermissionCodes.EdiView, codes);
+            Assert.DoesNotContain(PermissionCodes.EdiTest, codes);
+            Assert.DoesNotContain(PermissionCodes.EdiRetry, codes);
+        }
+    }
+
+    [Fact]
+    public async Task Version21_GrantsPeppolPermissions_ConfigureOnlyToManagement()
+    {
+        var (db, tenantId) = await SeedTenantWithCatalogAsync();
+        using var _ = db;
+
+        await DefaultRoleSeeder.SyncAsync(db.Context);
+
+        var state = await db.Context.RoleTemplateStates.SingleAsync(s => s.TenantId == tenantId);
+        Assert.Equal(DefaultRoleUpgrades.CurrentVersion, state.AppliedVersion);
+
+        var roles = await db.Context.Roles.Where(r => r.TenantId == tenantId).ToListAsync();
+        var managementCodes = await CodesOfAsync(db, roles.Single(r => r.TemplateCode == "management").Id);
+        var boekhoudingCodes = await CodesOfAsync(db, roles.Single(r => r.TemplateCode == "boekhouding").Id);
+
+        string[] everyday =
+        [
+            PermissionCodes.PeppolView, PermissionCodes.PeppolValidate, PermissionCodes.PeppolSend,
+            PermissionCodes.PeppolRetry, PermissionCodes.PeppolViewIncoming,
+        ];
+        foreach (var code in everyday)
+        {
+            Assert.Contains(code, managementCodes);
+            Assert.Contains(code, boekhoudingCodes);
+        }
+
+        // Per-legal-entity configuration follows the accounting.manage precedent: management only.
+        Assert.Contains(PermissionCodes.PeppolConfigure, managementCodes);
+        Assert.DoesNotContain(PermissionCodes.PeppolConfigure, boekhoudingCodes);
+
+        var others = roles.Where(r =>
+            r.TemplateCode is not null and not "management" and not "boekhouding");
+        foreach (var other in others)
+        {
+            Assert.DoesNotContain(PermissionCodes.PeppolView, await CodesOfAsync(db, other.Id));
+        }
+    }
+
+    [Fact]
+    public async Task Version22_GrantsMedicalAbsenceView_OnlyToHr()
+    {
+        var (db, tenantId) = await SeedTenantWithCatalogAsync();
+        using var _ = db;
+
+        await DefaultRoleSeeder.SyncAsync(db.Context);
+
+        var roles = await db.Context.Roles.Where(r => r.TenantId == tenantId).ToListAsync();
+        var hrCodes = await CodesOfAsync(db, roles.Single(r => r.TemplateCode == "hr").Id);
+        Assert.Contains(PermissionCodes.AbsencesViewMedical, hrCodes);
+
+        // Planning-side templates keep absences.view (who is absent, when) but never the
+        // health data behind it (GDPR art. 9).
+        foreach (var other in roles.Where(r => r.TemplateCode is not null and not "hr" and not "administrator"))
+        {
+            Assert.DoesNotContain(PermissionCodes.AbsencesViewMedical, await CodesOfAsync(db, other.Id));
+        }
+    }
+
+    [Fact]
+    public async Task Version23_GrantsSprintPermissions_PerTemplateScope()
+    {
+        var (db, tenantId) = await SeedTenantWithCatalogAsync();
+        using var _ = db;
+
+        await DefaultRoleSeeder.SyncAsync(db.Context);
+
+        var state = await db.Context.RoleTemplateStates.SingleAsync(s => s.TenantId == tenantId);
+        Assert.Equal(DefaultRoleUpgrades.CurrentVersion, state.AppliedVersion);
+
+        var roles = await db.Context.Roles.Where(r => r.TenantId == tenantId).ToListAsync();
+        Guid RoleId(string code) => roles.Single(r => r.TemplateCode == code).Id;
+
+        // Every employee-facing template can work its own tasks.
+        foreach (var code in new[] { "magazijn", "management", "hr", "planner", "dispatcher", "boekhouding", "chauffeur" })
+        {
+            var codes = await CodesOfAsync(db, RoleId(code));
+            Assert.Contains(PermissionCodes.TasksViewOwn, codes);
+            Assert.Contains(PermissionCodes.TasksManageOwn, codes);
+        }
+
+        // Magazijn operates the reorder flow but never sets thresholds or overrides negative stock.
+        var magazijn = await CodesOfAsync(db, RoleId("magazijn"));
+        Assert.Contains(PermissionCodes.InventoryReorderManage, magazijn);
+        Assert.Contains(PermissionCodes.InventoryLoansView, magazijn);
+        Assert.DoesNotContain(PermissionCodes.InventoryManageThresholds, magazijn);
+        Assert.DoesNotContain(PermissionCodes.InventoryOverrideNegativeStock, magazijn);
+        Assert.DoesNotContain(PermissionCodes.TasksViewAll, magazijn);
+
+        // Management owns thresholds, the full task surface, bulk/portal messaging and escalations.
+        var management = await CodesOfAsync(db, RoleId("management"));
+        Assert.Contains(PermissionCodes.InventoryManageThresholds, management);
+        Assert.Contains(PermissionCodes.TasksViewAll, management);
+        Assert.Contains(PermissionCodes.TasksReopen, management);
+        Assert.Contains(PermissionCodes.MessagesSendBulk, management);
+        Assert.Contains(PermissionCodes.PortalMessagesSendBulk, management);
+        Assert.Contains(PermissionCodes.EscalationsManage, management);
+
+        // HR coordinates team tasks and bulk employee messages, but no stock thresholds and
+        // no tenant-wide task visibility.
+        var hr = await CodesOfAsync(db, RoleId("hr"));
+        Assert.Contains(PermissionCodes.TasksViewTeam, hr);
+        Assert.Contains(PermissionCodes.TasksAssign, hr);
+        Assert.Contains(PermissionCodes.MessagesSendBulk, hr);
+        Assert.DoesNotContain(PermissionCodes.TasksViewAll, hr);
+        Assert.DoesNotContain(PermissionCodes.InventoryManageThresholds, hr);
+
+        // Drivers stay personal-scope only; portal templates get nothing from this sprint.
+        var chauffeur = await CodesOfAsync(db, RoleId("chauffeur"));
+        Assert.DoesNotContain(PermissionCodes.TasksViewTeam, chauffeur);
+        Assert.DoesNotContain(PermissionCodes.MessagesSendBulk, chauffeur);
+        foreach (var portal in roles.Where(r => r.TemplateCode != null && r.TemplateCode.StartsWith("klantportaal")))
+        {
+            var codes = await CodesOfAsync(db, portal.Id);
+            Assert.DoesNotContain(PermissionCodes.TasksViewOwn, codes);
+            Assert.DoesNotContain(PermissionCodes.PortalMessagesSend, codes);
+        }
+    }
+
+    [Fact]
+    public async Task Version24_GrantsIncompletePriceConfirmation_ToManagementAndBoekhoudingOnly()
+    {
+        var (db, tenantId) = await SeedTenantWithCatalogAsync();
+        using var _ = db;
+
+        await DefaultRoleSeeder.SyncAsync(db.Context);
+
+        var roles = await db.Context.Roles.Where(r => r.TenantId == tenantId).ToListAsync();
+
+        // Confirming a price while goods lines are unpriced is an explicitly granted decision:
+        // management and boekhouding only.
+        foreach (var template in new[] { "management", "boekhouding" })
+        {
+            var codes = await CodesOfAsync(db, roles.Single(r => r.TemplateCode == template).Id);
+            Assert.Contains(PermissionCodes.OrdersConfirmIncompletePrice, codes);
+        }
+
+        // Planning-side templates confirm complete prices at most; the incomplete-price override
+        // stays away from them (administrator holds the full catalog by design).
+        var others = roles.Where(r =>
+            r.TemplateCode is not null and not "management" and not "boekhouding" and not "administrator");
+        foreach (var other in others)
+        {
+            Assert.DoesNotContain(PermissionCodes.OrdersConfirmIncompletePrice, await CodesOfAsync(db, other.Id));
+        }
+    }
+
+    [Fact]
+    public async Task Version25_GrantsSensitiveLocationData_ToOperationalTemplatesOnly()
+    {
+        var (db, tenantId) = await SeedTenantWithCatalogAsync();
+        using var _ = db;
+
+        await DefaultRoleSeeder.SyncAsync(db.Context);
+
+        var roles = await db.Context.Roles.Where(r => r.TenantId == tenantId).ToListAsync();
+
+        // Access codes brief drivers and plan site visits: planner, dispatcher and management.
+        foreach (var template in new[] { "planner", "dispatcher", "management" })
+        {
+            var codes = await CodesOfAsync(db, roles.Single(r => r.TemplateCode == template).Id);
+            Assert.Contains(PermissionCodes.LocationsViewSensitive, codes);
+        }
+
+        // Everyone else — including the klantportaal templates — keeps locations.view at most,
+        // never the sensitive site data (administrator holds the full catalog by design).
+        var others = roles.Where(r =>
+            r.TemplateCode is not null and not "planner" and not "dispatcher" and not "management"
+            and not "administrator");
+        foreach (var other in others)
+        {
+            Assert.DoesNotContain(PermissionCodes.LocationsViewSensitive, await CodesOfAsync(db, other.Id));
+        }
+    }
+
+    [Fact]
+    public async Task Version26_GrantsActivityTypeCatalogue_ViewToOperationalTemplates_ManageToManagement()
+    {
+        var (db, tenantId) = await SeedTenantWithCatalogAsync();
+        using var _ = db;
+
+        await DefaultRoleSeeder.SyncAsync(db.Context);
+
+        var roles = await db.Context.Roles.Where(r => r.TenantId == tenantId).ToListAsync();
+
+        // The operational templates read the tenant activity catalogue; only management
+        // maintains it (administrator holds the full catalog by design).
+        foreach (var template in new[] { "planner", "dispatcher", "management" })
+        {
+            var codes = await CodesOfAsync(db, roles.Single(r => r.TemplateCode == template).Id);
+            Assert.Contains(PermissionCodes.ActivityTypesView, codes);
+            if (template == "management")
+            {
+                Assert.Contains(PermissionCodes.ActivityTypesManage, codes);
+            }
+            else
+            {
+                Assert.DoesNotContain(PermissionCodes.ActivityTypesManage, codes);
+            }
+        }
+
+        // Everyone else — including the klantportaal templates — stays away from the
+        // activity-type catalogue entirely.
+        var others = roles.Where(r =>
+            r.TemplateCode is not null and not "planner" and not "dispatcher" and not "management"
+            and not "administrator");
+        foreach (var other in others)
+        {
+            var codes = await CodesOfAsync(db, other.Id);
+            Assert.DoesNotContain(PermissionCodes.ActivityTypesView, codes);
+            Assert.DoesNotContain(PermissionCodes.ActivityTypesManage, codes);
+        }
+    }
+
+    [Fact]
+    public async Task Version30_GrantsAttendance_SelfBroadly_ManagementToHr_KioskBeheerToNobody()
+    {
+        var (db, tenantId) = await SeedTenantWithCatalogAsync();
+        using var _ = db;
+
+        await DefaultRoleSeeder.SyncAsync(db.Context);
+
+        var state = await db.Context.RoleTemplateStates.SingleAsync(s => s.TenantId == tenantId);
+        Assert.Equal(DefaultRoleUpgrades.CurrentVersion, state.AppliedVersion);
+        Assert.Equal(34, DefaultRoleUpgrades.CurrentVersion);
+
+
+        var roles = await db.Context.Roles.Where(r => r.TenantId == tenantId).ToListAsync();
+        Guid RoleId(string code) => roles.Single(r => r.TemplateCode == code).Id;
+
+        // v33 (Personeel/HR-wave 2026-09-12): HR beheert afdelingen, functies en referentiegegevens
+        // (contracttypes); geen ander sjabloon wordt verbreed.
+        foreach (var code in new[] { PermissionCodes.DepartmentsManage, PermissionCodes.JobFunctionsManage, PermissionCodes.ReferenceDataManage })
+        {
+            Assert.Contains(code, await CodesOfAsync(db, RoleId("hr")));
+            Assert.DoesNotContain(code, await CodesOfAsync(db, RoleId("planner")));
+            Assert.DoesNotContain(code, await CodesOfAsync(db, RoleId("magazijn")));
+        }
+
+        // v32 (activiteitsprijzen, stap 13): planner + management prijzen zelfstandige
+        // activiteiten; niemand anders erft het via dossiers.manage of orders.edit.
+        foreach (var code in new[] { "planner", "management" })
+        {
+            Assert.Contains(PermissionCodes.DossiersPrice, await CodesOfAsync(db, RoleId(code)));
+        }
+        foreach (var code in new[] { "dispatcher", "boekhouding", "magazijn", "chauffeur", "hr" })
+        {
+            Assert.DoesNotContain(PermissionCodes.DossiersPrice, await CodesOfAsync(db, RoleId(code)));
+        }
+
+        // v31 (Excel-importprofielen): planner + management beheren importprofielen;
+        // dispatcher/boekhouding bewust niet (least privilege — importeren zelf rijdt op orders.*).
+        Assert.Contains(PermissionCodes.OrderImportsManageProfiles, await CodesOfAsync(db, RoleId("planner")));
+        Assert.Contains(PermissionCodes.OrderImportsManageProfiles, await CodesOfAsync(db, RoleId("management")));
+        Assert.DoesNotContain(PermissionCodes.OrderImportsManageProfiles, await CodesOfAsync(db, RoleId("dispatcher")));
+        Assert.DoesNotContain(PermissionCodes.OrderImportsManageProfiles, await CodesOfAsync(db, RoleId("boekhouding")));
+
+        // Elke interne medewerker (incl. chauffeur) mag zelf punchen en eigen uren zien.
+        foreach (var template in new[] { "planner", "dispatcher", "boekhouding", "magazijn", "chauffeur", "hr", "management" })
+        {
+            Assert.Contains(PermissionCodes.AttendanceSelf, await CodesOfAsync(db, RoleId(template)));
+        }
+
+        // HR: overzicht, correcties, rapporten, PIN-beheer en instellingen.
+        var hr = await CodesOfAsync(db, RoleId("hr"));
+        Assert.Contains(PermissionCodes.AttendanceView, hr);
+        Assert.Contains(PermissionCodes.AttendanceCorrect, hr);
+        Assert.Contains(PermissionCodes.AttendanceReport, hr);
+        Assert.Contains(PermissionCodes.AttendanceManageCredentials, hr);
+        Assert.Contains(PermissionCodes.AttendanceManageSettings, hr);
+
+        // Management kijkt en rapporteert, maar corrigeert niet en beheert geen codes.
+        var management = await CodesOfAsync(db, RoleId("management"));
+        Assert.Contains(PermissionCodes.AttendanceView, management);
+        Assert.Contains(PermissionCodes.AttendanceReport, management);
+        Assert.DoesNotContain(PermissionCodes.AttendanceCorrect, management);
+        Assert.DoesNotContain(PermissionCodes.AttendanceManageCredentials, management);
+
+        // Dispatcher BEWUST geen live-overzicht (least privilege); kioskbeheer zit in geen
+        // enkel sjabloon — de administrator (systeemrol, volledige catalogus) kent dat per
+        // persoon toe. Portaalgebruikers punchen nooit.
+        Assert.DoesNotContain(PermissionCodes.AttendanceView, await CodesOfAsync(db, RoleId("dispatcher")));
+        foreach (var role in roles.Where(r => r.TemplateCode is not null && !r.IsSystemRole))
+        {
+            Assert.DoesNotContain(PermissionCodes.AttendanceManageKiosks, await CodesOfAsync(db, role.Id));
+        }
+
+        foreach (var portal in roles.Where(r => r.TemplateCode != null && r.TemplateCode.StartsWith("klantportaal")))
+        {
+            Assert.DoesNotContain(PermissionCodes.AttendanceSelf, await CodesOfAsync(db, portal.Id));
+        }
+    }
+
+    [Fact]
     public async Task Upgrades_AreTenantIsolated()
     {
         var (db, tenantA) = await SeedTenantWithCatalogAsync();
@@ -330,5 +860,21 @@ public class DefaultRoleSeederTests
         Assert.Equal(2, await db.Context.RoleTemplateStates.CountAsync());
         Assert.True(await db.Context.Roles.AnyAsync(r => r.TenantId == tenantB && r.TemplateCode == "planner"));
         Assert.Null((await db.Context.Roles.SingleAsync(r => r.Id == customB.Id)).TemplateCode);
+    }
+    /// <summary>Confirmation sprint 2026-09-23: reopening a confirmed dossier is an explicit right.</summary>
+    [Fact]
+    public async Task Version34_GrantsDossiersReopen_ToPlannerAndManagement_NotDispatcher()
+    {
+        var (db, tenantId) = await SeedTenantWithCatalogAsync();
+        using var _ = db;
+
+        await DefaultRoleSeeder.SyncAsync(db.Context);
+
+        var roles = await db.Context.Roles.Where(r => r.TenantId == tenantId).ToListAsync();
+        Guid RoleId(string code) => roles.Single(r => r.TemplateCode == code).Id;
+        Assert.Contains(PermissionCodes.DossiersReopen, await CodesOfAsync(db, RoleId("planner")));
+        Assert.Contains(PermissionCodes.DossiersReopen, await CodesOfAsync(db, RoleId("management")));
+        Assert.DoesNotContain(PermissionCodes.DossiersReopen, await CodesOfAsync(db, RoleId("dispatcher")));
+        Assert.DoesNotContain(PermissionCodes.DossiersReopen, await CodesOfAsync(db, RoleId("boekhouding")));
     }
 }

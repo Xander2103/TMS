@@ -81,11 +81,14 @@ public enum ScanFeedbackLevel
 {
     Success,
     Warning,
+    /// <summary>Wave 4: input rejected outright (no ledger row) — bad scan type/location/barcode.</summary>
+    Error,
 }
 
 public record ScanEventDto(
     Guid Id,
-    Guid TransportOrderStopId,
+    /// <summary>Null for standalone warehouse scans (Wave 4 §3) — trip history rows always carry one.</summary>
+    Guid? TransportOrderStopId,
     Guid? CargoItemId,
     string? CargoDescription,
     ScanType ScanType,

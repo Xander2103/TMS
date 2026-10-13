@@ -94,10 +94,19 @@ public class PodService : IPodService
         }
 
         var existing = await _dbContext.ProofsOfDelivery.AsNoTracking()
-            .AnyAsync(p => p.TripId == tripId && p.TransportOrderStopId == stopId
-                           && p.IsCurrent && p.TenantId == _tenantContext.TenantId, cancellationToken);
-        if (existing)
+            .Where(p => p.TripId == tripId && p.TransportOrderStopId == stopId
+                        && p.IsCurrent && p.TenantId == _tenantContext.TenantId)
+            .Select(p => new { p.Id, p.ClientRequestId })
+            .FirstOrDefaultAsync(cancellationToken);
+        if (existing is not null)
         {
+            // Offline replay of the exact same finalisation returns the stored proof as
+            // success; a genuinely different attempt still gets the correction hint.
+            if (request.ClientRequestId is { } key && existing.ClientRequestId == key)
+            {
+                return PodOperationResult.Success((await MapDetailAsync(existing.Id, cancellationToken))!);
+            }
+
             return PodOperationResult.InvalidState(
                 "Voor deze stop bestaat al een afgeronde POD; gebruik een correctie om iets recht te zetten.");
         }
@@ -154,11 +163,22 @@ public class PodService : IPodService
             PackagesAcknowledged = packageLines.Count > 0 && request.PackagesAcknowledged,
             FinalisedByUserId = _currentUserContext.CurrentUserId,
             DriverId = driverId,
+            ClientRequestId = request.ClientRequestId,
         };
         _dbContext.Add(pod);
         // Every package at the stop gets a PodFinalized custody event in the same save.
         await _tripPackageService.StagePodFinalizedAsync(tripId, stopId, pod.Version, cancellationToken);
+        // Wave 2 §6: a finalized POD can flip a completed order to ReadyForInvoice. The new POD
+        // row is still untracked-in-db, so the evaluator's own query would miss it — evaluate
+        // after the save that persists both.
         await _dbContext.SaveChangesAsync(cancellationToken);
+        var readinessOrder = await _dbContext.TransportOrders.FirstOrDefaultAsync(
+            o => o.TenantId == _tenantContext.TenantId && o.Id == pod.TransportOrderId, cancellationToken);
+        if (readinessOrder is not null)
+        {
+            await Modules.Orders.Services.InvoiceReadinessEvaluator.EvaluateAsync(_dbContext, readinessOrder, cancellationToken);
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
 
         await _auditService.RecordAsync(EntityType, pod.Id.ToString(), "Finalised", null,
             new { pod.TripId, pod.TransportOrderStopId, pod.RecipientName, pod.Outcome, pod.Version }, cancellationToken);
@@ -362,13 +382,14 @@ public class PodService : IPodService
     }
 
     public async Task<(Stream Content, string ContentType, string FileName)?> OpenPhotoAsync(
-        Guid podId, Guid photoId, CancellationToken cancellationToken)
+        Guid podId, Guid photoId, bool restrictToOwnDriver, CancellationToken cancellationToken)
     {
         var photo = await _dbContext.PodPhotos.AsNoTracking()
             .FirstOrDefaultAsync(p => p.Id == photoId && p.ProofOfDeliveryId == podId
                                       && p.TenantId == _tenantContext.TenantId, cancellationToken);
-        if (photo is null)
+        if (photo is null || !await MayAccessPodAsync(podId, restrictToOwnDriver, cancellationToken))
         {
+            // Same null result whether the object does not exist or is not yours: no id oracle.
             return null;
         }
 
@@ -376,19 +397,47 @@ public class PodService : IPodService
         return (stream, photo.ContentType, photo.FileName);
     }
 
-    public async Task<(Stream Content, string ContentType)?> OpenSignatureAsync(Guid podId, CancellationToken cancellationToken)
+    public async Task<(Stream Content, string ContentType)?> OpenSignatureAsync(
+        Guid podId, bool restrictToOwnDriver, CancellationToken cancellationToken)
     {
         var signaturePath = await _dbContext.ProofsOfDelivery.AsNoTracking()
             .Where(p => p.Id == podId && p.TenantId == _tenantContext.TenantId)
             .Select(p => p.SignaturePath)
             .FirstOrDefaultAsync(cancellationToken);
-        if (signaturePath is null)
+        if (signaturePath is null || !await MayAccessPodAsync(podId, restrictToOwnDriver, cancellationToken))
         {
             return null;
         }
 
         var stream = await _fileStorageService.OpenReadAsync(signaturePath, cancellationToken);
         return (stream, "image/png");
+    }
+
+    /// <summary>
+    /// Record-level guard for POD media: when the caller only holds driver-workflow rights, the
+    /// POD must belong to a trip assigned to that driver. Mirrors AttachPhotoAsync's check so read
+    /// and write paths cannot drift apart.
+    /// </summary>
+    private async Task<bool> MayAccessPodAsync(Guid podId, bool restrictToOwnDriver, CancellationToken cancellationToken)
+    {
+        if (!restrictToOwnDriver)
+        {
+            return true;
+        }
+
+        var driverId = await CurrentDriverIdAsync(cancellationToken);
+        if (driverId is null)
+        {
+            return false;
+        }
+
+        var tripDriverId = await _dbContext.ProofsOfDelivery.AsNoTracking()
+            .Where(p => p.Id == podId && p.TenantId == _tenantContext.TenantId)
+            .Join(_dbContext.Trips.AsNoTracking().Where(t => t.TenantId == _tenantContext.TenantId),
+                p => p.TripId, t => t.Id, (p, t) => t.DriverId)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        return tripDriverId == driverId;
     }
 
     private sealed record SignatureStoreResult(string? StoragePath, string? Error);

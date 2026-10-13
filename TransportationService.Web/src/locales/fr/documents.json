@@ -1,0 +1,18 @@
+{
+  "title": "Documents",
+  "source": {
+    "OrderDocument": "Document de commande",
+    "Pod": "Preuve de livraison",
+    "InvoiceAttachment": "Pièce jointe de facture"
+  },
+  "columns": {
+    "document": "Document",
+    "type": "Type",
+    "order": "Commande",
+    "invoice": "Facture",
+    "date": "Date"
+  },
+  "empty": "Pas encore de documents disponibles.",
+  "loading": "Chargement des documents...",
+  "loadError": "Les documents n'ont pas pu être chargés."
+}

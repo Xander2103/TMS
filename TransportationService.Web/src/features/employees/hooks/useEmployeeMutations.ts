@@ -1,13 +1,17 @@
 import { useEffect, useRef, useState } from 'react'
 import { ApiError } from '../../../api/apiClient'
+import { describeApiError, type FieldErrors } from '../../../api/problemDetails'
+import { useLocale } from '../../../i18n/localeContext'
 import { createEmployee, deactivateEmployee, reactivateEmployee, updateEmployee } from '../api/employeesApi'
 import type { CreateEmployeeInput, EmployeeDetail, UpdateEmployeeInput } from '../types/employee'
 
-const SUBMIT_ERROR_MESSAGE = 'De actie kon niet worden uitgevoerd. Probeer het opnieuw.'
+const SUBMIT_ERROR_KEY = 'employees.errors.actionFailedRetry'
 
 interface UseEmployeeMutationsResult {
   isSubmitting: boolean
   error: string | null
+  /** Per-field backend validation messages of the last failed action. */
+  fieldErrors: FieldErrors
   create: (input: CreateEmployeeInput) => Promise<EmployeeDetail | null>
   update: (id: string, input: UpdateEmployeeInput) => Promise<EmployeeDetail | null>
   deactivate: (id: string) => Promise<boolean>
@@ -15,8 +19,10 @@ interface UseEmployeeMutationsResult {
 }
 
 export function useEmployeeMutations(): UseEmployeeMutationsResult {
+  const { t } = useLocale()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
   const isMountedRef = useRef(true)
 
   useEffect(() => {
@@ -29,6 +35,7 @@ export function useEmployeeMutations(): UseEmployeeMutationsResult {
   async function run<T>(action: () => Promise<T>, fallback: T): Promise<T> {
     setIsSubmitting(true)
     setError(null)
+    setFieldErrors({})
 
     try {
       const result = await action()
@@ -38,8 +45,11 @@ export function useEmployeeMutations(): UseEmployeeMutationsResult {
       return result
     } catch (err) {
       if (isMountedRef.current) {
-        // Backend validation messages (400) are user-facing Dutch text; show them directly.
-        setError(err instanceof ApiError && err.status === 400 ? err.message : SUBMIT_ERROR_MESSAGE)
+        // Backend validation messages (400) are user-facing text; show them directly.
+        const fallback = t(SUBMIT_ERROR_KEY)
+        const described = describeApiError(err, fallback)
+        setError(err instanceof ApiError && err.status === 400 ? described.message : fallback)
+        setFieldErrors(described.fieldErrors)
         setIsSubmitting(false)
       }
       return fallback
@@ -49,6 +59,7 @@ export function useEmployeeMutations(): UseEmployeeMutationsResult {
   return {
     isSubmitting,
     error,
+    fieldErrors,
     create: (input) => run(() => createEmployee(input), null),
     update: (id, input) => run(() => updateEmployee(id, input), null),
     deactivate: (id) => run(async () => { await deactivateEmployee(id); return true }, false),

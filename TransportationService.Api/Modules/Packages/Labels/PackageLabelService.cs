@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using TransportationService.Api.Common;
 using TransportationService.Api.Data;
 using TransportationService.Api.Modules.Auditing.Services;
 using TransportationService.Api.Modules.Identity.Services;
@@ -162,15 +163,36 @@ public class PackageLabelService : IPackageLabelService
                          ?? await _dbContext.Tenants.AsNoTracking()
                              .Where(t => t.Id == tenantId).Select(t => t.Name).FirstAsync(cancellationToken);
 
+        // C-03: stop windows are UTC instants; a label shows the wall clock the dispatcher and the
+        // driver agreed on. A label is printed once and stuck to freight, so getting this wrong is
+        // not recallable.
+        var zone = await TenantTimeZone.ForTenantAsync(_dbContext, tenantId, cancellationToken);
+
         var orderIds = packages.Select(p => p.TransportOrderId).Distinct().ToList();
         var orders = await _dbContext.TransportOrders.AsNoTracking()
             .Where(o => o.TenantId == tenantId && orderIds.Contains(o.Id))
             .Join(_dbContext.Customers.AsNoTracking().Where(c => c.TenantId == tenantId),
                 o => o.CustomerId, c => c.Id,
-                (o, c) => new { o.Id, o.OrderNumber, CustomerName = c.Name, o.AdrRequired })
+                (o, c) => new { o.Id, o.OrderNumber, CustomerName = c.Name, o.AdrRequired, o.CustomerReference })
             .ToDictionaryAsync(o => o.Id, cancellationToken);
         var stops = await _dbContext.TransportOrderStops.AsNoTracking()
             .Where(s => s.TenantId == tenantId && orderIds.Contains(s.TransportOrderId))
+            .ToListAsync(cancellationToken);
+
+        // Resolve linked master locations for full street/city/country on the label.
+        var locationIds = stops.Where(s => s.LocationId is not null).Select(s => s.LocationId!.Value).Distinct().ToList();
+        var locations = locationIds.Count == 0
+            ? new Dictionary<Guid, Locations.Entities.Location>()
+            : await _dbContext.Locations.AsNoTracking()
+                .Where(l => l.TenantId == tenantId && locationIds.Contains(l.Id))
+                .ToDictionaryAsync(l => l.Id, cancellationToken);
+
+        // Sequence "Collo n van m": within the cargo line for generated packages, within the
+        // order for manually created ones. Ordered by package number (stable, immutable).
+        var siblings = await _dbContext.Packages.AsNoTracking()
+            .Where(p => p.TenantId == tenantId && orderIds.Contains(p.TransportOrderId)
+                && p.CurrentLifecycleStatus != PackageLifecycleStatus.Cancelled)
+            .Select(p => new { p.Id, p.TransportOrderId, p.CargoItemId, p.PackageNumber })
             .ToListAsync(cancellationToken);
 
         var result = new Dictionary<Guid, LabelSnapshot>(packages.Count);
@@ -178,12 +200,26 @@ public class PackageLabelService : IPackageLabelService
         {
             orders.TryGetValue(package.TransportOrderId, out var order);
             var orderStops = stops.Where(s => s.TransportOrderId == package.TransportOrderId).ToList();
-            var loading = package.LoadingStopId is { } loadId
-                ? orderStops.FirstOrDefault(s => s.Id == loadId)
-                : orderStops.Where(s => s.StopType == StopType.Loading).OrderBy(s => s.Sequence).FirstOrDefault();
-            var delivery = package.DeliveryStopId is { } deliveryId
-                ? orderStops.FirstOrDefault(s => s.Id == deliveryId)
-                : orderStops.Where(s => s.StopType == StopType.Unloading).OrderBy(s => s.Sequence).LastOrDefault();
+            // Wave 1 fix A (A5): a pin that no longer resolves — a DANGLING pin, which every order
+            // edited before blocker C-01 landed can carry — gets the same fallback as a null pin
+            // (first loading / last unloading stop). Without it the label printed a blank sender
+            // and recipient instead of the order's own addresses.
+            var loading = (package.LoadingStopId is { } loadId ? orderStops.FirstOrDefault(s => s.Id == loadId) : null)
+                ?? orderStops.Where(s => s.StopType == StopType.Loading).OrderBy(s => s.Sequence).FirstOrDefault();
+            var delivery = (package.DeliveryStopId is { } deliveryId ? orderStops.FirstOrDefault(s => s.Id == deliveryId) : null)
+                ?? orderStops.Where(s => s.StopType == StopType.Unloading).OrderBy(s => s.Sequence).LastOrDefault();
+
+            var group = siblings
+                .Where(s => s.TransportOrderId == package.TransportOrderId
+                    && (package.CargoItemId is null || s.CargoItemId == package.CargoItemId))
+                .OrderBy(s => s.PackageNumber, StringComparer.Ordinal)
+                .ToList();
+            var position = group.FindIndex(s => s.Id == package.Id) + 1;
+
+            var loadingAddress = ResolveAddress(loading, locations);
+            var deliveryAddress = ResolveAddress(delivery, locations);
+            var pickupLocal = TenantTimeZone.ToWallClock(loading?.PlannedFrom, zone);
+            var deliveryLocal = TenantTimeZone.ToWallClock(delivery?.PlannedFrom, zone);
 
             result[package.Id] = new LabelSnapshot(
                 tenantName,
@@ -197,14 +233,30 @@ public class PackageLabelService : IPackageLabelService
                 delivery?.Sequence,
                 package.CustomerReference ?? package.ExternalPackageReference,
                 package.WeightKg,
-                package.UnitType == PackageUnitType.Other
-                    ? package.UnitTypeLabel ?? "Anders"
-                    : package.UnitType.ToString(),
+                UnitTypeDutch(package.UnitType, package.UnitTypeLabel),
                 delivery?.UnloadingInstructions ?? delivery?.Instructions,
                 package.IsFragile,
                 order?.AdrRequired ?? false,
                 package.RequiresTemperatureControl,
-                package.RequiresSignature);
+                package.RequiresSignature,
+                position > 0 ? $"Collo {position} van {group.Count}" : null,
+                // Redesigned horizontal-label fields.
+                SenderName: loadingAddress.Name,
+                SenderStreet: loadingAddress.Street,
+                SenderPostalCodeCity: loadingAddress.PostalCity,
+                SenderCountry: loadingAddress.Country,
+                PickupDate: pickupLocal?.ToString("dd-MM-yyyy"),
+                PickupTime: pickupLocal?.ToString("HH:mm"),
+                RecipientName: deliveryAddress.Name,
+                RecipientStreet: deliveryAddress.Street,
+                RecipientPostalCodeCity: deliveryAddress.PostalCity,
+                RecipientCountry: deliveryAddress.Country,
+                DeliveryDate: deliveryLocal?.ToString("dd-MM-yyyy"),
+                DeliveryTime: deliveryLocal?.ToString("HH:mm"),
+                SequenceNumber: position > 0 ? position : null,
+                SequenceTotal: position > 0 ? group.Count : null,
+                VolumeM3: package.VolumeM3,
+                PurchaseOrderNumber: order?.CustomerReference);
         }
 
         return result;
@@ -212,4 +264,46 @@ public class PackageLabelService : IPackageLabelService
 
     private static string? LocationLabel(TransportOrderStop? stop) =>
         stop is null ? null : string.Join(", ", new[] { stop.LocationName, stop.City }.Where(v => !string.IsNullOrWhiteSpace(v)));
+
+    /// <summary>Full address for a stop: prefers the inline stop fields, falls back to the linked location.</summary>
+    private static (string? Name, string? Street, string? PostalCity, string? Country) ResolveAddress(
+        TransportOrderStop? stop, IReadOnlyDictionary<Guid, Locations.Entities.Location> locations)
+    {
+        if (stop is null)
+        {
+            return (null, null, null, null);
+        }
+
+        var location = stop.LocationId is { } id && locations.TryGetValue(id, out var loc) ? loc : null;
+        var name = FirstNonEmpty(stop.LocationName, location?.Name);
+        var street = FirstNonEmpty(
+            stop.Address,
+            location is not null ? string.Join(" ", new[] { location.Street, location.HouseNumber }.Where(v => !string.IsNullOrWhiteSpace(v))) : null);
+        var postalCity = FirstNonEmpty(
+            string.Join(" ", new[] { stop.PostalCode, stop.City }.Where(v => !string.IsNullOrWhiteSpace(v))),
+            location is not null ? string.Join(" ", new[] { location.PostalCode, location.City }.Where(v => !string.IsNullOrWhiteSpace(v))) : null);
+        var country = FirstNonEmpty(stop.CountryCode, location?.CountryCode);
+        return (name, street, string.IsNullOrWhiteSpace(postalCity) ? null : postalCity, country);
+    }
+
+    private static string? FirstNonEmpty(params string?[] values) =>
+        values.FirstOrDefault(v => !string.IsNullOrWhiteSpace(v));
+
+    private static string UnitTypeDutch(PackageUnitType type, string? customLabel) => type switch
+    {
+        PackageUnitType.Other => customLabel ?? "Anders",
+        PackageUnitType.Package => "Pakket",
+        PackageUnitType.Parcel => "Pakje",
+        PackageUnitType.Colli => "Colli",
+        PackageUnitType.Pallet => "Pallet",
+        PackageUnitType.EuroPallet => "Europallet",
+        PackageUnitType.BlockPallet => "Blokpallet",
+        PackageUnitType.Box => "Doos",
+        PackageUnitType.Crate => "Krat",
+        PackageUnitType.RollContainer => "Rolcontainer",
+        PackageUnitType.Drum => "Vat",
+        PackageUnitType.Container => "Container",
+        PackageUnitType.Document => "Document",
+        _ => type.ToString(),
+    };
 }

@@ -1,0 +1,58 @@
+{
+  "status": {
+    "Pending": "Queued",
+    "Sent": "Sent",
+    "Failed": "Failed",
+    "Suppressed": "Suppressed"
+  },
+  "page": {
+    "title": "Messages",
+    "subtitle": "Email/SMS outbox with delivery status — providers are only connected once credentials are available (currently: development sink).",
+    "editTemplate": "Edit template",
+    "statusAria": "Status",
+    "allStatuses": "All statuses",
+    "loadFailed": "The outbox could not be loaded.",
+    "empty": "No messages found."
+  },
+  "columns": {
+    "created": "Created",
+    "channel": "Channel",
+    "kind": "Type",
+    "recipient": "Recipient",
+    "status": "Status",
+    "attempts": "Attempts",
+    "detail": "Detail",
+    "actionsAria": "Actions"
+  },
+  "outbox": {
+    "fallback": "fallback",
+    "sentAtTime": "sent {time}",
+    "retry": "Retry",
+    "retried": "Message queued again.",
+    "retryFailed": "Resending failed."
+  },
+  "templates": {
+    "heading": "Own templates",
+    "inactive": "inactive",
+    "edit": "edit",
+    "delete": "delete",
+    "deleted": "Template deleted — the built-in template applies again.",
+    "deleteFailed": "The template could not be deleted.",
+    "bodyRequired": "The template content is required.",
+    "saved": "Template saved.",
+    "saveFailed": "The template could not be saved.",
+    "previewFailed": "The preview could not be loaded.",
+    "modalTitle": "Message template",
+    "preview": "Preview",
+    "form": {
+      "kind": "Type",
+      "channel": "Channel",
+      "channelEmail": "Email",
+      "channelSms": "SMS",
+      "language": "Language",
+      "subject": "Subject",
+      "subjectHint": "Tokens such as {{orderNumber}} are filled in.",
+      "body": "Content"
+    }
+  }
+}

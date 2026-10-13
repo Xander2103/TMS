@@ -71,4 +71,7 @@ public class StopStatusHistory : AuditableTenantEntity
 
     /// <summary>The reason supplied with the transition (skip/failure/partial/late arrival).</summary>
     public string? Reason { get; set; }
+
+    /// <summary>Client idempotency key of the transition request (offline replay protection).</summary>
+    public Guid? ClientRequestId { get; set; }
 }

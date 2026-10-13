@@ -1,0 +1,67 @@
+{
+  "actions": {
+    "cancel": "Annuler",
+    "close": "Fermer",
+    "back": "Retour",
+    "busy": "Veuillez patienter..."
+  },
+  "languageSwitcher": {
+    "label": "Choix de la langue"
+  },
+  "users": {
+    "title": "Utilisateurs",
+    "subtitle": "Gérez qui a accès au portail client au nom de votre société.",
+    "invite": "Inviter un utilisateur",
+    "empty": "Aucun utilisateur invité pour le moment.",
+    "loading": "Chargement des utilisateurs...",
+    "loadError": "Les utilisateurs n'ont pas pu être chargés.",
+    "columns": {
+      "name": "Nom",
+      "email": "Adresse e-mail",
+      "status": "Statut",
+      "grants": "Droits supplémentaires"
+    },
+    "status": {
+      "active": "Actif",
+      "deactivated": "Désactivé",
+      "pendingInvite": "Invitation en attente"
+    },
+    "grants": {
+      "documents": "Documents",
+      "invoices": "Factures",
+      "manageUsers": "Gestion des utilisateurs"
+    },
+    "actions": {
+      "deactivate": "Désactiver",
+      "reactivate": "Réactiver",
+      "resendInvite": "Renvoyer l'invitation"
+    },
+    "toasts": {
+      "deactivated": "{name} a été désactivé.",
+      "reactivated": "{name} est de nouveau actif.",
+      "inviteResent": "Invitation renvoyée à {email}.",
+      "inviteSent": "Invitation envoyée à {email}."
+    },
+    "errors": {
+      "deactivateFailed": "La désactivation a échoué.",
+      "reactivateFailed": "La réactivation a échoué.",
+      "resendFailed": "Le renvoi de l'invitation a échoué.",
+      "grantsFailed": "Les droits n'ont pas pu être modifiés.",
+      "inviteFailed": "L'invitation n'a pas pu être envoyée.",
+      "validation": "Veuillez renseigner le prénom, le nom et l'adresse e-mail."
+    },
+    "devActivationLink": "Environnement de développement : lien d'activation pour {email} —",
+    "inviteModal": {
+      "title": "Inviter un utilisateur",
+      "firstName": "Prénom",
+      "lastName": "Nom",
+      "email": "Adresse e-mail",
+      "extraRights": "Droits supplémentaires",
+      "extraRightsHint": "La soumission de commandes et la messagerie sont toujours disponibles.",
+      "viewDocuments": "Consulter les documents",
+      "viewInvoices": "Consulter les factures",
+      "manageUsers": "Gérer les utilisateurs",
+      "submit": "Inviter"
+    }
+  }
+}

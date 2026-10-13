@@ -1,0 +1,538 @@
+/* Inline link-styled button used for cross-navigation inside dossier rows. */
+.link-button {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--color-primary);
+  cursor: pointer;
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.link-button:hover {
+  opacity: 0.8;
+}
+
+/* ---- Dossierlijst ----
+   Eén dossier = één regel. De vaste kolombreedtes (incl. 10px padding links/rechts) staan hier
+   per kolom (nth-child); Klant en Referentie hebben er geen en delen de rest — Transport en
+   Planning tonen korte samenvattingen en krijgen een vaste breedte, zodat de ruimte naar de
+   kolommen gaat die werkelijk lange waarden dragen. De min-width = som van de vaste kolommen
+   + 2 × 150px voor de twee flexibele: met table-layout: fixed zou een kleinere min-width een
+   kolom zonder eigen breedte tot 0 px laten krimpen. Daaronder scrollt de wrapper horizontaal —
+   maar de container queries verderop laten eerst de minst kritische kolommen wijken
+   (Facturatie → Planning → Referentie), zodat een gewone desktop nooit scrolt en een rij nooit
+   over meerdere regels breekt.
+   Kolommen: 1 nummer · 2 status · 3 klant · 4 referentie · 5 datum · 6 transport · 7 planning ·
+   8 prijs · 9 facturatie · 10 acties. */
+.dossier-list {
+  container-type: inline-size;
+}
+
+.dossier-list .data-table {
+  table-layout: fixed;
+  min-width: 1398px;
+  font-size: 14px;
+}
+
+/* Compacte rijen: 8px + 24px regel + 8px = 40px, nog steeds een ruim klikdoel. */
+.dossier-list .data-table thead th,
+.dossier-list .data-table tbody td {
+  box-sizing: border-box;
+  padding: 8px 10px;
+  line-height: 24px;
+  vertical-align: middle;
+}
+
+.dossier-list .data-table tbody td {
+  overflow: hidden;
+}
+
+.dossier-list .data-table thead th:nth-child(1) {
+  width: 116px;
+}
+
+.dossier-list .data-table thead th:nth-child(2) {
+  width: 170px;
+}
+
+.dossier-list .data-table thead th:nth-child(5) {
+  width: 136px;
+}
+
+.dossier-list .data-table thead th:nth-child(6) {
+  width: 184px;
+}
+
+.dossier-list .data-table thead th:nth-child(7) {
+  width: 156px;
+}
+
+.dossier-list .data-table thead th:nth-child(8) {
+  width: 196px;
+}
+
+.dossier-list .data-table thead th:nth-child(9) {
+  width: 96px;
+}
+
+.dossier-list .data-table thead th:nth-child(10) {
+  width: 44px;
+}
+
+/* De rijacties blijven rechts in beeld, ook wanneer de tabel horizontaal scrolt. */
+.dossier-list .data-table thead th:last-child,
+.dossier-list .data-table tbody td:last-child {
+  position: sticky;
+  right: 0;
+  padding-left: 4px;
+  padding-right: 6px;
+}
+
+/* Geen overflow: hidden hier: een cel die zelf kan scrollen (focus op de knop) zou het menu
+   via de scroll-listener meteen weer sluiten. */
+.dossier-list .data-table tbody td:last-child {
+  background: var(--bg);
+  overflow: visible;
+}
+
+.dossier-list .data-table tbody tr.data-table-row-clickable:hover td:last-child,
+.dossier-list .data-table tbody tr.data-table-row-clickable:focus-visible td:last-child {
+  background: linear-gradient(var(--accent-bg), var(--accent-bg)), var(--bg);
+}
+
+/* Kolomprioriteit op smallere schermen: eerst krimpen de flexibele kolommen (ellipsis), dan
+   wijkt Facturatie (9) en wordt de statuscel compact (datum enkel nog in de tooltip), dan
+   Planning (7), dan Referentie (4). Nummer, status, klant, datum, transport, prijs en acties
+   blijven altijd staan; pas onder 946px scrolt de wrapper (tablet/mobiel). */
+@container (max-width: 1397px) {
+  .dossier-list .data-table {
+    min-width: 1252px;
+  }
+
+  .dossier-list .data-table thead th:nth-child(9),
+  .dossier-list .data-table tbody td:nth-child(9) {
+    display: none;
+  }
+
+  .dossier-list .data-table thead th:nth-child(2) {
+    width: 120px;
+  }
+
+  .dossier-list-status .dossier-list-muted {
+    display: none;
+  }
+}
+
+@container (max-width: 1251px) {
+  .dossier-list .data-table {
+    min-width: 1096px;
+  }
+
+  .dossier-list .data-table thead th:nth-child(7),
+  .dossier-list .data-table tbody td:nth-child(7) {
+    display: none;
+  }
+}
+
+@container (max-width: 1095px) {
+  .dossier-list .data-table {
+    min-width: 946px;
+  }
+
+  .dossier-list .data-table thead th:nth-child(4),
+  .dossier-list .data-table tbody td:nth-child(4) {
+    display: none;
+  }
+}
+
+/* Waarden die nooit mogen breken (datum, facturatiestatus). */
+.dossier-list-nowrap {
+  white-space: nowrap;
+}
+
+/* Scheidingsteken tussen de delen van een samengestelde cel ("Nexans NV · K-1001"). Het staat in
+   CSS, zodat elk deel in de DOM een eigen, exact matchbare tekst blijft. */
+.dossier-list-sep::before {
+  content: '\00a0·\00a0';
+  color: var(--text-muted);
+}
+
+/* Secundair deel van een cel (klantnummer, aantal, chauffeur, bevestigingsdatum). */
+.dossier-list-muted {
+  font-size: 0.875em;
+  color: var(--text-muted);
+}
+
+/* Dossiernummer: primaire identifier, nooit over twee regels ("DOS-" / "0001"). */
+.dossier-list-number {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  white-space: nowrap;
+}
+
+.dossier-list-number code {
+  white-space: nowrap;
+}
+
+/* Statuscel: badge + bevestigingsdatum op één regel; de datum kapt af, de badge nooit. */
+.dossier-list-status {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.dossier-list-status .dossier-list-muted {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Prijscel: bedrag · status op één regel, rechts uitgelijnd; gelijke cijferbreedte zodat de
+   bedragen onder elkaar uitlijnen. */
+.dossier-list-price {
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  max-width: 100%;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dossier-list-amount {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.dossier-list-price-status {
+  font-size: 0.875em;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+/* Hardening 2026-09-10: a partially priced dossier never shows its sum as a plain total. */
+.dossier-list-price-status[data-status='PartiallyPriced'],
+.dossier-list-price-status[data-status='NotPriced'],
+.dossier-list-price-status[data-status='ZeroUnconfirmed'] {
+  color: var(--color-warning);
+}
+
+.dossier-list-price-status[data-status='PartiallyPriced'] {
+  cursor: help;
+}
+
+/* Stap 13: a priced unit at exactly € 0,00 — the amount stays, the icon asks "is this intended?". */
+.dossier-list-zero {
+  margin-left: 4px;
+  color: var(--color-warning);
+  cursor: help;
+}
+
+/* Resultaattelling + sortering boven de tabel. */
+.dossier-list-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin-bottom: 8px;
+  min-height: 32px;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+.dossier-list-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dossier-list-sort select {
+  font: inherit;
+  font-size: 0.9rem;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+}
+
+/* ---- Filterbalk: [ zoeken ] [ status ] [ Filters ] ---- */
+.dossier-filters {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.dossier-filters .ui-filter-bar {
+  margin-bottom: 0;
+}
+
+.dossier-filter-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 15px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.dossier-filter-toggle:hover,
+.dossier-filter-toggle[aria-expanded='true'] {
+  border-color: var(--accent);
+}
+
+/* Actieve filters blijven zichtbaar op de knop, ook met het paneel dicht. */
+.dossier-filter-toggle[data-active='true'] {
+  background: var(--accent-bg);
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.dossier-filter-quick {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  grid-column: 1 / -1;
+}
+
+.dossier-filter-chip {
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.dossier-filter-chip:hover {
+  border-color: var(--accent);
+}
+
+.dossier-filter-chip[aria-pressed='true'] {
+  background: var(--accent-bg);
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* Uitgebreid paneel: gegroepeerde velden, meerdere kolommen op brede schermen, gestapeld op smalle. */
+.dossier-advanced {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
+  gap: 16px 24px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--code-bg);
+}
+
+.dossier-advanced-group {
+  margin: 0;
+  padding: 0;
+  border: none;
+  min-width: 0;
+}
+
+.dossier-advanced-group legend {
+  padding: 0;
+  margin-bottom: 8px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.dossier-advanced-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 12px;
+}
+
+/* Van/tot-paar: altijd samen op één regel, over de volle breedte van de groep. */
+.dossier-filter-range {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 12px;
+  grid-column: 1 / -1;
+}
+
+.dossier-advanced-fields .ui-form-field {
+  margin: 0;
+  min-width: 0;
+}
+
+.dossier-advanced-fields input,
+.dossier-advanced-fields select {
+  width: 100%;
+  font: inherit;
+  font-size: 0.9rem;
+  padding: 7px 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  box-sizing: border-box;
+}
+
+/* Actieve filterchips + "Filters wissen". */
+.dossier-active-filters {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+
+.dossier-active-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+}
+
+.dossier-active-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 6px 2px 10px;
+  border-radius: 999px;
+  background: var(--accent-bg);
+  color: var(--accent);
+  font-size: 0.85rem;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.dossier-active-chip > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dossier-active-chip button {
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 0.8rem;
+  line-height: 1;
+  padding: 4px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.dossier-active-chip button:hover {
+  background: var(--color-info-bg);
+}
+
+.dossier-clear-filters {
+  font-size: 0.9rem;
+}
+
+/* ---- Rijacties ---- */
+.dossier-row-actions {
+  display: inline-block;
+}
+
+.dossier-row-actions-button {
+  min-width: 32px;
+  min-height: 32px;
+  padding: 0 6px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.dossier-row-actions-button:hover,
+.dossier-row-actions-button[aria-expanded='true'] {
+  border-color: var(--border);
+  background: var(--bg);
+  color: var(--text);
+}
+
+/* Portal-popover: fixed to the viewport so the scrolling table wrapper cannot clip it. */
+.dossier-row-menu {
+  position: fixed;
+  min-width: 180px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.18);
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  z-index: 40;
+}
+
+.dossier-row-menu button {
+  border: none;
+  background: none;
+  text-align: left;
+  padding: 10px 12px;
+  min-height: 40px;
+  font: inherit;
+  color: var(--text);
+  cursor: pointer;
+  border-radius: 6px;
+}
+
+.dossier-row-menu button:hover {
+  background: var(--color-info-bg);
+}
+
+.dossier-row-menu .dossier-row-menu-danger {
+  color: var(--color-danger);
+}
+
+/* Smal scherm: zoekveld over de volle breedte, status en Filters delen de regel eronder; het
+   paneel stapelt tot één kolom en veroorzaakt zelf geen horizontale scroll. */
+@media (max-width: 720px) {
+  .dossier-filters .ui-filter-search {
+    flex-basis: 100%;
+  }
+
+  .dossier-filters .ui-filter-select,
+  .dossier-filter-toggle {
+    flex: 1 1 0;
+    justify-content: center;
+  }
+
+  .dossier-advanced {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 12px;
+  }
+}
+
+@media (max-width: 380px) {
+  .dossier-advanced-fields,
+  .dossier-filter-range {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

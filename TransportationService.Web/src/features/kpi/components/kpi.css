@@ -25,7 +25,7 @@
 }
 
 .kpi-presets button.kpi-preset-active {
-  background: var(--accent-bg, rgba(170, 59, 255, 0.12));
+  background: var(--accent-bg);
   color: var(--text-h);
   font-weight: 600;
 }
@@ -108,11 +108,11 @@
 
 /* Reserved status accents: border + label carry it together, never colour alone. */
 .kpi-card-warning {
-  border-color: var(--warning, #ca8a04);
+  border-color: var(--warning);
 }
 
 .kpi-card-danger {
-  border-color: var(--danger, #dc2626);
+  border-color: var(--danger);
 }
 
 .kpi-tables {
@@ -157,10 +157,16 @@
 }
 
 .kpi-table tbody tr.kpi-row-link:hover {
-  background: var(--accent-bg, rgba(170, 59, 255, 0.06));
+  background: var(--accent-bg);
 }
 
 .kpi-totals-row td {
   font-weight: 600;
   border-top: 2px solid var(--border);
+}
+
+.kpi-activities-palletdays {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--text-muted);
 }

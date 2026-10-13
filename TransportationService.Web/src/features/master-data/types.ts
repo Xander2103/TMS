@@ -15,11 +15,13 @@ export interface LookupOption {
   id: string
   code: string
   name: string
+  /** Non-null only for contract-type lookups (HR maturity wave, task 5). */
+  requiresEndDate?: boolean | null
 }
 
-/** Payload for creating/updating a lookup. */
+/** Payload for creating/updating a lookup. `code: null` asks the backend to generate the next free unique code. */
 export interface LookupInput {
-  code: string
+  code: string | null
   name: string
   description: string | null
   isActive: boolean

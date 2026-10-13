@@ -1,0 +1,297 @@
+import { useEffect, useRef, useState } from 'react'
+import { Badge } from '../../../components/ui/Badge'
+import { Button } from '../../../components/ui/Button'
+import { FormField } from '../../../components/ui/FormField'
+import { Modal } from '../../../components/ui/Modal'
+import { ValidationSummary } from '../../../components/ui/ValidationSummary'
+import { describeApiError } from '../../../api/problemDetails'
+import { useLocale } from '../../../i18n/localeContext'
+import { useAuth } from '../../auth/authContextValue'
+import { getCustomer } from '../../customers/api/customersApi'
+import { getLegalEntityOptions } from '../../legal-entities/api/legalEntitiesApi'
+import type { LegalEntityOption } from '../../legal-entities/types'
+import { changeDossierLegalEntity, getDossierLegalEntityImpact } from '../api/dossiersApi'
+import type { DossierLegalEntityChangeImpact } from '../api/dossiersApi'
+import { dossierLifecycleFacts, formatDate } from '../dossierDisplay'
+import { DOSSIER_STATUS_LABELS, DOSSIER_STATUS_TONE, type DossierDetail } from '../types'
+
+export interface DossierMenuAction {
+  key: string
+  label: string
+  onSelect: () => void
+  danger?: boolean
+}
+
+interface DossierHeaderProps {
+  dossier: DossierDetail
+  canManage: boolean
+  onAddActivity: () => void
+  /** Confirmation sprint 2026-09-23: opens the confirm dialog (open dossier, dossiers.manage). */
+  onConfirm: () => void
+  /** Meer ▾ items: bewerken kop, heropenen/annuleren, relaties, historiek… supplied by the page. */
+  menuActions: DossierMenuAction[]
+  onUpdated: (dossier: DossierDetail) => void
+  onConflict: (err: unknown) => boolean
+}
+
+/** §11 header: nummer + status, klant · ref · datum · entiteit, twee statuschips, primaire actie. */
+export function DossierHeader({ dossier, canManage, onAddActivity, onConfirm, menuActions, onUpdated, onConflict }: DossierHeaderProps) {
+  const { t } = useLocale()
+  const [entityDialog, setEntityDialog] = useState(false)
+  const [entities, setEntities] = useState<LegalEntityOption[]>([])
+  const [entityId, setEntityId] = useState('')
+  const [entityReason, setEntityReason] = useState('')
+  // Sprint 6: the customer's allowed entities and default decide what is offered and whether
+  // the choice is the privileged override path (right + reason).
+  const [allowedIds, setAllowedIds] = useState<string[]>([])
+  const [customerDefaultId, setCustomerDefaultId] = useState<string | null>(null)
+  const { hasPermission } = useAuth()
+  const mayOverride = hasPermission('dossiers.override_entity')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const menuRef = useRef<HTMLDetailsElement>(null)
+
+  useEffect(() => {
+    if (!entityDialog) return
+    Promise.all([
+      getLegalEntityOptions(),
+      dossier.customerId ? getCustomer(dossier.customerId) : Promise.resolve(null),
+    ])
+      .then(([options, customer]) => {
+        setEntities(options.filter((o) => o.isActive))
+        setAllowedIds(customer?.allowedLegalEntityIds ?? [])
+        setCustomerDefaultId(customer?.defaultLegalEntityId ?? null)
+      })
+      .catch((err: unknown) => {
+        setEntities([])
+        setError(describeApiError(err, t('dossiers.header.entityLoadFailed')).message)
+      })
+  }, [entityDialog, dossier.customerId, t])
+
+  // Impact preview: which linked orders move along and how many concept-invoice lines are
+  // released — shown BEFORE confirming, and blocking when one order sits on a sent invoice.
+  // Keyed on the entity it was fetched for: a stale preview (previous selection, closed dialog)
+  // derives to null instead of being reset synchronously inside the effect.
+  const [impactState, setImpactState] = useState<{ forEntityId: string; result: DossierLegalEntityChangeImpact } | null>(null)
+  const impact = entityDialog && entityId && entityId !== dossier.legalEntityId && impactState?.forEntityId === entityId
+    ? impactState.result
+    : null
+  useEffect(() => {
+    if (!entityDialog || !entityId || entityId === dossier.legalEntityId) {
+      return
+    }
+    let cancelled = false
+    getDossierLegalEntityImpact(dossier.id, entityId)
+      .then((result) => { if (!cancelled) setImpactState({ forEntityId: entityId, result }) })
+      .catch(() => { if (!cancelled) setImpactState(null) })
+    return () => { cancelled = true }
+  }, [entityDialog, entityId, dossier.id, dossier.legalEntityId])
+
+  const visibleEntities = allowedIds.length > 0
+    ? entities.filter((e) => allowedIds.includes(e.id) || e.id === dossier.legalEntityId)
+    : entities
+  const entityDeviates = entityId !== '' && entityId !== dossier.legalEntityId
+    && (customerDefaultId === null || entityId !== customerDefaultId)
+  const lacksOverrideRight = entityDeviates && !mayOverride
+
+  function openEntityDialog() {
+    setEntityId(dossier.legalEntityId ?? '')
+    setEntityReason('')
+    setError(null)
+    setEntityDialog(true)
+  }
+
+  async function saveEntity() {
+    if (!entityId) {
+      setError(t('dossiers.header.entityRequired'))
+      return
+    }
+    if (entityDeviates && !entityReason.trim()) {
+      setError(t('dossiers.header.entityReasonRequired'))
+      return
+    }
+    setBusy(true)
+    setError(null)
+    try {
+      const updated = await changeDossierLegalEntity(
+        dossier.id, entityId, dossier.version, entityReason.trim() || undefined)
+      onUpdated(updated)
+      setEntityDialog(false)
+    } catch (err) {
+      if (onConflict(err)) {
+        setEntityDialog(false)
+        return
+      }
+      setError(describeApiError(err, t('dossiers.header.entityChangeFailed')).message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const metaParts = [
+    dossier.customerName ?? t('dossiers.header.noCustomer'),
+    dossier.customerReference ? t('dossiers.header.reference', { reference: dossier.customerReference }) : null,
+    dossier.dossierDate ? formatDate(dossier.dossierDate) : null,
+  ].filter((part): part is string => part !== null)
+  const isOpen = dossier.status === 'Open'
+
+  return (
+    <header className="dossier-header">
+      <div className="dossier-header-title">
+        <h1>
+          {t('dossiers.header.title', { number: dossier.dossierNumber })}{' '}
+          <Badge tone={DOSSIER_STATUS_TONE[dossier.status]}>{t(DOSSIER_STATUS_LABELS[dossier.status])}</Badge>
+        </h1>
+        <DossierLifecycleFacts dossier={dossier} />
+        <p className="dossier-header-meta">
+          {metaParts.join(' · ')}
+          {' · '}
+          <span className="dossier-header-entity">
+            {t('dossiers.header.entity', { name: dossier.legalEntityName ?? '—' })}
+            {canManage && (
+              <button
+                type="button"
+                className="link-button"
+                onClick={openEntityDialog}
+                aria-label={t('dossiers.header.changeEntityAria')}
+              >
+                {t('dossiers.header.change')}
+              </button>
+            )}
+          </span>
+        </p>
+      </div>
+
+      {/* Action hierarchy: the secondary group (+ Activiteit, Meer ▾) on the left, a clear gap,
+          and the ONE primary lifecycle action — Bevestigen — right-most. A confirmed or
+          cancelled dossier has no primary action; "Heropenen" stays an exceptional item in Meer. */}
+      <div className="dossier-header-actions">
+        {(canManage && isOpen) || menuActions.length > 0 ? (
+          <div className="dossier-header-actions-secondary">
+            {canManage && isOpen && (
+              <Button variant="secondary" onClick={onAddActivity}>{t('dossiers.header.addActivity')}</Button>
+            )}
+            {menuActions.length > 0 && (
+              <details className="dossier-more" ref={menuRef}>
+                <summary role="button" aria-haspopup="menu">
+                  {t('dossiers.header.more')}
+                </summary>
+                <div className="dossier-more-menu" role="menu">
+                  {menuActions.map((action) => (
+                    <button
+                      key={action.key}
+                      type="button"
+                      role="menuitem"
+                      className={action.danger ? 'dossier-more-danger' : undefined}
+                      onClick={() => {
+                        menuRef.current?.removeAttribute('open')
+                        action.onSelect()
+                      }}
+                    >
+                      {action.label}
+                    </button>
+                  ))}
+                </div>
+              </details>
+            )}
+          </div>
+        ) : null}
+        {canManage && isOpen && (
+          <Button className="dossier-header-primary" onClick={onConfirm}>
+            {t('dossiers.lifecycle.confirm')}
+          </Button>
+        )}
+      </div>
+
+      {entityDialog && (
+        <Modal
+          title={t('dossiers.header.entityDialogTitle')}
+          onClose={() => setEntityDialog(false)}
+          busy={busy}
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setEntityDialog(false)} disabled={busy}>
+                {t('ui.actions.cancel')}
+              </Button>
+              <Button onClick={() => void saveEntity()} disabled={busy || !entityId || lacksOverrideRight || Boolean(impact?.blockedReason)}>
+                {t('dossiers.header.changeAction')}
+              </Button>
+            </>
+          }
+        >
+          <ValidationSummary message={error} />
+          <FormField
+            label={t('dossiers.header.entityField')}
+            htmlFor="dh-entity"
+            required
+            hint={dossier.customerId ? t('dossiers.header.entityAllowedHint') : t('dossiers.header.entityFieldHint')}
+          >
+            <select id="dh-entity" value={entityId} onChange={(event) => setEntityId(event.target.value)} disabled={busy}>
+              <option value="">{t('dossiers.header.chooseEntity')}</option>
+              {visibleEntities.map((entity) => (
+                <option key={entity.id} value={entity.id}>
+                  {entity.displayName}
+                  {(customerDefaultId ? entity.id === customerDefaultId : entity.isDefault) ? ` ${t('dossiers.header.defaultSuffix')}` : ''}
+                </option>
+              ))}
+            </select>
+          </FormField>
+          {impact && (
+            <div className="customer-form-muted" data-testid="dossier-entity-impact">
+              {impact.blockedReason ? (
+                <p className="customer-import-message customer-import-message-error" role="alert">{impact.blockedReason}</p>
+              ) : (
+                <>
+                  <p>{t('dossiers.header.entityImpactOrders', { count: impact.orders.length })}</p>
+                  {impact.draftInvoiceLinesReleased > 0 && (
+                    <p>{t('dossiers.header.entityImpactDraftLines', { count: impact.draftInvoiceLinesReleased })}</p>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+          {entityDeviates && (
+            <p className={lacksOverrideRight ? 'customer-import-message customer-import-message-error' : 'customer-form-muted'} role={lacksOverrideRight ? 'alert' : undefined}>
+              {lacksOverrideRight ? t('dossiers.header.entityNoOverride') : t('dossiers.header.entityDeviates')}
+            </p>
+          )}
+          <FormField
+            label={t('dossiers.header.reason')}
+            htmlFor="dh-entity-reason"
+            hint={t('dossiers.header.reasonHint')}
+          >
+            <input
+              id="dh-entity-reason"
+              value={entityReason}
+              onChange={(event) => setEntityReason(event.target.value)}
+              disabled={busy}
+              maxLength={500}
+            />
+          </FormField>
+        </Modal>
+      )}
+    </header>
+  )
+}
+
+/** Compact confirmed/cancelled metadata under the badge; renders nothing for an open dossier. */
+function DossierLifecycleFacts({ dossier }: { dossier: DossierDetail }) {
+  const { t } = useLocale()
+  const { facts, reason } = dossierLifecycleFacts(dossier, t)
+  if (facts.length === 0 && !reason) return null
+  return (
+    <div className="dossier-header-lifecycle" data-testid="dossier-lifecycle">
+      {facts.length > 0 && (
+        <p className="dossier-header-lifecycle-facts">
+          {facts.map((fact, index) => (
+            <span key={fact}>
+              {index > 0 && ' · '}
+              <span>{fact}</span>
+            </span>
+          ))}
+        </p>
+      )}
+      {reason && <p className="dossier-header-lifecycle-reason">{reason}</p>}
+    </div>
+  )
+}

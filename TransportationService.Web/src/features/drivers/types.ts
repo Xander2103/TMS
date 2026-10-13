@@ -9,6 +9,13 @@ export interface DriverListItem {
   availabilityStatus: DriverAvailabilityStatus
   isActive: boolean
   isBlocked: boolean
+  /**
+   * Fixed vehicle (`Vehicle.FixedDriverId`, resolved from the vehicle side). Absent on older
+   * payloads → callers fall back to the driver detail; null = the driver has none.
+   */
+  fixedVehicleId?: string | null
+  fixedVehicleNumber?: string | null
+  fixedVehiclePlate?: string | null
 }
 
 export interface DriverReadiness {
@@ -35,8 +42,12 @@ export interface DriverDetail {
   employeeId: string
   fullName: string
   employeeNumber: string
+  /** Primary category — mirrors the first entry of categoryIds. */
   categoryId: string | null
   categoryName: string | null
+  /** All operational categories in order; index 0 is the primary. */
+  categoryIds: string[]
+  categoryNames: string[]
   availabilityStatus: DriverAvailabilityStatus
   isActive: boolean
   isBlocked: boolean
@@ -65,11 +76,17 @@ export interface UpdateDriverInput {
   isActive: boolean
   fixedTrailerId: string | null
   notes: string | null
+  /**
+   * Ordered multi-category selection; the first entry becomes the primary. An empty array
+   * clears every category; null (together with a null driverCategoryId) leaves them unchanged.
+   */
+  driverCategoryIds: string[] | null
 }
 
+/** i18n-keys (driversAdmin.availability.*) — render via t(AVAILABILITY_LABELS[s]). */
 export const AVAILABILITY_LABELS: Record<DriverAvailabilityStatus, string> = {
-  Available: 'Beschikbaar',
-  Unavailable: 'Niet beschikbaar',
-  OnLeave: 'Afwezig',
-  OnTrip: 'Onderweg',
+  Available: 'driversAdmin.availability.Available',
+  Unavailable: 'driversAdmin.availability.Unavailable',
+  OnLeave: 'driversAdmin.availability.OnLeave',
+  OnTrip: 'driversAdmin.availability.OnTrip',
 }

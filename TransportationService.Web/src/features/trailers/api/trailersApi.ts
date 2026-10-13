@@ -38,6 +38,10 @@ export function updateTrailer(id: string, input: TrailerInput): Promise<TrailerD
   return apiClient.putJson<TrailerDetail, TrailerInput>(`/api/trailers/${id}`, input)
 }
 
+export function setTrailerActive(id: string, isActive: boolean): Promise<void> {
+  return apiClient.postJson<void, { isActive: boolean }>(`/api/trailers/${id}/active`, { isActive })
+}
+
 export function deleteTrailer(id: string): Promise<void> {
   return apiClient.deleteRequest(`/api/trailers/${id}`)
 }

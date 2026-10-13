@@ -12,6 +12,38 @@ public class User
     public Guid? CustomerId { get; set; }
     public bool IsActive { get; set; } = true;
     public bool IsBlocked { get; set; }
+
+    /// <summary>
+    /// UI/e-mail language preference (nl/fr/en). Null = not chosen yet; display falls back to
+    /// the browser language (portal frontend) → customer default language → nl.
+    /// </summary>
+    public string? PreferredLanguageCode { get; set; }
+
+    /// <summary>
+    /// Persoonlijke weergavevoorkeur van de UI (light/dark/system, zie
+    /// <see cref="Common.ThemePreferences"/>). Null = nog niet gekozen → de frontend volgt het
+    /// systeem. Hoort bij de gebruiker, niet bij de tenant: twee collega's van hetzelfde bedrijf
+    /// kiezen onafhankelijk van elkaar.
+    /// </summary>
+    public string? ThemePreference { get; set; }
+
+    /// <summary>Forces a password change at the next login (temporary/admin-set credentials).</summary>
+    public bool MustChangePassword { get; set; }
+
+    /// <summary>
+    /// Server-side session-revocation stamp. It is embedded in every access token and verified
+    /// on each authenticated request; rotating it (on an administrative password reset, and any
+    /// future block/deactivate) immediately invalidates all outstanding access tokens for this
+    /// user without waiting for their short lifetime to elapse.
+    /// </summary>
+    public Guid SecurityStamp { get; set; } = Guid.NewGuid();
+
+    /// <summary>Consecutive failed sign-in attempts since the last success (account lockout).</summary>
+    public int FailedLoginCount { get; set; }
+
+    /// <summary>When set and in the future, sign-in is temporarily locked for this account.</summary>
+    public DateTime? LockoutEndsAt { get; set; }
+
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
 }

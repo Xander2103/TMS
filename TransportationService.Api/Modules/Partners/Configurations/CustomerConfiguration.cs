@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using TransportationService.Api.Modules.Partners.Entities;
+using TransportationService.Api.Modules.Peppol.Entities;
 
 namespace TransportationService.Api.Modules.Partners.Configurations;
 
@@ -14,7 +15,14 @@ public class CustomerConfiguration : IEntityTypeConfiguration<Customer>
         builder.Property(c => c.CustomerNumber).IsRequired().HasMaxLength(30);
         builder.Property(c => c.Name).IsRequired().HasMaxLength(200);
         builder.Property(c => c.LegalName).HasMaxLength(200);
+        builder.Property(c => c.Nickname).HasMaxLength(100);
         builder.Property(c => c.VatNumber).HasMaxLength(30);
+        builder.Property(c => c.CompanyNumber).HasMaxLength(30);
+        builder.Property(c => c.CurrencyCode).IsRequired().HasMaxLength(3).HasDefaultValue("EUR");
+        builder.Property(c => c.Iban).HasMaxLength(34);
+        builder.Property(c => c.Bic).HasMaxLength(11);
+        builder.Property(c => c.BankName).HasMaxLength(100);
+        builder.Property(c => c.BankAccountNumber).HasMaxLength(50);
         builder.Property(c => c.Email).HasMaxLength(250);
         builder.Property(c => c.PhoneNumber).HasMaxLength(30);
         builder.Property(c => c.Website).HasMaxLength(200);
@@ -24,22 +32,34 @@ public class CustomerConfiguration : IEntityTypeConfiguration<Customer>
         builder.Property(c => c.City).HasMaxLength(100);
         builder.Property(c => c.CountryCode).HasMaxLength(2);
         builder.Property(c => c.InvoiceEmail).HasMaxLength(250);
+        builder.Property(c => c.InvoiceGrouping).HasMaxLength(20);
         builder.Property(c => c.DefaultLanguageCode).HasMaxLength(10);
         builder.Property(c => c.Notes).HasMaxLength(2000);
         builder.Property(c => c.BlockReason).HasMaxLength(500);
 
+        builder.Property(c => c.PurchaseOrderPolicy).HasConversion<string>().HasMaxLength(20);
         builder.Property(c => c.VatTreatment).HasConversion<string>().HasMaxLength(30);
         builder.Property(c => c.DefaultVatRatePercent).HasPrecision(5, 2);
         builder.Property(c => c.VatCountryCode).HasMaxLength(2);
         builder.Property(c => c.VatNotes).HasMaxLength(1000);
         builder.Property(c => c.PeppolId).HasMaxLength(64);
         builder.Property(c => c.PeppolScheme).HasMaxLength(10);
+        builder.Property(c => c.PeppolEnabled).HasDefaultValue(false);
+        builder.Property(c => c.PeppolValidationStatus).HasConversion<string>().HasMaxLength(20)
+            .HasDefaultValue(CustomerPeppolValidationStatus.Unknown);
+        builder.Property(c => c.PeppolValidationReference).HasMaxLength(200);
+        builder.Property(c => c.BuyerReference).HasMaxLength(200);
+        builder.Property(c => c.PeppolDeliveryPreference).HasConversion<string>().HasMaxLength(20)
+            .HasDefaultValue(PeppolDeliveryPreference.Peppol);
         builder.Property(c => c.InvoiceLanguageCode).HasMaxLength(10);
 
         builder.HasIndex(c => new { c.TenantId, c.CustomerNumber }).IsUnique().HasFilter("\"IsDeleted\" = false");
         builder.HasIndex(c => c.TenantId);
         builder.HasIndex(c => new { c.TenantId, c.IsActive });
         builder.HasIndex(c => new { c.TenantId, c.CategoryId });
+
+        builder.HasOne<Modules.Organization.Entities.LegalEntity>().WithMany()
+            .HasForeignKey(c => c.DefaultLegalEntityId).OnDelete(Microsoft.EntityFrameworkCore.DeleteBehavior.SetNull);
 
         builder.HasMany(c => c.Contacts)
             .WithOne()

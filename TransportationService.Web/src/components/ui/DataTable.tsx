@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { LoadingState } from '../feedback/LoadingState'
 import { ErrorState } from '../feedback/ErrorState'
 import { EmptyState } from './EmptyState'
+import { useLocale } from '../../i18n/localeContext'
 import './DataTable.css'
 
 export interface Column<TRow> {
@@ -14,6 +15,16 @@ export interface Column<TRow> {
   align?: 'left' | 'right' | 'center'
   /** Optional fixed width (CSS value). */
   width?: string
+  /**
+   * Server-side sort key for this column. When set — together with the table-level
+   * `sort`/`onSortChange` props — the header renders as a sort button with `aria-sort`.
+   */
+  sortKey?: string
+}
+
+export interface SortState {
+  key: string
+  dir: 'asc' | 'desc'
 }
 
 interface DataTableProps<TRow> {
@@ -26,6 +37,14 @@ interface DataTableProps<TRow> {
   loadingMessage?: string
   /** Invoked when a row is clicked; makes rows keyboard-focusable. */
   onRowClick?: (row: TRow) => void
+  /** Optional extra class name per row, e.g. greying out inactive records. */
+  rowClassName?: (row: TRow) => string | undefined
+  /** Optional DOM id per row, so callers can deep-link/scroll to one row (`getElementById`). */
+  rowId?: (row: TRow) => string | undefined
+  /** Current (server-side) sort; columns with a `sortKey` become clickable when `onSortChange` is set. */
+  sort?: SortState | null
+  /** Called with the next sort when a sortable header is clicked (same column toggles direction). */
+  onSortChange?: (sort: SortState) => void
 }
 
 /**
@@ -38,33 +57,69 @@ export function DataTable<TRow>({
   rowKey,
   isLoading = false,
   error = null,
-  emptyMessage = 'Geen gegevens gevonden.',
-  loadingMessage = 'Laden...',
+  emptyMessage,
+  loadingMessage,
   onRowClick,
+  rowClassName,
+  rowId,
+  sort,
+  onSortChange,
 }: DataTableProps<TRow>) {
-  if (isLoading) return <LoadingState message={loadingMessage} />
+  const { t } = useLocale()
+  if (isLoading) return <LoadingState message={loadingMessage ?? t('ui.table.loading')} />
   if (error) return <ErrorState message={error} />
-  if (rows.length === 0) return <EmptyState message={emptyMessage} />
+  if (rows.length === 0) return <EmptyState message={emptyMessage ?? t('ui.table.empty')} />
+
+  function handleSortClick(sortKey: string) {
+    if (!onSortChange) return
+    const nextDir: 'asc' | 'desc' = sort?.key === sortKey && sort.dir === 'asc' ? 'desc' : 'asc'
+    onSortChange({ key: sortKey, dir: nextDir })
+  }
 
   return (
     <div className="data-table-wrapper">
       <table className="data-table">
         <thead>
           <tr>
-            {columns.map((column) => (
-              <th key={column.key} style={{ textAlign: column.align ?? 'left', width: column.width }}>
-                {column.header}
-              </th>
-            ))}
+            {columns.map((column) => {
+              const sortable = Boolean(column.sortKey && onSortChange)
+              const isSorted = sortable && sort?.key === column.sortKey
+              return (
+                <th
+                  key={column.key}
+                  style={{ textAlign: column.align ?? 'left', width: column.width }}
+                  aria-sort={isSorted ? (sort!.dir === 'asc' ? 'ascending' : 'descending') : undefined}
+                >
+                  {sortable ? (
+                    <button
+                      type="button"
+                      className="data-table-sort-button"
+                      onClick={() => handleSortClick(column.sortKey!)}
+                    >
+                      {column.header}
+                      <span className="data-table-sort-indicator" aria-hidden="true">
+                        {isSorted ? (sort!.dir === 'asc' ? '▲' : '▼') : '↕'}
+                      </span>
+                    </button>
+                  ) : (
+                    column.header
+                  )}
+                </th>
+              )
+            })}
           </tr>
         </thead>
         <tbody>
           {rows.map((row) => {
             const clickable = Boolean(onRowClick)
+            const className = [clickable ? 'data-table-row-clickable' : undefined, rowClassName?.(row)]
+              .filter(Boolean)
+              .join(' ')
             return (
               <tr
                 key={rowKey(row)}
-                className={clickable ? 'data-table-row-clickable' : undefined}
+                id={rowId?.(row)}
+                className={className || undefined}
                 onClick={onRowClick ? () => onRowClick(row) : undefined}
                 tabIndex={clickable ? 0 : undefined}
                 onKeyDown={

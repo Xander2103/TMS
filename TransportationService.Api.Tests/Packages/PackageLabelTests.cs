@@ -162,8 +162,63 @@ public class PackageLabelTests
 
         Assert.Null(error);
         // 9 labels at 8 per A4 page → exactly 2 pages.
-        using var document = PdfSharp.Pdf.IO.PdfReader.Open(new MemoryStream(pdf!), PdfSharp.Pdf.IO.PdfDocumentOpenMode.InformationOnly);
+        using var document = PdfSharp.Pdf.IO.PdfReader.Open(new MemoryStream(pdf!), PdfSharp.Pdf.IO.PdfDocumentOpenMode.Import);
         Assert.Equal(2, document.PageCount);
+    }
+
+    [Fact]
+    public async Task Snapshot_CarriesSequenceLabel_WithinTheOrder_AndDutchUnitType()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var first = (await h.Packages.CreateAsync(h.OrderId,
+            new CreatePackageRequest("Pallet A") { UnitType = PackageUnitType.EuroPallet }, CancellationToken.None)).Package!;
+        var second = (await h.Packages.CreateAsync(h.OrderId,
+            new CreatePackageRequest("Pallet B") { UnitType = PackageUnitType.EuroPallet }, CancellationToken.None)).Package!;
+
+        await h.Sut.PrintAsync([first.Id, second.Id], LabelFormat.Thermal100x150, null, CancellationToken.None);
+
+        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        var snapshots = h.Db.Context.PackageLabels.ToList()
+            .Select(l => (l.PackageId, Snapshot: JsonSerializer.Deserialize<LabelSnapshot>(l.SnapshotJson, options)!))
+            .ToDictionary(x => x.PackageId, x => x.Snapshot);
+
+        Assert.Equal("Collo 1 van 2", snapshots[first.Id].SequenceLabel);
+        Assert.Equal("Collo 2 van 2", snapshots[second.Id].SequenceLabel);
+        Assert.Equal("Europallet", snapshots[first.Id].UnitTypeLabel);
+    }
+
+    /// <summary>
+    /// Wave 1 fix A (A5): a pin pointing at a stop that no longer exists — every order edited
+    /// before blocker C-01 landed carries some — used to resolve to null through the
+    /// soft-delete-filtered stop set and print a BLANK sender/recipient. A dangling pin now falls
+    /// back to the order's own stops, exactly like the null pin the entity documents.
+    /// </summary>
+    [Fact]
+    public async Task Snapshot_WithAPinToARemovedStop_FallsBackToTheOrdersLiveStops()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var removedStopId = Guid.NewGuid();
+        h.Db.Context.TransportOrderStops.Add(new TransportOrderStop
+        {
+            Id = removedStopId, TenantId = h.TenantId, TransportOrderId = h.OrderId, Sequence = 3,
+            StopType = StopType.Unloading, City = "Gent", IsDeleted = true,
+        });
+        var package = (await h.Packages.CreateAsync(h.OrderId, new CreatePackageRequest("Doos"), CancellationToken.None)).Package!;
+        h.Db.Context.Packages.Single(p => p.Id == package.Id).DeliveryStopId = removedStopId;
+        await h.Db.Context.SaveChangesAsync();
+
+        var (pdf, error) = await h.Sut.PrintAsync([package.Id], LabelFormat.Thermal100x150, null, CancellationToken.None);
+
+        Assert.Null(error);
+        Assert.NotNull(pdf);
+        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        var snapshot = JsonSerializer.Deserialize<LabelSnapshot>(
+            h.Db.Context.PackageLabels.Single(l => l.PackageId == package.Id).SnapshotJson, options)!;
+        Assert.Equal("Rotterdam", snapshot.DeliveryLocation);
+        Assert.Equal("Rotterdam", snapshot.RecipientPostalCodeCity);
+        Assert.Equal("Antwerpen", snapshot.LoadingLocation);
     }
 
     [Fact]

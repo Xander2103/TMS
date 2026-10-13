@@ -1,3 +1,4 @@
+using TransportationService.Api.Common.Scheduling;
 using TransportationService.Api.Modules.Auditing.Services;
 using TransportationService.Api.Modules.Drivers.Entities;
 using TransportationService.Api.Modules.EmployeePlanning.Services;
@@ -146,11 +147,30 @@ public class TripServiceTests
 
         var blocked = await h.Sut.ChangeStatusAsync(trip.Trip!.Id, TripStatus.Planned, false, false, null, CancellationToken.None);
         Assert.Equal(TripOperationOutcome.ConflictsBlock, blocked.Outcome);
-        Assert.Contains(blocked.Conflicts!, c => c.Code == PlanningConflictCode.DriverAbsent);
+        var conflict = Assert.Single(blocked.Conflicts!, c => c.Code == PlanningConflictCode.DriverAbsent);
+        // Structured metadata: category, related driver, override contract.
+        Assert.Equal(ConflictCategory.Availability, conflict.Category);
+        Assert.Equal("Driver", conflict.RelatedEntityType);
+        Assert.Equal(h.DriverId, conflict.RelatedEntityId);
+        Assert.True(conflict.OverrideAllowed);
+        Assert.Equal("planning.override_restriction", conflict.RequiredPermission);
 
-        var overridden = await h.Sut.ChangeStatusAsync(trip.Trip.Id, TripStatus.Planned, true, false, null, CancellationToken.None);
+        // Overriding without a reason is refused.
+        var noReason = await h.Sut.ChangeStatusAsync(trip.Trip.Id, TripStatus.Planned, true, false, null, CancellationToken.None);
+        Assert.Equal(TripOperationOutcome.ValidationFailed, noReason.Outcome);
+
+        var overridden = await h.Sut.ChangeStatusAsync(
+            trip.Trip.Id, TripStatus.Planned, true, false, "Klant staat erop; vervanger geregeld.", CancellationToken.None);
         Assert.Equal(TripOperationOutcome.Success, overridden.Outcome);
         Assert.Equal(TripStatus.Planned, overridden.Trip!.Status);
+
+        // The override left a permanent, reasoned trail that the trip detail surfaces.
+        var stored = Assert.Single(h.Db.Context.ConflictOverrides);
+        Assert.Equal(trip.Trip.Id, stored.EntityId);
+        Assert.Contains("DriverAbsent", stored.ConflictCodes);
+        Assert.Equal("Klant staat erop; vervanger geregeld.", stored.Reason);
+        var surfaced = Assert.Single(overridden.Trip.Overrides);
+        Assert.Equal(stored.Reason, surfaced.Reason);
     }
 
     [Fact]

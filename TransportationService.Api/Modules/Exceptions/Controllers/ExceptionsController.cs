@@ -125,6 +125,11 @@ public class ExceptionsController : ControllerBase
             return BadRequest(new { message = "De foto moet tussen 1 byte en 10 MB groot zijn." });
         }
 
+        if (Modules.Security.UploadValidation.SignatureError(file) is { } signatureError)
+        {
+            return BadRequest(new { message = signatureError });
+        }
+
         var restrict = !await IsStaffAsync(cancellationToken);
         await using var stream = file.OpenReadStream();
         return Handle(await _service.AttachPhotoAsync(
@@ -135,7 +140,10 @@ public class ExceptionsController : ControllerBase
     [RequirePermission(PermissionCodes.ExceptionsView, PermissionCodes.DriverWorkflowView)]
     public async Task<IActionResult> DownloadPhoto(Guid id, Guid photoId, CancellationToken cancellationToken)
     {
-        var photo = await _service.OpenPhotoAsync(id, photoId, cancellationToken);
+        // Non-staff callers reach this through driver-workflow rights and may only read media of
+        // their own trips; anything else is 404 so ids cannot be probed.
+        var restrict = !await IsStaffAsync(cancellationToken);
+        var photo = await _service.OpenPhotoAsync(id, photoId, restrict, cancellationToken);
         return photo is null ? NotFound() : File(photo.Value.Content, photo.Value.ContentType, photo.Value.FileName);
     }
 

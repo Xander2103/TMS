@@ -1,0 +1,20 @@
+{
+  "page": {
+    "breadcrumb": "Qualifications",
+    "title": "Qualifications",
+    "subtitle": "Qualifications, permis et contrôles arrivant à échéance ou expirés de tous les collaborateurs.",
+    "loadFailed": "Les qualifications n'ont pas pu être chargées.",
+    "expiringTitle": "Expire bientôt",
+    "expiredTitle": "Expirées",
+    "windowAria": "Période",
+    "windowDays": "{days} jours",
+    "colEmployee": "Collaborateur",
+    "driverSuffix": "· chauffeur",
+    "colQualification": "Qualification",
+    "colExpiry": "Date d'échéance",
+    "colStatus": "Statut",
+    "emptyExpiring": "Aucune qualification n'expire dans les {days} jours.",
+    "emptyExpired": "Aucune qualification expirée. 🎉",
+    "loading": "Chargement…"
+  }
+}

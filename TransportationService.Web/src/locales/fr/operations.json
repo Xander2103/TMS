@@ -1,0 +1,80 @@
+{
+  "locationSource": {
+    "LiveGps": "GPS en direct",
+    "LastKnownGps": "Dernier GPS connu",
+    "ScanLocation": "Lieu du scan",
+    "StopLocation": "Dernier arrêt",
+    "PlannedLocation": "Arrêt prévu",
+    "Unavailable": "Aucune position"
+  },
+  "etaSource": {
+    "Heuristic": "estimation",
+    "Provider": "fournisseur d'itinéraires",
+    "DispatcherOverride": "manuel"
+  },
+  "etaStatus": {
+    "OnTime": "À l'heure",
+    "AtRisk": "À risque",
+    "Late": "En retard"
+  },
+  "alertSeverity": {
+    "Information": "Info",
+    "Warning": "Avertissement",
+    "Critical": "Critique"
+  },
+  "alertCategory": {
+    "Delay": "Retard",
+    "Pod": "Preuve de livraison",
+    "Incident": "Incident",
+    "Exception": "Écart",
+    "Maintenance": "Entretien",
+    "Inspection": "Contrôle",
+    "Document": "Document"
+  },
+  "page": {
+    "title": "Centre opérationnel",
+    "overviewLoadFailed": "Le chargement de l'aperçu a échoué.",
+    "loading": "Chargement…",
+    "updatedAt": "Actualisé à {time}",
+    "refreshEvery": "actualisation toutes les 30 s",
+    "alertAcknowledged": "Notification confirmée.",
+    "alertResolved": "Notification traitée.",
+    "actionFailed": "L'action a échoué.",
+    "kpiActiveTrips": "Tournées actives",
+    "kpiDelayed": "En retard",
+    "kpiOpenExceptions": "Écarts ouverts",
+    "kpiCriticalIncidents": "Incidents critiques",
+    "kpiMissingPods": "POD manquante",
+    "kpiOpenAlerts": "Notifications ouvertes",
+    "tripsLabel": "Tournées actives",
+    "tripsTitle": "Tournées du jour & en route",
+    "colTrip": "Tournée",
+    "colStatus": "Statut",
+    "colDriverEquipment": "Chauffeur / matériel",
+    "colProgress": "Progression",
+    "colCurrentStop": "Arrêt actuel",
+    "colNextStop": "Prochain arrêt",
+    "colEta": "ETA",
+    "colLastScan": "Dernier scan",
+    "colSignals": "Signaux",
+    "stopsProgress": "{completed}/{total} arrêts",
+    "etaSourcePrefix": "source : {source}",
+    "noEta": "pas d'ETA",
+    "exceptions_one": "1 écart",
+    "exceptions_other": "{count} écarts",
+    "missingPod": "POD manquante",
+    "noActiveTrips": "Aucune tournée active.",
+    "alertsLabel": "Notifications",
+    "alertsTitle": "Notifications",
+    "alertsFilterLabel": "Filtrer les notifications",
+    "filterOpen": "Ouvertes",
+    "filterActive": "Nouvelles",
+    "filterAcknowledged": "Confirmées",
+    "filterResolved": "Traitées",
+    "acknowledgedBy": "Confirmée par {name}",
+    "open": "Ouvrir",
+    "acknowledge": "Confirmer",
+    "resolve": "Traiter",
+    "noAlerts": "Aucune notification."
+  }
+}

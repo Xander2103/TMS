@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using TransportationService.Api.Modules.Hr.Dtos;
+using TransportationService.Api.Modules.Identity;
+using TransportationService.Api.Modules.Identity.Authorization;
 using TransportationService.Api.Modules.Portal.Dtos;
 using TransportationService.Api.Modules.Portal.Services;
 using TransportationService.Api.Modules.Qualifications.Dtos;
@@ -58,6 +60,18 @@ public class MeController : ControllerBase
         return HandleAbsence(await _service.CreateMyAbsenceAsync(request, cancellationToken));
     }
 
+    /// <summary>Own leave balance (read-only, self-scoped). Requires the view-own permission.</summary>
+    [HttpGet("leave-balance")]
+    [RequirePermission(PermissionCodes.LeaveBalancesViewOwn)]
+    public async Task<ActionResult<EmployeeLeaveBalanceDto>> LeaveBalance([FromQuery] int? year, CancellationToken cancellationToken)
+    {
+        var resolved = year ?? DateTime.UtcNow.Year;
+        var balance = await _service.GetMyLeaveBalanceAsync(resolved, cancellationToken);
+        return balance is null
+            ? NotFound(new { message = "Er is geen personeelsdossier gekoppeld aan dit account." })
+            : Ok(balance);
+    }
+
     [HttpPost("absences/{id:guid}/cancel")]
     public async Task<ActionResult<AbsenceDto>> CancelAbsence(Guid id, CancellationToken cancellationToken)
     {
@@ -74,6 +88,11 @@ public class MeController : ControllerBase
         if (file.Length == 0 || file.Length > MaxAttachmentBytes)
         {
             return BadRequest(new { message = "De bijlage moet tussen 1 byte en 10 MB groot zijn." });
+        }
+
+        if (Modules.Security.UploadValidation.SignatureError(file) is { } signatureError)
+        {
+            return BadRequest(new { message = signatureError });
         }
 
         await using var stream = file.OpenReadStream();
@@ -114,6 +133,62 @@ public class MeController : ControllerBase
             : Ok(days);
     }
 
+    // --- Personal calendar notes (self-service; strictly own-employee scoped) ---
+
+    [HttpGet("calendar-notes")]
+    public async Task<IActionResult> ListCalendarNotes(
+        [FromQuery] DateOnly from, [FromQuery] DateOnly to, CancellationToken cancellationToken)
+    {
+        var notes = await _service.ListMyCalendarNotesAsync(from, to, cancellationToken);
+        return notes is null
+            ? NotFound(new { message = "Er is geen personeelsdossier gekoppeld aan dit account." })
+            : Ok(notes);
+    }
+
+    [HttpPost("calendar-notes")]
+    public async Task<IActionResult> CreateCalendarNote(
+        Dtos.SavePersonalCalendarNoteRequest request, CancellationToken cancellationToken)
+    {
+        var created = await _service.CreateMyCalendarNoteAsync(request, cancellationToken);
+        return created is null
+            ? NotFound(new { message = "Er is geen personeelsdossier gekoppeld aan dit account." })
+            : Ok(created);
+    }
+
+    [HttpPut("calendar-notes/{id:guid}")]
+    public async Task<IActionResult> UpdateCalendarNote(
+        Guid id, Dtos.SavePersonalCalendarNoteRequest request, CancellationToken cancellationToken)
+    {
+        var updated = await _service.UpdateMyCalendarNoteAsync(id, request, cancellationToken);
+        return updated is null ? NotFound() : Ok(updated);
+    }
+
+    [HttpDelete("calendar-notes/{id:guid}")]
+    public async Task<IActionResult> DeleteCalendarNote(Guid id, CancellationToken cancellationToken)
+    {
+        return await _service.DeleteMyCalendarNoteAsync(id, cancellationToken) ? NoContent() : NotFound();
+    }
+
+    /// <summary>Own planning as iCalendar — import/subscribe from any calendar client.</summary>
+    [HttpGet("planning/ics")]
+    public async Task<IActionResult> PlanningIcs(
+        [FromQuery] DateOnly from, [FromQuery] DateOnly to, CancellationToken cancellationToken)
+    {
+        if (to < from || to.DayNumber - from.DayNumber > 62)
+        {
+            return BadRequest(new { message = "Kies een geldige periode van maximaal 62 dagen." });
+        }
+
+        var days = await _service.GetMyPlanningAsync(from, to, cancellationToken);
+        if (days is null)
+        {
+            return NotFound(new { message = "Er is geen personeelsdossier gekoppeld aan dit account." });
+        }
+
+        var ics = Services.PlanningIcsBuilder.Build(days);
+        return File(System.Text.Encoding.UTF8.GetBytes(ics), "text/calendar", "planning.ics");
+    }
+
     [HttpGet("qualifications")]
     public async Task<ActionResult<IReadOnlyList<EmployeeQualificationDto>>> Qualifications(CancellationToken cancellationToken)
     {
@@ -144,6 +219,7 @@ public class MeController : ControllerBase
     }
 
     [HttpPost("password")]
+    [TransportationService.Api.Modules.Identity.Authorization.PermitWhenPasswordChangeRequired]
     public async Task<IActionResult> ChangePassword(
         ChangeMyPasswordRequest request, CancellationToken cancellationToken)
     {

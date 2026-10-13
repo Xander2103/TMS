@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useLocale } from '../../../i18n/localeContext'
 import './pod.css'
 
 interface SignaturePadProps {
@@ -12,6 +13,7 @@ interface SignaturePadProps {
  * the backend stores it through the shared file-storage abstraction.
  */
 export function SignaturePad({ disabled, onChange }: SignaturePadProps) {
+  const { t } = useLocale()
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const drawing = useRef(false)
   const [hasInk, setHasInk] = useState(false)
@@ -86,12 +88,12 @@ export function SignaturePad({ disabled, onChange }: SignaturePadProps) {
         onPointerMove={handleMove}
         onPointerUp={handleUp}
         onPointerLeave={handleUp}
-        aria-label="Handtekeningveld"
+        aria-label={t('pod.signature.fieldLabel')}
       />
       <div className="pod-signature-bar">
-        <span>{hasInk ? 'Handtekening gezet' : 'Laat hier tekenen'}</span>
+        <span>{hasInk ? t('pod.signature.signed') : t('pod.signature.drawHere')}</span>
         <button type="button" onClick={clear} disabled={disabled || !hasInk}>
-          Wissen
+          {t('pod.signature.clear')}
         </button>
       </div>
     </div>

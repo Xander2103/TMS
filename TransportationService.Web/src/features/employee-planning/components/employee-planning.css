@@ -73,27 +73,28 @@ button.schedule-chip {
   line-height: 1;
   margin-left: 2px;
 }
-.schedule-chip-conflict-information { box-shadow: 0 0 0 2px #93c5fd; }
+.schedule-chip-conflict-information { box-shadow: 0 0 0 2px var(--color-info-border); }
 
 .ep-conflict-panel {
   margin-top: 12px;
-  border: 1px solid #facc15;
-  background: #fefce8;
+  border: 1px solid var(--color-warning-border);
+  background: var(--color-warning-bg);
   border-radius: 8px;
   padding: 10px 12px;
   font-size: 14px;
 }
 .ep-conflict-panel ul { margin: 6px 0; padding-left: 18px; }
 .ep-conflict-override { display: flex; align-items: center; gap: 8px; font-weight: 600; }
-@media (prefers-color-scheme: dark) {
-  .ep-conflict-panel { background: #422006; border-color: #a16207; }
+
+.schedule-legend {
+  margin-bottom: 6px;
 }
 
 .schedule-legend summary {
   cursor: pointer;
-  font-size: 14px;
+  font-size: 13px;
   color: var(--accent);
-  padding: 6px 0;
+  padding: 2px 0;
 }
 
 .schedule-legend ul {
@@ -105,14 +106,418 @@ button.schedule-chip {
   gap: 8px;
 }
 
-/* Grid */
+/* Toolbar: one compact wrapping row; the grid gets the remaining height. */
 .ep-toolbar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 12px;
+  gap: 8px;
+  margin-bottom: 10px;
   font-size: 14px;
+}
+
+.ep-toolbar-spacer {
+  flex: 1 1 auto;
+}
+
+.ep-toolbar .ui-button {
+  padding: 7px 12px;
+  font-size: 14px;
+  min-height: 36px;
+}
+
+.ep-toolbar-field select {
+  min-height: 36px;
+}
+
+.ep-toolbar-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--text-h);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.ep-toolbar-button:hover:not(:disabled) {
+  border-color: var(--accent-border);
+}
+
+.ep-toolbar-button.is-active {
+  border-color: var(--color-primary-border);
+  background: var(--color-primary-bg);
+  font-weight: 600;
+}
+
+.ep-toolbar-button:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 1px;
+}
+
+.ep-toolbar-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.ep-toolbar-popover-host {
+  position: relative;
+}
+
+.ep-quick-search {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--color-input-border);
+  border-radius: var(--radius-md);
+  background: var(--color-input-bg);
+  color: var(--color-text-muted);
+}
+
+.ep-quick-search input {
+  border: none;
+  background: transparent;
+  padding: 6px 0;
+  min-width: 170px;
+  color: var(--text-h);
+}
+
+.ep-quick-search input:focus {
+  outline: none;
+}
+
+.ep-quick-search:focus-within {
+  border-color: var(--color-focus-ring);
+  box-shadow: 0 0 0 3px var(--color-primary-bg);
+}
+
+.ep-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  color: var(--text-h);
+  cursor: pointer;
+}
+
+.ep-check input {
+  margin: 0;
+  width: 15px;
+  height: 15px;
+  accent-color: var(--color-primary-solid);
+}
+
+.ep-toolbar-check {
+  min-height: 36px;
+  padding: 0 4px;
+}
+
+/* Anchored panels (filters, picker, export menu). */
+.ep-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 80;
+  width: min(360px, calc(100vw - 32px));
+  padding: 12px 14px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-raised);
+  box-shadow: var(--shadow);
+  font-size: 14px;
+  text-align: left;
+}
+
+.ep-popover-picker {
+  width: min(420px, calc(100vw - 32px));
+}
+
+.ep-popover-menu {
+  left: auto;
+  right: 0;
+  width: max-content;
+  min-width: 220px;
+  padding: 6px;
+}
+
+.ep-popover-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+  color: var(--text-h);
+}
+
+.ep-popover-section {
+  margin-bottom: 10px;
+}
+
+.ep-popover-fieldset {
+  border: none;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+}
+
+.ep-popover-fieldset legend {
+  padding: 0;
+  margin-bottom: 4px;
+}
+
+.ep-popover-label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.ep-popover-hint {
+  margin: 4px 0 8px;
+  font-size: 12.5px;
+  color: var(--color-text-muted);
+  flex-basis: 100%;
+}
+
+.ep-popover-error {
+  margin: 0 0 8px;
+  color: var(--color-danger);
+  font-size: 13px;
+}
+
+.ep-popover-footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 6px;
+}
+
+.ep-quick-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ep-quick-button {
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  color: var(--text-h);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.ep-quick-button.is-active {
+  border-color: var(--color-primary-border);
+  background: var(--color-primary-bg);
+  font-weight: 600;
+}
+
+.ep-quick-button:focus-visible,
+.ep-link-button:focus-visible,
+.ep-menu-item:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 1px;
+}
+
+.ep-link-button {
+  padding: 2px 4px;
+  border: none;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.ep-link-button:hover:not(:disabled) {
+  text-decoration: underline;
+}
+
+.ep-link-button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.ep-menu-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-h);
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ep-menu-item:hover {
+  background: var(--color-primary-bg);
+}
+
+.ep-menu-item-hint {
+  display: block;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+/* Result count + active selection chips. */
+.ep-status-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  min-height: 28px;
+}
+
+.ep-active-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 13.5px;
+}
+
+.ep-count {
+  font-weight: 600;
+  color: var(--text-h);
+  margin-right: 4px;
+}
+
+.ep-count-shown {
+  font-weight: 400;
+  color: var(--color-text-muted);
+}
+
+.ep-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 260px;
+  padding: 2px 4px 2px 9px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--color-surface-muted);
+  color: var(--text-h);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.ep-chip-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ep-chip-employee {
+  border-color: var(--color-primary-border);
+  background: var(--color-primary-bg);
+}
+
+.ep-chip-status {
+  border-style: dashed;
+}
+
+.ep-chip-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.ep-chip-remove:hover {
+  color: var(--text-h);
+  background: var(--color-hover);
+}
+
+.ep-chip-remove:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 1px;
+}
+
+.ep-updating {
+  font-size: 13px;
+  color: var(--color-text-muted);
+  margin-left: auto;
+}
+
+.ep-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 40px 24px;
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  color: var(--text);
+  text-align: center;
+}
+
+.ep-error p {
+  color: var(--color-danger);
+}
+
+.ep-copy-scope {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-h);
+}
+
+.ep-list .ep-employee-cell {
+  min-width: 160px;
+}
+
+.ep-grid td,
+.ep-grid th {
+  font-size: 13px;
+}
+
+.ep-grid tbody th.ep-employee-cell {
+  text-align: left;
+}
+
+@media (max-width: 900px) {
+  .ep-popover {
+    position: fixed;
+    top: auto;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: auto;
+    max-height: 80vh;
+    overflow-y: auto;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  }
+
+  .ep-quick-search input {
+    min-width: 120px;
+  }
 }
 
 .ep-toolbar select,
@@ -143,9 +548,12 @@ button.schedule-chip {
 }
 
 .ep-grid-wrap {
-  overflow-x: auto;
+  overflow: auto;
   border: 1px solid var(--border);
   border-radius: 10px;
+  background: var(--color-surface);
+  /* One work surface: header and employee column stick inside this scroller (see below). */
+  min-height: 160px;
 }
 
 .ep-grid {
@@ -164,17 +572,61 @@ button.schedule-chip {
   text-align: left;
 }
 
-.ep-grid th {
-  background: var(--code-bg, rgba(0, 0, 0, 0.03));
+.ep-grid thead th {
+  background: var(--code-bg);
   position: sticky;
   top: 0;
+  z-index: 2;
 }
 
 .ep-grid .ep-employee-cell {
-  min-width: 170px;
+  min-width: 190px;
+  max-width: 260px;
   position: sticky;
   left: 0;
-  background: var(--bg);
+  z-index: 1;
+  background: var(--color-surface);
+  font-weight: 400;
+  /* The sticky column needs its own right edge: the cell border scrolls away underneath it. */
+  box-shadow: inset -1px 0 0 var(--border);
+}
+
+.ep-grid thead .ep-corner {
+  z-index: 3;
+  background: var(--code-bg);
+}
+
+.ep-grid tbody tr:hover .ep-employee-cell,
+.ep-grid tbody tr:hover td {
+  background: color-mix(in srgb, var(--color-hover) 100%, var(--color-surface));
+}
+
+.ep-grid .ep-spacer td {
+  padding: 0;
+  border: none;
+}
+
+.ep-row-outside .ep-employee-cell {
+  background: color-mix(in srgb, var(--color-warning-bg) 60%, var(--color-surface));
+}
+
+.ep-inline-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--color-surface-muted);
+  color: var(--color-text-muted);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.6;
+  vertical-align: middle;
+}
+
+.ep-inline-badge-outside {
+  margin: 4px 0 0;
+  background: var(--color-warning-bg);
+  color: var(--color-warning-text);
 }
 
 .ep-employee-name {
@@ -215,7 +667,7 @@ button.schedule-chip {
 }
 
 .ep-weekend {
-  background: var(--code-bg, rgba(0, 0, 0, 0.02));
+  background: var(--code-bg);
 }
 
 .ep-today th,
@@ -257,11 +709,10 @@ th.ep-today {
   margin-top: 4px;
 }
 
-@media (prefers-color-scheme: dark) {
-  .ep-grid .ep-employee-cell,
-  .ep-grid th {
-    background: var(--bg);
-  }
+/* Sticky cells need an opaque fill in dark mode so scrolled content does not show through. */
+html[data-theme='dark'] .ep-grid .ep-employee-cell,
+html[data-theme='dark'] .ep-grid th {
+  background: var(--bg);
 }
 
 @media (max-width: 640px) {
@@ -273,9 +724,87 @@ th.ep-today {
 .ep-employee-link {
   color: inherit;
   text-decoration: none;
-  border-bottom: 1px dotted var(--accent, #aa3bff);
+  border-bottom: 1px dotted var(--accent);
 }
 .ep-employee-link:hover,
 .ep-employee-link:focus-visible {
-  color: var(--accent, #aa3bff);
+  color: var(--accent);
+}
+
+/* Personal calendar note (colour comes from the employee's palette choice inline). */
+.schedule-chip-note {
+  background: #dbeafe;
+  border-color: #2563eb;
+}
+
+/* Compact chips for the month grid: same colour language, smaller footprint. */
+.schedule-chip-compact {
+  padding: 1px 6px;
+  font-size: 11px;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.schedule-chip-compact .schedule-chip-time {
+  display: none;
+}
+
+.schedule-chip-compact .schedule-chip-state {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* All-day entries (absences carry no start/end time) read as a full-width banner rather than
+   an inline chip, so they stand out from timed shifts/trips in week and list views. */
+.schedule-chip-fullwidth {
+  display: flex;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* Entry detail popover (EmployeePlanningTab) */
+.ep-entry-detail {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 12px;
+  margin: 0 0 16px;
+}
+
+.ep-entry-detail dt {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.ep-entry-detail dd {
+  margin: 0;
+  color: var(--text-h);
+}
+
+.ep-entry-link {
+  display: inline-block;
+  border: none;
+  background: none;
+  font: inherit;
+  color: var(--accent);
+  cursor: pointer;
+  padding: 4px 0;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.ep-entry-approve-hint {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--text);
+}
+
+/* The panel itself can hold focus on open (filters): no ring on a mouse open, a clear one via keyboard. */
+.ep-popover:focus {
+  outline: none;
+}
+
+.ep-popover:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }

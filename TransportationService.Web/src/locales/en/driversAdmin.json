@@ -1,0 +1,83 @@
+{
+  "availability": {
+    "Available": "Available",
+    "Unavailable": "Unavailable",
+    "OnLeave": "On leave",
+    "OnTrip": "On trip"
+  },
+  "readiness": {
+    "Ready": "Deployable",
+    "Warning": "Attention",
+    "NotReady": "Not deployable",
+    "Blocked": "Blocked"
+  },
+  "qualStatus": {
+    "Valid": "Valid",
+    "ExpiringSoon": "Expiring soon",
+    "Expired": "Expired",
+    "Suspended": "Suspended",
+    "Rejected": "Rejected",
+    "Pending": "Pending"
+  },
+  "fields": {
+    "availability": "Availability",
+    "notes": "Notes"
+  },
+  "panel": {
+    "loading": "Loading driver…",
+    "loadFailed": "The driver could not be loaded.",
+    "reloadFailed": "The driver could not be reloaded.",
+    "updated": "Driver updated.",
+    "blocked": "Driver blocked.",
+    "unblocked": "Block lifted.",
+    "blockFailed": "The block status could not be changed.",
+    "deleted": "Driver deleted.",
+    "deleteFailed": "The driver could not be deleted.",
+    "block": "Block",
+    "unblock": "Unblock",
+    "readinessTitle": "Deployability",
+    "readinessOk": "No impediments. The driver is deployable.",
+    "blockReasonPlaceholder": "Reason for the block (optional)",
+    "categories": "Categories",
+    "categoriesHint": "The first ticked category is the primary one.",
+    "noCategories": "No categories available.",
+    "primary": "(primary)",
+    "active": "Active",
+    "activeCheckbox": "Driver is active",
+    "fixedTrailer": "Fixed trailer",
+    "fixedTrailerHint": "Long-term preference; no operational link.",
+    "noteFixedLead": "Fixed vehicle",
+    "noteFixedText": "is a long-term preference;",
+    "noteCurrentLead": "current vehicle",
+    "noteCurrentText": "is the temporary operational assignment. Trip assignment for a specific day happens in planning. Changes made here are also visible on the vehicle page — it is the same link.",
+    "fixedVehicle": "Fixed vehicle",
+    "fixedVehicleDesc": "Preferred vehicle in the long term.",
+    "currentVehicle": "Current vehicle",
+    "currentVehicleDesc": "Temporary operational assignment (e.g. during a replacement).",
+    "pickerVehicle": "Vehicle",
+    "qualNote": "Driving licence and professional competence data are managed via the tab",
+    "qualEmpty": "No qualifications recorded yet.",
+    "colQualification": "Qualification",
+    "colStatus": "Status",
+    "colExpiry": "Expiry date",
+    "deleteTitle": "Delete driver",
+    "deleteMessage": "Are you sure you want to delete driver {number}? The personnel file is kept."
+  },
+  "newPage": {
+    "breadcrumb": "Drivers",
+    "title": "New driver",
+    "employeesLoadFailed": "Employees could not be loaded.",
+    "selectEmployee": "Select an employee.",
+    "created": "Driver {number} created.",
+    "duplicate": "This employee is already linked to a driver.",
+    "createFailed": "The driver could not be created.",
+    "employee": "Employee",
+    "employeeHint": "Only employees without an existing driver profile; personal data comes from the personnel file.",
+    "employeePlaceholder": "— Select an employee —",
+    "category": "Driver category",
+    "create": "Create driver"
+  },
+  "redirect": {
+    "opening": "Opening driver profile…"
+  }
+}

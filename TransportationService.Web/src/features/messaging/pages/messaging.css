@@ -55,7 +55,7 @@
 }
 
 .msg-template-delete {
-  color: #dc2626;
+  color: var(--color-danger-strong);
 }
 
 .msg-form {

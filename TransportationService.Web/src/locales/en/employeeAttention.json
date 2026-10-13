@@ -1,0 +1,25 @@
+{
+  "title": "Attention points",
+  "kind": {
+    "document": "Document",
+    "qualification": "Qualification"
+  },
+  "summary": {
+    "days_one": "{count} day",
+    "days_other": "{count} days",
+    "documentsExpiring_one": "{count} document expires in {period}",
+    "documentsExpiring_other": "{count} documents expire soon",
+    "documentsExpiringToday": "1 document expires today",
+    "documentsExpired_one": "{count} document has expired",
+    "documentsExpired_other": "{count} documents have expired",
+    "qualificationsExpiring_one": "{count} qualification expires in {period}",
+    "qualificationsExpiring_other": "{count} qualifications expire soon",
+    "qualificationsExpiringToday": "1 qualification expires today",
+    "qualificationsExpired_one": "{count} qualification has expired",
+    "qualificationsExpired_other": "{count} qualifications have expired"
+  },
+  "item": {
+    "expires": "{label} — expires on {date}",
+    "expired": "{label} — expired on {date}"
+  }
+}

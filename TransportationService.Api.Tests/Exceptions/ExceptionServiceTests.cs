@@ -299,7 +299,8 @@ public class ExceptionServiceTests
             var photo = Assert.Single(attached.Exception!.Photos);
             Assert.Equal("schade.jpg", photo.FileName);
 
-            var open = await h.Sut.OpenPhotoAsync(id, photo.Id, CancellationToken.None);
+            // restrictToOwnDriver: false = a staff caller holding exceptions.view.
+            var open = await h.Sut.OpenPhotoAsync(id, photo.Id, false, CancellationToken.None);
             Assert.NotNull(open);
             using (var reader = new StreamReader(open!.Value.Content))
             {

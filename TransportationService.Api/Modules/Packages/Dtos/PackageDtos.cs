@@ -105,6 +105,16 @@ public record BulkCreatePackagesRequest(
 
 public record BulkCreateResultDto(IReadOnlyList<PackageDto> Packages, PackageDto? Pallet);
 
+/// <summary>Outcome of the idempotent cargo-driven package generation.</summary>
+public record PackageGenerationResultDto(
+    int Created,
+    int Cancelled,
+    int Unchanged,
+    /// <summary>Surplus packages WITH scan history — resolved via the disposition flow, never deleted.</summary>
+    int RequiresAttention,
+    IReadOnlyList<PackageDto> CreatedPackages,
+    string? Message);
+
 public record RelabelPackageRequest(string Reason);
 
 public enum PackageOutcome

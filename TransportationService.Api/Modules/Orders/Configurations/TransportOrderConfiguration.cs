@@ -17,14 +17,39 @@ public class TransportOrderConfiguration : IEntityTypeConfiguration<TransportOrd
         builder.Property(o => o.OrderNumber).IsRequired().HasMaxLength(30);
         builder.Property(o => o.CustomerReference).HasMaxLength(100);
         builder.Property(o => o.Status).HasConversion<string>().HasMaxLength(20);
-        builder.Property(o => o.GoodsDescription).IsRequired().HasMaxLength(1000);
+        builder.Property(o => o.Priority).HasConversion<string>().HasMaxLength(10);
+        builder.Property(o => o.GoodsDescription).HasMaxLength(1000);
         builder.Property(o => o.Quantity).HasPrecision(12, 2);
         builder.Property(o => o.QuantityUnit).HasMaxLength(50);
+        builder.Property(o => o.QuantityUnitCode).HasMaxLength(30);
         builder.Property(o => o.WeightKg).HasPrecision(12, 2);
         builder.Property(o => o.VolumeM3).HasPrecision(12, 2);
+        builder.Property(o => o.DistanceKm).HasPrecision(10, 2);
+        builder.Property(o => o.LoadingMeters).HasPrecision(8, 2);
         builder.Property(o => o.AgreedPrice).HasPrecision(12, 2);
+        builder.Property(o => o.DieselSurchargePercentOverride).HasPrecision(5, 2);
+        builder.Property(o => o.DieselSurchargeOverrideReason).HasMaxLength(500);
         builder.Property(o => o.Notes).HasMaxLength(4000);
         builder.Property(o => o.CancellationReason).HasMaxLength(500);
+        builder.Property(o => o.InvoiceReadiness).HasMaxLength(20);
+        builder.Property(o => o.InvoiceReadinessReasons).HasMaxLength(500);
+        builder.HasIndex(o => new { o.TenantId, o.InvoiceReadiness });
+
+        builder.Property(o => o.PricingSource).HasConversion<string>().HasMaxLength(20);
+        builder.Property(o => o.OneOffFixedAmount).HasPrecision(12, 2);
+        builder.Property(o => o.OneOffExtraHourlyRate).HasPrecision(10, 2);
+        builder.Property(o => o.OneOffNotes).HasMaxLength(1000);
+        builder.Property(o => o.ExtraTimeHourlyRateOverride).HasPrecision(10, 2);
+
+        // D2 (master sprint 2026-09-21): crane job kind, work description and lift data.
+        builder.Property(o => o.CraneJobKind).HasConversion<string>().HasMaxLength(30);
+        builder.Property(o => o.WorkDescription).HasMaxLength(2000);
+        builder.Property(o => o.LiftLoadWeightKg).HasPrecision(12, 2);
+        builder.Property(o => o.LiftLoadDimensions).HasMaxLength(200);
+        builder.Property(o => o.LiftRadiusMeters).HasPrecision(8, 2);
+        builder.Property(o => o.LiftHeightMeters).HasPrecision(8, 2);
+        builder.Property(o => o.LiftConditions).HasMaxLength(1000);
+        builder.Property(o => o.LiftEquipment).HasMaxLength(500);
 
         builder.HasIndex(o => new { o.TenantId, o.OrderNumber })
             .IsUnique()
@@ -53,6 +78,7 @@ public class TransportOrderStopConfiguration : IEntityTypeConfiguration<Transpor
         builder.HasKey(s => s.Id);
 
         builder.Property(s => s.StopType).HasConversion<string>().HasMaxLength(20);
+        builder.Property(s => s.TimeRequirement).HasConversion<string>().HasMaxLength(20);
         builder.Property(s => s.LocationName).HasMaxLength(200);
         builder.Property(s => s.Address).HasMaxLength(300);
         builder.Property(s => s.PostalCode).HasMaxLength(20);
@@ -64,6 +90,17 @@ public class TransportOrderStopConfiguration : IEntityTypeConfiguration<Transpor
         builder.Property(s => s.AccessInstructions).HasMaxLength(2000);
         builder.Property(s => s.LoadingInstructions).HasMaxLength(2000);
         builder.Property(s => s.UnloadingInstructions).HasMaxLength(2000);
+
+        // Location snapshot (master-data wave 2026-08-05, Phase 7).
+        builder.Property(s => s.ContactName).HasMaxLength(150);
+        builder.Property(s => s.ContactPhone).HasMaxLength(30);
+        builder.Property(s => s.ContactMobile).HasMaxLength(30);
+        builder.Property(s => s.ContactEmail).HasMaxLength(250);
+        builder.Property(s => s.OpeningHoursSummary).HasMaxLength(500);
+        builder.Property(s => s.Gate).HasMaxLength(100);
+        builder.Property(s => s.AccessCode).HasMaxLength(200);
+        builder.Property(s => s.Dock).HasMaxLength(100);
+        builder.Property(s => s.RouteDescription).HasMaxLength(2000);
 
         builder.HasIndex(s => new { s.TransportOrderId, s.Sequence });
 

@@ -1,0 +1,25 @@
+.customer-billing {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.customer-billing-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.customer-billing-section > h3 {
+  margin: 0;
+}
+
+.customer-billing-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.75rem 1rem;
+}
+
+.customer-billing-subtitle {
+  margin: 0.5rem 0 0;
+}

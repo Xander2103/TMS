@@ -1,10 +1,13 @@
+import { formatCurrency } from '../../utils/numbers'
+
 export type InvoiceStatus = 'Draft' | 'Sent' | 'Paid' | 'Cancelled'
 
+/** Vertaalsleutels — renderen als t(INVOICE_STATUS_LABELS[status]). */
 export const INVOICE_STATUS_LABELS: Record<InvoiceStatus, string> = {
-  Draft: 'Concept',
-  Sent: 'Verzonden',
-  Paid: 'Betaald',
-  Cancelled: 'Geannuleerd',
+  Draft: 'invoices.status.Draft',
+  Sent: 'invoices.status.Sent',
+  Paid: 'invoices.status.Paid',
+  Cancelled: 'invoices.status.Cancelled',
 }
 
 export const INVOICE_STATUSES: InvoiceStatus[] = ['Draft', 'Sent', 'Paid', 'Cancelled']
@@ -16,11 +19,12 @@ export const INVOICE_STATUS_TONE: Record<InvoiceStatus, 'neutral' | 'success' | 
   Cancelled: 'danger',
 }
 
+/** Vertaalsleutels — renderen als t(INVOICE_TRANSITION_LABELS[target]). */
 export const INVOICE_TRANSITION_LABELS: Record<InvoiceStatus, string> = {
-  Draft: 'Terug naar concept',
-  Sent: 'Verzenden',
-  Paid: 'Markeer als betaald',
-  Cancelled: 'Annuleren',
+  Draft: 'invoices.transition.Draft',
+  Sent: 'invoices.transition.Sent',
+  Paid: 'invoices.transition.Paid',
+  Cancelled: 'invoices.transition.Cancelled',
 }
 
 export interface InvoiceListItem {
@@ -43,11 +47,29 @@ export interface InvoiceLine {
   sequence: number
   transportOrderId: string | null
   orderNumber: string | null
+  /** Activity-backed line (Opslag/Kraan uit een dossier): transportOrderId is null, this is set. */
+  dossierActivityId: string | null
+  dossierNumber: string | null
   description: string
   quantity: number
   unitPrice: number
   vatRatePercent: number
   lineTotal: number
+  /** Verkoopcategorie: live while Draft, frozen name/account after Send. */
+  salesCategoryId: string | null
+  salesCategoryName: string | null
+  ledgerAccountNumber: string | null
+  ledgerAccountName: string | null
+  /** Draft-stage warning when the category is missing or unmapped; null = ok. */
+  ledgerWarning: string | null
+  /** Sprint 5: fiscal treatment of the line (VatTreatment name) — snapshot after Send, live while Draft. */
+  vatTreatment?: string | null
+  /** Where the treatment came from: LineOverride | SalesCode | Customer | TenantDefault. */
+  vatTreatmentSource?: string | null
+  vatLegalText?: string | null
+  salesCode?: string | null
+  /** What the customer reads in the invoice language: what Send will freeze while Draft, frozen after. */
+  customerDescription?: string | null
 }
 
 export interface InvoiceDetail {
@@ -61,11 +83,34 @@ export interface InvoiceDetail {
   status: InvoiceStatus
   currency: string
   notes: string | null
+  purchaseOrderNumber: string | null
   lines: InvoiceLine[]
   subtotal: number
   vatAmount: number
   total: number
   allowedTransitions: InvoiceStatus[]
+  legalEntityId: string | null
+  legalEntityName: string | null
+  invoicePeriodYear: number
+  invoicePeriodMonth: number
+  numberIsManual: boolean
+  /** Sprint 5: the customer treatment frozen on the header, the document language and its statutory text. */
+  customerVatTreatment?: string | null
+  languageCode?: string | null
+  vatLegalText?: string | null
+  /** Invoice or CreditNote; a credit note points at the invoice it credits, an invoice lists its credit notes. */
+  kind?: 'Invoice' | 'CreditNote'
+  creditedInvoiceId?: string | null
+  creditedInvoiceNumber?: string | null
+  creditNotes?: { id: string; invoiceNumber: string; status: InvoiceStatus }[] | null
+}
+
+/** Mirrors InvoiceNumberPreviewDto (GET /api/invoices/next-number). */
+export interface InvoiceNumberPreview {
+  invoiceNumber: string
+  legalEntityId: string
+  year: number
+  month: number
 }
 
 export interface UninvoicedOrder {
@@ -76,6 +121,28 @@ export interface UninvoicedOrder {
   firstLoadingCity: string | null
   lastUnloadingCity: string | null
   agreedPrice: number | null
+  /** Wave 2 §6: NotReady | ReadyForInvoice | ReviewRequired — informatief, nooit blokkerend. */
+  invoiceReadiness?: string
+  /** Puntkomma-gescheiden redencodes bij ReviewRequired (bv. pricing.stale;pod.missing). */
+  invoiceReadinessReasons?: string | null
+}
+
+/** Mirrors UninvoicedActivityDto (GET /api/invoices/uninvoiced-activities): a priced dossier activity without an invoice line. */
+export interface UninvoicedActivity {
+  id: string
+  dossierId: string
+  dossierNumber: string
+  dossierTitle: string | null
+  activityTypeName: string
+  label: string | null
+  /** Kalenderdatum (YYYY-MM-DD) zonder tijd. */
+  plannedDate: string | null
+  agreedPrice: number
+  /** Explicitly agreed at no charge: still invoiceable as a € 0,00 line. */
+  isFree: boolean
+  pricingSource: 'OneOff' | 'Lines'
+  priceLineCount: number
+  legalEntityId: string | null
 }
 
 export interface ManualLineInput {
@@ -91,8 +158,11 @@ export interface UpdateLineInput {
   quantity: number
   unitPrice: number
   vatRatePercent: number
+  /** Null keeps the line's current category. */
+  salesCategoryId?: string | null
 }
 
 export function euro(value: number, currency = 'EUR'): string {
-  return value.toLocaleString('nl-BE', { style: 'currency', currency })
+  // Central tenant-aware notation ("€ 1.234,56"); non-EUR currencies show their ISO code as symbol.
+  return formatCurrency(value, currency === 'EUR' ? '€' : currency)
 }

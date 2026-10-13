@@ -1,3 +1,4 @@
+import { lazy, Suspense, type ComponentType } from 'react'
 import {
   createBrowserRouter,
   createRoutesFromElements,
@@ -5,77 +6,201 @@ import {
   Outlet,
   Route,
   RouterProvider,
+  useLocation,
+  useParams,
 } from 'react-router-dom'
 import { AuthProvider } from '../features/auth/AuthContext'
+import { useAuth } from '../features/auth/authContextValue'
+import { LocaleProvider } from '../i18n/LocaleProvider'
+import { ThemeProvider } from '../theme/ThemeProvider'
 import { LoginPage } from '../features/auth/LoginPage'
 import { RequireAuth } from '../features/auth/RequireAuth'
 import { AppLayout } from '../components/layout/AppLayout'
+import { InternalOnly, RootRedirect } from './portalRouting'
+import { LoadingState } from '../components/feedback/LoadingState'
 import { NotFoundPage } from '../components/feedback/NotFoundPage'
-import { DashboardPage } from '../features/dashboard/pages/DashboardPage'
-import { TransportOrdersPage } from '../features/transport-orders/pages/TransportOrdersPage'
-import { NewTransportOrderPage } from '../features/transport-orders/pages/NewTransportOrderPage'
-import { TransportOrderDetailPage } from '../features/transport-orders/pages/TransportOrderDetailPage'
-import { PlanningPage } from '../features/planning/pages/PlanningPage'
-import { TripDetailPage } from '../features/planning/pages/TripDetailPage'
-import { MyTripsPage } from '../features/my-trips/pages/MyTripsPage'
-import { TripExecutionPage } from '../features/my-trips/pages/TripExecutionPage'
-import { ExceptionsPage } from '../features/exceptions/pages/ExceptionsPage'
-import { ExceptionDetailPage } from '../features/exceptions/pages/ExceptionDetailPage'
-import { PodDetailPage } from '../features/pod/pages/PodDetailPage'
-import { PackageDetailPage } from '../features/packages/pages/PackageDetailPage'
-import { WarehousePage } from '../features/packages/pages/WarehousePage'
-import { PortalDashboardPage } from '../features/portal/pages/PortalDashboardPage'
-import { PortalPlanningPage } from '../features/portal/pages/PortalPlanningPage'
-import { EmployeePlanningPage } from '../features/employee-planning/pages/EmployeePlanningPage'
-import { MessagingPage } from '../features/messaging/pages/MessagingPage'
-import { EdiPage } from '../features/edi/pages/EdiPage'
-import { IntegrationsPage } from '../features/integrations/pages/IntegrationsPage'
-import { PortalAbsencesPage } from '../features/portal/pages/PortalAbsencesPage'
-import { PortalQualificationsPage } from '../features/portal/pages/PortalQualificationsPage'
-import { PortalProfilePage } from '../features/portal/pages/PortalProfilePage'
-import { InvoicesPage } from '../features/invoices/pages/InvoicesPage'
-import { NewInvoicePage } from '../features/invoices/pages/NewInvoicePage'
-import { InvoiceDetailPage } from '../features/invoices/pages/InvoiceDetailPage'
-import { NotificationsPage } from '../features/notifications/pages/NotificationsPage'
-import { CustomersPage } from '../features/customers/pages/CustomersPage'
-import { NewCustomerPage } from '../features/customers/pages/NewCustomerPage'
-import { CustomerDetailPage } from '../features/customers/pages/CustomerDetailPage'
-import { DriversPage } from '../features/drivers/pages/DriversPage'
-import { NewDriverPage } from '../features/drivers/pages/NewDriverPage'
-import { DriverDetailPage } from '../features/drivers/pages/DriverDetailPage'
-import { VehiclesPage } from '../features/vehicles/pages/VehiclesPage'
-import { NewVehiclePage } from '../features/vehicles/pages/NewVehiclePage'
-import { VehicleDetailPage } from '../features/vehicles/pages/VehicleDetailPage'
-import { TrailersPage } from '../features/trailers/pages/TrailersPage'
-import { NewTrailerPage } from '../features/trailers/pages/NewTrailerPage'
-import { TrailerDetailPage } from '../features/trailers/pages/TrailerDetailPage'
-import { AbsencesPage } from '../features/absences/pages/AbsencesPage'
-import { FleetDashboardPage } from '../features/fleet-dashboard/pages/FleetDashboardPage'
-import { TankCardsPage } from '../features/tank-cards/pages/TankCardsPage'
-import { CostRatesPage } from '../features/trip-costing/pages/CostRatesPage'
-import { KpiDashboardPage } from '../features/kpi/pages/KpiDashboardPage'
-import { KpiTripsPage } from '../features/kpi/pages/KpiTripsPage'
-import { LocationsPage } from '../features/locations/pages/LocationsPage'
-import { NewLocationPage } from '../features/locations/pages/NewLocationPage'
-import { LocationDetailPage } from '../features/locations/pages/LocationDetailPage'
-import { SettingsPage } from '../features/settings/pages/SettingsPage'
-import { UsersPage } from '../features/users/pages/UsersPage'
-import { NewUserPage } from '../features/users/pages/NewUserPage'
-import { UserDetailPage } from '../features/users/pages/UserDetailPage'
-import { RolesPage } from '../features/roles/pages/RolesPage'
-import { RoleDetailPage } from '../features/roles/pages/RoleDetailPage'
-import { EmployeesPage } from '../features/employees/pages/EmployeesPage'
-import { QualificationsOverviewPage } from '../features/qualifications/pages/QualificationsOverviewPage'
-import { NewEmployeePage } from '../features/employees/pages/NewEmployeePage'
-import { EmployeeDetailPage } from '../features/employees/pages/EmployeeDetailPage'
-import { LookupPage } from '../features/master-data/pages/LookupPage'
 import { LOOKUP_RESOURCES } from '../features/master-data/lookupRegistry'
+
+/**
+ * Route-based code splitting: every page loads as its own chunk on first visit, so the
+ * initial bundle only carries the shell (auth, layout, shared kit). Pages use named
+ * exports, hence the pick-helper around React.lazy.
+ */
+function lazyPage<TModule extends Record<string, unknown>>(
+  loader: () => Promise<TModule>,
+  name: keyof TModule,
+) {
+  return lazy(async () => ({ default: (await loader())[name] as ComponentType }))
+}
+
+const DashboardPage = lazyPage(() => import('../features/dashboard/pages/DashboardPage'), 'DashboardPage')
+const TransportOrdersPage = lazyPage(() => import('../features/transport-orders/pages/TransportOrdersPage'), 'TransportOrdersPage')
+const NewTransportOrderPage = lazyPage(() => import('../features/transport-orders/pages/NewTransportOrderPage'), 'NewTransportOrderPage')
+const TransportOrderDetailPage = lazyPage(() => import('../features/transport-orders/pages/TransportOrderDetailPage'), 'TransportOrderDetailPage')
+const OrderImportsPage = lazyPage(() => import('../features/order-imports/pages/OrderImportsPage'), 'OrderImportsPage')
+const PlanningPage = lazyPage(() => import('../features/planning/pages/PlanningPage'), 'PlanningPage')
+const PlanningCenterPage = lazyPage(() => import('../features/planning-center/pages/PlanningCenterPage'), 'PlanningCenterPage')
+const OperationsPage = lazyPage(() => import('../features/operations/pages/OperationsPage'), 'OperationsPage')
+const ProfitabilityPage = lazyPage(() => import('../features/profitability/pages/ProfitabilityPage'), 'ProfitabilityPage')
+const WarehousesPage = lazyPage(() => import('../features/warehousing/pages/WarehousesPage'), 'WarehousesPage')
+const WarehouseTracePage = lazyPage(() => import('../features/warehousing/pages/WarehouseTracePage'), 'WarehouseTracePage')
+const DockPlanningPage = lazyPage(() => import('../features/warehousing/pages/DockPlanningPage'), 'DockPlanningPage')
+const DriverLayout = lazyPage(() => import('../features/driver/components/DriverLayout'), 'DriverLayout')
+const DriverHomePage = lazyPage(() => import('../features/driver/pages/DriverHomePage'), 'DriverHomePage')
+const DriverDocumentsPage = lazyPage(() => import('../features/driver/pages/DriverDocumentsPage'), 'DriverDocumentsPage')
+const DriverIncidentsPage = lazyPage(() => import('../features/driver/pages/DriverIncidentsPage'), 'DriverIncidentsPage')
+const TripDetailPage = lazyPage(() => import('../features/planning/pages/TripDetailPage'), 'TripDetailPage')
+const MyTripsPage = lazyPage(() => import('../features/my-trips/pages/MyTripsPage'), 'MyTripsPage')
+const TripExecutionPage = lazyPage(() => import('../features/my-trips/pages/TripExecutionPage'), 'TripExecutionPage')
+const ExceptionsPage = lazyPage(() => import('../features/exceptions/pages/ExceptionsPage'), 'ExceptionsPage')
+const ExceptionDetailPage = lazyPage(() => import('../features/exceptions/pages/ExceptionDetailPage'), 'ExceptionDetailPage')
+const PodDetailPage = lazyPage(() => import('../features/pod/pages/PodDetailPage'), 'PodDetailPage')
+const PackageDetailPage = lazyPage(() => import('../features/packages/pages/PackageDetailPage'), 'PackageDetailPage')
+const WarehousePage = lazyPage(() => import('../features/packages/pages/WarehousePage'), 'WarehousePage')
+const PortalDashboardPage = lazyPage(() => import('../features/portal/pages/PortalDashboardPage'), 'PortalDashboardPage')
+const PortalPlanningPage = lazyPage(() => import('../features/portal/pages/PortalPlanningPage'), 'PortalPlanningPage')
+const EmployeePlanningPage = lazyPage(() => import('../features/employee-planning/pages/EmployeePlanningPage'), 'EmployeePlanningPage')
+const MessagingPage = lazyPage(() => import('../features/messaging/pages/MessagingPage'), 'MessagingPage')
+const EdiPage = lazyPage(() => import('../features/edi/pages/EdiPage'), 'EdiPage')
+const PeppolPage = lazyPage(() => import('../features/peppol/pages/PeppolPage'), 'PeppolPage')
+const IntegrationsPage = lazyPage(() => import('../features/integrations/pages/IntegrationsPage'), 'IntegrationsPage')
+const PortalAbsencesPage = lazyPage(() => import('../features/portal/pages/PortalAbsencesPage'), 'PortalAbsencesPage')
+const PortalQualificationsPage = lazyPage(() => import('../features/portal/pages/PortalQualificationsPage'), 'PortalQualificationsPage')
+const PortalProfilePage = lazyPage(() => import('../features/portal/pages/PortalProfilePage'), 'PortalProfilePage')
+const MyTimePage = lazyPage(() => import('../features/time-attendance/pages/MyTimePage'), 'MyTimePage')
+const AttendanceOverviewPage = lazyPage(() => import('../features/time-attendance/pages/AttendanceOverviewPage'), 'AttendanceOverviewPage')
+const AttendanceSettingsPage = lazyPage(() => import('../features/time-attendance/pages/AttendanceSettingsPage'), 'AttendanceSettingsPage')
+const KioskPage = lazyPage(() => import('../features/time-attendance/pages/KioskPage'), 'KioskPage')
+const InvoicesPage = lazyPage(() => import('../features/invoices/pages/InvoicesPage'), 'InvoicesPage')
+const NewInvoicePage = lazyPage(() => import('../features/invoices/pages/NewInvoicePage'), 'NewInvoicePage')
+const InvoiceControlPage = lazyPage(() => import('../features/invoices/pages/InvoiceControlPage'), 'InvoiceControlPage')
+const InvoiceDetailPage = lazyPage(() => import('../features/invoices/pages/InvoiceDetailPage'), 'InvoiceDetailPage')
+const NotificationsPage = lazyPage(() => import('../features/notifications/pages/NotificationsPage'), 'NotificationsPage')
+const CustomersPage = lazyPage(() => import('../features/customers/pages/CustomersPage'), 'CustomersPage')
+const NewCustomerPage = lazyPage(() => import('../features/customers/pages/NewCustomerPage'), 'NewCustomerPage')
+const CustomerDetailPage = lazyPage(() => import('../features/customers/pages/CustomerDetailPage'), 'CustomerDetailPage')
+const NewDriverPage = lazyPage(() => import('../features/drivers/pages/NewDriverPage'), 'NewDriverPage')
+const DriverDetailPage = lazyPage(() => import('../features/drivers/pages/DriverDetailPage'), 'DriverDetailPage')
+const VehiclesPage = lazyPage(() => import('../features/vehicles/pages/VehiclesPage'), 'VehiclesPage')
+const NewVehiclePage = lazyPage(() => import('../features/vehicles/pages/NewVehiclePage'), 'NewVehiclePage')
+const VehicleDetailPage = lazyPage(() => import('../features/vehicles/pages/VehicleDetailPage'), 'VehicleDetailPage')
+const TrailersPage = lazyPage(() => import('../features/trailers/pages/TrailersPage'), 'TrailersPage')
+const NewTrailerPage = lazyPage(() => import('../features/trailers/pages/NewTrailerPage'), 'NewTrailerPage')
+const TrailerDetailPage = lazyPage(() => import('../features/trailers/pages/TrailerDetailPage'), 'TrailerDetailPage')
+const AbsencesPage = lazyPage(() => import('../features/absences/pages/AbsencesPage'), 'AbsencesPage')
+const FleetDashboardPage = lazyPage(() => import('../features/fleet-dashboard/pages/FleetDashboardPage'), 'FleetDashboardPage')
+const TankCardsPage = lazyPage(() => import('../features/tank-cards/pages/TankCardsPage'), 'TankCardsPage')
+const MaintenancePoliciesPage = lazyPage(() => import('../features/maintenance-policies/pages/MaintenancePoliciesPage'), 'MaintenancePoliciesPage')
+const CustomerPortalOrdersPage = lazyPage(() => import('../features/customer-portal/pages/CustomerPortalOrdersPage'), 'CustomerPortalOrdersPage')
+const CustomerPortalNewOrderPage = lazyPage(() => import('../features/customer-portal/pages/CustomerPortalNewOrderPage'), 'CustomerPortalNewOrderPage')
+const CustomerPortalOrderDetailPage = lazyPage(() => import('../features/customer-portal/pages/CustomerPortalOrderDetailPage'), 'CustomerPortalOrderDetailPage')
+const CustomerPortalLayout = lazyPage(() => import('../features/customer-portal/components/CustomerPortalLayout'), 'CustomerPortalLayout')
+const CustomerPortalDashboardPage = lazyPage(() => import('../features/customer-portal/pages/CustomerPortalDashboardPage'), 'CustomerPortalDashboardPage')
+const CustomerPortalDocumentsPage = lazyPage(() => import('../features/customer-portal/pages/CustomerPortalDocumentsPage'), 'CustomerPortalDocumentsPage')
+const CustomerPortalInvoicesPage = lazyPage(() => import('../features/customer-portal/pages/CustomerPortalInvoicesPage'), 'CustomerPortalInvoicesPage')
+const CustomerPortalInvoiceDetailPage = lazyPage(() => import('../features/customer-portal/pages/CustomerPortalInvoiceDetailPage'), 'CustomerPortalInvoiceDetailPage')
+const CustomerPortalMessagesPage = lazyPage(() => import('../features/customer-portal/pages/CustomerPortalMessagesPage'), 'CustomerPortalMessagesPage')
+const CustomerPortalNoticesPage = lazyPage(() => import('../features/customer-portal/pages/CustomerPortalNoticesPage'), 'CustomerPortalNoticesPage')
+const PortalMessagesPage = lazyPage(() => import('../features/portal-messages/pages/PortalMessagesPage'), 'PortalMessagesPage')
+const CustomerPortalUsersPage = lazyPage(() => import('../features/customer-portal/pages/CustomerPortalUsersPage'), 'CustomerPortalUsersPage')
+const CustomerPortalPreferencesPage = lazyPage(() => import('../features/customer-portal/pages/CustomerPortalPreferencesPage'), 'CustomerPortalPreferencesPage')
+const PortalAnnouncementsSettingsPage = lazyPage(() => import('../features/customer-portal/pages/PortalAnnouncementsSettingsPage'), 'PortalAnnouncementsSettingsPage')
+const ForgotPasswordPage = lazyPage(() => import('../features/auth/PasswordFlowPages'), 'ForgotPasswordPage')
+const ResetPasswordPage = lazyPage(() => import('../features/auth/PasswordFlowPages'), 'ResetPasswordPage')
+const ActivatePage = lazyPage(() => import('../features/auth/PasswordFlowPages'), 'ActivatePage')
+const ChangePasswordPage = lazyPage(() => import('../features/auth/PasswordFlowPages'), 'ChangePasswordPage')
+const JobFunctionMappingsPage = lazyPage(() => import('../features/roles/pages/JobFunctionMappingsPage'), 'JobFunctionMappingsPage')
+const InboxPage = lazyPage(() => import('../features/inbox/pages/InboxPage'), 'InboxPage')
+const CostRatesPage = lazyPage(() => import('../features/trip-costing/pages/CostRatesPage'), 'CostRatesPage')
+const PricingSettingsPage = lazyPage(() => import('../features/tarification/pages/PricingSettingsPage'), 'PricingSettingsPage')
+const PricingTablesPage = lazyPage(() => import('../features/tarification/pages/PricingTablesPage'), 'PricingTablesPage')
+const PricingTableDetailPage = lazyPage(() => import('../features/tarification/pages/PricingTableDetailPage'), 'PricingTableDetailPage')
+const KpiDashboardPage = lazyPage(() => import('../features/kpi/pages/KpiDashboardPage'), 'KpiDashboardPage')
+const KpiTripsPage = lazyPage(() => import('../features/kpi/pages/KpiTripsPage'), 'KpiTripsPage')
+const LocationsPage = lazyPage(() => import('../features/locations/pages/LocationsPage'), 'LocationsPage')
+const NewLocationPage = lazyPage(() => import('../features/locations/pages/NewLocationPage'), 'NewLocationPage')
+const LocationDetailPage = lazyPage(() => import('../features/locations/pages/LocationDetailPage'), 'LocationDetailPage')
+const SettingsPage = lazyPage(() => import('../features/settings/pages/SettingsPage'), 'SettingsPage')
+const DocumentRulesPage = lazyPage(() => import('../features/settings/pages/DocumentRulesPage'), 'DocumentRulesPage')
+const ChargePoliciesPage = lazyPage(() => import('../features/settings/pages/ChargePoliciesPage'), 'ChargePoliciesPage')
+const SystemInfoPage = lazyPage(() => import('../features/settings/pages/SystemInfoPage'), 'SystemInfoPage')
+const LegalEntitiesPage = lazyPage(() => import('../features/legal-entities/pages/LegalEntitiesPage'), 'LegalEntitiesPage')
+const IssuedItemsAdminPage = lazyPage(() => import('../features/issued-items/pages/IssuedItemsAdminPage'), 'IssuedItemsAdminPage')
+const IssuedItemTemplateDetailPage = lazyPage(() => import('../features/issued-items/pages/IssuedItemTemplateDetailPage'), 'IssuedItemTemplateDetailPage')
+const InventoryOverviewPage = lazyPage(() => import('../features/issued-items/pages/InventoryOverviewPage'), 'InventoryOverviewPage')
+const LeaveSettingsPage = lazyPage(() => import('../features/leave-balance/pages/LeaveSettingsPage'), 'LeaveSettingsPage')
+const AccountingSettingsPage = lazyPage(() => import('../features/accounting/pages/AccountingSettingsPage'), 'AccountingSettingsPage')
+const NotificationAdminPage = lazyPage(() => import('../features/notification-admin/pages/NotificationAdminPage'), 'NotificationAdminPage')
+const EscalationSettingsPage = lazyPage(() => import('../features/escalations/pages/EscalationSettingsPage'), 'EscalationSettingsPage')
+const UsersPage = lazyPage(() => import('../features/users/pages/UsersPage'), 'UsersPage')
+const NewUserPage = lazyPage(() => import('../features/users/pages/NewUserPage'), 'NewUserPage')
+const UserDetailPage = lazyPage(() => import('../features/users/pages/UserDetailPage'), 'UserDetailPage')
+const RolesPage = lazyPage(() => import('../features/roles/pages/RolesPage'), 'RolesPage')
+const RoleDetailPage = lazyPage(() => import('../features/roles/pages/RoleDetailPage'), 'RoleDetailPage')
+const EmployeesPage = lazyPage(() => import('../features/employees/pages/EmployeesPage'), 'EmployeesPage')
+const QualificationsOverviewPage = lazyPage(() => import('../features/qualifications/pages/QualificationsOverviewPage'), 'QualificationsOverviewPage')
+const NewEmployeePage = lazyPage(() => import('../features/employees/pages/NewEmployeePage'), 'NewEmployeePage')
+const EmployeeDetailPage = lazyPage(() => import('../features/employees/pages/EmployeeDetailPage'), 'EmployeeDetailPage')
+const HrReminderSettingsPage = lazyPage(() => import('../features/employees/pages/HrReminderSettingsPage'), 'HrReminderSettingsPage')
+const LookupPage = lazyPage(() => import('../features/master-data/pages/LookupPage'), 'LookupPage')
+const UnitTypesPage = lazyPage(() => import('../features/master-data/pages/UnitTypesPage'), 'UnitTypesPage')
+const ServiceOptionsPage = lazyPage(() => import('../features/master-data/pages/ServiceOptionsPage'), 'ServiceOptionsPage')
+const ReportsPage = lazyPage(() => import('../features/reports/pages/ReportsPage'), 'ReportsPage')
+const ReportViewerPage = lazyPage(() => import('../features/reports/pages/ReportViewerPage'), 'ReportViewerPage')
+const DossiersPage = lazyPage(() => import('../features/dossiers/pages/DossiersPage'), 'DossiersPage')
+const NewDossierPage = lazyPage(() => import('../features/dossiers/pages/NewDossierPage'), 'NewDossierPage')
+const DossierDetailPage = lazyPage(() => import('../features/dossiers/pages/DossierDetailPage'), 'DossierDetailPage')
+const ActivityTypesPage = lazyPage(() => import('../features/dossiers/pages/ActivityTypesPage'), 'ActivityTypesPage')
+const IncidentsPage = lazyPage(() => import('../features/incidents/pages/IncidentsPage'), 'IncidentsPage')
+const IncidentDetailPage = lazyPage(() => import('../features/incidents/pages/IncidentDetailPage'), 'IncidentDetailPage')
+const TasksPage = lazyPage(() => import('../features/tasks/pages/TasksPage'), 'TasksPage')
+const TaskTemplatesPage = lazyPage(() => import('../features/tasks/pages/TaskTemplatesPage'), 'TaskTemplatesPage')
+
+/**
+ * App-brede taalcontext (i18n-wave): de bewaarde gebruikersvoorkeur komt uit /api/auth/me
+ * zodra de sessie geladen is; tot dan dekt de ts.locale-cache de refresh zonder flash.
+ */
+function RootLocaleProvider({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth()
+  return <LocaleProvider preferredLanguage={user?.preferredLanguage ?? null}>{children}</LocaleProvider>
+}
+
+/**
+ * App-brede weergavevoorkeur (licht/donker/systeem): per GEBRUIKER, uit dezelfde
+ * /api/auth/me-respons. Boven RequireAuth zodat ook login- en wachtwoordschermen het
+ * juiste thema dragen; tot de sessie geladen is dekt de ts.theme-cache de start zonder flash.
+ */
+function RootThemeProvider({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth()
+  return (
+    <ThemeProvider savedPreference={user?.themePreference ?? null} sessionId={user?.id ?? null}>
+      {children}
+    </ThemeProvider>
+  )
+}
+
+/**
+ * Legacy deep link (bookmarks, notification LinkPaths) for a template detail: keeps the id and
+ * the query string (?tab=…) while moving the page under /issued-items.
+ */
+function LegacyIssuedItemTemplateRedirect() {
+  const { id = '' } = useParams<{ id: string }>()
+  const { search } = useLocation()
+  return <Navigate to={`/issued-items/templates/${id}${search}`} replace />
+}
 
 /** Root layout route: providers that need to live inside the router render an Outlet. */
 function RootProviders() {
   return (
     <AuthProvider>
-      <Outlet />
+      <RootThemeProvider>
+        <RootLocaleProvider>
+          {/* Boundary for lazily loaded routes outside the app shell (login/password flows). */}
+          <Suspense fallback={<LoadingState message="Laden..." />}>
+            <Outlet />
+          </Suspense>
+        </RootLocaleProvider>
+      </RootThemeProvider>
     </AuthProvider>
   )
 }
@@ -85,14 +210,51 @@ const router = createBrowserRouter(
   createRoutesFromElements(
     <Route element={<RootProviders />}>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
+      <Route path="/activeren" element={<ActivatePage />} />
+      {/* Prikklok: fullscreen, geen gebruikerssessie — het device authenticeert met zijn
+          eigen provisioning-sleutel per verzoek en kan nooit naar andere modules navigeren. */}
+      <Route path="/kiosk" element={<KioskPage />} />
       <Route element={<RequireAuth />}>
+        <Route path="/" element={<RootRedirect />} />
+        <Route path="/change-password" element={<ChangePasswordPage />} />
+        {/* Mobile-first driver shell (bottom tabs); execution pages stay shared under /my-trips. */}
+        <Route element={<DriverLayout />}>
+          <Route path="/driver" element={<DriverHomePage />} />
+          <Route path="/driver/documents" element={<DriverDocumentsPage />} />
+          <Route path="/driver/incidents" element={<DriverIncidentsPage />} />
+        </Route>
+        {/* Customer-portal shell: portal users never render the internal AppLayout sidebar. */}
+        <Route element={<CustomerPortalLayout />}>
+          <Route path="/klantportaal" element={<CustomerPortalOrdersPage />} />
+          <Route path="/klantportaal/dashboard" element={<CustomerPortalDashboardPage />} />
+          <Route path="/klantportaal/new" element={<CustomerPortalNewOrderPage />} />
+          <Route path="/klantportaal/orders/:id" element={<CustomerPortalOrderDetailPage />} />
+          <Route path="/klantportaal/documenten" element={<CustomerPortalDocumentsPage />} />
+          <Route path="/klantportaal/facturen" element={<CustomerPortalInvoicesPage />} />
+          <Route path="/klantportaal/facturen/:id" element={<CustomerPortalInvoiceDetailPage />} />
+          <Route path="/klantportaal/berichten" element={<CustomerPortalMessagesPage />} />
+          <Route path="/klantportaal/mededelingen" element={<CustomerPortalNoticesPage />} />
+          <Route path="/klantportaal/gebruikers" element={<CustomerPortalUsersPage />} />
+          <Route path="/klantportaal/voorkeuren" element={<CustomerPortalPreferencesPage />} />
+        </Route>
+        <Route element={<InternalOnly />}>
         <Route element={<AppLayout />}>
-              <Route path="/" element={<Navigate to="/transport-orders" replace />} />
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/transport-orders" element={<TransportOrdersPage />} />
           <Route path="/transport-orders/new" element={<NewTransportOrderPage />} />
-          <Route path="/transport-orders/:id" element={<TransportOrderDetailPage />} />
+          {/* Redesign 2026-09-12: the order shell stays mounted; the optional segment selects the
+              subsection (overzicht · lading · prijs · stops · colli · historiek · berichten). */}
+          <Route path="/transport-orders/:id/:section?" element={<TransportOrderDetailPage />} />
+          <Route path="/order-imports" element={<OrderImportsPage />} />
           <Route path="/planning" element={<PlanningPage />} />
+          <Route path="/planning-center" element={<PlanningCenterPage />} />
+          <Route path="/operations" element={<OperationsPage />} />
+          <Route path="/profitability" element={<ProfitabilityPage />} />
+          <Route path="/warehouses" element={<WarehousesPage />} />
+          <Route path="/warehouse/trace" element={<WarehouseTracePage />} />
+          <Route path="/dock-planning" element={<DockPlanningPage />} />
           <Route path="/planning/:id" element={<TripDetailPage />} />
           <Route path="/exceptions" element={<ExceptionsPage />} />
           <Route path="/exceptions/:id" element={<ExceptionDetailPage />} />
@@ -104,20 +266,26 @@ const router = createBrowserRouter(
           <Route path="/employee-planning" element={<EmployeePlanningPage />} />
           <Route path="/messaging" element={<MessagingPage />} />
           <Route path="/edi" element={<EdiPage />} />
+          <Route path="/peppol" element={<PeppolPage />} />
           <Route path="/integrations" element={<IntegrationsPage />} />
           <Route path="/portal/absences" element={<PortalAbsencesPage />} />
+          <Route path="/portal/time" element={<MyTimePage />} />
+          <Route path="/attendance" element={<AttendanceOverviewPage />} />
           <Route path="/portal/qualifications" element={<PortalQualificationsPage />} />
           <Route path="/portal/profile" element={<PortalProfilePage />} />
           <Route path="/my-trips" element={<MyTripsPage />} />
           <Route path="/my-trips/:id" element={<TripExecutionPage />} />
           <Route path="/invoices" element={<InvoicesPage />} />
+          <Route path="/invoice-control" element={<InvoiceControlPage />} />
           <Route path="/invoices/new" element={<NewInvoicePage />} />
           <Route path="/invoices/:id" element={<InvoiceDetailPage />} />
           <Route path="/notifications" element={<NotificationsPage />} />
           <Route path="/customers" element={<CustomersPage />} />
           <Route path="/customers/new" element={<NewCustomerPage />} />
           <Route path="/customers/:id" element={<CustomerDetailPage />} />
-          <Route path="/drivers" element={<DriversPage />} />
+          {/* Driver profiles are merged into the personnel dossier: the list is the
+              "Chauffeurs" view of /employees, and driver detail redirects to its tab. */}
+          <Route path="/drivers" element={<Navigate to="/employees?view=chauffeurs" replace />} />
           <Route path="/drivers/new" element={<NewDriverPage />} />
           <Route path="/drivers/:id" element={<DriverDetailPage />} />
           <Route path="/fleet" element={<FleetDashboardPage />} />
@@ -128,9 +296,24 @@ const router = createBrowserRouter(
           <Route path="/trailers/new" element={<NewTrailerPage />} />
           <Route path="/trailers/:id" element={<TrailerDetailPage />} />
           <Route path="/tank-cards" element={<TankCardsPage />} />
+          <Route path="/maintenance-policies" element={<MaintenancePoliciesPage />} />
+          <Route path="/dossiers" element={<DossiersPage />} />
+          <Route path="/dossiers/new" element={<NewDossierPage />} />
+          {/* Redesign 2026-09-11: one route element for the dossier shell; the optional segment
+              selects the subsection (overzicht · activiteiten · route · goederen · prijs ·
+              documenten · historiek) so deep links and back/forward work without remounting. */}
+          <Route path="/dossiers/:id/:section?" element={<DossierDetailPage />} />
+          <Route path="/incidents" element={<IncidentsPage />} />
+          <Route path="/incidents/new" element={<IncidentDetailPage />} />
+          <Route path="/incidents/:id" element={<IncidentDetailPage />} />
           <Route path="/cost-rates" element={<CostRatesPage />} />
+          <Route path="/settings/pricing" element={<PricingSettingsPage />} />
+          <Route path="/pricing/tables" element={<PricingTablesPage />} />
+          <Route path="/pricing/tables/:id" element={<PricingTableDetailPage />} />
           <Route path="/kpi" element={<KpiDashboardPage />} />
           <Route path="/kpi/trips" element={<KpiTripsPage />} />
+          <Route path="/reports" element={<ReportsPage />} />
+          <Route path="/reports/:reportId" element={<ReportViewerPage />} />
           <Route path="/locations" element={<LocationsPage />} />
           <Route path="/locations/new" element={<NewLocationPage />} />
           <Route path="/locations/:id" element={<LocationDetailPage />} />
@@ -138,19 +321,48 @@ const router = createBrowserRouter(
           <Route path="/users/new" element={<NewUserPage />} />
           <Route path="/users/:id" element={<UserDetailPage />} />
           <Route path="/roles" element={<RolesPage />} />
+          <Route path="/job-function-mappings" element={<JobFunctionMappingsPage />} />
+          <Route path="/inbox" element={<InboxPage />} />
           <Route path="/roles/:id" element={<RoleDetailPage />} />
           <Route path="/employees" element={<EmployeesPage />} />
           <Route path="/employees/new" element={<NewEmployeePage />} />
           <Route path="/employees/:id" element={<EmployeeDetailPage />} />
+          <Route path="/settings/hr-reminders" element={<HrReminderSettingsPage />} />
           <Route path="/absences" element={<AbsencesPage />} />
           <Route path="/qualifications" element={<QualificationsOverviewPage />} />
+          <Route path="/tasks" element={<TasksPage />} />
+          <Route path="/settings/task-templates" element={<TaskTemplatesPage />} />
           <Route
             path="/master-data"
             element={<Navigate to={`/master-data/${LOOKUP_RESOURCES[0].slug}`} replace />}
           />
+          <Route path="/master-data/eenheden" element={<UnitTypesPage />} />
+          <Route path="/master-data/services" element={<ServiceOptionsPage />} />
+          {/* Bedrijfsmiddelcategorieën live with their templates under Personeel → Bedrijfsmiddelen. */}
+          <Route path="/master-data/issued-item-categories" element={<Navigate to="/issued-items/categories" replace />} />
           <Route path="/master-data/:resource" element={<LookupPage />} />
           <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/settings/document-rules" element={<DocumentRulesPage />} />
+          <Route path="/settings/charge-policies" element={<ChargePoliciesPage />} />
+          <Route path="/settings/system" element={<SystemInfoPage />} />
+          <Route path="/settings/legal-entities" element={<LegalEntitiesPage />} />
+          {/* Bedrijfsmiddelen (beheer): categories + templates as tabs; the index lands on templates. */}
+          <Route path="/issued-items" element={<Navigate to="/issued-items/templates" replace />} />
+          <Route path="/issued-items/:tab" element={<IssuedItemsAdminPage />} />
+          <Route path="/issued-items/templates/:id" element={<IssuedItemTemplateDetailPage />} />
+          <Route path="/settings/issued-item-templates" element={<Navigate to="/issued-items/templates" replace />} />
+          <Route path="/settings/issued-item-templates/:id" element={<LegacyIssuedItemTemplateRedirect />} />
+          <Route path="/inventory" element={<InventoryOverviewPage />} />
+          <Route path="/settings/leave" element={<LeaveSettingsPage />} />
+          <Route path="/settings/attendance" element={<AttendanceSettingsPage />} />
+          <Route path="/settings/activity-types" element={<ActivityTypesPage />} />
+          <Route path="/settings/accounting" element={<AccountingSettingsPage />} />
+          <Route path="/settings/notifications" element={<NotificationAdminPage />} />
+          <Route path="/settings/escalations" element={<EscalationSettingsPage />} />
+          <Route path="/settings/portal-announcements" element={<PortalAnnouncementsSettingsPage />} />
+          <Route path="/settings/portal-messages" element={<PortalMessagesPage />} />
           <Route path="*" element={<NotFoundPage />} />
+        </Route>
         </Route>
       </Route>
     </Route>,

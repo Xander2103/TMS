@@ -8,6 +8,7 @@ import { Pagination } from '../../../components/ui/Pagination'
 import { Badge, type BadgeTone } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { usePagedQuery } from '../../../hooks/usePagedQuery'
+import { useLocale } from '../../../i18n/localeContext'
 import { useAuth } from '../../auth/authContextValue'
 import { searchTrailers } from '../api/trailersApi'
 import { TRAILER_STATUS_LABELS, TRAILER_STATUS_TONES, type TrailerListItem } from '../types'
@@ -16,6 +17,7 @@ const STATUS_TONE: Record<TrailerListItem['operationalStatus'], BadgeTone> = TRA
 
 export function TrailersPage() {
   const navigate = useNavigate()
+  const { t } = useLocale()
   const { hasPermission } = useAuth()
   const [search, setSearch] = useState('')
   const [activeFilter, setActiveFilter] = useState<boolean | undefined>(undefined)
@@ -23,34 +25,34 @@ export function TrailersPage() {
 
   const { items, totalCount, pageSize, isLoading, error } = usePagedQuery<TrailerListItem>(
     (args) => searchTrailers(args),
-    { search, isActive: activeFilter, page, errorMessage: 'Opleggers konden niet worden geladen.' },
+    { search, isActive: activeFilter, page, errorMessage: t('trailers.list.loadFailed') },
   )
 
   const columns: Column<TrailerListItem>[] = [
-    { key: 'number', header: 'Nummer', width: '120px', render: (row) => <code>{row.internalNumber}</code> },
-    { key: 'plate', header: 'Kenteken', width: '130px', render: (row) => <code>{row.licensePlate}</code> },
-    { key: 'brand', header: 'Merk / model', render: (row) => [row.brand, row.model].filter(Boolean).join(' ') || '—' },
-    { key: 'category', header: 'Categorie', render: (row) => row.categoryName ?? '—' },
+    { key: 'number', header: t('fleet.list.colNumber'), width: '120px', render: (row) => <code>{row.internalNumber}</code> },
+    { key: 'plate', header: t('fleet.list.colPlate'), width: '130px', render: (row) => <code>{row.licensePlate}</code> },
+    { key: 'brand', header: t('fleet.list.colBrandModel'), render: (row) => [row.brand, row.model].filter(Boolean).join(' ') || '—' },
+    { key: 'category', header: t('fleet.list.colCategory'), render: (row) => row.categoryName ?? '—' },
     {
       key: 'status',
-      header: 'Status',
+      header: t('fleet.list.colStatus'),
       width: '150px',
-      render: (row) => <Badge tone={STATUS_TONE[row.operationalStatus]}>{TRAILER_STATUS_LABELS[row.operationalStatus]}</Badge>,
+      render: (row) => <Badge tone={STATUS_TONE[row.operationalStatus]}>{t(TRAILER_STATUS_LABELS[row.operationalStatus])}</Badge>,
     },
     {
       key: 'active',
-      header: 'Actief',
+      header: t('fleet.list.colActive'),
       width: '90px',
-      render: (row) => (row.isActive ? <Badge tone="success">Ja</Badge> : <Badge tone="neutral">Nee</Badge>),
+      render: (row) => (row.isActive ? <Badge tone="success">{t('fleet.common.yes')}</Badge> : <Badge tone="neutral">{t('fleet.common.no')}</Badge>),
     },
   ]
 
   return (
     <div>
-      <Breadcrumbs items={[{ label: 'Opleggers' }]} />
+      <Breadcrumbs items={[{ label: t('navigation.menu.trailers') }]} />
       <PageHeader
-        title="Opleggers"
-        action={hasPermission('trailers.create') ? <Button onClick={() => navigate('/trailers/new')}>Nieuwe oplegger</Button> : undefined}
+        title={t('navigation.menu.trailers')}
+        action={hasPermission('trailers.create') ? <Button onClick={() => navigate('/trailers/new')}>{t('trailers.list.new')}</Button> : undefined}
       />
       <FilterBar
         search={search}
@@ -58,7 +60,7 @@ export function TrailersPage() {
           setSearch(value)
           setPage(1)
         }}
-        searchPlaceholder="Zoeken op nummer, kenteken, merk of model..."
+        searchPlaceholder={t('fleet.list.searchPlaceholder')}
         activeFilter={activeFilter}
         onActiveFilterChange={(value) => {
           setActiveFilter(value)
@@ -71,8 +73,8 @@ export function TrailersPage() {
         rowKey={(row) => row.id}
         isLoading={isLoading}
         error={error}
-        emptyMessage="Nog geen opleggers."
-        loadingMessage="Opleggers laden..."
+        emptyMessage={t('trailers.list.empty')}
+        loadingMessage={t('trailers.list.loading')}
         onRowClick={(row) => navigate(`/trailers/${row.id}`)}
       />
       <Pagination page={page} pageSize={pageSize} totalCount={totalCount} onPageChange={setPage} />

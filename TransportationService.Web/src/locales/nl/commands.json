@@ -1,0 +1,18 @@
+{
+  "createOrder": "Nieuwe transportopdracht",
+  "createCustomer": "Nieuwe klant",
+  "createTrip": "Nieuwe rit plannen",
+  "reportIncident": "Incident melden",
+  "goPlanningCenter": "Planbord openen",
+  "goOperations": "Live opvolging openen",
+  "goDriver": "Chauffeursapp openen",
+  "goDashboard": "Dashboard vandaag openen",
+  "goMyTime": "Mijn uren openen",
+  "goAttendance": "Aanwezigheid openen",
+  "goProfitability": "Rendement openen",
+  "goDockPlanning": "Dockplanning openen",
+  "goWarehouses": "Magazijnen (beheer) openen",
+  "goWarehouseScanning": "Laden & scannen openen",
+  "goPackages": "Colli zoeken",
+  "goDossiers": "Dossiers openen"
+}

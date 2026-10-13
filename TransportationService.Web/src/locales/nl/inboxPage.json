@@ -1,0 +1,93 @@
+{
+  "title": "Berichten",
+  "subtitle": "Interne berichten binnen het bedrijf.",
+  "newMessage": "Nieuw bericht",
+  "tabs": {
+    "inbox": "Ontvangen",
+    "sent": "Verzonden"
+  },
+  "list": {
+    "loading": "Berichten laden...",
+    "emptyInbox": "Geen berichten in je inbox.",
+    "emptySent": "Nog geen verzonden berichten.",
+    "newBadge": "nieuw",
+    "ackPending": "te bevestigen",
+    "ackDone": "bevestigd",
+    "recipients_one": "{count} ontvanger",
+    "recipients_other": "{count} ontvangers",
+    "cancelledOn": "Ingetrokken op {dateTime}",
+    "deliveryStatus": "Bezorgstatus",
+    "withdraw": "Intrekken"
+  },
+  "priority": {
+    "Normal": "Normaal",
+    "High": "Hoog",
+    "Urgent": "Dringend"
+  },
+  "emailStatus": {
+    "Geen": "Geen",
+    "Pending": "In wachtrij",
+    "Sent": "Verzonden",
+    "Failed": "Mislukt",
+    "Suppressed": "Onderdrukt",
+    "Duplicate": "Duplicaat"
+  },
+  "detail": {
+    "acknowledge": "Bevestigen",
+    "acknowledging": "Bevestigen…",
+    "acknowledgedAt": "Bevestigd op {dateTime}",
+    "acknowledgementRequired": "Dit bericht vraagt om een expliciete bevestiging."
+  },
+  "toasts": {
+    "acknowledged": "Bericht bevestigd.",
+    "acknowledgeFailed": "Het bericht kon niet worden bevestigd.",
+    "withdrawn": "Bericht ingetrokken.",
+    "withdrawFailed": "Het bericht kon niet worden ingetrokken.",
+    "sent": "Bericht verzonden."
+  },
+  "cancelDialog": {
+    "title": "Bericht intrekken",
+    "message": "Weet je zeker dat je \"{subject}\" wilt intrekken? Ontvangers zien het bericht daarna niet meer.",
+    "confirm": "Intrekken"
+  },
+  "delivery": {
+    "title": "Bezorgstatus",
+    "loading": "Bezorgstatus laden...",
+    "loadFailed": "De bezorgstatus kon niet worden geladen.",
+    "sentOn": "verzonden {dateTime}",
+    "columnName": "Naam",
+    "columnRead": "Gelezen",
+    "columnAcknowledged": "Bevestigd",
+    "columnEmail": "E-mail"
+  },
+  "compose": {
+    "title": "Nieuw intern bericht",
+    "send": "Verzenden",
+    "sending": "Verzenden…",
+    "sendFailed": "Het bericht kon niet worden verzonden.",
+    "recipientsLoadFailed": "Ontvangers konden niet worden geladen.",
+    "targetField": "Doelgroep",
+    "targetUsers": "Specifieke personen",
+    "targetRole": "Iedereen met een rol",
+    "targetDepartment": "Een afdeling",
+    "targetAll": "Alle medewerkers",
+    "roleField": "Rol",
+    "roleHint": "Alle actieve leden van de rol ontvangen het bericht.",
+    "chooseRole": "— Kies een rol —",
+    "departmentField": "Afdeling",
+    "departmentHint": "Alle medewerkers van de afdeling ontvangen het bericht.",
+    "chooseDepartment": "— Kies een afdeling —",
+    "allNote": "Het bericht wordt aan alle actieve medewerkers bezorgd.",
+    "toUsersField": "Aan (personen)",
+    "subjectField": "Onderwerp",
+    "bodyField": "Bericht",
+    "priorityField": "Prioriteit",
+    "optionsField": "Opties",
+    "requireAcknowledgement": "Bevestiging vereist",
+    "alsoEmail": "Ook per e-mail versturen",
+    "visibleFromField": "Zichtbaar vanaf",
+    "visibleFromHint": "Leeg = direct zichtbaar",
+    "expiresAtField": "Verloopt op",
+    "expiresAtHint": "Leeg = geen einddatum"
+  }
+}

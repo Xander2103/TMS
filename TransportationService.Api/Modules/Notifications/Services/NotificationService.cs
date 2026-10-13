@@ -8,9 +8,19 @@ namespace TransportationService.Api.Modules.Notifications.Services;
 
 public record NotificationDto(
     Guid Id, string Type, NotificationCategory Category, NotificationSeverity Severity,
-    string Title, string Message, string? LinkPath, bool IsRead, bool IsArchived, DateTime CreatedAt);
+    string Title, string Message, string? LinkPath, bool IsRead, bool IsArchived, DateTime CreatedAt,
+    bool RequiresAcknowledgement = false, DateTime? AcknowledgedAt = null,
+    DateTime? ResolvedAt = null, DateTime? ExpiresAt = null);
 
 public record NotificationQuery(bool UnreadOnly, NotificationCategory? Category, bool IncludeArchived, int Take);
+
+/// <summary>
+/// Optional lifecycle behaviour for a produced notification. DedupeKey suppresses the insert
+/// while an unresolved notification with the same key exists for the recipient; resolving
+/// (stock recovered, task completed) re-arms the key for the next occurrence.
+/// </summary>
+public record NotificationOptions(
+    string? DedupeKey = null, bool RequiresAcknowledgement = false, DateTime? ExpiresAt = null);
 
 public record NotificationPreferenceDto(NotificationCategory Category, bool Enabled);
 
@@ -25,9 +35,18 @@ public static class NotificationTypeCatalog
         {
             ["absence_requested"] = (NotificationCategory.Hr, NotificationSeverity.Info),
             ["absence_decided"] = (NotificationCategory.Hr, NotificationSeverity.Info),
+            ["attendance_forgotten_clockout"] = (NotificationCategory.Hr, NotificationSeverity.Warning),
+            ["attendance_auto_closed"] = (NotificationCategory.Hr, NotificationSeverity.Warning),
             ["absence_changes_requested"] = (NotificationCategory.Hr, NotificationSeverity.Warning),
             ["qualification_expiring"] = (NotificationCategory.Hr, NotificationSeverity.Warning),
             ["document_expiring"] = (NotificationCategory.Hr, NotificationSeverity.Warning),
+            ["employee_document_expiring"] = (NotificationCategory.Hr, NotificationSeverity.Warning),
+            ["hr_birthday"] = (NotificationCategory.Hr, NotificationSeverity.Info),
+            ["hr_seniority"] = (NotificationCategory.Hr, NotificationSeverity.Info),
+            ["hr_employment_end"] = (NotificationCategory.Hr, NotificationSeverity.Warning),
+            // HR maturity wave, task 4: dossier-completeness follow-up.
+            ["employee_dossier_incomplete"] = (NotificationCategory.Hr, NotificationSeverity.Warning),
+            ["employee_dossier_incomplete_escalated"] = (NotificationCategory.Hr, NotificationSeverity.Critical),
             ["trip_assigned"] = (NotificationCategory.Planning, NotificationSeverity.Info),
             ["trip_changed"] = (NotificationCategory.Planning, NotificationSeverity.Warning),
             ["shift_assigned"] = (NotificationCategory.Planning, NotificationSeverity.Info),
@@ -41,6 +60,65 @@ public static class NotificationTypeCatalog
             ["package_departure_override"] = (NotificationCategory.Execution, NotificationSeverity.Warning),
             ["package_completion_override"] = (NotificationCategory.Execution, NotificationSeverity.Warning),
             ["package_returned_depot"] = (NotificationCategory.Execution, NotificationSeverity.Info),
+            ["inventory_low_stock"] = (NotificationCategory.System, NotificationSeverity.Warning),
+
+            // Inventory status transitions (inventory-tasks-notifications sprint).
+            ["inventory_status_low"] = (NotificationCategory.Inventory, NotificationSeverity.Warning),
+            ["inventory_status_critical"] = (NotificationCategory.Inventory, NotificationSeverity.Warning),
+            ["inventory_status_out"] = (NotificationCategory.Inventory, NotificationSeverity.Warning),
+            ["inventory_status_negative"] = (NotificationCategory.Inventory, NotificationSeverity.Critical),
+
+            // Employee tasks (inventory-tasks-notifications sprint).
+            ["task_assigned"] = (NotificationCategory.Task, NotificationSeverity.Info),
+            ["task_due_changed"] = (NotificationCategory.Task, NotificationSeverity.Info),
+            ["task_due_soon"] = (NotificationCategory.Task, NotificationSeverity.Warning),
+            ["task_overdue"] = (NotificationCategory.Task, NotificationSeverity.Warning),
+            ["task_blocked"] = (NotificationCategory.Task, NotificationSeverity.Warning),
+            ["task_waiting_review"] = (NotificationCategory.Task, NotificationSeverity.Info),
+            ["task_review_approved"] = (NotificationCategory.Task, NotificationSeverity.Success),
+            ["task_review_rejected"] = (NotificationCategory.Task, NotificationSeverity.Warning),
+            ["task_reopened"] = (NotificationCategory.Task, NotificationSeverity.Warning),
+            ["task_cancelled"] = (NotificationCategory.Task, NotificationSeverity.Info),
+            ["task_redistributed"] = (NotificationCategory.Task, NotificationSeverity.Info),
+            ["escalation_raised"] = (NotificationCategory.Approval, NotificationSeverity.Critical),
+            ["inventory_return_due"] = (NotificationCategory.Inventory, NotificationSeverity.Info),
+            ["inventory_return_overdue"] = (NotificationCategory.Inventory, NotificationSeverity.Warning),
+            ["inventory_reorder_proposed"] = (NotificationCategory.Inventory, NotificationSeverity.Info),
+
+            // Notification-event catalog (corrections wave 4, phase 6) — keys match
+            // Messaging.Services.NotificationEventCatalog.EventKey / MessageKinds 1:1.
+            ["order_created"] = (NotificationCategory.Orders, NotificationSeverity.Info),
+            ["order_submitted_portal"] = (NotificationCategory.Orders, NotificationSeverity.Info),
+            ["order_accepted"] = (NotificationCategory.Orders, NotificationSeverity.Info),
+            ["order_rejected"] = (NotificationCategory.Orders, NotificationSeverity.Warning),
+            ["order_info_requested"] = (NotificationCategory.Orders, NotificationSeverity.Warning),
+            ["order_planned"] = (NotificationCategory.Orders, NotificationSeverity.Info),
+            ["order_pickup_window"] = (NotificationCategory.Orders, NotificationSeverity.Info),
+            ["order_delivery_window"] = (NotificationCategory.Orders, NotificationSeverity.Info),
+            ["order_pickup_completed"] = (NotificationCategory.Orders, NotificationSeverity.Info),
+            ["order_delivery_completed"] = (NotificationCategory.Orders, NotificationSeverity.Info),
+            ["order_delay_detected"] = (NotificationCategory.Orders, NotificationSeverity.Warning),
+            ["order_failed_delivery"] = (NotificationCategory.Execution, NotificationSeverity.Warning),
+            ["order_damage_registered"] = (NotificationCategory.Execution, NotificationSeverity.Warning),
+            ["order_pod_available"] = (NotificationCategory.Orders, NotificationSeverity.Info),
+            ["invoice_draft_ready"] = (NotificationCategory.General, NotificationSeverity.Info),
+            ["invoice_sent"] = (NotificationCategory.General, NotificationSeverity.Info),
+            ["invoice_peppol_queued"] = (NotificationCategory.General, NotificationSeverity.Info),
+            ["invoice_peppol_delivered"] = (NotificationCategory.General, NotificationSeverity.Info),
+            ["invoice_peppol_failed"] = (NotificationCategory.General, NotificationSeverity.Warning),
+            ["invoice_credit_note"] = (NotificationCategory.General, NotificationSeverity.Info),
+            ["personnel_qualification_expiry"] = (NotificationCategory.Hr, NotificationSeverity.Warning),
+            ["personnel_medical_expiry"] = (NotificationCategory.Hr, NotificationSeverity.Warning),
+            ["personnel_document_expiry"] = (NotificationCategory.Hr, NotificationSeverity.Warning),
+            ["leave_requested"] = (NotificationCategory.Hr, NotificationSeverity.Info),
+            ["leave_decided"] = (NotificationCategory.Hr, NotificationSeverity.Info),
+            ["employee_note_pinned"] = (NotificationCategory.Hr, NotificationSeverity.Info),
+            ["fleet_maintenance_due"] = (NotificationCategory.General, NotificationSeverity.Warning),
+            ["fleet_inspection_due"] = (NotificationCategory.General, NotificationSeverity.Warning),
+            ["fleet_document_expiry"] = (NotificationCategory.General, NotificationSeverity.Warning),
+            ["fleet_damage_created"] = (NotificationCategory.General, NotificationSeverity.Warning),
+            ["tank_card_expiry"] = (NotificationCategory.Fleet, NotificationSeverity.Warning),
+            ["customer_message_received"] = (NotificationCategory.General, NotificationSeverity.Info),
         };
 
     public static (NotificationCategory Category, NotificationSeverity Severity) Resolve(string type) =>
@@ -51,16 +129,25 @@ public interface INotificationService
 {
     /// <summary>Queues a notification; silently skipped when the recipient is null (no linked user)
     /// or has disabled the resolved category (Critical always delivers).</summary>
-    Task NotifyAsync(Guid? userId, string type, string title, string message, string? linkPath, CancellationToken cancellationToken);
+    Task NotifyAsync(Guid? userId, string type, string title, string message, string? linkPath, CancellationToken cancellationToken, NotificationOptions? options = null);
 
     /// <summary>Notifies every active user of the tenant that holds the given permission.</summary>
-    Task NotifyPermissionHoldersAsync(string permissionCode, string type, string title, string message, string? linkPath, CancellationToken cancellationToken);
+    Task NotifyPermissionHoldersAsync(string permissionCode, string type, string title, string message, string? linkPath, CancellationToken cancellationToken, NotificationOptions? options = null);
 
     /// <summary>Notifies every active member of one role.</summary>
-    Task NotifyRoleAsync(Guid roleId, string type, string title, string message, string? linkPath, CancellationToken cancellationToken);
+    Task NotifyRoleAsync(Guid roleId, string type, string title, string message, string? linkPath, CancellationToken cancellationToken, NotificationOptions? options = null);
 
     /// <summary>Notifies every active user of the tenant.</summary>
-    Task NotifyTenantAsync(string type, string title, string message, string? linkPath, CancellationToken cancellationToken);
+    Task NotifyTenantAsync(string type, string title, string message, string? linkPath, CancellationToken cancellationToken, NotificationOptions? options = null);
+
+    /// <summary>
+    /// Marks every unresolved notification with this dedupe key (whole tenant, all recipients)
+    /// as resolved, re-arming the key. Call sites own the semantics of "the condition cleared".
+    /// </summary>
+    Task ResolveByDedupeKeyAsync(string dedupeKey, CancellationToken cancellationToken);
+
+    /// <summary>Acknowledges one of the caller's notifications (also marks it read).</summary>
+    Task<bool> AcknowledgeAsync(Guid id, CancellationToken cancellationToken);
 
     Task<IReadOnlyList<NotificationDto>> ListMineAsync(NotificationQuery query, CancellationToken cancellationToken);
 
@@ -99,25 +186,31 @@ public class NotificationService : INotificationService
     }
 
     public async Task NotifyAsync(
-        Guid? userId, string type, string title, string message, string? linkPath, CancellationToken cancellationToken)
+        Guid? userId, string type, string title, string message, string? linkPath, CancellationToken cancellationToken,
+        NotificationOptions? options = null)
     {
         if (userId is not { } recipient)
         {
             return;
         }
 
-        if (await AddIfEnabledAsync(recipient, type, title, message, linkPath, cancellationToken))
+        if (await AddIfEnabledAsync(recipient, type, title, message, linkPath, options, cancellationToken))
         {
             await _dbContext.SaveChangesAsync(cancellationToken);
         }
     }
 
     public async Task NotifyPermissionHoldersAsync(
-        string permissionCode, string type, string title, string message, string? linkPath, CancellationToken cancellationToken)
+        string permissionCode, string type, string title, string message, string? linkPath, CancellationToken cancellationToken,
+        NotificationOptions? options = null)
     {
         var tenantId = _tenantContext.TenantId;
+        // H-14 (I-3): only INTERNAL identities receive internal traffic. A customer-linked account
+        // carrying a legacy internal grant is refused every internal endpoint, so telling it about
+        // internal work would be a leak with no way to act on it.
         var recipients = await (from ur in _dbContext.UserRoles.AsNoTracking()
                                 join u in _dbContext.Users.AsNoTracking().Where(u => u.TenantId == tenantId && u.IsActive)
+                                    .Where(PortalPermissionScope.InternalIdentityOnly)
                                     on ur.UserId equals u.Id
                                 join r in _dbContext.Roles.AsNoTracking().Where(r => r.TenantId == tenantId && r.IsActive)
                                     on ur.RoleId equals r.Id
@@ -128,15 +221,20 @@ public class NotificationService : INotificationService
             .Distinct()
             .ToListAsync(cancellationToken);
 
-        await NotifyManyAsync(recipients, type, title, message, linkPath, cancellationToken);
+        await NotifyManyAsync(recipients, type, title, message, linkPath, options, cancellationToken);
     }
 
     public async Task NotifyRoleAsync(
-        Guid roleId, string type, string title, string message, string? linkPath, CancellationToken cancellationToken)
+        Guid roleId, string type, string title, string message, string? linkPath, CancellationToken cancellationToken,
+        NotificationOptions? options = null)
     {
         var tenantId = _tenantContext.TenantId;
+        // Same rule as NotifyPermissionHoldersAsync: this is the sibling fan-out behind the
+        // InternalRole recipient type, so a portal identity sitting in an internal role is not a
+        // recipient either.
         var recipients = await (from ur in _dbContext.UserRoles.AsNoTracking().Where(ur => ur.RoleId == roleId)
                                 join u in _dbContext.Users.AsNoTracking().Where(u => u.TenantId == tenantId && u.IsActive)
+                                    .Where(PortalPermissionScope.InternalIdentityOnly)
                                     on ur.UserId equals u.Id
                                 join r in _dbContext.Roles.AsNoTracking().Where(r => r.TenantId == tenantId && r.IsActive)
                                     on ur.RoleId equals r.Id
@@ -144,28 +242,68 @@ public class NotificationService : INotificationService
             .Distinct()
             .ToListAsync(cancellationToken);
 
-        await NotifyManyAsync(recipients, type, title, message, linkPath, cancellationToken);
+        await NotifyManyAsync(recipients, type, title, message, linkPath, options, cancellationToken);
     }
 
     public async Task NotifyTenantAsync(
-        string type, string title, string message, string? linkPath, CancellationToken cancellationToken)
+        string type, string title, string message, string? linkPath, CancellationToken cancellationToken,
+        NotificationOptions? options = null)
     {
         var recipients = await _dbContext.Users.AsNoTracking()
             .Where(u => u.TenantId == _tenantContext.TenantId && u.IsActive)
             .Select(u => u.Id)
             .ToListAsync(cancellationToken);
 
-        await NotifyManyAsync(recipients, type, title, message, linkPath, cancellationToken);
+        await NotifyManyAsync(recipients, type, title, message, linkPath, options, cancellationToken);
+    }
+
+    public async Task ResolveByDedupeKeyAsync(string dedupeKey, CancellationToken cancellationToken)
+    {
+        var open = await _dbContext.Notifications
+            .Where(n => n.TenantId == _tenantContext.TenantId && n.DedupeKey == dedupeKey && n.ResolvedAt == null)
+            .ToListAsync(cancellationToken);
+        if (open.Count == 0)
+        {
+            return;
+        }
+
+        var now = _timeProvider.GetUtcNow().UtcDateTime;
+        foreach (var notification in open)
+        {
+            notification.ResolvedAt = now;
+        }
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task<bool> AcknowledgeAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var notification = await Mine().FirstOrDefaultAsync(n => n.Id == id, cancellationToken);
+        if (notification is null)
+        {
+            return false;
+        }
+
+        var now = _timeProvider.GetUtcNow().UtcDateTime;
+        if (!notification.IsRead)
+        {
+            notification.IsRead = true;
+            notification.ReadAt = now;
+        }
+
+        notification.AcknowledgedAt ??= now;
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        return true;
     }
 
     private async Task NotifyManyAsync(
         IReadOnlyList<Guid> recipients, string type, string title, string message, string? linkPath,
-        CancellationToken cancellationToken)
+        NotificationOptions? options, CancellationToken cancellationToken)
     {
         var added = false;
         foreach (var recipient in recipients)
         {
-            added |= await AddIfEnabledAsync(recipient, type, title, message, linkPath, cancellationToken);
+            added |= await AddIfEnabledAsync(recipient, type, title, message, linkPath, options, cancellationToken);
         }
 
         if (added)
@@ -174,9 +312,11 @@ public class NotificationService : INotificationService
         }
     }
 
-    /// <summary>Adds the row unless the recipient disabled the category (Critical always goes through).</summary>
+    /// <summary>Adds the row unless the recipient disabled the category (Critical always goes through)
+    /// or an unresolved notification with the same dedupe key already exists for them.</summary>
     private async Task<bool> AddIfEnabledAsync(
-        Guid recipient, string type, string title, string message, string? linkPath, CancellationToken cancellationToken)
+        Guid recipient, string type, string title, string message, string? linkPath,
+        NotificationOptions? options, CancellationToken cancellationToken)
     {
         var (category, severity) = NotificationTypeCatalog.Resolve(type);
 
@@ -186,6 +326,21 @@ public class NotificationService : INotificationService
                 .AnyAsync(p => p.TenantId == _tenantContext.TenantId && p.UserId == recipient
                                && p.Category == category && !p.Enabled, cancellationToken);
             if (disabled)
+            {
+                return false;
+            }
+        }
+
+        if (options?.DedupeKey is { } dedupeKey)
+        {
+            // Pending (unsaved) rows of the same fan-out batch count too, so two recipients in
+            // one batch each get exactly one row and a re-publish within the batch is a no-op.
+            var pendingDuplicate = _dbContext.ChangeTracker.Entries<Notification>().Any(e =>
+                e.State == EntityState.Added && e.Entity.UserId == recipient && e.Entity.DedupeKey == dedupeKey);
+            var storedDuplicate = !pendingDuplicate && await _dbContext.Notifications.AsNoTracking()
+                .AnyAsync(n => n.TenantId == _tenantContext.TenantId && n.UserId == recipient
+                               && n.DedupeKey == dedupeKey && n.ResolvedAt == null, cancellationToken);
+            if (pendingDuplicate || storedDuplicate)
             {
                 return false;
             }
@@ -202,6 +357,9 @@ public class NotificationService : INotificationService
             Title = title,
             Message = message,
             LinkPath = linkPath,
+            DedupeKey = options?.DedupeKey,
+            RequiresAcknowledgement = options?.RequiresAcknowledgement ?? false,
+            ExpiresAt = options?.ExpiresAt,
         });
         return true;
     }
@@ -232,17 +390,29 @@ public class NotificationService : INotificationService
             rows = rows.Where(n => n.Category == category);
         }
 
+        // Expired notifications behave like archived ones: hidden unless explicitly requested.
+        var now = _timeProvider.GetUtcNow().UtcDateTime;
+        if (!query.IncludeArchived)
+        {
+            rows = rows.Where(n => n.ExpiresAt == null || n.ExpiresAt > now);
+        }
+
         return await rows
             .OrderByDescending(n => n.CreatedAt)
             .Take(Math.Clamp(query.Take, 1, 100))
             .Select(n => new NotificationDto(
                 n.Id, n.Type, n.Category, n.Severity, n.Title, n.Message, n.LinkPath,
-                n.IsRead, n.IsArchived, n.CreatedAt))
+                n.IsRead, n.IsArchived, n.CreatedAt,
+                n.RequiresAcknowledgement, n.AcknowledgedAt, n.ResolvedAt, n.ExpiresAt))
             .ToListAsync(cancellationToken);
     }
 
-    public Task<int> UnreadCountAsync(CancellationToken cancellationToken) =>
-        Mine().AsNoTracking().CountAsync(n => !n.IsRead && !n.IsArchived, cancellationToken);
+    public Task<int> UnreadCountAsync(CancellationToken cancellationToken)
+    {
+        var now = _timeProvider.GetUtcNow().UtcDateTime;
+        return Mine().AsNoTracking()
+            .CountAsync(n => !n.IsRead && !n.IsArchived && (n.ExpiresAt == null || n.ExpiresAt > now), cancellationToken);
+    }
 
     public async Task<bool> MarkReadAsync(Guid id, CancellationToken cancellationToken)
     {

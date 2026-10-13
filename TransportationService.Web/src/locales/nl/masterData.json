@@ -1,0 +1,101 @@
+{
+  "groups": {
+    "organisatie": "Organisatie",
+    "categorieen": "Categorieën",
+    "referentie": "Referentiegegevens"
+  },
+  "singular": {
+    "departments": "afdeling",
+    "job-functions": "functie",
+    "vehicle-categories": "voertuigcategorie",
+    "trailer-categories": "opleggercategorie",
+    "driver-categories": "chauffeurcategorie",
+    "customer-categories": "klantcategorie",
+    "issued-item-categories": "bedrijfsmiddelcategorie",
+    "task-categories": "taakcategorie",
+    "languages": "taal",
+    "nationalities": "nationaliteit",
+    "contract-types": "contracttype"
+  },
+  "newLabel": {
+    "departments": "Nieuwe afdeling",
+    "job-functions": "Nieuwe functie",
+    "vehicle-categories": "Nieuwe voertuigcategorie",
+    "trailer-categories": "Nieuwe opleggercategorie",
+    "driver-categories": "Nieuwe chauffeurcategorie",
+    "customer-categories": "Nieuwe klantcategorie",
+    "issued-item-categories": "Nieuwe bedrijfsmiddelcategorie",
+    "task-categories": "Nieuwe taakcategorie",
+    "languages": "Nieuwe taal",
+    "nationalities": "Nieuwe nationaliteit",
+    "contract-types": "Nieuw contracttype"
+  },
+  "hints": {
+    "languages": "ISO 639-1, bv. nl"
+  },
+  "list": {
+    "searchPlaceholder": "Zoeken op code of naam...",
+    "loadFailed": "{title} konden niet worden geladen.",
+    "empty": "Nog geen {titleLower}.",
+    "loading": "{title} laden...",
+    "columns": {
+      "code": "Code",
+      "name": "Naam",
+      "description": "Omschrijving",
+      "status": "Status"
+    }
+  },
+  "toasts": {
+    "added": "Item toegevoegd.",
+    "updated": "Item bijgewerkt.",
+    "deleted": "Item verwijderd."
+  },
+  "deleteDialog": {
+    "title": "{singular} verwijderen",
+    "message": "Weet je zeker dat je '{name}' wilt verwijderen?"
+  },
+  "errors": {
+    "inUse": "Dit item wordt nog gebruikt en kan niet worden verwijderd.",
+    "deleteFailed": "Verwijderen is mislukt.",
+    "duplicateCode": "Er bestaat al een item met code '{code}'.",
+    "saveFailed": "Opslaan is mislukt. Probeer het opnieuw."
+  },
+  "form": {
+    "editTitle": "{singular} bewerken",
+    "saving": "Opslaan...",
+    "codeLabel": "Code",
+    "nameLabel": "Naam",
+    "descriptionLabel": "Omschrijving",
+    "sortLabel": "Volgorde",
+    "sortHint": "Bepaalt de volgorde in keuzelijsten.",
+    "activeLabel": "Actief",
+    "codeRequired": "Code is verplicht.",
+    "codeMax": "Code mag maximaal 50 tekens bevatten.",
+    "nameRequired": "Naam is verplicht.",
+    "nameMax": "Naam mag maximaal 150 tekens bevatten.",
+    "advanced": "Meer instellingen",
+    "advancedHint": "Code en volgorde worden automatisch bepaald; pas ze alleen aan als dat nodig is."
+  },
+  "select": {
+    "createOption": "{newLabel} \"{query}\" toevoegen",
+    "nameAndCodeRequired": "Naam en code zijn verplicht.",
+    "duplicate": "Er bestaat al een {singular} met code '{code}'.",
+    "createFailed": "Toevoegen is mislukt. Probeer het opnieuw.",
+    "adding": "Toevoegen…",
+    "addAndSelect": "Toevoegen en selecteren",
+    "codeHint": "Korte unieke code voor deze waarde.",
+    "newAction": "+ {newLabel}",
+    "codeAutoHint": "Laat dit veld leeg om automatisch de volgende beschikbare unieke code te laten genereren.",
+    "createOptionGeneric": "\"{query}\" toevoegen ({singular})",
+    "newGeneric": "Toevoegen: {singular}"
+  },
+  "lookup": {
+    "optionsLoadFailed": "Keuzelijst kon niet worden geladen."
+  },
+  "units": {
+    "subtitle": "Globale eenheden met code, categorie, afmetingen en fysieke standaardwaarden. Klant-specifieke voorkeuren en tarieven staan op de klantenfiche."
+  },
+  "services": {
+    "subtitle": "Globale diensten en toeslagen met berekeningswijze en standaardprijs. Klant-specifieke overrides beheer je op de klantenfiche."
+  }
+}

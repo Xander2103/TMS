@@ -44,7 +44,7 @@
 
 .pod-outcome-active {
   border-color: var(--accent);
-  background: var(--accent-bg, rgba(170, 59, 255, 0.08));
+  background: var(--accent-bg);
   font-weight: 600;
 }
 
@@ -110,8 +110,8 @@
 .pod-superseded {
   margin: 0 0 12px;
   padding: 8px 12px;
-  border: 1px solid var(--warning-border, #f59e0b);
-  background: var(--warning-bg, rgba(245, 158, 11, 0.1));
+  border: 1px solid var(--warning-border);
+  background: var(--warning-bg);
   border-radius: 8px;
   font-size: 14px;
 }

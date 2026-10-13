@@ -10,12 +10,17 @@ public record TransportOrderListItemDto(
     string CustomerName,
     string? CustomerReference,
     TransportOrderStatus Status,
-    string GoodsDescription,
+    string? GoodsDescription,
     string? FirstLoadingCity,
     string? LastUnloadingCity,
     int StopCount,
     bool AdrRequired,
-    bool CraneRequired);
+    bool CraneRequired,
+    OrderPriority Priority = OrderPriority.Normal,
+    /// <summary>D2: kind of crane job (None | TransportWithCrane | OnSiteLifting).</summary>
+    CraneJobKind CraneJobKind = CraneJobKind.None,
+    /// <summary>D2: city of the first site stop — the route summary of an on-site order, which has no loading/unloading cities.</summary>
+    string? FirstSiteCity = null);
 
 public record TransportOrderStopDto(
     Guid Id,
@@ -42,7 +47,59 @@ public record TransportOrderStopDto(
     string? AppointmentReference = null,
     string? AccessInstructions = null,
     string? LoadingInstructions = null,
-    string? UnloadingInstructions = null);
+    string? UnloadingInstructions = null,
+    /// <summary>Wave 2026-08-04 §15: simple time requirement ("Leveren vóór 10:00").</summary>
+    StopTimeRequirementKind TimeRequirement = StopTimeRequirementKind.None,
+    TimeOnly? TimeRequirementFrom = null,
+    TimeOnly? TimeRequirementTo = null,
+    /// <summary>Wave 2026-08-04 §18: stop-level included-minutes override (stop → order → contract).</summary>
+    int? IncludedTimeMinutesOverride = null,
+    // --- Location snapshot (master-data wave 2026-08-05, Phase 7): frozen at order time ---
+    string? ContactName = null,
+    string? ContactPhone = null,
+    string? ContactMobile = null,
+    string? ContactEmail = null,
+    string? OpeningHoursSummary = null,
+    string? Gate = null,
+    /// <summary>Sensitive: null unless the caller holds locations.view_sensitive.</summary>
+    string? AccessCode = null,
+    string? Dock = null,
+    string? RouteDescription = null,
+    int? DefaultLoadingMinutes = null,
+    int? DefaultUnloadingMinutes = null,
+    DateTime? SnapshotAt = null,
+    /// <summary>
+    /// Computed (never persisted) advisory opening-hours warnings: planned times evaluated
+    /// against the LIVE location hours — the warning answers "will the site be open", the
+    /// snapshot answers "what did we agree". Dutch, non-blocking.
+    /// </summary>
+    IReadOnlyList<string>? Warnings = null,
+    /// <summary>D2 (site stops): true = PlannedTo was entered by hand and is never recomputed from start + duration.</summary>
+    bool PlannedToIsManual = false,
+    /// <summary>
+    /// D3: true = this stop has a master location but its address was deliberately edited for this
+    /// order (the snapshot deviates from the address book). "Adres opnieuw overnemen"
+    /// (<c>RefreshSnapshot</c>) resets it. The central address itself is never changed by an order.
+    /// </summary>
+    bool AddressOverridden = false,
+    /// <summary>
+    /// D3: what "Opslaan in adresboek" did for this stop IN THE SAVE THAT PRODUCED THIS RESPONSE
+    /// (transient — a plain GET always reports None).
+    /// </summary>
+    AddressBookOutcome AddressBookOutcome = AddressBookOutcome.None);
+
+/// <summary>D3: per-stop result of <c>TransportOrderStopInput.SaveToAddressBook</c>.</summary>
+public enum AddressBookOutcome
+{
+    /// <summary>Nothing was asked, or nothing had to happen.</summary>
+    None = 0,
+
+    /// <summary>A new address was created in the address book and linked to the dossier customer.</summary>
+    Created = 1,
+
+    /// <summary>An identical active address already existed; the stop was linked to it instead.</summary>
+    LinkedExisting = 2,
+}
 
 public record TransportOrderDetailDto(
     Guid Id,
@@ -52,7 +109,7 @@ public record TransportOrderDetailDto(
     string CustomerName,
     string? CustomerReference,
     TransportOrderStatus Status,
-    string GoodsDescription,
+    string? GoodsDescription,
     decimal? Quantity,
     string? QuantityUnit,
     decimal? WeightKg,
@@ -67,26 +124,292 @@ public record TransportOrderDetailDto(
     IReadOnlyList<CargoItemDto> CargoItems,
     IReadOnlyList<TransportOrderStatus> AllowedTransitions,
     /// <summary>Whether the order can currently be cancelled (separate action, orders.cancel).</summary>
-    bool CanCancel);
+    bool CanCancel,
+    /// <summary>Backward corrections available via the controlled correction flow (orders.correct_status).</summary>
+    IReadOnlyList<TransportOrderStatus> AllowedCorrections,
+    OrderPriority Priority = OrderPriority.Normal,
+    bool DieselSurchargeOverride = false,
+    decimal? DieselSurchargePercentOverride = null,
+    string? DieselSurchargeOverrideReason = null,
+    Guid? LegalEntityId = null,
+    string? QuantityUnitCode = null,
+    decimal? CalculatedPrice = null,
+    bool PriceIsManual = false,
+    string? PriceOverrideReason = null,
+    IReadOnlyList<OrderPricingLineDto>? PricingLines = null,
+    IReadOnlyList<OrderServiceLineDto>? ServiceLines = null,
+    OrderPricingSnapshotDto? PricingSnapshot = null,
+    /// <summary>Contract (default) or OneOff (spec Phase 6): this order carries its own price agreement.</summary>
+    OrderPricingSource PricingSource = OrderPricingSource.Contract,
+    decimal? OneOffFixedAmount = null,
+    int? OneOffIncludedLoadingMinutes = null,
+    int? OneOffIncludedUnloadingMinutes = null,
+    int? OneOffIncludedCombinedMinutes = null,
+    decimal? OneOffExtraHourlyRate = null,
+    string? OneOffNotes = null,
+    /// <summary>CalculatedPrice + proposed (unconfirmed) extra-time charges; null when nothing could be calculated.</summary>
+    decimal? TotalWithProposed = null,
+    /// <summary>
+    /// Task 10: order-level overrides of the engaged contract agreement's included loading/
+    /// unloading time and extra-time rate/rounding/minimum. Contract pricing only.
+    /// </summary>
+    int? IncludedLoadingMinutesOverride = null,
+    int? IncludedUnloadingMinutesOverride = null,
+    decimal? ExtraTimeHourlyRateOverride = null,
+    int? ExtraTimeRoundingStepMinutes = null,
+    int? ExtraTimeMinimumBillableMinutes = null,
+    /// <summary>Concurrency token; echo on update — a mismatch yields 409 with the current state.</summary>
+    Guid Version = default,
+    /// <summary>Containing dossier (wrapper or user-created); the detail header links to it.</summary>
+    Guid? DossierId = null,
+    string? DossierNumber = null,
+    /// <summary>Wave 3 §1: planned distance in km (PerKm bases/services).</summary>
+    decimal? DistanceKm = null,
+    /// <summary>Wave 3 §1: loading meters (PerLoadingMeter bases, ldm bracket caps).</summary>
+    decimal? LoadingMeters = null,
+    // P6: equipment/movement pricing dimensions.
+    bool PlateauRequired = false,
+    bool MoffettRequired = false,
+    bool IsReturnMovement = false,
+    /// <summary>D2: kind of crane job (None | TransportWithCrane | OnSiteLifting).</summary>
+    CraneJobKind CraneJobKind = CraneJobKind.None,
+    /// <summary>D2: what has to be done on site (mandatory for OnSiteLifting).</summary>
+    string? WorkDescription = null,
+    // D2: lift data — describes the load to lift; never a goods line.
+    decimal? LiftLoadWeightKg = null,
+    string? LiftLoadDimensions = null,
+    decimal? LiftRadiusMeters = null,
+    decimal? LiftHeightMeters = null,
+    string? LiftConditions = null,
+    string? LiftEquipment = null,
+    /// <summary>D2 (read-only): the linked dossier activity, its planned duration and whether its type allows on-site work.</summary>
+    Guid? ActivityId = null,
+    Guid? ActivityTypeId = null,
+    decimal? ActivityDurationHours = null,
+    bool ActivitySupportsOnSiteWork = false);
+
+/// <summary>Snapshot line of the price calculation stored on the order.</summary>
+public record OrderPricingLineDto(
+    string Label, decimal Amount, string Source, bool Informational,
+    string? RuleName = null, string? AgreementName = null,
+    decimal? ActualQuantity = null, decimal? BillableQuantity = null,
+    /// <summary>An unconfirmed extra-time charge (spec Phase 6): excluded from AgreedPrice, shown as a proposal.</summary>
+    bool Proposed = false,
+    /// <summary>Persisted line id; needed to target the confirm endpoint on a VOORSTEL line.</summary>
+    Guid? Id = null,
+    /// <summary>Manual-editing lifecycle (spec ch. 24-26): Auto/AutoAdjusted/Manual/Proposed.</summary>
+    OrderPriceLineKind Kind = OrderPriceLineKind.Auto,
+    decimal? Quantity = null, decimal? UnitPrice = null,
+    decimal? OriginalQuantity = null, decimal? OriginalUnitPrice = null, decimal? OriginalAmount = null,
+    string? AdjustReason = null,
+    string? LineKey = null,
+    /// <summary>Managed unit code for Quantity (e.g. "COLLI"), editable on manual lines (spec Task 5).</summary>
+    string? Unit = null,
+    /// <summary>Frozen identity of the service option, for merge-matching (see LineKey too).</summary>
+    Guid? ServiceOptionId = null,
+    /// <summary>D4: goods lines this sales line prices (control relation on LineKey; never an invoice line).</summary>
+    IReadOnlyList<Guid>? CargoItemIds = null);
+
+/// <summary>Frozen header of the order's pricing snapshot (spec ch. 21).</summary>
+public record OrderPricingSnapshotDto(
+    DateOnly TariffDate, string Currency, string? ZoneCode, string? ZoneName,
+    string? AgreementNames, string? UnitSummary, decimal? CalculatedTotal,
+    decimal? OverrideAmount, string? OverrideReason, Guid? OverriddenByUserId, DateTime? OverriddenAtUtc,
+    string? Explanation,
+    /// <summary>Draft → Reviewed → Locked → Invoiced (spec ch. 24-26); preserved across recalculations.</summary>
+    OrderPricingStatus Status = OrderPricingStatus.Draft,
+    /// <summary>Sum of Auto/AutoAdjusted/Manual non-informational line amounts.</summary>
+    decimal? LinesTotal = null,
+    /// <summary>Wave 2026-08-04 §7: per-goods-line pricing coverage frozen with the calculation.</summary>
+    IReadOnlyList<OrderPricingCoverageDto>? Coverage = null,
+    /// <summary>Wave 2026-08-04 §8: confirmation metadata ("Bevestigd op … door …").</summary>
+    DateTime? ConfirmedAtUtc = null,
+    Guid? ConfirmedByUserId = null,
+    string? ConfirmedByName = null,
+    /// <summary>Non-null: the price was confirmed DESPITE unpriced goods, with this reason (visible warning).</summary>
+    string? ConfirmedWithUnpricedGoodsReason = null,
+    /// <summary>Wave 2 §5: typed coverage projection (Full | Partial | None | NotApplicable).</summary>
+    string? CoverageStatus = null,
+    /// <summary>Wave 2 §5: pricing inputs changed without a recalculation — "Prijs verouderd".</summary>
+    bool IsStale = false);
+
+/// <summary>
+/// Pricing coverage of one commercial goods line/unit (wave 2026-08-04 §7). Status: "Full"
+/// (base tariff prices it), "Partial" (services only — never counts as transport pricing),
+/// "None" (nothing prices it; see Reason).
+/// </summary>
+public record OrderPricingCoverageDto(
+    Guid? UnitTypeId, string UnitLabel, decimal Quantity, string Status,
+    decimal BaseAmount = 0m, string? BaseRuleName = null,
+    decimal ServicesAmount = 0m, string? Reason = null,
+    /// <summary>
+    /// Closure sprint 2026-09-23: the goods lines this entry stands for, frozen with the
+    /// calculation, so a later separate sales line (D4 link) can mark the entry covered.
+    /// Null on snapshots frozen before this field existed (reconciled at the next calculation).
+    /// </summary>
+    IReadOnlyList<Guid>? CargoItemIds = null,
+    /// <summary>What the ENGINE said (Status/Reason before reconciliation); null = same as Status.</summary>
+    string? EngineStatus = null,
+    string? EngineReason = null,
+    /// <summary>"SeparatelyPriced" | "FixedPrice" when Status was lifted to Full by reconciliation; null otherwise.</summary>
+    string? CoveredBy = null);
+
+/// <summary>
+/// One line-level manual correction/addition (spec ch. 24-26). LineKey null = free manual line;
+/// otherwise targets an existing Auto/AutoAdjusted/Manual line by its stable merge key.
+/// Remove keeps the row for audit (Auto/AutoAdjusted → Amount 0) except a Manual line, which is
+/// hard-deleted.
+/// </summary>
+public record SaveOrderPriceLineRequest(
+    string? LineKey, string Label, decimal? Quantity, decimal? UnitPrice, decimal? Amount,
+    string? AdjustReason, bool Remove = false,
+    /// <summary>Managed unit code for Quantity (e.g. "COLLI"); normalized like <c>QuantityUnitCode</c>.</summary>
+    string? Unit = null,
+    /// <summary>
+    /// D4: goods lines (cargo item ids OF THIS ORDER) this sales line prices. Null = leave the
+    /// links of this line unchanged; a list (also an empty one) REPLACES them. A request that
+    /// carries only this field next to the LineKey is a link-only change: the line's amount,
+    /// kind and adjust reason stay untouched.
+    /// </summary>
+    IReadOnlyList<Guid>? CargoItemIds = null);
+
+/// <summary>Body for the pricing status transition endpoint (spec ch. 24-26).</summary>
+public record SetOrderPricingStatusRequest(OrderPricingStatus Status);
+
+/// <summary>
+/// Hardening 2026-09-11: the dossier's "Afgesproken prijs". A price-only mutation: sets
+/// <see cref="OrderPricingSource.OneOff"/> with <paramref name="FixedAmount"/> (€ 0 is a valid,
+/// intentional price) or, when <paramref name="FixedAmount"/> is null, returns the order to
+/// contract pricing. Never touches stops or goods, so an incomplete route cannot block it;
+/// route validation stays on the order PUT and the confirmation gate.
+/// </summary>
+public record SetOneOffPriceRequest(decimal? FixedAmount, Guid? Version = null);
+
+/// <summary>
+/// Body for "Prijs bevestigen" (wave 2026-08-04 §8/§10). UnpricedGoodsReason is only consulted —
+/// and then mandatory — when the coverage shows unpriced goods and the caller may override.
+/// </summary>
+public record ConfirmOrderPricingRequest(string? UnpricedGoodsReason = null);
+
+/// <summary>Body for "Prijs aanpassen" (wave 2026-08-04 §8): mandatory reason to reopen a confirmed price.</summary>
+public record ReopenOrderPricingRequest(string Reason);
+
+/// <summary>Selected delivery service/supplement snapshotted on the order.</summary>
+public record OrderServiceLineDto(
+    Guid? ServiceOptionId, string Name,
+    TransportationService.Api.Modules.Tarification.Entities.SurchargeKind Kind,
+    decimal Value, decimal Amount, decimal? Quantity = null,
+    decimal? PalletCount = null, decimal? DayCount = null, string? Note = null);
+
+/// <summary>
+/// A selected service with the entered quantity where applicable (hours / stops / days /
+/// pallet-days). For per-pallet-day services the pallet and day inputs are persisted and the
+/// billable quantity defaults to pallets × days; an explicitly sent Quantity is a manual
+/// correction and always wins. For per-day services a lone DayCount doubles as the quantity.
+/// </summary>
+public record OrderServiceInput(
+    Guid ServiceOptionId, decimal? Quantity = null, decimal? PalletCount = null, decimal? DayCount = null,
+    string? Note = null);
 
 /// <summary>Body for the dedicated cancel action; the reason is mandatory and audited.</summary>
 public record CancelTransportOrderRequest(string Reason);
 
+/// <summary>Sprint 6 (completion): explicit, audited change of the invoicing entity of ONE order.</summary>
+public record ChangeOrderLegalEntityRequest(
+    Guid LegalEntityId,
+    /// <summary>Mandatory when the target differs from the customer default (the audited override path).</summary>
+    string? Reason = null,
+    Guid? Version = null);
+
+/// <summary>What changing the order's invoicing entity would do; never writes.</summary>
+public record OrderLegalEntityChangeImpactDto(
+    Guid OrderId,
+    Guid? CurrentLegalEntityId,
+    Guid TargetLegalEntityId,
+    /// <summary>The customer's default entity, when configured.</summary>
+    Guid? CustomerDefaultLegalEntityId,
+    /// <summary>True when the target is not the customer default: needs the override right AND a reason.</summary>
+    bool DeviatesFromCustomerDefault,
+    /// <summary>True when the caller lacks the override right for a deviating target.</summary>
+    bool RequiresOverridePermission,
+    /// <summary>Refusal reason (sent invoice, policy violation, inactive entity); null = allowed.</summary>
+    string? BlockedReason,
+    /// <summary>Draft invoice lines of this order on a concept invoice of ANOTHER entity; released on apply.</summary>
+    int DraftInvoiceLinesReleased);
+
+/// <summary>Body for the controlled status-correction action; the reason is mandatory and audited.</summary>
+public record CorrectTransportOrderStatusRequest(TransportOrderStatus TargetStatus, string Reason);
+
+/// <summary>One entry of the chronological order timeline (audit + status + packages + stops + invoicing).</summary>
+public record OrderTimelineEventDto(
+    DateTime Timestamp,
+    string Category,
+    string Title,
+    string? Detail,
+    string? UserName);
+
 public record CargoItemDto(
     Guid Id,
     int Sequence,
-    string Description,
+    string? Description,
     string? Barcode,
     decimal ExpectedQuantity,
     string? QuantityUnit,
-    string? Notes);
+    string? Notes,
+    TransportationService.Api.Modules.Packages.Entities.PackageUnitType? UnitType = null,
+    string? UnitTypeLabel = null,
+    decimal? TotalWeightKg = null,
+    decimal? WeightPerUnitKg = null,
+    decimal? LengthMeters = null,
+    decimal? WidthMeters = null,
+    decimal? HeightMeters = null,
+    decimal? VolumeM3 = null,
+    bool VolumeIsManual = false,
+    bool AdrRequired = false,
+    string? AdrDetails = null,
+    bool Stackable = true,
+    string? Reference = null,
+    Guid? LoadingStopId = null,
+    Guid? UnloadingStopId = null,
+    string? QuantityUnitCode = null,
+    decimal? PalletCount = null,
+    /// <summary>
+    /// D4: derived, never stored — <c>SeparatelyPriced</c> (linked to an existing non-informational
+    /// sales line) · <c>Included</c> (the order is priced by provenance AND has a fixed price
+    /// (one-off/override) or this line's unit is covered "Full") · <c>ToReview</c>.
+    /// </summary>
+    string? CommercialCoverage = null);
 
+/// <summary>
+/// Stop links use INDEXES into the request's stop list (stops receive fresh ids on every
+/// save). Omitted indexes auto-link when the order has exactly one loading and one
+/// unloading stop; otherwise the line stays unlinked until assigned.
+/// </summary>
 public record CargoItemInput(
-    string Description,
+    string? Description,
     string? Barcode,
     decimal ExpectedQuantity,
     string? QuantityUnit,
-    string? Notes);
+    string? Notes,
+    TransportationService.Api.Modules.Packages.Entities.PackageUnitType? UnitType = null,
+    string? UnitTypeLabel = null,
+    decimal? TotalWeightKg = null,
+    decimal? WeightPerUnitKg = null,
+    decimal? LengthMeters = null,
+    decimal? WidthMeters = null,
+    decimal? HeightMeters = null,
+    decimal? VolumeM3 = null,
+    bool VolumeIsManual = false,
+    bool AdrRequired = false,
+    string? AdrDetails = null,
+    bool Stackable = true,
+    string? Reference = null,
+    int? LoadingStopIndex = null,
+    int? UnloadingStopIndex = null,
+    string? QuantityUnitCode = null,
+    // Id-preserving update sync: null/unmatched Id => treated as a new line. Ignored on create.
+    Guid? Id = null,
+    decimal? PalletCount = null);
 
 public record TransportOrderStopInput(
     StopType StopType,
@@ -110,7 +433,44 @@ public record TransportOrderStopInput(
     string? AppointmentReference = null,
     string? AccessInstructions = null,
     string? LoadingInstructions = null,
-    string? UnloadingInstructions = null);
+    string? UnloadingInstructions = null,
+    /// <summary>Wave 2026-08-04 §15: simple time requirement (Before → To, After → From, Window → both).</summary>
+    StopTimeRequirementKind TimeRequirement = StopTimeRequirementKind.None,
+    TimeOnly? TimeRequirementFrom = null,
+    TimeOnly? TimeRequirementTo = null,
+    /// <summary>Wave 2026-08-04 §18: stop-level included-minutes override (stop → order → contract).</summary>
+    int? IncludedTimeMinutesOverride = null,
+    /// <summary>
+    /// Existing stop id echoed by the client. Since wave 1 blocker C-01 this IDENTIFIES the stop:
+    /// an id belonging to the order being updated addresses that very row, which is then updated
+    /// in place (packages, executions, POD, scans and ETAs stay attached); no id — or an id the
+    /// order does not own — creates a new stop. A matching id with an unchanged LocationId also
+    /// carries the previous location snapshot over instead of re-copying live master data
+    /// (master-data wave 2026-08-05, Phase 7).
+    /// </summary>
+    Guid? Id = null,
+    /// <summary>True = deliberately re-copy the CURRENT master-location data onto this stop (audited).</summary>
+    bool RefreshSnapshot = false,
+    /// <summary>
+    /// D2 (site stops only): true = PlannedTo is the planner's own value; false = the server sets
+    /// PlannedTo = PlannedFrom + activity duration. Ignored for loading/unloading stops.
+    /// </summary>
+    bool PlannedToIsManual = false,
+    /// <summary>
+    /// D3: only meaningful WITH a <c>LocationId</c>. True = the name/address/postal code/city/country
+    /// of this input are this order's own deviation and are stored as the stop snapshot instead of
+    /// the location's values. The central location is never modified. <c>RefreshSnapshot</c> wins
+    /// and clears the flag. False = the existing snapshot behaviour, unchanged.
+    /// </summary>
+    bool AddressOverridden = false,
+    /// <summary>
+    /// D3 (write-only): save this stop's address to the address book in the SAME save as the order.
+    /// Applies to a stop without a <c>LocationId</c> or with an overridden one; requires
+    /// <c>locations.create</c>. An identical active address is linked instead of duplicated; the
+    /// dossier customer gets a link. Afterwards the stop carries the <c>LocationId</c>, so saving
+    /// again creates nothing.
+    /// </summary>
+    bool SaveToAddressBook = false);
 
 /// <summary>
 /// Dispatcher-side execution planning of one stop: the confirmed window, hard bounds,
@@ -132,7 +492,7 @@ public record CreateTransportOrderRequest(
     Guid CustomerId,
     string? CustomerReference,
     DateOnly? OrderDate,
-    string GoodsDescription,
+    string? GoodsDescription,
     decimal? Quantity,
     string? QuantityUnit,
     decimal? WeightKg,
@@ -143,13 +503,80 @@ public record CreateTransportOrderRequest(
     decimal? AgreedPrice,
     string? Notes,
     IReadOnlyList<TransportOrderStopInput> Stops,
-    IReadOnlyList<CargoItemInput>? CargoItems = null);
+    IReadOnlyList<CargoItemInput>? CargoItems = null,
+    OrderPriority? Priority = null,
+    bool DieselSurchargeOverride = false,
+    decimal? DieselSurchargePercentOverride = null,
+    string? DieselSurchargeOverrideReason = null,
+    Guid? LegalEntityId = null,
+    string? QuantityUnitCode = null,
+    IReadOnlyList<Guid>? ServiceOptionIds = null,
+    bool PriceIsManual = false,
+    string? PriceOverrideReason = null,
+    /// <summary>Preferred over ServiceOptionIds when present: selections incl. quantities.</summary>
+    IReadOnlyList<OrderServiceInput>? Services = null,
+    /// <summary>Contract (default) or OneOff (spec Phase 6): this order carries its own price agreement.</summary>
+    OrderPricingSource PricingSource = OrderPricingSource.Contract,
+    decimal? OneOffFixedAmount = null,
+    int? OneOffIncludedLoadingMinutes = null,
+    int? OneOffIncludedUnloadingMinutes = null,
+    int? OneOffIncludedCombinedMinutes = null,
+    decimal? OneOffExtraHourlyRate = null,
+    string? OneOffNotes = null,
+    /// <summary>
+    /// Task 10: order-level overrides of the engaged contract agreement's included loading/
+    /// unloading time and extra-time rate/rounding/minimum. Contract pricing only — rejected in
+    /// combination with PricingSource == OneOff.
+    /// </summary>
+    int? IncludedLoadingMinutesOverride = null,
+    int? IncludedUnloadingMinutesOverride = null,
+    decimal? ExtraTimeHourlyRateOverride = null,
+    int? ExtraTimeRoundingStepMinutes = null,
+    int? ExtraTimeMinimumBillableMinutes = null,
+    /// <summary>
+    /// Dossier this order is created inside (dossier-originated create). Absent → the order
+    /// gets its own auto-created wrapper dossier so EVERY order lives in a dossier without
+    /// callers (EDI, portal, legacy API) changing anything.
+    /// </summary>
+    Guid? DossierId = null,
+    /// <summary>Wave 3 §1: planned distance in km (PerKm bases/services) — optional.</summary>
+    decimal? DistanceKm = null,
+    /// <summary>Wave 3 §1: loading meters (PerLoadingMeter bases, ldm bracket caps) — optional.</summary>
+    decimal? LoadingMeters = null,
+    // P6: equipment/movement pricing dimensions.
+    bool PlateauRequired = false,
+    bool MoffettRequired = false,
+    bool IsReturnMovement = false,
+    /// <summary>
+    /// One-page intake (2026-09): the dossier activity type of the auto-created wrapper dossier's
+    /// activity (Distributie / Direct transport / Kraantransport, …). Only used when
+    /// <see cref="DossierId"/> is null; must be an active type with stops. Null keeps the
+    /// existing behaviour: the tenant's system-default transport type.
+    /// </summary>
+    Guid? ActivityTypeId = null,
+    /// <summary>
+    /// One-page intake: DurationHours for the wrapper activity (e.g. Kraantransport). Only used
+    /// when <see cref="DossierId"/> is null; the wrapper type must AllowsDuration and the value
+    /// must be >= 0 — the same rules DossierActivityService enforces on the activity itself.
+    /// </summary>
+    decimal? ActivityDurationHours = null,
+    /// <summary>D2: kind of crane job. OnSiteLifting needs an activity type with SupportsOnSiteWork.</summary>
+    CraneJobKind CraneJobKind = CraneJobKind.None,
+    /// <summary>D2: mandatory for OnSiteLifting.</summary>
+    string? WorkDescription = null,
+    // D2: lift data — never turned into goods lines.
+    decimal? LiftLoadWeightKg = null,
+    string? LiftLoadDimensions = null,
+    decimal? LiftRadiusMeters = null,
+    decimal? LiftHeightMeters = null,
+    string? LiftConditions = null,
+    string? LiftEquipment = null);
 
 public record UpdateTransportOrderRequest(
     Guid CustomerId,
     string? CustomerReference,
     DateOnly? OrderDate,
-    string GoodsDescription,
+    string? GoodsDescription,
     decimal? Quantity,
     string? QuantityUnit,
     decimal? WeightKg,
@@ -160,9 +587,64 @@ public record UpdateTransportOrderRequest(
     decimal? AgreedPrice,
     string? Notes,
     IReadOnlyList<TransportOrderStopInput> Stops,
-    IReadOnlyList<CargoItemInput>? CargoItems = null);
+    IReadOnlyList<CargoItemInput>? CargoItems = null,
+    OrderPriority? Priority = null,
+    bool DieselSurchargeOverride = false,
+    decimal? DieselSurchargePercentOverride = null,
+    string? DieselSurchargeOverrideReason = null,
+    Guid? LegalEntityId = null,
+    string? QuantityUnitCode = null,
+    IReadOnlyList<Guid>? ServiceOptionIds = null,
+    bool PriceIsManual = false,
+    string? PriceOverrideReason = null,
+    /// <summary>Preferred over ServiceOptionIds when present: selections incl. quantities.</summary>
+    IReadOnlyList<OrderServiceInput>? Services = null,
+    /// <summary>Contract (default) or OneOff (spec Phase 6): this order carries its own price agreement.</summary>
+    OrderPricingSource PricingSource = OrderPricingSource.Contract,
+    decimal? OneOffFixedAmount = null,
+    int? OneOffIncludedLoadingMinutes = null,
+    int? OneOffIncludedUnloadingMinutes = null,
+    int? OneOffIncludedCombinedMinutes = null,
+    decimal? OneOffExtraHourlyRate = null,
+    string? OneOffNotes = null,
+    /// <summary>
+    /// Task 10: order-level overrides of the engaged contract agreement's included loading/
+    /// unloading time and extra-time rate/rounding/minimum. Contract pricing only — rejected in
+    /// combination with PricingSource == OneOff.
+    /// </summary>
+    int? IncludedLoadingMinutesOverride = null,
+    int? IncludedUnloadingMinutesOverride = null,
+    decimal? ExtraTimeHourlyRateOverride = null,
+    int? ExtraTimeRoundingStepMinutes = null,
+    int? ExtraTimeMinimumBillableMinutes = null,
+    /// <summary>Expected concurrency token; null (legacy clients) skips the check.</summary>
+    Guid? Version = null,
+    /// <summary>Wave 3 §1: planned distance in km (PerKm bases/services) — optional.</summary>
+    decimal? DistanceKm = null,
+    /// <summary>Wave 3 §1: loading meters (PerLoadingMeter bases, ldm bracket caps) — optional.</summary>
+    decimal? LoadingMeters = null,
+    // P6: equipment/movement pricing dimensions.
+    bool PlateauRequired = false,
+    bool MoffettRequired = false,
+    bool IsReturnMovement = false,
+    /// <summary>
+    /// D2: kind of crane job. Null = unchanged — a client that does not know the D2 fields then
+    /// leaves the kind, work description and lift data exactly as stored. Non-null applies the
+    /// kind AND the work description / lift fields below as sent.
+    /// </summary>
+    CraneJobKind? CraneJobKind = null,
+    string? WorkDescription = null,
+    decimal? LiftLoadWeightKg = null,
+    string? LiftLoadDimensions = null,
+    decimal? LiftRadiusMeters = null,
+    decimal? LiftHeightMeters = null,
+    string? LiftConditions = null,
+    string? LiftEquipment = null);
 
 public record ChangeTransportOrderStatusRequest(TransportOrderStatus Status);
+
+/// <summary>Inline edit of the operational priority; validated and audited server-side.</summary>
+public record ChangeOrderPriorityRequest(OrderPriority Priority);
 
 public enum TransportOrderOperationOutcome
 {
@@ -171,6 +653,8 @@ public enum TransportOrderOperationOutcome
     InvalidReference,
     InvalidState,
     ValidationFailed,
+    /// <summary>Optimistic-concurrency mismatch; <c>Order</c> carries the CURRENT state so the client can rebase.</summary>
+    VersionConflict,
 }
 
 public record TransportOrderOperationResult(
@@ -181,4 +665,7 @@ public record TransportOrderOperationResult(
     public static TransportOrderOperationResult InvalidReference(string error) => new(TransportOrderOperationOutcome.InvalidReference, null, error);
     public static TransportOrderOperationResult InvalidState(string error) => new(TransportOrderOperationOutcome.InvalidState, null, error);
     public static TransportOrderOperationResult Invalid(string error) => new(TransportOrderOperationOutcome.ValidationFailed, null, error);
+    public static TransportOrderOperationResult Conflict(TransportOrderDetailDto current) => new(
+        TransportOrderOperationOutcome.VersionConflict, current,
+        "Deze opdracht is intussen door iemand anders gewijzigd. Herlaad en probeer opnieuw.");
 }

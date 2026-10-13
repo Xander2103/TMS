@@ -3,6 +3,7 @@ using TransportationService.Api.Common.Models;
 using TransportationService.Api.Common.Persistence;
 using TransportationService.Api.Data;
 using TransportationService.Api.Modules.Auditing.Services;
+using TransportationService.Api.Modules.Reference.Entities;
 using TransportationService.Api.Modules.Tenancy.Services;
 
 namespace TransportationService.Api.Common.Lookups;
@@ -50,18 +51,32 @@ public class LookupService<TEntity> : ILookupService<TEntity> where TEntity : Lo
                 e.Name.ToLower().Contains(term));
         }
 
-        return await query
+        // Mapped in memory (not via a Select(projection) expression tree): MapToDto's
+        // RequiresEndDate branch pattern-matches on ContractType, and only closed generic
+        // instantiations of this class where TEntity is ContractType can ever satisfy it — for
+        // every other lookup type the SQL translator would otherwise have to make sense of a
+        // TypeBinaryExpression against an unrelated entity, which it can't. Lookup tables are
+        // tiny, so paging in full rows instead of a narrow SELECT is not a real cost here.
+        var paged = await query
             .OrderBy(e => e.SortOrder).ThenBy(e => e.Name)
-            .ToPagedResultAsync(page, e => MapToDto(e), cancellationToken);
+            .ToPagedResultAsync(page, e => e, cancellationToken);
+
+        return new PagedResult<LookupItemDto>(
+            paged.Items.Select(MapToDto).ToList(), paged.TotalCount, paged.Page, paged.PageSize);
     }
 
-    public async Task<IReadOnlyList<LookupOptionDto>> ListOptionsAsync(CancellationToken cancellationToken) =>
-        await TenantScoped()
+    public async Task<IReadOnlyList<LookupOptionDto>> ListOptionsAsync(CancellationToken cancellationToken)
+    {
+        var entities = await TenantScoped()
             .AsNoTracking()
             .Where(e => e.IsActive)
             .OrderBy(e => e.SortOrder).ThenBy(e => e.Name)
-            .Select(e => new LookupOptionDto(e.Id, e.Code, e.Name))
             .ToListAsync(cancellationToken);
+
+        return entities
+            .Select(e => new LookupOptionDto(e.Id, e.Code, e.Name, RequiresEndDateOf(e)))
+            .ToList();
+    }
 
     public async Task<LookupItemDto?> GetByIdAsync(Guid id, CancellationToken cancellationToken)
     {
@@ -69,45 +84,82 @@ public class LookupService<TEntity> : ILookupService<TEntity> where TEntity : Lo
         return entity is null ? null : MapToDto(entity);
     }
 
+    /// <summary>Attempts for a generated code when concurrent creates race for the same candidate.</summary>
+    private const int MaxGeneratedCodeAttempts = 5;
+
     public async Task<LookupOperationResult> CreateAsync(CreateLookupRequest request, CancellationToken cancellationToken)
     {
-        if (Validate(request.Code, request.Name) is { } validationError)
+        if (string.IsNullOrWhiteSpace(request.Name))
         {
-            return LookupOperationResult.Invalid(validationError);
+            return LookupOperationResult.Invalid("Naam is verplicht.");
         }
 
-        var code = request.Code.Trim();
-        if (await CodeExistsAsync(code, excludingId: null, cancellationToken))
+        var explicitCode = Normalize(request.Code);
+        if (explicitCode is not null && await CodeExistsAsync(explicitCode, excludingId: null, cancellationToken))
         {
-            return LookupOperationResult.Duplicate(code);
+            return LookupOperationResult.Duplicate(explicitCode);
         }
 
-        var entity = new TEntity
+        // Generated codes: the database (unique TenantId+Code index) is the arbiter. Two
+        // concurrent creates may compute the same candidate; the loser gets a
+        // DbUpdateException and simply moves on to the next free ordinal.
+        var rejectedCandidates = new List<string>();
+        for (var attempt = 1; ; attempt++)
         {
-            Id = Guid.NewGuid(),
-            TenantId = _tenantContext.TenantId,
-            Code = code,
-            Name = request.Name.Trim(),
-            Description = Normalize(request.Description),
-            IsActive = request.IsActive,
-            SortOrder = request.SortOrder,
-        };
+            var code = explicitCode ?? await NextGeneratedCodeAsync(request.Name, rejectedCandidates, cancellationToken);
 
-        _dbContext.Set<TEntity>().Add(entity);
+            var entity = new TEntity
+            {
+                Id = Guid.NewGuid(),
+                TenantId = _tenantContext.TenantId,
+                Code = code,
+                Name = request.Name.Trim(),
+                Description = Normalize(request.Description),
+                IsActive = request.IsActive,
+                SortOrder = request.SortOrder,
+            };
+            ApplyRequiresEndDate(entity, request.RequiresEndDate);
 
-        try
-        {
-            await _dbContext.SaveChangesAsync(cancellationToken);
+            _dbContext.Set<TEntity>().Add(entity);
+
+            try
+            {
+                await _dbContext.SaveChangesAsync(cancellationToken);
+            }
+            catch (DbUpdateException)
+            {
+                _dbContext.Entry(entity).State = EntityState.Detached;
+                if (explicitCode is not null || attempt >= MaxGeneratedCodeAttempts)
+                {
+                    return LookupOperationResult.Duplicate(code);
+                }
+
+                rejectedCandidates.Add(code);
+                continue;
+            }
+
+            await _auditService.RecordAsync(EntityTypeName, entity.Id.ToString(), "Created", null,
+                new { entity.Code, entity.Name, entity.IsActive, GeneratedCode = explicitCode is null }, cancellationToken);
+
+            return LookupOperationResult.Ok(MapToDto(entity));
         }
-        catch (DbUpdateException)
-        {
-            return LookupOperationResult.Duplicate(code);
-        }
+    }
 
-        await _auditService.RecordAsync(EntityTypeName, entity.Id.ToString(), "Created", null,
-            new { entity.Code, entity.Name, entity.IsActive }, cancellationToken);
-
-        return LookupOperationResult.Ok(MapToDto(entity));
+    /// <summary>
+    /// Next free code for <paramref name="name"/> within the tenant: the name-derived base, else
+    /// base-2, base-3, … Existing codes (including soft-deleted ones, so a reused code never
+    /// resurrects history) are read once; candidates that just lost a race are excluded too.
+    /// </summary>
+    private async Task<string> NextGeneratedCodeAsync(string name, IReadOnlyCollection<string> rejectedCandidates, CancellationToken cancellationToken)
+    {
+        var baseCode = LookupCodeGenerator.BaseFromName(name);
+        var prefix = baseCode.ToLowerInvariant();
+        var taken = await _dbContext.Set<TEntity>()
+            .IgnoreQueryFilters()
+            .Where(e => e.TenantId == _tenantContext.TenantId && e.Code.ToLower().StartsWith(prefix))
+            .Select(e => e.Code)
+            .ToListAsync(cancellationToken);
+        return LookupCodeGenerator.NextFree(baseCode, taken.Concat(rejectedCandidates));
     }
 
     public async Task<LookupOperationResult> UpdateAsync(Guid id, UpdateLookupRequest request, CancellationToken cancellationToken)
@@ -136,6 +188,7 @@ public class LookupService<TEntity> : ILookupService<TEntity> where TEntity : Lo
         entity.Description = Normalize(request.Description);
         entity.IsActive = request.IsActive;
         entity.SortOrder = request.SortOrder;
+        ApplyRequiresEndDate(entity, request.RequiresEndDate);
 
         try
         {
@@ -185,6 +238,19 @@ public class LookupService<TEntity> : ILookupService<TEntity> where TEntity : Lo
     private static string? Normalize(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
+    /// <summary>No-op for every lookup type except <see cref="ContractType"/>; a request value
+    /// of null (field not supplied) leaves an existing row's flag untouched, but still defaults
+    /// to false on create.</summary>
+    private static void ApplyRequiresEndDate(TEntity entity, bool? requiresEndDate)
+    {
+        if (entity is ContractType contractType && requiresEndDate is { } value)
+        {
+            contractType.RequiresEndDate = value;
+        }
+    }
+
+    private static bool? RequiresEndDateOf(TEntity e) => e is ContractType ct ? ct.RequiresEndDate : null;
+
     private static LookupItemDto MapToDto(TEntity e) =>
-        new(e.Id, e.Code, e.Name, e.Description, e.IsActive, e.SortOrder, e.CreatedAt, e.UpdatedAt);
+        new(e.Id, e.Code, e.Name, e.Description, e.IsActive, e.SortOrder, e.CreatedAt, e.UpdatedAt, RequiresEndDateOf(e));
 }

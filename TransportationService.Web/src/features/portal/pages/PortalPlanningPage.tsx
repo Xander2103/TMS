@@ -1,100 +1,211 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { PageHeader } from '../../../components/layout/PageHeader'
 import { LoadingState } from '../../../components/feedback/LoadingState'
 import { ErrorState } from '../../../components/feedback/ErrorState'
+import { Button } from '../../../components/ui/Button'
+import { useToast } from '../../../components/ui/toastContext'
 import { apiClient } from '../../../api/apiClient'
+import { apiBaseUrl } from '../../../config/env'
+import { useLocale } from '../../../i18n/localeContext'
+import { getAccessToken } from '../../auth/authStorage'
 import { useAuth } from '../../auth/authContextValue'
+import { MonthGrid } from '../../../components/calendar/MonthGrid'
+import { WeekGrid } from '../../../components/calendar/WeekGrid'
+import { CalendarToolbar, type CalendarViewMode } from '../../../components/calendar/CalendarToolbar'
+import { dayIndexMonday, getDayNames, monthGridRange } from '../../../components/calendar/dateUtils'
+import '../../../components/calendar/calendar.css'
 import { ScheduleChip, ScheduleLegend } from '../../employee-planning/components/ScheduleChip'
 import { mondayOf, toIsoDate, type ScheduleDay, type ScheduleEntry } from '../../employee-planning/types'
+import { PersonalNoteDialog } from '../components/PersonalNoteDialog'
+import type { PersonalCalendarNote } from '../api/calendarNotesApi'
 import './portal.css'
 
-const DAY_NAMES = ['maandag', 'dinsdag', 'woensdag', 'donderdag', 'vrijdag', 'zaterdag', 'zondag']
+function addDays(iso: string, days: number): string {
+  return toIsoDate(new Date(new Date(`${iso}T00:00:00`).getTime() + days * 86_400_000))
+}
 
-/** Own schedule (shifts, trips and leave merged), mobile-first list for the coming two weeks. */
+/**
+ * Personal planning as a real calendar: week view (days side by side), month view (shared
+ * calendar grid) and the original agenda list — plus an iCalendar export for Google/Outlook
+ * import.
+ */
 export function PortalPlanningPage() {
   const navigate = useNavigate()
+  const toast = useToast()
   const { hasPermission } = useAuth()
-  const [days, setDays] = useState<ScheduleDay[] | null>(null)
-  const [loadError, setLoadError] = useState<string | null>(null)
-  const [weekStart, setWeekStart] = useState(() => toIsoDate(mondayOf(new Date())))
+  const { t } = useLocale()
 
-  /** Own trip chips open the driver execution view; absence chips open the leave page. */
-  function chipAction(entry: ScheduleEntry): (() => void) | undefined {
-    if (entry.sourceType === 'Trip' && entry.tripId && hasPermission('driver_workflow.view')) {
-      return () => navigate(`/my-trips/${entry.tripId}`)
-    }
-    if (entry.sourceType === 'Absence') {
-      return () => navigate('/portal/absences')
-    }
-    return undefined
-  }
+  const [view, setView] = useState<CalendarViewMode>('week')
+  const [anchor, setAnchor] = useState(() => toIsoDate(mondayOf(new Date())))
+  const [loadedDays, setLoadedDays] = useState<{ key: string; days: ScheduleDay[] } | null>(null)
+  const [loadError, setLoadError] = useState(false)
+  const [reloadToken, setReloadToken] = useState(0)
+  const [noteDialog, setNoteDialog] = useState<{ note: PersonalCalendarNote | null; date: string } | null>(null)
+
+  // Visible range per view: week = 7 days from the anchor's Monday; month = the full padded
+  // grid MonthGrid renders (leading/trailing weeks from neighbouring months included, so their
+  // dimmed pad cells aren't silently empty); list = 14 days.
+  // `anchor` isn't guaranteed Monday-aligned for week view (e.g. after paging months while in
+  // month view and then switching to week), and WeekGrid always renders `mondayOf(anchor)`, so
+  // the fetch must be derived the same way or days would render empty.
+  const anchorDate = new Date(`${anchor}T00:00:00`)
+  const monthRange = view === 'month' ? monthGridRange(anchorDate) : null
+  const weekStart = view === 'week' ? mondayOf(anchorDate) : null
+  const from = monthRange ? toIsoDate(monthRange.start) : weekStart ? toIsoDate(weekStart) : anchor
+  const to = monthRange
+    ? toIsoDate(monthRange.end)
+    : weekStart
+      ? addDays(toIsoDate(weekStart), 6)
+      : addDays(anchor, 13)
+
+  // Loading is derived from a request key so no setState runs synchronously in the effect.
+  const requestKey = `${from}|${to}|${reloadToken}`
+  const days = loadedDays?.key === requestKey ? loadedDays.days : null
 
   useEffect(() => {
     let mounted = true
-    const from = weekStart
-    const to = toIsoDate(new Date(new Date(`${weekStart}T00:00:00`).getTime() + 13 * 86_400_000))
     apiClient
       .getJson<ScheduleDay[]>(`/api/me/planning?from=${from}&to=${to}`)
       .then((data) => {
-        if (!mounted) return
-        setDays(data)
-        setLoadError(null)
+        if (mounted) setLoadedDays({ key: `${from}|${to}|${reloadToken}`, days: data })
       })
       .catch(() => {
-        if (mounted) setLoadError('Je planning kon niet worden geladen.')
+        if (mounted) setLoadError(true)
       })
     return () => {
       mounted = false
     }
-  }, [weekStart])
+  }, [from, to, reloadToken])
 
-  function shiftWeeks(delta: number) {
-    const date = new Date(`${weekStart}T00:00:00`)
-    date.setDate(date.getDate() + delta * 7)
-    setWeekStart(toIsoDate(date))
+  const entriesByDate = useMemo(() => new Map((days ?? []).map((day) => [day.date, day.entries])), [days])
+
+  function chipAction(entry: ScheduleEntry, date: string): (() => void) | undefined {
+    if (entry.noteId) {
+      return () =>
+        setNoteDialog({
+          date,
+          note: {
+            id: entry.noteId!,
+            title: entry.label,
+            description: entry.statusLabel,
+            date,
+            startTime: entry.startTime,
+            endTime: entry.endTime,
+            allDay: !entry.startTime,
+            colour: entry.colour ?? '#2563eb',
+          },
+        })
+    }
+    if (entry.tripId && hasPermission('driver_workflow.view')) {
+      return () => navigate(`/my-trips/${entry.tripId}`)
+    }
+    return undefined
   }
 
-  if (loadError) return <ErrorState message={loadError} />
-  if (!days) return <LoadingState message="Planning laden..." />
+  function selectMonthDate(iso: string) {
+    setView('week')
+    setAnchor(toIsoDate(mondayOf(new Date(`${iso}T00:00:00`))))
+  }
+
+  async function downloadIcs() {
+    try {
+      const response = await fetch(`${apiBaseUrl}/api/me/planning/ics?from=${from}&to=${to}`, {
+        headers: { Authorization: `Bearer ${getAccessToken()}` },
+      })
+      if (!response.ok) throw new Error()
+      const blob = await response.blob()
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = 'planning.ics'
+      link.click()
+      URL.revokeObjectURL(url)
+    } catch {
+      toast.showError(t('portalHome.planning.icsFailed'))
+    }
+  }
+
+  if (loadError) return <ErrorState message={t('portalHome.planning.loadFailed')} />
 
   const today = toIsoDate(new Date())
 
   return (
     <div>
       <PageHeader
-        title="Mijn planning"
-        subtitle="Je shifts, ritten, opleidingen en afwezigheden voor de komende twee weken."
+        title={t('portalHome.planning.title')}
+        subtitle={t('portalHome.planning.subtitle')}
+        action={
+          <div className="portal-planning-actions">
+            <Button onClick={() => setNoteDialog({ note: null, date: today })}>{t('portalHome.planning.addNote')}</Button>
+            <Button variant="secondary" onClick={() => void downloadIcs()}>
+              {t('portalHome.planning.icsExport')}
+            </Button>
+          </div>
+        }
       />
-      <div className="portal-week-nav">
-        <button type="button" onClick={() => shiftWeeks(-2)} aria-label="Twee weken terug">
-          ‹ vorige
-        </button>
-        <span>vanaf {weekStart}</span>
-        <button type="button" onClick={() => shiftWeeks(2)} aria-label="Twee weken verder">
-          volgende ›
-        </button>
-      </div>
-      <ul className="portal-planning">
-        {days.map((day) => {
-          const dayIndex = (new Date(`${day.date}T00:00:00`).getDay() + 6) % 7
-          return (
-            <li key={day.date} className={`portal-planning-day ${day.date === today ? 'portal-planning-today' : ''}`}>
-              <div className="portal-planning-date">
-                {DAY_NAMES[dayIndex]} {day.date.slice(8, 10)}/{day.date.slice(5, 7)}
-                {day.date === today && ' · vandaag'}
-              </div>
-              <div className="portal-planning-entries">
-                {day.entries.length === 0 && <span className="portal-planning-free">vrij</span>}
-                {day.entries.map((entry, index) => (
-                  <ScheduleChip key={index} entry={entry} onClick={chipAction(entry)} />
-                ))}
-              </div>
-            </li>
-          )
-        })}
-      </ul>
-      <ScheduleLegend />
+
+      <CalendarToolbar
+        anchor={anchorDate}
+        view={view}
+        onViewChange={setView}
+        onNavigate={(next) => setAnchor(toIsoDate(next))}
+      />
+
+      {!days && <LoadingState message={t('portalHome.planning.loading')} />}
+
+      {days && view === 'week' && (
+        <WeekGrid
+          anchor={anchorDate}
+          entriesByDate={entriesByDate}
+          renderEntry={(entry, ctx) => <ScheduleChip entry={entry} onClick={chipAction(entry, ctx.date)} />}
+        />
+      )}
+
+      {days && view === 'month' && (
+        <MonthGrid
+          anchor={anchorDate}
+          entriesByDate={entriesByDate}
+          onSelectDate={selectMonthDate}
+          renderEntry={(entry) => <ScheduleChip entry={entry} compact />}
+        />
+      )}
+
+      {days && view === 'list' && (
+        <ul className="cal-list">
+          {days.map((day) => {
+            const dayIndex = dayIndexMonday(new Date(`${day.date}T00:00:00`))
+            return (
+              <li key={day.date} className={`cal-list-day ${day.date === today ? 'cal-today' : ''}`}>
+                <div className="cal-list-date">
+                  {getDayNames()[dayIndex]} {day.date.slice(8, 10)}/{day.date.slice(5, 7)}
+                  {day.date === today && ` · ${t('portalHome.planning.today')}`}
+                </div>
+                <div className="cal-list-entries">
+                  {day.entries.length === 0 && <span className="cal-list-free">{t('ui.calendar.free')}</span>}
+                  {day.entries.map((entry, index) => (
+                    <ScheduleChip key={index} entry={entry} onClick={chipAction(entry, day.date)} />
+                  ))}
+                </div>
+              </li>
+            )
+          })}
+        </ul>
+      )}
+
+      {days && <ScheduleLegend />}
+
+      {noteDialog && (
+        <PersonalNoteDialog
+          note={noteDialog.note}
+          initialDate={noteDialog.date}
+          onClose={() => setNoteDialog(null)}
+          onSaved={() => {
+            setNoteDialog(null)
+            setReloadToken((t) => t + 1)
+          }}
+        />
+      )}
     </div>
   )
 }

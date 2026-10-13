@@ -25,8 +25,10 @@ public class AbsenceConfiguration : IEntityTypeConfiguration<Absence>
 
         builder.HasIndex(a => new { a.TenantId, a.EmployeeId, a.StartDate });
         builder.HasIndex(a => new { a.TenantId, a.StartDate });
+        builder.HasIndex(a => new { a.TenantId, a.LeaveTypeId });
 
         builder.HasOne<Employee>().WithMany().HasForeignKey(a => a.EmployeeId).OnDelete(DeleteBehavior.Cascade);
+        builder.HasOne<LeaveType>().WithMany().HasForeignKey(a => a.LeaveTypeId).OnDelete(DeleteBehavior.Restrict);
 
         builder.HasQueryFilter(a => !a.IsDeleted);
     }

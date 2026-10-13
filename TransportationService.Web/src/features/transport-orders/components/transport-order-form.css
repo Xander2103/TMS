@@ -29,6 +29,24 @@
   grid-template-columns: 1fr 1fr 1fr 1fr;
 }
 
+.tof-radio-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tof-radio-row label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 15px;
+  font-weight: 400;
+}
+
+.tof-radio-row input[type='radio'] {
+  width: auto;
+}
+
 .tof-checkbox {
   display: flex;
   align-items: center;
@@ -62,6 +80,31 @@
   margin-bottom: 8px;
 }
 
+/* Phase 7: "Overgenomen van klantlocatie" chip row + pending-refresh badge on a stop. */
+.tof-snapshot-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 13px;
+  margin: -4px 0 8px;
+}
+
+.tof-snapshot-line {
+  color: var(--muted);
+}
+
+/* Phase 7: advisory opening-hours hint (never blocking). */
+.tof-hours-warning {
+  background: var(--warning-bg);
+  border: 1px solid var(--warning-border);
+  color: var(--warning);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 13px;
+  margin: 0 0 8px;
+}
+
 .tof-stops-header {
   display: flex;
   align-items: center;
@@ -84,6 +127,43 @@
   border-radius: 8px;
   padding: 8px 14px 12px;
   margin: 8px 0 0;
+}
+
+/* Wave 2026-08-04 §13 / route UX sprint 2026-10-08: stop cards flow row by row in sequence
+   order and fill the available width first (auto-fill, 380px minimum per card — the same rule
+   as route-section.css, repeated here so the layout does not depend on stylesheet order). */
+.tof-stops-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(380px, 100%), 1fr));
+  gap: 0 12px;
+  align-items: start;
+}
+
+.tof-stops-grid .tof-stop {
+  min-width: 0;
+}
+
+/* Half-width cards: two form columns fit, four don't. */
+.tof-stops-grid .tof-row,
+.tof-stops-grid .tof-row-4 {
+  grid-template-columns: 1fr 1fr;
+}
+
+@media (max-width: 640px) {
+  .tof-stops-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .tof-stops-grid .tof-row,
+  .tof-stops-grid .tof-row-4 {
+    grid-template-columns: 1fr;
+  }
+}
+
+.tof-stop-summary {
+  margin: 4px 0;
+  font-size: 14px;
+  color: var(--text-muted);
 }
 
 .tof-stop legend {
@@ -120,7 +200,7 @@
 }
 
 .tof-link-danger {
-  color: #dc2626;
+  color: var(--color-danger-strong);
 }
 
 .tof-actions {
@@ -135,6 +215,45 @@
   .tof-row-4 {
     grid-template-columns: 1fr;
   }
+}
+
+/* Also defined in ../pages/transport-orders.css — duplicated so the create form shows the
+   warning even when the detail page chunk (and its CSS) was never loaded. */
+.to-coverage-warning {
+  border: 1px solid var(--color-danger-strong);
+  border-left-width: 4px;
+  border-radius: 8px;
+  background: rgba(220, 38, 38, 0.06);
+  padding: 10px 14px;
+  margin: 8px 0;
+  font-size: 14px;
+}
+
+.to-coverage-warning ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+
+.tof-derived-summary {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin: 8px 0;
+  background: var(--surface-muted);
+}
+
+.tof-derived-summary h4 {
+  margin: 0 0 6px;
+  font-size: 14px;
+}
+
+.tof-lading-list {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.tof-lading-list li {
+  font-size: 14px;
 }
 
 .tof-stop-extended {
@@ -189,4 +308,103 @@
   margin: 0 0 10px;
   font-size: 14px;
   color: var(--text);
+}
+
+/* --- Sectioned form additions (services, pricing, summary, documents) --- */
+
+.tof-service-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tof-service-option {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+
+.tof-service-group {
+  margin-bottom: 20px;
+}
+
+.tof-service-group h4 {
+  margin: 0 0 8px;
+  font-size: 15px;
+}
+
+.tof-service-option-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.tof-service-add-panel {
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.tof-service-not-applied {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--text);
+  font-size: 14px;
+}
+
+.tof-price-breakdown {
+  margin-bottom: 12px;
+}
+
+.tof-price-amount {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.tof-price-informational td {
+  color: var(--text);
+  font-style: italic;
+}
+
+.tof-price-proposed td {
+  background: var(--surface-subtle);
+}
+
+.tof-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px 24px;
+  margin: 0 0 16px;
+}
+
+.tof-summary dt {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text);
+}
+
+.tof-summary dd {
+  margin: 2px 0 0;
+  font-weight: 500;
+}
+
+.tof-documents-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.tof-documents-visibility {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
 }

@@ -51,6 +51,67 @@
   width: 100%;
 }
 
+.inv-entity-period {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.inv-entity-period .ui-form-field {
+  flex: 1;
+  min-width: 220px;
+}
+
+.inv-next-number {
+  margin: -4px 0 0;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.inv-period-warning {
+  margin: -4px 0 0;
+  font-size: 13px;
+  color: var(--color-warning);
+}
+
+/* Wave 2 §4: informational grouping-preference hint under the customer picker. */
+.inv-grouping-hint {
+  margin: -4px 0 0;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.inv-meta {
+  margin: -8px 0 16px;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.inv-override-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.inv-override-form input,
+.inv-override-form textarea {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 15px;
+  color: var(--text-h);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.inv-override-error {
+  margin: 0;
+  font-size: 14px;
+  color: var(--color-danger-strong);
+}
+
 .inv-section h3 {
   font-size: 16px;
   margin: 8px 0;
@@ -87,7 +148,7 @@
 }
 
 .inv-order-row:hover {
-  background: rgba(0, 0, 0, 0.03);
+  background: var(--color-surface-subtle);
 }
 
 .inv-goods {
@@ -121,7 +182,7 @@
 }
 
 .inv-link-danger {
-  color: #dc2626;
+  color: var(--color-danger-strong);
 }
 
 .inv-builder-footer {
@@ -218,4 +279,59 @@
   .inv-manual-row {
     grid-template-columns: 1fr;
   }
+}
+
+/* Wave 2 §6: readiness chip in the uninvoiced-orders table. */
+.inv-readiness {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.inv-readiness-ready {
+  background: var(--color-success-bg);
+  color: var(--color-success);
+}
+
+.inv-readiness-review {
+  background: var(--color-warning-bg);
+  color: var(--color-warning-text);
+  cursor: help;
+}
+
+/* "gratis" marker next to the € 0,00 of a free dossier activity in the builder. */
+.inv-free-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--color-info-bg);
+  color: var(--color-info);
+}
+
+/* P12: inline datum+reden invoer voor het uitstellen van een order in de facturatiecontrole. */
+.inv-snooze-editor {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+/* Send confirmation summary (irreversible action → explicit facts before the click). */
+.inv-send-summary {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 6px 16px;
+  margin: 12px 0 0;
+}
+.inv-send-summary dt {
+  color: var(--text-muted);
+}
+.inv-send-summary dd {
+  margin: 0;
+  font-weight: 600;
 }

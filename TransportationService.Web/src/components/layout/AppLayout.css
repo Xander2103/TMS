@@ -1,13 +1,31 @@
 .app-shell {
   display: flex;
+  /* svh on purpose: a minimum must never force a scrollbar. The sidebar itself is 100dvh. */
   min-height: 100svh;
   text-align: left;
+  /* Where page-level sticky chrome (subnavs, section tabs) may stick. 0 on desktop; below
+     900px the fixed mobile topbar covers the top of the viewport, see the media query. */
+  --app-sticky-top: 0px;
+}
+
+.app-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 12px 40px 0;
 }
 
 .content {
   flex: 1;
   min-width: 0;
-  padding: 32px 40px;
+  padding: 16px 40px 32px;
   box-sizing: border-box;
 }
 
@@ -22,10 +40,21 @@
 @media (max-width: 900px) {
   .app-shell {
     flex-direction: column;
+    /* Height of .mobile-topbar: 10px padding + 44px toggle + 10px padding + 1px border. */
+    --app-sticky-top: 65px;
   }
 
   .content {
     padding: 76px 16px 24px;
+  }
+
+  /* The bell overlays the right edge of the fixed mobile-topbar instead of adding a second bar. */
+  .app-topbar {
+    position: fixed;
+    top: 0;
+    right: 0;
+    z-index: 41;
+    padding: 12px 12px 0;
   }
 
   .mobile-topbar {
@@ -64,6 +93,31 @@
     position: fixed;
     inset: 0;
     z-index: 45;
-    background: rgba(0, 0, 0, 0.4);
+    background: var(--color-overlay);
   }
+}
+
+.shortcut-help-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.shortcut-help-list li {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.shortcut-help-list kbd {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.15rem 0.5rem;
+  font-family: inherit;
+  font-size: 0.82rem;
+  min-width: 3.5rem;
+  text-align: center;
 }

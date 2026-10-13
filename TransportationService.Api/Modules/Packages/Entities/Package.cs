@@ -13,6 +13,11 @@ public enum PackageUnitType
     Container,
     Document,
     Other,
+    // Stored as strings, so appending members is safe.
+    EuroPallet,
+    BlockPallet,
+    Box,
+    Drum,
 }
 
 public enum PackageLifecycleStatus
@@ -56,8 +61,13 @@ public class Package : AuditableTenantEntity
 {
     public Guid TransportOrderId { get; set; }
 
-    /// <summary>Best-effort pins; stops are wholesale-replaced on order edits (FK SetNull),
-    /// so a null pin falls back to the order's loading/unloading stops at scan time.</summary>
+    /// <summary>The cargo line this package was generated from (null for manually created packages).</summary>
+    public Guid? CargoItemId { get; set; }
+
+    /// <summary>Best-effort pins. Since wave 1 blocker C-01 an order edit PRESERVES stop identity,
+    /// so these normally survive; removing a pinned stop is refused on a confirmed order and
+    /// releases the pin (null) while the order is still Draft/Submitted. A null pin falls back to
+    /// the order's loading/unloading stops at scan time.</summary>
     public Guid? LoadingStopId { get; set; }
     public Guid? DeliveryStopId { get; set; }
 
@@ -94,6 +104,12 @@ public class Package : AuditableTenantEntity
     public bool RequiresSignature { get; set; }
 
     public PackageLifecycleStatus CurrentLifecycleStatus { get; set; } = PackageLifecycleStatus.Created;
+
+    /// <summary>
+    /// Wave 4 §2: WHERE the package currently sits (projection — the append-only custody
+    /// events stay the source of truth). FK-less snapshot id; null = unknown/on the road.
+    /// </summary>
+    public Guid? CurrentWarehouseLocationId { get; set; }
     public PackageExceptionState CurrentExceptionStatus { get; set; } = PackageExceptionState.None;
 
     public string? Notes { get; set; }

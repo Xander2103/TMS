@@ -45,8 +45,14 @@ public class EmployeeProfileTests
         var audit = new AuditService(db.Context, tenant, new DevCurrentUserContext(userId));
         var driverService = new Modules.Drivers.Services.DriverService(db.Context, tenant, audit,
             new Modules.Qualifications.Services.QualificationStatusCalculator(), TimeProvider.System);
+        var qualificationService = new Modules.Qualifications.Services.QualificationService(
+            db.Context, tenant, new Modules.Qualifications.Services.QualificationStatusCalculator(),
+            TimeProvider.System, audit, new CountryCodeValidator(db.Context),
+            new Modules.Qualifications.Services.LocalFileStorageService(
+                Path.Combine(Path.GetTempPath(), "ts-tests", Guid.NewGuid().ToString("N"))));
         var sut = new EmployeeService(db.Context, tenant, audit,
-            new CountryCodeValidator(db.Context), driverService);
+            new CountryCodeValidator(db.Context), driverService, qualificationService,
+            new EmployeeCompletenessService(db.Context, tenant));
         return new Harness(db, sut, tenantId, userId, departmentId, functionChauffeur, functionPlanner);
     }
 
@@ -199,8 +205,8 @@ public class EmployeeProfileTests
             canEditConfidential: true, CancellationToken.None);
         h.Db.Context.ChangeTracker.Clear();
 
-        var chauffeurs = await h.Sut.SearchAsync(null, null, h.FunctionChauffeur, null, null, false, PageRequest.Of(1, 25), CancellationToken.None);
-        var planningDept = await h.Sut.SearchAsync(null, null, null, h.DepartmentId, null, false, PageRequest.Of(1, 25), CancellationToken.None);
+        var chauffeurs = await h.Sut.SearchAsync(null, null, h.FunctionChauffeur, null, null, false, null, null, false, PageRequest.Of(1, 25), CancellationToken.None);
+        var planningDept = await h.Sut.SearchAsync(null, null, null, h.DepartmentId, null, false, null, null, false, PageRequest.Of(1, 25), CancellationToken.None);
 
         Assert.Single(chauffeurs.Items);
         Assert.Equal("Janssen", chauffeurs.Items[0].LastName);
@@ -286,10 +292,36 @@ public class EmployeeProfileTests
             EmploymentStatus.Active), canEditConfidential: true, CancellationToken.None);
         h.Db.Context.ChangeTracker.Clear();
 
-        var withoutDrivers = await h.Sut.SearchAsync(null, null, null, null, null, true, PageRequest.Of(1, 25), CancellationToken.None);
+        var withoutDrivers = await h.Sut.SearchAsync(null, null, null, null, null, true, null, null, false, PageRequest.Of(1, 25), CancellationToken.None);
 
         Assert.Single(withoutDrivers.Items);
         Assert.DoesNotContain(withoutDrivers.Items, e => e.Id == withDriver.Id);
+    }
+
+    [Fact]
+    public async Task Search_HasDriverProfile_ReturnsOnlyDriversWithReadinessColumns()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        h.Db.Context.ChangeTracker.Clear();
+        var withDriver = await h.Sut.CreateAsync(FullRequest(h) with
+        {
+            DriverProfile = new CreateEmployeeDriverProfile(null, null),
+        }, canEditConfidential: true, CancellationToken.None);
+        await h.Sut.CreateAsync(new CreateEmployeeRequest(
+            "Piet", "Peeters", new DateOnly(1985, 1, 1),
+            "Dorpstraat", "2", "2000", "Antwerpen",
+            "+323", "piet2@acme.example", new DateOnly(2021, 1, 1),
+            EmploymentStatus.Active), canEditConfidential: true, CancellationToken.None);
+        h.Db.Context.ChangeTracker.Clear();
+
+        var onlyDrivers = await h.Sut.SearchAsync(null, null, null, null, null, false, true, null, false, PageRequest.Of(1, 25), CancellationToken.None);
+
+        var row = Assert.Single(onlyDrivers.Items);
+        Assert.Equal(withDriver.Id, row.Id);
+        Assert.True(row.IsDriver);
+        Assert.False(row.DriverIsBlocked);
+        Assert.NotNull(row.DriverAvailability);
     }
 
     [Fact]
@@ -312,5 +344,52 @@ public class EmployeeProfileTests
         Assert.True(afterReactivate!.IsActive);
         Assert.Equal(EmploymentStatus.Active, afterReactivate.EmploymentStatus);
         Assert.Null(afterReactivate.EmploymentEndDate);
+    }
+
+    [Fact]
+    public async Task CreateAsync_WithQualifications_PersistsThemInTheSameTransaction()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var typeId = Guid.NewGuid();
+        h.Db.Context.QualificationTypes.Add(new Modules.Qualifications.Entities.QualificationType
+        {
+            Id = typeId, Code = "adr", Name = "ADR", Category = "Certificaat", RequiresExpiryDate = true, IsActive = true,
+        });
+        await h.Db.Context.SaveChangesAsync();
+
+        var created = await h.Sut.CreateAsync(FullRequest(h) with
+        {
+            Qualifications =
+            [
+                new Modules.Qualifications.Dtos.CreateEmployeeQualificationRequest(
+                    typeId, "DOC-1", new DateOnly(2024, 1, 1), new DateOnly(2029, 1, 1), null),
+            ],
+        }, canEditConfidential: true, CancellationToken.None);
+
+        var stored = Assert.Single(h.Db.Context.EmployeeQualifications.Where(q => q.EmployeeId == created.Id));
+        Assert.Equal(typeId, stored.QualificationTypeId);
+        Assert.Equal("DOC-1", stored.DocumentNumber);
+    }
+
+    [Fact]
+    public async Task CreateAsync_WithUnknownQualificationType_FailsWithFieldError_AndCreatesNoEmployee()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+
+        var ex = await Assert.ThrowsAsync<TransportationService.Api.Common.DomainValidationException>(
+            () => h.Sut.CreateAsync(FullRequest(h) with
+            {
+                Qualifications =
+                [
+                    new Modules.Qualifications.Dtos.CreateEmployeeQualificationRequest(
+                        Guid.NewGuid(), null, new DateOnly(2024, 1, 1), null, null),
+                ],
+            }, canEditConfidential: true, CancellationToken.None));
+
+        Assert.Contains("qualifications", ex.FieldErrors!.Keys);
+        Assert.Empty(h.Db.Context.Employees.ToList());
+        Assert.Empty(h.Db.Context.EmployeeQualifications.ToList());
     }
 }

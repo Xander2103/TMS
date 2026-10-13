@@ -8,20 +8,46 @@ export type LocationType =
   | 'UnloadingLocation'
   | 'ParkingLocation'
   | 'Office'
+  | 'RegisteredOffice'
+  | 'AdministrativeAddress'
+  | 'BillingAddress'
+  | 'ReturnsAddress'
+  | 'ConstructionSite'
+  | 'TemporaryLocation'
+  | 'Other'
 
-export const LOCATION_TYPE_LABELS: Record<LocationType, string> = {
-  CompanySite: 'Bedrijfssite',
-  Depot: 'Depot',
-  Warehouse: 'Magazijn',
-  CustomerLocation: 'Klantlocatie',
-  Terminal: 'Terminal',
-  LoadingLocation: 'Laadlocatie',
-  UnloadingLocation: 'Loslocatie',
-  ParkingLocation: 'Parking',
-  Office: 'Kantoor',
+/** Vertaalsleutels — renderen als t(LOCATION_TYPE_LABEL_KEYS[type]). */
+export const LOCATION_TYPE_LABEL_KEYS: Record<LocationType, string> = {
+  CompanySite: 'locations.type.CompanySite',
+  Depot: 'locations.type.Depot',
+  Warehouse: 'locations.type.Warehouse',
+  CustomerLocation: 'locations.type.CustomerLocation',
+  Terminal: 'locations.type.Terminal',
+  LoadingLocation: 'locations.type.LoadingLocation',
+  UnloadingLocation: 'locations.type.UnloadingLocation',
+  ParkingLocation: 'locations.type.ParkingLocation',
+  Office: 'locations.type.Office',
+  RegisteredOffice: 'locations.type.RegisteredOffice',
+  AdministrativeAddress: 'locations.type.AdministrativeAddress',
+  BillingAddress: 'locations.type.BillingAddress',
+  ReturnsAddress: 'locations.type.ReturnsAddress',
+  ConstructionSite: 'locations.type.ConstructionSite',
+  TemporaryLocation: 'locations.type.TemporaryLocation',
+  Other: 'locations.type.Other',
 }
 
-export const LOCATION_TYPES = Object.keys(LOCATION_TYPE_LABELS) as LocationType[]
+export const LOCATION_TYPES = Object.keys(LOCATION_TYPE_LABEL_KEYS) as LocationType[]
+
+/**
+ * One structured opening window. Times travel as "HH:mm" strings — exactly what the weekly
+ * editor and `<input type="time">` produce; dayOfWeek is ISO (1 = maandag .. 7 = zondag).
+ */
+export interface LocationOpeningInterval {
+  dayOfWeek: number
+  fromTime: string
+  toTime: string
+  note: string | null
+}
 
 export interface LocationListItem {
   id: string
@@ -32,6 +58,19 @@ export interface LocationListItem {
   countryCode: string | null
   customerName: string | null
   isActive: boolean
+  isDefaultLoadingLocation: boolean
+  isDefaultUnloadingLocation: boolean
+  isDefaultBillingLocation: boolean
+}
+
+/**
+ * One group of the per-customer overview (GET /api/locations/grouped). Paging happens over
+ * GROUPS; `customerName` null identifies the "Ongekoppelde locaties" bucket (sorted last).
+ */
+export interface LocationGroup {
+  customerId: string | null
+  customerName: string | null
+  locations: LocationListItem[]
 }
 
 export interface LocationOption {
@@ -39,6 +78,16 @@ export interface LocationOption {
   code: string
   name: string
   type: LocationType
+  city: string | null
+  isDefaultLoadingLocation: boolean
+  isDefaultUnloadingLocation: boolean
+  isDefaultBillingLocation: boolean
+  /** Central address master (additive, optional): provenance relative to the requested customer. */
+  isLinkedToCustomer?: boolean
+  /** Total customer relationships on the address; 0 = company-wide address. */
+  linkedCustomerCount?: number
+  /** Up to three names of OTHER customers using the address, comma-separated. */
+  linkedCustomerNames?: string | null
 }
 
 export interface LocationDetail {
@@ -55,8 +104,14 @@ export interface LocationDetail {
   longitude: number | null
   contactName: string | null
   contactPhone: string | null
+  contactMobile: string | null
   contactEmail: string | null
+  /** Optional link to a CustomerContact of the linked customer (snapshot fields stay editable). */
+  customerContactId: string | null
+  externalReference: string | null
   openingHours: string | null
+  /** Structured weekly hours; a day without intervals is closed/unknown. */
+  openingIntervals: LocationOpeningInterval[] | null
   loadingInstructions: string | null
   unloadingInstructions: string | null
   accessInstructions: string | null
@@ -65,10 +120,116 @@ export interface LocationDetail {
   trailerRestrictions: string | null
   alfapassRequired: boolean
   appointmentRequired: boolean
+  gate: string | null
+  /** Absent/null unless the caller holds locations.view_sensitive. */
+  accessCode?: string | null
+  receptionPoint: string | null
+  dock: string | null
+  routeDescription: string | null
+  deliveryByAppointmentOnly: boolean
+  heightRestrictionMeters: number | null
+  weightRestrictionTons: number | null
+  /** Null = onbekend (never guessed to false). */
+  adrAllowed: boolean | null
+  craneRequired: boolean
+  forkliftAvailable: boolean
+  driverInstructions: string | null
+  /** Internal-only memo, never shown on driver/customer surfaces. */
+  internalMemo: string | null
+  defaultLoadingMinutes: number | null
+  defaultUnloadingMinutes: number | null
+  preferredArrivalFrom: string | null
+  preferredArrivalTo: string | null
+  earliestArrival: string | null
+  latestArrival: string | null
   isActive: boolean
   customerId: string | null
   customerName: string | null
   notes: string | null
+  isDefaultLoadingLocation: boolean
+  isDefaultUnloadingLocation: boolean
+  isDefaultBillingLocation: boolean
+  /**
+   * The customer relationships behind this address (sprint 2 audit). More than one means the
+   * legacy customer/default fields on the address form are read-only: manage the links via
+   * Klant › Adressen. Optional so older callers/fixtures keep type-checking.
+   */
+  linkedCustomerCount?: number
+  linkedCustomerNames?: string[]
 }
 
-export type LocationInput = Omit<LocationDetail, 'id' | 'customerName'>
+/**
+ * Create/update payload. Notes on backend semantics:
+ * - `openingIntervals` must ALWAYS echo the full list on update — sending null clears every
+ *   interval, so the type requires an array (send [] to intentionally clear).
+ * - `accessCode` must be OMITTED entirely when the user lacks locations.view_sensitive
+ *   (the backend then preserves the stored value).
+ * - `overrideDuplicate` (create only): the server refuses a same-front-door address with a
+ *   409 `address_duplicate` unless this is true — set it only after the user chose "Toch aanmaken".
+ */
+export type LocationInput = Omit<
+  LocationDetail,
+  'id' | 'customerName' | 'accessCode' | 'openingIntervals' | 'linkedCustomerCount' | 'linkedCustomerNames'
+> & {
+  accessCode?: string | null
+  openingIntervals: LocationOpeningInterval[]
+  overrideDuplicate?: boolean
+  /** Read-only context for the edit form (never posted with meaning; the server ignores it). */
+  linkedCustomerCount?: number
+  linkedCustomerNames?: string[]
+}
+
+/** Blank location form value; spread and override to prefill (e.g. customerId from the URL). */
+export const EMPTY_LOCATION_INPUT: LocationInput = {
+  code: '',
+  name: '',
+  type: 'Depot',
+  street: null,
+  houseNumber: null,
+  postalCode: null,
+  city: null,
+  countryCode: null,
+  latitude: null,
+  longitude: null,
+  contactName: null,
+  contactPhone: null,
+  contactMobile: null,
+  contactEmail: null,
+  customerContactId: null,
+  externalReference: null,
+  openingHours: null,
+  openingIntervals: [],
+  loadingInstructions: null,
+  unloadingInstructions: null,
+  accessInstructions: null,
+  accessRestrictions: null,
+  vehicleRestrictions: null,
+  trailerRestrictions: null,
+  alfapassRequired: false,
+  appointmentRequired: false,
+  gate: null,
+  accessCode: null,
+  receptionPoint: null,
+  dock: null,
+  routeDescription: null,
+  deliveryByAppointmentOnly: false,
+  heightRestrictionMeters: null,
+  weightRestrictionTons: null,
+  adrAllowed: null,
+  craneRequired: false,
+  forkliftAvailable: false,
+  driverInstructions: null,
+  internalMemo: null,
+  defaultLoadingMinutes: null,
+  defaultUnloadingMinutes: null,
+  preferredArrivalFrom: null,
+  preferredArrivalTo: null,
+  earliestArrival: null,
+  latestArrival: null,
+  isActive: true,
+  customerId: null,
+  notes: null,
+  isDefaultLoadingLocation: false,
+  isDefaultUnloadingLocation: false,
+  isDefaultBillingLocation: false,
+}

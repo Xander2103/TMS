@@ -44,14 +44,14 @@
 }
 
 .status-active {
-  color: #15803d;
+  color: var(--color-success);
 }
 
 .status-inactive {
-  color: #a16207;
+  color: var(--color-warning);
 }
 
 .status-blocked {
-  color: #dc2626;
+  color: var(--color-danger-strong);
   font-weight: 500;
 }
