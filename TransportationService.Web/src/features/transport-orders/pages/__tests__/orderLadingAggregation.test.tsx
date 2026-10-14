@@ -214,7 +214,7 @@ describe('TransportOrderDetailPage Lading aggregation', () => {
     expect(within(rows[2]).getByText('Nog te controleren')).toBeInTheDocument()
     expect(rows[3].querySelector('.ui-badge')).toBeNull()
 
-    expect(screen.getByText('Capaciteit nog te controleren')).toBeInTheDocument()
+    expect(screen.getByText('Capaciteitscontrole beschikbaar na voertuigtoewijzing.')).toBeInTheDocument()
     expect(document.body.textContent).not.toMatch(/veilig/i)
   })
 

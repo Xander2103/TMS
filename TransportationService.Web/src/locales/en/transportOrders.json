@@ -337,10 +337,9 @@
     "linesWithoutUnitWeight": "{count} goods line(s) without a weight per unit: their heaviest unit is not known.",
     "payloadExceeded": "Total weight ({weight}) exceeds the vehicle payload ({capacity}).",
     "tailLiftExceeded": "Heaviest unit ({weight}) exceeds the tail lift capacity ({capacity}).",
-    "toCheck": "Capacity still to be checked",
-    "unknownPayload": "vehicle payload",
-    "unknownTailLift": "tail lift",
-    "unknownHandling": "pallet truck/forklift"
+    "afterAssignment": "Capacity check available after vehicle assignment.",
+    "payloadMissing": "Attention: Vehicle payload is missing.",
+    "handlingNotModelled": "Pallet truck/forklift capacity is not recorded — check on site."
   },
   "coverageBadge": {
     "SeparatelyPriced": "Priced separately",

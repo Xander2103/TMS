@@ -23,6 +23,7 @@ import {
 } from '../../transport-orders/components/sections/orderFormState'
 import { orderValuesFromDetail } from './orderDrawerState'
 import { SectionDrawer } from './SectionDrawer'
+import type { VehicleContext } from '../../transport-orders/components/GoodsCapacityHint'
 import '../../transport-orders/components/transport-order-form.css'
 
 interface GoodsDrawerProps {
@@ -30,13 +31,14 @@ interface GoodsDrawerProps {
   onClose: () => void
   /** Receives the fresh order detail after a successful save. */
   onSaved: (order: TransportOrderDetail) => void
-  /** Capacities of the planned vehicle, when the host knows one; absent → "nog te controleren". */
+  /** Capacities of the planned vehicle, when the host knows one; no vehicle → quiet hint. */
   vehiclePayloadKg?: number | null
   tailLiftCapacityKg?: number | null
+  vehicleContext?: VehicleContext
 }
 
 /** §11 goods drawer: hosts the Phase-6 GoodsSection against ONE linked order (see RouteDrawer). */
-export function GoodsDrawer({ order, onClose, onSaved, vehiclePayloadKg, tailLiftCapacityKg }: GoodsDrawerProps) {
+export function GoodsDrawer({ order, onClose, onSaved, vehiclePayloadKg, tailLiftCapacityKg, vehicleContext }: GoodsDrawerProps) {
   const { t } = useLocale()
   const [baseOrder, setBaseOrder] = useState(order)
   const [cargoItems, setCargoItems] = useState<CargoFormRow[]>(() => cargoFromOrder(order))
@@ -173,6 +175,7 @@ export function GoodsDrawer({ order, onClose, onSaved, vehiclePayloadKg, tailLif
         <GoodsSection
           vehiclePayloadKg={vehiclePayloadKg}
           tailLiftCapacityKg={tailLiftCapacityKg}
+          vehicleContext={vehicleContext}
           goodsDescription={goodsDescription}
           setGoodsDescription={touch(setGoodsDescription)}
           quantity={quantity}

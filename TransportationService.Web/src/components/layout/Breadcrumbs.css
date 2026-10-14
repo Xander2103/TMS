@@ -1,22 +1,52 @@
 .ui-breadcrumbs {
   margin-bottom: 8px;
+  min-width: 0;
 }
 
+/* B54: always ONE line. Long crumbs shrink and ellipsize instead of wrapping the trail. */
 .ui-breadcrumbs ol {
   list-style: none;
   margin: 0;
   padding: 0;
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 8px;
+  min-width: 0;
+  overflow: hidden;
   font-size: 14px;
+  white-space: nowrap;
 }
 
 .ui-breadcrumbs li {
   display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
+  flex: 0 1 auto;
+}
+
+/* The current (last) crumb gives way first; identifiers never shrink. */
+.ui-breadcrumbs li.ui-breadcrumbs-item--current {
+  flex-shrink: 4;
+}
+
+.ui-breadcrumbs li.ui-breadcrumbs-item--id {
+  flex-shrink: 0;
+}
+
+.ui-breadcrumbs-label {
+  display: block;
+  min-width: 0;
+  max-width: 28ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ui-breadcrumbs li.ui-breadcrumbs-item--id .ui-breadcrumbs-label {
+  max-width: none;
+  overflow: visible;
 }
 
 .ui-breadcrumbs a {
@@ -34,5 +64,6 @@
 }
 
 .ui-breadcrumbs-sep {
+  flex: none;
   color: var(--border);
 }

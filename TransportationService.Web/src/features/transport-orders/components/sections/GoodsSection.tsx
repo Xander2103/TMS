@@ -5,7 +5,7 @@ import { UNIT_TYPE_LABELS, type PackageUnitType } from '../../../packages/types'
 import { computeVolumeM3 } from '../../../../utils/volume'
 import { formatQuantity } from '../../../../utils/numbers'
 import type { CustomerPreferredUnit } from '../../../tarification/api/pricingApi'
-import { GoodsCapacityHint } from '../GoodsCapacityHint'
+import { GoodsCapacityHint, type VehicleContext } from '../GoodsCapacityHint'
 import { UnitSelect, type UnitOptionItem } from '../UnitSelect'
 import {
   applyCargoWeightPatch,
@@ -71,10 +71,12 @@ interface GoodsSectionProps {
   onDuplicateCargoRow?: (key: string) => void
   /**
    * Capacities of the vehicle assigned in the current context, when the host knows one
-   * (`Vehicle.payloadKg` / `Vehicle.tailLiftCapacityKg`). Absent → "Capaciteit nog te controleren".
+   * (`Vehicle.payloadKg` / `Vehicle.tailLiftCapacityKg`). `vehicleContext` says whether there is a
+   * vehicle at all; absent → `none` (quiet "available after vehicle assignment").
    */
   vehiclePayloadKg?: number | null
   tailLiftCapacityKg?: number | null
+  vehicleContext?: VehicleContext
   /** Selecting a unit auto-fills physical defaults from the unit master (composer owns the master data). */
   applyCargoUnit: (key: string, code: string | null) => void
   /** Fixed dimensions come from the unit definition and are not editable per order line. */
@@ -127,6 +129,7 @@ export function GoodsSection({
   onDuplicateCargoRow,
   vehiclePayloadKg,
   tailLiftCapacityKg,
+  vehicleContext,
   applyCargoUnit,
   cargoDimensionsFixed,
   saving,
@@ -178,6 +181,7 @@ export function GoodsSection({
       linesWithoutUnitWeight={weightTotals.linesWithoutUnitWeight}
       payloadKg={vehiclePayloadKg}
       tailLiftCapacityKg={tailLiftCapacityKg}
+      vehicle={vehicleContext}
     />
   )
 

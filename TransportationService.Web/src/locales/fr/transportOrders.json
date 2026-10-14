@@ -337,10 +337,9 @@
     "linesWithoutUnitWeight": "{count} ligne(s) de marchandises sans poids par unité : leur unité la plus lourde n’est pas connue.",
     "payloadExceeded": "Le poids total ({weight}) dépasse la charge utile du véhicule ({capacity}).",
     "tailLiftExceeded": "L’unité la plus lourde ({weight}) dépasse la capacité du hayon ({capacity}).",
-    "toCheck": "Capacité encore à vérifier",
-    "unknownPayload": "charge utile du véhicule",
-    "unknownTailLift": "hayon",
-    "unknownHandling": "transpalette/chariot élévateur"
+    "afterAssignment": "Contrôle de capacité disponible après l’affectation d’un véhicule.",
+    "payloadMissing": "Attention : la charge utile du véhicule manque.",
+    "handlingNotModelled": "La capacité du transpalette/chariot élévateur n’est pas enregistrée — à vérifier sur place."
   },
   "coverageBadge": {
     "SeparatelyPriced": "Tarifé séparément",

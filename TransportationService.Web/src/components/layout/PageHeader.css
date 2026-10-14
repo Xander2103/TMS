@@ -7,19 +7,27 @@
   margin-bottom: 24px;
 }
 
+/* B54: a long title (a 90-character customer name) wraps naturally — never truncated — and an
+   unbroken string breaks anywhere instead of pushing the page sideways. */
+.page-header > div:first-child {
+  min-width: 0;
+  max-width: 100%;
+}
+
 .page-header h2 {
   margin: 0;
+  overflow-wrap: anywhere;
 }
 
 .page-header-subtitle {
   margin: 4px 0 0;
-  font-size: 14px;
+  font-size: var(--text-md);
   color: var(--text);
 }
 
 .primary-button {
   display: inline-block;
-  font-size: 15px;
+  font-size: var(--text-base);
   padding: 8px 16px;
   border-radius: 6px;
   color: var(--color-on-primary);

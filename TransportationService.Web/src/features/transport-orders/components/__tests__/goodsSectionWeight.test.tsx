@@ -151,6 +151,6 @@ describe('GoodsSection goods line (D4)', () => {
     const block = screen.getByRole('complementary', { name: 'Operationele capaciteit' })
     expect(within(block).getByText('6.000 kg')).toBeInTheDocument()
     expect(within(block).getByText('2.000 kg')).toBeInTheDocument()
-    expect(within(block).getByText('Capaciteit nog te controleren')).toBeInTheDocument()
+    expect(within(block).getByText('Capaciteitscontrole beschikbaar na voertuigtoewijzing.')).toBeInTheDocument()
   })
 })

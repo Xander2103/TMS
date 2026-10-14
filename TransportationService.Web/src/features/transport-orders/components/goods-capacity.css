@@ -45,13 +45,13 @@
   align-items: center;
   gap: 0 var(--space-1);
   margin: 2px 0 0;
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--text);
 }
 
 .tof-weight-mode .tof-link {
   padding: 0 2px;
-  font-size: 13px;
+  font-size: var(--text-sm);
 }
 
 .tof-goods-footer {
@@ -72,13 +72,13 @@
   padding: var(--space-3) var(--space-4);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  font-size: 14px;
+  font-size: var(--text-md);
   color: var(--text-h);
 }
 
 .goods-capacity h4 {
   margin: 0 0 var(--space-2);
-  font-size: 14px;
+  font-size: var(--text-md);
 }
 
 .goods-capacity dl {
@@ -89,7 +89,7 @@
 }
 
 .goods-capacity dt {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text);
 }
 
@@ -115,8 +115,9 @@
   color: var(--danger);
 }
 
-.goods-capacity-unknown {
+.goods-capacity-attention {
   color: var(--warning);
+  font-weight: 600;
 }
 
 .goods-empty-lifting {

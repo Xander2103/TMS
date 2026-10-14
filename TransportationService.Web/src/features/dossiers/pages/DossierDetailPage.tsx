@@ -238,7 +238,7 @@ function DossierDetailContent() {
   // While true, the route/goods/price bodies show a placeholder inside a RetainedHeight, so the
   // page never shrinks under the planner's scroll position.
   const firstOrderLoading = Boolean(firstLinkedOrderId) && loadedOrder?.id !== firstLinkedOrderId
-  // D4: capacities of the vehicle the route target is planned on; unknown stays "nog te controleren".
+  // D4/B55: capacities of the vehicle the route target is planned on; no vehicle → a quiet hint.
   const routeVehicleCapacity = useVehicleCapacity(routeActivity?.assignment?.vehicleId ?? null)
 
   // --- Subsection from the URL ---------------------------------------------------------------
@@ -608,6 +608,7 @@ function DossierDetailContent() {
             onClose={() => setGoodsDrawerOpen(false)}
             vehiclePayloadKg={routeVehicleCapacity.payloadKg}
             tailLiftCapacityKg={routeVehicleCapacity.tailLiftCapacityKg}
+            vehicleContext={routeVehicleCapacity.vehicle}
             onSaved={(updated) => {
               setLoadedOrder({ id: updated.id, order: updated })
               toast.showSuccess(t('dossiers.detail.goodsSaved'))

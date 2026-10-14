@@ -116,7 +116,7 @@ describe('DossierGoodsSummary', () => {
     expect(item.textContent).toContain('totaal 6.000 kg')
     expect(item.textContent).not.toContain('per eenheid')
     expect(container.textContent).not.toContain('2.000')
-    expect(screen.getByText('Capaciteit nog te controleren')).toBeInTheDocument()
+    expect(screen.getByText('Capaciteitscontrole beschikbaar na voertuigtoewijzing.')).toBeInTheDocument()
     expect(container.textContent).not.toMatch(/veilig/i)
   })
 

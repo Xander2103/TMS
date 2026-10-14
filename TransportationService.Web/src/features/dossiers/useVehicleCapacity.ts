@@ -1,13 +1,21 @@
 import { useEffect, useState } from 'react'
+import type { VehicleContext } from '../transport-orders/components/GoodsCapacityHint'
 import { getVehicle } from '../vehicles/api/vehiclesApi'
 
-/** `Vehicle.payloadKg` / `Vehicle.tailLiftCapacityKg`; null = unknown ("Capaciteit nog te controleren"). */
+/**
+ * `Vehicle.payloadKg` / `Vehicle.tailLiftCapacityKg`; null = unknown. `vehicle`: `none` = nothing
+ * assigned yet (the hint stays quiet), `loading` = assigned, capacities still being fetched,
+ * `assigned` = looked up (a null capacity is then missing on the vehicle, or the lookup failed).
+ */
 export interface VehicleCapacity {
+  vehicle: VehicleContext
   payloadKg: number | null
   tailLiftCapacityKg: number | null
 }
 
-export const UNKNOWN_VEHICLE_CAPACITY: VehicleCapacity = { payloadKg: null, tailLiftCapacityKg: null }
+export const UNKNOWN_VEHICLE_CAPACITY: VehicleCapacity = { vehicle: 'none', payloadKg: null, tailLiftCapacityKg: null }
+
+const LOADING_VEHICLE_CAPACITY: VehicleCapacity = { vehicle: 'loading', payloadKg: null, tailLiftCapacityKg: null }
 
 /** One lookup per vehicle per session: capacities are master data that rarely change. */
 const cache = new Map<string, VehicleCapacity>()
@@ -32,6 +40,7 @@ export function useVehicleCapacity(vehicleId: string | null): VehicleCapacity {
       .then((vehicle) => {
         if (controller.signal.aborted) return
         const capacity: VehicleCapacity = {
+          vehicle: 'assigned',
           payloadKg: vehicle.payloadKg ?? null,
           tailLiftCapacityKg: vehicle.tailLiftCapacityKg ?? null,
         }
@@ -39,11 +48,13 @@ export function useVehicleCapacity(vehicleId: string | null): VehicleCapacity {
         setLoaded({ vehicleId, capacity })
       })
       .catch(() => {
-        // Unknown stays unknown; the next mount retries.
+        // Unknown stays unknown (not cached, so the next mount retries).
+        if (controller.signal.aborted) return
+        setLoaded({ vehicleId, capacity: { vehicle: 'assigned', payloadKg: null, tailLiftCapacityKg: null } })
       })
     return () => controller.abort()
   }, [vehicleId])
 
   if (!vehicleId) return UNKNOWN_VEHICLE_CAPACITY
-  return cache.get(vehicleId) ?? (loaded?.vehicleId === vehicleId ? loaded.capacity : UNKNOWN_VEHICLE_CAPACITY)
+  return cache.get(vehicleId) ?? (loaded?.vehicleId === vehicleId ? loaded.capacity : LOADING_VEHICLE_CAPACITY)
 }

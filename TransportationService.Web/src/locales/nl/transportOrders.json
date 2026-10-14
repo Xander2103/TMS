@@ -337,10 +337,9 @@
     "linesWithoutUnitWeight": "{count} goederenlijn(en) zonder gewicht per eenheid: de zwaarste eenheid daarvan is niet gekend.",
     "payloadExceeded": "Totaal gewicht ({weight}) overschrijdt het laadvermogen van het voertuig ({capacity}).",
     "tailLiftExceeded": "Zwaarste eenheid ({weight}) overschrijdt de capaciteit van de laadklep ({capacity}).",
-    "toCheck": "Capaciteit nog te controleren",
-    "unknownPayload": "laadvermogen voertuig",
-    "unknownTailLift": "laadklep",
-    "unknownHandling": "transpallet/heftruck"
+    "afterAssignment": "Capaciteitscontrole beschikbaar na voertuigtoewijzing.",
+    "payloadMissing": "Aandacht: Laadvermogen voertuig ontbreekt.",
+    "handlingNotModelled": "Capaciteit van transpallet/heftruck wordt niet geregistreerd — ter plaatse na te gaan."
   },
   "coverageBadge": {
     "SeparatelyPriced": "Afzonderlijk geprijsd",

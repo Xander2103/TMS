@@ -2,7 +2,7 @@ import { Button } from '../../../components/ui/Button'
 import { useLocale } from '../../../i18n/localeContext'
 import { formatQuantity } from '../../../utils/numbers'
 import { CargoCoverageBadge } from '../../transport-orders/components/CargoCoverageBadge'
-import { GoodsCapacityHint } from '../../transport-orders/components/GoodsCapacityHint'
+import { GoodsCapacityHint, type VehicleContext } from '../../transport-orders/components/GoodsCapacityHint'
 import { isOnSiteLiftingOrder } from '../../transport-orders/components/onSiteLifting'
 import { computeCargoWeightTotals } from '../../transport-orders/components/sections/cargoWeight'
 import { unitLabelFrom } from '../../transport-orders/pricing/cargoLabels'
@@ -14,14 +14,15 @@ interface DossierGoodsSummaryProps {
   loading: boolean
   canEdit: boolean
   onEdit: () => void
-  /** Capacities of the planned vehicle, when the host knows one; absent → "nog te controleren". */
+  /** Capacities of the planned vehicle, when the host knows one; no vehicle → quiet hint. */
   vehiclePayloadKg?: number | null
   tailLiftCapacityKg?: number | null
+  vehicleContext?: VehicleContext
 }
 
 /** §11 Goederen section: compact "2 × Europallet"-style lines from the first linked order. */
 export function DossierGoodsSummary({
-  order, loading, canEdit, onEdit, vehiclePayloadKg, tailLiftCapacityKg,
+  order, loading, canEdit, onEdit, vehiclePayloadKg, tailLiftCapacityKg, vehicleContext,
 }: DossierGoodsSummaryProps) {
   const { t } = useLocale()
   // Same resolver as the order shell: catalogue name for a managed code (the code itself while
@@ -68,6 +69,7 @@ export function DossierGoodsSummary({
             linesWithoutUnitWeight={weightTotals.linesWithoutUnitWeight}
             payloadKg={vehiclePayloadKg}
             tailLiftCapacityKg={tailLiftCapacityKg}
+            vehicle={vehicleContext}
           />
         </>
       )}

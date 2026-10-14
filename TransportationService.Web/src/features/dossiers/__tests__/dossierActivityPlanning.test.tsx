@@ -581,7 +581,20 @@ describe('Dossier overview (spec §17)', () => {
     expect(await hint.findByText(/12\.000 kg/)).toBeInTheDocument()
     // Heaviest unit (900 kg) above the tail lift (750 kg): a warning — and it never says "safe".
     expect(await hint.findByRole('alert')).toHaveTextContent(/900 kg/)
-    expect(hint.getByText(/Capaciteit nog te controleren/)).toBeInTheDocument()
+    expect(hint.queryByText(/voertuigtoewijzing/)).not.toBeInTheDocument()
+    expect(hint.queryByText(/Aandacht/)).not.toBeInTheDocument()
+  })
+
+  it('B55: flags a missing payload of the assigned vehicle as attention, not as a warning', async () => {
+    const line = { ...orderDetail().cargoItems[0], weightPerUnitKg: 900, totalWeightKg: 1800 }
+    orders.get.mockResolvedValue(orderDetail({ id: 'o-6', orderNumber: '0006', cargoItems: [line] }))
+    vehiclesApi.getVehicle.mockResolvedValue({ id: 'v-1', payloadKg: null, tailLiftCapacityKg: null })
+    api.getDossier.mockResolvedValue(dossierWith([orderActivity({ assignment: assignment() })]))
+    renderPage('/dossiers/d-1/goederen')
+
+    const hint = within(await screen.findByRole('complementary', { name: 'Operationele capaciteit' }))
+    expect(await hint.findByText('Aandacht: Laadvermogen voertuig ontbreekt.')).toBeInTheDocument()
+    expect(hint.queryByRole('alert')).not.toBeInTheDocument()
   })
 
   it('leaves the capacity unknown for an activity without a vehicle', async () => {
@@ -591,7 +604,8 @@ describe('Dossier overview (spec §17)', () => {
     renderPage('/dossiers/d-1/goederen')
 
     const hint = within(await screen.findByRole('complementary', { name: 'Operationele capaciteit' }))
-    expect(hint.getByText(/Capaciteit nog te controleren/)).toBeInTheDocument()
+    expect(hint.getByText('Capaciteitscontrole beschikbaar na voertuigtoewijzing.')).toBeInTheDocument()
+    expect(hint.queryByText(/Aandacht|nog te controleren/)).not.toBeInTheDocument()
     expect(hint.queryByRole('alert')).not.toBeInTheDocument()
     expect(vehiclesApi.getVehicle).not.toHaveBeenCalled()
   })

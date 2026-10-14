@@ -33,6 +33,7 @@ export function DossierGoodsSection() {
                 onEdit={ws.openGoodsDrawer}
                 vehiclePayloadKg={ws.routeVehicleCapacity.payloadKg}
                 tailLiftCapacityKg={ws.routeVehicleCapacity.tailLiftCapacityKg}
+                vehicleContext={ws.routeVehicleCapacity.vehicle}
               />
             ) : (
               <p className="placeholder-text">{t('dossiers.detail.goodsOnOrder')}</p>
