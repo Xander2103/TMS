@@ -876,9 +876,13 @@ export function TripDetailPage() {
             className="pl-notes"
           />
         </FormField>
+        {hasPermission('trip_costs.view') && (
+          <div className="pl-subsection">
+            <TripCostingPanel tripId={trip.id} tripStatus={trip.status} />
+          </div>
+        )}
       </details>
 
-      {hasPermission('trip_costs.view') && <TripCostingPanel tripId={trip.id} tripStatus={trip.status} />}
 
       {delayOpen && (
         <Modal
