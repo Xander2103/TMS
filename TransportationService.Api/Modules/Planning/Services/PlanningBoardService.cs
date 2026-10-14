@@ -178,6 +178,13 @@ public class PlanningBoardService : IPlanningBoardService
             }
 
             var conflicts = await _conflictService.EvaluateAsync(trip, cancellationToken);
+            // B09: the card explains itself on hover — blocking reasons first, three at most.
+            var conflictPreview = conflicts
+                .OrderByDescending(c => c.Severity == Common.Scheduling.ConflictSeverity.Blocking)
+                .ThenByDescending(c => c.Severity == Common.Scheduling.ConflictSeverity.Warning)
+                .Select(c => c.Description)
+                .Take(3)
+                .ToList();
 
             items.Add(new PlanningBoardTripDto(
                 trip.Id, trip.TripNumber, trip.TripDate, trip.Status, trip.PlannedStart, trip.PlannedEnd,
@@ -189,7 +196,8 @@ public class PlanningBoardService : IPlanningBoardService
                 capacityWeight, capacityVolume,
                 conflicts.Count(c => c.Severity == Common.Scheduling.ConflictSeverity.Blocking),
                 conflicts.Count(c => c.Severity == Common.Scheduling.ConflictSeverity.Warning),
-                trip.Version));
+                trip.Version,
+                conflictPreview));
         }
 
         return new PlanningBoardDto(start, end, items);
@@ -206,10 +214,14 @@ public class PlanningBoardService : IPlanningBoardService
         var page = PageRequest.Of(query.Page, Math.Min(query.PageSize, 100));
 
         // Unplanned = ready for planning (Confirmed) or awaiting review (Submitted), and not
-        // already claimed by a non-cancelled trip.
+        // already claimed by a non-cancelled trip. B09: on request the Draft pipeline is listed
+        // too — visibly not plannable, so the dispatcher sees work coming without bypassing the
+        // order lifecycle (the trip guard still only accepts Confirmed orders).
+        var includeDrafts = query.IncludeDrafts;
         var orders = _dbContext.TransportOrders.AsNoTracking()
             .Where(o => o.TenantId == tenantId
-                        && (o.Status == TransportOrderStatus.Confirmed || o.Status == TransportOrderStatus.Submitted)
+                        && (o.Status == TransportOrderStatus.Confirmed || o.Status == TransportOrderStatus.Submitted
+                            || (includeDrafts && o.Status == TransportOrderStatus.Draft))
                         && !_dbContext.TripOrders.Any(to =>
                             to.TenantId == tenantId && to.TransportOrderId == o.Id
                             && _dbContext.Trips.Any(t => t.Id == to.TripId && t.Status != TripStatus.Cancelled)));
@@ -258,7 +270,7 @@ public class PlanningBoardService : IPlanningBoardService
             {
                 x.o.Id, x.o.OrderNumber, x.o.OrderDate, x.o.CustomerId, x.CustomerName, x.o.Status,
                 x.o.Priority, x.o.GoodsDescription, x.o.WeightKg, x.o.VolumeM3,
-                x.o.AdrRequired, x.o.CraneRequired,
+                x.o.AdrRequired, x.o.CraneRequired, x.o.CustomerReference,
             })
             .ToListAsync(cancellationToken);
 
@@ -328,7 +340,9 @@ public class PlanningBoardService : IPlanningBoardService
                 packageCounts.GetValueOrDefault(r.Id),
                 weight, volume,
                 r.AdrRequired, r.CraneRequired,
-                badges);
+                badges,
+                Plannable: r.Status == TransportOrderStatus.Confirmed,
+                CustomerReference: r.CustomerReference);
         }).ToList();
 
         return new PagedResult<UnplannedOrderDto>(items, totalCount, page.Page, page.PageSize);

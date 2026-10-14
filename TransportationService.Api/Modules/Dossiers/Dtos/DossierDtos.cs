@@ -101,6 +101,14 @@ public sealed record DossierSearchQuery
     public string? InvoiceStatus { get; init; }
     public bool? HasCmr { get; init; }
 
+    // ---- B11 quick views: the presets of the list drive these three plain filters.
+    /// <summary>Dossiers whose responsible user is this user ("Mijn open").</summary>
+    public Guid? ResponsibleUserId { get; init; }
+    /// <summary>true = at least one open (New/InProgress) incident on the dossier; false = none.</summary>
+    public bool? HasOpenIncident { get; init; }
+    /// <summary>planned | unplanned: whether any order sits on a non-cancelled trip (or a standalone activity has a planned date).</summary>
+    public string? Planning { get; init; }
+
     /// <summary>number | date | customer | status | confirmedAt | planningDate | createdAt (default: date).</summary>
     public string? Sort { get; init; }
     /// <summary>asc | desc (default depends on the key: date-like keys desc, text keys asc).</summary>

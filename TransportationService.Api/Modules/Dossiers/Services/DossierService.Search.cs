@@ -3,6 +3,7 @@ using TransportationService.Api.Common;
 using TransportationService.Api.Common.Models;
 using TransportationService.Api.Modules.Dossiers.Dtos;
 using TransportationService.Api.Modules.Dossiers.Entities;
+using TransportationService.Api.Modules.Incidents.Entities;
 using TransportationService.Api.Modules.Invoicing.Entities;
 using TransportationService.Api.Modules.Orders.Entities;
 using TransportationService.Api.Modules.Orders.Services;
@@ -79,6 +80,32 @@ public partial class DossierService
         {
             var to = crt.AddDays(1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
             dossiers = dossiers.Where(d => d.CreatedAt < to);
+        }
+
+        // ---- B11 quick views: owner, open incidents, planned/unplanned
+        if (query.ResponsibleUserId is { } responsibleUserId) dossiers = dossiers.Where(d => d.ResponsibleUserId == responsibleUserId);
+        if (query.HasOpenIncident is { } hasOpenIncident)
+        {
+            // The same definition as the list row's OpenIncidentCount, so the filter and the badge agree.
+            dossiers = hasOpenIncident
+                ? dossiers.Where(d => _dbContext.Incidents.Any(i => i.DossierId == d.Id && (i.Status == IncidentStatus.New || i.Status == IncidentStatus.InProgress)))
+                : dossiers.Where(d => !_dbContext.Incidents.Any(i => i.DossierId == d.Id && (i.Status == IncidentStatus.New || i.Status == IncidentStatus.InProgress)));
+        }
+
+        if (!string.IsNullOrWhiteSpace(query.Planning))
+        {
+            // Planned = any of the dossier's orders sits on a non-cancelled trip, or a standalone
+            // activity carries a planned date — the same facts behind the Planning column.
+            dossiers = query.Planning.Trim().ToLowerInvariant() switch
+            {
+                "planned" => dossiers.Where(d =>
+                    _dbContext.Trips.Any(t => t.Status != TripStatus.Cancelled && _dbContext.TripOrders.Any(to => to.TripId == t.Id && _dbContext.TransportOrders.Where(o => _dbContext.DossierOrders.Any(l => l.DossierId == d.Id && l.TransportOrderId == o.Id) || _dbContext.DossierActivities.Any(a => a.DossierId == d.Id && a.LinkedTransportOrderId == o.Id)).Any(o2 => o2.Id == to.TransportOrderId)))
+                    || _dbContext.DossierActivities.Any(a => a.DossierId == d.Id && a.LinkedTransportOrderId == null && a.PlannedDate != null)),
+                "unplanned" => dossiers.Where(d =>
+                    !_dbContext.Trips.Any(t => t.Status != TripStatus.Cancelled && _dbContext.TripOrders.Any(to => to.TripId == t.Id && _dbContext.TransportOrders.Where(o => _dbContext.DossierOrders.Any(l => l.DossierId == d.Id && l.TransportOrderId == o.Id) || _dbContext.DossierActivities.Any(a => a.DossierId == d.Id && a.LinkedTransportOrderId == o.Id)).Any(o2 => o2.Id == to.TransportOrderId)))
+                    && !_dbContext.DossierActivities.Any(a => a.DossierId == d.Id && a.LinkedTransportOrderId == null && a.PlannedDate != null)),
+                _ => throw new DomainValidationException("planning", "Onbekende planningsstatus."),
+            };
         }
 
         // ---- identification / customer / dossier date

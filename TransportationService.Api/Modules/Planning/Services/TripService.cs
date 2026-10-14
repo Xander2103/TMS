@@ -1101,9 +1101,21 @@ public class TripService : ITripService
                          .Where(o => o.TenantId == tenantId && orderIds.Contains(o.Id))
                      join c in _dbContext.Customers.AsNoTracking().Where(c => c.TenantId == tenantId)
                          on o.CustomerId equals c.Id
-                     select new { o.Id, o.OrderNumber, CustomerName = c.Name, o.Status, o.GoodsDescription, o.AdrRequired, o.CraneRequired })
+                     select new { o.Id, o.OrderNumber, CustomerName = c.Name, o.Status, o.GoodsDescription, o.AdrRequired, o.CraneRequired, o.CustomerReference })
                 .ToListAsync(cancellationToken);
         var orderById = orderRows.ToDictionary(o => o.Id);
+
+        // B23: the dossier behind each order (first active link), so the trip page links back to it.
+        var dossierByOrder = orderIds.Count == 0
+            ? new Dictionary<Guid, (Guid Id, string Number)>()
+            : (await _dbContext.DossierOrders.AsNoTracking()
+                .Where(l => l.TenantId == tenantId && !l.IsDeleted && orderIds.Contains(l.TransportOrderId))
+                .Join(_dbContext.TransportDossiers.AsNoTracking().Where(d => d.TenantId == tenantId),
+                    l => l.DossierId, d => d.Id,
+                    (l, d) => new { l.TransportOrderId, d.Id, d.DossierNumber })
+                .ToListAsync(cancellationToken))
+                .GroupBy(x => x.TransportOrderId)
+                .ToDictionary(g => g.Key, g => (Id: g.First().Id, Number: g.First().DossierNumber));
 
         var stops = orderIds.Count == 0
             ? []
@@ -1126,13 +1138,15 @@ public class TripService : ITripService
             {
                 var order = orderById[to.TransportOrderId];
                 var orderStops = stopsByOrder[to.TransportOrderId].OrderBy(s => s.Sequence).ToList();
+                var dossier = dossierByOrder.TryGetValue(order.Id, out var link) ? link : ((Guid Id, string Number)?)null;
                 return new TripOrderSummaryDto(
                     order.Id, to.Sequence, order.OrderNumber, order.CustomerName, order.Status,
                     order.GoodsDescription,
                     orderStops.FirstOrDefault(s => s.StopType == StopType.Loading)?.City,
                     // D2: on-site work has no unloading stop — its site is the destination shown.
                     orderStops.LastOrDefault(s => s.StopType is StopType.Unloading or StopType.Site)?.City,
-                    order.AdrRequired, order.CraneRequired);
+                    order.AdrRequired, order.CraneRequired,
+                    dossier?.Id, dossier?.Number, order.CustomerReference);
             })
             .ToList();
 

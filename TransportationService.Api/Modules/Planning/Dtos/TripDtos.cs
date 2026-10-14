@@ -79,7 +79,11 @@ public record TripOrderSummaryDto(
     string? FirstLoadingCity,
     string? LastUnloadingCity,
     bool AdrRequired,
-    bool CraneRequired);
+    bool CraneRequired,
+    /// <summary>B23: the dossier the order belongs to (first active link), so the trip page can link back.</summary>
+    Guid? DossierId = null,
+    string? DossierNumber = null,
+    string? CustomerReference = null);
 
 public record TripListItemDto(
     Guid Id,

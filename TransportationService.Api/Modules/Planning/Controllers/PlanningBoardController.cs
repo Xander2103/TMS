@@ -40,11 +40,12 @@ public class PlanningBoardController : ControllerBase
         [FromQuery] bool onlyWithAttention,
         [FromQuery] int page,
         [FromQuery] int pageSize,
+        [FromQuery] bool includeDrafts,
         CancellationToken cancellationToken)
     {
         var query = new UnplannedOrdersQuery(
             search, customerId, status, priority, fromDate, toDate, onlyWithAttention,
-            page <= 0 ? 1 : page, pageSize <= 0 ? 50 : pageSize);
+            page <= 0 ? 1 : page, pageSize <= 0 ? 50 : pageSize, includeDrafts);
         return Ok(await _service.GetUnplannedOrdersAsync(query, cancellationToken));
     }
 

@@ -32,7 +32,9 @@ public record PlanningBoardTripDto(
     decimal? CapacityVolumeM3,
     int BlockingConflictCount,
     int WarningConflictCount,
-    Guid Version);
+    Guid Version,
+    /// <summary>B09: the first conflict descriptions (blocking first, max 3) so a card can explain itself without a selection.</summary>
+    IReadOnlyList<string>? ConflictPreview = null);
 
 public record PlanningBoardDto(
     DateOnly From,
@@ -64,7 +66,10 @@ public record UnplannedOrderDto(
     bool AdrRequired,
     bool CraneRequired,
     /// <summary>Machine badges: MissingWeight, MissingVolume, AppointmentRequired, NoStops, SubmittedReview.</summary>
-    IReadOnlyList<string> AttentionBadges);
+    IReadOnlyList<string> AttentionBadges,
+    /// <summary>B09: only a Confirmed order can be put on a trip (the trip guard); Draft/Submitted are shown for visibility only.</summary>
+    bool Plannable = true,
+    string? CustomerReference = null);
 
 public record UnplannedOrdersQuery(
     string? Search = null,
@@ -75,7 +80,9 @@ public record UnplannedOrdersQuery(
     DateOnly? ToDate = null,
     bool OnlyWithAttention = false,
     int Page = 1,
-    int PageSize = 50);
+    int PageSize = 50,
+    /// <summary>B09: also list Draft orders (visibly not plannable) so work in the pipeline is not invisible.</summary>
+    bool IncludeDrafts = false);
 
 // ---------------------------------------------------------------------------
 // Resources (right zone): drivers / vehicles / trailers with availability

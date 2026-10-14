@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using TransportationService.Api.Common.Scheduling;
 using TransportationService.Api.Modules.Auditing.Services;
+using TransportationService.Api.Modules.Dossiers.Entities;
 using TransportationService.Api.Modules.Drivers.Entities;
 using TransportationService.Api.Modules.EmployeePlanning.Services;
 using TransportationService.Api.Modules.Employees.Entities;
@@ -411,5 +412,85 @@ public class PlanningCenterTests
             c.Code == PlanningConflictCode.DriverDoubleBooked && c.Severity == ConflictSeverity.Blocking);
         // Nothing was persisted.
         Assert.Null(h.Db.Context.Trips.AsNoTracking().Single(t => t.Id == second.Id).DriverId);
+    }
+
+    // -----------------------------------------------------------------------
+    // Wave 2 (B09/B23): draft visibility, conflict preview, dossier links
+    // -----------------------------------------------------------------------
+
+    [Fact]
+    public async Task UnplannedOrders_ListDraftsOnlyOnRequest_AndFlagWhatCanBePlanned()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        h.Db.Context.TransportOrders.Add(new TransportOrder
+        {
+            Id = Guid.NewGuid(), TenantId = h.TenantId, CustomerId = h.CustomerId, OrderNumber = "ORD-0003",
+            OrderDate = new(2026, 7, 22), Status = TransportOrderStatus.Draft, GoodsDescription = "Concept", WeightKg = 100,
+        });
+        h.Db.Context.TransportOrders.Add(new TransportOrder
+        {
+            Id = Guid.NewGuid(), TenantId = h.TenantId, CustomerId = h.CustomerId, OrderNumber = "ORD-0004",
+            OrderDate = new(2026, 7, 22), Status = TransportOrderStatus.Submitted, GoodsDescription = "Review", WeightKg = 100,
+        });
+        await h.Db.Context.SaveChangesAsync();
+
+        // Default: the pool is what it always was — Confirmed and Submitted, never Draft.
+        var pool = await h.Board.GetUnplannedOrdersAsync(new UnplannedOrdersQuery(), CancellationToken.None);
+        Assert.DoesNotContain(pool.Items, o => o.OrderNumber == "ORD-0003");
+        Assert.True(pool.Items.Single(o => o.OrderNumber == "ORD-0001").Plannable);
+        // Submitted work is visible but the trip guard refuses it: not plannable.
+        Assert.False(pool.Items.Single(o => o.OrderNumber == "ORD-0004").Plannable);
+
+        // On request the Draft pipeline joins the list, visibly not plannable (lifecycle intact).
+        var withDrafts = await h.Board.GetUnplannedOrdersAsync(new UnplannedOrdersQuery(IncludeDrafts: true), CancellationToken.None);
+        var draft = withDrafts.Items.Single(o => o.OrderNumber == "ORD-0003");
+        Assert.Equal(TransportOrderStatus.Draft, draft.Status);
+        Assert.False(draft.Plannable);
+        Assert.Equal(4, withDrafts.TotalCount);
+    }
+
+    [Fact]
+    public async Task Board_CarriesAConflictPreview_BlockingReasonsFirst()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        // No driver, no vehicle: two blocking conflicts the card must be able to explain on hover.
+        await h.Trips.CreateAsync(
+            new CreateTripRequest(TripDate, null, null, null, null, null, null, [h.OrderId]), CancellationToken.None);
+
+        var board = await h.Board.GetBoardAsync(TripDate, TripDate, CancellationToken.None);
+
+        var trip = Assert.Single(board.Trips);
+        Assert.NotNull(trip.ConflictPreview);
+        Assert.InRange(trip.ConflictPreview!.Count, 1, 3);
+        Assert.Contains("Er is nog geen chauffeur toegewezen.", trip.ConflictPreview);
+        Assert.Equal(trip.BlockingConflictCount >= 2, trip.ConflictPreview.Count >= 2);
+    }
+
+    [Fact]
+    public async Task TripDetail_LinksEachOrderToItsDossier()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var dossierId = Guid.NewGuid();
+        h.Db.Context.TransportDossiers.Add(new TransportDossier
+        {
+            Id = dossierId, TenantId = h.TenantId, DossierNumber = "DOS-0022", Title = "Haven BV",
+            CustomerId = h.CustomerId, Status = DossierStatus.Open, DossierDate = new(2026, 7, 20), CreatedAt = Now.UtcDateTime,
+        });
+        h.Db.Context.DossierOrders.Add(new DossierOrder { Id = Guid.NewGuid(), TenantId = h.TenantId, DossierId = dossierId, TransportOrderId = h.OrderId });
+        await h.Db.Context.SaveChangesAsync();
+
+        var created = (await h.Trips.CreateAsync(
+            new CreateTripRequest(TripDate, h.DriverId, h.VehicleId, null, null, null, null, [h.OrderId, h.SecondOrderId]),
+            CancellationToken.None)).Trip!;
+        var detail = await h.Trips.GetByIdAsync(created.Id, CancellationToken.None);
+
+        var linked = detail!.Orders.Single(o => o.TransportOrderId == h.OrderId);
+        Assert.Equal(dossierId, linked.DossierId);
+        Assert.Equal("DOS-0022", linked.DossierNumber);
+        var unlinked = detail.Orders.Single(o => o.TransportOrderId == h.SecondOrderId);
+        Assert.Null(unlinked.DossierId);
     }
 }

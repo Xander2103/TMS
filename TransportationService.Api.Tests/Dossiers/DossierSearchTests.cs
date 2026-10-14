@@ -9,6 +9,7 @@ using TransportationService.Api.Modules.Drivers.Entities;
 using TransportationService.Api.Modules.Employees.Entities;
 using TransportationService.Api.Modules.Fleet.Entities;
 using TransportationService.Api.Modules.Identity.Services;
+using TransportationService.Api.Modules.Incidents.Entities;
 using TransportationService.Api.Modules.Invoicing.Entities;
 using TransportationService.Api.Modules.Orders.Entities;
 using TransportationService.Api.Modules.Partners.Entities;
@@ -450,5 +451,37 @@ public class DossierSearchTests
         var row = (await h.Search(Q())).Items.Single(i => i.Id == h.DossierLive);
 
         Assert.Equal(version, row.Version);
+    }
+
+    /// <summary>Wave 2 (B11): the quick views of the list are plain server filters — owner, open incident, planned/unplanned.</summary>
+    [Fact]
+    public async Task QuickViewFilters_ResponsibleUser_OpenIncident_AndPlanning()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var me = Guid.NewGuid();
+        var live = h.Db.Context.TransportDossiers.Single(d => d.Id == h.DossierLive);
+        live.ResponsibleUserId = me;
+        h.Db.Context.Incidents.AddRange(
+            new Incident { Id = Guid.NewGuid(), TenantId = h.TenantId, DossierId = h.DossierManual, Title = "Schade", Description = "Pallet beschadigd", Status = IncidentStatus.New },
+            new Incident { Id = Guid.NewGuid(), TenantId = h.TenantId, DossierId = h.DossierAuto, Title = "Opgelost", Description = "x", Status = IncidentStatus.Resolved });
+        await h.Db.Context.SaveChangesAsync();
+
+        // "Mijn open": the responsible user combined with the status filter.
+        Assert.Equal(["DOS-0001"], await h.Numbers(new DossierSearchQuery { ResponsibleUserId = me, Status = "Open" }));
+        Assert.Empty(await h.Numbers(new DossierSearchQuery { ResponsibleUserId = Guid.NewGuid() }));
+
+        // Open incident = New or InProgress; a resolved one does not count (same rule as the list badge).
+        Assert.Equal(["DOS-0002"], await h.Numbers(new DossierSearchQuery { HasOpenIncident = true }));
+        Assert.DoesNotContain("DOS-0002", await h.Numbers(new DossierSearchQuery { HasOpenIncident = false }));
+        Assert.Contains("DOS-0003", await h.Numbers(new DossierSearchQuery { HasOpenIncident = false }));
+
+        // Planned = an order on a live trip (DOS-0001) or a standalone activity with a planned date (DOS-0003).
+        Assert.Equal(["DOS-0001", "DOS-0003"], (await h.Numbers(new DossierSearchQuery { Planning = "planned" })).OrderBy(n => n).ToList());
+        var unplanned = await h.Numbers(new DossierSearchQuery { Planning = "unplanned" });
+        Assert.Equal(["DOS-0002", "DOS-0004", "DOS-0005"], unplanned.OrderBy(n => n).ToList());
+        // "Ongepland komende 7 dagen" = unplanned + open + a dossier-date window.
+        Assert.Equal(["DOS-0005"], await h.Numbers(new DossierSearchQuery { Planning = "unplanned", Status = "Open", DateFrom = new(2026, 9, 22), DateTo = new(2026, 9, 29) }));
+        await Assert.ThrowsAsync<DomainValidationException>(() => h.Search(new DossierSearchQuery { Planning = "later" }));
     }
 }
