@@ -1,6 +1,7 @@
 import { useLocale } from '../../../../i18n/localeContext'
 import { formatDate as formatIsoDate } from '../../../../utils/dates'
 import { AuditHistoryPanel } from '../../../auditing/components/AuditHistoryPanel'
+import { dossierAuditLabels } from '../../dossierAuditLabels'
 import { dossierLifecycleFacts } from '../../dossierDisplay'
 import { useDossierWorkspace } from '../../dossierWorkspace'
 import { DossierNotesPanel } from '../../notes/DossierNotesPanel'
@@ -53,7 +54,7 @@ export function DossierHistorySection() {
         </div>
         <div>
           <h3>{t('dossiers.overview.historyAudit')}</h3>
-          <AuditHistoryPanel entityType="TransportDossier" entityId={dossier.id} />
+          <AuditHistoryPanel entityType="TransportDossier" entityId={dossier.id} valueLabels={dossierAuditLabels} />
         </div>
       </div>
       <DossierMoreSection

@@ -1,3 +1,4 @@
+import { newestFirst } from '../components/orderTimeline'
 import { useEffect, useState, type ComponentType, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowRight, Boxes, Clock, Euro, FileText, History, Image, MapPin, MessageSquare, Package } from 'lucide-react'
@@ -266,7 +267,8 @@ export function OrderOverview() {
           {data.timeline && data.timeline.length === 0 && <p className="tod-muted">Nog geen gebeurtenissen.</p>}
           {data.timeline && data.timeline.length > 0 && (
             <ul className="tod-timeline">
-              {data.timeline.slice(0, 3).map((event, index) => (
+              {/* B25: the overview shows the LATEST three events (the API answers oldest first). */}
+              {newestFirst(data.timeline).slice(0, 3).map((event, index) => (
                 <li key={`${event.timestamp}-${index}`}>
                   <span className="tod-timeline-time">{formatDateTime(event.timestamp)}</span>
                   <span className="tod-timeline-title">{event.title}</span>

@@ -15,7 +15,9 @@
     "Rejected": "Rejected",
     "Assigned": "Assigned",
     "Unassigned": "Unassigned",
-    "Archived": "Archived"
+    "Archived": "Archived",
+    "PhotoAttached": "Photo added",
+    "PhotoDeleted": "Photo removed"
   },
   "panel": {
     "loadFailed": "The history could not be loaded.",
@@ -30,6 +32,8 @@
     "after": "After:",
     "empty": "No history for this item yet.",
     "loading": "Loading history…",
-    "system": "System (automatic)"
+    "system": "System (automatic)",
+    "systemLine": "{action} · automatic",
+    "unknownUser": "Unknown user"
   }
 }

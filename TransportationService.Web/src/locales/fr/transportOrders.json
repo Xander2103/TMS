@@ -693,19 +693,17 @@
     "busy": "Traitement..."
   },
   "timeline": {
-    "category": {
+    "loadFailed": "L'historique n'a pas pu être chargé.",
+    "empty": "Pas encore d'événements.",
+    "filterLabel": "Filtrer par type",
+    "categories": {
+      "all": "Tout",
       "order": "Commande",
       "status": "Statut",
       "package": "Colis",
       "stop": "Arrêt",
       "invoice": "Facture"
-    },
-    "loadFailed": "L'historique n'a pas pu être chargé.",
-    "loading": "Chargement de l'historique...",
-    "empty": "Pas encore d'événements.",
-    "filterPlaceholder": "Filtrer l'historique…",
-    "filterAria": "Filtrer l'historique",
-    "noMatches": "Aucun événement pour ce filtre."
+    }
   },
   "stopPlan": {
     "windowEndInvalid": "La fin de la fenêtre confirmée doit être postérieure au début.",

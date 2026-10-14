@@ -354,11 +354,12 @@ describe('order detail — overview cards', () => {
     renderPage()
     const history = await screen.findByRole('article', { name: 'Historiek' })
 
-    expect(await within(history).findByText('Opdracht aangemaakt')).toBeInTheDocument()
-    expect(within(history).getByText('Status gewijzigd naar Bevestigd')).toBeInTheDocument()
+    // B25: the overview previews the LATEST three events, newest first.
+    expect(await within(history).findByText('Vierde gebeurtenis')).toBeInTheDocument()
     expect(within(history).getByText('Prijs herberekend')).toBeInTheDocument()
-    expect(within(history).queryByText('Vierde gebeurtenis')).not.toBeInTheDocument()
-    expect(within(history).getByText(formatDateTime('2026-08-12T09:00:00Z'))).toBeInTheDocument()
+    expect(within(history).getByText('Status gewijzigd naar Bevestigd')).toBeInTheDocument()
+    expect(within(history).queryByText('Opdracht aangemaakt')).not.toBeInTheDocument()
+    expect(within(history).getByText(formatDateTime('2026-08-12T11:00:00Z'))).toBeInTheDocument()
     expect(api.getTransportOrderTimeline).toHaveBeenCalledWith('order-1')
     expect(within(history).getByRole('link', { name: 'Open historiek' })).toHaveAttribute('href', '/transport-orders/order-1/historiek')
   })

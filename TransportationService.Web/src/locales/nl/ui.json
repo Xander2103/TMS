@@ -175,5 +175,22 @@
     "retry": "Opnieuw proberen",
     "backToList": "Terug naar de lijst",
     "back": "Terug"
+  },
+  "save": {
+    "saving": "Opslaan…",
+    "savedAt": "Opgeslagen · {time}",
+    "failed": "Opslaan mislukt",
+    "retry": "Opnieuw proberen",
+    "dirty": "Niet-opgeslagen wijzigingen"
+  },
+  "history": {
+    "actorLine": "{action} door {name}",
+    "system": "Systeem",
+    "expand": "Uitklappen",
+    "collapse": "Inklappen",
+    "field": "Veld",
+    "before": "Voor",
+    "after": "Na",
+    "loading": "Historiek laden…"
   }
 }

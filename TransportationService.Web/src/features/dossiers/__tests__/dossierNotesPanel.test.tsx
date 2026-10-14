@@ -481,13 +481,12 @@ describe('DossierHistorySection', () => {
     expect(screen.getByRole('heading', { name: 'Wijzigingshistoriek' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: ADD })).toBeInTheDocument()
 
-    // The audit row lives in the audit table, never in the notes list — and vice versa.
-    const auditRow = await screen.findByText('Bijgewerkt')
-    const notesList = screen.getByRole('list')
-    expect(notesList).not.toContainElement(auditRow)
-    expect(within(notesList).getAllByRole('listitem')).toHaveLength(1)
-    expect(auditRow.closest('table')).not.toBeNull()
-    expect(auditRow.closest('table')).not.toContainElement(screen.getByText('Handmatige notitie'))
+    // The audit event lives in the history timeline, never in the notes list — and vice versa (B25).
+    const auditEvent = (await screen.findByText('Titel gewijzigd van Oud naar Nieuw')).closest('article')!
+    const notesList = screen.getByText('Handmatige notitie').closest('ul, ol')!
+    expect(notesList).not.toContainElement(auditEvent)
+    expect(auditEvent).toHaveTextContent('Bijgewerkt door Onbekende gebruiker')
+    expect(auditEvent).not.toContainElement(screen.getByText('Handmatige notitie'))
     expect(getJson).toHaveBeenCalledWith(expect.stringContaining('/api/audit-logs?entityType=TransportDossier&entityId=d-1'))
 
     // The legacy free text is no longer a separate block once the notes loaded.

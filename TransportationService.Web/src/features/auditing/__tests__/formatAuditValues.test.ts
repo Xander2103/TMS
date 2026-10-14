@@ -66,3 +66,38 @@ describe('isSensitiveAuditKey', () => {
     expect(isSensitiveAuditKey(key)).toBe(key === 'Tokens')
   })
 })
+
+// ---------------------------------------------------------------------------
+// B25: field-level changes and one-line summaries
+// ---------------------------------------------------------------------------
+import { auditChanges, auditSummary } from '../formatAuditValues'
+
+describe('auditChanges / auditSummary (B25)', () => {
+  const orderId = '631a45c4-49c0-4c1e-8a7b-0d3b5c2e9f10'
+
+  it('resolves ids to human references and never shows a GUID', () => {
+    const changes = auditChanges(null, `{"LinkedTransportOrderId":"${orderId}","Label":"Herlevering"}`, { references: { [orderId]: 'ORD-0024' } })
+    expect(changes).toEqual([
+      { key: 'LinkedTransportOrderId', field: 'Transportopdracht', before: null, after: 'ORD-0024' },
+      { key: 'Label', field: 'Label', before: null, after: 'Herlevering' },
+    ])
+    expect(JSON.stringify(changes)).not.toContain(orderId)
+    // An id that cannot be resolved stays a neutral word.
+    expect(auditChanges(null, `{"TripId":"${orderId}"}`)[0].after).toBe('verwijzing')
+  })
+
+  it('reads lifecycle values in Dutch and leaves unchanged fields out', () => {
+    const changes = auditChanges('{"Status":"Planned","Notes":"x"}', '{"Status":"InProgress","Notes":"x"}')
+    expect(changes).toEqual([{ key: 'Status', field: 'Status', before: 'Gepland', after: 'Onderweg' }])
+    expect(auditSummary(changes)).toBe('Status gewijzigd van Gepland naar Onderweg')
+  })
+
+  it('summarises a creation by its naming value and lists the other fields', () => {
+    const changes = auditChanges(null, '{"Label":"Plateau","DurationHours":2,"PlannedDate":"2026-10-14"}')
+    expect(auditSummary(changes)).toBe('Label: Plateau · gewijzigd: Label, Duur (uren), Geplande datum')
+  })
+
+  it('masks sensitive values in the changes too', () => {
+    expect(auditChanges('{"Iban":"BE68"}', '{"Iban":"BE99"}')[0]).toMatchObject({ before: '••••', after: '••••' })
+  })
+})

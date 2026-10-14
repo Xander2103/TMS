@@ -175,5 +175,22 @@
     "retry": "Réessayer",
     "backToList": "Retour à la liste",
     "back": "Retour"
+  },
+  "save": {
+    "saving": "Enregistrement…",
+    "savedAt": "Enregistré · {time}",
+    "failed": "Échec de l'enregistrement",
+    "retry": "Réessayer",
+    "dirty": "Modifications non enregistrées"
+  },
+  "history": {
+    "actorLine": "{action} par {name}",
+    "system": "Système",
+    "expand": "Développer",
+    "collapse": "Réduire",
+    "field": "Champ",
+    "before": "Avant",
+    "after": "Après",
+    "loading": "Chargement de l'historique…"
   }
 }

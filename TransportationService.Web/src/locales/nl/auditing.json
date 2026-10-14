@@ -15,7 +15,9 @@
     "Rejected": "Afgewezen",
     "Assigned": "Toegewezen",
     "Unassigned": "Toewijzing verwijderd",
-    "Archived": "Gearchiveerd"
+    "Archived": "Gearchiveerd",
+    "PhotoAttached": "Foto toegevoegd",
+    "PhotoDeleted": "Foto verwijderd"
   },
   "panel": {
     "loadFailed": "Historiek kon niet worden geladen.",
@@ -30,6 +32,8 @@
     "after": "Na:",
     "empty": "Nog geen historiek voor dit item.",
     "loading": "Historiek laden…",
-    "system": "Systeem (automatisch)"
+    "system": "Systeem (automatisch)",
+    "systemLine": "{action} · automatisch",
+    "unknownUser": "Onbekende gebruiker"
   }
 }

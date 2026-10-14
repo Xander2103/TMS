@@ -693,19 +693,17 @@
     "busy": "Bezig..."
   },
   "timeline": {
-    "category": {
+    "loadFailed": "De historiek kon niet worden geladen.",
+    "empty": "Nog geen gebeurtenissen.",
+    "filterLabel": "Filter op soort",
+    "categories": {
+      "all": "Alles",
       "order": "Opdracht",
       "status": "Status",
       "package": "Collo",
       "stop": "Stop",
       "invoice": "Factuur"
-    },
-    "loadFailed": "De historiek kon niet worden geladen.",
-    "loading": "Historiek laden...",
-    "empty": "Nog geen gebeurtenissen.",
-    "filterPlaceholder": "Historiek filteren…",
-    "filterAria": "Historiek filteren",
-    "noMatches": "Geen gebeurtenissen voor deze filter."
+    }
   },
   "stopPlan": {
     "windowEndInvalid": "Het einde van het bevestigde venster moet na het begin liggen.",

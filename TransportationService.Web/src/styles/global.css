@@ -124,6 +124,25 @@
   --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
   --mono: ui-monospace, Consolas, monospace;
 
+  /* B52: the type scale. Roles, not a redesign — the values are the ones the product already
+     uses most (13/14/15px), named so new code stops inventing 12.5px, 13.5px and 0.8125rem.
+     --text-xs   12px  badges, micro metadata (never running operational text)
+     --text-sm   13px  metadata, table headers, chips, helper text
+     --text-md   14px  table cells, field labels, dense controls
+     --text-base 15px  body text, form controls
+     --text-lg   17px  section titles
+     --text-xl   20px  sub-page / card titles
+     --text-2xl  24px  page title (PageHeader h2)
+     Enterprise density comes from padding, nowrap/ellipsis and action consolidation — not from
+     shrinking these. */
+  --text-xs: 12px;
+  --text-sm: 13px;
+  --text-md: 14px;
+  --text-base: 15px;
+  --text-lg: 17px;
+  --text-xl: 20px;
+  --text-2xl: 24px;
+
   /* UX-sprint 2026-09-09: shared scale tokens so features stop inventing one-off values. */
   --radius-sm: 6px;
   --radius-md: 8px;

@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
 import { apiClient } from '../../../api/apiClient'
-import { DataTable, type Column } from '../../../components/ui/DataTable'
+import { HistoryTimeline, type HistoryItem } from '../../../components/ui/HistoryTimeline'
 import { useAuth } from '../../auth/authContextValue'
 import { useLocale } from '../../../i18n/localeContext'
-import { formatDateTime } from '../../../utils/dates'
-import { formatAuditValues, type AuditValueLabels } from '../formatAuditValues'
-import './AuditHistoryPanel.css'
+import { auditChanges, auditSummary, type AuditReferences, type AuditValueLabels } from '../formatAuditValues'
+
+const PAGE_SIZE = 25
 
 interface AuditLogEntry {
   id: string
@@ -18,6 +18,8 @@ interface AuditLogEntry {
   timestamp: string
   /** Acting person; null = no human actor (automatic pipeline event) or unknown. Absent on older payloads. */
   userName?: string | null
+  /** B25: ids inside the values resolved to human references (order number, name, …). */
+  references?: AuditReferences | null
 }
 
 interface AuditLogPage {
@@ -49,6 +51,8 @@ const ACTION_LABELS: Record<string, string> = {
   Assigned: 'auditing.action.Assigned',
   Unassigned: 'auditing.action.Unassigned',
   Archived: 'auditing.action.Archived',
+  PhotoAttached: 'auditing.action.PhotoAttached',
+  PhotoDeleted: 'auditing.action.PhotoDeleted',
 }
 
 /** Per-entity catalogue prefix tried for actions ACTION_LABELS does not know. */
@@ -83,80 +87,62 @@ export function AuditHistoryPanel({ entityType, entityId, valueLabels }: AuditHi
   const { t } = useLocale()
   const { hasPermission } = useAuth()
   const canView = hasPermission('audit_logs.view')
-  const [data, setData] = useState<AuditLogPage | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [page, setPage] = useState(1)
+  const [loaded, setLoaded] = useState<{ key: string; data: AuditLogPage | null; error: string | null } | null>(null)
+  const requestKey = `${entityType}:${entityId}:${page}`
 
   useEffect(() => {
     if (!canView) return
     let mounted = true
     apiClient
-      .getJson<AuditLogPage>(`/api/audit-logs?entityType=${encodeURIComponent(entityType)}&entityId=${encodeURIComponent(entityId)}&pageSize=50`)
-      .then((page) => {
-        if (mounted) setData(page)
+      .getJson<AuditLogPage>(
+        `/api/audit-logs?entityType=${encodeURIComponent(entityType)}&entityId=${encodeURIComponent(entityId)}&page=${page}&pageSize=${PAGE_SIZE}`,
+      )
+      .then((data) => {
+        if (mounted) setLoaded({ key: requestKey, data, error: null })
       })
       .catch(() => {
-        if (mounted) setError(t('auditing.panel.loadFailed'))
+        if (mounted) setLoaded({ key: requestKey, data: null, error: t('auditing.panel.loadFailed') })
       })
     return () => {
       mounted = false
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canView, entityType, entityId])
+  }, [canView, requestKey])
 
   if (!canView) {
     return <p className="placeholder-text">{t('auditing.panel.noPermission')}</p>
   }
 
-  const columns: Column<AuditLogEntry>[] = [
-    {
-      key: 'timestamp',
-      header: t('auditing.panel.columns.timestamp'),
-      width: '150px',
-      render: (row) => formatDateTime(row.timestamp),
-    },
-    {
-      key: 'action',
-      header: t('auditing.panel.columns.action'),
-      width: '150px',
-      render: (row) => actionLabel(t, row.entityType, row.action),
-    },
-    {
-      key: 'actor',
-      header: t('auditing.panel.columns.actor'),
-      width: '140px',
-      // No user id = no person acted (an automatic confirmation by the pipeline); never a made-up name.
-      render: (row) => (row.userId ? (row.userName ?? row.userId) : <span className="placeholder-text">{t('auditing.panel.system')}</span>),
-    },
-    {
-      key: 'changes',
-      header: t('auditing.panel.columns.changes'),
-      render: (row) => (
-        // Stored change details are historical data; they are humanized for reading, never edited.
-        <div className="audit-history-values">
-          {row.oldValuesJson && (
-            <div className="audit-history-old">
-              {t('auditing.panel.before')} {formatAuditValues(row.oldValuesJson, valueLabels)}
-            </div>
-          )}
-          {row.newValuesJson && (
-            <div>
-              {t('auditing.panel.after')} {formatAuditValues(row.newValuesJson, valueLabels)}
-            </div>
-          )}
-        </div>
-      ),
-    },
-  ]
+  const current = loaded?.key === requestKey ? loaded : null
+  const items: HistoryItem[] | null = current?.data
+    ? current.data.items.map((row) => {
+        const changes = auditChanges(row.oldValuesJson, row.newValuesJson, { valueLabels, references: row.references ?? undefined })
+        return {
+          id: row.id,
+          timestamp: row.timestamp,
+          // No user id = no person acted (an automatic pipeline event); never a raw id as a name.
+          actorName: row.userId ? (row.userName ?? t('auditing.panel.unknownUser')) : null,
+          action: actionLabel(t, row.entityType, row.action),
+          summary: auditSummary(changes),
+          changes: changes.map(({ field, before, after }) => ({ field, before, after })),
+        }
+      })
+    : null
 
   return (
-    <DataTable
-      columns={columns}
-      rows={data?.items ?? []}
-      rowKey={(row) => row.id}
-      isLoading={!data && !error}
-      error={error}
+    <HistoryTimeline
+      items={current?.error ? [] : items}
+      loading={!current}
+      error={current?.error ?? null}
       emptyMessage={t('auditing.panel.empty')}
       loadingMessage={t('auditing.panel.loading')}
+      actorLine={(item) =>
+        item.actorName
+          ? t('ui.history.actorLine', { action: item.action, name: item.actorName })
+          : t('auditing.panel.systemLine', { action: item.action })
+      }
+      pagination={current?.data ? { page, pageSize: PAGE_SIZE, totalCount: current.data.totalCount, onPageChange: setPage } : undefined}
     />
   )
 }

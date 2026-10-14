@@ -1,86 +1,73 @@
 import { useEffect, useState } from 'react'
-import { Badge, type BadgeTone } from '../../../components/ui/Badge'
-import { LoadingState } from '../../../components/feedback/LoadingState'
-import { ErrorState } from '../../../components/feedback/ErrorState'
-import { EmptyState } from '../../../components/ui/EmptyState'
+import { HistoryTimeline, type HistoryItem } from '../../../components/ui/HistoryTimeline'
+import { useLocale } from '../../../i18n/localeContext'
 import { getTransportOrderTimeline, type OrderTimelineEvent } from '../api/transportOrdersApi'
-import { formatDateTime } from '../../../utils/dates'
+import { newestFirst } from './orderTimeline'
 
-const CATEGORY_LABELS: Record<string, { label: string; tone: BadgeTone }> = {
-  order: { label: 'Opdracht', tone: 'neutral' },
-  status: { label: 'Status', tone: 'info' },
-  package: { label: 'Collo', tone: 'success' },
-  stop: { label: 'Stop', tone: 'warning' },
-  invoice: { label: 'Factuur', tone: 'danger' },
-}
-
-function formatTimestamp(value: string): string {
-  return formatDateTime(value)
-}
+const CATEGORIES = ['all', 'order', 'status', 'package', 'stop', 'invoice'] as const
 
 /**
- * Chronological activity log of one order — who did what and when. Newest events last
- * (matching reading order); a filter keeps long histories navigable.
+ * The order's activity log on the shared timeline (B25): who did what and when, newest first,
+ * with a category filter for long histories. The server merges audit, status, package, stop and
+ * invoice events into Dutch sentences.
  */
 export function OrderTimelinePanel({ orderId }: { orderId: string }) {
+  const { t } = useLocale()
   const [events, setEvents] = useState<OrderTimelineEvent[] | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [filter, setFilter] = useState('')
+  const [category, setCategory] = useState<string>('all')
 
   useEffect(() => {
     let mounted = true
     getTransportOrderTimeline(orderId)
       .then((data) => {
-        if (mounted) setEvents(data)
+        if (mounted) setEvents(newestFirst(data))
       })
       .catch(() => {
-        if (mounted) setError('De historiek kon niet worden geladen.')
+        if (mounted) setError(t('transportOrders.timeline.loadFailed'))
       })
     return () => {
       mounted = false
     }
-  }, [orderId])
+  }, [orderId, t])
 
-  if (error) return <ErrorState message={error} />
-  if (events === null) return <LoadingState message="Historiek laden..." />
-  if (events.length === 0) return <EmptyState message="Nog geen gebeurtenissen." />
-
-  const term = filter.trim().toLowerCase()
-  const visible = term
-    ? events.filter((event) =>
-        [event.title, event.detail ?? '', event.userName ?? ''].some((text) => text.toLowerCase().includes(term)),
-      )
-    : events
+  const visible = (events ?? []).filter((event) => category === 'all' || event.category === category)
+  const items: HistoryItem[] | null = events
+    ? visible.map((event, index) => ({
+        id: `${event.timestamp}-${index}`,
+        timestamp: event.timestamp,
+        actorName: event.userName,
+        action: t(`transportOrders.timeline.categories.${event.category}`),
+        summary: event.title,
+        detail: event.detail,
+        category: null,
+      }))
+    : null
+  const present = new Set((events ?? []).map((event) => event.category))
 
   return (
-    <div className="to-timeline">
-      {events.length > 10 && (
-        <input
-          type="search"
-          className="to-timeline-filter"
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-          placeholder="Historiek filteren…"
-          aria-label="Historiek filteren"
-        />
-      )}
-      <ol className="to-timeline-list">
-        {visible.map((event, index) => {
-          const category = CATEGORY_LABELS[event.category] ?? { label: event.category, tone: 'neutral' as BadgeTone }
-          return (
-            <li key={`${event.timestamp}-${index}`} className="to-timeline-item">
-              <span className="to-timeline-time">{formatTimestamp(event.timestamp)}</span>
-              <Badge tone={category.tone}>{category.label}</Badge>
-              <span className="to-timeline-body">
-                {event.title}
-                {event.detail && <span className="to-timeline-detail"> — {event.detail}</span>}
-                {event.userName && <span className="to-timeline-user"> · {event.userName}</span>}
-              </span>
-            </li>
-          )
-        })}
-        {visible.length === 0 && <li className="to-timeline-item">Geen gebeurtenissen voor deze filter.</li>}
-      </ol>
-    </div>
+    <HistoryTimeline
+      items={error ? [] : items}
+      error={error}
+      emptyMessage={t('transportOrders.timeline.empty')}
+      categories={
+        events && present.size > 1
+          ? {
+              label: t('transportOrders.timeline.filterLabel'),
+              value: category,
+              options: CATEGORIES.filter((code) => code === 'all' || present.has(code)).map((code) => ({
+                value: code,
+                label: t(`transportOrders.timeline.categories.${code}`),
+              })),
+              onChange: setCategory,
+            }
+          : undefined
+      }
+      actorLine={(item) =>
+        item.actorName
+          ? t('ui.history.actorLine', { action: item.action, name: item.actorName })
+          : item.action
+      }
+    />
   )
 }

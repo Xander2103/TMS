@@ -15,7 +15,9 @@
     "Rejected": "Rejeté",
     "Assigned": "Attribué",
     "Unassigned": "Attribution retirée",
-    "Archived": "Archivé"
+    "Archived": "Archivé",
+    "PhotoAttached": "Photo ajoutée",
+    "PhotoDeleted": "Photo supprimée"
   },
   "panel": {
     "loadFailed": "L'historique n'a pas pu être chargé.",
@@ -30,6 +32,8 @@
     "after": "Après :",
     "empty": "Pas encore d'historique pour cet élément.",
     "loading": "Chargement de l'historique…",
-    "system": "Système (automatique)"
+    "system": "Système (automatique)",
+    "systemLine": "{action} · automatique",
+    "unknownUser": "Utilisateur inconnu"
   }
 }

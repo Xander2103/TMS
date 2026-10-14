@@ -39,6 +39,14 @@ const FIELD_LABELS: Record<string, string> = {
   CustomerReference: 'Klantreferentie', Reference: 'Referentie', AgreedPrice: 'Afgesproken prijs', Price: 'Prijs',
   Email: 'E-mail', Phone: 'Telefoon', Address: 'Adres', City: 'Gemeente', PostalCode: 'Postcode', Country: 'Land',
   LicensePlate: 'Kenteken', Quantity: 'Aantal', Weight: 'Gewicht', Id: 'Referentie',
+  // B25: the remaining recurring keys that read as English before.
+  ResponsibleUserId: 'Verantwoordelijke', ConfirmedByUserId: 'Bevestigd door', AssignedToUserId: 'Toegewezen aan',
+  TargetDossierId: 'Gekoppeld dossier', SourceDossierId: 'Dossier', ActivityTypeId: 'Activiteitstype', ActivityId: 'Activiteit',
+  DurationHours: 'Duur (uren)', PlannedStart: 'Geplande start', PlannedEnd: 'Gepland einde', FixedAmount: 'Vast bedrag',
+  FreeConfirmed: 'Gratis bevestigd', OrdersMoved: 'Verplaatste opdrachten', WarningsAcknowledged: 'Bevestigde waarschuwingen',
+  PackageId: 'Collo', StopId: 'Stop', Priority: 'Prioriteit', RelationType: 'Soort relatie', OccurredAt: 'Tijdstip',
+  ResolutionNote: 'Oplossing', Resolution: 'Oplossing', FileName: 'Bestand', ConfirmationSource: 'Bevestigingswijze',
+  Version: 'Versie',
 }
 
 /** Optional per-field value renderers (an entity can map its enum ordinals or codes to labels). */
@@ -56,13 +64,36 @@ export function auditFieldLabel(key: string): string {
   return humanizeCode(base)
 }
 
-function formatValue(value: unknown): string {
+/**
+ * B25: common lifecycle words (new audit rows store enums by NAME) read in Dutch. Only exact,
+ * unambiguous words are mapped; an entity with its own meaning (dossier "Closed" = Bevestigd)
+ * passes `valueLabels` instead.
+ */
+const VALUE_WORDS: Record<string, string> = {
+  Draft: 'Concept', Submitted: 'Ingediend', Confirmed: 'Bevestigd', Planned: 'Gepland', InProgress: 'Onderweg',
+  Completed: 'Afgerond', Invoiced: 'Gefactureerd', Cancelled: 'Geannuleerd', Requested: 'Aangevraagd',
+  Approved: 'Goedgekeurd', Rejected: 'Afgewezen', Resolved: 'Opgelost', Sent: 'Verzonden', Paid: 'Betaald',
+  Low: 'Laag', Medium: 'Gemiddeld', High: 'Hoog', Critical: 'Kritiek', Normal: 'Normaal', Urgent: 'Dringend',
+  Manual: 'Handmatig', Automatic: 'Automatisch', Locked: 'Bevestigd', Reviewed: 'Nagekeken',
+}
+
+/** Ids inside the values resolved server-side to human references (order number, name, …). */
+export type AuditReferences = Record<string, string>
+
+function formatValue(value: unknown, references?: AuditReferences): string {
   if (value === null || value === undefined || value === '') return '—'
   if (typeof value === 'boolean') return value ? 'ja' : 'nee'
   if (typeof value === 'number') return String(value)
+  if (Array.isArray(value)) {
+    if (value.length === 0) return '—'
+    if (value.every((entry) => typeof entry !== 'object' || entry === null)) return value.map((entry) => formatValue(entry, references)).join(', ')
+    return `${value.length} items`
+  }
   if (typeof value === 'object') return '…'
   const text = String(value)
-  if (GUID.test(text)) return 'verwijzing'
+  // A resolvable id reads as what it is; an unresolvable one stays a neutral word, never a GUID.
+  if (GUID.test(text)) return references?.[text.toLowerCase()] ?? references?.[text] ?? 'verwijzing'
+  if (VALUE_WORDS[text]) return VALUE_WORDS[text]
   if (ISO_DATE_TIME.test(text)) return formatDateTime(text) || text
   if (ISO_DATE.test(text)) return formatDate(text) || text
   if (CODE_LIKE.test(text)) return humanizeCode(text)
@@ -86,4 +117,69 @@ export function formatAuditValues(json: string | null, valueLabels?: AuditValueL
   } catch {
     return json
   }
+}
+
+/** One field-level change of an audit entry (keys present on either side; unchanged ones left out). */
+export interface AuditChange {
+  key: string
+  field: string
+  before: string | null
+  after: string | null
+}
+
+function parseValues(json: string | null): Record<string, unknown> | null {
+  if (!json) return null
+  try {
+    const parsed = JSON.parse(json) as unknown
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : null
+  } catch {
+    return null
+  }
+}
+
+/** B25: the before/after of an audit entry per field — humanized, masked, references resolved. */
+export function auditChanges(
+  oldJson: string | null,
+  newJson: string | null,
+  options: { valueLabels?: AuditValueLabels; references?: AuditReferences } = {},
+): AuditChange[] {
+  const before = parseValues(oldJson) ?? {}
+  const after = parseValues(newJson) ?? {}
+  const keys = [...new Set([...Object.keys(before), ...Object.keys(after)])]
+  const render = (key: string, value: unknown, present: boolean): string | null => {
+    if (!present) return null
+    if (value !== null && value !== undefined && value !== '' && isSensitiveAuditKey(key)) return MASK
+    return options.valueLabels?.[key]?.(value) ?? formatValue(value, options.references)
+  }
+  // Unchanged is decided on the RAW values: two masked values must still show that something changed.
+  const same = (key: string) => key in before && key in after && JSON.stringify(before[key]) === JSON.stringify(after[key])
+  return keys
+    .filter((key) => !same(key))
+    .map((key) => ({
+      key,
+      field: auditFieldLabel(key),
+      before: render(key, before[key], key in before),
+      after: render(key, after[key], key in after),
+    }))
+}
+
+/**
+ * B25: one sentence saying WHAT happened, readable without expanding:
+ *  - one field changed on both sides → "Status gewijzigd van Gepland naar Onderweg";
+ *  - a creation with a naming value → "Activiteit toegevoegd: Herlevering";
+ *  - otherwise the changed fields ("Gewijzigd: Prijs, Referentie").
+ */
+export function auditSummary(changes: AuditChange[]): string | null {
+  const meaningful = changes.filter((change) => change.key !== 'Id' && change.key !== 'Version')
+  if (meaningful.length === 0) return null
+  if (meaningful.length === 1) {
+    const [only] = meaningful
+    if (only.before !== null && only.after !== null) return `${only.field} gewijzigd van ${only.before} naar ${only.after}`
+    if (only.after !== null) return `${only.field}: ${only.after}`
+    return `${only.field}: ${only.before} (verwijderd)`
+  }
+  const naming = meaningful.find((change) => /^(Label|Name|Title|OrderNumber|ActivityType(Id)?|TransportOrderId|LinkedTransportOrderId|Reason)$/.test(change.key) && change.after)
+  const fields = meaningful.slice(0, 4).map((change) => change.field)
+  const list = `${fields.join(', ')}${meaningful.length > 4 ? ` +${meaningful.length - 4}` : ''}`
+  return naming ? `${naming.field}: ${naming.after} · gewijzigd: ${list}` : `Gewijzigd: ${list}`
 }

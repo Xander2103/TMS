@@ -175,5 +175,22 @@
     "retry": "Try again",
     "backToList": "Back to the list",
     "back": "Back"
+  },
+  "save": {
+    "saving": "Saving…",
+    "savedAt": "Saved · {time}",
+    "failed": "Saving failed",
+    "retry": "Try again",
+    "dirty": "Unsaved changes"
+  },
+  "history": {
+    "actorLine": "{action} by {name}",
+    "system": "System",
+    "expand": "Expand",
+    "collapse": "Collapse",
+    "field": "Field",
+    "before": "Before",
+    "after": "After",
+    "loading": "Loading history…"
   }
 }

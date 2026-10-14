@@ -693,19 +693,17 @@
     "busy": "Working..."
   },
   "timeline": {
-    "category": {
+    "loadFailed": "The history could not be loaded.",
+    "empty": "No events yet.",
+    "filterLabel": "Filter by type",
+    "categories": {
+      "all": "All",
       "order": "Order",
       "status": "Status",
       "package": "Package",
       "stop": "Stop",
       "invoice": "Invoice"
-    },
-    "loadFailed": "The history could not be loaded.",
-    "loading": "Loading history...",
-    "empty": "No events yet.",
-    "filterPlaceholder": "Filter history…",
-    "filterAria": "Filter history",
-    "noMatches": "No events for this filter."
+    }
   },
   "stopPlan": {
     "windowEndInvalid": "The end of the confirmed window must be after the start.",
