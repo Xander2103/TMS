@@ -89,16 +89,6 @@ const ORDERS = [
   { id: 'o-2', orderNumber: 'ORD-0002', orderDate: '2026-09-20', customerId: 'c2', customerName: 'Bekaert', customerReference: null, status: 'Confirmed', goodsDescription: null, firstLoadingCity: 'Zwevegem', lastUnloadingCity: 'Antwerpen', stopCount: 2, adrRequired: false, craneRequired: false, priority: 'Normal' },
 ]
 
-/** Fixed vehicle per driver, as `GET /api/drivers/{id}` exposes it. */
-const FIXED_VEHICLE: Record<string, { id: string; label: string } | null> = {
-  'd-jan': { id: 'v-1', label: 'V-101 (1-ABC-123)' },
-  'd-els': { id: 'v-2', label: 'V-202 (2-XYZ-987)' },
-  'd-tom': null,
-}
-
-const SUGGESTED_HINT = 'Voorgesteld op basis van vaste chauffeur-voertuigkoppeling'
-
-
 const ORDER_ON_TRIP = {
   transportOrderId: 'o-1', sequence: 1, orderNumber: 'ORD-0023', customerName: 'Nexans NV', orderStatus: 'Confirmed' as const,
   goodsDescription: 'Kabelhaspels', firstLoadingCity: 'Gent', lastUnloadingCity: 'Luik', adrRequired: false, craneRequired: false,
