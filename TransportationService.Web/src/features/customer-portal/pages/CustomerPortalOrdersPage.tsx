@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { PageHeader } from '../../../components/layout/PageHeader'
-import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { DataTable, type Column } from '../../../components/ui/DataTable'
@@ -69,7 +68,6 @@ export function CustomerPortalOrdersPage() {
 
   return (
     <div>
-      <Breadcrumbs items={[{ label: t('navigation.portalName') }]} />
       <PageHeader
         title={t('orders.list.title')}
         subtitle={customerName ?? undefined}

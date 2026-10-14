@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { PageHeader } from '../../../components/layout/PageHeader'
-import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { useToast } from '../../../components/ui/toastContext'
@@ -76,7 +75,6 @@ export function PlanningPage() {
 
   return (
     <div>
-      <Breadcrumbs items={[{ label: t('planning.title') }]} />
       <PageHeader
         title={t('planning.title')}
         action={

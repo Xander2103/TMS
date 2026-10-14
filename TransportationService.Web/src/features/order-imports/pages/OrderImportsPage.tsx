@@ -1,6 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { PageHeader } from '../../../components/layout/PageHeader'
 import { Badge, type BadgeTone } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
@@ -302,7 +301,6 @@ export function OrderImportsPage() {
   if (!canView && !canUpload) {
     return (
       <div>
-        <Breadcrumbs items={[{ label: t('navigation.menu.excelImport') }]} />
         <PageHeader title={t('navigation.menu.excelImport')} />
         <p>{t('orderImports.noPermission')}</p>
       </div>
@@ -311,7 +309,6 @@ export function OrderImportsPage() {
 
   return (
     <div>
-      <Breadcrumbs items={[{ label: t('navigation.menu.excelImport') }]} />
       <PageHeader title={t('navigation.menu.excelImport')} subtitle={t('orderImports.subtitle')} />
 
       <Tabs

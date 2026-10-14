@@ -1,3 +1,4 @@
+import { PageHeader } from '../../../components/layout/PageHeader'
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { localizeApiError } from '../../../api/problemDetails'
@@ -67,8 +68,9 @@ export function ProfitabilityPage() {
 
   return (
     <div className="pf-page">
-      <header className="pf-header">
-        <h1>{t('profitability.page.title')}</h1>
+      <PageHeader
+        title={t('profitability.page.title')}
+        action={(
         <div className="pf-filters">
           <input type="date" value={from} onChange={(event) => setFrom(event.target.value || from)} aria-label={t('profitability.page.fromAria')} />
           <input type="date" value={to} onChange={(event) => setTo(event.target.value || to)} aria-label={t('profitability.page.toAria')} />
@@ -83,7 +85,8 @@ export function ProfitabilityPage() {
             </Button>
           )}
         </div>
-      </header>
+        )}
+      />
 
       {summary && (
         <div className="pf-kpis">

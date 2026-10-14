@@ -4,7 +4,7 @@
     "actions": "Actions"
   },
   "company": {
-    "title": "Paramètres de l'entreprise",
+    "title": "Paramètres",
     "readOnlySubtitle": "Vous disposez uniquement d'un accès en lecture à ces paramètres.",
     "loading": "Chargement des paramètres…",
     "loadFailed": "Les paramètres n'ont pas pu être chargés.",

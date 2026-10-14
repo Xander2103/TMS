@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { PageHeader } from '../../../components/layout/PageHeader'
-import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { Badge } from '../../../components/ui/Badge'
 import { useLocale } from '../../../i18n/localeContext'
 import { TRIP_STATUS_LABELS, TRIP_STATUS_TONE } from '../../planning/types'
@@ -35,7 +34,6 @@ export function MyTripsPage() {
 
   return (
     <div>
-      <Breadcrumbs items={[{ label: t('myTrips.list.title') }]} />
       <PageHeader title={t('myTrips.list.title')} subtitle={t('myTrips.list.subtitle')} />
 
       {loadError && <p className="placeholder-text">{loadError}</p>}

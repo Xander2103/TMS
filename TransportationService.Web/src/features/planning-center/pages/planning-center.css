@@ -14,7 +14,7 @@
   flex-wrap: wrap;
 }
 
-.pc-toolbar h1 {
+.pc-toolbar .pc-title {
   margin: 0;
   font-size: 1.4rem;
 }

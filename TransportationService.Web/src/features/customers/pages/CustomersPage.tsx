@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { PageHeader } from '../../../components/layout/PageHeader'
-import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { DataTable, type Column } from '../../../components/ui/DataTable'
 import { FilterBar } from '../../../components/ui/FilterBar'
 import { Pagination } from '../../../components/ui/Pagination'
@@ -53,7 +52,6 @@ export function CustomersPage() {
 
   return (
     <div>
-      <Breadcrumbs items={[{ label: t('navigation.menu.customers') }]} />
       <PageHeader
         title={t('navigation.menu.customers')}
         action={

@@ -25,7 +25,6 @@ import {
   Search,
 } from 'lucide-react'
 import { PageHeader } from '../../../components/layout/PageHeader'
-import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { Button } from '../../../components/ui/Button'
 import { useToast } from '../../../components/ui/toastContext'
 import {
@@ -406,7 +405,6 @@ export function NotificationsPage() {
 
   return (
     <div className="ntc-page">
-      <Breadcrumbs items={[{ label: t('notificationCenter.page.title') }]} />
       <PageHeader title={t('notificationCenter.page.title')} subtitle={t('notificationCenter.page.subtitle')} />
 
       <div className="ntc-stats" role="group" aria-label={t('notificationCenter.stats.ariaLabel')}>

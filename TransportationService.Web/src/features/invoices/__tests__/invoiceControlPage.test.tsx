@@ -132,7 +132,7 @@ describe('InvoiceControlPage (P12: selectie + uitstel)', () => {
 
     const section = (await screen.findByText('Uitgesteld (1)')).closest('section')!
     expect(within(section).getByText('ORD-0009')).toBeInTheDocument()
-    expect(within(section).getByText('2026-09-15')).toBeInTheDocument()
+    expect(within(section).getByText('15/09/2026')).toBeInTheDocument()
     expect(within(section).getByText('Klant betwist')).toBeInTheDocument()
     expect(within(section).getByRole('link', { name: 'Naar opdracht' })).toHaveAttribute(
       'href',

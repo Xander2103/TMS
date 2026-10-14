@@ -1,6 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { PageHeader } from '../../../components/layout/PageHeader'
-import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { FormField } from '../../../components/ui/FormField'
@@ -183,7 +182,6 @@ export function MessagingPage() {
 
   return (
     <div>
-      <Breadcrumbs items={[{ label: t('messaging.page.title') }]} />
       <PageHeader
         title={t('messaging.page.title')}
         subtitle={t('messaging.page.subtitle')}

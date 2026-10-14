@@ -892,7 +892,7 @@ describe('CustomerPriceAdjustmentsPanel', () => {
   it('lists scheduled adjustments with status and cancel action', async () => {
     render(<CustomerPriceAdjustmentsPanel customerId="cust-1" />)
 
-    expect(await screen.findByText('2099-10-01')).toBeInTheDocument()
+    expect(await screen.findByText('01/10/2099')).toBeInTheDocument()
     expect(screen.getByText('+4%')).toBeInTheDocument()
     expect(screen.getByText('Gepland')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Annuleren' })).toBeInTheDocument()

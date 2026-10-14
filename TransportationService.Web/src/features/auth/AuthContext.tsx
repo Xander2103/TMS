@@ -2,18 +2,11 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { setUnauthorizedHandler } from '../../api/apiClient'
 import { resetDisplayPreferences } from '../../components/layout/displayPreferences'
 import * as authApi from './authApi'
-import { AuthContext, type AuthContextValue, type SessionUnavailableReason } from './authContextValue'
+import { AuthContext, SESSION_RETRY_DELAYS_MS, type AuthContextValue, type SessionUnavailableReason } from './authContextValue'
 import { clearLegacyTokens, clearTokens, getAccessToken, setAccessToken } from './authStorage'
 import type { CurrentUser } from './authTypes'
 
 type AuthStatus = AuthContextValue['status']
-
-/**
- * Backoff between session-restore attempts when the server cannot be reached (B01). Three
- * retries, ~11 s in total: long enough to ride out a reload storm or a restarting API, short
- * enough that a user with a real outage sees the "unavailable" screen before they give up.
- */
-export const SESSION_RETRY_DELAYS_MS: readonly number[] = [1000, 3000, 7000]
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
 

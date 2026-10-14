@@ -342,7 +342,7 @@ export function PlanningCenterPage() {
     <div className="pc-page">
       <header className="pc-toolbar">
         <div className="pc-toolbar-left">
-          <h1>{t('planningCenter.page.title')}</h1>
+          <h2 className="pc-title">{t('planningCenter.page.title')}</h2>
         </div>
         <div className="pc-toolbar-range" role="group" aria-label={t('planningCenter.page.periodLabel')}>
           <Button variant="secondary" onClick={() => setAnchor(shiftAnchor(anchor, days, -1))}>‹</Button>

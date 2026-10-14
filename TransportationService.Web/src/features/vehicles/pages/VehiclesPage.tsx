@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { PageHeader } from '../../../components/layout/PageHeader'
-import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { DataTable, type Column } from '../../../components/ui/DataTable'
 import { FilterBar } from '../../../components/ui/FilterBar'
 import { Pagination } from '../../../components/ui/Pagination'
@@ -49,7 +48,6 @@ export function VehiclesPage() {
 
   return (
     <div>
-      <Breadcrumbs items={[{ label: t('navigation.menu.vehicles') }]} />
       <PageHeader
         title={t('navigation.menu.vehicles')}
         action={hasPermission('vehicles.create') ? <Button onClick={() => navigate('/vehicles/new')}>{t('vehicles.list.new')}</Button> : undefined}

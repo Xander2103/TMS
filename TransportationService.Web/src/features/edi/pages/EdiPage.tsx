@@ -1,6 +1,5 @@
 import { useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { PageHeader } from '../../../components/layout/PageHeader'
 import { TabPanel, Tabs, type TabItem } from '../../../components/ui/Tabs'
 import { useAuth } from '../../auth/authContextValue'
@@ -61,7 +60,6 @@ export function EdiPage() {
 
   return (
     <div>
-      <Breadcrumbs items={[{ label: t('edi.page.title') }]} />
       <PageHeader
         title={t('edi.page.title')}
         subtitle={t('edi.page.subtitle')}

@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { PageHeader } from '../../../components/layout/PageHeader'
-import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { DataTable, type Column, type SortState } from '../../../components/ui/DataTable'
 import { FilterBar } from '../../../components/ui/FilterBar'
 import { Pagination } from '../../../components/ui/Pagination'
@@ -107,7 +106,6 @@ export function LocationsPage() {
 
   return (
     <div>
-      <Breadcrumbs items={[{ label: t('navigation.menu.locations') }]} />
       <PageHeader
         title={t('navigation.menu.locations')}
         action={

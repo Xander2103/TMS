@@ -3,6 +3,13 @@ import type { CurrentUser } from './authTypes'
 
 export type SessionUnavailableReason = 'network' | 'rate_limited' | 'server'
 
+/**
+ * Backoff between session-restore attempts when the server cannot be reached (B01). Three
+ * retries, ~11 s in total: long enough to ride out a reload storm or a restarting API, short
+ * enough that a user with a real outage sees the "unavailable" screen before they give up.
+ */
+export const SESSION_RETRY_DELAYS_MS: readonly number[] = [1000, 3000, 7000]
+
 export interface AuthContextValue {
   /**
    * `unavailable`: the session could not be restored because the server could not be reached or

@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { PageHeader } from '../../../components/layout/PageHeader'
-import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { Badge } from '../../../components/ui/Badge'
 import { DataTable, type Column } from '../../../components/ui/DataTable'
 import { Pagination } from '../../../components/ui/Pagination'
@@ -156,7 +155,6 @@ export function ExceptionsPage() {
 
   return (
     <div>
-      <Breadcrumbs items={[{ label: t('exceptions.list.title') }]} />
       <PageHeader
         title={t('exceptions.list.title')}
         subtitle={t('exceptions.list.subtitle')}

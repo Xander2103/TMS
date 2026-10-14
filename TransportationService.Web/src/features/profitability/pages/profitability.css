@@ -12,7 +12,7 @@
   flex-wrap: wrap;
 }
 
-.pf-header h1 {
+.pf-header h2 {
   margin: 0;
   font-size: 1.4rem;
 }
@@ -164,3 +164,5 @@
   justify-content: space-between;
   gap: 0.75rem;
 }
+
+.pf-filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }

@@ -1,3 +1,4 @@
+import { PageHeader } from '../../../components/layout/PageHeader'
 import { useEffect, useState, type FormEvent } from 'react'
 import { localizeApiError } from '../../../api/problemDetails'
 import { Badge } from '../../../components/ui/Badge'
@@ -99,12 +100,10 @@ export function WarehousesPage() {
 
   return (
     <div className="wh-page">
-      <header className="wh-header">
-        <h1>{t('warehousing.warehouses.title')}</h1>
-        {canManage && (
-          <Button onClick={() => setEditing({ id: null, input: EMPTY_WAREHOUSE })}>{t('warehousing.warehouses.new')}</Button>
-        )}
-      </header>
+      <PageHeader
+        title={t('warehousing.warehouses.title')}
+        action={canManage ? <Button onClick={() => setEditing({ id: null, input: EMPTY_WAREHOUSE })}>{t('warehousing.warehouses.new')}</Button> : undefined}
+      />
 
       {warehouses.length === 0 && <p className="wh-muted">{t('warehousing.warehouses.none')}</p>}
 

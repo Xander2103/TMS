@@ -121,7 +121,7 @@ describe('AgreementAdjustmentsPanel', () => {
 
     render(<AgreementAdjustmentsPanel agreementId="agr-1" canManage />)
 
-    expect(await screen.findByText('2099-10-01')).toBeInTheDocument()
+    expect(await screen.findByText('01/10/2099')).toBeInTheDocument()
     expect(screen.getByText('+4%')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Annuleren' }))
     await user.click(await screen.findByRole('button', { name: 'Annuleren bevestigen' }))

@@ -1,6 +1,5 @@
 import { useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { PageHeader } from '../../../components/layout/PageHeader'
 import { TabPanel, Tabs, type TabItem } from '../../../components/ui/Tabs'
 import { useLocale } from '../../../i18n/localeContext'
@@ -60,7 +59,6 @@ export function PeppolPage() {
 
   return (
     <div>
-      <Breadcrumbs items={[{ label: t('peppol.page.title') }]} />
       <PageHeader title={t('peppol.page.title')} subtitle={t('peppol.page.subtitle')} />
 
       <Tabs tabs={tabs} activeId={tab} onChange={setTab} />

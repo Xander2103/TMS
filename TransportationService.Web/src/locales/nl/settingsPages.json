@@ -4,7 +4,7 @@
     "actions": "Acties"
   },
   "company": {
-    "title": "Bedrijfsinstellingen",
+    "title": "Instellingen",
     "readOnlySubtitle": "Je hebt alleen leesrechten voor deze instellingen.",
     "loading": "Instellingen laden…",
     "loadFailed": "Instellingen konden niet worden geladen.",

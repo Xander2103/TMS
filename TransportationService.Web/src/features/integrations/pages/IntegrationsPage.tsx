@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import { PageHeader } from '../../../components/layout/PageHeader'
-import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { Pagination } from '../../../components/ui/Pagination'
@@ -96,7 +95,6 @@ export function IntegrationsPage() {
 
   return (
     <div>
-      <Breadcrumbs items={[{ label: t('integrations.page.title') }]} />
       <PageHeader title={t('integrations.page.title')} subtitle={t('integrations.page.subtitle')} />
 
       <div className="edi-filters">

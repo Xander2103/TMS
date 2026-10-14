@@ -1,6 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { PageHeader } from '../../../components/layout/PageHeader'
-import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { Button } from '../../../components/ui/Button'
 import { FormActions } from '../../../components/ui/FormActions'
 import { FormField } from '../../../components/ui/FormField'
@@ -143,7 +142,6 @@ export function SettingsPage() {
   return (
     <div>
       <UnsavedChangesGuard when={dirty && !saving} />
-      <Breadcrumbs items={[{ label: t('navigation.menu.settings') }]} />
       <PageHeader
         title={t('settingsPages.company.title')}
         subtitle={canManage ? undefined : t('settingsPages.company.readOnlySubtitle')}

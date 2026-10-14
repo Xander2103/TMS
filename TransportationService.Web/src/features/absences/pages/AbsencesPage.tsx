@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { PageHeader } from '../../../components/layout/PageHeader'
-import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { useLocale } from '../../../i18n/localeContext'
@@ -69,7 +68,6 @@ export function AbsencesPage() {
 
   return (
     <div>
-      <Breadcrumbs items={[{ label: t('absences.page.title') }]} />
       <PageHeader title={t('absences.page.title')} subtitle={t('absences.page.subtitle')} />
 
       <div className="absp-filters">

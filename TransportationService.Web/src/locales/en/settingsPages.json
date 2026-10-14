@@ -4,7 +4,7 @@
     "actions": "Actions"
   },
   "company": {
-    "title": "Company settings",
+    "title": "Settings",
     "readOnlySubtitle": "You have read-only access to these settings.",
     "loading": "Loading settings…",
     "loadFailed": "The settings could not be loaded.",

@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { PageHeader } from '../../../components/layout/PageHeader'
-import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { Badge } from '../../../components/ui/Badge'
 import { DataTable, type Column } from '../../../components/ui/DataTable'
 import { useLocale } from '../../../i18n/localeContext'
@@ -79,7 +78,6 @@ export function QualificationsOverviewPage() {
 
   return (
     <div>
-      <Breadcrumbs items={[{ label: t('qualifications.page.breadcrumb') }]} />
       <PageHeader
         title={t('qualifications.page.title')}
         subtitle={t('qualifications.page.subtitle')}

@@ -1,3 +1,4 @@
+import { PageHeader } from '../../../components/layout/PageHeader'
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { describeApiError } from '../../../api/problemDetails'
@@ -78,13 +79,15 @@ export function OperationsPage() {
 
   return (
     <div className="ops-page">
-      <header className="ops-header">
-        <h1>{t('operations.page.title')}</h1>
-        <span className="ops-refresh">
-          {overview ? t('operations.page.updatedAt', { time: formatTime(overview.generatedAt) }) : t('operations.page.loading')}
-          {' · '}{t('operations.page.refreshEvery')}
-        </span>
-      </header>
+      <PageHeader
+        title={t('operations.page.title')}
+        subtitle={(
+          <span className="ops-refresh">
+            {overview ? t('operations.page.updatedAt', { time: formatTime(overview.generatedAt) }) : t('operations.page.loading')}
+            {' · '}{t('operations.page.refreshEvery')}
+          </span>
+        )}
+      />
 
       {counters && (
         <div className="ops-kpis">

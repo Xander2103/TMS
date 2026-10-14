@@ -16,8 +16,8 @@
   flex-wrap: wrap;
 }
 
-.wh-header h1,
-.dp-header h1 {
+.wh-header h2,
+.dp-header h2 {
   margin: 0;
   font-size: 1.4rem;
 }
@@ -420,3 +420,5 @@
   color: var(--color-warning-text);
   font-weight: 600;
 }
+
+.dp-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }

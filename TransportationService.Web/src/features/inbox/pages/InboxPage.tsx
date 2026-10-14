@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { PageHeader } from '../../../components/layout/PageHeader'
-import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
@@ -188,7 +187,6 @@ export function InboxPage() {
 
   return (
     <div>
-      <Breadcrumbs items={[{ label: t('inboxPage.title') }]} />
       <PageHeader
         title={t('inboxPage.title')}
         subtitle={t('inboxPage.subtitle')}

@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react'
 import { describeApiError, getFieldError, type FieldErrors } from '../../../api/problemDetails'
-import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { PageHeader } from '../../../components/layout/PageHeader'
 import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
@@ -339,7 +338,6 @@ export function LegalEntitiesPage() {
 
   return (
     <div className="le-page">
-      <Breadcrumbs items={[{ label: t('navigation.menu.legalEntities') }]} />
       <PageHeader
         title={t('navigation.menu.legalEntities')}
         subtitle={t('legalEntities.page.subtitle')}

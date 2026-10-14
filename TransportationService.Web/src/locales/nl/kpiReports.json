@@ -1,7 +1,7 @@
 {
   "kpi": {
     "breadcrumb": "KPI's",
-    "title": "KPI-dashboard",
+    "title": "KPI's",
     "subtitle": "Managementcijfers voor de gekozen periode. Klik op een kaart voor het detailrapport.",
     "loadFailed": "De KPI-cijfers konden niet worden geladen.",
     "loading": "KPI's laden…",
@@ -118,7 +118,7 @@
     "palletDays": "Pallet-dagen (opslag):"
   },
   "reports": {
-    "title": "Rapportcentrum",
+    "title": "Rapporten",
     "subtitle": "Alle rapporten en exports op één plek; je ziet alleen wat je mag openen.",
     "loadFailed": "Het rapportcentrum kon niet worden geladen.",
     "loading": "Rapportcentrum laden...",

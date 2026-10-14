@@ -1,7 +1,7 @@
 {
   "kpi": {
     "breadcrumb": "KPIs",
-    "title": "KPI dashboard",
+    "title": "KPIs",
     "subtitle": "Management figures for the chosen period. Click a card for the detail report.",
     "loadFailed": "The KPI figures could not be loaded.",
     "loading": "Loading KPIs…",
@@ -118,7 +118,7 @@
     "palletDays": "Pallet-days (storage):"
   },
   "reports": {
-    "title": "Report centre",
+    "title": "Reports",
     "subtitle": "All reports and exports in one place; you only see what you may open.",
     "loadFailed": "The report centre could not be loaded.",
     "loading": "Loading report centre...",

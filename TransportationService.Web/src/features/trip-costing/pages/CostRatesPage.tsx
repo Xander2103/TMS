@@ -1,6 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { PageHeader } from '../../../components/layout/PageHeader'
-import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { Button } from '../../../components/ui/Button'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { FormField } from '../../../components/ui/FormField'
@@ -151,7 +150,6 @@ export function CostRatesPage() {
 
   return (
     <div>
-      <Breadcrumbs items={[{ label: t('tripCosting.rates.title') }]} />
       <PageHeader
         title={t('tripCosting.rates.title')}
         subtitle={t('tripCosting.rates.subtitle')}

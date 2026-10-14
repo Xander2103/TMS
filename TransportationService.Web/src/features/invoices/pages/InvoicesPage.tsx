@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { formatDate } from '../../../utils/dates'
 import { useNavigate } from 'react-router-dom'
 import { PageHeader } from '../../../components/layout/PageHeader'
-import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { DataTable, type Column } from '../../../components/ui/DataTable'
 import { FilterBar } from '../../../components/ui/FilterBar'
 import { FormField } from '../../../components/ui/FormField'
@@ -68,7 +67,6 @@ export function InvoicesPage() {
 
   return (
     <div>
-      <Breadcrumbs items={[{ label: t('invoices.list.title') }]} />
       <PageHeader
         title={t('invoices.list.title')}
         action={

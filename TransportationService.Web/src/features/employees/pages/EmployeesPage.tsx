@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { PageHeader } from '../../../components/layout/PageHeader'
-import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { DataTable, type Column } from '../../../components/ui/DataTable'
@@ -184,7 +183,6 @@ export function EmployeesPage() {
 
   return (
     <div>
-      <Breadcrumbs items={[{ label: isDriversView ? t('employees.list.driversTitle') : t('employees.list.title') }]} />
       <PageHeader
         title={isDriversView ? t('employees.list.driversTitle') : t('employees.list.title')}
         subtitle={isDriversView ? t('employees.list.driversSubtitle') : undefined}

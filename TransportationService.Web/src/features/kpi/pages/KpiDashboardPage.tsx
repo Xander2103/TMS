@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { createSearchParams, useNavigate } from 'react-router-dom'
 import { PageHeader } from '../../../components/layout/PageHeader'
-import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { useAuth } from '../../auth/authContextValue'
 import { useLocale } from '../../../i18n/localeContext'
 import { euro } from '../../invoices/types'
@@ -63,7 +62,6 @@ export function KpiDashboardPage() {
 
   return (
     <div>
-      <Breadcrumbs items={[{ label: t('kpiReports.kpi.breadcrumb') }]} />
       <PageHeader
         title={t('kpiReports.kpi.title')}
         subtitle={t('kpiReports.kpi.subtitle')}

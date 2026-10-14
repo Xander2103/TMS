@@ -1,3 +1,4 @@
+import { PageHeader } from '../../../components/layout/PageHeader'
 import { useEffect, useMemo, useState, type DragEvent, type FormEvent } from 'react'
 import { ApiError } from '../../../api/apiClient'
 import { localizeApiError } from '../../../api/problemDetails'
@@ -155,8 +156,9 @@ export function DockPlanningPage() {
 
   return (
     <div className="dp-page">
-      <header className="dp-header">
-        <h1>{t('warehousing.dockPlanning.title')}</h1>
+      <PageHeader
+        title={t('warehousing.dockPlanning.title')}
+        action={(
         <div className="dp-controls">
           <select value={warehouseId} onChange={(event) => setWarehouseId(event.target.value)} aria-label={t('warehousing.dockPlanning.warehouseAria')}>
             {warehouses.map((warehouse) => (
@@ -173,7 +175,8 @@ export function DockPlanningPage() {
             </Button>
           )}
         </div>
-      </header>
+        )}
+      />
 
       {dashboard && (
         <div className="dp-kpis">

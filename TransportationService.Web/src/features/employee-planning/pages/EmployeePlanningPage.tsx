@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { PageHeader } from '../../../components/layout/PageHeader'
-import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { Button } from '../../../components/ui/Button'
 import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
@@ -155,7 +154,6 @@ export function EmployeePlanningPage() {
 
   return (
     <div className="ep-page">
-      <Breadcrumbs items={[{ label: t('employeePlanning.page.breadcrumb') }]} />
       <PageHeader title={t('employeePlanning.page.title')} subtitle={t('employeePlanning.page.subtitle')} />
 
       <PlanningToolbar

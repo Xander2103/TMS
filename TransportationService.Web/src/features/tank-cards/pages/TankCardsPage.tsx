@@ -1,6 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { PageHeader } from '../../../components/layout/PageHeader'
-import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { DataTable, type Column } from '../../../components/ui/DataTable'
 import { FilterBar } from '../../../components/ui/FilterBar'
 import { Pagination } from '../../../components/ui/Pagination'
@@ -293,7 +292,6 @@ export function TankCardsPage() {
 
   return (
     <div>
-      <Breadcrumbs items={[{ label: t('tankCards.page.breadcrumb') }]} />
       <PageHeader
         title={t('tankCards.page.title')}
         action={

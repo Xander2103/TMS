@@ -32,7 +32,7 @@
     "Document": "Document"
   },
   "page": {
-    "title": "Centre opérationnel",
+    "title": "Suivi en direct",
     "overviewLoadFailed": "Le chargement de l'aperçu a échoué.",
     "loading": "Chargement…",
     "updatedAt": "Actualisé à {time}",

@@ -202,7 +202,7 @@
   },
   "warehouse": {
     "loadListFailed": "The loading list could not be loaded.",
-    "title": "Warehouse",
+    "title": "Loading & scanning",
     "subtitle": "Loading lists and packages",
     "dayAria": "Day",
     "today": "Today",

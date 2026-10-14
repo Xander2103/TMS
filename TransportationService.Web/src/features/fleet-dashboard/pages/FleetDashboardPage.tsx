@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { PageHeader } from '../../../components/layout/PageHeader'
-import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { Badge, type BadgeTone } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { useLocale } from '../../../i18n/localeContext'
@@ -68,7 +67,6 @@ export function FleetDashboardPage() {
 
   return (
     <div>
-      <Breadcrumbs items={[{ label: t('navigation.menu.modules.vloot') }]} />
       <PageHeader
         title={t('navigation.menu.modules.vloot')}
         action={
