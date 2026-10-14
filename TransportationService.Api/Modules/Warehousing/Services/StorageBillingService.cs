@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using TransportationService.Api.Common;
 using TransportationService.Api.Data;
 using TransportationService.Api.Modules.Tenancy.Services;
 
@@ -45,8 +46,11 @@ public class StorageBillingService : IStorageBillingService
         Guid customerId, DateOnly from, DateOnly to, CancellationToken cancellationToken)
     {
         var tenantId = _tenantContext.TenantId;
-        var periodStart = from.ToDateTime(TimeOnly.MinValue);
-        var periodEnd = to.AddDays(1).ToDateTime(TimeOnly.MinValue); // exclusive
+        // C-03: the period is typed as tenant-local calendar days; InAt/OutAt are instants, so the
+        // bounds are the UTC window of those days (naive midnight bounds were Kind=Unspecified,
+        // which Npgsql rejects — B07).
+        var zone = await TenantTimeZone.ForTenantAsync(_dbContext, tenantId, cancellationToken);
+        var (periodStart, periodEnd) = TenantTimeZone.LocalDayRangeUtc(from, to, zone); // end exclusive
 
         var stays = await _dbContext.StorageStays.AsNoTracking()
             .Where(s => s.TenantId == tenantId && s.InAt < periodEnd && (s.OutAt == null || s.OutAt > periodStart))

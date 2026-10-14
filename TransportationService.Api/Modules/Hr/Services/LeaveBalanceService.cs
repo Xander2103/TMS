@@ -50,29 +50,51 @@ public class LeaveBalanceService : ILeaveBalanceService
     public async Task EnsureSeededAsync(CancellationToken cancellationToken)
     {
         var tenantId = _tenant.TenantId;
+        await SeedMissingBalanceTypesAsync(tenantId, cancellationToken);
+        await SeedMissingLeaveTypesAsync(tenantId, cancellationToken);
+    }
 
-        // IgnoreQueryFilters: a deliberately DELETED seeded category must never be resurrected
-        // by the add-if-missing seeding (corrections wave §5).
-        var existingBalanceCodes = await _db.LeaveBalanceTypes.IgnoreQueryFilters()
-            .Where(t => t.TenantId == tenantId).Select(t => t.Code).ToListAsync(cancellationToken);
+    /// <summary>
+    /// Add-if-missing, one row per SaveChanges. B07: the leave settings page fires its reads in
+    /// parallel, so a fresh tenant is seeded by two requests at once. A multi-row insert deadlocked
+    /// (EF orders batched rows by their random primary key, so both transactions took the unique
+    /// (tenant, code) index entries in different orders); a single-row insert can only wait on the
+    /// winner and is then rejected, after which the loser takes the winner's row. Any rejection
+    /// without a concurrent winner is a real error and propagates.
+    /// </summary>
+    private async Task SeedMissingBalanceTypesAsync(Guid tenantId, CancellationToken cancellationToken)
+    {
+        var existingCodes = await ExistingBalanceCodesAsync(tenantId, cancellationToken);
         foreach (var seed in LeaveDefaults.BalanceTypes)
         {
-            if (existingBalanceCodes.Contains(seed.Code)) continue;
-            _db.LeaveBalanceTypes.Add(new LeaveBalanceType
+            if (existingCodes.Contains(seed.Code)) continue;
+            var entity = new LeaveBalanceType
             {
                 Id = Guid.NewGuid(), TenantId = tenantId, Code = seed.Code, Name = seed.Name, SortOrder = seed.SortOrder,
-            });
+            };
+            _db.LeaveBalanceTypes.Add(entity);
+            try
+            {
+                await _db.SaveChangesAsync(cancellationToken);
+            }
+            catch (DbUpdateException)
+            {
+                _db.Entry(entity).State = EntityState.Detached;
+                existingCodes = await ExistingBalanceCodesAsync(tenantId, cancellationToken);
+                if (!existingCodes.Contains(seed.Code)) throw;
+            }
         }
-        if (_db.ChangeTracker.HasChanges()) await _db.SaveChangesAsync(cancellationToken);
+    }
 
+    private async Task SeedMissingLeaveTypesAsync(Guid tenantId, CancellationToken cancellationToken)
+    {
         var balanceByCode = await _db.LeaveBalanceTypes
             .Where(t => t.TenantId == tenantId).ToDictionaryAsync(t => t.Code, t => t.Id, cancellationToken);
-        var existingLeaveCodes = await _db.LeaveTypes.IgnoreQueryFilters()
-            .Where(t => t.TenantId == tenantId).Select(t => t.Code).ToListAsync(cancellationToken);
+        var existingCodes = await ExistingLeaveCodesAsync(tenantId, cancellationToken);
         foreach (var seed in LeaveDefaults.LeaveTypes)
         {
-            if (existingLeaveCodes.Contains(seed.Code)) continue;
-            _db.LeaveTypes.Add(new LeaveType
+            if (existingCodes.Contains(seed.Code)) continue;
+            var entity = new LeaveType
             {
                 Id = Guid.NewGuid(), TenantId = tenantId, Code = seed.Code, Name = seed.Name,
                 AbsenceType = seed.AbsenceType, DeductsFromBalance = seed.DeductsFromBalance,
@@ -80,10 +102,30 @@ public class LeaveBalanceService : ILeaveBalanceService
                 IsPaid = seed.IsPaid, AllowsHalfDays = seed.AllowsHalfDays, RequiresReason = seed.RequiresReason,
                 RequiresAttachment = seed.RequiresAttachment, VisibleInSelfService = seed.VisibleInSelfService,
                 Colour = seed.Colour, SortOrder = seed.SortOrder,
-            });
+            };
+            _db.LeaveTypes.Add(entity);
+            try
+            {
+                await _db.SaveChangesAsync(cancellationToken);
+            }
+            catch (DbUpdateException)
+            {
+                _db.Entry(entity).State = EntityState.Detached;
+                existingCodes = await ExistingLeaveCodesAsync(tenantId, cancellationToken);
+                if (!existingCodes.Contains(seed.Code)) throw;
+            }
         }
-        if (_db.ChangeTracker.HasChanges()) await _db.SaveChangesAsync(cancellationToken);
     }
+
+    // IgnoreQueryFilters: a deliberately DELETED seeded category must never be resurrected by the
+    // add-if-missing seeding (corrections wave §5).
+    private Task<List<string>> ExistingBalanceCodesAsync(Guid tenantId, CancellationToken cancellationToken) =>
+        _db.LeaveBalanceTypes.IgnoreQueryFilters()
+            .Where(t => t.TenantId == tenantId).Select(t => t.Code).ToListAsync(cancellationToken);
+
+    private Task<List<string>> ExistingLeaveCodesAsync(Guid tenantId, CancellationToken cancellationToken) =>
+        _db.LeaveTypes.IgnoreQueryFilters()
+            .Where(t => t.TenantId == tenantId).Select(t => t.Code).ToListAsync(cancellationToken);
 
     public async Task<EmployeeLeaveBalanceDto> GetForEmployeeAsync(Guid employeeId, int year, CancellationToken cancellationToken)
     {

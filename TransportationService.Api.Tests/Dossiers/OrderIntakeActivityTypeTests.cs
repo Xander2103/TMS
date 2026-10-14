@@ -67,9 +67,9 @@ public class OrderIntakeActivityTypeTests
         Stops:
         [
             new TransportOrderStopInput(StopType.Loading, null, "Magazijn Hoeilaart", "Waversesteenweg 78", "1560", "Hoeilaart", "BE",
-                new DateTime(2026, 9, 3, 8, 0, 0), new DateTime(2026, 9, 3, 10, 0, 0), null, null),
+                new DateTime(2026, 9, 3, 8, 0, 0, DateTimeKind.Utc), new DateTime(2026, 9, 3, 10, 0, 0, DateTimeKind.Utc), null, null),
             new TransportOrderStopInput(StopType.Unloading, null, "Werf Gent", "Dok Noord 4", "9000", "Gent", "BE",
-                new DateTime(2026, 9, 3, 13, 0, 0), new DateTime(2026, 9, 3, 15, 0, 0), null, null),
+                new DateTime(2026, 9, 3, 13, 0, 0, DateTimeKind.Utc), new DateTime(2026, 9, 3, 15, 0, 0, DateTimeKind.Utc), null, null),
         ],
         CargoItems: [new CargoItemInput("Bouwmateriaal", null, 12, "Pallets", null)],
         ActivityTypeId: activityTypeId);

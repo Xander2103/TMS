@@ -1415,4 +1415,63 @@ public class TransportOrderServiceTests
 
         Assert.Equal(TransportOrderOperationOutcome.InvalidState, result.Outcome);
     }
+
+    /// <summary>
+    /// B07: a stop time without a time zone (JSON "2026-07-21T08:00:00" binds as Kind=Unspecified)
+    /// used to blow up in Npgsql at SaveChanges ("only UTC is supported") — a 500 for a client
+    /// mistake. It is a validation error now; UTC instants are accepted as before.
+    /// </summary>
+    [Fact]
+    public async Task Create_RejectsStopTimesWithoutTimeZone()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+
+        var unspecified = await h.Sut.CreateAsync(Request(h.CustomerId,
+            Stop(StopType.Loading, h.LocationId, from: new DateTime(2026, 7, 21, 8, 0, 0, DateTimeKind.Unspecified)),
+            Stop(StopType.Unloading, city: "Gent")), CancellationToken.None);
+        var utc = await h.Sut.CreateAsync(Request(h.CustomerId,
+            Stop(StopType.Loading, h.LocationId, from: new DateTime(2026, 7, 21, 8, 0, 0, DateTimeKind.Utc)),
+            Stop(StopType.Unloading, city: "Gent")), CancellationToken.None);
+
+        Assert.Equal(TransportOrderOperationOutcome.ValidationFailed, unspecified.Outcome);
+        Assert.Contains("tijdzone", unspecified.Error);
+        Assert.Equal(TransportOrderOperationOutcome.Success, utc.Outcome);
+    }
+
+    /// <summary>
+    /// B07: texts longer than their columns are refused with a 400 instead of reaching PostgreSQL
+    /// ("value too long for type character varying(100)" → 500), on create and on update.
+    /// </summary>
+    [Fact]
+    public async Task CreateAndUpdate_RejectTextsLongerThanTheirColumns()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var stops = new[] { Stop(StopType.Loading, h.LocationId), Stop(StopType.Unloading, city: "Gent") };
+
+        var longReference = await h.Sut.CreateAsync(
+            Request(h.CustomerId, stops) with { CustomerReference = new string('R', 101) }, CancellationToken.None);
+        Assert.Equal(TransportOrderOperationOutcome.ValidationFailed, longReference.Outcome);
+        Assert.Contains("100", longReference.Error);
+        var longGoods = await h.Sut.CreateAsync(
+            Request(h.CustomerId, stops) with { GoodsDescription = new string('G', 1001) }, CancellationToken.None);
+        Assert.Equal(TransportOrderOperationOutcome.ValidationFailed, longGoods.Outcome);
+        var longNotes = await h.Sut.CreateAsync(
+            Request(h.CustomerId, stops) with { Notes = new string('N', 4001) }, CancellationToken.None);
+        Assert.Equal(TransportOrderOperationOutcome.ValidationFailed, longNotes.Outcome);
+        var longStopReference = await h.Sut.CreateAsync(Request(h.CustomerId,
+            Stop(StopType.Loading, h.LocationId) with { Reference = new string('S', 101) },
+            Stop(StopType.Unloading, city: "Gent")), CancellationToken.None);
+        Assert.Equal(TransportOrderOperationOutcome.ValidationFailed, longStopReference.Outcome);
+
+        // Exactly the column length is fine; one more on update is refused the same way.
+        var created = await h.Sut.CreateAsync(
+            Request(h.CustomerId, stops) with { CustomerReference = new string('R', 100) }, CancellationToken.None);
+        Assert.Equal(TransportOrderOperationOutcome.Success, created.Outcome);
+        h.Db.Context.ChangeTracker.Clear();
+        var updated = await h.Sut.UpdateAsync(created.Order!.Id,
+            BuildUpdateFrom(created.Order!) with { CustomerReference = new string('R', 101) }, CancellationToken.None);
+        Assert.Equal(TransportOrderOperationOutcome.ValidationFailed, updated.Outcome);
+    }
 }

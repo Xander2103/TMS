@@ -390,4 +390,34 @@ public class DossierServiceTests
         Assert.Equal(1, withPriced!.Financials.PricedOrderCount);
         Assert.Equal(500m, withPriced.Financials.AgreedOrderTotal);
     }
+
+    /// <summary>
+    /// B07: text longer than its column used to reach PostgreSQL and surface as a 500 ("value too
+    /// long for type character varying(100)"); it is a field error now, on create and on update.
+    /// </summary>
+    [Fact]
+    public async Task CreateAndUpdate_RejectTextsLongerThanTheirColumns()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var sut = h.Sut();
+
+        var longReference = await Assert.ThrowsAsync<DomainValidationException>(() => sut.CreateAsync(
+            new SaveDossierRequest("X", CustomerId: h.CustomerId, CustomerReference: new string('R', 101)), CancellationToken.None));
+        Assert.Contains("customerReference", longReference.FieldErrors!.Keys);
+        var longDescription = await Assert.ThrowsAsync<DomainValidationException>(() => sut.CreateAsync(
+            new SaveDossierRequest("X", Description: new string('D', 2001), CustomerId: h.CustomerId), CancellationToken.None));
+        Assert.Contains("description", longDescription.FieldErrors!.Keys);
+        var longNotes = await Assert.ThrowsAsync<DomainValidationException>(() => sut.CreateAsync(
+            new SaveDossierRequest("X", CustomerId: h.CustomerId, Notes: new string('N', 4001)), CancellationToken.None));
+        Assert.Contains("notes", longNotes.FieldErrors!.Keys);
+
+        // Exactly the column length is fine; one more on update is refused the same way.
+        var created = await sut.CreateAsync(
+            new SaveDossierRequest("X", CustomerId: h.CustomerId, CustomerReference: new string('R', 100)), CancellationToken.None);
+        Assert.Equal(new string('R', 100), created.CustomerReference);
+        var longOnUpdate = await Assert.ThrowsAsync<DomainValidationException>(() => sut.UpdateAsync(
+            created.Id, new SaveDossierRequest("X", CustomerReference: new string('R', 101)), CancellationToken.None));
+        Assert.Contains("customerReference", longOnUpdate.FieldErrors!.Keys);
+    }
 }

@@ -196,4 +196,38 @@ public class AccountFlowTests
         await Assert.ThrowsAsync<TransportationService.Api.Common.DomainValidationException>(
             () => mappings.CreateAsync(new SaveJobFunctionRoleMappingRequest(functionId, roleId), CancellationToken.None));
     }
+
+    /// <summary>
+    /// B07: the mappings page lists function → role pairs sorted by function, then role. The
+    /// ordering must be applied before the DTO projection — EF cannot translate an OrderBy over
+    /// a record constructed inside the query, so the list endpoint returned 500.
+    /// </summary>
+    [Fact]
+    public async Task JobFunctionRoleMappings_List_IsOrderedByFunctionThenRole()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var plannerFunction = Guid.NewGuid();
+        var driverFunction = Guid.NewGuid();
+        var dispatcherRole = Guid.NewGuid();
+        var driverRole = Guid.NewGuid();
+        h.Db.Context.JobFunctions.AddRange(
+            new JobFunction { Id = plannerFunction, TenantId = h.TenantId, Code = "PLAN", Name = "Planner", IsActive = true },
+            new JobFunction { Id = driverFunction, TenantId = h.TenantId, Code = "CHAUF", Name = "Chauffeur", IsActive = true });
+        h.Db.Context.Roles.AddRange(
+            new Role { Id = dispatcherRole, TenantId = h.TenantId, Name = "Dispatcher", IsActive = true },
+            new Role { Id = driverRole, TenantId = h.TenantId, Name = "Chauffeur", IsActive = true });
+        await h.Db.Context.SaveChangesAsync();
+        var tenant = new DevTenantContext(h.TenantId);
+        var mappings = new JobFunctionRoleMappingService(h.Db.Context, tenant,
+            new AuditService(h.Db.Context, tenant, new DevCurrentUserContext(null)));
+        await mappings.CreateAsync(new SaveJobFunctionRoleMappingRequest(plannerFunction, driverRole), CancellationToken.None);
+        await mappings.CreateAsync(new SaveJobFunctionRoleMappingRequest(plannerFunction, dispatcherRole), CancellationToken.None);
+        await mappings.CreateAsync(new SaveJobFunctionRoleMappingRequest(driverFunction, driverRole), CancellationToken.None);
+
+        var list = await mappings.ListAsync(CancellationToken.None);
+
+        var expected = new[] { ("Chauffeur", "Chauffeur"), ("Planner", "Chauffeur"), ("Planner", "Dispatcher") };
+        Assert.Equal(expected, list.Select(m => (m.JobFunctionName, m.RoleName)).ToArray());
+    }
 }

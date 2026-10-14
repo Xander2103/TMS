@@ -276,4 +276,48 @@ public class ActivityKpiTests
         Assert.Equal(1200m, report.Totals.Revenue);
         Assert.Equal(1200m, report.PerCategory.Single(c => c.KpiCategory == "Kraan").Revenue);
     }
+
+    /// <summary>
+    /// B07: the period is typed as tenant-local calendar days, so the CreatedAt fallback and the
+    /// pallet-day window must compare against the UTC instants of the tenant's local midnights
+    /// (Npgsql even refuses the naive Kind=Unspecified bounds outright — the page returned 500).
+    /// An activity created at 00:30 local on the first day belongs to the period; one created at
+    /// 00:30 local the night after the last day does not.
+    /// </summary>
+    [Fact]
+    public async Task PeriodFilter_UsesTenantLocalDays_ForCreatedAtFallbackAndPalletDays()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        h.Db.Context.TenantSettings.Add(new TenantSettings { Id = Guid.NewGuid(), TenantId = h.TenantId, Timezone = "Europe/Amsterdam" });
+        var dossierId = await h.Db.Context.TransportDossiers.Where(d => d.TenantId == h.TenantId).Select(d => d.Id).SingleAsync();
+        var warehouseId = await h.Db.Context.Warehouses.Where(w => w.TenantId == h.TenantId).Select(w => w.Id).SingleAsync();
+        var inside = new DossierActivity { Id = Guid.NewGuid(), TenantId = h.TenantId, DossierId = dossierId, ActivityTypeId = h.PlateauTypeId, Sequence = 4 };
+        var outside = new DossierActivity { Id = Guid.NewGuid(), TenantId = h.TenantId, DossierId = dossierId, ActivityTypeId = h.CraneTypeId, Sequence = 5 };
+        h.Db.Context.DossierActivities.AddRange(inside, outside);
+        // 00:30–01:30 local on 20/07 = 22:30–23:30Z on 19/07: inside the July range in tenant time.
+        h.Db.Context.StorageStays.Add(new StorageStay
+        {
+            Id = Guid.NewGuid(), TenantId = h.TenantId, PackageId = Guid.NewGuid(), WarehouseId = warehouseId,
+            InAt = new DateTime(2026, 07, 19, 22, 30, 0, DateTimeKind.Utc),
+            OutAt = new DateTime(2026, 07, 19, 23, 30, 0, DateTimeKind.Utc),
+        });
+        await h.Db.Context.SaveChangesAsync();
+        // The audit interceptor stamps CreatedAt on insert; raw SQL backdates it (same technique
+        // as EmployeeDossierReminderTests).
+        await BackdateCreatedAtAsync(h.Db, inside.Id, new DateTime(2026, 07, 19, 22, 30, 0, DateTimeKind.Utc));   // 20/07 00:30 local
+        await BackdateCreatedAtAsync(h.Db, outside.Id, new DateTime(2026, 07, 24, 22, 30, 0, DateTimeKind.Utc));  // 25/07 00:30 local
+        h.Db.Context.ChangeTracker.Clear();
+
+        var report = await h.Sut.GetActivityKpisAsync(JulFrom, JulTo, CancellationToken.None);
+
+        Assert.Equal(3, report.Totals.ActivityCount); // crane 20/07 + plateau 21/07 + the 00:30-local plateau
+        Assert.Equal(2, report.Rows.Single(r => r.ActivityTypeId == h.PlateauTypeId).ActivityCount);
+        Assert.Equal(1, report.Rows.Single(r => r.ActivityTypeId == h.CraneTypeId).ActivityCount);
+        Assert.Equal(3m, report.PalletDays); // 2 (seeded stay) + 1 (the night stay)
+    }
+
+    private static Task BackdateCreatedAtAsync(SqliteTestDbContext db, Guid activityId, DateTime createdAt) =>
+        db.Context.Database.ExecuteSqlInterpolatedAsync(
+            $"UPDATE dossier_activities SET CreatedAt = {createdAt} WHERE Id = {activityId}");
 }
