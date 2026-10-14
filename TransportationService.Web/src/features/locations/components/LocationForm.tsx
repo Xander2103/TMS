@@ -717,8 +717,6 @@ export function LocationForm({ mode, initial, submitting, error, submitError, on
         onSelect={jumpToField}
       />
 
-      {actionBar('top')}
-
       <SectionedForm
         sections={sections}
         activeId={activeId}

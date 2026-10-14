@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import {render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { EmployeeForm } from '../EmployeeForm'
@@ -71,28 +71,13 @@ async function openDienstverband() {
 }
 
 describe('EmployeeForm — info-tips', () => {
-  it('heet "Opslaan en nieuwe medewerker" en legt op hover/focus uit wat de knop doet', async () => {
-    const user = userEvent.setup()
+  it('heet "Opslaan en nieuwe medewerker" en staat één keer in de enige bewaarbalk (B39)', () => {
     renderForm()
-    expect(screen.getAllByRole('button', { name: 'Opslaan en nieuwe medewerker' })).toHaveLength(2)
+    expect(screen.getAllByRole('button', { name: 'Opslaan en nieuwe medewerker' })).toHaveLength(1)
     expect(screen.queryByRole('button', { name: 'Opslaan en nieuwe werknemer' })).not.toBeInTheDocument()
-
-    const tips = screen.getAllByRole('button', { name: 'Meer informatie' })
-    expect(tips).toHaveLength(2) // één per bewaarbalk (boven + onder)
-    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument()
-
-    await user.hover(tips[0])
-    expect(screen.getByRole('tooltip')).toHaveTextContent(
-      'Slaat deze medewerker op en opent daarna onmiddellijk een leeg formulier om een volgende medewerker toe te voegen.',
-    )
-    await user.unhover(tips[0])
-    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument()
-
-    fireEvent.focus(tips[1])
-    expect(screen.getByRole('tooltip')).toHaveTextContent(/Slaat deze medewerker op/)
-    // Het gewone Opslaan heeft geen info-tip.
-    const saveButtons = screen.getAllByRole('button', { name: 'Opslaan' })
-    expect(saveButtons).toHaveLength(2)
+    // De knop legt zichzelf uit; er hangt geen "?"-tip meer naast.
+    expect(screen.queryByRole('button', { name: 'Meer informatie' })).not.toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: 'Opslaan' })).toHaveLength(1)
   })
 
   it('toont bij DIMONA-nummer een info-tip met uitleg en een externe "Meer info"-link', async () => {

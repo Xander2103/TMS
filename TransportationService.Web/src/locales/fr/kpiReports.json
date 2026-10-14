@@ -149,6 +149,8 @@
       "downloadFailed": "Le rapport n'a pas pu être téléchargé.",
       "generating": "Génération en cours…",
       "download": "Télécharger ({type})"
-    }
+    },
+    "packageExportsTitle": "Exports colis",
+    "packageExportsHint": "Exports Excel sur les colis, scans, anomalies et performances de livraison pour une période choisie."
   }
 }

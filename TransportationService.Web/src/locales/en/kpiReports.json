@@ -149,6 +149,8 @@
       "downloadFailed": "The report could not be downloaded.",
       "generating": "Generating…",
       "download": "Download ({type})"
-    }
+    },
+    "packageExportsTitle": "Package exports",
+    "packageExportsHint": "Excel exports on packages, scans, exceptions and delivery performance for a chosen period."
   }
 }

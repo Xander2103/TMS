@@ -707,7 +707,6 @@ export function EmployeeForm({
   const defaultSectionId =
     initialSectionId && sections.some((s) => s.id === initialSectionId) ? initialSectionId : sections[0].id
   const { activeId, setActive } = useSectionNavigation(sections.map((s) => s.id), defaultSectionId)
-  const activeSection = sections.find((s) => s.id === activeId) ?? sections[0]
 
   // Which save button was clicked last; a plain Enter-submit counts as the normal save.
   const submitIntentRef = useRef<EmployeeSubmitIntent>('save')
@@ -781,10 +780,6 @@ export function EmployeeForm({
           >
             {t('employees.form.saveAndNew')}
           </Button>
-          <InfoTip
-            text={t('employees.form.saveAndNewHelp')}
-            placement={position === 'top' ? 'bottom-end' : 'top-end'}
-          />
         </>
       )}
       <Button
@@ -803,10 +798,6 @@ export function EmployeeForm({
     <form onSubmit={handleSubmit} className="employee-form" onChange={touch} noValidate>
       <UnsavedChangesGuard when={dirty && !isSubmitting} />
       <ValidationSummary message={submitError} fieldErrors={serverFieldErrors} fieldLabels={fieldLabels} />
-
-      {/* SectionedForm renders `actions` only at the bottom; mirror its panel check here so the
-          top bar also disappears on self-saving panel sections. */}
-      {!activeSection.panel && actionBar('top')}
 
       <SectionedForm
         sections={sections}

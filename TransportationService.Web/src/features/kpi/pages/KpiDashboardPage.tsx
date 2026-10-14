@@ -7,7 +7,6 @@ import { euro } from '../../invoices/types'
 import { getKpiDashboard } from '../api/kpiApi'
 import { KpiCard } from '../components/KpiCard'
 import { KpiExportControl } from '../components/KpiExportControl'
-import { PackageReportsControl } from '../../packages/components/PackageReportsControl'
 import { KpiFilterBar } from '../components/KpiFilterBar'
 import { KpiActivitiesSection } from '../components/KpiActivitiesSection'
 import { num, pct, presetRange, type KpiDashboard, type KpiFilterState } from '../types'
@@ -68,7 +67,6 @@ export function KpiDashboardPage() {
         action={
           <span className="kpi-export-actions">
             <KpiExportControl filter={filter} />
-            <PackageReportsControl />
           </span>
         }
       />

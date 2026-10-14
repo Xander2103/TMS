@@ -149,6 +149,8 @@
       "downloadFailed": "Het rapport kon niet worden gedownload.",
       "generating": "Bezig met genereren…",
       "download": "Download ({type})"
-    }
+    },
+    "packageExportsTitle": "Colli-exports",
+    "packageExportsHint": "Excel-exports over colli, scans, afwijkingen en leverprestaties voor een gekozen periode."
   }
 }

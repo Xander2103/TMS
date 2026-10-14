@@ -44,7 +44,8 @@
     "customersMissingData_one": "{count} actieve klant zonder Peppol-gegevens",
     "customersMissingData_other": "{count} actieve klanten zonder Peppol-gegevens",
     "checklistTitle": "Configuratie per eigen bedrijf",
-    "noEntities": "Nog geen eigen bedrijven geconfigureerd."
+    "noEntities": "Nog geen eigen bedrijven geconfigureerd.",
+    "configure": "Configureren →"
   },
   "outgoing": {
     "loadFailed": "De Peppol-transmissies konden niet worden geladen.",

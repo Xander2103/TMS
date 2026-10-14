@@ -6,6 +6,8 @@ import { ErrorState } from '../../../components/feedback/ErrorState'
 import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { useLocale } from '../../../i18n/localeContext'
+import { useAuth } from '../../auth/authContextValue'
+import { PackageReportsControl } from '../../packages/components/PackageReportsControl'
 import { getReportCatalog } from '../api/reportsApi'
 import { REPORT_CATEGORY_META, REPORT_CATEGORY_ORDER, type ReportCatalogEntry } from '../types'
 import './reports.css'
@@ -18,6 +20,7 @@ import './reports.css'
 export function ReportsPage() {
   const navigate = useNavigate()
   const { t } = useLocale()
+  const { hasPermission } = useAuth()
   const [reports, setReports] = useState<ReportCatalogEntry[] | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [activeCategory, setActiveCategory] = useState<string | null>(null)
@@ -125,6 +128,14 @@ export function ReportsPage() {
         )}
         {!selected && <p className="placeholder-text">{t('kpiReports.reports.chooseCategory')}</p>}
       </div>
+
+      {hasPermission('package_reports.export') && (
+        <section className="reports-list reports-exports">
+          <h2>{t('kpiReports.reports.packageExportsTitle')}</h2>
+          <p className="reports-row-description">{t('kpiReports.reports.packageExportsHint')}</p>
+          <PackageReportsControl />
+        </section>
+      )}
     </div>
   )
 }

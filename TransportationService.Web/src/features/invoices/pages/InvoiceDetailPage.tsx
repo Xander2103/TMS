@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { PageHeader } from '../../../components/layout/PageHeader'
 import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { LoadingState } from '../../../components/feedback/LoadingState'
@@ -493,8 +493,12 @@ export function InvoiceDetailPage() {
                       </div>
                     )}
                     {line.ledgerWarning && (
-                      <div>
+                      <div className="inv-ledger-warning">
                         <Badge tone="warning">{line.ledgerWarning}</Badge>
+                        {/* B43: the warning names the fix; take the user there when allowed. */}
+                        {hasAnyPermission(['accounting.view', 'accounting.manage']) && (
+                          <Link to="/settings/accounting">{t('invoices.detail.ledgerSettingsLink')}</Link>
+                        )}
                       </div>
                     )}
                     <InvoiceLineFiscalBadge line={line} />

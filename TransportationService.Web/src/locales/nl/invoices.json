@@ -315,7 +315,8 @@
     "total": "Totaal",
     "attachmentsTitle": "Bijlagen",
     "loading": "Factuur laden...",
-    "loadError": "De factuur kon niet worden geladen."
+    "loadError": "De factuur kon niet worden geladen.",
+    "ledgerSettingsLink": "Grootboek instellen →"
   },
   "fiscal": {
     "draftNote": "Voorbeeld — wordt vastgelegd bij verzenden.",

@@ -44,7 +44,8 @@
     "customersMissingData_one": "{count} active customer without Peppol details",
     "customersMissingData_other": "{count} active customers without Peppol details",
     "checklistTitle": "Configuration per own company",
-    "noEntities": "No own companies configured yet."
+    "noEntities": "No own companies configured yet.",
+    "configure": "Configure →"
   },
   "outgoing": {
     "loadFailed": "The Peppol transmissions could not be loaded.",

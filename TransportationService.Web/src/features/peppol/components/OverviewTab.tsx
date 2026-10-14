@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { KpiCard } from '../../kpi/components/KpiCard'
 import { Badge } from '../../../components/ui/Badge'
 import { useLocale } from '../../../i18n/localeContext'
@@ -78,6 +79,11 @@ export function OverviewTab() {
               <CheckMark ok={entity.hasPeppolIdentity} label={t('peppol.fields.peppolId')} />
               <CheckMark ok={entity.hasVatNumber} label={t('peppol.fields.vatNumber')} />
               <CheckMark ok={entity.hasIban} label={t('peppol.fields.iban')} />
+              {(!entity.hasPeppolIdentity || !entity.hasVatNumber || !entity.hasIban) && (
+                <Link to="/peppol?tab=configuratie" className="peppol-configure-link">
+                  {t('peppol.overview.configure')}
+                </Link>
+              )}
               <Badge tone={entity.enabled ? 'success' : 'neutral'}>
                 {entity.enabled ? t('ui.statusBadges.active') : t('ui.statusBadges.inactive')}
               </Badge>

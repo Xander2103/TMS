@@ -44,7 +44,8 @@
     "customersMissingData_one": "{count} client actif sans données Peppol",
     "customersMissingData_other": "{count} clients actifs sans données Peppol",
     "checklistTitle": "Configuration par entité propre",
-    "noEntities": "Aucune entité propre configurée pour le moment."
+    "noEntities": "Aucune entité propre configurée pour le moment.",
+    "configure": "Configurer →"
   },
   "outgoing": {
     "loadFailed": "Les transmissions Peppol n'ont pas pu être chargées.",

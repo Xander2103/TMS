@@ -315,7 +315,8 @@
     "total": "Total",
     "attachmentsTitle": "Pièces jointes",
     "loading": "Chargement de la facture...",
-    "loadError": "La facture n'a pas pu être chargée."
+    "loadError": "La facture n'a pas pu être chargée.",
+    "ledgerSettingsLink": "Configurer le grand livre →"
   },
   "fiscal": {
     "draftNote": "Aperçu — figé à l’envoi.",

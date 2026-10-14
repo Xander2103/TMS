@@ -8,7 +8,6 @@ import { Button } from '../../../components/ui/Button'
 import { useAuth } from '../../auth/authContextValue'
 import { useLocale } from '../../../i18n/localeContext'
 import { ScanPanel } from '../../scanning/components/ScanPanel'
-import { PackageReportsControl } from '../components/PackageReportsControl'
 import { getWarehouseTrips, searchWarehousePackages } from '../api/packagesApi'
 import {
   PACKAGE_STATUS_LABELS,
@@ -84,21 +83,15 @@ export function WarehousePage() {
         subtitle={t('packages.warehouse.subtitle')}
         action={
           <span className="wh-day-toggle" role="radiogroup" aria-label={t('packages.warehouse.dayAria')}>
-            <Button variant={dayOffset === 0 ? 'primary' : 'secondary'} onClick={() => setDayOffset(0)}>
+            <Button variant={dayOffset === 0 ? 'primary' : 'secondary'} role="radio" aria-checked={dayOffset === 0} onClick={() => setDayOffset(0)}>
               {t('packages.warehouse.today')}
             </Button>
-            <Button variant={dayOffset === 1 ? 'primary' : 'secondary'} onClick={() => setDayOffset(1)}>
+            <Button variant={dayOffset === 1 ? 'primary' : 'secondary'} role="radio" aria-checked={dayOffset === 1} onClick={() => setDayOffset(1)}>
               {t('packages.warehouse.tomorrow')}
             </Button>
           </span>
         }
       />
-
-      {hasPermission('package_reports.export') && (
-        <section className="to-section">
-          <PackageReportsControl />
-        </section>
-      )}
 
       <section className="to-section">
         <h2>{t('packages.warehouse.searchTitle')}</h2>

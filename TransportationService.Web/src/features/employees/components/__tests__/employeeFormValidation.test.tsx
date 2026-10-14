@@ -220,7 +220,7 @@ describe('EmployeeForm — dienstverbanddatums', () => {
 })
 
 describe('EmployeeForm — bewaarbalk boven en onder', () => {
-  it('toont de bewaarbalk bovenaan én onderaan en verbergt beide op paneelsecties (edit)', async () => {
+  it('toont één bewaarbalk en verbergt die op paneelsecties (edit, B39)', async () => {
     auth.permissions = []
     renderForm({
       mode: 'edit',
@@ -230,23 +230,23 @@ describe('EmployeeForm — bewaarbalk boven en onder', () => {
       ],
     })
 
-    // Gewone sectie: twee bewaarbalken (boven + onder), dus twee Opslaan-knoppen.
-    expect(screen.getAllByRole('button', { name: 'Opslaan' })).toHaveLength(2)
-    expect(screen.getAllByRole('button', { name: 'Annuleren' })).toHaveLength(2)
+    // Gewone sectie: één (sticky) bewaarbalk, dus één Opslaan-knop.
+    expect(screen.getAllByRole('button', { name: 'Opslaan' })).toHaveLength(1)
+    expect(screen.getAllByRole('button', { name: 'Annuleren' })).toHaveLength(1)
     // Edit-modus kent geen "Opslaan en nieuwe medewerker".
     expect(screen.queryByRole('button', { name: 'Opslaan en nieuwe medewerker' })).not.toBeInTheDocument()
 
-    // Paneelsectie: beide balken verdwijnen (het paneel bewaart zichzelf).
+    // Paneelsectie: de balk verdwijnt (het paneel bewaart zichzelf).
     await userEvent.click(screen.getByRole('tab', { name: /Paneelsectie/i }))
     expect(screen.getByText('Zelfbewarend paneel')).toBeInTheDocument()
     expect(screen.queryAllByRole('button', { name: 'Opslaan' })).toHaveLength(0)
     expect(screen.queryAllByRole('button', { name: 'Annuleren' })).toHaveLength(0)
   })
 
-  it('toont in create-modus ook "Opslaan en nieuwe medewerker" in beide balken', () => {
+  it('toont in create-modus ook "Opslaan en nieuwe medewerker" in de bewaarbalk', () => {
     auth.permissions = []
     renderForm()
-    expect(screen.getAllByRole('button', { name: 'Opslaan en nieuwe medewerker' })).toHaveLength(2)
+    expect(screen.getAllByRole('button', { name: 'Opslaan en nieuwe medewerker' })).toHaveLength(1)
   })
 })
 

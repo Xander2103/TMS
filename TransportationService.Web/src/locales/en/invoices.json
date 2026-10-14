@@ -315,7 +315,8 @@
     "total": "Total",
     "attachmentsTitle": "Attachments",
     "loading": "Loading invoice...",
-    "loadError": "The invoice could not be loaded."
+    "loadError": "The invoice could not be loaded.",
+    "ledgerSettingsLink": "Set up ledger →"
   },
   "fiscal": {
     "draftNote": "Preview — frozen on send.",
