@@ -49,7 +49,12 @@
     "colOrders": "Orders",
     "colStatus": "Status",
     "colConflicts": "Conflicts",
-    "conflictsOk": "OK"
+    "conflictsOk": "OK",
+    "newTripTitle": "New trip",
+    "createTrip": "Create trip",
+    "driverLabel": "Driver",
+    "driverOptional": "Optional — can be chosen on the trip later.",
+    "driverPlaceholder": "Search driver…"
   },
   "proposals": {
     "title": "Trip proposals",

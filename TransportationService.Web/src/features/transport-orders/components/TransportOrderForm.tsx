@@ -1,7 +1,8 @@
-import { useState, type FormEvent, type ReactNode } from 'react'
+import { useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react'
 import { ApiError } from '../../../api/apiClient'
 import { Button } from '../../../components/ui/Button'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
+import { UnsavedChangesGuard } from '../../../components/ui/UnsavedChangesGuard'
 import { SectionedForm, type SectionDef } from '../../../components/ui/SectionedForm'
 import { ValidationSummary } from '../../../components/ui/ValidationSummary'
 import { useSectionNavigation } from '../../../components/ui/useSectionNavigation'
@@ -248,6 +249,25 @@ export function TransportOrderForm({ mode, order, onSubmit, onCancel, submitLabe
     version: order?.version,
     craneJob: ownsCraneJob ? craneJob : undefined,
   }
+
+  // B05: unsaved-changes guard. The baseline follows the values until the user first touches
+  // the form (lookups and defaults settle asynchronously after mount); from then on any
+  // difference counts as a change. Saving clears it through `saving`.
+  const valuesSnapshot = JSON.stringify(values)
+  // Captured in the capture phase of the first user change, i.e. from the render BEFORE that
+  // change took effect — so lookups and defaults that settle earlier never count as edits.
+  const [baseline, setBaseline] = useState<string | null>(null)
+  const markTouched = () => setBaseline((current) => current ?? valuesSnapshot)
+  const dirty = baseline !== null && valuesSnapshot !== baseline
+
+  /** Enter in a text field must never submit this long form (it jumped to save mid-way). */
+  function preventImplicitSubmit(event: KeyboardEvent<HTMLFormElement>) {
+    if (event.key !== 'Enter') return
+    const target = event.target as HTMLElement
+    if (target.tagName === 'INPUT' && (target as HTMLInputElement).type !== 'submit') {
+      event.preventDefault()
+    }
+  }
   const errors = fieldErrorMap(clientErrors)
 
   // Wave 2026-08-04 §2: commercial goods lines are the source of truth as soon as any row
@@ -490,7 +510,19 @@ export function TransportOrderForm({ mode, order, onSubmit, onCancel, submitLabe
   const summaryFieldLabels = Object.fromEntries(clientErrors.map((error) => [error.field, error.label]))
 
   return (
-    <form className="tof" onSubmit={handleSubmit} noValidate>
+    <form
+      className="tof"
+      onSubmit={handleSubmit}
+      onKeyDown={preventImplicitSubmit}
+      onChangeCapture={markTouched}
+      onClickCapture={(event) => {
+        // Option picks in comboboxes do not fire change events; any click inside a listbox
+        // counts as the user touching the form.
+        if ((event.target as HTMLElement).closest('[role="listbox"], [role="option"]')) markTouched()
+      }}
+      noValidate
+    >
+      <UnsavedChangesGuard when={dirty && !saving} />
       <ValidationSummary
         message={formError}
         fieldErrors={summaryFieldErrors}

@@ -49,7 +49,12 @@
     "colOrders": "Opdrachten",
     "colStatus": "Status",
     "colConflicts": "Conflicten",
-    "conflictsOk": "OK"
+    "conflictsOk": "OK",
+    "newTripTitle": "Nieuwe rit",
+    "createTrip": "Rit aanmaken",
+    "driverLabel": "Chauffeur",
+    "driverOptional": "Optioneel — kan later op de rit gekozen worden.",
+    "driverPlaceholder": "Zoek chauffeur…"
   },
   "proposals": {
     "title": "Ritvoorstellen",

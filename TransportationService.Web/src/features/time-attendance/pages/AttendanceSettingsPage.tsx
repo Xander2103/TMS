@@ -3,6 +3,7 @@ import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { PageHeader } from '../../../components/layout/PageHeader'
 import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
+import { UnsavedChangesGuard } from '../../../components/ui/UnsavedChangesGuard'
 import { DataTable, type Column } from '../../../components/ui/DataTable'
 import { FormField } from '../../../components/ui/FormField'
 import { Modal } from '../../../components/ui/Modal'
@@ -34,6 +35,7 @@ export function AttendanceSettingsPage() {
   const canManageKiosks = hasPermission('attendance.manage_kiosks')
 
   const [settings, setSettings] = useState<AttendanceSettings | null>(null)
+  const [loadedSettings, setLoadedSettings] = useState<AttendanceSettings | null>(null)
   const [devices, setDevices] = useState<KioskDevice[] | null>(null)
   const [locations, setLocations] = useState<LocationOption[]>([])
   const [reloadToken, setReloadToken] = useState(0)
@@ -50,7 +52,10 @@ export function AttendanceSettingsPage() {
     if (canManageSettings) {
       getAttendanceSettings()
         .then((data) => {
-          if (mounted) setSettings(data)
+          if (mounted) {
+            setSettings(data)
+            setLoadedSettings(data)
+          }
         })
         .catch((err) => showError(describeApiError(err, t('attendance.settings.loadFailed')).message))
     }
@@ -85,6 +90,7 @@ export function AttendanceSettingsPage() {
       void kioskConfigured
       const updated = await updateAttendanceSettings(payload)
       setSettings(updated)
+      setLoadedSettings(updated)
       showSuccess(t('attendance.settings.saved'))
     } catch (err) {
       showError(describeApiError(err, t('attendance.settings.saveFailed')).message)
@@ -186,9 +192,14 @@ export function AttendanceSettingsPage() {
     },
   ]
 
+  // B05: leaving with unsaved settings asks first.
+  const settingsDirty =
+    settings !== null && loadedSettings !== null && JSON.stringify(settings) !== JSON.stringify(loadedSettings)
+
   return (
     <div>
       <Breadcrumbs items={[{ label: t('navigation.menu.settings'), to: '/settings' }, { label: t('attendance.settings.title') }]} />
+      <UnsavedChangesGuard when={settingsDirty && !savingSettings} />
       <PageHeader title={t('attendance.settings.title')} subtitle={t('attendance.settings.subtitle')} />
 
       {canManageSettings && settings && (

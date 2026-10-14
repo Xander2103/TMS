@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { PageHeader } from '../../../components/layout/PageHeader'
 import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { Button } from '../../../components/ui/Button'
+import { UnsavedChangesGuard } from '../../../components/ui/UnsavedChangesGuard'
 import { FormField } from '../../../components/ui/FormField'
 import { useToast } from '../../../components/ui/toastContext'
 import { useLocale } from '../../../i18n/localeContext'
@@ -64,6 +65,14 @@ export function NewInvoicePage() {
     return periodToMonthInput(today.year, today.month)
   })
   const [nextNumber, setNextNumber] = useState<string | null>(null)
+  // B05: anything the user filled in is lost on navigation; ask first.
+  const dirty =
+    customerId !== '' ||
+    selectedOrderIds.length > 0 ||
+    selectedActivityIds.length > 0 ||
+    manualLines.length > 0 ||
+    notes.trim() !== '' ||
+    poNumber.trim() !== ''
 
   useEffect(() => {
     let mounted = true
@@ -258,6 +267,7 @@ export function NewInvoicePage() {
   return (
     <div>
       <Breadcrumbs items={[{ label: t('invoices.list.title'), to: '/invoices' }, { label: t('invoices.internalList.newInvoice') }]} />
+      <UnsavedChangesGuard when={dirty && !busy} />
       <PageHeader title={t('invoices.internalList.newInvoice')} subtitle={t('invoices.new.subtitle')} />
 
       <div className="inv-builder">

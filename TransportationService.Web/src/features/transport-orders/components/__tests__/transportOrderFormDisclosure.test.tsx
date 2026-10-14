@@ -14,6 +14,9 @@ import { TransportOrderForm } from '../TransportOrderForm'
 
 const auth = vi.hoisted(() => ({ permissions: new Set<string>(['locations.create']) }))
 
+vi.mock('../../../../components/ui/UnsavedChangesGuard', () => ({
+  UnsavedChangesGuard: ({ when }: { when: boolean }) => <div data-testid="unsaved-guard" data-when={String(when)} />,
+}))
 vi.mock('../../../auth/authContextValue', () => ({
   useAuth: () => ({ hasPermission: (code: string) => auth.permissions.has(code) }),
 }))
@@ -216,5 +219,21 @@ describe('TransportOrderForm derived volume (Wave 1 §12 audit fix)', () => {
 
     // 3 stuks × 2 m³/stuk → 6 m³ (the old summary showed 2 m³).
     expect(screen.getByText(/Volume: 6 m³/)).toBeInTheDocument()
+  })
+})
+
+describe('TransportOrderForm — unsaved changes and Enter (B05)', () => {
+  it('starts clean, Enter in a text field does not submit, and typing marks the form dirty', async () => {
+    const { onSubmit } = renderForm()
+    expect(screen.getByTestId('unsaved-guard')).toHaveAttribute('data-when', 'false')
+
+    const textInput = screen.getAllByRole('textbox').find((el) => el.tagName === 'INPUT') as HTMLInputElement
+    textInput.focus()
+    await userEvent.keyboard('{Enter}')
+    expect(onSubmit).not.toHaveBeenCalled()
+    expect(screen.getByTestId('unsaved-guard')).toHaveAttribute('data-when', 'false')
+
+    await userEvent.type(textInput, 'REF-1')
+    expect(screen.getByTestId('unsaved-guard')).toHaveAttribute('data-when', 'true')
   })
 })

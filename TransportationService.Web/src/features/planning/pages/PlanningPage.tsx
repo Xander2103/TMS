@@ -1,14 +1,19 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { PageHeader } from '../../../components/layout/PageHeader'
 import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
+import { FormField } from '../../../components/ui/FormField'
+import { Modal } from '../../../components/ui/Modal'
+import { SearchableSelect } from '../../../components/ui/SearchableSelect'
 import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
 import { useLocale } from '../../../i18n/localeContext'
 import { createTrip, getPlanningProposals, listTrips, type PlanningProposals, type TourProposal } from '../api/planningApi'
 import { describeApiError } from '../../../api/problemDetails'
 import { TRIP_STATUS_LABELS, TRIP_STATUS_TONE, TRIP_STATUSES, type TripListItem, type TripStatus } from '../types'
+import { buildDriverOptions } from '../resourceOptions'
+import { usePlanningResources } from '../usePlanningResources'
 import './planning.css'
 
 function todayIso(): string {
@@ -50,12 +55,27 @@ export function PlanningPage() {
     }
   }, [date, statusFilter, t])
 
+  // B06: a new trip is created deliberately — date (defaults to the shown day) and an optional
+  // driver are asked first; cancelling creates nothing and a double click creates one trip.
+  const [newTripOpen, setNewTripOpen] = useState(false)
+  const [newTripDate, setNewTripDate] = useState(date)
+  const [newTripDriverId, setNewTripDriverId] = useState<string | null>(null)
+  const { drivers, status: resourceStatus } = usePlanningResources(newTripOpen)
+  const driverOptions = useMemo(() => buildDriverOptions(drivers, t), [drivers, t])
+
+  function openNewTrip() {
+    setNewTripDate(date)
+    setNewTripDriverId(null)
+    setNewTripOpen(true)
+  }
+
   async function handleNewTrip() {
+    if (creating || !newTripDate) return
     setCreating(true)
     try {
       const trip = await createTrip({
-        tripDate: date,
-        driverId: null,
+        tripDate: newTripDate,
+        driverId: newTripDriverId,
         vehicleId: null,
         trailerId: null,
         plannedStart: null,
@@ -65,9 +85,10 @@ export function PlanningPage() {
         plannedDistanceKm: null,
         plannedEmptyKm: null,
       })
+      setNewTripOpen(false)
       navigate(`/planning/${trip.id}`)
-    } catch {
-      showError(t('planning.list.createFailed'))
+    } catch (err) {
+      showError(describeApiError(err, t('planning.list.createFailed')).message)
     } finally {
       setCreating(false)
     }
@@ -79,12 +100,46 @@ export function PlanningPage() {
         title={t('planning.title')}
         action={
           hasPermission('planning.create') ? (
-            <Button onClick={() => void handleNewTrip()} disabled={creating}>
-              {creating ? t('planning.list.busy') : t('planning.list.newTrip')}
+            <Button onClick={openNewTrip} disabled={creating}>
+              {t('planning.list.newTrip')}
             </Button>
           ) : undefined
         }
       />
+
+      {newTripOpen && (
+        <Modal
+          title={t('planning.list.newTripTitle')}
+          onClose={() => setNewTripOpen(false)}
+          busy={creating}
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setNewTripOpen(false)} disabled={creating}>
+                {t('ui.actions.cancel')}
+              </Button>
+              <Button onClick={() => void handleNewTrip()} disabled={creating || !newTripDate}>
+                {creating ? t('planning.list.busy') : t('planning.list.createTrip')}
+              </Button>
+            </>
+          }
+        >
+          <FormField label={t('planning.list.dateLabel')} htmlFor="new-trip-date">
+            <input id="new-trip-date" type="date" value={newTripDate} onChange={(e) => setNewTripDate(e.target.value)} disabled={creating} />
+          </FormField>
+          <FormField label={t('planning.list.driverLabel')} htmlFor="new-trip-driver" hint={t('planning.list.driverOptional')}>
+            <SearchableSelect
+              id="new-trip-driver"
+              value={newTripDriverId}
+              onChange={setNewTripDriverId}
+              options={driverOptions}
+              isLoading={resourceStatus.drivers === 'loading'}
+              errorMessage={resourceStatus.drivers === 'error' ? t('planning.detail.driversLoadError') : null}
+              placeholder={t('planning.list.driverPlaceholder')}
+              disabled={creating}
+            />
+          </FormField>
+        </Modal>
+      )}
 
       <div className="pl-toolbar">
         <div className="pl-datenav">

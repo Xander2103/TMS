@@ -49,7 +49,12 @@
     "colOrders": "Commandes",
     "colStatus": "Statut",
     "colConflicts": "Conflits",
-    "conflictsOk": "OK"
+    "conflictsOk": "OK",
+    "newTripTitle": "Nouveau trajet",
+    "createTrip": "Créer le trajet",
+    "driverLabel": "Chauffeur",
+    "driverOptional": "Facultatif — peut être choisi plus tard sur le trajet.",
+    "driverPlaceholder": "Rechercher un chauffeur…"
   },
   "proposals": {
     "title": "Propositions de tournées",

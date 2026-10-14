@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { PageHeader } from '../../../components/layout/PageHeader'
 import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { Button } from '../../../components/ui/Button'
+import { UnsavedChangesGuard } from '../../../components/ui/UnsavedChangesGuard'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { FormField } from '../../../components/ui/FormField'
 import { useToast } from '../../../components/ui/toastContext'
@@ -32,6 +33,7 @@ export function LeaveSettingsPage() {
   const canManage = hasPermission('leave_types.manage')
 
   const [settings, setSettings] = useState<LeaveSettings | null>(null)
+  const [loadedSettings, setLoadedSettings] = useState<LeaveSettings | null>(null)
   const [balanceTypes, setBalanceTypes] = useState<LeaveBalanceType[]>([])
   const [leaveTypes, setLeaveTypes] = useState<LeaveType[]>([])
   const [reload, setReload] = useState(0)
@@ -46,6 +48,7 @@ export function LeaveSettingsPage() {
       .then(([s, bt, lt]) => {
         if (!mounted) return
         setSettings(s)
+        setLoadedSettings(s)
         setBalanceTypes(bt)
         setLeaveTypes(lt)
       })
@@ -61,6 +64,7 @@ export function LeaveSettingsPage() {
     setBusy(true)
     try {
       await updateLeaveSettings(settings)
+      setLoadedSettings(settings)
       showSuccess(t('leave.settings.settingsSaved'))
     } catch (err) {
       showError(describeApiError(err, t('leave.settings.saveFailed')).message)
@@ -114,9 +118,14 @@ export function LeaveSettingsPage() {
   const balanceName = (id: string | null) => balanceTypes.find((b) => b.id === id)?.name ?? '—'
   const yesNo = (value: boolean) => (value ? t('leave.settings.yes') : t('leave.settings.no'))
 
+  // B05: leaving with unsaved general settings asks first.
+  const settingsDirty =
+    settings !== null && loadedSettings !== null && JSON.stringify(settings) !== JSON.stringify(loadedSettings)
+
   return (
     <div>
       <Breadcrumbs items={[{ label: t('leave.settings.breadcrumbSettings'), to: '/settings' }, { label: t('leave.settings.breadcrumb') }]} />
+      <UnsavedChangesGuard when={settingsDirty && !busy} />
       <PageHeader title={t('leave.settings.title')} subtitle={t('leave.settings.subtitle')} />
 
       {settings && (

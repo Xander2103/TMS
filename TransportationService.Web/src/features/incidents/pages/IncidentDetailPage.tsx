@@ -7,6 +7,7 @@ import { BackButton } from '../../../components/ui/BackButton'
 import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { FormActions } from '../../../components/ui/FormActions'
+import { UnsavedChangesGuard } from '../../../components/ui/UnsavedChangesGuard'
 import { FormField } from '../../../components/ui/FormField'
 import { FormSection } from '../../../components/ui/FormSection'
 import { Modal } from '../../../components/ui/Modal'
@@ -131,6 +132,10 @@ function toInput(form: FormState): IncidentInput {
 }
 
 /** Eén incident: registreren (nieuw), bijwerken en de status opvolgen tot afhandeling. */
+function stableJson(value: object): string {
+  return JSON.stringify(value, Object.keys(value).sort())
+}
+
 export function IncidentDetailPage() {
   const { id } = useParams<{ id: string }>()
   const [searchParams] = useSearchParams()
@@ -202,6 +207,9 @@ export function IncidentDetailPage() {
   if (!isNew && !incident) return <LoadingState message={t('incidents.detail.loading')} />
 
   const editable = canManage && (isNew || incident!.status !== 'Cancelled')
+  // B05: compare against what was loaded (or the empty form), key order independent.
+  const baselineForm: FormState = incident ? toForm(incident) : { ...EMPTY_FORM, dossierId: searchParams.get('dossierId') }
+  const dirty = stableJson(form) !== stableJson(baselineForm)
 
   function set<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((current) => ({ ...current, [key]: value }))
@@ -300,6 +308,7 @@ export function IncidentDetailPage() {
       {!isNew && <IncidentChargePanel incident={incident!} onUpdated={setIncident} />}
 
       <form onSubmit={(event) => void submit(event)}>
+        <UnsavedChangesGuard when={editable && dirty && !busy} />
         <ValidationSummary message={formError} fieldErrors={fieldErrors} />
 
         <FormSection title={t('incidents.detail.sectionReport')}>
