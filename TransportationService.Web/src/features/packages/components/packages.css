@@ -39,7 +39,7 @@
 
 .pk-external {
   color: var(--text);
-  font-size: 11px;
+  font-size: var(--text-xs);
 }
 
 .pk-flags span {
@@ -204,37 +204,6 @@ strong.pk-danger {
 
 .pk-event-link {
   font-size: 0.85rem;
-}
-
-/* B42: Vandaag/Morgen is one segmented control, not two competing buttons. */
-.wh-day-toggle {
-  display: inline-flex;
-  gap: 0;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  overflow: hidden;
-}
-
-.wh-day-toggle .ui-button {
-  border-radius: 0;
-  border: none;
-  min-height: 38px;
-  box-shadow: none;
-}
-
-.wh-day-toggle .ui-button + .ui-button {
-  border-left: 1px solid var(--border);
-}
-
-.wh-search {
-  width: 100%;
-  box-sizing: border-box;
-  padding: 0.7rem 0.9rem;
-  font: inherit;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--bg);
-  color: var(--text-h);
 }
 
 .wh-results {

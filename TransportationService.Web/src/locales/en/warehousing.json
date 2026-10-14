@@ -52,7 +52,10 @@
     "name": "Name",
     "adr": "ADR",
     "refrigerated": "Refrigerated",
-    "active": "Active"
+    "active": "Active",
+    "deleteTitle": "Delete dock",
+    "deleteMessage": "Dock {code} will be deleted. This cannot be undone.",
+    "deleted": "Dock deleted."
   },
   "locations": {
     "manage": "Manage locations",
@@ -80,7 +83,6 @@
   "dockPlanning": {
     "title": "Dock planning",
     "warehouseAria": "Warehouse",
-    "dateAria": "Date",
     "newAppointment": "New appointment",
     "kpiExpected": "Expected",
     "kpiQueue": "Queue",
@@ -127,7 +129,10 @@
     "overrideReason": "Reason for override (required)",
     "close": "Close",
     "overridden": "Overridden and saved.",
-    "overrideConfirm": "Override and continue"
+    "overrideConfirm": "Override and continue",
+    "deleteTitle": "Delete appointment",
+    "deleteMessage": "Appointment {reference} will be deleted. This cannot be undone.",
+    "toolbarAria": "Warehouse and day"
   },
   "trace": {
     "breadcrumbWarehouse": "Warehouse",
@@ -169,6 +174,14 @@
     "orderHeader": "Order",
     "colliHeader": "Packages",
     "palletDaysHeader": "Pallet-days",
-    "storageFailed": "The storage calculation could not be loaded."
+    "storageFailed": "The storage calculation could not be loaded.",
+    "scanBarAria": "Look up or scan a barcode",
+    "storageBarAria": "Storage period"
+  },
+  "day": {
+    "aria": "Day",
+    "today": "Today",
+    "tomorrow": "Tomorrow",
+    "date": "Other date"
   }
 }

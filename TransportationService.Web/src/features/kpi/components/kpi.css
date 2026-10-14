@@ -38,13 +38,10 @@
   color: var(--text);
 }
 
-.kpi-filterbar input[type='date'] {
+/* B44: colours, border and focus come from the shared native-control baseline (global.css). */
+.kpi-filterbar input[type='date'],
+.kpi-filterbar select {
   padding: 7px 9px;
-  font: inherit;
-  color: var(--text-h);
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 6px;
 }
 
 .kpi-filterbar .kpi-filter-select {

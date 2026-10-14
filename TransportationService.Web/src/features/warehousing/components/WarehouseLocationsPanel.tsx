@@ -93,9 +93,9 @@ export function WarehouseLocationsPanel({ warehouseId, canManage }: WarehouseLoc
           onCancel={() => setRemoveTarget(null)}
         />
       )}
-      <button type="button" className="issued-items-link" onClick={() => setOpen((o) => !o)}>
+      <Button variant="ghost" className="wh-inline-action" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
         {open ? t('warehousing.locations.hide') : t('warehousing.locations.manage')}
-      </button>
+      </Button>
       {open && (
         <div className="wh-locations-body">
           {locations === null && <p className="wh-muted">{t('warehousing.locations.loading')}</p>}
@@ -111,9 +111,9 @@ export function WarehouseLocationsPanel({ warehouseId, canManage }: WarehouseLoc
                 )}
               </span>
               {canManage && (
-                <button type="button" className="issued-items-link issued-items-link-danger" onClick={() => setRemoveTarget(zone)}>
+                <Button variant="ghost" className="wh-inline-action wh-inline-action-danger" onClick={() => setRemoveTarget(zone)}>
                   {t('warehousing.locations.remove')}
-                </button>
+                </Button>
               )}
               {positionsOf(zone.id).map((position) => (
                 <div key={position.id} className="wh-location-position">
@@ -124,13 +124,13 @@ export function WarehouseLocationsPanel({ warehouseId, canManage }: WarehouseLoc
                     )}
                   </span>
                   {canManage && (
-                    <button
-                      type="button"
-                      className="issued-items-link issued-items-link-danger"
+                    <Button
+                      variant="ghost"
+                      className="wh-inline-action wh-inline-action-danger"
                       onClick={() => setRemoveTarget(position)}
                     >
                       {t('warehousing.locations.remove')}
-                    </button>
+                    </Button>
                   )}
                 </div>
               ))}

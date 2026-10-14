@@ -52,7 +52,10 @@
     "name": "Nom",
     "adr": "ADR",
     "refrigerated": "Réfrigéré",
-    "active": "Actif"
+    "active": "Actif",
+    "deleteTitle": "Supprimer le quai",
+    "deleteMessage": "Le quai {code} sera supprimé. Cette action est irréversible.",
+    "deleted": "Quai supprimé."
   },
   "locations": {
     "manage": "Gérer les emplacements",
@@ -80,7 +83,6 @@
   "dockPlanning": {
     "title": "Planification des quais",
     "warehouseAria": "Entrepôt",
-    "dateAria": "Date",
     "newAppointment": "Nouveau rendez-vous",
     "kpiExpected": "Attendus",
     "kpiQueue": "File d'attente",
@@ -127,7 +129,10 @@
     "overrideReason": "Motif du forçage (obligatoire)",
     "close": "Fermer",
     "overridden": "Forcé et enregistré.",
-    "overrideConfirm": "Forcer et continuer"
+    "overrideConfirm": "Forcer et continuer",
+    "deleteTitle": "Supprimer le rendez-vous",
+    "deleteMessage": "Le rendez-vous {reference} sera supprimé. Cette action est irréversible.",
+    "toolbarAria": "Entrepôt et jour"
   },
   "trace": {
     "breadcrumbWarehouse": "Entrepôt",
@@ -169,6 +174,14 @@
     "orderHeader": "Commande",
     "colliHeader": "Colis",
     "palletDaysHeader": "Jours-palette",
-    "storageFailed": "Le calcul du stockage n'a pas pu être chargé."
+    "storageFailed": "Le calcul du stockage n'a pas pu être chargé.",
+    "scanBarAria": "Rechercher ou scanner un code-barres",
+    "storageBarAria": "Période de stockage"
+  },
+  "day": {
+    "aria": "Jour",
+    "today": "Aujourd'hui",
+    "tomorrow": "Demain",
+    "date": "Autre date"
   }
 }

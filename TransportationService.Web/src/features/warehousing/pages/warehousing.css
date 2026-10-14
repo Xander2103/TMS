@@ -7,25 +7,16 @@
   gap: 1rem;
 }
 
-.wh-header,
-.dp-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  flex-wrap: wrap;
-}
-
-.wh-header h2,
-.dp-header h2 {
-  margin: 0;
-  font-size: 1.4rem;
+/* Toolbars (FilterBar) sit in the page's flex gap; no extra bottom margin. */
+.wh-page > .ui-filter-bar,
+.dp-page > .ui-filter-bar {
+  margin-bottom: 0;
 }
 
 .wh-muted,
 .dp-muted {
   opacity: 0.65;
-  font-size: 0.85rem;
+  font-size: var(--text-base);
 }
 
 .wh-card {
@@ -43,9 +34,10 @@
   flex-wrap: wrap;
 }
 
+.wh-card h2,
 .wh-card-head h2 {
   margin: 0 0 0.2rem;
-  font-size: 1.1rem;
+  font-size: var(--text-lg);
 }
 
 .wh-card-actions {
@@ -87,33 +79,49 @@
   gap: 0.75rem;
 }
 
-.wh-link {
-  border: none;
-  background: none;
+/* Compact text actions (bewerken, verwijderen, locaties beheren) on the shared ghost Button. */
+.wh-inline-action.ui-button {
+  padding: 4px 8px;
+  min-height: 32px;
+  font-size: var(--text-sm);
   color: var(--accent);
-  cursor: pointer;
-  font: inherit;
-  font-size: 0.82rem;
-  padding: 0;
 }
 
-.wh-link-danger {
-  color: var(--danger);
+.wh-inline-action-danger.ui-button {
+  color: var(--color-danger);
+}
+
+/* B47: the one Vandaag/Morgen control (WarehouseDayToggle) — a segmented pair + optional date. */
+.wh-day-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.wh-day-toggle {
+  display: inline-flex;
+  gap: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.wh-day-toggle .ui-button {
+  border-radius: 0;
+  border: none;
+  min-height: 38px;
+  box-shadow: none;
+}
+
+.wh-day-toggle .ui-button + .ui-button {
+  border-left: 1px solid var(--border);
 }
 
 .wh-form {
   display: flex;
   flex-direction: column;
   gap: 0.6rem;
-}
-
-.wh-form label {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  font-size: 0.85rem;
-  font-weight: 600;
-  flex: 1;
 }
 
 .wh-form-row {
@@ -123,11 +131,21 @@
   align-items: flex-end;
 }
 
+.wh-form-row > .ui-form-field {
+  flex: 1 1 200px;
+  min-width: 0;
+}
+
+.wh-check-row {
+  gap: 0.5rem 1.25rem;
+}
+
 .wh-check {
-  flex-direction: row !important;
+  display: inline-flex;
   align-items: center;
-  gap: 0.4rem !important;
-  font-weight: 500 !important;
+  gap: 0.4rem;
+  font-size: var(--text-md);
+  min-height: 32px;
 }
 
 .wh-form-actions {
@@ -139,13 +157,6 @@
 
 /* --- Dock planning board --- */
 
-.dp-controls {
-  display: flex;
-  gap: 0.5rem;
-  align-items: center;
-  flex-wrap: wrap;
-}
-
 .dp-kpis {
   display: flex;
   gap: 1.25rem;
@@ -153,7 +164,7 @@
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 0.55rem 0.9rem;
-  font-size: 0.9rem;
+  font-size: var(--text-lg);
 }
 
 .dp-alert {
@@ -178,7 +189,7 @@
 .dp-board-scale {
   display: flex;
   justify-content: space-between;
-  font-size: 0.75rem;
+  font-size: var(--text-md);
   opacity: 0.6;
   padding-left: 90px;
   margin-bottom: 0.35rem;
@@ -227,7 +238,7 @@
   border-radius: 6px;
   background: var(--bg);
   color: var(--text);
-  font-size: 0.72rem;
+  font-size: var(--text-sm);
   text-align: left;
   padding: 0.2rem 0.4rem;
   overflow: hidden;
@@ -272,7 +283,7 @@
 
 .dp-queue h2 {
   margin: 0;
-  font-size: 1rem;
+  font-size: var(--text-lg);
 }
 
 .dp-queue-item {
@@ -287,7 +298,7 @@
   flex-direction: column;
   gap: 0.15rem;
   font: inherit;
-  font-size: 0.85rem;
+  font-size: var(--text-base);
 }
 
 .dp-detail {
@@ -318,13 +329,6 @@
   align-items: baseline;
 }
 
-.dp-override-label {
-  display: block;
-  font-size: 0.85rem;
-  font-weight: 600;
-  margin-bottom: 0.25rem;
-}
-
 @media (max-width: 950px) {
   .dp-layout {
     grid-template-columns: 1fr;
@@ -351,7 +355,7 @@
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
-  font-size: 14px;
+  font-size: var(--text-md);
 }
 
 .wh-location-zone {
@@ -370,43 +374,14 @@
   margin-top: 6px;
 }
 
-.wh-location-add select,
-.wh-location-add input {
-  padding: 6px 8px;
-  font: inherit;
-  font-size: 14px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--bg);
-  color: var(--text-h);
-}
-
-/* Wave 4 §4: trace & scan station. */
-.wh-trace-bar {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  margin-bottom: 12px;
-}
-
-.wh-trace-bar input,
-.wh-trace-bar select {
-  padding: 8px 10px;
-  font: inherit;
-  font-size: 15px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--bg);
-  color: var(--text-h);
-}
-
-.wh-trace-bar input {
-  min-width: 220px;
+/* Wave 4 §4: trace & scan station. Layout/controls come from FilterBar.css (ui-filter-*). */
+.wh-card .wh-trace-bar {
+  margin: 0.5rem 0 0.75rem;
 }
 
 .wh-trace-feedback {
   margin: 0 0 12px;
-  font-size: 14px;
+  font-size: var(--text-md);
   font-weight: 600;
 }
 
@@ -416,9 +391,18 @@
 
 .wh-trace-alert {
   margin: 4px 0;
-  font-size: 14px;
+  font-size: var(--text-md);
   color: var(--color-warning-text);
   font-weight: 600;
 }
 
-.dp-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+/* Tablet (~820px): toolbars wrap to full-width rows, the scan field keeps a usable width. */
+@media (max-width: 900px) {
+  .wh-trace-bar .ui-filter-search {
+    flex-basis: 100%;
+  }
+
+  .wh-card-head {
+    flex-direction: column;
+  }
+}

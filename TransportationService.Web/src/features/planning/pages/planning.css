@@ -13,15 +13,10 @@
   gap: 8px;
 }
 
+/* B44: colours, border and focus come from the shared native-control baseline (global.css). */
 .pl-toolbar input,
 .pl-toolbar select {
   padding: 8px 10px;
-  font: inherit;
-  font-size: 15px;
-  color: var(--text-h);
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 6px;
 }
 
 .pl-nav-btn {
@@ -51,9 +46,8 @@
 }
 
 .pl-table th {
-  font-size: 13px;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
+  font-size: var(--text-sm);
+  font-weight: 600;
   color: var(--text);
 }
 
@@ -419,20 +413,6 @@
   margin: 0 0 10px;
   font-size: 14px;
   color: var(--text-muted);
-}
-
-.pl-save-state {
-  font-size: 14px;
-}
-
-.pl-save-ok {
-  color: var(--color-success);
-  font-weight: 600;
-}
-
-.pl-save-dirty {
-  color: var(--color-warning);
-  font-weight: 600;
 }
 
 .pl-assign-4 {

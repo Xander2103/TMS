@@ -3,6 +3,8 @@ import { PageHeader } from '../../../components/layout/PageHeader'
 import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
+import { DataTable, type Column } from '../../../components/ui/DataTable'
+import '../../../components/ui/FilterBar.css'
 import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
 import { localizeApiError } from '../../../api/problemDetails'
@@ -25,6 +27,7 @@ import type { CustomerListItem } from '../../customers/types'
 import type { Warehouse } from '../types'
 import { formatDateTime } from '../../../utils/dates'
 import { labelFor } from '../../../utils/labels'
+import './warehousing.css'
 
 /** Vertaalsleutels — renderen als t(SCAN_TYPE_LABELS[type]). */
 const SCAN_TYPE_LABELS: Record<WarehouseScanType, string> = {
@@ -137,16 +140,31 @@ export function WarehouseTracePage() {
 
   const activeLocations = locations.filter((l) => l.isActive)
 
+  type TraceEvent = WarehouseTrace['lastEvents'][number]
+  const eventColumns: Column<TraceEvent & { index: number }>[] = [
+    { key: 'event', header: t('warehousing.trace.eventHeader'), render: (event) => labelFor(t, event.eventType, 'packages.eventType', 'packages.events') },
+    { key: 'time', header: t('warehousing.trace.timeHeader'), render: (event) => <span className="nowrap">{formatDateTime(event.occurredAt)}</span> },
+    { key: 'location', header: t('warehousing.trace.locationHeader'), render: (event) => event.locationCode ?? '—' },
+    { key: 'trip', header: t('warehousing.trace.tripHeader'), render: (event) => event.tripNumber ?? '—' },
+  ]
+  type StorageRow = StorageBilling['perOrder'][number]
+  const storageColumns: Column<StorageRow>[] = [
+    { key: 'order', header: t('warehousing.trace.orderHeader'), render: (row) => <span className="nowrap">{row.orderNumber}</span> },
+    { key: 'colli', header: t('warehousing.trace.colliHeader'), align: 'right', render: (row) => row.packageCount },
+    { key: 'palletDays', header: t('warehousing.trace.palletDaysHeader'), align: 'right', render: (row) => row.palletDays },
+  ]
+
   return (
-    <div>
+    <div className="wh-page">
       <Breadcrumbs items={[{ label: t('warehousing.trace.breadcrumbWarehouse') }, { label: t('warehousing.trace.breadcrumbTrace') }]} />
       <PageHeader
         title={t('warehousing.trace.title')}
         subtitle={t('warehousing.trace.subtitle')}
       />
 
-      <form className="wh-trace-bar" onSubmit={(e) => void scan(e)}>
+      <form className="ui-filter-bar wh-trace-bar" onSubmit={(e) => void scan(e)} aria-label={t('warehousing.trace.scanBarAria')}>
         <input
+          className="ui-filter-search"
           value={barcode}
           onChange={(e) => setBarcode(e.target.value)}
           placeholder={t('warehousing.trace.barcodePlaceholder')}
@@ -159,17 +177,17 @@ export function WarehouseTracePage() {
         </Button>
         {canScan && (
           <>
-            <select value={scanType} onChange={(e) => setScanType(e.target.value as WarehouseScanType)} aria-label={t('warehousing.trace.scanTypeAria')} disabled={busy}>
+            <select className="ui-filter-select" value={scanType} onChange={(e) => setScanType(e.target.value as WarehouseScanType)} aria-label={t('warehousing.trace.scanTypeAria')} disabled={busy}>
               {(Object.keys(SCAN_TYPE_LABELS) as WarehouseScanType[]).map((value) => (
                 <option key={value} value={value}>{t(SCAN_TYPE_LABELS[value])}</option>
               ))}
             </select>
-            <select value={warehouseId} onChange={(e) => { setWarehouseId(e.target.value); setLocationId('') }} aria-label={t('warehousing.trace.warehouseAria')} disabled={busy}>
+            <select className="ui-filter-select" value={warehouseId} onChange={(e) => { setWarehouseId(e.target.value); setLocationId('') }} aria-label={t('warehousing.trace.warehouseAria')} disabled={busy}>
               {warehouses.map((w) => (
                 <option key={w.id} value={w.id}>{w.name}</option>
               ))}
             </select>
-            <select value={locationId} onChange={(e) => setLocationId(e.target.value)} aria-label={t('warehousing.trace.locationAria')} disabled={busy}>
+            <select className="ui-filter-select" value={locationId} onChange={(e) => setLocationId(e.target.value)} aria-label={t('warehousing.trace.locationAria')} disabled={busy}>
               <option value="">{t('warehousing.trace.noLocation')}</option>
               {activeLocations.map((l) => (
                 <option key={l.id} value={l.id}>{l.code} — {l.name}</option>
@@ -210,26 +228,12 @@ export function WarehouseTracePage() {
               ? <strong>{trace.warehouseName} · {trace.locationCode} — {trace.locationName}</strong>
               : <span className="wh-muted">{t('warehousing.trace.noLocationRegistered')}</span>}
           </p>
-          <table className="issued-items-table">
-            <thead>
-              <tr>
-                <th>{t('warehousing.trace.eventHeader')}</th>
-                <th>{t('warehousing.trace.timeHeader')}</th>
-                <th>{t('warehousing.trace.locationHeader')}</th>
-                <th>{t('warehousing.trace.tripHeader')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {trace.lastEvents.map((event, index) => (
-                <tr key={index}>
-                  <td>{labelFor(t, event.eventType, 'packages.eventType', 'packages.events')}</td>
-                  <td>{formatDateTime(event.occurredAt)}</td>
-                  <td>{event.locationCode ?? '—'}</td>
-                  <td>{event.tripNumber ?? '—'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <DataTable
+            columns={eventColumns}
+            rows={trace.lastEvents.map((event, index) => ({ ...event, index }))}
+            rowKey={(event) => String(event.index)}
+            density="compact"
+          />
         </section>
       )}
 
@@ -263,15 +267,15 @@ export function WarehouseTracePage() {
       <section className="wh-card">
         <h2>{t('warehousing.trace.storageTitle')}</h2>
         <p className="wh-muted">{t('warehousing.trace.storageHint')}</p>
-        <div className="wh-trace-bar">
-          <select value={storageCustomerId} onChange={(e) => setStorageCustomerId(e.target.value)} aria-label={t('warehousing.trace.customerAria')}>
+        <div className="ui-filter-bar wh-trace-bar" role="group" aria-label={t('warehousing.trace.storageBarAria')}>
+          <select className="ui-filter-select" value={storageCustomerId} onChange={(e) => setStorageCustomerId(e.target.value)} aria-label={t('warehousing.trace.customerAria')}>
             <option value="">{t('warehousing.trace.selectCustomer')}</option>
             {customers.map((customer) => (
               <option key={customer.id} value={customer.id}>{customer.name}</option>
             ))}
           </select>
-          <input type="date" value={storageFrom} onChange={(e) => setStorageFrom(e.target.value)} aria-label={t('warehousing.trace.fromAria')} />
-          <input type="date" value={storageTo} onChange={(e) => setStorageTo(e.target.value)} aria-label={t('warehousing.trace.toAria')} />
+          <input className="ui-filter-select" type="date" value={storageFrom} onChange={(e) => setStorageFrom(e.target.value)} aria-label={t('warehousing.trace.fromAria')} />
+          <input className="ui-filter-select" type="date" value={storageTo} onChange={(e) => setStorageTo(e.target.value)} aria-label={t('warehousing.trace.toAria')} />
           <Button type="button" variant="secondary" onClick={() => void lookupStorage()} disabled={!storageCustomerId}>
             {t('warehousing.trace.calculate')}
           </Button>
@@ -285,24 +289,12 @@ export function WarehouseTracePage() {
               )}
             </p>
             {storage.perOrder.length > 0 && (
-              <table className="issued-items-table">
-                <thead>
-                  <tr>
-                    <th>{t('warehousing.trace.orderHeader')}</th>
-                    <th>{t('warehousing.trace.colliHeader')}</th>
-                    <th>{t('warehousing.trace.palletDaysHeader')}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {storage.perOrder.map((row) => (
-                    <tr key={row.transportOrderId}>
-                      <td>{row.orderNumber}</td>
-                      <td>{row.packageCount}</td>
-                      <td>{row.palletDays}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <DataTable
+                columns={storageColumns}
+                rows={storage.perOrder}
+                rowKey={(row) => row.transportOrderId}
+                density="compact"
+              />
             )}
             {storage.perWarehouse.length > 1 && (
               <p className="wh-muted">

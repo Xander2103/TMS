@@ -311,6 +311,79 @@ textarea::placeholder {
   color: var(--color-text-subtle);
 }
 
+/* B44: shared baseline for native text-like controls (selects, date/time/number inputs,
+   textareas) that no component or feature stylesheet styles. Wrapped in :where() so it has ZERO
+   specificity: any class rule (FormField, FilterBar, feature CSS) still wins, but a bare toolbar
+   <select> or <input type="date"> no longer falls back to the browser's light chrome in dark
+   mode. Checkboxes, radios, ranges, files and colour pickers keep their native rendering. */
+:where(
+    input:not(
+        [type='checkbox'],
+        [type='radio'],
+        [type='range'],
+        [type='file'],
+        [type='color'],
+        [type='button'],
+        [type='submit'],
+        [type='reset'],
+        [type='image'],
+        [type='hidden']
+      ),
+    select,
+    textarea
+  ) {
+  font-family: inherit;
+  font-size: var(--text-base);
+  line-height: 1.35;
+  padding: 6px 10px;
+  color: var(--color-text);
+  background-color: var(--color-input-bg);
+  border: 1px solid var(--color-input-border);
+  border-radius: var(--radius-sm, 6px);
+  box-sizing: border-box;
+  max-width: 100%;
+}
+
+:where(select) {
+  cursor: pointer;
+}
+
+/* The open dropdown list follows the theme too (Chromium/Firefox honour option colours). */
+:where(select) option {
+  color: var(--color-text);
+  background-color: var(--color-input-bg);
+}
+
+:where(input, select, textarea):where(:hover:not(:disabled, [readonly])) {
+  border-color: var(--color-border-strong);
+}
+
+:where(input, select, textarea):focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 1px;
+}
+
+:where(input, select, textarea):disabled {
+  cursor: not-allowed;
+  color: var(--color-text-subtle);
+  background-color: var(--color-surface-muted);
+}
+
+/* Native date/time pickers: the indicator glyph is drawn by the UA in the control's
+   colour-scheme, so it stays visible on the dark input background. */
+html[data-theme='dark'] :where(input, select, textarea) {
+  color-scheme: dark;
+}
+
+:where(input)::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 0.8;
+}
+
+:where(input)::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+}
+
 /* B34: identifiers (numbers, codes, dates) never break across lines. */
 .nowrap {
   white-space: nowrap;
@@ -355,4 +428,14 @@ td > code,
 /* Amounts line up in their column. */
 .ui-amount {
   font-variant-numeric: tabular-nums;
+}
+
+/* B14: overdue deadline in a dense list (components/ui/OverdueDate). */
+.ui-overdue-date {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-danger);
+  white-space: nowrap;
+  font-weight: 500;
 }

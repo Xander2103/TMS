@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { ApiError } from '../../../api/apiClient'
 import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
+import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { FormField } from '../../../components/ui/FormField'
 import { Modal } from '../../../components/ui/Modal'
 import { useToast } from '../../../components/ui/toastContext'
@@ -88,6 +89,8 @@ export function ScanPanel({ tripId, stopId, stopLabel, scanType, canCorrect, onC
   const [activeType, setActiveType] = useState<ScanType>(scanType)
 
   const [queued, setQueued] = useState<QueuedScan[]>([])
+  // B47: dropping an unsent offline scan loses it for good — always confirm first.
+  const [removeQueued, setRemoveQueued] = useState<QueuedScan | null>(null)
 
   const barcodeRef = useRef<HTMLInputElement>(null)
 
@@ -389,9 +392,9 @@ export function ScanPanel({ tripId, stopId, stopLabel, scanType, canCorrect, onC
             />
             <div className="scan-controls">
               <div className="scan-qty" role="group" aria-label={t('scanning.panel.quantityLabel')}>
-                <button type="button" onClick={() => setQuantity((q) => String(Math.max(1, Number(q || '1') - 1)))} disabled={busy} aria-label={t('scanning.panel.less')}>
+                <Button variant="ghost" onClick={() => setQuantity((q) => String(Math.max(1, Number(q || '1') - 1)))} disabled={busy} aria-label={t('scanning.panel.less')}>
                   −
-                </button>
+                </Button>
                 <input
                   aria-label={t('scanning.panel.quantityLabel')}
                   inputMode="decimal"
@@ -399,9 +402,9 @@ export function ScanPanel({ tripId, stopId, stopLabel, scanType, canCorrect, onC
                   onChange={(e) => setQuantity(e.target.value)}
                   disabled={busy}
                 />
-                <button type="button" onClick={() => setQuantity((q) => String(Number(q || '0') + 1))} disabled={busy} aria-label={t('scanning.panel.more')}>
+                <Button variant="ghost" onClick={() => setQuantity((q) => String(Number(q || '0') + 1))} disabled={busy} aria-label={t('scanning.panel.more')}>
                   +
-                </button>
+                </Button>
               </div>
               <label className="scan-damaged">
                 <input type="checkbox" checked={damaged} onChange={(e) => setDamaged(e.target.checked)} disabled={busy} />
@@ -482,12 +485,12 @@ export function ScanPanel({ tripId, stopId, stopLabel, scanType, canCorrect, onC
                   </span>
                   {item.state === 'failed' && (
                     <>
-                      <button type="button" className="scan-correct-link" onClick={() => scanQueue.retry(item.clientEventId)}>
+                      <Button variant="ghost" className="scan-inline-action" onClick={() => scanQueue.retry(item.clientEventId)}>
                         {t('scanning.panel.retry')}
-                      </button>
-                      <button type="button" className="scan-correct-link" onClick={() => scanQueue.remove(item.clientEventId)}>
+                      </Button>
+                      <Button variant="ghost" className="scan-inline-action scan-inline-action-danger" onClick={() => setRemoveQueued(item)}>
                         {t('scanning.panel.remove')}
-                      </button>
+                      </Button>
                     </>
                   )}
                 </li>
@@ -515,9 +518,9 @@ export function ScanPanel({ tripId, stopId, stopLabel, scanType, canCorrect, onC
                       scanType === 'Load' &&
                       !item.isGroup &&
                       PRE_TRANSIT.includes(item.status) && (
-                        <button
-                          type="button"
-                          className="scan-correct-link"
+                        <Button
+                          variant="ghost"
+                          className="scan-inline-action"
                           onClick={() => {
                             setMissingFor(item)
                             setMissingNote('')
@@ -525,7 +528,7 @@ export function ScanPanel({ tripId, stopId, stopLabel, scanType, canCorrect, onC
                           disabled={busy}
                         >
                           {t('scanning.panel.markMissing')}
-                        </button>
+                        </Button>
                       )}
                   </div>
                   {missingFor?.packageId === item.packageId && (
@@ -583,9 +586,9 @@ export function ScanPanel({ tripId, stopId, stopLabel, scanType, canCorrect, onC
                       {SCAN_STATE_ICONS[item.state]} {t(SCAN_STATE_LABELS[item.state])}
                     </Badge>
                     {canCorrect && (
-                      <button
-                        type="button"
-                        className="scan-correct-link"
+                      <Button
+                        variant="ghost"
+                        className="scan-inline-action"
                         onClick={() => {
                           setCorrectionFor(item.cargoItemId)
                           setCorrectionQty(String(item.scannedQuantity))
@@ -594,7 +597,7 @@ export function ScanPanel({ tripId, stopId, stopLabel, scanType, canCorrect, onC
                         disabled={busy}
                       >
                         {t('scanning.panel.correct')}
-                      </button>
+                      </Button>
                     )}
                   </div>
                   {item.damagedQuantity > 0 && (
@@ -658,6 +661,19 @@ export function ScanPanel({ tripId, stopId, stopLabel, scanType, canCorrect, onC
           </section>
         )}
       </div>
+      {removeQueued && (
+        <ConfirmDialog
+          title={t('scanning.panel.removeQueuedTitle')}
+          message={t('scanning.panel.removeQueuedMessage', { code: removeQueued.input.barcode })}
+          confirmLabel={t('scanning.panel.remove')}
+          destructive
+          onConfirm={() => {
+            scanQueue.remove(removeQueued.clientEventId)
+            setRemoveQueued(null)
+          }}
+          onCancel={() => setRemoveQueued(null)}
+        />
+      )}
     </Modal>
   )
 }

@@ -5,9 +5,12 @@ import { LoadingState } from '../../../components/feedback/LoadingState'
 import { ErrorState } from '../../../components/feedback/ErrorState'
 import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
+import { FilterBar } from '../../../components/ui/FilterBar'
 import { useAuth } from '../../auth/authContextValue'
 import { useLocale } from '../../../i18n/localeContext'
 import { ScanPanel } from '../../scanning/components/ScanPanel'
+import { WarehouseDayToggle } from '../../warehousing/components/WarehouseDayToggle'
+import { localIsoDate } from '../../warehousing/warehouseDay'
 import { getWarehouseTrips, searchWarehousePackages } from '../api/packagesApi'
 import {
   PACKAGE_STATUS_LABELS,
@@ -17,12 +20,6 @@ import {
 } from '../types'
 import '../components/packages.css'
 
-function isoDate(offsetDays: number): string {
-  const date = new Date()
-  date.setDate(date.getDate() + offsetDays)
-  return date.toISOString().slice(0, 10)
-}
-
 /**
  * Warehouse loading floor: today's/tomorrow's trips with load completeness, direct scan
  * access per loading stop and package search. Costs, HR and profitability deliberately
@@ -31,10 +28,10 @@ function isoDate(offsetDays: number): string {
 export function WarehousePage() {
   const { t } = useLocale()
   const { hasPermission } = useAuth()
-  const [dayOffset, setDayOffset] = useState(0)
-  const [state, setState] = useState<{ trips: WarehouseTrip[]; loadedOffset: number | null }>({
+  const [day, setDay] = useState(() => localIsoDate(0))
+  const [state, setState] = useState<{ trips: WarehouseTrip[]; loadedDay: string | null }>({
     trips: [],
-    loadedOffset: null,
+    loadedDay: null,
   })
   const [loadError, setLoadError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
@@ -45,14 +42,14 @@ export function WarehousePage() {
   const canOpenTrip = hasPermission('planning.view')
 
   const reload = useCallback(() => {
-    getWarehouseTrips(isoDate(dayOffset))
+    getWarehouseTrips(day)
       .then((data) => {
-        setState({ trips: data, loadedOffset: dayOffset })
+        setState({ trips: data, loadedDay: day })
         setLoadError(null)
       })
       .catch(() => setLoadError(t('packages.warehouse.loadListFailed')))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dayOffset])
+  }, [day])
 
   useEffect(() => {
     reload()
@@ -72,7 +69,7 @@ export function WarehousePage() {
     return () => window.clearTimeout(timer)
   }, [search])
 
-  const trips = state.loadedOffset === dayOffset ? state.trips : null
+  const trips = state.loadedDay === day ? state.trips : null
 
   if (loadError) return <ErrorState message={loadError} />
 
@@ -81,26 +78,16 @@ export function WarehousePage() {
       <PageHeader
         title={t('packages.warehouse.title')}
         subtitle={t('packages.warehouse.subtitle')}
-        action={
-          <span className="wh-day-toggle" role="radiogroup" aria-label={t('packages.warehouse.dayAria')}>
-            <Button variant={dayOffset === 0 ? 'primary' : 'secondary'} role="radio" aria-checked={dayOffset === 0} onClick={() => setDayOffset(0)}>
-              {t('packages.warehouse.today')}
-            </Button>
-            <Button variant={dayOffset === 1 ? 'primary' : 'secondary'} role="radio" aria-checked={dayOffset === 1} onClick={() => setDayOffset(1)}>
-              {t('packages.warehouse.tomorrow')}
-            </Button>
-          </span>
-        }
+        action={<WarehouseDayToggle date={day} onChange={setDay} />}
       />
 
       <section className="to-section">
         <h2>{t('packages.warehouse.searchTitle')}</h2>
-        <input
-          className="wh-search"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder={t('packages.warehouse.searchPlaceholder')}
-          aria-label={t('packages.warehouse.searchAria')}
+        <FilterBar
+          search={search}
+          onSearchChange={setSearch}
+          searchPlaceholder={t('packages.warehouse.searchPlaceholder')}
+          searchLabel={t('packages.warehouse.searchAria')}
         />
         {results && (
           <ul className="wh-results">

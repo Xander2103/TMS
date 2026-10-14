@@ -4,6 +4,9 @@ import { ApiError } from '../../../api/apiClient'
 import { localizeApiError } from '../../../api/problemDetails'
 import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
+import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
+import { FilterBar } from '../../../components/ui/FilterBar'
+import { FormField } from '../../../components/ui/FormField'
 import { Modal } from '../../../components/ui/Modal'
 import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
@@ -23,13 +26,11 @@ import {
   type DockAppointment, type DockAppointmentInput, type DockBoard, type DockConflict,
   type Warehouse, type WarehouseDashboard,
 } from '../types'
+import { WarehouseDayToggle } from '../components/WarehouseDayToggle'
+import { localIsoDate } from '../warehouseDay'
 import './warehousing.css'
 
 const APPOINTMENT_MIME = 'application/x-ts-dock'
-
-function todayIso(): string {
-  return new Date().toISOString().slice(0, 10)
-}
 
 interface ConflictPrompt {
   message: string
@@ -47,7 +48,7 @@ export function DockPlanningPage() {
 
   const [warehouses, setWarehouses] = useState<Warehouse[]>([])
   const [warehouseId, setWarehouseId] = useState<string>('')
-  const [date, setDate] = useState(todayIso)
+  const [date, setDate] = useState(() => localIsoDate(0))
   const [board, setBoard] = useState<DockBoard | null>(null)
   const [dashboard, setDashboard] = useState<WarehouseDashboard | null>(null)
   const [reloadToken, setReloadToken] = useState(0)
@@ -56,6 +57,7 @@ export function DockPlanningPage() {
   const [editing, setEditing] = useState<DockAppointmentInput & { id?: string } | null>(null)
   const [conflictPrompt, setConflictPrompt] = useState<ConflictPrompt | null>(null)
   const [overrideReason, setOverrideReason] = useState('')
+  const [deleteTarget, setDeleteTarget] = useState<DockAppointment | null>(null)
 
   useEffect(() => {
     listWarehouses()
@@ -158,25 +160,29 @@ export function DockPlanningPage() {
     <div className="dp-page">
       <PageHeader
         title={t('warehousing.dockPlanning.title')}
-        action={(
-        <div className="dp-controls">
-          <select value={warehouseId} onChange={(event) => setWarehouseId(event.target.value)} aria-label={t('warehousing.dockPlanning.warehouseAria')}>
-            {warehouses.map((warehouse) => (
-              <option key={warehouse.id} value={warehouse.id}>{warehouse.name}</option>
-            ))}
-          </select>
-          <input type="date" value={date} onChange={(event) => setDate(event.target.value || date)} aria-label={t('warehousing.dockPlanning.dateAria')} />
-          {canSchedule && activeWarehouse && (
-            <Button onClick={() => setEditing({
-              warehouseId, dockId: null, operationType: 'Loading',
-              plannedStart: `${date}T08:00`, plannedEnd: `${date}T09:00`,
-            })}>
-              {t('warehousing.dockPlanning.newAppointment')}
-            </Button>
-          )}
-        </div>
-        )}
+        action={canSchedule && activeWarehouse ? (
+          <Button onClick={() => setEditing({
+            warehouseId, dockId: null, operationType: 'Loading',
+            plannedStart: `${date}T08:00`, plannedEnd: `${date}T09:00`,
+          })}>
+            {t('warehousing.dockPlanning.newAppointment')}
+          </Button>
+        ) : undefined}
       />
+
+      <FilterBar>
+        <select
+          className="ui-filter-select"
+          value={warehouseId}
+          onChange={(event) => setWarehouseId(event.target.value)}
+          aria-label={t('warehousing.dockPlanning.warehouseAria')}
+        >
+          {warehouses.map((warehouse) => (
+            <option key={warehouse.id} value={warehouse.id}>{warehouse.name}</option>
+          ))}
+        </select>
+        <WarehouseDayToggle date={date} onChange={setDate} withDatePicker />
+      </FilterBar>
 
       {dashboard && (
         <div className="dp-kpis">
@@ -299,10 +305,11 @@ export function DockPlanningPage() {
                   {t('warehousing.dockPlanning.edit')}
                 </Button>
                 {['Planned', 'Expected'].includes(selected.status) && (
-                  <Button variant="secondary" disabled={busy}
-                          onClick={() => void run(
-                            () => deleteDockAppointment(selected.id, selected.version),
-                            t('warehousing.dockPlanning.deleted'))}>
+                  <Button variant="danger" disabled={busy}
+                          onClick={() => {
+                            setDeleteTarget(selected)
+                            setSelected(null)
+                          }}>
                     {t('warehousing.dockPlanning.delete')}
                   </Button>
                 )}
@@ -330,46 +337,40 @@ export function DockPlanningPage() {
             ).then(() => setEditing(null))
           }}>
             <div className="wh-form-row">
-              <label>
-                {t('warehousing.dockPlanning.dock')}
-                <select value={editing.dockId ?? ''} onChange={(event) => setEditing({ ...editing, dockId: event.target.value || null })}>
+              <FormField label={t('warehousing.dockPlanning.dock')} htmlFor="dp-edit-dock">
+                <select id="dp-edit-dock" value={editing.dockId ?? ''} onChange={(event) => setEditing({ ...editing, dockId: event.target.value || null })}>
                   <option value="">{t('warehousing.dockPlanning.queueNoDock')}</option>
                   {(activeWarehouse?.docks ?? []).filter((d) => d.isActive).map((dock) => (
                     <option key={dock.id} value={dock.id}>{dock.code}</option>
                   ))}
                 </select>
-              </label>
-              <label>
-                {t('warehousing.dockPlanning.operationLabel')}
-                <select value={editing.operationType}
+              </FormField>
+              <FormField label={t('warehousing.dockPlanning.operationLabel')} htmlFor="dp-edit-operation">
+                <select id="dp-edit-operation" value={editing.operationType}
                         onChange={(event) => setEditing({ ...editing, operationType: event.target.value as 'Loading' | 'Unloading' })}>
                   <option value="Loading">{t(OPERATION_LABELS.Loading)}</option>
                   <option value="Unloading">{t(OPERATION_LABELS.Unloading)}</option>
                 </select>
-              </label>
+              </FormField>
             </div>
             <div className="wh-form-row">
-              <label>
-                {t('warehousing.dockPlanning.start')}
-                <input type="datetime-local" value={editing.plannedStart} required
+              <FormField label={t('warehousing.dockPlanning.start')} htmlFor="dp-edit-start" required>
+                <input id="dp-edit-start" type="datetime-local" value={editing.plannedStart} required
                        onChange={(event) => setEditing({ ...editing, plannedStart: event.target.value })} />
-              </label>
-              <label>
-                {t('warehousing.dockPlanning.end')}
-                <input type="datetime-local" value={editing.plannedEnd} required
+              </FormField>
+              <FormField label={t('warehousing.dockPlanning.end')} htmlFor="dp-edit-end" required>
+                <input id="dp-edit-end" type="datetime-local" value={editing.plannedEnd} required
                        onChange={(event) => setEditing({ ...editing, plannedEnd: event.target.value })} />
-              </label>
+              </FormField>
             </div>
-            <label>
-              {t('warehousing.dockPlanning.reference')}
-              <input value={editing.reference ?? ''} maxLength={100}
+            <FormField label={t('warehousing.dockPlanning.reference')} htmlFor="dp-edit-reference">
+              <input id="dp-edit-reference" value={editing.reference ?? ''} maxLength={100}
                      onChange={(event) => setEditing({ ...editing, reference: event.target.value || null })} />
-            </label>
-            <label>
-              {t('warehousing.dockPlanning.remarks')}
-              <textarea rows={2} value={editing.remarks ?? ''}
+            </FormField>
+            <FormField label={t('warehousing.dockPlanning.remarks')} htmlFor="dp-edit-remarks">
+              <textarea id="dp-edit-remarks" rows={2} value={editing.remarks ?? ''}
                         onChange={(event) => setEditing({ ...editing, remarks: event.target.value || null })} />
-            </label>
+            </FormField>
             <div className="wh-form-actions">
               <Button variant="secondary" type="button" onClick={() => setEditing(null)} disabled={busy}>
                 {t('warehousing.dockPlanning.cancel')}
@@ -378,6 +379,26 @@ export function DockPlanningPage() {
             </div>
           </form>
         </Modal>
+      )}
+
+      {deleteTarget && (
+        <ConfirmDialog
+          title={t('warehousing.dockPlanning.deleteTitle')}
+          message={t('warehousing.dockPlanning.deleteMessage', {
+            reference: deleteTarget.orderNumber ?? deleteTarget.tripNumber ?? deleteTarget.reference ?? '',
+          })}
+          confirmLabel={t('warehousing.dockPlanning.delete')}
+          destructive
+          busy={busy}
+          onConfirm={() => {
+            const target = deleteTarget
+            void run(
+              () => deleteDockAppointment(target.id, target.version),
+              t('warehousing.dockPlanning.deleted'),
+            ).then(() => setDeleteTarget(null))
+          }}
+          onCancel={() => setDeleteTarget(null)}
+        />
       )}
 
       {conflictPrompt && (
@@ -398,11 +419,10 @@ export function DockPlanningPage() {
             ))}
           </ul>
           {canOverride && conflictPrompt.conflicts.filter((c) => c.severity === 'Blocking').every((c) => c.overrideAllowed) && (
-            <>
-              <label className="dp-override-label" htmlFor="dp-override-reason">{t('warehousing.dockPlanning.overrideReason')}</label>
+            <FormField label={t('warehousing.dockPlanning.overrideReason')} htmlFor="dp-override-reason">
               <textarea id="dp-override-reason" rows={2} value={overrideReason}
                         onChange={(event) => setOverrideReason(event.target.value)} />
-            </>
+            </FormField>
           )}
           <div className="wh-form-actions">
             <Button variant="secondary" onClick={() => setConflictPrompt(null)} disabled={busy}>

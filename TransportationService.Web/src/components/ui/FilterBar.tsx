@@ -3,9 +3,12 @@ import { useLocale } from '../../i18n/localeContext'
 import './FilterBar.css'
 
 interface FilterBarProps {
-  search: string
-  onSearchChange: (value: string) => void
+  /** Omit `onSearchChange` for a toolbar without a free-text search (selects/dates only). */
+  search?: string
+  onSearchChange?: (value: string) => void
   searchPlaceholder?: string
+  /** Accessible name of the search input; defaults to the generic "Zoeken". */
+  searchLabel?: string
   /** Optional active/inactive tri-state filter. Omit to hide it. */
   activeFilter?: boolean | undefined
   onActiveFilterChange?: (value: boolean | undefined) => void
@@ -22,6 +25,7 @@ export function FilterBar({
   search,
   onSearchChange,
   searchPlaceholder,
+  searchLabel,
   activeFilter,
   onActiveFilterChange,
   children,
@@ -37,14 +41,16 @@ export function FilterBar({
 
   return (
     <div className="ui-filter-bar">
-      <input
-        type="search"
-        className="ui-filter-search"
-        placeholder={searchPlaceholder ?? t('ui.filter.searchPlaceholder')}
-        value={search}
-        onChange={(event) => onSearchChange(event.target.value)}
-        aria-label={t('ui.filter.searchLabel')}
-      />
+      {onSearchChange && (
+        <input
+          type="search"
+          className="ui-filter-search"
+          placeholder={searchPlaceholder ?? t('ui.filter.searchPlaceholder')}
+          value={search ?? ''}
+          onChange={(event) => onSearchChange(event.target.value)}
+          aria-label={searchLabel ?? t('ui.filter.searchLabel')}
+        />
+      )}
       {onActiveFilterChange && (
         <select
           className="ui-filter-select"

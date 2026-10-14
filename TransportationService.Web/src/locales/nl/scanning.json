@@ -96,7 +96,9 @@
     "correct": "Corrigeren",
     "correctionQtyLabel": "Juiste totale hoeveelheid",
     "reasonLabel": "Reden",
-    "recentTitle": "Recente scans"
+    "recentTitle": "Recente scans",
+    "removeQueuedTitle": "Scan uit wachtrij verwijderen",
+    "removeQueuedMessage": "De scan van {code} is nog niet verstuurd. Verwijderen betekent dat deze scan verloren gaat."
   },
   "camera": {
     "notAvailable": "Camera niet beschikbaar of toegang geweigerd.",

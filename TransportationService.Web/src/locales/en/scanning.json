@@ -96,7 +96,9 @@
     "correct": "Correct",
     "correctionQtyLabel": "Correct total quantity",
     "reasonLabel": "Reason",
-    "recentTitle": "Recent scans"
+    "recentTitle": "Recent scans",
+    "removeQueuedTitle": "Remove scan from queue",
+    "removeQueuedMessage": "The scan of {code} has not been sent yet. Removing it means this scan is lost."
   },
   "camera": {
     "notAvailable": "Camera not available or access denied.",

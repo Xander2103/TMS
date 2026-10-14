@@ -52,7 +52,10 @@
     "name": "Naam",
     "adr": "ADR",
     "refrigerated": "Koeling",
-    "active": "Actief"
+    "active": "Actief",
+    "deleteTitle": "Dock verwijderen",
+    "deleteMessage": "Dock {code} wordt verwijderd. Dit kan niet ongedaan worden gemaakt.",
+    "deleted": "Dock verwijderd."
   },
   "locations": {
     "manage": "Locaties beheren",
@@ -80,7 +83,6 @@
   "dockPlanning": {
     "title": "Dockplanning",
     "warehouseAria": "Magazijn",
-    "dateAria": "Datum",
     "newAppointment": "Nieuwe afspraak",
     "kpiExpected": "Verwacht",
     "kpiQueue": "Wachtrij",
@@ -127,7 +129,10 @@
     "overrideReason": "Reden voor overschrijven (verplicht)",
     "close": "Sluiten",
     "overridden": "Overschreven en opgeslagen.",
-    "overrideConfirm": "Overschrijven en doorgaan"
+    "overrideConfirm": "Overschrijven en doorgaan",
+    "deleteTitle": "Afspraak verwijderen",
+    "deleteMessage": "De afspraak {reference} wordt verwijderd. Dit kan niet ongedaan worden gemaakt.",
+    "toolbarAria": "Magazijn en dag"
   },
   "trace": {
     "breadcrumbWarehouse": "Magazijn",
@@ -169,6 +174,14 @@
     "orderHeader": "Order",
     "colliHeader": "Colli",
     "palletDaysHeader": "Pallet-dagen",
-    "storageFailed": "De opslagberekening kon niet worden geladen."
+    "storageFailed": "De opslagberekening kon niet worden geladen.",
+    "scanBarAria": "Barcode zoeken of scannen",
+    "storageBarAria": "Opslagperiode"
+  },
+  "day": {
+    "aria": "Dag",
+    "today": "Vandaag",
+    "tomorrow": "Morgen",
+    "date": "Andere datum"
   }
 }

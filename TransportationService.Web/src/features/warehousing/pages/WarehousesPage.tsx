@@ -3,6 +3,8 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { localizeApiError } from '../../../api/problemDetails'
 import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
+import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
+import { FormField } from '../../../components/ui/FormField'
 import { Modal } from '../../../components/ui/Modal'
 import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
@@ -38,6 +40,7 @@ export function WarehousesPage() {
 
   const [editing, setEditing] = useState<{ id: string | null; input: WarehouseInput } | null>(null)
   const [dockEditing, setDockEditing] = useState<{ warehouseId: string; dockId: string | null; input: DockInput } | null>(null)
+  const [dockDelete, setDockDelete] = useState<{ warehouseId: string; dock: Dock } | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -93,6 +96,21 @@ export function WarehousesPage() {
       setReloadToken((token) => token + 1)
     } catch (error) {
       showError(localizeApiError(t, error, t('warehousing.warehouses.saveFailed')))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function confirmDockDelete() {
+    if (!dockDelete) return
+    setBusy(true)
+    try {
+      await deleteDock(dockDelete.warehouseId, dockDelete.dock.id)
+      showSuccess(t('warehousing.docks.deleted'))
+      setDockDelete(null)
+      setReloadToken((token) => token + 1)
+    } catch (error) {
+      showError(localizeApiError(t, error, t('warehousing.warehouses.deleteFailed')))
     } finally {
       setBusy(false)
     }
@@ -157,11 +175,7 @@ export function WarehousesPage() {
                     maxVehicleHeightM: dock.maxVehicleHeightM, isActive: dock.isActive, notes: dock.notes,
                   },
                 })}
-                onDelete={() => {
-                  void deleteDock(warehouse.id, dock.id)
-                    .then(() => setReloadToken((token) => token + 1))
-                    .catch((error: unknown) => showError(localizeApiError(t, error, t('warehousing.warehouses.deleteFailed'))))
-                }}
+                onDelete={() => setDockDelete({ warehouseId: warehouse.id, dock })}
               />
             ))}
             {warehouse.docks.length === 0 && <p className="wh-muted">{t('warehousing.warehouses.noDocks')}</p>}
@@ -177,14 +191,12 @@ export function WarehousesPage() {
           busy={busy}
         >
           <form className="wh-form" onSubmit={(event) => void submitWarehouse(event)}>
-            <label>
-              {t('warehousing.warehouses.name')}
-              <input value={editing.input.name} required maxLength={200}
+            <FormField label={t('warehousing.warehouses.name')} htmlFor="wh-edit-name" required>
+              <input id="wh-edit-name" value={editing.input.name} required maxLength={200}
                      onChange={(event) => setEditing({ ...editing, input: { ...editing.input, name: event.target.value } })} />
-            </label>
-            <label>
-              {t('warehousing.warehouses.locationAddress')}
-              <select value={editing.input.locationId} required
+            </FormField>
+            <FormField label={t('warehousing.warehouses.locationAddress')} htmlFor="wh-edit-location" required>
+              <select id="wh-edit-location" value={editing.input.locationId} required
                       onChange={(event) => setEditing({ ...editing, input: { ...editing.input, locationId: event.target.value } })}>
                 <option value="">{t('warehousing.warehouses.chooseLocation')}</option>
                 {locations.map((location) => (
@@ -193,24 +205,21 @@ export function WarehousesPage() {
                   </option>
                 ))}
               </select>
-            </label>
+            </FormField>
             <div className="wh-form-row">
-              <label>
-                {t('warehousing.warehouses.opensAt')}
-                <input type="time" value={editing.input.opensAt ?? ''}
+              <FormField label={t('warehousing.warehouses.opensAt')} htmlFor="wh-edit-opens">
+                <input id="wh-edit-opens" type="time" value={editing.input.opensAt ?? ''}
                        onChange={(event) => setEditing({ ...editing, input: { ...editing.input, opensAt: event.target.value || null } })} />
-              </label>
-              <label>
-                {t('warehousing.warehouses.closesAt')}
-                <input type="time" value={editing.input.closesAt ?? ''}
+              </FormField>
+              <FormField label={t('warehousing.warehouses.closesAt')} htmlFor="wh-edit-closes">
+                <input id="wh-edit-closes" type="time" value={editing.input.closesAt ?? ''}
                        onChange={(event) => setEditing({ ...editing, input: { ...editing.input, closesAt: event.target.value || null } })} />
-              </label>
+              </FormField>
             </div>
-            <label>
-              {t('warehousing.warehouses.contactName')}
-              <input value={editing.input.contactName ?? ''}
+            <FormField label={t('warehousing.warehouses.contactName')} htmlFor="wh-edit-contact">
+              <input id="wh-edit-contact" value={editing.input.contactName ?? ''}
                      onChange={(event) => setEditing({ ...editing, input: { ...editing.input, contactName: event.target.value || null } })} />
-            </label>
+            </FormField>
             <label className="wh-check">
               <input type="checkbox" checked={editing.input.isActive}
                      onChange={(event) => setEditing({ ...editing, input: { ...editing.input, isActive: event.target.checked } })} />
@@ -234,18 +243,16 @@ export function WarehousesPage() {
         >
           <form className="wh-form" onSubmit={(event) => void submitDock(event)}>
             <div className="wh-form-row">
-              <label>
-                {t('warehousing.docks.code')}
-                <input value={dockEditing.input.code} required maxLength={30}
+              <FormField label={t('warehousing.docks.code')} htmlFor="wh-dock-code" required>
+                <input id="wh-dock-code" value={dockEditing.input.code} required maxLength={30}
                        onChange={(event) => setDockEditing({ ...dockEditing, input: { ...dockEditing.input, code: event.target.value } })} />
-              </label>
-              <label>
-                {t('warehousing.docks.name')}
-                <input value={dockEditing.input.name ?? ''}
+              </FormField>
+              <FormField label={t('warehousing.docks.name')} htmlFor="wh-dock-name">
+                <input id="wh-dock-name" value={dockEditing.input.name ?? ''}
                        onChange={(event) => setDockEditing({ ...dockEditing, input: { ...dockEditing.input, name: event.target.value || null } })} />
-              </label>
+              </FormField>
             </div>
-            <div className="wh-form-row">
+            <div className="wh-form-row wh-check-row">
               <label className="wh-check">
                 <input type="checkbox" checked={dockEditing.input.allowsLoading}
                        onChange={(event) => setDockEditing({ ...dockEditing, input: { ...dockEditing.input, allowsLoading: event.target.checked } })} />
@@ -281,6 +288,18 @@ export function WarehousesPage() {
           </form>
         </Modal>
       )}
+
+      {dockDelete && (
+        <ConfirmDialog
+          title={t('warehousing.docks.deleteTitle')}
+          message={t('warehousing.docks.deleteMessage', { code: dockDelete.dock.code })}
+          confirmLabel={t('warehousing.warehouses.delete')}
+          destructive
+          busy={busy}
+          onConfirm={() => void confirmDockDelete()}
+          onCancel={() => setDockDelete(null)}
+        />
+      )}
     </div>
   )
 }
@@ -307,8 +326,12 @@ function DockCard({ dock, canManage, onEdit, onDelete }: {
       </div>
       {canManage && (
         <div className="wh-dock-actions">
-          <button type="button" className="wh-link" onClick={onEdit}>{t('warehousing.warehouses.edit')}</button>
-          <button type="button" className="wh-link wh-link-danger" onClick={onDelete}>{t('warehousing.warehouses.delete')}</button>
+          <Button variant="ghost" className="wh-inline-action" onClick={onEdit}>
+            {t('warehousing.warehouses.edit')}
+          </Button>
+          <Button variant="ghost" className="wh-inline-action wh-inline-action-danger" onClick={onDelete}>
+            {t('warehousing.warehouses.delete')}
+          </Button>
         </div>
       )}
     </div>

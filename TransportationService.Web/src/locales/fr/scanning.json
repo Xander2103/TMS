@@ -96,7 +96,9 @@
     "correct": "Corriger",
     "correctionQtyLabel": "Quantité totale correcte",
     "reasonLabel": "Motif",
-    "recentTitle": "Scans récents"
+    "recentTitle": "Scans récents",
+    "removeQueuedTitle": "Retirer le scan de la file",
+    "removeQueuedMessage": "Le scan de {code} n'a pas encore été envoyé. Le retirer signifie que ce scan est perdu."
   },
   "camera": {
     "notAvailable": "Caméra non disponible ou accès refusé.",
