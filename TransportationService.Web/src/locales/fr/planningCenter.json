@@ -36,7 +36,16 @@
     "pickerOrders": "{count} cmd.",
     "pickerEmpty": "Aucune tournée ouverte sur cette période.",
     "pickerNewTripOn": "Nouvelle tournée le",
-    "pickerCreateTrip": "Créer une nouvelle tournée"
+    "pickerCreateTrip": "Créer une nouvelle tournée",
+    "densityLabel": "Densité",
+    "densityCompact": "Compact",
+    "densityNormal": "Normal",
+    "collapseLeft": "Réduire Non planifié",
+    "expandLeft": "Développer Non planifié",
+    "collapseRight": "Réduire Ressources",
+    "expandRight": "Développer Ressources",
+    "previousPeriod": "Période précédente",
+    "nextPeriod": "Période suivante"
   },
   "board": {
     "label": "Tableau de planification",
@@ -49,7 +58,15 @@
     "blocking_one": "1 bloquant",
     "blocking_other": "{count} bloquants",
     "warnings_one": "1 avertissement",
-    "warnings_other": "{count} avertissements"
+    "warnings_other": "{count} avertissements",
+    "weekHint": "Tous les jours ne tiennent pas côte à côte ; la ligne du temps défile horizontalement.",
+    "weekHintAction": "Réduire les panneaux latéraux pour une semaine complète",
+    "conflictsTitle": "Pourquoi ce trajet demande de l’attention",
+    "conflictCount_one": "1 conflit",
+    "conflictCount_other": "{count} conflits",
+    "moreConflicts_one": "+ 1 autre point d’attention",
+    "moreConflicts_other": "+ {count} autres points d’attention",
+    "conflictsSelectHint": "Sélectionnez le trajet pour les détails."
   },
   "resources": {
     "label": "Ressources",
@@ -118,7 +135,19 @@
     "packages_one": "1 colis",
     "packages_other": "{count} colis",
     "crane": "Grue",
-    "planInto": "Planifier…"
+    "planInto": "Planifier…",
+    "showDrafts": "Afficher les brouillons",
+    "notPlannableShort": "pas encore planifiable",
+    "notPlannableDraft": "Pas encore planifiable — confirmez d'abord la commande.",
+    "notPlannableSubmitted": "Pas encore planifiable — vérifiez et confirmez d'abord la commande.",
+    "openOrder": "Ouvrir la commande →",
+    "attentionTitle": "Points d'attention",
+    "attentionCount_one": "1 point d'attention",
+    "attentionCount_other": "{count} points d'attention",
+    "reference": "Réf. {reference}",
+    "stops_one": "1 arrêt",
+    "stops_other": "{count} arrêts",
+    "noRoute": "Pas encore d’itinéraire"
   },
   "conflictDialog": {
     "title": "Conflits de planification",

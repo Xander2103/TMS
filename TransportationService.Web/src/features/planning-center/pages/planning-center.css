@@ -50,12 +50,104 @@
   color: #fff;
 }
 
+/* B08: a width-aware workspace. The side panels are narrow (they carry lists, not forms) and
+   each collapses to a 44px rail; the timeline takes everything else. Column widths come from
+   variables so density and the rails change ONE value instead of the grid definition. */
+.pc-page {
+  --pc-left: 272px;
+  --pc-right: 272px;
+  --pc-rail: 44px;
+  --pc-gap: 0.75rem;
+  --pc-card-pad: 0.4rem 0.5rem;
+  --pc-font: 0.82rem;
+  --pc-row-pad: 0.35rem 0.5rem;
+}
+
+.pc-page[data-density='compact'] {
+  --pc-left: 248px;
+  --pc-right: 248px;
+  --pc-gap: 0.5rem;
+  --pc-card-pad: 0.2rem 0.35rem;
+  --pc-font: 0.75rem;
+  --pc-row-pad: 0.2rem 0.4rem;
+  gap: 0.5rem;
+}
+
 .pc-layout {
   display: grid;
-  grid-template-columns: 300px minmax(0, 1fr) 320px;
-  gap: 0.75rem;
+  grid-template-columns: var(--pc-left) minmax(0, 1fr) var(--pc-right);
+  gap: var(--pc-gap);
   flex: 1;
   min-height: 0;
+  /* The grid itself never grows past its container: the timeline scrolls, the page does not. */
+  min-width: 0;
+}
+
+.pc-layout[data-left='collapsed'] {
+  --pc-left: var(--pc-rail);
+}
+
+.pc-layout[data-right='collapsed'] {
+  --pc-right: var(--pc-rail);
+}
+
+/* Collapsed panel: a vertical caption, the count and one button to expand. */
+.pc-rail {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.pc-rail-toggle,
+.pc-collapse {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  border-radius: 6px;
+  width: 28px;
+  height: 28px;
+  line-height: 1;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.95rem;
+}
+
+.pc-rail-toggle:hover,
+.pc-collapse:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.pc-rail-label {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.pc-rail-count {
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  background: var(--accent-bg);
+  color: var(--accent);
+}
+
+.pc-panel-header-right {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
 }
 
 .pc-panel {
@@ -71,8 +163,36 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.6rem 0.75rem;
+  padding: 0.5rem 0.65rem;
   border-bottom: 1px solid var(--border);
+}
+
+.pc-page[data-density='compact'] .pc-panel-header {
+  padding: 0.3rem 0.5rem;
+}
+
+.pc-page[data-density='compact'] .pc-panel-header h2 {
+  font-size: 0.9rem;
+}
+
+.pc-page[data-density='compact'] .pc-filters {
+  padding: 0.4rem 0.5rem;
+  gap: 0.3rem;
+}
+
+.pc-page[data-density='compact'] .pc-filters input,
+.pc-page[data-density='compact'] .pc-filters select {
+  font-size: 0.8rem;
+  padding: 0.2rem 0.35rem;
+}
+
+.pc-filter-checks {
+  flex-wrap: wrap;
+  gap: 0.25rem 0.75rem;
+}
+
+.pc-filter-checks > * {
+  flex: 0 1 auto;
 }
 
 .pc-panel-header h2 {
@@ -115,60 +235,148 @@
   padding: 0.5rem 0.75rem;
 }
 
-/* --- Unplanned pool --- */
+/* --- Unplanned pool (B09: one line per order; the selected row unfolds) --- */
 
 .pc-unplanned-list {
   flex: 1;
   overflow-y: auto;
-  padding: 0.5rem;
+  padding: 0.25rem;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 2px;
 }
 
-.pc-order-card {
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 0.5rem 0.6rem;
+.pc-order {
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: var(--pc-row-pad);
   cursor: grab;
   background: var(--bg);
+  font-size: var(--pc-font);
 }
 
-.pc-order-card:focus-visible,
-.pc-trip:focus-visible {
+.pc-order:hover {
+  background: var(--color-surface-subtle);
+}
+
+.pc-order:focus-visible,
+.pc-trip:focus-visible,
+.pc-hint:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
 
-.pc-order-card.pc-selected,
+.pc-order.pc-selected,
 .pc-trip.pc-selected {
   border-color: var(--accent);
   box-shadow: 0 0 0 1px var(--accent);
 }
 
-.pc-order-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.4rem;
+/* Draft/Submitted: visible, subdued, not draggable. */
+.pc-order-locked {
+  cursor: default;
+  color: var(--text-muted);
 }
 
-.pc-order-customer,
-.pc-order-route,
-.pc-order-meta {
-  margin: 0.15rem 0 0;
-  font-size: 0.85rem;
+.pc-order-locked .pc-order-number,
+.pc-order-locked .pc-order-customer {
+  color: var(--text-muted);
+}
+
+.pc-order-draft {
+  background: var(--color-surface-subtle);
+  border-style: dashed;
+  border-color: var(--border);
+}
+
+.pc-order-line {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+  line-height: 1.5;
+}
+
+.pc-order-number {
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--text-h);
+  font-size: 0.95em;
+}
+
+.pc-order-customer {
+  flex: 1 1 40%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-h);
 }
 
 .pc-order-route {
-  opacity: 0.8;
+  flex: 1 1 50%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-muted);
+}
+
+.pc-order-state {
+  font-style: italic;
+}
+
+.pc-order-weight {
+  white-space: nowrap;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Priority mark: a 3px edge, coloured only when it matters (High/Urgent). */
+.pc-order-prio {
+  flex: 0 0 3px;
+  align-self: stretch;
+  border-radius: 2px;
+  background: transparent;
+  margin-left: -0.15rem;
+}
+
+.pc-order[data-priority='High'] .pc-order-prio {
+  background: var(--warning);
+}
+
+.pc-order[data-priority='Urgent'] .pc-order-prio {
+  background: var(--danger);
+}
+
+.pc-order-flag {
+  flex: 0 0 auto;
+}
+
+.pc-order-details {
+  margin-top: 0.35rem;
+  padding-top: 0.35rem;
+  border-top: 1px dashed var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.pc-order-hint {
+  margin: 0;
+  color: var(--text-h);
+}
+
+.pc-order-hint a {
+  color: var(--accent);
 }
 
 .pc-order-meta {
+  margin: 0;
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
-  opacity: 0.75;
+  gap: 0.25rem 0.6rem;
+  color: var(--text-muted);
 }
 
 .pc-flag {
@@ -180,18 +388,37 @@
   display: flex;
   flex-wrap: wrap;
   gap: 0.3rem;
-  margin-top: 0.35rem;
+}
+
+.pc-order-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.pc-order-priority {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--text-muted);
 }
 
 .pc-plan-button {
-  margin-top: 0.4rem;
-  border: 1px solid var(--border);
-  background: transparent;
+  border: 1px solid var(--accent-border);
+  background: var(--accent-bg);
   color: var(--accent);
   border-radius: 6px;
-  padding: 0.2rem 0.5rem;
+  padding: 0.2rem 0.6rem;
   cursor: pointer;
+  font: inherit;
   font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.pc-plan-button:hover {
+  border-color: var(--accent);
 }
 
 .pc-paging {
@@ -203,8 +430,91 @@
   border-top: 1px solid var(--border);
 }
 
+/* --- Self-explaining warning chips (B09): hover or focus shows the reasons --- */
+
+.pc-hint {
+  position: relative;
+  display: inline-flex;
+  cursor: help;
+  border-radius: 999px;
+}
+
+.pc-hint-pop {
+  display: none;
+  position: absolute;
+  z-index: 5;
+  top: calc(100% + 4px);
+  right: 0;
+  min-width: 220px;
+  max-width: 320px;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text-h);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.18);
+  font-size: 0.8rem;
+  font-weight: 400;
+  text-align: left;
+  white-space: normal;
+}
+
+.pc-hint:hover .pc-hint-pop,
+.pc-hint:focus-within .pc-hint-pop {
+  display: block;
+}
+
+.pc-hint-pop strong {
+  display: block;
+  margin-bottom: 0.2rem;
+}
+
+.pc-hint-line {
+  display: block;
+  padding-left: 0.9rem;
+  text-indent: -0.6rem;
+}
+
+.pc-hint-line::before {
+  content: '• ';
+  color: var(--text-muted);
+}
+
 /* --- Board --- */
 
+.pc-board-wrap {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  gap: 0.4rem;
+}
+
+.pc-board-hint {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.35rem 0.6rem;
+  border: 1px solid var(--info-border, var(--border));
+  border-radius: 8px;
+  background: var(--info-bg, var(--color-surface-subtle));
+  font-size: 0.82rem;
+  color: var(--text-h);
+}
+
+.pc-link {
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+/* The timeline is the ONLY horizontal scroller on the page. */
 .pc-board {
   display: flex;
   gap: 0;
@@ -214,6 +524,8 @@
   overflow: auto;
   position: relative;
   min-height: 0;
+  min-width: 0;
+  flex: 1;
 }
 
 .pc-board-axis {
@@ -235,9 +547,10 @@
   min-width: 0;
 }
 
+/* Every column takes an even share; below --pc-day-min (set per density) the timeline scrolls. */
 .pc-day {
-  flex: 1;
-  min-width: 180px;
+  flex: 1 0 var(--pc-day-min, 132px);
+  min-width: var(--pc-day-min, 132px);
   border-left: 1px solid var(--border);
   display: flex;
   flex-direction: column;
@@ -248,14 +561,35 @@
 }
 
 .pc-day-header {
-  padding: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.35rem;
+  padding: 0.4rem 0.5rem;
   font-weight: 600;
+  font-size: 0.9rem;
   border-bottom: 1px solid var(--border);
   position: sticky;
   top: 0;
   background: var(--bg);
   z-index: 1;
   text-transform: capitalize;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.pc-page[data-density='compact'] .pc-day-header {
+  padding: 0.25rem 0.4rem;
+  font-size: 0.8rem;
+}
+
+.pc-day-count {
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  background: var(--color-surface-subtle);
+  color: var(--text-muted);
 }
 
 .pc-day-unscheduled {
@@ -290,11 +624,45 @@
   border-left: 4px solid var(--accent);
   border-radius: 8px;
   background: var(--bg);
-  padding: 0.4rem 0.5rem;
+  padding: var(--pc-card-pad);
   cursor: grab;
   box-shadow: var(--shadow);
   overflow: hidden;
-  font-size: 0.82rem;
+  font-size: var(--pc-font);
+  line-height: 1.4;
+}
+
+/* Status also reads from the edge, so a narrow card without a badge still tells Draft from Planned. */
+.pc-trip-status-draft {
+  border-left-color: var(--color-border-strong, var(--text-muted));
+}
+
+.pc-trip-status-inprogress {
+  border-left-color: var(--warning);
+}
+
+.pc-trip-status-completed {
+  border-left-color: var(--success);
+}
+
+.pc-trip-status-cancelled {
+  border-left-color: var(--danger);
+  opacity: 0.6;
+}
+
+/* Narrow columns: the card keeps number · time · driver on tight lines. */
+.pc-board[data-level='narrow'] .pc-trip {
+  padding: 0.15rem 0.3rem;
+  font-size: 0.72rem;
+  line-height: 1.3;
+}
+
+.pc-board[data-level='medium'] .pc-trip {
+  font-size: 0.76rem;
+}
+
+.pc-trip-flag {
+  flex: 0 0 auto;
 }
 
 .pc-trip-floating {
@@ -315,6 +683,13 @@
   align-items: center;
   justify-content: space-between;
   gap: 0.35rem;
+  min-width: 0;
+}
+
+.pc-trip-head strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .pc-trip-time {
@@ -372,8 +747,19 @@
 .pc-resource-card {
   border: 1px solid var(--border);
   border-radius: 8px;
-  padding: 0.5rem 0.6rem;
+  padding: var(--pc-card-pad);
   cursor: grab;
+  font-size: var(--pc-font);
+}
+
+.pc-page[data-density='compact'] .pc-resource-list {
+  gap: 0.25rem;
+  padding: 0.3rem;
+}
+
+.pc-page[data-density='compact'] .pc-resource-badges .ui-badge {
+  font-size: 0.65rem;
+  padding: 0 0.3rem;
 }
 
 .pc-resource-head {
@@ -584,8 +970,21 @@
     height: auto;
   }
 
-  .pc-layout {
+  .pc-layout,
+  .pc-layout[data-left='collapsed'],
+  .pc-layout[data-right='collapsed'] {
     grid-template-columns: 1fr;
+  }
+
+  .pc-rail {
+    flex-direction: row;
+    justify-content: flex-start;
+    padding: 0.35rem 0.6rem;
+  }
+
+  .pc-rail-label {
+    writing-mode: horizontal-tb;
+    transform: none;
   }
 
   .pc-board {

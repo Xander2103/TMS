@@ -1,32 +1,66 @@
-import { useState, type DragEvent } from 'react'
+import { useEffect, useRef, useState, type CSSProperties, type DragEvent } from 'react'
 import { Badge } from '../../../components/ui/Badge'
 import { useLocale } from '../../../i18n/localeContext'
-import { formatInteger } from '../../../utils/numbers'
 import { TRIP_STATUS_LABELS, TRIP_STATUS_TONE } from '../../planning/types'
 import {
-  blockPosition, formatDayHeading, formatTimeRange, gridHours, type BoardViewDays,
+  blockPosition, dayColumnLevel, dayColumnWidth, daysFitWithoutScroll, formatDayHeading, formatDayHeadingShort,
+  formatTimeRange, gridHours, MIN_DAY_WIDTH, type BoardDensity, type BoardViewDays, type DayColumnLevel,
 } from '../utils/boardMath'
+import { formatWeightShort } from '../utils/boardFormat'
 import { DRAG_MIME, decodeDragPayload, encodeDragPayload, type DragPayload, type PlanningBoardTrip } from '../types'
+import { ConflictHint } from './ConflictHint'
 
 interface BoardTimelineProps {
   dates: string[]
   days: BoardViewDays
+  density: BoardDensity
   trips: PlanningBoardTrip[]
   isLoading: boolean
   selectedTripId: string | null
+  /** True when both side panels are already rails (the "collapse for a full week" hint is moot). */
+  sidesCollapsed: boolean
   onSelectTrip: (trip: PlanningBoardTrip) => void
   /** A payload was dropped on a trip block (order/driver/vehicle/trailer). */
   onDropOnTrip: (trip: PlanningBoardTrip, payload: DragPayload) => void
   /** A payload was dropped on a day column (order → new trip, trip → reschedule). */
   onDropOnDay: (dateIso: string, payload: DragPayload) => void
+  /** B08: offered by the week hint when the columns do not fit next to each other. */
+  onCollapseSides?: () => void
 }
 
-/** Center zone: day columns on a 05:00–22:00 grid; trips without times stack on top. */
+/**
+ * Center zone: day columns on a 05:00–22:00 grid; trips without times stack on top.
+ *
+ * B08: the board is width-aware. The timeline measures itself; every day column gets an even
+ * share of that width down to a readable minimum (`MIN_DAY_WIDTH`), and the cards adapt what
+ * they show to the column width (`DayColumnLevel`). Only when the minimum does not fit does the
+ * TIMELINE scroll sideways — the page never does.
+ */
 export function BoardTimeline({
-  dates, days, trips, isLoading, selectedTripId, onSelectTrip, onDropOnTrip, onDropOnDay,
+  dates, days, density, trips, isLoading, selectedTripId, sidesCollapsed,
+  onSelectTrip, onDropOnTrip, onDropOnDay, onCollapseSides,
 }: BoardTimelineProps) {
   const { t } = useLocale()
   const [dragOverKey, setDragOverKey] = useState<string | null>(null)
+  const daysRef = useRef<HTMLDivElement>(null)
+  const [availableWidth, setAvailableWidth] = useState(0)
+
+  // The measured width drives the column level; RO callbacks are asynchronous, so this is not a
+  // synchronous setState-in-effect (React Compiler rule).
+  useEffect(() => {
+    const element = daysRef.current
+    if (!element || typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver((entries) => {
+      const width = entries[0]?.contentRect.width ?? 0
+      setAvailableWidth(Math.floor(width))
+    })
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [])
+
+  const dayWidth = dayColumnWidth(availableWidth, days, density)
+  const level: DayColumnLevel = availableWidth > 0 ? dayColumnLevel(dayWidth) : 'full'
+  const fits = availableWidth === 0 || daysFitWithoutScroll(availableWidth, days, density)
 
   function readPayload(event: DragEvent): DragPayload | null {
     return decodeDragPayload(event.dataTransfer.getData(DRAG_MIME))
@@ -44,64 +78,57 @@ export function BoardTimeline({
   for (const trip of trips) byDate.get(trip.tripDate)?.push(trip)
 
   return (
-    <section className={`pc-board pc-board-${days}`} aria-label={t('planningCenter.board.label')}>
-      <div className="pc-board-axis" aria-hidden="true">
-        {gridHours().map((hour) => (
-          <span key={hour}>{String(hour).padStart(2, '0')}:00</span>
-        ))}
-      </div>
-      <div className="pc-board-days">
-        {dates.map((date) => {
-          const dayTrips = byDate.get(date) ?? []
-          const unscheduled = dayTrips.filter((t) => blockPosition(t.plannedStart, t.plannedEnd) === null)
-          const scheduled = dayTrips.filter((t) => blockPosition(t.plannedStart, t.plannedEnd) !== null)
-          return (
-            <div
-              key={date}
-              className={`pc-day${dragOverKey === date ? ' pc-drop-target' : ''}`}
-              onDragOver={allowDrop}
-              onDragEnter={() => setDragOverKey(date)}
-              onDragLeave={(event) => {
-                if (!event.currentTarget.contains(event.relatedTarget as Node)) setDragOverKey(null)
-              }}
-              onDrop={(event) => {
-                event.preventDefault()
-                setDragOverKey(null)
-                const payload = readPayload(event)
-                if (payload) onDropOnDay(date, payload)
-              }}
-            >
-              <header className="pc-day-header">{formatDayHeading(date)}</header>
-              {unscheduled.length > 0 && (
-                <div className="pc-day-unscheduled">
-                  {unscheduled.map((trip) => (
-                    <TripBlock
-                      key={trip.id}
-                      trip={trip}
-                      floating={false}
-                      selected={trip.id === selectedTripId}
-                      dragOver={dragOverKey === trip.id}
-                      setDragOver={setDragOverKey}
-                      onSelect={onSelectTrip}
-                      onDrop={onDropOnTrip}
-                      allowDrop={allowDrop}
-                      readPayload={readPayload}
-                    />
-                  ))}
-                </div>
-              )}
-              <div className="pc-day-grid">
-                {scheduled.map((trip) => {
-                  const pos = blockPosition(trip.plannedStart, trip.plannedEnd)!
-                  return (
-                    <div
-                      key={trip.id}
-                      className="pc-block-anchor"
-                      style={{ top: `${pos.topPct}%`, height: `${pos.heightPct}%` }}
-                    >
+    <div className="pc-board-wrap">
+      {!fits && days === 7 && !sidesCollapsed && onCollapseSides && (
+        <p className="pc-board-hint" role="status">
+          <span>{t('planningCenter.board.weekHint')}</span>
+          <button type="button" className="pc-link" onClick={onCollapseSides}>{t('planningCenter.board.weekHintAction')}</button>
+        </p>
+      )}
+      <section
+        className={`pc-board pc-board-${days}`}
+        data-level={level}
+        data-scrolls={fits ? undefined : 'true'}
+        aria-label={t('planningCenter.board.label')}
+      >
+        <div className="pc-board-axis" aria-hidden="true">
+          {gridHours().map((hour) => (
+            <span key={hour}>{String(hour).padStart(2, '0')}:00</span>
+          ))}
+        </div>
+        <div className="pc-board-days" ref={daysRef} style={{ '--pc-day-min': `${MIN_DAY_WIDTH[density]}px` } as CSSProperties}>
+          {dates.map((date) => {
+            const dayTrips = byDate.get(date) ?? []
+            const unscheduled = dayTrips.filter((trip) => blockPosition(trip.plannedStart, trip.plannedEnd) === null)
+            const scheduled = dayTrips.filter((trip) => blockPosition(trip.plannedStart, trip.plannedEnd) !== null)
+            return (
+              <div
+                key={date}
+                className={`pc-day${dragOverKey === date ? ' pc-drop-target' : ''}`}
+                onDragOver={allowDrop}
+                onDragEnter={() => setDragOverKey(date)}
+                onDragLeave={(event) => {
+                  if (!event.currentTarget.contains(event.relatedTarget as Node)) setDragOverKey(null)
+                }}
+                onDrop={(event) => {
+                  event.preventDefault()
+                  setDragOverKey(null)
+                  const payload = readPayload(event)
+                  if (payload) onDropOnDay(date, payload)
+                }}
+              >
+                <header className="pc-day-header" title={formatDayHeading(date)}>
+                  {level === 'narrow' ? formatDayHeadingShort(date) : formatDayHeading(date)}
+                  {dayTrips.length > 0 && <span className="pc-day-count">{dayTrips.length}</span>}
+                </header>
+                {unscheduled.length > 0 && (
+                  <div className="pc-day-unscheduled">
+                    {unscheduled.map((trip) => (
                       <TripBlock
+                        key={trip.id}
                         trip={trip}
-                        floating
+                        level={level}
+                        floating={false}
                         selected={trip.id === selectedTripId}
                         dragOver={dragOverKey === trip.id}
                         setDragOver={setDragOverKey}
@@ -110,21 +137,47 @@ export function BoardTimeline({
                         allowDrop={allowDrop}
                         readPayload={readPayload}
                       />
-                    </div>
-                  )
-                })}
+                    ))}
+                  </div>
+                )}
+                <div className="pc-day-grid">
+                  {scheduled.map((trip) => {
+                    const pos = blockPosition(trip.plannedStart, trip.plannedEnd)!
+                    return (
+                      <div
+                        key={trip.id}
+                        className="pc-block-anchor"
+                        style={{ top: `${pos.topPct}%`, height: `${pos.heightPct}%` }}
+                      >
+                        <TripBlock
+                          trip={trip}
+                          level={level}
+                          floating
+                          selected={trip.id === selectedTripId}
+                          dragOver={dragOverKey === trip.id}
+                          setDragOver={setDragOverKey}
+                          onSelect={onSelectTrip}
+                          onDrop={onDropOnTrip}
+                          allowDrop={allowDrop}
+                          readPayload={readPayload}
+                        />
+                      </div>
+                    )
+                  })}
+                </div>
               </div>
-            </div>
-          )
-        })}
-      </div>
-      {isLoading && <p className="pc-muted pc-board-loading">{t('planningCenter.board.loading')}</p>}
-    </section>
+            )
+          })}
+        </div>
+        {isLoading && <p className="pc-muted pc-board-loading">{t('planningCenter.board.loading')}</p>}
+      </section>
+    </div>
   )
 }
 
 interface TripBlockProps {
   trip: PlanningBoardTrip
+  level: DayColumnLevel
   floating: boolean
   selected: boolean
   dragOver: boolean
@@ -135,19 +188,32 @@ interface TripBlockProps {
   readPayload: (event: DragEvent) => DragPayload | null
 }
 
+/**
+ * One trip card. What it shows follows the column width: everything at `full`, no vehicle/route
+ * at `medium`, only number · time · driver at `narrow`. The status is always readable from the
+ * badge or, when there is no room for one, from the card's edge colour; conflicts always keep
+ * their chip, and the chip explains itself on hover/focus (B09).
+ */
 function TripBlock({
-  trip, floating, selected, dragOver, setDragOver, onSelect, onDrop, allowDrop, readPayload,
+  trip, level, floating, selected, dragOver, setDragOver, onSelect, onDrop, allowDrop, readPayload,
 }: TripBlockProps) {
   const { t } = useLocale()
   const timeRange = formatTimeRange(trip.plannedStart, trip.plannedEnd)
   const overloaded =
     (trip.capacityWeightKg !== null && trip.totalWeightKg !== null && trip.totalWeightKg > trip.capacityWeightKg) ||
     (trip.capacityVolumeM3 !== null && trip.totalVolumeM3 !== null && trip.totalVolumeM3 > trip.capacityVolumeM3)
+  const conflictCount = trip.blockingConflictCount + trip.warningConflictCount
+  const preview = trip.conflictPreview ?? []
+  const reasons = preview.length > 0
+    ? [...preview, ...(conflictCount > preview.length ? [t('planningCenter.board.moreConflicts', { count: conflictCount - preview.length })] : [])]
+    : [t('planningCenter.board.conflictsSelectHint')]
+  const statusLabel = t(TRIP_STATUS_LABELS[trip.status])
 
   return (
     <article
       className={[
         'pc-trip',
+        `pc-trip-status-${trip.status.toLowerCase()}`,
         floating ? 'pc-trip-floating' : '',
         selected ? 'pc-selected' : '',
         dragOver ? 'pc-drop-target' : '',
@@ -184,36 +250,64 @@ function TripBlock({
           onSelect(trip)
         }
       }}
-      aria-label={t('planningCenter.board.tripAriaLabel', { tripNumber: trip.tripNumber, status: t(TRIP_STATUS_LABELS[trip.status]) })}
+      aria-label={t('planningCenter.board.tripAriaLabel', { tripNumber: trip.tripNumber, status: statusLabel })}
+      title={level === 'full' ? undefined : [trip.tripNumber, statusLabel, timeRange, trip.driverName, trip.vehicleNumber, trip.routeSummary].filter(Boolean).join(' · ')}
     >
       <div className="pc-trip-head">
         <strong>{trip.tripNumber}</strong>
-        <Badge tone={TRIP_STATUS_TONE[trip.status]}>{t(TRIP_STATUS_LABELS[trip.status])}</Badge>
+        {level === 'full' && <Badge tone={TRIP_STATUS_TONE[trip.status]}>{statusLabel}</Badge>}
+        {level !== 'full' && conflictCount > 0 && (
+          <ConflictHint
+            tone={trip.blockingConflictCount > 0 ? 'danger' : 'warning'}
+            label={`⚠ ${conflictCount}`}
+            title={t('planningCenter.board.conflictsTitle')}
+            reasons={reasons}
+            ariaLabel={t('planningCenter.board.conflictCount', { count: conflictCount })}
+            className="pc-trip-flag"
+          />
+        )}
       </div>
       {timeRange && <p className="pc-trip-time">{timeRange}</p>}
       <p className="pc-trip-line">{trip.driverName ?? t('planningCenter.board.noDriver')}</p>
-      <p className="pc-trip-line">
-        {trip.vehicleNumber ?? t('planningCenter.board.noVehicle')}
-        {trip.trailerNumber ? ` + ${trip.trailerNumber}` : ''}
-      </p>
-      {trip.routeSummary && <p className="pc-trip-line pc-trip-route">{trip.routeSummary}</p>}
-      <p className="pc-trip-line pc-trip-meta">
-        <span>{t('planningCenter.board.orders', { count: trip.orderCount })}</span>
-        <span>{t('planningCenter.board.stops', { count: trip.stopCount })}</span>
-        {trip.totalWeightKg !== null && (
-          <span className={overloaded ? 'pc-overloaded' : undefined}>
-            {formatInteger(trip.totalWeightKg)}
-            {trip.capacityWeightKg !== null ? `/${formatInteger(trip.capacityWeightKg)}` : ''} kg
-          </span>
-        )}
-      </p>
-      {(trip.blockingConflictCount > 0 || trip.warningConflictCount > 0) && (
+      {level === 'full' && (
+        <p className="pc-trip-line">
+          {trip.vehicleNumber ?? t('planningCenter.board.noVehicle')}
+          {trip.trailerNumber ? ` + ${trip.trailerNumber}` : ''}
+        </p>
+      )}
+      {level === 'full' && trip.routeSummary && <p className="pc-trip-line pc-trip-route">{trip.routeSummary}</p>}
+      {level !== 'narrow' && (
+        <p className="pc-trip-line pc-trip-meta">
+          <span>{t('planningCenter.board.orders', { count: trip.orderCount })}</span>
+          {level === 'full' && <span>{t('planningCenter.board.stops', { count: trip.stopCount })}</span>}
+          {trip.totalWeightKg !== null && (
+            <span className={overloaded ? 'pc-overloaded' : undefined}>
+              {level === 'full' && trip.capacityWeightKg !== null
+                ? `${formatWeightShort(trip.totalWeightKg)} / ${formatWeightShort(trip.capacityWeightKg)}`
+                : formatWeightShort(trip.totalWeightKg)}
+            </span>
+          )}
+        </p>
+      )}
+      {level === 'full' && conflictCount > 0 && (
         <div className="pc-trip-conflicts">
           {trip.blockingConflictCount > 0 && (
-            <Badge tone="danger">{t('planningCenter.board.blocking', { count: trip.blockingConflictCount })}</Badge>
+            <ConflictHint
+              tone="danger"
+              label={t('planningCenter.board.blocking', { count: trip.blockingConflictCount })}
+              title={t('planningCenter.board.conflictsTitle')}
+              reasons={reasons}
+              ariaLabel={t('planningCenter.board.conflictCount', { count: conflictCount })}
+            />
           )}
           {trip.warningConflictCount > 0 && (
-            <Badge tone="warning">{t('planningCenter.board.warnings', { count: trip.warningConflictCount })}</Badge>
+            <ConflictHint
+              tone="warning"
+              label={t('planningCenter.board.warnings', { count: trip.warningConflictCount })}
+              title={t('planningCenter.board.conflictsTitle')}
+              reasons={reasons}
+              ariaLabel={t('planningCenter.board.conflictCount', { count: conflictCount })}
+            />
           )}
         </div>
       )}

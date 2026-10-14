@@ -24,6 +24,8 @@ export interface PlanningBoardTrip {
   blockingConflictCount: number
   warningConflictCount: number
   version: string
+  /** B09: the first conflict descriptions (blocking first, max 3) — the card explains itself on hover. */
+  conflictPreview?: string[] | null
 }
 
 export interface PlanningBoard {
@@ -53,6 +55,14 @@ export interface UnplannedOrder {
   adrRequired: boolean
   craneRequired: boolean
   attentionBadges: string[]
+  /** B09: only a Confirmed order can go on a trip; Draft/Submitted are listed for visibility. Absent on older payloads = plannable. */
+  plannable?: boolean
+  customerReference?: string | null
+}
+
+/** Only a Confirmed order passes the trip guard; older payloads without the flag are treated by status. */
+export function isPlannable(order: Pick<UnplannedOrder, 'plannable' | 'status'>): boolean {
+  return order.plannable ?? order.status === 'Confirmed'
 }
 
 /** Vertaalsleutels (i18n-wave): render via t(ATTENTION_BADGE_LABELS[badge] ?? badge). */

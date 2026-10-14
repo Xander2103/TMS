@@ -36,7 +36,16 @@
     "pickerOrders": "{count} opdr.",
     "pickerEmpty": "Geen open ritten in deze periode.",
     "pickerNewTripOn": "Nieuwe rit op",
-    "pickerCreateTrip": "Nieuwe rit aanmaken"
+    "pickerCreateTrip": "Nieuwe rit aanmaken",
+    "densityLabel": "Dichtheid",
+    "densityCompact": "Compact",
+    "densityNormal": "Normaal",
+    "collapseLeft": "Ongepland inklappen",
+    "expandLeft": "Ongepland uitklappen",
+    "collapseRight": "Middelen inklappen",
+    "expandRight": "Middelen uitklappen",
+    "previousPeriod": "Vorige periode",
+    "nextPeriod": "Volgende periode"
   },
   "board": {
     "label": "Planbord",
@@ -49,7 +58,15 @@
     "blocking_one": "1 blokkerend",
     "blocking_other": "{count} blokkerend",
     "warnings_one": "1 waarschuwing",
-    "warnings_other": "{count} waarschuwingen"
+    "warnings_other": "{count} waarschuwingen",
+    "weekHint": "Niet alle dagen passen naast elkaar; de tijdlijn scrolt horizontaal.",
+    "weekHintAction": "Zijpanelen inklappen voor een volledige week",
+    "conflictsTitle": "Waarom deze rit aandacht vraagt",
+    "conflictCount_one": "1 conflict",
+    "conflictCount_other": "{count} conflicten",
+    "moreConflicts_one": "+ 1 ander aandachtspunt",
+    "moreConflicts_other": "+ {count} andere aandachtspunten",
+    "conflictsSelectHint": "Selecteer de rit voor de details."
   },
   "resources": {
     "label": "Middelen",
@@ -118,7 +135,19 @@
     "packages_one": "1 collo",
     "packages_other": "{count} colli",
     "crane": "Kraan",
-    "planInto": "Plan in…"
+    "planInto": "Plan in…",
+    "showDrafts": "Toon concepten",
+    "notPlannableShort": "nog niet planbaar",
+    "notPlannableDraft": "Nog niet planbaar — bevestig de opdracht eerst.",
+    "notPlannableSubmitted": "Nog niet planbaar — beoordeel en bevestig de opdracht eerst.",
+    "openOrder": "Opdracht openen →",
+    "attentionTitle": "Aandachtspunten",
+    "attentionCount_one": "1 aandachtspunt",
+    "attentionCount_other": "{count} aandachtspunten",
+    "reference": "Ref. {reference}",
+    "stops_one": "1 stop",
+    "stops_other": "{count} stops",
+    "noRoute": "Nog geen route"
   },
   "conflictDialog": {
     "title": "Planningsconflicten",

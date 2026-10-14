@@ -16,6 +16,8 @@ export interface UnplannedOrdersParams {
   fromDate?: string
   toDate?: string
   onlyWithAttention?: boolean
+  /** B09: also list Draft orders (shown subdued, never draggable). */
+  includeDrafts?: boolean
   page?: number
   pageSize?: number
 }
@@ -29,6 +31,7 @@ export function getUnplannedOrders(params: UnplannedOrdersParams): Promise<Paged
   if (params.fromDate) query.set('fromDate', params.fromDate)
   if (params.toDate) query.set('toDate', params.toDate)
   if (params.onlyWithAttention) query.set('onlyWithAttention', 'true')
+  if (params.includeDrafts) query.set('includeDrafts', 'true')
   query.set('page', String(params.page ?? 1))
   query.set('pageSize', String(params.pageSize ?? 50))
   return apiClient.getJson<PagedResult<UnplannedOrder>>(`/api/planning-board/unplanned-orders?${query}`)

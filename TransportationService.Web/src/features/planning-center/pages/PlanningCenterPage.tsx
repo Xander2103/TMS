@@ -20,17 +20,18 @@ import { BoardTimeline } from '../components/BoardTimeline'
 import { ConflictDialog } from '../components/ConflictDialog'
 import { ResourcesPanel } from '../components/ResourcesPanel'
 import { TripInspector } from '../components/TripInspector'
+import { PanelRail } from '../components/PanelRail'
 import { UnplannedPanel, type UnplannedFilters } from '../components/UnplannedPanel'
 import {
   type DragPayload, type PlanningBoard, type PlanningBoardTrip, type PlanningRejection,
   type PlanningResources, type UnplannedOrder,
 } from '../types'
-import { shiftAnchor, toIsoDate, viewDates, type BoardViewDays } from '../utils/boardMath'
+import { loadStoredLayout, storeLayout, type BoardLayout } from '../utils/boardLayout'
+import { shiftAnchor, startOfWeek, toIsoDate, viewDates, type BoardDensity, type BoardViewDays } from '../utils/boardMath'
 import { formatDate } from '../../../utils/dates'
 import './planning-center.css'
 
 const FILTER_STORAGE_KEY = 'ts.planningCenter.filters'
-
 interface MutationOptions {
   success?: string
   reloadOrders?: boolean
@@ -48,7 +49,7 @@ interface ConflictState {
 }
 
 const EMPTY_FILTERS: UnplannedFilters = {
-  search: '', status: '', priority: '', fromDate: '', toDate: '', onlyWithAttention: false,
+  search: '', status: '', priority: '', fromDate: '', toDate: '', onlyWithAttention: false, includeDrafts: false,
 }
 
 function loadStoredFilters(): UnplannedFilters {
@@ -65,9 +66,17 @@ export function PlanningCenterPage() {
   const { showError, showSuccess } = useToast()
   const { t } = useLocale()
 
+  const [layout, setLayout] = useState<BoardLayout>(loadStoredLayout)
+  const { density, leftCollapsed, rightCollapsed, days } = layout
+  const updateLayout = useCallback((patch: Partial<BoardLayout>) => setLayout((current) => ({ ...current, ...patch })), [])
+  useEffect(() => {
+    storeLayout(layout)
+  }, [layout])
+
   const [anchor, setAnchor] = useState(() => toIsoDate(new Date()))
-  const [days, setDays] = useState<BoardViewDays>(3)
-  const dates = useMemo(() => viewDates(anchor, days), [anchor, days])
+  // The Week view always shows Monday … Sunday, whatever date the planner picked.
+  const effectiveAnchor = days === 7 ? startOfWeek(anchor) : anchor
+  const dates = useMemo(() => viewDates(effectiveAnchor, days), [effectiveAnchor, days])
   const rangeFrom = dates[0]
   const rangeTo = dates[dates.length - 1]
 
@@ -142,6 +151,7 @@ export function PlanningCenterPage() {
         fromDate: filters.fromDate || undefined,
         toDate: filters.toDate || undefined,
         onlyWithAttention: filters.onlyWithAttention || undefined,
+        includeDrafts: filters.includeDrafts || undefined,
         page: unplannedPage,
       })
         .then((data) => {
@@ -338,24 +348,27 @@ export function PlanningCenterPage() {
     [board],
   )
 
+  const sidesCollapsed = leftCollapsed && rightCollapsed
+
   return (
-    <div className="pc-page">
+    <div className="pc-page" data-density={density}>
       <header className="pc-toolbar">
         <div className="pc-toolbar-left">
           <h2 className="pc-title">{t('planningCenter.page.title')}</h2>
         </div>
         <div className="pc-toolbar-range" role="group" aria-label={t('planningCenter.page.periodLabel')}>
-          <Button variant="secondary" onClick={() => setAnchor(shiftAnchor(anchor, days, -1))}>‹</Button>
+          <Button variant="secondary" onClick={() => setAnchor(shiftAnchor(effectiveAnchor, days, -1))} aria-label={t('planningCenter.page.previousPeriod')}>‹</Button>
           <input type="date" value={anchor} onChange={(event) => setAnchor(event.target.value || anchor)} aria-label={t('planningCenter.page.startDateLabel')} />
           <Button variant="secondary" onClick={() => setAnchor(toIsoDate(new Date()))}>{t('planningCenter.page.today')}</Button>
-          <Button variant="secondary" onClick={() => setAnchor(shiftAnchor(anchor, days, 1))}>›</Button>
+          <Button variant="secondary" onClick={() => setAnchor(shiftAnchor(effectiveAnchor, days, 1))} aria-label={t('planningCenter.page.nextPeriod')}>›</Button>
           <div className="pc-view-switch" role="group" aria-label={t('planningCenter.page.viewLabel')}>
             {([1, 3, 7] as BoardViewDays[]).map((option) => (
               <button
                 key={option}
                 type="button"
                 className={days === option ? 'pc-tab-active' : ''}
-                onClick={() => setDays(option)}
+                aria-pressed={days === option}
+                onClick={() => updateLayout({ days: option })}
               >
                 {option === 1
                   ? t('planningCenter.page.viewDay')
@@ -365,45 +378,72 @@ export function PlanningCenterPage() {
               </button>
             ))}
           </div>
+          <div className="pc-view-switch" role="group" aria-label={t('planningCenter.page.densityLabel')}>
+            {(['compact', 'normal'] as BoardDensity[]).map((option) => (
+              <button
+                key={option}
+                type="button"
+                className={density === option ? 'pc-tab-active' : ''}
+                aria-pressed={density === option}
+                onClick={() => updateLayout({ density: option })}
+              >
+                {option === 'compact' ? t('planningCenter.page.densityCompact') : t('planningCenter.page.densityNormal')}
+              </button>
+            ))}
+          </div>
         </div>
       </header>
 
-      <div className="pc-layout">
-        <UnplannedPanel
-          orders={unplanned.items}
-          totalCount={unplanned.totalCount}
-          page={unplannedPage}
-          pageSize={unplanned.pageSize}
-          isLoading={unplannedLoadedKey !== unplannedKey}
-          filters={filters}
-          selectedOrderId={selectedOrderId}
-          onFiltersChange={(next) => {
-            setFilters(next)
-            setUnplannedPage(1)
-          }}
-          onPageChange={setUnplannedPage}
-          onSelect={(order) => setSelectedOrderId(order.id)}
-          onPlanRequest={(order) => setPlanPickerOrder(order)}
-          onPriorityChange={async (order, priority) => {
-            try {
-              await changeOrderPriority(order.id, priority)
-              reloadUnplanned()
-            } catch (error) {
-              showError(describeApiError(error, t('planningCenter.page.priorityChangeFailed')).message)
-              throw error
-            }
-          }}
-        />
+      <div className="pc-layout" data-left={leftCollapsed ? 'collapsed' : 'open'} data-right={rightCollapsed && !selectedTripId ? 'collapsed' : 'open'}>
+        {leftCollapsed ? (
+          <PanelRail
+            side="left"
+            label={t('planningCenter.unplanned.title')}
+            count={unplanned.totalCount}
+            expandLabel={t('planningCenter.page.expandLeft')}
+            onExpand={() => updateLayout({ leftCollapsed: false })}
+          />
+        ) : (
+          <UnplannedPanel
+            orders={unplanned.items}
+            totalCount={unplanned.totalCount}
+            page={unplannedPage}
+            pageSize={unplanned.pageSize}
+            isLoading={unplannedLoadedKey !== unplannedKey}
+            filters={filters}
+            selectedOrderId={selectedOrderId}
+            onFiltersChange={(next) => {
+              setFilters(next)
+              setUnplannedPage(1)
+            }}
+            onPageChange={setUnplannedPage}
+            onSelect={(order) => setSelectedOrderId(order.id)}
+            onPlanRequest={(order) => setPlanPickerOrder(order)}
+            onPriorityChange={async (order, priority) => {
+              try {
+                await changeOrderPriority(order.id, priority)
+                reloadUnplanned()
+              } catch (error) {
+                showError(describeApiError(error, t('planningCenter.page.priorityChangeFailed')).message)
+                throw error
+              }
+            }}
+            onCollapse={() => updateLayout({ leftCollapsed: true })}
+          />
+        )}
 
         <BoardTimeline
           dates={dates}
           days={days}
+          density={density}
           trips={board?.trips ?? []}
           isLoading={boardLoadedKey !== boardKey}
           selectedTripId={selectedTripId}
+          sidesCollapsed={sidesCollapsed}
           onSelectTrip={(trip) => setSelectedTripId(trip.id)}
           onDropOnTrip={handleDropOnTrip}
           onDropOnDay={handleDropOnDay}
+          onCollapseSides={() => updateLayout({ leftCollapsed: true, rightCollapsed: true })}
         />
 
         <div className="pc-right">
@@ -452,12 +492,20 @@ export function PlanningCenterPage() {
                 )
               }}
             />
+          ) : rightCollapsed ? (
+            <PanelRail
+              side="right"
+              label={t('planningCenter.resources.title')}
+              expandLabel={t('planningCenter.page.expandRight')}
+              onExpand={() => updateLayout({ rightCollapsed: false })}
+            />
           ) : (
             <ResourcesPanel
               resources={resources}
               isLoading={resourcesLoadedKey !== resourcesKey}
               pinnedIds={pinnedIds}
               onTogglePin={handleTogglePin}
+              onCollapse={() => updateLayout({ rightCollapsed: true })}
             />
           )}
         </div>
@@ -490,14 +538,14 @@ export function PlanningCenterPage() {
           </div>
           <div className="pc-picker-new">
             <label htmlFor="pc-picker-date">{t('planningCenter.page.pickerNewTripOn')}</label>
-            <input id="pc-picker-date" type="date" defaultValue={anchor} onChange={(event) => setAnchor(event.target.value || anchor)} />
+            <input id="pc-picker-date" type="date" defaultValue={effectiveAnchor} onChange={(event) => setAnchor(event.target.value || anchor)} />
             <Button
               disabled={busy}
               onClick={() => {
                 const order = planPickerOrder
                 setPlanPickerOrder(null)
                 void runMutation(
-                  () => createTripFromOrders(anchor, [order.id]),
+                  () => createTripFromOrders(effectiveAnchor, [order.id]),
                   { success: t('planningCenter.page.newTripWith', { label: order.orderNumber }), reloadOrders: true },
                 )
               }}

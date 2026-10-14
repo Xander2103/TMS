@@ -17,10 +17,12 @@ interface ResourcesPanelProps {
   /** Ids of pinned resources (pinned-first ordering, user preference). */
   pinnedIds: ReadonlySet<string>
   onTogglePin: (entityType: 'Driver' | 'Vehicle' | 'Trailer', id: string, label: string) => void
+  /** B08: the panel collapses to a rail. */
+  onCollapse?: () => void
 }
 
 /** Right zone: draggable drivers / vehicles / trailers with availability context. */
-export function ResourcesPanel({ resources, isLoading, pinnedIds, onTogglePin }: ResourcesPanelProps) {
+export function ResourcesPanel({ resources, isLoading, pinnedIds, onTogglePin, onCollapse }: ResourcesPanelProps) {
   const { t } = useLocale()
   const [tab, setTab] = useState<ResourceTab>('drivers')
   const [search, setSearch] = useState('')
@@ -53,6 +55,11 @@ export function ResourcesPanel({ resources, isLoading, pinnedIds, onTogglePin }:
     <section className="pc-panel pc-resources" aria-label={t('planningCenter.resources.label')}>
       <header className="pc-panel-header">
         <h2>{t('planningCenter.resources.title')}</h2>
+        {onCollapse && (
+          <button type="button" className="pc-collapse" onClick={onCollapse} aria-label={t('planningCenter.page.collapseRight')} title={t('planningCenter.page.collapseRight')}>
+            »
+          </button>
+        )}
       </header>
       <div className="pc-tabs" role="tablist">
         <button role="tab" aria-selected={tab === 'drivers'} className={tab === 'drivers' ? 'pc-tab-active' : ''} onClick={() => setTab('drivers')}>

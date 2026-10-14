@@ -56,3 +56,67 @@ describe('toIsoDate', () => {
     expect(toIsoDate(new Date(2026, 0, 5))).toBe('2026-01-05')
   })
 })
+
+// ---------------------------------------------------------------------------
+// B08: width-aware board
+// ---------------------------------------------------------------------------
+
+import {
+  dayColumnLevel, dayColumnWidth, daysFitWithoutScroll, MIN_DAY_WIDTH, startOfWeek,
+} from '../boardMath'
+import { formatRoute, formatWeightShort } from '../boardFormat'
+
+describe('startOfWeek', () => {
+  it('snaps any day to the Monday of its week (the Week view shows Ma … Zo)', () => {
+    expect(startOfWeek('2026-10-14')).toBe('2026-10-12') // Wednesday → Monday
+    expect(startOfWeek('2026-10-12')).toBe('2026-10-12') // Monday stays
+    expect(startOfWeek('2026-10-18')).toBe('2026-10-12') // Sunday belongs to the week before
+  })
+})
+
+describe('dayColumnWidth', () => {
+  it('shares the measured timeline evenly over the days', () => {
+    expect(dayColumnWidth(1050, 7, 'normal')).toBe(150)
+    expect(dayColumnWidth(900, 3, 'normal')).toBe(300)
+  })
+
+  it('never goes below the readable minimum of the density (then the timeline scrolls)', () => {
+    expect(dayColumnWidth(600, 7, 'normal')).toBe(MIN_DAY_WIDTH.normal)
+    expect(dayColumnWidth(600, 7, 'compact')).toBe(MIN_DAY_WIDTH.compact)
+    expect(daysFitWithoutScroll(600, 7, 'normal')).toBe(false)
+    expect(daysFitWithoutScroll(7 * MIN_DAY_WIDTH.compact, 7, 'compact')).toBe(true)
+  })
+
+  it('falls back to the minimum before the first measurement', () => {
+    expect(dayColumnWidth(0, 7, 'normal')).toBe(MIN_DAY_WIDTH.normal)
+  })
+
+  it('a 1440 laptop with both rails collapsed fits a full week in compact density', () => {
+    // 1440 − 250 sidebar − 80 gutters − 2×44 rails − 2×8 gaps − 44 axis ≈ 930px for the days.
+    expect(daysFitWithoutScroll(930, 7, 'compact')).toBe(true)
+    expect(dayColumnLevel(dayColumnWidth(930, 7, 'compact'))).toBe('narrow')
+  })
+})
+
+describe('dayColumnLevel', () => {
+  it('grades what a card can show by its column width', () => {
+    expect(dayColumnLevel(260)).toBe('full')
+    expect(dayColumnLevel(200)).toBe('full')
+    expect(dayColumnLevel(160)).toBe('medium')
+    expect(dayColumnLevel(120)).toBe('narrow')
+  })
+})
+
+describe('boardFormat', () => {
+  it('formats weights as a dispatcher reads them', () => {
+    expect(formatWeightShort(11000)).toBe('11 t')
+    expect(formatWeightShort(11500)).toBe('11,5 t')
+    expect(formatWeightShort(850)).toBe('850 kg')
+  })
+
+  it('formats a route with a "?" for a missing end', () => {
+    expect(formatRoute('Aachen', 'Düsseldorf')).toBe('Aachen → Düsseldorf')
+    expect(formatRoute(null, 'Gent')).toBe('? → Gent')
+    expect(formatRoute(null, null)).toBeNull()
+  })
+})

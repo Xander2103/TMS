@@ -36,7 +36,16 @@
     "pickerOrders": "{count} orders",
     "pickerEmpty": "No open trips in this period.",
     "pickerNewTripOn": "New trip on",
-    "pickerCreateTrip": "Create new trip"
+    "pickerCreateTrip": "Create new trip",
+    "densityLabel": "Density",
+    "densityCompact": "Compact",
+    "densityNormal": "Normal",
+    "collapseLeft": "Collapse unplanned",
+    "expandLeft": "Expand unplanned",
+    "collapseRight": "Collapse resources",
+    "expandRight": "Expand resources",
+    "previousPeriod": "Previous period",
+    "nextPeriod": "Next period"
   },
   "board": {
     "label": "Planning board",
@@ -49,7 +58,15 @@
     "blocking_one": "1 blocking",
     "blocking_other": "{count} blocking",
     "warnings_one": "1 warning",
-    "warnings_other": "{count} warnings"
+    "warnings_other": "{count} warnings",
+    "weekHint": "Not every day fits side by side; the timeline scrolls horizontally.",
+    "weekHintAction": "Collapse the side panels for a full week",
+    "conflictsTitle": "Why this trip needs attention",
+    "conflictCount_one": "1 conflict",
+    "conflictCount_other": "{count} conflicts",
+    "moreConflicts_one": "+ 1 more point of attention",
+    "moreConflicts_other": "+ {count} more points of attention",
+    "conflictsSelectHint": "Select the trip for the details."
   },
   "resources": {
     "label": "Resources",
@@ -118,7 +135,19 @@
     "packages_one": "1 package",
     "packages_other": "{count} packages",
     "crane": "Crane",
-    "planInto": "Plan into…"
+    "planInto": "Plan into…",
+    "showDrafts": "Show drafts",
+    "notPlannableShort": "not plannable yet",
+    "notPlannableDraft": "Not plannable yet — confirm the order first.",
+    "notPlannableSubmitted": "Not plannable yet — review and confirm the order first.",
+    "openOrder": "Open order →",
+    "attentionTitle": "Points of attention",
+    "attentionCount_one": "1 point of attention",
+    "attentionCount_other": "{count} points of attention",
+    "reference": "Ref. {reference}",
+    "stops_one": "1 stop",
+    "stops_other": "{count} stops",
+    "noRoute": "No route yet"
   },
   "conflictDialog": {
     "title": "Planning conflicts",

@@ -1,7 +1,8 @@
+import { Link } from 'react-router-dom'
 import { Badge } from '../../../components/ui/Badge'
 import { InlineSelect } from '../../../components/ui/InlineSelect'
 import { useLocale } from '../../../i18n/localeContext'
-import { formatDecimal, formatInteger } from '../../../utils/numbers'
+import { formatDecimal } from '../../../utils/numbers'
 import {
   ORDER_PRIORITIES,
   ORDER_PRIORITY_LABELS,
@@ -9,7 +10,9 @@ import {
   type OrderPriority,
   type TransportOrderStatus,
 } from '../../transport-orders/types'
-import { ATTENTION_BADGE_LABELS, DRAG_MIME, encodeDragPayload, type UnplannedOrder } from '../types'
+import { ATTENTION_BADGE_LABELS, DRAG_MIME, encodeDragPayload, isPlannable, type UnplannedOrder } from '../types'
+import { formatRoute, formatWeightShort } from '../utils/boardFormat'
+import { ConflictHint } from './ConflictHint'
 
 export interface UnplannedFilters {
   search: string
@@ -18,6 +21,8 @@ export interface UnplannedFilters {
   fromDate: string
   toDate: string
   onlyWithAttention: boolean
+  /** B09: Draft work shown subdued (visibility, never plannable). */
+  includeDrafts: boolean
 }
 
 interface UnplannedPanelProps {
@@ -35,26 +40,45 @@ interface UnplannedPanelProps {
   onPlanRequest: (order: UnplannedOrder) => void
   /** Safe inline priority edit; backend-validated and audited. */
   onPriorityChange: (order: UnplannedOrder, priority: OrderPriority) => Promise<void>
+  /** B08: the panel collapses to a rail. */
+  onCollapse?: () => void
 }
 
-/** Left zone: the unplanned work pool. Rows are draggable onto the board. */
+/**
+ * Left zone: the unplanned work pool. B09: ONE line per order — number · customer · route ·
+ * weight · ⚠ n — so a laptop shows twenty orders instead of six; the selected row unfolds its
+ * details (meta, priority, "Plan in…"). Draft and Submitted work is listed subdued and is never
+ * draggable: the lifecycle stays intact, the pipeline stays visible.
+ */
 export function UnplannedPanel({
   orders, totalCount, page, pageSize, isLoading, filters, selectedOrderId,
-  onFiltersChange, onPageChange, onSelect, onPlanRequest, onPriorityChange,
+  onFiltersChange, onPageChange, onSelect, onPlanRequest, onPriorityChange, onCollapse,
 }: UnplannedPanelProps) {
   const { t } = useLocale()
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize))
-  // Vertaald bij render; werkt ook zolang de transport-orders-map nog NL-teksten bevat
-  // (t() geeft onbekende sleutels ongewijzigd terug).
   const priorityLabels = Object.fromEntries(
     ORDER_PRIORITIES.map((priority) => [priority, t(ORDER_PRIORITY_LABELS[priority])]),
   ) as Record<OrderPriority, string>
+
+  /** Why a row cannot be dragged, in the planner's words. */
+  function notPlannableReason(order: UnplannedOrder): string {
+    return order.status === 'Draft'
+      ? t('planningCenter.unplanned.notPlannableDraft')
+      : t('planningCenter.unplanned.notPlannableSubmitted')
+  }
 
   return (
     <section className="pc-panel pc-unplanned" aria-label={t('planningCenter.unplanned.label')}>
       <header className="pc-panel-header">
         <h2>{t('planningCenter.unplanned.title')}</h2>
-        <span className="pc-count">{totalCount}</span>
+        <span className="pc-panel-header-right">
+          <span className="pc-count">{totalCount}</span>
+          {onCollapse && (
+            <button type="button" className="pc-collapse" onClick={onCollapse} aria-label={t('planningCenter.page.collapseLeft')} title={t('planningCenter.page.collapseLeft')}>
+              «
+            </button>
+          )}
+        </span>
       </header>
       <div className="pc-filters">
         <input
@@ -73,6 +97,7 @@ export function UnplannedPanel({
             <option value="">{t('planningCenter.unplanned.allStatuses')}</option>
             <option value="Confirmed">{t(ORDER_STATUS_LABELS.Confirmed)}</option>
             <option value="Submitted">{t(ORDER_STATUS_LABELS.Submitted)}</option>
+            {filters.includeDrafts && <option value="Draft">{t(ORDER_STATUS_LABELS.Draft)}</option>}
           </select>
           <select
             value={filters.priority}
@@ -99,80 +124,148 @@ export function UnplannedPanel({
             aria-label={t('planningCenter.unplanned.toDateLabel')}
           />
         </div>
-        <label className="pc-check">
-          <input
-            type="checkbox"
-            checked={filters.onlyWithAttention}
-            onChange={(event) => onFiltersChange({ ...filters, onlyWithAttention: event.target.checked })}
-          />
-          {t('planningCenter.unplanned.onlyWithAttention')}
-        </label>
+        <div className="pc-filter-row pc-filter-checks">
+          <label className="pc-check">
+            <input
+              type="checkbox"
+              checked={filters.onlyWithAttention}
+              onChange={(event) => onFiltersChange({ ...filters, onlyWithAttention: event.target.checked })}
+            />
+            {t('planningCenter.unplanned.onlyWithAttention')}
+          </label>
+          <label className="pc-check">
+            <input
+              type="checkbox"
+              checked={filters.includeDrafts}
+              onChange={(event) => onFiltersChange({
+                ...filters,
+                includeDrafts: event.target.checked,
+                // Hiding drafts again also drops a Draft-only status filter, or the list would go empty.
+                status: !event.target.checked && filters.status === 'Draft' ? '' : filters.status,
+              })}
+            />
+            {t('planningCenter.unplanned.showDrafts')}
+          </label>
+        </div>
       </div>
       <div className="pc-unplanned-list" role="list">
         {isLoading && <p className="pc-muted">{t('planningCenter.unplanned.loading')}</p>}
         {!isLoading && orders.length === 0 && <p className="pc-muted">{t('planningCenter.unplanned.empty')}</p>}
-        {orders.map((order) => (
-          <article
-            key={order.id}
-            role="listitem"
-            tabIndex={0}
-            className={`pc-order-card${selectedOrderId === order.id ? ' pc-selected' : ''}`}
-            draggable
-            onDragStart={(event) => {
-              event.dataTransfer.setData(DRAG_MIME, encodeDragPayload({
-                kind: 'order', id: order.id, label: order.orderNumber,
-              }))
-              event.dataTransfer.effectAllowed = 'move'
-            }}
-            onClick={() => onSelect(order)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') {
-                event.preventDefault()
-                onPlanRequest(order)
-              }
-            }}
-            aria-label={t('planningCenter.unplanned.orderAriaLabel', { orderNumber: order.orderNumber, customerName: order.customerName })}
-          >
-            <div className="pc-order-head">
-              <strong>{order.orderNumber}</strong>
-              <InlineSelect
-                value={order.priority}
-                options={ORDER_PRIORITIES}
-                labels={priorityLabels}
-                ariaLabel={t('planningCenter.unplanned.priorityOf', { orderNumber: order.orderNumber })}
-                onChange={(priority) => onPriorityChange(order, priority)}
-              />
-            </div>
-            <p className="pc-order-customer">{order.customerName}</p>
-            <p className="pc-order-route">
-              {order.firstLoadingCity ?? '?'} → {order.lastUnloadingCity ?? '?'}
-            </p>
-            <p className="pc-order-meta">
-              {order.packageCount > 0 && <span>{t('planningCenter.unplanned.packages', { count: order.packageCount })}</span>}
-              {order.totalWeightKg !== null && <span>{formatInteger(order.totalWeightKg)} kg</span>}
-              {order.totalVolumeM3 !== null && <span>{formatDecimal(order.totalVolumeM3)} m³</span>}
-              {order.adrRequired && <span className="pc-flag">ADR</span>}
-              {order.craneRequired && <span className="pc-flag">{t('planningCenter.unplanned.crane')}</span>}
-            </p>
-            {order.attentionBadges.length > 0 && (
-              <div className="pc-order-badges">
-                {order.attentionBadges.map((badge) => (
-                  <Badge key={badge} tone="warning">{t(ATTENTION_BADGE_LABELS[badge] ?? badge)}</Badge>
-                ))}
-              </div>
-            )}
-            <button
-              type="button"
-              className="pc-plan-button"
-              onClick={(event) => {
-                event.stopPropagation()
-                onPlanRequest(order)
+        {orders.map((order) => {
+          const plannable = isPlannable(order)
+          const selected = selectedOrderId === order.id
+          const route = formatRoute(order.firstLoadingCity, order.lastUnloadingCity)
+          const reasons = order.attentionBadges.map((badge) => t(ATTENTION_BADGE_LABELS[badge] ?? badge))
+          return (
+            <article
+              key={order.id}
+              role="listitem"
+              tabIndex={0}
+              className={[
+                'pc-order',
+                selected ? 'pc-selected' : '',
+                plannable ? '' : 'pc-order-locked',
+                order.status === 'Draft' ? 'pc-order-draft' : '',
+              ].filter(Boolean).join(' ')}
+              data-priority={order.priority}
+              data-status={order.status}
+              draggable={plannable}
+              onDragStart={(event) => {
+                if (!plannable) {
+                  event.preventDefault()
+                  return
+                }
+                event.dataTransfer.setData(DRAG_MIME, encodeDragPayload({
+                  kind: 'order', id: order.id, label: order.orderNumber,
+                }))
+                event.dataTransfer.effectAllowed = 'move'
               }}
+              onClick={() => onSelect(order)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault()
+                  if (plannable) onPlanRequest(order)
+                  else onSelect(order)
+                }
+              }}
+              aria-label={t('planningCenter.unplanned.orderAriaLabel', { orderNumber: order.orderNumber, customerName: order.customerName })}
             >
-              {t('planningCenter.unplanned.planInto')}
-            </button>
-          </article>
-        ))}
+              <div className="pc-order-line">
+                <span className="pc-order-prio" aria-hidden="true" />
+                <code className="pc-order-number">{order.orderNumber}</code>
+                <span className="pc-order-customer" title={order.customerName}>{order.customerName}</span>
+                {plannable ? (
+                  <span className="pc-order-route" title={route ?? undefined}>{route ?? t('planningCenter.unplanned.noRoute')}</span>
+                ) : (
+                  <span className="pc-order-route pc-order-state" title={notPlannableReason(order)}>
+                    {t(ORDER_STATUS_LABELS[order.status])} · {t('planningCenter.unplanned.notPlannableShort')}
+                  </span>
+                )}
+                {order.totalWeightKg !== null && <span className="pc-order-weight">{formatWeightShort(order.totalWeightKg)}</span>}
+                {reasons.length > 0 && (
+                  <ConflictHint
+                    tone="warning"
+                    label={`⚠ ${reasons.length}`}
+                    title={t('planningCenter.unplanned.attentionTitle')}
+                    reasons={reasons}
+                    ariaLabel={t('planningCenter.unplanned.attentionCount', { count: reasons.length })}
+                    className="pc-order-flag"
+                  />
+                )}
+              </div>
+              {selected && (
+                <div className="pc-order-details">
+                  {!plannable && (
+                    <p className="pc-order-hint">
+                      {notPlannableReason(order)}{' '}
+                      <Link to={`/transport-orders/${order.id}`} onClick={(event) => event.stopPropagation()}>
+                        {t('planningCenter.unplanned.openOrder')}
+                      </Link>
+                    </p>
+                  )}
+                  <p className="pc-order-meta">
+                    {order.customerReference && <span>{t('planningCenter.unplanned.reference', { reference: order.customerReference })}</span>}
+                    {order.goodsDescription && <span>{order.goodsDescription}</span>}
+                    {order.stopCount > 0 && <span>{t('planningCenter.unplanned.stops', { count: order.stopCount })}</span>}
+                    {order.packageCount > 0 && <span>{t('planningCenter.unplanned.packages', { count: order.packageCount })}</span>}
+                    {order.totalVolumeM3 !== null && <span>{formatDecimal(order.totalVolumeM3)} m³</span>}
+                    {order.adrRequired && <span className="pc-flag">ADR</span>}
+                    {order.craneRequired && <span className="pc-flag">{t('planningCenter.unplanned.crane')}</span>}
+                  </p>
+                  {reasons.length > 0 && (
+                    <div className="pc-order-badges">
+                      {reasons.map((reason) => <Badge key={reason} tone="warning">{reason}</Badge>)}
+                    </div>
+                  )}
+                  <div className="pc-order-actions">
+                    <label className="pc-order-priority">
+                      <span>{t('planningCenter.unplanned.priorityLabel')}</span>
+                      <InlineSelect
+                        value={order.priority}
+                        options={ORDER_PRIORITIES}
+                        labels={priorityLabels}
+                        ariaLabel={t('planningCenter.unplanned.priorityOf', { orderNumber: order.orderNumber })}
+                        onChange={(priority) => onPriorityChange(order, priority)}
+                      />
+                    </label>
+                    {plannable && (
+                      <button
+                        type="button"
+                        className="pc-plan-button"
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          onPlanRequest(order)
+                        }}
+                      >
+                        {t('planningCenter.unplanned.planInto')}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+            </article>
+          )
+        })}
       </div>
       {totalPages > 1 && (
         <footer className="pc-paging">

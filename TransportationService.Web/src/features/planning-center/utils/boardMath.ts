@@ -30,6 +30,14 @@ export function toIsoDate(date: Date): string {
   return `${y}-${m}-${d}`
 }
 
+/** Monday of the week that contains the date (the Week view always shows Ma … Zo). */
+export function startOfWeek(iso: string): string {
+  const date = new Date(`${iso}T00:00:00`)
+  const offsetFromMonday = (date.getDay() + 6) % 7
+  date.setDate(date.getDate() - offsetFromMonday)
+  return toIsoDate(date)
+}
+
 export function shiftAnchor(anchorIso: string, days: BoardViewDays, direction: 1 | -1): string {
   const anchor = new Date(`${anchorIso}T00:00:00`)
   anchor.setDate(anchor.getDate() + direction * days)
@@ -85,4 +93,43 @@ export function gridHours(): number[] {
   const hours: number[] = []
   for (let h = DAY_START_HOUR; h <= DAY_END_HOUR; h += 2) hours.push(h)
   return hours
+}
+
+// ---------------------------------------------------------------------------
+// B08: width-aware board. The day columns share the measured width of the timeline; below a
+// readable minimum they stop shrinking and the timeline (never the page) scrolls sideways.
+// ---------------------------------------------------------------------------
+
+export type BoardDensity = 'compact' | 'normal'
+
+/** The narrowest column that still reads (number, time, driver): tighter in compact density. */
+export const MIN_DAY_WIDTH: Record<BoardDensity, number> = { compact: 104, normal: 132 }
+
+/** Width one day column gets: an even share of the timeline, never below the readable minimum. */
+export function dayColumnWidth(availablePx: number, days: BoardViewDays, density: BoardDensity): number {
+  if (!Number.isFinite(availablePx) || availablePx <= 0) return MIN_DAY_WIDTH[density]
+  return Math.max(MIN_DAY_WIDTH[density], Math.floor(availablePx / days))
+}
+
+/** True when all columns fit the timeline at their minimum width (no horizontal scrolling). */
+export function daysFitWithoutScroll(availablePx: number, days: BoardViewDays, density: BoardDensity): boolean {
+  return MIN_DAY_WIDTH[density] * days <= availablePx
+}
+
+/**
+ * How much a trip card can show at this column width: everything (full), without vehicle and
+ * route (medium), or only number · time · driver with a conflict dot (narrow).
+ */
+export type DayColumnLevel = 'full' | 'medium' | 'narrow'
+
+export function dayColumnLevel(widthPx: number): DayColumnLevel {
+  if (widthPx >= 200) return 'full'
+  if (widthPx >= 140) return 'medium'
+  return 'narrow'
+}
+
+/** Short day heading for narrow columns: weekday + day number only ("ma 20"). */
+export function formatDayHeadingShort(iso: string): string {
+  const date = new Date(`${iso}T00:00:00`)
+  return date.toLocaleDateString(localeTag(), { weekday: 'short', day: 'numeric' })
 }
