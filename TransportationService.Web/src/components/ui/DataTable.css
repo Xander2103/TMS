@@ -11,6 +11,22 @@
   font-size: 15px;
 }
 
+/* B34: fixed layout — widths are honoured, flexible columns share the rest, long text truncates. */
+.data-table-fixed {
+  table-layout: fixed;
+}
+
+/* A declared column width includes the cell padding, so the widths add up as written. */
+.data-table-fixed thead th,
+.data-table-fixed tbody td {
+  box-sizing: border-box;
+}
+
+.data-table-fixed tbody td {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .data-table thead th {
   text-align: left;
   padding: 12px 16px;

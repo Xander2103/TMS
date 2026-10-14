@@ -11,7 +11,7 @@
     "creatingOrder": "Transportopdracht wordt aangemaakt…",
     "createOrderFailed": "De transportopdracht kon niet aangemaakt worden.",
     "readOnlyRights": "Je kunt de route bekijken maar niet bewerken.",
-    "readOnlyStatus": "In deze status wordt de route niet meer via het dossier gewijzigd.",
+    "readOnlyStatus": "De route wordt nu op de opdracht beheerd.",
     "sequenceHint": "De volgorde van de stops is de rijvolgorde.",
     "retryLoad": "Opnieuw laden",
     "emptyStopsTitle_one": "Lege stop verwijderen?",
@@ -23,7 +23,8 @@
     "emptyStopsConfirm_other": "Lege stops verwijderen & opslaan",
     "removeStopTitle": "Stop verwijderen?",
     "removeStopMessage": "Stop {number} bevat gegevens en wordt uit de route verwijderd zodra je de route opslaat. Wil je doorgaan?",
-    "removeStopConfirm": "Stop verwijderen"
+    "removeStopConfirm": "Stop verwijderen",
+    "openOrderStops": "Open de stops van {number} →"
   },
   "price": {
     "noPrice": "Nog geen prijs",

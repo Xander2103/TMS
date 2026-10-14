@@ -25,6 +25,7 @@ import {
 } from '../types'
 import { formatDateTime } from '../../../utils/dates'
 import '../components/exceptions.css'
+import { TruncatedText } from '../../../components/ui/TruncatedText'
 
 const PAGE_SIZE = 25
 
@@ -82,16 +83,18 @@ export function ExceptionsPage() {
     {
       key: 'occurredAt',
       header: t('exceptions.list.colReported'),
-      width: '140px',
+      width: '130px',
       render: (r) => formatDateTime(r.occurredAt),
     },
     {
       key: 'type',
+      width: '140px',
       header: t('exceptions.list.colType'),
       render: (r) => t(EXCEPTION_TYPE_LABELS[r.type]),
     },
     {
       key: 'severity',
+      width: '100px',
       header: t('exceptions.list.colSeverity'),
       render: (r) => (
         <Badge tone={EXCEPTION_SEVERITY_TONE[r.severity]}>
@@ -101,6 +104,7 @@ export function ExceptionsPage() {
     },
     {
       key: 'status',
+      width: '110px',
       header: t('exceptions.list.colStatus'),
       render: (r) => (
         <Badge tone={EXCEPTION_STATUS_TONE[r.status]}>
@@ -111,8 +115,9 @@ export function ExceptionsPage() {
     {
       key: 'context',
       header: t('exceptions.list.colContext'),
+      width: '200px',
       render: (r) => (
-        <span>
+        <span className="nowrap">
           <code>{r.tripNumber}</code>
           {r.orderNumber && (
             <>
@@ -133,15 +138,17 @@ export function ExceptionsPage() {
     {
       key: 'description',
       header: t('exceptions.list.colDescription'),
-      render: (r) => <span className="exc-description-cell">{r.description}</span>,
+      render: (r) => <TruncatedText tooltip={r.description} className="exc-description-cell">{r.description}</TruncatedText>,
     },
     {
       key: 'assignee',
+      width: '130px',
       header: t('exceptions.list.colAssignee'),
       render: (r) => <span>{r.assignedToName ?? '—'}</span>,
     },
     {
       key: 'meta',
+      width: '110px',
       header: t('exceptions.list.colInfo'),
       render: (r) => (
         <span className="exc-meta-cell">
@@ -237,6 +244,7 @@ export function ExceptionsPage() {
       </div>
 
       <DataTable
+        fixedLayout
         columns={columns}
         rows={items}
         rowKey={(r) => r.id}

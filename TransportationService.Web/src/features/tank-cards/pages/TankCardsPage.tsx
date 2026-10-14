@@ -240,27 +240,28 @@ export function TankCardsPage() {
   const canDelete = hasPermission('tank_cards.delete')
 
   const columns: Column<TankCard>[] = [
-    { key: 'number', header: t('tankCards.page.colNumber'), width: '150px', render: (row) => <code>{maskCardNumber(row.cardNumber)}</code> },
-    { key: 'internalName', header: t('tankCards.page.colInternalName'), width: '140px', render: (row) => row.internalName ?? '—' },
-    { key: 'provider', header: t('tankCards.page.colProvider'), width: '130px', render: (row) => row.provider },
+    { key: 'number', header: t('tankCards.page.colNumber'), width: '120px', render: (row) => <code>{maskCardNumber(row.cardNumber)}</code> },
+    { key: 'internalName', header: t('tankCards.page.colInternalName'), render: (row) => row.internalName ?? '—' },
+    { key: 'provider', header: t('tankCards.page.colProvider'), width: '110px', render: (row) => row.provider },
     {
       key: 'vehicle',
       header: t('tankCards.page.colVehicle'),
+      width: '180px',
       render: (row) =>
-        row.vehicleInternalNumber ? `${row.vehicleInternalNumber} (${row.vehicleLicensePlate})` : '—',
+        row.vehicleInternalNumber ? <span className="nowrap">{`${row.vehicleInternalNumber} (${row.vehicleLicensePlate})`}</span> : '—',
     },
     { key: 'employee', header: t('tankCards.page.colEmployee'), render: (row) => row.employeeName ?? row.driverName ?? '—' },
-    { key: 'validUntil', header: t('tankCards.page.colValidUntil'), width: '120px', render: (row) => formatDate(row.validUntil) || '—' },
+    { key: 'validUntil', header: t('tankCards.page.colValidUntil'), width: '105px', render: (row) => formatDate(row.validUntil) || '—' },
     {
       key: 'status',
       header: t('tankCards.page.colStatus'),
-      width: '160px',
+      width: '140px',
       render: (row) => <Badge tone={STATUS_TONE[row.status]}>{t(`tankCards.status.${row.status}`)}</Badge>,
     },
     {
       key: 'actions',
       header: '',
-      width: '210px',
+      width: '240px',
       render: (row) => (
         <span className="tc-actions">
           {canEdit && (
@@ -325,6 +326,7 @@ export function TankCardsPage() {
         </select>
       </div>
       <DataTable
+        fixedLayout
         columns={columns}
         rows={items}
         rowKey={(row) => row.id}

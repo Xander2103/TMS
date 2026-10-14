@@ -37,6 +37,7 @@ import type { DossierActivity, DossierDetail } from '../types'
 import { orderValuesFromDetail } from './orderDrawerState'
 import { DossierRouteSummary } from './DossierRouteSummary'
 import '../../transport-orders/components/transport-order-form.css'
+import { Link } from 'react-router-dom'
 
 /**
  * Stop rows for the editor: the order's stops in sequence, plus a seeded loading row in front /
@@ -461,7 +462,15 @@ export function DossierRouteEditor({
     return (
       <div className="dossier-route-readonly">
         <DossierRouteSummary order={order} loading={false} canEdit={false} onEdit={() => undefined} />
-        <p className="placeholder-text">{!canEdit ? t('dossierSheet.route.readOnlyRights') : t('dossierSheet.route.readOnlyStatus')}</p>
+        <p className="placeholder-text">
+          {!canEdit ? t('dossierSheet.route.readOnlyRights') : t('dossierSheet.route.readOnlyStatus')}
+          {canEdit && order && (
+            <>
+              {' '}
+              <Link to={`/transport-orders/${order.id}/stops`}>{t('dossierSheet.route.openOrderStops', { number: order.orderNumber })}</Link>
+            </>
+          )}
+        </p>
       </div>
     )
   }

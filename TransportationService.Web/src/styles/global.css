@@ -291,3 +291,13 @@ input::placeholder,
 textarea::placeholder {
   color: var(--color-text-subtle);
 }
+
+/* B34: identifiers (numbers, codes, dates) never break across lines. */
+.nowrap {
+  white-space: nowrap;
+}
+
+td > code,
+.data-table code {
+  white-space: nowrap;
+}

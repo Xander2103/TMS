@@ -625,7 +625,7 @@
       "activities": "Uitvoerbare activiteiten",
       "activitiesValue": "{executed} van {total} uitgevoerd",
       "pricing": "Prijs",
-      "pricingValue": "{priced} van {total} eenheden geprijsd",
+      "pricingValue": "{priced} van {total} onderdelen afgehandeld",
       "documents": "Documenten",
       "documentsValue": "{count} document(en)",
       "cmrPresent": "CMR aanwezig",

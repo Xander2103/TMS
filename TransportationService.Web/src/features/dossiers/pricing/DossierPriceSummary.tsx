@@ -31,6 +31,9 @@ function settledCounts(dossier: DossierDetail, activities: DossierActivity[], le
   const f = dossier.financials
   const total = f.billableActivityCount ?? (activities.length > 0 ? activities.length + legacyOrders.length : dossier.orders.length)
   if (total === 0) return null
+  // B37: the server's settled count (Priced or confirmed Free) is the shared truth with the
+  // confirmation dialog; the client-side derivation below is the fallback for older payloads.
+  if (typeof f.settledActivityCount === 'number') return { handled: Math.min(f.settledActivityCount, total), total }
   if (activities.length === 0) {
     return { handled: f.pricedActivityCount ?? f.pricedOrderCount ?? dossier.orders.filter(legacyOrderPriced).length, total }
   }

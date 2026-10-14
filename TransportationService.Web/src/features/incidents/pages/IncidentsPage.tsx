@@ -23,6 +23,7 @@ import {
 import { formatDate } from '../../../utils/dates'
 import { EXCEPTION_SEVERITY_LABELS, EXCEPTION_STATUS_LABELS, type ExceptionSeverity, type ExecutionExceptionStatus } from '../../exceptions/types'
 import { labelFor } from '../../../utils/labels'
+import { TruncatedText } from '../../../components/ui/TruncatedText'
 
 /** Incidentenregister: schade, vertragingen, klachten en andere operationele meldingen. */
 type TranslateFn = (key: string) => string
@@ -77,19 +78,21 @@ export function IncidentsPage() {
   }, [reload])
 
   const columns: Column<IncidentListItem>[] = [
-    { key: 'title', header: t('incidents.list.colTitle'), render: (row) => row.title },
-    { key: 'type', header: t('incidents.list.colType'), render: (row) => incidentTypeLabel(row, t) },
+    { key: 'title', header: t('incidents.list.colTitle'), render: (row) => <TruncatedText tooltip={row.title}>{row.title}</TruncatedText> },
+    { key: 'type', header: t('incidents.list.colType'), width: '140px', render: (row) => incidentTypeLabel(row, t) },
     {
       key: 'severity',
       header: t('incidents.list.colSeverity'),
+      width: '95px',
       render: (row) => <Badge tone={INCIDENT_SEVERITY_TONE[row.severity]}>{t(INCIDENT_SEVERITY_LABELS[row.severity])}</Badge>,
     },
-    { key: 'customer', header: t('incidents.list.colCustomer'), render: (row) => row.customerName ?? '—' },
-    { key: 'dossier', header: t('incidents.list.colDossier'), render: (row) => (row.dossierNumber ? <code>{row.dossierNumber}</code> : '—') },
-    { key: 'responsible', header: t('incidents.list.colResponsible'), render: (row) => row.responsibleName ?? '—' },
+    { key: 'customer', header: t('incidents.list.colCustomer'), width: '160px', render: (row) => (row.customerName ? <TruncatedText tooltip={row.customerName}>{row.customerName}</TruncatedText> : '—') },
+    { key: 'dossier', header: t('incidents.list.colDossier'), width: '105px', render: (row) => (row.dossierNumber ? <code className="nowrap">{row.dossierNumber}</code> : '—') },
+    { key: 'responsible', header: t('incidents.list.colResponsible'), width: '120px', render: (row) => row.responsibleName ?? '—' },
     {
       key: 'due',
       header: t('incidents.list.colDue'),
+      width: '150px',
       render: (row) =>
         row.dueDate ? (
           row.isOverdue ? (
@@ -104,6 +107,7 @@ export function IncidentsPage() {
     {
       key: 'status',
       header: t('incidents.list.colStatus'),
+      width: '130px',
       render: (row) => <Badge tone={INCIDENT_STATUS_TONE[row.status]}>{t(INCIDENT_STATUS_LABELS[row.status])}</Badge>,
     },
   ]
@@ -147,6 +151,7 @@ export function IncidentsPage() {
       {!error && loaded && incidents.length === 0 && <EmptyState message={t('incidents.list.empty')} />}
       {!error && incidents.length > 0 && (
         <DataTable
+          fixedLayout
           columns={columns}
           rows={incidents}
           rowKey={(row) => row.id}
@@ -179,9 +184,9 @@ function ProblemsPanel() {
 
   return (
     <section className="ui-form-section">
-      <button type="button" className="issued-items-link" onClick={() => setOpen((o) => !o)}>
+      <Button variant="secondary" onClick={() => setOpen((o) => !o)}>
         {open ? t('incidents.problems.toggleHide') : t('incidents.problems.toggleShow')}
-      </button>
+      </Button>
       {open && problems !== null && (
         problems.length === 0
           ? <p className="placeholder-text">{t('incidents.problems.empty')}</p>

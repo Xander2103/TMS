@@ -619,7 +619,9 @@ public partial class DossierService : IDossierService
             .ToHashSet();
         var units = activities
             .Where(a => a.Dto.IsBillable)
-            .Select(a => new BillableUnit(a.Dto.IsPriced, a.Dto.AgreedPrice, a.IsZero))
+            .Select(a => new BillableUnit(
+                a.Dto.IsPriced, a.Dto.AgreedPrice, a.IsZero,
+                IsSettled: a.Dto.PriceStatus is ActivityPriceStatus.Priced or ActivityPriceStatus.Free))
             .Concat(orderRows
                 .Where(o => !representedOrderIds.Contains(o.Id))
                 // Legacy links: an intentional € 0 on the order is settled (Free), never an
@@ -627,7 +629,8 @@ public partial class DossierService : IDossierService
                 .Select(o => new BillableUnit(
                     OrderPricingState.IsPriced(o.PriceIsManual, o.PricingSource, o.OneOffFixedAmount, o.AgreedPrice),
                     OrderPricingState.EffectiveAgreedPrice(o.PricingSource, o.OneOffFixedAmount, o.AgreedPrice),
-                    IsUnconfirmedZero: false)))
+                    IsUnconfirmedZero: false,
+                    IsSettled: OrderPricingState.IsPriced(o.PriceIsManual, o.PricingSource, o.OneOffFixedAmount, o.AgreedPrice))))
             .ToList();
         var financials = await BuildFinancialsAsync(id, orderIds, orders.Count(o => o.IsPriced), units, cancellationToken);
 
@@ -1161,7 +1164,7 @@ public partial class DossierService : IDossierService
     /// priced at exactly € 0 WITHOUT a "free" decision (standalone activities only — an order's
     /// one-off € 0 is that decision).
     /// </summary>
-    private sealed record BillableUnit(bool IsPriced, decimal? Amount, bool IsUnconfirmedZero);
+    private sealed record BillableUnit(bool IsPriced, decimal? Amount, bool IsUnconfirmedZero, bool IsSettled);
 
     /// <param name="units">Billable units: activities of a billable type (priced via order or own record) + legacy links.</param>
     private async Task<DossierFinancialSummaryDto> BuildFinancialsAsync(
@@ -1208,7 +1211,8 @@ public partial class DossierService : IDossierService
             BillableActivityCount: units.Count,
             PricedActivityCount: pricedUnits.Count,
             ZeroPricedActivityCount: zeroPriced,
-            UnpricedActivityCount: units.Count - pricedUnits.Count);
+            UnpricedActivityCount: units.Count - pricedUnits.Count,
+            SettledActivityCount: units.Count(u => u.IsSettled));
     }
 
     private async Task ValidateAsync(SaveDossierRequest request, Guid tenantId, CancellationToken cancellationToken)

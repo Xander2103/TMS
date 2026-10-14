@@ -467,6 +467,74 @@ public class DossierActivityPriceLinesTests
         Assert.Equal(0, await h.Db.Context.DossierActivityPricings.CountAsync());
     }
 
+    // ------------------------------------------------------------ B37: one "settled" count for price tab and confirm dialog
+
+    [Fact]
+    public async Task SettledUnitCount_IsSharedByFinancialsAndConfirmationSummary()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var dossier = await h.DossierWithAsync("DIRECT_TRANSPORT");
+        var activityId = Only(dossier).Id;
+        dossier = (await h.Activities().CreateOrderForActivityAsync(dossier.Id, activityId, dossier.Version, CancellationToken.None))!;
+        var orderId = Only(dossier).LinkedTransportOrderId!.Value;
+
+        async Task SetAsync(decimal? agreed, string coverage)
+        {
+            var entity = await h.Db.Context.TransportOrders.SingleAsync(o => o.Id == orderId);
+            entity.PriceIsManual = false;
+            entity.PricingSource = OrderPricingSource.Contract;
+            entity.OneOffFixedAmount = null;
+            entity.AgreedPrice = agreed;
+            var row = await h.Db.Context.TransportOrderPricingSnapshots.SingleOrDefaultAsync(x => x.TransportOrderId == orderId);
+            if (row is null)
+            {
+                row = new TransportOrderPricingSnapshot
+                {
+                    Id = Guid.NewGuid(), TenantId = h.TenantId, TransportOrderId = orderId,
+                    TariffDate = new DateOnly(2026, 9, 21), Currency = "EUR",
+                };
+                h.Db.Context.Add(row);
+            }
+
+            row.CoverageStatus = coverage;
+            row.IsStale = false;
+            await h.Db.Context.SaveChangesAsync();
+        }
+
+        async Task<(string? Status, int Settled, int Billable, int DialogPriced, int DialogBillable)> ReadAsync()
+        {
+            var detail = (await h.Dossiers().GetAsync(dossier.Id, CancellationToken.None))!;
+            var evaluation = (await DossierTestLifecycle.Create(h.Db.Context, h.TenantId, null, TimeProvider.System).EvaluateAsync(dossier.Id, CancellationToken.None))!;
+            return (Only(detail).PriceStatus, detail.Financials.SettledActivityCount, detail.Financials.BillableActivityCount,
+                evaluation.Summary.PricedUnits, evaluation.Summary.BillableUnits);
+        }
+
+        // Partially priced (lines do not cover every goods line): priced for the financial total,
+        // but NOT settled — and the dialog must say the same thing as the price tab.
+        await SetAsync(450m, "Partial");
+        var partial = await ReadAsync();
+        Assert.Equal("PartiallyPriced", partial.Status);
+        Assert.Equal(0, partial.Settled);
+        Assert.Equal(1, partial.Billable);
+        Assert.Equal(partial.Settled, partial.DialogPriced);
+        Assert.Equal(partial.Billable, partial.DialogBillable);
+
+        // Fully priced: settled in both places.
+        await SetAsync(450m, "Full");
+        var full = await ReadAsync();
+        Assert.Equal("Priced", full.Status);
+        Assert.Equal(1, full.Settled);
+        Assert.Equal(full.Settled, full.DialogPriced);
+
+        // Not priced at all: nothing settled.
+        await SetAsync(null, "Full");
+        var none = await ReadAsync();
+        Assert.Equal("NotPriced", none.Status);
+        Assert.Equal(0, none.Settled);
+        Assert.Equal(0, none.DialogPriced);
+    }
+
     // ------------------------------------------------------------ order-backed priceStatus + numbered readiness
 
     [Fact]

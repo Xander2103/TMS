@@ -1,6 +1,6 @@
 import { createElement, type ComponentType, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowRight, Calendar, ChevronRight, FileText, History, ListChecks, MapPin, Package, Tag } from 'lucide-react'
+import { ArrowRight, Calendar, FileText, History, ListChecks, MapPin, Package, Tag } from 'lucide-react'
 import { Badge, type BadgeTone } from '../../../components/ui/Badge'
 import { useLocale } from '../../../i18n/localeContext'
 import { formatDateTime } from '../../../utils/dates'
@@ -31,9 +31,9 @@ interface OverviewCardProps {
 }
 
 /**
- * One conceptual group of the read-only Overzicht. The header chevron and the footer action are
- * real links to the subsection (keyboard + middle-click + screen readers); the body never
- * contains an input — editing lives in the subsection.
+ * One conceptual group of the read-only Overzicht. ONE action per card (B36): the footer link to
+ * the subsection (keyboard + middle-click + screen readers); the body never contains an input —
+ * editing lives in the subsection.
  */
 function OverviewCard({ tab, icon, title, status, action, children }: OverviewCardProps) {
   const { dossier } = useDossierWorkspace()
@@ -44,9 +44,6 @@ function OverviewCard({ tab, icon, title, status, action, children }: OverviewCa
         {createElement(icon, { size: 20, 'aria-hidden': true })}
         <h2 id={`ov-${tab}-title`}>{title}</h2>
         {status && <Badge tone={status.tone}>{status.label}</Badge>}
-        <Link to={path} className="dossier-ov-chevron" aria-label={action}>
-          <ChevronRight size={18} aria-hidden />
-        </Link>
       </header>
       <div className="dossier-ov-body">{children}</div>
       <footer className="dossier-ov-foot">

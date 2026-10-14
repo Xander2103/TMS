@@ -75,6 +75,10 @@
     "open": "Open",
     "acknowledge": "Acknowledge",
     "resolve": "Resolve",
-    "noAlerts": "No alerts."
+    "noAlerts": "No alerts.",
+    "lateBy": "{delay} late",
+    "alertsLoadFailed": "Alerts could not be loaded.",
+    "retry": "Try again",
+    "noOpenAlerts": "No open alerts."
   }
 }

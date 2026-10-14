@@ -156,7 +156,13 @@ public record DossierFinancialSummaryDto(
     /// <summary>Step 13: priced units at exactly € 0 (intentional zero) that were NOT confirmed free (D5) — the ones that earn a ⚠.</summary>
     int ZeroPricedActivityCount = 0,
     /// <summary>D5: billable units without a price (BillableActivityCount − PricedActivityCount), spelled out so the UI never subtracts.</summary>
-    int UnpricedActivityCount = 0);
+    int UnpricedActivityCount = 0,
+    /// <summary>
+    /// B37: units that are SETTLED — price status Priced or confirmed Free (not NotPriced, not
+    /// PartiallyPriced, not a € 0 awaiting its decision). The one count both the price tab
+    /// ("x van y onderdelen afgehandeld") and the confirmation dialog show.
+    /// </summary>
+    int SettledActivityCount = 0);
 
 /// <summary>One activity card on the dossier: type capabilities + the linked execution record.</summary>
 public record DossierActivityDto(

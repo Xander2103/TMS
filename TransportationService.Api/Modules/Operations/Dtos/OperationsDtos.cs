@@ -56,7 +56,16 @@ public record OperationsTripDto(
     DateTime? LastScanAt,
     string? LastScanResult,
     int OpenExceptionCount,
-    int MissingPodCount);
+    int MissingPodCount,
+    /// <summary>Orders on the trip in sequence (B21): the dispatcher sees WHAT is being driven, not only who drives.</summary>
+    IReadOnlyList<OperationsTripOrderDto> Orders);
+
+public record OperationsTripOrderDto(
+    Guid Id,
+    string OrderNumber,
+    string? CustomerName,
+    Guid? DossierId,
+    string? DossierNumber);
 
 public record OperationsCountersDto(
     int ActiveTrips,

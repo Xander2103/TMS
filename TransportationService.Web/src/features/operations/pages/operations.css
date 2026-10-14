@@ -77,6 +77,10 @@
   font-size: 0.85rem;
 }
 
+.ops-table th {
+  white-space: nowrap;
+}
+
 .ops-table th,
 .ops-table td {
   text-align: left;
@@ -184,4 +188,32 @@
   .ops-columns {
     grid-template-columns: 1fr;
   }
+}
+
+.ops-orders {
+  display: block;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ops-orders a {
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.ops-orders a:hover {
+  text-decoration: underline;
+}
+
+.ops-link-button {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--accent);
+  cursor: pointer;
+  font: inherit;
+  text-decoration: underline;
 }

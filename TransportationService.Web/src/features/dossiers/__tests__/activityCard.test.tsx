@@ -67,7 +67,6 @@ describe('ActivityCard', () => {
     })
     const { card, onOpen } = renderCard(activity, { onOpenDetail })
 
-    expect(cell(card, 'Dossier')).toHaveTextContent('DOS-0042')
     expect(cell(card, 'CMR / document')).toHaveTextContent('CMR-2026-00051')
     expect(cell(card, 'Chauffeur')).toHaveTextContent('Jan Peeters')
     expect(cell(card, 'Kenteken')).toHaveTextContent('1-ABC-123')

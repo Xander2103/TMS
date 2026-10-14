@@ -244,8 +244,13 @@ public class DossierLifecycleService : IDossierLifecycleService
             checks.Add(new Check("documents.cmr_missing", "Geen CMR aanwezig op dit dossier.", BlocksAuto: false));
         }
 
-        var billable = activities.Count(a => a.IsBillable);
-        var pricedUnits = billable == 0 ? 0 : billable - readiness.Count(i => i.Code is "pricing.missing");
+        // B37: ONE definition of "settled" for the dialog and the price tab — the dossier
+        // financials (price status Priced or confirmed Free per billable unit), never a second
+        // derivation from readiness codes that counted a partially priced order as priced.
+        var detail = await _dossiers().GetAsync(dossier.Id, cancellationToken);
+        var billable = detail?.Financials.BillableActivityCount ?? activities.Count(a => a.IsBillable);
+        var pricedUnits = detail?.Financials.SettledActivityCount
+                          ?? (billable == 0 ? 0 : billable - readiness.Count(i => i.Code is "pricing.missing"));
 
         var blockers = checks.Where(c => c.BlocksManual).ToList();
         var warnings = checks.Where(c => !c.BlocksManual).ToList();

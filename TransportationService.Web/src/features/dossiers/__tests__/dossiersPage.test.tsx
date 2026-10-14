@@ -739,10 +739,11 @@ describe('DossiersPage (lijst)', () => {
       const row = await findRow()
       const cells = within(row).getAllByRole('cell')
 
-      // Dossiernummer + incidentbadge in één nowrap-container; geen aparte regels meer.
+      // Dossiernummer op één regel; de incidentteller (B33) staat als ⚠-badge naast de status, nooit afgekapt.
       const number = cells[0].querySelector('.dossier-list-number')!
       expect(within(number as HTMLElement).getByText('DOS-0001').tagName).toBe('CODE')
-      expect(within(number as HTMLElement).getByTitle('2 open incidenten')).toBeInTheDocument()
+      const status = cells[1].querySelector('.dossier-list-status')!
+      expect(within(status as HTMLElement).getByTitle('2 open incidenten')).toHaveTextContent('⚠ 2')
       expect(row.querySelector('.dossier-list-stack')).toBeNull()
 
       // Klant: naam · nummer in één afkapbare regel; het nummer is het secundaire deel.

@@ -6,9 +6,8 @@
 }
 .ui-section-nav {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.25rem;
-  overflow-x: auto;
-  scrollbar-width: thin;
   border-bottom: 1px solid var(--border);
   padding-bottom: 0.25rem;
 }

@@ -75,6 +75,10 @@
     "open": "Ouvrir",
     "acknowledge": "Confirmer",
     "resolve": "Traiter",
-    "noAlerts": "Aucune notification."
+    "noAlerts": "Aucune notification.",
+    "lateBy": "{delay} de retard",
+    "alertsLoadFailed": "Les notifications n’ont pas pu être chargées.",
+    "retry": "Réessayer",
+    "noOpenAlerts": "Aucune notification ouverte."
   }
 }

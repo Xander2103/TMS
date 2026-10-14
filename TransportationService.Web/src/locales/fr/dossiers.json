@@ -625,7 +625,7 @@
       "activities": "Activités exécutables",
       "activitiesValue": "{executed} sur {total} exécutées",
       "pricing": "Prix",
-      "pricingValue": "{priced} sur {total} unités tarifées",
+      "pricingValue": "{priced} sur {total} éléments réglés",
       "documents": "Documents",
       "documentsValue": "{count} document(s)",
       "cmrPresent": "CMR présente",

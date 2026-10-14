@@ -105,8 +105,9 @@
 
 .fd-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
+  gap: 4px 10px;
   width: 100%;
   text-align: left;
   font: inherit;
@@ -134,7 +135,8 @@ li:last-child > .fd-row {
 }
 
 .fd-row-main {
-  flex: 1;
+  flex: 1 1 12ch;
+  min-width: 12ch;
   font-size: 14px;
   overflow: hidden;
   text-overflow: ellipsis;

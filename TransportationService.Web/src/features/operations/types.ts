@@ -76,6 +76,16 @@ export interface OperationsTrip {
   lastScanResult: string | null
   openExceptionCount: number
   missingPodCount: number
+  /** Orders on the trip in sequence (B21). Absent on older payloads. */
+  orders?: OperationsTripOrder[]
+}
+
+export interface OperationsTripOrder {
+  id: string
+  orderNumber: string
+  customerName: string | null
+  dossierId: string | null
+  dossierNumber: string | null
 }
 
 export interface OperationsCounters {
@@ -138,11 +148,22 @@ export interface OperationalAlert {
  * Compact "x min" / "1 u 20 min" delay formatting for the trips table. The hour unit
  * follows the active UI language (NL "u", FR/EN "h"); "min" is shared by all three.
  */
+/**
+ * Delay in the dispatcher's words (B21): "12 min", "2 u 15 min", "13 dagen", "1 dag 4 u".
+ * Past one day the minutes no longer matter; "+328 u 43 min" told nobody anything.
+ */
 export function formatDelay(minutes: number | null): string | null {
   if (minutes === null || minutes <= 0) return null
+  const locale = getActiveLocale()
+  const hourUnit = locale === 'nl' ? 'u' : 'h'
   if (minutes < 60) return `${minutes} min`
-  const unit = getActiveLocale() === 'nl' ? 'u' : 'h'
-  const hours = Math.floor(minutes / 60)
-  const rest = minutes % 60
-  return rest === 0 ? `${hours} ${unit}` : `${hours} ${unit} ${rest} min`
+  const totalHours = Math.floor(minutes / 60)
+  if (totalHours < 24) {
+    const rest = minutes % 60
+    return rest === 0 ? `${totalHours} ${hourUnit}` : `${totalHours} ${hourUnit} ${rest} min`
+  }
+  const days = Math.floor(totalHours / 24)
+  const hours = totalHours % 24
+  const dayWord = locale === 'fr' ? (days === 1 ? 'jour' : 'jours') : locale === 'en' ? (days === 1 ? 'day' : 'days') : (days === 1 ? 'dag' : 'dagen')
+  return hours > 0 && days < 3 ? `${days} ${dayWord} ${hours} ${hourUnit}` : `${days} ${dayWord}`
 }

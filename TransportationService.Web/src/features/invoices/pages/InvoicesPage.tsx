@@ -25,6 +25,7 @@ import {
   type InvoiceStatus,
 } from '../types'
 import './invoices.css'
+import { TruncatedText } from '../../../components/ui/TruncatedText'
 
 export function InvoicesPage() {
   const navigate = useNavigate()
@@ -52,10 +53,10 @@ export function InvoicesPage() {
   }, [statusFilter])
 
   const columns: Column<InvoiceListItem>[] = [
-    { key: 'number', header: t('invoices.internalList.columns.number'), width: '110px', render: (row) => <code>{row.invoiceNumber}</code> },
+    { key: 'number', header: t('invoices.internalList.columns.number'), width: '160px', render: (row) => <code className="nowrap">{row.invoiceNumber}</code> },
     { key: 'date', header: t('invoices.internalList.columns.date'), width: '110px', render: (row) => formatDate(row.invoiceDate) },
     { key: 'due', header: t('invoices.internalList.columns.due'), width: '110px', render: (row) => formatDate(row.dueDate) },
-    { key: 'customer', header: t('invoices.internalList.columns.customer'), render: (row) => row.customerName },
+    { key: 'customer', header: t('invoices.internalList.columns.customer'), render: (row) => <TruncatedText tooltip={row.customerName}>{row.customerName}</TruncatedText> },
     { key: 'total', header: t('invoices.internalList.columns.total'), width: '150px', render: (row) => euro(row.total, row.currency) },
     {
       key: 'status',
@@ -109,6 +110,7 @@ export function InvoicesPage() {
         </select>
       </div>
       <DataTable
+        fixedLayout
         columns={columns}
         rows={items}
         rowKey={(row) => row.id}

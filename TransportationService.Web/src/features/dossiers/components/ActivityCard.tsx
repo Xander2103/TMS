@@ -90,10 +90,6 @@ export function ActivityCard({ activity, activities, dossier, onOpen, onOpenDeta
 
       <dl className="dossier-activity-info">
         <div>
-          <dt>{t('dossierActivities.card.dossier')}</dt>
-          <dd>{dossier.dossierNumber}</dd>
-        </div>
-        <div>
           <dt>{t('dossierActivities.card.document')}</dt>
           <dd>
             <ActivityDocumentStatus

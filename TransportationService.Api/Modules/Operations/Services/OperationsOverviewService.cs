@@ -60,6 +60,7 @@ public class OperationsOverviewService : IOperationsOverviewService
 
         // Batched context (one query per concern; no per-trip roundtrips).
         var driverNames = await ResolveDriverNamesAsync(trips, cancellationToken);
+        var orderContext = await ResolveOrderContextAsync(orderIds, cancellationToken);
         var vehicleNumbers = await ResolveAssetNumbersAsync(
             trips.Where(t => t.VehicleId != null).Select(t => t.VehicleId!.Value), isVehicle: true, cancellationToken);
         var trailerNumbers = await ResolveAssetNumbersAsync(
@@ -208,7 +209,8 @@ public class OperationsOverviewService : IOperationsOverviewService
                     gpsByTrip, nextStop),
                 lastScan?.OccurredAt, lastScan?.Result.ToString(),
                 openExceptions.GetValueOrDefault(trip.Id),
-                missingPods));
+                missingPods,
+                tripOrderIds.Select(id => orderContext.GetValueOrDefault(id)).Where(o => o is not null).Select(o => o!).ToList()));
         }
 
         var openCriticalIncidents = await _dbContext.Incidents.AsNoTracking()
@@ -279,6 +281,37 @@ public class OperationsOverviewService : IOperationsOverviewService
         }
 
         return new TripPositionDto(LocationSource.Unavailable, null, null, null, "Geen locatiegegevens");
+    }
+
+    /// <summary>Order number, customer and dossier per order id — one query for the whole board (B21).</summary>
+    private async Task<Dictionary<Guid, OperationsTripOrderDto>> ResolveOrderContextAsync(
+        IReadOnlyCollection<Guid> orderIds, CancellationToken cancellationToken)
+    {
+        if (orderIds.Count == 0) return [];
+        var tenantId = _tenantContext.TenantId;
+        var orders = await _dbContext.TransportOrders.AsNoTracking()
+            .Where(o => o.TenantId == tenantId && orderIds.Contains(o.Id))
+            .Select(o => new { o.Id, o.OrderNumber, o.CustomerId })
+            .ToListAsync(cancellationToken);
+        var customerIds = orders.Select(o => o.CustomerId).Distinct().ToList();
+        var customerNames = await _dbContext.Customers.AsNoTracking()
+            .Where(c => c.TenantId == tenantId && customerIds.Contains(c.Id))
+            .ToDictionaryAsync(c => c.Id, c => c.Name, cancellationToken);
+        var dossierByOrder = await _dbContext.DossierOrders.AsNoTracking()
+            .Where(l => l.TenantId == tenantId && !l.IsDeleted && orderIds.Contains(l.TransportOrderId))
+            .Join(_dbContext.TransportDossiers.AsNoTracking().Where(d => d.TenantId == tenantId),
+                l => l.DossierId, d => d.Id,
+                (l, d) => new { l.TransportOrderId, d.Id, d.DossierNumber })
+            .ToListAsync(cancellationToken);
+        var dossierLookup = dossierByOrder
+            .GroupBy(x => x.TransportOrderId)
+            .ToDictionary(g => g.Key, g => g.First());
+        return orders.ToDictionary(
+            o => o.Id,
+            o => new OperationsTripOrderDto(
+                o.Id, o.OrderNumber, customerNames.GetValueOrDefault(o.CustomerId),
+                dossierLookup.TryGetValue(o.Id, out var d) ? d.Id : null,
+                dossierLookup.TryGetValue(o.Id, out var d2) ? d2.DossierNumber : null));
     }
 
     private async Task<Dictionary<Guid, string>> ResolveDriverNamesAsync(

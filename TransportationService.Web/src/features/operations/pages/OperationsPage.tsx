@@ -1,6 +1,6 @@
 import { PageHeader } from '../../../components/layout/PageHeader'
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { describeApiError } from '../../../api/problemDetails'
 import { Badge } from '../../../components/ui/Badge'
 import { useToast } from '../../../components/ui/toastContext'
@@ -42,18 +42,27 @@ export function OperationsPage() {
     return () => clearInterval(handle)
   }, [])
 
+  const [alertsFailed, setAlertsFailed] = useState(false)
+
   useEffect(() => {
     let cancelled = false
+    // ONE refresh cycle: the overview call also syncs the alert table on the server, so the
+    // alert list is read AFTER it — the "Open meldingen" tile and the panel then describe the
+    // same rows (B21). A failed alert read is shown, never silently rendered as "no alerts".
     getOperationsOverview()
       .then((data) => {
         if (!cancelled) setOverview(data)
       })
       .catch((error: unknown) => showError(describeApiError(error, t('operations.page.overviewLoadFailed')).message))
-    listAlerts()
+      .then(() => listAlerts())
       .then((data) => {
-        if (!cancelled) setAlerts(data)
+        if (cancelled) return
+        setAlerts(data)
+        setAlertsFailed(false)
       })
-      .catch(() => undefined)
+      .catch(() => {
+        if (!cancelled) setAlertsFailed(true)
+      })
     return () => {
       cancelled = true
     }
@@ -127,7 +136,22 @@ export function OperationsPage() {
                         onKeyDown={(event) => {
                           if (event.key === 'Enter') navigate(`/planning/${trip.id}`)
                         }}>
-                      <td><strong>{trip.tripNumber}</strong></td>
+                      <td>
+                        <strong>{trip.tripNumber}</strong>
+                        {trip.orders && trip.orders.length > 0 && (
+                          <div className="ops-sub ops-orders">
+                            <Link
+                              to={trip.orders[0].dossierId ? `/dossiers/${trip.orders[0].dossierId}` : `/transport-orders/${trip.orders[0].id}`}
+                              onClick={(event) => event.stopPropagation()}
+                              title={trip.orders[0].dossierNumber ? `${trip.orders[0].dossierNumber} · ${trip.orders[0].orderNumber}` : trip.orders[0].orderNumber}
+                            >
+                              {trip.orders[0].dossierNumber ?? trip.orders[0].orderNumber}
+                            </Link>
+                            {trip.orders[0].customerName && ` · ${trip.orders[0].customerName}`}
+                            {trip.orders.length > 1 && ` +${trip.orders.length - 1}`}
+                          </div>
+                        )}
+                      </td>
                       <td><Badge tone={TRIP_STATUS_TONE[trip.status]}>{t(TRIP_STATUS_LABELS[trip.status])}</Badge></td>
                       <td>
                         <div>{trip.driverName ?? '—'}</div>
@@ -149,7 +173,7 @@ export function OperationsPage() {
                         {trip.etaStatus ? (
                           <>
                             <Badge tone={ETA_STATUS_META[trip.etaStatus].tone}>
-                              {t(ETA_STATUS_META[trip.etaStatus].label)}{delay ? ` +${delay}` : ''}
+                              {delay ? t('operations.page.lateBy', { delay }) : t(ETA_STATUS_META[trip.etaStatus].label)}
                             </Badge>
                             {trip.etaSource && (
                               <div className="ops-sub">{t('operations.page.etaSourcePrefix', { source: t(ETA_SOURCE_LABELS[trip.etaSource]) })}</div>
@@ -234,7 +258,15 @@ export function OperationsPage() {
                 </li>
               )
             })}
-            {visibleAlerts.length === 0 && <li className="ops-sub ops-alert-empty">{t('operations.page.noAlerts')}</li>}
+            {alertsFailed && (
+              <li className="ops-sub ops-alert-empty">
+                {t('operations.page.alertsLoadFailed')}{' '}
+                <button type="button" className="ops-link-button" onClick={() => setTick((value) => value + 1)}>{t('operations.page.retry')}</button>
+              </li>
+            )}
+            {!alertsFailed && visibleAlerts.length === 0 && (
+              <li className="ops-sub ops-alert-empty">{alertFilter === 'Open' ? t('operations.page.noOpenAlerts') : t('operations.page.noAlerts')}</li>
+            )}
           </ul>
         </section>
       </div>

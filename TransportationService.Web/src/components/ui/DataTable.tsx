@@ -49,6 +49,11 @@ interface DataTableProps<TRow> {
   sort?: SortState | null
   /** Called with the next sort when a sortable header is clicked (same column toggles direction). */
   onSortChange?: (sort: SortState) => void
+  /**
+   * B34: `table-layout: fixed` — columns without a width share the remaining space and long text
+   * truncates (TruncatedText) instead of widening the table past its container.
+   */
+  fixedLayout?: boolean
 }
 
 /**
@@ -70,6 +75,7 @@ export function DataTable<TRow>({
   rowId,
   sort,
   onSortChange,
+  fixedLayout = false,
 }: DataTableProps<TRow>) {
   const { t } = useLocale()
   if (isLoading) return <LoadingState message={loadingMessage ?? t('ui.table.loading')} />
@@ -84,7 +90,7 @@ export function DataTable<TRow>({
 
   return (
     <div className="data-table-wrapper">
-      <table className="data-table">
+      <table className={fixedLayout ? 'data-table data-table-fixed' : 'data-table'}>
         <thead>
           <tr>
             {columns.map((column) => {

@@ -11,7 +11,7 @@
     "creatingOrder": "Creating transport order…",
     "createOrderFailed": "The transport order could not be created.",
     "readOnlyRights": "You can view the route but not edit it.",
-    "readOnlyStatus": "In this status the route is no longer changed from the dossier.",
+    "readOnlyStatus": "The route is now managed on the order.",
     "sequenceHint": "The order of the stops is the driving order.",
     "retryLoad": "Reload",
     "emptyStopsTitle_one": "Remove empty stop?",
@@ -23,7 +23,8 @@
     "emptyStopsConfirm_other": "Remove empty stops & save",
     "removeStopTitle": "Remove stop?",
     "removeStopMessage": "Stop {number} holds data and will be removed from the route once you save the route. Continue?",
-    "removeStopConfirm": "Remove stop"
+    "removeStopConfirm": "Remove stop",
+    "openOrderStops": "Open the stops of {number} →"
   },
   "price": {
     "noPrice": "No price yet",

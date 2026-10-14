@@ -92,6 +92,8 @@ export interface DossierFinancialSummary {
   pricedOrderCount?: number
   /** Stap 13: billable units (activities of an IsBillable type + legacy orders without activity). Absent on older payloads. */
   billableActivityCount?: number
+  /** B37: units that are settled (Priced or confirmed Free) — the ONE definition shared with the confirmation dialog. */
+  settledActivityCount?: number
   pricedActivityCount?: number
   zeroPricedActivityCount?: number
   invoicedTotal: number

@@ -625,7 +625,7 @@
       "activities": "Executable activities",
       "activitiesValue": "{executed} of {total} executed",
       "pricing": "Price",
-      "pricingValue": "{priced} of {total} units priced",
+      "pricingValue": "{priced} of {total} parts settled",
       "documents": "Documents",
       "documentsValue": "{count} document(s)",
       "cmrPresent": "CMR present",

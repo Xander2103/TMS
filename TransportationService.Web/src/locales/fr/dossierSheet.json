@@ -11,7 +11,7 @@
     "creatingOrder": "Création de la commande de transport…",
     "createOrderFailed": "La commande de transport n'a pas pu être créée.",
     "readOnlyRights": "Vous pouvez consulter l'itinéraire mais pas le modifier.",
-    "readOnlyStatus": "Dans ce statut, l'itinéraire n'est plus modifié via le dossier.",
+    "readOnlyStatus": "L'itinéraire est désormais géré sur la commande.",
     "sequenceHint": "L'ordre des arrêts est l'ordre de passage.",
     "retryLoad": "Recharger",
     "emptyStopsTitle_one": "Supprimer l'arrêt vide ?",
@@ -23,7 +23,8 @@
     "emptyStopsConfirm_other": "Supprimer les arrêts vides et enregistrer",
     "removeStopTitle": "Supprimer l'arrêt ?",
     "removeStopMessage": "L'arrêt {number} contient des données et sera retiré de l'itinéraire dès que vous enregistrez l'itinéraire. Continuer ?",
-    "removeStopConfirm": "Supprimer l'arrêt"
+    "removeStopConfirm": "Supprimer l'arrêt",
+    "openOrderStops": "Ouvrir les arrêts de {number} →"
   },
   "price": {
     "noPrice": "Pas encore de prix",

@@ -75,6 +75,10 @@
     "open": "Openen",
     "acknowledge": "Bevestigen",
     "resolve": "Afhandelen",
-    "noAlerts": "Geen meldingen."
+    "noAlerts": "Geen meldingen.",
+    "lateBy": "{delay} te laat",
+    "alertsLoadFailed": "Meldingen konden niet worden geladen.",
+    "retry": "Opnieuw proberen",
+    "noOpenAlerts": "Geen open meldingen."
   }
 }

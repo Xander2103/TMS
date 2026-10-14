@@ -22,6 +22,7 @@ import {
   type TransportOrderStatus,
 } from '../types'
 import './transport-orders.css'
+import { TruncatedText } from '../../../components/ui/TruncatedText'
 
 export function TransportOrdersPage() {
   const navigate = useNavigate()
@@ -132,26 +133,28 @@ export function TransportOrdersPage() {
       : []),
     { key: 'number', header: t('transportOrders.list.columns.number'), width: '110px', render: (row) => <code>{row.orderNumber}</code> },
     { key: 'date', header: t('transportOrders.list.columns.date'), width: '110px', render: (row) => formatDate(row.orderDate) },
-    { key: 'customer', header: t('transportOrders.list.columns.customer'), render: (row) => row.customerName },
+    { key: 'customer', header: t('transportOrders.list.columns.customer'), render: (row) => <TruncatedText tooltip={row.customerName}>{row.customerName}</TruncatedText> },
     {
       key: 'route',
       header: t('transportOrders.list.columns.route'),
-      render: (row) =>
+      render: (row) => {
         // D2: an on-site lifting job has no route — it shows its work site ("Werf: Waver").
-        row.craneJobKind === 'OnSiteLifting'
+        const text = row.craneJobKind === 'OnSiteLifting'
           ? `${t('stopEditor.stopType.Site')}: ${row.firstSiteCity ?? '—'}`
           : row.firstLoadingCity || row.lastUnloadingCity
           ? `${row.firstLoadingCity ?? '?'} → ${row.lastUnloadingCity ?? '?'}${
               row.stopCount > 2 ? ` ${t('transportOrders.list.stopCount', { count: row.stopCount })}` : ''
             }`
-          : '—',
+          : '—'
+        return <TruncatedText tooltip={text}>{text}</TruncatedText>
+      },
     },
     {
       key: 'goods',
       header: t('transportOrders.list.columns.goods'),
       render: (row) => (
         <span className="to-goods" title={row.goodsDescription ?? undefined}>
-          {row.goodsDescription ?? '—'}
+          <TruncatedText tooltip={row.goodsDescription ?? ''}>{row.goodsDescription ?? '—'}</TruncatedText>
           {row.adrRequired && <Badge tone="danger">{t('transportOrders.badges.adr')}</Badge>}
           {row.craneRequired && <Badge tone="info">{t('transportOrders.badges.crane')}</Badge>}
         </span>
@@ -232,6 +235,7 @@ export function TransportOrdersPage() {
         </div>
       )}
       <DataTable
+        fixedLayout
         columns={columns}
         rows={items}
         rowKey={(row) => row.id}
