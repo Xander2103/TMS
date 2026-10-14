@@ -118,7 +118,8 @@
       "customer": "Customer",
       "route": "Route",
       "goods": "Goods",
-      "status": "Status"
+      "status": "Status",
+      "reference": "Reference"
     },
     "stopCount": "({count} stops)",
     "exporting": "Exporting…",

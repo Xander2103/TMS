@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
 import { TankCardsPage } from '../TankCardsPage'
 
 vi.mock('../../../../components/ui/toastContext', () => ({
@@ -55,7 +56,7 @@ describe('TankCardsPage', () => {
   afterEach(cleanup)
 
   it('submits the new tank-card fields (fuel type, limits, cost centre, internal name) on create', async () => {
-    render(<TankCardsPage />)
+    render(<MemoryRouter><TankCardsPage /></MemoryRouter>)
 
     await userEvent.click(await screen.findByRole('button', { name: 'Nieuwe tankkaart' }))
 
@@ -85,7 +86,7 @@ describe('TankCardsPage', () => {
   })
 
   it('omits unset optional limits as null instead of 0 or empty string', async () => {
-    render(<TankCardsPage />)
+    render(<MemoryRouter><TankCardsPage /></MemoryRouter>)
 
     await userEvent.click(await screen.findByRole('button', { name: 'Nieuwe tankkaart' }))
     await userEvent.type(screen.getByLabelText(/^Kaartnummer/), '1111222233334444')

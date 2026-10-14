@@ -44,7 +44,10 @@
     "all": "Alle",
     "packagesOnly": "Alleen colli",
     "mineOnly": "Aan mij toegewezen",
-    "empty": "Geen afwijkingen gevonden."
+    "empty": "Geen afwijkingen gevonden.",
+    "allStatuses": "Alle statussen",
+    "allTypes": "Alle soorten",
+    "allSeverities": "Alle ernstniveaus"
   },
   "detail": {
     "loadError": "De afwijking kon niet worden geladen.",

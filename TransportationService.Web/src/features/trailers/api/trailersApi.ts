@@ -9,6 +9,9 @@ export interface SearchTrailersParams {
   categoryId?: string
   page: number
   pageSize: number
+  /** B26: whitelisted server sort key and direction ('' = the list's natural order). */
+  sort?: string
+  dir?: 'asc' | 'desc' | ''
 }
 
 export function searchTrailers(params: SearchTrailersParams): Promise<PagedResult<TrailerListItem>> {
@@ -17,6 +20,8 @@ export function searchTrailers(params: SearchTrailersParams): Promise<PagedResul
   if (params.status) query.set('status', params.status)
   if (params.isActive !== undefined) query.set('isActive', String(params.isActive))
   if (params.categoryId) query.set('categoryId', params.categoryId)
+  if (params.sort) query.set('sort', params.sort)
+  if (params.dir) query.set('dir', params.dir)
   query.set('page', String(params.page))
   query.set('pageSize', String(params.pageSize))
   return apiClient.getJson<PagedResult<TrailerListItem>>(`/api/trailers?${query.toString()}`)

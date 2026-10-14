@@ -66,6 +66,9 @@ export interface TaskListParams {
   search?: string
   page?: number
   pageSize?: number
+  /** B26: due | priority | created | title; '' = the work-queue order. */
+  sort?: string
+  dir?: 'asc' | 'desc' | ''
 }
 
 export interface CreateTaskInput {

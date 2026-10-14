@@ -22,6 +22,9 @@ export interface SearchCustomersParams {
   categoryId?: string
   page: number
   pageSize: number
+  /** B26: whitelisted server sort key and direction ('' = the list's natural order). */
+  sort?: string
+  dir?: 'asc' | 'desc' | ''
 }
 
 export function searchCustomers(params: SearchCustomersParams): Promise<PagedResult<CustomerListItem>> {
@@ -29,6 +32,8 @@ export function searchCustomers(params: SearchCustomersParams): Promise<PagedRes
   if (params.search) query.set('search', params.search)
   if (params.isActive !== undefined) query.set('isActive', String(params.isActive))
   if (params.categoryId) query.set('categoryId', params.categoryId)
+  if (params.sort) query.set('sort', params.sort)
+  if (params.dir) query.set('dir', params.dir)
   query.set('page', String(params.page))
   query.set('pageSize', String(params.pageSize))
   return apiClient.getJson<PagedResult<CustomerListItem>>(`/api/customers?${query.toString()}`)

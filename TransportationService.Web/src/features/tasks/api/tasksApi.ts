@@ -32,6 +32,8 @@ export function listTasks(params: TaskListParams): Promise<TaskListResult> {
   if (params.overdueOnly) query.set('overdueOnly', 'true')
   if (params.waitingForReviewOnly) query.set('waitingForReviewOnly', 'true')
   if (params.search) query.set('search', params.search)
+  if (params.sort) query.set('sort', params.sort)
+  if (params.dir) query.set('dir', params.dir)
   query.set('page', String(params.page ?? 1))
   query.set('pageSize', String(params.pageSize ?? 25))
   return apiClient.getJson<TaskListResult>(`/api/tasks?${query.toString()}`)

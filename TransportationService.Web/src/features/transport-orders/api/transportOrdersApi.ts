@@ -18,6 +18,9 @@ export interface SearchTransportOrdersParams {
   toDate?: string
   page: number
   pageSize: number
+  /** B26: whitelisted server sort key and direction ('' = the list's natural order). */
+  sort?: string
+  dir?: 'asc' | 'desc' | ''
 }
 
 export function searchTransportOrders(
@@ -29,6 +32,8 @@ export function searchTransportOrders(
   if (params.customerId) query.set('customerId', params.customerId)
   if (params.fromDate) query.set('fromDate', params.fromDate)
   if (params.toDate) query.set('toDate', params.toDate)
+  if (params.sort) query.set('sort', params.sort)
+  if (params.dir) query.set('dir', params.dir)
   query.set('page', String(params.page))
   query.set('pageSize', String(params.pageSize))
   return apiClient.getJson<PagedResult<TransportOrderListItem>>(`/api/transport-orders?${query.toString()}`)

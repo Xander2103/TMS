@@ -11,6 +11,10 @@ interface FilterBarProps {
   onActiveFilterChange?: (value: boolean | undefined) => void
   /** Extra controls (additional selects, buttons) rendered on the right. */
   children?: ReactNode
+  /** B26: shown when anything differs from the default view; returns to a clean URL. */
+  onClear?: () => void
+  /** Trailing controls pushed to the far right (density toggle, column chooser). */
+  trailing?: ReactNode
 }
 
 /** Reusable list toolbar: debounce-friendly search input + optional status filter + extras. */
@@ -21,6 +25,8 @@ export function FilterBar({
   activeFilter,
   onActiveFilterChange,
   children,
+  onClear,
+  trailing,
 }: FilterBarProps) {
   const { t } = useLocale()
   function handleActiveChange(event: ChangeEvent<HTMLSelectElement>) {
@@ -52,6 +58,12 @@ export function FilterBar({
         </select>
       )}
       {children}
+      {onClear && (
+        <button type="button" className="ui-filter-clear" onClick={onClear}>
+          {t('ui.filter.clear')}
+        </button>
+      )}
+      {trailing && <div className="ui-filter-trailing">{trailing}</div>}
     </div>
   )
 }

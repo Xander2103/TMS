@@ -23,7 +23,8 @@
     "colValidUntil": "Geldig tot",
     "colStatus": "Status",
     "block": "Blokkeren",
-    "unblock": "Deblokkeren"
+    "unblock": "Deblokkeren",
+    "rowActions": "Acties kaart {number}"
   },
   "form": {
     "editTitle": "Tankkaart bewerken",

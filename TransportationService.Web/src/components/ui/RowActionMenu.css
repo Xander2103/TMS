@@ -1,0 +1,79 @@
+/* B14: the one "⋯" per row — same look as the dossier list menu it generalises. */
+.ui-row-actions {
+  display: inline-flex;
+}
+
+.ui-row-actions-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  min-height: 32px;
+  padding: 0 6px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.ui-row-actions-button:hover,
+.ui-row-actions-button[aria-expanded='true'] {
+  border-color: var(--border);
+  background: var(--bg);
+  color: var(--text-h);
+}
+
+.ui-row-actions-button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.ui-row-menu {
+  position: fixed;
+  min-width: 190px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px var(--color-shadow, rgba(15, 23, 42, 0.18));
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  z-index: 60;
+}
+
+.ui-row-menu-item {
+  border: none;
+  background: none;
+  text-align: left;
+  padding: 8px 12px;
+  min-height: 38px;
+  font: inherit;
+  font-size: var(--text-sm, 14px);
+  color: var(--text-h);
+  cursor: pointer;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+
+.ui-row-menu-item:hover,
+.ui-row-menu-item:focus-visible {
+  background: var(--color-info-bg);
+  outline: none;
+}
+
+.ui-row-menu-item:disabled {
+  color: var(--text-muted);
+  cursor: not-allowed;
+  background: none;
+}
+
+.ui-row-menu-item-danger {
+  color: var(--color-danger);
+}
+
+.ui-row-menu-separator {
+  height: 1px;
+  margin: 4px 2px;
+  background: var(--border);
+}

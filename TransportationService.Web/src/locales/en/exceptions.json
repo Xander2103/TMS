@@ -44,7 +44,10 @@
     "all": "All",
     "packagesOnly": "Packages only",
     "mineOnly": "Assigned to me",
-    "empty": "No exceptions found."
+    "empty": "No exceptions found.",
+    "allStatuses": "All statuses",
+    "allTypes": "All types",
+    "allSeverities": "All severities"
   },
   "detail": {
     "loadError": "The exception could not be loaded.",

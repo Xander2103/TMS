@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { formatDate } from '../../../utils/dates'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { PageHeader } from '../../../components/layout/PageHeader'
 import { DataTable, type Column } from '../../../components/ui/DataTable'
 import { FilterBar } from '../../../components/ui/FilterBar'
@@ -10,6 +10,9 @@ import { Pagination } from '../../../components/ui/Pagination'
 import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { usePagedQuery } from '../../../hooks/usePagedQuery'
+import { tableSortOf, useUrlListState } from '../../../hooks/useUrlListState'
+import { DensityToggle } from '../../../components/ui/DensityToggle'
+import { useListDensity } from '../../../components/ui/listDensity'
 import { useToast } from '../../../components/ui/toastContext'
 import { useLocale } from '../../../i18n/localeContext'
 import { useAuth } from '../../auth/authContextValue'
@@ -27,41 +30,47 @@ import {
 import './invoices.css'
 import { TruncatedText } from '../../../components/ui/TruncatedText'
 
+/** B26: list state in the URL (refresh, Back and shared links keep the view). */
+const LIST_STATE = {
+  defaults: { search: '', status: '', sort: '', dir: '' },
+  allowed: { status: INVOICE_STATUSES, sort: ['number', 'date', 'due', 'customer', 'status'], dir: ['asc', 'desc'] },
+}
+const DESC_BY_DEFAULT = ['date', 'due']
+
 export function InvoicesPage() {
   const navigate = useNavigate()
   const { t } = useLocale()
   const { hasPermission, hasAnyPermission } = useAuth()
   const { showError, showSuccess } = useToast()
-  const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState<InvoiceStatus | ''>('')
-  const [page, setPage] = useState(1)
+  const { state, apply, reset, isFiltered } = useUrlListState(LIST_STATE)
+  const { search, page } = state
+  const statusFilter = state.status as InvoiceStatus | ''
+  const [density, setDensity] = useListDensity('invoices')
   const [exportOpen, setExportOpen] = useState(false)
   const [exportFrom, setExportFrom] = useState('')
   const [exportTo, setExportTo] = useState('')
   const [exportBusy, setExportBusy] = useState(false)
 
   const { items, totalCount, pageSize, isLoading, error, reload } = usePagedQuery<InvoiceListItem>(
-    (args) => searchInvoices({ ...args, status: statusFilter || undefined }),
-    { search, page, errorMessage: t('invoices.internalList.loadError') },
+    (args) => searchInvoices({ ...args, status: statusFilter || undefined, sort: state.sort, dir: state.dir as 'asc' | 'desc' | '' }),
+    { search, page, errorMessage: t('invoices.internalList.loadError'), extra: { status: statusFilter, sort: state.sort, dir: state.dir } },
   )
 
-  // The status filter isn't part of usePagedQuery's own dependency key, so trigger a reload
-  // explicitly whenever it changes.
-  useEffect(() => {
-    reload()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statusFilter])
-
   const columns: Column<InvoiceListItem>[] = [
-    { key: 'number', header: t('invoices.internalList.columns.number'), width: '160px', render: (row) => <code className="nowrap">{row.invoiceNumber}</code> },
-    { key: 'date', header: t('invoices.internalList.columns.date'), width: '110px', render: (row) => formatDate(row.invoiceDate) },
-    { key: 'due', header: t('invoices.internalList.columns.due'), width: '110px', render: (row) => formatDate(row.dueDate) },
-    { key: 'customer', header: t('invoices.internalList.columns.customer'), render: (row) => <TruncatedText tooltip={row.customerName}>{row.customerName}</TruncatedText> },
-    { key: 'total', header: t('invoices.internalList.columns.total'), width: '150px', render: (row) => euro(row.total, row.currency) },
+    { key: 'number', header: t('invoices.internalList.columns.number'), width: '170px', sortKey: 'number', render: (row) => (
+      <Link to={`/invoices/${row.id}`} className="ui-id-link" onClick={(event) => event.stopPropagation()}>
+        {row.invoiceNumber}
+      </Link>
+    ) },
+    { key: 'date', header: t('invoices.internalList.columns.date'), width: '112px', sortKey: 'date', render: (row) => <span className="ui-nowrap">{formatDate(row.invoiceDate)}</span> },
+    { key: 'due', header: t('invoices.internalList.columns.due'), width: '112px', sortKey: 'due', render: (row) => <span className="ui-nowrap">{formatDate(row.dueDate)}</span> },
+    { key: 'customer', header: t('invoices.internalList.columns.customer'), sortKey: 'customer', render: (row) => <TruncatedText tooltip={row.customerName}>{row.customerName}</TruncatedText> },
+    { key: 'total', header: t('invoices.internalList.columns.total'), width: '140px', align: 'right', render: (row) => <span className="ui-nowrap ui-amount">{euro(row.total, row.currency)}</span> },
     {
       key: 'status',
       header: t('invoices.internalList.columns.status'),
       width: '130px',
+      sortKey: 'status',
       render: (row) => <Badge tone={INVOICE_STATUS_TONE[row.status]}>{t(INVOICE_STATUS_LABELS[row.status])}</Badge>,
     },
   ]
@@ -83,22 +92,17 @@ export function InvoicesPage() {
           </>
         }
       />
-      <div className="inv-filters">
-        <FilterBar
-          search={search}
-          onSearchChange={(value) => {
-            setSearch(value)
-            setPage(1)
-          }}
-          searchPlaceholder={t('invoices.internalList.searchPlaceholder')}
-        />
+      <FilterBar
+        search={search}
+        onSearchChange={(value) => apply({ search: value }, { replace: true })}
+        searchPlaceholder={t('invoices.internalList.searchPlaceholder')}
+        onClear={isFiltered ? reset : undefined}
+        trailing={<DensityToggle value={density} onChange={setDensity} />}
+      >
         <select
           value={statusFilter}
-          onChange={(e) => {
-            setStatusFilter(e.target.value as InvoiceStatus | '')
-            setPage(1)
-          }}
-          className="inv-status-filter"
+          onChange={(e) => apply({ status: e.target.value })}
+          className="ui-filter-select"
           aria-label={t('ui.filter.statusLabel')}
         >
           <option value="">{t('ui.filter.allStatuses')}</option>
@@ -108,9 +112,12 @@ export function InvoicesPage() {
             </option>
           ))}
         </select>
-      </div>
+      </FilterBar>
       <DataTable
         fixedLayout
+        density={density}
+        sort={tableSortOf(state.sort, state.dir, DESC_BY_DEFAULT)}
+        onSortChange={(next) => apply({ sort: next.key, dir: next.dir })}
         columns={columns}
         rows={items}
         rowKey={(row) => row.id}
@@ -122,7 +129,7 @@ export function InvoicesPage() {
         loadingMessage={t('invoices.list.loading')}
         onRowClick={(row) => navigate(`/invoices/${row.id}`)}
       />
-      <Pagination page={page} pageSize={pageSize} totalCount={totalCount} onPageChange={setPage} />
+      <Pagination page={page} pageSize={pageSize} totalCount={totalCount} onPageChange={(next) => apply({ page: next })} />
 
       {exportOpen && (
         <Modal

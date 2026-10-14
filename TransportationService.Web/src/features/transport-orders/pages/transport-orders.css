@@ -1,29 +1,8 @@
-.to-filters {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.to-filters .ui-filter-bar {
-  flex: 1;
-}
-
-.to-status-filter {
-  padding: 8px 10px;
-  font: inherit;
-  font-size: 15px;
-  color: var(--text-h);
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  margin-bottom: 16px;
-}
-
 .to-goods {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  max-width: 320px;
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -278,13 +257,6 @@
   padding: 10px 12px;
   max-height: 400px;
   overflow-y: auto;
-}
-
-@media (max-width: 640px) {
-  .to-filters {
-    flex-direction: column;
-    align-items: stretch;
-  }
 }
 
 /* Documentstrategie (leveringsbon/CMR) onder de header: reden + orderkeuze. */

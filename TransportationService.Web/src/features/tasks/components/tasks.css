@@ -14,7 +14,16 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.task-title-cell > :first-child {
+  min-width: 0;
+  flex: 0 1 auto;
+}
+
+.task-title-cell > :not(:first-child) {
+  flex-shrink: 0;
 }
 
 .task-due-overdue {

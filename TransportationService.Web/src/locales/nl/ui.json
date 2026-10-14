@@ -22,7 +22,8 @@
     "statusLabel": "Statusfilter",
     "allStatuses": "Alle statussen",
     "active": "Actief",
-    "inactive": "Inactief"
+    "inactive": "Inactief",
+    "clear": "Filters wissen"
   },
   "pagination": {
     "label": "Paginering",
@@ -192,5 +193,10 @@
     "before": "Voor",
     "after": "Na",
     "loading": "Historiek laden…"
+  },
+  "density": {
+    "label": "Dichtheid",
+    "compact": "Compact",
+    "normal": "Normaal"
   }
 }

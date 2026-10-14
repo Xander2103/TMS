@@ -27,6 +27,9 @@ export interface SearchExceptionsParams {
   assignedToUserId?: string
   page: number
   pageSize: number
+  /** B26: whitelisted server sort key and direction ('' = the list's natural order). */
+  sort?: string
+  dir?: 'asc' | 'desc' | ''
 }
 
 export function searchExceptions(params: SearchExceptionsParams): Promise<PagedResult<ExceptionListItem>> {
@@ -36,6 +39,8 @@ export function searchExceptions(params: SearchExceptionsParams): Promise<PagedR
   if (params.severity) query.set('severity', params.severity)
   if (params.packagesOnly) query.set('packagesOnly', 'true')
   if (params.assignedToUserId) query.set('assignedToUserId', params.assignedToUserId)
+  if (params.sort) query.set('sort', params.sort)
+  if (params.dir) query.set('dir', params.dir)
   query.set('page', String(params.page))
   query.set('pageSize', String(params.pageSize))
   return apiClient.getJson<PagedResult<ExceptionListItem>>(`/api/exceptions?${query.toString()}`)

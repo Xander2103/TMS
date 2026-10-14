@@ -44,7 +44,10 @@
     "all": "Tous",
     "packagesOnly": "Colis uniquement",
     "mineOnly": "Attribués à moi",
-    "empty": "Aucun écart trouvé."
+    "empty": "Aucun écart trouvé.",
+    "allStatuses": "Tous les statuts",
+    "allTypes": "Tous les types",
+    "allSeverities": "Toutes les gravités"
   },
   "detail": {
     "loadError": "L'écart n'a pas pu être chargé.",

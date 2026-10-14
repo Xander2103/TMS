@@ -10,7 +10,12 @@ import { FormField } from '../../../components/ui/FormField'
 import { Modal } from '../../../components/ui/Modal'
 import { useToast } from '../../../components/ui/toastContext'
 import { ApiError } from '../../../api/apiClient'
+import { TruncatedText } from '../../../components/ui/TruncatedText'
 import { usePagedQuery } from '../../../hooks/usePagedQuery'
+import { useUrlListState } from '../../../hooks/useUrlListState'
+import { DensityToggle } from '../../../components/ui/DensityToggle'
+import { useListDensity } from '../../../components/ui/listDensity'
+import { RowActionMenu } from '../../../components/ui/RowActionMenu'
 import { useAuth } from '../../auth/authContextValue'
 import { useLocale } from '../../../i18n/localeContext'
 import { EmployeeSelect } from '../../tasks/components/EmployeePicker'
@@ -80,26 +85,26 @@ function parseOptionalNumber(value: string): number | null {
   return Number.isFinite(n) ? n : null
 }
 
+const LIST_STATE = {
+  defaults: { search: '', status: '' },
+  allowed: { status: TANK_CARD_STATUSES },
+}
+
 export function TankCardsPage() {
   const { t } = useLocale()
   const { hasPermission } = useAuth()
   const { showSuccess, showError } = useToast()
 
-  const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState<TankCardStatus | ''>('')
-  const [page, setPage] = useState(1)
+  // B26: search, status and page live in the URL (refresh, Back and shared links keep the view).
+  const { state, apply, reset, isFiltered } = useUrlListState(LIST_STATE)
+  const { search, page } = state
+  const statusFilter = state.status as TankCardStatus | ''
+  const [density, setDensity] = useListDensity('tank-cards')
 
   const { items, totalCount, pageSize, isLoading, error, reload } = usePagedQuery<TankCard>(
     (args) => searchTankCards({ ...args, status: statusFilter || undefined }),
-    { search, page, errorMessage: t('tankCards.page.loadFailed') },
+    { search, page, errorMessage: t('tankCards.page.loadFailed'), extra: { status: statusFilter } },
   )
-
-  // The status filter isn't part of usePagedQuery's own dependency key, so trigger a reload
-  // explicitly whenever it changes.
-  useEffect(() => {
-    reload()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statusFilter])
 
   const [vehicles, setVehicles] = useState<VehicleOption[]>([])
 
@@ -241,16 +246,25 @@ export function TankCardsPage() {
 
   const columns: Column<TankCard>[] = [
     { key: 'number', header: t('tankCards.page.colNumber'), width: '120px', render: (row) => <code>{maskCardNumber(row.cardNumber)}</code> },
-    { key: 'internalName', header: t('tankCards.page.colInternalName'), render: (row) => row.internalName ?? '—' },
+    { key: 'internalName', header: t('tankCards.page.colInternalName'), render: (row) => (row.internalName ? <TruncatedText tooltip={row.internalName}>{row.internalName}</TruncatedText> : '—') },
     { key: 'provider', header: t('tankCards.page.colProvider'), width: '110px', render: (row) => row.provider },
     {
       key: 'vehicle',
       header: t('tankCards.page.colVehicle'),
       width: '180px',
-      render: (row) =>
-        row.vehicleInternalNumber ? <span className="nowrap">{`${row.vehicleInternalNumber} (${row.vehicleLicensePlate})`}</span> : '—',
+      render: (row) => {
+        const text = row.vehicleInternalNumber ? `${row.vehicleInternalNumber} (${row.vehicleLicensePlate})` : null
+        return text ? <TruncatedText tooltip={text}>{text}</TruncatedText> : '—'
+      },
     },
-    { key: 'employee', header: t('tankCards.page.colEmployee'), render: (row) => row.employeeName ?? row.driverName ?? '—' },
+    {
+      key: 'employee',
+      header: t('tankCards.page.colEmployee'),
+      render: (row) => {
+        const name = row.employeeName ?? row.driverName
+        return name ? <TruncatedText tooltip={name}>{name}</TruncatedText> : '—'
+      },
+    },
     { key: 'validUntil', header: t('tankCards.page.colValidUntil'), width: '105px', render: (row) => formatDate(row.validUntil) || '—' },
     {
       key: 'status',
@@ -261,32 +275,27 @@ export function TankCardsPage() {
     {
       key: 'actions',
       header: '',
-      width: '240px',
+      width: '52px',
+      align: 'right',
+      // B14: the row opens the editor; the rest lives in one "⋯" menu instead of three links.
       render: (row) => (
-        <span className="tc-actions">
-          {canEdit && (
-            <button type="button" className="tc-link" onClick={() => openEdit(row)}>
-              {t('ui.actions.edit')}
-            </button>
-          )}
-          {canBlock && (
-            <button
-              type="button"
-              className="tc-link"
-              onClick={() => {
-                setBlockTarget(row)
-                setBlockReason('')
-              }}
-            >
-              {row.isBlocked ? t('tankCards.page.unblock') : t('tankCards.page.block')}
-            </button>
-          )}
-          {canDelete && (
-            <button type="button" className="tc-link tc-link-danger" onClick={() => setDeleteTarget(row)}>
-              {t('ui.actions.delete')}
-            </button>
-          )}
-        </span>
+        <RowActionMenu
+          label={t('tankCards.page.rowActions', { number: maskCardNumber(row.cardNumber) })}
+          items={[
+            ...(canEdit ? [{ key: 'edit', label: t('ui.actions.edit'), onSelect: () => openEdit(row) }] : []),
+            ...(canBlock
+              ? [{
+                  key: 'block',
+                  label: row.isBlocked ? t('tankCards.page.unblock') : t('tankCards.page.block'),
+                  onSelect: () => {
+                    setBlockTarget(row)
+                    setBlockReason('')
+                  },
+                }]
+              : []),
+            ...(canDelete ? [{ key: 'delete', label: t('ui.actions.delete'), danger: true, onSelect: () => setDeleteTarget(row) }] : []),
+          ]}
+        />
       ),
     },
   ]
@@ -299,22 +308,17 @@ export function TankCardsPage() {
           hasPermission('tank_cards.create') ? <Button onClick={openCreate}>{t('tankCards.page.new')}</Button> : undefined
         }
       />
-      <div className="tc-filters">
-        <FilterBar
-          search={search}
-          onSearchChange={(value) => {
-            setSearch(value)
-            setPage(1)
-          }}
-          searchPlaceholder={t('tankCards.page.searchPlaceholder')}
-        />
+      <FilterBar
+        search={search}
+        onSearchChange={(value) => apply({ search: value }, { replace: true })}
+        searchPlaceholder={t('tankCards.page.searchPlaceholder')}
+        onClear={isFiltered ? reset : undefined}
+        trailing={<DensityToggle value={density} onChange={setDensity} />}
+      >
         <select
           value={statusFilter}
-          onChange={(e) => {
-            setStatusFilter(e.target.value as TankCardStatus | '')
-            setPage(1)
-          }}
-          className="tc-status-filter"
+          onChange={(e) => apply({ status: e.target.value })}
+          className="ui-filter-select"
           aria-label={t('tankCards.page.statusFilter')}
         >
           <option value="">{t('tankCards.page.allStatuses')}</option>
@@ -324,9 +328,11 @@ export function TankCardsPage() {
             </option>
           ))}
         </select>
-      </div>
+      </FilterBar>
       <DataTable
         fixedLayout
+        density={density}
+        onRowClick={canEdit ? (row) => openEdit(row) : undefined}
         columns={columns}
         rows={items}
         rowKey={(row) => row.id}
@@ -337,7 +343,7 @@ export function TankCardsPage() {
         onRetry={reload}
         loadingMessage={t('tankCards.page.loading')}
       />
-      <Pagination page={page} pageSize={pageSize} totalCount={totalCount} onPageChange={setPage} />
+      <Pagination page={page} pageSize={pageSize} totalCount={totalCount} onPageChange={(next) => apply({ page: next })} />
 
       {editorOpen && (
         <Modal

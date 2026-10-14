@@ -118,7 +118,8 @@
       "customer": "Klant",
       "route": "Route",
       "goods": "Goederen",
-      "status": "Status"
+      "status": "Status",
+      "reference": "Referentie"
     },
     "stopCount": "({count} stops)",
     "exporting": "Exporteren…",

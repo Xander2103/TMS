@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import { PageHeader } from '../../../components/layout/PageHeader'
 import { DataTable, type Column } from '../../../components/ui/DataTable'
 import { FilterBar } from '../../../components/ui/FilterBar'
@@ -7,6 +7,9 @@ import { Pagination } from '../../../components/ui/Pagination'
 import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { usePagedQuery } from '../../../hooks/usePagedQuery'
+import { tableSortOf, useUrlListState } from '../../../hooks/useUrlListState'
+import { DensityToggle } from '../../../components/ui/DensityToggle'
+import { useListDensity } from '../../../components/ui/listDensity'
 import { useToast } from '../../../components/ui/toastContext'
 import { useLocale } from '../../../i18n/localeContext'
 import { useAuth } from '../../auth/authContextValue'
@@ -24,14 +27,22 @@ import {
 import './transport-orders.css'
 import { TruncatedText } from '../../../components/ui/TruncatedText'
 
+/** B26: the list state lives in the URL — refresh, Back and a shared link restore the exact view. */
+const LIST_STATE = {
+  defaults: { search: '', status: '', sort: '', dir: '' },
+  allowed: { status: ORDER_STATUSES, sort: ['number', 'date', 'customer', 'status', 'reference'], dir: ['asc', 'desc'] },
+}
+const DESC_BY_DEFAULT = ['date']
+
 export function TransportOrdersPage() {
   const navigate = useNavigate()
   const { t } = useLocale()
   const toast = useToast()
   const { hasAnyPermission } = useAuth()
-  const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState<TransportOrderStatus | ''>('')
-  const [page, setPage] = useState(1)
+  const { state, apply, reset, isFiltered } = useUrlListState(LIST_STATE)
+  const { search, page } = state
+  const statusFilter = state.status as TransportOrderStatus | ''
+  const [density, setDensity] = useListDensity('transport-orders')
   const [exporting, setExporting] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [bulkStatus, setBulkStatus] = useState<TransportOrderStatus | ''>('')
@@ -82,6 +93,8 @@ export function TransportOrdersPage() {
       const query = new URLSearchParams()
       if (search) query.set('search', search)
       if (statusFilter) query.set('status', statusFilter)
+      if (state.sort) query.set('sort', state.sort)
+      if (state.dir) query.set('dir', state.dir)
       const response = await fetch(`${apiBaseUrl}/api/transport-orders/export?${query.toString()}`, {
         headers: { Authorization: `Bearer ${getAccessToken() ?? ''}` },
       })
@@ -101,16 +114,15 @@ export function TransportOrdersPage() {
   }
 
   const { items, totalCount, pageSize, isLoading, error, reload } = usePagedQuery<TransportOrderListItem>(
-    (args) => searchTransportOrders({ ...args, status: statusFilter || undefined }),
-    { search, page, errorMessage: t('transportOrders.list.loadFailed') },
+    (args) => searchTransportOrders({ ...args, status: statusFilter || undefined, sort: state.sort, dir: state.dir as 'asc' | 'desc' | '' }),
+    {
+      search,
+      page,
+      errorMessage: t('transportOrders.list.loadFailed'),
+      // Filter and sort are part of the request key, so a change refetches (no manual reload).
+      extra: { status: statusFilter, sort: state.sort, dir: state.dir },
+    },
   )
-
-  // The status filter isn't part of usePagedQuery's own dependency key, so trigger a reload
-  // explicitly whenever it changes.
-  useEffect(() => {
-    reload()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statusFilter])
 
   const columns: Column<TransportOrderListItem>[] = [
     ...(canBulk
@@ -131,9 +143,27 @@ export function TransportOrdersPage() {
           } satisfies Column<TransportOrderListItem>,
         ]
       : []),
-    { key: 'number', header: t('transportOrders.list.columns.number'), width: '110px', render: (row) => <code>{row.orderNumber}</code> },
-    { key: 'date', header: t('transportOrders.list.columns.date'), width: '110px', render: (row) => formatDate(row.orderDate) },
-    { key: 'customer', header: t('transportOrders.list.columns.customer'), render: (row) => <TruncatedText tooltip={row.customerName}>{row.customerName}</TruncatedText> },
+    {
+      key: 'number',
+      header: t('transportOrders.list.columns.number'),
+      width: '118px',
+      sortKey: 'number',
+      // B14: the identifier is a real link (middle-click, keyboard) that never wraps.
+      render: (row) => (
+        <Link to={`/transport-orders/${row.id}`} className="ui-id-link" onClick={(event) => event.stopPropagation()}>
+          {row.orderNumber}
+        </Link>
+      ),
+    },
+    { key: 'date', header: t('transportOrders.list.columns.date'), width: '108px', sortKey: 'date', render: (row) => <span className="ui-nowrap">{formatDate(row.orderDate)}</span> },
+    { key: 'customer', header: t('transportOrders.list.columns.customer'), sortKey: 'customer', render: (row) => <TruncatedText tooltip={row.customerName}>{row.customerName}</TruncatedText> },
+    {
+      key: 'reference',
+      header: t('transportOrders.list.columns.reference'),
+      width: '150px',
+      sortKey: 'reference',
+      render: (row) => (row.customerReference ? <TruncatedText tooltip={row.customerReference}>{row.customerReference}</TruncatedText> : '—'),
+    },
     {
       key: 'route',
       header: t('transportOrders.list.columns.route'),
@@ -164,6 +194,7 @@ export function TransportOrdersPage() {
       key: 'status',
       header: t('transportOrders.list.columns.status'),
       width: '130px',
+      sortKey: 'status',
       render: (row) => <Badge tone={ORDER_STATUS_TONE[row.status]}>{t(ORDER_STATUS_LABELS[row.status])}</Badge>,
     },
   ]
@@ -185,22 +216,17 @@ export function TransportOrdersPage() {
           </span>
         }
       />
-      <div className="to-filters">
-        <FilterBar
-          search={search}
-          onSearchChange={(value) => {
-            setSearch(value)
-            setPage(1)
-          }}
-          searchPlaceholder={t('transportOrders.list.searchPlaceholder')}
-        />
+      <FilterBar
+        search={search}
+        onSearchChange={(value) => apply({ search: value }, { replace: true })}
+        searchPlaceholder={t('transportOrders.list.searchPlaceholder')}
+        onClear={isFiltered ? reset : undefined}
+        trailing={<DensityToggle value={density} onChange={setDensity} />}
+      >
         <select
           value={statusFilter}
-          onChange={(e) => {
-            setStatusFilter(e.target.value as TransportOrderStatus | '')
-            setPage(1)
-          }}
-          className="to-status-filter"
+          onChange={(e) => apply({ status: e.target.value })}
+          className="ui-filter-select"
           aria-label={t('ui.filter.statusLabel')}
         >
           <option value="">{t('ui.filter.allStatuses')}</option>
@@ -210,7 +236,7 @@ export function TransportOrdersPage() {
             </option>
           ))}
         </select>
-      </div>
+      </FilterBar>
       {canBulk && selected.size > 0 && (
         <div className="to-bulkbar">
           <span>{t('transportOrders.list.selectedCount', { count: selected.size })}</span>
@@ -236,6 +262,9 @@ export function TransportOrdersPage() {
       )}
       <DataTable
         fixedLayout
+        density={density}
+        sort={tableSortOf(state.sort, state.dir, DESC_BY_DEFAULT)}
+        onSortChange={(next) => apply({ sort: next.key, dir: next.dir })}
         columns={columns}
         rows={items}
         rowKey={(row) => row.id}
@@ -247,7 +276,7 @@ export function TransportOrdersPage() {
         loadingMessage={t('transportOrders.list.loading')}
         onRowClick={(row) => navigate(`/transport-orders/${row.id}`)}
       />
-      <Pagination page={page} pageSize={pageSize} totalCount={totalCount} onPageChange={setPage} />
+      <Pagination page={page} pageSize={pageSize} totalCount={totalCount} onPageChange={(next) => apply({ page: next })} />
     </div>
   )
 }

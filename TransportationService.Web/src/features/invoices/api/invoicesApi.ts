@@ -19,6 +19,9 @@ export interface SearchInvoicesParams {
   customerId?: string
   page: number
   pageSize: number
+  /** B26: whitelisted server sort key and direction ('' = the list's natural order). */
+  sort?: string
+  dir?: 'asc' | 'desc' | ''
 }
 
 export function searchInvoices(params: SearchInvoicesParams): Promise<PagedResult<InvoiceListItem>> {
@@ -26,6 +29,8 @@ export function searchInvoices(params: SearchInvoicesParams): Promise<PagedResul
   if (params.search) query.set('search', params.search)
   if (params.status) query.set('status', params.status)
   if (params.customerId) query.set('customerId', params.customerId)
+  if (params.sort) query.set('sort', params.sort)
+  if (params.dir) query.set('dir', params.dir)
   query.set('page', String(params.page))
   query.set('pageSize', String(params.pageSize))
   return apiClient.getJson<PagedResult<InvoiceListItem>>(`/api/invoices?${query.toString()}`)

@@ -10,7 +10,7 @@
   flex: 1 1 240px;
   min-width: 200px;
   font: inherit;
-  font-size: 15px;
+  font-size: var(--text-base);
   padding: 9px 12px;
   border: 1px solid var(--color-input-border);
   border-radius: 8px;
@@ -20,7 +20,7 @@
 
 .ui-filter-select {
   font: inherit;
-  font-size: 15px;
+  font-size: var(--text-base);
   padding: 9px 12px;
   border: 1px solid var(--color-input-border);
   border-radius: 8px;
@@ -33,4 +33,24 @@
   outline: none;
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-bg);
+}
+
+.ui-filter-clear {
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-size: var(--text-md);
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.ui-filter-trailing {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }

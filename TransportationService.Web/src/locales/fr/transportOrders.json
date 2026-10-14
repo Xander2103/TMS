@@ -118,7 +118,8 @@
       "customer": "Client",
       "route": "Itinéraire",
       "goods": "Marchandises",
-      "status": "Statut"
+      "status": "Statut",
+      "reference": "Référence"
     },
     "stopCount": "({count} arrêts)",
     "exporting": "Export en cours…",

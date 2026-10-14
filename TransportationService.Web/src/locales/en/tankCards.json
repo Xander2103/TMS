@@ -23,7 +23,8 @@
     "colValidUntil": "Valid until",
     "colStatus": "Status",
     "block": "Block",
-    "unblock": "Unblock"
+    "unblock": "Unblock",
+    "rowActions": "Actions card {number}"
   },
   "form": {
     "editTitle": "Edit fuel card",

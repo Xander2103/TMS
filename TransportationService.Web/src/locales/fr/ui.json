@@ -22,7 +22,8 @@
     "statusLabel": "Filtre de statut",
     "allStatuses": "Tous les statuts",
     "active": "Actif",
-    "inactive": "Inactif"
+    "inactive": "Inactif",
+    "clear": "Effacer les filtres"
   },
   "pagination": {
     "label": "Pagination",
@@ -192,5 +193,10 @@
     "before": "Avant",
     "after": "Après",
     "loading": "Chargement de l'historique…"
+  },
+  "density": {
+    "label": "Densité",
+    "compact": "Compact",
+    "normal": "Normal"
   }
 }

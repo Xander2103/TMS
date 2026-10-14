@@ -23,7 +23,8 @@
     "colValidUntil": "Valable jusqu'au",
     "colStatus": "Statut",
     "block": "Bloquer",
-    "unblock": "Débloquer"
+    "unblock": "Débloquer",
+    "rowActions": "Actions carte {number}"
   },
   "form": {
     "editTitle": "Modifier la carte carburant",
