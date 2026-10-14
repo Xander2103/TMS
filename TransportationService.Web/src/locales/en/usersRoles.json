@@ -21,11 +21,16 @@
       "email": "Email",
       "firstName": "First name",
       "lastName": "Last name",
-      "employeeId": "Linked employee (id)",
-      "customerId": "Linked customer (id)",
+      "employeeId": "Linked employee",
+      "customerId": "Linked customer",
       "saving": "Saving...",
       "saveChanges": "Save changes",
-      "create": "Create user"
+      "create": "Create user",
+      "employeePlaceholder": "Search by name or employee number…",
+      "customerPlaceholder": "Search by name or customer number…",
+      "employeeHint": "Optional. Gives the account this employee’s planning, hours and documents.",
+      "customerHint": "Optional. Gives the account access to this customer’s portal.",
+      "noResults": "No results."
     },
     "validation": {
       "emailRequired": "Email is required.",

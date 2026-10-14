@@ -1,4 +1,6 @@
 import { Link } from 'react-router-dom'
+import { Badge } from '../../../components/ui/Badge'
+import { DataTable, type Column } from '../../../components/ui/DataTable'
 import { useLocale } from '../../../i18n/localeContext'
 import type { User } from '../types/user'
 import './UsersTable.css'
@@ -7,53 +9,52 @@ interface UsersTableProps {
   users: User[]
 }
 
+/** B46: the same DataTable and status badges as every other list in the app. */
 export function UsersTable({ users }: UsersTableProps) {
   const { t } = useLocale()
-  if (users.length === 0) {
-    return <p>{t('usersRoles.users.table.empty')}</p>
-  }
+  const columns: Column<User>[] = [
+    {
+      key: 'name',
+      header: t('usersRoles.users.table.name'),
+      render: (user) => (
+        <Link to={`/users/${user.id}`}>
+          {user.firstName} {user.lastName}
+        </Link>
+      ),
+    },
+    { key: 'email', header: t('usersRoles.users.table.email'), render: (user) => user.email },
+    {
+      key: 'roles',
+      header: t('usersRoles.users.table.roles'),
+      render: (user) =>
+        user.roles.length === 0 ? (
+          <span className="muted-text">{t('usersRoles.users.table.noRoles')}</span>
+        ) : (
+          <span className="badge-list">
+            {user.roles.map((role) => (
+              <Badge key={role.id} tone="neutral">
+                {role.name}
+              </Badge>
+            ))}
+          </span>
+        ),
+    },
+    {
+      key: 'status',
+      header: t('usersRoles.users.table.status'),
+      width: '200px',
+      render: (user) => (
+        <span className="badge-list">
+          {user.isActive ? (
+            <Badge tone="success">{t('usersRoles.users.table.active')}</Badge>
+          ) : (
+            <Badge tone="neutral">{t('usersRoles.users.table.inactive')}</Badge>
+          )}
+          {user.isBlocked && <Badge tone="danger">{t('usersRoles.users.table.blocked')}</Badge>}
+        </span>
+      ),
+    },
+  ]
 
-  return (
-    <table className="users-table">
-      <thead>
-        <tr>
-          <th scope="col">{t('usersRoles.users.table.name')}</th>
-          <th scope="col">{t('usersRoles.users.table.email')}</th>
-          <th scope="col">{t('usersRoles.users.table.roles')}</th>
-          <th scope="col">{t('usersRoles.users.table.status')}</th>
-        </tr>
-      </thead>
-      <tbody>
-        {users.map((user) => (
-          <tr key={user.id}>
-            <td>
-              <Link to={`/users/${user.id}`}>
-                {user.firstName} {user.lastName}
-              </Link>
-            </td>
-            <td>{user.email}</td>
-            <td>
-              {user.roles.length === 0 ? (
-                <span className="muted-text">{t('usersRoles.users.table.noRoles')}</span>
-              ) : (
-                <span className="badge-list">
-                  {user.roles.map((role) => (
-                    <span key={role.id} className="badge">
-                      {role.name}
-                    </span>
-                  ))}
-                </span>
-              )}
-            </td>
-            <td>
-              <span className={user.isActive ? 'status-text status-active' : 'status-text status-inactive'}>
-                {user.isActive ? t('usersRoles.users.table.active') : t('usersRoles.users.table.inactive')}
-              </span>
-              {user.isBlocked && <span className="status-text status-blocked">{t('usersRoles.users.table.blocked')}</span>}
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  )
+  return <DataTable columns={columns} rows={users} rowKey={(user) => user.id} emptyMessage={t('usersRoles.users.table.empty')} />
 }

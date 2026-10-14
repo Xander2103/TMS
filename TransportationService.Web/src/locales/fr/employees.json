@@ -494,7 +494,9 @@
     "deleteFailed": "La suppression a échoué.",
     "deleteTitle": "Supprimer le document",
     "deleteMessage": "Supprimer définitivement « {name} » ? Cette action est irréversible.",
-    "deleteConfirm": "Supprimer"
+    "deleteConfirm": "Supprimer",
+    "openUpload": "Téléverser un document",
+    "closeUpload": "Fermer le téléversement"
   },
   "tankCards": {
     "heading": "Cartes carburant",

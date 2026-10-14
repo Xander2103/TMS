@@ -21,11 +21,16 @@
       "email": "E-mail",
       "firstName": "Prénom",
       "lastName": "Nom",
-      "employeeId": "Collaborateur lié (id)",
-      "customerId": "Client lié (id)",
+      "employeeId": "Collaborateur lié",
+      "customerId": "Client lié",
       "saving": "Enregistrement...",
       "saveChanges": "Enregistrer les modifications",
-      "create": "Créer l'utilisateur"
+      "create": "Créer l'utilisateur",
+      "employeePlaceholder": "Rechercher par nom ou numéro de personnel…",
+      "customerPlaceholder": "Rechercher par nom ou numéro de client…",
+      "employeeHint": "Facultatif. Donne au compte le planning, les heures et les documents de ce collaborateur.",
+      "customerHint": "Facultatif. Donne au compte l’accès au portail client de ce client.",
+      "noResults": "Aucun résultat."
     },
     "validation": {
       "emailRequired": "L'e-mail est obligatoire.",

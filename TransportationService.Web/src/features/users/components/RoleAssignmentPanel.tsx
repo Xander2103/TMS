@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Button } from '../../../components/ui/Button'
 import { useLocale } from '../../../i18n/localeContext'
 import { useRoles } from '../../roles/hooks/useRoles'
 import { useUserMutations } from '../hooks/useUserMutations'
@@ -66,9 +67,9 @@ export function RoleAssignmentPanel({ user, onSaved }: RoleAssignmentPanelProps)
           {saveError}
         </p>
       )}
-      <button type="button" className="primary-button" onClick={handleSave} disabled={isSubmitting}>
+      <Button onClick={handleSave} disabled={isSubmitting}>
         {isSubmitting ? t('usersRoles.users.rolesPanel.saving') : t('usersRoles.users.rolesPanel.save')}
-      </button>
+      </Button>
     </div>
   )
 }

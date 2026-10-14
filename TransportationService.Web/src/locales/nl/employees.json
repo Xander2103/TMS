@@ -494,7 +494,9 @@
     "deleteFailed": "Verwijderen is mislukt.",
     "deleteTitle": "Document verwijderen",
     "deleteMessage": "'{name}' definitief verwijderen? Dit kan niet ongedaan worden gemaakt.",
-    "deleteConfirm": "Verwijderen"
+    "deleteConfirm": "Verwijderen",
+    "openUpload": "Document uploaden",
+    "closeUpload": "Uploaden sluiten"
   },
   "tankCards": {
     "heading": "Tankkaarten",

@@ -1,4 +1,8 @@
-import { useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react'
+import { SearchableSelect, type SearchableSelectSearchFn } from '../../../components/ui/SearchableSelect'
+import { getEmployee, searchEmployees } from '../../employees/api/employeesApi'
+import { getCustomer, searchCustomers } from '../../customers/api/customersApi'
+import { Button } from '../../../components/ui/Button'
 import { useLocale } from '../../../i18n/localeContext'
 import { useUserMutations } from '../hooks/useUserMutations'
 import {
@@ -27,12 +31,61 @@ function valuesFromUser(user?: User): UserFormValues {
   }
 }
 
+const searchEmployeeOptions: SearchableSelectSearchFn = async (query) => {
+  const page = await searchEmployees({ search: query || undefined, isActive: true, page: 1, pageSize: 20 })
+  return page.items.map((employee) => ({
+    value: employee.id,
+    label: `${employee.firstName} ${employee.lastName}`,
+    subtitle: employee.employeeNumber,
+  }))
+}
+
+const searchCustomerOptions: SearchableSelectSearchFn = async (query) => {
+  const page = await searchCustomers({ search: query || undefined, isActive: true, page: 1, pageSize: 20 })
+  return page.items.map((customer) => ({ value: customer.id, label: customer.name, subtitle: customer.customerNumber }))
+}
+
 export function UserForm({ user, onSaved, secondaryAction }: UserFormProps) {
   const { t } = useLocale()
   const isEditMode = Boolean(user)
   const [values, setValues] = useState<UserFormValues>(() => valuesFromUser(user))
   const [errors, setErrors] = useState<UserFormErrors>({})
   const { isSubmitting, error, create, update } = useUserMutations()
+  // Labels for the ids the user already carries; later picks carry their own label.
+  const [employeeLabel, setEmployeeLabel] = useState<string | undefined>(undefined)
+  const [customerLabel, setCustomerLabel] = useState<string | undefined>(undefined)
+  const linkedEmployeeId = user?.employeeId ?? null
+  const linkedCustomerId = user?.customerId ?? null
+
+  useEffect(() => {
+    if (!linkedEmployeeId) return
+    let active = true
+    getEmployee(linkedEmployeeId)
+      .then((employee) => {
+        if (active) setEmployeeLabel(`${employee.firstName} ${employee.lastName} (${employee.employeeNumber})`)
+      })
+      .catch(() => {})
+    return () => {
+      active = false
+    }
+  }, [linkedEmployeeId])
+
+  useEffect(() => {
+    if (!linkedCustomerId) return
+    let active = true
+    getCustomer(linkedCustomerId)
+      .then((customer) => {
+        if (active) setCustomerLabel(`${customer.name} (${customer.customerNumber})`)
+      })
+      .catch(() => {})
+    return () => {
+      active = false
+    }
+  }, [linkedCustomerId])
+
+  function setLinked(field: 'employeeId' | 'customerId', value: string | null) {
+    setValues((previous) => ({ ...previous, [field]: value ?? '' }))
+  }
 
   function handleChange(event: ChangeEvent<HTMLInputElement>) {
     const { value } = event.target
@@ -130,28 +183,35 @@ export function UserForm({ user, onSaved, secondaryAction }: UserFormProps) {
         )}
       </div>
 
+      {/* B46: link by searching a name, never by pasting an id. */}
       <div className="form-field">
         <label htmlFor="employeeId">{t('usersRoles.users.form.employeeId')}</label>
-        <input
+        <SearchableSelect
           id="employeeId"
-          name="employeeId"
-          type="text"
-          autoComplete="off"
-          value={values.employeeId}
-          onChange={handleChange}
+          value={values.employeeId || null}
+          onChange={(value) => setLinked('employeeId', value)}
+          options={[]}
+          selectedLabel={employeeLabel}
+          onSearch={searchEmployeeOptions}
+          placeholder={t('usersRoles.users.form.employeePlaceholder')}
+          emptyMessage={t('usersRoles.users.form.noResults')}
         />
+        <p className="field-hint">{t('usersRoles.users.form.employeeHint')}</p>
       </div>
 
       <div className="form-field">
         <label htmlFor="customerId">{t('usersRoles.users.form.customerId')}</label>
-        <input
+        <SearchableSelect
           id="customerId"
-          name="customerId"
-          type="text"
-          autoComplete="off"
-          value={values.customerId}
-          onChange={handleChange}
+          value={values.customerId || null}
+          onChange={(value) => setLinked('customerId', value)}
+          options={[]}
+          selectedLabel={customerLabel}
+          onSearch={searchCustomerOptions}
+          placeholder={t('usersRoles.users.form.customerPlaceholder')}
+          emptyMessage={t('usersRoles.users.form.noResults')}
         />
+        <p className="field-hint">{t('usersRoles.users.form.customerHint')}</p>
       </div>
 
       {error && (
@@ -161,13 +221,13 @@ export function UserForm({ user, onSaved, secondaryAction }: UserFormProps) {
       )}
 
       <div className="form-actions">
-        <button type="submit" className="primary-button" disabled={isSubmitting}>
+        <Button type="submit" disabled={isSubmitting}>
           {isSubmitting
             ? t('usersRoles.users.form.saving')
             : isEditMode
               ? t('usersRoles.users.form.saveChanges')
               : t('usersRoles.users.form.create')}
-        </button>
+        </Button>
         {secondaryAction}
       </div>
     </form>

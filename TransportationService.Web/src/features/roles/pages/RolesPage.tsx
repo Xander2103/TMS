@@ -3,6 +3,7 @@ import { PageHeader } from '../../../components/layout/PageHeader'
 import { LoadingState } from '../../../components/feedback/LoadingState'
 import { ErrorState } from '../../../components/feedback/ErrorState'
 import { useAuth } from '../../auth/authContextValue'
+import { Button } from '../../../components/ui/Button'
 import { useLocale } from '../../../i18n/localeContext'
 import { RolesTable } from '../components/RolesTable'
 import { useRoles } from '../hooks/useRoles'
@@ -53,9 +54,9 @@ export function RolesPage() {
         title={t('usersRoles.roles.page.title')}
         action={
           hasPermission('roles.create') && (
-            <button type="button" className="primary-button" onClick={() => setIsCreating((value) => !value)}>
+            <Button variant={isCreating ? 'secondary' : 'primary'} onClick={() => setIsCreating((value) => !value)}>
               {isCreating ? t('ui.actions.cancel') : t('usersRoles.roles.page.newRole')}
-            </button>
+            </Button>
           )
         }
       />
@@ -99,9 +100,9 @@ export function RolesPage() {
             </p>
           )}
           <div className="form-actions">
-            <button type="submit" className="primary-button" disabled={isSubmitting}>
+            <Button type="submit" disabled={isSubmitting}>
               {isSubmitting ? t('usersRoles.roles.page.creating') : t('usersRoles.roles.page.create')}
-            </button>
+            </Button>
           </div>
         </form>
       )}

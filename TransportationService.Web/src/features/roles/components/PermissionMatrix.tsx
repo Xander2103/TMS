@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Button } from '../../../components/ui/Button'
 import { useLocale } from '../../../i18n/localeContext'
 import { usePermissions } from '../hooks/usePermissions'
 import { useRoleMutations } from '../hooks/useRoleMutations'
@@ -96,9 +97,9 @@ export function PermissionMatrix({ role, onSaved }: PermissionMatrixProps) {
         </p>
       )}
 
-      <button type="button" className="primary-button" onClick={handleSave} disabled={isSubmitting}>
+      <Button onClick={handleSave} disabled={isSubmitting}>
         {isSubmitting ? t('usersRoles.roles.matrix.saving') : t('usersRoles.roles.matrix.save')}
-      </button>
+      </Button>
     </div>
   )
 }

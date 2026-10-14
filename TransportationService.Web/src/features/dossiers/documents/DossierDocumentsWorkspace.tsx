@@ -178,6 +178,14 @@ export function DossierDocumentsWorkspace({ dossierId, levels, initialOrderId, i
     </section>
   )
 
+  // B48: an empty list offers the upload right there instead of a bare sentence.
+  const uploadAction =
+    canUploadHere && documents ? (
+      <Button variant="secondary" onClick={() => setUploadOpen(true)} disabled={busy}>
+        + {t('dossierDocuments.upload.open')}
+      </Button>
+    ) : undefined
+
   return (
     <div className="ddoc-workspace" data-level={activeLevel}>
       <div className="ddoc-layout">
@@ -205,7 +213,7 @@ export function DossierDocumentsWorkspace({ dossierId, levels, initialOrderId, i
             <section className="ddoc-section" aria-label={t('dossierDocuments.sections.dossier')}>
               <h3>{t('dossierDocuments.sections.dossier')}</h3>
               <p className="ddoc-hint">{t('dossierDocuments.sections.dossierHint')}</p>
-              <DossierDocumentTable documents={dossierDocuments} actions={dossierActions} emptyText={t('dossierDocuments.empty.dossier')} />
+              <DossierDocumentTable documents={dossierDocuments} actions={dossierActions} emptyText={t('dossierDocuments.empty.dossier')} emptyAction={uploadAction} />
             </section>
           )}
 
@@ -214,7 +222,7 @@ export function DossierDocumentsWorkspace({ dossierId, levels, initialOrderId, i
               <section className="ddoc-section" aria-label={t('dossierDocuments.sections.own')}>
                 <h3>{t('dossierDocuments.sections.own')}</h3>
                 <p className="ddoc-hint">{t('dossierDocuments.sections.ownHint', { number: activeOrder.orderNumber })}</p>
-                <DossierDocumentTable documents={ownDocuments} actions={orderActions} emptyText={t('dossierDocuments.empty.order')} />
+                <DossierDocumentTable documents={ownDocuments} actions={orderActions} emptyText={t('dossierDocuments.empty.order')} emptyAction={uploadAction} />
               </section>
               {sharedDossierDocuments}
               <IssuedTransportDocumentsBlock key={activeOrder.orderId} orderId={activeOrder.orderId} craneJobKind={craneJobKinds?.[activeOrder.orderId]} />
@@ -226,7 +234,7 @@ export function DossierDocumentsWorkspace({ dossierId, levels, initialOrderId, i
               <section className="ddoc-section" aria-label={t('dossierDocuments.sections.ownActivity')}>
                 <h3>{t('dossierDocuments.sections.ownActivity')}</h3>
                 <p className="ddoc-hint">{t('dossierDocuments.sections.ownActivityHint', { label: activeActivity.label })}</p>
-                <DossierDocumentTable documents={ownDocuments} actions={activityActions} emptyText={t('dossierDocuments.empty.activity')} />
+                <DossierDocumentTable documents={ownDocuments} actions={activityActions} emptyText={t('dossierDocuments.empty.activity')} emptyAction={uploadAction} />
               </section>
               {sharedDossierDocuments}
             </>

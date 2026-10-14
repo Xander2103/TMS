@@ -21,11 +21,16 @@
       "email": "E-mail",
       "firstName": "Voornaam",
       "lastName": "Achternaam",
-      "employeeId": "Gekoppelde medewerker (id)",
-      "customerId": "Gekoppelde klant (id)",
+      "employeeId": "Gekoppelde medewerker",
+      "customerId": "Gekoppelde klant",
       "saving": "Opslaan...",
       "saveChanges": "Wijzigingen opslaan",
-      "create": "Gebruiker aanmaken"
+      "create": "Gebruiker aanmaken",
+      "employeePlaceholder": "Zoek op naam of personeelsnummer…",
+      "customerPlaceholder": "Zoek op naam of klantnummer…",
+      "employeeHint": "Optioneel. Geeft het account de planning, uren en documenten van deze medewerker.",
+      "customerHint": "Optioneel. Geeft het account toegang tot het klantenportaal van deze klant.",
+      "noResults": "Geen resultaten."
     },
     "validation": {
       "emailRequired": "E-mail is verplicht.",

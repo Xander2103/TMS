@@ -4,6 +4,7 @@ import { ErrorState } from '../../../components/feedback/ErrorState'
 import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
+import { EmptyState } from '../../../components/ui/EmptyState'
 import { FormField } from '../../../components/ui/FormField'
 import { useToast } from '../../../components/ui/toastContext'
 import { useLocale } from '../../../i18n/localeContext'
@@ -54,6 +55,8 @@ export function EmployeeDocumentsTab({ employeeId, highlightDocumentId, onChange
   const [uploadExpiry, setUploadExpiry] = useState('')
   const [uploadNotes, setUploadNotes] = useState('')
   const [uploading, setUploading] = useState(false)
+  // B48: the upload form stays folded behind one button until it is needed.
+  const [uploadOpen, setUploadOpen] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const cameraInputRef = useRef<HTMLInputElement>(null)
 
@@ -93,6 +96,7 @@ export function EmployeeDocumentsTab({ employeeId, highlightDocumentId, onChange
       toast.showSuccess(t('employees.documents.saved'))
       setUploadExpiry('')
       setUploadNotes('')
+      setUploadOpen(false)
       void reload()
       onChanged?.()
     } catch (err) {
@@ -140,7 +144,19 @@ export function EmployeeDocumentsTab({ employeeId, highlightDocumentId, onChange
         </p>
       )}
 
-      {canCreate && (
+      <div className="employee-documents-toolbar">
+        {canCreate && (
+          <Button variant={uploadOpen ? 'secondary' : 'primary'} onClick={() => setUploadOpen((open) => !open)} aria-expanded={uploadOpen}>
+            {uploadOpen ? t('employees.documents.closeUpload') : t('employees.documents.openUpload')}
+          </Button>
+        )}
+        <label className="customer-form-checkbox">
+          <input type="checkbox" checked={includeArchived} onChange={(e) => setIncludeArchived(e.target.checked)} />
+          {t('employees.documents.showArchived')}
+        </label>
+      </div>
+
+      {canCreate && uploadOpen && (
         <div className="employee-documents-upload">
           <FormField label={t('employees.documents.uploadCategory')} htmlFor="ed-upload-category">
             <select
@@ -195,15 +211,17 @@ export function EmployeeDocumentsTab({ employeeId, highlightDocumentId, onChange
         </div>
       )}
 
-      <div className="employee-documents-toolbar">
-        <label className="customer-form-checkbox">
-          <input type="checkbox" checked={includeArchived} onChange={(e) => setIncludeArchived(e.target.checked)} />
-          {t('employees.documents.showArchived')}
-        </label>
-      </div>
-
       {grouped.length === 0 ? (
-        <p className="placeholder-text">{t('employees.documents.empty')}</p>
+        <EmptyState
+          message={t('employees.documents.empty')}
+          action={
+            canCreate && !uploadOpen ? (
+              <Button variant="secondary" onClick={() => setUploadOpen(true)}>
+                {t('employees.documents.openUpload')}
+              </Button>
+            ) : undefined
+          }
+        />
       ) : (
         grouped.map(({ category, docs }) => (
           <section key={category} className="employee-documents-group">

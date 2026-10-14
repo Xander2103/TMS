@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import userEvent from '@testing-library/user-event'
 import { render, screen } from '@testing-library/react'
 import { EmployeeDocumentsTab } from '../components/EmployeeDocumentsTab'
 import type { EmployeeDocument } from '../api/employeeDocumentsApi'
@@ -76,5 +77,20 @@ describe('EmployeeDocumentsTab', () => {
 
     expect(await screen.findByText('paspoort.pdf')).toBeInTheDocument()
     expect(screen.queryByText(/Gevoelige documenten/)).not.toBeInTheDocument()
+  })
+
+  it('folds the upload form behind "Document uploaden" and offers it from the empty state (B48)', async () => {
+    auth.permissions = ['employee_documents.view', 'employee_documents.create']
+    docs.value = []
+    render(<EmployeeDocumentsTab employeeId="e-1" />)
+
+    expect(await screen.findByText('Er zijn nog geen documenten geregistreerd.')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Bestand kiezen' })).not.toBeInTheDocument()
+    const openers = screen.getAllByRole('button', { name: 'Document uploaden' })
+    expect(openers).toHaveLength(2) // toolbar + empty state
+
+    await userEvent.click(openers[1])
+    expect(screen.getByRole('button', { name: 'Bestand kiezen' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Uploaden sluiten' })).toBeInTheDocument()
   })
 })

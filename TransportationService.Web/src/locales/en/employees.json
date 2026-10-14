@@ -494,7 +494,9 @@
     "deleteFailed": "Deletion failed.",
     "deleteTitle": "Delete document",
     "deleteMessage": "Permanently delete '{name}'? This cannot be undone.",
-    "deleteConfirm": "Delete"
+    "deleteConfirm": "Delete",
+    "openUpload": "Upload document",
+    "closeUpload": "Close upload"
   },
   "tankCards": {
     "heading": "Fuel cards",

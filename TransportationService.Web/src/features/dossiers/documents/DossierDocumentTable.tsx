@@ -1,4 +1,6 @@
+import type { ReactNode } from 'react'
 import { Badge } from '../../../components/ui/Badge'
+import { EmptyState } from '../../../components/ui/EmptyState'
 import { useToast } from '../../../components/ui/toastContext'
 import { describeApiError } from '../../../api/problemDetails'
 import { useLocale } from '../../../i18n/localeContext'
@@ -20,6 +22,8 @@ interface DossierDocumentTableProps {
   actions?: DossierDocumentRowActions
   /** Tells the empty-state apart per list; the caller renders it. */
   emptyText: string
+  /** B48: the one thing to do when the list is empty (upload), rendered inside the empty state. */
+  emptyAction?: ReactNode
 }
 
 /**
@@ -27,11 +31,11 @@ interface DossierDocumentTableProps {
  * order page). Viewing/downloading goes through the shared auth path; every write action is
  * only rendered when the host passes a handler, so a read-only list simply passes none.
  */
-export function DossierDocumentTable({ documents, showLevel = false, actions = {}, emptyText }: DossierDocumentTableProps) {
+export function DossierDocumentTable({ documents, showLevel = false, actions = {}, emptyText, emptyAction }: DossierDocumentTableProps) {
   const { t, formatDate } = useLocale()
   const { showError } = useToast()
 
-  if (documents.length === 0) return <p className="placeholder-text">{emptyText}</p>
+  if (documents.length === 0) return <EmptyState message={emptyText} action={emptyAction} />
 
   function download(document: DossierDocument) {
     downloadDossierDocumentFile(document).catch((err: unknown) =>
