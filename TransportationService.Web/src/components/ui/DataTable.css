@@ -27,6 +27,13 @@
   text-overflow: ellipsis;
 }
 
+/* B10: compact rows (4px + 24px line + 4px = 32px) for lists that are scanned all day. */
+.data-table-compact thead th,
+.data-table-compact tbody td {
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+
 .data-table thead th {
   text-align: left;
   padding: 12px 16px;

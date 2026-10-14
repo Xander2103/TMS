@@ -20,6 +20,8 @@ interface DossierFilterPanelProps {
   id: string
   filters: DossierSearchFilters
   lookups: DossierFilterLookups
+  /** The signed-in user; "Alleen mijn dossiers" needs it. */
+  currentUserId?: string | null
   /** Patches the URL-backed filter state; `replace` for keystrokes so Back skips them. */
   onChange: (patch: Partial<DossierSearchFilters>, options?: { replace?: boolean }) => void
 }
@@ -29,7 +31,7 @@ interface DossierFilterPanelProps {
  * URL-backed filter state — it holds no filter state of its own, so closing it never drops a
  * filter. Every field maps 1:1 to a parameter of GET /api/dossiers/search.
  */
-export function DossierFilterPanel({ id, filters, lookups, onChange }: DossierFilterPanelProps) {
+export function DossierFilterPanel({ id, filters, lookups, currentUserId = null, onChange }: DossierFilterPanelProps) {
   const { t } = useLocale()
   const idPrefix = useId()
   const fieldId = (key: DossierFilterKey) => `${idPrefix}-${key}`
@@ -126,6 +128,20 @@ export function DossierFilterPanel({ id, filters, lookups, onChange }: DossierFi
           { value: 'Automatic', label: t('dossiers.filters.options.sourceAutomatic') },
         ]),
         rangeField('confirmed'),
+        selectField('hasOpenIncident', [
+          { value: 'true', label: t('dossiers.filters.options.incidentOpen') },
+          { value: 'false', label: t('dossiers.filters.options.incidentNone') },
+        ]),
+        currentUserId ? (
+          <label key="mine" className="dossier-filter-mine">
+            <input
+              type="checkbox"
+              checked={filters.responsibleUserId === currentUserId}
+              onChange={(e) => onChange({ responsibleUserId: e.target.checked ? currentUserId : '' })}
+            />
+            {t('dossiers.filters.onlyMine')}
+          </label>
+        ) : null,
       ])}
       {group('date', [
         rangeField('date'),
@@ -150,6 +166,10 @@ export function DossierFilterPanel({ id, filters, lookups, onChange }: DossierFi
         lookupField('activityTypeId', lookups.activityTypes),
       ])}
       {group('planning', [
+        selectField('planning', [
+          { value: 'planned', label: t('dossiers.filters.options.planned') },
+          { value: 'unplanned', label: t('dossiers.filters.options.unplanned') },
+        ]),
         lookupField('driverId', lookups.drivers),
         lookupField('vehicleId', lookups.vehicles),
         textField('licensePlate'),

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import dossiersCss from '../pages/dossiers.css?raw'
 import dossierDetailCss from '../pages/dossier-detail.css?raw'
+import { DOSSIER_COLUMN_WIDTHS } from '../pages/dossierListColumns'
 
 /**
  * Dossier list refinement (2026-10-08): one dossier = one row. These assertions pin the CSS rules
@@ -22,74 +23,58 @@ function ruleBody(css: string, selector: string, from = 0): string {
 
 const list = strip(dossiersCss)
 
-/** Splits the stylesheet into the plain rules and the `@container (max-width: …)` blocks, in source order. */
-function splitContainerQueries(css: string): { desktop: string; queries: { maxWidth: number; block: string }[] } {
-  const queries: { maxWidth: number; block: string }[] = []
-  let desktop = ''
-  let cursor = 0
-  const pattern = /@container\s*\(max-width:\s*(\d+)px\)\s*\{/g
-  for (let match = pattern.exec(css); match; match = pattern.exec(css)) {
-    desktop += css.slice(cursor, match.index)
-    let depth = 1
-    let index = pattern.lastIndex
-    while (depth > 0 && index < css.length) {
-      if (css[index] === '{') depth += 1
-      else if (css[index] === '}') depth -= 1
-      index += 1
-    }
-    queries.push({ maxWidth: Number(match[1]), block: css.slice(pattern.lastIndex, index - 1) })
-    cursor = index
-    pattern.lastIndex = index
-  }
-  desktop += css.slice(cursor)
-  return { desktop, queries }
-}
-
-const { desktop, queries } = splitContainerQueries(list)
-
+/**
+ * B10: the widths live per column CLASS (pages/dossierListColumns.ts is the model; the page
+ * drops columns by priority when the container is too narrow), so the stylesheet contract is:
+ * one width per fixed column, klant/referentie flexible, the actions column sticky.
+ */
 describe('dossier list layout rules', () => {
   it('the dossier number never wraps (code + incident badge in one nowrap line)', () => {
-    expect(ruleBody(desktop, '.dossier-list-number {')).toMatch(/white-space:\s*nowrap/)
-    expect(ruleBody(desktop, '.dossier-list-number code')).toMatch(/white-space:\s*nowrap/)
-    expect(ruleBody(desktop, '.dossier-list .data-table thead th:nth-child(1)')).toMatch(/width:\s*116px/)
+    expect(ruleBody(list, '.dossier-list-number {')).toMatch(/white-space:\s*nowrap/)
+    expect(ruleBody(list, '.dossier-list-number code')).toMatch(/white-space:\s*nowrap/)
+    expect(ruleBody(list, '.dossier-list .dossier-col-number')).toMatch(/width:\s*92px/)
   })
 
   it('composed cells stay on one line: status, price and the truncated text cells are nowrap with ellipsis', () => {
-    expect(ruleBody(desktop, '.dossier-list-status {')).toMatch(/white-space:\s*nowrap/)
-    expect(ruleBody(desktop, '.dossier-list-price {')).toMatch(/white-space:\s*nowrap/)
-    expect(ruleBody(desktop, '.dossier-list-price {')).toMatch(/text-overflow:\s*ellipsis/)
-    expect(ruleBody(desktop, '.dossier-list-nowrap')).toMatch(/white-space:\s*nowrap/)
+    expect(ruleBody(list, '.dossier-list-status {')).toMatch(/white-space:\s*nowrap/)
+    expect(ruleBody(list, '.dossier-list-price {')).toMatch(/white-space:\s*nowrap/)
+    expect(ruleBody(list, '.dossier-list-price {')).toMatch(/text-overflow:\s*ellipsis/)
+    expect(ruleBody(list, '.dossier-list-nowrap')).toMatch(/white-space:\s*nowrap/)
     // The separator lives in CSS so every part keeps its own exact DOM text.
-    expect(ruleBody(desktop, '.dossier-list-sep::before')).toMatch(/content:/)
+    expect(ruleBody(list, '.dossier-list-sep::before')).toMatch(/content:/)
     expect(list).not.toMatch(/\.dossier-list-stack/)
   })
 
-  it('compact rows: fixed table layout, 14px text, 8px vertical padding on a 24px line, cells vertically centred', () => {
-    const table = ruleBody(desktop, '.dossier-list .data-table {')
+  it('rows: fixed table layout, 14px text, 8px vertical padding on a 24px line (4px in compact density), cells vertically centred', () => {
+    const table = ruleBody(list, '.dossier-list .data-table {')
     expect(table).toMatch(/table-layout:\s*fixed/)
     expect(table).toMatch(/font-size:\s*14px/)
-    const cells = ruleBody(desktop, '.dossier-list .data-table thead th,\n.dossier-list .data-table tbody td')
+    // The minimum width follows the shown columns (set by the page), never a stale constant.
+    expect(table).toMatch(/min-width:\s*var\(--dossier-table-min/)
+    const cells = ruleBody(list, '.dossier-list .data-table thead th,\n.dossier-list .data-table tbody td')
     expect(cells).toMatch(/padding:\s*8px 10px/)
     expect(cells).toMatch(/line-height:\s*24px/)
     expect(cells).toMatch(/vertical-align:\s*middle/)
+    const compact = ruleBody(list, ".dossier-list[data-density='compact'] .data-table thead th")
+    expect(compact).toMatch(/padding-top:\s*4px/)
+    expect(compact).toMatch(/padding-bottom:\s*4px/)
   })
 
-  it('the compact columns have fixed widths (incl. the short Transport/Planning summaries); klant and referentie share the rest', () => {
-    const widths = [...desktop.matchAll(/thead th:nth-child\((\d+)\)\s*\{\s*width:\s*(\d+)px/g)].map((m) => [Number(m[1]), Number(m[2])])
-    expect(Object.fromEntries(widths)).toEqual({ 1: 116, 2: 170, 5: 136, 6: 184, 7: 156, 8: 196, 9: 96, 10: 44 })
-    // min-width = fixed columns + 2 × 150px for the flexible ones (klant, referentie).
-    const fixed = widths.reduce((sum, [, width]) => sum + width, 0)
-    expect(ruleBody(desktop, '.dossier-list .data-table {')).toContain(`min-width: ${fixed + 2 * 150}px`)
+  it('every fixed column has its width in CSS and matches the model; klant and referentie share the rest', () => {
+    const widths = Object.fromEntries(
+      [...list.matchAll(/\.dossier-list \.dossier-col-(\w+)\s*\{\s*width:\s*(\d+)px/g)].map((m) => [m[1], Number(m[2])]),
+    )
+    // The status column widens on a wide container (second rule); the base width is the model's.
+    expect(widths).toEqual({ ...DOSSIER_COLUMN_WIDTHS, status: 170 })
+    expect(ruleBody(list, '.dossier-list .dossier-col-status {')).toMatch(/width:\s*104px/)
+    expect(widths).not.toHaveProperty('customer')
+    expect(widths).not.toHaveProperty('reference')
   })
 
-  it('column priority: Facturatie (9) hides first, then Planning (7), then Referentie (4); the sticky actions column stays', () => {
-    const hidden = queries.map(({ block }) => Number(block.match(/nth-child\((\d+)\)\s*\{\s*display:\s*none/)?.[1]))
-    expect(hidden).toEqual([9, 7, 4])
-    const breakpoints = queries.map((query) => query.maxWidth)
-    expect(breakpoints).toEqual([...breakpoints].sort((a, b) => b - a))
-    // Each step lowers the table's min-width by exactly the column it drops (plus the compact status step).
-    expect(queries.map(({ block }) => Number(block.match(/min-width:\s*(\d+)px/)?.[1]))).toEqual([1252, 1096, 946])
-    expect(ruleBody(desktop, '.dossier-list .data-table thead th:last-child')).toMatch(/position:\s*sticky/)
+  it('the sticky actions column stays; the confirmation date only shows on a wide container', () => {
+    expect(ruleBody(list, '.dossier-list .data-table thead th:last-child')).toMatch(/position:\s*sticky/)
+    expect(list).toMatch(/@container \(min-width: 1300px\)/)
+    expect(list).not.toMatch(/@container \(max-width/)
   })
 })
 

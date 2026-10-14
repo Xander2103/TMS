@@ -44,6 +44,11 @@ export interface DossierSearchFilters {
   invoiceStatus: '' | DossierInvoiceStatus
   /** Tri-state as text so it lives in the URL unchanged. */
   hasCmr: '' | 'true' | 'false'
+  // --- B11 quick views: plain server filters behind the presets ---
+  /** The dossier's responsible user ("Mijn open" = the signed-in user's id). */
+  responsibleUserId: string
+  hasOpenIncident: '' | 'true' | 'false'
+  planning: '' | 'planned' | 'unplanned'
   sort: '' | DossierSortKey
   dir: '' | 'asc' | 'desc'
   page: number
@@ -82,6 +87,9 @@ export const DOSSIER_FILTER_KEYS: readonly DossierFilterKey[] = [
   'priceStatus',
   'invoiceStatus',
   'hasCmr',
+  'responsibleUserId',
+  'hasOpenIncident',
+  'planning',
 ]
 
 export const EMPTY_DOSSIER_FILTERS: DossierSearchFilters = {
@@ -114,6 +122,9 @@ export const EMPTY_DOSSIER_FILTERS: DossierSearchFilters = {
   priceStatus: '',
   invoiceStatus: '',
   hasCmr: '',
+  responsibleUserId: '',
+  hasOpenIncident: '',
+  planning: '',
   sort: '',
   dir: '',
   page: 1,
@@ -127,6 +138,7 @@ const INVOICE_STATUSES: readonly DossierInvoiceStatus[] = ['NotInvoiced', 'Draft
 const SORT_KEYS: readonly DossierSortKey[] = ['number', 'date', 'customer', 'status', 'confirmedAt', 'planningDate', 'createdAt']
 const DIRS = ['asc', 'desc'] as const
 const CMR = ['true', 'false'] as const
+const PLANNING = ['planned', 'unplanned'] as const
 
 function oneOf<T extends string>(allowed: readonly T[], value: string | null): '' | T {
   return value !== null && (allowed as readonly string[]).includes(value) ? (value as T) : ''
@@ -169,6 +181,9 @@ export function parseDossierSearchParams(params: URLSearchParams): DossierSearch
     priceStatus: oneOf(PRICE_STATUSES, params.get('priceStatus')),
     invoiceStatus: oneOf(INVOICE_STATUSES, params.get('invoiceStatus')),
     hasCmr: oneOf(CMR, params.get('hasCmr')),
+    responsibleUserId: text(params.get('responsibleUserId')),
+    hasOpenIncident: oneOf(CMR, params.get('hasOpenIncident')),
+    planning: oneOf(PLANNING, params.get('planning')),
     sort: oneOf(SORT_KEYS, params.get('sort')),
     dir: oneOf(DIRS, params.get('dir')),
     page: Number.isInteger(rawPage) && rawPage >= 1 ? rawPage : 1,
@@ -196,6 +211,7 @@ export function toSearchDossiersParams(filters: DossierSearchFilters, pageSize: 
     const value = filters[key]
     if (!value) continue
     if (key === 'hasCmr') params.hasCmr = value === 'true'
+    else if (key === 'hasOpenIncident') params.hasOpenIncident = value === 'true'
     else (params as Record<string, unknown>)[key] = value
   }
   if (filters.sort) params.sort = filters.sort

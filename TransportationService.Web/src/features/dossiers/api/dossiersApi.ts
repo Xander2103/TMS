@@ -55,6 +55,10 @@ export interface SearchDossiersParams {
   priceStatus?: DossierPriceStatusFilter
   invoiceStatus?: DossierInvoiceStatus
   hasCmr?: boolean
+  /** B11 quick views. */
+  responsibleUserId?: string
+  hasOpenIncident?: boolean
+  planning?: 'planned' | 'unplanned'
   sort?: DossierSortKey
   dir?: 'asc' | 'desc'
   page?: number

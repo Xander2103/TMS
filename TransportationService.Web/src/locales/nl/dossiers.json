@@ -33,7 +33,9 @@
       "invoice": "Facturatie",
       "price": "Prijs",
       "status": "Status",
-      "planning": "Planning"
+      "planning": "Planning",
+      "driver": "Chauffeur / voertuig",
+      "responsible": "Verantwoordelijke"
     },
     "orderCountShort": "{count} opdr.",
     "activityCountShort": "{count} act.",
@@ -68,7 +70,15 @@
       "Priced": "Geprijsd",
       "ZeroUnconfirmed": "Controle vereist",
       "Free": "Gratis"
-    }
+    },
+    "columnsButton": "Kolommen",
+    "columnsPanelLabel": "Zichtbare kolommen",
+    "columnsReset": "Standaard herstellen",
+    "densityLabel": "Dichtheid",
+    "densityCompact": "Compact",
+    "densityNormal": "Normaal",
+    "hiddenByWidth_one": "1 kolom verborgen (te smal)",
+    "hiddenByWidth_other": "{count} kolommen verborgen (te smal)"
   },
   "filters": {
     "today": "Vandaag",
@@ -116,7 +126,10 @@
       "customerId": "Klant",
       "dateFrom": "Dossierdatum van",
       "dateTo": "Dossierdatum tot",
-      "transportTypeId": "Transporttype"
+      "transportTypeId": "Transporttype",
+      "responsibleUserId": "Verantwoordelijke",
+      "hasOpenIncident": "Open incident",
+      "planning": "Planning"
     },
     "options": {
       "sourceManual": "Handmatig",
@@ -129,7 +142,11 @@
       "invoiceSent": "Verzonden",
       "invoicePaid": "Betaald",
       "cmrYes": "Aanwezig",
-      "cmrNo": "Ontbreekt"
+      "cmrNo": "Ontbreekt",
+      "incidentOpen": "Met open incident",
+      "incidentNone": "Zonder open incident",
+      "planned": "Gepland",
+      "unplanned": "Ongepland"
     },
     "allStatuses": "Alle statussen",
     "toggle": "Filters",
@@ -146,7 +163,8 @@
       "since": "vanaf {date}",
       "until": "t/m {date}",
       "between": "{from} – {to}"
-    }
+    },
+    "onlyMine": "Alleen mijn dossiers"
   },
   "new": {
     "addUnloadAddress": "+ Losadres toevoegen",
@@ -672,5 +690,22 @@
     "ActivityUpdated": "Activiteit gewijzigd",
     "ActivityRemoved": "Activiteit verwijderd",
     "ActivityOrderCreated": "Transportopdracht aangemaakt"
+  },
+  "views": {
+    "label": "Weergave",
+    "save": "+ Opslaan als weergave",
+    "saveTitle": "Weergave opslaan",
+    "saveIntro": "De huidige filters worden als eigen weergave bewaard (in deze browser). De zoekterm en sortering horen er niet bij.",
+    "nameLabel": "Naam",
+    "nameRequired": "Geef de weergave een naam.",
+    "remove": "Weergave {name} verwijderen",
+    "presets": {
+      "all": "Alle",
+      "myOpen": "Mijn open",
+      "unplannedWeek": "Ongepland 7 dagen",
+      "unpriced": "Niet geprijsd",
+      "toInvoice": "Te factureren",
+      "openIncident": "Met open incident"
+    }
   }
 }

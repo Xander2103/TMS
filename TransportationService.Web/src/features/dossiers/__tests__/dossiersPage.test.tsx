@@ -10,7 +10,7 @@ import { dossierDetail, dossierListItem } from './fixtures'
 
 const auth = vi.hoisted(() => ({ permissions: new Set<string>() }))
 vi.mock('../../auth/authContextValue', () => ({
-  useAuth: () => ({ hasPermission: (code: string) => auth.permissions.has(code) }),
+  useAuth: () => ({ hasPermission: (code: string) => auth.permissions.has(code), user: { id: 'u-1' } }),
 }))
 
 const toast = vi.hoisted(() => ({ showToast: vi.fn(), showSuccess: vi.fn(), showError: vi.fn() }))
@@ -134,6 +134,7 @@ async function expectLastSearch(params: Record<string, unknown>) {
 
 describe('DossiersPage (lijst)', () => {
   beforeEach(() => {
+    window.localStorage.clear()
     auth.permissions = new Set(['dossiers.view', 'dossiers.manage', 'dossiers.reopen'])
     toast.showSuccess.mockReset()
     toast.showError.mockReset()
@@ -1232,4 +1233,86 @@ describe('DossiersPage (lijst)', () => {
       })
     })
   })
+
+  // ---- B10/B11: weergaven, kolommen, dichtheid -------------------------------------------------
+
+  describe('weergaven en kolommen (Wave 2)', () => {
+    it('de presetchips zetten de bestaande serverfilters en tonen welke actief is', async () => {
+      const user = userEvent.setup()
+      api.searchDossiers.mockResolvedValue(paged([dossierListItem()]))
+      const router = renderPage()
+      await screen.findByRole('table')
+
+      const views = screen.getByRole('group', { name: 'Weergave' })
+      expect(within(views).getByRole('button', { name: 'Alle' })).toHaveAttribute('aria-pressed', 'true')
+
+      await user.click(within(views).getByRole('button', { name: 'Te factureren' }))
+      await waitFor(() => expect(router.state.location.search).toBe('?status=Closed&invoiceStatus=NotInvoiced'))
+      expect(within(views).getByRole('button', { name: 'Te factureren' })).toHaveAttribute('aria-pressed', 'true')
+      expect(chipTexts()).toEqual(['Bevestigd', 'Facturatiestatus: Niet gefactureerd'])
+      await expectLastSearch({ ...BASE, status: 'Closed', invoiceStatus: 'NotInvoiced' })
+
+      await user.click(within(views).getByRole('button', { name: 'Mijn open' }))
+      await waitFor(() => expect(router.state.location.search).toBe('?status=Open&responsibleUserId=u-1'))
+      expect(chipTexts()).toEqual(['Open', 'Alleen mijn dossiers'])
+
+      await user.click(within(views).getByRole('button', { name: 'Met open incident' }))
+      await expectLastSearch({ ...BASE, status: 'Open', hasOpenIncident: true })
+    })
+
+    it('een verfijnde preset is geen preset meer en kan als eigen weergave bewaard worden', async () => {
+      const user = userEvent.setup()
+      api.searchDossiers.mockResolvedValue(paged([dossierListItem()]))
+      renderPage('/dossiers?status=Open&priceStatus=Unpriced&postalCode=2000')
+      await screen.findByRole('table')
+
+      const views = screen.getByRole('group', { name: 'Weergave' })
+      expect(within(views).getByRole('button', { name: 'Niet geprijsd' })).toHaveAttribute('aria-pressed', 'false')
+      await user.click(screen.getByRole('button', { name: '+ Opslaan als weergave' }))
+      await user.type(screen.getByLabelText(/Naam/), 'Antwerpen te prijzen')
+      await user.click(screen.getByRole('button', { name: 'Opslaan' }))
+
+      expect(within(views).getByRole('button', { name: 'Antwerpen te prijzen' })).toHaveAttribute('aria-pressed', 'true')
+      expect(JSON.parse(window.localStorage.getItem('ts.dossiers.views:u-1') ?? '[]')).toHaveLength(1)
+      await user.click(within(views).getByRole('button', { name: 'Weergave Antwerpen te prijzen verwijderen' }))
+      expect(within(views).queryByRole('button', { name: 'Antwerpen te prijzen' })).not.toBeInTheDocument()
+    })
+
+    it('"Kolommen" verbergt en toont optionele kolommen en onthoudt de keuze per gebruiker', async () => {
+      const user = userEvent.setup()
+      api.searchDossiers.mockResolvedValue(paged([dossierListItem({ driverSummary: 'Jan Peeters', vehicleSummary: '1-ABC-123', planningDate: '2026-08-14' })]))
+      renderPage()
+      await screen.findByRole('table')
+
+      await user.click(screen.getByRole('button', { name: 'Kolommen' }))
+      const panel = screen.getByRole('group', { name: 'Zichtbare kolommen' })
+      await user.click(within(panel).getByRole('checkbox', { name: 'Referentie' }))
+      await user.click(within(panel).getByRole('checkbox', { name: 'Chauffeur / voertuig' }))
+
+      expect(headerTexts()).toEqual(['Dossiernr.', 'Status', 'Klant', 'Dossierdatum', 'Transport', 'Planning', 'Chauffeur / voertuig', 'Prijs', 'Facturatie', ''])
+      // With its own Chauffeur column, Planning is the date alone.
+      const row = await findRow()
+      expect(within(row).getByText('Jan Peeters · 1-ABC-123')).toBeInTheDocument()
+      expect(within(row).getByText('14/08/2026').closest('td')).toHaveClass('dossier-col-planning')
+      expect(JSON.parse(window.localStorage.getItem('ts.dossiers.list:u-1') ?? '{}')).toEqual({
+        optional: ['transport', 'planning', 'driver', 'price', 'invoice'],
+        density: 'normal',
+      })
+
+      await user.click(within(panel).getByRole('button', { name: 'Standaard herstellen' }))
+      expect(headerTexts()).toContain('Referentie')
+    })
+
+    it('de dichtheid Compact/Normaal wordt onthouden en op de tabel gezet', async () => {
+      const user = userEvent.setup()
+      api.searchDossiers.mockResolvedValue(paged([dossierListItem()]))
+      renderPage()
+      await screen.findByRole('table')
+
+      await user.click(screen.getByRole('button', { name: 'Compact' }))
+      expect(screen.getByRole('table')).toHaveClass('data-table-compact')
+      expect(JSON.parse(window.localStorage.getItem('ts.dossiers.list:u-1') ?? '{}').density).toBe('compact')
+    })
+  })
+
 })

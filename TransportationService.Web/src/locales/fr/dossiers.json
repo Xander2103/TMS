@@ -33,7 +33,9 @@
       "invoice": "Facturation",
       "price": "Prix",
       "status": "Statut",
-      "planning": "Planification"
+      "planning": "Planification",
+      "driver": "Chauffeur / véhicule",
+      "responsible": "Responsable"
     },
     "orderCountShort": "{count} cde",
     "activityCountShort": "{count} act.",
@@ -68,7 +70,15 @@
       "Priced": "Tarifé",
       "ZeroUnconfirmed": "Contrôle requis",
       "Free": "Gratuit"
-    }
+    },
+    "columnsButton": "Colonnes",
+    "columnsPanelLabel": "Colonnes visibles",
+    "columnsReset": "Rétablir par défaut",
+    "densityLabel": "Densité",
+    "densityCompact": "Compact",
+    "densityNormal": "Normal",
+    "hiddenByWidth_one": "1 colonne masquée (trop étroit)",
+    "hiddenByWidth_other": "{count} colonnes masquées (trop étroit)"
   },
   "filters": {
     "today": "Aujourd'hui",
@@ -116,7 +126,10 @@
       "customerId": "Client",
       "dateFrom": "Date du dossier du",
       "dateTo": "Date du dossier au",
-      "transportTypeId": "Type de transport"
+      "transportTypeId": "Type de transport",
+      "responsibleUserId": "Responsable",
+      "hasOpenIncident": "Incident ouvert",
+      "planning": "Planification"
     },
     "options": {
       "sourceManual": "Manuelle",
@@ -129,7 +142,11 @@
       "invoiceSent": "Envoyée",
       "invoicePaid": "Payée",
       "cmrYes": "Présent",
-      "cmrNo": "Manquant"
+      "cmrNo": "Manquant",
+      "incidentOpen": "Avec incident ouvert",
+      "incidentNone": "Sans incident ouvert",
+      "planned": "Planifié",
+      "unplanned": "Non planifié"
     },
     "allStatuses": "Tous les statuts",
     "toggle": "Filtres",
@@ -146,7 +163,8 @@
       "since": "à partir du {date}",
       "until": "jusqu'au {date}",
       "between": "{from} – {to}"
-    }
+    },
+    "onlyMine": "Seulement mes dossiers"
   },
   "new": {
     "addUnloadAddress": "+ Ajouter une adresse de déchargement",
@@ -672,5 +690,22 @@
     "ActivityUpdated": "Activité modifiée",
     "ActivityRemoved": "Activité supprimée",
     "ActivityOrderCreated": "Ordre de transport créé"
+  },
+  "views": {
+    "label": "Vue",
+    "save": "+ Enregistrer comme vue",
+    "saveTitle": "Enregistrer la vue",
+    "saveIntro": "Les filtres actuels sont enregistrés comme vue personnelle (dans ce navigateur). Le terme de recherche et le tri n'en font pas partie.",
+    "nameLabel": "Nom",
+    "nameRequired": "Donnez un nom à la vue.",
+    "remove": "Supprimer la vue {name}",
+    "presets": {
+      "all": "Tous",
+      "myOpen": "Mes dossiers ouverts",
+      "unplannedWeek": "Non planifié 7 jours",
+      "unpriced": "Sans prix",
+      "toInvoice": "À facturer",
+      "openIncident": "Avec incident ouvert"
+    }
   }
 }

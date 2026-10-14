@@ -20,6 +20,8 @@ export interface Column<TRow> {
    * `sort`/`onSortChange` props — the header renders as a sort button with `aria-sort`.
    */
   sortKey?: string
+  /** Class applied to the header AND every cell of the column (stable width/visibility hooks for CSS). */
+  className?: string
 }
 
 export interface SortState {
@@ -54,6 +56,8 @@ interface DataTableProps<TRow> {
    * truncates (TruncatedText) instead of widening the table past its container.
    */
   fixedLayout?: boolean
+  /** B10: row density — compact rows for operational lists the planner scans all day. */
+  density?: 'compact' | 'normal'
 }
 
 /**
@@ -76,6 +80,7 @@ export function DataTable<TRow>({
   sort,
   onSortChange,
   fixedLayout = false,
+  density = 'normal',
 }: DataTableProps<TRow>) {
   const { t } = useLocale()
   if (isLoading) return <LoadingState message={loadingMessage ?? t('ui.table.loading')} />
@@ -90,7 +95,7 @@ export function DataTable<TRow>({
 
   return (
     <div className="data-table-wrapper">
-      <table className={fixedLayout ? 'data-table data-table-fixed' : 'data-table'}>
+      <table className={['data-table', fixedLayout ? 'data-table-fixed' : '', density === 'compact' ? 'data-table-compact' : ''].filter(Boolean).join(' ')}>
         <thead>
           <tr>
             {columns.map((column) => {
@@ -99,6 +104,7 @@ export function DataTable<TRow>({
               return (
                 <th
                   key={column.key}
+                  className={column.className}
                   style={{ textAlign: column.align ?? 'left', width: column.width }}
                   aria-sort={isSorted ? (sort!.dir === 'asc' ? 'ascending' : 'descending') : undefined}
                 >
@@ -143,7 +149,7 @@ export function DataTable<TRow>({
                 }
               >
                 {columns.map((column) => (
-                  <td key={column.key} style={{ textAlign: column.align ?? 'left' }}>
+                  <td key={column.key} className={column.className} style={{ textAlign: column.align ?? 'left' }}>
                     {column.render(row)}
                   </td>
                 ))}

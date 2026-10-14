@@ -15,28 +15,20 @@
 }
 
 /* ---- Dossierlijst ----
-   Eén dossier = één regel. De vaste kolombreedtes (incl. 10px padding links/rechts) staan hier
-   per kolom (nth-child); Klant en Referentie hebben er geen en delen de rest — Transport en
-   Planning tonen korte samenvattingen en krijgen een vaste breedte, zodat de ruimte naar de
-   kolommen gaat die werkelijk lange waarden dragen. De min-width = som van de vaste kolommen
-   + 2 × 150px voor de twee flexibele: met table-layout: fixed zou een kleinere min-width een
-   kolom zonder eigen breedte tot 0 px laten krimpen. Daaronder scrollt de wrapper horizontaal —
-   maar de container queries verderop laten eerst de minst kritische kolommen wijken
-   (Facturatie → Planning → Referentie), zodat een gewone desktop nooit scrolt en een rij nooit
-   over meerdere regels breekt.
-   Kolommen: 1 nummer · 2 status · 3 klant · 4 referentie · 5 datum · 6 transport · 7 planning ·
-   8 prijs · 9 facturatie · 10 acties. */
-.dossier-list {
-  container-type: inline-size;
-}
-
+   Eén dossier = één regel. B10: de kolommen zijn een MODEL (pages/dossierListColumns.ts): de
+   planner kiest via "Kolommen ▾" welke optionele kolommen hij toont, en de pagina meet de
+   containerbreedte en laat kolommen in vaste prioriteit wijken (Verantwoordelijke → Referentie →
+   Chauffeur → Transport → Facturatie → Planning → Prijs) zodat een gewone desktop nooit scrolt.
+   De vaste breedtes (incl. 10px padding links/rechts) staan hier per kolomklasse; Klant en
+   Referentie hebben er geen en delen de rest. De min-width volgt uit de getoonde kolommen
+   (--dossier-table-min, gezet door de pagina): daaronder scrolt de wrapper (tablet/mobiel). */
 .dossier-list .data-table {
   table-layout: fixed;
-  min-width: 1398px;
+  min-width: var(--dossier-table-min, 946px);
   font-size: 14px;
 }
 
-/* Compacte rijen: 8px + 24px regel + 8px = 40px, nog steeds een ruim klikdoel. */
+/* Normale rijen: 8px + 24px regel + 8px = 40px; compact (data-density) 4px + 24px + 4px = 32px. */
 .dossier-list .data-table thead th,
 .dossier-list .data-table tbody td {
   box-sizing: border-box;
@@ -45,40 +37,58 @@
   vertical-align: middle;
 }
 
+.dossier-list[data-density='compact'] .data-table thead th,
+.dossier-list[data-density='compact'] .data-table tbody td {
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+
+.dossier-list[data-density='compact'] .data-table {
+  font-size: 13px;
+}
+
 .dossier-list .data-table tbody td {
   overflow: hidden;
 }
 
-.dossier-list .data-table thead th:nth-child(1) {
-  width: 116px;
+.dossier-list .dossier-col-number {
+  width: 92px;
 }
 
-.dossier-list .data-table thead th:nth-child(2) {
-  width: 170px;
+.dossier-list .dossier-col-status {
+  width: 104px;
 }
 
-.dossier-list .data-table thead th:nth-child(5) {
-  width: 136px;
+.dossier-list .dossier-col-date {
+  width: 90px;
 }
 
-.dossier-list .data-table thead th:nth-child(6) {
-  width: 184px;
+.dossier-list .dossier-col-transport {
+  width: 150px;
 }
 
-.dossier-list .data-table thead th:nth-child(7) {
-  width: 156px;
+.dossier-list .dossier-col-planning {
+  width: 150px;
 }
 
-.dossier-list .data-table thead th:nth-child(8) {
-  width: 196px;
+.dossier-list .dossier-col-driver {
+  width: 150px;
 }
 
-.dossier-list .data-table thead th:nth-child(9) {
-  width: 96px;
+.dossier-list .dossier-col-price {
+  width: 112px;
 }
 
-.dossier-list .data-table thead th:nth-child(10) {
-  width: 44px;
+.dossier-list .dossier-col-invoice {
+  width: 92px;
+}
+
+.dossier-list .dossier-col-responsible {
+  width: 130px;
+}
+
+.dossier-list .dossier-col-actions {
+  width: 40px;
 }
 
 /* De rijacties blijven rechts in beeld, ook wanneer de tabel horizontaal scrolt. */
@@ -102,49 +112,23 @@
   background: linear-gradient(var(--accent-bg), var(--accent-bg)), var(--bg);
 }
 
-/* Kolomprioriteit op smallere schermen: eerst krimpen de flexibele kolommen (ellipsis), dan
-   wijkt Facturatie (9) en wordt de statuscel compact (datum enkel nog in de tooltip), dan
-   Planning (7), dan Referentie (4). Nummer, status, klant, datum, transport, prijs en acties
-   blijven altijd staan; pas onder 946px scrolt de wrapper (tablet/mobiel). */
-@container (max-width: 1397px) {
-  .dossier-list .data-table {
-    min-width: 1252px;
-  }
+/* De statuscel toont de bevestigingsdatum enkel wanneer ze ruim staat (≥ 1300px container). */
+.dossier-list-status .dossier-list-muted {
+  display: none;
+}
 
-  .dossier-list .data-table thead th:nth-child(9),
-  .dossier-list .data-table tbody td:nth-child(9) {
-    display: none;
-  }
-
-  .dossier-list .data-table thead th:nth-child(2) {
-    width: 120px;
+@container (min-width: 1300px) {
+  .dossier-list .dossier-col-status {
+    width: 170px;
   }
 
   .dossier-list-status .dossier-list-muted {
-    display: none;
+    display: inline;
   }
 }
 
-@container (max-width: 1251px) {
-  .dossier-list .data-table {
-    min-width: 1096px;
-  }
-
-  .dossier-list .data-table thead th:nth-child(7),
-  .dossier-list .data-table tbody td:nth-child(7) {
-    display: none;
-  }
-}
-
-@container (max-width: 1095px) {
-  .dossier-list .data-table {
-    min-width: 946px;
-  }
-
-  .dossier-list .data-table thead th:nth-child(4),
-  .dossier-list .data-table tbody td:nth-child(4) {
-    display: none;
-  }
+.dossier-list {
+  container-type: inline-size;
 }
 
 /* Waarden die nooit mogen breken (datum, facturatiestatus). */
@@ -238,6 +222,201 @@
   margin-left: 4px;
   color: var(--color-warning);
   cursor: help;
+}
+
+/* B10: sortering, Kolommen ▾ en dichtheid als één rechtse groep boven de tabel. */
+.dossier-list-tools {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+
+.dossier-list-hidden {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  cursor: help;
+}
+
+.dossier-columns {
+  position: relative;
+}
+
+.dossier-columns-toggle,
+.dossier-density button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.dossier-columns-toggle:hover,
+.dossier-columns-toggle[aria-expanded='true'],
+.dossier-density button:hover {
+  border-color: var(--accent);
+}
+
+.dossier-columns-panel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 30;
+  min-width: 200px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.18);
+}
+
+.dossier-columns-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  color: var(--text-h);
+  cursor: pointer;
+}
+
+.dossier-columns-option:hover {
+  background: var(--color-surface-subtle);
+}
+
+.dossier-columns-reset {
+  align-self: flex-start;
+  margin: 6px 8px 2px;
+  font-size: 0.85rem;
+}
+
+.dossier-columns-reset:disabled {
+  color: var(--text-muted);
+  text-decoration: none;
+  cursor: default;
+}
+
+.dossier-density {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.dossier-density button {
+  border: none;
+  border-radius: 0;
+  min-height: 30px;
+}
+
+.dossier-density button[aria-pressed='true'] {
+  background: var(--color-primary-solid);
+  color: #fff;
+}
+
+/* ---- B11: Weergave-chips (presets + eigen weergaven) boven de filterbalk ---- */
+.dossier-views {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  margin-bottom: 12px;
+}
+
+.dossier-views-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.dossier-views-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dossier-view-saved {
+  display: inline-flex;
+  align-items: center;
+}
+
+.dossier-view-chip {
+  min-height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.dossier-view-chip:hover {
+  border-color: var(--accent);
+}
+
+.dossier-view-chip[aria-pressed='true'] {
+  background: var(--accent-bg);
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.dossier-view-saved .dossier-view-chip {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.dossier-view-remove {
+  min-height: 30px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-left: none;
+  border-radius: 0 999px 999px 0;
+  background: var(--bg);
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.dossier-view-remove:hover {
+  color: var(--danger);
+  border-color: var(--accent);
+}
+
+.dossier-views-save {
+  font-size: 0.85rem;
+}
+
+.dossier-views-save-intro {
+  margin: 0 0 12px;
+  color: var(--text-muted);
+}
+
+.dossier-filter-mine {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  grid-column: 1 / -1;
+  font-size: 0.9rem;
 }
 
 /* Resultaattelling + sortering boven de tabel. */

@@ -33,7 +33,9 @@
       "invoice": "Invoicing",
       "price": "Price",
       "status": "Status",
-      "planning": "Planning"
+      "planning": "Planning",
+      "driver": "Driver / vehicle",
+      "responsible": "Responsible"
     },
     "orderCountShort": "{count} ord.",
     "activityCountShort": "{count} act.",
@@ -68,7 +70,15 @@
       "Priced": "Priced",
       "ZeroUnconfirmed": "Review required",
       "Free": "Free"
-    }
+    },
+    "columnsButton": "Columns",
+    "columnsPanelLabel": "Visible columns",
+    "columnsReset": "Restore defaults",
+    "densityLabel": "Density",
+    "densityCompact": "Compact",
+    "densityNormal": "Normal",
+    "hiddenByWidth_one": "1 column hidden (too narrow)",
+    "hiddenByWidth_other": "{count} columns hidden (too narrow)"
   },
   "filters": {
     "today": "Today",
@@ -116,7 +126,10 @@
       "customerId": "Customer",
       "dateFrom": "File date from",
       "dateTo": "File date to",
-      "transportTypeId": "Transport type"
+      "transportTypeId": "Transport type",
+      "responsibleUserId": "Responsible",
+      "hasOpenIncident": "Open incident",
+      "planning": "Planning"
     },
     "options": {
       "sourceManual": "Manual",
@@ -129,7 +142,11 @@
       "invoiceSent": "Sent",
       "invoicePaid": "Paid",
       "cmrYes": "Present",
-      "cmrNo": "Missing"
+      "cmrNo": "Missing",
+      "incidentOpen": "With open incident",
+      "incidentNone": "Without open incident",
+      "planned": "Planned",
+      "unplanned": "Unplanned"
     },
     "allStatuses": "All statuses",
     "toggle": "Filters",
@@ -146,7 +163,8 @@
       "since": "from {date}",
       "until": "until {date}",
       "between": "{from} – {to}"
-    }
+    },
+    "onlyMine": "Only my dossiers"
   },
   "new": {
     "addUnloadAddress": "+ Add unload address",
@@ -672,5 +690,22 @@
     "ActivityUpdated": "Activity updated",
     "ActivityRemoved": "Activity removed",
     "ActivityOrderCreated": "Transport order created"
+  },
+  "views": {
+    "label": "View",
+    "save": "+ Save as view",
+    "saveTitle": "Save view",
+    "saveIntro": "The current filters are saved as your own view (in this browser). The search term and sort are not part of it.",
+    "nameLabel": "Name",
+    "nameRequired": "Give the view a name.",
+    "remove": "Remove view {name}",
+    "presets": {
+      "all": "All",
+      "myOpen": "My open",
+      "unplannedWeek": "Unplanned 7 days",
+      "unpriced": "Not priced",
+      "toInvoice": "To invoice",
+      "openIncident": "With open incident"
+    }
   }
 }

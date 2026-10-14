@@ -60,10 +60,23 @@ describe('parseDossierSearchParams', () => {
       priceStatus: 'Partial',
       invoiceStatus: 'Sent',
       hasCmr: 'true',
+      responsibleUserId: '',
+      hasOpenIncident: '',
+      planning: '',
       sort: 'number',
       dir: 'asc',
       page: 2,
     })
+  })
+
+  it('leest de snelle-weergavefilters (B11): verantwoordelijke, open incident, gepland/ongepland', () => {
+    const parsed = parseDossierSearchParams(new URLSearchParams('responsibleUserId=u-1&hasOpenIncident=true&planning=unplanned'))
+    expect(parsed.responsibleUserId).toBe('u-1')
+    expect(parsed.hasOpenIncident).toBe('true')
+    expect(parsed.planning).toBe('unplanned')
+    expect(parseDossierSearchParams(new URLSearchParams('planning=later&hasOpenIncident=maybe')).planning).toBe('')
+    expect(toSearchDossiersParams({ ...EMPTY_DOSSIER_FILTERS, hasOpenIncident: 'true', planning: 'unplanned', responsibleUserId: 'u-1' }, 25))
+      .toEqual({ hasOpenIncident: true, planning: 'unplanned', responsibleUserId: 'u-1', page: 1, pageSize: 25 })
   })
 
   it('negeert ongeldige enumwaarden, sorteersleutels en pagina’s', () => {

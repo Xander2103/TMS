@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { SlidersHorizontal } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { PageHeader } from '../../../components/layout/PageHeader'
@@ -23,8 +23,10 @@ import { getTrailerOptions } from '../../trailers/api/trailersApi'
 import { getVehicleOptions } from '../../vehicles/api/vehiclesApi'
 import { listActivityTypes } from '../api/activityTypesApi'
 import { cancelDossier, reopenDossier, searchDossiers } from '../api/dossiersApi'
+import { DossierColumnChooser } from '../components/DossierColumnChooser'
 import { DossierConfirmDialog } from '../components/DossierConfirmDialog'
 import { DossierFilterPanel } from '../components/DossierFilterPanel'
+import { DossierViewsBar } from '../components/DossierViewsBar'
 import { EMPTY_DOSSIER_FILTER_LOOKUPS, type DossierFilterLookups } from '../components/dossierFilterLookups'
 import { DossierReasonDialog } from '../components/DossierReasonDialog'
 import { DossierRowActions } from '../components/DossierRowActions'
@@ -47,6 +49,17 @@ import {
   type DossierFilterChip,
   type DossierFilterKey,
 } from './dossierSearchParams'
+import {
+  fitColumns,
+  readDossierListPrefs,
+  tableMinWidth,
+  visibleColumns,
+  writeDossierListPrefs,
+  type DossierColumnKey,
+  type DossierListDensity,
+  type DossierListPrefs,
+} from './dossierListColumns'
+import { readSavedViews, writeSavedViews, type SavedDossierView } from './dossierViews'
 import { useDossierFilters } from './useDossierFilters'
 import './dossiers.css'
 
@@ -58,6 +71,22 @@ const SORT_KEYS: readonly DossierSortKey[] = ['date', 'number', 'customer', 'sta
 
 /** Lookup filters whose chip shows the chosen name; the rest read "Label: waarde". */
 const LOOKUP_KEYS = ['customerId', 'transportTypeId', 'activityTypeId', 'driverId', 'vehicleId', 'trailerId'] as const
+
+/** Which filter keys sit behind "Kolommen" columns — only used for the responsive fit, never for data. */
+const COLUMN_CLASS: Record<DossierColumnKey, string> = {
+  number: 'dossier-col-number',
+  status: 'dossier-col-status',
+  customer: 'dossier-col-customer',
+  reference: 'dossier-col-reference',
+  date: 'dossier-col-date',
+  transport: 'dossier-col-transport',
+  planning: 'dossier-col-planning',
+  driver: 'dossier-col-driver',
+  price: 'dossier-col-price',
+  invoice: 'dossier-col-invoice',
+  responsible: 'dossier-col-responsible',
+  actions: 'dossier-col-actions',
+}
 type LookupKey = (typeof LOOKUP_KEYS)[number]
 
 const LOOKUP_SOURCE: Record<LookupKey, keyof DossierFilterLookups> = {
@@ -101,12 +130,43 @@ function capitalise(value: string): string {
 export function DossiersPage() {
   const navigate = useNavigate()
   const { t } = useLocale()
-  const { hasPermission } = useAuth()
+  const { hasPermission, user } = useAuth()
   const toast = useToast()
   const canManage = hasPermission('dossiers.manage')
   const canReopen = hasPermission('dossiers.reopen')
+  const userId = user?.id ?? null
 
   const { filters, apply } = useDossierFilters()
+
+  // --- B10: columns + density (per user, browser-local) + the responsive fit -------------------
+  const [prefs, setPrefs] = useState<DossierListPrefs>(() => readDossierListPrefs(userId))
+  function updatePrefs(patch: Partial<DossierListPrefs>) {
+    setPrefs((current) => {
+      const next = { ...current, ...patch }
+      writeDossierListPrefs(userId, next)
+      return next
+    })
+  }
+  const listRef = useRef<HTMLDivElement>(null)
+  const [containerWidth, setContainerWidth] = useState(0)
+  useEffect(() => {
+    const element = listRef.current
+    if (!element || typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver((entries) => setContainerWidth(Math.floor(entries[0]?.contentRect.width ?? 0)))
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [])
+  const chosenColumns = useMemo(() => visibleColumns(prefs.optional), [prefs.optional])
+  const shownColumns = useMemo(() => fitColumns(chosenColumns, containerWidth), [chosenColumns, containerWidth])
+  const hiddenByWidth = chosenColumns.filter((key) => !shownColumns.includes(key))
+
+  // --- B11: saved views (per user, browser-local) ------------------------------------------------
+  const [savedViews, setSavedViews] = useState<SavedDossierView[]>(() => readSavedViews(userId))
+  function updateSavedViews(next: SavedDossierView[]) {
+    setSavedViews(next)
+    writeSavedViews(userId, next)
+  }
+  const presetContext = useMemo(() => ({ userId }), [userId])
 
   const chips = activeFilterChips(filters)
   const hasActiveFilters = chips.length > 0 || filters.search !== ''
@@ -202,6 +262,8 @@ export function DossiersPage() {
       Paid: t('dossiers.filters.options.invoicePaid'),
     },
     hasCmr: { true: t('dossiers.filters.options.cmrYes'), false: t('dossiers.filters.options.cmrNo') },
+    hasOpenIncident: { true: t('dossiers.filters.options.incidentOpen'), false: t('dossiers.filters.options.incidentNone') },
+    planning: { planned: t('dossiers.filters.options.planned'), unplanned: t('dossiers.filters.options.unplanned') },
   }
 
   function rangeValue(from: string, to: string): string {
@@ -222,6 +284,8 @@ export function DossiersPage() {
     const key = chip.id
     const value = filters[key]
     if (key === 'status') return t(DOSSIER_STATUS_LABELS[value as DossierStatus])
+    // "Mijn dossiers" when it is the signed-in user; any other id only names the filter.
+    if (key === 'responsibleUserId') return value === userId ? t('dossiers.filters.onlyMine') : fieldLabel(key)
     if (isLookupKey(key)) {
       // Until the lookup has loaded the chip names the filter, never a raw id.
       return lookups[LOOKUP_SOURCE[key]].find((o) => o.value === value)?.label ?? fieldLabel(key)
@@ -234,7 +298,7 @@ export function DossiersPage() {
   // One dossier = ONE row: every cell is a single line that cuts off with an ellipsis and shows
   // its full value on hover. Column widths live in dossiers.css (per nth-child), together with
   // the container queries that drop the least critical columns first on narrower screens.
-  const columns: Column<DossierListItem>[] = [
+  const allColumns: Column<DossierListItem>[] = [
     {
       key: 'number',
       header: t('dossiers.list.columns.number'),
@@ -277,7 +341,13 @@ export function DossiersPage() {
       key: 'planning',
       header: t('dossiers.list.columns.planning'),
       sortKey: 'planningDate',
-      render: (row) => <PlanningCell row={row} />,
+      // With its own Chauffeur column on screen, Planning is the date alone — no double information.
+      render: (row) => <PlanningCell row={row} withAssignment={!shownColumns.includes('driver')} />,
+    },
+    {
+      key: 'driver',
+      header: t('dossiers.list.columns.driver'),
+      render: (row) => <DriverCell row={row} />,
     },
     {
       key: 'price',
@@ -289,6 +359,11 @@ export function DossiersPage() {
       key: 'invoice',
       header: t('dossiers.list.columns.invoice'),
       render: (row) => <span className="dossier-list-nowrap">{row.invoiceStatus ? t(`dossiers.list.invoice.${row.invoiceStatus}`) : EMPTY}</span>,
+    },
+    {
+      key: 'responsible',
+      header: t('dossiers.list.columns.responsible'),
+      render: (row) => <TruncatedCell value={row.responsibleName} />,
     },
     {
       key: 'actions',
@@ -308,6 +383,9 @@ export function DossiersPage() {
       },
     },
   ]
+  const columns = allColumns
+    .filter((column) => shownColumns.includes(column.key as DossierColumnKey))
+    .map((column) => ({ ...column, className: COLUMN_CLASS[column.key as DossierColumnKey] }))
 
   // --- render ----------------------------------------------------------------------------------
   return (
@@ -316,6 +394,15 @@ export function DossiersPage() {
         title={t('dossiers.list.title')}
         subtitle={t('dossiers.list.subtitle')}
         action={canManage ? <Button onClick={() => navigate('/dossiers/new')}>{t('dossiers.list.new')}</Button> : undefined}
+      />
+
+      <DossierViewsBar
+        filters={filters}
+        context={presetContext}
+        savedViews={savedViews}
+        onApply={(next) => apply(next)}
+        onSaveView={(view) => updateSavedViews([...savedViews, view])}
+        onRemoveView={(id) => updateSavedViews(savedViews.filter((view) => view.id !== id))}
       />
 
       <div className="dossier-filters">
@@ -350,7 +437,7 @@ export function DossiersPage() {
           </button>
         </FilterBar>
 
-        {panelOpen && <DossierFilterPanel id={panelId} filters={filters} lookups={lookups} onChange={apply} />}
+        {panelOpen && <DossierFilterPanel id={panelId} filters={filters} lookups={lookups} currentUserId={userId} onChange={apply} />}
 
         {hasActiveFilters && (
           <div className="dossier-active-filters">
@@ -391,24 +478,45 @@ export function DossiersPage() {
         <span className="dossier-list-count" aria-live="polite">
           {!isLoading && !error ? t('dossiers.list.resultCount', { count: totalCount }) : ''}
         </span>
-        <label className="dossier-list-sort">
-          <span>{t('dossiers.list.sortLabel')}</span>
-          <select
-            value={filters.sort || SORT_KEYS[0]}
-            // The direction resets so the server picks the natural one (newest first for dates, A→Z for text).
-            onChange={(e) => apply({ sort: e.target.value === SORT_KEYS[0] ? '' : (e.target.value as DossierSortKey), dir: '' })}
-          >
-            {SORT_KEYS.map((key) => (
-              <option key={key} value={key}>
-                {t(`dossiers.list.sort.${key}`)}
-              </option>
+        <div className="dossier-list-tools">
+          {hiddenByWidth.length > 0 && (
+            <span className="dossier-list-hidden" title={hiddenByWidth.map((key) => t(`dossiers.list.columns.${key}`)).join(', ')}>
+              {t('dossiers.list.hiddenByWidth', { count: hiddenByWidth.length })}
+            </span>
+          )}
+          <label className="dossier-list-sort">
+            <span>{t('dossiers.list.sortLabel')}</span>
+            <select
+              value={filters.sort || SORT_KEYS[0]}
+              // The direction resets so the server picks the natural one (newest first for dates, A→Z for text).
+              onChange={(e) => apply({ sort: e.target.value === SORT_KEYS[0] ? '' : (e.target.value as DossierSortKey), dir: '' })}
+            >
+              {SORT_KEYS.map((key) => (
+                <option key={key} value={key}>
+                  {t(`dossiers.list.sort.${key}`)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <DossierColumnChooser optional={prefs.optional} onChange={(optional) => updatePrefs({ optional })} />
+          <div className="dossier-density" role="group" aria-label={t('dossiers.list.densityLabel')}>
+            {(['compact', 'normal'] as DossierListDensity[]).map((option) => (
+              <button
+                key={option}
+                type="button"
+                aria-pressed={prefs.density === option}
+                onClick={() => updatePrefs({ density: option })}
+              >
+                {option === 'compact' ? t('dossiers.list.densityCompact') : t('dossiers.list.densityNormal')}
+              </button>
             ))}
-          </select>
-        </label>
+          </div>
+        </div>
       </div>
 
-      <div className="dossier-list">
+      <div className="dossier-list" ref={listRef} data-density={prefs.density} style={{ '--dossier-table-min': `${tableMinWidth(shownColumns)}px` } as CSSProperties}>
         <DataTable
+          density={prefs.density}
           columns={columns}
           rows={items}
           rowKey={(row) => row.id}
@@ -536,9 +644,9 @@ function TransportCell({ row }: { row: DossierListItem }) {
  * name/plate when exactly one driver/vehicle is assigned, "2 chauffeurs"/"2 voertuigen" otherwise —
  * never one arbitrary driver presented as THE driver of the dossier.
  */
-function PlanningCell({ row }: { row: DossierListItem }) {
+function PlanningCell({ row, withAssignment = true }: { row: DossierListItem; withAssignment?: boolean }) {
   const date = row.planningDate ? formatDate(row.planningDate) : null
-  const assignment = [row.driverSummary, row.vehicleSummary].filter(Boolean).join(' · ')
+  const assignment = withAssignment ? [row.driverSummary, row.vehicleSummary].filter(Boolean).join(' · ') : ''
   if (!date && !assignment) return <>{EMPTY}</>
   return (
     <TruncatedText tooltip={[date ?? EMPTY, assignment].filter(Boolean).join(' · ')}>
@@ -546,6 +654,13 @@ function PlanningCell({ row }: { row: DossierListItem }) {
       {assignment && <span className="dossier-list-muted dossier-list-sep">{assignment}</span>}
     </TruncatedText>
   )
+}
+
+/** B10 optional column: who drives / what drives, on one line ("Jan Peeters · 1-ABC-123" or "2 chauffeurs"). */
+function DriverCell({ row }: { row: DossierListItem }) {
+  const assignment = [row.driverSummary, row.vehicleSummary].filter(Boolean).join(' · ')
+  if (!assignment) return <>{EMPTY}</>
+  return <TruncatedText tooltip={assignment}>{assignment}</TruncatedText>
 }
 
 /**
