@@ -7,6 +7,8 @@ import { LoadingState } from '../../../components/feedback/LoadingState'
 import { ErrorState } from '../../../components/feedback/ErrorState'
 import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
+import { ActionMenu, type ActionMenuItem } from '../../../components/ui/ActionMenu'
+import { UnsavedChangesGuard } from '../../../components/ui/UnsavedChangesGuard'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { FormField } from '../../../components/ui/FormField'
 import { SearchableSelect, type SearchableSelectOption } from '../../../components/ui/SearchableSelect'
@@ -50,6 +52,9 @@ import {
 import { usePlanningResources, type ResourceListStatus } from '../usePlanningResources'
 import './planning.css'
 import { formatDate } from '../../../utils/dates'
+
+/** Lifecycle steps that move a trip forward; the first allowed one is the primary header action. */
+const TRIP_FORWARD_STEPS: TripStatus[] = ['Planned', 'InProgress', 'Completed']
 
 export function TripDetailPage() {
   const { id = '' } = useParams<{ id: string }>()
@@ -405,6 +410,26 @@ export function TripDetailPage() {
     }
   })
 
+  // B04: the next forward step is the one primary action; "Terug naar concept", cancelling and
+  // deleting live in the "Meer" menu so they never compete with it.
+  const canEditTrip = hasPermission('planning.edit')
+  const forwardTripTransitions = canEditTrip
+    ? TRIP_FORWARD_STEPS.filter((step) => trip.allowedTransitions.includes(step))
+    : []
+  const primaryTripTransition = forwardTripTransitions[0] ?? null
+  const secondaryTripTransitions = forwardTripTransitions.slice(1)
+  const tripMenuItems: ActionMenuItem[] = [
+    ...(canEditTrip && trip.allowedTransitions.includes('Draft')
+      ? [{ key: 'draft', label: t(TRIP_TRANSITION_LABELS.Draft), onSelect: () => void applyTransition('Draft', false), disabled: dirty }]
+      : []),
+    ...(canEditTrip && trip.allowedTransitions.includes('Cancelled')
+      ? [{ key: 'cancel', label: t(TRIP_TRANSITION_LABELS.Cancelled), onSelect: () => setCancelTarget('Cancelled'), danger: true, disabled: dirty }]
+      : []),
+    ...(canEditTrip && (trip.status === 'Draft' || trip.status === 'Cancelled')
+      ? [{ key: 'delete', label: t('planning.detail.remove'), onSelect: () => setConfirmDelete(true), danger: true }]
+      : []),
+  ]
+
   return (
     <div>
       <Breadcrumbs items={[{ label: t('planning.title'), to: '/planning' }, { label: trip.tripNumber }]} />
@@ -430,21 +455,22 @@ export function TripDetailPage() {
             >
               {t('planning.detail.deliveryNotesButton')}
             </Button>
-            {hasPermission('planning.edit') &&
-              trip.allowedTransitions.map((target) => (
-                <Button
-                  key={target}
-                  variant={target === 'Cancelled' ? 'secondary' : 'primary'}
-                  onClick={() => (target === 'Cancelled' ? setCancelTarget(target) : void applyTransition(target, false))}
-                  disabled={busy || dirty}
-                >
-                  {t(TRIP_TRANSITION_LABELS[target])}
-                </Button>
-              ))}
+            {secondaryTripTransitions.map((target) => (
+              <Button key={target} variant="secondary" onClick={() => void applyTransition(target, false)} disabled={busy || dirty}>
+                {t(TRIP_TRANSITION_LABELS[target])}
+              </Button>
+            ))}
+            {primaryTripTransition && (
+              <Button onClick={() => void applyTransition(primaryTripTransition, false)} disabled={busy || dirty}>
+                {t(TRIP_TRANSITION_LABELS[primaryTripTransition])}
+              </Button>
+            )}
+            <ActionMenu items={tripMenuItems} disabled={busy} size="sm" />
           </span>
         }
       />
 
+      <UnsavedChangesGuard when={dirty && !busy} />
       {dirty && <p className="pl-dirty-hint">{t('planning.detail.dirtyHint')}</p>}
 
       <section className="pl-section">
@@ -773,11 +799,6 @@ export function TripDetailPage() {
         {editable && dirty && (
           <Button onClick={() => void handleSave()} disabled={busy}>
             {busy ? t('planning.detail.saving') : t('planning.detail.save')}
-          </Button>
-        )}
-        {(trip.status === 'Draft' || trip.status === 'Cancelled') && hasPermission('planning.edit') && (
-          <Button variant="secondary" onClick={() => setConfirmDelete(true)} disabled={busy}>
-            {t('planning.detail.remove')}
           </Button>
         )}
       </div>

@@ -73,7 +73,9 @@
     "codeAria": "Code d'emplacement",
     "namePlaceholder": "Nom",
     "nameAria": "Nom d'emplacement",
-    "add": "+ Emplacement"
+    "add": "+ Emplacement",
+    "removeTitle": "Supprimer l’emplacement",
+    "removeMessage": "{name} ({code}) sera supprimé."
   },
   "dockPlanning": {
     "title": "Planification des quais",

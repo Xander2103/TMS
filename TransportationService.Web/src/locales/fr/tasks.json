@@ -127,7 +127,9 @@
     "downloadFailed": "La pièce jointe n'a pas pu être téléchargée.",
     "notePlaceholder": "Note sur la pièce jointe (facultatif)",
     "noteAria": "Note sur la pièce jointe",
-    "uploadAria": "Envoyer une pièce jointe"
+    "uploadAria": "Envoyer une pièce jointe",
+    "deleteTitle": "Supprimer la pièce jointe",
+    "deleteMessage": "{name} sera définitivement supprimé."
   },
   "picker": {
     "employee": "Collaborateur",

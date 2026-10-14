@@ -433,7 +433,10 @@
       "legalName": "Officiële naam",
       "postalCode": "Postcode",
       "street": "Straat",
-      "vatNumber": "BTW-nummer"
+      "vatNumber": "BTW-nummer",
+      "conflictTitle": "Afwijkende registerwaarden",
+      "conflictKeep": "Alleen lege velden invullen",
+      "conflictOverwrite": "Overschrijven met register"
     },
     "sameAsPreferredLanguage": "— Zelfde als voorkeurstaal —",
     "saveAndNew": "Opslaan en nieuwe klant",

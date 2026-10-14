@@ -35,6 +35,7 @@ import { useCustomerMutations } from '../hooks/useCustomerMutations'
 import { useLocale } from '../../../i18n/localeContext'
 import { VAT_TREATMENT_LABEL_KEYS } from '../types'
 import './../components/customers.css'
+import { ActionMenu } from '../../../components/ui/ActionMenu'
 
 export function CustomerDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -191,36 +192,29 @@ export function CustomerDetailPage() {
         action={
           !isEditing && (
             <div className="customer-detail-toolbar">
-              {canEdit && (
-                <Button variant="secondary" onClick={() => setIsEditing(true)}>
-                  {t('ui.actions.edit')}
-                </Button>
-              )}
-              {canEdit &&
-                (customer.isBlocked ? (
-                  <Button variant="secondary" onClick={() => setShowUnblockConfirm(true)}>
-                    {t('customers.detail.unblock')}
-                  </Button>
-                ) : (
-                  <Button variant="secondary" onClick={() => setShowBlockDialog(true)}>
-                    {t('customers.detail.block')}
-                  </Button>
-                ))}
-              {canDeactivate &&
-                (customer.isActive ? (
-                  <Button variant="secondary" onClick={() => setShowActiveConfirm('deactivate')}>
-                    {t('customers.detail.deactivate')}
-                  </Button>
-                ) : (
-                  <Button variant="secondary" onClick={() => setShowActiveConfirm('activate')}>
-                    {t('customers.detail.reactivate')}
-                  </Button>
-                ))}
-              {canDelete && (
-                <Button variant="danger" onClick={() => setShowDeleteConfirm(true)}>
-                  {t('ui.actions.delete')}
-                </Button>
-              )}
+              {/* B03: one primary (edit); blocking, (de)activating and deleting live behind "Meer". */}
+              {canEdit && <Button onClick={() => setIsEditing(true)}>{t('ui.actions.edit')}</Button>}
+              <ActionMenu
+                items={[
+                  ...(canEdit
+                    ? [
+                        customer.isBlocked
+                          ? { key: 'unblock', label: t('customers.detail.unblock'), onSelect: () => setShowUnblockConfirm(true) }
+                          : { key: 'block', label: t('customers.detail.block'), onSelect: () => setShowBlockDialog(true) },
+                      ]
+                    : []),
+                  ...(canDeactivate
+                    ? [
+                        customer.isActive
+                          ? { key: 'deactivate', label: t('customers.detail.deactivate'), onSelect: () => setShowActiveConfirm('deactivate') }
+                          : { key: 'activate', label: t('customers.detail.reactivate'), onSelect: () => setShowActiveConfirm('activate') },
+                      ]
+                    : []),
+                  ...(canDelete
+                    ? [{ key: 'delete', label: t('ui.actions.delete'), onSelect: () => setShowDeleteConfirm(true), danger: true }]
+                    : []),
+                ]}
+              />
             </div>
           )
         }

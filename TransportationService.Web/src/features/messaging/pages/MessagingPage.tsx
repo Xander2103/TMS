@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { PageHeader } from '../../../components/layout/PageHeader'
 import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
+import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { FormField } from '../../../components/ui/FormField'
 import { Modal } from '../../../components/ui/Modal'
 import { Pagination } from '../../../components/ui/Pagination'
@@ -74,6 +75,7 @@ export function MessagingPage() {
   const [outbox, setOutbox] = useState<PagedResult<OutboxRow> | null>(null)
 
   const [templates, setTemplates] = useState<Template[] | null>(null)
+  const [templateToDelete, setTemplateToDelete] = useState<Template | null>(null)
   const [kinds, setKinds] = useState<string[]>([])
   const [editorOpen, setEditorOpen] = useState(false)
   const [tplKind, setTplKind] = useState('pod_available')
@@ -273,6 +275,24 @@ export function MessagingPage() {
       {canTemplates && templates && templates.length > 0 && (
         <section className="to-section">
           <h2>{t('messaging.templates.heading')}</h2>
+          {templateToDelete && (
+            <ConfirmDialog
+              title={t('messaging.templates.deleteTitle')}
+              message={t('messaging.templates.deleteMessage', {
+                kind: templateToDelete.kind,
+                channel: templateToDelete.channel,
+                language: templateToDelete.language,
+              })}
+              confirmLabel={t('ui.actions.delete')}
+              destructive
+              onConfirm={() => {
+                const target = templateToDelete
+                setTemplateToDelete(null)
+                void removeTemplate(target.id)
+              }}
+              onCancel={() => setTemplateToDelete(null)}
+            />
+          )}
           <ul className="msg-templates">
             {templates.map((template) => (
               <li key={template.id}>
@@ -293,7 +313,7 @@ export function MessagingPage() {
                 >
                   {t('messaging.templates.edit')}
                 </button>
-                <button type="button" className="msg-template-delete" onClick={() => void removeTemplate(template.id)}>
+                <button type="button" className="msg-template-delete" onClick={() => setTemplateToDelete(template)}>
                   {t('messaging.templates.delete')}
                 </button>
               </li>

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { Button } from '../../../components/ui/Button'
+import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { useToast } from '../../../components/ui/toastContext'
 import { localizeApiError } from '../../../api/problemDetails'
 import { useLocale } from '../../../i18n/localeContext'
@@ -61,6 +62,8 @@ export function WarehouseLocationsPanel({ warehouseId, canManage }: WarehouseLoc
     }
   }
 
+  const [removeTarget, setRemoveTarget] = useState<WarehouseLocation | null>(null)
+
   async function remove(location: WarehouseLocation) {
     try {
       await deleteWarehouseLocation(warehouseId, location.id)
@@ -76,6 +79,20 @@ export function WarehouseLocationsPanel({ warehouseId, canManage }: WarehouseLoc
 
   return (
     <div className="wh-locations">
+      {removeTarget && (
+        <ConfirmDialog
+          title={t('warehousing.locations.removeTitle')}
+          message={t('warehousing.locations.removeMessage', { name: removeTarget.name, code: removeTarget.code })}
+          confirmLabel={t('ui.actions.delete')}
+          destructive
+          onConfirm={() => {
+            const target = removeTarget
+            setRemoveTarget(null)
+            void remove(target)
+          }}
+          onCancel={() => setRemoveTarget(null)}
+        />
+      )}
       <button type="button" className="issued-items-link" onClick={() => setOpen((o) => !o)}>
         {open ? t('warehousing.locations.hide') : t('warehousing.locations.manage')}
       </button>
@@ -94,7 +111,7 @@ export function WarehouseLocationsPanel({ warehouseId, canManage }: WarehouseLoc
                 )}
               </span>
               {canManage && (
-                <button type="button" className="issued-items-link issued-items-link-danger" onClick={() => void remove(zone)}>
+                <button type="button" className="issued-items-link issued-items-link-danger" onClick={() => setRemoveTarget(zone)}>
                   {t('warehousing.locations.remove')}
                 </button>
               )}
@@ -110,7 +127,7 @@ export function WarehouseLocationsPanel({ warehouseId, canManage }: WarehouseLoc
                     <button
                       type="button"
                       className="issued-items-link issued-items-link-danger"
-                      onClick={() => void remove(position)}
+                      onClick={() => setRemoveTarget(position)}
                     >
                       {t('warehousing.locations.remove')}
                     </button>

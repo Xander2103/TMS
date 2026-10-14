@@ -41,6 +41,7 @@ import { contractEndBadge } from '../utils/employeeListBadges'
 import { CIVIL_STATUS_LABELS, EMPLOYMENT_STATUS_LABELS, EMPLOYMENT_STATUS_TONES, type EmployeeAttention } from '../types/employee'
 import { fullYearsSince } from '../utils/fullYearsSince'
 import './EmployeeDetailPage.css'
+import { ActionMenu } from '../../../components/ui/ActionMenu'
 
 const TAB_IDS = ['profiel', 'planning', 'kwalificaties', 'documenten', 'verlof', 'uren', 'taken', 'ritten', 'bedrijfsmiddelen', 'historiek'] as const
 type TabId = (typeof TAB_IDS)[number]
@@ -293,13 +294,14 @@ export function EmployeeDetailPage() {
               </Button>
             )}
             {canDeactivate && (
-              <Button
-                variant={employee.isActive ? 'danger' : 'secondary'}
-                onClick={() => setConfirmLifecycle(employee.isActive ? 'deactivate' : 'reactivate')}
+              <ActionMenu
                 disabled={mutations.isSubmitting}
-              >
-                {employee.isActive ? t('employees.detail.deactivate') : t('employees.detail.reactivate')}
-              </Button>
+                items={[
+                  employee.isActive
+                    ? { key: 'deactivate', label: t('employees.detail.deactivate'), onSelect: () => setConfirmLifecycle('deactivate'), danger: true }
+                    : { key: 'reactivate', label: t('employees.detail.reactivate'), onSelect: () => setConfirmLifecycle('reactivate') },
+                ]}
+              />
             )}
           </>
         }

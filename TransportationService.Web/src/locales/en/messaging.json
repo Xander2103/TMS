@@ -54,6 +54,8 @@
       "subject": "Subject",
       "subjectHint": "Tokens such as {{orderNumber}} are filled in.",
       "body": "Content"
-    }
+    },
+    "deleteTitle": "Delete template",
+    "deleteMessage": "The custom template {kind} ({channel}, {language}) will be deleted. The built-in template applies again afterwards."
   }
 }

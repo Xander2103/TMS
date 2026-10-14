@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Button } from '../../../components/ui/Button'
+import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { useToast } from '../../../components/ui/toastContext'
 import { localizeApiError } from '../../../api/problemDetails'
 import { useLocale } from '../../../i18n/localeContext'
@@ -64,6 +65,8 @@ export function TaskAttachmentsSection({ taskId, canManage, onCountChange }: Tas
     }
   }
 
+  const [deleteTarget, setDeleteTarget] = useState<TaskAttachment | null>(null)
+
   async function handleDelete(attachment: TaskAttachment) {
     setBusy(true)
     try {
@@ -79,6 +82,21 @@ export function TaskAttachmentsSection({ taskId, canManage, onCountChange }: Tas
 
   return (
     <div className="task-detail-section">
+      {deleteTarget && (
+        <ConfirmDialog
+          title={t('tasks.attachments.deleteTitle')}
+          message={t('tasks.attachments.deleteMessage', { name: deleteTarget.fileName })}
+          confirmLabel={t('ui.actions.delete')}
+          destructive
+          busy={busy}
+          onConfirm={() => {
+            const target = deleteTarget
+            setDeleteTarget(null)
+            void handleDelete(target)
+          }}
+          onCancel={() => setDeleteTarget(null)}
+        />
+      )}
       <h4>{t('tasks.attachments.title')}</h4>
       {attachments.length === 0 ? (
         <p className="placeholder-text">{t('tasks.attachments.empty')}</p>
@@ -102,7 +120,7 @@ export function TaskAttachmentsSection({ taskId, canManage, onCountChange }: Tas
                 {attachment.note ? ` · ${attachment.note}` : ''}
               </span>
               {canManage && (
-                <Button variant="ghost" onClick={() => void handleDelete(attachment)} disabled={busy}>
+                <Button variant="ghost" onClick={() => setDeleteTarget(attachment)} disabled={busy}>
                   {t('ui.actions.delete')}
                 </Button>
               )}

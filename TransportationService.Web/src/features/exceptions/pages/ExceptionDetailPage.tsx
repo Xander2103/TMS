@@ -6,6 +6,8 @@ import { LoadingState } from '../../../components/feedback/LoadingState'
 import { ErrorState } from '../../../components/feedback/ErrorState'
 import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
+import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
+import { UnsavedChangesGuard } from '../../../components/ui/UnsavedChangesGuard'
 import { FormField } from '../../../components/ui/FormField'
 import { Modal } from '../../../components/ui/Modal'
 import { useToast } from '../../../components/ui/toastContext'
@@ -93,6 +95,7 @@ export function ExceptionDetailPage() {
   const [statusNote, setStatusNote] = useState('')
 
   const [editing, setEditing] = useState(false)
+  const [photoToDelete, setPhotoToDelete] = useState<string | null>(null)
   const [severity, setSeverity] = useState<ExceptionSeverity>('Medium')
   const [dispatcherNotes, setDispatcherNotes] = useState('')
   const [customerVisible, setCustomerVisible] = useState(false)
@@ -227,6 +230,13 @@ export function ExceptionDetailPage() {
 
   if (loadError) return <ErrorState message={loadError} />
   if (!detail) return <LoadingState message={t('exceptions.detail.loading')} />
+
+  // B05: leaving the page with unsaved edits asks first.
+  const editDirty =
+    editing &&
+    (severity !== detail.severity ||
+      dispatcherNotes.trim() !== (detail.dispatcherNotes ?? '') ||
+      customerVisible !== detail.customerVisible)
 
   return (
     <div>
@@ -378,6 +388,7 @@ export function ExceptionDetailPage() {
               <input type="checkbox" checked={customerVisible} onChange={(e) => setCustomerVisible(e.target.checked)} disabled={busy} />
               {t('exceptions.detail.customerVisible')}
             </label>
+            <UnsavedChangesGuard when={editDirty && !busy} />
             <div className="exc-edit-actions">
               <Button variant="secondary" onClick={() => setEditing(false)} disabled={busy}>
                 {t('exceptions.detail.cancel')}
@@ -428,6 +439,21 @@ export function ExceptionDetailPage() {
         )}
       </section>
 
+      {photoToDelete && (
+        <ConfirmDialog
+          title={t('exceptions.detail.deletePhotoTitle')}
+          message={t('exceptions.detail.deletePhotoMessage')}
+          confirmLabel={t('ui.actions.delete')}
+          destructive
+          busy={busy}
+          onConfirm={() => {
+            const target = photoToDelete
+            setPhotoToDelete(null)
+            void handleDeletePhoto(target)
+          }}
+          onCancel={() => setPhotoToDelete(null)}
+        />
+      )}
       {detail.photos.length > 0 && (
         <section className="to-section">
           <h2>{t('exceptions.detail.photosTitle', { count: detail.photos.length })}</h2>
@@ -444,7 +470,7 @@ export function ExceptionDetailPage() {
                 <figcaption>
                   {photo.fileName}
                   {canResolve && (
-                    <button type="button" className="exc-photo-delete" onClick={() => void handleDeletePhoto(photo.id)} disabled={busy}>
+                    <button type="button" className="exc-photo-delete" onClick={() => setPhotoToDelete(photo.id)} disabled={busy}>
                       {t('exceptions.detail.deletePhoto')}
                     </button>
                   )}

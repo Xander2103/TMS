@@ -481,7 +481,9 @@
     "zoneEditTitle": "Edit zone — {code}",
     "zoneSaveError": "The zone could not be saved.",
     "zoneUpdated": "Zone updated.",
-    "zonesEmpty": "No zones yet. Zones link postcode ranges to a rate area."
+    "zonesEmpty": "No zones yet. Zones link postcode ranges to a rate area.",
+    "holidayRemoveTitle": "Delete holiday",
+    "holidayRemoveMessage": "{name} ({date}) will be deleted; holiday surcharges no longer apply on that day."
   },
   "status": {
     "Active": "Active",

@@ -73,7 +73,9 @@
     "codeAria": "Locatiecode",
     "namePlaceholder": "Naam",
     "nameAria": "Locatienaam",
-    "add": "+ Locatie"
+    "add": "+ Locatie",
+    "removeTitle": "Locatie verwijderen",
+    "removeMessage": "{name} ({code}) wordt verwijderd."
   },
   "dockPlanning": {
     "title": "Dockplanning",

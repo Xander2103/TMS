@@ -73,7 +73,9 @@
     "codeAria": "Location code",
     "namePlaceholder": "Name",
     "nameAria": "Location name",
-    "add": "+ Location"
+    "add": "+ Location",
+    "removeTitle": "Delete location",
+    "removeMessage": "{name} ({code}) will be deleted."
   },
   "dockPlanning": {
     "title": "Dock planning",

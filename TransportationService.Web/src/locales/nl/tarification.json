@@ -481,7 +481,9 @@
     "zoneEditTitle": "Zone bewerken — {code}",
     "zoneSaveError": "De zone kon niet worden opgeslagen.",
     "zoneUpdated": "Zone bijgewerkt.",
-    "zonesEmpty": "Nog geen zones. Zones koppelen postcodereeksen aan een tariefgebied."
+    "zonesEmpty": "Nog geen zones. Zones koppelen postcodereeksen aan een tariefgebied.",
+    "holidayRemoveTitle": "Feestdag verwijderen",
+    "holidayRemoveMessage": "{name} ({date}) wordt verwijderd; toeslagen met de conditie ‘Feestdag’ gelden dan niet meer op die dag."
   },
   "status": {
     "Active": "Actief",

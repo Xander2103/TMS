@@ -1,9 +1,10 @@
 import { Link, useNavigate } from 'react-router-dom'
-import { FileText, Pencil, Trash2, X } from 'lucide-react'
+import { FileText, Pencil } from 'lucide-react'
 import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { BackButton } from '../../../components/ui/BackButton'
 import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
+import { ActionMenu, type ActionMenuItem } from '../../../components/ui/ActionMenu'
 import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
 import { useLocale } from '../../../i18n/localeContext'
@@ -12,6 +13,9 @@ import { downloadOrderDocument } from '../api/transportDocumentsApi'
 import { isPlaceholderCustomerName } from '../components/placeholderCustomer'
 import { ORDER_STATUS_LABELS, ORDER_STATUS_TONE, ORDER_TRANSITION_LABELS, type TransportOrderStatus } from '../types'
 import { useOrderDetail } from './orderDetailContext'
+
+/** Lifecycle steps that move an order forward, in order; the first allowed one is THE primary action. */
+const ORDER_FORWARD_STEPS: TransportOrderStatus[] = ['Submitted', 'Confirmed', 'Planned', 'InProgress', 'Completed', 'Invoiced']
 
 interface OrderDetailHeaderProps {
   onEdit: () => void
@@ -34,6 +38,33 @@ export function OrderDetailHeader({ onEdit, onDelete, onCancel, onCorrectStatus,
   const ws = useOrderDetail()
   const { order, busy, editing, entities, editable, deletable, priceDisplay } = ws
   const showPriceChip = Boolean(order.pricingSnapshot) || ws.totalPrice !== null
+
+  const canTransition = hasAnyPermission(['orders.change_status', 'orders.manage'])
+  const forwardTransitions = canTransition
+    ? ORDER_FORWARD_STEPS.filter((step) => order.allowedTransitions.includes(step))
+    : []
+  const primaryTransition = forwardTransitions[0] ?? null
+  const secondaryTransitions = forwardTransitions.slice(1)
+  const menuItems: ActionMenuItem[] = []
+  if (canTransition && order.allowedTransitions.includes('Draft')) {
+    menuItems.push({ key: 'draft', label: t(ORDER_TRANSITION_LABELS.Draft), onSelect: () => onTransition('Draft') })
+  }
+  if (order.allowedCorrections.length > 0 && hasAnyPermission(['orders.correct_status', 'orders.manage'])) {
+    menuItems.push({ key: 'correct', label: 'Status corrigeren', onSelect: onCorrectStatus })
+  }
+  if (hasAnyPermission(['orders.create', 'orders.manage'])) {
+    menuItems.push({
+      key: 'template',
+      label: 'Gebruik als sjabloon',
+      onSelect: () => navigate(`/transport-orders/new?template=${order.id}`),
+    })
+  }
+  if (order.canCancel && hasAnyPermission(['orders.cancel', 'orders.manage'])) {
+    menuItems.push({ key: 'cancel', label: 'Annuleren', onSelect: onCancel, danger: true })
+  }
+  if (deletable) {
+    menuItems.push({ key: 'delete', label: 'Verwijderen', onSelect: onDelete, danger: true })
+  }
 
   return (
     <header className="tod-header">
@@ -107,33 +138,25 @@ export function OrderDetailHeader({ onEdit, onDelete, onCancel, onCorrectStatus,
         </div>
 
         <div className="tod-header-actions">
+          {/* B04: one primary (the next lifecycle step), secondary edit/document actions, and a
+              "Meer" menu for the backward, corrective, template and destructive actions. */}
           <div className="tod-actions-row tod-actions-workflow">
             {editable && !editing && (
               <Button variant="secondary" onClick={onEdit} disabled={busy}>
                 <Pencil size={15} aria-hidden /> Bewerken
               </Button>
             )}
-            {hasAnyPermission(['orders.change_status', 'orders.manage']) &&
-              order.allowedTransitions.map((target) => (
-                <Button key={target} onClick={() => onTransition(target)} disabled={busy || editing}>
-                  {t(ORDER_TRANSITION_LABELS[target])}
-                </Button>
-              ))}
-            {order.canCancel && hasAnyPermission(['orders.cancel', 'orders.manage']) && (
-              <Button variant="secondary" onClick={onCancel} disabled={busy || editing}>
-                <X size={15} aria-hidden /> Annuleren
+            {secondaryTransitions.map((target) => (
+              <Button key={target} variant="secondary" onClick={() => onTransition(target)} disabled={busy || editing}>
+                {t(ORDER_TRANSITION_LABELS[target])}
+              </Button>
+            ))}
+            {primaryTransition && (
+              <Button onClick={() => onTransition(primaryTransition)} disabled={busy || editing}>
+                {t(ORDER_TRANSITION_LABELS[primaryTransition])}
               </Button>
             )}
-            {order.allowedCorrections.length > 0 && hasAnyPermission(['orders.correct_status', 'orders.manage']) && (
-              <Button variant="secondary" onClick={onCorrectStatus} disabled={busy || editing}>
-                Status corrigeren
-              </Button>
-            )}
-            {deletable && (
-              <Button variant="danger" className="tod-action-destructive" onClick={onDelete} disabled={busy || editing}>
-                <Trash2 size={15} aria-hidden /> Verwijderen
-              </Button>
-            )}
+            <ActionMenu items={menuItems} disabled={busy || editing} size="sm" />
           </div>
           <div className="tod-actions-row tod-actions-documents">
             {/* Wave 9: leveringsbon/CMR uit de bevroren ordergegevens. */}
@@ -153,15 +176,6 @@ export function OrderDetailHeader({ onEdit, onDelete, onCancel, onCorrectStatus,
             >
               <FileText size={15} aria-hidden /> Leveringsbon
             </Button>
-            {hasAnyPermission(['orders.create', 'orders.manage']) && (
-              <Button
-                variant="secondary"
-                onClick={() => navigate(`/transport-orders/new?template=${order.id}`)}
-                disabled={busy || editing}
-              >
-                Gebruik als sjabloon
-              </Button>
-            )}
           </div>
         </div>
       </div>

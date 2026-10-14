@@ -106,10 +106,14 @@ describe('CustomerForm section structure (quick-entry consolidation)', () => {
     expect(screen.getByLabelText(/Interne klantmemo/i)).toBeInTheDocument()
   })
 
-  it('offers dual save bars plus "Opslaan en nieuwe klant" in create mode', () => {
+  it('offers one sticky save bar plus "Opslaan en nieuwe klant" in create mode (B39)', () => {
     renderForm()
-    expect(screen.getAllByRole('button', { name: 'Opslaan' })).toHaveLength(2)
-    expect(screen.getAllByRole('button', { name: 'Opslaan en nieuwe klant' })).toHaveLength(2)
+    expect(screen.getAllByRole('button', { name: 'Opslaan' })).toHaveLength(1)
+    expect(screen.getAllByRole('button', { name: 'Opslaan en nieuwe klant' })).toHaveLength(1)
+    // Sections that only exist after creation are not offered as empty placeholders.
+    expect(screen.queryByRole('tab', { name: /Communicatie/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('tab', { name: /Tarieven/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('tab', { name: /Historiek/i })).not.toBeInTheDocument()
   })
 
   it('shows the Historiek panel section in edit mode without the save bar', async () => {
@@ -129,7 +133,7 @@ describe('CustomerForm section structure (quick-entry consolidation)', () => {
     expect(screen.queryByRole('button', { name: 'Opslaan en nieuwe klant' })).not.toBeInTheDocument()
     await userEvent.click(screen.getByRole('tab', { name: /Historiek/i }))
     expect(screen.getByText('HISTORIEK-PANEL')).toBeInTheDocument()
-    // Panel sections hide both save bars.
+    // Panel sections hide the save bar.
     expect(screen.queryByRole('button', { name: 'Opslaan' })).not.toBeInTheDocument()
   })
 })

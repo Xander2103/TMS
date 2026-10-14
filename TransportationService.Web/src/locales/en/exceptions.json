@@ -99,7 +99,9 @@
     "statusModalTitle": "Change status to: {status}",
     "resolutionNoteLabel": "Resolution note",
     "optionalNoteLabel": "Note (optional)",
-    "statusNoteHint": "The reporter receives this decision as a notification."
+    "statusNoteHint": "The reporter receives this decision as a notification.",
+    "deletePhotoTitle": "Delete photo",
+    "deletePhotoMessage": "This photo will be permanently deleted."
   },
   "report": {
     "descriptionRequired": "A description of the problem is required.",

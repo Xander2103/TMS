@@ -54,6 +54,8 @@
       "subject": "Onderwerp",
       "subjectHint": "Tokens zoals {{orderNumber}} worden ingevuld.",
       "body": "Inhoud"
-    }
+    },
+    "deleteTitle": "Sjabloon verwijderen",
+    "deleteMessage": "Het eigen sjabloon {kind} ({channel}, {language}) wordt verwijderd. Daarna geldt het ingebouwde sjabloon weer."
   }
 }

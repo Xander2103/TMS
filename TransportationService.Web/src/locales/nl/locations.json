@@ -75,7 +75,9 @@
     "trailers": "Opleggers",
     "updated": "Adres bijgewerkt.",
     "vehicles": "Voertuigen",
-    "weightValue": "{value} t"
+    "weightValue": "{value} t",
+    "showEmptySections": "Toon {count} lege secties",
+    "hideEmptySections": "Verberg lege secties"
   },
   "duplicate": {
     "createAnyway": "Toch nieuw adres maken",

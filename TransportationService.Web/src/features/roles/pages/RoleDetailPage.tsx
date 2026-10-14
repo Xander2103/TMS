@@ -3,6 +3,8 @@ import { useParams } from 'react-router-dom'
 import { PageHeader } from '../../../components/layout/PageHeader'
 import { LoadingState } from '../../../components/feedback/LoadingState'
 import { ErrorState } from '../../../components/feedback/ErrorState'
+import { Button } from '../../../components/ui/Button'
+import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { PermissionMatrix } from '../components/PermissionMatrix'
 import { useLocale } from '../../../i18n/localeContext'
 import { useRole } from '../hooks/useRole'
@@ -132,9 +134,9 @@ function RoleDetailsForm({ roleId, isSystemRole, initialName, initialDescription
         </p>
       )}
       <div className="form-actions">
-        <button type="submit" className="primary-button" disabled={isSubmitting}>
+        <Button type="submit" disabled={isSubmitting}>
           {isSubmitting ? t('usersRoles.roles.detail.saving') : t('usersRoles.roles.detail.saveChanges')}
-        </button>
+        </Button>
       </div>
     </form>
   )
@@ -150,11 +152,10 @@ interface DeactivateControlProps {
 function DeactivateControl({ roleId, isSystemRole, isActive, onSaved }: DeactivateControlProps) {
   const { t } = useLocale()
   const { isSubmitting, error, deactivate } = useRoleMutations()
+  const [confirming, setConfirming] = useState(false)
 
   async function handleDeactivate() {
-    if (!window.confirm(t('usersRoles.roles.detail.confirmDeactivate'))) {
-      return
-    }
+    setConfirming(false)
     const saved = await deactivate(roleId)
     if (saved) {
       onSaved()
@@ -167,9 +168,20 @@ function DeactivateControl({ roleId, isSystemRole, isActive, onSaved }: Deactiva
 
   return (
     <div>
-      <button type="button" className="primary-button" onClick={handleDeactivate} disabled={isSystemRole || isSubmitting}>
+      <Button variant="danger" onClick={() => setConfirming(true)} disabled={isSystemRole || isSubmitting}>
         {t('usersRoles.roles.detail.deactivateRole')}
-      </button>
+      </Button>
+      {confirming && (
+        <ConfirmDialog
+          title={t('usersRoles.roles.detail.deactivateRole')}
+          message={t('usersRoles.roles.detail.confirmDeactivate')}
+          confirmLabel={t('usersRoles.roles.detail.deactivateRole')}
+          destructive
+          busy={isSubmitting}
+          onConfirm={() => void handleDeactivate()}
+          onCancel={() => setConfirming(false)}
+        />
+      )}
       {isSystemRole && <p className="field-hint">{t('usersRoles.roles.detail.systemRoleDeactivateHint')}</p>}
       {error && (
         <p className="form-error" role="alert">

@@ -191,21 +191,26 @@ describe('LocationDetailPage', () => {
     expect(screen.queryByRole('region', { name: 'Interne informatie' })).not.toBeInTheDocument()
   })
 
-  it('offers Bewerken / Dupliceren / Deactiveren in the header and deactivates via ConfirmDialog', async () => {
+  it('offers Bewerken as the primary and Dupliceren / Deactiveren / Verwijderen in the "Meer" menu (B03)', async () => {
     renderPage()
     await screen.findByRole('heading', { name: 'Magazijn Leuven' })
 
-    expect(screen.getByRole('button', { name: 'Bewerken' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Dupliceren' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Bewerken' })).toHaveClass('ui-button-primary')
+    expect(screen.queryByRole('button', { name: 'Dupliceren' })).not.toBeInTheDocument()
 
-    await userEvent.click(screen.getByRole('button', { name: 'Deactiveren' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Meer' }))
+    expect(screen.getByRole('menuitem', { name: 'Dupliceren' })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: 'Verwijderen' })).toHaveClass('ui-action-menu-item-danger')
+
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Deactiveren' }))
     const dialog = screen.getByRole('dialog', { name: 'Adres deactiveren' })
     expect(within(dialog).getByText(/'Magazijn Leuven' deactiveren\?/)).toBeInTheDocument()
     await userEvent.click(within(dialog).getByRole('button', { name: 'Deactiveren' }))
 
     expect(api.setLocationActive).toHaveBeenCalledWith('loc-1', false)
     expect(await screen.findByText('Inactief')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Activeren' })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Meer' }))
+    expect(screen.getByRole('menuitem', { name: 'Activeren' })).toBeInTheDocument()
   })
 
   it('duplicates the location and navigates to the copy', async () => {
@@ -216,7 +221,8 @@ describe('LocationDetailPage', () => {
     renderPage()
     await screen.findByRole('heading', { name: 'Magazijn Leuven' })
 
-    await userEvent.click(screen.getByRole('button', { name: 'Dupliceren' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Meer' }))
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Dupliceren' }))
 
     expect(api.duplicateLocation).toHaveBeenCalledWith('loc-1')
     expect(await screen.findByRole('heading', { name: 'Magazijn Leuven (kopie)' })).toBeInTheDocument()
@@ -229,8 +235,32 @@ describe('LocationDetailPage', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Bewerken' }))
 
     expect(screen.getByRole('tab', { name: /Algemeen/ })).toBeInTheDocument()
-    // The action bar renders twice (top + sticky bottom).
+    // One sticky action bar (B39).
     expect(screen.getAllByRole('button', { name: 'Opslaan' }).length).toBeGreaterThan(0)
+  })
+
+  it('hides empty optional cards behind one "Toon lege secties" toggle (B40)', async () => {
+    api.getLocation.mockResolvedValue(
+      detail({
+        contactName: null, contactPhone: null, contactMobile: null, contactEmail: null,
+        openingHours: null, openingIntervals: [],
+        defaultLoadingMinutes: null, defaultUnloadingMinutes: null,
+        preferredArrivalFrom: null, preferredArrivalTo: null, earliestArrival: null, latestArrival: null,
+      }),
+    )
+    renderPage()
+    await screen.findByRole('heading', { name: 'Magazijn Leuven' })
+    expect(screen.getByRole('region', { name: 'Adres' })).toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Contact' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Openingsuren' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Planning' })).not.toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Toon 3 lege secties' }))
+    expect(screen.getByRole('region', { name: 'Contact' })).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'Openingsuren' })).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'Planning' })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Verberg lege secties' }))
+    expect(screen.queryByRole('region', { name: 'Contact' })).not.toBeInTheDocument()
   })
 
   it('hides mutating actions without permissions', async () => {
@@ -238,8 +268,8 @@ describe('LocationDetailPage', () => {
     renderPage()
     await screen.findByRole('heading', { name: 'Magazijn Leuven' })
     expect(screen.queryByRole('button', { name: 'Bewerken' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Dupliceren' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Deactiveren' })).not.toBeInTheDocument()
+    // No permitted action is left, so the "Meer" menu is not rendered either.
+    expect(screen.queryByRole('button', { name: 'Meer' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Verwijderen' })).not.toBeInTheDocument()
   })
 })

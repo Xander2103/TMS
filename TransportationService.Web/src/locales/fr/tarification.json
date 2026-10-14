@@ -481,7 +481,9 @@
     "zoneEditTitle": "Modifier la zone — {code}",
     "zoneSaveError": "La zone n'a pas pu être enregistrée.",
     "zoneUpdated": "Zone mise à jour.",
-    "zonesEmpty": "Pas encore de zones. Les zones relient des plages de codes postaux à une zone tarifaire."
+    "zonesEmpty": "Pas encore de zones. Les zones relient des plages de codes postaux à une zone tarifaire.",
+    "holidayRemoveTitle": "Supprimer le jour férié",
+    "holidayRemoveMessage": "{name} ({date}) sera supprimé ; les suppléments « jour férié » ne s’appliqueront plus ce jour-là."
   },
   "status": {
     "Active": "Active",

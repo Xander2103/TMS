@@ -99,7 +99,9 @@
     "statusModalTitle": "Modifier le statut en : {status}",
     "resolutionNoteLabel": "Note de traitement",
     "optionalNoteLabel": "Note (facultatif)",
-    "statusNoteHint": "Le déclarant reçoit cette décision comme notification."
+    "statusNoteHint": "Le déclarant reçoit cette décision comme notification.",
+    "deletePhotoTitle": "Supprimer la photo",
+    "deletePhotoMessage": "Cette photo sera définitivement supprimée."
   },
   "report": {
     "descriptionRequired": "Une description du problème est obligatoire.",

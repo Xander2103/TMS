@@ -433,7 +433,10 @@
       "legalName": "Legal name",
       "postalCode": "Postal code",
       "street": "Street",
-      "vatNumber": "VAT number"
+      "vatNumber": "VAT number",
+      "conflictTitle": "Registry values differ",
+      "conflictKeep": "Fill empty fields only",
+      "conflictOverwrite": "Overwrite with registry"
     },
     "sameAsPreferredLanguage": "— Same as preferred language —",
     "saveAndNew": "Save and new customer",

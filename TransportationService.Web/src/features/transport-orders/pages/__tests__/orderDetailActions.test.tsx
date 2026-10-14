@@ -130,9 +130,11 @@ describe('TransportOrderDetailPage top-level actions', () => {
 
     const header = document.querySelector<HTMLElement>('header.tod-header')!
     expect(screen.getAllByRole('button', { name: 'Bewerken' })).toHaveLength(1)
-    expect(screen.getAllByRole('button', { name: 'Verwijderen' })).toHaveLength(1)
     expect(within(header).getByRole('button', { name: 'Bewerken' })).toBeInTheDocument()
-    expect(within(header).getByRole('button', { name: 'Verwijderen' })).toBeInTheDocument()
+    // B04: delete is a destructive item inside the header's "Meer" menu — once, not a button.
+    expect(screen.queryByRole('button', { name: 'Verwijderen' })).not.toBeInTheDocument()
+    await userEvent.click(within(header).getByRole('button', { name: 'Meer' }))
+    expect(screen.getAllByRole('menuitem', { name: 'Verwijderen' })).toHaveLength(1)
   })
 
   it('hides both header buttons without orders.edit/orders.delete permissions', async () => {
@@ -142,6 +144,7 @@ describe('TransportOrderDetailPage top-level actions', () => {
 
     expect(screen.queryByRole('button', { name: 'Bewerken' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Verwijderen' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('menuitem', { name: 'Verwijderen' })).not.toBeInTheDocument()
   })
 
   it('hides Bewerken for status Completed (not editable)', async () => {
@@ -156,7 +159,8 @@ describe('TransportOrderDetailPage top-level actions', () => {
     renderPage()
     await screen.findByText('ORD-0001 — Klant X')
 
-    await userEvent.click(screen.getByRole('button', { name: 'Verwijderen' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Meer' }))
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Verwijderen' }))
 
     const dialog = await screen.findByRole('dialog')
     expect(dialog).toHaveTextContent('ORD-0001')

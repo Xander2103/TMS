@@ -75,7 +75,9 @@
     "trailers": "Semi-remorques",
     "updated": "Adresse mise à jour.",
     "vehicles": "Véhicules",
-    "weightValue": "{value} t"
+    "weightValue": "{value} t",
+    "showEmptySections": "Afficher {count} sections vides",
+    "hideEmptySections": "Masquer les sections vides"
   },
   "duplicate": {
     "createAnyway": "Créer quand même une nouvelle adresse",

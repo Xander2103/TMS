@@ -33,6 +33,7 @@ import {
 import './trailer-form.css'
 import { formatDate } from '../../../utils/dates'
 import { ErrorState } from '../../../components/feedback/ErrorState'
+import { ActionMenu } from '../../../components/ui/ActionMenu'
 
 const TAB_IDS = ['overzicht', 'techniek', 'documenten', 'leasing', 'onderhoud', 'keuringen', 'schade', 'kpi', 'historiek'] as const
 type TabId = (typeof TAB_IDS)[number]
@@ -149,14 +150,22 @@ export function TrailerDetailPage() {
         subtitle={`${trailer.internalNumber} · ${trailer.licensePlate}`}
         action={
           <div className="trailer-detail-actions">
-            {canEdit && !editing && <Button variant="secondary" onClick={startEdit}>{t('ui.actions.edit')}</Button>}
-            {canEdit && !editing && (
-              <Button variant="secondary" onClick={() => setConfirmActive(trailer.isActive ? 'deactivate' : 'activate')}>
-                {trailer.isActive ? t('vehicles.detail.deactivate') : t('vehicles.detail.reactivate')}
-              </Button>
-            )}
-            {hasPermission('trailers.delete') && !editing && (
-              <Button variant="danger" onClick={() => setConfirmDelete(true)}>{t('ui.actions.delete')}</Button>
+            {canEdit && !editing && <Button onClick={startEdit}>{t('ui.actions.edit')}</Button>}
+            {!editing && (
+              <ActionMenu
+                items={[
+                  ...(canEdit
+                    ? [{
+                        key: 'active',
+                        label: trailer.isActive ? t('vehicles.detail.deactivate') : t('vehicles.detail.reactivate'),
+                        onSelect: () => setConfirmActive(trailer.isActive ? 'deactivate' : 'activate'),
+                      }]
+                    : []),
+                  ...(hasPermission('trailers.delete')
+                    ? [{ key: 'delete', label: t('ui.actions.delete'), onSelect: () => setConfirmDelete(true), danger: true }]
+                    : []),
+                ]}
+              />
             )}
           </div>
         }

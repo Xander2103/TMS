@@ -127,7 +127,9 @@
     "downloadFailed": "Bijlage kon niet worden gedownload.",
     "notePlaceholder": "Notitie bij de bijlage (optioneel)",
     "noteAria": "Notitie bij de bijlage",
-    "uploadAria": "Bijlage uploaden"
+    "uploadAria": "Bijlage uploaden",
+    "deleteTitle": "Bijlage verwijderen",
+    "deleteMessage": "{name} wordt definitief verwijderd."
   },
   "picker": {
     "employee": "Medewerker",

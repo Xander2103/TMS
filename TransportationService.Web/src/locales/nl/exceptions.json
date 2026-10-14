@@ -99,7 +99,9 @@
     "statusModalTitle": "Status wijzigen naar: {status}",
     "resolutionNoteLabel": "Afhandelingsnotitie",
     "optionalNoteLabel": "Notitie (optioneel)",
-    "statusNoteHint": "De melder ontvangt deze beslissing als notificatie."
+    "statusNoteHint": "De melder ontvangt deze beslissing als notificatie.",
+    "deletePhotoTitle": "Foto verwijderen",
+    "deletePhotoMessage": "Deze foto wordt definitief verwijderd."
   },
   "report": {
     "descriptionRequired": "Een omschrijving van het probleem is verplicht.",

@@ -16,6 +16,7 @@ import { LOCATION_TYPE_LABEL_KEYS, type LocationDetail, type LocationInput } fro
 import './locations.css'
 import './location-form.css'
 import { ErrorState } from '../../../components/feedback/ErrorState'
+import { ActionMenu } from '../../../components/ui/ActionMenu'
 
 /** Full detail → form payload; every field round-trips so saving never clears untouched data. */
 function toInput(location: LocationDetail): LocationInput {
@@ -126,6 +127,8 @@ export function LocationDetailPage() {
   const [confirmDeactivate, setConfirmDeactivate] = useState(false)
   const [duplicating, setDuplicating] = useState(false)
   const [togglingActive, setTogglingActive] = useState(false)
+  // B40: optional groups without content stay out of the way; one toggle brings them back.
+  const [showEmptySections, setShowEmptySections] = useState(false)
 
   useEffect(() => {
     if (!id) return
@@ -269,6 +272,7 @@ export function LocationDetailPage() {
   ].filter((r): r is { label: string; value: string } => r !== null)
 
   const hasInternal = Boolean(location.internalMemo || location.notes)
+  const hiddenSectionCount = [hasContact, hasStructuredHours || Boolean(location.openingHours), hasPlanning].filter((has) => !has).length
 
   const flagList = (flags: string[]) => (
     <ul className="location-flag-list">
@@ -307,28 +311,29 @@ export function LocationDetailPage() {
         action={
           <div className="location-detail-actions">
             {canEdit && !editing && (
-              <Button variant="secondary" onClick={() => { setSaveError(null); setEditing(true) }}>
+              <Button onClick={() => { setSaveError(null); setEditing(true) }}>
                 {t('ui.actions.edit')}
               </Button>
             )}
-            {hasPermission('locations.create') && !editing && (
-              <Button variant="secondary" onClick={() => void handleDuplicate()} disabled={duplicating}>
-                {duplicating ? t('locations.detail.busy') : t('locations.detail.duplicate')}
-              </Button>
-            )}
-            {canEdit && !editing && (
-              location.isActive ? (
-                <Button variant="secondary" onClick={() => setConfirmDeactivate(true)} disabled={togglingActive}>
-                  {t('locations.detail.deactivate')}
-                </Button>
-              ) : (
-                <Button variant="secondary" onClick={() => void handleSetActive(true)} disabled={togglingActive}>
-                  {t('locations.detail.activate')}
-                </Button>
-              )
-            )}
-            {hasPermission('locations.delete') && !editing && (
-              <Button variant="danger" onClick={() => setConfirmDelete(true)}>{t('ui.actions.delete')}</Button>
+            {!editing && (
+              <ActionMenu
+                disabled={duplicating || togglingActive}
+                items={[
+                  ...(hasPermission('locations.create')
+                    ? [{ key: 'duplicate', label: t('locations.detail.duplicate'), onSelect: () => void handleDuplicate() }]
+                    : []),
+                  ...(canEdit
+                    ? [
+                        location.isActive
+                          ? { key: 'deactivate', label: t('locations.detail.deactivate'), onSelect: () => setConfirmDeactivate(true) }
+                          : { key: 'activate', label: t('locations.detail.activate'), onSelect: () => void handleSetActive(true) },
+                      ]
+                    : []),
+                  ...(hasPermission('locations.delete')
+                    ? [{ key: 'delete', label: t('ui.actions.delete'), onSelect: () => setConfirmDelete(true), danger: true }]
+                    : []),
+                ]}
+              />
             )}
           </div>
         }
@@ -358,6 +363,7 @@ export function LocationDetailPage() {
             )}
           </DetailCard>
 
+          {(hasContact || showEmptySections) && (
           <DetailCard title={t('locations.detail.cards.contact')}>
             {hasContact ? (
               <dl>
@@ -382,7 +388,9 @@ export function LocationDetailPage() {
               noInfo
             )}
           </DetailCard>
+          )}
 
+          {(hasStructuredHours || location.openingHours || showEmptySections) && (
           <DetailCard title={t('locations.detail.cards.openingHours')}>
             {hasStructuredHours ? (
               <table className="location-hours-table">
@@ -424,7 +432,9 @@ export function LocationDetailPage() {
               noInfo
             )}
           </DetailCard>
+          )}
 
+          {(hasPlanning || showEmptySections) && (
           <DetailCard title={t('locations.detail.cards.planning')}>
             {hasPlanning ? (
               <dl>
@@ -450,6 +460,7 @@ export function LocationDetailPage() {
               noInfo
             )}
           </DetailCard>
+          )}
 
           <DetailCard title={t('locations.detail.cards.operational')} className="location-card-wide">
             {hasOperational ? (
@@ -516,6 +527,15 @@ export function LocationDetailPage() {
                 {location.notes && <DetailRow label={t('locations.detail.notes')}>{location.notes}</DetailRow>}
               </dl>
             </DetailCard>
+          )}
+          {hiddenSectionCount > 0 && (
+            <p className="location-cards-toggle">
+              <button type="button" className="location-link-button" onClick={() => setShowEmptySections((v) => !v)}>
+                {showEmptySections
+                  ? t('locations.detail.hideEmptySections')
+                  : t('locations.detail.showEmptySections', { count: hiddenSectionCount })}
+              </button>
+            </p>
           )}
         </div>
       ) : (

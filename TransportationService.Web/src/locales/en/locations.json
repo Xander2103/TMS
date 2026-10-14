@@ -75,7 +75,9 @@
     "trailers": "Trailers",
     "updated": "Address updated.",
     "vehicles": "Vehicles",
-    "weightValue": "{value} t"
+    "weightValue": "{value} t",
+    "showEmptySections": "Show {count} empty sections",
+    "hideEmptySections": "Hide empty sections"
   },
   "duplicate": {
     "createAnyway": "Create a new address anyway",

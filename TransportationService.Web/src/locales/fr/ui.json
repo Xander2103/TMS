@@ -9,7 +9,8 @@
     "add": "Ajouter",
     "edit": "Modifier",
     "delete": "Supprimer",
-    "search": "Rechercher"
+    "search": "Rechercher",
+    "more": "Plus"
   },
   "table": {
     "empty": "Aucune donnée trouvée.",

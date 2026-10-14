@@ -9,7 +9,8 @@
     "add": "Toevoegen",
     "edit": "Bewerken",
     "delete": "Verwijderen",
-    "search": "Zoeken"
+    "search": "Zoeken",
+    "more": "Meer"
   },
   "table": {
     "empty": "Geen gegevens gevonden.",

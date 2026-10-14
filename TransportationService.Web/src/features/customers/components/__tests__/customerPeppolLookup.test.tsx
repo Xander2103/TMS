@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import * as api from '../../api/customersApi'
@@ -97,8 +97,7 @@ describe('Customer Peppol registry lookup', () => {
     expect(await screen.findByText(/niet gevonden/i)).toBeInTheDocument()
   })
 
-  it('does not overwrite existing manual peppol data without confirmation', async () => {
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false)
+  it('does not overwrite existing manual peppol data without confirmation (in-app dialog, B03)', async () => {
     vi.spyOn(api, 'registryLookup').mockResolvedValue({
       configured: true,
       result: registryResult({ peppolId: '9999999999', peppolScheme: '9925' }),
@@ -109,7 +108,10 @@ describe('Customer Peppol registry lookup', () => {
     await userEvent.type(screen.getByLabelText(/Ondernemingsnummer/i), '0123456749')
     await userEvent.click(screen.getByRole('button', { name: /Gegevens opzoeken/i }))
     await userEvent.click(await screen.findByRole('button', { name: /Overnemen/i }))
-    expect(confirmSpy).toHaveBeenCalled()
+    const dialog = await screen.findByRole('dialog', { name: 'Afwijkende registerwaarden' })
+    expect(within(dialog).getByText(/Peppol-ID/)).toBeInTheDocument()
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Alleen lege velden invullen' }))
+    expect(screen.queryByRole('dialog', { name: 'Afwijkende registerwaarden' })).not.toBeInTheDocument()
     expect(screen.getByLabelText(/Peppol-ID/i)).toHaveValue('0123456789') // unchanged, still manual
     expect(screen.getByText('Manueel ingevoerd')).toBeInTheDocument()
   })

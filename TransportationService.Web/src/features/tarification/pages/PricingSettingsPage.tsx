@@ -10,6 +10,7 @@ import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
 import { localizeApiError } from '../../../api/problemDetails'
 import { useLocale } from '../../../i18n/localeContext'
+import { formatDate } from '../../../utils/dates'
 import {
   createPricingZone,
   createTenantHoliday,
@@ -55,6 +56,7 @@ export function PricingSettingsPage() {
 
   // Wave 3 §4: feestdagen die Feestdag-toeslagcondities voeden.
   const [holidays, setHolidays] = useState<TenantHoliday[]>([])
+  const [holidayToRemove, setHolidayToRemove] = useState<TenantHoliday | null>(null)
   const [holidayDate, setHolidayDate] = useState('')
   const [holidayName, setHolidayName] = useState('')
 
@@ -264,7 +266,7 @@ export function PricingSettingsPage() {
                         <button
                           type="button"
                           className="issued-items-link issued-items-link-danger"
-                          onClick={() => void removeHoliday(holiday)}
+                          onClick={() => setHolidayToRemove(holiday)}
                         >
                           {t('ui.actions.delete')}
                         </button>
@@ -331,6 +333,20 @@ export function PricingSettingsPage() {
         </Modal>
       )}
 
+      {holidayToRemove && (
+        <ConfirmDialog
+          title={t('tarification.settings.holidayRemoveTitle')}
+          message={t('tarification.settings.holidayRemoveMessage', { name: holidayToRemove.name, date: formatDate(holidayToRemove.date) })}
+          confirmLabel={t('ui.actions.delete')}
+          destructive
+          onConfirm={() => {
+            const target = holidayToRemove
+            setHolidayToRemove(null)
+            void removeHoliday(target)
+          }}
+          onCancel={() => setHolidayToRemove(null)}
+        />
+      )}
       {deleteZone && (
         <ConfirmDialog
           title={t('tarification.settings.zoneDeleteTitle')}

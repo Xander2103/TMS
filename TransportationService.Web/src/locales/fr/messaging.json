@@ -54,6 +54,8 @@
       "subject": "Objet",
       "subjectHint": "Les tokens comme {{orderNumber}} sont remplis automatiquement.",
       "body": "Contenu"
-    }
+    },
+    "deleteTitle": "Supprimer le modèle",
+    "deleteMessage": "Le modèle personnalisé {kind} ({channel}, {language}) sera supprimé. Le modèle intégré s’appliquera à nouveau."
   }
 }

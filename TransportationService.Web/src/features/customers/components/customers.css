@@ -289,6 +289,15 @@
   min-width: 0;
 }
 
+.customer-form-conflicts {
+  margin: 8px 0;
+  padding-left: 20px;
+}
+
+.customer-form-conflicts li {
+  margin: 4px 0;
+}
+
 .customer-detail-toolbar {
   display: flex;
   gap: 8px;

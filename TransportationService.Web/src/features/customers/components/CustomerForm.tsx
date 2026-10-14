@@ -3,6 +3,7 @@ import { FormField } from '../../../components/ui/FormField'
 import { Button } from '../../../components/ui/Button'
 import { FormSection } from '../../../components/ui/FormSection'
 import { FormActions } from '../../../components/ui/FormActions'
+import { Modal } from '../../../components/ui/Modal'
 import { SectionedForm, type SectionDef } from '../../../components/ui/SectionedForm'
 import { useSectionNavigation, firstSectionWithError } from '../../../components/ui/useSectionNavigation'
 import { ValidationSummary } from '../../../components/ui/ValidationSummary'
@@ -54,6 +55,9 @@ import {
   type VatTreatmentInfo,
 } from '../types'
 import './customers.css'
+
+/** Panel sections that only make sense once the customer exists (B39). */
+const CREATE_HIDDEN_SECTIONS = new Set(['communicatie', 'tarieven', 'historiek'])
 
 /**
  * Which save button triggered the submit: 'save' is the normal flow (navigate/reload by the
@@ -259,6 +263,10 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
   const [vatRateError, setVatRateError] = useState<string | undefined>(undefined)
   const [dirty, setDirty] = useState(false)
   const [lookup, setLookup] = useState<LookupState>({ kind: 'idle' })
+  const [registryConflict, setRegistryConflict] = useState<{
+    result: CompanyRegistryResult
+    conflicts: { label: string; current: string; next: string }[]
+  } | null>(null)
 
   const treatmentInfo = useMemo(() => treatments.find((t) => t.treatment === vatTreatment), [treatments, vatTreatment])
   const rateControl = useMemo(() => resolveRateOptions(treatmentInfo, canManageFiscal), [treatmentInfo, canManageFiscal])
@@ -320,7 +328,7 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
    * grouped Peppol control's status reflects whether its value came from the provider (auto),
    * the provider ran but returned no Peppol (not-found), or a manual value was kept.
    */
-  function applyRegistryResult(result: CompanyRegistryResult) {
+  function applyRegistryResult(result: CompanyRegistryResult, overwrite: boolean | null = null) {
     const fields: { label: string; value: string | null; current: string; set: (v: string) => void; fiscal?: boolean }[] = [
       { label: t('customers.form.registry.legalName'), value: result.legalName, current: legalName, set: setLegalName },
       { label: t('customers.form.registry.companyNumber'), value: result.companyNumber, current: companyNumber, set: setCompanyNumber, fiscal: true },
@@ -348,22 +356,17 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
       conflicts.push({ label: t('customers.fields.peppolId'), current: currentPeppol, next: nextPeppol })
     }
 
-    let overwrite = false
-    if (conflicts.length > 0) {
-      overwrite = window.confirm(
-        t('customers.form.registry.conflictIntro') +
-          '\n\n' +
-          conflicts.map((c) => `• ${c.label}: "${c.current}" → "${c.next}"`).join('\n') +
-          '\n\n' +
-          t('customers.form.registry.conflictQuestion'),
-      )
+    if (conflicts.length > 0 && overwrite === null) {
+      // B03: the differences are listed in an in-app dialog; the user keeps or overwrites.
+      setRegistryConflict({ result, conflicts })
+      return
     }
     for (const f of candidates) {
       const next = f.value?.trim() ?? ''
-      if (f.current.trim() === '' || (overwrite && f.current.trim() !== next)) f.set(next)
+      if (f.current.trim() === '' || (overwrite === true && f.current.trim() !== next)) f.set(next)
     }
     let peppolApplied = false
-    if (peppolCandidate && (currentPeppol === '' || overwrite)) {
+    if (peppolCandidate && (currentPeppol === '' || overwrite === true)) {
       setPeppolScheme(providerPeppol.scheme)
       setPeppolId(providerPeppol.id)
       peppolApplied = true
@@ -1206,12 +1209,13 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
 
   // De zichtbare volgorde staat in CUSTOMER_SECTION_ORDER (sprint 1C), niet in de
   // volgorde waarin de secties hierboven toevallig gedefinieerd zijn.
+  // B39: sections that only exist after the customer is created (communication rules,
+  // tariffs, history) are not shown as empty placeholders on the create form.
   const sections: SectionDef[] = CUSTOMER_SECTION_ORDER.map(
     (id) => sectionDefs.find((s) => s.id === id),
-  ).filter((s): s is SectionDef => s !== undefined)
+  ).filter((s): s is SectionDef => s !== undefined && (isEdit || !CREATE_HIDDEN_SECTIONS.has(s.id)))
 
   const { activeId, setActive } = useSectionNavigation(sections.map((s) => s.id), sections[0].id)
-  const activeSection = sections.find((s) => s.id === activeId) ?? sections[0]
 
   // Which save button was clicked last; a plain Enter-submit counts as the normal save.
   const submitIntentRef = useRef<CustomerSubmitIntent>('save')
@@ -1355,7 +1359,7 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
     onSubmit({ ...base, isActive: isEdit ? isActive : true }, intent)
   }
 
-  // Same buttons at the top and (sticky) bottom of the form; both submit the one form.
+  // B39: one sticky action bar at the bottom of the form (the duplicate top bar is gone).
   const actionBar = (position: 'top' | 'bottom') => (
     <FormActions dirty={dirty} position={position}>
       <Button variant="secondary" onClick={onCancel} disabled={isSubmitting}>
@@ -1394,9 +1398,45 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
         fieldLabels={Object.fromEntries(Object.entries(FIELD_LABEL_KEYS).map(([path, key]) => [path, t(key)]))}
       />
 
-      {/* SectionedForm renders `actions` only at the bottom; mirror its panel check here so the
-          top bar also disappears on self-saving panel sections. */}
-      {!activeSection.panel && actionBar('top')}
+      {registryConflict && (
+        <Modal
+          title={t('customers.form.registry.conflictTitle')}
+          onClose={() => setRegistryConflict(null)}
+          footer={
+            <>
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  const pending = registryConflict
+                  setRegistryConflict(null)
+                  applyRegistryResult(pending.result, false)
+                }}
+              >
+                {t('customers.form.registry.conflictKeep')}
+              </Button>
+              <Button
+                onClick={() => {
+                  const pending = registryConflict
+                  setRegistryConflict(null)
+                  applyRegistryResult(pending.result, true)
+                }}
+              >
+                {t('customers.form.registry.conflictOverwrite')}
+              </Button>
+            </>
+          }
+        >
+          <p>{t('customers.form.registry.conflictIntro').trim()}</p>
+          <ul className="customer-form-conflicts">
+            {registryConflict.conflicts.map((conflict) => (
+              <li key={conflict.label}>
+                <strong>{conflict.label}</strong>: “{conflict.current}” → “{conflict.next}”
+              </li>
+            ))}
+          </ul>
+          <p>{t('customers.form.registry.conflictQuestion').trim()}</p>
+        </Modal>
+      )}
 
       {/* Left rail (same pattern as EmployeeForm/LocationForm): nine sections never fit a
           single horizontal row at 900–1100px, which clipped labels and forced a scrollbar. */}

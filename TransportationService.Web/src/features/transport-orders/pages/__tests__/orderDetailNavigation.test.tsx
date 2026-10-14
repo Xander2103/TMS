@@ -468,12 +468,16 @@ describe('order detail — header actions', () => {
     await screen.findByText('ORD-0001 — Nexans NV')
 
     const head = header()
-    for (const name of ['Bewerken', 'Verwijderen', 'CMR', 'Leveringsbon', 'Gebruik als sjabloon']) {
+    for (const name of ['Bewerken', 'CMR', 'Leveringsbon']) {
       expect(within(head).getByRole('button', { name })).toBeInTheDocument()
     }
+    // B04: template and delete live in the "Meer" menu, delete styled as destructive.
+    await userEvent.click(within(head).getByRole('button', { name: 'Meer' }))
+    expect(screen.getByRole('menuitem', { name: 'Gebruik als sjabloon' })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: 'Verwijderen' })).toHaveClass('ui-action-menu-item-danger')
     // Once each: the former duplicate bottom bar is gone.
     expect(screen.getAllByRole('button', { name: 'Bewerken' })).toHaveLength(1)
-    expect(screen.getAllByRole('button', { name: 'Verwijderen' })).toHaveLength(1)
+    expect(screen.getAllByRole('menuitem', { name: 'Verwijderen' })).toHaveLength(1)
   })
 
   it('hides the permission-gated actions without orders.edit/orders.delete/orders.create', async () => {
@@ -483,8 +487,8 @@ describe('order detail — header actions', () => {
     await screen.findByText('ORD-0001 — Nexans NV')
 
     expect(screen.queryByRole('button', { name: 'Bewerken' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Verwijderen' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Gebruik als sjabloon' })).not.toBeInTheDocument()
+    // Nothing is left for the "Meer" menu either, so it is not rendered at all.
+    expect(screen.queryByRole('button', { name: 'Meer' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Klant van deze opdracht wijzigen' })).not.toBeInTheDocument()
     // Document downloads are not permission-gated (unchanged from before the redesign).
     expect(within(header()).getByRole('button', { name: 'CMR' })).toBeInTheDocument()

@@ -127,7 +127,9 @@
     "downloadFailed": "The attachment could not be downloaded.",
     "notePlaceholder": "Note for the attachment (optional)",
     "noteAria": "Note for the attachment",
-    "uploadAria": "Upload attachment"
+    "uploadAria": "Upload attachment",
+    "deleteTitle": "Delete attachment",
+    "deleteMessage": "{name} will be permanently deleted."
   },
   "picker": {
     "employee": "Employee",

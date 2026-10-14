@@ -433,7 +433,10 @@
       "legalName": "Dénomination officielle",
       "postalCode": "Code postal",
       "street": "Rue",
-      "vatNumber": "Numéro de TVA"
+      "vatNumber": "Numéro de TVA",
+      "conflictTitle": "Valeurs du registre différentes",
+      "conflictKeep": "Remplir uniquement les champs vides",
+      "conflictOverwrite": "Écraser avec le registre"
     },
     "sameAsPreferredLanguage": "— Identique à la langue préférée —",
     "saveAndNew": "Enregistrer et nouveau client",
