@@ -89,7 +89,6 @@
   "detail": {
     "loadError": "La tournée n'a pas pu être chargée.",
     "loading": "Chargement de la tournée...",
-    "saved": "Tournée mise à jour.",
     "saveFailedInput": "La tournée n'a pas pu être enregistrée — vérifiez la saisie.",
     "saveFailed": "La tournée n'a pas pu être enregistrée.",
     "statusChanged": "La tournée est maintenant : {status}.",
@@ -183,7 +182,6 @@
     "dossiersLabel_one": "Dossier",
     "dossiersLabel_other": "Dossiers",
     "unsaved": "Modifications non enregistrées",
-    "savedAt": "Enregistré · {time}",
     "editOnBoard": "Un trajet planifié se modifie sur le tableau de planification (avec contrôle des conflits).",
     "openBoard": "Ouvrir le tableau →",
     "ordersStopsTitle": "Commandes & arrêts ({count})",

@@ -5,7 +5,8 @@ import { describeApiError } from '../../../api/problemDetails'
 import { Button } from '../../../components/ui/Button'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { FormField } from '../../../components/ui/FormField'
-import { useToast } from '../../../components/ui/toastContext'
+import { SaveStatus } from '../../../components/ui/SaveStatus'
+import { isRetryableSaveError, useSaveStatus } from '../../../components/ui/useSaveStatus'
 import { useLocale } from '../../../i18n/localeContext'
 import { parseDecimalInput } from '../../../utils/numbers'
 import { euro } from '../../invoices/types'
@@ -90,7 +91,10 @@ function calculatedTariffTotal(order: TransportOrderDetail): number | null {
  */
 export function DossierOrderPricePanel({ dossier, activity, order, canEditPrice, isOpen, onOrderSaved, ref }: DossierOrderPricePanelProps) {
   const { t } = useLocale()
-  const toast = useToast()
+  // B31: the agreed price is edited in place — its save state stays beside the field.
+  const agreedStatus = useSaveStatus()
+  // The amount of the last attempt, re-sent by "Opnieuw proberen".
+  const [lastAgreedAmount, setLastAgreedAmount] = useState<number | null>(null)
   const navigate = useNavigate()
   const agreedInputRef = useRef<HTMLInputElement>(null)
   const { options: unitTypes } = useLookupOptions('/api/unit-types')
@@ -175,16 +179,19 @@ export function DossierOrderPricePanel({ dossier, activity, order, canEditPrice,
   async function persistAgreed(amount: number | null) {
     setBusy(true)
     setAgreedError(null)
+    setLastAgreedAmount(amount)
+    agreedStatus.setState({ kind: 'saving' })
     try {
       // Price-only command (hardening 2026-09-11). The previous full order PUT echoed the loaded
       // stops and so re-validated an incomplete route ("Elke stop heeft een locatie …") — a valid
       // price must never depend on unrelated route data. Route rules stay on the route save.
       const updated = await setOrderOneOffPrice(order.id, { fixedAmount: amount, version: order.version })
-      toast.showSuccess(amount === null ? t('dossierSheet.price.agreedCleared') : t('dossierSheet.price.agreedSaved'))
+      agreedStatus.setState({ kind: 'saved', at: new Date().toISOString() })
       setConfirmZero(false)
       onOrderSaved(updated)
     } catch (err) {
       setConfirmZero(false)
+      agreedStatus.setState(isRetryableSaveError(err) ? { kind: 'error' } : { kind: 'idle' })
       if (err instanceof ApiError && err.status === 409) {
         setAgreedError(t('dossiers.orderDrawer.conflict'))
       } else {
@@ -252,6 +259,7 @@ export function DossierOrderPricePanel({ dossier, activity, order, canEditPrice,
               <Button type="submit" disabled={busy || agreedInput.trim() === currentAgreedAmount(order)}>
                 {t('dossierSheet.price.agreedSave')}
               </Button>
+              <SaveStatus state={agreedStatus.state} onRetry={() => void persistAgreed(lastAgreedAmount)} />
             </div>
           </FormField>
         </form>

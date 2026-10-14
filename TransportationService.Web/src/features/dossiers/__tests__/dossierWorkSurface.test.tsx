@@ -236,7 +236,9 @@ describe('Dossier work surface', () => {
     // Fresh order + dossier re-read (readiness, totals) after the save.
     await waitFor(() => expect(api.getDossier).toHaveBeenCalledTimes(2))
     expect(screen.queryByText('Niet-opgeslagen wijzigingen')).not.toBeInTheDocument()
-    expect(toast.showSuccess).toHaveBeenCalledWith('Route opgeslagen.')
+    // B31: in-place save — "✓ Opgeslagen · hh:mm" beside the button, no success toast.
+    expect(await screen.findByText(/^✓ Opgeslagen · \d{2}:\d{2}$/)).toBeInTheDocument()
+    expect(toast.showSuccess).not.toHaveBeenCalled()
   })
 
   it('adds extra ordered stops and lets the planner reorder them', async () => {
@@ -535,19 +537,23 @@ describe('Dossier work surface — failure paths of the inline route save', () =
 
     await waitFor(() => expect(orders.update).toHaveBeenCalledTimes(1))
     expect(api.createOrderForActivity).toHaveBeenCalledTimes(1)
-    expect(await screen.findByRole('alert')).toHaveTextContent('Interne fout')
+    expect(await screen.findByText('Interne fout')).toBeInTheDocument()
+    // B31: the failure stays beside the save button, with a retry (not a toast).
+    const status = screen.getByText(/Opslaan mislukt/)
+    expect(status).toHaveAttribute('role', 'alert')
+    expect(toast.showError).not.toHaveBeenCalled()
     // The planner's route is still there — nothing was reset by the dossier/order refresh.
     await waitFor(() => expect(screen.getByDisplayValue('Antwerpen')).toBeInTheDocument())
     expect(screen.getByDisplayValue('Gent')).toBeInTheDocument()
-    expect(screen.getByText('Niet-opgeslagen wijzigingen')).toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: 'Route opslaan' }))
+    await user.click(within(status).getByRole('button', { name: 'Opnieuw proberen' }))
     await waitFor(() => expect(orders.update).toHaveBeenCalledTimes(2))
     // Retry PUTs the SAME order; no second transport order is created.
     expect(api.createOrderForActivity).toHaveBeenCalledTimes(1)
     expect((orders.update.mock.calls[1] as [string, TransportOrderInput])[0]).toBe('o-1')
     expect((orders.update.mock.calls[1] as [string, TransportOrderInput])[1].stops.map((s) => s.city)).toEqual(['Antwerpen', 'Gent'])
-    expect(toast.showSuccess).toHaveBeenCalledWith('Route opgeslagen.')
+    expect(await screen.findByText(/^✓ Opgeslagen · \d{2}:\d{2}$/)).toBeInTheDocument()
+    expect(toast.showSuccess).not.toHaveBeenCalled()
   })
 
   it('create succeeds but the follow-up order load fails: the retry loads the linked order instead of creating again', async () => {
@@ -707,7 +713,9 @@ describe('Dossier work surface — standalone billable activities carry their ow
     await waitFor(() => expect(api.setActivityPrice).toHaveBeenCalledTimes(1))
     expect(api.setActivityPrice).toHaveBeenCalledWith('d-1', 'a-1', { fixedAmount: 350, version: 'pv-1' })
     expect(orders.setOneOff).not.toHaveBeenCalled()
-    expect(toast.showSuccess).toHaveBeenCalledWith('Afgesproken prijs opgeslagen.')
+    // B31: the agreed price is an in-place edit — inline "Opgeslagen · hh:mm", no success toast.
+    expect(await screen.findByText(/^✓ Opgeslagen · \d{2}:\d{2}$/)).toBeInTheDocument()
+    expect(toast.showSuccess).not.toHaveBeenCalled()
     const price = document.getElementById('sectie-prijs')!
     expect(await within(price).findByText('Huidige prijsafspraak: € 350,00')).toBeInTheDocument()
     expect(within(price.querySelector('.dossier-price-total')!).getByText(/€\s350,00/)).toBeInTheDocument()
@@ -735,7 +743,8 @@ describe('Dossier work surface — standalone billable activities carry their ow
     await user.clear(agreed)
     await user.click(screen.getByRole('button', { name: 'Opslaan' }))
     await waitFor(() => expect(api.setActivityPrice).toHaveBeenCalledWith('d-1', 'a-2', { fixedAmount: null, version: 'pv-2' }))
-    expect(toast.showSuccess).toHaveBeenCalledWith('Afgesproken prijs verwijderd.')
+    expect(await screen.findByText(/^✓ Opgeslagen · \d{2}:\d{2}$/)).toBeInTheDocument()
+    expect(toast.showSuccess).not.toHaveBeenCalled()
   })
 
   it('without dossiers.price the activity price is read-only', async () => {

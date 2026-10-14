@@ -15,7 +15,7 @@ interface SaveStatusProps {
   state: SaveState
   /** Offered on error; re-runs the failed save. */
   onRetry?: () => void
-  /** Unsaved edits are pending (explicit-save forms); wins over an older "Opgeslagen". */
+  /** Unsaved edits are pending (explicit-save forms); wins over an older "Opgeslagen" (not over a failure). */
   dirty?: boolean
   className?: string
 }
@@ -23,7 +23,8 @@ interface SaveStatusProps {
 export function SaveStatus({ state, onRetry, dirty = false, className }: SaveStatusProps) {
   const { t } = useLocale()
   const classes = ['ui-save-status', className].filter(Boolean).join(' ')
-  if (dirty && state.kind !== 'saving') {
+  // A failed save outranks "unsaved": the edits are still pending AND the user must know why.
+  if (dirty && state.kind !== 'saving' && state.kind !== 'error') {
     return <span className={`${classes} ui-save-status-dirty`} role="status">{t('ui.save.dirty')}</span>
   }
   switch (state.kind) {

@@ -72,6 +72,8 @@ interface EmployeeFormProps {
   onNameChanged?: (firstName: string, lastName: string) => void
   /** Non-blocking hint rendered right under the name fields (create page's duplicate-name warning). */
   duplicateNameHint?: ReactNode
+  /** B31: inline save state (edit mode) rendered beside the save button — the form stays on screen. */
+  saveStatus?: ReactNode
 }
 
 /** i18n keys (employees.fields.*) for backend field paths, for the validation summary. */
@@ -127,6 +129,7 @@ export function EmployeeForm({
   initialSectionId,
   onNameChanged,
   duplicateNameHint,
+  saveStatus,
 }: EmployeeFormProps) {
   const { t } = useLocale()
   const { hasPermission } = useAuth()
@@ -791,6 +794,7 @@ export function EmployeeForm({
       >
         {isSubmitting ? t('employees.form.saving') : t('employees.form.save')}
       </Button>
+      {saveStatus}
     </FormActions>
   )
 

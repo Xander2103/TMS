@@ -3,6 +3,8 @@ import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { PageHeader } from '../../../components/layout/PageHeader'
 import { Button } from '../../../components/ui/Button'
 import { useToast } from '../../../components/ui/toastContext'
+import { SaveStatus } from '../../../components/ui/SaveStatus'
+import { useSaveStatus } from '../../../components/ui/useSaveStatus'
 import { useAuth } from '../../auth/authContextValue'
 import { describeApiError } from '../../../api/problemDetails'
 import { useLocale } from '../../../i18n/localeContext'
@@ -70,7 +72,9 @@ function toRow(policy: ChargePolicy): PolicyRow {
 export function ChargePoliciesPage() {
   const { t } = useLocale()
   const { hasPermission } = useAuth()
-  const { showSuccess, showError } = useToast()
+  const { showError } = useToast()
+  // B31: in-place settings table — the save outcome stays beside the save button, not a toast.
+  const saveStatus = useSaveStatus()
   const canManage = hasPermission('problems.approve_charge')
   const canView = canManage || hasPermission('incidents.manage')
 
@@ -141,13 +145,14 @@ export function ChargePoliciesPage() {
       })
     }
     setBusy(true)
+    saveStatus.setState({ kind: 'saving' })
     try {
       await saveChargePolicies(inputs)
-      showSuccess(t('settingsPages.chargePolicies.saved'))
+      saveStatus.setState({ kind: 'saved', at: new Date().toISOString() })
       const reloaded = await listChargePolicies()
       setRows(reloaded.map(toRow))
     } catch (err) {
-      showError(describeApiError(err, t('settingsPages.chargePolicies.saveFailed')).message)
+      saveStatus.setState({ kind: 'error', message: describeApiError(err, t('settingsPages.chargePolicies.saveFailed')).message })
     } finally {
       setBusy(false)
     }
@@ -170,6 +175,7 @@ export function ChargePoliciesPage() {
               <Button onClick={() => void handleSave()} disabled={busy}>
                 {busy ? t('settingsPages.common.saving') : t('ui.actions.save')}
               </Button>
+              <SaveStatus state={saveStatus.state} onRetry={() => void handleSave()} />
             </span>
           )
         }

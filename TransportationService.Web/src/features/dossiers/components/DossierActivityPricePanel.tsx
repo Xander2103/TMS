@@ -5,6 +5,8 @@ import { Button } from '../../../components/ui/Button'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { FormField } from '../../../components/ui/FormField'
 import { useToast } from '../../../components/ui/toastContext'
+import { SaveStatus } from '../../../components/ui/SaveStatus'
+import { isRetryableSaveError, useSaveStatus } from '../../../components/ui/useSaveStatus'
 import { useLocale } from '../../../i18n/localeContext'
 import { parseDecimalInput } from '../../../utils/numbers'
 import { euro } from '../../invoices/types'
@@ -90,6 +92,11 @@ export function DossierActivityPricePanel({
 }: DossierActivityPricePanelProps) {
   const { t } = useLocale()
   const toast = useToast()
+  // B31: the agreed amount is edited in place — its save state stays beside the field. Confirming
+  // "free" and removing the price stay toasts (confirmed, state-changing actions).
+  const agreedStatus = useSaveStatus()
+  // The amount of the last attempt, re-sent by "Opnieuw proberen".
+  const [lastAgreedAmount, setLastAgreedAmount] = useState<number | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const linesRef = useRef<ActivityPriceLinesEditorHandle>(null)
   const [input, setInput] = useState(() => currentAgreedAmount(activity))
@@ -182,14 +189,22 @@ export function DossierActivityPricePanel({
       setError(t('dossierSheet.price.agreedInvalid'))
       return
     }
+    await persistAgreed(amount)
+  }
+
+  async function persistAgreed(amount: number | null) {
+    if (busy || !editable) return
     setBusy(true)
     setError(null)
+    setLastAgreedAmount(amount)
+    agreedStatus.setState({ kind: 'saving' })
     try {
       const updated = await setActivityPrice(dossier.id, activity.id, { fixedAmount: amount, version: activity.pricingVersion })
-      toast.showSuccess(amount === null ? t('dossierSheet.price.agreedClearedActivity') : t('dossierSheet.price.agreedSaved'))
+      agreedStatus.setState({ kind: 'saved', at: new Date().toISOString() })
       dropLineDraft()
       onDossierUpdated(updated)
     } catch (err) {
+      agreedStatus.setState(isRetryableSaveError(err) ? { kind: 'error' } : { kind: 'idle' })
       reportFailure(err, t('dossierSheet.price.agreedSaveFailed'))
     } finally {
       setBusy(false)
@@ -317,6 +332,7 @@ export function DossierActivityPricePanel({
                 <Button type="submit" disabled={busy || input.trim() === currentAgreedAmount(activity)}>
                   {t('dossierSheet.price.agreedSave')}
                 </Button>
+                <SaveStatus state={agreedStatus.state} onRetry={() => void persistAgreed(lastAgreedAmount)} />
               </div>
             </FormField>
           </form>

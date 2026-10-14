@@ -14,6 +14,8 @@ import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { FormField } from '../../../components/ui/FormField'
 import { SearchableSelect, type SearchableSelectOption } from '../../../components/ui/SearchableSelect'
 import { useToast } from '../../../components/ui/toastContext'
+import { SaveStatus } from '../../../components/ui/SaveStatus'
+import { useSaveStatus } from '../../../components/ui/useSaveStatus'
 import { useAuth } from '../../auth/authContextValue'
 import { useLocale } from '../../../i18n/localeContext'
 import { searchTransportOrders } from '../../transport-orders/api/transportOrdersApi'
@@ -52,7 +54,7 @@ import {
 } from '../resourceOptions'
 import { usePlanningResources, type ResourceListStatus } from '../usePlanningResources'
 import './planning.css'
-import { formatDate, formatTime } from '../../../utils/dates'
+import { formatDate } from '../../../utils/dates'
 
 /** Lifecycle steps that move a trip forward; the first allowed one is the primary header action. */
 const TRIP_FORWARD_STEPS: TripStatus[] = ['Planned', 'InProgress', 'Completed']
@@ -89,8 +91,9 @@ export function TripDetailPage() {
   const [plannedDistanceKm, setPlannedDistanceKm] = useState('')
   const [plannedEmptyKm, setPlannedEmptyKm] = useState('')
   const [dirty, setDirty] = useState(false)
-  // B23: explicit save — the moment of the last save stays visible next to the assignment.
-  const [savedAt, setSavedAt] = useState<string | null>(null)
+  // B23/B31: explicit in-place save — its state ("Opslaan…" / "✓ Opgeslagen · 14:22" / failure with
+  // retry) stays visible next to the assignment instead of a passing toast.
+  const saveStatus = useSaveStatus()
   const [showPackages, setShowPackages] = useState(false)
 
   const [overrideTarget, setOverrideTarget] = useState<{ status: TripStatus; conflicts: string[] } | null>(null)
@@ -284,6 +287,7 @@ export function TripDetailPage() {
   async function handleSave() {
     if (!trip) return
     setBusy(true)
+    saveStatus.setState({ kind: 'saving' })
     try {
       const parsedDistance = plannedDistanceKm.trim() === '' ? null : Number(plannedDistanceKm.replace(',', '.'))
       const parsedEmpty = plannedEmptyKm.trim() === '' ? null : Number(plannedEmptyKm.replace(',', '.'))
@@ -307,14 +311,14 @@ export function TripDetailPage() {
       )
       // The API echoes `vehicleSelectionSource`, so a manual choice survives this save and a reload.
       applyTrip(updated)
-      setSavedAt(new Date().toISOString())
-      showSuccess(t('planning.detail.saved'))
+      saveStatus.setState({ kind: 'saved', at: new Date().toISOString() })
     } catch (err) {
-      showError(
-        err instanceof ApiError && err.status === 400
+      saveStatus.setState({
+        kind: 'error',
+        message: err instanceof ApiError && err.status === 400
           ? t('planning.detail.saveFailedInput')
           : t('planning.detail.saveFailed'),
-      )
+      })
     } finally {
       setBusy(false)
     }
@@ -519,13 +523,11 @@ export function TripDetailPage() {
       <section className="pl-section pl-card" aria-labelledby="tr-assign-title">
         <header className="pl-section-head">
           <h2 id="tr-assign-title">{t('planning.detail.assignmentTitle')}</h2>
-          <span className="pl-save-state" role="status">
-            {dirty
-              ? <span className="pl-save-dirty">{t('planning.detail.unsaved')}</span>
-              : savedAt
-                ? <span className="pl-save-ok">✓ {t('planning.detail.savedAt', { time: formatTime(savedAt) })}</span>
-                : null}
-          </span>
+          <SaveStatus
+            state={saveStatus.state}
+            dirty={dirty}
+            onRetry={editable ? () => void handleSave() : undefined}
+          />
         </header>
         {!editable && canEditTrip && (trip.status === 'Planned') && (
           <p className="pl-section-note">

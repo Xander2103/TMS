@@ -12,6 +12,8 @@ import { StatusBadges } from '../../../components/ui/StatusBadges'
 import type { SectionDef } from '../../../components/ui/SectionedForm'
 import { TabPanel, Tabs } from '../../../components/ui/Tabs'
 import { useToast } from '../../../components/ui/toastContext'
+import { SaveStatus } from '../../../components/ui/SaveStatus'
+import { useSaveStatus } from '../../../components/ui/useSaveStatus'
 import { useLocale } from '../../../i18n/localeContext'
 import { useAuth } from '../../auth/authContextValue'
 import { AbsencesTab } from '../../absences/components/AbsencesTab'
@@ -38,7 +40,7 @@ import { QualificationsTab } from '../components/QualificationsTab'
 import { useEmployee } from '../hooks/useEmployee'
 import { useEmployeeMutations } from '../hooks/useEmployeeMutations'
 import { contractEndBadge } from '../utils/employeeListBadges'
-import { CIVIL_STATUS_LABELS, EMPLOYMENT_STATUS_LABELS, EMPLOYMENT_STATUS_TONES, type EmployeeAttention } from '../types/employee'
+import { CIVIL_STATUS_LABELS, EMPLOYMENT_STATUS_LABELS, EMPLOYMENT_STATUS_TONES, type EmployeeAttention, type EmployeeDetail, type EmployeeInput } from '../types/employee'
 import { fullYearsSince } from '../utils/fullYearsSince'
 import './EmployeeDetailPage.css'
 import { ActionMenu } from '../../../components/ui/ActionMenu'
@@ -67,6 +69,10 @@ export function EmployeeDetailPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const { employee, isLoading, error, reload } = useEmployee(id)
   const mutations = useEmployeeMutations()
+  // B31: the profile form stays on screen after a save — its state shows beside the save button
+  // ("✓ Opgeslagen · 14:22" / "Opslaan mislukt · Opnieuw proberen"), not as a passing toast.
+  const profileSave = useSaveStatus()
+  const [lastProfileValues, setLastProfileValues] = useState<EmployeeInput | null>(null)
   const [confirmLifecycle, setConfirmLifecycle] = useState<'deactivate' | 'reactivate' | null>(null)
   // Codes of the functions currently chosen in the edit form (null until the user touches them).
   const [editedFunctionCodes, setEditedFunctionCodes] = useState<string[] | null>(null)
@@ -166,6 +172,28 @@ export function EmployeeDetailPage() {
    * tab; every other section only needs `employees.edit` (already gated by the caller). */
   function canNavigateCompleteness(section: string) {
     return section !== 'documenten' || canViewDocuments
+  }
+
+  async function saveProfile(current: EmployeeDetail, values: EmployeeInput) {
+    setLastProfileValues(values)
+    profileSave.setState({ kind: 'saving' })
+    const updated = await mutations.update(current.id, values)
+    if (!updated) {
+      // The validation summary above the form carries the details; this line offers the retry.
+      profileSave.setState({ kind: 'error' })
+      return
+    }
+    profileSave.setState({ kind: 'saved', at: new Date().toISOString() })
+    // Driver functions removed while a driver profile exists → offer (never force)
+    // deactivating that profile. Historical driver data is always preserved.
+    const removedDriverFunctions =
+      current.driverId !== null &&
+      editedFunctionCodes !== null &&
+      !editedFunctionCodes.some((code) => code.toUpperCase().startsWith('CHAUF'))
+    if (removedDriverFunctions) {
+      setOfferDriverDeactivation(true)
+    }
+    reload()
   }
 
   async function copyEmployeeNumber() {
@@ -380,22 +408,13 @@ export function EmployeeDetailPage() {
               onFunctionsChanged={setEditedFunctionCodes}
               extraSections={editExtraSections}
               initialSectionId={requestedSection}
-              onSubmit={async (values) => {
-                const updated = await mutations.update(employee.id, values)
-                if (updated) {
-                  toast.showSuccess(t('employees.detail.updated'))
-                  // Driver functions removed while a driver profile exists → offer (never force)
-                  // deactivating that profile. Historical driver data is always preserved.
-                  const removedDriverFunctions =
-                    employee.driverId !== null &&
-                    editedFunctionCodes !== null &&
-                    !editedFunctionCodes.some((code) => code.toUpperCase().startsWith('CHAUF'))
-                  if (removedDriverFunctions) {
-                    setOfferDriverDeactivation(true)
-                  }
-                  reload()
-                }
-              }}
+              onSubmit={(values) => void saveProfile(employee, values)}
+              saveStatus={
+                <SaveStatus
+                  state={profileSave.state}
+                  onRetry={lastProfileValues ? () => void saveProfile(employee, lastProfileValues) : undefined}
+                />
+              }
             />
           ) : (
             <div className="employee-readonly-profile">

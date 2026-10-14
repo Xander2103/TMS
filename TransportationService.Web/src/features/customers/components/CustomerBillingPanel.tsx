@@ -7,6 +7,8 @@ import { FormField } from '../../../components/ui/FormField'
 import { Modal } from '../../../components/ui/Modal'
 import { PanelHeader } from '../../../components/ui/PanelHeader'
 import { useToast } from '../../../components/ui/toastContext'
+import { SaveStatus } from '../../../components/ui/SaveStatus'
+import { useSaveStatus } from '../../../components/ui/useSaveStatus'
 import { describeApiError, getFieldError, type FieldErrors } from '../../../api/problemDetails'
 import { useAuth } from '../../auth/authContextValue'
 import { useLocale } from '../../../i18n/localeContext'
@@ -53,7 +55,8 @@ export function CustomerBillingPanel({ customerId }: CustomerBillingPanelProps) 
 // --- Dieseltoeslag ---
 
 function DieselSurchargeSection({ customerId }: { customerId: string }) {
-  const toast = useToast()
+  // B31: in-place form — its save state stays beside the save button, not a passing toast.
+  const saveStatus = useSaveStatus()
   const { t } = useLocale()
   const { hasPermission } = useAuth()
   const canManage = hasPermission('customers.manage_surcharge')
@@ -98,8 +101,8 @@ function DieselSurchargeSection({ customerId }: { customerId: string }) {
     }
   }, [customerId, t])
 
-  async function handleSubmit(event: FormEvent) {
-    event.preventDefault()
+  async function handleSubmit(event?: FormEvent) {
+    event?.preventDefault()
     // validateSurchargeForm levert vertaalsleutels; hier vertaald voor weergave.
     const validationKeys = validateSurchargeForm({ percent, effectiveFrom, effectiveUntil })
     const validation: SurchargeFormErrors = {
@@ -120,13 +123,14 @@ function DieselSurchargeSection({ customerId }: { customerId: string }) {
       effectiveUntil: effectiveUntil || null,
     }
     setBusy(true)
+    saveStatus.setState({ kind: 'saving' })
     try {
       const saved = await saveDieselSurcharge(customerId, payload)
       setEnabled(saved.enabled)
       setPercent(saved.percent ? String(saved.percent) : '')
-      toast.showSuccess(t('customers.billing.dieselSaved'))
+      saveStatus.setState({ kind: 'saved', at: new Date().toISOString() })
     } catch (err) {
-      toast.showError(describeApiError(err, t('customers.billing.dieselSaveFailed')).message)
+      saveStatus.setState({ kind: 'error', message: describeApiError(err, t('customers.billing.dieselSaveFailed')).message })
     } finally {
       setBusy(false)
     }
@@ -234,6 +238,7 @@ function DieselSurchargeSection({ customerId }: { customerId: string }) {
               <Button type="submit" disabled={disabled}>
                 {busy ? t('customers.common.savingEllipsis') : t('ui.actions.save')}
               </Button>
+              <SaveStatus state={saveStatus.state} onRetry={() => void handleSubmit()} />
             </div>
           )}
         </form>
@@ -248,6 +253,9 @@ type PoDialogState = { mode: 'create' } | { mode: 'edit'; po: CustomerPoNumber }
 
 function PoPolicySection({ customerId }: { customerId: string }) {
   const toast = useToast()
+  // B31: the policy select saves on change — its state shows right under it.
+  const policyStatus = useSaveStatus()
+  const [lastPolicy, setLastPolicy] = useState<PurchaseOrderPolicy | null>(null)
   const { t } = useLocale()
   const { hasPermission } = useAuth()
   const canManage = hasPermission('customers.manage_po')
@@ -273,12 +281,14 @@ function PoPolicySection({ customerId }: { customerId: string }) {
 
   async function handlePolicyChange(policy: PurchaseOrderPolicy) {
     setBusy(true)
+    setLastPolicy(policy)
+    policyStatus.setState({ kind: 'saving' })
     try {
       const result = await setPoPolicy(customerId, policy)
       setData(result)
-      toast.showSuccess(t('customers.billing.poPolicySaved'))
+      policyStatus.setState({ kind: 'saved', at: new Date().toISOString() })
     } catch (err) {
-      toast.showError(describeApiError(err, t('customers.billing.poPolicySaveFailed')).message)
+      policyStatus.setState({ kind: 'error', message: describeApiError(err, t('customers.billing.poPolicySaveFailed')).message })
     } finally {
       setBusy(false)
     }
@@ -370,6 +380,7 @@ function PoPolicySection({ customerId }: { customerId: string }) {
               ))}
             </select>
           </FormField>
+          <SaveStatus state={policyStatus.state} onRetry={lastPolicy ? () => void handlePolicyChange(lastPolicy) : undefined} />
 
           <h4 className="customer-billing-subtitle">{t('customers.billing.poHistoryTitle')}</h4>
           <DataTable

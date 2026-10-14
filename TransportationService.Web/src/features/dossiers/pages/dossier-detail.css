@@ -473,11 +473,6 @@
   color: var(--text-muted);
 }
 
-.dossier-route-state-dirty {
-  color: var(--warning);
-  font-style: italic;
-}
-
 .dossier-route-readonly .placeholder-text {
   margin-top: var(--space-2);
   font-size: 0.875rem;

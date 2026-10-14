@@ -89,7 +89,6 @@
   "detail": {
     "loadError": "The trip could not be loaded.",
     "loading": "Loading trip...",
-    "saved": "Trip updated.",
     "saveFailedInput": "The trip could not be saved — check the input.",
     "saveFailed": "The trip could not be saved.",
     "statusChanged": "The trip is now: {status}.",
@@ -183,7 +182,6 @@
     "dossiersLabel_one": "Dossier",
     "dossiersLabel_other": "Dossiers",
     "unsaved": "Unsaved changes",
-    "savedAt": "Saved · {time}",
     "editOnBoard": "A planned trip is changed on the planning board (with conflict checks).",
     "openBoard": "Open planning board →",
     "ordersStopsTitle": "Orders & stops ({count})",

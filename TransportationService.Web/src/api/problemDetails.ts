@@ -65,7 +65,10 @@ export function describeApiError(
         ? (error.fieldErrors as FieldErrors)
         : {}
     const code = 'code' in error && typeof error.code === 'string' ? error.code : undefined
-    return { message: error.message || fallback, fieldErrors, code }
+    // apiClient's own placeholder ("Request to /api/… failed with status 500") is technical: the
+    // caller's fallback says the same thing in the user's language.
+    const technical = /^Request to \S+ failed with status \d+$/.test(error.message)
+    return { message: (!technical && error.message) || fallback, fieldErrors, code }
   }
   return { message: fallback, fieldErrors: {} }
 }

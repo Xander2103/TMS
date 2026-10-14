@@ -89,7 +89,6 @@
   "detail": {
     "loadError": "De rit kon niet worden geladen.",
     "loading": "Rit laden...",
-    "saved": "Rit bijgewerkt.",
     "saveFailedInput": "De rit kon niet worden opgeslagen — controleer de invoer.",
     "saveFailed": "De rit kon niet worden opgeslagen.",
     "statusChanged": "Rit is nu: {status}.",
@@ -183,7 +182,6 @@
     "dossiersLabel_one": "Dossier",
     "dossiersLabel_other": "Dossiers",
     "unsaved": "Niet-opgeslagen wijzigingen",
-    "savedAt": "Opgeslagen · {time}",
     "editOnBoard": "Een geplande rit wijzig je op het planbord (met conflictcontrole).",
     "openBoard": "Planbord openen →",
     "ordersStopsTitle": "Opdrachten & stops ({count})",

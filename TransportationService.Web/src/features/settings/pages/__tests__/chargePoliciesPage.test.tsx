@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { ChargePoliciesPage } from '../ChargePoliciesPage'
 import type { ChargePolicy } from '../../api/chargePoliciesApi'
@@ -9,9 +10,8 @@ const auth = vi.hoisted(() => ({ permissions: new Set<string>(['problems.approve
 vi.mock('../../../auth/authContextValue', () => ({
   useAuth: () => ({ hasPermission: (code: string) => auth.permissions.has(code) }),
 }))
-vi.mock('../../../../components/ui/toastContext', () => ({
-  useToast: () => ({ showToast: vi.fn(), showSuccess: vi.fn(), showError: vi.fn() }),
-}))
+const toast = vi.hoisted(() => ({ showToast: vi.fn(), showSuccess: vi.fn(), showError: vi.fn() }))
+vi.mock('../../../../components/ui/toastContext', () => ({ useToast: () => toast }))
 
 const state = vi.hoisted(() => ({
   policies: [] as ChargePolicy[],
@@ -84,5 +84,41 @@ describe('ChargePoliciesPage', () => {
 
     expect(await screen.findByLabelText('Modus beleid 1')).toBeDisabled()
     expect(screen.queryByRole('button', { name: 'Opslaan' })).not.toBeInTheDocument()
+  })
+
+  it('B31: saving shows "✓ Opgeslagen · hh:mm" beside the button and no success toast', async () => {
+    const user = userEvent.setup()
+    state.save.mockResolvedValue(undefined)
+    render(
+      <MemoryRouter>
+        <ChargePoliciesPage />
+      </MemoryRouter>,
+    )
+    await screen.findByLabelText('Modus beleid 1')
+    await user.click(screen.getByRole('button', { name: 'Opslaan' }))
+
+    expect(await screen.findByText(/^✓ Opgeslagen · \d{2}:\d{2}$/)).toBeInTheDocument()
+    expect(state.save).toHaveBeenCalledTimes(1)
+    expect(toast.showSuccess).not.toHaveBeenCalled()
+  })
+
+  it('B31: a failed save stays inline with "Opnieuw proberen" (no toast); the retry saves again', async () => {
+    const user = userEvent.setup()
+    state.save.mockRejectedValueOnce(new Error('')).mockResolvedValueOnce(undefined)
+    render(
+      <MemoryRouter>
+        <ChargePoliciesPage />
+      </MemoryRouter>,
+    )
+    await screen.findByLabelText('Modus beleid 1')
+    await user.click(screen.getByRole('button', { name: 'Opslaan' }))
+
+    const failure = await screen.findByRole('alert')
+    expect(failure).toHaveTextContent('Het doorrekenbeleid kon niet worden opgeslagen. · Opnieuw proberen')
+    expect(toast.showError).not.toHaveBeenCalled()
+
+    await user.click(within(failure).getByRole('button', { name: 'Opnieuw proberen' }))
+    expect(await screen.findByText(/^✓ Opgeslagen · \d{2}:\d{2}$/)).toBeInTheDocument()
+    expect(state.save).toHaveBeenCalledTimes(2)
   })
 })

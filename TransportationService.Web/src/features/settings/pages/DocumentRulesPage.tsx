@@ -3,6 +3,8 @@ import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { PageHeader } from '../../../components/layout/PageHeader'
 import { Button } from '../../../components/ui/Button'
 import { useToast } from '../../../components/ui/toastContext'
+import { SaveStatus } from '../../../components/ui/SaveStatus'
+import { useSaveStatus } from '../../../components/ui/useSaveStatus'
 import { useAuth } from '../../auth/authContextValue'
 import { describeApiError } from '../../../api/problemDetails'
 import { useLocale } from '../../../i18n/localeContext'
@@ -50,7 +52,9 @@ function fromTriState(value: '' | 'ja' | 'nee'): boolean | null {
 export function DocumentRulesPage() {
   const { t } = useLocale()
   const { hasPermission } = useAuth()
-  const { showSuccess, showError } = useToast()
+  const { showError } = useToast()
+  // B31: in-place settings table — the save outcome stays beside the save button, not a toast.
+  const saveStatus = useSaveStatus()
   const canManage = hasPermission('company_settings.manage')
   const canView = hasPermission('company_settings.view') || canManage
 
@@ -130,9 +134,10 @@ export function DocumentRulesPage() {
       })
     }
     setBusy(true)
+    saveStatus.setState({ kind: 'saving' })
     try {
       await saveDocumentRules(inputs)
-      showSuccess(t('settingsPages.documentRules.saved'))
+      saveStatus.setState({ kind: 'saved', at: new Date().toISOString() })
       const reloaded = await listDocumentRules()
       setRows(
         reloaded.map((rule) => ({
@@ -145,7 +150,7 @@ export function DocumentRulesPage() {
         })),
       )
     } catch (err) {
-      showError(describeApiError(err, t('settingsPages.documentRules.saveFailed')).message)
+      saveStatus.setState({ kind: 'error', message: describeApiError(err, t('settingsPages.documentRules.saveFailed')).message })
     } finally {
       setBusy(false)
     }
@@ -168,6 +173,7 @@ export function DocumentRulesPage() {
               <Button onClick={() => void handleSave()} disabled={busy}>
                 {busy ? t('settingsPages.common.saving') : t('ui.actions.save')}
               </Button>
+              <SaveStatus state={saveStatus.state} onRetry={() => void handleSave()} />
             </span>
           )
         }

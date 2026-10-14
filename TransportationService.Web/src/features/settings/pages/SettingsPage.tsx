@@ -5,6 +5,8 @@ import { FormActions } from '../../../components/ui/FormActions'
 import { FormField } from '../../../components/ui/FormField'
 import { UnsavedChangesGuard } from '../../../components/ui/UnsavedChangesGuard'
 import { useToast } from '../../../components/ui/toastContext'
+import { SaveStatus } from '../../../components/ui/SaveStatus'
+import { useSaveStatus } from '../../../components/ui/useSaveStatus'
 import { describeApiError } from '../../../api/problemDetails'
 import { useAuth } from '../../auth/authContextValue'
 import { useLocale } from '../../../i18n/localeContext'
@@ -34,7 +36,9 @@ type NumericField =
 
 export function SettingsPage() {
   const { t } = useLocale()
-  const { showSuccess, showError } = useToast()
+  const { showError } = useToast()
+  // B31: in-place settings form — the save outcome stays in the (sticky) action bar, not a toast.
+  const saveStatus = useSaveStatus()
   const { hasPermission } = useAuth()
   const canManage = hasPermission('company_settings.manage')
 
@@ -120,16 +124,17 @@ export function SettingsPage() {
       return
     }
     setSaving(true)
+    saveStatus.setState({ kind: 'saving' })
     try {
       const updated = await updateCompanySettings(form)
       setLoaded(updated)
       setForm(updated)
       // The central date formatter follows the saved preference immediately.
       setDateFormatPreference(updated.dateFormat)
-      showSuccess(t('settingsPages.company.saved'))
+      saveStatus.setState({ kind: 'saved', at: new Date().toISOString() })
     } catch (err) {
       // Preserve the backend's specific validation message (e.g. an unknown country code).
-      showError(describeApiError(err, t('settingsPages.company.saveFailed')).message)
+      saveStatus.setState({ kind: 'error', message: describeApiError(err, t('settingsPages.company.saveFailed')).message })
     } finally {
       setSaving(false)
     }
@@ -426,6 +431,7 @@ export function SettingsPage() {
           <Button onClick={handleSave} disabled={!dirty || saving}>
             {saving ? t('settingsPages.common.saving') : t('ui.actions.save')}
           </Button>
+          <SaveStatus state={saveStatus.state} onRetry={() => void handleSave()} />
         </FormActions>
       )}
     </div>

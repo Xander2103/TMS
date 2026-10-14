@@ -5,7 +5,8 @@ import { Button } from '../../../components/ui/Button'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { UnsavedChangesGuard } from '../../../components/ui/UnsavedChangesGuard'
 import { ValidationSummary } from '../../../components/ui/ValidationSummary'
-import { useToast } from '../../../components/ui/toastContext'
+import { SaveStatus } from '../../../components/ui/SaveStatus'
+import { useSaveStatus } from '../../../components/ui/useSaveStatus'
 import { useLocale } from '../../../i18n/localeContext'
 import { LocationQuickCreateDialog } from '../../locations/components/LocationQuickCreateDialog'
 import type { LocationOption } from '../../locations/types'
@@ -142,7 +143,8 @@ export function DossierRouteEditor({
   ref,
 }: DossierRouteEditorProps) {
   const { t } = useLocale()
-  const toast = useToast()
+  // B31: in-place save — the outcome stays next to the save button, not in a passing toast.
+  const saveStatus = useSaveStatus()
   const rootRef = useRef<HTMLDivElement>(null)
   const [baseOrder, setBaseOrder] = useState<TransportOrderDetail | null>(order)
   const [stops, setStops] = useState<StopFormRow[]>(() => seedStops(order))
@@ -384,9 +386,13 @@ export function DossierRouteEditor({
     const effectiveCargo = remapCargoStopIndices(cargo, rows, effectiveStops)
     setSaving(true)
     setError(null)
+    saveStatus.setState({ kind: 'saving' })
     try {
       const target = await ensureOrder()
-      if (!target) return
+      if (!target) {
+        saveStatus.setState({ kind: 'idle' })
+        return
+      }
       const values = {
         ...orderValuesFromDetail(target, serviceOptions),
         stops: effectiveStops,
@@ -398,6 +404,8 @@ export function DossierRouteEditor({
       const routeErrors = validateOrderForm(values).filter((e) => e.section === 'route')
       setErrors(fieldErrorMap(routeErrors.map((e) => ({ ...e, field: toDisplayedField(e.field, effectiveStops, rows) }))))
       if (routeErrors.length > 0) {
+        // Input to fix, not a failed save: the summary and the fields say what — no retry offered.
+        saveStatus.setState({ kind: 'idle' })
         setError(t('dossiers.orderDrawer.checkStops'))
         return
       }
@@ -408,15 +416,18 @@ export function DossierRouteEditor({
       setCargoItems(cargoFromOrder(updated))
       setCraneJob(craneJobFromOrder(updated))
       setErrors({})
-      toast.showSuccess(t('dossierSheet.route.saved'))
+      saveStatus.setState({ kind: 'saved', at: new Date().toISOString() })
       onOrderSaved(updated)
     } catch (err) {
       if (err instanceof ApiError && err.status === 409 && err.body && typeof err.body === 'object' && 'stops' in err.body) {
+        // The conflict banner carries this one (reload); a retry would only conflict again.
+        saveStatus.setState({ kind: 'idle' })
         setConflict(err.body as TransportOrderDetail)
       } else {
         // No success toast on a failure — and a refusal that names a stop (e.g. storing its
         // address in the address book) is shown ON that stop, re-indexed to the displayed rows.
         const described = describeApiError(err, t('dossierSheet.route.saveFailed'))
+        saveStatus.setState({ kind: 'error' })
         setError(described.message)
         setErrors(
           Object.fromEntries(
@@ -550,7 +561,9 @@ export function DossierRouteEditor({
         </div>
         <div className="dossier-route-save">
           {creatingOrder && <span className="dossier-route-state">{t('dossierSheet.route.creatingOrder')}</span>}
-          {!creatingOrder && dirty && <span className="dossier-route-state dossier-route-state-dirty">{t('dossierSheet.route.unsaved')}</span>}
+          {!creatingOrder && (
+            <SaveStatus state={saveStatus.state} dirty={dirty} onRetry={requestSave} />
+          )}
           <Button variant="ghost" onClick={discard} disabled={!dirty || busy}>
             {t('dossierSheet.route.discard')}
           </Button>

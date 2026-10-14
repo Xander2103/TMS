@@ -122,7 +122,9 @@ describe('Dossier route editor — hijswerk op locatie (D2)', () => {
       id: 'site-1', stopType: 'Site', plannedToIsManual: false,
       plannedFrom: '2026-09-22T20:00:00Z', plannedTo: '2026-09-23T00:00:00Z',
     })
-    expect(toast.showSuccess).toHaveBeenCalledTimes(1)
+    // B31: in-place save — the outcome stays beside the button, no success toast.
+    expect(await screen.findByText(/^✓ Opgeslagen · \d{2}:\d{2}$/)).toBeInTheDocument()
+    expect(toast.showSuccess).not.toHaveBeenCalled()
   })
 
   it('a cleared description blocks the save inline — no request, no success toast', async () => {

@@ -147,6 +147,30 @@ describe('TripDetailPage — B23', () => {
 
     expect(await screen.findByText(/^✓ Opgeslagen · \d{2}:\d{2}$/)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Opslaan' })).not.toBeInTheDocument()
+    // B31: inline state only — never a success toast on top of it.
+    expect(toast.showSuccess).not.toHaveBeenCalled()
+  })
+
+  it('a failed save stays beside the assignment with "Opnieuw proberen" (no toast); the retry saves', async () => {
+    const user = userEvent.setup()
+    planningApi.getTrip.mockResolvedValue(trip())
+    planningApi.updateTrip
+      .mockRejectedValueOnce(new Error('netwerk weg'))
+      .mockResolvedValueOnce(trip({ driverId: 'd-els', driverName: 'Els Janssens', version: 'v2' }))
+    await renderPage()
+
+    await user.click(screen.getByRole('combobox', { name: 'Chauffeur' }))
+    await user.click(await screen.findByRole('option', { name: /Els Janssens/ }))
+    await user.click(screen.getByRole('button', { name: 'Opslaan' }))
+
+    const failure = await screen.findByRole('alert')
+    expect(failure).toHaveTextContent('De rit kon niet worden opgeslagen. · Opnieuw proberen')
+    expect(toast.showError).not.toHaveBeenCalled()
+
+    await user.click(within(failure).getByRole('button', { name: 'Opnieuw proberen' }))
+    expect(await screen.findByText(/^✓ Opgeslagen · \d{2}:\d{2}$/)).toBeInTheDocument()
+    expect(planningApi.updateTrip).toHaveBeenCalledTimes(2)
+    expect(toast.showSuccess).not.toHaveBeenCalled()
   })
 
   it('readiness leads with the summary; critical packages show, the full list only on request', async () => {

@@ -2,7 +2,8 @@ import { useImperativeHandle, useRef, useState, type Ref } from 'react'
 import { ApiError } from '../../../api/apiClient'
 import { describeApiError } from '../../../api/problemDetails'
 import { Button } from '../../../components/ui/Button'
-import { useToast } from '../../../components/ui/toastContext'
+import { SaveStatus } from '../../../components/ui/SaveStatus'
+import { isRetryableSaveError, useSaveStatus } from '../../../components/ui/useSaveStatus'
 import { useLocale } from '../../../i18n/localeContext'
 import { formatCurrency, formatQuantity, parseDecimalInput } from '../../../utils/numbers'
 import type { DossierActivity, DossierDetail } from '../types'
@@ -82,7 +83,8 @@ export function ActivityPriceLinesEditor({
   dossier, activity, editable, replacesFlatPrice, onDirtyChange, onDossierUpdated, reloadDossier, ref,
 }: ActivityPriceLinesEditorProps) {
   const { t } = useLocale()
-  const toast = useToast()
+  // B31: the sales lines are edited in place — the save state stays next to the line actions.
+  const saveStatus = useSaveStatus()
   const serverLines = [...(activity.priceLines ?? [])].sort((a, b) => a.sequence - b.sequence)
   // null = no unsaved edits: the table mirrors the server lines.
   const [draft, setDraft] = useState<DraftRow[] | null>(null)
@@ -167,13 +169,15 @@ export function ActivityPriceLinesEditor({
     setBusy(true)
     setError(null)
     setConflict(null)
+    saveStatus.setState({ kind: 'saving' })
     try {
       const updated = await saveActivityPriceLines(dossier.id, activity.id, { version: activity.pricingVersion, lines, freeConfirmed: false })
-      toast.showSuccess(t('dossierPricing.activity.linesSaved'))
+      saveStatus.setState({ kind: 'saved', at: new Date().toISOString() })
       // From here on the server's amounts and total are the only ones on screen.
       update(null)
       onDossierUpdated(updated)
     } catch (err) {
+      saveStatus.setState(isRetryableSaveError(err) ? { kind: 'error' } : { kind: 'idle' })
       if (err instanceof ApiError && err.status === 409) {
         // Reload (fresh version + the colleague's state everywhere else) but keep the typed rows.
         try {
@@ -341,6 +345,7 @@ export function ActivityPriceLinesEditor({
               </Button>
             </>
           )}
+          <SaveStatus state={saveStatus.state} dirty={dirty} onRetry={() => void save()} />
         </p>
       )}
     </div>

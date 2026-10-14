@@ -83,4 +83,9 @@ describe('describeApiError', () => {
     expect(describeApiError('boom', 'Opslaan mislukt.')).toEqual({ message: 'Opslaan mislukt.', fieldErrors: {} })
     expect(describeApiError(new Error(''), 'Opslaan mislukt.')).toEqual({ message: 'Opslaan mislukt.', fieldErrors: {} })
   })
+
+  it('replaces the client placeholder for a body-less server error by the readable fallback (B31)', () => {
+    const err = new Error('Request to /api/company-settings failed with status 500')
+    expect(describeApiError(err, 'Opslaan mislukt.').message).toBe('Opslaan mislukt.')
+  })
 })
