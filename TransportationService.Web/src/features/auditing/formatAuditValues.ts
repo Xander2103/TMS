@@ -169,6 +169,9 @@ export function auditChanges(
  *  - a creation with a naming value → "Activiteit toegevoegd: Herlevering";
  *  - otherwise the changed fields ("Gewijzigd: Prijs, Referentie").
  */
+/** Fields that name what an event is about (an activity label, an order number, …). */
+const NAMING_KEY = /^(Label|Name|Title|OrderNumber|ActivityType(Id)?|TransportOrderId|LinkedTransportOrderId|Reason)$/
+
 export function auditSummary(changes: AuditChange[]): string | null {
   const meaningful = changes.filter((change) => change.key !== 'Id' && change.key !== 'Version')
   if (meaningful.length === 0) return null
@@ -178,8 +181,23 @@ export function auditSummary(changes: AuditChange[]): string | null {
     if (only.after !== null) return `${only.field}: ${only.after}`
     return `${only.field}: ${only.before} (verwijderd)`
   }
-  const naming = meaningful.find((change) => /^(Label|Name|Title|OrderNumber|ActivityType(Id)?|TransportOrderId|LinkedTransportOrderId|Reason)$/.test(change.key) && change.after)
-  const fields = meaningful.slice(0, 4).map((change) => change.field)
-  const list = `${fields.join(', ')}${meaningful.length > 4 ? ` +${meaningful.length - 4}` : ''}`
+  const more = (rest: AuditChange[], limit: number) =>
+    `${rest.slice(0, limit).map((change) => change.field).join(', ')}${rest.length > limit ? ` +${rest.length - limit}` : ''}`
+  // A status move is what the reader looks for first; the other fields follow it.
+  const status = meaningful.find((change) => /Status$/.test(change.key) && change.before !== null && change.after !== null)
+  if (status) {
+    const rest = meaningful.filter((change) => change !== status)
+    return `${status.field} gewijzigd van ${status.before} naar ${status.after} · ook: ${more(rest, 3)}`
+  }
+  // Nothing existed before (a creation): say WHAT was recorded, not which fields "changed".
+  if (meaningful.every((change) => change.before === null)) {
+    const filled = meaningful
+      .filter((change) => change.after !== null && change.after !== '—')
+      .sort((a, b) => Number(NAMING_KEY.test(b.key)) - Number(NAMING_KEY.test(a.key)))
+    const shown = filled.slice(0, 3).map((change) => `${change.field}: ${change.after}`)
+    return `${shown.join(' · ')}${filled.length > 3 ? ` +${filled.length - 3}` : ''}`
+  }
+  const naming = meaningful.find((change) => NAMING_KEY.test(change.key) && change.after)
+  const list = more(meaningful, 4)
   return naming ? `${naming.field}: ${naming.after} · gewijzigd: ${list}` : `Gewijzigd: ${list}`
 }

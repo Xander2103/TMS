@@ -92,9 +92,19 @@ describe('auditChanges / auditSummary (B25)', () => {
     expect(auditSummary(changes)).toBe('Status gewijzigd van Gepland naar Onderweg')
   })
 
-  it('summarises a creation by its naming value and lists the other fields', () => {
-    const changes = auditChanges(null, '{"Label":"Plateau","DurationHours":2,"PlannedDate":"2026-10-14"}')
-    expect(auditSummary(changes)).toBe('Label: Plateau · gewijzigd: Label, Duur (uren), Geplande datum')
+  it('summarises a creation by what was recorded, naming value first', () => {
+    const changes = auditChanges(null, '{"DurationHours":2,"Label":"Plateau","PlannedDate":"2026-10-14","Notes":"a","Reason":null}')
+    expect(auditSummary(changes)).toMatch(/^Label: Plateau · Duur \(uren\): 2 · Geplande datum: .+ \+1$/)
+  })
+
+  it('leads with the status move when other fields changed with it', () => {
+    const changes = auditChanges('{"Status":"Planned","Notes":"x"}', '{"Status":"InProgress","Notes":"y"}')
+    expect(auditSummary(changes)).toBe('Status gewijzigd van Gepland naar Onderweg · ook: Notities')
+  })
+
+  it('lists the changed fields of an ordinary edit', () => {
+    const changes = auditChanges('{"Label":"A","DurationHours":1}', '{"Label":"B","DurationHours":2}')
+    expect(auditSummary(changes)).toBe('Label: B · gewijzigd: Label, Duur (uren)')
   })
 
   it('masks sensitive values in the changes too', () => {
