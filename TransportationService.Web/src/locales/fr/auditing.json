@@ -9,7 +9,13 @@
     "Unblocked": "Débloqué",
     "Cancelled": "Annulé",
     "StatusChanged": "Statut modifié",
-    "AssignmentChanged": "Attribution modifiée"
+    "AssignmentChanged": "Attribution modifiée",
+    "Reported": "Signalé",
+    "Resolved": "Résolu",
+    "Rejected": "Rejeté",
+    "Assigned": "Attribué",
+    "Unassigned": "Attribution retirée",
+    "Archived": "Archivé"
   },
   "panel": {
     "loadFailed": "L'historique n'a pas pu être chargé.",

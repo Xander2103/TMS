@@ -7,6 +7,7 @@ import {
   DRAG_MIME, encodeDragPayload,
   type PlanningDriver, type PlanningResources, type PlanningTrailer, type PlanningVehicle,
 } from '../types'
+import { labelFor } from '../../../utils/labels'
 
 type ResourceTab = 'drivers' | 'vehicles' | 'trailers'
 
@@ -185,7 +186,7 @@ function VehicleCard({ vehicle, pinned, onTogglePin, t }: {
       </p>
       <div className="pc-resource-badges">
         {!vehicle.isActive && <Badge tone="danger">{t('planningCenter.resources.inactive')}</Badge>}
-        {vehicle.operationalStatus !== 'Available' && <Badge tone="warning">{vehicle.operationalStatus}</Badge>}
+        {vehicle.operationalStatus !== 'Available' && <Badge tone="warning">{labelFor(t, vehicle.operationalStatus, 'vehicles.status')}</Badge>}
         {vehicle.adrSuitable && <Badge tone="info">ADR</Badge>}
         {vehicle.hasCrane && <Badge tone="info">{t('planningCenter.resources.crane')}</Badge>}
         {vehicle.hasTailLift && <Badge tone="info">{t('planningCenter.resources.tailLift')}</Badge>}
@@ -226,7 +227,7 @@ function TrailerCard({ trailer, pinned, onTogglePin, t }: {
       </p>
       <div className="pc-resource-badges">
         {!trailer.isActive && <Badge tone="danger">{t('planningCenter.resources.inactive')}</Badge>}
-        {trailer.operationalStatus !== 'Available' && <Badge tone="warning">{trailer.operationalStatus}</Badge>}
+        {trailer.operationalStatus !== 'Available' && <Badge tone="warning">{labelFor(t, trailer.operationalStatus, 'trailers.status')}</Badge>}
         {trailer.adrSuitable && <Badge tone="info">ADR</Badge>}
         {trailer.hasRefrigeration && <Badge tone="info">{t('planningCenter.resources.refrigeration')}</Badge>}
         {trailer.overdueMaintenanceCount > 0 && <Badge tone="danger">{t('planningCenter.resources.maintenanceOverdue')}</Badge>}

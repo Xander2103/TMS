@@ -75,7 +75,7 @@ public class TransportOrderTimelineService : ITransportOrderTimelineService
             .ToListAsync(cancellationToken);
         foreach (var row in packageRows)
         {
-            events.Add((row.CreatedAt, "package", $"Collo {row.PackageNumber}: {row.EventType}", row.Result, row.UserId));
+            events.Add((row.CreatedAt, "package", $"Collo {row.PackageNumber}: {PackageEventTitle(row.EventType)}", row.Result, row.UserId));
         }
 
         // 4. Stop execution trail (arrival, completion, skips) of this order's stops.
@@ -127,6 +127,31 @@ public class TransportOrderTimelineService : ITransportOrderTimelineService
             .ToList();
     }
 
+    /// <summary>Package chain-of-custody events in the planner's words, never the enum name (B32).</summary>
+    private static string PackageEventTitle(Packages.Entities.PackageEventType eventType) => eventType switch
+    {
+        Packages.Entities.PackageEventType.Created => "aangemaakt",
+        Packages.Entities.PackageEventType.Labelled => "geëtiketteerd",
+        Packages.Entities.PackageEventType.LabelReprinted => "etiket opnieuw afgedrukt",
+        Packages.Entities.PackageEventType.Relabelled => "opnieuw geëtiketteerd",
+        Packages.Entities.PackageEventType.StatusChanged => "status gewijzigd",
+        Packages.Entities.PackageEventType.LoadScan => "geladen (scan)",
+        Packages.Entities.PackageEventType.LoadMissing => "ontbrak bij het laden",
+        Packages.Entities.PackageEventType.WrongPackageScan => "verkeerd collo gescand",
+        Packages.Entities.PackageEventType.UnloadScan => "gelost (scan)",
+        Packages.Entities.PackageEventType.Delivered => "geleverd",
+        Packages.Entities.PackageEventType.Refused => "geweigerd",
+        Packages.Entities.PackageEventType.PartialDelivery => "gedeeltelijk geleverd",
+        Packages.Entities.PackageEventType.DamageReported => "schade gemeld",
+        Packages.Entities.PackageEventType.MarkedMissing => "als vermist gemarkeerd",
+        Packages.Entities.PackageEventType.ExceptionResolved => "afwijking afgehandeld",
+        Packages.Entities.PackageEventType.GroupAssigned => "aan een groep toegevoegd",
+        Packages.Entities.PackageEventType.GroupRemoved => "uit de groep gehaald",
+        Packages.Entities.PackageEventType.GroupBroken => "groep opgeheven",
+        Packages.Entities.PackageEventType.MovedToTrip => "naar een andere rit verplaatst",
+        _ => eventType.ToString(),
+    };
+
     private static string AuditTitle(string action) => action switch
     {
         "Created" => "Opdracht aangemaakt",
@@ -136,15 +161,5 @@ public class TransportOrderTimelineService : ITransportOrderTimelineService
         _ => action,
     };
 
-    private static string StatusLabel(Entities.TransportOrderStatus status) => status switch
-    {
-        Entities.TransportOrderStatus.Draft => "Concept",
-        Entities.TransportOrderStatus.Confirmed => "Bevestigd",
-        Entities.TransportOrderStatus.Planned => "Gepland",
-        Entities.TransportOrderStatus.InProgress => "In uitvoering",
-        Entities.TransportOrderStatus.Completed => "Afgerond",
-        Entities.TransportOrderStatus.Invoiced => "Gefactureerd",
-        Entities.TransportOrderStatus.Cancelled => "Geannuleerd",
-        _ => status.ToString(),
-    };
+    private static string StatusLabel(Entities.TransportOrderStatus status) => TransportOrderStatusLabels.Dutch(status);
 }

@@ -9,7 +9,13 @@
     "Unblocked": "Unblocked",
     "Cancelled": "Cancelled",
     "StatusChanged": "Status changed",
-    "AssignmentChanged": "Assignment changed"
+    "AssignmentChanged": "Assignment changed",
+    "Reported": "Reported",
+    "Resolved": "Resolved",
+    "Rejected": "Rejected",
+    "Assigned": "Assigned",
+    "Unassigned": "Unassigned",
+    "Archived": "Archived"
   },
   "panel": {
     "loadFailed": "The history could not be loaded.",

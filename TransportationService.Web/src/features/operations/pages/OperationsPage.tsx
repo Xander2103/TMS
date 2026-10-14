@@ -15,6 +15,7 @@ import {
 } from '../types'
 import { formatDateTime, formatTime } from '../../../utils/dates'
 import './operations.css'
+import { labelFor } from '../../../utils/labels'
 
 const POLL_INTERVAL_MS = 30_000
 
@@ -135,7 +136,7 @@ export function OperationsPage() {
                         </div>
                       </td>
                       <td>{t('operations.page.stopsProgress', { completed: trip.completedStopCount, total: trip.stopCount })}</td>
-                      <td>{trip.currentStop ? `${trip.currentStop.city ?? trip.currentStop.locationName ?? '?'} (${trip.currentStop.status})` : '—'}</td>
+                      <td>{trip.currentStop ? `${trip.currentStop.city ?? trip.currentStop.locationName ?? '?'} (${labelFor(t, trip.currentStop.status, 'myTrips.stopStatus')})` : '—'}</td>
                       <td>
                         {trip.nextStop ? (trip.nextStop.city ?? trip.nextStop.locationName ?? '?') : '—'}
                         {trip.nextStop?.currentEta && (

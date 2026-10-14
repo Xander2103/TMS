@@ -70,7 +70,6 @@ export function NotificationDetail({
   const tone = severityTone(notification.severity)
 
   const rows: Array<{ key: string; label: string; value: ReactNode }> = [
-    { key: 'type', label: t('notificationCenter.detail.type'), value: <code className="ntc-code">{notification.type}</code> },
     { key: 'category', label: t('notificationCenter.detail.category'), value: t(NOTIFICATION_CATEGORY_LABELS[notification.category]) },
     {
       key: 'severity',
@@ -105,9 +104,6 @@ export function NotificationDetail({
   }
   if (notification.expiresAt) {
     rows.push({ key: 'expiresAt', label: t('notificationCenter.detail.expiresAt'), value: formatDateTime(notification.expiresAt) })
-  }
-  if (link) {
-    rows.push({ key: 'link', label: t('notificationCenter.detail.link'), value: <code className="ntc-code">{link.path}</code> })
   }
 
   const followUp = pendingAck

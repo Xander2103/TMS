@@ -186,7 +186,7 @@ public class DossierLifecycleService : IDossierLifecycleService
                 continue;
             }
 
-            checks.Add(new Check("order.not_completed", $"Opdracht {order.OrderNumber} is nog niet uitgevoerd (status {order.Status}).", OrderId: order.Id));
+            checks.Add(new Check("order.not_completed", $"Opdracht {order.OrderNumber} is nog niet uitgevoerd (status: {TransportOrderStatusLabels.Dutch(order.Status).ToLowerInvariant()}).", OrderId: order.Id));
         }
 
         // Delivery quality of the executed orders: the LATEST execution per stop decides.

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { PageHeader } from '../../../components/layout/PageHeader'
 import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
@@ -13,6 +13,7 @@ import { useAuth } from '../../auth/authContextValue'
 import { useLocale } from '../../../i18n/localeContext'
 import { ApiError } from '../../../api/apiClient'
 import { AuditHistoryPanel } from '../../auditing/components/AuditHistoryPanel'
+import type { AuditValueLabels } from '../../auditing/formatAuditValues'
 import { resolvePackageIncident } from '../../packages/api/packagesApi'
 import { PACKAGE_INCIDENT_ACTION_LABELS, type PackageIncidentAction } from '../../packages/types'
 import {
@@ -35,6 +36,7 @@ import {
   type ExceptionDetail,
   type ExceptionSeverity,
   type ExecutionExceptionStatus,
+  type ExecutionExceptionType,
 } from '../types'
 import { formatDateTime as formatDateTimeIso } from '../../../utils/dates'
 import '../components/exceptions.css'
@@ -55,8 +57,29 @@ const PACKAGE_DISPOSITIONS: Record<string, PackageIncidentAction[]> = {
   Quarantined: ['Return', 'Redeliver', 'Cancel'],
 }
 
+/** Server enum order of ExecutionExceptionType (audit payloads store ordinals). */
+const EXCEPTION_TYPE_ORDER: ExecutionExceptionType[] = [
+  'MissingPackage', 'WrongPackage', 'DamagedPackage', 'UnknownPackage', 'WrongRoutePackage', 'WrongStopPackage',
+  'IncompleteQuantity', 'UnreadableBarcode', 'LabelMissing', 'RejectedBeforeLoading', 'RejectedDelivery',
+  'PartialDelivery', 'AddressIssue', 'CustomerUnavailable', 'AccessDenied',
+] as ExecutionExceptionType[]
+const EXCEPTION_SEVERITY_ORDER: ExceptionSeverity[] = ['Low', 'Medium', 'High', 'Critical']
+const EXCEPTION_STATUS_ORDER: ExecutionExceptionStatus[] = ['Open', 'Investigating', 'Resolved', 'Rejected', 'CustomerActionRequired']
+
+function byOrdinalOrName<T extends string>(order: T[], labels: Record<T, string>, t: (key: string) => string) {
+  return (value: unknown): string | undefined => {
+    const code = typeof value === 'number' ? order[value] : (typeof value === 'string' && value in labels ? (value as T) : undefined)
+    return code ? t(labels[code]) : undefined
+  }
+}
+
 export function ExceptionDetailPage() {
   const { t } = useLocale()
+  const exceptionAuditLabels = useMemo<AuditValueLabels>(() => ({
+    Type: byOrdinalOrName(EXCEPTION_TYPE_ORDER, EXCEPTION_TYPE_LABELS, t),
+    Severity: byOrdinalOrName(EXCEPTION_SEVERITY_ORDER, EXCEPTION_SEVERITY_LABELS, t),
+    Status: byOrdinalOrName(EXCEPTION_STATUS_ORDER, EXCEPTION_STATUS_LABELS, t),
+  }), [t])
   const { id = '' } = useParams<{ id: string }>()
   const { showSuccess, showError } = useToast()
   const { hasPermission, user } = useAuth()
@@ -434,7 +457,7 @@ export function ExceptionDetailPage() {
 
       <section className="to-section">
         <h2>{t('exceptions.detail.historyTitle')}</h2>
-        <AuditHistoryPanel entityType="ExecutionException" entityId={detail.id} />
+        <AuditHistoryPanel entityType="ExecutionException" entityId={detail.id} valueLabels={exceptionAuditLabels} />
       </section>
 
       {dispositionAction && (

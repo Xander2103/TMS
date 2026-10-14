@@ -233,7 +233,7 @@ export function MessagingPage() {
             <tr key={row.id}>
               <td>{formatDateTime(row.createdAt)}</td>
               <td>
-                {row.channel === 'Email' ? '✉' : '📱'} {row.channel}
+                {row.channel === 'Email' ? '✉' : '📱'} {row.channel === 'Email' ? t('messaging.templates.form.channelEmail') : row.channel === 'Sms' ? t('messaging.templates.form.channelSms') : row.channel}
                 {row.isFallback && <Badge tone="warning">{t('messaging.outbox.fallback')}</Badge>}
               </td>
               <td>

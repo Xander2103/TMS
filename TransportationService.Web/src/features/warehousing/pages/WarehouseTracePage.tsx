@@ -24,6 +24,7 @@ import { searchCustomers } from '../../customers/api/customersApi'
 import type { CustomerListItem } from '../../customers/types'
 import type { Warehouse } from '../types'
 import { formatDateTime } from '../../../utils/dates'
+import { labelFor } from '../../../utils/labels'
 
 /** Vertaalsleutels — renderen als t(SCAN_TYPE_LABELS[type]). */
 const SCAN_TYPE_LABELS: Record<WarehouseScanType, string> = {
@@ -199,8 +200,8 @@ export function WarehouseTracePage() {
               </p>
             </div>
             <div className="wh-card-actions">
-              <Badge tone="info">{trace.lifecycleStatus}</Badge>
-              {trace.exceptionStatus !== 'None' && <Badge tone="warning">{trace.exceptionStatus}</Badge>}
+              <Badge tone="info">{labelFor(t, trace.lifecycleStatus, 'packages.status', 'packages.status.statusCode')}</Badge>
+              {trace.exceptionStatus !== 'None' && <Badge tone="warning">{labelFor(t, trace.exceptionStatus, 'packages.exceptionState', 'exceptions.status')}</Badge>}
             </div>
           </div>
           <p>
@@ -221,7 +222,7 @@ export function WarehouseTracePage() {
             <tbody>
               {trace.lastEvents.map((event, index) => (
                 <tr key={index}>
-                  <td>{event.eventType}</td>
+                  <td>{labelFor(t, event.eventType, 'packages.eventType', 'packages.events')}</td>
                   <td>{formatDateTime(event.occurredAt)}</td>
                   <td>{event.locationCode ?? '—'}</td>
                   <td>{event.tripNumber ?? '—'}</td>

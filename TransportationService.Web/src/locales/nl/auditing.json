@@ -9,7 +9,13 @@
     "Unblocked": "Gedeblokkeerd",
     "Cancelled": "Geannuleerd",
     "StatusChanged": "Status gewijzigd",
-    "AssignmentChanged": "Toewijzing gewijzigd"
+    "AssignmentChanged": "Toewijzing gewijzigd",
+    "Reported": "Gemeld",
+    "Resolved": "Opgelost",
+    "Rejected": "Afgewezen",
+    "Assigned": "Toegewezen",
+    "Unassigned": "Toewijzing verwijderd",
+    "Archived": "Gearchiveerd"
   },
   "panel": {
     "loadFailed": "Historiek kon niet worden geladen.",

@@ -222,7 +222,8 @@ describe('NotificationsPage — selection and detail panel', () => {
     expect(within(panel).getByRole('heading', { level: 2, name: 'Opdracht aangemaakt' })).toBeInTheDocument()
     expect(within(panel).getByText('ORD-0014 (Klant BV) is aangemaakt.')).toBeInTheDocument()
     expect(within(panel).getByText(/Vandaag om \d{2}:\d{2}/)).toBeInTheDocument()
-    expect(within(panel).getByText('order_created')).toBeInTheDocument()
+    // B32: the technical type code is not shown to users; category and title carry the meaning.
+    expect(within(panel).queryByText('order_created')).not.toBeInTheDocument()
     expect(within(panel).getByText('/transport-orders/order-1')).toBeInTheDocument()
     expect(within(panel).getByRole('button', { name: 'Open opdracht' })).toBeInTheDocument()
     expect(within(panel).getByRole('button', { name: 'Markeer als gelezen' })).toBeInTheDocument()

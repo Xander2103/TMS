@@ -24,6 +24,7 @@ import {
 } from '../types'
 import { formatDateTime as formatDateTimeIso } from '../../../utils/dates'
 import '../components/pod.css'
+import { labelFor } from '../../../utils/labels'
 
 function formatDateTime(value: string | null): string {
   return value ? formatDateTimeIso(value) : '—'
@@ -273,7 +274,7 @@ export function PodDetailPage() {
                   <td>{line.expectedQuantity}</td>
                   <td>{line.scannedQuantity}</td>
                   <td>{line.damagedQuantity > 0 ? line.damagedQuantity : '—'}</td>
-                  <td>{line.state}</td>
+                  <td>{labelFor(t, line.state, 'packages.status', 'pod.lineState')}</td>
                 </tr>
               ))}
             </tbody>
@@ -307,7 +308,7 @@ export function PodDetailPage() {
                   <td>
                     {line.quantity} {line.unitType}
                   </td>
-                  <td>{line.outcome}</td>
+                  <td>{labelFor(t, line.outcome, 'pod.outcome', 'packages.status')}</td>
                   <td>{line.exceptionOpen ? t('pod.detail.exceptionOpen') : '—'}</td>
                 </tr>
               ))}

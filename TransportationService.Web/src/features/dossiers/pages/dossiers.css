@@ -182,9 +182,15 @@
 .dossier-list-status {
   display: inline-flex;
   align-items: center;
+  gap: 6px;
   max-width: 100%;
   min-width: 0;
   white-space: nowrap;
+}
+
+/* Open incidents: a compact warning badge next to the status, never truncated. */
+.dossier-list-status .dossier-list-incidents {
+  flex-shrink: 0;
 }
 
 .dossier-list-status .dossier-list-muted {

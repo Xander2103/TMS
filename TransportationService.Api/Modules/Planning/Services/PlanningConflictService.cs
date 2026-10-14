@@ -1,3 +1,4 @@
+using TransportationService.Api.Modules.Qualifications;
 using Microsoft.EntityFrameworkCore;
 using TransportationService.Api.Common.Scheduling;
 using TransportationService.Api.Data;
@@ -632,7 +633,7 @@ public class PlanningConflictService : IPlanningConflictService
                 case QualificationStatus.Suspended:
                 case QualificationStatus.Rejected:
                     conflicts.Add(new(PlanningConflictCode.DriverNotReady, true,
-                        $"{entry.Name} van {driverName} is niet geldig ({status})."));
+                        $"{entry.Name} van {driverName} is niet geldig ({QualificationStatusLabels.Dutch(status)})."));
                     break;
                 case QualificationStatus.ExpiringSoon:
                     conflicts.Add(new(PlanningConflictCode.DriverNotReady, false,

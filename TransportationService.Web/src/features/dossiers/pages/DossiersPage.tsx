@@ -242,11 +242,6 @@ export function DossiersPage() {
       render: (row) => (
         <span className="dossier-list-number">
           <code>{row.dossierNumber}</code>
-          {row.openIncidentCount > 0 && (
-            <Badge tone="warning" title={t('dossiers.list.openIncidents', { count: row.openIncidentCount })}>
-              {row.openIncidentCount}
-            </Badge>
-          )}
         </span>
       ),
     },
@@ -492,6 +487,11 @@ function StatusCell({ row }: { row: DossierListItem }) {
   return (
     <span className="dossier-list-status" title={confirmation?.title}>
       <Badge tone={DOSSIER_STATUS_TONE[row.status]}>{t(DOSSIER_STATUS_LABELS[row.status])}</Badge>
+      {row.openIncidentCount > 0 && (
+        <span className="dossier-list-incidents" title={t('dossiers.list.openIncidents', { count: row.openIncidentCount })}>
+          <Badge tone="warning">⚠ {row.openIncidentCount}</Badge>
+        </span>
+      )}
       {compact && <span className="dossier-list-muted dossier-list-sep">{compact}</span>}
     </span>
   )

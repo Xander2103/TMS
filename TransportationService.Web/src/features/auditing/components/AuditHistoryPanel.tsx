@@ -4,7 +4,7 @@ import { DataTable, type Column } from '../../../components/ui/DataTable'
 import { useAuth } from '../../auth/authContextValue'
 import { useLocale } from '../../../i18n/localeContext'
 import { formatDateTime } from '../../../utils/dates'
-import { formatAuditValues } from '../formatAuditValues'
+import { formatAuditValues, type AuditValueLabels } from '../formatAuditValues'
 import './AuditHistoryPanel.css'
 
 interface AuditLogEntry {
@@ -43,6 +43,12 @@ const ACTION_LABELS: Record<string, string> = {
   Cancelled: 'auditing.action.Cancelled',
   StatusChanged: 'auditing.action.StatusChanged',
   AssignmentChanged: 'auditing.action.AssignmentChanged',
+  Reported: 'auditing.action.Reported',
+  Resolved: 'auditing.action.Resolved',
+  Rejected: 'auditing.action.Rejected',
+  Assigned: 'auditing.action.Assigned',
+  Unassigned: 'auditing.action.Unassigned',
+  Archived: 'auditing.action.Archived',
 }
 
 /** Per-entity catalogue prefix tried for actions ACTION_LABELS does not know. */
@@ -66,7 +72,14 @@ function actionLabel(t: (key: string) => string, entityType: string, action: str
  * Change history for one entity, read from the tenant audit log. Rendered only for users
  * holding audit_logs.view; others see a short explanation instead.
  */
-export function AuditHistoryPanel({ entityType, entityId }: { entityType: string; entityId: string }) {
+interface AuditHistoryPanelProps {
+  entityType: string
+  entityId: string
+  /** Entity-specific value renderers (enum ordinals → labels, codes → names). */
+  valueLabels?: AuditValueLabels
+}
+
+export function AuditHistoryPanel({ entityType, entityId, valueLabels }: AuditHistoryPanelProps) {
   const { t } = useLocale()
   const { hasPermission } = useAuth()
   const canView = hasPermission('audit_logs.view')
@@ -98,19 +111,19 @@ export function AuditHistoryPanel({ entityType, entityId }: { entityType: string
     {
       key: 'timestamp',
       header: t('auditing.panel.columns.timestamp'),
-      width: '180px',
+      width: '150px',
       render: (row) => formatDateTime(row.timestamp),
     },
     {
       key: 'action',
       header: t('auditing.panel.columns.action'),
-      width: '160px',
+      width: '150px',
       render: (row) => actionLabel(t, row.entityType, row.action),
     },
     {
       key: 'actor',
       header: t('auditing.panel.columns.actor'),
-      width: '160px',
+      width: '140px',
       // No user id = no person acted (an automatic confirmation by the pipeline); never a made-up name.
       render: (row) => (row.userId ? (row.userName ?? row.userId) : <span className="placeholder-text">{t('auditing.panel.system')}</span>),
     },
@@ -118,16 +131,16 @@ export function AuditHistoryPanel({ entityType, entityId }: { entityType: string
       key: 'changes',
       header: t('auditing.panel.columns.changes'),
       render: (row) => (
-        // The stored change details are historical data and render as-is; only the chrome is translated.
+        // Stored change details are historical data; they are humanized for reading, never edited.
         <div className="audit-history-values">
           {row.oldValuesJson && (
             <div className="audit-history-old">
-              {t('auditing.panel.before')} {formatAuditValues(row.oldValuesJson)}
+              {t('auditing.panel.before')} {formatAuditValues(row.oldValuesJson, valueLabels)}
             </div>
           )}
           {row.newValuesJson && (
             <div>
-              {t('auditing.panel.after')} {formatAuditValues(row.newValuesJson)}
+              {t('auditing.panel.after')} {formatAuditValues(row.newValuesJson, valueLabels)}
             </div>
           )}
         </div>

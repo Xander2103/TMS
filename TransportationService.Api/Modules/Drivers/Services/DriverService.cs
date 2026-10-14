@@ -1,3 +1,4 @@
+using TransportationService.Api.Modules.Qualifications;
 using Microsoft.EntityFrameworkCore;
 using TransportationService.Api.Common.Models;
 using TransportationService.Api.Common.Persistence;
@@ -535,7 +536,7 @@ public class DriverService : IDriverService
                     break;
                 case nameof(QualificationStatus.Suspended):
                 case nameof(QualificationStatus.Rejected):
-                    blocking.Add($"{q.TypeName} is niet geldig ({q.Status}).");
+                    blocking.Add($"{q.TypeName} is niet geldig ({QualificationStatusLabels.Dutch(q.Status)}).");
                     break;
                 case nameof(QualificationStatus.ExpiringSoon):
                     warnings.Add($"{q.TypeName} verloopt binnenkort.");

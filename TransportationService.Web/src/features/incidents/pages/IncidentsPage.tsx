@@ -21,8 +21,26 @@ import {
   type IncidentStatus,
 } from '../types'
 import { formatDate } from '../../../utils/dates'
+import { EXCEPTION_SEVERITY_LABELS, EXCEPTION_STATUS_LABELS, type ExceptionSeverity, type ExecutionExceptionStatus } from '../../exceptions/types'
+import { labelFor } from '../../../utils/labels'
 
 /** Incidentenregister: schade, vertragingen, klachten en andere operationele meldingen. */
+type TranslateFn = (key: string) => string
+interface ProblemLike { kind: string; severity: string; status: string }
+
+/** Combined problems table: incident and exception enums each through their own label map. */
+function problemSeverityLabel(t: TranslateFn, problem: ProblemLike): string {
+  if (problem.kind === 'Incident') return labelFor(t, problem.severity, 'incidents.severity')
+  const key = EXCEPTION_SEVERITY_LABELS[problem.severity as ExceptionSeverity]
+  return key ? t(key) : labelFor(t, problem.severity, 'exceptions.severity')
+}
+
+function problemStatusLabel(t: TranslateFn, problem: ProblemLike): string {
+  if (problem.kind === 'Incident') return labelFor(t, problem.status, 'incidents.status')
+  const key = EXCEPTION_STATUS_LABELS[problem.status as ExecutionExceptionStatus]
+  return key ? t(key) : labelFor(t, problem.status, 'exceptions.status')
+}
+
 export function IncidentsPage() {
   const navigate = useNavigate()
   const { hasPermission } = useAuth()
@@ -193,8 +211,8 @@ function ProblemsPanel() {
                   >
                     <td>{problem.kind === 'Incident' ? t('incidents.problems.kindIncident') : t('incidents.problems.kindException')}</td>
                     <td>{problem.title}</td>
-                    <td>{problem.severity}</td>
-                    <td>{problem.status}</td>
+                    <td>{problemSeverityLabel(t, problem)}</td>
+                    <td>{problemStatusLabel(t, problem)}</td>
                     <td>{problem.orderNumber ?? '—'}</td>
                     <td>{problem.tripNumber ?? '—'}</td>
                     <td>{problem.kind === 'Incident' ? t(CHARGE_DECISION_LABELS[problem.chargeDecision] ?? problem.chargeDecision) : '—'}</td>
