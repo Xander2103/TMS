@@ -526,7 +526,7 @@ describe('TransportOrderDetailPage add price line modal — berekeningswijze', (
   async function openAddModal() {
     renderPage(PRICE_TAB)
     await screen.findByText('Basisregel')
-    await userEvent.click(screen.getByRole('button', { name: '+ Vrije regel' }))
+    await userEvent.click(screen.getByRole('button', { name: '+ Verkooplijn toevoegen' }))
   }
 
   it('shows a Berekeningswijze radio group defaulting to per-unit mode with the per-unit fields', async () => {
@@ -626,6 +626,30 @@ describe('TransportOrderDetailPage pricing coverage (wave 2026-08-04 §7)', () =
     expect(screen.getByText('Volledig geprijsd')).toBeInTheDocument()
     expect(screen.getByText('Gedeeltelijk geprijsd')).toBeInTheDocument()
     expect(screen.getByText(/Palletstaffel: € 100,00/)).toBeInTheDocument()
+  })
+
+  it('B13: missing coverage before confirmation is ATTENTION (amber note), never a red alert', async () => {
+    api.getTransportOrder.mockResolvedValue(
+      baseOrder({ pricingSnapshot: { ...baseOrder().pricingSnapshot!, coverage } }),
+    )
+    renderPage(PRICE_TAB)
+
+    const warning = (await screen.findByText('Niet alle goederen zijn geprijsd.')).closest('div')!
+    expect(warning).toHaveClass('order-coverage-attention')
+    expect(warning).toHaveAttribute('role', 'note')
+    expect(warning).toHaveTextContent('Voeg een verkooplijn toe')
+  })
+
+  it('B13: under an agreed trip price the uncovered goods read as information, without a to-do list', async () => {
+    api.getTransportOrder.mockResolvedValue(
+      baseOrder({ pricingSource: 'OneOff', oneOffFixedAmount: 450, pricingSnapshot: { ...baseOrder().pricingSnapshot!, coverage } }),
+    )
+    renderPage(PRICE_TAB)
+
+    const note = (await screen.findByText('Deze goederenlijnen vallen onder de afgesproken ritprijs.')).closest('div')!
+    expect(note).toHaveClass('order-coverage-note')
+    expect(screen.queryByText('Niet alle goederen zijn geprijsd.')).not.toBeInTheDocument()
+    expect(within(note).queryByText(/geen passend basistarief/)).not.toBeInTheDocument()
   })
 
   it('renders no coverage blocks when the snapshot carries no coverage', async () => {

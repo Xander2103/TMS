@@ -350,7 +350,8 @@ export function priceStatusDisplay(
 ): { labelKey: string; tone: 'neutral' | 'warning' | 'success' | 'danger' } {
   if (status === 'Invoiced') return { labelKey: 'transportOrders.priceStatus.invoiced', tone: 'success' }
   if (status === 'Locked') return { labelKey: 'transportOrders.priceStatus.confirmed', tone: 'success' }
-  if (hasUnpricedGoods) return { labelKey: 'transportOrders.priceStatus.incomplete', tone: 'danger' }
+  // B13: missing coverage before confirmation needs ATTENTION (amber), it is not an error.
+  if (hasUnpricedGoods) return { labelKey: 'transportOrders.priceStatus.incomplete', tone: 'warning' }
   return { labelKey: 'transportOrders.priceStatus.toConfirm', tone: 'warning' }
 }
 
@@ -403,6 +404,8 @@ export interface OrderPricingCoverage {
   baseRuleName: string | null
   servicesAmount: number
   reason: string | null
+  /** "SeparatelyPriced" | "FixedPrice" when reconciliation lifted the entry to Full; null otherwise. */
+  coveredBy?: string | null
 }
 
 /** Vertaalsleutels per dekkingsstatus — renderen als t(PRICING_COVERAGE_LABELS[status]). */
@@ -415,7 +418,8 @@ export const PRICING_COVERAGE_LABELS: Record<PricingCoverageStatus, string> = {
 export const PRICING_COVERAGE_TONE: Record<PricingCoverageStatus, 'success' | 'warning' | 'danger'> = {
   Full: 'success',
   Partial: 'warning',
-  None: 'danger',
+  // B13: a goods line without a tariff is attention, not a blocker (confirmation decides that).
+  None: 'warning',
 }
 
 /** Frozen header of the order's pricing snapshot (spec ch. 21, extended ch. 24-26). */

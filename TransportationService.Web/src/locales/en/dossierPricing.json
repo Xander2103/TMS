@@ -109,5 +109,17 @@
     "colGoods": "Goods line",
     "colCoverage": "Price coverage",
     "includedHint": "A goods line that is included in a fixed trip or activity price is not invoiced separately."
+  },
+  "method": {
+    "legend": "Set the price via",
+    "agreed": "Agreed price",
+    "agreedHint": "One fixed amount for this part.",
+    "lines": "Sales lines",
+    "linesHint": "Quantity × unit price, per line.",
+    "free": "Free",
+    "freeHint": "Deliberately carried out without a price.",
+    "freeExplain": "This activity is deliberately free (€ 0). It counts as handled.",
+    "freeExplainOrder": "Order {number} is deliberately free (€ 0). It counts as handled.",
+    "freeConfirm": "Confirm as free"
   }
 }

@@ -41,7 +41,7 @@ export function OrderPricingDialogs({ editor, unitTypes }: OrderPricingDialogsPr
     <>
       {editLine && (
         <Modal
-          title="Prijsregel aanpassen"
+          title="Verkooplijn aanpassen"
           onClose={editor.closeEditLine}
           busy={pricingBusy}
           footer={
@@ -124,7 +124,7 @@ export function OrderPricingDialogs({ editor, unitTypes }: OrderPricingDialogsPr
 
       {removeLine && (
         <Modal
-          title="Prijsregel verwijderen"
+          title="Verkooplijn verwijderen"
           onClose={editor.closeRemoveLine}
           busy={pricingBusy}
           footer={
@@ -158,7 +158,7 @@ export function OrderPricingDialogs({ editor, unitTypes }: OrderPricingDialogsPr
 
       {addLineOpen && (
         <Modal
-          title="Vrije prijsregel toevoegen"
+          title="Verkooplijn toevoegen"
           onClose={editor.closeAddLine}
           busy={pricingBusy}
           footer={

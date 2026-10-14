@@ -17,6 +17,7 @@ import { OrderPricingPanel } from '../../transport-orders/pricing/OrderPricingPa
 import { useOrderPricingEditor } from '../../transport-orders/pricing/useOrderPricingEditor'
 import { ORDER_PRICING_STATUS_LABELS, type TransportOrderDetail } from '../../transport-orders/types'
 import type { DossierActivity, DossierDetail } from '../types'
+import { PriceMethodChoice, type PriceMethod } from './PriceMethodChoice'
 import './dossier-pricing.css'
 
 export interface DossierOrderPricePanelHandle {
@@ -100,6 +101,8 @@ export function DossierOrderPricePanel({ dossier, activity, order, canEditPrice,
   const [busy, setBusy] = useState(false)
   // A typed € 0 waits here for the planner's explicit "yes, free" before it is sent.
   const [confirmZero, setConfirmZero] = useState(false)
+  // B13: how an UNPRICED order gets its price; only that answer's controls are shown.
+  const [method, setMethod] = useState<PriceMethod>('agreed')
 
   // The agreed-price field follows the order it belongs to (adjusted during render, see React's
   // "storing information from previous renders" pattern).
@@ -109,6 +112,7 @@ export function DossierOrderPricePanel({ dossier, activity, order, canEditPrice,
     setSyncedOrderKey(orderKey)
     setAgreedInput(currentAgreedAmount(order))
     setAgreedError(null)
+    setMethod('agreed')
   }
 
   const pricingStatus = order.pricingSnapshot?.status ?? 'Draft'
@@ -122,6 +126,18 @@ export function DossierOrderPricePanel({ dossier, activity, order, canEditPrice,
   const orderIsPriced = isOrderPriced(dossier, order)
   const orderIsFree = activity?.priceStatus === 'Free' || (orderIsPriced && order.agreedPrice === 0)
   const hasLines = (order.pricingLines ?? []).length > 0
+  // A real sales line (not an engine notice) means the planner already chose lines.
+  const hasSalesLines = (order.pricingLines ?? []).some((line) => !line.informational && !line.proposed)
+  const undecided = agreedEditable && !orderIsPriced && !hasSalesLines
+  const showAgreed = agreedEditable && (!undecided || method === 'agreed')
+  const showLines = !undecided || method === 'lines'
+
+  function chooseMethod(next: PriceMethod) {
+    setAgreedError(null)
+    setMethod(next)
+    // Choosing sales lines opens the add-line dialog right away: one click less.
+    if (next === 'lines' && linesEditable) editor.openAddLine()
+  }
 
   useImperativeHandle(ref, () => ({
     focusField: () => {
@@ -194,7 +210,19 @@ export function DossierOrderPricePanel({ dossier, activity, order, canEditPrice,
         </p>
       )}
 
-      {agreedEditable && (
+      {!orderIsPriced && agreedEditable && <p className="dossier-price-none">{t('dossierPricing.noPriceSet')}</p>}
+      {undecided && <PriceMethodChoice value={method} onChange={chooseMethod} disabled={busy} />}
+      {undecided && method === 'free' && (
+        <div className="dossier-price-free-choice">
+          <p>{t('dossierPricing.method.freeExplainOrder', { number: order.orderNumber })}</p>
+          <Button onClick={() => void persistAgreed(0)} disabled={busy}>
+            {t('dossierPricing.method.freeConfirm')}
+          </Button>
+          {agreedError && <p className="dossier-activity-lines-error" role="alert">{agreedError}</p>}
+        </div>
+      )}
+
+      {showAgreed && (
         <form className="dossier-price-agreed" onSubmit={(event) => void saveAgreed(event)}>
           <FormField
             label={t('dossierSheet.price.agreedLabel')}
@@ -230,13 +258,15 @@ export function DossierOrderPricePanel({ dossier, activity, order, canEditPrice,
       )}
       {orderIsFree && <p className="dossier-price-note dossier-price-free-note">{t('dossierPricing.order.freeNote')}</p>}
 
-      <OrderPricingPanel
-        ws={{ ...editor, order }}
-        unitLabel={unitLabelFrom(unitTypes)}
-        isPriced={orderIsPriced}
-        addLineLabel={t('dossierPricing.addLine')}
-      />
-      {!hasLines && <p className="placeholder-text">{t('dossierSheet.price.noLinesYet')}</p>}
+      {showLines && (
+        <OrderPricingPanel
+          ws={{ ...editor, order }}
+          unitLabel={unitLabelFrom(unitTypes)}
+          isPriced={orderIsPriced}
+          addLineLabel={t('dossierPricing.addLine')}
+        />
+      )}
+      {showLines && !hasLines && <p className="placeholder-text">{t('dossierSheet.price.noLinesYet')}</p>}
       {!linesEditable && !locked && isOpen && <p className="dossier-price-note">{t('dossierSheet.price.linesPermission')}</p>}
 
       <p className="dossier-price-actions dossier-activity-price-actions">

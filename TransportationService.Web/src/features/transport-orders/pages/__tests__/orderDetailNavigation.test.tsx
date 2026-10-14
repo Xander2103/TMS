@@ -378,9 +378,9 @@ describe('order detail — overview cards', () => {
     await screen.findByRole('article', { name: 'Verkoop & prijs' })
 
     expect(screen.queryByRole('table')).not.toBeInTheDocument()
-    expect(screen.queryByRole('heading', { name: 'Prijsregels' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Verkooplijnen' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Venster' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: '+ Vrije regel' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '+ Verkooplijn toevoegen' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Herberekenen' })).not.toBeInTheDocument()
     // The only Bewerken is the header's order action; none inside a price table.
     const editButtons = screen.getAllByRole('button', { name: 'Bewerken' })
@@ -395,11 +395,11 @@ describe('order detail — overview links into the subsections', () => {
     api.getTransportOrder.mockResolvedValue(pricedOrder())
     const { router } = renderPage()
     await screen.findByRole('article', { name: 'Verkoop & prijs' })
-    expect(screen.queryByRole('heading', { name: /Prijsregels/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: /Verkooplijnen/ })).not.toBeInTheDocument()
 
     await user.click(within(card('Verkoop & prijs')).getByRole('link', { name: 'Open prijsdetails' }))
     expect(router.state.location.pathname).toBe(PRICE_TAB)
-    expect(await screen.findByRole('heading', { name: /Prijsregels/ })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: /Verkooplijnen/ })).toBeInTheDocument()
     expect(screen.getByText('Basisregel')).toBeInTheDocument()
     const headers = within(screen.getByRole('table')).getAllByRole('columnheader').map((h) => h.textContent)
     expect(headers.slice(0, 4)).toEqual(['Omschrijving', 'Type', 'Berekening', 'Bedrag'])

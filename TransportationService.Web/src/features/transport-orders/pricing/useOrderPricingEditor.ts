@@ -149,13 +149,13 @@ export function useOrderPricingEditor(order: TransportOrderDetail | null, { onOr
     try {
       const updated = await saveOrderPriceLines(order.id, [payload])
       onOrderChanged(updated)
-      showSuccess('Prijsregel bijgewerkt.')
+      showSuccess('Verkooplijn bijgewerkt.')
       setEditLine(null)
       setRemoveLine(null)
       setRemoveReason('')
       closeAddLine()
     } catch (err) {
-      showError(err instanceof ApiError ? err.message : 'De prijsregel kon niet worden opgeslagen.')
+      showError(err instanceof ApiError ? err.message : 'De verkooplijn kon niet worden opgeslagen.')
     } finally {
       setPricingBusy(false)
     }
@@ -198,7 +198,7 @@ export function useOrderPricingEditor(order: TransportOrderDetail | null, { onOr
       return
     }
     if (!editReason.trim()) {
-      showError('Een reden is verplicht bij het aanpassen van een prijsregel.')
+      showError('Een reden is verplicht bij het aanpassen van een verkooplijn.')
       return
     }
     const quantity = parseNum(editQuantity)
@@ -220,7 +220,7 @@ export function useOrderPricingEditor(order: TransportOrderDetail | null, { onOr
   async function handleRemoveLine() {
     if (!removeLine) return
     if (removeLine.kind !== 'Manual' && !removeReason.trim()) {
-      showError('Een reden is verplicht bij het verwijderen van een berekende prijsregel.')
+      showError('Een reden is verplicht bij het verwijderen van een berekende verkooplijn.')
       return
     }
     await submitPriceLine({
@@ -236,7 +236,7 @@ export function useOrderPricingEditor(order: TransportOrderDetail | null, { onOr
 
   async function handleAddLine() {
     if (!addLabel.trim()) {
-      showError('Een omschrijving is verplicht voor een vrije regel.')
+      showError('Een omschrijving is verplicht voor een verkooplijn.')
       return
     }
     const link = addCargoItemIds.length > 0 ? { cargoItemIds: addCargoItemIds } : {}

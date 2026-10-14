@@ -109,5 +109,17 @@
     "colGoods": "Goederenlijn",
     "colCoverage": "Prijsdekking",
     "includedHint": "Een goederenlijn die inbegrepen is in een vaste rit- of activiteitprijs wordt niet afzonderlijk gefactureerd."
+  },
+  "method": {
+    "legend": "Prijs bepalen via",
+    "agreed": "Afgesproken prijs",
+    "agreedHint": "Eén vast bedrag voor dit onderdeel.",
+    "lines": "Verkooplijnen",
+    "linesHint": "Aantal × eenheidsprijs, per lijn.",
+    "free": "Gratis",
+    "freeHint": "Bewust zonder prijs uitgevoerd.",
+    "freeExplain": "Deze activiteit wordt bewust gratis uitgevoerd (€ 0). Dit telt als afgehandeld.",
+    "freeExplainOrder": "Opdracht {number} wordt bewust gratis uitgevoerd (€ 0). Dit telt als afgehandeld.",
+    "freeConfirm": "Bevestigen als gratis"
   }
 }

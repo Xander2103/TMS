@@ -416,7 +416,7 @@ export function TransportOrderDetailPage() {
       {confirmDelete && (
         <ConfirmDialog
           title={`Transportopdracht ${order.orderNumber} verwijderen?`}
-          message={`Deze actie kan niet ongedaan worden gemaakt. De opdracht van ${order.customerName} wordt verwijderd; gekoppelde goederenlijnen, prijsregels en conceptplanning worden behandeld volgens de bestaande domeinregels.`}
+          message={`Deze actie kan niet ongedaan worden gemaakt. De opdracht van ${order.customerName} wordt verwijderd; gekoppelde goederenlijnen, verkooplijnen en conceptplanning worden behandeld volgens de bestaande domeinregels.`}
           confirmLabel="Verwijderen"
           destructive
           onConfirm={handleDelete}

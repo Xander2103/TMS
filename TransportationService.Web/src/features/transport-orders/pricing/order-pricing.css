@@ -80,3 +80,66 @@
   font-weight: 500;
   color: var(--text-muted);
 }
+
+/* ---- B13: warning semantics and collapsed calculation internals ---- */
+/* Attention (amber): goods without a tariff before confirmation — not an error. */
+.order-coverage-attention {
+  box-sizing: border-box;
+  margin: 0 0 var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--warning-border);
+  border-left: 4px solid var(--warning);
+  border-radius: var(--radius-md);
+  background: var(--warning-bg);
+  color: var(--text-h);
+}
+
+/* Information (neutral/blue): covered by an agreed trip price, or confirmed with a reason. */
+.order-coverage-note,
+.order-price-note {
+  box-sizing: border-box;
+  margin: var(--space-2) 0 var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--info-border);
+  border-radius: var(--radius-md);
+  background: var(--info-bg);
+  color: var(--text-h);
+  font-size: 0.9375rem;
+}
+
+.order-coverage-attention ul,
+.order-coverage-note ul {
+  margin: var(--space-1) 0 0;
+  padding-left: 1.2rem;
+}
+
+.order-coverage-hint {
+  margin: var(--space-1) 0 0;
+  font-size: 0.875rem;
+  color: var(--text);
+}
+
+.order-calc-details {
+  margin-top: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg);
+}
+
+.order-calc-details > summary {
+  padding: var(--space-2) var(--space-3);
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.order-calc-details-body {
+  padding: 0 var(--space-3) var(--space-3);
+}
+
+.order-calc-details-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: var(--space-2) 0 0;
+}

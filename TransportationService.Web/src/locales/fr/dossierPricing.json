@@ -109,5 +109,17 @@
     "colGoods": "Ligne de marchandises",
     "colCoverage": "Couverture tarifaire",
     "includedHint": "Une ligne de marchandises incluse dans un prix fixe de trajet ou d'activité n'est pas facturée séparément."
+  },
+  "method": {
+    "legend": "Déterminer le prix via",
+    "agreed": "Prix convenu",
+    "agreedHint": "Un montant fixe pour cette partie.",
+    "lines": "Lignes de vente",
+    "linesHint": "Quantité × prix unitaire, par ligne.",
+    "free": "Gratuit",
+    "freeHint": "Volontairement exécuté sans prix.",
+    "freeExplain": "Cette activité est volontairement gratuite (0 €). Elle compte comme traitée.",
+    "freeExplainOrder": "La commande {number} est volontairement gratuite (0 €). Elle compte comme traitée.",
+    "freeConfirm": "Confirmer comme gratuit"
   }
 }

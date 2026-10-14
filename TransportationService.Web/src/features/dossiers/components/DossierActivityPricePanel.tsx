@@ -15,6 +15,7 @@ import { saveActivityPriceLines } from '../pricing/activityPriceLinesApi'
 import { activityUnitName } from '../pricing/activityPriceDisplay'
 import type { ActivityPriceLineInput } from '../pricing/types'
 import type { DossierActivity, DossierDetail } from '../types'
+import { PriceMethodChoice, type PriceMethod } from '../pricing/PriceMethodChoice'
 import '../pricing/dossier-pricing.css'
 
 export interface DossierActivityPricePanelHandle {
@@ -99,6 +100,8 @@ export function DossierActivityPricePanel({
   const [confirming, setConfirming] = useState<'free' | 'remove' | null>(null)
   // Bumped when the price was replaced wholesale (flat price, free, removed): the line draft is void.
   const [linesReset, setLinesReset] = useState(0)
+  // B13: how an UNPRICED unit gets its price; only that answer's controls are shown.
+  const [method, setMethod] = useState<PriceMethod>('agreed')
 
   // The input follows the activity it belongs to (switching units or a refetch after a save must
   // never leave a stale amount on screen) — adjusted during render, React's "previous render" pattern.
@@ -109,6 +112,7 @@ export function DossierActivityPricePanel({
     setInput(currentAgreedAmount(activity))
     setError(null)
     setFlatForced(false)
+    setMethod('agreed')
   }
 
   const locked = activity.pricingStatus != null && LOCKED_STATUSES.has(activity.pricingStatus)
@@ -124,8 +128,21 @@ export function DossierActivityPricePanel({
     : activity.isPriced && activity.agreedPrice === 0 && !activity.freeConfirmed
   const hasLines = (activity.priceLines?.length ?? 0) > 0
   const hasPrice = activity.isPriced || isFree || hasLines
+  // B13: no price yet → the planner first decides HOW (agreed price / sales lines / free).
+  const undecided = editable && !hasPrice
+  const activeMethod: PriceMethod = undecided && linesDirty ? 'lines' : method
   // The flat price is the quick option; with lines on the table it steps aside until asked for.
-  const showFlat = editable && ((!hasLines && !linesDirty) || flatForced)
+  const showFlat = editable && (undecided ? activeMethod === 'agreed' : (!hasLines && !linesDirty) || flatForced)
+  const showLines = !undecided || activeMethod === 'lines'
+
+  function chooseMethod(next: PriceMethod) {
+    if (next === activeMethod) return
+    setError(null)
+    if (activeMethod === 'lines' && linesDirty) dropLineDraft()
+    setMethod(next)
+    // Choosing sales lines starts the first line right away: one click less.
+    if (next === 'lines') linesRef.current?.addLine()
+  }
 
   useImperativeHandle(ref, () => ({
     focusField: () => {
@@ -247,6 +264,15 @@ export function DossierActivityPricePanel({
           <p className="dossier-price-note">{t('dossierSheet.price.agreedCurrent', { amount: euro(activity.agreedPrice) })}</p>
         )}
         {!hasPrice && editable && <p className="dossier-price-none">{t('dossierPricing.noPriceSet')}</p>}
+        {undecided && <PriceMethodChoice value={activeMethod} onChange={chooseMethod} disabled={busy} />}
+        {undecided && activeMethod === 'free' && (
+          <div className="dossier-price-free-choice">
+            <p>{t('dossierPricing.method.freeExplain')}</p>
+            <Button onClick={() => void clearLines(true)} disabled={busy}>
+              {t('dossierPricing.method.freeConfirm')}
+            </Button>
+          </div>
+        )}
         {!hasPrice && !editable && <p className="placeholder-text">{t('dossierSheet.price.noActivityPrice')}</p>}
 
         {isZeroUnconfirmed && (
@@ -302,6 +328,7 @@ export function DossierActivityPricePanel({
         )}
       </div>
 
+      <div hidden={!showLines}>
       <ActivityPriceLinesEditor
         key={linesReset}
         ref={linesRef}
@@ -316,17 +343,13 @@ export function DossierActivityPricePanel({
         onDossierUpdated={onDossierUpdated}
         reloadDossier={() => getDossier(dossier.id)}
       />
+      </div>
 
-      {editable && (hasLines || hasPrice || !isFree) && (
+      {editable && hasPrice && (
         <p className="dossier-price-actions dossier-activity-price-actions">
           {hasLines && !flatForced && (
             <Button variant="ghost" onClick={() => setFlatForced(true)} disabled={busy}>
               {t('dossierPricing.activity.useFlat')}
-            </Button>
-          )}
-          {!hasPrice && !isFree && (
-            <Button variant="ghost" onClick={() => (linesDirty ? setConfirming('free') : void clearLines(true))} disabled={busy}>
-              {t('dossierPricing.activity.markFree')}
             </Button>
           )}
           {hasPrice && (

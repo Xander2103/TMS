@@ -458,3 +458,77 @@
     display: none;
   }
 }
+
+/* ---- B13: "Prijs bepalen via" — one decision for an unpriced unit ---- */
+.dossier-price-method {
+  box-sizing: border-box;
+  margin: var(--space-2) 0 var(--space-3);
+  padding: 0;
+  border: none;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
+  max-width: 720px;
+}
+
+.dossier-price-method legend {
+  padding: 0;
+  margin-bottom: var(--space-2);
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.dossier-price-method-option {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg);
+  cursor: pointer;
+}
+
+.dossier-price-method-option:hover {
+  border-color: var(--accent-border);
+}
+
+.dossier-price-method-option[data-checked] {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+}
+
+.dossier-price-method-option input {
+  margin-top: 3px;
+}
+
+.dossier-price-method-option label {
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.dossier-price-method-option span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.dossier-price-method-option small {
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+}
+
+.dossier-price-free-choice {
+  max-width: 640px;
+  margin: 0 0 var(--space-3);
+}
+
+.dossier-price-free-choice p {
+  margin: 0 0 var(--space-2);
+}
+
+@media (max-width: 640px) {
+  .dossier-price-method {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

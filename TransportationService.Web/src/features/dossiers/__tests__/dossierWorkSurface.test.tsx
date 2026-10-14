@@ -301,9 +301,9 @@ describe('Dossier work surface', () => {
       }),
     )
     renderPage(PRICE_TAB)
-    await screen.findByText('Nog geen verkooplijnen.')
-
-    await user.click(screen.getByRole('button', { name: '+ Verkooplijn toevoegen' }))
+    // B13: an unpriced order first asks HOW; "Verkooplijnen" opens the add-line dialog directly.
+    await user.click(await screen.findByRole('radio', { name: 'Verkooplijnen' }))
+    expect(screen.getByText('Nog geen verkooplijnen.')).toBeInTheDocument()
     await user.type(screen.getByLabelText(/Omschrijving/), 'Transport')
     await user.clear(screen.getByLabelText('Aantal'))
     await user.type(screen.getByLabelText('Aantal'), '1')

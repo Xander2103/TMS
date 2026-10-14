@@ -67,13 +67,24 @@ interface OrderPricingPanelProps {
  * unchanged from before the redesign (they live in `useOrderPricingEditor`). Shared by the order
  * detail page and the dossier price tab (master sprint 2026-09-21, D5).
  */
-export function OrderPricingPanel({ ws, unitLabel, isPriced, addLineLabel = '+ Vrije regel', sectionId }: OrderPricingPanelProps) {
+export function OrderPricingPanel({ ws, unitLabel, isPriced, addLineLabel, sectionId }: OrderPricingPanelProps) {
   const { t } = useLocale()
   const {
     order, priceDisplay, totalPrice, pricingStatus, pricingLocked, pricingBusy,
     canLockPrice, canEditPricingStatus, canEditPricingLines, invoiceLines, notAppliedLines, coverage, unpricedCoverage,
   } = ws
   const hasPricing = Boolean(order.pricingSnapshot) || totalPrice !== null
+  const addLabel = addLineLabel ?? t('dossierPricing.addLine')
+  // B13 — ONE primary per state: confirm while there is a price to confirm; once confirmed only
+  // "Prijs aanpassen" (reopen). Recalculation is a detail, except when the price is stale.
+  const canConfirm = canLockPrice && (pricingStatus === 'Draft' || pricingStatus === 'Reviewed') && isPriced !== false
+  const stale = Boolean(order.pricingSnapshot?.isStale)
+  const showRecalcButton = canEditPricingStatus && !pricingLocked && stale
+  // B13 warning semantics: goods without a tariff under an AGREED trip price are information;
+  // before confirmation they need attention (amber); only a blocked confirmation is red (dialog).
+  const coveredByAgreedPrice = order.pricingSource === 'OneOff' && order.oneOffFixedAmount != null
+  const coverageTone: 'info' | 'attention' = coveredByAgreedPrice || pricingLocked ? 'info' : 'attention'
+  const hasCalcDetails = Boolean(order.pricingSnapshot) || coverage.length > 0 || notAppliedLines.length > 0
   const hasCommercialCoverage = order.cargoItems.some((item) => item.commercialCoverage)
   const linkedGoods = (line: OrderPricingLine): string =>
     (line.cargoItemIds ?? [])
@@ -103,9 +114,14 @@ export function OrderPricingPanel({ ws, unitLabel, isPriced, addLineLabel = '+ V
             </span>
           </div>
           <div className="to-header-actions to-price-status-actions tod-price-actions">
-            {canLockPrice && (pricingStatus === 'Draft' || pricingStatus === 'Reviewed') && (
-              <Button onClick={ws.handleConfirmPriceClick} disabled={pricingBusy}>
-                Prijs bevestigen
+            {canEditPricingLines && !pricingLocked && (
+              <Button variant="secondary" onClick={ws.openAddLine} disabled={pricingBusy}>
+                {addLabel}
+              </Button>
+            )}
+            {showRecalcButton && (
+              <Button variant="secondary" onClick={ws.handleRecalculateClick} disabled={pricingBusy}>
+                Herberekenen
               </Button>
             )}
             {canLockPrice && pricingStatus === 'Locked' && (
@@ -113,19 +129,9 @@ export function OrderPricingPanel({ ws, unitLabel, isPriced, addLineLabel = '+ V
                 Prijs aanpassen
               </Button>
             )}
-            {canEditPricingStatus && !pricingLocked && (
-              <Button variant="secondary" onClick={ws.handleRecalculateClick} disabled={pricingBusy}>
-                Herberekenen
-              </Button>
-            )}
-            {canEditPricingLines && !pricingLocked && (
-              <Button variant="secondary" onClick={ws.openAddLine} disabled={pricingBusy}>
-                {addLineLabel}
-              </Button>
-            )}
-            {order.pricingSnapshot && (
-              <Button variant="ghost" onClick={ws.openCalcDetails}>
-                Bekijk berekeningsdetails
+            {canConfirm && (
+              <Button onClick={ws.handleConfirmPriceClick} disabled={pricingBusy}>
+                Prijs bevestigen
               </Button>
             )}
           </div>
@@ -137,8 +143,8 @@ export function OrderPricingPanel({ ws, unitLabel, isPriced, addLineLabel = '+ V
           </p>
         )}
         {order.pricingSnapshot?.confirmedWithUnpricedGoodsReason && (
-          <p className="to-price-summary-warning" role="note">
-            Bevestigd terwijl niet alle goederen geprijsd zijn: {order.pricingSnapshot.confirmedWithUnpricedGoodsReason}
+          <p className="order-price-note" role="note">
+            Bevestigd terwijl niet alle goederen een tarief hadden: {order.pricingSnapshot.confirmedWithUnpricedGoodsReason}
           </p>
         )}
         {order.pricingSnapshot?.isStale && (
@@ -152,36 +158,33 @@ export function OrderPricingPanel({ ws, unitLabel, isPriced, addLineLabel = '+ V
       {order.pricingLines && order.pricingLines.length > 0 && (
         <section className="tod-panel">
           <h2>
-            Prijsregels <Badge tone={priceDisplay.tone}>{t(priceDisplay.labelKey)}</Badge>
+            Verkooplijnen <Badge tone={priceDisplay.tone}>{t(priceDisplay.labelKey)}</Badge>
           </h2>
           {unpricedCoverage.length > 0 && (
-            <div className="to-coverage-warning" role="alert">
-              <strong>Niet alle goederen zijn geprijsd.</strong>
-              <ul>
-                {unpricedCoverage.map((c, index) => (
-                  <li key={c.unitTypeId ?? `${c.unitLabel}-${index}`}>
-                    {formatQuantity(c.quantity)} {c.unitLabel}:{' '}
-                    {(c.reason ?? 'geen passend basistarief').toLowerCase()}
-                    {c.servicesAmount > 0 && ` — alleen diensten (${formatCurrency(c.servicesAmount)}), geen transportprijs`}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-          {coverage.length > 0 && (
-            <div className="to-coverage">
-              <h3>Prijsdekking per goederenlijn</h3>
-              <ul>
-                {coverage.map((c, index) => (
-                  <li key={c.unitTypeId ?? `${c.unitLabel}-${index}`}>
-                    <Badge tone={PRICING_COVERAGE_TONE[c.status]}>{t(PRICING_COVERAGE_LABELS[c.status])}</Badge>{' '}
-                    {formatQuantity(c.quantity)} {c.unitLabel}
-                    {c.status === 'Full' && ` — ${c.baseRuleName ?? 'basistarief'}: ${formatCurrency(c.baseAmount)}`}
-                    {c.status !== 'Full' && c.reason ? ` — ${c.reason}` : ''}
-                    {c.servicesAmount > 0 && ` · diensten ${formatCurrency(c.servicesAmount)}`}
-                  </li>
-                ))}
-              </ul>
+            <div className={coverageTone === 'info' ? 'order-coverage-note' : 'order-coverage-attention'} role="note">
+              <strong>
+                {coveredByAgreedPrice
+                  ? 'Deze goederenlijnen vallen onder de afgesproken ritprijs.'
+                  : pricingLocked
+                    ? 'Niet alle goederen hadden een tarief bij het bevestigen.'
+                    : 'Niet alle goederen zijn geprijsd.'}
+              </strong>
+              {!coveredByAgreedPrice && (
+                <ul>
+                  {unpricedCoverage.map((c, index) => (
+                    <li key={c.unitTypeId ?? `${c.unitLabel}-${index}`}>
+                      {formatQuantity(c.quantity)} {c.unitLabel}:{' '}
+                      {(c.reason ?? 'geen passend basistarief').toLowerCase()}
+                      {c.servicesAmount > 0 && ` — alleen diensten (${formatCurrency(c.servicesAmount)}), geen transportprijs`}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {coverageTone === 'attention' && (
+                <p className="order-coverage-hint">
+                  Voeg een verkooplijn toe voor deze goederen, of spreek een vaste ritprijs af. Bevestigen kan ook met een reden.
+                </p>
+              )}
             </div>
           )}
           <div className="tod-table-wrap">
@@ -261,17 +264,54 @@ export function OrderPricingPanel({ ws, unitLabel, isPriced, addLineLabel = '+ V
               </tfoot>
             </table>
           </div>
-          {notAppliedLines.length > 0 && (
-            <div className="to-price-not-applied">
-              <h3>Niet toegepast</h3>
-              <ul>
-                {notAppliedLines.map((line, index) => (
-                  <li key={line.id ?? line.lineKey ?? index}>{line.label}</li>
-                ))}
-              </ul>
-            </div>
-          )}
         </section>
+      )}
+
+      {hasCalcDetails && (
+        <details className="order-calc-details">
+          <summary>Berekeningsdetails</summary>
+          <div className="order-calc-details-body">
+            {coverage.length > 0 && (
+              <div className="to-coverage">
+                <h3>Prijsdekking per goederenlijn</h3>
+                <ul>
+                  {coverage.map((c, index) => (
+                    <li key={c.unitTypeId ?? `${c.unitLabel}-${index}`}>
+                      <Badge tone={PRICING_COVERAGE_TONE[c.status]}>{t(PRICING_COVERAGE_LABELS[c.status])}</Badge>{' '}
+                      {formatQuantity(c.quantity)} {c.unitLabel}
+                      {c.status === 'Full' && c.coveredBy === 'FixedPrice' && ' — valt onder de afgesproken ritprijs'}
+                      {c.status === 'Full' && c.coveredBy !== 'FixedPrice' && ` — ${c.baseRuleName ?? 'basistarief'}: ${formatCurrency(c.baseAmount)}`}
+                      {c.status !== 'Full' && c.reason ? ` — ${c.reason}` : ''}
+                      {c.servicesAmount > 0 && ` · diensten ${formatCurrency(c.servicesAmount)}`}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {notAppliedLines.length > 0 && (
+              <div className="to-price-not-applied">
+                <h3>Niet toegepast</h3>
+                <ul>
+                  {notAppliedLines.map((line, index) => (
+                    <li key={line.id ?? line.lineKey ?? index}>{line.label}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            <p className="order-calc-details-actions">
+              {order.pricingSnapshot && (
+                <Button variant="ghost" onClick={ws.openCalcDetails}>
+                  Volledige berekening bekijken
+                </Button>
+              )}
+              {canEditPricingStatus && !pricingLocked && !stale && (
+                <Button variant="ghost" onClick={ws.handleRecalculateClick} disabled={pricingBusy}>
+                  Herberekenen
+                </Button>
+              )}
+            </p>
+          </div>
+        </details>
       )}
 
       {hasCommercialCoverage && (
