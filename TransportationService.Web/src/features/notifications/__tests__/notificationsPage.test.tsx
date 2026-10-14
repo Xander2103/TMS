@@ -17,6 +17,13 @@ function ago(ms: number): string {
   return new Date(Date.now() - ms).toISOString()
 }
 
+/** Up to an hour ago, but never before local midnight — so the "Vandaag" group is never empty between 00:00 and 01:00. */
+function earlierToday(): string {
+  const midnight = new Date()
+  midnight.setHours(0, 0, 0, 0)
+  return new Date(Math.max(Date.now() - HOUR, midnight.getTime())).toISOString()
+}
+
 function makeNotification(overrides: Partial<Notification> = {}): Notification {
   return {
     id: 'n1',
@@ -47,7 +54,7 @@ function threeGroups(): Notification[] {
       title: 'Opdracht aangemaakt',
       message: 'ORD-0014 (Klant BV) is aangemaakt.',
       linkPath: '/orders/order-1',
-      createdAt: ago(1 * HOUR),
+      createdAt: earlierToday(),
     }),
     makeNotification({
       id: 'week',
