@@ -14,7 +14,7 @@
 .ui-action-menu-trigger-sm {
   min-height: 38px;
   padding: 7px 12px;
-  font-size: 14px;
+  font-size: var(--text-md);
 }
 
 .ui-action-menu-list {
@@ -39,7 +39,7 @@
   padding: 10px 12px;
   min-height: 44px;
   font: inherit;
-  font-size: 15px;
+  font-size: var(--text-base);
   color: var(--text);
   cursor: pointer;
   border-radius: 6px;

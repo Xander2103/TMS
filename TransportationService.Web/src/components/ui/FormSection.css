@@ -11,7 +11,7 @@
 }
 
 .ui-form-section-framed legend {
-  font-size: 16px;
+  font-size: var(--text-lg);
   font-weight: 600;
   color: var(--text-h);
   padding: 0 8px;
@@ -31,7 +31,7 @@
 }
 
 .ui-form-section-title {
-  font-size: 16px;
+  font-size: var(--text-lg);
   font-weight: 600;
   color: var(--text-h);
   margin: 0 0 var(--space-4);
@@ -58,12 +58,12 @@
 }
 
 .ui-form-section-chevron {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text);
 }
 
 .ui-form-section-description {
-  font-size: 13.5px;
+  font-size: var(--text-md);
   color: var(--text-muted);
   margin: -4px 0 16px;
 }

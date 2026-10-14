@@ -8,14 +8,14 @@
 }
 
 .ui-validation-summary-title {
-  font-size: 14.5px;
+  font-size: var(--text-base);
   font-weight: 600;
   color: var(--color-danger);
   margin: 0;
 }
 
 .ui-validation-summary-message {
-  font-size: 14px;
+  font-size: var(--text-md);
   color: var(--color-danger-text);
   margin: 6px 0 0;
 }
@@ -23,7 +23,7 @@
 .ui-validation-summary-list {
   margin: 8px 0 0;
   padding-left: 20px;
-  font-size: 14px;
+  font-size: var(--text-md);
   color: var(--color-danger-text);
 }
 

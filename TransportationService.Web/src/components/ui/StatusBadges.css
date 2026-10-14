@@ -6,7 +6,7 @@
 }
 
 .ui-status-badges-reason {
-  font-size: 13.5px;
+  font-size: var(--text-md);
   color: var(--text);
   font-style: italic;
 }

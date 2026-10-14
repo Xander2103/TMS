@@ -458,7 +458,7 @@
 }
 
 .ntc-row-head .ui-badge {
-  font-size: 11px;
+  font-size: var(--text-xs);
   line-height: 16px;
   padding: 1px 8px;
 }

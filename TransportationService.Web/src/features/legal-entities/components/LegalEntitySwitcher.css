@@ -6,7 +6,7 @@
 }
 
 .le-switcher-label {
-  font-size: 11px;
+  font-size: var(--text-xs);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;

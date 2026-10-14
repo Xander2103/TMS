@@ -21,7 +21,7 @@
 }
 
 .to-section h2 {
-  font-size: 17px;
+  font-size: var(--text-lg);
   margin: 0 0 10px;
 }
 
@@ -36,14 +36,14 @@
 }
 
 .to-facts dt {
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--text);
   margin-bottom: 2px;
 }
 
 .to-facts dd {
   margin: 0;
-  font-size: 15px;
+  font-size: var(--text-base);
   color: var(--text-h);
   display: flex;
   gap: 6px;
@@ -60,14 +60,14 @@
 
 .to-notes {
   margin: 10px 0 0;
-  font-size: 15px;
+  font-size: var(--text-base);
   white-space: pre-wrap;
 }
 
 .to-stops-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 15px;
+  font-size: var(--text-base);
 }
 
 .to-stops-table th,
@@ -79,7 +79,7 @@
 }
 
 .to-stops-table th {
-  font-size: 13px;
+  font-size: var(--text-sm);
   text-transform: uppercase;
   letter-spacing: 0.03em;
   color: var(--text);
@@ -87,7 +87,7 @@
 
 .to-loc-code {
   color: var(--text);
-  font-size: 13px;
+  font-size: var(--text-sm);
 }
 
 .to-detail-actions {
@@ -101,7 +101,7 @@
 }
 
 .to-price-original {
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--text);
   margin-top: 2px;
 }
@@ -140,12 +140,12 @@
 }
 
 .to-price-summary-label {
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--text-muted);
 }
 
 .to-price-summary-amount {
-  font-size: 24px;
+  font-size: var(--text-2xl);
   font-weight: 700;
   line-height: 1.2;
 }
@@ -154,20 +154,20 @@
   display: flex;
   flex-wrap: wrap;
   gap: 4px 16px;
-  font-size: 14px;
+  font-size: var(--text-md);
   align-items: center;
 }
 
 .to-price-summary-confirmed {
   margin: 0;
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--text-muted);
   flex-basis: 100%;
 }
 
 .to-price-summary-warning {
   margin: 0;
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--color-danger);
   flex-basis: 100%;
 }
@@ -179,7 +179,7 @@
   background: rgba(220, 38, 38, 0.06);
   padding: 10px 14px;
   margin: 8px 0;
-  font-size: 14px;
+  font-size: var(--text-md);
 }
 
 .to-coverage-warning ul {
@@ -200,7 +200,7 @@
   border-radius: 8px;
   padding: 6px 10px;
   margin: 4px 0;
-  font-size: 13px;
+  font-size: var(--text-sm);
 }
 
 .to-stop-warning-marker {
@@ -208,7 +208,7 @@
 }
 
 .to-stop-site {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--muted);
 }
 
@@ -218,7 +218,7 @@
 
 .to-coverage h3 {
   margin: 0 0 6px;
-  font-size: 14px;
+  font-size: var(--text-md);
 }
 
 .to-coverage ul {
@@ -228,17 +228,17 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
-  font-size: 14px;
+  font-size: var(--text-md);
 }
 
 .to-price-not-applied {
   margin-top: 12px;
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--text-muted);
 }
 
 .to-price-not-applied h3 {
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-weight: 600;
   margin: 0 0 4px;
 }
@@ -250,7 +250,7 @@
 
 .to-calc-explanation {
   white-space: pre-wrap;
-  font-size: 13px;
+  font-size: var(--text-sm);
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -278,14 +278,14 @@
   color: var(--warning);
   border-radius: 8px;
   padding: 8px 12px;
-  font-size: 14px;
+  font-size: var(--text-md);
 }
 
 .to-doc-strategy-choice {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 14px;
+  font-size: var(--text-md);
 }
 
 .to-doc-strategy-choice select {
@@ -301,7 +301,7 @@
   color: var(--danger);
   border-radius: 8px;
   padding: 10px 12px;
-  font-size: 14px;
+  font-size: var(--text-md);
   margin-bottom: 16px;
 }
 

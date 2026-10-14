@@ -7,7 +7,7 @@
   border-radius: 8px;
   border: 1px solid transparent;
   font: inherit;
-  font-size: 15px;
+  font-size: var(--text-base);
   font-weight: 600;
   cursor: pointer;
   transition: background 0.12s ease, border-color 0.12s ease, opacity 0.12s ease;

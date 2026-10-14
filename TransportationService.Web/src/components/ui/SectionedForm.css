@@ -48,7 +48,7 @@
   border-radius: 999px;
   background: var(--danger);
   color: #fff;
-  font-size: 0.7rem;
+  font-size: var(--text-sm);
   line-height: 1;
 }
 .ui-section-tab-complete {
@@ -56,12 +56,12 @@
 }
 .ui-section-tab-filled {
   color: var(--accent);
-  font-size: 0.65rem;
+  font-size: var(--text-xs);
   line-height: 1;
 }
 .ui-section-tab-empty {
   color: var(--text-muted);
-  font-size: 0.65rem;
+  font-size: var(--text-xs);
   line-height: 1;
 }
 .ui-sectioned-form-body {
@@ -89,7 +89,7 @@
     padding: 0.5rem 0;
   }
   .ui-section-select-label {
-    font-size: 0.85rem;
+    font-size: var(--text-base);
     color: var(--text);
   }
   .ui-section-select select {

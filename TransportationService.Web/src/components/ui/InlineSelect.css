@@ -3,7 +3,7 @@
   background: transparent;
   color: var(--text);
   font: inherit;
-  font-size: 0.82rem;
+  font-size: var(--text-base);
   border-radius: 6px;
   padding: 0.1rem 0.25rem;
   cursor: pointer;

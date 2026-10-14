@@ -19,7 +19,7 @@
   border: 1px solid var(--border);
   background: var(--color-surface-raised);
   box-shadow: var(--shadow);
-  font-size: 14px;
+  font-size: var(--text-md);
   color: var(--text-h);
   border-left-width: 4px;
 }

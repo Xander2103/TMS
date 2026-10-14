@@ -42,7 +42,7 @@ html:has(.ui-sectioned-form-actions) {
 }
 
 .ui-form-actions-dirty {
-  font-size: 13.5px;
+  font-size: var(--text-md);
   color: var(--color-warning);
   font-style: italic;
 }
