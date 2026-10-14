@@ -134,7 +134,8 @@
     "restoreStock": "Terug in voorraad opnemen",
     "notes": "Notities",
     "deleteTitle": "Bedrijfsmiddel verwijderen",
-    "deleteMessage": "Weet je zeker dat je \"{name}\" wilt verwijderen?"
+    "deleteMessage": "Weet je zeker dat je \"{name}\" wilt verwijderen?",
+    "rowActions": "Acties {name}"
   },
   "bulk": {
     "title": "Meerdere middelen uitgeven",
@@ -242,7 +243,8 @@
     "deleteFailed": "Het bedrijfsmiddel kon niet worden verwijderd.",
     "deleteTitle": "Bedrijfsmiddel verwijderen",
     "deleteMessage": "Weet je zeker dat je \"{name}\" wilt verwijderen? Reeds uitgereikte middelen blijven behouden.",
-    "variantsPartiallyFailed": "Het bedrijfsmiddel is aangemaakt, maar deze varianten konden niet worden toegevoegd: {labels}. Voeg ze toe op het tabblad Varianten."
+    "variantsPartiallyFailed": "Het bedrijfsmiddel is aangemaakt, maar deze varianten konden niet worden toegevoegd: {labels}. Voeg ze toe op het tabblad Varianten.",
+    "rowActions": "Acties {name}"
   },
   "form": {
     "editTitle": "Bedrijfsmiddel bewerken",

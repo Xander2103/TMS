@@ -1,4 +1,5 @@
 import { Badge } from '../../../components/ui/Badge'
+import { OverdueDate } from '../../../components/ui/OverdueDate'
 import { useLocale } from '../../../i18n/localeContext'
 import { formatTaskDateTime } from './taskFormat'
 import {
@@ -32,11 +33,15 @@ export function TaskCategoryBadge({ name, color }: { name: string | null; color:
   )
 }
 
-/** Deadline cell: overdue tasks render red with an explicit warning label. */
-export function TaskDueCell({ task }: { task: Pick<EmployeeTask, 'dueAt' | 'isOverdue'> }) {
+/**
+ * Deadline cell: overdue tasks render red with an explicit warning label. `compact` (dense list
+ * column) keeps the label as a named warning icon so the column never clips the badge.
+ */
+export function TaskDueCell({ task, compact = false }: { task: Pick<EmployeeTask, 'dueAt' | 'isOverdue'>; compact?: boolean }) {
   const { t } = useLocale()
   if (!task.dueAt) return <>—</>
   if (!task.isOverdue) return <>{formatTaskDateTime(task.dueAt)}</>
+  if (compact) return <OverdueDate label={t('tasks.badges.overdue').replace('⚠', '').trim()}>{formatTaskDateTime(task.dueAt)}</OverdueDate>
   return (
     <span className="task-due-overdue">
       {formatTaskDateTime(task.dueAt)} <Badge tone="danger">{t('tasks.badges.overdue')}</Badge>

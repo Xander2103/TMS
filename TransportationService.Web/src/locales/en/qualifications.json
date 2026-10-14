@@ -15,6 +15,11 @@
     "colStatus": "Status",
     "emptyExpiring": "No qualifications expiring within {days} days.",
     "emptyExpired": "No expired qualifications.",
-    "loading": "Loading…"
+    "loading": "Loading…",
+    "inDays_one": "in {count} day",
+    "inDays_other": "in {count} days",
+    "today": "today",
+    "daysAgo_one": "{count} day ago",
+    "daysAgo_other": "{count} days ago"
   }
 }

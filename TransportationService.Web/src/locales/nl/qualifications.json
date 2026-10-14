@@ -15,6 +15,11 @@
     "colStatus": "Status",
     "emptyExpiring": "Geen kwalificaties die binnen {days} dagen vervallen.",
     "emptyExpired": "Geen verlopen kwalificaties.",
-    "loading": "Laden…"
+    "loading": "Laden…",
+    "inDays_one": "over {count} dag",
+    "inDays_other": "over {count} dagen",
+    "today": "vandaag",
+    "daysAgo_one": "{count} dag geleden",
+    "daysAgo_other": "{count} dagen geleden"
   }
 }

@@ -133,11 +133,11 @@ export function TasksPage() {
         </span>
       ),
     },
-    { key: 'assignee', header: t('tasks.columns.assignee'), width: '180px', render: (row) => <TruncatedText tooltip={row.assignedEmployeeName}>{row.assignedEmployeeName}</TruncatedText> },
+    { key: 'assignee', header: t('tasks.columns.assignee'), width: '170px', render: (row) => <TruncatedText tooltip={row.assignedEmployeeName}>{row.assignedEmployeeName}</TruncatedText> },
     { key: 'priority', header: t('tasks.columns.priority'), width: '110px', sortKey: 'priority', render: (row) => <TaskPriorityBadge priority={row.priority} /> },
-    { key: 'due', header: t('tasks.columns.due'), width: '170px', sortKey: 'due', render: (row) => <span className="ui-nowrap"><TaskDueCell task={row} /></span> },
-    { key: 'status', header: t('tasks.columns.status'), width: '150px', render: (row) => <TaskStatusBadge status={row.status} /> },
-    { key: 'updated', header: t('tasks.columns.updated'), width: '140px', sortKey: 'created', render: (row) => <span className="ui-nowrap">{formatTaskDateTime(row.updatedAt)}</span> },
+    { key: 'due', header: t('tasks.columns.due'), width: '180px', sortKey: 'due', render: (row) => <span className="ui-nowrap"><TaskDueCell task={row} compact /></span> },
+    { key: 'status', header: t('tasks.columns.status'), width: '170px', render: (row) => <TaskStatusBadge status={row.status} /> },
+    { key: 'updated', header: t('tasks.columns.updated'), width: '150px', sortKey: 'created', render: (row) => <span className="ui-nowrap">{formatTaskDateTime(row.updatedAt)}</span> },
   ]
 
   function toggle(key: 'mine' | 'created' | 'overdue' | 'review') {

@@ -3,7 +3,7 @@
 }
 
 .qual-overview-section h2 {
-  font-size: 20px;
+  font-size: var(--text-xl);
   margin-bottom: 12px;
 }
 
@@ -20,17 +20,27 @@
   margin-bottom: 0;
 }
 
-.qual-overview-window {
+.qual-overview-tools {
   display: flex;
-  gap: 6px;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
+/* B14: one line per row — name, then the staff number muted; the full value in the tooltip. */
 .qual-overview-name {
   color: var(--text-h);
   font-weight: 500;
 }
 
-.qual-overview-number {
-  font-size: 13px;
-  color: var(--text);
+.qual-overview-number,
+.qual-overview-relative {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.qual-overview-icon {
+  margin-right: 4px;
+  vertical-align: -1px;
 }

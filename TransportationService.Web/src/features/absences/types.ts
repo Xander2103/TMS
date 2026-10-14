@@ -34,6 +34,11 @@ export const ABSENCE_STATUS_TONE: Record<AbsenceStatus, 'neutral' | 'success' | 
   Cancelled: 'neutral',
 }
 
+/** B50: a request HR can still decide on — the only rows that show "Beoordelen" directly. */
+export function isReviewable(absence: Pick<Absence, 'status'>): boolean {
+  return absence.status === 'Requested' || absence.status === 'UnderReview'
+}
+
 /** Vertaalsleutels — renderen als t(PART_DAY_LABELS[partDay]). */
 export const PART_DAY_LABELS: Record<AbsencePartDay, string> = {
   FullDay: 'absences.partDay.FullDay',

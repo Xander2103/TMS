@@ -27,7 +27,8 @@
     "adjust": "Ajuster le solde",
     "history": "Historique",
     "historyTitle": "Historique des ajustements — {name}",
-    "historyEmpty": "Aucun ajustement manuel."
+    "historyEmpty": "Aucun ajustement manuel.",
+    "rowActions": "Plus d’actions pour {name}"
   },
   "table": {
     "balanceType": "Type de solde",

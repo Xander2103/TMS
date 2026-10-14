@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Button } from '../../../components/ui/Button'
+import { RowActionMenu } from '../../../components/ui/RowActionMenu'
 import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
 import { useLocale } from '../../../i18n/localeContext'
@@ -124,14 +125,18 @@ export function LeaveBalanceTab({ employeeId }: LeaveBalanceTabProps) {
           renderActions={
             canManage || canAdjust
               ? (row) => (
+                  // B49: one direct action (Saldo aanpassen); jaarrecht and historiek live in "⋯".
                   <div className="lb-row-actions">
-                    {canManage && (
-                      <Button variant="secondary" onClick={() => setDialog({ kind: 'entitlement', row })}>{t('leave.tab.setEntitlement')}</Button>
-                    )}
                     {canAdjust && (
-                      <Button variant="secondary" onClick={() => setDialog({ kind: 'adjust', row })}>{t('leave.tab.adjust')}</Button>
+                      <Button variant="secondary" className="lb-row-button" onClick={() => setDialog({ kind: 'adjust', row })}>{t('leave.tab.adjust')}</Button>
                     )}
-                    <Button variant="ghost" onClick={() => openHistory(row)}>{t('leave.tab.history')}</Button>
+                    <RowActionMenu
+                      label={t('leave.tab.rowActions', { name: row.balanceTypeName })}
+                      items={[
+                        ...(canManage ? [{ key: 'entitlement', label: t('leave.tab.setEntitlement'), onSelect: () => setDialog({ kind: 'entitlement', row }) }] : []),
+                        { key: 'history', label: t('leave.tab.history'), onSelect: () => void openHistory(row) },
+                      ]}
+                    />
                   </div>
                 )
               : undefined

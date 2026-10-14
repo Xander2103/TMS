@@ -184,17 +184,17 @@ describe('IssuedItemsTab', () => {
     expect(returnedRow).toHaveTextContent('15/08/2026')
     expect(returnedRow).toHaveTextContent('door An Peeters')
 
-    // A returned row is history: reactivate only — no edit, no delete, no second "Teruggebracht".
+    // A returned row is history: reactivate only — no edit, no delete, no second "Teruggebracht", no menu.
     expect(within(returnedRow).getByRole('button', { name: 'Heractiveren' })).toBeInTheDocument()
-    expect(within(returnedRow).queryByRole('button', { name: 'Verwijderen' })).not.toBeInTheDocument()
-    expect(within(returnedRow).queryByRole('button', { name: 'Bewerken' })).not.toBeInTheDocument()
+    expect(within(returnedRow).queryByRole('button', { name: /^Acties/ })).not.toBeInTheDocument()
     expect(within(returnedRow).queryByRole('button', { name: 'Teruggebracht' })).not.toBeInTheDocument()
 
-    // An active row offers Bewerken · Teruggebracht · Verwijderen.
-    expect(within(activeRow).getByRole('button', { name: 'Bewerken' })).toBeInTheDocument()
+    // B14: an active row shows Teruggebracht directly; Bewerken · Verwijderen live in the row menu.
     expect(within(activeRow).getByRole('button', { name: 'Teruggebracht' })).toBeInTheDocument()
-    expect(within(activeRow).getByRole('button', { name: 'Verwijderen' })).toBeInTheDocument()
+    expect(within(activeRow).queryByRole('button', { name: 'Bewerken' })).not.toBeInTheDocument()
     expect(within(activeRow).queryByRole('button', { name: 'Heractiveren' })).not.toBeInTheDocument()
+    await userEvent.click(within(activeRow).getByRole('button', { name: 'Acties Laptop' }))
+    expect(within(screen.getByRole('menu')).getAllByRole('menuitem').map((item) => item.textContent)).toEqual(['Bewerken', 'Verwijderen'])
   })
 
   it('keeps Bewerken/Verwijderen without Teruggebracht for non-issued, non-returned statuses', async () => {
@@ -204,10 +204,12 @@ describe('IssuedItemsTab', () => {
 
     await waitFor(() => expect(screen.getByText('Badge')).toBeInTheDocument())
     const row = screen.getByText('Badge').closest('tr')!
-    expect(within(row).getByRole('button', { name: 'Bewerken' })).toBeInTheDocument()
-    expect(within(row).getByRole('button', { name: 'Verwijderen' })).toBeInTheDocument()
     expect(within(row).queryByRole('button', { name: 'Teruggebracht' })).not.toBeInTheDocument()
     expect(within(row).queryByRole('button', { name: 'Heractiveren' })).not.toBeInTheDocument()
+    await userEvent.click(within(row).getByRole('button', { name: 'Acties Badge' }))
+    const menu = screen.getByRole('menu')
+    expect(within(menu).getByRole('menuitem', { name: 'Bewerken' })).toBeInTheDocument()
+    expect(within(menu).getByRole('menuitem', { name: 'Verwijderen' })).toBeInTheDocument()
   })
 
   it('posts the chosen return values to the return endpoint', async () => {
@@ -320,7 +322,8 @@ describe('IssuedItemsTab', () => {
     render(<IssuedItemsTab employeeId="emp-4" />)
 
     await waitFor(() => expect(screen.getByText('Laptop')).toBeInTheDocument())
-    await userEvent.click(screen.getByText('Bewerken'))
+    await userEvent.click(screen.getByRole('button', { name: 'Acties Laptop' }))
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Bewerken' }))
     await userEvent.selectOptions(screen.getByLabelText(/^Status/), 'Returned')
 
     // Disposition select with "good" restoring stock by default.

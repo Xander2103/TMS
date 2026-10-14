@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { PageHeader } from '../../../components/layout/PageHeader'
 import { Button } from '../../../components/ui/Button'
 import { useToast } from '../../../components/ui/toastContext'
+import { useListDensity } from '../../../components/ui/listDensity'
 import { useAuth } from '../../auth/authContextValue'
 import { useLocale } from '../../../i18n/localeContext'
 import { getPlanningFilterOptions, getShift } from '../api/employeePlanningApi'
@@ -97,6 +98,7 @@ export function EmployeePlanningPage() {
   }, [pickedNames, grid])
 
   const [quickSearch, setQuickSearch] = useState('')
+  const [density, setDensity] = useListDensity('employee-planning')
   const [dialog, setDialog] = useState<ShiftDialogState | null>(null)
   const [copyOpen, setCopyOpen] = useState(false)
 
@@ -170,6 +172,8 @@ export function EmployeePlanningPage() {
         onQuickSearch={setQuickSearch}
         canManage={canManage}
         onCopyWeek={() => setCopyOpen(true)}
+        density={density}
+        onDensityChange={setDensity}
       />
 
       <div className="ep-status-row">
@@ -223,6 +227,7 @@ export function EmployeePlanningPage() {
           chipAction={chipAction}
           onAddShift={(row, date) => setDialog({ mode: 'create', employeeId: row.employeeId, employeeName: row.employeeName, date })}
           maxHeight={gridMaxHeight}
+          density={density}
         />
       )}
 

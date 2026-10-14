@@ -61,7 +61,8 @@
     "deleteTitle": "Afwezigheid verwijderen",
     "deleteMessage": "{type} van {from} tot en met {to} verwijderen?",
     "deleted": "Afwezigheid verwijderd.",
-    "deleteFailed": "De afwezigheid kon niet worden verwijderd."
+    "deleteFailed": "De afwezigheid kon niet worden verwijderd.",
+    "rowActions": "Acties {type} {from}"
   },
   "page": {
     "title": "Afwezigheden",
@@ -77,7 +78,13 @@
     "empty": "Geen afwezigheden in deze periode.",
     "colEmployee": "Medewerker",
     "driver": "Chauffeur",
-    "review": "Beoordelen"
+    "review": "Beoordelen",
+    "searchPlaceholder": "Zoek op medewerker of personeelsnummer…",
+    "rowActions": "Acties {name}",
+    "openEmployee": "Openen bij medewerker",
+    "details": "Details en interne notitie",
+    "cancel": "Afwezigheid annuleren",
+    "hasAttachment": "Met bijlage"
   },
   "review": {
     "title": "Aanvraag beoordelen — {name}",

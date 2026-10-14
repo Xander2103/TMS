@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { IssuedItemTemplatesPanel } from '../components/IssuedItemTemplatesPanel'
@@ -176,6 +176,19 @@ describe('IssuedItemTemplatesPanel — the Bedrijfsmiddelen overview', () => {
     expect(screen.getByText('Veiligheidsschoenen')).toBeInTheDocument()
     expect(screen.queryByText('Toegangsbadge')).not.toBeInTheDocument()
     expect(screen.queryByText('Helm')).not.toBeInTheDocument()
+  })
+
+  it('B14: keeps edit and delete in one row menu instead of stacked links', async () => {
+    templates.value = [makeTemplate({ id: 't-9', name: 'Scanner' })]
+    renderPanel()
+    const row = (await screen.findByRole('link', { name: 'Scanner' })).closest('tr')!
+    expect(within(row).queryByRole('button', { name: 'Bewerken' })).not.toBeInTheDocument()
+    expect(within(row).queryByRole('button', { name: 'Verwijderen' })).not.toBeInTheDocument()
+
+    await userEvent.click(within(row).getByRole('button', { name: 'Acties Scanner' }))
+    expect(within(screen.getByRole('menu')).getAllByRole('menuitem').map((item) => item.textContent)).toEqual(['Bewerken', 'Verwijderen'])
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Bewerken' }))
+    expect(screen.getByTestId('form-stub')).toHaveAttribute('data-editing', 't-9')
   })
 
   it('links an item to its detail page under /issued-items', async () => {

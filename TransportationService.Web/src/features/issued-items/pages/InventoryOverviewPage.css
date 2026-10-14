@@ -14,7 +14,7 @@
   border-radius: 10px;
   background: none;
   font: inherit;
-  font-size: 14px;
+  font-size: var(--text-md);
   cursor: pointer;
   color: inherit;
 }
@@ -46,7 +46,7 @@
   border-radius: 999px;
   padding: 1px 8px;
   font-weight: 600;
-  font-size: 13px;
+  font-size: var(--text-sm);
   background: var(--border);
 }
 

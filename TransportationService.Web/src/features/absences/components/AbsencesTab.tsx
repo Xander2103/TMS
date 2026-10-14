@@ -2,9 +2,11 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { ApiError } from '../../../api/apiClient'
 import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
+import type { ActionMenuItem } from '../../../components/ui/ActionMenu'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { FormField } from '../../../components/ui/FormField'
 import { Modal } from '../../../components/ui/Modal'
+import { RowActionMenu } from '../../../components/ui/RowActionMenu'
 import { useToast } from '../../../components/ui/toastContext'
 import { useLocale } from '../../../i18n/localeContext'
 import { useAuth } from '../../auth/authContextValue'
@@ -16,10 +18,12 @@ import {
   listEmployeeAbsences,
   updateAbsence,
 } from '../api/absencesApi'
+import { ReviewAbsenceDialog } from './ReviewAbsenceDialog'
 import { getLeaveTypes } from '../../leave-balance/api/leaveBalanceApi'
 import type { LeaveType } from '../../leave-balance/types'
 import {
   ABSENCE_STATUS_TONE,
+  isReviewable,
   type Absence,
   type AbsenceInput,
   type AbsenceType,
@@ -72,6 +76,7 @@ export function AbsencesTab({ employeeId, highlightAbsenceId }: AbsencesTabProps
   const [decisionNote, setDecisionNote] = useState('')
   const [cancelTarget, setCancelTarget] = useState<Absence | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Absence | null>(null)
+  const [reviewTarget, setReviewTarget] = useState<Absence | null>(null)
 
   useEffect(() => {
     let mounted = true
@@ -213,6 +218,31 @@ export function AbsencesTab({ employeeId, highlightAbsenceId }: AbsencesTabProps
   const canEdit = hasPermission('absences.edit')
   const canApprove = hasPermission('absences.approve')
 
+  function rowActions(absence: Absence): ActionMenuItem[] {
+    const items: ActionMenuItem[] = []
+    if (canApprove && isReviewable(absence)) {
+      items.push(
+        { key: 'approve', label: t('absences.tab.approve'), onSelect: () => openDecide(absence, true) },
+        { key: 'reject', label: t('absences.tab.reject'), onSelect: () => openDecide(absence, false) },
+      )
+    }
+    if (canEdit && absence.status === 'Requested') {
+      items.push({ key: 'edit', label: t('ui.actions.edit'), onSelect: () => openEdit(absence) })
+    }
+    if (canEdit && (absence.status === 'Requested' || absence.status === 'Approved')) {
+      items.push({ key: 'cancel', label: t('absences.page.cancel'), danger: true, onSelect: () => setCancelTarget(absence) })
+    }
+    if (hasPermission('absences.delete')) {
+      items.push({ key: 'delete', label: t('ui.actions.delete'), danger: true, onSelect: () => setDeleteTarget(absence) })
+    }
+    return items
+  }
+
+  function openDecide(absence: Absence, approve: boolean) {
+    setDecideTarget({ absence, approve })
+    setDecisionNote('')
+  }
+
   return (
     <section className="abs">
       <div className="abs-header">
@@ -266,45 +296,16 @@ export function AbsencesTab({ employeeId, highlightAbsenceId }: AbsencesTabProps
                   {absence.reason ?? '—'}
                 </td>
                 <td className="abs-actions">
-                  {canApprove && absence.status === 'Requested' && (
-                    <>
-                      <button
-                        type="button"
-                        className="abs-link"
-                        onClick={() => {
-                          setDecideTarget({ absence, approve: true })
-                          setDecisionNote('')
-                        }}
-                      >
-                        {t('absences.tab.approve')}
-                      </button>
-                      <button
-                        type="button"
-                        className="abs-link abs-link-danger"
-                        onClick={() => {
-                          setDecideTarget({ absence, approve: false })
-                          setDecisionNote('')
-                        }}
-                      >
-                        {t('absences.tab.reject')}
-                      </button>
-                    </>
+                  {/* B50: one direct action only while there is something to decide; the rest in "⋯". */}
+                  {canApprove && isReviewable(absence) && (
+                    <Button variant="secondary" className="abs-review" onClick={() => setReviewTarget(absence)}>
+                      {t('absences.page.review')}
+                    </Button>
                   )}
-                  {canEdit && absence.status === 'Requested' && (
-                    <button type="button" className="abs-link" onClick={() => openEdit(absence)}>
-                      {t('ui.actions.edit')}
-                    </button>
-                  )}
-                  {canEdit && (absence.status === 'Requested' || absence.status === 'Approved') && (
-                    <button type="button" className="abs-link" onClick={() => setCancelTarget(absence)}>
-                      {t('ui.actions.cancel')}
-                    </button>
-                  )}
-                  {hasPermission('absences.delete') && (
-                    <button type="button" className="abs-link abs-link-danger" onClick={() => setDeleteTarget(absence)}>
-                      {t('ui.actions.delete')}
-                    </button>
-                  )}
+                  <RowActionMenu
+                    label={t('absences.tab.rowActions', { type: t(`absences.type.${absence.type}`), from: formatDate(absence.startDate) })}
+                    items={rowActions(absence)}
+                  />
                 </td>
               </tr>
             ))}
@@ -390,6 +391,17 @@ export function AbsencesTab({ employeeId, highlightAbsenceId }: AbsencesTabProps
             </FormField>
           </form>
         </Modal>
+      )}
+
+      {reviewTarget && (
+        <ReviewAbsenceDialog
+          absence={reviewTarget}
+          onClose={() => setReviewTarget(null)}
+          onChanged={(updated) => {
+            setReviewTarget(updated)
+            setAbsences((current) => current?.map((a) => (a.id === updated.id ? updated : a)) ?? null)
+          }}
+        />
       )}
 
       {cancelTarget && (

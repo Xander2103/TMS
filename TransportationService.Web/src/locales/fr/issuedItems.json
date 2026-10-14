@@ -134,7 +134,8 @@
     "restoreStock": "Remettre en stock",
     "notes": "Notes",
     "deleteTitle": "Supprimer l'équipement",
-    "deleteMessage": "Voulez-vous vraiment supprimer « {name} » ?"
+    "deleteMessage": "Voulez-vous vraiment supprimer « {name} » ?",
+    "rowActions": "Actions {name}"
   },
   "bulk": {
     "title": "Remettre plusieurs équipements",
@@ -242,7 +243,8 @@
     "deleteFailed": "Le matériel n'a pas pu être supprimé.",
     "deleteTitle": "Supprimer le matériel",
     "deleteMessage": "Voulez-vous vraiment supprimer « {name} » ? Les équipements déjà remis sont conservés.",
-    "variantsPartiallyFailed": "Le matériel a été créé, mais ces variantes n'ont pas pu être ajoutées : {labels}. Ajoutez-les dans l'onglet Variantes."
+    "variantsPartiallyFailed": "Le matériel a été créé, mais ces variantes n'ont pas pu être ajoutées : {labels}. Ajoutez-les dans l'onglet Variantes.",
+    "rowActions": "Actions {name}"
   },
   "form": {
     "editTitle": "Modifier le matériel",

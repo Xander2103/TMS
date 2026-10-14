@@ -12,6 +12,12 @@ export interface VirtualRowsOptions {
   threshold?: number
   /** Stable keys so measurements survive re-ordering/filtering. */
   rowKey: (index: number) => string
+  /**
+   * B49: identifies the row layout (e.g. the density). Measured heights belong to one layout; when
+   * it changes they are discarded so the new estimate — not a stale normal-density height — sizes
+   * the spacers until the rows are measured again.
+   */
+  layoutKey?: string
 }
 
 export interface VirtualRowsResult {
@@ -41,10 +47,16 @@ export function useVirtualRows({
   overscan = 6,
   threshold = 60,
   rowKey,
+  layoutKey = '',
 }: VirtualRowsOptions): VirtualRowsResult {
   const active = rowCount > threshold
   const [viewport, setViewport] = useState({ scrollTop: 0, height: 0 })
-  const [measured, setMeasured] = useState<Record<string, number>>({})
+  // Heights are stored with the layout they were measured in; another layout reads as "unmeasured".
+  const [measuredState, setMeasuredState] = useState<{ layoutKey: string; heights: Record<string, number> }>({ layoutKey, heights: {} })
+  const measured = useMemo(
+    () => (measuredState.layoutKey === layoutKey ? measuredState.heights : {}),
+    [measuredState, layoutKey],
+  )
   // Header rows sit inside the same scroller and take part of its height; measured from the
   // first rendered row's offset instead of hardcoding header heights.
   const [headerOffset, setHeaderOffset] = useState(0)
@@ -117,9 +129,13 @@ export function useVirtualRows({
           setHeaderOffset((current) => (Math.abs(current - offset) > 0.5 ? offset : current))
         }
       }
-      setMeasured((current) => (Math.abs((current[key] ?? 0) - height) > 0.5 ? { ...current, [key]: height } : current))
+      setMeasuredState((current) => {
+        const heights = current.layoutKey === layoutKey ? current.heights : {}
+        if (current.layoutKey === layoutKey && Math.abs((heights[key] ?? 0) - height) <= 0.5) return current
+        return { layoutKey, heights: { ...heights, [key]: height } }
+      })
     },
-    [active, rowKey, start, topPad, scrollRef],
+    [active, rowKey, start, topPad, scrollRef, layoutKey],
   )
 
   return { start, end, topPad, bottomPad, active, measure }

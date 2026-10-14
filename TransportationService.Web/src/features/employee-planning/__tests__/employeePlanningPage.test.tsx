@@ -348,4 +348,31 @@ describe('EmployeePlanningPage', () => {
     expect(table().getByText('Marc Janssens')).toBeInTheDocument()
     expect(screen.getByTestId('url')).not.toHaveTextContent('departments=')
   })
+
+  it('B49: the density toggle switches the grid to compact rows without dropping chips or totals', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    expect(await screen.findByText('Jan Peeters')).toBeInTheDocument()
+    expect(screen.getByRole('table')).not.toHaveClass('ep-grid-compact')
+
+    const density = screen.getByRole('group', { name: 'Dichtheid' })
+    await user.click(within(density).getByRole('button', { name: 'Compact' }))
+
+    expect(screen.getByRole('table')).toHaveClass('ep-grid-compact')
+    expect(within(density).getByRole('button', { name: 'Compact' })).toHaveAttribute('aria-pressed', 'true')
+    // Shifts, planned totals and the add-shift action stay available in compact.
+    expect(table().getAllByText('06:00–14:00').length).toBeGreaterThan(0)
+    expect(table().getAllByText(/7u30 gepland|7:30 gepland|gepland/).length).toBe(3)
+    expect(table().getAllByRole('button', { name: '+ shift' }).length).toBeGreaterThan(0)
+    expect(window.localStorage.getItem('ts.list.density.employee-planning')).toBe('compact')
+
+    await user.click(within(density).getByRole('button', { name: 'Normaal' }))
+    expect(screen.getByRole('table')).not.toHaveClass('ep-grid-compact')
+  })
+
+  it('B49: hides the density toggle in the list view (it only applies to the grid)', async () => {
+    renderPage(`/employee-planning?week=${WEEK}&view=list`)
+    expect(await screen.findByRole('columnheader', { name: 'Datum' })).toBeInTheDocument()
+    expect(screen.queryByRole('group', { name: 'Dichtheid' })).toBeNull()
+  })
 })

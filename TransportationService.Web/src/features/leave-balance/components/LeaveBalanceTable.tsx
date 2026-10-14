@@ -32,12 +32,12 @@ export function LeaveBalanceTable({ rows, renderActions }: LeaveBalanceTableProp
         <tbody>
           {rows.map((row) => (
             <tr key={row.balanceTypeId}>
-              <td>{row.balanceTypeName}</td>
-              <td>{fmt(row.baseEntitlementDays)}</td>
-              <td>{fmt(row.carryOverDays)}</td>
-              <td>{fmt(row.manualAdjustmentDays)}</td>
-              <td>{fmt(row.approvedUsedDays)}</td>
-              <td>
+              <td className="lb-name" title={row.balanceTypeName}>{row.balanceTypeName}</td>
+              <td className="lb-num">{fmt(row.baseEntitlementDays)}</td>
+              <td className="lb-num">{fmt(row.carryOverDays)}</td>
+              <td className="lb-num">{fmt(row.manualAdjustmentDays)}</td>
+              <td className="lb-num">{fmt(row.approvedUsedDays)}</td>
+              <td className="lb-num">
                 {fmt(row.pendingReservedDays)}
                 {row.pendingReservedDays > 0 && (
                   <span className="lb-reserved-note">
@@ -46,7 +46,7 @@ export function LeaveBalanceTable({ rows, renderActions }: LeaveBalanceTableProp
                   </span>
                 )}
               </td>
-              <td className={row.remainingDays < 0 ? 'lb-remaining lb-negative' : 'lb-remaining'}>{fmt(row.remainingDays)}</td>
+              <td className={row.remainingDays < 0 ? 'lb-num lb-remaining lb-negative' : 'lb-num lb-remaining'}>{fmt(row.remainingDays)}</td>
               {renderActions && <td className="lb-actions-cell">{renderActions(row)}</td>}
             </tr>
           ))}

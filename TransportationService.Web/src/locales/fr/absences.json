@@ -61,7 +61,8 @@
     "deleteTitle": "Supprimer l'absence",
     "deleteMessage": "Supprimer {type} du {from} jusqu'au {to} ?",
     "deleted": "Absence supprimée.",
-    "deleteFailed": "L'absence n'a pas pu être supprimée."
+    "deleteFailed": "L'absence n'a pas pu être supprimée.",
+    "rowActions": "Actions {type} {from}"
   },
   "page": {
     "title": "Absences",
@@ -77,7 +78,13 @@
     "empty": "Aucune absence sur cette période.",
     "colEmployee": "Collaborateur",
     "driver": "Chauffeur",
-    "review": "Évaluer"
+    "review": "Évaluer",
+    "searchPlaceholder": "Rechercher par collaborateur ou matricule…",
+    "rowActions": "Actions {name}",
+    "openEmployee": "Ouvrir chez le collaborateur",
+    "details": "Détails et note interne",
+    "cancel": "Annuler l’absence",
+    "hasAttachment": "Avec pièce jointe"
   },
   "review": {
     "title": "Évaluer la demande — {name}",

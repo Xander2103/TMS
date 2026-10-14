@@ -1,5 +1,7 @@
 import { ChevronLeft, ChevronRight, Copy, Search } from 'lucide-react'
 import { Button } from '../../../components/ui/Button'
+import { DensityToggle } from '../../../components/ui/DensityToggle'
+import type { ListDensity } from '../../../components/ui/listDensity'
 import { useLocale } from '../../../i18n/localeContext'
 import { shiftWeekStart, type PlanningGroupFilters, type PlanningSelection, type PlanningWeeks } from '../planningFilters'
 import { mondayOf, toIsoDate } from '../types'
@@ -19,6 +21,9 @@ interface PlanningToolbarProps {
   onQuickSearch: (value: string) => void
   canManage: boolean
   onCopyWeek: () => void
+  /** B49: grid row density (the list view has its own layout and ignores it). */
+  density: ListDensity
+  onDensityChange: (value: ListDensity) => void
 }
 
 /**
@@ -37,6 +42,8 @@ export function PlanningToolbar({
   onQuickSearch,
   canManage,
   onCopyWeek,
+  density,
+  onDensityChange,
 }: PlanningToolbarProps) {
   const { t } = useLocale()
 
@@ -84,6 +91,7 @@ export function PlanningToolbar({
         <input type="checkbox" checked={selection.listView} onChange={(e) => onChange({ listView: e.target.checked })} />
         {t('employeePlanning.page.listView')}
       </label>
+      {!selection.listView && <DensityToggle value={density} onChange={onDensityChange} />}
       <span className="ep-toolbar-spacer" />
       <ExportMenu selection={selection} />
       {canManage && (

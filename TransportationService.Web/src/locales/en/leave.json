@@ -27,7 +27,8 @@
     "adjust": "Adjust balance",
     "history": "History",
     "historyTitle": "Adjustment history — {name}",
-    "historyEmpty": "No manual adjustments."
+    "historyEmpty": "No manual adjustments.",
+    "rowActions": "More actions for {name}"
   },
   "table": {
     "balanceType": "Balance type",

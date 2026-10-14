@@ -61,7 +61,8 @@
     "deleteTitle": "Delete absence",
     "deleteMessage": "Delete {type} from {from} through {to}?",
     "deleted": "Absence deleted.",
-    "deleteFailed": "The absence could not be deleted."
+    "deleteFailed": "The absence could not be deleted.",
+    "rowActions": "Actions {type} {from}"
   },
   "page": {
     "title": "Absences",
@@ -77,7 +78,13 @@
     "empty": "No absences in this period.",
     "colEmployee": "Employee",
     "driver": "Driver",
-    "review": "Review"
+    "review": "Review",
+    "searchPlaceholder": "Search by employee or staff number…",
+    "rowActions": "Actions {name}",
+    "openEmployee": "Open at employee",
+    "details": "Details and internal note",
+    "cancel": "Cancel absence",
+    "hasAttachment": "Has attachment"
   },
   "review": {
     "title": "Review request — {name}",

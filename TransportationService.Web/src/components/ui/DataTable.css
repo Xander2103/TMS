@@ -112,3 +112,11 @@ th[aria-sort] .data-table-sort-indicator {
   background: var(--accent-bg);
   outline: none;
 }
+
+/* B14: a column that is useful but not essential (a reason preview, a responsible person) gives
+   way first on narrower screens (~125% zoom) instead of pushing the table into a side scroll. */
+@media (max-width: 1365px) {
+  .data-table .ui-col-optional {
+    display: none;
+  }
+}

@@ -4,6 +4,8 @@ import { Button } from '../../components/ui/Button'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { FormField } from '../../components/ui/FormField'
 import { Modal } from '../../components/ui/Modal'
+import { RowActionMenu } from '../../components/ui/RowActionMenu'
+import { TruncatedText } from '../../components/ui/TruncatedText'
 import { useToast } from '../../components/ui/toastContext'
 import { useAuth } from '../auth/authContextValue'
 import { useLocale } from '../../i18n/localeContext'
@@ -399,7 +401,7 @@ export function IssuedItemsTab({ employeeId, employeeName }: { employeeId: strin
       )}
 
       {!loadErrorKey && items !== null && items.length > 0 && (
-        <table className="issued-items-table">
+        <table className="issued-items-table issued-items-table-dense">
           <thead>
             <tr>
               <th>{t('issuedItems.tab.colItem')}</th>
@@ -420,11 +422,15 @@ export function IssuedItemsTab({ employeeId, employeeName }: { employeeId: strin
               return (
                 // Een teruggebrachte uitgifte blijft als historiek staan (server weigert verwijderen), maar treedt visueel terug.
                 <tr key={item.id} className={isReturned ? 'is-returned' : undefined}>
-                  <td>{item.name}</td>
+                  <td>
+                    <TruncatedText tooltip={item.name} className="issued-items-cell-name">{item.name}</TruncatedText>
+                  </td>
                   <td>{item.variantLabel ?? '—'}</td>
-                  <td>{item.category}</td>
-                  <td>{item.quantity}</td>
-                  <td>{item.serialNumber ?? '—'}</td>
+                  <td>
+                    <TruncatedText tooltip={item.category} className="issued-items-cell-category">{item.category}</TruncatedText>
+                  </td>
+                  <td className="issued-items-num">{item.quantity}</td>
+                  <td>{item.serialNumber ? <code>{item.serialNumber}</code> : '—'}</td>
                   <td>{formatDate(item.issuedDate) || '—'}</td>
                   <td>
                     {formatDate(item.returnedDate) || '—'}
@@ -432,19 +438,21 @@ export function IssuedItemsTab({ employeeId, employeeName }: { employeeId: strin
                       <small className="issued-items-returned-by">{t('issuedItems.tab.returnedBy', { name: item.receivedBackByName })}</small>
                     )}
                   </td>
-                  <td>{item.issuedByName ?? '—'}</td>
+                  <td>
+                    {item.issuedByName ? (
+                      <TruncatedText tooltip={item.issuedByName} className="issued-items-cell-person">{item.issuedByName}</TruncatedText>
+                    ) : (
+                      '—'
+                    )}
+                  </td>
                   <td>
                     <Badge tone={STATUS_TONE[item.status]}>{t(ISSUED_ITEM_STATUS_LABELS[item.status])}</Badge>
                   </td>
+                  {/* B14: the one transition that fits the status stays visible; edit/delete live in "⋯". */}
                   <td className="issued-items-row-actions">
                     {canManage && isReturned && (
                       <button type="button" className="issued-items-link" onClick={() => openReactivate(item)}>
                         {t('issuedItems.tab.reactivate')}
-                      </button>
-                    )}
-                    {canManage && !isReturned && (
-                      <button type="button" className="issued-items-link" onClick={() => openEdit(item)}>
-                        {t('ui.actions.edit')}
                       </button>
                     )}
                     {canManage && item.status === 'Issued' && (
@@ -453,9 +461,13 @@ export function IssuedItemsTab({ employeeId, employeeName }: { employeeId: strin
                       </button>
                     )}
                     {canManage && !isReturned && (
-                      <button type="button" className="issued-items-link issued-items-link-danger" onClick={() => setDeleteTarget(item)}>
-                        {t('ui.actions.delete')}
-                      </button>
+                      <RowActionMenu
+                        label={t('issuedItems.tab.rowActions', { name: item.name })}
+                        items={[
+                          { key: 'edit', label: t('ui.actions.edit'), onSelect: () => openEdit(item) },
+                          { key: 'delete', label: t('ui.actions.delete'), danger: true, onSelect: () => setDeleteTarget(item) },
+                        ]}
+                      />
                     )}
                   </td>
                 </tr>

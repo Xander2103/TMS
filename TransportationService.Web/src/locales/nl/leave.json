@@ -27,7 +27,8 @@
     "adjust": "Saldo aanpassen",
     "history": "Historiek",
     "historyTitle": "Aanpassingshistoriek — {name}",
-    "historyEmpty": "Geen handmatige aanpassingen."
+    "historyEmpty": "Geen handmatige aanpassingen.",
+    "rowActions": "Meer acties voor {name}"
   },
   "table": {
     "balanceType": "Saldotype",

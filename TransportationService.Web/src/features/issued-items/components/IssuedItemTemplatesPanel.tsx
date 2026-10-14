@@ -4,6 +4,8 @@ import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { FormField } from '../../../components/ui/FormField'
+import { RowActionMenu } from '../../../components/ui/RowActionMenu'
+import { TruncatedText } from '../../../components/ui/TruncatedText'
 import { useToast } from '../../../components/ui/toastContext'
 import { useLocale } from '../../../i18n/localeContext'
 import {
@@ -141,7 +143,7 @@ export function IssuedItemTemplatesPanel() {
       )}
 
       {!loadErrorKey && templates !== null && visible.length > 0 && (
-        <table className="issued-items-table">
+        <table className="issued-items-table issued-items-table-dense">
           <thead>
             <tr>
               <th>{t('issuedItems.templates.colName')}</th>
@@ -159,11 +161,13 @@ export function IssuedItemTemplatesPanel() {
               return (
                 <tr key={tpl.id}>
                   <td>
-                    <Link className="issued-items-link" to={`/issued-items/templates/${tpl.id}`}>
-                      {tpl.name}
+                    <Link className="issued-items-link issued-items-name-link" to={`/issued-items/templates/${tpl.id}`}>
+                      <TruncatedText tooltip={tpl.name} className="issued-items-cell-name">{tpl.name}</TruncatedText>
                     </Link>
                   </td>
-                  <td>{tpl.category}</td>
+                  <td>
+                    <TruncatedText tooltip={tpl.category} className="issued-items-cell-category">{tpl.category}</TruncatedText>
+                  </td>
                   <td>
                     <span className="issued-items-mode-cell">
                       {t(MANAGEMENT_MODE_LABELS[mode])}
@@ -195,20 +199,22 @@ export function IssuedItemTemplatesPanel() {
                       {tpl.isActive ? t('issuedItems.templates.active') : t('issuedItems.templates.inactive')}
                     </Badge>
                   </td>
+                  {/* B14: the name opens the item; edit and delete live in one "⋯" menu. */}
                   <td className="issued-items-row-actions">
-                    <button
-                      type="button"
-                      className="issued-items-link"
-                      onClick={() => {
-                        setEditing(tpl)
-                        setEditorOpen(true)
-                      }}
-                    >
-                      {t('ui.actions.edit')}
-                    </button>
-                    <button type="button" className="issued-items-link issued-items-link-danger" onClick={() => setDeleteTarget(tpl)}>
-                      {t('ui.actions.delete')}
-                    </button>
+                    <RowActionMenu
+                      label={t('issuedItems.templates.rowActions', { name: tpl.name })}
+                      items={[
+                        {
+                          key: 'edit',
+                          label: t('ui.actions.edit'),
+                          onSelect: () => {
+                            setEditing(tpl)
+                            setEditorOpen(true)
+                          },
+                        },
+                        { key: 'delete', label: t('ui.actions.delete'), danger: true, onSelect: () => setDeleteTarget(tpl) },
+                      ]}
+                    />
                   </td>
                 </tr>
               )

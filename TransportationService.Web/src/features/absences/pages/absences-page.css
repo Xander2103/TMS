@@ -1,67 +1,49 @@
-.absp-filters {
-  display: flex;
-  align-items: flex-end;
-  gap: 12px;
-  flex-wrap: wrap;
-  margin-bottom: 16px;
-}
-
-.absp-filters label {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 13px;
+/* B50: the overview is a DataTable (~44px rows); only the cells' contents are styled here. */
+.absp-date {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-sm);
   color: var(--text);
 }
 
-.absp-filters input,
-.absp-filters select {
-  padding: 8px 10px;
-  font: inherit;
-  font-size: 15px;
-  color: var(--text-h);
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 6px;
+.absp-employee,
+.absp-type {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
 }
 
-.absp-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 15px;
+.absp-employee > .ui-truncated-text,
+.absp-type > .ui-truncated-text {
+  flex: 0 1 auto;
 }
 
-.absp-table th,
-.absp-table td {
-  text-align: left;
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--border);
-  vertical-align: top;
-}
-
-.absp-table th {
-  font-size: 13px;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-  color: var(--text);
-}
-
-.absp-row {
-  cursor: pointer;
-}
-
-.absp-row:hover {
-  background: var(--color-surface-subtle);
+.absp-employee > :not(.ui-truncated-text),
+.absp-type > :not(.ui-truncated-text) {
+  flex: none;
 }
 
 .absp-number {
-  color: var(--text);
-  font-size: 13px;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.absp-attachment {
+  color: var(--text-muted);
 }
 
 .absp-reason {
-  max-width: 280px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  color: var(--text);
+}
+
+/* The one direct row action stays within the row height. */
+.data-table .absp-review {
+  padding: 4px 12px;
+  font-size: var(--text-sm);
+}
+
+.absp-driver {
+  color: var(--text-muted);
 }

@@ -22,7 +22,7 @@
 .lb-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.9rem;
+  font-size: var(--text-md);
 }
 .lb-table th,
 .lb-table td {
@@ -30,6 +30,16 @@
   padding: 0.5rem 0.6rem;
   border-bottom: 1px solid var(--border);
   white-space: nowrap;
+  vertical-align: middle;
+}
+/* B49: figures never wrap and line up per column. */
+.lb-table .lb-num {
+  font-variant-numeric: tabular-nums;
+}
+.lb-name {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .lb-table th {
   color: var(--text);
@@ -44,13 +54,18 @@
 }
 .lb-reserved-note {
   color: var(--text);
-  font-size: 0.8em;
+  font-size: var(--text-xs);
 }
+/* B49: one direct action + "⋯" on one line — no stacked buttons (rows stay ~44px). */
 .lb-row-actions {
   display: flex;
+  align-items: center;
   gap: 0.4rem;
-  flex-wrap: wrap;
   justify-content: flex-end;
+}
+.lb-row-actions .lb-row-button {
+  padding: 4px 12px;
+  font-size: var(--text-sm);
 }
 .lb-history {
   border: 1px solid var(--border);

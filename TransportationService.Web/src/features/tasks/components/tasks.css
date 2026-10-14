@@ -4,7 +4,7 @@
   display: inline-block;
   padding: 0.1rem 0.5rem;
   border-radius: 999px;
-  font-size: 0.75rem;
+  font-size: var(--text-md);
   font-weight: 600;
   color: #fff;
   white-space: nowrap;
@@ -44,7 +44,7 @@
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
-  font-size: 0.85rem;
+  font-size: var(--text-base);
   white-space: nowrap;
   cursor: pointer;
 }
@@ -59,7 +59,7 @@
 }
 
 .task-detail-grid dt {
-  font-size: 0.75rem;
+  font-size: var(--text-md);
   text-transform: uppercase;
   letter-spacing: 0.03em;
   opacity: 0.7;
@@ -128,7 +128,7 @@
 }
 
 .task-attachment-meta {
-  font-size: 0.8rem;
+  font-size: var(--text-md);
   opacity: 0.7;
 }
 
@@ -164,14 +164,14 @@
   padding: 0.15rem 0.6rem;
   border-radius: 999px;
   background: var(--surface-muted);
-  font-size: 0.85rem;
+  font-size: var(--text-base);
 }
 
 .task-employee-chip button {
   border: none;
   background: none;
   cursor: pointer;
-  font-size: 0.9rem;
+  font-size: var(--text-lg);
   line-height: 1;
   padding: 0;
 }
@@ -200,7 +200,7 @@
 }
 
 .task-template-item-head strong {
-  font-size: 0.9rem;
+  font-size: var(--text-lg);
 }
 
 .task-template-item-actions {
@@ -225,7 +225,7 @@
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  font-size: 0.85rem;
+  font-size: var(--text-base);
   cursor: pointer;
 }
 

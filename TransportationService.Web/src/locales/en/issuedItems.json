@@ -134,7 +134,8 @@
     "restoreStock": "Return to stock",
     "notes": "Notes",
     "deleteTitle": "Delete company asset",
-    "deleteMessage": "Are you sure you want to delete \"{name}\"?"
+    "deleteMessage": "Are you sure you want to delete \"{name}\"?",
+    "rowActions": "Actions {name}"
   },
   "bulk": {
     "title": "Issue multiple assets",
@@ -242,7 +243,8 @@
     "deleteFailed": "The company asset could not be deleted.",
     "deleteTitle": "Delete company asset",
     "deleteMessage": "Are you sure you want to delete \"{name}\"? Assets already issued are kept.",
-    "variantsPartiallyFailed": "The asset was created, but these variants could not be added: {labels}. Add them on the Variants tab."
+    "variantsPartiallyFailed": "The asset was created, but these variants could not be added: {labels}. Add them on the Variants tab.",
+    "rowActions": "Actions {name}"
   },
   "form": {
     "editTitle": "Edit company asset",

@@ -24,6 +24,7 @@ import { formatDate } from '../../../utils/dates'
 import { EXCEPTION_SEVERITY_LABELS, EXCEPTION_STATUS_LABELS, type ExceptionSeverity, type ExecutionExceptionStatus } from '../../exceptions/types'
 import { labelFor } from '../../../utils/labels'
 import { TruncatedText } from '../../../components/ui/TruncatedText'
+import { OverdueDate } from '../../../components/ui/OverdueDate'
 import { Pagination } from '../../../components/ui/Pagination'
 import { DensityToggle } from '../../../components/ui/DensityToggle'
 import { useListDensity } from '../../../components/ui/listDensity'
@@ -121,7 +122,7 @@ export function IncidentsPage() {
 
   const columns: Column<IncidentListItem>[] = [
     { key: 'title', header: t('incidents.list.colTitle'), sortKey: 'title', render: (row) => <TruncatedText tooltip={row.title}>{row.title}</TruncatedText> },
-    { key: 'type', header: t('incidents.list.colType'), width: '140px', render: (row) => incidentTypeLabel(row, t) },
+    { key: 'type', header: t('incidents.list.colType'), width: '145px', render: (row) => <TruncatedText tooltip={incidentTypeLabel(row, t)}>{incidentTypeLabel(row, t)}</TruncatedText> },
     {
       key: 'severity',
       header: t('incidents.list.colSeverity'),
@@ -129,18 +130,18 @@ export function IncidentsPage() {
       sortKey: 'severity',
       render: (row) => <Badge tone={INCIDENT_SEVERITY_TONE[row.severity]}>{t(INCIDENT_SEVERITY_LABELS[row.severity])}</Badge>,
     },
-    { key: 'customer', header: t('incidents.list.colCustomer'), width: '170px', sortKey: 'customer', render: (row) => (row.customerName ? <TruncatedText tooltip={row.customerName}>{row.customerName}</TruncatedText> : '—') },
-    { key: 'dossier', header: t('incidents.list.colDossier'), width: '105px', render: (row) => (row.dossierNumber ? <code className="ui-nowrap">{row.dossierNumber}</code> : '—') },
-    { key: 'responsible', header: t('incidents.list.colResponsible'), width: '120px', render: (row) => (row.responsibleName ? <TruncatedText tooltip={row.responsibleName}>{row.responsibleName}</TruncatedText> : '—') },
+    { key: 'customer', header: t('incidents.list.colCustomer'), width: '150px', sortKey: 'customer', render: (row) => (row.customerName ? <TruncatedText tooltip={row.customerName}>{row.customerName}</TruncatedText> : '—') },
+    { key: 'dossier', header: t('incidents.list.colDossier'), width: '115px', render: (row) => (row.dossierNumber ? <code className="ui-nowrap">{row.dossierNumber}</code> : '—') },
+    { key: 'responsible', header: t('incidents.list.colResponsible'), width: '150px', className: 'ui-col-optional', render: (row) => (row.responsibleName ? <TruncatedText tooltip={row.responsibleName}>{row.responsibleName}</TruncatedText> : '—') },
     {
       key: 'due',
       header: t('incidents.list.colDue'),
-      width: '150px',
+      width: '125px',
       sortKey: 'due',
       render: (row) =>
         row.dueDate ? (
           row.isOverdue ? (
-            <Badge tone="danger">{formatDate(row.dueDate)} · {t('incidents.list.overdueSuffix')}</Badge>
+            <OverdueDate label={t('incidents.list.overdueSuffix')}>{formatDate(row.dueDate)}</OverdueDate>
           ) : (
             <span className="ui-nowrap">{formatDate(row.dueDate)}</span>
           )
@@ -151,7 +152,7 @@ export function IncidentsPage() {
     {
       key: 'status',
       header: t('incidents.list.colStatus'),
-      width: '130px',
+      width: '150px',
       sortKey: 'status',
       render: (row) => <Badge tone={INCIDENT_STATUS_TONE[row.status]}>{t(INCIDENT_STATUS_LABELS[row.status])}</Badge>,
     },
