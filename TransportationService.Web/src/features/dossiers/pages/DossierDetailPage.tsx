@@ -348,13 +348,21 @@ function DossierDetailContent() {
     load()
   }
 
+  /** B12: "Openen" keeps the planner in the dossier — every activity opens its detail drawer. */
   function openActivity(activity: DossierActivity) {
-    if (activity.hasStops && activity.linkedTransportOrderId) {
-      navigate(`/transport-orders/${activity.linkedTransportOrderId}`)
-      return
-    }
     setDrawerFocus(null)
     setDrawerActivity(activity)
+  }
+
+  /** B12: edit one slice of an activity's order on the dossier tab that owns it, with that activity selected. */
+  function openActivityTab(tab: DossierTab, activity: DossierActivity) {
+    setDrawerActivity(null)
+    if (tab === 'route' || tab === 'goederen' || tab === 'prijs') selectActivity(activity.id)
+    if (tab === 'documenten') {
+      navigate(`${dossierTabPath(id!, 'documenten')}?${activity.linkedTransportOrderId ? `opdracht=${activity.linkedTransportOrderId}` : `activiteit=${activity.id}`}`)
+      return
+    }
+    openTab(tab)
   }
 
   /** The activity detail drawer for ANY activity (also one whose [Openen] leads to its order). */
@@ -584,6 +592,7 @@ function DossierDetailContent() {
             initialFocus={drawerFocus ?? undefined}
             onApply={applyDossier}
             onReload={load}
+            onOpenTab={openActivityTab}
             onClose={() => setDrawerActivity(null)}
             onUpdated={(updated) => {
               applyDossier(updated)

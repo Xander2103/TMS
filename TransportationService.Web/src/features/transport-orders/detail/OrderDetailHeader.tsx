@@ -68,10 +68,25 @@ export function OrderDetailHeader({ onEdit, onDelete, onCancel, onCorrectStatus,
 
   return (
     <header className="tod-header">
-      <Breadcrumbs items={[{ label: 'Transportopdrachten', to: '/transport-orders' }, { label: order.orderNumber }]} />
+      {/* B12: an order that belongs to a dossier lives INSIDE it — the path and the way back say so. */}
+      {order.dossierId && order.dossierNumber ? (
+        <Breadcrumbs
+          items={[
+            { label: t('navigation.menu.dossiers'), to: '/dossiers' },
+            { label: order.dossierNumber, to: `/dossiers/${order.dossierId}` },
+            { label: order.orderNumber },
+          ]}
+        />
+      ) : (
+        <Breadcrumbs items={[{ label: 'Transportopdrachten', to: '/transport-orders' }, { label: order.orderNumber }]} />
+      )}
       <div className="tod-header-row">
         <div className="tod-header-main">
-          <BackButton to="/transport-orders" label="Terug naar opdrachten" />
+          {order.dossierId && order.dossierNumber ? (
+            <BackButton to={`/dossiers/${order.dossierId}/activiteiten`} label={t('transportOrders.detail.backToDossier', { number: order.dossierNumber })} />
+          ) : (
+            <BackButton to="/transport-orders" label="Terug naar opdrachten" />
+          )}
           <div className="tod-header-title">
             <h1>
               {order.orderNumber} — {order.customerName}

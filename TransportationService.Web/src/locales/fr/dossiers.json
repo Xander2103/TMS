@@ -707,5 +707,31 @@
       "toInvoice": "À facturer",
       "openIncident": "Avec incident ouvert"
     }
+  },
+  "orderView": {
+    "contextDossier": "Dossier",
+    "openFull": "Ouvrir la commande complète →",
+    "navLabel": "Parties",
+    "overview": "Aperçu",
+    "status": "Statut de la commande",
+    "orderDate": "Date de commande",
+    "reference": "Référence client",
+    "goods": "Marchandises",
+    "stops": "Arrêts",
+    "goodsTitle": "Chargement",
+    "price": "Prix",
+    "priceOpen": "Voir le prix",
+    "priceDecide": "Déterminer le prix",
+    "documents": "Documents",
+    "activityFields": "Activité",
+    "nav": {
+      "overzicht": "Aperçu",
+      "stops": "Arrêts",
+      "lading": "Chargement",
+      "prijs": "Prix",
+      "planning": "Planning",
+      "documenten": "Documents",
+      "notities": "Notes"
+    }
   }
 }

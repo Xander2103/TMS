@@ -634,7 +634,8 @@
       "colli": "Colli",
       "history": "Historiek",
       "messages": "Berichten"
-    }
+    },
+    "backToDossier": "Terug naar dossier {number}"
   },
   "documents": {
     "loadFailed": "Documenten konden niet worden geladen.",

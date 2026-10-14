@@ -32,6 +32,31 @@
   font-size: 1.25rem;
 }
 
+.section-drawer-heading {
+  min-width: 0;
+  flex: 1;
+}
+
+/* B12: the parent context above the title, so the planner always knows where the drawer sits. */
+.section-drawer-context {
+  margin: 0 0 2px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.section-drawer-context code {
+  font-size: 0.85rem;
+}
+
+.section-drawer-header-action {
+  flex-shrink: 0;
+  font-size: 0.9rem;
+}
+
 .section-drawer-close {
   border: none;
   background: none;
@@ -80,5 +105,106 @@
   .section-drawer-footer {
     padding-left: 16px;
     padding-right: 16px;
+  }
+}
+
+/* ---- B12: the order of an activity, read inside the dossier ---- */
+.ad-full-order {
+  white-space: nowrap;
+  color: var(--accent);
+}
+
+.ad-nav {
+  position: sticky;
+  top: -16px;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: -16px -24px 12px;
+  padding: 8px 24px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+}
+
+.ad-nav button {
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 2px 10px;
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.ad-nav button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.ad-section {
+  padding: 10px 0 14px;
+  border-bottom: 1px solid var(--border);
+  scroll-margin-top: 48px;
+}
+
+.ad-section h4,
+.ad-subhead {
+  margin: 0 0 8px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.ad-subhead {
+  margin-top: 14px;
+}
+
+.ad-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 24px;
+  margin: 0;
+}
+
+.ad-facts > div {
+  display: grid;
+  grid-template-columns: 8rem minmax(0, 1fr);
+  gap: 8px;
+  align-items: baseline;
+}
+
+.ad-facts dt {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.ad-facts dd {
+  margin: 0;
+  color: var(--text-h);
+  overflow-wrap: anywhere;
+}
+
+.ad-inline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin: 0;
+}
+
+@media (max-width: 899px) {
+  .ad-nav {
+    margin-left: -16px;
+    margin-right: -16px;
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .ad-facts {
+    grid-template-columns: minmax(0, 1fr);
   }
 }

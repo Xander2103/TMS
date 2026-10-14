@@ -18,6 +18,10 @@ interface SectionDrawerProps {
   saveLabel?: string
   /** Extra footer content left of the standard buttons (e.g. Verwijderen). */
   footerExtra?: ReactNode
+  /** B12: where this drawer sits ("DOS-0022 › ORD-0023"), shown above the title. */
+  context?: ReactNode
+  /** B12: a secondary action in the header (e.g. "Volledige opdracht openen →"). */
+  headerAction?: ReactNode
   children: ReactNode
 }
 
@@ -26,7 +30,7 @@ interface SectionDrawerProps {
  * Opslaan/Annuleren. ESC and overlay clicks ask for confirmation while dirty; in-app
  * navigation is guarded by UnsavedChangesGuard.
  */
-export function SectionDrawer({ title, dirty, busy = false, onClose, onSave, saveLabel, footerExtra, children }: SectionDrawerProps) {
+export function SectionDrawer({ title, dirty, busy = false, onClose, onSave, saveLabel, footerExtra, context, headerAction, children }: SectionDrawerProps) {
   const { t } = useLocale()
   const [confirmClose, setConfirmClose] = useState(false)
   // Captured on the first render, like Modal: the element that opened the drawer gets focus back
@@ -66,7 +70,11 @@ export function SectionDrawer({ title, dirty, busy = false, onClose, onSave, sav
         onClick={(event) => event.stopPropagation()}
       >
         <header className="section-drawer-header">
-          <h3>{title}</h3>
+          <div className="section-drawer-heading">
+            {context && <p className="section-drawer-context">{context}</p>}
+            <h3>{title}</h3>
+          </div>
+          {headerAction && <div className="section-drawer-header-action">{headerAction}</div>}
           <button
             type="button"
             className="section-drawer-close"

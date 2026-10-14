@@ -707,5 +707,31 @@
       "toInvoice": "To invoice",
       "openIncident": "With open incident"
     }
+  },
+  "orderView": {
+    "contextDossier": "Dossier",
+    "openFull": "Open full order →",
+    "navLabel": "Parts",
+    "overview": "Overview",
+    "status": "Order status",
+    "orderDate": "Order date",
+    "reference": "Customer reference",
+    "goods": "Goods",
+    "stops": "Stops",
+    "goodsTitle": "Cargo",
+    "price": "Price",
+    "priceOpen": "View price",
+    "priceDecide": "Set price",
+    "documents": "Documents",
+    "activityFields": "Activity",
+    "nav": {
+      "overzicht": "Overview",
+      "stops": "Stops",
+      "lading": "Cargo",
+      "prijs": "Price",
+      "planning": "Planning",
+      "documenten": "Documents",
+      "notities": "Notes"
+    }
   }
 }

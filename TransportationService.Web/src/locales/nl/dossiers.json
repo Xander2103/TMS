@@ -707,5 +707,31 @@
       "toInvoice": "Te factureren",
       "openIncident": "Met open incident"
     }
+  },
+  "orderView": {
+    "contextDossier": "Dossier",
+    "openFull": "Volledige opdracht openen →",
+    "navLabel": "Onderdelen",
+    "overview": "Overzicht",
+    "status": "Opdrachtstatus",
+    "orderDate": "Opdrachtdatum",
+    "reference": "Klantreferentie",
+    "goods": "Goederen",
+    "stops": "Stops",
+    "goodsTitle": "Lading",
+    "price": "Prijs",
+    "priceOpen": "Prijs bekijken",
+    "priceDecide": "Prijs bepalen",
+    "documents": "Documenten",
+    "activityFields": "Activiteit",
+    "nav": {
+      "overzicht": "Overzicht",
+      "stops": "Stops",
+      "lading": "Lading",
+      "prijs": "Prijs",
+      "planning": "Planning",
+      "documenten": "Documenten",
+      "notities": "Notities"
+    }
   }
 }

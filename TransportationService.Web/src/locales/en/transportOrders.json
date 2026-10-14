@@ -634,7 +634,8 @@
       "colli": "Packages",
       "history": "History",
       "messages": "Messages"
-    }
+    },
+    "backToDossier": "Back to dossier {number}"
   },
   "documents": {
     "loadFailed": "Documents could not be loaded.",

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { Button } from '../../../components/ui/Button'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { FormField } from '../../../components/ui/FormField'
@@ -9,6 +10,8 @@ import { createOrderForActivity, deleteDossierActivity, updateDossierActivity } 
 import type { DossierActivity, DossierDetail } from '../types'
 import { DossierNotesPanel } from '../notes/DossierNotesPanel'
 import type { ActivityDetailFocus } from './ActivityCard'
+import type { DossierTab } from '../dossierSections'
+import { ActivityOrderContext } from './ActivityOrderContext'
 import { ActivityPlanningBlock } from './ActivityPlanningBlock'
 import { SectionDrawer } from './SectionDrawer'
 
@@ -27,6 +30,8 @@ interface ActivityDrawerProps {
   onReload?: () => void
   /** Part of the drawer a card action asked for; scrolled into view on open. */
   initialFocus?: ActivityDetailFocus
+  /** B12: edit a slice of the activity's order on its dossier tab (route/goods/price/documents). */
+  onOpenTab?: (tab: DossierTab, activity: DossierActivity) => void
 }
 
 /**
@@ -35,7 +40,7 @@ interface ActivityDrawerProps {
  * Sprint 2026-09-21: the Planning block (trip assignment, D1) and the activity's own notes.
  */
 export function ActivityDrawer({
-  dossier, activity, canManage, onClose, onUpdated, onConflict, onApply, onReload, initialFocus,
+  dossier, activity, canManage, onClose, onUpdated, onConflict, onApply, onReload, initialFocus, onOpenTab,
 }: ActivityDrawerProps) {
   const { t } = useLocale()
   const [label, setLabel] = useState(activity.label ?? '')
@@ -118,9 +123,38 @@ export function ActivityDrawer({
     )
   }
 
+  // B12: an order-backed activity is read in context — the order's stops, goods, price and
+  // documents sit in this drawer; the full order page is one secondary link away.
+  const orderBacked = activity.hasStops && Boolean(activity.linkedTransportOrderId)
+  const sections = [
+    ...(orderBacked ? ['overzicht', 'stops', ...(activity.supportsGoods ? ['lading'] : []), ...(activity.isBillable !== false ? ['prijs'] : [])] : []),
+    ...(activity.hasStops ? ['planning'] : []),
+    ...(orderBacked ? ['documenten'] : []),
+    'notities',
+  ]
+  function jump(section: string) {
+    const target = section === 'planning' ? planningRef.current : section === 'notities' ? notesRef.current : document.getElementById(`ad-sec-${section}`)
+    target?.scrollIntoView?.({ block: 'start', behavior: 'smooth' })
+  }
+  const typeTitle = activity.label ? `${activity.activityTypeName} — ${activity.label}` : activity.activityTypeName
+
   return (
     <SectionDrawer
-      title={activity.label ? `${activity.activityTypeName} — ${activity.label}` : activity.activityTypeName}
+      title={activity.linkedOrderNumber ? `${activity.linkedOrderNumber} · ${typeTitle}` : typeTitle}
+      context={
+        <>
+          <span>{t('dossiers.orderView.contextDossier')}</span>
+          <code>{dossier.dossierNumber}</code>
+          {dossier.customerName && <span>· {dossier.customerName}</span>}
+        </>
+      }
+      headerAction={
+        orderBacked ? (
+          <Link to={`/transport-orders/${activity.linkedTransportOrderId}`} className="ad-full-order">
+            {t('dossiers.orderView.openFull')}
+          </Link>
+        ) : undefined
+      }
       dirty={dirty || noteDirty || planningDirty}
       busy={busy}
       onClose={onClose}
@@ -134,6 +168,22 @@ export function ActivityDrawer({
       }
     >
       <ValidationSummary message={error} />
+
+      {sections.length > 2 && (
+        <nav className="ad-nav" aria-label={t('dossiers.orderView.navLabel')}>
+          {sections.map((section) => (
+            <button key={section} type="button" onClick={() => jump(section)}>
+              {t(`dossiers.orderView.nav.${section}`)}
+            </button>
+          ))}
+        </nav>
+      )}
+
+      {orderBacked && onOpenTab && (
+        <ActivityOrderContext dossier={dossier} activity={activity} canEdit={canManage} onOpenTab={onOpenTab} />
+      )}
+
+      {orderBacked && <h4 className="ad-subhead">{t('dossiers.orderView.activityFields')}</h4>}
 
       {needsOrder && canManage && (
         <div className="dossier-activity-order-cta">

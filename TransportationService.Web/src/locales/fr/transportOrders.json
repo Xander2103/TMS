@@ -634,7 +634,8 @@
       "colli": "Colis",
       "history": "Historique",
       "messages": "Messages"
-    }
+    },
+    "backToDossier": "Retour au dossier {number}"
   },
   "documents": {
     "loadFailed": "Les documents n'ont pas pu être chargés.",
