@@ -79,9 +79,11 @@ public class CustomersController : ControllerBase
         [FromQuery] Guid? categoryId,
         [FromQuery] int? page,
         [FromQuery] int? pageSize,
+        [FromQuery] string? sort,
+        [FromQuery] string? dir,
         CancellationToken cancellationToken)
     {
-        var result = await _customerService.SearchAsync(search, isActive, categoryId, PageRequest.Of(page, pageSize), cancellationToken);
+        var result = await _customerService.SearchAsync(search, isActive, categoryId, PageRequest.Of(page, pageSize), cancellationToken, sort, dir);
         return Ok(result);
     }
 

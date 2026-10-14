@@ -75,10 +75,12 @@ public class ExceptionsController : ControllerBase
         [FromQuery] Guid? assignedToUserId,
         [FromQuery] int? page,
         [FromQuery] int? pageSize,
+        [FromQuery] string? sort,
+        [FromQuery] string? dir,
         CancellationToken cancellationToken)
     {
         return Ok(await _service.SearchAsync(
-            status, type, severity, tripId, packagesOnly, assignedToUserId, page, pageSize, cancellationToken));
+            status, type, severity, tripId, packagesOnly, assignedToUserId, page, pageSize, cancellationToken, sort, dir));
     }
 
     /// <summary>Assign (or with null: unassign) the follow-up owner.</summary>

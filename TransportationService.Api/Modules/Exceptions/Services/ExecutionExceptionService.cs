@@ -152,7 +152,7 @@ public class ExecutionExceptionService : IExecutionExceptionService
     public async Task<PagedResult<ExceptionListItemDto>> SearchAsync(
         ExecutionExceptionStatus? status, ExecutionExceptionType? type, ExceptionSeverity? severity,
         Guid? tripId, bool? packagesOnly, Guid? assignedToUserId,
-        int? page, int? pageSize, CancellationToken cancellationToken)
+        int? page, int? pageSize, CancellationToken cancellationToken, string? sort = null, string? dir = null)
     {
         var pageRequest = PageRequest.Of(page, pageSize);
 
@@ -166,8 +166,16 @@ public class ExecutionExceptionService : IExecutionExceptionService
         if (assignedToUserId is { } assignee) query = query.Where(e => e.AssignedToUserId == assignee);
 
         var totalCount = await query.CountAsync(cancellationToken);
-        var rows = await query
-            .OrderByDescending(e => e.OccurredAt)
+        var listSort = ListSort.Parse(sort, dir, "occurred", ["occurred", "severity"], ["occurred", "severity"]);
+        var ordered = listSort.Key switch
+        {
+            // Severity is stored as text: rank it (Critical first when descending).
+            "severity" => query.OrderBy(e => e.Severity == ExceptionSeverity.Critical ? 3
+                : e.Severity == ExceptionSeverity.High ? 2
+                : e.Severity == ExceptionSeverity.Medium ? 1 : 0, listSort.Descending).ThenByDescending(e => e.OccurredAt),
+            _ => query.OrderBy(e => e.OccurredAt, listSort.Descending),
+        };
+        var rows = await ordered
             .Skip(pageRequest.Skip)
             .Take(pageRequest.PageSize)
             .ToListAsync(cancellationToken);

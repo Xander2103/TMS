@@ -143,7 +143,7 @@ public class TransportOrderService : ITransportOrderService
 
     public async Task<PagedResult<TransportOrderListItemDto>> SearchAsync(
         string? search, TransportOrderStatus? status, Guid? customerId,
-        DateOnly? fromDate, DateOnly? toDate, PageRequest page, CancellationToken cancellationToken)
+        DateOnly? fromDate, DateOnly? toDate, PageRequest page, CancellationToken cancellationToken, string? sort = null, string? dir = null)
     {
         var query = TenantScoped().AsNoTracking();
 
@@ -169,8 +169,24 @@ public class TransportOrderService : ITransportOrderService
 
         var totalCount = await joined.CountAsync(cancellationToken);
 
-        var rows = await joined
-            .OrderByDescending(x => x.o.OrderDate).ThenByDescending(x => x.o.OrderNumber)
+        // B26: whitelisted server sort; a stable number tie-breaker keeps pages consistent.
+        var listSort = ListSort.Parse(sort, dir, "date", ["number", "date", "customer", "status", "reference"], ["date"]);
+        var ordered = listSort.Key switch
+        {
+            "number" => joined.OrderBy(x => x.o.OrderNumber, listSort.Descending),
+            "customer" => joined.OrderBy(x => x.CustomerName, listSort.Descending).ThenBy(x => x.o.OrderNumber, true),
+            // Status is stored as text: sort by lifecycle position, never alphabetically.
+            "status" => joined.OrderBy(x => x.o.Status == TransportOrderStatus.Draft ? 0
+                : x.o.Status == TransportOrderStatus.Submitted ? 1
+                : x.o.Status == TransportOrderStatus.Confirmed ? 2
+                : x.o.Status == TransportOrderStatus.Planned ? 3
+                : x.o.Status == TransportOrderStatus.InProgress ? 4
+                : x.o.Status == TransportOrderStatus.Completed ? 5
+                : x.o.Status == TransportOrderStatus.Invoiced ? 6 : 7, listSort.Descending).ThenBy(x => x.o.OrderNumber, true),
+            "reference" => joined.OrderBy(x => x.o.CustomerReference == null).ThenBy(x => x.o.CustomerReference, listSort.Descending),
+            _ => joined.OrderBy(x => x.o.OrderDate, listSort.Descending).ThenBy(x => x.o.OrderNumber, listSort.Descending),
+        };
+        var rows = await ordered
             .Skip(page.Skip)
             .Take(page.PageSize)
             .Select(x => new

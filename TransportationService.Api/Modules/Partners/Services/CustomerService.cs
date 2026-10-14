@@ -34,7 +34,7 @@ public class CustomerService : ICustomerService
         _dbContext.Customers.Where(c => c.TenantId == _tenantContext.TenantId);
 
     public async Task<PagedResult<CustomerListItemDto>> SearchAsync(
-        string? search, bool? isActive, Guid? categoryId, PageRequest page, CancellationToken cancellationToken)
+        string? search, bool? isActive, Guid? categoryId, PageRequest page, CancellationToken cancellationToken, string? sort = null, string? dir = null)
     {
         var query = TenantScoped().AsNoTracking();
 
@@ -59,12 +59,19 @@ public class CustomerService : ICustomerService
                 (c.City != null && c.City.ToLower().Contains(term)));
         }
 
+        var listSort = ListSort.Parse(sort, dir, "name", ["name", "number", "city"]);
+        IQueryable<Customer> sorted = listSort.Key switch
+        {
+            "number" => query.OrderBy(c => c.CustomerNumber, listSort.Descending),
+            "city" => query.OrderBy(c => c.City == null).ThenBy(c => c.City, listSort.Descending).ThenBy(c => c.Name),
+            _ => query.OrderBy(c => c.Name, listSort.Descending),
+        };
+
         // Left join to category name via GroupJoin projection (tenant-scoped, defense in depth).
-        var projected = from c in query
+        var projected = from c in sorted
                         join cat in _dbContext.CustomerCategories.Where(cc => cc.TenantId == _tenantContext.TenantId)
                             on c.CategoryId equals cat.Id into cats
                         from cat in cats.DefaultIfEmpty()
-                        orderby c.Name
                         select new CustomerListItemDto(
                             c.Id, c.CustomerNumber, c.Name, c.City, c.CountryCode,
                             cat != null ? cat.Name : null, c.IsActive, c.IsBlocked);

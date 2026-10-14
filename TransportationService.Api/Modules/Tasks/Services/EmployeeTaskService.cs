@@ -1,3 +1,4 @@
+using TransportationService.Api.Common.Models;
 using Microsoft.EntityFrameworkCore;
 using TransportationService.Api.Common;
 using TransportationService.Api.Data;
@@ -39,7 +40,9 @@ public record TaskListQuery(
     Guid? CategoryId = null, EmployeeTaskStatus? Status = null, TaskPriority? Priority = null,
     DateTime? DueBefore = null, bool OverdueOnly = false, bool WaitingForReviewOnly = false,
     string? RelatedEntityType = null, string? RelatedEntityId = null, string? Search = null,
-    int Page = 1, int PageSize = 50);
+    int Page = 1, int PageSize = 50,
+    /// <summary>B26: due | priority | created | title; empty = the work-queue order (open first, earliest due).</summary>
+    string? Sort = null, string? Dir = null);
 
 public record EmployeeTaskDto(
     Guid Id, string Title, string? Description, Guid? CategoryId, string? CategoryName, string? CategoryColor,
@@ -572,9 +575,20 @@ public class EmployeeTaskService : IEmployeeTaskService
         var total = await rows.CountAsync(cancellationToken);
         var page = Math.Max(1, query.Page);
         var pageSize = Math.Clamp(query.PageSize, 1, 200);
-        var ids = await rows
-            .OrderBy(t => t.Status == EmployeeTaskStatus.Completed || t.Status == EmployeeTaskStatus.Cancelled)
-            .ThenBy(t => t.DueAt == null).ThenBy(t => t.DueAt).ThenByDescending(t => t.CreatedAt)
+        var queue = rows.OrderBy(t => t.Status == EmployeeTaskStatus.Completed || t.Status == EmployeeTaskStatus.Cancelled);
+        var listSort = ListSort.Parse(query.Sort, query.Dir, "queue", ["queue", "due", "priority", "created", "title"], ["priority", "created"]);
+        var ordered = listSort.Key switch
+        {
+            "due" => queue.ThenBy(t => t.DueAt == null).ThenBy(t => t.DueAt, listSort.Descending).ThenByDescending(t => t.CreatedAt),
+            // Priority is stored as text: rank it (Urgent first when descending).
+            "priority" => queue.ThenBy(t => t.Priority == TaskPriority.Urgent ? 3
+                : t.Priority == TaskPriority.High ? 2
+                : t.Priority == TaskPriority.Normal ? 1 : 0, listSort.Descending).ThenBy(t => t.DueAt == null).ThenBy(t => t.DueAt),
+            "created" => queue.ThenBy(t => t.CreatedAt, listSort.Descending),
+            "title" => queue.ThenBy(t => t.Title, listSort.Descending),
+            _ => queue.ThenBy(t => t.DueAt == null).ThenBy(t => t.DueAt).ThenByDescending(t => t.CreatedAt),
+        };
+        var ids = await ordered
             .Skip((page - 1) * pageSize).Take(pageSize)
             .Select(t => t.Id)
             .ToListAsync(cancellationToken);

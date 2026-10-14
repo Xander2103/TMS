@@ -34,6 +34,12 @@ public class AuditService : IAuditService
         _httpContextAccessor = httpContextAccessor;
     }
 
+    /// <summary>B25: enums are stored by NAME so a history reads "Planned", never "3" (older rows keep ordinals).</summary>
+    private static readonly JsonSerializerOptions SerializerOptions = new()
+    {
+        Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() },
+    };
+
     public async Task RecordAsync(string entityType, string entityId, string action, object? oldValues, object? newValues, CancellationToken cancellationToken)
     {
         var httpContext = _httpContextAccessor?.HttpContext;
@@ -46,8 +52,8 @@ public class AuditService : IAuditService
             EntityType = entityType,
             EntityId = entityId,
             Action = action,
-            OldValuesJson = oldValues is null ? null : JsonSerializer.Serialize(oldValues),
-            NewValuesJson = newValues is null ? null : JsonSerializer.Serialize(newValues),
+            OldValuesJson = oldValues is null ? null : JsonSerializer.Serialize(oldValues, SerializerOptions),
+            NewValuesJson = newValues is null ? null : JsonSerializer.Serialize(newValues, SerializerOptions),
             Timestamp = DateTime.UtcNow,
             IpAddress = httpContext?.Connection.RemoteIpAddress?.ToString(),
             CorrelationId = httpContext?.TraceIdentifier,

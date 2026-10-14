@@ -33,9 +33,11 @@ public class VehiclesController : ControllerBase
         [FromQuery] Guid? categoryId,
         [FromQuery] int? page,
         [FromQuery] int? pageSize,
+        [FromQuery] string? sort,
+        [FromQuery] string? dir,
         CancellationToken cancellationToken)
     {
-        var result = await _service.SearchAsync(search, status, isActive, categoryId, PageRequest.Of(page, pageSize), cancellationToken);
+        var result = await _service.SearchAsync(search, status, isActive, categoryId, PageRequest.Of(page, pageSize), cancellationToken, sort, dir);
         return Ok(result);
     }
 

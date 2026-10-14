@@ -33,7 +33,7 @@ public class TrailerService : ITrailerService
 
     public async Task<PagedResult<TrailerListItemDto>> SearchAsync(
         string? search, TrailerOperationalStatus? status, bool? isActive, Guid? categoryId,
-        PageRequest page, CancellationToken cancellationToken)
+        PageRequest page, CancellationToken cancellationToken, string? sort = null, string? dir = null)
     {
         var query = TenantScoped().AsNoTracking();
 
@@ -52,11 +52,17 @@ public class TrailerService : ITrailerService
                 (t.Model != null && t.Model.ToLower().Contains(term)));
         }
 
-        var projected = from t in query
+        var listSort = ListSort.Parse(sort, dir, "number", ["number", "plate"]);
+        IQueryable<Trailer> sorted = listSort.Key switch
+        {
+            "plate" => query.OrderBy(t => t.LicensePlate, listSort.Descending),
+            _ => query.OrderBy(t => t.InternalNumber, listSort.Descending),
+        };
+
+        var projected = from t in sorted
                         join c in _dbContext.TrailerCategories.AsNoTracking().Where(tc => tc.TenantId == _tenantContext.TenantId)
                             on t.CategoryId equals c.Id into cats
                         from c in cats.DefaultIfEmpty()
-                        orderby t.InternalNumber
                         select new TrailerListItemDto(
                             t.Id, t.InternalNumber, t.LicensePlate, t.Brand, t.Model,
                             c != null ? c.Name : null, t.OperationalStatus, t.IsActive);

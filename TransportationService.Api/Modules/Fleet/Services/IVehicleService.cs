@@ -8,7 +8,7 @@ public interface IVehicleService
 {
     Task<PagedResult<VehicleListItemDto>> SearchAsync(
         string? search, VehicleOperationalStatus? status, bool? isActive, Guid? categoryId,
-        PageRequest page, CancellationToken cancellationToken);
+        PageRequest page, CancellationToken cancellationToken, string? sort = null, string? dir = null);
 
     Task<IReadOnlyList<VehicleOptionDto>> GetOptionsAsync(CancellationToken cancellationToken);
 

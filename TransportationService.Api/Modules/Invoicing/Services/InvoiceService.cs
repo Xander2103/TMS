@@ -111,7 +111,7 @@ public class InvoiceService : IInvoiceService
         _dbContext.Invoices.Where(i => i.TenantId == _tenantContext.TenantId);
 
     public async Task<PagedResult<InvoiceListItemDto>> SearchAsync(
-        string? search, InvoiceStatus? status, Guid? customerId, PageRequest page, CancellationToken cancellationToken)
+        string? search, InvoiceStatus? status, Guid? customerId, PageRequest page, CancellationToken cancellationToken, string? sort = null, string? dir = null)
     {
         var query = TenantScoped().AsNoTracking();
 
@@ -132,8 +132,18 @@ public class InvoiceService : IInvoiceService
 
         var totalCount = await joined.CountAsync(cancellationToken);
 
-        var pageRows = await joined
-            .OrderByDescending(x => x.i.InvoiceDate).ThenByDescending(x => x.i.InvoiceNumber)
+        var listSort = ListSort.Parse(sort, dir, "date", ["number", "date", "due", "customer", "status"], ["date", "due"]);
+        var ordered = listSort.Key switch
+        {
+            "number" => joined.OrderBy(x => x.i.InvoiceNumber, listSort.Descending),
+            "due" => joined.OrderBy(x => x.i.DueDate, listSort.Descending).ThenBy(x => x.i.InvoiceNumber, true),
+            "customer" => joined.OrderBy(x => x.CustomerName, listSort.Descending).ThenBy(x => x.i.InvoiceNumber, true),
+            "status" => joined.OrderBy(x => x.i.Status == InvoiceStatus.Draft ? 0
+                : x.i.Status == InvoiceStatus.Sent ? 1
+                : x.i.Status == InvoiceStatus.Paid ? 2 : 3, listSort.Descending).ThenBy(x => x.i.InvoiceNumber, true),
+            _ => joined.OrderBy(x => x.i.InvoiceDate, listSort.Descending).ThenBy(x => x.i.InvoiceNumber, listSort.Descending),
+        };
+        var pageRows = await ordered
             .Skip(page.Skip)
             .Take(page.PageSize)
             .Select(x => new { x.i.Id, x.i.InvoiceNumber, x.i.InvoiceDate, x.i.DueDate, x.i.CustomerId, x.CustomerName, x.i.Status, x.i.Currency, x.i.Kind })

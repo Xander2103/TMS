@@ -176,6 +176,50 @@ public class AbsenceService : IAbsenceService
             .ToList();
     }
 
+    public async Task<Common.Models.PagedResult<AbsenceDto>> SearchAsync(
+        DateOnly? from, DateOnly? to, AbsenceType? type, AbsenceStatus? status, string? search,
+        string? sort, string? dir, Common.Models.PageRequest page, CancellationToken cancellationToken)
+    {
+        var rangeFrom = from ?? Today;
+        var rangeTo = to ?? rangeFrom.AddDays(DefaultRangeDays);
+        if (rangeTo < rangeFrom)
+        {
+            (rangeFrom, rangeTo) = (rangeTo, rangeFrom);
+        }
+
+        var query = TenantScoped().AsNoTracking()
+            .Where(a => a.StartDate <= rangeTo && a.EndDate >= rangeFrom);
+        if (type is { } t) query = query.Where(a => a.Type == t);
+        if (status is { } s) query = query.Where(a => a.Status == s);
+
+        // Keys only (SQL-translatable) for filter/sort/page; the full projection is loaded per page.
+        var keyed = from a in query
+                    join e in _dbContext.Employees.AsNoTracking().Where(e => e.TenantId == _tenantContext.TenantId)
+                        on a.EmployeeId equals e.Id
+                    select new { a.Id, a.StartDate, a.EndDate, e.FirstName, e.LastName, e.EmployeeNumber };
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim().ToLowerInvariant();
+            keyed = keyed.Where(x => (x.FirstName + " " + x.LastName).ToLower().Contains(term) || x.EmployeeNumber.ToLower().Contains(term));
+        }
+
+        var total = await keyed.CountAsync(cancellationToken);
+        var listSort = Common.Models.ListSort.Parse(sort, dir, "start", ["start", "end", "employee"]);
+        var ordered = listSort.Key switch
+        {
+            "end" => Common.Models.ListSortExtensions.OrderBy(keyed, x => x.EndDate, listSort.Descending).ThenBy(x => x.LastName),
+            "employee" => Common.Models.ListSortExtensions.ThenBy(Common.Models.ListSortExtensions.OrderBy(keyed, x => x.LastName, listSort.Descending), x => x.FirstName, listSort.Descending).ThenBy(x => x.StartDate),
+            _ => Common.Models.ListSortExtensions.OrderBy(keyed, x => x.StartDate, listSort.Descending).ThenBy(x => x.LastName),
+        };
+        var ids = await ordered.ThenBy(x => x.Id).Skip(page.Skip).Take(page.PageSize).Select(x => x.Id).ToListAsync(cancellationToken);
+
+        var rows = await Joined(TenantScoped().AsNoTracking().Where(a => ids.Contains(a.Id))).ToListAsync(cancellationToken);
+        var scope = await MedicalScopeAsync(cancellationToken);
+        var byId = rows.ToDictionary(r => r.Absence.Id);
+        var items = ids.Where(byId.ContainsKey).Select(id => Map(byId[id], scope)).ToList();
+        return new Common.Models.PagedResult<AbsenceDto>(items, total, page.Page, page.PageSize);
+    }
+
     public async Task<AbsenceOperationResult> CreateForEmployeeAsync(
         Guid employeeId, CreateAbsenceRequest request, CancellationToken cancellationToken)
     {

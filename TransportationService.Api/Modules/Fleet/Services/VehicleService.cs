@@ -33,7 +33,7 @@ public class VehicleService : IVehicleService
 
     public async Task<PagedResult<VehicleListItemDto>> SearchAsync(
         string? search, VehicleOperationalStatus? status, bool? isActive, Guid? categoryId,
-        PageRequest page, CancellationToken cancellationToken)
+        PageRequest page, CancellationToken cancellationToken, string? sort = null, string? dir = null)
     {
         var query = TenantScoped().AsNoTracking();
 
@@ -52,11 +52,17 @@ public class VehicleService : IVehicleService
                 (v.Model != null && v.Model.ToLower().Contains(term)));
         }
 
-        var projected = from v in query
+        var listSort = ListSort.Parse(sort, dir, "number", ["number", "plate"]);
+        IQueryable<Vehicle> sorted = listSort.Key switch
+        {
+            "plate" => query.OrderBy(v => v.LicensePlate, listSort.Descending),
+            _ => query.OrderBy(v => v.InternalNumber, listSort.Descending),
+        };
+
+        var projected = from v in sorted
                         join c in _dbContext.VehicleCategories.AsNoTracking().Where(vc => vc.TenantId == _tenantContext.TenantId)
                             on v.CategoryId equals c.Id into cats
                         from c in cats.DefaultIfEmpty()
-                        orderby v.InternalNumber
                         select new VehicleListItemDto(
                             v.Id, v.InternalNumber, v.LicensePlate, v.Brand, v.Model,
                             c != null ? c.Name : null, v.OperationalStatus, v.IsActive);

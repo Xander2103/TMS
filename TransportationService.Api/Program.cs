@@ -245,6 +245,7 @@ builder.Services.AddScoped<
 
 // Audit
 builder.Services.AddScoped<IAuditService, AuditService>();
+builder.Services.AddScoped<TransportationService.Api.Modules.Auditing.Services.IAuditReferenceResolver, TransportationService.Api.Modules.Auditing.Services.AuditReferenceResolver>();
 
 // Global reference data (country code validation against the seeded ISO list)
 builder.Services.AddScoped<TransportationService.Api.Common.Reference.ICountryCodeValidator,

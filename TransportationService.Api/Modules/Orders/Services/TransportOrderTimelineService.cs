@@ -95,7 +95,7 @@ public class TransportOrderTimelineService : ITransportOrderTimelineService
             foreach (var row in stopHistory)
             {
                 var sequence = sequenceByStop.TryGetValue(row.TransportOrderStopId, out var seq) ? seq : 0;
-                events.Add((row.OccurredAt, "stop", $"Stop {sequence}: {row.FromStatus} → {row.ToStatus}", row.Reason, row.UserId));
+                events.Add((row.OccurredAt, "stop", $"Stop {sequence}: {StopStatusLabel(row.FromStatus)} → {StopStatusLabel(row.ToStatus)}", row.Reason, row.UserId));
             }
         }
 
@@ -152,13 +152,46 @@ public class TransportOrderTimelineService : ITransportOrderTimelineService
         _ => eventType.ToString(),
     };
 
+    // B25: every action written for an order reads as a Dutch sentence; an unknown future action
+    // reads neutrally instead of as a raw code.
     private static string AuditTitle(string action) => action switch
     {
         "Created" => "Opdracht aangemaakt",
         "Updated" => "Opdracht bijgewerkt",
         "Deleted" => "Opdracht verwijderd",
+        "Cancelled" => "Opdracht geannuleerd",
+        "StatusChanged" => "Status gewijzigd",
+        "StatusCorrected" => "Status gecorrigeerd",
+        "CustomerChanged" => "Klant gewijzigd",
+        "LegalEntityChanged" => "Facturerende entiteit gewijzigd",
+        "PriorityChanged" => "Prioriteit gewijzigd",
+        "DieselSurchargeOverridden" => "Dieseltoeslag handmatig aangepast",
         "StopExecutionPlanUpdated" => "Uitvoeringsplanning van een stop bijgewerkt",
-        _ => action,
+        "StopLinkedToAddressBook" => "Stop gekoppeld aan het adresboek",
+        "StopSnapshotRefreshed" => "Stopadres bijgewerkt vanuit het adresboek",
+        "DocumentPreferenceChanged" => "Documentvoorkeur gewijzigd",
+        "PortalSubmitted" => "Ingediend via het klantportaal",
+        "PortalInfoRequested" => "Extra informatie gevraagd aan de klant",
+        "FileAttached" => "Bestand toegevoegd",
+        "FileRemoved" => "Bestand verwijderd",
+        "Issued" => "Document uitgegeven",
+        "Moved" => "Verplaatst",
+        _ => "Opdracht gewijzigd",
+    };
+
+    private static string StopStatusLabel(Planning.Entities.StopExecutionStatus status) => status switch
+    {
+        Planning.Entities.StopExecutionStatus.Planned => "Gepland",
+        Planning.Entities.StopExecutionStatus.EnRoute => "Onderweg",
+        Planning.Entities.StopExecutionStatus.Arrived => "Aangekomen",
+        Planning.Entities.StopExecutionStatus.Loading => "Laden",
+        Planning.Entities.StopExecutionStatus.Loaded => "Geladen",
+        Planning.Entities.StopExecutionStatus.Unloading => "Lossen",
+        Planning.Entities.StopExecutionStatus.Completed => "Afgerond",
+        Planning.Entities.StopExecutionStatus.PartiallyCompleted => "Gedeeltelijk afgerond",
+        Planning.Entities.StopExecutionStatus.Failed => "Mislukt",
+        Planning.Entities.StopExecutionStatus.Skipped => "Overgeslagen",
+        _ => status.ToString(),
     };
 
     private static string StatusLabel(Entities.TransportOrderStatus status) => TransportOrderStatusLabels.Dutch(status);

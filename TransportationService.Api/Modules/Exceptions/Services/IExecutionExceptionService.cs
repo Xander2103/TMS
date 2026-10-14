@@ -13,7 +13,7 @@ public interface IExecutionExceptionService
     Task<PagedResult<ExceptionListItemDto>> SearchAsync(
         ExecutionExceptionStatus? status, ExecutionExceptionType? type, ExceptionSeverity? severity,
         Guid? tripId, bool? packagesOnly, Guid? assignedToUserId,
-        int? page, int? pageSize, CancellationToken cancellationToken);
+        int? page, int? pageSize, CancellationToken cancellationToken, string? sort = null, string? dir = null);
 
     Task<ExceptionDetailDto?> GetByIdAsync(Guid id, CancellationToken cancellationToken);
 

@@ -30,6 +30,24 @@ public class AbsencesController : ControllerBase
         return Ok(await _service.ListAsync(from, to, type, status, cancellationToken));
     }
 
+    /// <summary>B50: the absences overview, paged and sortable (start | end | employee).</summary>
+    [HttpGet("api/absences/search")]
+    [RequirePermission(PermissionCodes.AbsencesView)]
+    public async Task<ActionResult<Common.Models.PagedResult<AbsenceDto>>> Search(
+        [FromQuery] DateOnly? from,
+        [FromQuery] DateOnly? to,
+        [FromQuery] AbsenceType? type,
+        [FromQuery] AbsenceStatus? status,
+        [FromQuery] string? search,
+        [FromQuery] string? sort,
+        [FromQuery] string? dir,
+        [FromQuery] int? page,
+        [FromQuery] int? pageSize,
+        CancellationToken cancellationToken)
+    {
+        return Ok(await _service.SearchAsync(from, to, type, status, search, sort, dir, Common.Models.PageRequest.Of(page, pageSize), cancellationToken));
+    }
+
     [HttpGet("api/employees/{employeeId:guid}/absences")]
     [RequirePermission(PermissionCodes.AbsencesView)]
     public async Task<ActionResult<IReadOnlyList<AbsenceDto>>> ListForEmployee(

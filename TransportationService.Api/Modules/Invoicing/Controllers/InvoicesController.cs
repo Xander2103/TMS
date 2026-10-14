@@ -37,9 +37,11 @@ public class InvoicesController : ControllerBase
         [FromQuery] Guid? customerId,
         [FromQuery] int? page,
         [FromQuery] int? pageSize,
+        [FromQuery] string? sort,
+        [FromQuery] string? dir,
         CancellationToken cancellationToken)
     {
-        return Ok(await _service.SearchAsync(search, status, customerId, PageRequest.Of(page, pageSize), cancellationToken));
+        return Ok(await _service.SearchAsync(search, status, customerId, PageRequest.Of(page, pageSize), cancellationToken, sort, dir));
     }
 
     [HttpGet("{id:guid}")]

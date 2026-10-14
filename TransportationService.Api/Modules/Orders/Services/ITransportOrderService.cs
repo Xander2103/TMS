@@ -8,7 +8,7 @@ public interface ITransportOrderService
 {
     Task<PagedResult<TransportOrderListItemDto>> SearchAsync(
         string? search, TransportOrderStatus? status, Guid? customerId,
-        DateOnly? fromDate, DateOnly? toDate, PageRequest page, CancellationToken cancellationToken);
+        DateOnly? fromDate, DateOnly? toDate, PageRequest page, CancellationToken cancellationToken, string? sort = null, string? dir = null);
 
     Task<TransportOrderDetailDto?> GetByIdAsync(Guid id, CancellationToken cancellationToken);
 

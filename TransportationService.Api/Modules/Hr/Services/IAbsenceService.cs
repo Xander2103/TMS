@@ -12,6 +12,14 @@ public interface IAbsenceService
     Task<IReadOnlyList<AbsenceDto>> ListAsync(
         DateOnly? from, DateOnly? to, AbsenceType? type, AbsenceStatus? status, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// B50: the absences overview as a paged, sortable, searchable list (start | end | employee).
+    /// Same window, type and status semantics as <see cref="ListAsync"/>.
+    /// </summary>
+    Task<Common.Models.PagedResult<AbsenceDto>> SearchAsync(
+        DateOnly? from, DateOnly? to, AbsenceType? type, AbsenceStatus? status, string? search,
+        string? sort, string? dir, Common.Models.PageRequest page, CancellationToken cancellationToken);
+
     Task<AbsenceOperationResult> CreateForEmployeeAsync(Guid employeeId, CreateAbsenceRequest request, CancellationToken cancellationToken);
 
     /// <summary>Only requested absences can be edited; decided ones must be cancelled instead.</summary>

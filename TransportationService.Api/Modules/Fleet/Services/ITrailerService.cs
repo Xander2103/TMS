@@ -8,7 +8,7 @@ public interface ITrailerService
 {
     Task<PagedResult<TrailerListItemDto>> SearchAsync(
         string? search, TrailerOperationalStatus? status, bool? isActive, Guid? categoryId,
-        PageRequest page, CancellationToken cancellationToken);
+        PageRequest page, CancellationToken cancellationToken, string? sort = null, string? dir = null);
 
     Task<IReadOnlyList<TrailerOptionDto>> GetOptionsAsync(CancellationToken cancellationToken);
 

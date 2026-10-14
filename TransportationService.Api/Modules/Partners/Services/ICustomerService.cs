@@ -6,7 +6,7 @@ namespace TransportationService.Api.Modules.Partners.Services;
 public interface ICustomerService
 {
     Task<PagedResult<CustomerListItemDto>> SearchAsync(
-        string? search, bool? isActive, Guid? categoryId, PageRequest page, CancellationToken cancellationToken);
+        string? search, bool? isActive, Guid? categoryId, PageRequest page, CancellationToken cancellationToken, string? sort = null, string? dir = null);
 
     Task<CustomerDetailDto?> GetByIdAsync(Guid id, CancellationToken cancellationToken);
 

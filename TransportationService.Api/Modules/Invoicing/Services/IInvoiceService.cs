@@ -7,7 +7,7 @@ namespace TransportationService.Api.Modules.Invoicing.Services;
 public interface IInvoiceService
 {
     Task<PagedResult<InvoiceListItemDto>> SearchAsync(
-        string? search, InvoiceStatus? status, Guid? customerId, PageRequest page, CancellationToken cancellationToken);
+        string? search, InvoiceStatus? status, Guid? customerId, PageRequest page, CancellationToken cancellationToken, string? sort = null, string? dir = null);
 
     Task<InvoiceDetailDto?> GetByIdAsync(Guid id, CancellationToken cancellationToken);
 
