@@ -74,11 +74,21 @@ beforeEach(() => {
   auth.permissions = new Set(['locations.create'])
 })
 
+
+/** The customer mocked by this file, as the picker labels it. */
+const customerLabel = (id: string) => (id === 'cust-1' ? 'Klant X (KL-1)' : id)
+
+/** B19: the customer is a searchable picker — open it, then pick the option. */
+async function pickCustomer(id: string) {
+  await userEvent.click(screen.getByLabelText('Klant *'))
+  await userEvent.click(await screen.findByRole('option', { name: customerLabel(id) }))
+}
+
 describe('TransportOrderForm targeted validation (Wave 1 §12)', () => {
   it('lists every failing field in the validation summary, jumps to the first failing section and navigates on click', async () => {
     const { onSubmit } = renderForm()
     await waitFor(() => expect(screen.getByLabelText('Klant *')).toBeInTheDocument())
-    await userEvent.selectOptions(screen.getByLabelText('Klant *'), 'cust-1')
+    await pickCustomer('cust-1')
 
     // No stop cities, no goods: submitting from Algemeen collects BOTH problems at once.
     await userEvent.click(screen.getByRole('button', { name: 'Opdracht aanmaken' }))

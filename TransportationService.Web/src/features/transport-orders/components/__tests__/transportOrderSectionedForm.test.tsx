@@ -118,12 +118,22 @@ function renderForm(onSubmit = vi.fn().mockResolvedValue(undefined)) {
 /** Fills customer + both stop cities so submission only depends on the goods-description rule. */
 async function fillMinimalRouteAndCustomer() {
   await waitFor(() => expect(screen.getByLabelText('Klant *')).toBeInTheDocument())
-  await userEvent.selectOptions(screen.getByLabelText('Klant *'), 'cust-1')
+  await pickCustomer('cust-1')
 
   await userEvent.click(screen.getByRole('tab', { name: /Route & stops/ }))
   for (const cityInput of screen.getAllByLabelText('Plaats *')) {
     await userEvent.type(cityInput, 'Gent')
   }
+}
+
+
+/** The customer mocked by this file, as the picker labels it. */
+const customerLabel = (id: string) => (id === 'cust-1' ? 'Klant X (KL-1)' : id)
+
+/** B19: the customer is a searchable picker — open it, then pick the option. */
+async function pickCustomer(id: string) {
+  await userEvent.click(screen.getByLabelText('Klant *'))
+  await userEvent.click(await screen.findByRole('option', { name: customerLabel(id) }))
 }
 
 describe('TransportOrderForm sections + pricing', () => {
@@ -140,13 +150,13 @@ describe('TransportOrderForm sections + pricing', () => {
     }
 
     await waitFor(() => expect(screen.getByLabelText('Klant *')).toBeInTheDocument())
-    await userEvent.selectOptions(screen.getByLabelText('Klant *'), 'cust-1')
+    await pickCustomer('cust-1')
 
     await userEvent.click(screen.getByRole('tab', { name: /Goederen/ }))
     await userEvent.type(screen.getByLabelText('Aantal'), '3')
 
     await userEvent.click(screen.getByRole('tab', { name: /Algemeen/ }))
-    expect(screen.getByLabelText('Klant *')).toHaveValue('cust-1')
+    expect(screen.getByLabelText('Klant *')).toHaveValue(customerLabel('cust-1'))
     await userEvent.click(screen.getByRole('tab', { name: /Goederen/ }))
     expect(screen.getByLabelText('Aantal')).toHaveValue(3)
   })
@@ -154,7 +164,7 @@ describe('TransportOrderForm sections + pricing', () => {
   it('lists customer-preferred units first with a toggle for the rest', async () => {
     renderForm()
     await waitFor(() => expect(screen.getByLabelText('Klant *')).toBeInTheDocument())
-    await userEvent.selectOptions(screen.getByLabelText('Klant *'), 'cust-1')
+    await pickCustomer('cust-1')
     await userEvent.click(screen.getByRole('tab', { name: /Goederen/ }))
 
     const unitSelect = screen.getByLabelText('Eenheid')
@@ -192,7 +202,7 @@ describe('TransportOrderForm sections + pricing', () => {
     })
     renderForm()
     await waitFor(() => expect(screen.getByLabelText('Klant *')).toBeInTheDocument())
-    await userEvent.selectOptions(screen.getByLabelText('Klant *'), 'cust-1')
+    await pickCustomer('cust-1')
     await userEvent.click(screen.getByRole('tab', { name: /Goederen/ }))
     await userEvent.type(screen.getByLabelText('Aantal'), '3')
     await userEvent.selectOptions(screen.getByLabelText('Eenheid'), 'EUROPALLET')
@@ -222,7 +232,7 @@ describe('TransportOrderForm sections + pricing', () => {
     })
     renderForm()
     await waitFor(() => expect(screen.getByLabelText('Klant *')).toBeInTheDocument())
-    await userEvent.selectOptions(screen.getByLabelText('Klant *'), 'cust-1')
+    await pickCustomer('cust-1')
     await userEvent.click(screen.getByRole('tab', { name: /Goederen/ }))
     await userEvent.type(screen.getByLabelText('Aantal'), '3')
     await userEvent.selectOptions(screen.getByLabelText('Eenheid'), 'EUROPALLET')
@@ -265,7 +275,7 @@ describe('TransportOrderForm sections + pricing', () => {
     })
     renderForm()
     await waitFor(() => expect(screen.getByLabelText('Klant *')).toBeInTheDocument())
-    await userEvent.selectOptions(screen.getByLabelText('Klant *'), 'cust-1')
+    await pickCustomer('cust-1')
     await userEvent.click(screen.getByRole('tab', { name: /Goederen/ }))
     await userEvent.type(screen.getByLabelText('Aantal'), '3')
     await userEvent.selectOptions(screen.getByLabelText('Eenheid'), 'EUROPALLET')
@@ -293,7 +303,7 @@ describe('TransportOrderForm sections + pricing', () => {
     })
     renderForm()
     await waitFor(() => expect(screen.getByLabelText('Klant *')).toBeInTheDocument())
-    await userEvent.selectOptions(screen.getByLabelText('Klant *'), 'cust-1')
+    await pickCustomer('cust-1')
     await userEvent.click(screen.getByRole('tab', { name: /Goederen/ }))
     await userEvent.type(screen.getByLabelText('Aantal'), '3')
     await userEvent.selectOptions(screen.getByLabelText('Eenheid'), 'EUROPALLET')
@@ -321,7 +331,7 @@ describe('TransportOrderForm sections + pricing', () => {
     })
     renderForm()
     await waitFor(() => expect(screen.getByLabelText('Klant *')).toBeInTheDocument())
-    await userEvent.selectOptions(screen.getByLabelText('Klant *'), 'cust-1')
+    await pickCustomer('cust-1')
     await userEvent.click(screen.getByRole('tab', { name: /Goederen/ }))
     await userEvent.type(screen.getByLabelText('Aantal'), '3')
     await userEvent.selectOptions(screen.getByLabelText('Eenheid'), 'EUROPALLET')
@@ -344,7 +354,7 @@ describe('TransportOrderForm sections + pricing', () => {
   it('disables the "Laad- en lostijd" section with a hint when pricing is a one-off agreement', async () => {
     renderForm()
     await waitFor(() => expect(screen.getByLabelText('Klant *')).toBeInTheDocument())
-    await userEvent.selectOptions(screen.getByLabelText('Klant *'), 'cust-1')
+    await pickCustomer('cust-1')
     await userEvent.click(screen.getByRole('tab', { name: /^Prijs$/ }))
     await userEvent.click(screen.getByRole('radio', { name: 'Eenmalige prijsafspraak' }))
 
@@ -397,7 +407,7 @@ describe('TransportOrderForm sections + pricing', () => {
     })
     renderForm()
     await waitFor(() => expect(screen.getByLabelText('Klant *')).toBeInTheDocument())
-    await userEvent.selectOptions(screen.getByLabelText('Klant *'), 'cust-1')
+    await pickCustomer('cust-1')
     await userEvent.click(screen.getByRole('tab', { name: /Goederen/ }))
     await userEvent.type(screen.getByLabelText('Aantal'), '3')
     await userEvent.selectOptions(screen.getByLabelText('Eenheid'), 'EUROPALLET')
@@ -411,7 +421,7 @@ describe('TransportOrderForm sections + pricing', () => {
   it('the add panel shows the calculation method, a live price indication and asks a quantity for hourly services', async () => {
     renderForm()
     await waitFor(() => expect(screen.getByLabelText('Klant *')).toBeInTheDocument())
-    await userEvent.selectOptions(screen.getByLabelText('Klant *'), 'cust-1')
+    await pickCustomer('cust-1')
     await userEvent.click(screen.getByRole('tab', { name: /Services/ }))
 
     await userEvent.click(screen.getByRole('button', { name: '+ Dienst of toeslag toevoegen' }))
@@ -442,7 +452,7 @@ describe('TransportOrderForm sections + pricing', () => {
   it('asks a day count for per-day services and derives pallet-days for per-pallet-day services', async () => {
     renderForm()
     await waitFor(() => expect(screen.getByLabelText('Klant *')).toBeInTheDocument())
-    await userEvent.selectOptions(screen.getByLabelText('Klant *'), 'cust-1')
+    await pickCustomer('cust-1')
     await userEvent.click(screen.getByRole('tab', { name: /Services/ }))
 
     // Per-day: a lone day-count input; sent as the billable quantity + dayCount.
@@ -483,7 +493,7 @@ describe('TransportOrderForm sections + pricing', () => {
   it('removing a manually selected service unticks it and clears its entered inputs', async () => {
     renderForm()
     await waitFor(() => expect(screen.getByLabelText('Klant *')).toBeInTheDocument())
-    await userEvent.selectOptions(screen.getByLabelText('Klant *'), 'cust-1')
+    await pickCustomer('cust-1')
     await userEvent.click(screen.getByRole('tab', { name: /Services/ }))
 
     await userEvent.click(screen.getByRole('button', { name: '+ Dienst of toeslag toevoegen' }))
@@ -533,7 +543,7 @@ describe('TransportOrderForm sections + pricing', () => {
   it('shows the customer label with a favourite star in the unit selector', async () => {
     renderForm()
     await waitFor(() => expect(screen.getByLabelText('Klant *')).toBeInTheDocument())
-    await userEvent.selectOptions(screen.getByLabelText('Klant *'), 'cust-1')
+    await pickCustomer('cust-1')
     await userEvent.click(screen.getByRole('tab', { name: /Goederen/ }))
 
     const unitSelect = screen.getByLabelText('Eenheid')
@@ -545,7 +555,7 @@ describe('TransportOrderForm sections + pricing', () => {
   it('autofills cargo dimensions from the unit master defaults', async () => {
     renderForm()
     await waitFor(() => expect(screen.getByLabelText('Klant *')).toBeInTheDocument())
-    await userEvent.selectOptions(screen.getByLabelText('Klant *'), 'cust-1')
+    await pickCustomer('cust-1')
     await userEvent.click(screen.getByRole('tab', { name: /Goederen/ }))
 
     await userEvent.click(screen.getByRole('button', { name: '+ Goederenlijn' }))
@@ -594,7 +604,7 @@ describe('TransportOrderForm sections + pricing', () => {
     })
     renderForm()
     await waitFor(() => expect(screen.getByLabelText('Klant *')).toBeInTheDocument())
-    await userEvent.selectOptions(screen.getByLabelText('Klant *'), 'cust-1')
+    await pickCustomer('cust-1')
     await userEvent.click(screen.getByRole('tab', { name: /Goederen/ }))
     await userEvent.type(screen.getByLabelText('Aantal'), '3')
     await userEvent.selectOptions(screen.getByLabelText('Eenheid'), 'EUROPALLET')
@@ -611,7 +621,7 @@ describe('TransportOrderForm sections + pricing', () => {
   it('shows the calculated breakdown on the Prijs tab', async () => {
     renderForm()
     await waitFor(() => expect(screen.getByLabelText('Klant *')).toBeInTheDocument())
-    await userEvent.selectOptions(screen.getByLabelText('Klant *'), 'cust-1')
+    await pickCustomer('cust-1')
     await userEvent.click(screen.getByRole('tab', { name: /Goederen/ }))
     await userEvent.type(screen.getByLabelText('Aantal'), '3')
     await userEvent.selectOptions(screen.getByLabelText('Eenheid'), 'EUROPALLET')
@@ -664,7 +674,7 @@ describe('TransportOrderForm sections + pricing', () => {
     })
     renderForm()
     await waitFor(() => expect(screen.getByLabelText('Klant *')).toBeInTheDocument())
-    await userEvent.selectOptions(screen.getByLabelText('Klant *'), 'cust-1')
+    await pickCustomer('cust-1')
     await userEvent.click(screen.getByRole('tab', { name: /Goederen/ }))
     await userEvent.type(screen.getByLabelText('Aantal'), '3')
     await userEvent.selectOptions(screen.getByLabelText('Eenheid'), 'EUROPALLET')
@@ -702,7 +712,7 @@ describe('TransportOrderForm sections + pricing', () => {
     })
     renderForm()
     await waitFor(() => expect(screen.getByLabelText('Klant *')).toBeInTheDocument())
-    await userEvent.selectOptions(screen.getByLabelText('Klant *'), 'cust-1')
+    await pickCustomer('cust-1')
     await userEvent.click(screen.getByRole('tab', { name: /Goederen/ }))
     await userEvent.type(screen.getByLabelText('Aantal'), '3')
     await userEvent.selectOptions(screen.getByLabelText('Eenheid'), 'EUROPALLET')
@@ -730,7 +740,7 @@ describe('TransportOrderForm sections + pricing', () => {
   it('switches to the one-off fieldset and includes the one-off fields in the preview payload', async () => {
     renderForm()
     await waitFor(() => expect(screen.getByLabelText('Klant *')).toBeInTheDocument())
-    await userEvent.selectOptions(screen.getByLabelText('Klant *'), 'cust-1')
+    await pickCustomer('cust-1')
     await userEvent.click(screen.getByRole('tab', { name: /^Prijs$/ }))
 
     expect(screen.queryByLabelText('Vast bedrag (€) *')).not.toBeInTheDocument()
@@ -774,7 +784,7 @@ describe('TransportOrderForm sections + pricing', () => {
     })
     renderForm()
     await waitFor(() => expect(screen.getByLabelText('Klant *')).toBeInTheDocument())
-    await userEvent.selectOptions(screen.getByLabelText('Klant *'), 'cust-1')
+    await pickCustomer('cust-1')
     await userEvent.click(screen.getByRole('tab', { name: /^Prijs$/ }))
     await userEvent.click(screen.getByRole('radio', { name: 'Eenmalige prijsafspraak' }))
     await userEvent.type(screen.getByLabelText('Vast bedrag (€) *'), '450')

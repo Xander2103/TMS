@@ -1,3 +1,4 @@
+import { SearchableSelect } from '../../../../components/ui/SearchableSelect'
 import { FormField } from '../../../../components/ui/FormField'
 import { useLocale } from '../../../../i18n/localeContext'
 import type { CustomerDetail, CustomerListItem } from '../../../customers/types'
@@ -80,27 +81,28 @@ export function GeneralSection({
           hint={editingExisting ? t('transportOrders.general.customerLockedHint') : undefined}
           error={errors.customerId}
         >
-          <select
+          {/* B19: a searchable picker — a native select is unusable with thousands of customers.
+              The list offers only active customers; an existing order keeps its (possibly
+              deactivated) customer shown by name so editing never silently switches customers. */}
+          <SearchableSelect
             id="to-customer"
-            value={customerId}
-            onChange={(e) => setCustomerId(e.target.value)}
+            value={customerId || null}
+            onChange={(next) => setCustomerId(next ?? '')}
+            options={customers.map((customer) => ({
+              value: customer.id,
+              label: `${customer.name} (${customer.customerNumber})`,
+              keywords: customer.customerNumber,
+            }))}
+            selectedLabel={
+              order && order.customerId === customerId && !customers.some((customer) => customer.id === order.customerId)
+                ? `${order.customerName} ${t('transportOrders.general.deactivatedSuffix')}`
+                : undefined
+            }
+            placeholder={t('transportOrders.general.selectCustomer')}
             disabled={saving || editingExisting}
-            aria-invalid={errors.customerId ? true : undefined}
-          >
-            <option value="">{t('transportOrders.general.selectCustomer')}</option>
-            {/* The list offers only active customers; an existing order keeps its (possibly
-                deactivated) customer selectable so editing never silently switches customers. */}
-            {order && !customers.some((customer) => customer.id === order.customerId) && (
-              <option value={order.customerId}>
-                {order.customerName} {t('transportOrders.general.deactivatedSuffix')}
-              </option>
-            )}
-            {customers.map((customer) => (
-              <option key={customer.id} value={customer.id}>
-                {customer.name} ({customer.customerNumber})
-              </option>
-            ))}
-          </select>
+            clearable={false}
+            ariaInvalid={Boolean(errors.customerId)}
+          />
         </FormField>
         <FormField label={t('transportOrders.general.customerReference')} htmlFor="to-ref">
           <input id="to-ref" value={customerReference} onChange={(e) => setCustomerReference(e.target.value)} disabled={saving} maxLength={100} />

@@ -74,6 +74,8 @@ export interface SearchableSelectProps {
   searchDebounceMs?: number
   /** Label shown for `value` when no option (sync list, search result or previous selection) matches it. */
   selectedLabel?: string
+  /** Marks the control invalid for assistive tech (FormField errors). */
+  ariaInvalid?: boolean
 }
 
 const CREATE_ROW = '__create__'
@@ -113,6 +115,7 @@ export function SearchableSelect({
   searchMinChars = 0,
   searchDebounceMs = 250,
   selectedLabel,
+  ariaInvalid,
 }: SearchableSelectProps) {
   const { t } = useLocale()
   const generatedId = useId()
@@ -391,6 +394,7 @@ export function SearchableSelect({
           aria-autocomplete="list"
           aria-activedescendant={open && rowCount > 0 ? `${baseId}-opt-${activeIndex}` : undefined}
           aria-label={ariaLabel}
+          aria-invalid={ariaInvalid || undefined}
           autoComplete="off"
           placeholder={selected ? selected.label : (placeholder ?? t('ui.select.placeholder'))}
           value={displayValue}

@@ -1,3 +1,4 @@
+import { SearchableSelect } from '../../../components/ui/SearchableSelect'
 import { useEffect, useState } from 'react'
 import { formatDate } from '../../../utils/dates'
 import { useNavigate } from 'react-router-dom'
@@ -272,14 +273,19 @@ export function NewInvoicePage() {
 
       <div className="inv-builder">
         <FormField label={t('invoices.fields.customer')} htmlFor="inv-customer" required>
-          <select id="inv-customer" value={customerId} onChange={(e) => handleCustomerChange(e.target.value)} disabled={busy}>
-            <option value="">{t('invoices.new.customerPlaceholder')}</option>
-            {customers.map((customer) => (
-              <option key={customer.id} value={customer.id}>
-                {customer.name} ({customer.customerNumber})
-              </option>
-            ))}
-          </select>
+          {/* B19: searchable — the customer list of a real tenant runs into the thousands. */}
+          <SearchableSelect
+            id="inv-customer"
+            value={customerId || null}
+            onChange={(next) => handleCustomerChange(next ?? '')}
+            options={customers.map((customer) => ({
+              value: customer.id,
+              label: `${customer.name} (${customer.customerNumber})`,
+              keywords: customer.customerNumber,
+            }))}
+            placeholder={t('invoices.new.customerPlaceholder')}
+            disabled={busy}
+          />
         </FormField>
         {invoiceGrouping && invoiceGrouping !== 'Manual' && (
           <p className="inv-grouping-hint" role="note">

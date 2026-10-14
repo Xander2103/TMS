@@ -63,9 +63,10 @@ async function chooseCustomer() {
       <NewInvoicePage />
     </MemoryRouter>,
   )
-  const select = await screen.findByLabelText(/Klant/)
-  await screen.findByRole('option', { name: 'Haven BV (K-0001)' })
-  await user.selectOptions(select, 'cust-1')
+  // B19: the customer is a searchable picker — open it, then pick the option.
+  const picker = await screen.findByRole('combobox', { name: /Klant/ })
+  await user.click(picker)
+  await user.click(await screen.findByRole('option', { name: 'Haven BV (K-0001)' }))
   return user
 }
 

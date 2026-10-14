@@ -89,7 +89,8 @@ describe('GeneralSection commercial lock', () => {
     const { container } = render(<GeneralSection {...baseProps} mode="edit" order={existingOrder} />)
     const { customer, entity } = selects(container)
 
-    expect(customer.value).toBe('cust-1')
+    // B19: the searchable picker shows the chosen customer by name.
+    expect(customer.value).toBe('Haven BV (KL-1)')
     expect(entity.value).toBe('ent-1')
   })
 })
