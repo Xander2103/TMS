@@ -129,7 +129,10 @@ export function DossierOrderPricePanel({ dossier, activity, order, canEditPrice,
   // A real sales line (not an engine notice) means the planner already chose lines.
   const hasSalesLines = (order.pricingLines ?? []).some((line) => !line.informational && !line.proposed)
   const undecided = agreedEditable && !orderIsPriced && !hasSalesLines
-  const showAgreed = agreedEditable && (!undecided || method === 'agreed')
+  // Priced through sales lines (no one-off agreement): the agreed price steps aside until asked for.
+  const pricedByLines = hasSalesLines && order.pricingSource !== 'OneOff'
+  const [flatForced, setFlatForced] = useState(false)
+  const showAgreed = agreedEditable && (undecided ? method === 'agreed' : !pricedByLines || flatForced)
   const showLines = !undecided || method === 'lines'
 
   function chooseMethod(next: PriceMethod) {
@@ -267,6 +270,13 @@ export function DossierOrderPricePanel({ dossier, activity, order, canEditPrice,
         />
       )}
       {showLines && !hasLines && <p className="placeholder-text">{t('dossierSheet.price.noLinesYet')}</p>}
+      {agreedEditable && pricedByLines && !flatForced && (
+        <p className="dossier-price-actions">
+          <Button variant="ghost" onClick={() => setFlatForced(true)} disabled={busy}>
+            {t('dossierPricing.activity.useFlat')}
+          </Button>
+        </p>
+      )}
       {!linesEditable && !locked && isOpen && <p className="dossier-price-note">{t('dossierSheet.price.linesPermission')}</p>}
 
       <p className="dossier-price-actions dossier-activity-price-actions">

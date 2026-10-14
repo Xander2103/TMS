@@ -646,7 +646,7 @@ describe('DossiersPage (lijst)', () => {
         'Status',
         'Klant',
         'Referentie',
-        'Dossierdatum',
+        'Datum',
         'Transport',
         'Planning',
         'Prijs',
@@ -1289,7 +1289,7 @@ describe('DossiersPage (lijst)', () => {
       await user.click(within(panel).getByRole('checkbox', { name: 'Referentie' }))
       await user.click(within(panel).getByRole('checkbox', { name: 'Chauffeur / voertuig' }))
 
-      expect(headerTexts()).toEqual(['Dossiernr.', 'Status', 'Klant', 'Dossierdatum', 'Transport', 'Planning', 'Chauffeur / voertuig', 'Prijs', 'Facturatie', ''])
+      expect(headerTexts()).toEqual(['Dossiernr.', 'Status', 'Klant', 'Datum', 'Transport', 'Planning', 'Chauffeur / voertuig', 'Prijs', 'Facturatie', ''])
       // With its own Chauffeur column, Planning is the date alone.
       const row = await findRow()
       expect(within(row).getByText('Jan Peeters · 1-ABC-123')).toBeInTheDocument()

@@ -66,7 +66,7 @@ describe('dossier list layout rules', () => {
     )
     // The status column widens on a wide container (second rule); the base width is the model's.
     expect(widths).toEqual({ ...DOSSIER_COLUMN_WIDTHS, status: 170 })
-    expect(ruleBody(list, '.dossier-list .dossier-col-status {')).toMatch(/width:\s*104px/)
+    expect(ruleBody(list, '.dossier-list .dossier-col-status {')).toMatch(/width:\s*120px/)
     expect(widths).not.toHaveProperty('customer')
     expect(widths).not.toHaveProperty('reference')
   })

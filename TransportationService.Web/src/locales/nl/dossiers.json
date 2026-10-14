@@ -28,7 +28,7 @@
       "number": "Dossiernr.",
       "reference": "Referentie",
       "customer": "Klant",
-      "date": "Dossierdatum",
+      "date": "Datum",
       "transport": "Transport",
       "invoice": "Facturatie",
       "price": "Prijs",

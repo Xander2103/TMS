@@ -42,9 +42,9 @@ export const DOSSIER_DEFAULT_OPTIONAL: readonly DossierColumnKey[] = ['reference
  */
 export const DOSSIER_COLUMN_WIDTHS: Readonly<Record<Exclude<DossierColumnKey, 'customer' | 'reference'>, number>> = {
   number: 92,
-  status: 104,
+  status: 120,
   date: 90,
-  transport: 150,
+  transport: 140,
   planning: 150,
   driver: 150,
   price: 112,

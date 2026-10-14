@@ -79,7 +79,7 @@ function renderPage(initialPath = '/dossiers/d-1/prijs') {
 
 const priceSection = () => document.getElementById('sectie-prijs')!
 /** The order price editor is on screen (the detail header already shows the unit while the order still loads). */
-const orderEditorLoaded = () => screen.findByLabelText('Afgesproken prijs (€)')
+const orderEditorLoaded = () => screen.findByText('Totaalprijs')
 const picker = () => screen.getByRole('listbox', { name: /Prijsbare onderdelen/ })
 /** The detail header names the selected unit: "ORD-0005 — Direct transport" or "Plateau". */
 const detailHeading = (name: RegExp | string) => screen.getByRole('heading', { name })
@@ -573,7 +573,9 @@ describe('Price per activity — an order-backed activity uses THE order price l
     expect(screen.getByRole('button', { name: 'Bewerken' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Verwijderen' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '+ Verkooplijn toevoegen' })).toBeInTheDocument()
-    // The agreed (one-off) price stays available as the manual price.
+    // B13: priced through sales lines → the agreed (one-off) price steps aside, one click away.
+    expect(screen.queryByLabelText('Afgesproken prijs (€)')).not.toBeInTheDocument()
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Vaste prijs gebruiken' }))
     expect(screen.getByLabelText('Afgesproken prijs (€)')).toBeInTheDocument()
   })
 
@@ -696,8 +698,9 @@ describe('Price per activity — an order-backed activity uses THE order price l
     api.getDossier.mockResolvedValue(dossier)
     orders.get.mockResolvedValue(pricedOrder({ agreedPrice: 0, pricingLines: null }))
     renderPage()
-    await orderEditorLoaded()
-    expect(screen.getByText('Nog geen verkoopprijs ingesteld.')).toBeInTheDocument()
+    // B13: an unpriced order opens on the price decision (agreed price by default).
+    expect(await screen.findByText('Nog geen verkoopprijs ingesteld.')).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: 'Afgesproken prijs' })).toBeChecked()
     expect(within(priceSection()).queryByText(/€\s0,00/)).not.toBeInTheDocument()
   })
 
