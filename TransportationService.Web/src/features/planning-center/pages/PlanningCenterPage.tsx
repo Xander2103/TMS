@@ -32,6 +32,8 @@ import { formatDate } from '../../../utils/dates'
 import './planning-center.css'
 
 const FILTER_STORAGE_KEY = 'ts.planningCenter.filters'
+/** Below this viewport width seven readable day columns do not fit next to both side panels. */
+const WEEK_NEEDS_RAILS_BELOW = 1700
 interface MutationOptions {
   success?: string
   reloadOrders?: boolean
@@ -368,7 +370,12 @@ export function PlanningCenterPage() {
                 type="button"
                 className={days === option ? 'pc-tab-active' : ''}
                 aria-pressed={days === option}
-                onClick={() => updateLayout({ days: option })}
+                onClick={() =>
+                  // B08: "Week" means seeing the week. On a laptop the side panels step aside to
+                  // rails (one click to bring them back); on a wide screen they stay.
+                  updateLayout(option === 7 && window.innerWidth < WEEK_NEEDS_RAILS_BELOW
+                    ? { days: option, leftCollapsed: true, rightCollapsed: true }
+                    : { days: option })}
               >
                 {option === 1
                   ? t('planningCenter.page.viewDay')

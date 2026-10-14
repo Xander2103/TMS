@@ -190,17 +190,10 @@ export function UnplannedPanel({
               }}
               aria-label={t('planningCenter.unplanned.orderAriaLabel', { orderNumber: order.orderNumber, customerName: order.customerName })}
             >
+              {/* B09: two tight lines (≈40px): number · weight · ⚠ n, then customer · route. */}
               <div className="pc-order-line">
                 <span className="pc-order-prio" aria-hidden="true" />
                 <code className="pc-order-number">{order.orderNumber}</code>
-                <span className="pc-order-customer" title={order.customerName}>{order.customerName}</span>
-                {plannable ? (
-                  <span className="pc-order-route" title={route ?? undefined}>{route ?? t('planningCenter.unplanned.noRoute')}</span>
-                ) : (
-                  <span className="pc-order-route pc-order-state" title={notPlannableReason(order)}>
-                    {t(ORDER_STATUS_LABELS[order.status])} · {t('planningCenter.unplanned.notPlannableShort')}
-                  </span>
-                )}
                 {order.totalWeightKg !== null && <span className="pc-order-weight">{formatWeightShort(order.totalWeightKg)}</span>}
                 {reasons.length > 0 && (
                   <ConflictHint
@@ -211,6 +204,16 @@ export function UnplannedPanel({
                     ariaLabel={t('planningCenter.unplanned.attentionCount', { count: reasons.length })}
                     className="pc-order-flag"
                   />
+                )}
+              </div>
+              <div className="pc-order-sub">
+                <span className="pc-order-customer" title={order.customerName}>{order.customerName}</span>
+                {plannable ? (
+                  <span className="pc-order-route" title={route ?? undefined}>{route ?? t('planningCenter.unplanned.noRoute')}</span>
+                ) : (
+                  <span className="pc-order-route pc-order-state" title={notPlannableReason(order)}>
+                    {t(ORDER_STATUS_LABELS[order.status])} · {t('planningCenter.unplanned.notPlannableShort')}
+                  </span>
                 )}
               </div>
               {selected && (

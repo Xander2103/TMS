@@ -157,6 +157,10 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
+  /* B08: a panel never grows past its grid column — wide content clips or wraps inside it,
+     it must not push the page into horizontal scrolling. */
+  min-width: 0;
+  overflow: hidden;
 }
 
 .pc-panel-header {
@@ -187,12 +191,38 @@
 }
 
 .pc-filter-checks {
-  flex-wrap: wrap;
-  gap: 0.25rem 0.75rem;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.2rem;
 }
 
 .pc-filter-checks > * {
-  flex: 0 1 auto;
+  flex: 0 0 auto;
+}
+
+.pc-check {
+  flex-direction: row;
+  white-space: nowrap;
+}
+
+.pc-check input {
+  width: auto;
+  margin: 0;
+  flex: 0 0 auto;
+}
+
+/* Filter controls carry the app's control look (they sit outside a FormField). */
+.pc-filters input[type='search'],
+.pc-filters input[type='date'],
+.pc-filters select {
+  font: inherit;
+  font-size: 13px;
+  padding: 4px 6px;
+  border: 1px solid var(--color-input-border);
+  border-radius: 6px;
+  background: var(--color-input-bg);
+  color: var(--text-h);
+  width: 100%;
 }
 
 .pc-panel-header h2 {
@@ -298,14 +328,26 @@
 }
 
 .pc-order-number {
-  font-weight: 600;
+  font-weight: 700;
   white-space: nowrap;
   color: var(--text-h);
   font-size: 0.95em;
+  padding: 0;
+  background: none;
+  flex: 1 1 auto;
+}
+
+.pc-order-sub {
+  display: flex;
+  gap: 0.4rem;
+  min-width: 0;
+  padding-left: calc(3px + 0.45rem);
+  line-height: 1.35;
 }
 
 .pc-order-customer {
-  flex: 1 1 40%;
+  flex: 0 1 auto;
+  max-width: 55%;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -314,7 +356,7 @@
 }
 
 .pc-order-route {
-  flex: 1 1 50%;
+  flex: 1 1 0;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -457,6 +499,8 @@
   font-weight: 400;
   text-align: left;
   white-space: normal;
+  /* Explains, never blocks: the rows underneath stay clickable and draggable. */
+  pointer-events: none;
 }
 
 .pc-hint:hover .pc-hint-pop,
@@ -531,14 +575,42 @@
 .pc-board-axis {
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
-  padding: 3.4rem 0.35rem 0.5rem;
+  flex: 0 0 44px;
   font-size: 0.7rem;
-  opacity: 0.6;
+  color: var(--text-muted);
   position: sticky;
   left: 0;
   background: var(--bg);
-  z-index: 1;
+  z-index: 2;
+}
+
+.pc-axis-head {
+  border-bottom: 1px solid var(--border);
+}
+
+.pc-axis-lane {
+  justify-content: center;
+  align-items: center;
+  font-size: 0.65rem;
+  text-align: center;
+  padding: 0 2px;
+}
+
+/* The hour labels sit on the same scale as the day grids (flex:1 in both), positioned in %. */
+.pc-axis-hours {
+  position: relative;
+  flex: 1;
+  min-height: 560px;
+}
+
+.pc-axis-hours span {
+  position: absolute;
+  right: 6px;
+  transform: translateY(-50%);
+}
+
+.pc-axis-hours span:first-child {
+  transform: none;
 }
 
 .pc-board-days {
@@ -561,6 +633,9 @@
 }
 
 .pc-day-header {
+  flex-shrink: 0;
+  height: 2.25rem;
+  box-sizing: border-box;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -593,11 +668,38 @@
 }
 
 .pc-day-unscheduled {
+  flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
-  padding: 0.35rem;
+  gap: 2px;
+  padding: 3px;
+  box-sizing: border-box;
+  /* Equal in every column: rows × one-line trip, so all time grids start at the same height. */
+  height: calc(var(--pc-lane-rows, 0) * 28px + 6px);
   border-bottom: 1px dashed var(--border);
+  overflow: hidden;
+}
+
+.pc-trip-inline {
+  padding: 2px 6px;
+  height: 26px;
+  box-sizing: border-box;
+  box-shadow: none;
+}
+
+.pc-trip-inline .pc-trip-head {
+  justify-content: flex-start;
+  gap: 6px;
+  height: 100%;
+}
+
+.pc-trip-inline-driver {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-muted);
 }
 
 .pc-day-grid {
@@ -797,14 +899,39 @@
 }
 
 .pc-tabs {
-  margin: 0.5rem 0.75rem 0;
+  margin: 0.5rem 0.65rem 0;
+  display: flex;
+}
+
+/* The three resource tabs share the panel width instead of setting its minimum. */
+.pc-tabs button {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 4px 2px;
+  font-size: 12.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pc-filters input,
+.pc-filters select {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 /* --- Inspector --- */
 
 .pc-right {
   min-height: 0;
+  min-width: 0;
   display: flex;
+}
+
+.pc-right > * {
+  min-width: 0;
+  flex: 1 1 auto;
 }
 
 .pc-inspector {
@@ -992,7 +1119,8 @@
     min-height: 420px;
   }
 
-  .pc-day-grid {
+  .pc-day-grid,
+  .pc-axis-hours {
     min-height: 420px;
   }
 }

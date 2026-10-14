@@ -3,7 +3,7 @@ import { Badge } from '../../../components/ui/Badge'
 import { useLocale } from '../../../i18n/localeContext'
 import { TRIP_STATUS_LABELS, TRIP_STATUS_TONE } from '../../planning/types'
 import {
-  blockPosition, dayColumnLevel, dayColumnWidth, daysFitWithoutScroll, formatDayHeading, formatDayHeadingShort,
+  blockPosition, DAY_END_HOUR, DAY_START_HOUR, dayColumnLevel, dayColumnWidth, daysFitWithoutScroll, formatDayHeading, formatDayHeadingShort,
   formatTimeRange, gridHours, MIN_DAY_WIDTH, type BoardDensity, type BoardViewDays, type DayColumnLevel,
 } from '../utils/boardMath'
 import { formatWeightShort } from '../utils/boardFormat'
@@ -76,6 +76,10 @@ export function BoardTimeline({
   const byDate = new Map<string, PlanningBoardTrip[]>()
   for (const date of dates) byDate.set(date, [])
   for (const trip of trips) byDate.get(trip.tripDate)?.push(trip)
+  // Trips without times sit in ONE lane of equal height in every column (and in the axis), so
+  // the time grids of all days — and the hour labels — stay aligned.
+  const maxUnscheduled = Math.max(0, ...dates.map((date) => (byDate.get(date) ?? []).filter((trip) => blockPosition(trip.plannedStart, trip.plannedEnd) === null).length))
+  const laneStyle = { '--pc-lane-rows': maxUnscheduled } as CSSProperties
 
   return (
     <div className="pc-board-wrap">
@@ -90,11 +94,18 @@ export function BoardTimeline({
         data-level={level}
         data-scrolls={fits ? undefined : 'true'}
         aria-label={t('planningCenter.board.label')}
+        style={laneStyle}
       >
         <div className="pc-board-axis" aria-hidden="true">
-          {gridHours().map((hour) => (
-            <span key={hour}>{String(hour).padStart(2, '0')}:00</span>
-          ))}
+          <div className="pc-day-header pc-axis-head">&nbsp;</div>
+          {maxUnscheduled > 0 && <div className="pc-day-unscheduled pc-axis-lane">{t('planningCenter.board.noTime')}</div>}
+          <div className="pc-axis-hours">
+            {gridHours().map((hour) => (
+              <span key={hour} style={{ top: `${((hour - DAY_START_HOUR) / (DAY_END_HOUR - DAY_START_HOUR)) * 100}%` }}>
+                {String(hour).padStart(2, '0')}:00
+              </span>
+            ))}
+          </div>
         </div>
         <div className="pc-board-days" ref={daysRef} style={{ '--pc-day-min': `${MIN_DAY_WIDTH[density]}px` } as CSSProperties}>
           {dates.map((date) => {
@@ -121,13 +132,14 @@ export function BoardTimeline({
                   {level === 'narrow' ? formatDayHeadingShort(date) : formatDayHeading(date)}
                   {dayTrips.length > 0 && <span className="pc-day-count">{dayTrips.length}</span>}
                 </header>
-                {unscheduled.length > 0 && (
+                {maxUnscheduled > 0 && (
                   <div className="pc-day-unscheduled">
                     {unscheduled.map((trip) => (
                       <TripBlock
                         key={trip.id}
                         trip={trip}
                         level={level}
+                        inline
                         floating={false}
                         selected={trip.id === selectedTripId}
                         dragOver={dragOverKey === trip.id}
@@ -178,6 +190,8 @@ export function BoardTimeline({
 interface TripBlockProps {
   trip: PlanningBoardTrip
   level: DayColumnLevel
+  /** A trip without times: one line in the shared lane (number · driver · ⚠). */
+  inline?: boolean
   floating: boolean
   selected: boolean
   dragOver: boolean
@@ -195,7 +209,7 @@ interface TripBlockProps {
  * their chip, and the chip explains itself on hover/focus (B09).
  */
 function TripBlock({
-  trip, level, floating, selected, dragOver, setDragOver, onSelect, onDrop, allowDrop, readPayload,
+  trip, level, inline = false, floating, selected, dragOver, setDragOver, onSelect, onDrop, allowDrop, readPayload,
 }: TripBlockProps) {
   const { t } = useLocale()
   const timeRange = formatTimeRange(trip.plannedStart, trip.plannedEnd)
@@ -215,6 +229,7 @@ function TripBlock({
         'pc-trip',
         `pc-trip-status-${trip.status.toLowerCase()}`,
         floating ? 'pc-trip-floating' : '',
+        inline ? 'pc-trip-inline' : '',
         selected ? 'pc-selected' : '',
         dragOver ? 'pc-drop-target' : '',
         trip.blockingConflictCount > 0 ? 'pc-trip-blocked' : '',
@@ -251,8 +266,24 @@ function TripBlock({
         }
       }}
       aria-label={t('planningCenter.board.tripAriaLabel', { tripNumber: trip.tripNumber, status: statusLabel })}
-      title={level === 'full' ? undefined : [trip.tripNumber, statusLabel, timeRange, trip.driverName, trip.vehicleNumber, trip.routeSummary].filter(Boolean).join(' · ')}
+      title={level === 'full' && !inline ? undefined : [trip.tripNumber, statusLabel, timeRange, trip.driverName, trip.vehicleNumber, trip.routeSummary].filter(Boolean).join(' · ')}
     >
+      {inline ? (
+        <div className="pc-trip-head">
+          <strong>{trip.tripNumber}</strong>
+          <span className="pc-trip-inline-driver">{trip.driverName ?? t('planningCenter.board.noDriver')}</span>
+          {conflictCount > 0 && (
+            <ConflictHint
+              tone={trip.blockingConflictCount > 0 ? 'danger' : 'warning'}
+              label={`⚠ ${conflictCount}`}
+              title={t('planningCenter.board.conflictsTitle')}
+              reasons={reasons}
+              ariaLabel={t('planningCenter.board.conflictCount', { count: conflictCount })}
+              className="pc-trip-flag"
+            />
+          )}
+        </div>
+      ) : (<>
       <div className="pc-trip-head">
         <strong>{trip.tripNumber}</strong>
         {level === 'full' && <Badge tone={TRIP_STATUS_TONE[trip.status]}>{statusLabel}</Badge>}
@@ -311,6 +342,7 @@ function TripBlock({
           )}
         </div>
       )}
+      </>)}
     </article>
   )
 }
