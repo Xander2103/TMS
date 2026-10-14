@@ -54,7 +54,9 @@
     "createTrip": "Create trip",
     "driverLabel": "Driver",
     "driverOptional": "Optional — can be chosen on the trip later.",
-    "driverPlaceholder": "Search driver…"
+    "driverPlaceholder": "Search driver…",
+    "colDate": "Date",
+    "noDriver": "No driver"
   },
   "proposals": {
     "title": "Trip proposals",
@@ -71,7 +73,18 @@
     "notProposed": "Not proposed",
     "noteTemplate": "Proposal zone {zone}",
     "created_one": "Trip {tripNumber} created with 1 order.",
-    "created_other": "Trip {tripNumber} created with {count} orders."
+    "created_other": "Trip {tripNumber} created with {count} orders.",
+    "intro": "Orders for {date} that fit together in one trip, per delivery zone.",
+    "combine_one": "1 order ready to plan",
+    "combine_other": "{count} orders can be combined",
+    "overdueCount_one": "1 overdue",
+    "overdueCount_other": "{count} overdue",
+    "constraintCount_one": "1 with a condition",
+    "constraintCount_other": "{count} with conditions",
+    "why": "Why, and which orders?",
+    "gaps_one": "1 order not proposed — to complete",
+    "gaps_other": "{count} orders not proposed — to complete",
+    "noZone": "{order}: the unloading place is in no delivery zone."
   },
   "detail": {
     "loadError": "The trip could not be loaded.",
@@ -167,5 +180,17 @@
     "deleteTitle": "Delete trip",
     "deleteMessage": "Are you sure you want to delete trip {tripNumber}?",
     "deleteConfirm": "Delete"
+  },
+  "groups": {
+    "today": "Today",
+    "running": "Running",
+    "runningHint": "On the road, whatever the trip date",
+    "overdue": "Overdue",
+    "overdueHint": "Trips from the last {count} days that never left",
+    "startedOn": "started {date}",
+    "notDeparted": "not departed",
+    "movedUp_one": "1 trip of this day is listed above under Running or Overdue.",
+    "movedUp_other": "{count} trips of this day are listed above under Running or Overdue.",
+    "dayOnlyAbove": "Every trip of this day is listed above under Running or Overdue."
   }
 }

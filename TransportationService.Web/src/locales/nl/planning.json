@@ -54,7 +54,9 @@
     "createTrip": "Rit aanmaken",
     "driverLabel": "Chauffeur",
     "driverOptional": "Optioneel — kan later op de rit gekozen worden.",
-    "driverPlaceholder": "Zoek chauffeur…"
+    "driverPlaceholder": "Zoek chauffeur…",
+    "colDate": "Datum",
+    "noDriver": "Geen chauffeur"
   },
   "proposals": {
     "title": "Ritvoorstellen",
@@ -71,7 +73,18 @@
     "notProposed": "Niet voorgesteld",
     "noteTemplate": "Voorstel zone {zone}",
     "created_one": "Rit {tripNumber} aangemaakt met 1 order.",
-    "created_other": "Rit {tripNumber} aangemaakt met {count} orders."
+    "created_other": "Rit {tripNumber} aangemaakt met {count} orders.",
+    "intro": "Opdrachten voor {date} die samen in één rit passen, per leverzone.",
+    "combine_one": "1 opdracht klaar om in te plannen",
+    "combine_other": "{count} opdrachten kunnen gecombineerd worden",
+    "overdueCount_one": "1 achterstallig",
+    "overdueCount_other": "{count} achterstallig",
+    "constraintCount_one": "1 met voorwaarde",
+    "constraintCount_other": "{count} met voorwaarden",
+    "why": "Waarom en welke opdrachten?",
+    "gaps_one": "1 opdracht niet voorgesteld — aan te vullen",
+    "gaps_other": "{count} opdrachten niet voorgesteld — aan te vullen",
+    "noZone": "{order}: de losplaats valt in geen leverzone."
   },
   "detail": {
     "loadError": "De rit kon niet worden geladen.",
@@ -167,5 +180,17 @@
     "deleteTitle": "Rit verwijderen",
     "deleteMessage": "Weet je zeker dat je rit {tripNumber} wilt verwijderen?",
     "deleteConfirm": "Verwijderen"
+  },
+  "groups": {
+    "today": "Vandaag",
+    "running": "Lopend",
+    "runningHint": "Onderweg, ongeacht de ritdatum",
+    "overdue": "Achterstallig",
+    "overdueHint": "Ritten uit de voorbije {count} dagen die nooit vertrokken",
+    "startedOn": "gestart {date}",
+    "notDeparted": "niet vertrokken",
+    "movedUp_one": "1 rit van deze dag staat hierboven bij Lopend of Achterstallig.",
+    "movedUp_other": "{count} ritten van deze dag staan hierboven bij Lopend of Achterstallig.",
+    "dayOnlyAbove": "Alle ritten van deze dag staan hierboven bij Lopend of Achterstallig."
   }
 }

@@ -54,7 +54,9 @@
     "createTrip": "Créer le trajet",
     "driverLabel": "Chauffeur",
     "driverOptional": "Facultatif — peut être choisi plus tard sur le trajet.",
-    "driverPlaceholder": "Rechercher un chauffeur…"
+    "driverPlaceholder": "Rechercher un chauffeur…",
+    "colDate": "Date",
+    "noDriver": "Pas de chauffeur"
   },
   "proposals": {
     "title": "Propositions de tournées",
@@ -71,7 +73,18 @@
     "notProposed": "Non proposées",
     "noteTemplate": "Proposition zone {zone}",
     "created_one": "Tournée {tripNumber} créée avec 1 commande.",
-    "created_other": "Tournée {tripNumber} créée avec {count} commandes."
+    "created_other": "Tournée {tripNumber} créée avec {count} commandes.",
+    "intro": "Commandes du {date} qui tiennent ensemble dans un trajet, par zone de livraison.",
+    "combine_one": "1 commande prête à planifier",
+    "combine_other": "{count} commandes peuvent être combinées",
+    "overdueCount_one": "1 en retard",
+    "overdueCount_other": "{count} en retard",
+    "constraintCount_one": "1 avec condition",
+    "constraintCount_other": "{count} avec conditions",
+    "why": "Pourquoi et quelles commandes ?",
+    "gaps_one": "1 commande non proposée — à compléter",
+    "gaps_other": "{count} commandes non proposées — à compléter",
+    "noZone": "{order} : le lieu de déchargement n'est dans aucune zone de livraison."
   },
   "detail": {
     "loadError": "La tournée n'a pas pu être chargée.",
@@ -167,5 +180,17 @@
     "deleteTitle": "Supprimer la tournée",
     "deleteMessage": "Voulez-vous vraiment supprimer la tournée {tripNumber} ?",
     "deleteConfirm": "Supprimer"
+  },
+  "groups": {
+    "today": "Aujourd'hui",
+    "running": "En cours",
+    "runningHint": "En route, quelle que soit la date du trajet",
+    "overdue": "En retard",
+    "overdueHint": "Trajets des {count} derniers jours jamais partis",
+    "startedOn": "parti le {date}",
+    "notDeparted": "pas parti",
+    "movedUp_one": "1 trajet de ce jour figure plus haut (En cours ou En retard).",
+    "movedUp_other": "{count} trajets de ce jour figurent plus haut (En cours ou En retard).",
+    "dayOnlyAbove": "Tous les trajets de ce jour figurent plus haut (En cours ou En retard)."
   }
 }

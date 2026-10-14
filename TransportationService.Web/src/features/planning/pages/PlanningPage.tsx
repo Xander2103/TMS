@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import { PageHeader } from '../../../components/layout/PageHeader'
 import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
@@ -14,16 +14,17 @@ import { describeApiError } from '../../../api/problemDetails'
 import { TRIP_STATUS_LABELS, TRIP_STATUS_TONE, TRIP_STATUSES, type TripListItem, type TripStatus } from '../types'
 import { buildDriverOptions } from '../resourceOptions'
 import { usePlanningResources } from '../usePlanningResources'
+import { addDaysIso, groupTrips, localIsoDate, OVERDUE_LOOKBACK_DAYS } from '../tripGroups'
+import { formatDate } from '../../../utils/dates'
+import { formatInteger } from '../../../utils/numbers'
 import './planning.css'
 
 function todayIso(): string {
-  return new Date().toISOString().slice(0, 10)
+  return localIsoDate()
 }
 
 function shiftDate(iso: string, days: number): string {
-  const date = new Date(`${iso}T00:00:00Z`)
-  date.setUTCDate(date.getUTCDate() + days)
-  return date.toISOString().slice(0, 10)
+  return addDaysIso(iso, days)
 }
 
 /** Day-based planning board: all trips of the selected date with live conflict counts. */
@@ -36,8 +37,12 @@ export function PlanningPage() {
   const [date, setDate] = useState(todayIso)
   const [statusFilter, setStatusFilter] = useState<TripStatus | ''>('')
   const [trips, setTrips] = useState<TripListItem[] | null>(null)
+  // B20: the operational groups load independently of the chosen day.
+  const [running, setRunning] = useState<TripListItem[]>([])
+  const [past, setPast] = useState<TripListItem[]>([])
   const [loadError, setLoadError] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
+  const today = todayIso()
 
   useEffect(() => {
     let mounted = true
@@ -54,6 +59,24 @@ export function PlanningPage() {
       mounted = false
     }
   }, [date, statusFilter, t])
+
+  useEffect(() => {
+    let mounted = true
+    Promise.all([
+      listTrips({ status: 'InProgress' }).catch(() => [] as TripListItem[]),
+      listTrips({ from: addDaysIso(today, -OVERDUE_LOOKBACK_DAYS), to: addDaysIso(today, -1) }).catch(() => [] as TripListItem[]),
+    ]).then(([runningTrips, pastTrips]) => {
+      if (!mounted) return
+      setRunning(runningTrips)
+      setPast(pastTrips)
+    })
+    return () => {
+      mounted = false
+    }
+  }, [today])
+
+  const groups = useMemo(() => groupTrips(trips ?? [], running, past, today), [trips, running, past, today])
+  const dayLabel = date === today ? t('planning.groups.today') : formatDate(date)
 
   // B06: a new trip is created deliberately — date (defaults to the shown day) and an optional
   // driver are asked first; cancelling creates nothing and a double click creates one trip.
@@ -170,74 +193,130 @@ export function PlanningPage() {
 
       {loadError && <p className="placeholder-text">{loadError}</p>}
       {!loadError && trips === null && <p className="placeholder-text">{t('planning.list.loading')}</p>}
-      {!loadError && trips !== null && trips.length === 0 && (
-        <p className="placeholder-text">{t('planning.list.empty')}</p>
-      )}
 
-      {!loadError && trips !== null && trips.length > 0 && (
-        <table className="pl-table">
+      {!loadError && trips !== null && (
+        <table className="pl-table pl-grouped">
           <thead>
             <tr>
               <th>{t('planning.list.colTrip')}</th>
+              <th>{t('planning.list.colDate')}</th>
               <th>{t('planning.list.colDriver')}</th>
               <th>{t('planning.list.colVehicle')}</th>
               <th>{t('planning.list.colTrailer')}</th>
-              <th>{t('planning.list.colOrders')}</th>
+              <th className="pl-num">{t('planning.list.colOrders')}</th>
               <th>{t('planning.list.colStatus')}</th>
               <th>{t('planning.list.colConflicts')}</th>
             </tr>
           </thead>
-          <tbody>
-            {trips.map((trip) => (
-              <tr key={trip.id} className="pl-row" onClick={() => navigate(`/planning/${trip.id}`)}>
-                <td>
-                  <code>{trip.tripNumber}</code>
-                </td>
-                <td>{trip.driverName ?? '—'}</td>
-                <td>{trip.vehicleNumber ? `${trip.vehicleNumber} (${trip.vehicleLicensePlate})` : '—'}</td>
-                <td>{trip.trailerNumber ?? '—'}</td>
-                <td>{trip.orderCount}</td>
-                <td>
-                  <Badge tone={TRIP_STATUS_TONE[trip.status]}>{t(TRIP_STATUS_LABELS[trip.status])}</Badge>
-                </td>
-                <td>
-                  {trip.blockingConflictCount > 0 ? (
-                    <Badge tone="danger">⚠ {trip.blockingConflictCount}</Badge>
-                  ) : (
-                    <Badge tone="success">{t('planning.list.conflictsOk')}</Badge>
-                  )}
-                </td>
-              </tr>
+          {groups.running.length > 0 && (
+            <TripGroup title={t('planning.groups.running')} hint={t('planning.groups.runningHint')} tone="running" count={groups.running.length}>
+              {groups.running.map(({ trip, startedBefore }) => (
+                <TripRow key={trip.id} trip={trip} note={startedBefore ? t('planning.groups.startedOn', { date: formatDate(trip.tripDate) }) : undefined} />
+              ))}
+            </TripGroup>
+          )}
+          {groups.overdue.length > 0 && (
+            <TripGroup title={t('planning.groups.overdue')} hint={t('planning.groups.overdueHint', { count: OVERDUE_LOOKBACK_DAYS })} tone="overdue" count={groups.overdue.length}>
+              {groups.overdue.map((trip) => (
+                <TripRow key={trip.id} trip={trip} note={t('planning.groups.notDeparted')} />
+              ))}
+            </TripGroup>
+          )}
+          <TripGroup title={dayLabel} tone="day" count={groups.day.length}>
+            {groups.day.map((trip) => (
+              <TripRow key={trip.id} trip={trip} />
             ))}
-          </tbody>
+            {groups.day.length === 0 && (
+              <tr className="pl-empty-row">
+                <td colSpan={8}>{groups.movedUp > 0 ? t('planning.groups.dayOnlyAbove') : t('planning.list.empty')}</td>
+              </tr>
+            )}
+            {groups.day.length > 0 && groups.movedUp > 0 && (
+              <tr className="pl-empty-row">
+                <td colSpan={8}>{t('planning.groups.movedUp', { count: groups.movedUp })}</td>
+              </tr>
+            )}
+          </TripGroup>
         </table>
       )}
 
-      <TourProposalsPanel />
+      <TourProposalsPanel date={date} />
     </div>
   )
 }
 
-/**
- * Wave 7: transparante ritvoorstellen — te plannen orders per leverzone (zelfde zoneconcept
- * als de prijzen), achterstand eerst, elke uitsluiting met reden. "Maak rit" gebruikt de
- * gewone rit-aanmaak, dus alle conflict- en rechtenlogica geldt onverkort.
- */
-function TourProposalsPanel() {
+/** One group of the Ritlijst: a header row with its name, count and what it means. */
+function TripGroup({ title, hint, tone, count, children }: { title: string; hint?: string; tone: 'running' | 'overdue' | 'day'; count: number; children: ReactNode }) {
+  return (
+    <tbody className={`pl-group pl-group-${tone}`}>
+      <tr className="pl-group-head">
+        <th colSpan={8} scope="rowgroup">
+          <span className="pl-group-title">{title}</span>
+          <span className="pl-group-count">{count}</span>
+          {hint && <span className="pl-group-hint">{hint}</span>}
+        </th>
+      </tr>
+      {children}
+    </tbody>
+  )
+}
+
+function TripRow({ trip, note }: { trip: TripListItem; note?: string }) {
   const navigate = useNavigate()
-  const { hasPermission } = useAuth()
+  const { t } = useLocale()
+  return (
+    <tr className="pl-row" onClick={() => navigate(`/planning/${trip.id}`)}>
+      <td>
+        <Link to={`/planning/${trip.id}`} className="pl-trip-link" onClick={(event) => event.stopPropagation()}>
+          {trip.tripNumber}
+        </Link>
+        {note && <span className="pl-row-note">{note}</span>}
+      </td>
+      <td className="pl-nowrap">{formatDate(trip.tripDate)}</td>
+      <td>{trip.driverName ?? <span className="pl-missing">{t('planning.list.noDriver')}</span>}</td>
+      <td>{trip.vehicleNumber ? `${trip.vehicleNumber} (${trip.vehicleLicensePlate})` : <span className="pl-missing">—</span>}</td>
+      <td>{trip.trailerNumber ?? '—'}</td>
+      <td className="pl-num">{trip.orderCount}</td>
+      <td>
+        <Badge tone={TRIP_STATUS_TONE[trip.status]}>{t(TRIP_STATUS_LABELS[trip.status])}</Badge>
+      </td>
+      <td>
+        {trip.blockingConflictCount > 0 ? (
+          <Badge tone="danger">⚠ {trip.blockingConflictCount}</Badge>
+        ) : (
+          <Badge tone="success">{t('planning.list.conflictsOk')}</Badge>
+        )}
+      </td>
+    </tr>
+  )
+}
+
+/**
+ * B20 — ritvoorstellen as an actual suggestion list for the chosen day: per delivery zone WHAT is
+ * suggested (n orders to combine), WHY (zone, weight, overdue work) and ONE action ("Maak rit",
+ * through the normal trip creation, so every conflict and permission rule applies). The order
+ * list and the explanations fold open on demand. Data gaps that keep an order out of a proposal
+ * (missing unloading stop, no zone) are only shown to users who can fix the order.
+ */
+function TourProposalsPanel({ date }: { date: string }) {
+  const navigate = useNavigate()
+  const { hasPermission, hasAnyPermission } = useAuth()
   const { showSuccess, showError } = useToast()
   const { t } = useLocale()
   const canCreate = hasPermission('planning.create')
+  const canFixOrders = hasAnyPermission(['orders.edit', 'orders.manage'])
 
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [proposals, setProposals] = useState<PlanningProposals | null>(null)
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
+    let mounted = true
     getPlanningProposals(date)
-      .then(setProposals)
-      .catch(() => setProposals(null))
+      .then((data) => mounted && setProposals(data))
+      .catch(() => mounted && setProposals(null))
+    return () => {
+      mounted = false
+    }
   }, [date])
 
   async function accept(proposal: TourProposal) {
@@ -251,7 +330,7 @@ function TourProposalsPanel() {
         plannedDistanceKm: null, plannedEmptyKm: null,
       })
       showSuccess(t('planning.proposals.created', { tripNumber: trip.tripNumber, count: proposal.orders.length }))
-      navigate(`/trips/${trip.id}`)
+      navigate(`/planning/${trip.id}`)
     } catch (err) {
       showError(describeApiError(err, t('planning.list.createFailed')).message)
     } finally {
@@ -259,60 +338,78 @@ function TourProposalsPanel() {
     }
   }
 
+  // Only proposals that can become a trip (a known zone) are suggestions; the rest is data to fix.
+  const suggestions = (proposals?.proposals ?? []).filter((proposal) => proposal.zoneCode !== '—')
+  const unzoned = (proposals?.proposals ?? []).filter((proposal) => proposal.zoneCode === '—')
+  const gaps = [
+    ...(proposals?.excluded ?? []),
+    ...unzoned.flatMap((proposal) => proposal.orders.map((order) => t('planning.proposals.noZone', { order: order.orderNumber }))),
+  ]
+  if (proposals === null || (suggestions.length === 0 && (!canFixOrders || gaps.length === 0))) return null
+
   return (
-    <section className="ui-form-section">
-      <div className="wh-trace-bar">
-        <h2 style={{ margin: 0 }}>{t('planning.proposals.title')}</h2>
-        <input type="date" value={date} onChange={(e) => setDate(e.target.value)} aria-label={t('planning.proposals.dateLabel')} />
-      </div>
-      {proposals === null && <p className="placeholder-text">{t('planning.proposals.loading')}</p>}
-      {proposals !== null && proposals.proposals.length === 0 && (
-        <p className="placeholder-text">{t('planning.proposals.empty')}</p>
+    <section className="pl-proposals" aria-labelledby="pl-proposals-title">
+      <h2 id="pl-proposals-title">{t('planning.proposals.title')}</h2>
+      <p className="pl-proposals-intro">{t('planning.proposals.intro', { date: formatDate(date) })}</p>
+      {suggestions.length > 0 && (
+        <ul className="pl-suggestions">
+          {suggestions.map((proposal) => {
+            const overdue = proposal.orders.filter((order) => order.overdue).length
+            const constrained = proposal.orders.filter((order) => order.constraints.length > 0).length
+            return (
+              <li key={proposal.zoneCode + proposal.zoneName} className="pl-suggestion">
+                <div className="pl-suggestion-main">
+                  <strong>{proposal.zoneName}</strong>
+                  <span className="pl-suggestion-what">
+                    {t('planning.proposals.combine', { count: proposal.orders.length })}
+                    {' · '}{formatInteger(proposal.totalWeightKg)} kg
+                    {proposal.totalLoadingMeters > 0 && ` · ${proposal.totalLoadingMeters.toFixed(1)} ldm`}
+                    {proposal.totalPallets > 0 && ` · ${t('planning.proposals.pallets', { count: proposal.totalPallets })}`}
+                  </span>
+                  {(overdue > 0 || constrained > 0) && (
+                    <span className="pl-suggestion-flags">
+                      {overdue > 0 && <Badge tone="warning">{t('planning.proposals.overdueCount', { count: overdue })}</Badge>}
+                      {constrained > 0 && <Badge tone="info">{t('planning.proposals.constraintCount', { count: constrained })}</Badge>}
+                    </span>
+                  )}
+                </div>
+                {canCreate && (
+                  <Button variant="secondary" disabled={busy} onClick={() => void accept(proposal)}>
+                    {t('planning.proposals.makeTrip')}
+                  </Button>
+                )}
+                <details className="pl-suggestion-details">
+                  <summary>{t('planning.proposals.why')}</summary>
+                  {proposal.explanations.map((line, index) => (
+                    <p key={index} className="pl-muted">{line}</p>
+                  ))}
+                  <ul>
+                    {proposal.orders.map((order) => (
+                      <li key={order.transportOrderId}>
+                        <Link to={`/transport-orders/${order.transportOrderId}`}>{order.orderNumber}</Link>
+                        {' '}{order.customerName}
+                        {order.deliveryCity && ` · ${order.deliveryCity}`}
+                        {order.overdue && <> {' '}<Badge tone="warning">{t('planning.proposals.overdue')}</Badge></>}
+                        {order.constraints.map((constraint, index) => (
+                          <span key={index} className="pl-muted pl-constraint">{constraint}</span>
+                        ))}
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              </li>
+            )
+          })}
+        </ul>
       )}
-      {proposals?.proposals.map((proposal) => (
-        <div key={proposal.zoneCode + proposal.zoneName} className="wh-card">
-          <div className="wh-card-head">
-            <div>
-              <h3 style={{ margin: 0 }}>
-                {proposal.zoneName} {proposal.zoneCode !== '—' && <code>{proposal.zoneCode}</code>}
-              </h3>
-              <p className="wh-muted">
-                {t('planning.proposals.orders', { count: proposal.orders.length })} · {proposal.totalWeightKg.toFixed(0)} kg
-                {proposal.totalLoadingMeters > 0 && ` · ${proposal.totalLoadingMeters.toFixed(1)} ldm`}
-                {proposal.totalPallets > 0 && ` · ${t('planning.proposals.pallets', { count: proposal.totalPallets })}`}
-              </p>
-            </div>
-            {canCreate && proposal.zoneCode !== '—' && (
-              <Button variant="secondary" disabled={busy} onClick={() => void accept(proposal)}>
-                {t('planning.proposals.makeTrip')}
-              </Button>
-            )}
-          </div>
-          {proposal.explanations.map((line, index) => (
-            <p key={index} className="wh-muted">{line}</p>
+      {suggestions.length === 0 && <p className="placeholder-text">{t('planning.proposals.empty')}</p>}
+      {canFixOrders && gaps.length > 0 && (
+        <details className="pl-proposals-gaps">
+          <summary>{t('planning.proposals.gaps', { count: gaps.length })}</summary>
+          {gaps.map((reason, index) => (
+            <p key={index} className="pl-muted">{reason}</p>
           ))}
-          <div>
-            {proposal.orders.map((order) => (
-              <div key={order.transportOrderId} style={{ marginBottom: 4 }}>
-                {order.overdue && <Badge tone="warning">{t('planning.proposals.overdue')}</Badge>}{' '}
-                <code>{order.orderNumber}</code> {order.deliveryCity ?? ''} {order.deliveryPostalCode ?? ''}
-                {order.constraints.map((constraint, index) => (
-                  <p key={index} className="wh-muted" style={{ margin: '2px 0 0 16px' }}>
-                    <Badge tone="warning">{t('planning.proposals.constraint')}</Badge> {constraint}
-                  </p>
-                ))}
-              </div>
-            ))}
-          </div>
-        </div>
-      ))}
-      {proposals !== null && proposals.excluded.length > 0 && (
-        <div className="wh-card">
-          <h3 style={{ margin: 0 }}>{t('planning.proposals.notProposed')}</h3>
-          {proposals.excluded.map((reason, index) => (
-            <p key={index} className="wh-muted">{reason}</p>
-          ))}
-        </div>
+        </details>
       )}
     </section>
   )

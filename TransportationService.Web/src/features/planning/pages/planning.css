@@ -232,3 +232,162 @@
   font-size: 12px;
   font-style: italic;
 }
+
+/* ---- B20: the Ritlijst as an operational list ---- */
+.pl-grouped {
+  font-size: 14px;
+}
+
+.pl-grouped th,
+.pl-grouped td {
+  padding: 7px 10px;
+}
+
+.pl-num {
+  text-align: right;
+}
+
+.pl-nowrap {
+  white-space: nowrap;
+}
+
+.pl-group-head th {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 13px;
+  background: var(--color-surface-subtle);
+  border-top: 1px solid var(--border);
+}
+
+.pl-group-title {
+  font-weight: 700;
+  color: var(--text-h);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.pl-group-count {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  font-weight: 600;
+}
+
+.pl-group-hint {
+  margin-left: 10px;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+.pl-group-running .pl-group-head th {
+  box-shadow: inset 4px 0 0 var(--warning);
+}
+
+.pl-group-overdue .pl-group-head th {
+  box-shadow: inset 4px 0 0 var(--danger);
+}
+
+.pl-trip-link {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.pl-row-note {
+  display: block;
+  font-size: 12px;
+  color: var(--color-warning-text, var(--warning));
+}
+
+.pl-missing {
+  color: var(--text-muted);
+}
+
+.pl-empty-row td {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* Ritvoorstellen: suggestions, not scaffolding. */
+.pl-proposals {
+  margin-top: 24px;
+  max-width: 1000px;
+}
+
+.pl-proposals h2 {
+  font-size: 17px;
+  margin: 0 0 4px;
+}
+
+.pl-proposals-intro,
+.pl-muted {
+  margin: 0 0 8px;
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.pl-suggestions {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pl-suggestion {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 12px;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+}
+
+.pl-suggestion-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  min-width: 0;
+}
+
+.pl-suggestion-what {
+  color: var(--text);
+}
+
+.pl-suggestion-flags {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.pl-suggestion-details {
+  grid-column: 1 / -1;
+  font-size: 14px;
+}
+
+.pl-suggestion-details summary,
+.pl-proposals-gaps summary {
+  cursor: pointer;
+  color: var(--accent);
+}
+
+.pl-suggestion-details ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+
+.pl-constraint {
+  display: block;
+  margin: 0;
+}
+
+.pl-proposals-gaps {
+  margin-top: 12px;
+  font-size: 14px;
+}
