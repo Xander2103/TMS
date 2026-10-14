@@ -82,6 +82,7 @@ export function TransportOrderDetailPage() {
 
   const [order, setOrder] = useState<TransportOrderDetail | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [reloadToken, setReloadToken] = useState(0)
   const [editing, setEditing] = useState(false)
   const [busy, setBusy] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -133,7 +134,7 @@ export function TransportOrderDetailPage() {
     return () => {
       mounted = false
     }
-  }, [id])
+  }, [id, reloadToken])
 
   async function applyTransition(target: TransportOrderStatus) {
     setBusy(true)
@@ -202,7 +203,7 @@ export function TransportOrderDetailPage() {
     }
   }
 
-  if (loadError) return <ErrorState message={loadError} />
+  if (loadError) return <ErrorState message={loadError} onRetry={() => { setLoadError(null); setReloadToken((n) => n + 1) }} backTo="/transport-orders" />
   if (!order) return <LoadingState message="Opdracht laden..." />
   // Redesign 2026-09-12: an unknown segment lands on the overview with a clean URL.
   if (section !== undefined && !isOrderTab(section)) return <Navigate to={orderTabPath(id, 'overzicht')} replace />

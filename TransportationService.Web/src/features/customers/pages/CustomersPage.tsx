@@ -87,6 +87,8 @@ export function CustomersPage() {
         isLoading={isLoading}
         error={error}
         emptyMessage={t('customers.list.empty')}
+        emptyAction={hasPermission('customers.create') ? <Button onClick={() => navigate('/customers/new')}>{t('customers.list.newCustomer')}</Button> : undefined}
+        onRetry={reload}
         loadingMessage={t('customers.list.loading')}
         onRowClick={(row) => navigate(`/customers/${row.id}`)}
       />

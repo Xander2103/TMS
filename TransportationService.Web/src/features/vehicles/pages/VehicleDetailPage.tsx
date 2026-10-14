@@ -39,6 +39,7 @@ import {
 } from '../types'
 import './vehicle-form.css'
 import { formatDate } from '../../../utils/dates'
+import { ErrorState } from '../../../components/feedback/ErrorState'
 
 const TAB_IDS = ['overzicht', 'techniek', 'toewijzing', 'documenten', 'tachograaf', 'leasing', 'onderhoud', 'keuringen', 'schade', 'brandstof', 'kpi', 'historiek'] as const
 type TabId = (typeof TAB_IDS)[number]
@@ -53,6 +54,7 @@ export function VehicleDetailPage() {
 
   const [vehicle, setVehicle] = useState<VehicleDetail | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [reloadToken, setReloadToken] = useState(0)
   const [editing, setEditing] = useState(false)
   const [form, setForm] = useState<VehicleInput | null>(null)
   const [saving, setSaving] = useState(false)
@@ -77,7 +79,7 @@ export function VehicleDetailPage() {
     return () => {
       mounted = false
     }
-  }, [id, t])
+  }, [id, t, reloadToken])
 
   const loading = vehicle === null && loadError === null
   const canEdit = hasPermission('vehicles.edit')
@@ -168,7 +170,7 @@ export function VehicleDetailPage() {
   }
 
   if (loading) return <p className="placeholder-text">{t('vehicles.detail.loading')}</p>
-  if (loadError || !vehicle) return <p className="placeholder-text">{loadError ?? t('fleet.common.notFound')}</p>
+  if (loadError || !vehicle) return <ErrorState message={loadError ?? t('fleet.common.notFound')} onRetry={() => { setLoadError(null); setReloadToken((n) => n + 1) }} backTo="/vehicles" />
 
   return (
     <div>

@@ -22,7 +22,7 @@ export function VehiclesPage() {
   const [activeFilter, setActiveFilter] = useState<boolean | undefined>(undefined)
   const [page, setPage] = useState(1)
 
-  const { items, totalCount, pageSize, isLoading, error } = usePagedQuery<VehicleListItem>(
+  const { items, totalCount, pageSize, isLoading, error, reload } = usePagedQuery<VehicleListItem>(
     (args) => searchVehicles(args),
     { search, isActive: activeFilter, page, errorMessage: t('vehicles.list.loadFailed') },
   )
@@ -72,6 +72,8 @@ export function VehiclesPage() {
         isLoading={isLoading}
         error={error}
         emptyMessage={t('vehicles.list.empty')}
+        emptyAction={hasPermission('vehicles.create') ? <Button onClick={() => navigate('/vehicles/new')}>{t('vehicles.list.new')}</Button> : undefined}
+        onRetry={reload}
         loadingMessage={t('vehicles.list.loading')}
         onRowClick={(row) => navigate(`/vehicles/${row.id}`)}
       />

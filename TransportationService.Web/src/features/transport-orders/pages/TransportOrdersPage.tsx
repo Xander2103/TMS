@@ -238,6 +238,8 @@ export function TransportOrdersPage() {
         isLoading={isLoading}
         error={error}
         emptyMessage={t('transportOrders.list.empty')}
+        emptyAction={hasAnyPermission(['orders.create', 'orders.manage']) ? <Button onClick={() => navigate('/transport-orders/new')}>{t('transportOrders.list.newOrder')}</Button> : undefined}
+        onRetry={reload}
         loadingMessage={t('transportOrders.list.loading')}
         onRowClick={(row) => navigate(`/transport-orders/${row.id}`)}
       />

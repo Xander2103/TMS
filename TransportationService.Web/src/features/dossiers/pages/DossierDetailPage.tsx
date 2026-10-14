@@ -295,7 +295,7 @@ function DossierDetailContent() {
       .catch(() => setUserOptions([]))
   }, [editing])
 
-  if (loadError) return <ErrorState message={loadError} />
+  if (loadError) return <ErrorState message={loadError} onRetry={load} backTo="/dossiers" />
   if (!dossier || !id) return <LoadingState message={t('dossiers.detail.loading')} />
   // An unknown or unavailable segment lands on the overview with a clean URL.
   if (section !== undefined && activeTab !== section) return <Navigate to={dossierTabPath(id, 'overzicht')} replace />

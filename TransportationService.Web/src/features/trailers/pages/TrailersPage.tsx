@@ -22,7 +22,7 @@ export function TrailersPage() {
   const [activeFilter, setActiveFilter] = useState<boolean | undefined>(undefined)
   const [page, setPage] = useState(1)
 
-  const { items, totalCount, pageSize, isLoading, error } = usePagedQuery<TrailerListItem>(
+  const { items, totalCount, pageSize, isLoading, error, reload } = usePagedQuery<TrailerListItem>(
     (args) => searchTrailers(args),
     { search, isActive: activeFilter, page, errorMessage: t('trailers.list.loadFailed') },
   )
@@ -72,6 +72,8 @@ export function TrailersPage() {
         isLoading={isLoading}
         error={error}
         emptyMessage={t('trailers.list.empty')}
+        emptyAction={hasPermission('trailers.create') ? <Button onClick={() => navigate('/trailers/new')}>{t('trailers.list.new')}</Button> : undefined}
+        onRetry={reload}
         loadingMessage={t('trailers.list.loading')}
         onRowClick={(row) => navigate(`/trailers/${row.id}`)}
       />

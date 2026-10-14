@@ -62,6 +62,7 @@ export function InvoiceDetailPage() {
   const [invoice, setInvoice] = useState<InvoiceDetail | null>(null)
   // Vertaalsleutel in state; vertaling gebeurt pas bij render.
   const [loadErrorKey, setLoadErrorKey] = useState<string | null>(null)
+  const [reloadToken, setReloadToken] = useState(0)
   const [busy, setBusy] = useState(false)
 
   const [editing, setEditing] = useState(false)
@@ -103,7 +104,7 @@ export function InvoiceDetailPage() {
     return () => {
       mounted = false
     }
-  }, [id])
+  }, [id, reloadToken])
 
   function startEditing() {
     if (!invoice) return
@@ -257,7 +258,7 @@ export function InvoiceDetailPage() {
     }
   }
 
-  if (loadErrorKey) return <ErrorState message={t(loadErrorKey)} />
+  if (loadErrorKey) return <ErrorState message={t(loadErrorKey)} onRetry={() => { setLoadErrorKey(null); setReloadToken((n) => n + 1) }} backTo="/invoices" />
   if (!invoice) return <LoadingState message={t('invoices.detail.loading')} />
 
   const editable = invoice.status === 'Draft' && hasPermission('invoices.edit')

@@ -187,6 +187,7 @@ export function LocationsPage() {
 
 /** Flat table with server-side sorting on Code/Naam/Type/Plaats/Klant/Status. */
 function FlatLocationsView({ filters }: { filters: LocationFilters }) {
+  const { hasPermission } = useAuth()
   const navigate = useNavigate()
   const { t } = useLocale()
   const [page, setPage] = useState(1)
@@ -202,7 +203,7 @@ function FlatLocationsView({ filters }: { filters: LocationFilters }) {
     setPage(1)
   }
 
-  const { items, totalCount, pageSize, isLoading, error } = usePagedQuery<LocationListItem>(
+  const { items, totalCount, pageSize, isLoading, error, reload } = usePagedQuery<LocationListItem>(
     (args) =>
       searchLocations({
         ...args,
@@ -240,6 +241,8 @@ function FlatLocationsView({ filters }: { filters: LocationFilters }) {
         isLoading={isLoading}
         error={error}
         emptyMessage={t('locations.list.empty')}
+        emptyAction={hasPermission('locations.create') ? <Button onClick={() => navigate('/locations/new')}>{t('locations.list.new')}</Button> : undefined}
+        onRetry={reload}
         loadingMessage={t('locations.list.loading')}
         onRowClick={(row) => navigate(`/locations/${row.id}`)}
         rowClassName={(row) => (row.isActive ? undefined : 'locations-row-inactive')}

@@ -128,7 +128,13 @@ export function IncidentsPage() {
       {error && <p className="placeholder-text">{error}</p>}
       {!error && loaded && incidents.length === 0 && <EmptyState message={t('incidents.list.empty')} />}
       {!error && incidents.length > 0 && (
-        <DataTable columns={columns} rows={incidents} rowKey={(row) => row.id} onRowClick={(row) => navigate(`/incidents/${row.id}`)} />
+        <DataTable
+          columns={columns}
+          rows={incidents}
+          rowKey={(row) => row.id}
+          onRowClick={(row) => navigate(`/incidents/${row.id}`)}
+          emptyAction={canManage ? <Button onClick={() => navigate('/incidents/new')}>{t('incidents.list.newIncident')}</Button> : undefined}
+        />
       )}
 
       <ProblemsPanel />

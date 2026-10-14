@@ -32,6 +32,7 @@ import {
 } from '../types'
 import './trailer-form.css'
 import { formatDate } from '../../../utils/dates'
+import { ErrorState } from '../../../components/feedback/ErrorState'
 
 const TAB_IDS = ['overzicht', 'techniek', 'documenten', 'leasing', 'onderhoud', 'keuringen', 'schade', 'kpi', 'historiek'] as const
 type TabId = (typeof TAB_IDS)[number]
@@ -46,6 +47,7 @@ export function TrailerDetailPage() {
 
   const [trailer, setTrailer] = useState<TrailerDetail | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [reloadToken, setReloadToken] = useState(0)
   const [editing, setEditing] = useState(false)
   const [form, setForm] = useState<TrailerInput | null>(null)
   const [saving, setSaving] = useState(false)
@@ -70,7 +72,7 @@ export function TrailerDetailPage() {
     return () => {
       mounted = false
     }
-  }, [id, t])
+  }, [id, t, reloadToken])
 
   const loading = trailer === null && loadError === null
   const canEdit = hasPermission('trailers.edit')
@@ -136,7 +138,7 @@ export function TrailerDetailPage() {
   }
 
   if (loading) return <p className="placeholder-text">{t('trailers.detail.loading')}</p>
-  if (loadError || !trailer) return <p className="placeholder-text">{loadError ?? t('fleet.common.notFound')}</p>
+  if (loadError || !trailer) return <ErrorState message={loadError ?? t('fleet.common.notFound')} onRetry={() => { setLoadError(null); setReloadToken((n) => n + 1) }} backTo="/trailers" />
 
   return (
     <div>

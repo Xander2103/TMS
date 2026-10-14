@@ -131,7 +131,7 @@ export function EmployeeDetailPage() {
   }, [canEdit, requestedSection])
 
   if (isLoading) return <LoadingState message={t('employees.detail.loading')} />
-  if (error || !employee) return <ErrorState message={error ?? t('employees.errors.employeeNotFound')} />
+  if (error || !employee) return <ErrorState message={error ?? t('employees.errors.employeeNotFound')} onRetry={reload} backTo="/employees" />
 
   function setTab(next: string) {
     setSearchParams(next === 'profiel' ? {} : { tab: next }, { replace: true })

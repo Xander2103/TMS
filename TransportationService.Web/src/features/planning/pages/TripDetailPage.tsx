@@ -60,6 +60,7 @@ export function TripDetailPage() {
 
   const [trip, setTrip] = useState<TripDetail | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [reloadToken, setReloadToken] = useState(0)
   const [busy, setBusy] = useState(false)
 
   // Driver/vehicle/trailer lists + their per-picker status (shared with the dossier planning block).
@@ -146,7 +147,7 @@ export function TripDetailPage() {
     return () => {
       mounted = false
     }
-  }, [id, applyTrip, t])
+  }, [id, applyTrip, t, reloadToken])
 
   // Execution snapshot (stop statuses + POD flags) for trips that left Draft.
   useEffect(() => {
@@ -388,7 +389,7 @@ export function TripDetailPage() {
     [availableOrders, orderIds, t],
   )
 
-  if (loadError) return <ErrorState message={loadError} />
+  if (loadError) return <ErrorState message={loadError} onRetry={() => { setLoadError(null); setReloadToken((n) => n + 1) }} backTo="/planning" />
   if (!trip) return <LoadingState message={t('planning.detail.loading')} />
 
   const attachedSummaries = orderIds.map((orderId) => {

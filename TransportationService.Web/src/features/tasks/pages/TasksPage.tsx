@@ -224,6 +224,7 @@ export function TasksPage() {
         isLoading={isLoading}
         error={error}
         emptyMessage={t('tasks.page.empty')}
+        emptyAction={canCreate ? <Button onClick={() => setShowNewDialog(true)}>{t('tasks.page.newTask')}</Button> : undefined}
         onRowClick={(row) => openDetail(row.id)}
       />
       <Pagination page={page} pageSize={PAGE_SIZE} totalCount={total} onPageChange={setPage} />

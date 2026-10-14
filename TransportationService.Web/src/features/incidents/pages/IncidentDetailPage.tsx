@@ -198,7 +198,7 @@ export function IncidentDetailPage() {
       .catch(() => setVehicleOptions([]))
   }, [])
 
-  if (loadError) return <ErrorState message={loadError} />
+  if (loadError) return <ErrorState message={loadError} onRetry={load} backTo="/incidents" />
   if (!isNew && !incident) return <LoadingState message={t('incidents.detail.loading')} />
 
   const editable = canManage && (isNew || incident!.status !== 'Cancelled')

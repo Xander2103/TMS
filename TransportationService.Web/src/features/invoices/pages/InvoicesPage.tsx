@@ -115,6 +115,8 @@ export function InvoicesPage() {
         isLoading={isLoading}
         error={error}
         emptyMessage={t('invoices.internalList.empty')}
+        emptyAction={undefined}
+        onRetry={reload}
         loadingMessage={t('invoices.list.loading')}
         onRowClick={(row) => navigate(`/invoices/${row.id}`)}
       />

@@ -15,6 +15,7 @@ import { OPENING_DAYS, OPENING_DAY_LABEL_KEYS } from '../openingHours'
 import { LOCATION_TYPE_LABEL_KEYS, type LocationDetail, type LocationInput } from '../types'
 import './locations.css'
 import './location-form.css'
+import { ErrorState } from '../../../components/feedback/ErrorState'
 
 /** Full detail → form payload; every field round-trips so saving never clears untouched data. */
 function toInput(location: LocationDetail): LocationInput {
@@ -117,6 +118,7 @@ export function LocationDetailPage() {
 
   const [location, setLocation] = useState<LocationDetail | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [reloadToken, setReloadToken] = useState(0)
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -140,7 +142,7 @@ export function LocationDetailPage() {
     return () => {
       mounted = false
     }
-  }, [id, t])
+  }, [id, t, reloadToken])
 
   const loading = location === null && loadError === null
   const canEdit = hasPermission('locations.edit')
@@ -210,7 +212,7 @@ export function LocationDetailPage() {
   }
 
   if (loading) return <p className="placeholder-text">{t('locations.detail.loading')}</p>
-  if (loadError || !location) return <p className="placeholder-text">{loadError ?? t('locations.detail.notFound')}</p>
+  if (loadError || !location) return <ErrorState message={loadError ?? t('locations.detail.notFound')} onRetry={() => { setLoadError(null); setReloadToken((n) => n + 1) }} backTo="/locations" />
 
   const noInfo = <p className="location-card-empty">{t('locations.detail.noInfo')}</p>
 

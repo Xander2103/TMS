@@ -13,6 +13,7 @@ import { getMyAttendanceHistory } from '../api/timeAttendanceApi'
 import { periodRange, type Period } from '../utils/periodRange'
 import type { AttendanceHistory } from '../types'
 import './time-attendance.css'
+import { EmptyState } from '../../../components/ui/EmptyState'
 
 const PERIOD_LABELS: Record<Period, string> = {
   today: 'attendance.myTime.periodToday',
@@ -75,7 +76,8 @@ export function MyTimePage() {
         ))}
       </div>
 
-      {error && <ErrorState message={t(error)} />}
+      {error === 'attendance.myTime.noEmployeeLink' && <EmptyState message={t(error)} />}
+      {error && error !== 'attendance.myTime.noEmployeeLink' && <ErrorState message={t(error)} />}
       {!error && isLoading && <LoadingState message={t('attendance.myTime.loading')} />}
 
       {!error && !isLoading && history && (

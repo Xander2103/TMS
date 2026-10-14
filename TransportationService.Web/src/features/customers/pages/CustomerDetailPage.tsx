@@ -93,7 +93,7 @@ export function CustomerDetailPage() {
   // `reload()` after a panel save keeps the current customer on screen so the edit form, the
   // self-saving panels and any open dialog stay mounted (and edits elsewhere survive).
   if (isLoading) return <LoadingState message={t('customers.detail.loading')} />
-  if (error || !customer) return <ErrorState message={error ? t(error) : t('customers.detail.notFound')} />
+  if (error || !customer) return <ErrorState message={error ? t(error) : t('customers.detail.notFound')} onRetry={reload} backTo="/customers" />
 
   function openNumberDialog() {
     setNewNumber('')

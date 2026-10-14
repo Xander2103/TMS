@@ -420,6 +420,8 @@ export function DossiersPage() {
           isLoading={isLoading}
           error={error}
           emptyMessage={t('dossiers.list.empty')}
+          emptyAction={canManage ? <Button onClick={() => navigate('/dossiers/new')}>{t('dossiers.list.new')}</Button> : undefined}
+          onRetry={reload}
           loadingMessage={t('dossiers.list.loading')}
           onRowClick={(row) => navigate(`/dossiers/${row.id}`)}
           sort={sort}

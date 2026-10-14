@@ -331,6 +331,8 @@ export function TankCardsPage() {
         isLoading={isLoading}
         error={error}
         emptyMessage={t('tankCards.page.empty')}
+        emptyAction={hasPermission('tank_cards.create') ? <Button onClick={openCreate}>{t('tankCards.page.new')}</Button> : undefined}
+        onRetry={reload}
         loadingMessage={t('tankCards.page.loading')}
       />
       <Pagination page={page} pageSize={pageSize} totalCount={totalCount} onPageChange={setPage} />
