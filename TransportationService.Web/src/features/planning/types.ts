@@ -117,6 +117,10 @@ export interface TripOrderSummary {
   lastUnloadingCity: string | null
   adrRequired: boolean
   craneRequired: boolean
+  /** B23: the dossier the order belongs to (absent on older payloads / orders without a dossier). */
+  dossierId?: string | null
+  dossierNumber?: string | null
+  customerReference?: string | null
 }
 
 export interface TripListItem {

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { apiClient, ApiError } from '../../../api/apiClient'
 import { PageHeader } from '../../../components/layout/PageHeader'
 import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
@@ -9,6 +9,7 @@ import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { ActionMenu, type ActionMenuItem } from '../../../components/ui/ActionMenu'
 import { UnsavedChangesGuard } from '../../../components/ui/UnsavedChangesGuard'
+import { FormActions } from '../../../components/ui/FormActions'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { FormField } from '../../../components/ui/FormField'
 import { SearchableSelect, type SearchableSelectOption } from '../../../components/ui/SearchableSelect'
@@ -51,7 +52,7 @@ import {
 } from '../resourceOptions'
 import { usePlanningResources, type ResourceListStatus } from '../usePlanningResources'
 import './planning.css'
-import { formatDate } from '../../../utils/dates'
+import { formatDate, formatTime } from '../../../utils/dates'
 
 /** Lifecycle steps that move a trip forward; the first allowed one is the primary header action. */
 const TRIP_FORWARD_STEPS: TripStatus[] = ['Planned', 'InProgress', 'Completed']
@@ -88,6 +89,9 @@ export function TripDetailPage() {
   const [plannedDistanceKm, setPlannedDistanceKm] = useState('')
   const [plannedEmptyKm, setPlannedEmptyKm] = useState('')
   const [dirty, setDirty] = useState(false)
+  // B23: explicit save — the moment of the last save stays visible next to the assignment.
+  const [savedAt, setSavedAt] = useState<string | null>(null)
+  const [showPackages, setShowPackages] = useState(false)
 
   const [overrideTarget, setOverrideTarget] = useState<{ status: TripStatus; conflicts: string[] } | null>(null)
   const [cancelTarget, setCancelTarget] = useState<TripStatus | null>(null)
@@ -303,6 +307,7 @@ export function TripDetailPage() {
       )
       // The API echoes `vehicleSelectionSource`, so a manual choice survives this save and a reload.
       applyTrip(updated)
+      setSavedAt(new Date().toISOString())
       showSuccess(t('planning.detail.saved'))
     } catch (err) {
       showError(
@@ -410,6 +415,22 @@ export function TripDetailPage() {
     }
   })
 
+  // B23: the dossiers this trip serves (unique, in order sequence) — real links, never dead text.
+  const tripDossiers = trip.orders.reduce<{ id: string; number: string }[]>(
+    (list, order) =>
+      order.dossierId && order.dossierNumber && !list.some((entry) => entry.id === order.dossierId)
+        ? [...list, { id: order.dossierId, number: order.dossierNumber }]
+        : list,
+    [],
+  )
+  const criticalPackages = readiness?.outstandingPackages.filter(
+    (item) => item.status === 'Missing' || item.status === 'Damaged' || item.exceptionState === 'Open',
+  ) ?? []
+
+  function discardChanges() {
+    if (trip) applyTrip(trip)
+  }
+
   // B04: the next forward step is the one primary action; "Terug naar concept", cancelling and
   // deleting live in the "Meer" menu so they never compete with it.
   const canEditTrip = hasPermission('planning.edit')
@@ -432,9 +453,32 @@ export function TripDetailPage() {
 
   return (
     <div>
-      <Breadcrumbs items={[{ label: t('planning.title'), to: '/planning' }, { label: trip.tripNumber }]} />
+      <Breadcrumbs
+        items={
+          // B23: a trip that serves ONE dossier sits in that dossier's path; otherwise in the Ritlijst.
+          tripDossiers.length === 1
+            ? [
+                { label: t('navigation.menu.dossiers'), to: '/dossiers' },
+                { label: tripDossiers[0].number, to: `/dossiers/${tripDossiers[0].id}` },
+                { label: trip.tripNumber },
+              ]
+            : [{ label: t('planning.title'), to: '/planning' }, { label: trip.tripNumber }]
+        }
+      />
       <PageHeader
         title={`${trip.tripNumber} — ${formatDate(trip.tripDate)}`}
+        subtitle={
+          tripDossiers.length > 0 ? (
+            <span className="pl-context-chips">
+              <span>{t('planning.detail.dossiersLabel', { count: tripDossiers.length })}</span>
+              {tripDossiers.map((dossier) => (
+                <Link key={dossier.id} to={`/dossiers/${dossier.id}`} className="pl-chip">
+                  {dossier.number}
+                </Link>
+              ))}
+            </span>
+          ) : undefined
+        }
         action={
           <span className="pl-header-actions">
             <Badge tone={TRIP_STATUS_TONE[trip.status]}>{t(TRIP_STATUS_LABELS[trip.status])}</Badge>
@@ -471,11 +515,25 @@ export function TripDetailPage() {
       />
 
       <UnsavedChangesGuard when={dirty && !busy} />
-      {dirty && <p className="pl-dirty-hint">{t('planning.detail.dirtyHint')}</p>}
 
-      <section className="pl-section">
-        <h2>{t('planning.detail.assignmentTitle')}</h2>
-        <div className="pl-assign">
+      <section className="pl-section pl-card" aria-labelledby="tr-assign-title">
+        <header className="pl-section-head">
+          <h2 id="tr-assign-title">{t('planning.detail.assignmentTitle')}</h2>
+          <span className="pl-save-state" role="status">
+            {dirty
+              ? <span className="pl-save-dirty">{t('planning.detail.unsaved')}</span>
+              : savedAt
+                ? <span className="pl-save-ok">✓ {t('planning.detail.savedAt', { time: formatTime(savedAt) })}</span>
+                : null}
+          </span>
+        </header>
+        {!editable && canEditTrip && (trip.status === 'Planned') && (
+          <p className="pl-section-note">
+            {t('planning.detail.editOnBoard')}{' '}
+            <Link to="/planning-center">{t('planning.detail.openBoard')}</Link>
+          </p>
+        )}
+        <div className="pl-assign pl-assign-4">
           <FormField label={t('planning.detail.date')} htmlFor="tr-date">
             <input
               id="tr-date"
@@ -545,82 +603,69 @@ export function TripDetailPage() {
               disabled={!editable || busy}
             />
           </FormField>
-          <FormField label={t('planning.detail.plannedDistance')} htmlFor="tr-distance" hint={t('planning.detail.plannedDistanceHint')}>
-            <input
-              id="tr-distance"
-              inputMode="decimal"
-              value={plannedDistanceKm}
-              onChange={(e) => {
-                setPlannedDistanceKm(e.target.value)
-                markDirty()
-              }}
-              disabled={!editable || busy}
-            />
-          </FormField>
-          <FormField label={t('planning.detail.emptyDistance')} htmlFor="tr-empty">
-            <input
-              id="tr-empty"
-              inputMode="decimal"
-              value={plannedEmptyKm}
-              onChange={(e) => {
-                setPlannedEmptyKm(e.target.value)
-                markDirty()
-              }}
-              disabled={!editable || busy}
-            />
-          </FormField>
         </div>
-        <FormField label={t('planning.detail.notes')} htmlFor="tr-notes">
-          <textarea
-            id="tr-notes"
-            rows={2}
-            value={notes}
-            onChange={(e) => {
-              setNotes(e.target.value)
-              markDirty()
-            }}
-            disabled={!editable || busy}
-            className="pl-notes"
-          />
-        </FormField>
       </section>
 
-      <section className="pl-section">
-        <h2>{t('planning.detail.ordersTitle', { count: orderIds.length })}</h2>
+      <section className="pl-section pl-card" aria-labelledby="tr-orders-title">
+        <header className="pl-section-head">
+          <h2 id="tr-orders-title">{t('planning.detail.ordersStopsTitle', { count: orderIds.length })}</h2>
+        </header>
         {attachedSummaries.length === 0 && <p className="placeholder-text">{t('planning.detail.ordersEmpty')}</p>}
         {attachedSummaries.length > 0 && (
           <ol className="pl-orders">
-            {attachedSummaries.map((order, index) => (
-              <li key={order.id}>
-                <span className="pl-order-label">{order.label}</span>
-                {editable && (
-                  <span className="pl-order-actions">
-                    <button type="button" className="pl-link" onClick={() => moveOrder(index, -1)} disabled={busy || index === 0}>
-                      ↑
-                    </button>
-                    <button
-                      type="button"
-                      className="pl-link"
-                      onClick={() => moveOrder(index, 1)}
-                      disabled={busy || index === attachedSummaries.length - 1}
-                    >
-                      ↓
-                    </button>
-                    <button
-                      type="button"
-                      className="pl-link pl-link-danger"
-                      onClick={() => {
-                        setOrderIds((ids) => ids.filter((x) => x !== order.id))
-                        markDirty()
-                      }}
-                      disabled={busy}
-                    >
-                      {t('planning.detail.remove')}
-                    </button>
+            {attachedSummaries.map((order, index) => {
+              const onTrip = trip.orders.find((o) => o.transportOrderId === order.id)
+              return (
+                <li key={order.id}>
+                  <span className="pl-order-label">
+                    <Link to={`/transport-orders/${order.id}`} className="pl-chip pl-chip-order">
+                      {onTrip?.orderNumber ?? order.label}
+                    </Link>
+                    {onTrip?.dossierId && onTrip.dossierNumber && (
+                      <Link to={`/dossiers/${onTrip.dossierId}`} className="pl-chip">
+                        {onTrip.dossierNumber}
+                      </Link>
+                    )}
+                    {onTrip ? (
+                      <span className="pl-order-text">
+                        {onTrip.customerName}
+                        <span className="pl-muted-inline"> · {onTrip.firstLoadingCity ?? '?'} → {onTrip.lastUnloadingCity ?? '?'}</span>
+                        {onTrip.customerReference && <span className="pl-muted-inline"> · {t('planning.detail.orderReference', { reference: onTrip.customerReference })}</span>}
+                      </span>
+                    ) : (
+                      <span className="pl-order-text pl-muted-inline">{t('planning.detail.addedUnsaved')}</span>
+                    )}
                   </span>
-                )}
-              </li>
-            ))}
+                  {editable && (
+                    <span className="pl-order-actions">
+                      <button type="button" className="pl-link" onClick={() => moveOrder(index, -1)} disabled={busy || index === 0} aria-label={t('planning.detail.moveUp')}>
+                        ↑
+                      </button>
+                      <button
+                        type="button"
+                        className="pl-link"
+                        onClick={() => moveOrder(index, 1)}
+                        disabled={busy || index === attachedSummaries.length - 1}
+                        aria-label={t('planning.detail.moveDown')}
+                      >
+                        ↓
+                      </button>
+                      <button
+                        type="button"
+                        className="pl-link pl-link-danger"
+                        onClick={() => {
+                          setOrderIds((ids) => ids.filter((x) => x !== order.id))
+                          markDirty()
+                        }}
+                        disabled={busy}
+                      >
+                        {t('planning.detail.remove')}
+                      </button>
+                    </span>
+                  )}
+                </li>
+              )
+            })}
           </ol>
         )}
 
@@ -646,13 +691,12 @@ export function TripDetailPage() {
             />
           </div>
         )}
-      </section>
 
       {execution && execution.stops.length > 0 && (
-        <section className="pl-section">
-          <h2>
+        <div className="pl-subsection">
+          <h3>
             {t('planning.detail.executionTitle', { completed: execution.completedCount, total: execution.totalCount })}
-          </h2>
+          </h3>
           {trip.status === 'InProgress' && canEditPlanning && (
             <p className="pl-eta-bar">
               {eta && eta.manualDelayMinutes > 0 && (
@@ -708,8 +752,133 @@ export function TripDetailPage() {
               )
             })}
           </ol>
+        </div>
+      )}
+
+      </section>
+
+      <section className="pl-section pl-card">
+        <h2>{t('planning.detail.conflictsTitle')}</h2>
+        {trip.conflicts.length === 0 && <p className="pl-ok">✓ {t('planning.detail.noConflicts')}</p>}
+        {trip.conflicts.length > 0 && (
+          <ul className="pl-conflicts">
+            {trip.conflicts.map((conflict, index) => (
+              <li key={`${conflict.code}-${index}`}>
+                <Badge tone={CONFLICT_SEVERITY_META[conflict.severity]?.tone ?? (conflict.blocking ? 'danger' : 'warning')}>
+                  {t(CONFLICT_SEVERITY_META[conflict.severity]?.label ??
+                    (conflict.blocking ? 'planning.conflictSeverity.Blocking' : 'planning.conflictSeverity.Warning'))}
+                </Badge>{' '}
+                {conflict.description}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+
+      {readiness && readinessRelevant && (
+        <section className="pl-section pl-card" aria-labelledby="tr-readiness-title">
+          <header className="pl-section-head">
+            <h2 id="tr-readiness-title">{t('planning.detail.readinessTitle')}</h2>
+          </header>
+          <p className={readiness.isComplete ? 'pl-ok' : 'pl-readiness-warning'}>
+            {readiness.isComplete
+              ? `✓ ${t('planning.detail.readinessComplete', { count: readiness.mandatoryPackages })}`
+              : `⚠ ${t('planning.detail.readinessIncomplete', {
+                  loaded: readiness.loadedCount,
+                  mandatory: readiness.mandatoryPackages,
+                  notLoaded: readiness.notLoadedCount,
+                })}` +
+                (readiness.missingCount > 0 ? t('planning.detail.readinessMissingPart', { count: readiness.missingCount }) : '') +
+                (readiness.damagedCount > 0 ? t('planning.detail.readinessDamagedPart', { count: readiness.damagedCount }) : '') +
+                '.'}
+            {readiness.openExceptionCount > 0 &&
+              ` ${t('planning.detail.readinessOpenExceptions', { count: readiness.openExceptionCount })}`}
+          </p>
+          {!readiness.isComplete && (
+            <>
+              <p className="pl-readiness-rule">
+                {readiness.isBlocked
+                  ? t('planning.detail.readinessRuleBlocked')
+                  : readiness.requiresOverride
+                    ? t('planning.detail.readinessRuleOverride')
+                    : t('planning.detail.readinessRuleWarning')}
+              </p>
+              {/* B23: critical exceptions surface without expanding; the full list is on request. */}
+              {criticalPackages.length > 0 && (
+                <ul className="pl-conflicts" aria-label={t('planning.detail.criticalPackages')}>
+                  {criticalPackages.map((item) => (
+                    <li key={item.packageId}>
+                      <Badge tone={PACKAGE_STATUS_TONE[item.status]}>{t(PACKAGE_STATUS_LABELS[item.status])}</Badge>{' '}
+                      {item.packageNumber} — {item.description} ({item.orderNumber})
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <button type="button" className="pl-link pl-toggle" aria-expanded={showPackages} onClick={() => setShowPackages((open) => !open)}>
+                {showPackages
+                  ? t('planning.detail.hidePackages')
+                  : t('planning.detail.showPackages', { count: readiness.outstandingPackages.length })}
+              </button>
+              {showPackages && (
+                <ul className="pl-conflicts pl-package-list">
+                  {readiness.outstandingPackages.map((item) => (
+                    <li key={item.packageId}>
+                      <Badge tone={PACKAGE_STATUS_TONE[item.status]}>{t(PACKAGE_STATUS_LABELS[item.status])}</Badge>{' '}
+                      {item.packageNumber} — {item.description} ({item.orderNumber})
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </>
+          )}
         </section>
       )}
+
+      <details className="pl-section pl-card pl-details" open={dirty || undefined}>
+        <summary>{t('planning.detail.detailsTitle')}</summary>
+        <div className="pl-assign pl-assign-2">
+          <FormField label={t('planning.detail.plannedDistance')} htmlFor="tr-distance" hint={t('planning.detail.plannedDistanceHint')}>
+            <input
+              id="tr-distance"
+              inputMode="decimal"
+              value={plannedDistanceKm}
+              onChange={(e) => {
+                setPlannedDistanceKm(e.target.value)
+                markDirty()
+              }}
+              disabled={!editable || busy}
+            />
+          </FormField>
+          <FormField label={t('planning.detail.emptyDistance')} htmlFor="tr-empty">
+            <input
+              id="tr-empty"
+              inputMode="decimal"
+              value={plannedEmptyKm}
+              onChange={(e) => {
+                setPlannedEmptyKm(e.target.value)
+                markDirty()
+              }}
+              disabled={!editable || busy}
+            />
+          </FormField>
+        </div>
+        <FormField label={t('planning.detail.notes')} htmlFor="tr-notes">
+          <textarea
+            id="tr-notes"
+            rows={2}
+            value={notes}
+            onChange={(e) => {
+              setNotes(e.target.value)
+              markDirty()
+            }}
+            disabled={!editable || busy}
+            className="pl-notes"
+          />
+        </FormField>
+      </details>
+
+      {hasPermission('trip_costs.view') && <TripCostingPanel tripId={trip.id} tripStatus={trip.status} />}
 
       {delayOpen && (
         <Modal
@@ -736,72 +905,16 @@ export function TripDetailPage() {
         </Modal>
       )}
 
-      <section className="pl-section">
-        <h2>{t('planning.detail.conflictsTitle')}</h2>
-        {trip.conflicts.length === 0 && <p className="pl-ok">✓ {t('planning.detail.noConflicts')}</p>}
-        {trip.conflicts.length > 0 && (
-          <ul className="pl-conflicts">
-            {trip.conflicts.map((conflict, index) => (
-              <li key={`${conflict.code}-${index}`}>
-                <Badge tone={CONFLICT_SEVERITY_META[conflict.severity]?.tone ?? (conflict.blocking ? 'danger' : 'warning')}>
-                  {t(CONFLICT_SEVERITY_META[conflict.severity]?.label ??
-                    (conflict.blocking ? 'planning.conflictSeverity.Blocking' : 'planning.conflictSeverity.Warning'))}
-                </Badge>{' '}
-                {conflict.description}
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-
-      {readiness && readinessRelevant && (
-        <section className="pl-section">
-          <h2>{t('planning.detail.readinessTitle')}</h2>
-          <p className={readiness.isComplete ? 'pl-ok' : 'pl-readiness-warning'}>
-            {readiness.isComplete
-              ? `✓ ${t('planning.detail.readinessComplete', { count: readiness.mandatoryPackages })}`
-              : `⚠ ${t('planning.detail.readinessIncomplete', {
-                  loaded: readiness.loadedCount,
-                  mandatory: readiness.mandatoryPackages,
-                  notLoaded: readiness.notLoadedCount,
-                })}` +
-                (readiness.missingCount > 0 ? t('planning.detail.readinessMissingPart', { count: readiness.missingCount }) : '') +
-                (readiness.damagedCount > 0 ? t('planning.detail.readinessDamagedPart', { count: readiness.damagedCount }) : '') +
-                '.'}
-            {readiness.openExceptionCount > 0 &&
-              ` ${t('planning.detail.readinessOpenExceptions', { count: readiness.openExceptionCount })}`}
-          </p>
-          {!readiness.isComplete && (
-            <>
-              <p className="pl-readiness-rule">
-                {readiness.isBlocked
-                  ? t('planning.detail.readinessRuleBlocked')
-                  : readiness.requiresOverride
-                    ? t('planning.detail.readinessRuleOverride')
-                    : t('planning.detail.readinessRuleWarning')}
-              </p>
-              <ul className="pl-conflicts">
-                {readiness.outstandingPackages.map((item) => (
-                  <li key={item.packageId}>
-                    <Badge tone={PACKAGE_STATUS_TONE[item.status]}>{t(PACKAGE_STATUS_LABELS[item.status])}</Badge>{' '}
-                    {item.packageNumber} — {item.description} ({item.orderNumber})
-                  </li>
-                ))}
-              </ul>
-            </>
-          )}
-        </section>
-      )}
-
-      {hasPermission('trip_costs.view') && <TripCostingPanel tripId={trip.id} tripStatus={trip.status} />}
-
-      <div className="pl-detail-actions">
-        {editable && dirty && (
+      {editable && dirty && (
+        <FormActions dirty>
+          <Button variant="secondary" onClick={discardChanges} disabled={busy}>
+            {t('planning.detail.discard')}
+          </Button>
           <Button onClick={() => void handleSave()} disabled={busy}>
             {busy ? t('planning.detail.saving') : t('planning.detail.save')}
           </Button>
-        )}
-      </div>
+        </FormActions>
+      )}
 
       {overrideTarget && (
         <ConfirmDialog

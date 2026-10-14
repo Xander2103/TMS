@@ -391,3 +391,140 @@
   margin-top: 12px;
   font-size: 14px;
 }
+
+/* ---- B23: trip detail — hierarchy, links, save state ---- */
+.pl-card {
+  box-sizing: border-box;
+  max-width: 1100px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+}
+
+.pl-section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.pl-section-head h2 {
+  margin: 0;
+}
+
+.pl-section-note {
+  margin: 0 0 10px;
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.pl-save-state {
+  font-size: 14px;
+}
+
+.pl-save-ok {
+  color: var(--color-success);
+  font-weight: 600;
+}
+
+.pl-save-dirty {
+  color: var(--color-warning);
+  font-weight: 600;
+}
+
+.pl-assign-4 {
+  grid-template-columns: 160px repeat(3, minmax(0, 1fr));
+}
+
+.pl-assign-2 {
+  grid-template-columns: repeat(2, minmax(0, 220px));
+}
+
+.pl-context-chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.pl-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 8px;
+  border: 1px solid var(--accent-border);
+  border-radius: 999px;
+  background: var(--accent-bg);
+  color: var(--accent);
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.pl-chip:hover {
+  border-color: var(--accent);
+}
+
+.pl-chip-order {
+  background: var(--bg);
+}
+
+.pl-order-label {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.pl-order-text {
+  color: var(--text-h);
+}
+
+.pl-muted-inline {
+  color: var(--text-muted);
+}
+
+.pl-subsection {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.pl-subsection h3 {
+  margin: 0 0 8px;
+  font-size: 15px;
+}
+
+.pl-toggle {
+  margin-top: 6px;
+  padding-left: 0;
+}
+
+.pl-package-list {
+  margin-top: 8px;
+  max-height: 360px;
+  overflow-y: auto;
+}
+
+.pl-details > summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--text-h);
+}
+
+.pl-details[open] > summary {
+  margin-bottom: 10px;
+}
+
+@media (max-width: 900px) {
+  .pl-assign-4,
+  .pl-assign-2 {
+    grid-template-columns: 1fr 1fr;
+  }
+}
