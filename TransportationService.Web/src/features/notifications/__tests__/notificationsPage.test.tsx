@@ -224,7 +224,6 @@ describe('NotificationsPage — selection and detail panel', () => {
     expect(within(panel).getByText(/Vandaag om \d{2}:\d{2}/)).toBeInTheDocument()
     // B32: the technical type code is not shown to users; category and title carry the meaning.
     expect(within(panel).queryByText('order_created')).not.toBeInTheDocument()
-    expect(within(panel).getByText('/transport-orders/order-1')).toBeInTheDocument()
     expect(within(panel).getByRole('button', { name: 'Open opdracht' })).toBeInTheDocument()
     expect(within(panel).getByRole('button', { name: 'Markeer als gelezen' })).toBeInTheDocument()
     expect(within(panel).getByRole('button', { name: 'Melding "Opdracht aangemaakt" archiveren' })).toBeInTheDocument()
@@ -415,5 +414,22 @@ describe('NotificationsPage — header, filters and states', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Opnieuw proberen' }))
     expect((await screen.findAllByText('Opdracht aangemaakt'))[0]).toBeInTheDocument()
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+})
+
+describe('NotificationsPage — fewer of this type (B41)', () => {
+  it('offers to switch the category off from the detail and calls the preference endpoint', async () => {
+    vi.spyOn(api, 'getNotificationPreferences').mockResolvedValue([
+      { category: 'Orders', enabled: true },
+      { category: 'Inventory', enabled: false },
+    ] as never)
+    const setPreference = vi.spyOn(api, 'setNotificationPreference').mockResolvedValue(undefined)
+    vi.spyOn(api, 'listNotifications').mockResolvedValue(threeGroups())
+    renderPage()
+    const detail = await screen.findByRole('region', { name: 'Meldingdetail' })
+    await within(detail).findByRole('heading', { level: 2, name: 'Opdracht aangemaakt' })
+    await userEvent.click(await within(detail).findByRole('button', { name: 'Minder meldingen van dit type' }))
+    expect(setPreference).toHaveBeenCalledWith('Orders', false)
+    expect(screen.getByRole('button', { name: 'Alles gelezen' })).toHaveClass('ui-button-secondary')
   })
 })

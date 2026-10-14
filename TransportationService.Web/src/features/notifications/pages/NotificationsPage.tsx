@@ -481,7 +481,7 @@ export function NotificationsPage() {
           </button>
         )}
         <div className="ntc-filters-end">
-          <Button variant="primary" onClick={() => void markAll()} disabled={!hasUnread}>
+          <Button variant="secondary" onClick={() => void markAll()} disabled={!hasUnread}>
             <CheckCheck size={16} aria-hidden="true" /> {t('notificationCenter.actions.markAllRead')}
           </Button>
         </div>
@@ -599,6 +599,14 @@ export function NotificationsPage() {
           onArchive={(n) => void archive(n)}
           onNavigate={(path) => navigate(path)}
           onClose={closeDetail}
+          onMuteCategory={
+            preferences?.some((p) => p.category === selected?.category && p.enabled)
+              ? (n) => {
+                  const preference = preferences.find((p) => p.category === n.category)
+                  if (preference) void togglePreference(preference)
+                }
+              : undefined
+          }
         />
       </div>
     </div>

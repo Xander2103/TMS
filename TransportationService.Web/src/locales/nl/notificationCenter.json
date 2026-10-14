@@ -124,7 +124,8 @@
     "followUp": "Vervolgactie",
     "followUpOrder": "Plan deze opdracht in op het planbord om de uitvoering te starten.",
     "followUpAck": "Deze melding vraagt om een uitdrukkelijke bevestiging.",
-    "toPlanning": "Naar planbord"
+    "toPlanning": "Naar planbord",
+    "muteCategory": "Minder meldingen van dit type"
   },
   "severity": {
     "Info": "Info",

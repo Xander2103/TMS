@@ -14,7 +14,7 @@
     "colExpiry": "Expiry date",
     "colStatus": "Status",
     "emptyExpiring": "No qualifications expiring within {days} days.",
-    "emptyExpired": "No expired qualifications. 🎉",
+    "emptyExpired": "No expired qualifications.",
     "loading": "Loading…"
   }
 }

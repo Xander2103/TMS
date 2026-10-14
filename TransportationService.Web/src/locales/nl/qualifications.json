@@ -14,7 +14,7 @@
     "colExpiry": "Vervaldatum",
     "colStatus": "Status",
     "emptyExpiring": "Geen kwalificaties die binnen {days} dagen vervallen.",
-    "emptyExpired": "Geen verlopen kwalificaties. 🎉",
+    "emptyExpired": "Geen verlopen kwalificaties.",
     "loading": "Laden…"
   }
 }

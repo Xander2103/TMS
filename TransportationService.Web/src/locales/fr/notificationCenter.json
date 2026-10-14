@@ -124,7 +124,8 @@
     "followUp": "Action de suivi",
     "followUpOrder": "Planifiez cette commande sur le tableau de planning pour lancer l’exécution.",
     "followUpAck": "Cette notification demande une confirmation explicite.",
-    "toPlanning": "Vers le planning"
+    "toPlanning": "Vers le planning",
+    "muteCategory": "Moins de notifications de ce type"
   },
   "severity": {
     "Info": "Info",

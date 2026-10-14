@@ -191,7 +191,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
         <button key={`cmd-${row.command.id}`} type="button"
                 className={active ? 'cmdk-hit cmdk-hit-active' : 'cmdk-hit'}
                 onMouseEnter={() => setActiveIndex(index)} onClick={() => openRow(row)}>
-          <span className="cmdk-hit-title">⌘ {t(row.command.label)}</span>
+          <span className="cmdk-hit-title">{t(row.command.label)}</span>
           <span className="cmdk-hit-subtitle">
             {row.command.group === 'create' ? t('ui.palette.groupCreate') : t('ui.palette.groupNavigate')}
           </span>

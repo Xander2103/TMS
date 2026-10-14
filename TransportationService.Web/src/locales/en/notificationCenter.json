@@ -124,7 +124,8 @@
     "followUp": "Follow-up",
     "followUpOrder": "Schedule this order on the planning board to start execution.",
     "followUpAck": "This notification requires an explicit acknowledgement.",
-    "toPlanning": "To planning board"
+    "toPlanning": "To planning board",
+    "muteCategory": "Fewer notifications of this type"
   },
   "severity": {
     "Info": "Info",

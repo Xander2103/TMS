@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { LogOut } from 'lucide-react'
 import { useLocation } from 'react-router-dom'
 import { useAuth } from '../../features/auth/authContextValue'
 import { useLocale } from '../../i18n/localeContext'
@@ -92,7 +93,7 @@ export function Sidebar({ open = false, onNavigate }: { open?: boolean; onNaviga
             aria-label={t('navigation.logout')}
             title={t('navigation.logout')}
           >
-            ⎋
+            <LogOut size={16} aria-hidden="true" />
           </button>
         </div>
       )}

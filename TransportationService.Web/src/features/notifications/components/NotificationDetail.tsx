@@ -1,5 +1,5 @@
 import { useRef, type ReactNode } from 'react'
-import { Archive, ArrowRight, Check, ExternalLink, Info, Inbox, X } from 'lucide-react'
+import { Archive, ArrowRight, BellOff, Check, ExternalLink, Inbox, Info, X } from 'lucide-react'
 import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { NOTIFICATION_CATEGORY_LABELS, type Notification } from '../api/notificationsApi'
@@ -25,6 +25,8 @@ interface NotificationDetailProps {
   onArchive: (notification: Notification) => void
   onNavigate: (path: string) => void
   onClose: () => void
+  /** B41: switch the notification's category off (existing per-category preference); absent = not offered. */
+  onMuteCategory?: (notification: Notification) => void
 }
 
 /**
@@ -41,6 +43,7 @@ export function NotificationDetail({
   onArchive,
   onNavigate,
   onClose,
+  onMuteCategory,
 }: NotificationDetailProps) {
   const { t } = useLocale()
   const sectionRef = useRef<HTMLElement>(null)
@@ -160,6 +163,11 @@ export function NotificationDetail({
             aria-label={t('notificationCenter.page.archiveAria', { title: notification.title })}
           >
             <Archive size={16} aria-hidden="true" /> {t('notificationCenter.detail.archive')}
+          </Button>
+        )}
+        {onMuteCategory && (
+          <Button variant="ghost" onClick={() => onMuteCategory(notification)} disabled={busy}>
+            <BellOff size={16} aria-hidden="true" /> {t('notificationCenter.detail.muteCategory')}
           </Button>
         )}
       </div>
