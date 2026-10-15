@@ -8,8 +8,11 @@
 }
 
 /* B54: a long title (a 90-character customer name) wraps naturally — never truncated — and an
-   unbroken string breaks anywhere instead of pushing the page sideways. */
+   unbroken string breaks anywhere instead of pushing the page sideways. The title block takes the
+   free space and wraps first, so the actions stay top-right beside it; they only drop to their own
+   (right-aligned) line when less than ~320px would be left for the title. */
 .page-header > div:first-child {
+  flex: 1 1 320px;
   min-width: 0;
   max-width: 100%;
 }
@@ -34,6 +37,7 @@
 }
 
 .page-header-action {
+  margin-left: auto;
   display: flex;
   align-items: center;
   flex-wrap: wrap;

@@ -1,4 +1,4 @@
-import { useRef, type KeyboardEvent, type ReactNode } from 'react'
+import { useEffect, useRef, type KeyboardEvent, type ReactNode } from 'react'
 import './Tabs.css'
 
 export interface TabItem {
@@ -17,6 +17,19 @@ interface TabsProps {
 /** Accessible tab bar (roving tabindex, arrow-key navigation). Content is rendered by the parent. */
 export function Tabs({ tabs, activeId, onChange }: TabsProps) {
   const listRef = useRef<HTMLDivElement>(null)
+
+  // A deep link to a section that sits beyond the visible part of a scrolling bar (narrow
+  // desktop) brings that tab into view. Only the bar scrolls — never the page.
+  useEffect(() => {
+    const list = listRef.current
+    const tab = list?.querySelector<HTMLElement>('[aria-selected="true"]')
+    if (!list || !tab) return
+    const start = tab.offsetLeft
+    const end = start + tab.offsetWidth
+    if (start < list.scrollLeft || end > list.scrollLeft + list.clientWidth) {
+      list.scrollLeft = Math.max(0, start - 24)
+    }
+  }, [activeId])
 
   function handleKeyDown(event: KeyboardEvent<HTMLButtonElement>, index: number) {
     let nextIndex: number | null = null
