@@ -193,7 +193,10 @@
     "reactivateTitle": "Medewerker heractiveren",
     "reactivateMessage": "{name} opnieuw activeren?",
     "reactivated": "Medewerker geheractiveerd.",
-    "accountCreated": "Gebruikersaccount aangemaakt."
+    "accountCreated": "Gebruikersaccount aangemaakt.",
+    "tabDriver": "Chauffeur",
+    "tabLeaveAndTime": "Verlof & tijd",
+    "createDriverProfileAction": "Chauffeursprofiel aanmaken"
   },
   "form": {
     "personalTitle": "Persoonlijk",
@@ -355,7 +358,11 @@
   "completeness": {
     "ariaLabel": "Dossiervolledigheid",
     "complete": "Dossier compleet ✓",
-    "percent": "Dossier {percentage}% compleet"
+    "percent": "Dossier {percentage}% compleet",
+    "missing_one": "{count} gegeven ontbreekt",
+    "missing_other": "{count} gegevens ontbreken",
+    "fill": "Aanvullen",
+    "view": "Bekijken"
   },
   "history": {
     "filterLabel": "Filter op categorie",
@@ -450,7 +457,11 @@
     "dialogCancel": "Annuleren",
     "dialogSaving": "Opslaan…",
     "dialogSave": "Opslaan",
-    "dialogAdd": "Toevoegen"
+    "dialogAdd": "Toevoegen",
+    "rowActions": "Acties {name}",
+    "removeDocument": "Document verwijderen",
+    "removeDocumentTitle": "Document verwijderen?",
+    "removeDocumentMessage": "Het document bij '{name}' verwijderen? De kwalificatie zelf blijft bestaan."
   },
   "documents": {
     "categories": {
@@ -599,5 +610,14 @@
     "reset": "Herstellen",
     "saving": "Opslaan…",
     "save": "Opslaan"
+  },
+  "overview": {
+    "personal": "Persoonsgegevens",
+    "contact": "Contact & adres",
+    "address": "Adres",
+    "driver": "Chauffeur",
+    "openDriver": "Chauffeursgegevens openen",
+    "driverProfileActive": "Chauffeursprofiel actief — rijbewijs, categorieën en ritten staan onder Chauffeur.",
+    "editAll": "Gegevens bewerken"
   }
 }

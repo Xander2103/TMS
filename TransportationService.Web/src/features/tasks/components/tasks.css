@@ -252,3 +252,15 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* Employee dossier "Taken": the title truncates instead of wrapping; the category badge stays. */
+.employee-task-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.employee-task-title > .ui-truncated-text {
+  flex: 0 1 auto;
+}

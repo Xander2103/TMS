@@ -1,10 +1,12 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { LoadingState } from '../../../components/feedback/LoadingState'
 import { ErrorState } from '../../../components/feedback/ErrorState'
 import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { DataTable, type Column } from '../../../components/ui/DataTable'
+import { RowActionMenu } from '../../../components/ui/RowActionMenu'
+import { TruncatedText } from '../../../components/ui/TruncatedText'
 import { useToast } from '../../../components/ui/toastContext'
 import { useLocale } from '../../../i18n/localeContext'
 import { useAuth } from '../../auth/authContextValue'
@@ -50,6 +52,9 @@ export function QualificationsTab({ employeeId, highlightQualificationId, onChan
   const [suspendTarget, setSuspendTarget] = useState<EmployeeQualification | null>(null)
   const [statusFilter, setStatusFilter] = useState<QualificationStatus | 'all'>('all')
   const [documentBusyId, setDocumentBusyId] = useState<string | null>(null)
+  const [uploadTarget, setUploadTarget] = useState<EmployeeQualification | null>(null)
+  const [removeDocumentTarget, setRemoveDocumentTarget] = useState<EmployeeQualification | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const visible = useMemo(() => {
     const rows = statusFilter === 'all' ? qualifications : qualifications.filter((q) => q.effectiveStatus === statusFilter)
@@ -81,24 +86,47 @@ export function QualificationsTab({ employeeId, highlightQualificationId, onChan
   if (isLoading) return <LoadingState message={t('employees.qualifications.loading')} />
   if (error) return <ErrorState message={error} />
 
+  async function removeDocument(row: EmployeeQualification) {
+    try {
+      await deleteQualificationDocument(employeeId, row.id)
+      toast.showSuccess(t('employees.qualifications.documentDeleted'))
+      setRemoveDocumentTarget(null)
+      reload()
+    } catch {
+      toast.showError(t('employees.qualifications.documentDeleteFailed'))
+    }
+  }
+
+  function download(row: EmployeeQualification) {
+    downloadQualificationDocument(employeeId, row.id, t).catch(() => toast.showError(t('employees.errors.downloadFailed')))
+  }
+
+  function pickDocument(row: EmployeeQualification) {
+    setUploadTarget(row)
+    fileInputRef.current?.click()
+  }
+
+  // B15: one row = one line. The type carries its document number inline; the document column
+  // holds at most ONE direct action (download, or upload when there is none yet); every other
+  // action (edit, verify, replace/remove document, suspend) lives in the row's ⋯ menu.
   const columns: Column<EmployeeQualification>[] = [
     {
       key: 'type',
       header: t('employees.qualifications.columnType'),
       render: (row) => (
-        <div>
-          <div className="qualification-type-name">{row.qualificationTypeName}</div>
-          {row.documentNumber && <div className="qualification-doc-number">{row.documentNumber}</div>}
-        </div>
+        <TruncatedText tooltip={[row.qualificationTypeName, row.documentNumber].filter(Boolean).join(' · ')}>
+          <span className="qualification-type-name">{row.qualificationTypeName}</span>
+          {row.documentNumber && <span className="qualification-doc-number"> · {row.documentNumber}</span>}
+        </TruncatedText>
       ),
     },
-    { key: 'obtained', header: t('employees.qualifications.columnObtained'), width: '110px', render: (row) => formatDate(row.obtainedDate) },
-    { key: 'expiry', header: t('employees.qualifications.columnExpiry'), width: '110px', render: (row) => (row.expiryDate ? formatDate(row.expiryDate) : '—') },
+    { key: 'obtained', header: t('employees.qualifications.columnObtained'), width: '110px', render: (row) => <span className="ui-nowrap">{formatDate(row.obtainedDate)}</span> },
+    { key: 'expiry', header: t('employees.qualifications.columnExpiry'), width: '110px', render: (row) => <span className="ui-nowrap">{row.expiryDate ? formatDate(row.expiryDate) : '—'}</span> },
     { key: 'country', header: t('employees.qualifications.columnCountry'), width: '70px', render: (row) => row.issuingCountryCode ?? '—' },
     {
       key: 'status',
       header: t('employees.qualifications.columnStatus'),
-      width: '170px',
+      width: '150px',
       render: (row) => (
         <Badge tone={QUALIFICATION_STATUS_TONES[row.effectiveStatus]}>
           {t(`employees.qualificationStatus.${row.effectiveStatus}`)}
@@ -108,91 +136,61 @@ export function QualificationsTab({ employeeId, highlightQualificationId, onChan
     {
       key: 'document',
       header: t('employees.qualifications.columnDocument'),
-      width: '210px',
-      render: (row) => (
-        <div className="qualification-doc-actions">
-          {row.hasDocument && (
-            <button
-              type="button"
-              className="qualification-link"
-              onClick={() => downloadQualificationDocument(employeeId, row.id, t).catch(() => toast.showError(t('employees.errors.downloadFailed')))}
-            >
-              {t('employees.qualifications.download')}
-            </button>
-          )}
-          {canEdit && (
-            <label className={documentBusyId === row.id ? 'qualification-link is-busy' : 'qualification-link'}>
-              {documentBusyId === row.id
-                ? t('employees.qualifications.busy')
-                : row.hasDocument
-                  ? t('employees.qualifications.replace')
-                  : t('employees.qualifications.upload')}
-              <input
-                type="file"
-                accept=".pdf,.jpg,.jpeg,.png"
-                hidden
-                disabled={documentBusyId !== null}
-                onChange={(e) => {
-                  const file = e.target.files?.[0]
-                  e.target.value = ''
-                  if (file) void handleUpload(row, file)
-                }}
-              />
-            </label>
-          )}
-          {row.hasDocument && canDeleteDocument && (
-            <button
-              type="button"
-              className="qualification-link qualification-link-danger"
-              onClick={async () => {
-                try {
-                  await deleteQualificationDocument(employeeId, row.id)
-                  toast.showSuccess(t('employees.qualifications.documentDeleted'))
-                  reload()
-                } catch {
-                  toast.showError(t('employees.qualifications.documentDeleteFailed'))
-                }
-              }}
-            >
-              {t('employees.qualifications.remove')}
-            </button>
-          )}
-        </div>
-      ),
+      width: '130px',
+      render: (row) =>
+        documentBusyId === row.id ? (
+          <span className="qualification-link is-busy">{t('employees.qualifications.busy')}</span>
+        ) : row.hasDocument ? (
+          <button type="button" className="qualification-link" onClick={() => download(row)}>
+            {t('employees.qualifications.download')}
+          </button>
+        ) : canEdit ? (
+          <button type="button" className="qualification-link" disabled={documentBusyId !== null} onClick={() => pickDocument(row)}>
+            {t('employees.qualifications.upload')}
+          </button>
+        ) : (
+          <span className="qualification-doc-none">—</span>
+        ),
     },
     {
       key: 'actions',
       header: '',
-      width: '230px',
+      width: '52px',
       render: (row) => (
-        <div className="qualification-actions">
-          {canEdit && (
-            <Button variant="ghost" onClick={() => setDialog({ mode: 'edit', qualification: row })} disabled={mutations.isSubmitting}>
-              {t('employees.qualifications.edit')}
-            </Button>
-          )}
-          {canApprove && row.storedStatus !== 'Valid' && (
-            <Button
-              variant="ghost"
-              onClick={async () => {
-                const saved = await mutations.verify(employeeId, row.id)
-                if (saved) {
-                  toast.showSuccess(t('employees.qualifications.verified'))
-                  reload()
-                  onChanged?.()
-                }
-              }}
-              disabled={mutations.isSubmitting}
-            >
-              {t('employees.qualifications.verify')}
-            </Button>
-          )}
-          {canEdit && row.storedStatus !== 'Suspended' && (
-            <Button variant="ghost" onClick={() => setSuspendTarget(row)} disabled={mutations.isSubmitting}>
-              {t('employees.qualifications.suspend')}
-            </Button>
-          )}
-        </div>
+        <RowActionMenu
+          label={t('employees.qualifications.rowActions', { name: row.qualificationTypeName })}
+          items={[
+            ...(canEdit
+              ? [{ key: 'edit', label: t('employees.qualifications.edit'), onSelect: () => setDialog({ mode: 'edit', qualification: row }), disabled: mutations.isSubmitting }]
+              : []),
+            ...(canApprove && row.storedStatus !== 'Valid'
+              ? [
+                  {
+                    key: 'verify',
+                    label: t('employees.qualifications.verify'),
+                    disabled: mutations.isSubmitting,
+                    onSelect: async () => {
+                      const saved = await mutations.verify(employeeId, row.id)
+                      if (saved) {
+                        toast.showSuccess(t('employees.qualifications.verified'))
+                        reload()
+                        onChanged?.()
+                      }
+                    },
+                  },
+                ]
+              : []),
+            ...(canEdit && row.hasDocument
+              ? [{ key: 'replace', label: t('employees.qualifications.replace'), onSelect: () => pickDocument(row), disabled: documentBusyId !== null }]
+              : []),
+            ...(row.hasDocument && canDeleteDocument
+              ? [{ key: 'remove-document', label: t('employees.qualifications.removeDocument'), danger: true, onSelect: () => setRemoveDocumentTarget(row) }]
+              : []),
+            ...(canEdit && row.storedStatus !== 'Suspended'
+              ? [{ key: 'suspend', label: t('employees.qualifications.suspend'), danger: true, onSelect: () => setSuspendTarget(row), disabled: mutations.isSubmitting }]
+              : []),
+          ]}
+        />
       ),
     },
   ]
@@ -237,6 +235,31 @@ export function QualificationsTab({ employeeId, highlightQualificationId, onChan
             onChanged?.()
           }}
           onCancel={() => setDialog(null)}
+        />
+      )}
+
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".pdf,.jpg,.jpeg,.png"
+        hidden
+        data-testid="qualification-document-input"
+        onChange={(e) => {
+          const file = e.target.files?.[0]
+          e.target.value = ''
+          if (file && uploadTarget) void handleUpload(uploadTarget, file)
+          setUploadTarget(null)
+        }}
+      />
+
+      {removeDocumentTarget && (
+        <ConfirmDialog
+          title={t('employees.qualifications.removeDocumentTitle')}
+          message={t('employees.qualifications.removeDocumentMessage', { name: removeDocumentTarget.qualificationTypeName })}
+          confirmLabel={t('employees.qualifications.removeDocument')}
+          destructive
+          onConfirm={() => removeDocument(removeDocumentTarget)}
+          onCancel={() => setRemoveDocumentTarget(null)}
         />
       )}
 

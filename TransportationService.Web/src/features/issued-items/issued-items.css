@@ -18,6 +18,11 @@
   flex-wrap: wrap;
 }
 
+.issued-items-table-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
 .issued-items-table {
   width: 100%;
   border-collapse: collapse;
@@ -80,6 +85,10 @@
 
 .issued-items-table-dense .issued-items-cell-name {
   max-width: 240px;
+}
+
+.issued-items-table-dense .issued-items-cell-serial {
+  max-width: 180px;
 }
 
 .issued-items-table-dense .issued-items-cell-category,

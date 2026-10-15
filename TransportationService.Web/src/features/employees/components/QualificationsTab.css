@@ -20,7 +20,7 @@
 
 .qualification-filter {
   font: inherit;
-  font-size: 13.5px;
+  font-size: var(--text-sm);
   padding: 4px 12px;
   border: 1px solid var(--border);
   border-radius: 999px;
@@ -48,8 +48,12 @@
 }
 
 .qualification-doc-number {
-  font-size: 13px;
-  color: var(--text);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+
+.qualification-doc-none {
+  color: var(--text-muted);
 }
 
 .qualification-doc-actions,
@@ -61,8 +65,9 @@
 }
 
 .qualification-link {
-  font-size: 14px;
+  font-size: var(--text-md);
   color: var(--accent);
+  white-space: nowrap;
   background: none;
   border: none;
   padding: 0;

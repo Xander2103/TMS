@@ -193,7 +193,10 @@
     "reactivateTitle": "Reactivate employee",
     "reactivateMessage": "Reactivate {name}?",
     "reactivated": "Employee reactivated.",
-    "accountCreated": "User account created."
+    "accountCreated": "User account created.",
+    "tabDriver": "Driver",
+    "tabLeaveAndTime": "Leave & time",
+    "createDriverProfileAction": "Create driver profile"
   },
   "form": {
     "personalTitle": "Personal",
@@ -355,7 +358,11 @@
   "completeness": {
     "ariaLabel": "File completeness",
     "complete": "File complete ✓",
-    "percent": "File {percentage}% complete"
+    "percent": "File {percentage}% complete",
+    "missing_one": "{count} detail missing",
+    "missing_other": "{count} details missing",
+    "fill": "Complete",
+    "view": "View"
   },
   "history": {
     "filterLabel": "Filter by category",
@@ -450,7 +457,11 @@
     "dialogCancel": "Cancel",
     "dialogSaving": "Saving…",
     "dialogSave": "Save",
-    "dialogAdd": "Add"
+    "dialogAdd": "Add",
+    "rowActions": "Actions {name}",
+    "removeDocument": "Remove document",
+    "removeDocumentTitle": "Remove document?",
+    "removeDocumentMessage": "Remove the document of '{name}'? The qualification itself stays."
   },
   "documents": {
     "categories": {
@@ -599,5 +610,14 @@
     "reset": "Reset",
     "saving": "Saving…",
     "save": "Save"
+  },
+  "overview": {
+    "personal": "Personal details",
+    "contact": "Contact & address",
+    "address": "Address",
+    "driver": "Driver",
+    "openDriver": "Open driver details",
+    "driverProfileActive": "Driver profile active — licence, categories and trips are under Driver.",
+    "editAll": "Edit details"
   }
 }

@@ -193,7 +193,10 @@
     "reactivateTitle": "Réactiver le collaborateur",
     "reactivateMessage": "Réactiver {name} ?",
     "reactivated": "Collaborateur réactivé.",
-    "accountCreated": "Compte utilisateur créé."
+    "accountCreated": "Compte utilisateur créé.",
+    "tabDriver": "Chauffeur",
+    "tabLeaveAndTime": "Congés & temps",
+    "createDriverProfileAction": "Créer un profil chauffeur"
   },
   "form": {
     "personalTitle": "Personnel",
@@ -355,7 +358,11 @@
   "completeness": {
     "ariaLabel": "Complétude du dossier",
     "complete": "Dossier complet ✓",
-    "percent": "Dossier complet à {percentage} %"
+    "percent": "Dossier complet à {percentage} %",
+    "missing_one": "{count} donnée manquante",
+    "missing_other": "{count} données manquantes",
+    "fill": "Compléter",
+    "view": "Voir"
   },
   "history": {
     "filterLabel": "Filtrer par catégorie",
@@ -450,7 +457,11 @@
     "dialogCancel": "Annuler",
     "dialogSaving": "Enregistrement…",
     "dialogSave": "Enregistrer",
-    "dialogAdd": "Ajouter"
+    "dialogAdd": "Ajouter",
+    "rowActions": "Actions {name}",
+    "removeDocument": "Supprimer le document",
+    "removeDocumentTitle": "Supprimer le document ?",
+    "removeDocumentMessage": "Supprimer le document de « {name} » ? La qualification reste."
   },
   "documents": {
     "categories": {
@@ -599,5 +610,14 @@
     "reset": "Rétablir",
     "saving": "Enregistrement…",
     "save": "Enregistrer"
+  },
+  "overview": {
+    "personal": "Données personnelles",
+    "contact": "Contact & adresse",
+    "address": "Adresse",
+    "driver": "Chauffeur",
+    "openDriver": "Ouvrir les données chauffeur",
+    "driverProfileActive": "Profil chauffeur actif — permis, catégories et trajets sous Chauffeur.",
+    "editAll": "Modifier les données"
   }
 }

@@ -7,6 +7,7 @@ import { FormSection } from '../../../components/ui/FormSection'
 import { InfoTip } from '../../../components/ui/InfoTip'
 import { SearchableSelect } from '../../../components/ui/SearchableSelect'
 import { SectionedForm, type SectionDef } from '../../../components/ui/SectionedForm'
+import { SectionedFormBodyContext } from '../../../components/ui/sectionedFormContext'
 import { useSectionNavigation, firstSectionWithError } from '../../../components/ui/useSectionNavigation'
 import { UnsavedChangesGuard } from '../../../components/ui/UnsavedChangesGuard'
 import { ValidationSummary } from '../../../components/ui/ValidationSummary'
@@ -36,10 +37,14 @@ import {
   type EmploymentStatus,
 } from '../types/employee'
 import {
+  EMPLOYEE_BLOCK_FIELD_KEYS,
   EMPLOYEE_CORE_SECTIONS,
   EMPLOYEE_NOTITIES_SECTION,
   EMPLOYEE_SECTION_FIELD_KEYS,
+  type EmployeeFormBlock,
 } from './employeeSections'
+
+export type { EmployeeFormBlock }
 import './EmployeeForm.css'
 
 /**
@@ -47,6 +52,7 @@ import './EmployeeForm.css'
  * parent), 'saveAndNew' (create mode only) asks the parent to reset for a fresh entry.
  */
 export type EmployeeSubmitIntent = 'save' | 'saveAndNew'
+
 
 interface EmployeeFormProps {
   mode: 'create' | 'edit'
@@ -74,6 +80,8 @@ interface EmployeeFormProps {
   duplicateNameHint?: ReactNode
   /** B31: inline save state (edit mode) rendered beside the save button — the form stays on screen. */
   saveStatus?: ReactNode
+  /** B15: render only these blocks, stacked, without the section navigation (card edit mode). */
+  blocks?: EmployeeFormBlock[]
 }
 
 /** i18n keys (employees.fields.*) for backend field paths, for the validation summary. */
@@ -130,6 +138,7 @@ export function EmployeeForm({
   onNameChanged,
   duplicateNameHint,
   saveStatus,
+  blocks,
 }: EmployeeFormProps) {
   const { t } = useLocale()
   const { hasPermission } = useAuth()
@@ -293,12 +302,7 @@ export function EmployeeForm({
   const sectionHasError = (id: string) =>
     (EMPLOYEE_SECTION_FIELD_KEYS[id] ?? []).some((key) => combinedErrorKeys.has(key))
 
-  const algemeenSection: SectionDef = {
-    ...EMPLOYEE_CORE_SECTIONS[0],
-    label: t(EMPLOYEE_CORE_SECTIONS[0].labelKey),
-    hasError: sectionHasError('algemeen'),
-    render: () => (
-      <>
+  const renderPersonal = () => (
         <FormSection title={t('employees.form.personalTitle')} columns={3}>
           <FormField label={t('employees.form.firstName')} htmlFor="e-firstname" error={fieldErrors.firstName} required>
             <input id="e-firstname" value={firstName} onChange={(e) => setFirstName(e.target.value)} maxLength={100} aria-invalid={fieldErrors.firstName ? 'true' : undefined} />
@@ -366,7 +370,9 @@ export function EmployeeForm({
             />
           </FormField>
         </FormSection>
+  )
 
+  const renderContact = () => (
         <FormSection title={t('employees.form.contactAddressTitle')} columns={3}>
           <FormField label={t('employees.form.email')} htmlFor="e-email" error={fieldErrors.email}>
             <input id="e-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} maxLength={250} aria-invalid={fieldErrors.email ? 'true' : undefined} />
@@ -400,6 +406,16 @@ export function EmployeeForm({
             />
           </FormField>
         </FormSection>
+  )
+
+  const algemeenSection: SectionDef = {
+    ...EMPLOYEE_CORE_SECTIONS[0],
+    label: t(EMPLOYEE_CORE_SECTIONS[0].labelKey),
+    hasError: sectionHasError('algemeen'),
+    render: () => (
+      <>
+        {renderPersonal()}
+        {renderContact()}
       </>
     ),
   }
@@ -718,7 +734,10 @@ export function EmployeeForm({
     event.preventDefault()
     const intent = submitIntentRef.current
     submitIntentRef.current = 'save'
-    const errors = validate()
+    const allErrors = validate()
+    // Card edit: a stored value in a block that is not on screen never blocks this save.
+    const visibleKeys = blocks ? new Set(blocks.flatMap((block) => EMPLOYEE_BLOCK_FIELD_KEYS[block])) : null
+    const errors = visibleKeys ? Object.fromEntries(Object.entries(allErrors).filter(([key]) => visibleKeys.has(key))) : allErrors
     if (Object.keys(errors).length > 0) {
       // Route to the first section that owns a failing field so the error is visible.
       const target = firstSectionWithError(
@@ -797,6 +816,44 @@ export function EmployeeForm({
       {saveStatus}
     </FormActions>
   )
+
+  if (blocks) {
+    const renderBlock: Record<EmployeeFormBlock, () => ReactNode> = {
+      personal: renderPersonal,
+      contact: renderContact,
+      dienstverband: dienstverbandSection.render,
+      hr: hrSection.render,
+      noodcontacten: noodcontactenSection.render,
+    }
+    return (
+      <form
+        onSubmit={handleSubmit}
+        className={blocks.length === 1 ? 'employee-form employee-form-blocks employee-form-blocks-single' : 'employee-form employee-form-blocks'}
+        onChange={touch}
+        noValidate
+      >
+        <UnsavedChangesGuard when={dirty && !isSubmitting} />
+        <ValidationSummary message={submitError} fieldErrors={serverFieldErrors} fieldLabels={fieldLabels} />
+        {/* Flat sections (heading + fields, no fieldset frame): the host card is already the frame. */}
+        <SectionedFormBodyContext.Provider value={true}>
+          {blocks.map((block) => (
+            <div key={block} className="employee-form-block">
+              {renderBlock[block]()}
+            </div>
+          ))}
+        </SectionedFormBodyContext.Provider>
+        <div className="employee-form-block-actions">
+          <Button variant="secondary" onClick={onCancel} disabled={isSubmitting}>
+            {t('employees.form.cancel')}
+          </Button>
+          <Button type="submit" disabled={isSubmitting}>
+            {isSubmitting ? t('employees.form.saving') : t('employees.form.save')}
+          </Button>
+          {saveStatus}
+        </div>
+      </form>
+    )
+  }
 
   return (
     <form onSubmit={handleSubmit} className="employee-form" onChange={touch} noValidate>

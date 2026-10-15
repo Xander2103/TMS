@@ -1,15 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 import { EmployeeDetailPage } from '../EmployeeDetailPage'
 import type { EmployeeCompleteness } from '../../types/employee'
 
-// Task 10 follow-up: integration coverage for the CompletenessCard → EmployeeDetailPage wiring
-// (`goToCompletenessSection`) — a "dienstverband" missing item must land on the profiel tab with
-// `?section=dienstverband`, a "documenten" missing item must switch to the page-level Documenten
-// tab, and a "documenten" item must NOT be clickable at all for a viewer without
-// employee_documents.view (the tab wouldn't exist for them to land on).
+// B15: CompletenessCard → EmployeeDetailPage wiring — "Aanvullen" on a "dienstverband" gap opens
+// the Dienstverband card in edit mode (the URL stays clean), "Bekijken" on a "documenten" gap
+// switches to the Documenten section, and a "documenten" gap has no action at all for a viewer
+// without employee_documents.view (that section wouldn't exist for them to land on).
 
 const auth = vi.hoisted(() => ({ permissions: new Set<string>() }))
 
@@ -20,7 +19,7 @@ vi.mock('../../../../components/ui/toastContext', () => ({
   useToast: () => ({ showToast: vi.fn(), showSuccess: vi.fn(), showError: vi.fn() }),
 }))
 vi.mock('../../components/EmployeeForm', () => ({
-  EmployeeForm: () => <div data-testid="employee-form" />,
+  EmployeeForm: ({ blocks }: { blocks?: string[] }) => <div data-testid="employee-form">{blocks?.join(',')}</div>,
 }))
 vi.mock('../../components/QualificationsTab', () => ({ QualificationsTab: () => null }))
 vi.mock('../../components/EmployeeDocumentsTab', () => ({ EmployeeDocumentsTab: () => <div data-testid="documents-tab" /> }))
@@ -34,6 +33,7 @@ vi.mock('../../../drivers/components/DriverProfilePanel', () => ({
 vi.mock('../../../issued-items/IssuedItemsTab', () => ({ IssuedItemsTab: () => null }))
 vi.mock('../../../leave-balance/components/LeaveBalanceTab', () => ({ LeaveBalanceTab: () => null }))
 vi.mock('../../../absences/components/AbsencesTab', () => ({ AbsencesTab: () => null }))
+vi.mock('../../components/EmployeeNotesPanel', () => ({ EmployeeNotesPanel: () => null }))
 vi.mock('../../hooks/useEmployeeMutations', () => ({
   useEmployeeMutations: () => ({ isSubmitting: false, error: null, fieldErrors: {}, update: vi.fn() }),
 }))
@@ -85,48 +85,54 @@ function renderAt(initialPath: string) {
 }
 
 describe('EmployeeDetailPage — completeness-kaart navigatie', () => {
-  it('een "dienstverband"-item leidt naar de profiel-tab met ?section=dienstverband', async () => {
+  it('"Aanvullen" op een dienstverband-gat opent de Dienstverband-kaart in bewerkmodus', async () => {
     auth.permissions = new Set(['employees.edit', 'employee_documents.view'])
     const router = renderAt('/employees/emp-1')
 
-    await userEvent.click(screen.getByRole('button', { name: 'Startdatum' }))
+    expect(screen.getByRole('heading', { name: '2 gegevens ontbreken' })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Startdatum: Aanvullen' }))
 
-    const overzichtTab = screen.getByRole('tab', { name: 'Overzicht' })
-    expect(overzichtTab).toHaveAttribute('aria-selected', 'true')
-    expect(router.state.location.search).toContain('section=dienstverband')
-    expect(router.state.location.search).not.toContain('tab=')
+    expect(screen.getByRole('tab', { name: 'Overzicht' })).toHaveAttribute('aria-selected', 'true')
+    const card = screen.getByRole('region', { name: 'Dienstverband' })
+    expect(within(card).getByTestId('employee-form')).toHaveTextContent('dienstverband')
+    expect(router.state.location.search).toBe('')
   })
 
-  it('een "documenten"-item schakelt naar de Documenten-tab', async () => {
+  it('"Bekijken" op een documenten-gat schakelt naar de Documenten-sectie', async () => {
     auth.permissions = new Set(['employees.edit', 'employee_documents.view'])
     renderAt('/employees/emp-1')
 
-    await userEvent.click(screen.getByRole('button', { name: 'Contractdocument' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Contractdocument: Bekijken' }))
 
-    const documentenTab = screen.getByRole('tab', { name: 'Documenten' })
-    expect(documentenTab).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('tab', { name: 'Documenten' })).toHaveAttribute('aria-selected', 'true')
     expect(await screen.findByTestId('documents-tab')).toBeInTheDocument()
   })
 
-  it('het "documenten"-item is niet klikbaar zonder employee_documents.view', () => {
+  it('het documenten-gat heeft geen actie zonder employee_documents.view', () => {
     auth.permissions = new Set(['employees.edit'])
     renderAt('/employees/emp-1')
 
-    // No Documenten tab exists at all for this viewer, and the chip renders as plain text.
     expect(screen.queryByRole('tab', { name: 'Documenten' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Contractdocument' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Contractdocument/ })).not.toBeInTheDocument()
     expect(screen.getByText('Contractdocument')).toBeInTheDocument()
-    // The other item stays fully interactive.
-    expect(screen.getByRole('button', { name: 'Startdatum' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Startdatum: Aanvullen' })).toBeInTheDocument()
   })
 
-  it('missing-item chips zijn niet klikbaar zonder employees.edit (alleen-lezen weergave)', () => {
+  it('zonder employees.edit: geen acties, geen Bewerken (alleen-lezen weergave)', () => {
     auth.permissions = new Set(['employee_documents.view'])
     renderAt('/employees/emp-1')
 
-    expect(screen.queryByRole('button', { name: 'Startdatum' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Contractdocument' })).not.toBeInTheDocument()
-    expect(screen.getByText('Startdatum')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Aanvullen|Bekijken/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Bewerken' })).not.toBeInTheDocument()
+    const card = screen.getByRole('region', { name: 'Dossiervolledigheid' })
+    expect(within(card).getByText('Startdatum')).toBeInTheDocument()
+  })
+
+  it('een oude ?section=dienstverband-link opent de kaart en wordt uit de URL gehaald', async () => {
+    auth.permissions = new Set(['employees.edit'])
+    const router = renderAt('/employees/emp-1?section=dienstverband')
+    expect(await within(screen.getByRole('region', { name: 'Dienstverband' })).findByTestId('employee-form')).toBeInTheDocument()
+    expect(router.state.location.search).toBe('')
   })
 })
 
@@ -146,7 +152,8 @@ describe('EmployeeDetailPage — koptekst anciënniteit', () => {
     employeeState.employmentStartDate = '2020-08-06' // exactly 6 years ago today
     renderAt('/employees/emp-1')
     expect(screen.getByText(/In dienst sinds/)).toBeInTheDocument()
-    expect(screen.getByText(/6 jaar/)).toBeInTheDocument()
+    // Header metadata line (and the Dienstverband card repeats it next to the start date).
+    expect(screen.getByText(/In dienst sinds/)).toHaveTextContent('6 jaar')
   })
 
   it('laat "· n jaar" weg wanneer het dienstverband minder dan een jaar loopt', () => {

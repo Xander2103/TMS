@@ -1,14 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 import { EmployeeDetailPage } from '../EmployeeDetailPage'
 
-// Integration coverage for the "Chauffeursgegevens" profile section (formerly the standalone
-// "chauffeursprofiel" page tab) and the vertical section rail that the employee profile form
-// now uses (SectionedForm orientation="left"). EmployeeForm itself is real here — only its
-// heavy data dependencies (lookups) and DriverProfilePanel's content are stubbed, following the
-// pattern already used by employeeSectionedForm.test.tsx.
+// B15 integration: the read-first overview with the REAL EmployeeForm behind a card's
+// [Bewerken] (only that card's fields, no section rail, Annuleren returns to reading), and the
+// Chauffeur section (driver profile + trips). Only the form's heavy data dependencies (lookups)
+// and DriverProfilePanel's content are stubbed, as in employeeSectionedForm.test.tsx.
 
 const auth = vi.hoisted(() => ({ permissions: new Set(['employees.edit']) }))
 
@@ -33,7 +32,7 @@ vi.mock('../../../reference/components/CountryCombobox', () => ({
 vi.mock('../../components/QualificationsTab', () => ({ QualificationsTab: () => null }))
 vi.mock('../../components/EmployeeDocumentsTab', () => ({ EmployeeDocumentsTab: () => null }))
 vi.mock('../../components/EmployeePlanningTab', () => ({ EmployeePlanningTab: () => null }))
-vi.mock('../../components/EmployeeTripsTab', () => ({ EmployeeTripsTab: () => null }))
+vi.mock('../../components/EmployeeTripsTab', () => ({ EmployeeTripsTab: () => <div data-testid="trips" /> }))
 vi.mock('../../components/CreateUserAccountDialog', () => ({ CreateUserAccountDialog: () => null }))
 vi.mock('../../components/EmployeeHistoryPanel', () => ({ EmployeeHistoryPanel: () => null }))
 vi.mock('../../../drivers/components/DriverProfilePanel', () => ({
@@ -42,6 +41,7 @@ vi.mock('../../../drivers/components/DriverProfilePanel', () => ({
 vi.mock('../../../issued-items/IssuedItemsTab', () => ({ IssuedItemsTab: () => null }))
 vi.mock('../../../leave-balance/components/LeaveBalanceTab', () => ({ LeaveBalanceTab: () => null }))
 vi.mock('../../../absences/components/AbsencesTab', () => ({ AbsencesTab: () => null }))
+vi.mock('../../components/EmployeeNotesPanel', () => ({ EmployeeNotesPanel: () => null }))
 vi.mock('../../hooks/useEmployeeMutations', () => ({
   useEmployeeMutations: () => ({ isSubmitting: false, error: null, fieldErrors: {}, update: vi.fn() }),
 }))
@@ -77,32 +77,38 @@ function renderAt(initialPath: string) {
   return router
 }
 
-describe('EmployeeDetailPage — Chauffeursgegevens section & vertical rail', () => {
-  it('shows a "Chauffeursgegevens" section tab in the profile form for a driver, on a vertical rail', async () => {
+describe('EmployeeDetailPage — card edit & Chauffeur section', () => {
+  it('reads first: no form until a card is opened, then only that card\'s fields', async () => {
+    auth.permissions = new Set(['employees.edit'])
     renderAt('/employees/emp-1')
-    const sectionTablist = screen.getByRole('tablist', { name: 'Formuliersecties' })
-    expect(sectionTablist).toHaveAttribute('aria-orientation', 'vertical')
+    expect(screen.queryByLabelText(/Voornaam/)).not.toBeInTheDocument()
 
-    const driverTab = screen.getByRole('tab', { name: /Chauffeursgegevens/ })
-    expect(driverTab).toBeInTheDocument()
-    await userEvent.click(driverTab)
-    expect(screen.getByTestId('driver-panel')).toBeInTheDocument()
+    const contact = screen.getByRole('region', { name: 'Contact & adres' })
+    await userEvent.click(within(contact).getByRole('button', { name: 'Bewerken' }))
+
+    expect(within(contact).getByLabelText('E-mail')).toBeInTheDocument()
+    expect(within(contact).queryByLabelText(/Voornaam/)).not.toBeInTheDocument()
+    expect(screen.queryByRole('tablist', { name: 'Formuliersecties' })).not.toBeInTheDocument()
+    // One card at a time: the other cards' Bewerken is disabled while this one is open.
+    expect(within(screen.getByRole('region', { name: 'Persoonsgegevens' })).getByRole('button', { name: 'Bewerken' })).toBeDisabled()
+
+    await userEvent.click(within(contact).getByRole('button', { name: 'Annuleren' }))
+    expect(within(contact).queryByLabelText('E-mail')).not.toBeInTheDocument()
   })
 
-  it('roves section focus with ArrowDown/ArrowUp (vertical keyboard nav)', async () => {
+  it('shows the driver profile and, with planning.view, the trips in the Chauffeur section', async () => {
+    auth.permissions = new Set(['employees.edit', 'planning.view'])
     renderAt('/employees/emp-1')
-    const algemeenTab = screen.getByRole('tab', { name: /Algemeen/ })
-    algemeenTab.focus()
-    await userEvent.keyboard('{ArrowUp}')
-    // Algemeen is first; ArrowUp wraps to the last section tab.
-    const tabs = screen.getAllByRole('tab').filter((t) => t.closest('.ui-section-nav'))
-    expect(tabs[tabs.length - 1]).toHaveFocus()
+    await userEvent.click(within(screen.getByRole('region', { name: 'Chauffeur' })).getByRole('button', { name: 'Chauffeursgegevens openen' }))
+    expect(screen.getByRole('tab', { name: 'Chauffeur' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByTestId('driver-panel')).toBeInTheDocument()
+    expect(screen.getByTestId('trips')).toBeInTheDocument()
   })
 
-  it('the legacy ?tab=chauffeursprofiel deep link lands on the profile tab with Chauffeursgegevens active', async () => {
-    renderAt('/employees/emp-1?tab=chauffeursprofiel')
-    const driverTab = await screen.findByRole('tab', { name: /Chauffeursgegevens/ })
-    expect(driverTab).toHaveAttribute('aria-selected', 'true')
-    expect(screen.getByTestId('driver-panel')).toBeInTheDocument()
+  it('keeps the trips out of the Chauffeur section without planning.view', async () => {
+    auth.permissions = new Set(['employees.edit'])
+    renderAt('/employees/emp-1?tab=chauffeur')
+    expect(await screen.findByTestId('driver-panel')).toBeInTheDocument()
+    expect(screen.queryByTestId('trips')).not.toBeInTheDocument()
   })
 })

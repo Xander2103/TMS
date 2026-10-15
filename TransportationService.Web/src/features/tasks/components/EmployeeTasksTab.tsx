@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Badge } from '../../../components/ui/Badge'
 import { DataTable, type Column } from '../../../components/ui/DataTable'
+import { TruncatedText } from '../../../components/ui/TruncatedText'
 import { useLocale } from '../../../i18n/localeContext'
 import { getEmployeeOpenTaskSummary, listEmployeeTasks } from '../api/tasksApi'
 import type { EmployeeTask, TaskOpenSummary } from '../api/types'
@@ -43,16 +44,18 @@ export function EmployeeTasksTab({ employeeId }: EmployeeTasksTabProps) {
     {
       key: 'title',
       header: t('tasks.columns.title'),
+      // B15/B50: one line per task — a long title is cut (full title in the tooltip and the
+      // detail panel); the overdue state stays visible through the compact due cell.
       render: (row) => (
-        <span className="task-title-cell">
-          {row.title}
+        <span className="task-title-cell employee-task-title">
+          <TruncatedText tooltip={row.title}>{row.title}</TruncatedText>
           <TaskCategoryBadge name={row.categoryName} color={row.categoryColor} />
         </span>
       ),
     },
-    { key: 'priority', header: t('tasks.columns.priority'), render: (row) => <TaskPriorityBadge priority={row.priority} /> },
-    { key: 'due', header: t('tasks.columns.due'), render: (row) => <TaskDueCell task={row} /> },
-    { key: 'status', header: t('tasks.columns.status'), render: (row) => <TaskStatusBadge status={row.status} /> },
+    { key: 'priority', header: t('tasks.columns.priority'), width: '110px', render: (row) => <TaskPriorityBadge priority={row.priority} /> },
+    { key: 'due', header: t('tasks.columns.due'), width: '190px', render: (row) => <span className="ui-nowrap"><TaskDueCell task={row} compact /></span> },
+    { key: 'status', header: t('tasks.columns.status'), width: '150px', render: (row) => <TaskStatusBadge status={row.status} /> },
   ]
 
   return (

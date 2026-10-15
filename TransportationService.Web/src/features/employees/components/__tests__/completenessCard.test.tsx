@@ -14,58 +14,52 @@ const INCOMPLETE: EmployeeCompleteness = {
   ],
 }
 
-const COMPLETE: EmployeeCompleteness = {
-  percentage: 100,
-  isComplete: true,
-  missingItems: [],
-}
+const COMPLETE: EmployeeCompleteness = { percentage: 100, isComplete: true, missingItems: [] }
 
-describe('CompletenessCard', () => {
-  it('shows the percentage and a chip for every missing item', () => {
+describe('CompletenessCard (B15)', () => {
+  it('counts the gaps and offers the action that fills each one', () => {
     render(<CompletenessCard completeness={INCOMPLETE} onNavigate={vi.fn()} />)
-    expect(screen.getByText('Dossier 62% compleet')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: '3 gegevens ontbreken' })).toBeInTheDocument()
     expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '62')
-    expect(screen.getByRole('button', { name: 'Rijksregisternummer' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Noodcontact' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Contractdocument' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Rijksregisternummer: Aanvullen' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Contractdocument: Bekijken' })).toBeInTheDocument()
   })
 
-  it('shows the success state and no missing-item list when complete', () => {
-    render(<CompletenessCard completeness={COMPLETE} onNavigate={vi.fn()} />)
-    expect(screen.getByText('Dossier compleet ✓')).toBeInTheDocument()
-    expect(screen.queryByRole('button')).not.toBeInTheDocument()
+  it('is neutral by default and only emphasises gaps that block deployment', () => {
+    const { container, rerender } = render(<CompletenessCard completeness={INCOMPLETE} onNavigate={vi.fn()} />)
+    expect(container.querySelector('.completeness-card')).not.toHaveClass('is-attention')
+    rerender(
+      <CompletenessCard
+        completeness={{ ...INCOMPLETE, missingItems: [...INCOMPLETE.missingItems, { code: 'driving_licence_document', label: 'Rijbewijsdocument', section: 'documenten' }] }}
+        onNavigate={vi.fn()}
+      />,
+    )
+    expect(container.querySelector('.completeness-card')).toHaveClass('is-attention')
+    expect(screen.getByRole('img', { name: 'Waarschuwing' })).toBeInTheDocument()
   })
 
-  it('calls onNavigate with the missing item\'s section when its chip is clicked', async () => {
+  it('shows nothing once the dossier is complete', () => {
+    const { container } = render(<CompletenessCard completeness={COMPLETE} onNavigate={vi.fn()} />)
+    expect(container).toBeEmptyDOMElement()
+  })
+
+  it('passes the section and the item to onNavigate', async () => {
     const onNavigate = vi.fn()
     render(<CompletenessCard completeness={INCOMPLETE} onNavigate={onNavigate} />)
-    await userEvent.click(screen.getByRole('button', { name: 'Noodcontact' }))
-    expect(onNavigate).toHaveBeenCalledWith('noodcontacten')
-    await userEvent.click(screen.getByRole('button', { name: 'Contractdocument' }))
-    expect(onNavigate).toHaveBeenCalledWith('documenten')
+    await userEvent.click(screen.getByRole('button', { name: 'Noodcontact: Aanvullen' }))
+    expect(onNavigate).toHaveBeenCalledWith('noodcontacten', INCOMPLETE.missingItems[1])
   })
 
-  it('renders missing items as non-interactive chips (no buttons) for read-only viewers', () => {
+  it('renders plain text without actions for read-only viewers', () => {
     render(<CompletenessCard completeness={INCOMPLETE} />)
     expect(screen.queryByRole('button')).not.toBeInTheDocument()
     expect(screen.getByText('Rijksregisternummer')).toBeInTheDocument()
   })
 
-  it('renders a section gated by canNavigate as a plain chip even though onNavigate is set', async () => {
-    const onNavigate = vi.fn()
-    render(
-      <CompletenessCard
-        completeness={INCOMPLETE}
-        onNavigate={onNavigate}
-        canNavigate={(section) => section !== 'documenten'}
-      />,
-    )
-    // "documenten" (Contractdocument) is gated: plain chip, not a button.
-    expect(screen.queryByRole('button', { name: 'Contractdocument' })).not.toBeInTheDocument()
+  it('leaves a section gated by canNavigate without an action', () => {
+    render(<CompletenessCard completeness={INCOMPLETE} onNavigate={vi.fn()} canNavigate={(section) => section !== 'documenten'} />)
+    expect(screen.queryByRole('button', { name: /Contractdocument/ })).not.toBeInTheDocument()
     expect(screen.getByText('Contractdocument')).toBeInTheDocument()
-    // Every other section stays a clickable button.
-    expect(screen.getByRole('button', { name: 'Rijksregisternummer' })).toBeInTheDocument()
-    await userEvent.click(screen.getByRole('button', { name: 'Noodcontact' }))
-    expect(onNavigate).toHaveBeenCalledWith('noodcontacten')
+    expect(screen.getByRole('button', { name: 'Rijksregisternummer: Aanvullen' })).toBeInTheDocument()
   })
 })

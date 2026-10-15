@@ -67,3 +67,18 @@ export const EMPLOYEE_SECTION_FIELD_KEYS: Record<string, string[]> = {
   noodcontacten: ['emergencyContacts'],
   notities: [],
 }
+
+/**
+ * B15: one logical block of the employee record, edited on its own from the read-first overview
+ * card ("Persoonsgegevens → Bewerken"). The same state, validation, guard and save API as the
+ * full form — only the visible fields differ, and only their errors block that card's save.
+ */
+export type EmployeeFormBlock = 'personal' | 'contact' | 'dienstverband' | 'hr' | 'noodcontacten'
+
+export const EMPLOYEE_BLOCK_FIELD_KEYS: Record<EmployeeFormBlock, string[]> = {
+  personal: ['firstName', 'lastName', 'dateOfBirth', 'placeOfBirth', 'nationalityCode', 'preferredLanguageCode', 'civilStatus', 'dependentChildren'],
+  contact: ['email', 'phoneNumber', 'mobilePhone', 'street', 'houseNumber', 'postalCode', 'city', 'countryCode'],
+  dienstverband: EMPLOYEE_SECTION_FIELD_KEYS.dienstverband,
+  hr: EMPLOYEE_SECTION_FIELD_KEYS.hr,
+  noodcontacten: EMPLOYEE_SECTION_FIELD_KEYS.noodcontacten,
+}

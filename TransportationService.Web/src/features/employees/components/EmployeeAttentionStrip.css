@@ -3,18 +3,18 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding: 10px 14px;
-  margin-bottom: 1rem;
-  border: 1px solid color-mix(in srgb, var(--warning) 45%, var(--border));
-  border-left: 4px solid var(--warning);
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--warning) 7%, var(--bg));
+  /* B15: same strip as the shared AttentionList (vehicle, customer, incident pages). */
+  padding: 10px var(--space-4);
+  margin-bottom: var(--space-4);
+  border: 1px solid var(--color-warning-border);
+  border-left-width: 4px;
+  border-radius: var(--radius-md);
+  background: var(--color-warning-bg);
 }
 
 .employee-attention-strip.is-expired {
-  border-color: color-mix(in srgb, var(--danger) 40%, var(--border));
-  border-left-color: var(--danger);
-  background: color-mix(in srgb, var(--danger) 6%, var(--bg));
+  border-color: var(--color-danger-border);
+  background: var(--color-danger-bg);
 }
 
 .employee-attention-head {
@@ -26,14 +26,10 @@
 
 .employee-attention-title {
   margin: 0;
-  font-size: 0.9375rem;
+  font-size: var(--text-md);
   font-weight: 600;
   white-space: nowrap;
-  color: var(--warning);
-}
-
-.employee-attention-strip.is-expired .employee-attention-title {
-  color: var(--danger);
+  color: var(--text-h);
 }
 
 .employee-attention-icon {
@@ -47,7 +43,7 @@
   list-style: none;
   margin: 0;
   padding: 0;
-  font-size: 13.5px;
+  font-size: var(--text-md);
   font-weight: 500;
 }
 
@@ -70,7 +66,7 @@
   list-style: none;
   margin: 0;
   padding: 0;
-  font-size: 13.5px;
+  font-size: var(--text-md);
 }
 
 .employee-attention-item {

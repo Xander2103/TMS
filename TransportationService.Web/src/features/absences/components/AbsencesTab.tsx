@@ -261,56 +261,58 @@ export function AbsencesTab({ employeeId, highlightAbsenceId }: AbsencesTabProps
       )}
 
       {!loadErrorKey && absences !== null && absences.length > 0 && (
-        <table className="abs-table">
-          <thead>
-            <tr>
-              <th>{t('absences.tab.colType')}</th>
-              <th>{t('absences.tab.colFrom')}</th>
-              <th>{t('absences.tab.colTo')}</th>
-              <th>{t('absences.tab.colStatus')}</th>
-              <th>{t('absences.tab.colReason')}</th>
-              <th aria-label={t('absences.tab.colActions')} />
-            </tr>
-          </thead>
-          <tbody>
-            {absences.map((absence) => (
-              <tr
-                key={absence.id}
-                id={`absence-${absence.id}`}
-                className={absence.id === highlightAbsenceId ? 'absence-row-highlight' : undefined}
-                ref={
-                  absence.id === highlightAbsenceId
-                    ? (row) => row?.scrollIntoView({ block: 'center', behavior: 'smooth' })
-                    : undefined
-                }
-              >
-                <td>{t(`absences.type.${absence.type}`)}</td>
-                <td className="nowrap">{formatDate(absence.startDate)}</td>
-                <td className="nowrap">{formatDate(absence.endDate)}</td>
-                <td>
-                  <span title={absence.decisionNote ?? undefined}>
-                    <Badge tone={ABSENCE_STATUS_TONE[absence.status]}>{t(`absences.status.${absence.status}`)}</Badge>
-                  </span>
-                </td>
-                <td className="abs-reason" title={absence.reason ?? undefined}>
-                  {absence.reason ?? '—'}
-                </td>
-                <td className="abs-actions">
-                  {/* B50: one direct action only while there is something to decide; the rest in "⋯". */}
-                  {canApprove && isReviewable(absence) && (
-                    <Button variant="secondary" className="abs-review" onClick={() => setReviewTarget(absence)}>
-                      {t('absences.page.review')}
-                    </Button>
-                  )}
-                  <RowActionMenu
-                    label={t('absences.tab.rowActions', { type: t(`absences.type.${absence.type}`), from: formatDate(absence.startDate) })}
-                    items={rowActions(absence)}
-                  />
-                </td>
+        <div className="abs-table-scroll">
+          <table className="abs-table">
+            <thead>
+              <tr>
+                <th>{t('absences.tab.colType')}</th>
+                <th>{t('absences.tab.colFrom')}</th>
+                <th>{t('absences.tab.colTo')}</th>
+                <th>{t('absences.tab.colStatus')}</th>
+                <th>{t('absences.tab.colReason')}</th>
+                <th aria-label={t('absences.tab.colActions')} />
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {absences.map((absence) => (
+                <tr
+                  key={absence.id}
+                  id={`absence-${absence.id}`}
+                  className={absence.id === highlightAbsenceId ? 'absence-row-highlight' : undefined}
+                  ref={
+                    absence.id === highlightAbsenceId
+                      ? (row) => row?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+                      : undefined
+                  }
+                >
+                  <td>{t(`absences.type.${absence.type}`)}</td>
+                  <td className="nowrap">{formatDate(absence.startDate)}</td>
+                  <td className="nowrap">{formatDate(absence.endDate)}</td>
+                  <td>
+                    <span title={absence.decisionNote ?? undefined}>
+                      <Badge tone={ABSENCE_STATUS_TONE[absence.status]}>{t(`absences.status.${absence.status}`)}</Badge>
+                    </span>
+                  </td>
+                  <td className="abs-reason" title={absence.reason ?? undefined}>
+                    {absence.reason ?? '—'}
+                  </td>
+                  <td className="abs-actions">
+                    {/* B50: one direct action only while there is something to decide; the rest in "⋯". */}
+                    {canApprove && isReviewable(absence) && (
+                      <Button variant="secondary" className="abs-review" onClick={() => setReviewTarget(absence)}>
+                        {t('absences.page.review')}
+                      </Button>
+                    )}
+                    <RowActionMenu
+                      label={t('absences.tab.rowActions', { type: t(`absences.type.${absence.type}`), from: formatDate(absence.startDate) })}
+                      items={rowActions(absence)}
+                    />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
 
       {editorOpen && (

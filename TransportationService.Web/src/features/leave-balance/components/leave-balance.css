@@ -44,6 +44,9 @@
 .lb-table th {
   color: var(--text);
   font-weight: 600;
+  /* Two-word headers ("Goedgekeurd opgenomen") may wrap so the numbers fit at ~1150px. */
+  white-space: normal;
+  vertical-align: bottom;
 }
 .lb-remaining {
   font-weight: 700;

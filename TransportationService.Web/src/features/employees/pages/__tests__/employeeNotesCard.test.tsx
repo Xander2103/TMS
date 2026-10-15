@@ -85,7 +85,7 @@ function renderPage() {
   )
 }
 
-describe('EmployeeDetailPage — Notities panel (Overzicht, read-only users)', () => {
+describe('EmployeeDetailPage — Notities card (Overzicht)', () => {
   beforeEach(() => {
     auth.permissions = new Set(['employee_notes.view'])
     state.notes = []
@@ -111,11 +111,13 @@ describe('EmployeeDetailPage — Notities panel (Overzicht, read-only users)', (
     expect(screen.queryByRole('heading', { name: 'Notities' })).not.toBeInTheDocument()
   })
 
-  it('does not render the top-level notes card for a user who can edit the profile (it lives in the edit form instead)', () => {
+  it('shows the same notes card to a user who can edit the profile (B15: the overview is read-first for everyone)', async () => {
     auth.permissions = new Set(['employees.edit', 'employee_notes.view'])
     state.notes = [note()]
     renderPage()
-    expect(screen.queryByRole('heading', { name: 'Notities' })).not.toBeInTheDocument()
-    expect(screen.getByTestId('employee-form')).toBeInTheDocument()
+    expect(screen.getAllByRole('heading', { name: 'Notities' })).toHaveLength(1)
+    expect(await screen.findByText('Heeft hoogtevrees — nooit inplannen op kraanwerk.')).toBeInTheDocument()
+    // The profile form only opens on [Bewerken].
+    expect(screen.queryByTestId('employee-form')).not.toBeInTheDocument()
   })
 })
