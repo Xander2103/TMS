@@ -1,0 +1,81 @@
+.ui-attention {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2) var(--space-4);
+  flex-wrap: wrap;
+  margin: 0 0 var(--space-4);
+  padding: 10px var(--space-4);
+  border: 1px solid var(--color-info-border);
+  border-left-width: 4px;
+  border-radius: var(--radius-md);
+  background: var(--color-info-bg);
+}
+
+.ui-attention.is-warning {
+  border-color: var(--color-warning-border);
+  background: var(--color-warning-bg);
+}
+
+.ui-attention.is-critical {
+  border-color: var(--color-danger-border);
+  background: var(--color-danger-bg);
+}
+
+.ui-attention-title {
+  margin: 0;
+  font-size: var(--text-md);
+  font-weight: 600;
+  color: var(--text-h);
+  white-space: nowrap;
+}
+
+.ui-attention-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px var(--space-5);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.ui-attention-item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  font-size: var(--text-md);
+  color: var(--text-h);
+}
+
+.ui-attention-icon {
+  flex: 0 0 auto;
+}
+
+.ui-attention-item.is-critical .ui-attention-text {
+  color: var(--color-danger);
+  font-weight: 600;
+}
+
+.ui-attention-detail {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.ui-attention-action {
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: var(--text-md);
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.ui-attention-action:hover {
+  text-decoration-thickness: 2px;
+}

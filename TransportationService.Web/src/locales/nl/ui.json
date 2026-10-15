@@ -198,5 +198,13 @@
     "label": "Dichtheid",
     "compact": "Compact",
     "normal": "Normaal"
+  },
+  "attention": {
+    "title": "Aandacht",
+    "severity": {
+      "critical": "Kritiek",
+      "warning": "Waarschuwing",
+      "info": "Ter info"
+    }
   }
 }

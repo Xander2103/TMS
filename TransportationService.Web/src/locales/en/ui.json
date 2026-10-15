@@ -198,5 +198,13 @@
     "label": "Density",
     "compact": "Compact",
     "normal": "Normal"
+  },
+  "attention": {
+    "title": "Attention",
+    "severity": {
+      "critical": "Critical",
+      "warning": "Warning",
+      "info": "For information"
+    }
   }
 }
