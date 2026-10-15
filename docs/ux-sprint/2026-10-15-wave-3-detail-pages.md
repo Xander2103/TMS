@@ -74,3 +74,24 @@ The two domains stay separate; only the detail experiences are aligned.
 - Maintenance/inspection/damage/fuel/tachograph rows keep 2–3 text actions instead of a row menu.
 - Invoice list has no customer filter in the URL; "Alle facturen van klant" uses a name search.
 - The employee attention strip keeps its own (richer) layout and title "Aandachtspunten".
+
+## Verification pass (2026-10-15, evening)
+
+Independent browser review of all five detail pages (employee, vehicle, customer, incident,
+exception) at 1920/1440/1280/1152, light and dark, as Administrator and as a Dispatcher
+(no invoices, no HR-confidential, no audit, no tasks beyond own). Fixed in 2bdb761d..381c05fe:
+
+- Header actions dropped under long titles (customer, incident) and, at 1152, under the employee
+  metadata → the title block wraps first; actions stay beside it.
+- Section tabs clipped at 1152/1280 without a hint → tighter padding below 1366px, an edge shade
+  when the bar scrolls, and a deep-linked tab is scrolled into the bar's view.
+- Employee: subtitle separators lost their spaces; attention items did not look clickable; tab
+  add actions were filled primaries next to header Bewerken (three on Bedrijfsmiddelen); the
+  Taken tab showed a load error to users with only `tasks.view_own` on someone else's record.
+- Vehicle: Historiek tab shown without `audit_logs.view` (could only say "geen rechten").
+- History: customer billing events showed `DieselSurchargeChanged` and `None → Required`; older
+  incident status rows read "Van: … · Naar: …" instead of the B25 sentence.
+
+Data loading on open (Administrator, 1440): employee 2 requests, customer 5 (dossiers and invoices
+with pageSize 5, invoices only with invoice permission), vehicle 6 (per-vehicle compliance lists
+in parallel, only when permitted), incident/exception 2.
