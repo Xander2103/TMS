@@ -167,13 +167,6 @@
 }
 
 
-/* Card "Bewerken" stays quiet and does not stretch the card's title row. */
-.customer-overview .ui-detail-card-action .ui-button {
-  min-height: 32px;
-  padding: 4px 10px;
-  font-size: var(--text-md);
-}
-
 /* Facts in the overview cards: a fixed, modest label column so a one-column layout (narrow
    desktop) does not spend a third of the card on labels. */
 .customer-overview .ui-fact {

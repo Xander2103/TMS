@@ -298,7 +298,6 @@ export function CustomerDetailPage() {
             <>
               {/* B03/B17: one primary (edit); number change, blocking, (de)activating and deleting
                   are rare and live behind "Meer", destructive last. */}
-              {canEdit && <Button onClick={() => setEditSection('klantgegevens')}>{t('ui.actions.edit')}</Button>}
               <ActionMenu
                 items={[
                   ...(canOverrideNumber ? [{ key: 'number', label: t('customers.detail.changeNumber'), onSelect: openNumberDialog }] : []),
@@ -321,6 +320,7 @@ export function CustomerDetailPage() {
                     : []),
                 ]}
               />
+              {canEdit && <Button onClick={() => setEditSection('klantgegevens')}>{t('ui.actions.edit')}</Button>}
             </>
           )
         }

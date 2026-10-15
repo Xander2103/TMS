@@ -285,6 +285,7 @@ export function ExceptionDetailPage() {
           {t('exceptions.detail.assignToMe')}
         </Button>
       )}
+      <ActionMenu items={menuItems} disabled={busy || editing} />
       {nextTarget && (
         <Button
           // Resolving asks for a note and is final: calm secondary, never the loudest button.
@@ -295,7 +296,6 @@ export function ExceptionDetailPage() {
           {t(TRANSITION_LABELS[nextTarget])}
         </Button>
       )}
-      <ActionMenu items={menuItems} disabled={busy || editing} />
     </>
   ) : undefined
 

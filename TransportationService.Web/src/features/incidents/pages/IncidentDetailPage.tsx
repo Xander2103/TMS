@@ -657,8 +657,8 @@ export function IncidentDetailPage() {
         action={
           nextAction || menuItems.length > 0 ? (
             <>
-              {nextAction}
               <ActionMenu items={menuItems} disabled={busy || editing !== null} />
+              {nextAction}
             </>
           ) : undefined
         }

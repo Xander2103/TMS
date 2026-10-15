@@ -238,7 +238,6 @@ export function VehicleDetailPage() {
         action={
           !editing && (
             <>
-              {canEdit && <Button onClick={startEdit}>{t('ui.actions.edit')}</Button>}
               <ActionMenu
                 items={[
                   ...(canEdit
@@ -246,6 +245,7 @@ export function VehicleDetailPage() {
                         key: 'active',
                         label: vehicle.isActive ? t('vehicles.detail.deactivate') : t('vehicles.detail.reactivate'),
                         onSelect: () => setConfirmActive(vehicle.isActive ? 'deactivate' : 'activate'),
+                        danger: vehicle.isActive,
                       }]
                     : []),
                   ...(hasPermission('vehicles.delete')
@@ -253,6 +253,7 @@ export function VehicleDetailPage() {
                     : []),
                 ]}
               />
+              {canEdit && <Button onClick={startEdit}>{t('ui.actions.edit')}</Button>}
             </>
           )
         }

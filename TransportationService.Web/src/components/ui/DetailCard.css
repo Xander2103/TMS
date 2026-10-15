@@ -55,6 +55,44 @@
   margin-left: auto;
 }
 
+/* One quiet card action on every entity page ("Bewerken", "Wijzigen", "Alle gegevens"): accent
+   text, compact, never a framed or filled button competing with the page's primary action. */
+.ui-detail-card-action > .ui-button,
+.ui-detail-card-action > button,
+.ui-detail-card-action > a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 4px 8px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  box-shadow: none;
+  color: var(--accent);
+  font: inherit;
+  font-size: var(--text-md);
+  font-weight: 500;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.ui-detail-card-action > .ui-button:hover:not(:disabled),
+.ui-detail-card-action > button:hover:not(:disabled),
+.ui-detail-card-action > a:hover {
+  background: var(--accent-bg);
+}
+
+.ui-detail-card-action > .ui-button:disabled,
+.ui-detail-card-action > button:disabled {
+  color: var(--text-muted);
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.ui-detail-card + .ui-detail-grid {
+  margin-top: var(--space-4);
+}
+
 .ui-detail-card-body {
   min-width: 0;
   font-size: var(--text-md);
