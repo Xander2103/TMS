@@ -205,7 +205,7 @@ export function EmployeeTankCardsSection({ employeeId }: { employeeId: string })
               {t('employees.tankCards.linkExisting')}
             </Button>
           )}
-          {canCreate && <Button onClick={openCreate}>{t('employees.tankCards.newCard')}</Button>}
+          {canCreate && <Button variant="secondary" onClick={openCreate}>{t('employees.tankCards.newCard')}</Button>}
         </div>
       </div>
 

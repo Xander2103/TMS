@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { render, screen, within } from '@testing-library/react'
+import { cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 import { EmployeeDetailPage } from '../EmployeeDetailPage'
@@ -9,10 +9,13 @@ import { EmployeeDetailPage } from '../EmployeeDetailPage'
 // (leave balance above absences above time registration, each gated by its own permission) and
 // the Wave-1 header hierarchy. The profile form itself is exercised separately — stubbed here.
 
-const auth = vi.hoisted(() => ({ permissions: new Set<string>() }))
+const auth = vi.hoisted(() => ({ permissions: new Set<string>(), employeeId: null as string | null }))
 
 vi.mock('../../../auth/authContextValue', () => ({
-  useAuth: () => ({ hasPermission: (code: string) => auth.permissions.has(code) }),
+  useAuth: () => ({
+    hasPermission: (code: string) => auth.permissions.has(code),
+    user: { employeeId: auth.employeeId },
+  }),
 }))
 vi.mock('../../../../components/ui/toastContext', () => ({
   useToast: () => ({ showToast: vi.fn(), showSuccess: vi.fn(), showError: vi.fn() }),
@@ -117,6 +120,18 @@ describe('EmployeeDetailPage — one navigation layer', () => {
     auth.permissions = new Set()
     renderAt('/employees/emp-1')
     expect(tabLabels()).toEqual(['Overzicht', 'Chauffeur', 'Kwalificaties', 'Historiek'])
+  })
+
+  it("shows Taken with only tasks.view_own on the user's own record, not on a colleague's", () => {
+    auth.permissions = new Set(['tasks.view_own'])
+    auth.employeeId = 'someone-else'
+    renderAt('/employees/emp-1')
+    expect(tabLabels()).not.toContain('Taken')
+    cleanup()
+    auth.employeeId = 'emp-1'
+    renderAt('/employees/emp-1')
+    expect(tabLabels()).toContain('Taken')
+    auth.employeeId = null
   })
 })
 

@@ -98,10 +98,14 @@
   color: var(--accent);
   cursor: pointer;
   text-align: left;
+  /* Reads as a link like the other detail pages' attention items (it jumps to the tab). */
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
 }
 
 .employee-attention-link:hover {
-  text-decoration: underline;
+  text-decoration-thickness: 2px;
 }
 
 .employee-attention-item.is-expired .employee-attention-link {

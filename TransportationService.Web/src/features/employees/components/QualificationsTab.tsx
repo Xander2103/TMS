@@ -210,7 +210,7 @@ export function QualificationsTab({ employeeId, highlightQualificationId, onChan
             </button>
           ))}
         </div>
-        {canCreate && <Button onClick={() => setDialog({ mode: 'create' })}>{t('employees.qualifications.add')}</Button>}
+        {canCreate && <Button variant="secondary" onClick={() => setDialog({ mode: 'create' })}>{t('employees.qualifications.add')}</Button>}
       </div>
 
       <DataTable

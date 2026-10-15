@@ -390,7 +390,7 @@ export function IssuedItemsTab({ employeeId, employeeName }: { employeeId: strin
               {t('issuedItems.tab.bulkIssue')}
             </Button>
           )}
-          {canManage && <Button onClick={openCreate}>{t('issuedItems.tab.add')}</Button>}
+          {canManage && <Button variant="secondary" onClick={openCreate}>{t('issuedItems.tab.add')}</Button>}
         </div>
       </div>
 

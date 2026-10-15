@@ -146,7 +146,7 @@ export function EmployeeDocumentsTab({ employeeId, highlightDocumentId, onChange
 
       <div className="employee-documents-toolbar">
         {canCreate && (
-          <Button variant={uploadOpen ? 'secondary' : 'primary'} onClick={() => setUploadOpen((open) => !open)} aria-expanded={uploadOpen}>
+          <Button variant="secondary" onClick={() => setUploadOpen((open) => !open)} aria-expanded={uploadOpen}>
             {uploadOpen ? t('employees.documents.closeUpload') : t('employees.documents.openUpload')}
           </Button>
         )}

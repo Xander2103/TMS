@@ -100,7 +100,7 @@ export function EmployeeDetailPage() {
   const navigate = useNavigate()
   const toast = useToast()
   const { t } = useLocale()
-  const { hasPermission } = useAuth()
+  const { hasPermission, user } = useAuth()
   const { employee, isLoading, error, reload } = useEmployee(id)
   const mutations = useEmployeeMutations()
   // B31: a card save keeps the user on the overview — its state shows in that card's title row
@@ -143,8 +143,12 @@ export function EmployeeDetailPage() {
   const canViewLeaveBalance = hasPermission('leave_balances.view')
   const canViewAbsences = hasPermission('absences.view')
   const canViewAttendance = hasPermission('attendance.view')
+  // tasks.view_own only covers the signed-in user's own employee record: on anyone else's page
+  // the API answers 404, so the tab would only ever show a load error.
   const canViewTasks =
-    hasPermission('tasks.view_own') || hasPermission('tasks.view_team') || hasPermission('tasks.view_all')
+    hasPermission('tasks.view_team') ||
+    hasPermission('tasks.view_all') ||
+    (hasPermission('tasks.view_own') && !!user?.employeeId && user.employeeId === id)
   const canAssignTasks = hasPermission('tasks.assign')
   // Notes were reachable for editors through the profile form and for others through a card.
   const canViewNotes = canEdit || hasPermission('employee_notes.view')

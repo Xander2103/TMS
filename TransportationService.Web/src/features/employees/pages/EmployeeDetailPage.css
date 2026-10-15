@@ -1,7 +1,6 @@
+/* Plain inline text: a flex container drops the spaces around the " · " separators. */
 .employee-header-subtitle {
-  display: inline-flex;
-  align-items: center;
-  flex-wrap: wrap;
+  display: inline;
 }
 
 /* Employee number reads as plain subtitle text but copies to the clipboard on click. */
