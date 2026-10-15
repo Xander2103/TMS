@@ -108,7 +108,7 @@ export function ExceptionsPage() {
     {
       key: 'occurredAt',
       header: t('exceptions.list.colReported'),
-      width: '136px',
+      width: '156px',
       sortKey: 'occurred',
       render: (r) => <span className="ui-nowrap">{formatDateTime(r.occurredAt)}</span>,
     },
@@ -116,7 +116,7 @@ export function ExceptionsPage() {
       key: 'type',
       width: '140px',
       header: t('exceptions.list.colType'),
-      render: (r) => t(EXCEPTION_TYPE_LABELS[r.type]),
+      render: (r) => <TruncatedText tooltip={t(EXCEPTION_TYPE_LABELS[r.type])}>{t(EXCEPTION_TYPE_LABELS[r.type])}</TruncatedText>,
     },
     {
       key: 'severity',

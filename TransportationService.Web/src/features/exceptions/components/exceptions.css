@@ -34,11 +34,8 @@
 }
 
 .exc-description-cell {
-  display: inline-block;
-  max-width: 320px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  /* TruncatedText already cuts to the column; only cap very wide screens. */
+  max-width: min(100%, 420px);
 }
 
 .exc-context-part {

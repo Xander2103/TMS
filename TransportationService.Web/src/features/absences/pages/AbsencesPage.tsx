@@ -144,8 +144,8 @@ export function AbsencesPage() {
         </span>
       ),
     },
-    { key: 'start', header: t('absences.tab.colFrom'), width: '105px', sortKey: 'start', render: (row) => <span className="ui-nowrap">{formatDate(row.startDate)}</span> },
-    { key: 'end', header: t('absences.tab.colTo'), width: '110px', sortKey: 'end', render: (row) => <span className="ui-nowrap">{formatDate(row.endDate)}</span> },
+    { key: 'start', header: t('absences.tab.colFrom'), width: '118px', sortKey: 'start', render: (row) => <span className="ui-nowrap">{formatDate(row.startDate)}</span> },
+    { key: 'end', header: t('absences.tab.colTo'), width: '118px', sortKey: 'end', render: (row) => <span className="ui-nowrap">{formatDate(row.endDate)}</span> },
     {
       key: 'status',
       header: t('absences.tab.colStatus'),
