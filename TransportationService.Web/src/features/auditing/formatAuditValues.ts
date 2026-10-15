@@ -141,14 +141,29 @@ function parseValues(json: string | null): Record<string, unknown> | null {
   }
 }
 
+const LEGACY_STATUS_VALUE = /^[A-Z][A-Za-z]+$/
+
 /** B25: the before/after of an audit entry per field — humanized, masked, references resolved. */
 export function auditChanges(
   oldJson: string | null,
   newJson: string | null,
   options: { valueLabels?: AuditValueLabels; references?: AuditReferences } = {},
 ): AuditChange[] {
-  const before = parseValues(oldJson) ?? {}
-  const after = parseValues(newJson) ?? {}
+  let before = parseValues(oldJson) ?? {}
+  let after = parseValues(newJson) ?? {}
+  // Older incident status rows stored the move as {From, To} on the new side only; read them as
+  // the Status before/after pair that newer rows store, so both summarise the same way. Only
+  // enum-like values qualify — a date range (absence From/To) stays a creation of two fields.
+  if (
+    Object.keys(before).length === 0 &&
+    Object.keys(after).length === 2 &&
+    'From' in after &&
+    'To' in after &&
+    [after.From, after.To].every((value) => typeof value === 'string' && LEGACY_STATUS_VALUE.test(value))
+  ) {
+    before = { Status: after.From }
+    after = { Status: after.To }
+  }
   const keys = [...new Set([...Object.keys(before), ...Object.keys(after)])]
   const render = (key: string, value: unknown, present: boolean): string | null => {
     if (!present) return null

@@ -184,6 +184,11 @@ public class CustomerHistoryService : ICustomerHistoryService
         "CommunicationRuleChanged" => "Communicatievoorkeur gewijzigd",
         "CommunicationRuleRemoved" => "Communicatievoorkeur verwijderd",
         "PoPolicyChanged" => "PO-beleid gewijzigd",
+        "PoNumberAdded" => "PO-nummer toegevoegd",
+        "PoNumberChanged" => "PO-nummer gewijzigd",
+        "PoNumberRemoved" => "PO-nummer verwijderd",
+        "DieselSurchargeChanged" => "Dieseltoeslag gewijzigd",
+        "ContactNotificationsChanged" => "Meldingen contactpersoon gewijzigd",
         "DefaultsChanged" => "Standaardlocaties gewijzigd",
         "Imported" => "Geïmporteerd",
         _ => action,
@@ -273,12 +278,36 @@ public class CustomerHistoryService : ICustomerHistoryService
         ["EarliestArrival"] = "Vroegste aankomst",
         ["LatestArrival"] = "Laatste aankomst",
         ["OpeningIntervals"] = "Openingsuren",
+        // Billing configuration (diesel surcharge, PO numbers, contact notifications).
+        ["Enabled"] = "Actief",
+        ["Percent"] = "Percentage",
+        ["Basis"] = "Berekeningsbasis",
+        ["Presentation"] = "Weergave op factuur",
+        ["Rounding"] = "Afronding",
+        ["PoNumber"] = "PO-nummer",
+        ["ValidFrom"] = "Geldig vanaf",
+        ["ValidUntil"] = "Geldig tot",
+        ["OptionKeys"] = "Meldingen",
+    };
+
+    /// <summary>Enum values stored by the billing-config audit rows, in the words the screens use.</summary>
+    private static readonly Dictionary<string, string> ValueLabels = new(StringComparer.Ordinal)
+    {
+        ["None"] = "Geen",
+        ["Optional"] = "Vrij (optioneel)",
+        ["Required"] = "Verplicht",
+        ["OrderAmount"] = "Orderbedrag",
+        ["InvoiceSubtotal"] = "Subtotaal factuur",
+        ["PerOrderLine"] = "Per orderregel",
+        ["AggregatedLine"] = "Eén totaalregel",
+        ["NearestCent"] = "Op de cent",
+        ["RoundUpCent"] = "Naar boven op de cent",
     };
 
     /// <summary>Plumbing keys that would only show raw ids.</summary>
     private static readonly HashSet<string> HiddenKeys = new(StringComparer.Ordinal)
     {
-        "Id", "TenantId", "CustomerId", "EntityId", "CategoryId", "DepartmentId", "DefaultLegalEntityId",
+        "Id", "TenantId", "CustomerId", "EntityId", "CategoryId", "DepartmentId", "DefaultLegalEntityId", "ContactId",
     };
 
     private static List<CustomerHistoryChangeDto> BuildChanges(string? oldJson, string? newJson)
@@ -300,11 +329,14 @@ public class CustomerHistoryService : ICustomerHistoryService
             }
 
             var label = FieldLabels.TryGetValue(key, out var mapped) ? mapped : key;
-            changes.Add(new CustomerHistoryChangeDto(label, before, after));
+            changes.Add(new CustomerHistoryChangeDto(label, HumanizeValue(before), HumanizeValue(after)));
         }
 
         return changes;
     }
+
+    private static string? HumanizeValue(string? value) =>
+        value is not null && ValueLabels.TryGetValue(value, out var label) ? label : value;
 
     private static Dictionary<string, string?> ParseSnapshot(string? json)
     {
@@ -346,7 +378,7 @@ public class CustomerHistoryService : ICustomerHistoryService
             return $"{change.Field}: {change.Before ?? "—"} → {change.After ?? "—"}";
         }
 
-        if (changes.Count > 1 && action is "Updated" or "ContactUpdated")
+        if (changes.Count > 1 && action is "Updated" or "ContactUpdated" or "DieselSurchargeChanged" or "PoNumberChanged")
         {
             var names = string.Join(", ", changes.Take(3).Select(c => c.Field));
             var suffix = changes.Count > 3 ? ", …" : string.Empty;

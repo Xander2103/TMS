@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using TransportationService.Api.Common;
 using TransportationService.Api.Common.Reference;
 using TransportationService.Api.Data;
+using TransportationService.Api.Modules.Auditing.Entities;
 using TransportationService.Api.Modules.Auditing.Services;
 using TransportationService.Api.Modules.Identity.Services;
 using TransportationService.Api.Modules.Partners.Dtos;
@@ -286,6 +287,39 @@ public class CustomerContactTypeAndHistoryTests
         // Category filter narrows the list.
         var contactsOnly = await history.GetHistoryAsync(customer.Id, 1, 25, "Contactpersonen", CancellationToken.None);
         Assert.All(contactsOnly!.Items, e => Assert.Equal("Contactpersonen", e.Category));
+    }
+
+    [Fact]
+    public async Task History_BillingConfigEvents_ReadAsWordsNotCodes()
+    {
+        using var db = new SqliteTestDbContext();
+        var tenantId = await SeedTenantAsync(db);
+        var sut = CreateSut(db, tenantId);
+        var history = new CustomerHistoryService(db.Context, new DevTenantContext(tenantId));
+        var customer = await sut.CreateAsync(NewCustomer("Toeslag NV"), CancellationToken.None);
+
+        db.Context.AuditLogs.AddRange(
+            new AuditLog
+            {
+                Id = Guid.NewGuid(), TenantId = tenantId, EntityType = "Customer", EntityId = customer.Id.ToString(),
+                Action = "DieselSurchargeChanged", Timestamp = DateTime.UtcNow,
+                NewValuesJson = "{\"Enabled\":true,\"Percent\":12.5,\"Basis\":\"OrderAmount\"}",
+            },
+            new AuditLog
+            {
+                Id = Guid.NewGuid(), TenantId = tenantId, EntityType = "Customer", EntityId = customer.Id.ToString(),
+                Action = "PoPolicyChanged", Timestamp = DateTime.UtcNow,
+                OldValuesJson = "{\"Policy\":\"None\"}", NewValuesJson = "{\"Policy\":\"Required\"}",
+            });
+        await db.Context.SaveChangesAsync();
+
+        var page = await history.GetHistoryAsync(customer.Id, 1, 25, null, CancellationToken.None);
+
+        var diesel = Assert.Single(page!.Items, e => e.Action == "DieselSurchargeChanged");
+        Assert.Equal("Dieseltoeslag gewijzigd", diesel.ActionLabel);
+        Assert.Contains(diesel.Changes, c => c.Field == "Berekeningsbasis" && c.After == "Orderbedrag");
+        var po = Assert.Single(page.Items, e => e.Action == "PoPolicyChanged");
+        Assert.Equal("PO-beleid: Geen → Verplicht", po.Summary);
     }
 
     [Fact]

@@ -110,4 +110,16 @@ describe('auditChanges / auditSummary (B25)', () => {
   it('masks sensitive values in the changes too', () => {
     expect(auditChanges('{"Iban":"BE68"}', '{"Iban":"BE99"}')[0]).toMatchObject({ before: '••••', after: '••••' })
   })
+
+  it('reads an older incident status row ({From, To}) as a status move', () => {
+    const changes = auditChanges(null, '{"From":"New","To":"InProgress"}')
+    expect(changes).toHaveLength(1)
+    expect(changes[0]).toMatchObject({ key: 'Status', before: expect.any(String), after: expect.any(String) })
+    expect(auditSummary(changes)).toMatch(/^Status gewijzigd van .+ naar .+$/)
+  })
+
+  it('leaves a From/To date range as two recorded fields', () => {
+    const changes = auditChanges(null, '{"From":"2026-10-01","To":"2026-10-05"}')
+    expect(changes.map((change) => change.key)).toEqual(['From', 'To'])
+  })
 })
