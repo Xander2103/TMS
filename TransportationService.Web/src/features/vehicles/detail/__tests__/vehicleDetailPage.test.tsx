@@ -67,7 +67,7 @@ function renderPage(url = '/vehicles/v1') {
 
 const ALL = [
   'vehicles.edit', 'vehicles.delete', 'fleet_documents.view', 'inspections.view', 'tachograph.view', 'maintenance.view',
-  'damage_reports.view', 'fuel.view', 'kpi.view',
+  'damage_reports.view', 'fuel.view', 'kpi.view', 'audit_logs.view',
 ]
 
 beforeEach(() => {
@@ -120,6 +120,8 @@ describe('VehicleDetailPage (B16)', () => {
     expect(screen.queryByText('panel:kpi')).not.toBeInTheDocument()
     expect(screen.queryByRole('tab', { name: 'Documenten & keuringen' })).not.toBeInTheDocument()
     expect(screen.queryByRole('tab', { name: 'Onderhoud & schade' })).not.toBeInTheDocument()
+    // Without audit rights the history tab would only say "no permission".
+    expect(screen.queryByRole('tab', { name: 'Historiek' })).not.toBeInTheDocument()
   })
 
   it('never requests compliance lists without permission and then claims nothing', async () => {

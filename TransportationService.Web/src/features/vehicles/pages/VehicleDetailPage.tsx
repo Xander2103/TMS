@@ -77,13 +77,15 @@ export function VehicleDetailPage() {
   const canViewDocumentsGroup = hasPermission('fleet_documents.view') || hasPermission('inspections.view') || hasPermission('tachograph.view')
   const canViewMaintenanceGroup =
     hasPermission('maintenance.view') || hasPermission('damage_reports.view') || hasPermission('maintenance_policies.view') || hasPermission('maintenance_policies.manage')
+  // Without audit rights the history tab could only say "no permission": leave it out.
+  const canViewHistory = hasPermission('audit_logs.view')
   const tabIds: VehicleTab[] = [
     'overzicht',
     'techniek',
     ...(canViewDocumentsGroup ? (['documenten'] as const) : []),
     ...(canViewMaintenanceGroup ? (['onderhoud'] as const) : []),
     'kosten',
-    'historiek',
+    ...(canViewHistory ? (['historiek'] as const) : []),
   ]
   const { tab, setTab, searchParams } = useDetailTab<VehicleTab>({ ids: tabIds, defaultId: 'overzicht', aliases: TAB_ALIASES })
   const focus = searchParams.get('focus')
@@ -278,7 +280,7 @@ export function VehicleDetailPage() {
               ...(canViewDocumentsGroup ? [{ id: 'documenten', label: t('vehicles.detail.groups.documents') }] : []),
               ...(canViewMaintenanceGroup ? [{ id: 'onderhoud', label: t('vehicles.detail.groups.maintenance') }] : []),
               { id: 'kosten', label: t('vehicles.detail.groups.costs') },
-              { id: 'historiek', label: t('vehicles.detail.groups.history') },
+              ...(canViewHistory ? [{ id: 'historiek', label: t('vehicles.detail.groups.history') }] : []),
             ]}
             activeId={tab}
             onChange={(next) => setTab(next as VehicleTab)}
