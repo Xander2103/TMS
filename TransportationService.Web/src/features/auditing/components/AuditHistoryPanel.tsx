@@ -58,6 +58,7 @@ const ACTION_LABELS: Record<string, string> = {
 /** Per-entity catalogue prefix tried for actions ACTION_LABELS does not know. */
 const ENTITY_ACTION_PREFIX: Record<string, string> = {
   TransportDossier: 'dossiers.history',
+  Incident: 'incidents.history',
 }
 
 function actionLabel(t: (key: string) => string, entityType: string, action: string): string {

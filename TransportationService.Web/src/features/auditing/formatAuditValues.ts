@@ -47,6 +47,10 @@ const FIELD_LABELS: Record<string, string> = {
   PackageId: 'Collo', StopId: 'Stop', Priority: 'Prioriteit', RelationType: 'Soort relatie', OccurredAt: 'Tijdstip',
   ResolutionNote: 'Oplossing', Resolution: 'Oplossing', FileName: 'Bestand', ConfirmationSource: 'Bevestigingswijze',
   Version: 'Versie',
+  // B24: incident payloads (older status rows store From/To; charge and responsibility keys).
+  From: 'Van', To: 'Naar', IncidentType: 'Type', ResponsibleParty: 'Verantwoordelijke partij',
+  ResponsibilityNotes: 'Toelichting verantwoordelijkheid', ChargeDecision: 'Doorrekening', ChargeAmount: 'Bedrag doorrekening',
+  ChargeDescription: 'Omschrijving doorrekening', PolicyId: 'Doorrekenbeleid', Mode: 'Werkwijze',
 }
 
 /** Optional per-field value renderers (an entity can map its enum ordinals or codes to labels). */

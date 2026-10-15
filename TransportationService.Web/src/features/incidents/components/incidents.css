@@ -1,0 +1,85 @@
+/* B24: incident detail — read-first cards; edit happens inside one card at a time. */
+.inc-description {
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-base);
+  color: var(--text-h);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.inc-multiline {
+  white-space: pre-wrap;
+}
+
+.inc-edit {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.inc-edit-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  gap: var(--space-2) var(--space-4);
+}
+
+.inc-edit-grid .inc-edit-wide {
+  grid-column: 1 / -1;
+}
+
+.inc-edit-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.inc-charge-line {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-md);
+}
+
+.inc-charge-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-2) var(--space-3);
+  margin: var(--space-2) 0;
+}
+
+.inc-charge-row .ui-form-field {
+  margin-bottom: 0;
+}
+
+.inc-redelivery-hint {
+  margin: 0 0 var(--space-3);
+  padding: 8px 12px;
+  border: 1px solid var(--color-warning-border);
+  border-radius: var(--radius-md);
+  background: var(--color-warning-bg);
+  color: var(--color-warning-text);
+  font-weight: 600;
+  font-size: var(--text-md);
+}
+
+.inc-overdue {
+  color: var(--color-danger);
+  font-weight: 600;
+}
+.inc-charge-repropose {
+  display: inline-block;
+  margin: 0 0 var(--space-2);
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: var(--text-md);
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.inc-resolution-card {
+  margin-bottom: var(--space-4);
+}

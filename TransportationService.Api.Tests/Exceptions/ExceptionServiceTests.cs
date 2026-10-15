@@ -1,5 +1,6 @@
 using System.Text;
 using TransportationService.Api.Modules.Auditing.Services;
+using TransportationService.Api.Modules.Dossiers.Entities;
 using TransportationService.Api.Modules.Drivers.Entities;
 using TransportationService.Api.Modules.Employees.Entities;
 using TransportationService.Api.Modules.Exceptions.Dtos;
@@ -143,10 +144,41 @@ public class ExceptionServiceTests
         Assert.Equal("Jan Jansen", detail.ReportedByName);
         Assert.Equal("Jan Jansen", detail.DriverName);
         Assert.Equal(2, detail.Quantity);
+        // B24: the order's customer travels along; no dossier links this order.
+        Assert.Equal("Haven BV", detail.CustomerName);
+        Assert.Null(detail.DossierId);
 
         // The dispatcher (exceptions.resolve holder) got an in-app notification.
         Assert.Contains(h.Db.Context.Notifications,
             n => n.UserId == h.DispatcherUserId && n.Type == "exception_reported");
+    }
+
+    [Fact]
+    public async Task Detail_NamesTheDossierBehindTheOrder()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var dossierId = Guid.NewGuid();
+        var typeId = Guid.NewGuid();
+        h.Db.Context.ActivityTypes.Add(new ActivityType
+        {
+            Id = typeId, TenantId = h.TenantId, Code = "DIRECT", Name = "Direct transport", SortOrder = 1, IsActive = true,
+        });
+        h.Db.Context.TransportDossiers.Add(new TransportDossier
+        {
+            Id = dossierId, TenantId = h.TenantId, DossierNumber = "DOS-0042", Title = "Haven", DossierDate = new(2026, 7, 20),
+        });
+        h.Db.Context.DossierActivities.Add(new DossierActivity
+        {
+            Id = Guid.NewGuid(), TenantId = h.TenantId, DossierId = dossierId, ActivityTypeId = typeId, Sequence = 1,
+            LinkedTransportOrderId = h.OrderId,
+        });
+        await h.Db.Context.SaveChangesAsync();
+
+        var result = await h.Sut.ReportAsync(h.TripId, Report(stopId: h.StopId), true, CancellationToken.None);
+
+        Assert.Equal(dossierId, result.Exception!.DossierId);
+        Assert.Equal("DOS-0042", result.Exception.DossierNumber);
     }
 
     [Fact]

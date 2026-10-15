@@ -117,7 +117,31 @@
     "resolveTitle": "Incident afhandelen",
     "cancel": "Annuleren",
     "resolve": "Afhandelen",
-    "resolutionLabel": "Oplossing"
+    "resolutionLabel": "Oplossing",
+    "startAction": "In behandeling nemen",
+    "reopenAction": "Heropenen",
+    "cancelAction": "Incident annuleren…",
+    "cancelTitle": "Incident annuleren?",
+    "cancelMessage": "‘{title}’ wordt geannuleerd. Je kunt het later heropenen.",
+    "cancelConfirm": "Incident annuleren",
+    "resolutionRequired": "Beschrijf de oplossing om het incident af te handelen.",
+    "resolutionHint": "Verplicht: wat is er gedaan of afgesproken?",
+    "previousResolution": "Eerdere oplossing",
+    "tripLabel": "Rit",
+    "trailerLabel": "Oplegger",
+    "driverLabel": "Chauffeur",
+    "noImpact": "Nog geen impact of kosten geregistreerd.",
+    "estimatedCostShort": "Geschatte kost",
+    "actualCostShort": "Werkelijke kost",
+    "historyTitle": "Historiek",
+    "attention": {
+      "overdue": "Deadline overschreden sinds {date}",
+      "noResponsible": "Nog geen verantwoordelijke",
+      "assign": "Toewijzen",
+      "chargeProposed": "Doorrekening van {amount} wacht op beslissing",
+      "redelivery": "Herlevering aanbevolen na mislukte levering",
+      "view": "Bekijken"
+    }
   },
   "charge": {
     "actionFailed": "De actie kon niet worden uitgevoerd.",
@@ -139,6 +163,18 @@
     "redeliveryCreated": "Herleveringsorder aangemaakt in hetzelfde dossier.",
     "createRedelivery": "Herlevering aanmaken",
     "noOrderRights": "Je hebt geen rechten om orders aan te maken.",
-    "linkOrderFirst": "Koppel eerst de originele order om een herlevering aan te maken."
+    "linkOrderFirst": "Koppel eerst de originele order om een herlevering aan te maken.",
+    "changeProposal": "Voorstel wijzigen"
+  },
+  "history": {
+    "ChargeProposed": "Doorrekening voorgesteld",
+    "ChargeProposedByPolicy": "Doorrekening voorgesteld (beleid)",
+    "ChargeAutoApprovedByPolicy": "Doorrekening automatisch goedgekeurd (beleid)",
+    "ChargeApproved": "Doorrekening goedgekeurd",
+    "ChargeRejected": "Doorrekening afgekeurd",
+    "RedeliveryCreated": "Herlevering aangemaakt",
+    "AutoCreatedFromFailedStop": "Automatisch aangemaakt na mislukte levering",
+    "modeAuto": "Automatisch",
+    "modePropose": "Voorstellen"
   }
 }

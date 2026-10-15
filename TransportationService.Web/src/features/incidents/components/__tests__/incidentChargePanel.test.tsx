@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render as rtlRender, screen } from '@testing-library/react'
+import type { ReactElement } from 'react'
+import { MemoryRouter } from 'react-router-dom'
 import { IncidentChargePanel } from '../IncidentChargePanel'
 import type { IncidentDetail } from '../../types'
 
@@ -14,6 +16,8 @@ vi.mock('../../api/incidentsApi', () => ({
   decideIncidentCharge: vi.fn(),
   proposeIncidentCharge: vi.fn(),
 }))
+
+const render = (ui: ReactElement) => rtlRender(<MemoryRouter>{ui}</MemoryRouter>)
 
 function incident(overrides: Partial<IncidentDetail> = {}): IncidentDetail {
   return {

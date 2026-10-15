@@ -560,6 +560,7 @@ public class ExecutionExceptionService : IExecutionExceptionService
         }
 
         var context = await LoadContextAsync(row, cancellationToken);
+        var orderContext = await LoadOrderContextAsync(row.TransportOrderId, cancellationToken);
         var photos = await _dbContext.ExceptionPhotos.AsNoTracking()
             .Where(p => p.ExecutionExceptionId == row.Id && p.TenantId == _tenantContext.TenantId)
             .OrderBy(p => p.CreatedAt)
@@ -578,7 +579,32 @@ public class ExecutionExceptionService : IExecutionExceptionService
             row.OccurredAt, row.Latitude, row.Longitude,
             row.DispatcherNotes, row.CustomerVisible,
             row.ResolutionNote, context.ResolvedByName, row.ResolvedAt,
-            photos, Transitions[row.Status]);
+            photos, Transitions[row.Status],
+            orderContext?.DossierId, orderContext?.DossierNumber, orderContext?.CustomerId, orderContext?.CustomerName);
+    }
+
+    private sealed record OrderContext(Guid? DossierId, string? DossierNumber, Guid? CustomerId, string? CustomerName);
+
+    /// <summary>B24: the order's dossier (via its linked activity) and customer — detail page only.</summary>
+    private async Task<OrderContext?> LoadOrderContextAsync(Guid? transportOrderId, CancellationToken cancellationToken)
+    {
+        if (transportOrderId is not { } orderId)
+        {
+            return null;
+        }
+
+        var tenantId = _tenantContext.TenantId;
+        var customer = await _dbContext.TransportOrders.AsNoTracking().IgnoreQueryFilters()
+            .Where(o => o.Id == orderId && o.TenantId == tenantId)
+            .Join(_dbContext.Customers.AsNoTracking().IgnoreQueryFilters(), o => o.CustomerId, c => c.Id,
+                (o, c) => new { c.Id, c.Name })
+            .FirstOrDefaultAsync(cancellationToken);
+        var dossier = await _dbContext.DossierActivities.AsNoTracking().IgnoreQueryFilters()
+            .Where(a => a.LinkedTransportOrderId == orderId && a.TenantId == tenantId)
+            .Join(_dbContext.TransportDossiers.AsNoTracking().IgnoreQueryFilters(), a => a.DossierId, d => d.Id,
+                (a, d) => new { d.Id, d.DossierNumber })
+            .FirstOrDefaultAsync(cancellationToken);
+        return new OrderContext(dossier?.Id, dossier?.DossierNumber, customer?.Id, customer?.Name);
     }
 
     private static string ExceptionTypeLabel(ExecutionExceptionType type) => type switch

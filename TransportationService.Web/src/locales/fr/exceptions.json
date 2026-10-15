@@ -104,7 +104,21 @@
     "optionalNoteLabel": "Note (facultatif)",
     "statusNoteHint": "Le déclarant reçoit cette décision comme notification.",
     "deletePhotoTitle": "Supprimer la photo",
-    "deletePhotoMessage": "Cette photo sera définitivement supprimée."
+    "deletePhotoMessage": "Cette photo sera définitivement supprimée.",
+    "transition": {
+      "Open": "Rouvrir",
+      "Investigating": "Mettre en examen",
+      "Resolved": "Résoudre…",
+      "Rejected": "Rejeter…",
+      "CustomerActionRequired": "Action client requise"
+    },
+    "status": "Statut",
+    "type": "Type",
+    "dossier": "Dossier",
+    "customer": "Client",
+    "assignee": "Attribué à",
+    "outcomeResolved": "Résolu",
+    "outcomeRejected": "Rejeté"
   },
   "report": {
     "descriptionRequired": "Une description du problème est obligatoire.",

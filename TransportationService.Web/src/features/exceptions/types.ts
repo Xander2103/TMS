@@ -157,6 +157,11 @@ export interface ExceptionDetail {
   resolvedAt: string | null
   photos: ExceptionPhoto[]
   allowedTransitions: ExecutionExceptionStatus[]
+  /** B24: the dossier/customer behind the order (absent on older API builds). */
+  dossierId?: string | null
+  dossierNumber?: string | null
+  customerId?: string | null
+  customerName?: string | null
 }
 
 export interface ReportExceptionInput {

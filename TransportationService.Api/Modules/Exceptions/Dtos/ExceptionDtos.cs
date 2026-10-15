@@ -71,7 +71,12 @@ public record ExceptionDetailDto(
     string? ResolvedByName,
     DateTime? ResolvedAt,
     IReadOnlyList<ExceptionPhotoDto> Photos,
-    IReadOnlyList<ExecutionExceptionStatus> AllowedTransitions);
+    IReadOnlyList<ExecutionExceptionStatus> AllowedTransitions,
+    // B24: the dossier/customer behind the order, so the detail page links the whole context.
+    Guid? DossierId = null,
+    string? DossierNumber = null,
+    Guid? CustomerId = null,
+    string? CustomerName = null);
 
 public enum ExceptionOutcome
 {

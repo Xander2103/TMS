@@ -4,9 +4,12 @@ import { PageHeader } from '../../../components/layout/PageHeader'
 import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { LoadingState } from '../../../components/feedback/LoadingState'
 import { ErrorState } from '../../../components/feedback/ErrorState'
+import { ActionMenu, type ActionMenuItem } from '../../../components/ui/ActionMenu'
 import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
+import { DetailCard, DetailGrid } from '../../../components/ui/DetailCard'
+import { FactList } from '../../../components/ui/FactList'
 import { UnsavedChangesGuard } from '../../../components/ui/UnsavedChangesGuard'
 import { FormField } from '../../../components/ui/FormField'
 import { Modal } from '../../../components/ui/Modal'
@@ -17,7 +20,7 @@ import { ApiError } from '../../../api/apiClient'
 import { AuditHistoryPanel } from '../../auditing/components/AuditHistoryPanel'
 import type { AuditValueLabels } from '../../auditing/formatAuditValues'
 import { resolvePackageIncident } from '../../packages/api/packagesApi'
-import { PACKAGE_INCIDENT_ACTION_LABELS, type PackageIncidentAction } from '../../packages/types'
+import { PACKAGE_INCIDENT_ACTION_LABELS, PACKAGE_STATUS_LABELS, type PackageIncidentAction, type PackageLifecycleStatus } from '../../packages/types'
 import {
   assignException,
   changeExceptionStatus,
@@ -57,6 +60,15 @@ const PACKAGE_DISPOSITIONS: Record<string, PackageIncidentAction[]> = {
   ReturnPending: ['Redeliver', 'Quarantine', 'Cancel'],
   ReturnedToDepot: ['Redeliver', 'ReturnToSender', 'Quarantine', 'Cancel'],
   Quarantined: ['Return', 'Redeliver', 'Cancel'],
+}
+
+/** Button/menu wording per target status: a verb, not "Naar <status>". */
+const TRANSITION_LABELS: Record<ExecutionExceptionStatus, string> = {
+  Open: 'exceptions.detail.transition.Open',
+  Investigating: 'exceptions.detail.transition.Investigating',
+  Resolved: 'exceptions.detail.transition.Resolved',
+  Rejected: 'exceptions.detail.transition.Rejected',
+  CustomerActionRequired: 'exceptions.detail.transition.CustomerActionRequired',
 }
 
 /** Server enum order of ExecutionExceptionType (audit payloads store ordinals). */
@@ -113,6 +125,10 @@ export function ExceptionDetailPage() {
         if (!mounted) return
         setDetail(data)
         setLoadError(null)
+        // Another exception opened in the same page instance: never carry an edit or dialog over.
+        setEditing(false)
+        setStatusTarget(null)
+        setDispositionAction(null)
       })
       .catch(() => {
         if (mounted) setLoadError(t('exceptions.detail.loadError'))
@@ -238,192 +254,162 @@ export function ExceptionDetailPage() {
       dispatcherNotes.trim() !== (detail.dispatcherNotes ?? '') ||
       customerVisible !== detail.customerVisible)
 
+  const isMine = detail.assignedToUserId === user?.id
+  const allowed = canResolve ? detail.allowedTransitions : []
+  const openStatusDialog = (target: ExecutionExceptionStatus) => {
+    setStatusTarget(target)
+    setStatusNote('')
+  }
+
+  // B24: one sensible next step in the header; the other moves (and rejecting) in Meer ▾.
+  let nextTarget: ExecutionExceptionStatus | null = null
+  if (detail.status === 'Open' && allowed.includes('Investigating')) nextTarget = 'Investigating'
+  else if (allowed.includes('Resolved')) nextTarget = 'Resolved'
+  const menuItems: ActionMenuItem[] = [
+    ...allowed
+      .filter((target) => target !== nextTarget && target !== 'Rejected')
+      .map((target) => ({
+        key: target,
+        label: t(TRANSITION_LABELS[target]),
+        onSelect: () => openStatusDialog(target),
+      })),
+    ...(canResolve && isMine ? [{ key: 'unassign', label: t('exceptions.detail.unassign'), onSelect: () => void toggleAssignment() }] : []),
+    ...(allowed.includes('Rejected')
+      ? [{ key: 'Rejected', label: t(TRANSITION_LABELS.Rejected), danger: true, onSelect: () => openStatusDialog('Rejected') }]
+      : []),
+  ]
+  const headerActions = canResolve ? (
+    <>
+      {!isMine && (
+        <Button variant="secondary" onClick={() => void toggleAssignment()} disabled={busy || editing}>
+          {t('exceptions.detail.assignToMe')}
+        </Button>
+      )}
+      {nextTarget && (
+        <Button
+          // Resolving asks for a note and is final: calm secondary, never the loudest button.
+          variant={nextTarget === 'Resolved' ? 'secondary' : 'primary'}
+          onClick={() => openStatusDialog(nextTarget)}
+          disabled={busy || editing}
+        >
+          {t(TRANSITION_LABELS[nextTarget])}
+        </Button>
+      )}
+      <ActionMenu items={menuItems} disabled={busy || editing} />
+    </>
+  ) : undefined
+
+  const typeLabel = t(EXCEPTION_TYPE_LABELS[detail.type])
+  const packageStatusLabel = detail.packageStatus
+    ? (PACKAGE_STATUS_LABELS[detail.packageStatus as PackageLifecycleStatus] ? t(PACKAGE_STATUS_LABELS[detail.packageStatus as PackageLifecycleStatus]) : detail.packageStatus)
+    : null
+  const hasGps = detail.latitude !== null && detail.longitude !== null
+  const terminal = detail.status === 'Resolved' || detail.status === 'Rejected'
+
   return (
     <div>
-      <Breadcrumbs items={[{ label: t('exceptions.detail.breadcrumb'), to: '/exceptions' }, { label: t(EXCEPTION_TYPE_LABELS[detail.type]) }]} />
+      <Breadcrumbs items={[{ label: t('exceptions.detail.breadcrumb'), to: '/exceptions' }, { label: `${typeLabel} — ${detail.tripNumber}` }]} />
       <PageHeader
-        title={`${t(EXCEPTION_TYPE_LABELS[detail.type])} — ${detail.tripNumber}`}
-        subtitle={detail.reportedByName
-          ? t('exceptions.detail.subtitleReportedBy', { date: formatDateTime(detail.occurredAt), name: detail.reportedByName })
-          : t('exceptions.detail.subtitleReported', { date: formatDateTime(detail.occurredAt) })}
-        action={
-          <span className="exc-header-badges">
-            <Badge tone={EXCEPTION_SEVERITY_TONE[detail.severity]}>
-              {EXCEPTION_SEVERITY_ICONS[detail.severity]} {t(EXCEPTION_SEVERITY_LABELS[detail.severity])}
-            </Badge>
+        title={`${typeLabel} — ${detail.tripNumber}`}
+        badges={
+          <>
             <Badge tone={EXCEPTION_STATUS_TONE[detail.status]}>
               {EXCEPTION_STATUS_ICONS[detail.status]} {t(EXCEPTION_STATUS_LABELS[detail.status])}
             </Badge>
-          </span>
+            <Badge tone={EXCEPTION_SEVERITY_TONE[detail.severity]}>
+              {EXCEPTION_SEVERITY_ICONS[detail.severity]} {t(EXCEPTION_SEVERITY_LABELS[detail.severity])}
+            </Badge>
+          </>
         }
+        subtitle={detail.reportedByName
+          ? t('exceptions.detail.subtitleReportedBy', { date: formatDateTime(detail.occurredAt), name: detail.reportedByName })
+          : t('exceptions.detail.subtitleReported', { date: formatDateTime(detail.occurredAt) })}
+        action={headerActions}
       />
 
-      {canDisposition && detail.packageId && detail.packageStatus
-        && (PACKAGE_DISPOSITIONS[detail.packageStatus]?.length ?? 0) > 0 && (
-        <section className="to-section">
-          <h2>{t('exceptions.detail.dispositionTitle', { packageNumber: detail.packageNumber ?? '' })}</h2>
-          <div className="exc-actions">
-            {PACKAGE_DISPOSITIONS[detail.packageStatus].map((action) => (
-              <Button
-                key={action}
-                variant="secondary"
-                onClick={() => {
-                  setDispositionAction(action)
-                  setDispositionNote('')
-                }}
-                disabled={busy}
-              >
-                {t(PACKAGE_INCIDENT_ACTION_LABELS[action])}
-              </Button>
-            ))}
-          </div>
-        </section>
+      <UnsavedChangesGuard when={editDirty && !busy} />
+
+      {terminal && detail.resolutionNote && (
+        <DetailCard title={t(detail.status === 'Resolved' ? 'exceptions.detail.outcomeResolved' : 'exceptions.detail.outcomeRejected')} id="exception-outcome" className="exc-outcome-card">
+          <p className="exc-description">{detail.resolutionNote}</p>
+          <p className="ui-detail-empty">
+            {[detail.resolvedByName, detail.resolvedAt ? formatDateTime(detail.resolvedAt) : null].filter(Boolean).join(' · ')}
+          </p>
+        </DetailCard>
       )}
 
-      {canResolve && (
-        <div className="exc-actions">
-          <Button variant="secondary" onClick={() => void toggleAssignment()} disabled={busy}>
-            {detail.assignedToUserId === user?.id ? t('exceptions.detail.unassign') : t('exceptions.detail.assignToMe')}
-          </Button>
-          {detail.assignedToName && detail.assignedToUserId !== user?.id && (
-            <span className="exc-assignee">{t('exceptions.detail.assignedTo', { name: detail.assignedToName })}</span>
-          )}
-        </div>
-      )}
+      <DetailGrid>
+        <DetailCard title={t('exceptions.detail.reportTitle')} id="exception-report" className="ui-detail-card-wide">
+          <p className="exc-description">{detail.description}</p>
+          <FactList
+            columns={2}
+            facts={[
+              { key: 'status', label: t('exceptions.detail.status'), value: t(EXCEPTION_STATUS_LABELS[detail.status]) },
+              { key: 'trip', label: t('exceptions.detail.trip'), value: <Link className="ui-id-link" to={`/planning/${detail.tripId}`}>{detail.tripNumber}</Link> },
+              { key: 'type', label: t('exceptions.detail.type'), value: typeLabel },
+              {
+                key: 'order',
+                label: t('exceptions.detail.order'),
+                value: detail.transportOrderId ? <Link className="ui-id-link" to={`/transport-orders/${detail.transportOrderId}`}>{detail.orderNumber}</Link> : null,
+              },
+              { key: 'severity', label: t('exceptions.detail.severityLabel'), value: t(EXCEPTION_SEVERITY_LABELS[detail.severity]) },
+              {
+                key: 'dossier',
+                label: t('exceptions.detail.dossier'),
+                value: detail.dossierId ? <Link className="ui-id-link" to={`/dossiers/${detail.dossierId}`}>{detail.dossierNumber}</Link> : null,
+              },
+              { key: 'assignee', label: t('exceptions.detail.assignee'), value: detail.assignedToName },
+              {
+                key: 'customer',
+                label: t('exceptions.detail.customer'),
+                value: detail.customerId ? <Link to={`/customers/${detail.customerId}`}>{detail.customerName}</Link> : null,
+              },
+              { key: 'driver', label: t('exceptions.detail.driver'), value: detail.driverName },
+              !!detail.stopLabel && { key: 'stop', label: t('exceptions.detail.stop'), value: detail.stopLabel },
+              !!detail.cargoDescription && { key: 'cargo', label: t('exceptions.detail.cargoLine'), value: detail.cargoDescription },
+              !!detail.packageNumber && {
+                key: 'package',
+                label: t('exceptions.detail.package'),
+                value: (
+                  <>
+                    <code>{detail.packageNumber}</code>
+                    {packageStatusLabel && <> · {packageStatusLabel}</>}
+                  </>
+                ),
+              },
+              detail.quantity !== null && { key: 'quantity', label: t('exceptions.detail.quantity'), value: String(detail.quantity) },
+              hasGps && { key: 'gps', label: t('exceptions.detail.gps'), value: `${detail.latitude}, ${detail.longitude}` },
+            ]}
+          />
+        </DetailCard>
 
-      {canResolve && detail.allowedTransitions.length > 0 && (
-        <div className="exc-actions">
-          {detail.allowedTransitions.map((target) => (
-            <Button
-              key={target}
-              variant={target === 'Resolved' ? 'primary' : 'secondary'}
-              onClick={() => {
-                setStatusTarget(target)
-                setStatusNote('')
-              }}
-              disabled={busy}
-            >
-              {EXCEPTION_STATUS_ICONS[target]} {t(EXCEPTION_STATUS_LABELS[target])}
-            </Button>
-          ))}
-        </div>
-      )}
-
-      <section className="to-section">
-        <h2>{t('exceptions.detail.reportTitle')}</h2>
-        <dl className="to-facts">
-          <div>
-            <dt>{t('exceptions.detail.description')}</dt>
-            <dd>{detail.description}</dd>
-          </div>
-          <div>
-            <dt>{t('exceptions.detail.trip')}</dt>
-            <dd>
-              <Link to={`/planning/${detail.tripId}`}>{detail.tripNumber}</Link>
-            </dd>
-          </div>
-          <div>
-            <dt>{t('exceptions.detail.order')}</dt>
-            <dd>
-              {detail.transportOrderId ? (
-                <Link to={`/transport-orders/${detail.transportOrderId}`}>{detail.orderNumber}</Link>
-              ) : (
-                '—'
-              )}
-            </dd>
-          </div>
-          <div>
-            <dt>{t('exceptions.detail.stop')}</dt>
-            <dd>{detail.stopLabel ?? '—'}</dd>
-          </div>
-          <div>
-            <dt>{t('exceptions.detail.cargoLine')}</dt>
-            <dd>{detail.cargoDescription ?? '—'}</dd>
-          </div>
-          <div>
-            <dt>{t('exceptions.detail.package')}</dt>
-            <dd>
-              {detail.packageNumber ? (
-                <>
-                  <code>{detail.packageNumber}</code>
-                  {detail.packageStatus && <> — {detail.packageStatus}</>}
-                </>
-              ) : (
-                '—'
-              )}
-            </dd>
-          </div>
-          <div>
-            <dt>{t('exceptions.detail.quantity')}</dt>
-            <dd>{detail.quantity ?? '—'}</dd>
-          </div>
-          <div>
-            <dt>{t('exceptions.detail.driver')}</dt>
-            <dd>{detail.driverName ?? '—'}</dd>
-          </div>
-          <div>
-            <dt>{t('exceptions.detail.gps')}</dt>
-            <dd>{detail.latitude !== null && detail.longitude !== null ? `${detail.latitude}, ${detail.longitude}` : '—'}</dd>
-          </div>
-        </dl>
-      </section>
-
-      <section className="to-section">
-        <h2>{t('exceptions.detail.handlingTitle')}</h2>
-        {editing ? (
-          <div className="exc-edit">
-            <FormField label={t('exceptions.detail.severityLabel')} htmlFor="exc-edit-severity">
-              <select id="exc-edit-severity" value={severity} onChange={(e) => setSeverity(e.target.value as ExceptionSeverity)} disabled={busy}>
-                {EXCEPTION_SEVERITIES.map((s) => (
-                  <option key={s} value={s}>
-                    {t(EXCEPTION_SEVERITY_LABELS[s])}
-                  </option>
-                ))}
-              </select>
-            </FormField>
-            <FormField label={t('exceptions.detail.dispatcherNotes')} htmlFor="exc-edit-notes">
-              <textarea id="exc-edit-notes" rows={3} value={dispatcherNotes} onChange={(e) => setDispatcherNotes(e.target.value)} disabled={busy} maxLength={4000} />
-            </FormField>
-            <label className="tof-checkbox">
-              <input type="checkbox" checked={customerVisible} onChange={(e) => setCustomerVisible(e.target.checked)} disabled={busy} />
-              {t('exceptions.detail.customerVisible')}
-            </label>
-            <UnsavedChangesGuard when={editDirty && !busy} />
-            <div className="exc-edit-actions">
-              <Button variant="secondary" onClick={() => setEditing(false)} disabled={busy}>
-                {t('exceptions.detail.cancel')}
-              </Button>
-              <Button onClick={() => void handleEditSave()} disabled={busy}>
-                {t('exceptions.detail.save')}
-              </Button>
+        {canDisposition && detail.packageId && detail.packageStatus && (PACKAGE_DISPOSITIONS[detail.packageStatus]?.length ?? 0) > 0 && (
+          <DetailCard title={t('exceptions.detail.dispositionTitle', { packageNumber: detail.packageNumber ?? '' })} id="exception-disposition">
+            <div className="exc-actions">
+              {PACKAGE_DISPOSITIONS[detail.packageStatus].map((action) => (
+                <Button
+                  key={action}
+                  variant="secondary"
+                  onClick={() => {
+                    setDispositionAction(action)
+                    setDispositionNote('')
+                  }}
+                  disabled={busy}
+                >
+                  {t(PACKAGE_INCIDENT_ACTION_LABELS[action])}
+                </Button>
+              ))}
             </div>
-          </div>
-        ) : (
-          <>
-            <dl className="to-facts">
-              <div>
-                <dt>{t('exceptions.detail.dispatcherNotes')}</dt>
-                <dd className="exc-multiline">{detail.dispatcherNotes ?? '—'}</dd>
-              </div>
-              <div>
-                <dt>{t('exceptions.detail.customerVisible')}</dt>
-                <dd>{detail.customerVisible ? t('exceptions.detail.yes') : t('exceptions.detail.no')}</dd>
-              </div>
-              <div>
-                <dt>{t('exceptions.detail.resolutionNote')}</dt>
-                <dd className="exc-multiline">{detail.resolutionNote ?? '—'}</dd>
-              </div>
-              <div>
-                <dt>{t('exceptions.detail.resolvedBy')}</dt>
-                <dd>
-                  {detail.resolvedByName ?? '—'}
-                  {detail.resolvedAt && ` · ${formatDateTime(detail.resolvedAt)}`}
-                </dd>
-              </div>
-            </dl>
-            {canResolve && (
+          </DetailCard>
+        )}
+
+        <DetailCard
+          title={t('exceptions.detail.handlingTitle')}
+          id="exception-handling"
+          action={
+            canResolve && !editing ? (
               <Button
-                variant="secondary"
+                variant="ghost"
                 onClick={() => {
                   setSeverity(detail.severity)
                   setDispatcherNotes(detail.dispatcherNotes ?? '')
@@ -434,10 +420,84 @@ export function ExceptionDetailPage() {
               >
                 {t('exceptions.detail.edit')}
               </Button>
-            )}
-          </>
+            ) : undefined
+          }
+        >
+          {editing ? (
+            <div className="exc-edit">
+              <FormField label={t('exceptions.detail.severityLabel')} htmlFor="exc-edit-severity">
+                <select id="exc-edit-severity" value={severity} onChange={(e) => setSeverity(e.target.value as ExceptionSeverity)} disabled={busy}>
+                  {EXCEPTION_SEVERITIES.map((s) => (
+                    <option key={s} value={s}>
+                      {t(EXCEPTION_SEVERITY_LABELS[s])}
+                    </option>
+                  ))}
+                </select>
+              </FormField>
+              <FormField label={t('exceptions.detail.dispatcherNotes')} htmlFor="exc-edit-notes">
+                <textarea id="exc-edit-notes" rows={3} value={dispatcherNotes} onChange={(e) => setDispatcherNotes(e.target.value)} disabled={busy} maxLength={4000} />
+              </FormField>
+              <label className="tof-checkbox">
+                <input type="checkbox" checked={customerVisible} onChange={(e) => setCustomerVisible(e.target.checked)} disabled={busy} />
+                {t('exceptions.detail.customerVisible')}
+              </label>
+              <div className="exc-edit-actions">
+                <Button variant="secondary" onClick={() => setEditing(false)} disabled={busy}>
+                  {t('exceptions.detail.cancel')}
+                </Button>
+                <Button onClick={() => void handleEditSave()} disabled={busy || !editDirty}>
+                  {t('exceptions.detail.save')}
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <FactList
+              facts={[
+                { key: 'notes', label: t('exceptions.detail.dispatcherNotes'), value: detail.dispatcherNotes ? <span className="exc-multiline">{detail.dispatcherNotes}</span> : null },
+                { key: 'visible', label: t('exceptions.detail.customerVisible'), value: detail.customerVisible ? t('exceptions.detail.yes') : t('exceptions.detail.no') },
+                !terminal && { key: 'resolution', label: t('exceptions.detail.resolutionNote'), value: detail.resolutionNote ? <span className="exc-multiline">{detail.resolutionNote}</span> : null },
+                !terminal && !!detail.resolvedByName && { key: 'resolvedBy', label: t('exceptions.detail.resolvedBy'), value: detail.resolvedByName },
+              ]}
+            />
+          )}
+        </DetailCard>
+
+        {detail.photos.length > 0 && (
+          <DetailCard title={t('exceptions.detail.photosTitle', { count: detail.photos.length })} id="exception-photos">
+            <div className="exc-photos">
+              {detail.photos.map((photo) => (
+                <figure key={photo.id} className="exc-photo">
+                  {photoUrls[photo.id] ? (
+                    <a href={photoUrls[photo.id]} target="_blank" rel="noreferrer">
+                      <img src={photoUrls[photo.id]} alt={photo.fileName} />
+                    </a>
+                  ) : (
+                    <span className="exc-photo-placeholder">{photo.fileName}</span>
+                  )}
+                  <figcaption>
+                    <span className="exc-photo-name" title={photo.fileName}>{photo.fileName}</span>
+                    {canResolve && (
+                      <button type="button" className="exc-photo-delete" onClick={() => setPhotoToDelete(photo.id)} disabled={busy}>
+                        {t('exceptions.detail.deletePhoto')}
+                      </button>
+                    )}
+                  </figcaption>
+                </figure>
+              ))}
+            </div>
+          </DetailCard>
         )}
-      </section>
+      </DetailGrid>
+
+      <DetailCard title={t('exceptions.detail.historyTitle')} id="exception-history">
+        {/* Re-read after every in-page change, so the new step appears without a reload. */}
+        <AuditHistoryPanel
+          key={JSON.stringify([detail.status, detail.severity, detail.assignedToUserId, detail.dispatcherNotes, detail.customerVisible, detail.photos.length])}
+          entityType="ExecutionException"
+          entityId={detail.id}
+          valueLabels={exceptionAuditLabels}
+        />
+      </DetailCard>
 
       {photoToDelete && (
         <ConfirmDialog
@@ -454,37 +514,6 @@ export function ExceptionDetailPage() {
           onCancel={() => setPhotoToDelete(null)}
         />
       )}
-      {detail.photos.length > 0 && (
-        <section className="to-section">
-          <h2>{t('exceptions.detail.photosTitle', { count: detail.photos.length })}</h2>
-          <div className="exc-photos">
-            {detail.photos.map((photo) => (
-              <figure key={photo.id} className="exc-photo">
-                {photoUrls[photo.id] ? (
-                  <a href={photoUrls[photo.id]} target="_blank" rel="noreferrer">
-                    <img src={photoUrls[photo.id]} alt={photo.fileName} />
-                  </a>
-                ) : (
-                  <span className="exc-photo-placeholder">{photo.fileName}</span>
-                )}
-                <figcaption>
-                  {photo.fileName}
-                  {canResolve && (
-                    <button type="button" className="exc-photo-delete" onClick={() => setPhotoToDelete(photo.id)} disabled={busy}>
-                      {t('exceptions.detail.deletePhoto')}
-                    </button>
-                  )}
-                </figcaption>
-              </figure>
-            ))}
-          </div>
-        </section>
-      )}
-
-      <section className="to-section">
-        <h2>{t('exceptions.detail.historyTitle')}</h2>
-        <AuditHistoryPanel entityType="ExecutionException" entityId={detail.id} valueLabels={exceptionAuditLabels} />
-      </section>
 
       {dispositionAction && (
         <Modal

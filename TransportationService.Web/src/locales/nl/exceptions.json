@@ -104,7 +104,21 @@
     "optionalNoteLabel": "Notitie (optioneel)",
     "statusNoteHint": "De melder ontvangt deze beslissing als notificatie.",
     "deletePhotoTitle": "Foto verwijderen",
-    "deletePhotoMessage": "Deze foto wordt definitief verwijderd."
+    "deletePhotoMessage": "Deze foto wordt definitief verwijderd.",
+    "transition": {
+      "Open": "Heropenen",
+      "Investigating": "In onderzoek nemen",
+      "Resolved": "Oplossen…",
+      "Rejected": "Afwijzen…",
+      "CustomerActionRequired": "Actie klant vereist"
+    },
+    "status": "Status",
+    "type": "Type",
+    "dossier": "Dossier",
+    "customer": "Klant",
+    "assignee": "Toegewezen aan",
+    "outcomeResolved": "Opgelost",
+    "outcomeRejected": "Afgewezen"
   },
   "report": {
     "descriptionRequired": "Een omschrijving van het probleem is verplicht.",

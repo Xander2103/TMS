@@ -104,7 +104,21 @@
     "optionalNoteLabel": "Note (optional)",
     "statusNoteHint": "The reporter receives this decision as a notification.",
     "deletePhotoTitle": "Delete photo",
-    "deletePhotoMessage": "This photo will be permanently deleted."
+    "deletePhotoMessage": "This photo will be permanently deleted.",
+    "transition": {
+      "Open": "Reopen",
+      "Investigating": "Start investigation",
+      "Resolved": "Resolve…",
+      "Rejected": "Reject…",
+      "CustomerActionRequired": "Customer action required"
+    },
+    "status": "Status",
+    "type": "Type",
+    "dossier": "Dossier",
+    "customer": "Customer",
+    "assignee": "Assigned to",
+    "outcomeResolved": "Resolved",
+    "outcomeRejected": "Rejected"
   },
   "report": {
     "descriptionRequired": "A description of the problem is required.",

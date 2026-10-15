@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
+import './incidents.css'
 import { formatCurrency } from '../../../utils/numbers'
 import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
@@ -17,6 +19,11 @@ import { CHARGE_DECISION_LABELS, RESPONSIBLE_PARTY_LABELS, type IncidentDetail }
 interface IncidentChargePanelProps {
   incident: IncidentDetail
   onUpdated: (incident: IncidentDetail) => void
+  /**
+   * B24: the detail page shows responsibility/charge and redelivery as two cards (their titles
+   * come from the card). 'all' keeps the original single section with its own headings.
+   */
+  part?: 'all' | 'charge' | 'redelivery'
 }
 
 /**
@@ -24,7 +31,7 @@ interface IncidentChargePanelProps {
  * incidents.manage; goed-/afkeuren vereist problems.approve_charge (server bewaakt
  * fail-closed). Goedkeuring maakt de verkooplijn op de gekoppelde order aan.
  */
-export function IncidentChargePanel({ incident, onUpdated }: IncidentChargePanelProps) {
+export function IncidentChargePanel({ incident, onUpdated, part = 'all' }: IncidentChargePanelProps) {
   const { hasPermission } = useAuth()
   const { showSuccess, showError } = useToast()
   const { t } = useLocale()
@@ -35,6 +42,8 @@ export function IncidentChargePanel({ incident, onUpdated }: IncidentChargePanel
   const [amount, setAmount] = useState(incident.chargeAmount?.toString() ?? '')
   const [description, setDescription] = useState(incident.chargeDescription ?? '')
   const [busy, setBusy] = useState(false)
+  // B24: while a proposal awaits its decision the form to change it stays folded away.
+  const [reproposing, setReproposing] = useState(false)
 
   async function run(action: () => Promise<IncidentDetail>, message: string) {
     setBusy(true)
@@ -56,23 +65,28 @@ export function IncidentChargePanel({ incident, onUpdated }: IncidentChargePanel
         ? 'warning' as const
         : 'neutral' as const
 
-  return (
-    <section className="ui-form-section">
-      <h3>{t('incidents.charge.title')}</h3>
-      <p>
+  const charge = (
+    <>
+      <p className="inc-charge-line">
         {t('incidents.charge.responsibleParty')}{' '}
         <strong>{t(RESPONSIBLE_PARTY_LABELS[incident.responsibleParty] ?? incident.responsibleParty)}</strong>
         {incident.responsibilityNotes && <span className="customer-form-muted"> — {incident.responsibilityNotes}</span>}
       </p>
-      <p>
+      <p className="inc-charge-line">
         {t('incidents.charge.charge')}{' '}
         <Badge tone={chargeTone}>{t(CHARGE_DECISION_LABELS[incident.chargeDecision] ?? incident.chargeDecision)}</Badge>
         {incident.chargeAmount !== null && <strong> {formatCurrency(incident.chargeAmount)}</strong>}
         {incident.chargeDescription && <span className="customer-form-muted"> — {incident.chargeDescription}</span>}
       </p>
 
-      {canManage && incident.responsibleParty === 'Customer' && incident.chargeDecision !== 'Approved' && (
-        <div className="wh-trace-bar">
+      {canManage && incident.responsibleParty === 'Customer' && incident.chargeDecision === 'Proposed' && !reproposing && (
+        <button type="button" className="inc-charge-repropose" onClick={() => setReproposing(true)}>
+          {t('incidents.charge.changeProposal')}
+        </button>
+      )}
+      {canManage && incident.responsibleParty === 'Customer' && incident.chargeDecision !== 'Approved'
+        && (incident.chargeDecision !== 'Proposed' || reproposing) && (
+        <div className="inc-charge-row">
           <FormField label={t('incidents.charge.amountLabel')} htmlFor="inc-charge-amount">
             <input
               id="inc-charge-amount"
@@ -96,10 +110,13 @@ export function IncidentChargePanel({ incident, onUpdated }: IncidentChargePanel
           <Button
             variant="secondary"
             disabled={busy || !amount || Number(amount) <= 0 || !description.trim()}
-            onClick={() => void run(
-              () => proposeIncidentCharge(incident.id, Number(amount), description.trim()),
-              t('incidents.charge.proposed'),
-            )}
+            onClick={() => {
+              setReproposing(false)
+              void run(
+                () => proposeIncidentCharge(incident.id, Number(amount), description.trim()),
+                t('incidents.charge.proposed'),
+              )
+            }}
           >
             {t('incidents.charge.propose')}
           </Button>
@@ -112,7 +129,7 @@ export function IncidentChargePanel({ incident, onUpdated }: IncidentChargePanel
       )}
 
       {canDecide && incident.chargeDecision === 'Proposed' && (
-        <div className="wh-trace-bar">
+        <div className="inc-charge-row">
           <Button
             disabled={busy}
             onClick={() => void run(() => decideIncidentCharge(incident.id, true), t('incidents.charge.approved'))}
@@ -129,25 +146,22 @@ export function IncidentChargePanel({ incident, onUpdated }: IncidentChargePanel
         </div>
       )}
 
-      <h3>{t('incidents.charge.redeliveryTitle')}</h3>
+    </>
+  )
+
+  const redelivery = (
+    <>
       {incident.redeliverySuggested && !incident.linkedRedeliveryOrderNumber && (
-        <p
-          role="status"
-          style={{
-            background: 'var(--warning-bg)',
-            border: '1px solid var(--warning-border)',
-            color: 'var(--warning)',
-            borderRadius: 8,
-            padding: '8px 12px',
-            fontWeight: 600,
-          }}
-        >
+        <p role="status" className="inc-redelivery-hint">
           ⚠ {t('incidents.charge.redeliverySuggested')}
         </p>
       )}
       {incident.linkedRedeliveryOrderId ? (
-        <p>
-          {t('incidents.charge.redeliveryOrder')} <strong>{incident.linkedRedeliveryOrderNumber}</strong>
+        <p className="inc-charge-line">
+          {t('incidents.charge.redeliveryOrder')}{' '}
+          <Link className="ui-id-link" to={`/transport-orders/${incident.linkedRedeliveryOrderId}`}>
+            {incident.linkedRedeliveryOrderNumber}
+          </Link>
         </p>
       ) : incident.transportOrderId ? (
         canRedeliver ? (
@@ -164,6 +178,17 @@ export function IncidentChargePanel({ incident, onUpdated }: IncidentChargePanel
       ) : (
         <p className="customer-form-muted">{t('incidents.charge.linkOrderFirst')}</p>
       )}
+    </>
+  )
+
+  if (part === 'charge') return charge
+  if (part === 'redelivery') return redelivery
+  return (
+    <section className="ui-form-section">
+      <h3>{t('incidents.charge.title')}</h3>
+      {charge}
+      <h3>{t('incidents.charge.redeliveryTitle')}</h3>
+      {redelivery}
     </section>
   )
 }

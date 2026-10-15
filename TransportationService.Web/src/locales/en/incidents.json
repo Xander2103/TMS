@@ -117,7 +117,31 @@
     "resolveTitle": "Resolve incident",
     "cancel": "Cancel",
     "resolve": "Resolve",
-    "resolutionLabel": "Resolution"
+    "resolutionLabel": "Resolution",
+    "startAction": "Start handling",
+    "reopenAction": "Reopen",
+    "cancelAction": "Cancel incident…",
+    "cancelTitle": "Cancel incident?",
+    "cancelMessage": "‘{title}’ will be cancelled. You can reopen it later.",
+    "cancelConfirm": "Cancel incident",
+    "resolutionRequired": "Describe the resolution to resolve the incident.",
+    "resolutionHint": "Required: what was done or agreed?",
+    "previousResolution": "Earlier resolution",
+    "tripLabel": "Trip",
+    "trailerLabel": "Trailer",
+    "driverLabel": "Driver",
+    "noImpact": "No impact or costs recorded yet.",
+    "estimatedCostShort": "Estimated cost",
+    "actualCostShort": "Actual cost",
+    "historyTitle": "History",
+    "attention": {
+      "overdue": "Deadline passed since {date}",
+      "noResponsible": "No responsible person yet",
+      "assign": "Assign",
+      "chargeProposed": "Charge of {amount} awaits a decision",
+      "redelivery": "Redelivery recommended after failed delivery",
+      "view": "View"
+    }
   },
   "charge": {
     "actionFailed": "The action could not be executed.",
@@ -139,6 +163,18 @@
     "redeliveryCreated": "Redelivery order created in the same file.",
     "createRedelivery": "Create redelivery",
     "noOrderRights": "You do not have permission to create orders.",
-    "linkOrderFirst": "Link the original order first to create a redelivery."
+    "linkOrderFirst": "Link the original order first to create a redelivery.",
+    "changeProposal": "Change proposal"
+  },
+  "history": {
+    "ChargeProposed": "Charge proposed",
+    "ChargeProposedByPolicy": "Charge proposed (policy)",
+    "ChargeAutoApprovedByPolicy": "Charge auto-approved (policy)",
+    "ChargeApproved": "Charge approved",
+    "ChargeRejected": "Charge rejected",
+    "RedeliveryCreated": "Redelivery created",
+    "AutoCreatedFromFailedStop": "Created automatically after failed delivery",
+    "modeAuto": "Automatic",
+    "modePropose": "Propose"
   }
 }

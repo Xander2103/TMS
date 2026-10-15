@@ -393,8 +393,11 @@ public class IncidentService : IIncidentService
         incident.Status = target;
         await _dbContext.SaveChangesAsync(cancellationToken);
 
-        await _auditService.RecordAsync(EntityType, incident.Id.ToString(), "StatusChanged", null,
-            new { From = previousStatus.ToString(), To = target.ToString() }, cancellationToken);
+        // B24/B25: a before/after Status pair, so the history reads "Status gewijzigd van … naar …".
+        await _auditService.RecordAsync(EntityType, incident.Id.ToString(), "StatusChanged",
+            new { Status = previousStatus.ToString() },
+            new { Status = target.ToString(), Resolution = target == IncidentStatus.Resolved ? incident.Resolution : null },
+            cancellationToken);
 
         return await MapDetailAsync(incident, cancellationToken);
     }

@@ -117,7 +117,31 @@
     "resolveTitle": "Traiter l'incident",
     "cancel": "Annuler",
     "resolve": "Traiter",
-    "resolutionLabel": "Solution"
+    "resolutionLabel": "Solution",
+    "startAction": "Prendre en charge",
+    "reopenAction": "Rouvrir",
+    "cancelAction": "Annuler l’incident…",
+    "cancelTitle": "Annuler l’incident ?",
+    "cancelMessage": "‘{title}’ sera annulé. Vous pourrez le rouvrir plus tard.",
+    "cancelConfirm": "Annuler l’incident",
+    "resolutionRequired": "Décrivez la solution pour clôturer l’incident.",
+    "resolutionHint": "Obligatoire : qu’est-ce qui a été fait ou convenu ?",
+    "previousResolution": "Solution précédente",
+    "tripLabel": "Trajet",
+    "trailerLabel": "Remorque",
+    "driverLabel": "Chauffeur",
+    "noImpact": "Aucun impact ni coût enregistré.",
+    "estimatedCostShort": "Coût estimé",
+    "actualCostShort": "Coût réel",
+    "historyTitle": "Historique",
+    "attention": {
+      "overdue": "Échéance dépassée depuis le {date}",
+      "noResponsible": "Pas encore de responsable",
+      "assign": "Attribuer",
+      "chargeProposed": "Refacturation de {amount} en attente de décision",
+      "redelivery": "Nouvelle livraison recommandée après échec",
+      "view": "Voir"
+    }
   },
   "charge": {
     "actionFailed": "L'action n'a pas pu être exécutée.",
@@ -139,6 +163,18 @@
     "redeliveryCreated": "Commande de nouvelle livraison créée dans le même dossier.",
     "createRedelivery": "Créer une nouvelle livraison",
     "noOrderRights": "Vous n'avez pas les droits pour créer des commandes.",
-    "linkOrderFirst": "Liez d'abord la commande originale pour créer une nouvelle livraison."
+    "linkOrderFirst": "Liez d'abord la commande originale pour créer une nouvelle livraison.",
+    "changeProposal": "Modifier la proposition"
+  },
+  "history": {
+    "ChargeProposed": "Refacturation proposée",
+    "ChargeProposedByPolicy": "Refacturation proposée (règle)",
+    "ChargeAutoApprovedByPolicy": "Refacturation approuvée automatiquement (règle)",
+    "ChargeApproved": "Refacturation approuvée",
+    "ChargeRejected": "Refacturation refusée",
+    "RedeliveryCreated": "Nouvelle livraison créée",
+    "AutoCreatedFromFailedStop": "Créé automatiquement après une livraison échouée",
+    "modeAuto": "Automatique",
+    "modePropose": "Proposer"
   }
 }
