@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
 import { Badge, type BadgeTone } from '../../../components/ui/Badge'
+import { Download, Upload } from 'lucide-react'
+import { RowActionMenu } from '../../../components/ui/RowActionMenu'
+import { TruncatedText } from '../../../components/ui/TruncatedText'
 import { Button } from '../../../components/ui/Button'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { FormField } from '../../../components/ui/FormField'
@@ -69,6 +72,8 @@ export function FleetDocumentsPanel({ ownerType, ownerId }: FleetDocumentsPanelP
   const [formError, setFormError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<FleetDocument | null>(null)
+  // Clearing an attachment cannot be undone either: it asks first, like deleting the document.
+  const [clearTarget, setClearTarget] = useState<FleetDocument | null>(null)
 
   useEffect(() => {
     let mounted = true
@@ -230,49 +235,68 @@ export function FleetDocumentsPanel({ ownerType, ownerId }: FleetDocumentsPanelP
           <tbody>
             {documents.map((doc) => (
               <tr key={doc.id}>
-                <td>{t(fleetDocumentDisplayName(doc))}</td>
-                <td>{doc.documentNumber ?? '—'}</td>
+                <td>
+                  <TruncatedText tooltip={t(fleetDocumentDisplayName(doc))} className="fleet-docs-name">
+                    {t(fleetDocumentDisplayName(doc))}
+                  </TruncatedText>
+                </td>
+                <td>
+                  {doc.documentNumber ? (
+                    <TruncatedText tooltip={doc.documentNumber} className="fleet-docs-number">
+                      {doc.documentNumber}
+                    </TruncatedText>
+                  ) : (
+                    '—'
+                  )}
+                </td>
                 <td className="nowrap">{doc.issueDate ? formatDate(doc.issueDate) : '—'}</td>
                 <td className="nowrap">{doc.expiryDate ? formatDate(doc.expiryDate) : '—'}</td>
-                <td>
+                <td className="nowrap">
                   <Badge tone={STATUS_TONE[doc.status]}>{t(FLEET_DOCUMENT_STATUS_LABELS[doc.status])}</Badge>
                 </td>
+                {/* B14/B16: one direct file action; replace/clear/edit/delete live in the row menu. */}
                 <td className="fleet-docs-file">
                   {doc.hasAttachment ? (
-                    <>
-                      <button type="button" className="fleet-docs-link" onClick={() => handleDownload(doc)}>
-                        {t('fleet.common.download')}
-                      </button>
-                      {hasPermission('fleet_documents.edit') && (
-                        <button type="button" className="fleet-docs-link" onClick={() => pickFile(doc.id)} disabled={uploadingId === doc.id}>
-                          {uploadingId === doc.id ? t('fleet.common.busy') : t('fleet.common.replace')}
-                        </button>
-                      )}
-                      {hasPermission('fleet_documents.edit') && (
-                        <button type="button" className="fleet-docs-link fleet-docs-link-danger" onClick={() => handleRemoveFile(doc)}>
-                          {t('fleet.docs.clear')}
-                        </button>
-                      )}
-                    </>
+                    <button
+                      type="button"
+                      className="fleet-docs-icon-button"
+                      onClick={() => handleDownload(doc)}
+                      aria-label={`${t('fleet.common.download')} ${t(fleetDocumentDisplayName(doc))}`}
+                      title={doc.fileName ?? t('fleet.common.download')}
+                    >
+                      <Download size={16} aria-hidden="true" />
+                    </button>
                   ) : hasPermission('fleet_documents.edit') ? (
-                    <button type="button" className="fleet-docs-link" onClick={() => pickFile(doc.id)} disabled={uploadingId === doc.id}>
-                      {uploadingId === doc.id ? t('fleet.common.busy') : t('fleet.common.upload')}
+                    <button
+                      type="button"
+                      className="fleet-docs-icon-button"
+                      onClick={() => pickFile(doc.id)}
+                      disabled={uploadingId === doc.id}
+                      aria-label={`${uploadingId === doc.id ? t('fleet.common.busy') : t('fleet.common.upload')} ${t(fleetDocumentDisplayName(doc))}`}
+                      title={t('fleet.common.upload')}
+                    >
+                      <Upload size={16} aria-hidden="true" />
                     </button>
                   ) : (
                     '—'
                   )}
                 </td>
                 <td className="fleet-docs-actions">
-                  {hasPermission('fleet_documents.edit') && (
-                    <button type="button" className="fleet-docs-link" onClick={() => openEdit(doc)}>
-                      {t('ui.actions.edit')}
-                    </button>
-                  )}
-                  {hasPermission('fleet_documents.delete') && (
-                    <button type="button" className="fleet-docs-link fleet-docs-link-danger" onClick={() => setDeleteTarget(doc)}>
-                      {t('ui.actions.delete')}
-                    </button>
-                  )}
+                  <RowActionMenu
+                    label={`${t('fleet.common.actions')} ${t(fleetDocumentDisplayName(doc))}`}
+                    items={[
+                      ...(hasPermission('fleet_documents.edit') ? [{ key: 'edit', label: t('ui.actions.edit'), onSelect: () => openEdit(doc) }] : []),
+                      ...(doc.hasAttachment && hasPermission('fleet_documents.edit')
+                        ? [
+                            { key: 'replace', label: t('fleet.common.replace'), onSelect: () => pickFile(doc.id), disabled: uploadingId === doc.id },
+                            { key: 'clear', label: t('fleet.docs.clear'), onSelect: () => setClearTarget(doc), danger: true },
+                          ]
+                        : []),
+                      ...(hasPermission('fleet_documents.delete')
+                        ? [{ key: 'delete', label: t('ui.actions.delete'), onSelect: () => setDeleteTarget(doc), danger: true }]
+                        : []),
+                    ]}
+                  />
                 </td>
               </tr>
             ))}
@@ -391,6 +415,21 @@ export function FleetDocumentsPanel({ ownerType, ownerId }: FleetDocumentsPanelP
             </FormField>
           </form>
         </Modal>
+      )}
+
+      {clearTarget && (
+        <ConfirmDialog
+          title={t('fleet.docs.clearTitle')}
+          message={t('fleet.docs.clearMessage', { name: t(fleetDocumentDisplayName(clearTarget)) })}
+          confirmLabel={t('fleet.docs.clear')}
+          destructive
+          onConfirm={async () => {
+            const target = clearTarget
+            setClearTarget(null)
+            await handleRemoveFile(target)
+          }}
+          onCancel={() => setClearTarget(null)}
+        />
       )}
 
       {deleteTarget && (

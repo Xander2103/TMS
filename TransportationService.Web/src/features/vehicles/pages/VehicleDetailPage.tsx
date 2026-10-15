@@ -1,14 +1,15 @@
-import { useEffect, useState } from 'react'
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { useEffect, useState, type ReactNode } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
 import { PageHeader } from '../../../components/layout/PageHeader'
 import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
-import { BackButton } from '../../../components/ui/BackButton'
 import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
-import { FormField } from '../../../components/ui/FormField'
+import { DetailCard } from '../../../components/ui/DetailCard'
+import { FactList } from '../../../components/ui/FactList'
 import { StatusBadges } from '../../../components/ui/StatusBadges'
 import { TabPanel, Tabs } from '../../../components/ui/Tabs'
+import { useDetailTab, type DetailTabAlias } from '../../../hooks/useDetailTab'
 import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
 import { ApiError } from '../../../api/apiClient'
@@ -38,12 +39,24 @@ import {
   type VehicleInput,
 } from '../types'
 import './vehicle-form.css'
+import '../detail/vehicle-detail.css'
 import { formatDate } from '../../../utils/dates'
 import { ErrorState } from '../../../components/feedback/ErrorState'
 import { ActionMenu } from '../../../components/ui/ActionMenu'
+import { VehicleOverview } from '../detail/VehicleOverview'
+import { useVehicleCompliance } from '../detail/useVehicleCompliance'
+import { FOCUS_TAB, type VehicleFocus, type VehicleTab } from '../detail/vehicleCompliance'
 
-const TAB_IDS = ['overzicht', 'techniek', 'toewijzing', 'documenten', 'tachograaf', 'leasing', 'onderhoud', 'keuringen', 'schade', 'brandstof', 'kpi', 'historiek'] as const
-type TabId = (typeof TAB_IDS)[number]
+/**
+ * B16: twelve tabs became six groups. The retired ids keep working: an old bookmark opens the
+ * group that now hosts that block and scrolls to it (`?focus=`).
+ */
+const TAB_ALIASES: Partial<Record<string, DetailTabAlias<VehicleTab>>> = Object.fromEntries(
+  (['toewijzing', 'tachograaf', 'keuringen', 'schade', 'leasing', 'brandstof', 'kpi'] as const).map((focus) => [
+    focus,
+    { tab: FOCUS_TAB[focus], params: { focus } },
+  ]),
+)
 
 export function VehicleDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -51,7 +64,6 @@ export function VehicleDetailPage() {
   const { t } = useLocale()
   const { showSuccess, showError } = useToast()
   const { hasPermission } = useAuth()
-  const [searchParams, setSearchParams] = useSearchParams()
 
   const [vehicle, setVehicle] = useState<VehicleDetail | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -62,8 +74,20 @@ export function VehicleDetailPage() {
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [confirmActive, setConfirmActive] = useState<null | 'activate' | 'deactivate'>(null)
 
-  const requestedTab = searchParams.get('tab')
-  const tab: TabId = TAB_IDS.includes(requestedTab as TabId) ? (requestedTab as TabId) : 'overzicht'
+  const canViewDocumentsGroup = hasPermission('fleet_documents.view') || hasPermission('inspections.view') || hasPermission('tachograph.view')
+  const canViewMaintenanceGroup =
+    hasPermission('maintenance.view') || hasPermission('damage_reports.view') || hasPermission('maintenance_policies.view') || hasPermission('maintenance_policies.manage')
+  const tabIds: VehicleTab[] = [
+    'overzicht',
+    'techniek',
+    ...(canViewDocumentsGroup ? (['documenten'] as const) : []),
+    ...(canViewMaintenanceGroup ? (['onderhoud'] as const) : []),
+    'kosten',
+    'historiek',
+  ]
+  const { tab, setTab, searchParams } = useDetailTab<VehicleTab>({ ids: tabIds, defaultId: 'overzicht', aliases: TAB_ALIASES })
+  const focus = searchParams.get('focus')
+  const compliance = useVehicleCompliance(id ?? '', Boolean(id) && tab === 'overzicht')
 
   useEffect(() => {
     if (!id) return
@@ -85,9 +109,21 @@ export function VehicleDetailPage() {
   const loading = vehicle === null && loadError === null
   const canEdit = hasPermission('vehicles.edit')
 
-  function setTab(next: string) {
-    setSearchParams(next === 'overzicht' ? {} : { tab: next }, { replace: true })
+  /** Opens the group hosting a block (attention line, overview link) and scrolls to it. */
+  function openFocus(next: VehicleFocus) {
+    setTab(FOCUS_TAB[next], { focus: next })
   }
+
+  // Scroll to the requested block once its group has rendered (deep links, attention jumps).
+  // The panels load their own rows after mounting and push the later blocks down, so the jump
+  // is repeated once they have had time to render.
+  useEffect(() => {
+    if (!focus || !vehicle) return
+    const scroll = () => document.getElementById(`vehicle-block-${focus}`)?.scrollIntoView({ block: 'start' })
+    scroll()
+    const timer = window.setTimeout(scroll, 700)
+    return () => window.clearTimeout(timer)
+  }, [focus, tab, vehicle])
 
   function reloadVehicle() {
     if (!id) return
@@ -173,17 +209,36 @@ export function VehicleDetailPage() {
   if (loading) return <p className="placeholder-text">{t('vehicles.detail.loading')}</p>
   if (loadError || !vehicle) return <ErrorState message={loadError ?? t('fleet.common.notFound')} onRetry={() => { setLoadError(null); setReloadToken((n) => n + 1) }} backTo="/vehicles" />
 
+  const hasFuel = hasPermission('fuel.view')
+  const hasKpi = hasPermission('kpi.view')
+  const block = (blockId: VehicleFocus, content: ReactNode) => (
+    <div id={`vehicle-block-${blockId}`} className="vehicle-group-block">
+      {content}
+    </div>
+  )
+
   return (
     <div>
       <Breadcrumbs items={[{ label: t('navigation.menu.vehicles'), to: '/vehicles' }, { label: vehicle.internalNumber }]} />
-      <BackButton to="/vehicles" label={t('vehicles.detail.back')} />
       <PageHeader
         title={`${vehicle.brand ?? ''} ${vehicle.model ?? ''}`.trim() || vehicle.internalNumber}
-        subtitle={`${vehicle.internalNumber} · ${vehicle.licensePlate}`}
+        subtitle={[vehicle.internalNumber, vehicle.licensePlate, vehicle.categoryName].filter(Boolean).join(' · ')}
+        badges={
+          <>
+            <StatusBadges
+              active={vehicle.isActive}
+              operational={{
+                label: t(OPERATIONAL_STATUS_LABELS[vehicle.operationalStatus]),
+                tone: OPERATIONAL_STATUS_TONES[vehicle.operationalStatus],
+              }}
+            />
+            {vehicle.adrSuitable && <Badge tone="warning">{t('fleet.common.equipment.adrShort')}</Badge>}
+          </>
+        }
         action={
-          <div className="vehicle-detail-actions">
-            {canEdit && !editing && <Button onClick={startEdit}>{t('ui.actions.edit')}</Button>}
-            {!editing && (
+          !editing && (
+            <>
+              {canEdit && <Button onClick={startEdit}>{t('ui.actions.edit')}</Button>}
               <ActionMenu
                 items={[
                   ...(canEdit
@@ -198,25 +253,10 @@ export function VehicleDetailPage() {
                     : []),
                 ]}
               />
-            )}
-          </div>
+            </>
+          )
         }
       />
-
-      <div className="vehicle-detail-badges">
-        <StatusBadges
-          active={vehicle.isActive}
-          operational={{
-            label: t(OPERATIONAL_STATUS_LABELS[vehicle.operationalStatus]),
-            tone: OPERATIONAL_STATUS_TONES[vehicle.operationalStatus],
-            reason: vehicle.statusReason,
-          }}
-        />
-        {vehicle.adrSuitable && <Badge tone="warning">{t('fleet.common.equipment.adrShort')}</Badge>}
-        {vehicle.hasCrane && <Badge tone="info">{t('fleet.common.equipment.crane')}</Badge>}
-        {vehicle.hasRefrigeration && <Badge tone="info">{t('fleet.common.equipment.refrigeration')}</Badge>}
-        {vehicle.hasTailLift && <Badge tone="info">{t('fleet.common.equipment.tailLift')}</Badge>}
-      </div>
 
       {editing && form ? (
         <VehicleForm
@@ -232,148 +272,144 @@ export function VehicleDetailPage() {
         <>
           <Tabs
             tabs={[
-              { id: 'overzicht', label: t('fleet.tabs.overview') },
-              { id: 'techniek', label: t('fleet.tabs.technical') },
-              { id: 'toewijzing', label: t('fleet.tabs.assignment') },
-              { id: 'documenten', label: t('fleet.tabs.documents') },
-              ...(hasPermission('tachograph.view') ? [{ id: 'tachograaf', label: t('fleet.tabs.tachograph') }] : []),
-              { id: 'leasing', label: t('fleet.tabs.leasing') },
-              { id: 'onderhoud', label: t('fleet.tabs.maintenance') },
-              { id: 'keuringen', label: t('fleet.tabs.inspections') },
-              { id: 'schade', label: t('fleet.tabs.damage') },
-              { id: 'brandstof', label: t('fleet.tabs.fuel') },
-              { id: 'kpi', label: t('fleet.tabs.kpi') },
-              { id: 'historiek', label: t('fleet.tabs.history') },
+              { id: 'overzicht', label: t('vehicles.detail.groups.overview') },
+              { id: 'techniek', label: t('vehicles.detail.groups.technical') },
+              ...(canViewDocumentsGroup ? [{ id: 'documenten', label: t('vehicles.detail.groups.documents') }] : []),
+              ...(canViewMaintenanceGroup ? [{ id: 'onderhoud', label: t('vehicles.detail.groups.maintenance') }] : []),
+              { id: 'kosten', label: t('vehicles.detail.groups.costs') },
+              { id: 'historiek', label: t('vehicles.detail.groups.history') },
             ]}
             activeId={tab}
-            onChange={setTab}
+            onChange={(next) => setTab(next as VehicleTab)}
           />
 
           {tab === 'overzicht' && (
             <TabPanel tabId="overzicht">
-              <div className="vehicle-detail-grid">
-                <FormField label={t('fleet.form.plate')}><span>{vehicle.licensePlate}</span></FormField>
-                <FormField label={t('vehicles.detail.vin')}><span>{vehicle.vin ?? '—'}</span></FormField>
-                <FormField label={t('fleet.form.category')}><span>{vehicle.categoryName ?? '—'}</span></FormField>
-                <FormField label={t('fleet.form.year')}><span>{vehicle.year ?? '—'}</span></FormField>
-                <FormField label={t('vehicles.form.firstRegistration')}><span>{vehicle.firstRegistrationDate ? formatDate(vehicle.firstRegistrationDate) : '—'}</span></FormField>
-                <FormField label={t('fleet.form.ownership')}><span>{t(OWNERSHIP_TYPE_LABELS[vehicle.ownershipType])}</span></FormField>
-                <FormField label={t('vehicles.form.odometer')}><span>{formatInteger(vehicle.odometerKm)} km</span></FormField>
-                <FormField label={t('vehicles.detail.fixedDriver')}><span>{vehicle.fixedDriverName ?? '—'}</span></FormField>
-                <FormField label={t('vehicles.detail.currentDriver')}><span>{vehicle.currentDriverName ?? '—'}</span></FormField>
-                <FormField label={t('fleet.sections.notes')} className="vehicle-detail-full"><span>{vehicle.notes ?? '—'}</span></FormField>
-              </div>
+              <VehicleOverview
+                vehicle={vehicle}
+                compliance={compliance.data}
+                complianceLoading={compliance.isLoading}
+                canEdit={canEdit}
+                onFocus={openFocus}
+                onOpenTechnical={() => setTab('techniek')}
+              />
             </TabPanel>
           )}
 
           {tab === 'techniek' && (
             <TabPanel tabId="techniek">
-              <div className="vehicle-detail-grid">
-                <FormField label={t('vehicles.form.fuel')}><span>{t(FUEL_TYPE_LABELS[vehicle.fuelType])}</span></FormField>
-                <FormField label={t('vehicles.form.emissionClass')}><span>{vehicle.emissionClass ? t(EMISSION_CLASS_LABELS[vehicle.emissionClass]) : '—'}</span></FormField>
-                <FormField label={t('fleet.form.axles')} hint={t('fleet.form.axlesHint')}><span>{vehicle.axleCount || '—'}</span></FormField>
-                <FormField label={t('fleet.form.loadingMeters')}><span>{vehicle.loadingMeters ? `${vehicle.loadingMeters} ldm` : '—'}</span></FormField>
-                <FormField label={t('vehicles.form.requiredLicence')}><span>{vehicle.requiredLicenceCode ?? '—'}</span></FormField>
-                <FormField label={t('vehicles.detail.gvw')}><span>{vehicle.grossVehicleWeightKg !== null ? `${vehicle.grossVehicleWeightKg} kg` : '—'}</span></FormField>
-                <FormField label={t('vehicles.detail.payload')}><span>{vehicle.payloadKg !== null ? `${vehicle.payloadKg} kg` : '—'}</span></FormField>
-                <FormField label={t('vehicles.detail.dimensions')}>
-                  <span>
-                    {vehicle.lengthMeters ?? '—'} × {vehicle.widthMeters ?? '—'} × {vehicle.heightMeters ?? '—'} m
-                  </span>
-                </FormField>
-                <FormField label={t('vehicles.detail.volume')}><span>{vehicle.volumeM3 !== null ? `${vehicle.volumeM3} m³` : '—'}</span></FormField>
-                <FormField label={t('vehicles.detail.equipment')} className="vehicle-detail-full">
-                  <span>
-                    {[
-                      vehicle.hasCrane ? t('fleet.common.equipment.crane') : null,
-                      vehicle.hasRefrigeration ? t('fleet.common.equipment.refrigeration') : null,
-                      vehicle.hasTailLift ? t('fleet.common.equipment.tailLift') : null,
-                      vehicle.adrSuitable ? t('fleet.common.equipment.adrShort') : null,
-                    ]
-                      .filter(Boolean)
-                      .join(' · ') || t('vehicles.detail.noEquipment')}
-                  </span>
-                </FormField>
-              </div>
-            </TabPanel>
-          )}
+              <DetailCard title={t('vehicles.detail.overview.technicalBlock')}>
+                <FactList
+                  columns={2}
+                  facts={[
+                    { key: 'plate', label: t('fleet.form.plate'), value: vehicle.licensePlate },
+                    { key: 'vin', label: t('vehicles.detail.vin'), value: vehicle.vin },
+                    { key: 'category', label: t('fleet.form.category'), value: vehicle.categoryName },
+                    { key: 'year', label: t('fleet.form.year'), value: vehicle.year },
+                    { key: 'firstReg', label: t('vehicles.form.firstRegistration'), value: vehicle.firstRegistrationDate ? formatDate(vehicle.firstRegistrationDate) : null },
+                    { key: 'odometer', label: t('vehicles.form.odometer'), value: `${formatInteger(vehicle.odometerKm)} km` },
+                    { key: 'fuel', label: t('vehicles.form.fuel'), value: t(FUEL_TYPE_LABELS[vehicle.fuelType]) },
+                    { key: 'emission', label: t('vehicles.form.emissionClass'), value: vehicle.emissionClass ? t(EMISSION_CLASS_LABELS[vehicle.emissionClass]) : null },
+                    { key: 'consumption', label: t('vehicles.detail.overview.consumption'), value: vehicle.consumptionLPer100Km !== null ? `${vehicle.consumptionLPer100Km} l/100 km` : null },
+                    { key: 'licence', label: t('vehicles.form.requiredLicence'), value: vehicle.requiredLicenceCode },
+                    { key: 'gvw', label: t('vehicles.detail.gvw'), value: vehicle.grossVehicleWeightKg !== null ? `${formatInteger(vehicle.grossVehicleWeightKg)} kg` : null },
+                    { key: 'payload', label: t('vehicles.detail.payload'), value: vehicle.payloadKg !== null ? `${formatInteger(vehicle.payloadKg)} kg` : null },
+                    { key: 'axles', label: t('fleet.form.axles'), value: vehicle.axleCount || null },
+                    { key: 'ldm', label: t('fleet.form.loadingMeters'), value: vehicle.loadingMeters ? `${vehicle.loadingMeters} ldm` : null },
+                    {
+                      key: 'dimensions',
+                      label: t('vehicles.detail.dimensions'),
+                      value:
+                        vehicle.lengthMeters === null && vehicle.widthMeters === null && vehicle.heightMeters === null
+                          ? null
+                          : `${vehicle.lengthMeters ?? '—'} × ${vehicle.widthMeters ?? '—'} × ${vehicle.heightMeters ?? '—'} m`,
+                    },
+                    { key: 'volume', label: t('vehicles.detail.volume'), value: vehicle.volumeM3 !== null ? `${vehicle.volumeM3} m³` : null },
+                    { key: 'ownership', label: t('fleet.form.ownership'), value: t(OWNERSHIP_TYPE_LABELS[vehicle.ownershipType]) },
+                    {
+                      key: 'equipment',
+                      label: t('vehicles.detail.equipment'),
+                      value:
+                        [
+                          vehicle.hasCrane ? t('fleet.common.equipment.crane') : null,
+                          vehicle.hasRefrigeration ? t('fleet.common.equipment.refrigeration') : null,
+                          vehicle.hasTailLift ? t('fleet.common.equipment.tailLift') : null,
+                          vehicle.adrSuitable ? t('fleet.common.equipment.adrShort') : null,
+                        ]
+                          .filter(Boolean)
+                          .join(' · ') || t('vehicles.detail.noEquipment'),
+                    },
+                  ]}
+                />
+              </DetailCard>
 
-          {tab === 'toewijzing' && (
-            <TabPanel tabId="toewijzing">
-              <p className="assignment-slots-note">
-                <strong>{t('vehicles.detail.noteFixedLead')}</strong> {t('vehicles.detail.noteFixedText')}{' '}
-                <strong>{t('vehicles.detail.noteCurrentLead')}</strong> {t('vehicles.detail.noteCurrentText')}
-              </p>
-              <div className="assignment-slots">
-                <AssignmentSlot
-                  title={t('vehicles.detail.fixedDriver')}
-                  description={t('vehicles.detail.fixedDesc')}
-                  assigned={vehicle.fixedDriverId && vehicle.fixedDriverName ? { label: vehicle.fixedDriverName, linkTo: `/drivers/${vehicle.fixedDriverId}` } : null}
-                  canEdit={canEdit}
-                  pickerLabel={t('vehicles.detail.pickerDriver')}
-                  loadOptions={loadDriverOptions}
-                  assign={async (driverId, replaceExisting) => {
-                    await setVehicleDriver(vehicle.id, 'fixed-driver', driverId, replaceExisting)
-                  }}
-                  onChanged={reloadVehicle}
-                />
-                <AssignmentSlot
-                  title={t('vehicles.detail.currentDriver')}
-                  description={t('vehicles.detail.currentDesc')}
-                  assigned={vehicle.currentDriverId && vehicle.currentDriverName ? { label: vehicle.currentDriverName, linkTo: `/drivers/${vehicle.currentDriverId}` } : null}
-                  canEdit={canEdit}
-                  pickerLabel={t('vehicles.detail.pickerDriver')}
-                  loadOptions={loadDriverOptions}
-                  assign={async (driverId, replaceExisting) => {
-                    await setVehicleDriver(vehicle.id, 'current-driver', driverId, replaceExisting)
-                  }}
-                  onChanged={reloadVehicle}
-                />
-              </div>
+              {block(
+                'toewijzing',
+                <DetailCard title={t('vehicles.detail.overview.assignmentBlock')}>
+                  <p className="assignment-slots-note">
+                    <strong>{t('vehicles.detail.noteFixedLead')}</strong> {t('vehicles.detail.noteFixedText')}{' '}
+                    <strong>{t('vehicles.detail.noteCurrentLead')}</strong> {t('vehicles.detail.noteCurrentText')}
+                  </p>
+                  <div className="assignment-slots">
+                    <AssignmentSlot
+                      title={t('vehicles.detail.fixedDriver')}
+                      description={t('vehicles.detail.fixedDesc')}
+                      assigned={vehicle.fixedDriverId && vehicle.fixedDriverName ? { label: vehicle.fixedDriverName, linkTo: `/drivers/${vehicle.fixedDriverId}` } : null}
+                      canEdit={canEdit}
+                      pickerLabel={t('vehicles.detail.pickerDriver')}
+                      loadOptions={loadDriverOptions}
+                      assign={async (driverId, replaceExisting) => {
+                        await setVehicleDriver(vehicle.id, 'fixed-driver', driverId, replaceExisting)
+                      }}
+                      onChanged={reloadVehicle}
+                    />
+                    <AssignmentSlot
+                      title={t('vehicles.detail.currentDriver')}
+                      description={t('vehicles.detail.currentDesc')}
+                      assigned={vehicle.currentDriverId && vehicle.currentDriverName ? { label: vehicle.currentDriverName, linkTo: `/drivers/${vehicle.currentDriverId}` } : null}
+                      canEdit={canEdit}
+                      pickerLabel={t('vehicles.detail.pickerDriver')}
+                      loadOptions={loadDriverOptions}
+                      assign={async (driverId, replaceExisting) => {
+                        await setVehicleDriver(vehicle.id, 'current-driver', driverId, replaceExisting)
+                      }}
+                      onChanged={reloadVehicle}
+                    />
+                  </div>
+                </DetailCard>,
+              )}
             </TabPanel>
           )}
 
           {tab === 'documenten' && id && (
             <TabPanel tabId="documenten">
-              <FleetDocumentsPanel ownerType="vehicle" ownerId={id} />
+              {hasPermission('fleet_documents.view') && block('documenten', <FleetDocumentsPanel ownerType="vehicle" ownerId={id} />)}
+              {hasPermission('inspections.view') && block('keuringen', <InspectionsPanel ownerType="vehicle" ownerId={id} />)}
+              {hasPermission('tachograph.view') && block('tachograaf', <TachographPanel vehicleId={id} />)}
             </TabPanel>
           )}
-          {tab === 'tachograaf' && id && hasPermission('tachograph.view') && (
-            <TabPanel tabId="tachograaf">
-              <TachographPanel vehicleId={id} />
-            </TabPanel>
-          )}
-          {tab === 'leasing' && id && (
-            <TabPanel tabId="leasing">
-              <LeasingPanel ownerType="vehicle" ownerId={id} />
-            </TabPanel>
-          )}
+
           {tab === 'onderhoud' && id && (
             <TabPanel tabId="onderhoud">
-              <MaintenancePolicySummary assetKind="Vehicle" assetId={id} />
-              <MaintenancePanel ownerType="vehicle" ownerId={id} />
+              {block(
+                'onderhoud',
+                <>
+                  <MaintenancePolicySummary assetKind="Vehicle" assetId={id} />
+                  {hasPermission('maintenance.view') && <MaintenancePanel ownerType="vehicle" ownerId={id} />}
+                </>,
+              )}
+              {hasPermission('damage_reports.view') && block('schade', <DamagePanel ownerType="vehicle" ownerId={id} />)}
             </TabPanel>
           )}
-          {tab === 'keuringen' && id && (
-            <TabPanel tabId="keuringen">
-              <InspectionsPanel ownerType="vehicle" ownerId={id} />
+
+          {tab === 'kosten' && id && (
+            <TabPanel tabId="kosten">
+              {block('leasing', <LeasingPanel ownerType="vehicle" ownerId={id} />)}
+              {hasFuel && block('brandstof', <FuelPanel vehicleId={id} />)}
+              {hasKpi && block('kpi', <FleetKpiPanel ownerType="vehicle" ownerId={id} />)}
             </TabPanel>
           )}
-          {tab === 'schade' && id && (
-            <TabPanel tabId="schade">
-              <DamagePanel ownerType="vehicle" ownerId={id} />
-            </TabPanel>
-          )}
-          {tab === 'brandstof' && id && (
-            <TabPanel tabId="brandstof">
-              <FuelPanel vehicleId={id} />
-            </TabPanel>
-          )}
-          {tab === 'kpi' && id && (
-            <TabPanel tabId="kpi">
-              <FleetKpiPanel ownerType="vehicle" ownerId={id} />
-            </TabPanel>
-          )}
+
           {tab === 'historiek' && (
             <TabPanel tabId="historiek">
               <AuditHistoryPanel entityType="Vehicle" entityId={vehicle.id} />

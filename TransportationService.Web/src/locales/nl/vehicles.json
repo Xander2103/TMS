@@ -99,6 +99,54 @@
     "deactivateMessage": "{number} deactiveren? Historiek blijft behouden, maar het voertuig is niet meer inzetbaar voor nieuwe ritten.",
     "reactivateMessage": "{number} heractiveren? Het voertuig is daarna weer inzetbaar.",
     "deactivated": "Voertuig gedeactiveerd.",
-    "reactivated": "Voertuig geheractiveerd."
+    "reactivated": "Voertuig geheractiveerd.",
+    "groups": {
+      "overview": "Overzicht",
+      "technical": "Techniek & toewijzing",
+      "documents": "Documenten & keuringen",
+      "maintenance": "Onderhoud & schade",
+      "costs": "Leasing & kosten",
+      "history": "Historiek"
+    },
+    "overview": {
+      "statusCard": "Status & inzet",
+      "assignmentCard": "Toewijzing",
+      "technicalCard": "Techniek & uitrusting",
+      "upcomingCard": "Gepland",
+      "notesCard": "Notities",
+      "change": "Wijzigen",
+      "allDetails": "Alle gegevens",
+      "noUpcoming": "Niets gepland.",
+      "upcomingLoading": "Planning laden…",
+      "operationalStatus": "Operationele status",
+      "administrative": "Administratief",
+      "active": "Actief",
+      "inactive": "Inactief",
+      "notAssigned": "Niet toegewezen",
+      "fuelEmission": "Brandstof / emissie",
+      "weights": "MTM / laadvermogen",
+      "loadingMeters": "Laadmeters",
+      "consumption": "Verbruik",
+      "tachograph": "Tachograafijking",
+      "technicalBlock": "Technische gegevens",
+      "assignmentBlock": "Toewijzing"
+    },
+    "attention": {
+      "documentExpired": "{label} verlopen op {date}",
+      "documentExpiring": "{label} verloopt op {date}",
+      "inspectionOverdue": "{label} achterstallig sinds {date}",
+      "inspectionDue": "{label} vervalt op {date}",
+      "tachographOverdue": "Tachograafijking achterstallig sinds {date}",
+      "tachographDue": "Tachograafijking vervalt op {date}",
+      "maintenanceOverdue": "{label} achterstallig",
+      "maintenanceInProgress": "{label} bezig",
+      "maintenancePlanned": "{label} gepland op {date}",
+      "damageOpen_one": "1 openstaande schade",
+      "damageOpen_other": "{count} openstaande schades",
+      "equipmentDocumentMissing": "Geen {label} geregistreerd",
+      "baseDocumentsMissing": "Niet geregistreerd: {labels}",
+      "view": "Bekijken",
+      "add": "Toevoegen"
+    }
   }
 }

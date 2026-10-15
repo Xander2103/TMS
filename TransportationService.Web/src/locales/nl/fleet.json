@@ -250,7 +250,9 @@
       "body": "{entity} is aangemaakt. {succeeded} van {total} documenten zijn verwerkt; {failed} mislukt. Je bestanden blijven behouden.",
       "docLabel": "Document: {label}",
       "allProcessed": "Alle documenten zijn verwerkt."
-    }
+    },
+    "clearTitle": "Bestand wissen",
+    "clearMessage": "Het bijgevoegde bestand van \"{name}\" wissen? Het document zelf blijft bestaan."
   },
   "dashboard": {
     "loadFailed": "Het vlootoverzicht kon niet worden geladen.",

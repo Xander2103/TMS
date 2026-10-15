@@ -124,3 +124,15 @@
 .vehicle-form-collapsible[open] > summary {
   margin-bottom: 14px;
 }
+
+/* B16: the section navigation of the vehicle form stays one line (it wrapped "Onderhoud &
+   keuringen" and "Notities" onto a second row); on a narrow screen it scrolls sideways. */
+.vehicle-form {
+  max-width: 1040px;
+}
+
+.vehicle-form .ui-section-nav {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}

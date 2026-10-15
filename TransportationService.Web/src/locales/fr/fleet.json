@@ -250,7 +250,9 @@
       "body": "{entity} a été créé. {succeeded} documents sur {total} ont été traités ; {failed} ont échoué. Vos fichiers sont conservés.",
       "docLabel": "Document : {label}",
       "allProcessed": "Tous les documents ont été traités."
-    }
+    },
+    "clearTitle": "Effacer le fichier",
+    "clearMessage": "Effacer le fichier joint de « {name} » ? Le document lui-même est conservé."
   },
   "dashboard": {
     "loadFailed": "L'aperçu de la flotte n'a pas pu être chargé.",

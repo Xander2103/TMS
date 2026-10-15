@@ -250,7 +250,9 @@
       "body": "{entity} has been created. {succeeded} of {total} documents were processed; {failed} failed. Your files are kept.",
       "docLabel": "Document: {label}",
       "allProcessed": "All documents have been processed."
-    }
+    },
+    "clearTitle": "Clear file",
+    "clearMessage": "Clear the attached file of \"{name}\"? The document itself is kept."
   },
   "dashboard": {
     "loadFailed": "The fleet overview could not be loaded.",

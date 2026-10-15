@@ -99,6 +99,54 @@
     "deactivateMessage": "Désactiver {number} ? L'historique est conservé, mais le véhicule ne peut plus être affecté à de nouvelles tournées.",
     "reactivateMessage": "Réactiver {number} ? Le véhicule sera de nouveau disponible.",
     "deactivated": "Véhicule désactivé.",
-    "reactivated": "Véhicule réactivé."
+    "reactivated": "Véhicule réactivé.",
+    "groups": {
+      "overview": "Aperçu",
+      "technical": "Technique & affectation",
+      "documents": "Documents & contrôles",
+      "maintenance": "Entretien & dégâts",
+      "costs": "Leasing & coûts",
+      "history": "Historique"
+    },
+    "overview": {
+      "statusCard": "Statut & utilisation",
+      "assignmentCard": "Affectation",
+      "technicalCard": "Technique & équipement",
+      "upcomingCard": "Planifié",
+      "notesCard": "Notes",
+      "change": "Modifier",
+      "allDetails": "Toutes les données",
+      "noUpcoming": "Rien de planifié.",
+      "upcomingLoading": "Chargement du planning…",
+      "operationalStatus": "Statut opérationnel",
+      "administrative": "Administratif",
+      "active": "Actif",
+      "inactive": "Inactif",
+      "notAssigned": "Non affecté",
+      "fuelEmission": "Carburant / émission",
+      "weights": "MMA / charge utile",
+      "loadingMeters": "Mètres de chargement",
+      "consumption": "Consommation",
+      "tachograph": "Étalonnage tachygraphe",
+      "technicalBlock": "Données techniques",
+      "assignmentBlock": "Affectation"
+    },
+    "attention": {
+      "documentExpired": "{label} expiré le {date}",
+      "documentExpiring": "{label} expire le {date}",
+      "inspectionOverdue": "{label} en retard depuis le {date}",
+      "inspectionDue": "{label} échéance le {date}",
+      "tachographOverdue": "Étalonnage tachygraphe en retard depuis le {date}",
+      "tachographDue": "Étalonnage tachygraphe échéance le {date}",
+      "maintenanceOverdue": "{label} en retard",
+      "maintenanceInProgress": "{label} en cours",
+      "maintenancePlanned": "{label} planifié le {date}",
+      "damageOpen_one": "1 dégât ouvert",
+      "damageOpen_other": "{count} dégâts ouverts",
+      "equipmentDocumentMissing": "Aucun {label} enregistré",
+      "baseDocumentsMissing": "Non enregistré : {labels}",
+      "view": "Voir",
+      "add": "Ajouter"
+    }
   }
 }

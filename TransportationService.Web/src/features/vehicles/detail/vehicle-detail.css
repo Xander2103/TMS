@@ -1,0 +1,93 @@
+/* B16 vehicle detail: grouped sections stack their blocks with one rhythm. */
+.vehicle-group-block {
+  scroll-margin-top: 16px;
+}
+
+.vehicle-group-block + .vehicle-group-block {
+  margin-top: var(--space-6);
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--border);
+}
+
+.vehicle-muted {
+  color: var(--text-muted);
+}
+
+.vehicle-equipment-badges {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.vehicle-upcoming-link {
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  color: var(--accent);
+  text-align: left;
+  cursor: pointer;
+}
+
+.vehicle-upcoming-link:hover {
+  text-decoration: underline;
+}
+
+.vehicle-notes {
+  margin: 0;
+  white-space: pre-line;
+  font-size: var(--text-md);
+  color: var(--text-h);
+}
+
+/* The fleet panels were built as standalone tabs (own top margin, 900–1000px cap, mixed h2
+   sizes). Grouped two or three per section they share one width and one heading size. */
+.vehicle-group-block > * {
+  margin-top: 0;
+  max-width: none;
+  /* A wide table scrolls inside its block; the page itself never scrolls sideways. */
+  overflow-x: auto;
+}
+
+/* B52 list scale for the panels' own tables (they predate it: 15px cells, 12px padding). */
+.vehicle-group-block table {
+  font-size: var(--text-md);
+}
+
+.vehicle-group-block table th,
+.vehicle-group-block table td {
+  padding: 8px 10px;
+}
+
+.vehicle-group-block table th {
+  font-size: var(--text-sm);
+  text-transform: none;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+
+.vehicle-group-block > * + * {
+  margin-top: var(--space-4);
+}
+
+.vehicle-group-block h2 {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+/* Quiet per-card action ("Wijzigen", "Alle gegevens"): a link, never a second primary. */
+.vehicle-card-link {
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: var(--text-md);
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.vehicle-card-link:hover {
+  text-decoration: underline;
+}

@@ -99,6 +99,54 @@
     "deactivateMessage": "Deactivate {number}? History is kept, but the vehicle can no longer be used for new trips.",
     "reactivateMessage": "Reactivate {number}? The vehicle will be available again.",
     "deactivated": "Vehicle deactivated.",
-    "reactivated": "Vehicle reactivated."
+    "reactivated": "Vehicle reactivated.",
+    "groups": {
+      "overview": "Overview",
+      "technical": "Technical & assignment",
+      "documents": "Documents & inspections",
+      "maintenance": "Maintenance & damage",
+      "costs": "Leasing & costs",
+      "history": "History"
+    },
+    "overview": {
+      "statusCard": "Status & use",
+      "assignmentCard": "Assignment",
+      "technicalCard": "Technical & equipment",
+      "upcomingCard": "Scheduled",
+      "notesCard": "Notes",
+      "change": "Change",
+      "allDetails": "All details",
+      "noUpcoming": "Nothing scheduled.",
+      "upcomingLoading": "Loading schedule…",
+      "operationalStatus": "Operational status",
+      "administrative": "Administrative",
+      "active": "Active",
+      "inactive": "Inactive",
+      "notAssigned": "Not assigned",
+      "fuelEmission": "Fuel / emission",
+      "weights": "GVW / payload",
+      "loadingMeters": "Loading metres",
+      "consumption": "Consumption",
+      "tachograph": "Tachograph calibration",
+      "technicalBlock": "Technical data",
+      "assignmentBlock": "Assignment"
+    },
+    "attention": {
+      "documentExpired": "{label} expired on {date}",
+      "documentExpiring": "{label} expires on {date}",
+      "inspectionOverdue": "{label} overdue since {date}",
+      "inspectionDue": "{label} due on {date}",
+      "tachographOverdue": "Tachograph calibration overdue since {date}",
+      "tachographDue": "Tachograph calibration due on {date}",
+      "maintenanceOverdue": "{label} overdue",
+      "maintenanceInProgress": "{label} in progress",
+      "maintenancePlanned": "{label} scheduled on {date}",
+      "damageOpen_one": "1 open damage report",
+      "damageOpen_other": "{count} open damage reports",
+      "equipmentDocumentMissing": "No {label} registered",
+      "baseDocumentsMissing": "Not registered: {labels}",
+      "view": "View",
+      "add": "Add"
+    }
   }
 }

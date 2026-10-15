@@ -1,6 +1,8 @@
 .fleet-docs {
   margin-top: 32px;
   max-width: 900px;
+  /* Never widen the page: on a narrow desktop the table scrolls inside its own section. */
+  overflow-x: auto;
 }
 
 .fleet-docs-header {
@@ -38,6 +40,16 @@
 .fleet-docs-actions {
   white-space: nowrap;
   text-align: right;
+  width: 1%;
+}
+
+/* B16: a 90-character permit name or a long reference stays on one line (full value on hover). */
+.fleet-docs-name {
+  max-width: clamp(150px, 16vw, 340px);
+}
+
+.fleet-docs-number {
+  max-width: clamp(100px, 10vw, 180px);
 }
 
 .fleet-docs-link {
@@ -65,6 +77,7 @@
 }
 
 .fleet-docs-file {
+  width: 1%;
   white-space: nowrap;
 }
 
@@ -112,4 +125,27 @@
   .fleet-docs-form-row {
     grid-template-columns: 1fr;
   }
+}
+
+.fleet-docs-icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.fleet-docs-icon-button:hover:not(:disabled) {
+  background: var(--accent-bg);
+}
+
+.fleet-docs-icon-button:disabled {
+  opacity: 0.5;
+  cursor: wait;
 }

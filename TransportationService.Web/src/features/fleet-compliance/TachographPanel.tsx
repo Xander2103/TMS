@@ -212,7 +212,7 @@ export function TachographPanel({ vehicleId }: { vehicleId: string }) {
               <tr key={item.id}>
                 <td>{item.tachographType ?? '—'}</td>
                 <td>{formatDate(item.calibrationDate)}</td>
-                <td>{item.nextCalibrationDue}</td>
+                <td>{formatDate(item.nextCalibrationDue)}</td>
                 <td>{item.workshop ?? '—'}</td>
                 <td>
                   <Badge tone={STATUS_TONE[item.status]}>{t(TACHOGRAPH_STATUS_LABELS[item.status])}</Badge>
