@@ -37,6 +37,7 @@ import {
   type SaveCustomerPoNumberInput,
 } from '../types'
 import './customerBillingPanel.css'
+import '../customers.css'
 
 interface CustomerBillingPanelProps {
   customerId: string
@@ -140,7 +141,17 @@ function DieselSurchargeSection({ customerId }: { customerId: string }) {
 
   return (
     <section className="customer-billing-section">
-      <PanelHeader title={t('customers.billing.dieselTitle')} />
+      {/* B17: a rare, per-customer setting — collapsed behind a one-line summary so the full
+          form no longer stretches the tariffs tab; its state is readable without opening it. */}
+      <details className="customer-disclosure">
+        <summary>
+          <h3 className="customer-disclosure-title">{t('customers.billing.dieselTitle')}</h3>
+          {!loading && !loadError && (
+            <Badge tone={enabled ? 'info' : 'neutral'}>
+              {enabled ? `${t('ui.statusBadges.active')}${percent ? ` · ${percent}%` : ''}` : t('customers.billing.dieselInactive')}
+            </Badge>
+          )}
+        </summary>
       {loading ? (
         <p className="customer-form-muted">{t('customers.common.loading')}</p>
       ) : loadError ? (
@@ -243,6 +254,7 @@ function DieselSurchargeSection({ customerId }: { customerId: string }) {
           )}
         </form>
       )}
+      </details>
     </section>
   )
 }

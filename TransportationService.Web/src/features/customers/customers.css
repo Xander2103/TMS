@@ -1,16 +1,7 @@
 
-.customer-preferred-units {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 20px;
-  margin-bottom: 16px;
-}
-
-.customer-rule-bracket,
-.customer-ratecard-surcharge {
-  grid-template-columns: repeat(4, 1fr) auto;
-  align-items: center;
-}
+/* This sheet was orphaned (never imported) until B17; it is now imported by the customer
+   detail page and the tariff panels. Rules for modal bracket rows that never applied were
+   dropped rather than activated unverified. */
 
 /* Tarieven & toeslagen — sectioned layout (2026-09 rework) */
 
@@ -18,11 +9,42 @@
   margin-top: 20px;
 }
 
-/* Per-section primary action, right-aligned in the section header area. */
+/* Per-section add action on the section's title row, like every other block of the tab
+   (B17); the description leaves room for it. */
+.customer-pricing-panel .ui-form-section {
+  position: relative;
+}
+
 .customer-pricing-section-actions {
   display: flex;
   justify-content: flex-end;
-  margin-bottom: 8px;
+  margin-bottom: var(--space-2);
+}
+
+.customer-pricing-panel .customer-pricing-section-actions {
+  position: absolute;
+  top: -6px;
+  right: 0;
+  margin: 0;
+}
+
+/* Sections after the first start below their hairline + padding. */
+.customer-pricing-panel .ui-form-section-flat + .ui-form-section-flat .customer-pricing-section-actions {
+  top: calc(var(--space-5) - 6px);
+}
+
+.customer-pricing-panel .ui-form-section-title,
+.customer-pricing-panel .ui-form-section-description {
+  padding-right: 220px;
+}
+
+/* Empty sections are one quiet line, not a tall dashed box. */
+.customer-pricing-panel .empty-state {
+  padding: 10px 14px;
+  min-height: 0;
+  align-items: flex-start;
+  font-size: var(--text-md);
+  text-align: left;
 }
 
 /* Name/amount cells stack a value with badges and a muted note without inflating row height. */
@@ -50,24 +72,116 @@
   margin: 4px 0 8px;
 }
 
-/* Technical unit/EDI mapping: collapsed disclosure at the bottom of the tab. */
-.customer-units-details > summary {
-  cursor: pointer;
-  list-style-position: outside;
-}
-
-.customer-units-details > summary h3 {
-  display: inline;
-  margin: 0;
-}
-
-.customer-units-add {
+/* B17: rare/technical blocks of the tariffs tab (dieseltoeslag, unit/EDI mapping) collapse
+   behind a one-line summary with its own chevron. */
+.customer-disclosure > summary {
   display: flex;
-  gap: 8px;
   align-items: center;
-  margin-top: 12px;
+  gap: var(--space-2);
+  cursor: pointer;
+  list-style: none;
 }
 
-.customer-units-add > :first-child {
-  min-width: 260px;
+.customer-disclosure > summary::-webkit-details-marker {
+  display: none;
+}
+
+.customer-disclosure > summary::before {
+  content: '▸';
+  color: var(--text-muted);
+  transition: transform 0.15s;
+}
+
+.customer-disclosure[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+.customer-disclosure[open] > summary {
+  margin-bottom: var(--space-3);
+}
+
+.customer-disclosure-title {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+/* Panel title + its one add action on a single row (price adjustments, combination discounts). */
+.customer-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
+  margin-bottom: var(--space-2);
+}
+
+.customer-panel-header h3 {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+/* Tariffs tab: flat blocks separated by one rule instead of nested frames. */
+.customer-tariffs > * + * {
+  margin-top: var(--space-5);
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--border);
+}
+
+/* B17 overview: identity + invoicing left, what runs for the customer right. */
+.customer-overview {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.customer-overview:has(> .customer-overview-col:only-child) {
+  grid-template-columns: minmax(0, 1fr);
+  max-width: 880px;
+}
+
+.customer-overview-col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.customer-overview-col > .ui-detail-card + .ui-detail-card {
+  margin-top: 0;
+}
+
+.customer-invoice-amount {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 1200px) {
+  .customer-overview {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+
+/* Card "Bewerken" stays quiet and does not stretch the card's title row. */
+.customer-overview .ui-detail-card-action .ui-button {
+  min-height: 32px;
+  padding: 4px 10px;
+  font-size: var(--text-md);
+}
+
+/* Facts in the overview cards: a fixed, modest label column so a one-column layout (narrow
+   desktop) does not spend a third of the card on labels. */
+.customer-overview .ui-fact {
+  grid-template-columns: minmax(120px, 180px) minmax(0, 1fr);
+}
+
+/* Empty sections of the tariffs tab read at body size, like the other empty states. */
+.customer-tariffs .placeholder-text {
+  font-size: var(--text-md);
+  margin: var(--space-2) 0 0;
 }

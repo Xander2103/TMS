@@ -102,7 +102,8 @@
     "roundingField": "Arrondi",
     "startDateRequired": "Une date de début est obligatoire.",
     "validFrom": "Valable du",
-    "validUntil": "Valable jusqu'au"
+    "validUntil": "Valable jusqu'au",
+    "dieselInactive": "Inactif"
   },
   "common": {
     "actionFailed": "L'action n'a pas pu être exécutée.",
@@ -298,7 +299,9 @@
     "unblockMessage": "Lever le blocage de « {name} » ?",
     "unblockTitle": "Débloquer le client",
     "unblocked": "Client débloqué.",
-    "updated": "Client mis à jour."
+    "updated": "Client mis à jour.",
+    "tabOverview": "Aperçu",
+    "tabDocuments": "Documents par jour"
   },
   "dieselBasis": {
     "InvoiceSubtotal": "Sur le sous-total de la facture",
@@ -981,5 +984,32 @@
     "placeholder": "Rechercher par nom ou numéro de client…",
     "searching": "Recherche…",
     "typeToSearch": "Tapez pour rechercher."
+  },
+  "overview": {
+    "billingTitle": "Facturation & fiscalité",
+    "legalName": "Raison sociale",
+    "primaryAddress": "Adresse principale",
+    "website": "Site web",
+    "primaryContact": "Contact principal",
+    "peppolOff": "inactif",
+    "invoiceGrouping": "Regroupement des factures",
+    "documentStrategy": "Document de transport",
+    "openDossiersTitle": "Dossiers ouverts",
+    "openDossiersEmpty": "Aucun dossier ouvert.",
+    "allDossiers": "Tous les dossiers ouverts du client",
+    "recentInvoicesTitle": "Factures récentes",
+    "recentInvoicesEmpty": "Pas encore de factures.",
+    "allInvoices": "Toutes les factures du client",
+    "loadFailed": "Chargement impossible.",
+    "noRoute": "Itinéraire pas encore renseigné",
+    "draftInvoice": "Brouillon",
+    "editCard": "Modifier {title}"
+  },
+  "attention": {
+    "blocked": "Client bloqué",
+    "complete": "Compléter",
+    "peppolIdMissing": "Peppol est activé, mais l'identifiant Peppol manque",
+    "peppolNotFound": "Identifiant Peppol introuvable sur le réseau Peppol",
+    "noInvoiceChannel": "Données de facturation incomplètes : ni Peppol ni adresse e-mail pour les factures"
   }
 }

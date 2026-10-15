@@ -102,7 +102,8 @@
     "roundingField": "Afronding",
     "startDateRequired": "Een begindatum is verplicht.",
     "validFrom": "Geldig van",
-    "validUntil": "Geldig tot"
+    "validUntil": "Geldig tot",
+    "dieselInactive": "Niet actief"
   },
   "common": {
     "actionFailed": "De actie kon niet worden uitgevoerd.",
@@ -298,7 +299,9 @@
     "unblockMessage": "Blokkering voor '{name}' opheffen?",
     "unblockTitle": "Klant deblokkeren",
     "unblocked": "Klant gedeblokkeerd.",
-    "updated": "Klant bijgewerkt."
+    "updated": "Klant bijgewerkt.",
+    "tabOverview": "Overzicht",
+    "tabDocuments": "Documenten per dag"
   },
   "dieselBasis": {
     "InvoiceSubtotal": "Op factuursubtotaal",
@@ -981,5 +984,32 @@
     "placeholder": "Zoek op naam of klantnummer…",
     "searching": "Zoeken…",
     "typeToSearch": "Typ om te zoeken."
+  },
+  "overview": {
+    "billingTitle": "Facturatie & fiscaal",
+    "legalName": "Juridische naam",
+    "primaryAddress": "Hoofdadres",
+    "website": "Website",
+    "primaryContact": "Hoofdcontact",
+    "peppolOff": "niet actief",
+    "invoiceGrouping": "Factuurgroepering",
+    "documentStrategy": "Transportdocument",
+    "openDossiersTitle": "Open dossiers",
+    "openDossiersEmpty": "Geen open dossiers.",
+    "allDossiers": "Alle open dossiers van klant",
+    "recentInvoicesTitle": "Recente facturen",
+    "recentInvoicesEmpty": "Nog geen facturen.",
+    "allInvoices": "Alle facturen van klant",
+    "loadFailed": "Kon niet worden geladen.",
+    "noRoute": "Route nog niet ingevuld",
+    "draftInvoice": "Concept",
+    "editCard": "{title} bewerken"
+  },
+  "attention": {
+    "blocked": "Klant geblokkeerd",
+    "complete": "Aanvullen",
+    "peppolIdMissing": "Peppol staat aan, maar het Peppol-ID ontbreekt",
+    "peppolNotFound": "Peppol-ID niet gevonden in het Peppol-netwerk",
+    "noInvoiceChannel": "Facturatiegegevens onvolledig: geen Peppol en geen e-mailadres voor facturen"
   }
 }

@@ -23,3 +23,30 @@
 .customer-billing-subtitle {
   margin: 0.5rem 0 0;
 }
+
+
+/* The PO policy is one short choice; history below it. */
+.customer-billing-section #po-policy {
+  max-width: 360px;
+}
+
+.customer-billing-section .empty-state {
+  padding: 10px 14px;
+  min-height: 0;
+  align-items: flex-start;
+  font-size: var(--text-md);
+  text-align: left;
+}
+
+/* PO-beleid: title and its one add action on the same row, like the other tariff blocks. */
+.customer-billing-section > .ui-panel-header {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  margin-bottom: 0;
+}
+
+.customer-billing-section > .ui-panel-header .ui-panel-header-toolbar {
+  margin-left: auto;
+}

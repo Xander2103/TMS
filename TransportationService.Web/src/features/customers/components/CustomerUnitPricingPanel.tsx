@@ -5,6 +5,7 @@ import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { DataTable, type Column } from '../../../components/ui/DataTable'
+import '../customers.css'
 import { EmptyState } from '../../../components/ui/EmptyState'
 import { FormField } from '../../../components/ui/FormField'
 import { FormSection } from '../../../components/ui/FormSection'
@@ -1030,7 +1031,7 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
 
   return (
     <section className="customer-panel customer-pricing-panel">
-      <FormSection title={t('customers.pricing.basisTitle')} description={t('customers.pricing.basisHint')} columns={1}>
+      <FormSection title={t('customers.pricing.basisTitle')} description={t('customers.pricing.basisHint')} columns={1} variant="flat">
         {canManage && (
           <div className="customer-panel-header customer-pricing-section-actions">
             <Button variant="secondary" onClick={() => openAgreementDraft(null)}>
@@ -1039,16 +1040,7 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
           </div>
         )}
         {links.length === 0 ? (
-          <EmptyState
-            message={t('customers.pricing.basisEmptyBody')}
-            action={
-              canManage ? (
-                <Button variant="secondary" onClick={() => openAgreementDraft(null)}>
-                  {t('customers.pricing.addAgreement')}
-                </Button>
-              ) : undefined
-            }
-          />
+          <EmptyState message={t('customers.pricing.basisEmptyBody')} />
         ) : (
           <DataTable columns={linkColumns} rows={links} rowKey={(link) => `${link.agreementId}-${link.assignmentId ?? 'own'}`} />
         )}
@@ -1069,6 +1061,7 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
         title={t('customers.pricing.servicesSectionTitle')}
         description={t('customers.pricing.servicesSectionHint')}
         columns={1}
+        variant="flat"
       >
         {canManage && (
           <div className="customer-panel-header customer-pricing-section-actions">
@@ -1089,16 +1082,7 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
           {t('customers.pricing.showAllStandardServices')}
         </label>
         {visibleServiceRows.length === 0 ? (
-          <EmptyState
-            message={showAllServices ? t('customers.pricing.noServices') : t('customers.pricing.servicesEmptyDeviations')}
-            action={
-              canManage ? (
-                <Button variant="secondary" onClick={() => openServiceDraft(null)}>
-                  {t('customers.pricing.addServiceOverride')}
-                </Button>
-              ) : undefined
-            }
-          />
+          <EmptyState message={showAllServices ? t('customers.pricing.noServices') : t('customers.pricing.servicesEmptyDeviations')} />
         ) : (
           <DataTable columns={serviceColumns} rows={visibleServiceRows} rowKey={(row) => row.serviceOptionId} />
         )}
@@ -1108,17 +1092,15 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
         title={t('customers.pricing.deviationPricesTitle')}
         description={t('customers.pricing.deviationPricesHint')}
         columns={1}
+        variant="flat"
       >
         {canManage && (
           <div className="customer-panel-header customer-pricing-section-actions">
-            <Button onClick={() => openDraft(null)}>{t('customers.pricing.addRule')}</Button>
+            <Button variant="secondary" onClick={() => openDraft(null)}>{t('customers.pricing.addRule')}</Button>
           </div>
         )}
         {activeAndPlannedRules.length === 0 ? (
-          <EmptyState
-            message={t('customers.pricing.rulesEmptyBody')}
-            action={canManage ? <Button variant="secondary" onClick={() => openDraft(null)}>{t('customers.pricing.addRule')}</Button> : undefined}
-          />
+          <EmptyState message={t('customers.pricing.rulesEmptyBody')} />
         ) : (
           <DataTable columns={ruleColumns(true)} rows={activeAndPlannedRules} rowKey={(rule) => rule.id} />
         )}

@@ -139,7 +139,7 @@ export function CustomerPriceAdjustmentsPanel({ customerId }: CustomerPriceAdjus
     <section className="customer-panel">
       <div className="customer-panel-header">
         <h3>{t('customers.priceAdjustments.title')}</h3>
-        {canManage && <Button onClick={openWizard}>{t('customers.priceAdjustments.newAdjustment')}</Button>}
+        {canManage && <Button variant="secondary" onClick={openWizard}>{t('customers.priceAdjustments.newAdjustment')}</Button>}
       </div>
 
       {adjustments === null && <p className="placeholder-text">{t('customers.priceAdjustments.loading')}</p>}

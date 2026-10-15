@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { formatDate } from '../../../utils/dates'
 import { Button } from '../../../components/ui/Button'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
-import { EmptyState } from '../../../components/ui/EmptyState'
 import { FormField } from '../../../components/ui/FormField'
 import { Modal } from '../../../components/ui/Modal'
 import { useToast } from '../../../components/ui/toastContext'
@@ -186,11 +185,11 @@ export function CombinedDiscountsPanel({ customerId, agreementId }: CombinedDisc
     <section className="customer-panel">
       <div className="customer-panel-header">
         <h3>{t('tarification.discounts.title')}</h3>
-        {canManage && <Button onClick={() => setDraft(toDraft(null))}>{t('tarification.discounts.new')}</Button>}
+        {canManage && <Button variant="secondary" onClick={() => setDraft(toDraft(null))}>{t('tarification.discounts.new')}</Button>}
       </div>
       <p className="customer-form-muted">{t('tarification.discounts.intro')}</p>
 
-      {discounts.length === 0 && <EmptyState message={t('tarification.discounts.empty')} />}
+      {discounts.length === 0 && <p className="placeholder-text">{t('tarification.discounts.empty')}</p>}
       {discounts.length > 0 && (
         <table className="issued-items-table">
           <thead>

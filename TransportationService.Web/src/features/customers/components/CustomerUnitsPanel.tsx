@@ -8,6 +8,7 @@ import { Modal } from '../../../components/ui/Modal'
 import { SearchableSelect } from '../../../components/ui/SearchableSelect'
 import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
+import '../customers.css'
 import { useLocale } from '../../../i18n/localeContext'
 import { describeApiError } from '../../../api/problemDetails'
 import {
@@ -245,9 +246,9 @@ export function CustomerUnitsPanel({ customerId }: CustomerUnitsPanelProps) {
     <section className="customer-panel">
       {/* Technical import config — deliberately collapsed at the BOTTOM of the tariffs tab so it
           never visually dominates the actual price agreements above it. */}
-      <details className="customer-units-details">
+      <details className="customer-disclosure customer-units-details">
         <summary>
-          <h3>{t('customers.units.title')}</h3>
+          <h3 className="customer-disclosure-title">{t('customers.units.title')}</h3>
         </summary>
         <p className="customer-form-muted">{t('customers.units.explanation')}</p>
 

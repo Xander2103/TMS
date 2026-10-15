@@ -92,6 +92,8 @@ interface CustomerFormProps {
    * customer create succeeds.
    */
   stagedLocationsSlot?: ReactNode
+  /** Edit mode opened from an overview card: start on that card's section (B17). */
+  initialSectionId?: string
 }
 
 /** Vertaalsleutels per backend-veldpad, voor de validatiesamenvatting (render via t). */
@@ -141,7 +143,7 @@ type PeppolVerifyState =
   | { kind: 'error'; message: string }
   | { kind: 'result'; result: CustomerPeppolVerifyResult }
 
-export function CustomerForm({ mode, initial, isSubmitting, submitError, serverFieldErrors, onSubmit, onCancel, editPanels, stagedLocationsSlot }: CustomerFormProps) {
+export function CustomerForm({ mode, initial, isSubmitting, submitError, serverFieldErrors, onSubmit, onCancel, editPanels, stagedLocationsSlot, initialSectionId }: CustomerFormProps) {
   const { t } = useLocale()
   const languages = useLookupOptions('/api/languages')
   const { hasPermission } = useAuth()
@@ -1215,7 +1217,10 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
     (id) => sectionDefs.find((s) => s.id === id),
   ).filter((s): s is SectionDef => s !== undefined && (isEdit || !CREATE_HIDDEN_SECTIONS.has(s.id)))
 
-  const { activeId, setActive } = useSectionNavigation(sections.map((s) => s.id), sections[0].id)
+  const { activeId, setActive } = useSectionNavigation(
+    sections.map((s) => s.id),
+    initialSectionId && sections.some((s) => s.id === initialSectionId) ? initialSectionId : sections[0].id,
+  )
 
   // Which save button was clicked last; a plain Enter-submit counts as the normal save.
   const submitIntentRef = useRef<CustomerSubmitIntent>('save')

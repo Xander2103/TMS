@@ -145,19 +145,6 @@
   color: var(--text-h);
 }
 
-.customer-detail-layout {
-  display: grid;
-  grid-template-columns: 2fr 1fr;
-  gap: 24px;
-  align-items: start;
-}
-
-@media (max-width: 900px) {
-  .customer-detail-layout {
-    grid-template-columns: 1fr;
-  }
-}
-
 .customer-summary {
   /* Vaste labelkolom: elke kaart is een eigen grid, dus met 'auto' berekent elke
      kaart zijn eigen labelbreedte en starten de waardekolommen niet gelijk. */
@@ -339,10 +326,6 @@
   flex-wrap: wrap;
 }
 
-.customer-detail-tabs {
-  margin: 0 0 20px;
-}
-
 /* Customer Excel import dialog */
 
 .customer-import-dialog {
@@ -439,13 +422,6 @@
 
 .customer-import-row-error td {
   background: color-mix(in srgb, var(--color-danger-strong) 8%, transparent);
-}
-
-.customer-number-line {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
 }
 
 /* Grouped Peppol control (one combined Peppol-ID field) with provenance status chip. */

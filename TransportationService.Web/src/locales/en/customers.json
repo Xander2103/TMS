@@ -102,7 +102,8 @@
     "roundingField": "Rounding",
     "startDateRequired": "A start date is required.",
     "validFrom": "Valid from",
-    "validUntil": "Valid until"
+    "validUntil": "Valid until",
+    "dieselInactive": "Not active"
   },
   "common": {
     "actionFailed": "The action could not be completed.",
@@ -298,7 +299,9 @@
     "unblockMessage": "Lift the block for '{name}'?",
     "unblockTitle": "Unblock customer",
     "unblocked": "Customer unblocked.",
-    "updated": "Customer updated."
+    "updated": "Customer updated.",
+    "tabOverview": "Overview",
+    "tabDocuments": "Documents per day"
   },
   "dieselBasis": {
     "InvoiceSubtotal": "On invoice subtotal",
@@ -981,5 +984,32 @@
     "placeholder": "Search by name or customer number…",
     "searching": "Searching…",
     "typeToSearch": "Type to search."
+  },
+  "overview": {
+    "billingTitle": "Invoicing & tax",
+    "legalName": "Legal name",
+    "primaryAddress": "Main address",
+    "website": "Website",
+    "primaryContact": "Main contact",
+    "peppolOff": "not active",
+    "invoiceGrouping": "Invoice grouping",
+    "documentStrategy": "Transport document",
+    "openDossiersTitle": "Open dossiers",
+    "openDossiersEmpty": "No open dossiers.",
+    "allDossiers": "All open dossiers of this customer",
+    "recentInvoicesTitle": "Recent invoices",
+    "recentInvoicesEmpty": "No invoices yet.",
+    "allInvoices": "All invoices of this customer",
+    "loadFailed": "Could not be loaded.",
+    "noRoute": "Route not filled in yet",
+    "draftInvoice": "Draft",
+    "editCard": "Edit {title}"
+  },
+  "attention": {
+    "blocked": "Customer blocked",
+    "complete": "Complete",
+    "peppolIdMissing": "Peppol is on, but the Peppol ID is missing",
+    "peppolNotFound": "Peppol ID not found in the Peppol network",
+    "noInvoiceChannel": "Invoicing details incomplete: no Peppol and no e-mail address for invoices"
   }
 }

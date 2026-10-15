@@ -5,17 +5,25 @@ import { PageHeader } from '../../../components/layout/PageHeader'
 import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { LoadingState } from '../../../components/feedback/LoadingState'
 import { ErrorState } from '../../../components/feedback/ErrorState'
-import { BackButton } from '../../../components/ui/BackButton'
 import { Button } from '../../../components/ui/Button'
 import { Modal } from '../../../components/ui/Modal'
 import { FormField } from '../../../components/ui/FormField'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { StatusBadges } from '../../../components/ui/StatusBadges'
+import { AttentionList } from '../../../components/ui/AttentionList'
 import { Tabs, TabPanel } from '../../../components/ui/Tabs'
+import { useDetailTab } from '../../../hooks/useDetailTab'
 import { useToast } from '../../../components/ui/toastContext'
 import { describeApiError, getFieldError, type FieldErrors } from '../../../api/problemDetails'
 import { useAuth } from '../../auth/authContextValue'
-import { addCustomerContact, changeCustomerNumber, removeCustomerContact, updateCustomerContact } from '../api/customersApi'
+import {
+  addCustomerContact,
+  changeCustomerNumber,
+  getCustomerFiscalWarnings,
+  removeCustomerContact,
+  updateCustomerContact,
+  type CustomerFiscalWarning,
+} from '../api/customersApi'
 import { getCustomerMessagesUnreadCount } from '../api/customerMessagesApi'
 import { CustomerForm } from '../components/CustomerForm'
 import { CustomerContactsPanel } from '../components/CustomerContactsPanel'
@@ -28,14 +36,38 @@ import { CustomerBillingPanel } from '../components/CustomerBillingPanel'
 import { CustomerPriceAdjustmentsPanel } from '../components/CustomerPriceAdjustmentsPanel'
 import { CustomerUnitPricingPanel } from '../components/CustomerUnitPricingPanel'
 import { CustomerUnitsPanel } from '../components/CustomerUnitsPanel'
-import { CustomerFiscalWarnings } from '../components/CustomerFiscalWarnings'
+import { CustomerOverview } from '../components/CustomerOverview'
+import { buildCustomerAttention } from '../utils/customerAttention'
 import { CombinedDiscountsPanel } from '../../tarification/components/CombinedDiscountsPanel'
 import { useCustomer } from '../hooks/useCustomer'
 import { useCustomerMutations } from '../hooks/useCustomerMutations'
 import { useLocale } from '../../../i18n/localeContext'
-import { VAT_TREATMENT_LABEL_KEYS } from '../types'
 import './../components/customers.css'
+import '../customers.css'
 import { ActionMenu } from '../../../components/ui/ActionMenu'
+
+const TAB_LABEL_KEYS: Record<TabId, string> = {
+  overzicht: 'customers.detail.tabOverview',
+  adressen: 'customers.detail.tabLocations',
+  contactpersonen: 'customers.contacts.title',
+  communicatie: 'customers.form.sections.communicatie',
+  tarieven: 'customers.form.sections.tarieven',
+  documenten: 'customers.detail.tabDocuments',
+  historiek: 'customers.form.sections.historiek',
+  berichten: 'customers.detail.tabMessages',
+}
+
+type TabId = 'overzicht' | 'adressen' | 'contactpersonen' | 'communicatie' | 'tarieven' | 'documenten' | 'historiek' | 'berichten'
+
+const TAB_ALIASES: Partial<Record<string, { tab: TabId }>> = {
+  general: { tab: 'overzicht' },
+  locations: { tab: 'adressen' },
+  contacts: { tab: 'contactpersonen' },
+  communication: { tab: 'communicatie' },
+  billing: { tab: 'tarieven' },
+  history: { tab: 'historiek' },
+  messages: { tab: 'berichten' },
+}
 
 export function CustomerDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -54,9 +86,27 @@ export function CustomerDetailPage() {
   const canOverrideNumber = hasPermission('customers.override_number')
   const canViewMessages = hasPermission('customer_messages.view')
   const canViewOrders = hasAnyPermission(['orders.view', 'orders.manage'])
+  const canViewDossiers = hasAnyPermission(['dossiers.view', 'dossiers.manage'])
+  const canViewInvoices = hasPermission('invoices.view')
 
-  const [activeTab, setActiveTab] = useState('general')
-  const [isEditing, setIsEditing] = useState(false)
+  // B17: one navigation layer, kept in ?tab=. The former in-memory ids (general, locations, …)
+  // are accepted as aliases so any link built on them keeps working.
+  const tabIds: TabId[] = [
+    'overzicht',
+    ...(canViewLocations ? (['adressen'] as const) : []),
+    'contactpersonen',
+    'communicatie',
+    ...(canViewBilling ? (['tarieven'] as const) : []),
+    ...(canViewOrders ? (['documenten'] as const) : []),
+    'historiek',
+    ...(canViewMessages ? (['berichten'] as const) : []),
+  ]
+  const { tab: activeTab, setTab: setActiveTab } = useDetailTab<TabId>({ ids: tabIds, defaultId: 'overzicht', aliases: TAB_ALIASES })
+  // null = read mode; otherwise the form section the edit started on.
+  const [editSection, setEditSection] = useState<string | null>(null)
+  const isEditing = editSection !== null
+  const setIsEditing = (value: boolean) => setEditSection(value ? 'klantgegevens' : null)
+  const [fiscalWarnings, setFiscalWarnings] = useState<{ key: string; items: CustomerFiscalWarning[] } | null>(null)
   const [showBlockDialog, setShowBlockDialog] = useState(false)
   const [blockReason, setBlockReason] = useState('')
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
@@ -89,6 +139,22 @@ export function CustomerDetailPage() {
       mounted = false
     }
   }, [id, canViewMessages])
+
+  // Advisory fiscal notices feed the attention strip; re-fetched when a fiscal field changes.
+  const fiscalKey = customer
+    ? `${customer.id}|${customer.vatTreatment}|${customer.vatNumber ?? ''}|${customer.countryCode ?? ''}|${customer.vatCountryCode ?? ''}|${customer.defaultLegalEntityId ?? ''}`
+    : null
+  useEffect(() => {
+    if (!customer || !fiscalKey) return
+    let mounted = true
+    getCustomerFiscalWarnings(customer.id)
+      .then((items) => { if (mounted) setFiscalWarnings({ key: fiscalKey, items }) })
+      .catch(() => { if (mounted) setFiscalWarnings({ key: fiscalKey, items: [] }) })
+    return () => {
+      mounted = false
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fiscalKey])
 
   // Stale-while-refetch: only the very first load (or a new id) shows the loading state. A
   // `reload()` after a panel save keeps the current customer on screen so the edit form, the
@@ -183,30 +249,70 @@ export function CustomerDetailPage() {
     }
   }
 
+  const attention = buildCustomerAttention(customer, fiscalWarnings?.key === fiscalKey ? fiscalWarnings.items : [], t, {
+    onComplete: canEdit ? (section) => setEditSection(section) : undefined,
+    onUnblock: canEdit ? () => setShowUnblockConfirm(true) : undefined,
+  })
+
+  // Reading order: what prices this customer (basis → toeslagen → afwijkingen), then planned
+  // changes and discounts, then technical unit/EDI mapping and invoicing config (collapsed).
+  const tariffsPanel =
+    canViewBilling && id ? (
+      <div className="customer-tariffs">
+        {canViewTariffs ? (
+          <>
+            <CustomerUnitPricingPanel customerId={id} />
+            <CustomerPriceAdjustmentsPanel customerId={id} />
+            <CombinedDiscountsPanel customerId={id} />
+          </>
+        ) : (
+          <p className="customer-form-muted">{t('customers.detail.noTariffRights')}</p>
+        )}
+        <CustomerBillingPanel customerId={id} />
+        {canViewTariffs && <CustomerUnitsPanel customerId={id} />}
+      </div>
+    ) : (
+      <p className="customer-form-muted">{t('customers.detail.noTariffRights')}</p>
+    )
+
+  const subtitle = [
+    customer.customerNumber,
+    customer.nickname,
+    customer.categoryName,
+    [customer.city, customer.countryCode].filter(Boolean).join(', ') || null,
+  ]
+    .filter(Boolean)
+    .join(' · ')
+
   return (
     <div>
       <Breadcrumbs items={[{ label: t('navigation.menu.customers'), to: '/customers' }, { label: customer.name }]} />
-      <BackButton to="/customers" label={t('customers.detail.backToCustomers')} />
       <PageHeader
         title={customer.name}
+        subtitle={subtitle}
+        badges={
+          <StatusBadges active={customer.isActive} blocked={{ isBlocked: customer.isBlocked, reason: customer.blockReason }} />
+        }
         action={
           !isEditing && (
-            <div className="customer-detail-toolbar">
-              {/* B03: one primary (edit); blocking, (de)activating and deleting live behind "Meer". */}
-              {canEdit && <Button onClick={() => setIsEditing(true)}>{t('ui.actions.edit')}</Button>}
+            <>
+              {/* B03/B17: one primary (edit); number change, blocking, (de)activating and deleting
+                  are rare and live behind "Meer", destructive last. */}
+              {canEdit && <Button onClick={() => setEditSection('klantgegevens')}>{t('ui.actions.edit')}</Button>}
               <ActionMenu
                 items={[
+                  ...(canOverrideNumber ? [{ key: 'number', label: t('customers.detail.changeNumber'), onSelect: openNumberDialog }] : []),
                   ...(canEdit
                     ? [
                         customer.isBlocked
                           ? { key: 'unblock', label: t('customers.detail.unblock'), onSelect: () => setShowUnblockConfirm(true) }
-                          : { key: 'block', label: t('customers.detail.block'), onSelect: () => setShowBlockDialog(true) },
+                          : { key: 'block', label: t('customers.detail.block'), onSelect: () => setShowBlockDialog(true), danger: true },
                       ]
                     : []),
                   ...(canDeactivate
                     ? [
                         customer.isActive
-                          ? { key: 'deactivate', label: t('customers.detail.deactivate'), onSelect: () => setShowActiveConfirm('deactivate') }
+                          ? { key: 'deactivate', label: t('customers.detail.deactivate'), onSelect: () => setShowActiveConfirm('deactivate'), danger: true }
                           : { key: 'activate', label: t('customers.detail.reactivate'), onSelect: () => setShowActiveConfirm('activate') },
                       ]
                     : []),
@@ -215,15 +321,18 @@ export function CustomerDetailPage() {
                     : []),
                 ]}
               />
-            </div>
+            </>
           )
         }
       />
+
+      {!isEditing && <AttentionList items={attention} />}
 
       {isEditing ? (
         <CustomerForm
           mode="edit"
           initial={customer}
+          initialSectionId={editSection ?? undefined}
           isSubmitting={mutations.isSubmitting}
           submitError={mutations.error}
           serverFieldErrors={mutations.fieldErrors}
@@ -239,26 +348,7 @@ export function CustomerDetailPage() {
             contactpersonen: renderContactsPanel(false),
             communicatie: id ? <CustomerCommunicationPanel customerId={id} contacts={customer.contacts} /> : null,
             historiek: id ? <CustomerHistoryPanel customerId={id} /> : null,
-            tarieven:
-              canViewBilling && id ? (
-                <>
-                  {/* Reading order: what prices this customer (basis → toeslagen → afwijkingen),
-                      then technical unit/EDI mapping, then invoicing config. */}
-                  {canViewTariffs ? (
-                    <>
-                      <CustomerUnitPricingPanel customerId={id} />
-                      <CustomerPriceAdjustmentsPanel customerId={id} />
-                      <CombinedDiscountsPanel customerId={id} />
-                      <CustomerUnitsPanel customerId={id} />
-                    </>
-                  ) : (
-                    <p className="customer-form-muted">{t('customers.detail.noTariffRights')}</p>
-                  )}
-                  <CustomerBillingPanel customerId={id} />
-                </>
-              ) : (
-                <p className="customer-form-muted">{t('customers.detail.noTariffRights')}</p>
-              ),
+            tarieven: tariffsPanel,
           }}
           onSubmit={async (values) => {
             if (!id) return
@@ -272,210 +362,65 @@ export function CustomerDetailPage() {
         />
       ) : (
         <>
-          <div className="customer-detail-tabs">
-            <Tabs
-              tabs={[
-                { id: 'general', label: t('customers.detail.tabGeneral') },
-                ...(canViewLocations ? [{ id: 'locations', label: t('customers.detail.tabLocations') }] : []),
-                { id: 'contacts', label: t('customers.contacts.title'), badge: customer.contacts.length || undefined },
-                { id: 'communication', label: t('customers.form.sections.communicatie') },
-                ...(canViewBilling ? [{ id: 'billing', label: t('customers.form.sections.tarieven') }] : []),
-                { id: 'history', label: t('customers.form.sections.historiek') },
-                ...(canViewMessages
-                  ? [{ id: 'messages', label: t('customers.detail.tabMessages'), badge: unreadMessages || undefined }]
-                  : []),
-              ]}
-              activeId={activeTab}
-              onChange={setActiveTab}
-            />
-          </div>
+          <Tabs
+            tabs={tabIds.map((tabId) => ({
+              id: tabId,
+              label: t(TAB_LABEL_KEYS[tabId]),
+              badge:
+                tabId === 'contactpersonen'
+                  ? customer.contacts.length || undefined
+                  : tabId === 'berichten'
+                    ? unreadMessages || undefined
+                    : undefined,
+            }))}
+            activeId={activeTab}
+            onChange={(next) => setActiveTab(next as TabId)}
+          />
 
-          {activeTab === 'general' && (
-            <TabPanel tabId="general">
-              <div className="customer-detail-layout">
-            <div className="customer-summary">
-              <h3>{t('customers.form.sections.klantgegevens')}</h3>
-              <dl>
-                <dt>{t('customers.fields.customerNumber')}</dt>
-                <dd>
-                  <span className="customer-number-line">
-                    <code>{customer.customerNumber}</code>
-                    {canOverrideNumber && (
-                      <Button variant="secondary" onClick={openNumberDialog}>
-                        {t('customers.detail.changeNumber')}
-                      </Button>
-                    )}
-                  </span>
-                </dd>
-                <dt>{t('customers.detail.statusLabel')}</dt>
-                <dd>
-                  <StatusBadges
-                    active={customer.isActive}
-                    blocked={{ isBlocked: customer.isBlocked, reason: customer.blockReason }}
-                  />
-                </dd>
-                {customer.nickname && (
-                  <>
-                    <dt>{t('customers.fields.nickname')}</dt>
-                    <dd>{customer.nickname}</dd>
-                  </>
-                )}
-                {customer.categoryName && (
-                  <>
-                    <dt>{t('customers.form.category')}</dt>
-                    <dd>{customer.categoryName}</dd>
-                  </>
-                )}
-                <dt>{t('customers.detail.addressLabel')}</dt>
-                <dd>
-                  {[customer.street, customer.houseNumber].filter(Boolean).join(' ')}
-                  {customer.city ? `, ${[customer.postalCode, customer.city].filter(Boolean).join(' ')}` : ''}
-                  {customer.countryCode ? ` (${customer.countryCode})` : ''}
-                </dd>
-                {customer.email && (
-                  <>
-                    <dt>{t('customers.contacts.email')}</dt>
-                    <dd>{customer.email}</dd>
-                  </>
-                )}
-                {customer.phoneNumber && (
-                  <>
-                    <dt>{t('customers.contacts.phone')}</dt>
-                    <dd>{customer.phoneNumber}</dd>
-                  </>
-                )}
-                <dt>{t('customers.detail.paymentTermLabel')}</dt>
-                <dd>{t('customers.detail.paymentTermDays', { days: customer.paymentTermDays })}</dd>
-                {customer.notes && (
-                  <>
-                    <dt>{t('customers.contacts.notes')}</dt>
-                    <dd>{customer.notes}</dd>
-                  </>
-                )}
-              </dl>
-            </div>
-
-            <div className="customer-summary customer-vat-summary">
-              <h3>{t('customers.form.sections.fiscaal')}</h3>
-              <dl>
-                <dt>{t('customers.fields.vatNumber')}</dt>
-                <dd>{customer.vatNumber ?? '—'}</dd>
-                {customer.companyNumber && (
-                  <>
-                    <dt>{t('customers.fields.companyNumber')}</dt>
-                    <dd>{customer.companyNumber}</dd>
-                  </>
-                )}
-                <dt>{t('customers.form.vatTreatment')}</dt>
-                <dd>{t(VAT_TREATMENT_LABEL_KEYS[customer.vatTreatment])}</dd>
-                <dt>{t('customers.detail.defaultRateLabel')}</dt>
-                <dd>
-                  {customer.defaultVatRatePercent !== null
-                    ? `${customer.defaultVatRatePercent}%`
-                    : t('customers.form.companyDefault')}
-                </dd>
-                {customer.vatCountryCode && (
-                  <>
-                    <dt>{t('customers.fields.vatCountryCode')}</dt>
-                    <dd>{customer.vatCountryCode}</dd>
-                  </>
-                )}
-                <dt>Peppol</dt>
-                <dd>
-                  {customer.peppolId
-                    ? `${customer.peppolScheme ?? '?'}:${customer.peppolId}`
-                    : t('customers.detail.peppolNotConfigured')}
-                </dd>
-                {customer.iban && (
-                  <>
-                    <dt>{t('customers.fields.iban')}</dt>
-                    <dd>{customer.iban}{customer.bic ? ` (${customer.bic})` : ''}</dd>
-                  </>
-                )}
-                {customer.currencyCode && customer.currencyCode !== 'EUR' && (
-                  <>
-                    <dt>{t('customers.fields.currencyCode')}</dt>
-                    <dd>{customer.currencyCode}</dd>
-                  </>
-                )}
-                {customer.invoiceEmail && (
-                  <>
-                    <dt>{t('customers.form.invoiceEmail')}</dt>
-                    <dd>{customer.invoiceEmail}</dd>
-                  </>
-                )}
-                {(customer.customerReferenceRequired || customer.purchaseOrderRequired || customer.signedDeliveryNoteRequired) && (
-                  <>
-                    <dt>{t('customers.detail.requirementsLabel')}</dt>
-                    <dd>
-                      {[
-                        customer.customerReferenceRequired ? t('customers.detail.requirementCustomerReference') : null,
-                        customer.purchaseOrderRequired ? t('customers.detail.requirementPurchaseOrder') : null,
-                        customer.signedDeliveryNoteRequired ? t('customers.detail.requirementSignedNote') : null,
-                      ]
-                        .filter(Boolean)
-                        .join(' · ')}
-                    </dd>
-                  </>
-                )}
-                {customer.vatNotes && (
-                  <>
-                    <dt>{t('customers.form.vatNotes')}</dt>
-                    <dd>{customer.vatNotes}</dd>
-                  </>
-                )}
-              </dl>
-              <CustomerFiscalWarnings
-                customerId={customer.id}
-                countryCode={customer.vatCountryCode ?? customer.countryCode}
-                refreshKey={`${customer.vatTreatment}|${customer.vatNumber ?? ''}|${customer.countryCode ?? ''}|${customer.vatCountryCode ?? ''}|${customer.defaultLegalEntityId ?? ''}`}
+          {activeTab === 'overzicht' && (
+            <TabPanel tabId="overzicht">
+              <CustomerOverview
+                customer={customer}
+                onEdit={canEdit ? (section) => setEditSection(section) : undefined}
+                canViewDossiers={canViewDossiers}
+                canViewInvoices={canViewInvoices}
               />
-            </div>
-              </div>
-              {canViewOrders && id && <CustomerDayDocumentsCard customerId={id} />}
             </TabPanel>
           )}
 
-          {activeTab === 'contacts' && <TabPanel tabId="contacts">{renderContactsPanel(true)}</TabPanel>}
+          {activeTab === 'contactpersonen' && <TabPanel tabId="contactpersonen">{renderContactsPanel(true)}</TabPanel>}
 
-          {activeTab === 'locations' && canViewLocations && id && (
-            <TabPanel tabId="locations">
+          {activeTab === 'adressen' && id && (
+            <TabPanel tabId="adressen">
               <CustomerAddressesPanel customerId={id} />
             </TabPanel>
           )}
 
-          {activeTab === 'communication' && id && (
-            <TabPanel tabId="communication">
+          {activeTab === 'communicatie' && id && (
+            <TabPanel tabId="communicatie">
               <CustomerCommunicationPanel customerId={id} contacts={customer.contacts} />
             </TabPanel>
           )}
 
-          {activeTab === 'billing' && canViewBilling && id && (
-            <TabPanel tabId="billing">
-              {/* Reading order: what prices this customer (basis → toeslagen → afwijkingen),
-                  then technical unit/EDI mapping, then invoicing config. */}
-              {canViewTariffs ? (
-                <>
-                  <CustomerUnitPricingPanel customerId={id} />
-                  <CustomerPriceAdjustmentsPanel customerId={id} />
-                  <CombinedDiscountsPanel customerId={id} />
-                  <CustomerUnitsPanel customerId={id} />
-                </>
-              ) : (
-                <p className="customer-form-muted">{t('customers.detail.noTariffRights')}</p>
-              )}
-              <CustomerBillingPanel customerId={id} />
+          {activeTab === 'tarieven' && <TabPanel tabId="tarieven">{tariffsPanel}</TabPanel>}
+
+          {/* "Documenten per dag" is an operational batch action (preview + download of one
+              delivery day's delivery notes/CMRs for this customer); it moved off the overview
+              into its own section so it no longer dominates the customer's identity. */}
+          {activeTab === 'documenten' && id && (
+            <TabPanel tabId="documenten">
+              <CustomerDayDocumentsCard customerId={id} />
             </TabPanel>
           )}
 
-          {activeTab === 'history' && id && (
-            <TabPanel tabId="history">
+          {activeTab === 'historiek' && id && (
+            <TabPanel tabId="historiek">
               <CustomerHistoryPanel customerId={id} />
             </TabPanel>
           )}
 
-          {activeTab === 'messages' && canViewMessages && id && (
-            <TabPanel tabId="messages">
+          {activeTab === 'berichten' && id && (
+            <TabPanel tabId="berichten">
               <CustomerMessagesPanel customerId={id} onMarkedRead={() => setUnreadMessages(0)} />
             </TabPanel>
           )}

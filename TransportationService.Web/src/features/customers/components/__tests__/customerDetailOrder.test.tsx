@@ -140,11 +140,6 @@ describe('customer detail — fiscal card alignment (1D)', () => {
     expect(dl).toMatch(/grid-template-columns:\s*var\(--customer-summary-label\)/)
   })
 
-  it('does not offset the fiscal card from its grid sibling', () => {
-    const card = ruleBody(customersCss, '.customer-vat-summary')
-    expect(card).not.toMatch(/margin-top:\s*20px/)
-  })
-
   it('styles the card heading once for every summary card', () => {
     expect(ruleBody(customersCss, '.customer-summary h3')).not.toBe('')
   })
