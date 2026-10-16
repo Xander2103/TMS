@@ -92,6 +92,20 @@ describe('SearchableSelect', () => {
     expect((input as HTMLInputElement).value).toBe('Frankrijk (Frank)')
   })
 
+  it('an exact identifier keyword (e.g. customer number) finds the record and offers no duplicate create (M2)', async () => {
+    const user = userEvent.setup()
+    const create = vi.fn(async () => null)
+    render(
+      <ControlledSelect
+        options={[{ value: 'k5', label: 'TEST TRANSPORT Klant', meta: 'KL-0005', keywords: 'KL-0005' }]}
+        onCreate={{ label: (q) => `"${q}" als nieuwe klant toevoegen`, create, alwaysShow: true, emptyQueryLabel: '+ Nieuwe klant' }}
+      />,
+    )
+    await user.type(screen.getByRole('combobox', { name: 'Land' }), 'kl-0005')
+    expect(screen.getByRole('option', { name: /TEST TRANSPORT Klant/ })).toBeInTheDocument()
+    expect(screen.queryByRole('option', { name: /als nieuwe klant toevoegen/ })).not.toBeInTheDocument()
+  })
+
   it('hides the create row while the query is empty unless alwaysShow is set', async () => {
     const user = userEvent.setup()
     const create = vi.fn(async () => null)

@@ -131,8 +131,9 @@ export function NewDossierPage() {
   // Customers created from this page come first (the one-shot list of 200 never re-fetches).
   const customerOptions = useMemo<SearchableSelectOption[]>(
     () => [
-      ...createdCustomers.filter((created) => !customers.some((c) => c.id === created.id)).map((c) => ({ value: c.id, label: c.name, meta: c.customerNumber })),
-      ...customers.map((c) => ({ value: c.id, label: c.name })),
+      // M2: the customer number is shown and searchable ("KL-0005" finds the customer).
+      ...createdCustomers.filter((created) => !customers.some((c) => c.id === created.id)).map((c) => ({ value: c.id, label: c.name, meta: c.customerNumber, keywords: c.customerNumber ?? undefined })),
+      ...customers.map((c) => ({ value: c.id, label: c.name, meta: c.customerNumber ?? undefined, keywords: c.customerNumber ?? undefined })),
     ],
     [customers, createdCustomers],
   )

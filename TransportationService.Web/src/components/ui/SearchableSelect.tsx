@@ -256,7 +256,12 @@ export function SearchableSelect({
   const showCreateRow =
     createRowReady &&
     (trimmedQuery.length > 0
-      ? !filtered.some((o) => o.label.toLowerCase() === trimmedQuery.toLowerCase())
+      ? !filtered.some((o) => {
+          // An exact name OR an exact identifier keyword (e.g. customer number "KL-0005") means
+          // the record exists — never offer to create a duplicate of it (transport acceptance M2).
+          const q = trimmedQuery.toLowerCase()
+          return o.label.toLowerCase() === q || (o.keywords ?? '').toLowerCase().split(/\s+/).includes(q)
+        })
       : Boolean(onCreate?.alwaysShow))
   // Empty-query shortcut row ("+ Nieuwe …") vs. the query-driven "add \"query\"" row.
   const createRowLabel = !onCreate
