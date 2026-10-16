@@ -31,6 +31,7 @@ public static class DossierTimelineLabels
         "route.order_missing" => "Transportactiviteit zonder transportopdracht",
         "route.date_missing" => "Route zonder datum",
         "order.not_completed" => "Opdracht nog niet uitgevoerd",
+        "order.awaiting_review" => "Klantaanvraag nog niet beoordeeld",
         "delivery.not_completed" => "Levering niet volledig afgerond",
         "delivery.pod_missing" or "pod.missing" => "Afleverbewijs (POD) ontbreekt",
         "nothing.completed" => "Nog niets uitgevoerd",

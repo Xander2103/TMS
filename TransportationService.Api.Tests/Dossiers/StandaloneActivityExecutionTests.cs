@@ -210,6 +210,21 @@ public class StandaloneActivityExecutionTests
     }
 
     [Fact]
+    public async Task ACustomerRequestAwaitingReview_BlocksEvenManualConfirmation()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var dossier = await h.NewDossierAsync();
+        await h.AddOrderAsync(dossier.Id, TransportOrderStatus.Submitted);
+
+        var evaluation = (await h.Lifecycle().EvaluateAsync(dossier.Id, CancellationToken.None))!;
+        Assert.Contains(evaluation.Blockers, b => b.Code == "order.awaiting_review");
+        Assert.False(evaluation.CanConfirmManually);
+        await Assert.ThrowsAsync<DomainValidationException>(() => h.Lifecycle().ConfirmAsync(
+            dossier.Id, new ConfirmDossierRequest("historisch", AcknowledgeWarnings: true), CancellationToken.None));
+    }
+
+    [Fact]
     public async Task ACancelledStandaloneActivity_CountsAsResolved_LikeACancelledOrder()
     {
         var h = await SeedAsync();

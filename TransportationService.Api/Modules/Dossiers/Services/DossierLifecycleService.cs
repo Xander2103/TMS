@@ -150,6 +150,15 @@ public class DossierLifecycleService : IDossierLifecycleService
                 .Select(o => new { o.Id, o.OrderNumber, o.Status, o.InvoiceReadinessReasons, o.CraneJobKind })
                 .ToListAsync(cancellationToken);
 
+        // Transport acceptance M4: a customer request still awaiting the planner's review
+        // (Accepteren / Info opvragen / Afwijzen) cannot be confirmed away — also not manually.
+        foreach (var submitted in orders.Where(o => o.Status == TransportOrderStatus.Submitted))
+        {
+            checks.Add(new Check("order.awaiting_review",
+                $"Opdracht {submitted.OrderNumber} is een klantaanvraag die nog beoordeeld moet worden (accepteren, info opvragen of afwijzen).",
+                OrderId: submitted.Id, BlocksManual: true));
+        }
+
         foreach (var activity in activities)
         {
             if (activity.HasStops)
