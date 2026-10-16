@@ -414,6 +414,7 @@
   },
   "detail": {
     "loadFailed": "Het dossier kon niet worden geladen.",
+    "notFound": "Dossier niet gevonden.",
     "loading": "Dossier laden...",
     "back": "Terug naar dossiers",
     "conflict": "⚠ Dit dossier is intussen gewijzigd door een collega. Uw wijzigingen zijn niet opgeslagen.",
@@ -679,6 +680,11 @@
     "reasonRequired": "Geef een reden op.",
     "reopenShort": "Heropenen",
     "conflict": "Het dossier is intussen gewijzigd. De lijst is vernieuwd; controleer het dossier en probeer opnieuw."
+  },
+  "portalReview": {
+    "heading": "{number} · ingediend via het klantportaal",
+    "openOrder": "Opdracht {number} openen",
+    "confirmBlocked": "Beoordeel eerst de klantportaal-aanvraag ({numbers}) hieronder; daarna kan het dossier bevestigd worden."
   },
   "history": {
     "ConfirmedManually": "Handmatig bevestigd",

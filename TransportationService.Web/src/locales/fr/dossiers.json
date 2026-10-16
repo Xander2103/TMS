@@ -414,6 +414,7 @@
   },
   "detail": {
     "loadFailed": "Le dossier n'a pas pu être chargé.",
+    "notFound": "Dossier introuvable.",
     "loading": "Chargement du dossier...",
     "back": "Retour aux dossiers",
     "conflict": "⚠ Ce dossier a été modifié entre-temps par un collègue. Vos modifications n'ont pas été enregistrées.",
@@ -679,6 +680,11 @@
     "reasonRequired": "Indiquez un motif.",
     "reopenShort": "Rouvrir",
     "conflict": "Le dossier a été modifié entre-temps. La liste a été actualisée ; vérifiez le dossier et réessayez."
+  },
+  "portalReview": {
+    "heading": "{number} · soumis via le portail client",
+    "openOrder": "Ouvrir l'ordre {number}",
+    "confirmBlocked": "Évaluez d'abord la demande du portail client ({numbers}) ci-dessous ; ensuite le dossier pourra être confirmé."
   },
   "history": {
     "ConfirmedManually": "Confirmé manuellement",

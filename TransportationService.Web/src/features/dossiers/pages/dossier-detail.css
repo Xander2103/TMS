@@ -86,6 +86,25 @@
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.18);
 }
 
+/* M4: Bevestigen blocked while a portal request awaits review — the reason sits right under it. */
+.dossier-header-confirm-blocked {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  max-width: 280px;
+}
+
+.dossier-header-hint {
+  color: var(--text-muted);
+  font-size: 12px;
+  text-align: right;
+}
+
+.dossier-portal-review .link-button {
+  font-size: 13px;
+}
+
 @media (max-width: 640px) {
   .dossier-header-actions {
     width: 100%;
@@ -93,6 +112,16 @@
 
   .dossier-header-actions .dossier-header-primary {
     flex: 1 1 100%;
+  }
+
+  .dossier-header-confirm-blocked {
+    width: 100%;
+    max-width: none;
+    align-items: stretch;
+  }
+
+  .dossier-header-hint {
+    text-align: left;
   }
 }
 

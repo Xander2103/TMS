@@ -13,6 +13,7 @@ import type { LegalEntityOption } from '../../legal-entities/types'
 import { changeDossierLegalEntity, getDossierLegalEntityImpact } from '../api/dossiersApi'
 import type { DossierLegalEntityChangeImpact } from '../api/dossiersApi'
 import { dossierLifecycleFacts, formatDate } from '../dossierDisplay'
+import { submittedPortalOrders } from '../portalReview'
 import { DOSSIER_STATUS_LABELS, DOSSIER_STATUS_TONE, type DossierDetail } from '../types'
 
 export interface DossierMenuAction {
@@ -134,6 +135,7 @@ export function DossierHeader({ dossier, canManage, onAddActivity, onConfirm, me
     dossier.dossierDate ? formatDate(dossier.dossierDate) : null,
   ].filter((part): part is string => part !== null)
   const isOpen = dossier.status === 'Open'
+  const pendingReview = submittedPortalOrders(dossier)
 
   return (
     <header className="dossier-header">
@@ -196,7 +198,19 @@ export function DossierHeader({ dossier, canManage, onAddActivity, onConfirm, me
             )}
           </div>
         ) : null}
-        {canManage && isOpen && (
+        {canManage && isOpen && pendingReview.length > 0 && (
+          // M4: "Bevestigen" confirms the DOSSIER; with a portal request still unreviewed it would
+          // be the wrong button, so it is blocked with the reason and the review panel below.
+          <span className="dossier-header-confirm-blocked">
+            <Button className="dossier-header-primary" disabled aria-describedby="dossier-confirm-blocked-reason">
+              {t('dossiers.lifecycle.confirm')}
+            </Button>
+            <small id="dossier-confirm-blocked-reason" className="dossier-header-hint">
+              {t('dossiers.portalReview.confirmBlocked', { numbers: pendingReview.map((o) => o.orderNumber).join(', ') })}
+            </small>
+          </span>
+        )}
+        {canManage && isOpen && pendingReview.length === 0 && (
           <Button className="dossier-header-primary" onClick={onConfirm}>
             {t('dossiers.lifecycle.confirm')}
           </Button>

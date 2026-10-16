@@ -8,8 +8,11 @@ import type { TransportOrderDetail } from '../types'
 import './order-portal-review-panel.css'
 
 interface OrderPortalReviewPanelProps {
-  order: TransportOrderDetail
+  /** Only the id and status are needed, so the dossier workspace can host it for a linked order. */
+  order: Pick<TransportOrderDetail, 'id' | 'status'>
   onReviewed: (updated: TransportOrderDetail) => void
+  /** Overrides the heading (the dossier workspace names the order the review is about). */
+  heading?: string
 }
 
 const DIALOG_COPY: Record<Exclude<PortalReviewAction, 'Accept'>, { title: string; label: string; placeholder: string }> = {
@@ -25,8 +28,12 @@ const DIALOG_COPY: Record<Exclude<PortalReviewAction, 'Accept'>, { title: string
   },
 }
 
-/** Internal order-detail panel: accept/reject/request-info on a customer-submitted order. */
-export function OrderPortalReviewPanel({ order, onReviewed }: OrderPortalReviewPanelProps) {
+/**
+ * Internal accept/reject/request-info on a customer-submitted order (POST
+ * /api/transport-orders/{id}/portal-review). Hosted on the order detail AND in the dossier
+ * workspace (M4) — one component, one endpoint, no duplicated review logic.
+ */
+export function OrderPortalReviewPanel({ order, onReviewed, heading }: OrderPortalReviewPanelProps) {
   const { showSuccess, showError } = useToast()
   const [dialog, setDialog] = useState<Exclude<PortalReviewAction, 'Accept'> | null>(null)
   const [reason, setReason] = useState('')
@@ -67,7 +74,7 @@ export function OrderPortalReviewPanel({ order, onReviewed }: OrderPortalReviewP
 
   return (
     <section className="opr-panel" aria-label="Klantportaal-beoordeling">
-      <h2>Ingediend via het klantportaal</h2>
+      <h2>{heading ?? 'Ingediend via het klantportaal'}</h2>
       <p>Beoordeel deze opdracht: accepteer, weiger, of vraag meer informatie op bij de klant.</p>
       <div className="opr-actions">
         <Button onClick={() => void handleAccept()} disabled={busy}>
@@ -97,9 +104,9 @@ export function OrderPortalReviewPanel({ order, onReviewed }: OrderPortalReviewP
             </>
           }
         >
-          <FormField label={DIALOG_COPY[dialog].label} htmlFor="opr-reason" required>
+          <FormField label={DIALOG_COPY[dialog].label} htmlFor={`opr-reason-${order.id}`} required>
             <textarea
-              id="opr-reason"
+              id={`opr-reason-${order.id}`}
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               placeholder={DIALOG_COPY[dialog].placeholder}

@@ -414,6 +414,7 @@
   },
   "detail": {
     "loadFailed": "The file could not be loaded.",
+    "notFound": "Dossier not found.",
     "loading": "Loading file...",
     "back": "Back to files",
     "conflict": "⚠ This file has meanwhile been changed by a colleague. Your changes were not saved.",
@@ -679,6 +680,11 @@
     "reasonRequired": "Enter a reason.",
     "reopenShort": "Reopen",
     "conflict": "The file was changed in the meantime. The list has been refreshed; check the file and try again."
+  },
+  "portalReview": {
+    "heading": "{number} · submitted via the customer portal",
+    "openOrder": "Open order {number}",
+    "confirmBlocked": "Review the customer portal request ({numbers}) below first; then the dossier can be confirmed."
   },
   "history": {
     "ConfirmedManually": "Confirmed manually",

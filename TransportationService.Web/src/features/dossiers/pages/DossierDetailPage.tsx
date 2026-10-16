@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } fro
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import { LoadingState } from '../../../components/feedback/LoadingState'
 import { ErrorState } from '../../../components/feedback/ErrorState'
+import { isNotFoundError } from '../../../api/notFound'
 import { BackButton } from '../../../components/ui/BackButton'
 import { Button } from '../../../components/ui/Button'
 import { FormField } from '../../../components/ui/FormField'
@@ -31,6 +32,7 @@ import { ActivityDrawer } from '../components/ActivityDrawer'
 import { AddActivityDialog } from '../components/AddActivityDialog'
 import { AttentionPanel } from '../components/AttentionPanel'
 import { DossierConfirmDialog } from '../components/DossierConfirmDialog'
+import { DossierPortalReview } from '../components/DossierPortalReview'
 import { DossierHeader, type DossierMenuAction } from '../components/DossierHeader'
 import { DossierCustomerChangeDialog } from '../components/DossierCustomerChangeDialog'
 import { AddRelationDialog, LinkOrderDialog } from '../components/DossierLinkDialogs'
@@ -96,6 +98,7 @@ function DossierDetailContent() {
 
   const [dossier, setDossier] = useState<DossierDetail | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [loadNotFound, setLoadNotFound] = useState(false)
   /** 409-payload van een collega-wijziging; [Herladen] neemt deze staat over. */
   const [conflict, setConflict] = useState<DossierDetail | null>(null)
 
@@ -178,7 +181,10 @@ function DossierDetailContent() {
           route: `/dossiers/${data.id}`,
         })
       })
-      .catch(() => setLoadError(t('dossiers.detail.loadFailed')))
+      .catch((err: unknown) => {
+        setLoadNotFound(isNotFoundError(err))
+        setLoadError(t('dossiers.detail.loadFailed'))
+      })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, applyDossier])
 
@@ -295,6 +301,7 @@ function DossierDetailContent() {
       .catch(() => setUserOptions([]))
   }, [editing])
 
+  if (loadError && loadNotFound) return <ErrorState message={t('dossiers.detail.notFound')} backTo="/dossiers" />
   if (loadError) return <ErrorState message={loadError} onRetry={load} backTo="/dossiers" />
   if (!dossier || !id) return <LoadingState message={t('dossiers.detail.loading')} />
   // An unknown or unavailable segment lands on the overview with a clean URL.
@@ -556,6 +563,8 @@ function DossierDetailContent() {
             </Button>
           </div>
         )}
+
+        {isOpen && <DossierPortalReview dossier={dossier} onReviewed={load} />}
 
         <AttentionPanel issues={dossier.readiness} activities={orderedActivities} onNavigate={goToSection} />
 
