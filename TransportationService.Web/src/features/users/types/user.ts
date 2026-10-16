@@ -13,6 +13,8 @@ export interface User {
   isActive: boolean
   isBlocked: boolean
   roles: RoleSummary[]
+  /** False until a password was chosen via the activation link (cannot sign in yet). */
+  isActivated?: boolean
 }
 
 export interface CreateUserInput {

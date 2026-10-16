@@ -64,6 +64,25 @@
       "systemRole": "Systeemrol",
       "saving": "Opslaan...",
       "save": "Rollen opslaan"
+    },
+    "activation": {
+      "createdTitle": "Gebruiker aangemaakt",
+      "createdBody": "Het account voor {name} is aangemaakt maar kan pas inloggen na activatie. Bezorg de activatielink hieronder: die wordt maar één keer getoond, is 72 uur geldig en kan maar één keer gebruikt worden. De gebruiker kiest er zelf een wachtwoord mee.",
+      "link": "Activatielink",
+      "copy": "Link kopiëren",
+      "copied": "Link gekopieerd.",
+      "toUser": "Naar de gebruiker",
+      "another": "Nog een gebruiker aanmaken",
+      "noPermission": "Het account voor {name} is aangemaakt maar nog niet geactiveerd. Een beheerder met rechten om gebruikers te bewerken maakt de activatielink aan op de gebruikersfiche.",
+      "startFailed": "Het account is aangemaakt, maar de activatielink kon niet worden gemaakt. Maak de link aan op de gebruikersfiche.",
+      "sectionTitle": "Toegang",
+      "pending": "Dit account is nog niet geactiveerd: de gebruiker kan pas inloggen nadat die via de activatielink een wachtwoord heeft gekozen.",
+      "activated": "Dit account is geactiveerd.",
+      "start": "Activatielink maken",
+      "restart": "Nieuwe link om een wachtwoord in te stellen",
+      "starting": "Link maken…",
+      "restartHint": "Een nieuwe link maakt eerdere, ongebruikte links ongeldig.",
+      "notActivated": "Nog niet geactiveerd"
     }
   },
   "roles": {

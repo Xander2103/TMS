@@ -8,3 +8,20 @@
 .user-form input:disabled {
   opacity: 0.6;
 }
+
+/* H7: one-time activation link next to its copy action; wraps under 480px. */
+.user-activation-link {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  max-width: 640px;
+}
+
+.user-activation-link input {
+  flex: 1 1 280px;
+  min-width: 0;
+}
+
+.user-access-section p {
+  max-width: 640px;
+}

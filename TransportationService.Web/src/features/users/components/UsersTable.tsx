@@ -51,6 +51,9 @@ export function UsersTable({ users }: UsersTableProps) {
             <Badge tone="neutral">{t('usersRoles.users.table.inactive')}</Badge>
           )}
           {user.isBlocked && <Badge tone="danger">{t('usersRoles.users.table.blocked')}</Badge>}
+          {user.isActivated === false && (
+            <Badge tone="warning">{t('usersRoles.users.activation.notActivated')}</Badge>
+          )}
         </span>
       ),
     },

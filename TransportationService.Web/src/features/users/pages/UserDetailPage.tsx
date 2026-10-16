@@ -10,6 +10,9 @@ import { RoleAssignmentPanel } from '../components/RoleAssignmentPanel'
 import { useLocale } from '../../../i18n/localeContext'
 import { useUser } from '../hooks/useUser'
 import { useUserMutations } from '../hooks/useUserMutations'
+import { useAuth } from '../../auth/authContextValue'
+import { startUserActivation, type StartedActivation } from '../api/usersApi'
+import { ActivationLinkField } from '../components/ActivationLinkField'
 
 export function UserDetailPage() {
   const { t } = useLocale()
@@ -18,6 +21,24 @@ export function UserDetailPage() {
   const { isSubmitting, setActive, setBlocked } = useUserMutations()
   // B03: deactivating and blocking ask through the app's own dialog, not window.confirm.
   const [confirm, setConfirm] = useState<'deactivate' | 'block' | null>(null)
+  const { hasPermission } = useAuth()
+  const canStartActivation = hasPermission('users.edit')
+  const [activation, setActivation] = useState<StartedActivation | null>(null)
+  const [activationBusy, setActivationBusy] = useState(false)
+  const [activationFailed, setActivationFailed] = useState(false)
+
+  async function createActivationLink() {
+    if (!user) return
+    setActivationBusy(true)
+    setActivationFailed(false)
+    try {
+      setActivation(await startUserActivation(user.id))
+    } catch {
+      setActivationFailed(true)
+    } finally {
+      setActivationBusy(false)
+    }
+  }
 
   async function toggleActive() {
     if (!user) return
@@ -68,6 +89,32 @@ export function UserDetailPage() {
             {user.isBlocked ? t('usersRoles.users.detail.unblock') : t('usersRoles.users.detail.block')}
           </Button>
         </div>
+      </section>
+
+      {/* H7: every account has a visible next step to sign in — the one-time activation link. */}
+      <section className="user-access-section">
+        <h3>{t('usersRoles.users.activation.sectionTitle')}</h3>
+        <p>
+          {user.isActivated === false
+            ? t('usersRoles.users.activation.pending')
+            : t('usersRoles.users.activation.activated')}
+        </p>
+        {activation && <ActivationLinkField token={activation.token} />}
+        {activationFailed && <p role="alert" className="field-error">{t('usersRoles.users.mutations.submitFailed')}</p>}
+        {canStartActivation && !activation && (
+          <div className="form-actions">
+            <Button variant="secondary" onClick={() => void createActivationLink()} disabled={activationBusy}>
+              {activationBusy
+                ? t('usersRoles.users.activation.starting')
+                : user.isActivated === false
+                  ? t('usersRoles.users.activation.start')
+                  : t('usersRoles.users.activation.restart')}
+            </Button>
+          </div>
+        )}
+        {canStartActivation && !activation && user.isActivated !== false && (
+          <p className="form-hint">{t('usersRoles.users.activation.restartHint')}</p>
+        )}
       </section>
 
       <section>

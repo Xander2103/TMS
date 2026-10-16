@@ -64,6 +64,25 @@
       "systemRole": "Rôle système",
       "saving": "Enregistrement...",
       "save": "Enregistrer les rôles"
+    },
+    "activation": {
+      "createdTitle": "Utilisateur créé",
+      "createdBody": "Le compte de {name} a été créé mais ne peut se connecter qu’après activation. Transmettez le lien d’activation ci-dessous : il n’est affiché qu’une fois, valable 72 heures et utilisable une seule fois. L’utilisateur y choisit lui-même son mot de passe.",
+      "link": "Lien d’activation",
+      "copy": "Copier le lien",
+      "copied": "Lien copié.",
+      "toUser": "Vers l’utilisateur",
+      "another": "Créer un autre utilisateur",
+      "noPermission": "Le compte de {name} a été créé mais n’est pas encore activé. Un administrateur autorisé à modifier les utilisateurs crée le lien d’activation sur la fiche utilisateur.",
+      "startFailed": "Le compte a été créé, mais le lien d’activation n’a pas pu être généré. Créez-le sur la fiche utilisateur.",
+      "sectionTitle": "Accès",
+      "pending": "Ce compte n’est pas encore activé : l’utilisateur ne peut se connecter qu’après avoir choisi un mot de passe via le lien d’activation.",
+      "activated": "Ce compte est activé.",
+      "start": "Créer un lien d’activation",
+      "restart": "Nouveau lien pour définir un mot de passe",
+      "starting": "Création du lien…",
+      "restartHint": "Un nouveau lien invalide les liens précédents non utilisés.",
+      "notActivated": "Pas encore activé"
     }
   },
   "roles": {

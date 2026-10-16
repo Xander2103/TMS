@@ -455,7 +455,8 @@ public class UserService : IUserService
         return users
             .Select(u => new UserDto(
                 u.Id, u.Email, u.FirstName, u.LastName, u.EmployeeId, u.CustomerId, u.IsActive, u.IsBlocked,
-                roleRows.Where(r => r.UserId == u.Id).Select(r => r.RoleSummary).ToList()))
+                roleRows.Where(r => r.UserId == u.Id).Select(r => r.RoleSummary).ToList(),
+                IsActivated: !string.IsNullOrEmpty(u.PasswordHash)))
             .ToList();
     }
 }

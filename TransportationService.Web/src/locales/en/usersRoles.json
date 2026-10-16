@@ -64,6 +64,25 @@
       "systemRole": "System role",
       "saving": "Saving...",
       "save": "Save roles"
+    },
+    "activation": {
+      "createdTitle": "User created",
+      "createdBody": "The account for {name} has been created but can only sign in after activation. Hand over the activation link below: it is shown only once, valid for 72 hours and usable once. The user chooses their own password with it.",
+      "link": "Activation link",
+      "copy": "Copy link",
+      "copied": "Link copied.",
+      "toUser": "Go to user",
+      "another": "Create another user",
+      "noPermission": "The account for {name} has been created but is not activated yet. An administrator allowed to edit users creates the activation link on the user page.",
+      "startFailed": "The account was created, but the activation link could not be made. Create it on the user page.",
+      "sectionTitle": "Access",
+      "pending": "This account is not activated yet: the user can only sign in after choosing a password via the activation link.",
+      "activated": "This account is activated.",
+      "start": "Create activation link",
+      "restart": "New link to set a password",
+      "starting": "Creating link…",
+      "restartHint": "A new link invalidates earlier unused links.",
+      "notActivated": "Not activated yet"
     }
   },
   "roles": {

@@ -31,3 +31,17 @@ export function assignUserRoles(id: string, roleIds: string[]): Promise<User> {
 }
 
 export { getRoles }
+
+export interface StartedActivation {
+  token: string
+  expiresAtUtc: string
+}
+
+/** One-time activation token (shown once, 72h, single use) — requires users.edit. */
+export function startUserActivation(id: string): Promise<StartedActivation> {
+  return apiClient.postJson<StartedActivation, object>(`/api/users/${id}/activation`, {})
+}
+
+export function activationUrl(token: string): string {
+  return `${window.location.origin}/reset-password?token=${encodeURIComponent(token)}`
+}
