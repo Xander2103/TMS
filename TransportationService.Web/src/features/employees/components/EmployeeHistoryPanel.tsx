@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { HistoryTimeline, type HistoryItem } from '../../../components/ui/HistoryTimeline'
 import { getEmployeeHistory, type EmployeeHistoryPage } from '../api/employeeHistoryApi'
 import { useLocale } from '../../../i18n/localeContext'
+import { useAuth } from '../../auth/authContextValue'
 
 const PAGE_SIZE = 25
 
@@ -21,6 +22,15 @@ const CATEGORY_FILTERS = [
   'leave_balance',
   'driver_profile',
 ] as const
+
+/**
+ * Categories the server only returns with an HR permission (HR acceptance B2): without it the
+ * chip would always be empty, so it is not offered at all.
+ */
+const CATEGORY_PERMISSION: Partial<Record<(typeof CATEGORY_FILTERS)[number], string>> = {
+  notes: 'employee_notes.view',
+  leave_balance: 'leave_balances.view',
+}
 
 /** Category chip tones (keyed by category code) — informational only, no strict semantics. */
 const CATEGORY_TONES: Record<string, 'info' | 'neutral' | 'success' | 'warning'> = {
@@ -43,6 +53,11 @@ const CATEGORY_TONES: Record<string, 'info' | 'neutral' | 'success' | 'warning'>
  */
 export function EmployeeHistoryPanel({ employeeId }: { employeeId: string }) {
   const { t } = useLocale()
+  const { hasPermission } = useAuth()
+  const visibleFilters = CATEGORY_FILTERS.filter((filter) => {
+    const required = CATEGORY_PERMISSION[filter]
+    return !required || hasPermission(required)
+  })
   const [data, setData] = useState<EmployeeHistoryPage | null>(null)
   const [page, setPage] = useState(1)
   const [category, setCategory] = useState<string | null>(null)
@@ -88,7 +103,7 @@ export function EmployeeHistoryPanel({ employeeId }: { employeeId: string }) {
       categories={{
         label: t('employees.history.filterLabel'),
         value: category ?? 'all',
-        options: CATEGORY_FILTERS.map((filter) => ({ value: filter, label: t(`employees.history.categories.${filter}`) })),
+        options: visibleFilters.map((filter) => ({ value: filter, label: t(`employees.history.categories.${filter}`) })),
         onChange: selectCategory,
       }}
       pagination={data ? { page: data.page, pageSize: data.pageSize, totalCount: data.totalCount, onPageChange: setPage } : undefined}

@@ -18,6 +18,11 @@ vi.mock('../../api/employeeHistoryApi', async (importOriginal) => ({
   },
 }))
 
+const auth = vi.hoisted(() => ({ permissions: ['employee_notes.view', 'leave_balances.view'] }))
+vi.mock('../../../auth/authContextValue', () => ({
+  useAuth: () => ({ hasPermission: (code: string) => auth.permissions.includes(code) }),
+}))
+
 const RAW_GUID_ID = '3fa85f64-5717-4562-b3fc-2c963f66afa6'
 
 describe('EmployeeHistoryPanel', () => {
@@ -160,5 +165,15 @@ describe('EmployeeHistoryPanel', () => {
   it('shows an empty state without history', async () => {
     render(<EmployeeHistoryPanel employeeId="emp-1" />)
     expect(await screen.findByText('Nog geen historiek voor deze medewerker.')).toBeInTheDocument()
+  })
+
+  // HR acceptance B2: categories the server never returns without the HR right are not offered.
+  it('hides the Notities and Verlofsaldo filters without the HR permissions', async () => {
+    auth.permissions = []
+    render(<EmployeeHistoryPanel employeeId="emp-1" />)
+    expect(await screen.findByText('Kwalificaties')).toBeInTheDocument()
+    expect(screen.queryByText('Notities')).not.toBeInTheDocument()
+    expect(screen.queryByText('Verlofsaldo')).not.toBeInTheDocument()
+    auth.permissions = ['employee_notes.view', 'leave_balances.view']
   })
 })
