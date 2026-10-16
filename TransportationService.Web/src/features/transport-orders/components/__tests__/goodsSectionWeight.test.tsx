@@ -141,6 +141,13 @@ describe('GoodsSection goods line (D4)', () => {
     expect(screen.getAllByRole('group', { name: /^Lijn \d+$/ })).toHaveLength(3)
   })
 
+  it('package type options are translated, never raw i18n keys (M19)', () => {
+    const { container } = render(<Harness initial={[emptyCargoRow()]} />)
+    const optionTexts = [...container.querySelectorAll('option')].map((o) => o.textContent ?? '')
+    expect(optionTexts).toContain('Europallet')
+    expect(optionTexts.some((text) => text.startsWith('packages.'))).toBe(false)
+  })
+
   it('hides the duplicate action when the host does not support it', () => {
     render(<Harness initial={[emptyCargoRow()]} withDuplicate={false} />)
     expect(screen.queryByRole('button', { name: 'Regel dupliceren' })).not.toBeInTheDocument()

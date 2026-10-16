@@ -498,7 +498,7 @@ export function GoodsSection({
                   <option value="">{t('transportOrders.goods.notSpecified')}</option>
                   {Object.entries(UNIT_TYPE_LABELS).map(([value, label]) => (
                     <option key={value} value={value}>
-                      {label}
+                      {t(label)}
                     </option>
                   ))}
                 </select>
