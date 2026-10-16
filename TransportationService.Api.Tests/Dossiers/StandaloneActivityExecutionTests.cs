@@ -225,6 +225,27 @@ public class StandaloneActivityExecutionTests
     }
 
     [Fact]
+    public async Task ReadyToInvoice_ListsOnlyDossiersWithInvoiceableWork_NotHistoricalDrafts()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var historical = await h.NewDossierAsync();
+        await h.AddOrderAsync(historical.Id, TransportOrderStatus.Draft);
+        var executed = await h.NewDossierAsync();
+        await h.AddOrderAsync(executed.Id, TransportOrderStatus.Completed, agreedPrice: 400m);
+        var crane = await h.NewDossierAsync();
+        var activity = await h.AddStandaloneAsync(crane.Id, "KRAANWERK", "Kraan werf C");
+        await h.Complete(crane.Id, activity);
+
+        var ready = (await h.Dossiers().SearchAsync(new DossierSearchQuery { InvoiceStatus = "ReadyToInvoice" }, CancellationToken.None)).Items
+            .Select(i => i.Id).ToList();
+
+        Assert.Contains(executed.Id, ready);
+        Assert.Contains(crane.Id, ready);
+        Assert.DoesNotContain(historical.Id, ready);
+    }
+
+    [Fact]
     public async Task ACancelledStandaloneActivity_CountsAsResolved_LikeACancelledOrder()
     {
         var h = await SeedAsync();

@@ -146,7 +146,8 @@
       "incidentOpen": "Met open incident",
       "incidentNone": "Zonder open incident",
       "planned": "Gepland",
-      "unplanned": "Ongepland"
+      "unplanned": "Ongepland",
+      "readyToInvoice": "Klaar om te factureren"
     },
     "allStatuses": "Alle statussen",
     "toggle": "Filters",

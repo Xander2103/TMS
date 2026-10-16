@@ -146,7 +146,8 @@
       "incidentOpen": "With open incident",
       "incidentNone": "Without open incident",
       "planned": "Planned",
-      "unplanned": "Unplanned"
+      "unplanned": "Unplanned",
+      "readyToInvoice": "Ready to invoice"
     },
     "allStatuses": "All statuses",
     "toggle": "Filters",

@@ -41,7 +41,7 @@ export function presetPatch(id: DossierPresetId, context: PresetContext): Dossie
     case 'unpriced':
       return { status: 'Open', priceStatus: 'Unpriced' }
     case 'toInvoice':
-      return { status: 'Closed', invoiceStatus: 'NotInvoiced' }
+      return { status: 'Closed', invoiceStatus: 'ReadyToInvoice' }
     case 'openIncident':
       return { status: 'Open', hasOpenIncident: 'true' }
   }

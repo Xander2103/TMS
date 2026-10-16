@@ -56,6 +56,8 @@ export interface DossierListItem {
 }
 
 export type DossierInvoiceStatus = 'NotInvoiced' | 'Draft' | 'Sent' | 'Paid'
+/** Filter-only value (M16): completed, invoiceable work that is not on an invoice yet. */
+export type DossierInvoiceFilter = DossierInvoiceStatus | 'ReadyToInvoice'
 export type DossierPriceStatusFilter = 'Priced' | 'Partial' | 'Unpriced'
 export type DossierSortKey = 'number' | 'date' | 'customer' | 'status' | 'confirmedAt' | 'planningDate' | 'createdAt'
 

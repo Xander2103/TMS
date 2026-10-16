@@ -195,6 +195,7 @@ export function DossierFilterPanel({ id, filters, lookups, currentUserId = null,
           { value: 'Unpriced', label: t('dossiers.filters.options.unpriced') },
         ]),
         selectField('invoiceStatus', [
+          { value: 'ReadyToInvoice', label: t('dossiers.filters.options.readyToInvoice') },
           { value: 'NotInvoiced', label: t('dossiers.filters.options.notInvoiced') },
           { value: 'Draft', label: t('dossiers.filters.options.invoiceDraft') },
           { value: 'Sent', label: t('dossiers.filters.options.invoiceSent') },

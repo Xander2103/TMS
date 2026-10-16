@@ -256,6 +256,7 @@ export function DossiersPage() {
       Unpriced: t('dossiers.filters.options.unpriced'),
     },
     invoiceStatus: {
+      ReadyToInvoice: t('dossiers.filters.options.readyToInvoice'),
       NotInvoiced: t('dossiers.filters.options.notInvoiced'),
       Draft: t('dossiers.filters.options.invoiceDraft'),
       Sent: t('dossiers.filters.options.invoiceSent'),

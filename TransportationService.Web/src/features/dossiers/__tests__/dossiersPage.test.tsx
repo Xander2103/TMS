@@ -1247,10 +1247,11 @@ describe('DossiersPage (lijst)', () => {
       expect(within(views).getByRole('button', { name: 'Alle' })).toHaveAttribute('aria-pressed', 'true')
 
       await user.click(within(views).getByRole('button', { name: 'Te factureren' }))
-      await waitFor(() => expect(router.state.location.search).toBe('?status=Closed&invoiceStatus=NotInvoiced'))
+      // M16: "Te factureren" = invoiceable work not yet on an invoice, not merely "no invoice".
+      await waitFor(() => expect(router.state.location.search).toBe('?status=Closed&invoiceStatus=ReadyToInvoice'))
       expect(within(views).getByRole('button', { name: 'Te factureren' })).toHaveAttribute('aria-pressed', 'true')
-      expect(chipTexts()).toEqual(['Bevestigd', 'Facturatiestatus: Niet gefactureerd'])
-      await expectLastSearch({ ...BASE, status: 'Closed', invoiceStatus: 'NotInvoiced' })
+      expect(chipTexts()).toEqual(['Bevestigd', 'Facturatiestatus: Klaar om te factureren'])
+      await expectLastSearch({ ...BASE, status: 'Closed', invoiceStatus: 'ReadyToInvoice' })
 
       await user.click(within(views).getByRole('button', { name: 'Mijn open' }))
       await waitFor(() => expect(router.state.location.search).toBe('?status=Open&responsibleUserId=u-1'))

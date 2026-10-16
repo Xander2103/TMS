@@ -1,7 +1,7 @@
 import type { SearchDossiersParams } from '../api/dossiersApi'
 import type {
   DossierConfirmationSource,
-  DossierInvoiceStatus,
+  DossierInvoiceFilter,
   DossierPriceStatusFilter,
   DossierSortKey,
   DossierStatus,
@@ -41,7 +41,7 @@ export interface DossierSearchFilters {
   postalCode: string
   countryCode: string
   priceStatus: '' | DossierPriceStatusFilter
-  invoiceStatus: '' | DossierInvoiceStatus
+  invoiceStatus: '' | DossierInvoiceFilter
   /** Tri-state as text so it lives in the URL unchanged. */
   hasCmr: '' | 'true' | 'false'
   // --- B11 quick views: plain server filters behind the presets ---
@@ -134,7 +134,7 @@ export const EMPTY_DOSSIER_FILTERS: DossierSearchFilters = {
 export const DOSSIER_STATUSES: readonly DossierStatus[] = ['Open', 'Closed', 'Cancelled']
 const CONFIRMATION_SOURCES: readonly DossierConfirmationSource[] = ['Manual', 'Automatic']
 const PRICE_STATUSES: readonly DossierPriceStatusFilter[] = ['Priced', 'Partial', 'Unpriced']
-const INVOICE_STATUSES: readonly DossierInvoiceStatus[] = ['NotInvoiced', 'Draft', 'Sent', 'Paid']
+const INVOICE_STATUSES: readonly DossierInvoiceFilter[] = ['ReadyToInvoice', 'NotInvoiced', 'Draft', 'Sent', 'Paid']
 const SORT_KEYS: readonly DossierSortKey[] = ['number', 'date', 'customer', 'status', 'confirmedAt', 'planningDate', 'createdAt']
 const DIRS = ['asc', 'desc'] as const
 const CMR = ['true', 'false'] as const

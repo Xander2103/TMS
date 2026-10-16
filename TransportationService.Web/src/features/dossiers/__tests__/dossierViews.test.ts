@@ -11,7 +11,7 @@ describe('dossier quick views', () => {
     expect(presetPatch('myOpen', context)).toEqual({ status: 'Open', responsibleUserId: 'u-1' })
     expect(presetPatch('unplannedWeek', context)).toEqual({ status: 'Open', planning: 'unplanned', dateFrom: '2026-10-14', dateTo: '2026-10-21' })
     expect(presetPatch('unpriced', context)).toEqual({ status: 'Open', priceStatus: 'Unpriced' })
-    expect(presetPatch('toInvoice', context)).toEqual({ status: 'Closed', invoiceStatus: 'NotInvoiced' })
+    expect(presetPatch('toInvoice', context)).toEqual({ status: 'Closed', invoiceStatus: 'ReadyToInvoice' })
     expect(presetPatch('openIncident', context)).toEqual({ status: 'Open', hasOpenIncident: 'true' })
   })
 
