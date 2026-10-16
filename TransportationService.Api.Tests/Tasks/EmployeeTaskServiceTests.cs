@@ -432,4 +432,156 @@ public class EmployeeTaskServiceTests
                 DueAt: new DateTime(2026, 10, 22, 8, 0, 0, DateTimeKind.Utc)), CancellationToken.None));
         Assert.Contains("deadline", error.Message, StringComparison.OrdinalIgnoreCase);
     }
+
+    // ------------------------------------------------------------- HR acceptance #4/#5: assign scope
+
+    private static async Task<Guid> AddUserAsync(Harness h, Guid? employeeId, params string[] codes)
+    {
+        var userId = Guid.NewGuid();
+        h.Db.Context.Users.Add(new TransportationService.Api.Modules.Identity.Entities.User
+        {
+            Id = userId, TenantId = h.TenantId, Email = $"{userId:N}@acme.be", FirstName = "Hanne", LastName = "HR",
+            EmployeeId = employeeId, IsActive = true,
+        });
+        await h.Db.Context.SaveChangesAsync();
+        h.Grant(userId, codes);
+        return userId;
+    }
+
+    /// <summary>Every active employee is offered exactly when CreateAsync accepts it: picker and server agree.</summary>
+    private static async Task AssertScopeMatchesTheServerRuleAsync(Harness h, Guid userId, AssignableEmployeesDto result)
+    {
+        var offered = result.Items.Select(i => i.Id).ToHashSet();
+        var active = await h.Db.Context.Employees.AsNoTracking().Where(e => e.IsActive).Select(e => e.Id).ToListAsync();
+        foreach (var employeeId in active)
+        {
+            var accepted = true;
+            try
+            {
+                await h.For(userId).CreateAsync(NewTask(employeeId), CancellationToken.None);
+            }
+            catch (DomainValidationException)
+            {
+                accepted = false;
+            }
+
+            Assert.True(offered.Contains(employeeId) == accepted, $"Employee {employeeId}: offered={offered.Contains(employeeId)}, accepted={accepted}");
+        }
+    }
+
+    [Fact]
+    public async Task AssignableEmployees_WithViewAll_OffersEveryActiveEmployee()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        h.Db.Context.Employees.Add(new Employee
+        {
+            Id = Guid.NewGuid(), TenantId = h.TenantId, EmployeeNumber = "MED-9", FirstName = "Ina", LastName = "Inactief", IsActive = false,
+        });
+        await h.Db.Context.SaveChangesAsync();
+
+        var result = await h.For(h.ManagerUserId).ListAssignableEmployeesAsync(null, CancellationToken.None);
+
+        Assert.Equal("all", result.Scope);
+        Assert.Null(result.Limitation);
+        Assert.Equal(
+            new[] { h.WorkerEmployeeId, h.MateEmployeeId, h.OutsiderEmployeeId }.OrderBy(x => x),
+            result.Items.Select(i => i.Id).OrderBy(x => x));
+        await AssertScopeMatchesTheServerRuleAsync(h, h.ManagerUserId, result);
+    }
+
+    [Fact]
+    public async Task AssignableEmployees_WithAssignButNoViewAll_OffersOwnDepartmentOnly()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        h.Grant(h.WorkerUserId, PermissionCodes.TasksAssign, PermissionCodes.TasksViewTeam);
+
+        var result = await h.For(h.WorkerUserId).ListAssignableEmployeesAsync(null, CancellationToken.None);
+
+        Assert.Equal("department", result.Scope);
+        Assert.Equal("Magazijn", result.DepartmentName);
+        Assert.Equal(
+            new[] { h.WorkerEmployeeId, h.MateEmployeeId }.OrderBy(x => x),
+            result.Items.Select(i => i.Id).OrderBy(x => x));
+        await AssertScopeMatchesTheServerRuleAsync(h, h.WorkerUserId, result);
+
+        var searched = await h.For(h.WorkerUserId).ListAssignableEmployeesAsync("maat", CancellationToken.None);
+        Assert.Equal(h.MateEmployeeId, Assert.Single(searched.Items).Id);
+    }
+
+    [Fact]
+    public async Task AssignableEmployees_WithoutAssign_OffersOnlySelf()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+
+        var result = await h.For(h.WorkerUserId).ListAssignableEmployeesAsync(null, CancellationToken.None);
+
+        Assert.Equal("self", result.Scope);
+        Assert.Equal("no_permission", result.Limitation);
+        Assert.Equal(h.WorkerEmployeeId, Assert.Single(result.Items).Id);
+        await AssertScopeMatchesTheServerRuleAsync(h, h.WorkerUserId, result);
+    }
+
+    [Fact]
+    public async Task AssignableEmployees_HrWithoutDepartment_OffersSelfOrNothing_WithALimitation()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var loneEmployeeId = Guid.NewGuid();
+        h.Db.Context.Employees.Add(new Employee
+        {
+            Id = loneEmployeeId, TenantId = h.TenantId, EmployeeNumber = "MED-8", FirstName = "Hanne", LastName = "HR", IsActive = true,
+        });
+        await h.Db.Context.SaveChangesAsync();
+        var hrWithEmployee = await AddUserAsync(h, loneEmployeeId,
+            PermissionCodes.TasksAssign, PermissionCodes.TasksViewTeam, PermissionCodes.TasksManageOwn);
+        var hrWithoutEmployee = await AddUserAsync(h, null,
+            PermissionCodes.TasksAssign, PermissionCodes.TasksViewTeam, PermissionCodes.TasksManageOwn);
+
+        var withEmployee = await h.For(hrWithEmployee).ListAssignableEmployeesAsync(null, CancellationToken.None);
+        Assert.Equal("self", withEmployee.Scope);
+        Assert.Equal("no_department", withEmployee.Limitation);
+        Assert.Equal(loneEmployeeId, Assert.Single(withEmployee.Items).Id);
+        await AssertScopeMatchesTheServerRuleAsync(h, hrWithEmployee, withEmployee);
+
+        var withoutEmployee = await h.For(hrWithoutEmployee).ListAssignableEmployeesAsync(null, CancellationToken.None);
+        Assert.Equal("none", withoutEmployee.Scope);
+        Assert.Equal("no_employee_link", withoutEmployee.Limitation);
+        Assert.Empty(withoutEmployee.Items);
+        await AssertScopeMatchesTheServerRuleAsync(h, hrWithoutEmployee, withoutEmployee);
+    }
+
+    [Fact]
+    public async Task AssignOutsideOwnDepartment_FailsWithASpecificFieldMessageNamingTheEmployee()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        h.Grant(h.WorkerUserId, PermissionCodes.TasksAssign, PermissionCodes.TasksViewTeam);
+
+        var error = await Assert.ThrowsAsync<DomainValidationException>(() =>
+            h.For(h.WorkerUserId).CreateAsync(NewTask(h.OutsiderEmployeeId), CancellationToken.None));
+
+        Assert.Equal(
+            "Je kan alleen taken toewijzen aan medewerkers van je eigen afdeling (Magazijn); Otto Overkant hoort daar niet bij.",
+            error.Message);
+        // A field error, so the web shows this text instead of the generic validation message.
+        Assert.Equal([error.Message], error.FieldErrors!["assignedEmployeeIds"]);
+    }
+
+    [Fact]
+    public async Task AssignWithoutDepartment_FailsWithTheNoDepartmentMessage()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var hr = await AddUserAsync(h, null, PermissionCodes.TasksAssign, PermissionCodes.TasksViewTeam);
+
+        var error = await Assert.ThrowsAsync<DomainValidationException>(() =>
+            h.For(hr).CreateAsync(NewTask(h.WorkerEmployeeId), CancellationToken.None));
+
+        Assert.StartsWith("Je account is niet aan een afdeling gekoppeld", error.Message);
+        Assert.Contains("Jan Janssen", error.Message);
+        Assert.NotNull(error.FieldErrors?["assignedEmployeeIds"]);
+    }
 }

@@ -38,6 +38,16 @@ public class TasksController : ControllerBase
     public async Task<ActionResult<IReadOnlyList<EmployeeTaskDto>>> Create(CreateTaskRequest request, CancellationToken cancellationToken) =>
         Ok(await _service.CreateAsync(request, cancellationToken));
 
+    /// <summary>
+    /// HR acceptance #4: the employees the caller may assign a task to (same rule as create), so
+    /// the assignee pickers only offer valid choices.
+    /// </summary>
+    [HttpGet("api/tasks/assignable-employees")]
+    [RequirePermission(PermissionCodes.TasksManageOwn, PermissionCodes.TasksAssign)]
+    public async Task<ActionResult<AssignableEmployeesDto>> AssignableEmployees(
+        [FromQuery] string? search, CancellationToken cancellationToken) =>
+        Ok(await _service.ListAssignableEmployeesAsync(search, cancellationToken));
+
     [HttpGet("api/tasks/{id:guid}")]
     [RequirePermission(PermissionCodes.TasksViewOwn, PermissionCodes.TasksViewTeam, PermissionCodes.TasksViewAll)]
     public async Task<ActionResult<EmployeeTaskDto>> Get(Guid id, CancellationToken cancellationToken) =>

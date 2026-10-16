@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
+import { ApiError } from '../../../api/apiClient'
 import * as api from '../api/tasksApi'
 import { EmployeeTasksTab } from '../components/EmployeeTasksTab'
 import { makeSummary, makeTask } from './taskTestData'
@@ -43,5 +44,24 @@ describe('EmployeeTasksTab', () => {
     expect(await screen.findByText('Onboardingdossier')).toBeInTheDocument()
     expect(api.listEmployeeTasks).toHaveBeenCalledWith('emp-1')
     expect(api.getEmployeeOpenTaskSummary).toHaveBeenCalledWith('emp-1')
+  })
+
+  // HR acceptance #5: HR opening an employee of another department got "konden niet worden geladen".
+  it('explains an out-of-scope employee (404) instead of showing a load error', async () => {
+    vi.spyOn(api, 'getEmployeeOpenTaskSummary').mockRejectedValue(new ApiError('Not found', 404))
+    vi.spyOn(api, 'listEmployeeTasks').mockRejectedValue(new ApiError('Not found', 404))
+
+    render(<EmployeeTasksTab employeeId="emp-other" />)
+
+    expect(await screen.findByText(/Deze medewerker valt buiten je takenbereik/)).toBeInTheDocument()
+    expect(screen.queryByText('De taken konden niet worden geladen.')).not.toBeInTheDocument()
+  })
+
+  it('still reports a real load failure', async () => {
+    vi.spyOn(api, 'listEmployeeTasks').mockRejectedValue(new ApiError('boom', 500))
+
+    render(<EmployeeTasksTab employeeId="emp-1" />)
+
+    expect(await screen.findByText('De taken konden niet worden geladen.')).toBeInTheDocument()
   })
 })

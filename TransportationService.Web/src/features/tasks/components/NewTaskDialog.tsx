@@ -3,13 +3,13 @@ import { Button } from '../../../components/ui/Button'
 import { FormField } from '../../../components/ui/FormField'
 import { Modal } from '../../../components/ui/Modal'
 import { useToast } from '../../../components/ui/toastContext'
-import { localizeApiError } from '../../../api/problemDetails'
 import { useAuth } from '../../auth/authContextValue'
 import { useLocale } from '../../../i18n/localeContext'
 import { useLookupOptions } from '../../master-data/hooks/useLookupOptions'
 import { createTasks } from '../api/tasksApi'
 import { TASK_PRIORITY_LABELS, type TaskPriority } from '../api/types'
 import { EmployeeMultiSelect } from './EmployeePicker'
+import { taskErrorMessage, taskFieldError } from './taskErrors'
 import { fromDateTimeLocalInput } from '../../../utils/dates'
 import './tasks.css'
 
@@ -79,7 +79,10 @@ export function NewTaskDialog({ onClose, onCreated }: NewTaskDialogProps) {
       showSuccess(t('tasks.new.created', { count: created.length }))
       onCreated()
     } catch (err) {
-      showError(localizeApiError(t, err, t('tasks.new.createFailed')))
+      // HR acceptance #5: an assign refusal names the employee and the rule; show it at the picker too.
+      const assigneeError = taskFieldError(err, 'assignedEmployeeIds')
+      if (assigneeError) setEmployeeError(assigneeError)
+      showError(taskErrorMessage(t, err, t('tasks.new.createFailed'), 'assignedEmployeeIds', 'title', 'dueAt'))
     } finally {
       setBusy(false)
     }
@@ -127,6 +130,7 @@ export function NewTaskDialog({ onClose, onCreated }: NewTaskDialogProps) {
       {canAssign ? (
         <FormField label={t('tasks.new.employees')} required error={employeeError}>
           <EmployeeMultiSelect
+            source="assignable"
             value={employeeIds}
             onChange={(next) => {
               setEmployeeIds(next)

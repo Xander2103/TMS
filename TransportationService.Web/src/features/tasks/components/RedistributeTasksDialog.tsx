@@ -4,12 +4,12 @@ import { Button } from '../../../components/ui/Button'
 import { FormField } from '../../../components/ui/FormField'
 import { Modal } from '../../../components/ui/Modal'
 import { useToast } from '../../../components/ui/toastContext'
-import { localizeApiError } from '../../../api/problemDetails'
 import { useAuth } from '../../auth/authContextValue'
 import { useLocale } from '../../../i18n/localeContext'
 import { getEmployeeOpenTaskSummary, redistributeTasks } from '../api/tasksApi'
 import type { TaskOpenSummary } from '../api/types'
 import { EmployeeSelect } from './EmployeePicker'
+import { taskErrorMessage, taskFieldError } from './taskErrors'
 import { fromDateTimeLocalInput } from '../../../utils/dates'
 import './tasks.css'
 
@@ -81,7 +81,9 @@ export function RedistributeTasksDialog({ employeeId, employeeName, onClose }: R
       )
       onClose()
     } catch (err) {
-      showError(localizeApiError(t, err, t('tasks.redistribute.failed')))
+      const targetRefusal = taskFieldError(err, 'targetEmployeeId')
+      if (targetRefusal) setTargetError(targetRefusal)
+      showError(taskErrorMessage(t, err, t('tasks.redistribute.failed'), 'targetEmployeeId', 'fromEmployeeId', 'action'))
     } finally {
       setBusy(false)
     }
@@ -129,6 +131,7 @@ export function RedistributeTasksDialog({ employeeId, employeeName, onClose }: R
         <>
           <FormField label={t('tasks.redistribute.newEmployee')} required error={targetError}>
             <EmployeeSelect
+              source="assignable"
               value={targetEmployeeId}
               onChange={(next) => {
                 setTargetEmployeeId(next)

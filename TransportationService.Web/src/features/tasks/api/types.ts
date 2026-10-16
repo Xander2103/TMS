@@ -119,6 +119,26 @@ export interface RedistributeResult {
   action: string
 }
 
+/** HR acceptance #4: an employee inside the caller's assign scope. */
+export interface AssignableEmployee {
+  id: string
+  firstName: string
+  lastName: string
+  employeeNumber: string
+  departmentId: string | null
+}
+
+export type AssignScope = 'all' | 'department' | 'self' | 'none'
+export type AssignLimitation = 'no_department' | 'no_employee_link' | 'no_permission'
+
+/** The caller's assign scope, computed by the same server rule that guards task creation. */
+export interface AssignableEmployees {
+  scope: AssignScope
+  limitation: AssignLimitation | null
+  departmentName: string | null
+  items: AssignableEmployee[]
+}
+
 /** Mirrors TaskAttachmentDto. */
 export interface TaskAttachment {
   id: string

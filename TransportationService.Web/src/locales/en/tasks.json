@@ -57,7 +57,8 @@
     "overdue": "Overdue: {count}"
   },
   "employeeTab": {
-    "empty": "No tasks for this employee."
+    "empty": "No tasks for this employee.",
+    "outOfScope": "This employee is outside your task scope: you only see tasks of your own department."
   },
   "detail": {
     "fallbackTitle": "Task",
@@ -137,7 +138,11 @@
     "empty": "No employees found",
     "addEmployee": "Add employee",
     "addPlaceholder": "Search and add employees...",
-    "removeAria": "Remove {name}"
+    "removeAria": "Remove {name}",
+    "scopeNoDepartment": "Your account is not linked to a department; you can only create tasks for yourself.",
+    "scopeNoEmployeeLink": "Your account is not linked to an employee; you cannot assign tasks.",
+    "scopeSelfOnly": "You can only create tasks for yourself.",
+    "scopeDepartment": "You can assign tasks to employees of your own department ({department})."
   },
   "new": {
     "title": "New task",

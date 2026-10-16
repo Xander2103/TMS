@@ -57,7 +57,8 @@
     "overdue": "Achterstallig: {count}"
   },
   "employeeTab": {
-    "empty": "Geen taken voor deze medewerker."
+    "empty": "Geen taken voor deze medewerker.",
+    "outOfScope": "Deze medewerker valt buiten je takenbereik: je ziet alleen taken van je eigen afdeling."
   },
   "detail": {
     "fallbackTitle": "Taak",
@@ -137,7 +138,11 @@
     "empty": "Geen medewerkers gevonden",
     "addEmployee": "Medewerker toevoegen",
     "addPlaceholder": "Zoek en voeg medewerkers toe...",
-    "removeAria": "{name} verwijderen"
+    "removeAria": "{name} verwijderen",
+    "scopeNoDepartment": "Je account is niet aan een afdeling gekoppeld; je kan alleen taken voor jezelf aanmaken.",
+    "scopeNoEmployeeLink": "Je account is niet aan een medewerker gekoppeld; je kan geen taken toewijzen.",
+    "scopeSelfOnly": "Je kan alleen taken voor jezelf aanmaken.",
+    "scopeDepartment": "Je kan taken toewijzen aan medewerkers van je eigen afdeling ({department})."
   },
   "new": {
     "title": "Nieuwe taak",

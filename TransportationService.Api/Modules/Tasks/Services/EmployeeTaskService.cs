@@ -67,6 +67,16 @@ public record RedistributeTasksRequest(
 
 public record RedistributeResultDto(int AffectedTasks, string Action);
 
+/// <summary>HR acceptance #4: one employee the caller may assign a task to.</summary>
+public record AssignableEmployeeDto(Guid Id, string FirstName, string LastName, string EmployeeNumber, Guid? DepartmentId);
+
+/// <summary>
+/// The caller's assign scope for the assignee pickers. <c>Scope</c>: all | department | self | none.
+/// <c>Limitation</c> explains a narrowed scope: no_department (tasks.assign without a linked
+/// employee in a department), no_employee_link (no linked employee at all), no_permission.
+/// </summary>
+public record AssignableEmployeesDto(string Scope, string? Limitation, string? DepartmentName, IReadOnlyList<AssignableEmployeeDto> Items);
+
 public interface IEmployeeTaskService
 {
     Task<IReadOnlyList<EmployeeTaskDto>> CreateAsync(CreateTaskRequest request, CancellationToken cancellationToken);
@@ -84,6 +94,7 @@ public interface IEmployeeTaskService
     Task<IReadOnlyList<EmployeeTaskDto>?> ListForEmployeeAsync(Guid employeeId, CancellationToken cancellationToken);
     Task<EmployeeOpenTaskSummaryDto?> OpenSummaryAsync(Guid employeeId, CancellationToken cancellationToken);
     Task<RedistributeResultDto> RedistributeAsync(RedistributeTasksRequest request, CancellationToken cancellationToken);
+    Task<AssignableEmployeesDto> ListAssignableEmployeesAsync(string? search, CancellationToken cancellationToken);
 }
 
 public class EmployeeTaskService : IEmployeeTaskService
@@ -166,7 +177,7 @@ public class EmployeeTaskService : IEmployeeTaskService
 
         foreach (var assignee in assignees)
         {
-            await EnsureMayAssignAsync(scope, assignee.Id, assignee.DepartmentId, cancellationToken);
+            await EnsureMayAssignAsync(scope, assignee.Id, assignee.DepartmentId, assignee.Name, "assignedEmployeeIds", cancellationToken);
         }
 
         var category = await ResolveCategoryAsync(request.CategoryId, cancellationToken);
@@ -724,7 +735,7 @@ public class EmployeeTaskService : IEmployeeTaskService
                 .Select(e => new { e.Id, e.DepartmentId, Name = e.FirstName + " " + e.LastName })
                 .FirstOrDefaultAsync(cancellationToken)
                 ?? throw new DomainValidationException("targetEmployeeId", "De doelmedewerker bestaat niet of is inactief.");
-            await EnsureMayAssignAsync(scope, target.Id, target.DepartmentId, cancellationToken);
+            await EnsureMayAssignAsync(scope, target.Id, target.DepartmentId, target.Name, "targetEmployeeId", cancellationToken);
             targetName = target.Name;
         }
         else if (!await _permissionService.UserHasPermissionAsync(userId, PermissionCodes.TasksCancel, cancellationToken))
@@ -836,35 +847,124 @@ public class EmployeeTaskService : IEmployeeTaskService
         || scope.MyEmployeeId == employeeId
         || (scope.ViewTeam && scope.MyDepartmentId is { } department && departmentId == department);
 
-    /// <summary>Assigning to yourself needs tasks.manage_own; anyone else needs tasks.assign within scope.</summary>
-    private async Task EnsureMayAssignAsync(TaskScope scope, Guid assigneeId, Guid? assigneeDepartmentId, CancellationToken cancellationToken)
+    /// <summary>
+    /// The ONE assign rule (HR acceptance #4/#5), shared by <see cref="EnsureMayAssignAsync"/> and
+    /// <see cref="ListAssignableEmployeesAsync"/> so the picker and the server can never disagree:
+    /// yourself needs tasks.manage_own (or tasks.assign); anyone else needs tasks.assign, and
+    /// without tasks.view_all only within your own department.
+    /// </summary>
+    private enum AssignRefusal { None, NoSelfPermission, NoAssignPermission, NoDepartment, OutsideDepartment }
+
+    private static AssignRefusal AssignRefusalFor(TaskScope scope, bool maySelf, Guid assigneeId, Guid? assigneeDepartmentId)
     {
         if (scope.MyEmployeeId == assigneeId)
         {
-            var maySelf = scope.MayAssign
-                || await _permissionService.UserHasPermissionAsync(scope.UserId, PermissionCodes.TasksManageOwn, cancellationToken);
-            if (!maySelf)
-            {
-                throw new DomainValidationException("Je hebt geen rechten om taken aan te maken.");
-            }
-
-            return;
+            return maySelf ? AssignRefusal.None : AssignRefusal.NoSelfPermission;
         }
 
         if (!scope.MayAssign)
         {
-            throw new DomainValidationException("Taken toewijzen aan anderen vereist toewijzingsrechten.");
+            return AssignRefusal.NoAssignPermission;
         }
 
-        if (!scope.ViewAll)
+        if (scope.ViewAll)
         {
-            if (scope.MyDepartmentId is not { } department || assigneeDepartmentId != department)
-            {
-                throw new DomainValidationException("assignedEmployeeIds",
-                    "Je kan alleen taken toewijzen aan medewerkers binnen je eigen afdeling.");
-            }
+            return AssignRefusal.None;
+        }
+
+        if (scope.MyDepartmentId is not { } department)
+        {
+            return AssignRefusal.NoDepartment;
+        }
+
+        return assigneeDepartmentId == department ? AssignRefusal.None : AssignRefusal.OutsideDepartment;
+    }
+
+    private async Task<bool> MaySelfAssignAsync(TaskScope scope, CancellationToken cancellationToken) =>
+        scope.MayAssign
+        || await _permissionService.UserHasPermissionAsync(scope.UserId, PermissionCodes.TasksManageOwn, cancellationToken);
+
+    /// <summary>
+    /// Refusals carry the request field so the client shows them next to the picker (a form-wide
+    /// validation error is otherwise rendered as the generic "De invoer is ongeldig").
+    /// </summary>
+    private async Task EnsureMayAssignAsync(
+        TaskScope scope, Guid assigneeId, Guid? assigneeDepartmentId, string assigneeName, string field,
+        CancellationToken cancellationToken)
+    {
+        var maySelf = scope.MyEmployeeId == assigneeId && await MaySelfAssignAsync(scope, cancellationToken);
+        switch (AssignRefusalFor(scope, maySelf, assigneeId, assigneeDepartmentId))
+        {
+            case AssignRefusal.None:
+                return;
+            case AssignRefusal.NoSelfPermission:
+                throw new DomainValidationException(field, "Je hebt geen rechten om taken aan te maken.");
+            case AssignRefusal.NoAssignPermission:
+                throw new DomainValidationException(field,
+                    $"Je kan alleen taken voor jezelf aanmaken; een taak toewijzen aan {assigneeName} vereist toewijzingsrechten.");
+            case AssignRefusal.NoDepartment:
+                throw new DomainValidationException(field,
+                    $"Je account is niet aan een afdeling gekoppeld; je kan alleen taken voor jezelf aanmaken (niet voor {assigneeName}).");
+            default:
+                var departmentName = await DepartmentNameAsync(scope.MyDepartmentId, cancellationToken);
+                throw new DomainValidationException(field,
+                    $"Je kan alleen taken toewijzen aan medewerkers van je eigen afdeling{(departmentName is null ? "" : $" ({departmentName})")}; {assigneeName} hoort daar niet bij.");
         }
     }
+
+    public async Task<AssignableEmployeesDto> ListAssignableEmployeesAsync(string? search, CancellationToken cancellationToken)
+    {
+        var userId = RequireUser();
+        var scope = await ResolveScopeAsync(userId, cancellationToken);
+        var maySelf = await MaySelfAssignAsync(scope, cancellationToken);
+        var tenantId = _tenantContext.TenantId;
+        var rows = _dbContext.Employees.AsNoTracking().Where(e => e.TenantId == tenantId && e.IsActive);
+
+        // Mirrors AssignRefusalFor as a query; ScopeMatchesTheServerRule tests pin the equivalence.
+        var self = maySelf ? scope.MyEmployeeId : null;
+        string scopeName;
+        string? limitation = null;
+        if (scope.MayAssign && scope.ViewAll)
+        {
+            scopeName = "all";
+        }
+        else if (scope.MayAssign && scope.MyDepartmentId is { } department)
+        {
+            scopeName = "department";
+            rows = rows.Where(e => e.DepartmentId == department || e.Id == self);
+        }
+        else
+        {
+            limitation = !scope.MayAssign ? "no_permission"
+                : scope.MyEmployeeId is null ? "no_employee_link"
+                : "no_department";
+            scopeName = self is null ? "none" : "self";
+            rows = rows.Where(e => self != null && e.Id == self);
+        }
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = $"%{search.Trim()}%";
+            rows = rows.Where(e => EF.Functions.Like(e.FirstName + " " + e.LastName, term)
+                || EF.Functions.Like(e.EmployeeNumber, term));
+        }
+
+        var items = await rows
+            .OrderBy(e => e.LastName).ThenBy(e => e.FirstName)
+            .Take(500)
+            .Select(e => new AssignableEmployeeDto(e.Id, e.FirstName, e.LastName, e.EmployeeNumber, e.DepartmentId))
+            .ToListAsync(cancellationToken);
+        var departmentName = scopeName == "department" ? await DepartmentNameAsync(scope.MyDepartmentId, cancellationToken) : null;
+        return new AssignableEmployeesDto(scopeName, limitation, departmentName, items);
+    }
+
+    private async Task<string?> DepartmentNameAsync(Guid? departmentId, CancellationToken cancellationToken) =>
+        departmentId is not { } id
+            ? null
+            : await _dbContext.Departments.AsNoTracking()
+                .Where(d => d.TenantId == _tenantContext.TenantId && d.Id == id)
+                .Select(d => d.Name)
+                .FirstOrDefaultAsync(cancellationToken);
 
     private async Task<EmployeeTask?> FindVisibleAsync(Guid id, TaskScope scope, CancellationToken cancellationToken)
     {

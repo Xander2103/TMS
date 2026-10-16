@@ -7,6 +7,7 @@ import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { DataTable, type Column } from '../../../components/ui/DataTable'
 import { useToast } from '../../../components/ui/toastContext'
 import { localizeApiError } from '../../../api/problemDetails'
+import { taskErrorMessage } from '../components/taskErrors'
 import { useAuth } from '../../auth/authContextValue'
 import { useLocale } from '../../../i18n/localeContext'
 import { useLookupOptions } from '../../master-data/hooks/useLookupOptions'
@@ -97,7 +98,7 @@ export function TaskTemplatesPage() {
       showSuccess(t('tasks.templates.applied', { count: created.length, name: template.name }))
       setApplyDialog(null)
     } catch (err) {
-      showError(localizeApiError(t, err, t('tasks.templates.applyFailed')))
+      showError(taskErrorMessage(t, err, t('tasks.templates.applyFailed'), 'assignedEmployeeIds'))
     } finally {
       setBusy(false)
     }

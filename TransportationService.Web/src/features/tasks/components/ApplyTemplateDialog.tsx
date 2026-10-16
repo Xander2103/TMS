@@ -47,6 +47,7 @@ export function ApplyTemplateDialog({ templateName, busy, onSubmit, onClose }: A
     >
       <FormField label={t('tasks.applyDialog.employee')} required error={error}>
         <EmployeeSelect
+          source="assignable"
           value={employeeId}
           onChange={(next) => {
             setEmployeeId(next)

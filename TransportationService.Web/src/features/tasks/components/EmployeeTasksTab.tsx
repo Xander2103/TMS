@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { ApiError } from '../../../api/apiClient'
 import { Badge } from '../../../components/ui/Badge'
 import { DataTable, type Column } from '../../../components/ui/DataTable'
 import { TruncatedText } from '../../../components/ui/TruncatedText'
@@ -20,6 +21,9 @@ export function EmployeeTasksTab({ employeeId }: EmployeeTasksTabProps) {
   const [tasks, setTasks] = useState<EmployeeTask[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  // HR acceptance #5: the API answers 404/403 for an employee outside the caller's task scope
+  // (e.g. HR viewing another department) — that is information, not a load failure.
+  const [outOfScope, setOutOfScope] = useState(false)
   const [openTaskId, setOpenTaskId] = useState<string | null>(null)
 
   const reload = useCallback(() => {
@@ -28,10 +32,13 @@ export function EmployeeTasksTab({ employeeId }: EmployeeTasksTabProps) {
         setSummary(summaryData)
         setTasks(taskData)
         setError(null)
+        setOutOfScope(false)
         setIsLoading(false)
       })
-      .catch(() => {
-        setError(t('tasks.page.loadFailed'))
+      .catch((err: unknown) => {
+        const scoped = err instanceof ApiError && (err.status === 404 || err.status === 403)
+        setOutOfScope(scoped)
+        setError(scoped ? null : t('tasks.page.loadFailed'))
         setIsLoading(false)
       })
   }, [employeeId, t])
@@ -57,6 +64,14 @@ export function EmployeeTasksTab({ employeeId }: EmployeeTasksTabProps) {
     { key: 'due', header: t('tasks.columns.due'), width: '190px', render: (row) => <span className="ui-nowrap"><TaskDueCell task={row} compact /></span> },
     { key: 'status', header: t('tasks.columns.status'), width: '150px', render: (row) => <TaskStatusBadge status={row.status} /> },
   ]
+
+  if (outOfScope) {
+    return (
+      <p className="placeholder-text" role="status">
+        {t('tasks.employeeTab.outOfScope')}
+      </p>
+    )
+  }
 
   return (
     <div>

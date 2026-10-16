@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { PageHeader } from '../../../components/layout/PageHeader'
 import { Button } from '../../../components/ui/Button'
 import { DataTable, type Column } from '../../../components/ui/DataTable'
@@ -7,7 +8,7 @@ import { Pagination } from '../../../components/ui/Pagination'
 import { DensityToggle } from '../../../components/ui/DensityToggle'
 import { useListDensity } from '../../../components/ui/listDensity'
 import { TruncatedText } from '../../../components/ui/TruncatedText'
-import { tableSortOf, useUrlListState } from '../../../hooks/useUrlListState'
+import { serializeListState, tableSortOf, useUrlListState } from '../../../hooks/useUrlListState'
 import { useAuth } from '../../auth/authContextValue'
 import { useLocale } from '../../../i18n/localeContext'
 import { useLookupOptions } from '../../master-data/hooks/useLookupOptions'
@@ -55,6 +56,8 @@ export function TasksPage() {
   const { t } = useLocale()
   const { hasPermission } = useAuth()
   const { state, apply, reset, isFiltered } = useUrlListState(LIST_STATE)
+  const location = useLocation()
+  const navigate = useNavigate()
   const [density, setDensity] = useListDensity('tasks')
   const canCreate = hasPermission('tasks.manage_own') || hasPermission('tasks.assign')
   const { options: categories } = useLookupOptions('/api/task-categories')
@@ -109,11 +112,20 @@ export function TasksPage() {
   }, [reload])
 
   // The open detail is part of the URL too, without leaving the current page of the list.
+  // HR acceptance #20: opening PUSHES an entry (it used to replace the list entry, so Back skipped
+  // past it to the previous page), so browser Back closes the detail on the same page, filters,
+  // sort and search. Closing an in-app opened detail is that same Back; a deep-linked detail
+  // (notification, ?taskId=) has no list entry behind it and is closed in place.
   function openDetail(taskId: string) {
-    apply({ taskId, page }, { replace: true })
+    const next = serializeListState({ ...state, taskId }, LIST_STATE)
+    navigate({ pathname: location.pathname, search: `?${next.toString()}` }, { state: { taskDetailFromList: true } })
   }
 
   function closeDetail() {
+    if ((location.state as { taskDetailFromList?: boolean } | null)?.taskDetailFromList) {
+      navigate(-1)
+      return
+    }
     apply({ taskId: '', page }, { replace: true })
   }
 

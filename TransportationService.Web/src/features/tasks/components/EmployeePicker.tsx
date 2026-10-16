@@ -1,6 +1,33 @@
 import { SearchableSelect } from '../../../components/ui/SearchableSelect'
 import { useLocale } from '../../../i18n/localeContext'
-import { useEmployeeOptions } from './useEmployeeOptions'
+import { useEmployeeOptions, type EmployeeOptionsSource } from './useEmployeeOptions'
+
+type Translate = ReturnType<typeof useLocale>['t']
+
+/** HR acceptance #4: why the assignable list is narrowed (or empty), shown under the picker. */
+function scopeHint(t: Translate, state: ReturnType<typeof useEmployeeOptions>): string | null {
+  if (state.isLoading || state.scope === undefined) return null
+  switch (state.limitation) {
+    case 'no_department':
+      return t('tasks.picker.scopeNoDepartment')
+    case 'no_employee_link':
+      return t('tasks.picker.scopeNoEmployeeLink')
+    case 'no_permission':
+      return t('tasks.picker.scopeSelfOnly')
+  }
+  if (state.scope === 'department' && state.departmentName) {
+    return t('tasks.picker.scopeDepartment', { department: state.departmentName })
+  }
+  return null
+}
+
+function ScopeHint({ text }: { text: string | null }) {
+  return text ? (
+    <p className="ui-form-field-hint task-picker-scope-hint" role="note">
+      {text}
+    </p>
+  ) : null
+}
 
 interface EmployeeSelectProps {
   id?: string
@@ -8,24 +35,30 @@ interface EmployeeSelectProps {
   onChange: (value: string | null) => void
   disabled?: boolean
   ariaLabel?: string
+  /** "assignable": only employees the signed-in user may assign a task to (task assignee pickers). */
+  source?: EmployeeOptionsSource
 }
 
 /** Single-employee combobox used by redistribute/apply/recurrence dialogs. */
-export function EmployeeSelect({ id, value, onChange, disabled, ariaLabel }: EmployeeSelectProps) {
+export function EmployeeSelect({ id, value, onChange, disabled, ariaLabel, source = 'all' }: EmployeeSelectProps) {
   const { t } = useLocale()
-  const { options, isLoading } = useEmployeeOptions()
+  const employees = useEmployeeOptions(source)
+  const { options, isLoading } = employees
   return (
-    <SearchableSelect
-      id={id}
-      value={value}
-      onChange={onChange}
-      options={options}
-      isLoading={isLoading}
-      disabled={disabled}
-      ariaLabel={ariaLabel ?? t('tasks.picker.employee')}
-      placeholder={t('tasks.picker.searchPlaceholder')}
-      emptyMessage={t('tasks.picker.empty')}
-    />
+    <>
+      <SearchableSelect
+        id={id}
+        value={value}
+        onChange={onChange}
+        options={options}
+        isLoading={isLoading}
+        disabled={disabled}
+        ariaLabel={ariaLabel ?? t('tasks.picker.employee')}
+        placeholder={t('tasks.picker.searchPlaceholder')}
+        emptyMessage={t('tasks.picker.empty')}
+      />
+      <ScopeHint text={scopeHint(t, employees)} />
+    </>
   )
 }
 
@@ -34,12 +67,15 @@ interface EmployeeMultiSelectProps {
   value: string[]
   onChange: (value: string[]) => void
   disabled?: boolean
+  /** "assignable": only employees the signed-in user may assign a task to. */
+  source?: EmployeeOptionsSource
 }
 
 /** Multi-employee picker: combobox to add, chips with remove. */
-export function EmployeeMultiSelect({ id, value, onChange, disabled }: EmployeeMultiSelectProps) {
+export function EmployeeMultiSelect({ id, value, onChange, disabled, source = 'all' }: EmployeeMultiSelectProps) {
   const { t } = useLocale()
-  const { options, isLoading } = useEmployeeOptions()
+  const employees = useEmployeeOptions(source)
+  const { options, isLoading } = employees
   const selectable = options.filter((option) => !value.includes(option.value))
   const labelFor = (employeeId: string) => options.find((option) => option.value === employeeId)?.label ?? employeeId
 
@@ -59,6 +95,7 @@ export function EmployeeMultiSelect({ id, value, onChange, disabled }: EmployeeM
         placeholder={t('tasks.picker.addPlaceholder')}
         emptyMessage={t('tasks.picker.empty')}
       />
+      <ScopeHint text={scopeHint(t, employees)} />
       {value.length > 0 && (
         <ul className="task-employee-chips">
           {value.map((employeeId) => (

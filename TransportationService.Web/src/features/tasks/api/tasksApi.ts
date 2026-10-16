@@ -2,6 +2,7 @@ import { ApiError, apiClient } from '../../../api/apiClient'
 import { apiBaseUrl } from '../../../config/env'
 import { getAccessToken } from '../../auth/authStorage'
 import type {
+  AssignableEmployees,
   CreateTaskInput,
   EmployeeTask,
   RedistributeResult,
@@ -37,6 +38,12 @@ export function listTasks(params: TaskListParams): Promise<TaskListResult> {
   query.set('page', String(params.page ?? 1))
   query.set('pageSize', String(params.pageSize ?? 25))
   return apiClient.getJson<TaskListResult>(`/api/tasks?${query.toString()}`)
+}
+
+/** Employees the signed-in user may assign tasks to (same rule the server applies on create). */
+export function listAssignableEmployees(search?: string): Promise<AssignableEmployees> {
+  const query = search ? `?search=${encodeURIComponent(search)}` : ''
+  return apiClient.getJson<AssignableEmployees>(`/api/tasks/assignable-employees${query}`)
 }
 
 export function getTask(id: string): Promise<EmployeeTask> {

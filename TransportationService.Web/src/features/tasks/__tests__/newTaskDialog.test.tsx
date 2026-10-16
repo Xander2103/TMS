@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { ApiError } from '../../../api/apiClient'
 import * as api from '../api/tasksApi'
 import { NewTaskDialog } from '../components/NewTaskDialog'
 import { makeTask } from './taskTestData'
@@ -96,5 +97,29 @@ describe('NewTaskDialog', () => {
 
     expect(await screen.findByText('De deadline mag niet vóór het startmoment liggen.')).toBeInTheDocument()
     expect(createSpy).not.toHaveBeenCalled()
+  })
+
+  // HR acceptance #5: a scope refusal used to surface as the generic "De invoer is ongeldig".
+  it('shows the specific assign-scope refusal, in the toast and at the employee picker', async () => {
+    auth.permissions = ['tasks.manage_own', 'tasks.assign']
+    const message = 'Je kan alleen taken toewijzen aan medewerkers van je eigen afdeling (HR); Otto Overkant hoort daar niet bij.'
+    vi.spyOn(api, 'createTasks').mockRejectedValue(
+      new ApiError(message, 400, {
+        title: 'Validatiefout',
+        detail: message,
+        status: 400,
+        code: 'common.validation_failed',
+        errors: { assignedEmployeeIds: [message] },
+      }),
+    )
+    render(<NewTaskDialog onClose={vi.fn()} onCreated={vi.fn()} />)
+
+    fireEvent.change(screen.getByLabelText(/Titel/), { target: { value: 'Opleiding plannen' } })
+    fireEvent.click(screen.getByLabelText('Medewerker toevoegen'))
+    fireEvent.click(screen.getByRole('button', { name: 'Taak aanmaken' }))
+
+    await waitFor(() => expect(toast.showError).toHaveBeenCalledWith(message))
+    expect(await screen.findByText(message)).toBeInTheDocument()
+    expect(toast.showError).not.toHaveBeenCalledWith(expect.stringContaining('De invoer is ongeldig'))
   })
 })

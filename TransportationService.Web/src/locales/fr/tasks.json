@@ -57,7 +57,8 @@
     "overdue": "En retard : {count}"
   },
   "employeeTab": {
-    "empty": "Aucune tâche pour ce collaborateur."
+    "empty": "Aucune tâche pour ce collaborateur.",
+    "outOfScope": "Ce collaborateur est hors de votre périmètre de tâches : vous ne voyez que les tâches de votre propre département."
   },
   "detail": {
     "fallbackTitle": "Tâche",
@@ -137,7 +138,11 @@
     "empty": "Aucun collaborateur trouvé",
     "addEmployee": "Ajouter un collaborateur",
     "addPlaceholder": "Rechercher et ajouter des collaborateurs...",
-    "removeAria": "Retirer {name}"
+    "removeAria": "Retirer {name}",
+    "scopeNoDepartment": "Votre compte n'est lié à aucun département ; vous ne pouvez créer des tâches que pour vous-même.",
+    "scopeNoEmployeeLink": "Votre compte n'est lié à aucun collaborateur ; vous ne pouvez pas attribuer de tâches.",
+    "scopeSelfOnly": "Vous ne pouvez créer des tâches que pour vous-même.",
+    "scopeDepartment": "Vous pouvez attribuer des tâches aux collaborateurs de votre propre département ({department})."
   },
   "new": {
     "title": "Nouvelle tâche",
