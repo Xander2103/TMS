@@ -86,7 +86,7 @@
     "blocked": "Geblokkeerd",
     "absent": "Afwezig ({count})",
     "qualificationBlocks": "Kwalificatie: {list}",
-    "qualificationWarnings": "Verloopt: {list}",
+    "qualificationWarnings": "Let op: {list}",
     "trips_one": "1 rit",
     "trips_other": "{count} ritten",
     "free": "Vrij",

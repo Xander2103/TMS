@@ -101,6 +101,8 @@ export interface PlanningDriver {
   absences: ResourceAbsence[]
   qualificationBlocks: string[]
   qualificationWarnings: string[]
+  /** HR employment status code (Suspended/Terminated/OnLeave) when not deployable; null/absent = in dienst. */
+  employmentRestriction?: string | null
 }
 
 export interface PlanningVehicle {

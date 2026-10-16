@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using TransportationService.Api.Common;
@@ -131,7 +132,8 @@ public class EmployeeHistoryService : IEmployeeHistoryService
         ["Reactivated"] = "Geheractiveerd",
         ["Added"] = "Toegevoegd",
         ["Verified"] = "Geverifieerd",
-        ["Suspended"] = "Geschorst",
+        // Only qualifications are "suspended" — the UI action is "Intrekken" (HR acceptance P2-11).
+        ["Suspended"] = "Ingetrokken",
         ["Uploaded"] = "Geüpload",
         ["MetadataChanged"] = "Gegevens gewijzigd",
         ["FileReplaced"] = "Bestand vervangen",
@@ -142,7 +144,7 @@ public class EmployeeHistoryService : IEmployeeHistoryService
         ["Issued"] = "Uitgereikt",
         ["Returned"] = "Teruggebracht",
         ["Approved"] = "Goedgekeurd",
-        ["Rejected"] = "Afgekeurd",
+        ["Rejected"] = "Afgewezen",
         ["Cancelled"] = "Geannuleerd",
         ["ChangesRequested"] = "Wijzigingen gevraagd",
         ["StatusChanged"] = "Status gewijzigd",
@@ -213,6 +215,7 @@ public class EmployeeHistoryService : IEmployeeHistoryService
         ["IssuedDate"] = "Uitgereikt op",
         ["ReturnedDate"] = "Teruggebracht op",
         ["ReturnCondition"] = "Staat bij terugname",
+        ["ReturnDisposition"] = "Toestand bij terugname",
         // Absences
         ["Type"] = "Soort",
         ["StartDate"] = "Startdatum",
@@ -244,22 +247,34 @@ public class EmployeeHistoryService : IEmployeeHistoryService
         ["BlockReason"] = "Blokkeringsreden",
     };
 
+    /// <summary>
+    /// The same raw enum name means different things per entity: "Suspended" on a qualification
+    /// is a withdrawn record ("Ingetrokken"), on an employee it is the employment status
+    /// ("Geschorst"). Entity-specific labels win over <see cref="ValueLabels"/>.
+    /// </summary>
+    private static readonly IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>> ValueLabelsByEntity =
+        new Dictionary<string, IReadOnlyDictionary<string, string>>
+        {
+            ["EmployeeQualification"] = new Dictionary<string, string> { ["Suspended"] = "Ingetrokken" },
+        };
+
     /// <summary>Well-known enum/boolean raw values → readable Dutch.</summary>
     private static readonly IReadOnlyDictionary<string, string> ValueLabels = new Dictionary<string, string>
     {
         ["True"] = "Ja",
         ["False"] = "Nee",
-        ["Active"] = "Actief",
+        ["Active"] = "In dienst",
         ["OnLeave"] = "Met verlof",
         ["Suspended"] = "Geschorst",
         ["Terminated"] = "Uit dienst",
         ["Requested"] = "Aangevraagd",
         ["UnderReview"] = "In beoordeling",
         ["Approved"] = "Goedgekeurd",
-        ["Rejected"] = "Afgekeurd",
+        ["Rejected"] = "Afgewezen",
         ["Cancelled"] = "Geannuleerd",
         ["Valid"] = "Geldig",
-        ["Pending"] = "In afwachting",
+        ["ExpiringSoon"] = "Verloopt binnenkort",
+        ["Pending"] = "In behandeling",
         ["Expired"] = "Verlopen",
         ["FullDay"] = "Volledige dag",
         ["Morning"] = "Voormiddag",
@@ -273,13 +288,18 @@ public class EmployeeHistoryService : IEmployeeHistoryService
         ["Grant"] = "Toekenning",
         ["Seniority"] = "Anciënniteit",
         ["Correction"] = "Correctie",
-        ["Override"] = "Manuele override",
+        ["Override"] = "Saldo overschrijven",
         // Issued item status (EmployeeIssuedItem.Status)
         ["NotIssued"] = "Niet uitgereikt",
         ["Issued"] = "Uitgereikt",
         ["Returned"] = "Teruggebracht",
         ["Missing"] = "Vermist",
         ["Damaged"] = "Beschadigd",
+        // Return disposition (EmployeeIssuedItem.ReturnDisposition, stored lower-case)
+        ["good"] = "Goede staat",
+        ["damaged"] = "Beschadigd",
+        ["lost"] = "Verloren",
+        ["disposed"] = "Afgevoerd",
         // Document category (EmployeeDocument.Category)
         ["IdentityCardFront"] = "Identiteitskaart (voorzijde)",
         ["IdentityCardBack"] = "Identiteitskaart (achterzijde)",
@@ -442,7 +462,7 @@ public class EmployeeHistoryService : IEmployeeHistoryService
                 || (row.EntityType != "EmployeeLeaveBalance" && row.EntityType != "LeaveBalanceAdjustment"))
             .Select(row =>
             {
-                var entry = ProjectPending(row.Id, row.EntityType, row.Action, row.OldValuesJson, row.NewValuesJson, row.Timestamp, row.UserId);
+                var entry = ProjectPending(row.Id, row.EntityType, row.Action, row.OldValuesJson, row.NewValuesJson, row.Timestamp, row.UserId, row.EntityId);
                 if (!access.ConfidentialFields)
                 {
                     entry.Changes.RemoveAll(c => ConfidentialFieldKeys.Contains(c.FieldKey));
@@ -501,7 +521,9 @@ public class EmployeeHistoryService : IEmployeeHistoryService
             .ToDictionaryAsync(d => d.Id, d => d.Name, cancellationToken);
 
         var lookups = new IdLookups(userNames, qualificationTypeNames, leaveTypeNames, leaveBalanceTypeNames, departmentNames);
-        var items = pageItems.Select(entry => Finalize(entry, lookups)).ToList();
+        // P2-9: name WHICH qualification / asset a child entry is about ("Code 95: …").
+        var subjects = await SubjectsAsync(pageItems, tenantId, cancellationToken);
+        var items = pageItems.Select(entry => Finalize(entry, lookups, subjects)).ToList();
 
         return new EmployeeHistoryPageDto(items, total, page, pageSize);
     }
@@ -530,10 +552,12 @@ public class EmployeeHistoryService : IEmployeeHistoryService
 
     private sealed record PendingEntry(
         Guid Id, DateTime Timestamp, Guid? ActorUserId, string Action, string ActionLabel, string Category,
-        string? LeaveCategoryName, string? LeaveYear, List<PendingChange> Changes);
+        string? LeaveCategoryName, string? LeaveYear, List<PendingChange> Changes,
+        string EntityType = "", string EntityId = "");
 
     private static PendingEntry ProjectPending(
-        Guid id, string entityType, string action, string? oldJson, string? newJson, DateTime timestamp, Guid? actorUserId)
+        Guid id, string entityType, string action, string? oldJson, string? newJson, DateTime timestamp, Guid? actorUserId,
+        string entityKey = "")
     {
         var oldValues = ParseFlat(oldJson);
         var newValues = ParseFlat(newJson);
@@ -557,8 +581,8 @@ public class EmployeeHistoryService : IEmployeeHistoryService
             }
             else
             {
-                before = FormatValue(oldValues.GetValueOrDefault(key));
-                after = FormatValue(newValues.GetValueOrDefault(key));
+                before = FormatValue(oldValues.GetValueOrDefault(key), entityType);
+                after = FormatValue(newValues.GetValueOrDefault(key), entityType);
             }
 
             if (before == after)
@@ -574,14 +598,59 @@ public class EmployeeHistoryService : IEmployeeHistoryService
         return new PendingEntry(
             id, timestamp, actorUserId, action, ActionLabels.GetValueOrDefault(action, action), category,
             FormatValue(newValues.GetValueOrDefault("Verlofcategorie")), FormatValue(newValues.GetValueOrDefault("Jaar")),
-            changes);
+            changes, entityType, entityKey);
     }
 
-    private static EmployeeHistoryEntryDto Finalize(PendingEntry entry, IdLookups lookups)
+    private async Task<IReadOnlyDictionary<string, string>> SubjectsAsync(
+        IReadOnlyList<PendingEntry> entries, Guid tenantId, CancellationToken cancellationToken)
+    {
+        static List<Guid> IdsOf(IEnumerable<PendingEntry> source, string entityType) => source
+            .Where(e => e.EntityType == entityType)
+            .Select(e => Guid.TryParse(e.EntityId, out var id) ? id : Guid.Empty)
+            .Where(id => id != Guid.Empty)
+            .Distinct()
+            .ToList();
+
+        var qualificationIds = IdsOf(entries, "EmployeeQualification");
+        var issuedItemIds = IdsOf(entries, "EmployeeIssuedItem");
+        var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        if (qualificationIds.Count > 0)
+        {
+            var rows = await (from q in _db.EmployeeQualifications.IgnoreQueryFilters().AsNoTracking()
+                              where q.TenantId == tenantId && qualificationIds.Contains(q.Id)
+                              join t in _db.QualificationTypes.AsNoTracking() on q.QualificationTypeId equals t.Id
+                              select new { q.Id, t.Name, q.DocumentNumber })
+                .ToListAsync(cancellationToken);
+            foreach (var row in rows)
+            {
+                result[row.Id.ToString()] = row.DocumentNumber is { Length: > 0 } number ? $"{row.Name} ({number})" : row.Name;
+            }
+        }
+
+        if (issuedItemIds.Count > 0)
+        {
+            var rows = await _db.EmployeeIssuedItems.IgnoreQueryFilters().AsNoTracking()
+                .Where(i => i.TenantId == tenantId && issuedItemIds.Contains(i.Id))
+                .Select(i => new { i.Id, i.NameSnapshot, i.VariantSnapshot })
+                .ToListAsync(cancellationToken);
+            foreach (var row in rows)
+            {
+                result[row.Id.ToString()] = row.VariantSnapshot is { Length: > 0 } variant ? $"{row.NameSnapshot} ({variant})" : row.NameSnapshot;
+            }
+        }
+
+        return result;
+    }
+
+    private static EmployeeHistoryEntryDto Finalize(PendingEntry entry, IdLookups lookups, IReadOnlyDictionary<string, string> subjects)
     {
         var changes = entry.Changes.Select(c => ResolveChange(c, lookups)).ToList();
         var actorName = entry.ActorUserId is { } uid ? lookups.Users.GetValueOrDefault(uid) : null;
         var summary = BuildSummary(entry, changes);
+        if (subjects.TryGetValue(entry.EntityId, out var subject) && !summary.StartsWith(subject, StringComparison.Ordinal))
+        {
+            summary = $"{subject}: {summary}";
+        }
         return new EmployeeHistoryEntryDto(
             entry.Id, entry.Timestamp, actorName, entry.Action, entry.ActionLabel, entry.Category, changes, summary,
             CategoryCodeByLabel.GetValueOrDefault(entry.Category, "profile"));
@@ -689,11 +758,18 @@ public class EmployeeHistoryService : IEmployeeHistoryService
 
     private static string? NormalizeRaw(string? raw) => string.IsNullOrWhiteSpace(raw) ? null : raw.Trim();
 
-    private static string? FormatValue(string? raw)
+    private static string? FormatValue(string? raw, string? entityType = null)
     {
         if (string.IsNullOrWhiteSpace(raw))
         {
             return null;
+        }
+
+        if (entityType is not null
+            && ValueLabelsByEntity.TryGetValue(entityType, out var entityLabels)
+            && entityLabels.TryGetValue(raw, out var entityLabel))
+        {
+            return entityLabel;
         }
 
         if (ValueLabels.TryGetValue(raw, out var label))
@@ -701,15 +777,24 @@ public class EmployeeHistoryService : IEmployeeHistoryService
             return label;
         }
 
-        // ISO dates (and date-times) → consistent dd-MM-yyyy display.
-        if (raw.Length >= 10 && DateOnly.TryParse(raw[..10], out var date)
-            && raw.Length >= 10 && raw[4] == '-' && raw[7] == '-')
+        // ISO dates (and date-times) → the product date standard dd/MM/yyyy (utils/dates.ts).
+        if (raw.Length >= 10 && raw[4] == '-' && raw[7] == '-'
+            && DateOnly.TryParseExact(raw[..10], "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
         {
-            return date.ToString("dd-MM-yyyy");
+            return date.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture);
+        }
+
+        // Invariant decimals ("1.5", "-1.5") → Dutch notation ("1,5").
+        if (DecimalNumber.IsMatch(raw))
+        {
+            return raw.Replace('.', ',');
         }
 
         return raw;
     }
+
+    private static readonly System.Text.RegularExpressions.Regex DecimalNumber =
+        new(@"^-?\d+\.\d+$", System.Text.RegularExpressions.RegexOptions.CultureInvariant);
 
     /// <summary>Unmapped payload key → readable words ("SomeWeirdKey" → "Some Weird Key"), deterministic.</summary>
     private static string Humanize(string key)

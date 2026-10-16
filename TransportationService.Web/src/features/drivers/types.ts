@@ -19,7 +19,8 @@ export interface DriverListItem {
 }
 
 export interface DriverReadiness {
-  status: 'Ready' | 'Warning' | 'NotReady' | 'Blocked'
+  /** Incomplete: no live driving licence registered — deployability cannot be determined (H6). */
+  status: 'Ready' | 'Warning' | 'Incomplete' | 'NotReady' | 'Blocked'
   blockingReasons: string[]
   warnings: string[]
 }

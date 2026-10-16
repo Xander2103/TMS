@@ -86,7 +86,7 @@
     "blocked": "Blocked",
     "absent": "Absent ({count})",
     "qualificationBlocks": "Qualification: {list}",
-    "qualificationWarnings": "Expires: {list}",
+    "qualificationWarnings": "Attention: {list}",
     "trips_one": "1 trip",
     "trips_other": "{count} trips",
     "free": "Free",

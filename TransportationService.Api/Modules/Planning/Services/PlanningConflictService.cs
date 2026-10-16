@@ -1,3 +1,4 @@
+using TransportationService.Api.Modules.Employees.Services;
 using TransportationService.Api.Modules.Qualifications;
 using Microsoft.EntityFrameworkCore;
 using TransportationService.Api.Common.Scheduling;
@@ -113,7 +114,7 @@ public class PlanningConflictService : IPlanningConflictService
                 if (doubleBooked is not null)
                 {
                     conflicts.Add(new(PlanningConflictCode.VehicleDoubleBooked, true,
-                        $"Voertuig {vehicle.InternalNumber} is op {trip.TripDate:dd-MM-yyyy} al ingepland op rit {doubleBooked}."));
+                        $"Voertuig {vehicle.InternalNumber} is op {trip.TripDate:dd/MM/yyyy} al ingepland op rit {doubleBooked}."));
                 }
 
                 // Tachograph: overdue calibration is a warning (overrideable) on planning.
@@ -125,7 +126,7 @@ public class PlanningConflictService : IPlanningConflictService
                 if (tachoOverdue is { } due && due < DateOnly.FromDateTime(_timeProvider.GetUtcNow().UtcDateTime))
                 {
                     conflicts.Add(new(PlanningConflictCode.TachographOverdue, false,
-                        $"De tachograaf-ijking van {vehicle.InternalNumber} is vervallen ({due:dd-MM-yyyy})."));
+                        $"De tachograaf-ijking van {vehicle.InternalNumber} is vervallen ({due:dd/MM/yyyy})."));
                 }
 
                 // Driving-licence rank: the driver must hold a valid licence of at least the
@@ -171,7 +172,7 @@ public class PlanningConflictService : IPlanningConflictService
                 if (doubleBooked is not null)
                 {
                     conflicts.Add(new(PlanningConflictCode.TrailerDoubleBooked, true,
-                        $"Oplegger {trailer.InternalNumber} is op {trip.TripDate:dd-MM-yyyy} al ingepland op rit {doubleBooked}."));
+                        $"Oplegger {trailer.InternalNumber} is op {trip.TripDate:dd/MM/yyyy} al ingepland op rit {doubleBooked}."));
                 }
             }
         }
@@ -539,10 +540,11 @@ public class PlanningConflictService : IPlanningConflictService
             return;
         }
 
-        var driverName = await _dbContext.Employees.AsNoTracking()
+        var person = await _dbContext.Employees.AsNoTracking()
             .Where(e => e.Id == driver.EmployeeId && e.TenantId == tenantId)
-            .Select(e => e.FirstName + " " + e.LastName)
-            .FirstOrDefaultAsync(cancellationToken) ?? driver.DriverNumber;
+            .Select(e => new { Name = e.FirstName + " " + e.LastName, e.EmploymentStatus })
+            .FirstOrDefaultAsync(cancellationToken);
+        var driverName = person?.Name ?? driver.DriverNumber;
 
         if (driver.IsBlocked)
         {
@@ -553,6 +555,14 @@ public class PlanningConflictService : IPlanningConflictService
         if (!driver.IsActive)
         {
             conflicts.Add(new(PlanningConflictCode.DriverInactive, true, $"Chauffeur {driverName} is inactief."));
+        }
+
+        // H5: the HR employment status is authoritative — a suspended/terminated employee is not
+        // plannable even while the driver profile itself is still active.
+        if (person is not null && EmploymentDeployability.Restriction(person.EmploymentStatus) is { } restriction)
+        {
+            conflicts.Add(new(PlanningConflictCode.DriverInactive, true,
+                $"Chauffeur {driverName} is niet inzetbaar: dienstverband {restriction}."));
         }
 
         var settings = await _dbContext.TenantSettings.AsNoTracking()
@@ -575,12 +585,12 @@ public class PlanningConflictService : IPlanningConflictService
             if (absenceType == AbsenceType.Training)
             {
                 conflicts.Add(new(PlanningConflictCode.DriverTraining, severity == ConflictSeverity.Blocking,
-                    $"Chauffeur {driverName} heeft een goedgekeurde opleiding op {trip.TripDate:dd-MM-yyyy}.", severity));
+                    $"Chauffeur {driverName} heeft een goedgekeurde opleiding op {trip.TripDate:dd/MM/yyyy}.", severity));
             }
             else
             {
                 conflicts.Add(new(PlanningConflictCode.DriverAbsent, true,
-                    $"Chauffeur {driverName} is afwezig op {trip.TripDate:dd-MM-yyyy} ({absenceType}).",
+                    $"Chauffeur {driverName} is afwezig op {trip.TripDate:dd/MM/yyyy} ({Hr.AbsenceTypeLabels.Dutch(absenceType)}).",
                     ConflictSeverity.Blocking));
             }
         }
@@ -602,18 +612,21 @@ public class PlanningConflictService : IPlanningConflictService
             if (shift.Type == ShiftType.Training)
             {
                 conflicts.Add(new(PlanningConflictCode.DriverTraining, trainingSeverity == ConflictSeverity.Blocking,
-                    $"Chauffeur {driverName} heeft een opleidingsshift op {trip.TripDate:dd-MM-yyyy} ({shift.StartTime:HH\\:mm}–{shift.EndTime:HH\\:mm}).",
+                    $"Chauffeur {driverName} heeft een opleidingsshift op {trip.TripDate:dd/MM/yyyy} ({shift.StartTime:HH\\:mm}–{shift.EndTime:HH\\:mm}).",
                     trainingSeverity));
             }
             else
             {
                 conflicts.Add(new(PlanningConflictCode.DriverShiftOverlap, shiftOverlapSeverity == ConflictSeverity.Blocking,
-                    $"Chauffeur {driverName} heeft al een shift op {trip.TripDate:dd-MM-yyyy} ({shift.StartTime:HH\\:mm}–{shift.EndTime:HH\\:mm}).",
+                    $"Chauffeur {driverName} heeft al een shift op {trip.TripDate:dd/MM/yyyy} ({shift.StartTime:HH\\:mm}–{shift.EndTime:HH\\:mm}).",
                     shiftOverlapSeverity));
             }
         }
 
-        // Qualification state: expired/suspended/rejected blocks, expiring soon warns.
+        // Qualification state (QualificationReadinessPolicy, H4/P2-8): per type the best live
+        // record counts — withdrawn/rejected records are history, a valid replacement satisfies.
+        // An expired CORE qualification blocks; an expired situational one (ADR, kraan, …) only
+        // warns here — work that needs it is blocked by its own requirement check (ADR below).
         var warningDays = settings?.QualificationExpiryWarningDays ?? DefaultExpiryWarningDays;
         var today = DateOnly.FromDateTime(_timeProvider.GetUtcNow().UtcDateTime);
 
@@ -621,23 +634,28 @@ public class PlanningConflictService : IPlanningConflictService
             .Where(q => q.TenantId == tenantId && q.EmployeeId == driver.EmployeeId)
             .Join(_dbContext.QualificationTypes.AsNoTracking(),
                 q => q.QualificationTypeId, t => t.Id,
-                (q, t) => new { Qualification = q, t.Name })
+                (q, t) => new { Qualification = q, t.Name, t.Code })
             .ToListAsync(cancellationToken);
 
-        foreach (var entry in qualifications)
+        var summary = QualificationReadinessPolicy.Evaluate(qualifications.Select(entry =>
+            new QualificationReadinessPolicy.Record(entry.Code, entry.Name,
+                _statusCalculator.CalculateEffectiveStatus(entry.Qualification, today, warningDays),
+                entry.Qualification.ExpiryDate)));
+        foreach (var verdict in summary.Types)
         {
-            var status = _statusCalculator.CalculateEffectiveStatus(entry.Qualification, today, warningDays);
-            switch (status)
+            switch (verdict.Outcome)
             {
-                case QualificationStatus.Expired:
-                case QualificationStatus.Suspended:
-                case QualificationStatus.Rejected:
+                case QualificationReadinessPolicy.Outcome.Expired when verdict.IsCore:
                     conflicts.Add(new(PlanningConflictCode.DriverNotReady, true,
-                        $"{entry.Name} van {driverName} is niet geldig ({QualificationStatusLabels.Dutch(status)})."));
+                        $"{verdict.TypeName} van {driverName} is niet geldig ({QualificationStatusLabels.Dutch(QualificationStatus.Expired)})."));
                     break;
-                case QualificationStatus.ExpiringSoon:
+                case QualificationReadinessPolicy.Outcome.Expired:
                     conflicts.Add(new(PlanningConflictCode.DriverNotReady, false,
-                        $"{entry.Name} van {driverName} verloopt binnenkort."));
+                        $"{verdict.TypeName} van {driverName} is verlopen (niet vereist voor deze rit)."));
+                    break;
+                case QualificationReadinessPolicy.Outcome.ExpiringSoon:
+                    conflicts.Add(new(PlanningConflictCode.DriverNotReady, false,
+                        $"{verdict.TypeName} van {driverName} verloopt binnenkort."));
                     break;
             }
         }
@@ -667,7 +685,7 @@ public class PlanningConflictService : IPlanningConflictService
         if (doubleBooked is not null)
         {
             conflicts.Add(new(PlanningConflictCode.DriverDoubleBooked, true,
-                $"Chauffeur {driverName} is op {trip.TripDate:dd-MM-yyyy} al ingepland op rit {doubleBooked}."));
+                $"Chauffeur {driverName} is op {trip.TripDate:dd/MM/yyyy} al ingepland op rit {doubleBooked}."));
         }
     }
 

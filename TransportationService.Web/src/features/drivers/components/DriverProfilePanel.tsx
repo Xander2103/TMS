@@ -21,6 +21,7 @@ import { formatDate } from '../../../utils/dates'
 const READINESS_TONE: Record<DriverDetail['readiness']['status'], BadgeTone> = {
   Ready: 'success',
   Warning: 'warning',
+  Incomplete: 'neutral',
   NotReady: 'danger',
   Blocked: 'danger',
 }
@@ -28,6 +29,7 @@ const READINESS_TONE: Record<DriverDetail['readiness']['status'], BadgeTone> = {
 const READINESS_LABEL: Record<DriverDetail['readiness']['status'], string> = {
   Ready: 'driversAdmin.readiness.Ready',
   Warning: 'driversAdmin.readiness.Warning',
+  Incomplete: 'driversAdmin.readiness.Incomplete',
   NotReady: 'driversAdmin.readiness.NotReady',
   Blocked: 'driversAdmin.readiness.Blocked',
 }
@@ -35,8 +37,9 @@ const QUAL_TONE: Record<string, BadgeTone> = {
   Valid: 'success',
   ExpiringSoon: 'warning',
   Expired: 'danger',
-  Suspended: 'danger',
-  Rejected: 'danger',
+  // Withdrawn/rejected records are history: they no longer count for readiness (H4).
+  Suspended: 'neutral',
+  Rejected: 'neutral',
   Pending: 'neutral',
 }
 /** i18n-keys (driversAdmin.qualStatus.*); unknown backend statuses render as their raw code. */

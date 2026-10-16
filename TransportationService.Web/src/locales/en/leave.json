@@ -4,7 +4,7 @@
     "Grant": "Grant",
     "Seniority": "Seniority",
     "Correction": "Correction",
-    "Override": "Override"
+    "Override": "Overwrite balance"
   },
   "absenceType": {
     "Vacation": "Leave",

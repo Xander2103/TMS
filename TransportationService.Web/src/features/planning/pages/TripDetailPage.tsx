@@ -72,7 +72,7 @@ export function TripDetailPage() {
   const [busy, setBusy] = useState(false)
 
   // Driver/vehicle/trailer lists + their per-picker status (shared with the dossier planning block).
-  const { drivers, vehicles, trailers, status: resourceStatus } = usePlanningResources()
+  const { drivers, vehicles, trailers, status: resourceStatus } = usePlanningResources(true, trip?.tripDate)
   const [availableOrders, setAvailableOrders] = useState<TransportOrderListItem[]>([])
   const [ordersStatus, setOrdersStatus] = useState<ResourceListStatus>('loading')
   const listStatus = { ...resourceStatus, orders: ordersStatus }

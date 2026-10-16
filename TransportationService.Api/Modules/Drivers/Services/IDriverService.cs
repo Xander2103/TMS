@@ -9,7 +9,8 @@ public interface IDriverService
         string? search, bool? isActive, bool? isBlocked, Guid? categoryId,
         Entities.DriverAvailabilityStatus? availabilityStatus, Guid? qualificationTypeId,
         int? expiringWithinDays, bool hasExpired, bool eligibleOnly,
-        PageRequest page, CancellationToken cancellationToken);
+        PageRequest page, CancellationToken cancellationToken,
+        DateOnly? availabilityOn = null);
 
     Task<DriverDetailDto?> GetByIdAsync(Guid id, CancellationToken cancellationToken);
 

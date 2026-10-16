@@ -105,10 +105,14 @@ public record PlanningDriverDto(
     string? FixedVehicleNumber,
     IReadOnlyList<ResourceAssignmentDto> Assignments,
     IReadOnlyList<ResourceAbsenceDto> Absences,
-    /// <summary>Qualification names that are expired/suspended/rejected (hard problems).</summary>
+    /// <summary>Expired CORE qualification names (licence, Code 95, medical, driver card) — hard problems.</summary>
     IReadOnlyList<string> QualificationBlocks,
-    /// <summary>Qualification names expiring within the tenant's warning window.</summary>
-    IReadOnlyList<string> QualificationWarnings);
+    /// <summary>Qualification attention points with their state ("Code 95 (verloopt binnenkort)",
+    /// "ADR (verlopen)", "geen rijbewijs geregistreerd") — warn, never block.</summary>
+    IReadOnlyList<string> QualificationWarnings,
+    /// <summary>H5: the EmploymentStatus code (Suspended / Terminated / OnLeave) when the HR status
+    /// makes the driver non-deployable; null when "in dienst".</summary>
+    string? EmploymentRestriction = null);
 
 public record PlanningVehicleDto(
     Guid Id,

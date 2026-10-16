@@ -206,5 +206,10 @@
     "movedUp_one": "1 rit van deze dag staat hierboven bij Lopend of Achterstallig.",
     "movedUp_other": "{count} ritten van deze dag staan hierboven bij Lopend of Achterstallig.",
     "dayOnlyAbove": "Alle ritten van deze dag staan hierboven bij Lopend of Achterstallig."
+  },
+  "driverPicker": {
+    "blocked": "⚠ Geblokkeerd",
+    "absent": "⚠ Afwezig op deze dag",
+    "unavailable": "⚠ Niet inzetbaar"
   }
 }

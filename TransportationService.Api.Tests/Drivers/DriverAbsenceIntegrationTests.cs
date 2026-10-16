@@ -90,6 +90,9 @@ public class DriverAbsenceIntegrationTests
         Assert.Equal(DriverAvailabilityStatus.Available, list.Items[0].AvailabilityStatus);
 
         var detail = await h.Sut.GetByIdAsync(h.DriverId, CancellationToken.None);
-        Assert.Equal("Ready", detail!.Readiness.Status);
+        // No absence-based block. (The fixture has no driving licence, so the verdict is
+        // "Incomplete" — H6 — rather than "Ready".)
+        Assert.Empty(detail!.Readiness.BlockingReasons);
+        Assert.Equal("Incomplete", detail.Readiness.Status);
     }
 }

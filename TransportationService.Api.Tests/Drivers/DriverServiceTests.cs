@@ -73,7 +73,9 @@ public class DriverServiceTests
         Assert.Equal("CH-0001", result.Driver!.DriverNumber);
         Assert.Equal(employeeId, result.Driver.EmployeeId);
         Assert.Equal("Jan Jansen", result.Driver.FullName);
-        Assert.Equal("Ready", result.Driver.Readiness.Status);
+        // H6: a brand-new driver without any qualification is never "geen belemmeringen".
+        Assert.Equal("Incomplete", result.Driver.Readiness.Status);
+        Assert.Contains(result.Driver.Readiness.Warnings, w => w.Contains("rijbewijs"));
     }
 
     [Fact]
@@ -170,7 +172,7 @@ public class DriverServiceTests
         using var _ = h.Db;
 
         var typeId = Guid.NewGuid();
-        h.Db.Context.QualificationTypes.Add(new QualificationType { Id = typeId, Code = "code95", Name = "Code 95", Category = "Certificaat", RequiresExpiryDate = true, IsActive = true });
+        h.Db.Context.QualificationTypes.Add(new QualificationType { Id = typeId, Code = QualificationTypeCodes.Code95, Name = "Code 95", Category = "Certificaat", RequiresExpiryDate = true, IsActive = true });
         h.Db.Context.EmployeeQualifications.Add(new EmployeeQualification
         {
             Id = Guid.NewGuid(), TenantId = tenantId, EmployeeId = employeeId, QualificationTypeId = typeId,
@@ -183,5 +185,41 @@ public class DriverServiceTests
 
         Assert.Equal("NotReady", created.Driver!.Readiness.Status);
         Assert.Contains(created.Driver.Readiness.BlockingReasons, r => r.Contains("Code 95") && r.Contains("verlopen"));
+    }
+
+    [Fact]
+    public async Task Readiness_ValidLicence_IsReady_SuspendedEmployment_IsNotReady()
+    {
+        var tenantId = Guid.NewGuid();
+        var h = await SeedAsync(tenantId);
+        using var _ = h.Db;
+
+        var licenceType = new QualificationType { Id = Guid.NewGuid(), Code = QualificationTypeCodes.DrivingLicenceC, Name = "Rijbewijs C", Category = "Rijbewijs", IsActive = true };
+        h.Db.Context.QualificationTypes.Add(licenceType);
+        h.Db.Context.EmployeeQualifications.Add(new EmployeeQualification
+        {
+            Id = Guid.NewGuid(), TenantId = tenantId, EmployeeId = h.EmployeeId, QualificationTypeId = licenceType.Id,
+            ObtainedDate = new DateOnly(2015, 1, 1), ExpiryDate = new DateOnly(2031, 1, 1),
+            Status = QualificationStatus.Valid, CreatedAt = Now.UtcDateTime, UpdatedAt = Now.UtcDateTime,
+        });
+        await h.Db.Context.SaveChangesAsync();
+
+        var created = await h.Sut.CreateAsync(CreateRequest(h.EmployeeId), CancellationToken.None);
+        Assert.Equal("Ready", created.Driver!.Readiness.Status);
+
+        // H5: HR suspends the employment — the driver is no longer deployable anywhere.
+        var employee = await h.Db.Context.Employees.SingleAsync(e => e.Id == h.EmployeeId);
+        employee.EmploymentStatus = EmploymentStatus.Suspended;
+        await h.Db.Context.SaveChangesAsync();
+
+        var detail = await h.Sut.GetByIdAsync(created.Driver.Id, CancellationToken.None);
+        Assert.Equal("NotReady", detail!.Readiness.Status);
+        Assert.Contains(detail.Readiness.BlockingReasons, r => r.Contains("geschorst"));
+        Assert.Equal(DriverAvailabilityStatus.Unavailable, detail.AvailabilityStatus);
+
+        var listed = await h.Sut.SearchAsync(null, null, null, null, null, null, null, false, false, PageRequest.Of(1, 25), CancellationToken.None);
+        Assert.Equal(DriverAvailabilityStatus.Unavailable, Assert.Single(listed.Items).AvailabilityStatus);
+        var eligible = await h.Sut.SearchAsync(null, null, null, null, null, null, null, false, true, PageRequest.Of(1, 25), CancellationToken.None);
+        Assert.Empty(eligible.Items);
     }
 }

@@ -153,6 +153,8 @@ export interface ScheduleRow {
   isActive?: boolean
   /** False when the row is on screen only as an explicit pick outside the active group filters. */
   matchesFilters?: boolean
+  /** HR employment status code (Suspended/Terminated/OnLeave) when not deployable (H5); shift saves are blocked. */
+  employmentRestriction?: string | null
 }
 
 export interface ScheduleGrid {

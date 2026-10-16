@@ -148,6 +148,7 @@
     "semantics": "Au sein d'un filtre : ou ; entre filtres : et. Les collaborateurs choisis explicitement restent toujours visibles."
   },
   "picker": {
+    "notDeployable": "Non disponible selon le statut d’emploi : les nouveaux services sont bloqués.",
     "title": "Choisir des collaborateurs",
     "searchPlaceholder": "Rechercher par nom ou numéro de personnel…",
     "hint": "Recherche parmi tous les collaborateurs, aussi en dehors des filtres actuels.",

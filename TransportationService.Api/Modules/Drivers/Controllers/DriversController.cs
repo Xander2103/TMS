@@ -63,11 +63,13 @@ public class DriversController : ControllerBase
         [FromQuery] bool eligibleOnly = false,
         [FromQuery] int? page = null,
         [FromQuery] int? pageSize = null,
+        [FromQuery] DateOnly? availabilityOn = null,
         CancellationToken cancellationToken = default)
     {
         var result = await _driverService.SearchAsync(
             search, isActive, isBlocked, categoryId, availabilityStatus, qualificationTypeId,
-            expiringWithinDays, hasExpired, eligibleOnly, PageRequest.Of(page, pageSize), cancellationToken);
+            expiringWithinDays, hasExpired, eligibleOnly, PageRequest.Of(page, pageSize), cancellationToken,
+            availabilityOn);
         return Ok(result);
     }
 

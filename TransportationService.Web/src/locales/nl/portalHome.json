@@ -100,12 +100,12 @@
     "openFailed": "Het document kon niet worden geopend."
   },
   "qualificationStatus": {
-    "Pending": "In afwachting",
+    "Pending": "In behandeling",
     "Valid": "Geldig",
-    "ExpiringSoon": "Vervalt binnenkort",
-    "Expired": "Vervallen",
-    "Rejected": "Afgekeurd",
-    "Suspended": "Geschorst"
+    "ExpiringSoon": "Verloopt binnenkort",
+    "Expired": "Verlopen",
+    "Rejected": "Afgewezen",
+    "Suspended": "Ingetrokken"
   },
   "profile": {
     "loadFailed": "Je profiel kon niet worden geladen.",

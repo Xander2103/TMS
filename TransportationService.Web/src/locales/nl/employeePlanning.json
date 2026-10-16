@@ -148,6 +148,7 @@
     "semantics": "Binnen één filter geldt óf/óf, tussen filters én. Expliciet gekozen medewerkers blijven altijd zichtbaar."
   },
   "picker": {
+    "notDeployable": "Niet inzetbaar volgens het dienstverband: nieuwe shifts worden geblokkeerd.",
     "title": "Medewerkers kiezen",
     "searchPlaceholder": "Zoek op naam of personeelsnummer…",
     "hint": "Zoekt in alle medewerkers, ook buiten de huidige filters.",

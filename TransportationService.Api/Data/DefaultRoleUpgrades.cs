@@ -612,12 +612,25 @@ public static class DefaultRoleUpgrades
                 ["management"] = [PermissionCodes.DossiersReopen],
             }),
         new(35,
-            "HR-acceptatie 2026-10-16 (B1): de chauffeur zag via absences.view het bedrijfsbrede "
+            "HR-acceptatie 2026-10-16: HR krijgt kwalificatieverificatie, vertrouwelijke identiteits-/"
+            + "bankgegevens en uitdiensttreding (H3/H8). B1: de chauffeur zag via absences.view het bedrijfsbrede "
             + "afwezigheidsoverzicht (namen, ziekte, vrije redenen van collega's) en kon via "
             + "absences.create voor ANDERE medewerkers afwezigheden aanmaken. Eigen afwezigheden "
             + "lopen volledig via het self-service portaal (/api/me/absences, self-scoped), dus "
             + "beide rechten worden van het chauffeursjabloon ingetrokken.",
-            new Dictionary<string, IReadOnlyList<string>>(),
+            new Dictionary<string, IReadOnlyList<string>>
+            {
+                // H3/H8: de personeelsdienst voert de personeelsadministratie zelf — kwalificaties
+                // verifiëren (employee_documents.approve gate't enkel dat), identiteits- en
+                // bankgegevens (IBAN/RRN/identiteitskaart, dezelfde vertrouwelijkheidsklasse als de
+                // medische gegevens die HR al ziet) en een dienstverband beëindigen.
+                ["hr"] =
+                [
+                    PermissionCodes.EmployeeDocumentsApprove,
+                    PermissionCodes.EmployeesViewConfidential,
+                    PermissionCodes.EmployeesDeactivate,
+                ],
+            },
             new Dictionary<string, IReadOnlyList<string>>
             {
                 ["chauffeur"] = [PermissionCodes.AbsencesView, PermissionCodes.AbsencesCreate],

@@ -100,12 +100,12 @@
     "openFailed": "Le document n'a pas pu être ouvert."
   },
   "qualificationStatus": {
-    "Pending": "En attente",
+    "Pending": "En traitement",
     "Valid": "Valide",
     "ExpiringSoon": "Expire bientôt",
     "Expired": "Expirée",
     "Rejected": "Refusée",
-    "Suspended": "Suspendue"
+    "Suspended": "Retirée"
   },
   "profile": {
     "loadFailed": "Votre profil n'a pas pu être chargé.",

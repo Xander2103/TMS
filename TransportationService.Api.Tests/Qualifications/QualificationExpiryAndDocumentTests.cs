@@ -140,8 +140,30 @@ public class QualificationExpiryAndDocumentTests
         var h = await SeedAsync();
         using var _ = h.Db;
 
+        // H6: without any driving licence the driver is not "inzetbaar" (cannot be determined).
+        var withoutLicence = await h.Drivers.SearchAsync(null, null, null, null, null, null, null, false, true, PageRequest.Of(1, 25), CancellationToken.None);
+        Assert.Empty(withoutLicence.Items);
+
+        var licenceTypeId = Guid.NewGuid();
+        h.Db.Context.QualificationTypes.Add(new QualificationType
+        {
+            Id = licenceTypeId, Code = QualificationTypeCodes.DrivingLicenceC, Name = "Rijbewijs C", Category = "Rijbewijs", IsActive = true,
+        });
+        h.Db.Context.EmployeeQualifications.Add(new EmployeeQualification
+        {
+            Id = Guid.NewGuid(), TenantId = h.TenantId, EmployeeId = h.EmployeeId, QualificationTypeId = licenceTypeId,
+            ObtainedDate = new DateOnly(2015, 1, 1), ExpiryDate = Today.AddYears(5), Status = QualificationStatus.Valid,
+            CreatedAt = Now.UtcDateTime, UpdatedAt = Now.UtcDateTime,
+        });
+        await h.Db.Context.SaveChangesAsync();
+
         var eligible = await h.Drivers.SearchAsync(null, null, null, null, null, null, null, false, true, PageRequest.Of(1, 25), CancellationToken.None);
         Assert.Single(eligible.Items);
+
+        // H4: a withdrawn record is history — it does not make the driver ineligible.
+        h.Db.Context.EmployeeQualifications.Add(Qualification(h, Today.AddDays(-1), QualificationStatus.Suspended));
+        await h.Db.Context.SaveChangesAsync();
+        Assert.Single((await h.Drivers.SearchAsync(null, null, null, null, null, null, null, false, true, PageRequest.Of(1, 25), CancellationToken.None)).Items);
 
         h.Db.Context.EmployeeQualifications.Add(Qualification(h, Today.AddDays(-1)));
         await h.Db.Context.SaveChangesAsync();

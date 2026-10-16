@@ -148,6 +148,7 @@
     "semantics": "Within one filter: or; between filters: and. Explicitly chosen employees always stay visible."
   },
   "picker": {
+    "notDeployable": "Not deployable according to the employment status: new shifts are blocked.",
     "title": "Choose employees",
     "searchPlaceholder": "Search by name or employee number…",
     "hint": "Searches all employees, also outside the current filters.",

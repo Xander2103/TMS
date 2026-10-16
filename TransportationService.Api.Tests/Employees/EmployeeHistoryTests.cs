@@ -140,7 +140,7 @@ public class EmployeeHistoryTests
         var entry = history!.Items.First();
         Assert.Equal(2, entry.Changes.Count);
         Assert.Contains(entry.Changes, c => c.Field == "Straat" && c.Before == "Oude straat" && c.After == "Nieuwe straat");
-        Assert.Contains(entry.Changes, c => c.Field == "Status tewerkstelling" && c.Before == "Actief" && c.After == "Met verlof");
+        Assert.Contains(entry.Changes, c => c.Field == "Status tewerkstelling" && c.Before == "In dienst" && c.After == "Met verlof");
         Assert.Equal("2 velden gewijzigd (Straat, Status tewerkstelling)", entry.Summary);
     }
 
@@ -192,7 +192,17 @@ public class EmployeeHistoryTests
 
         var history = await h.History.GetHistoryAsync(created.Id, 1, 25, null, EmployeeHistoryAccess.Full, CancellationToken.None);
         var updateEntry = history!.Items.First(e => e.Category == "Kwalificaties" && e.Action == "Updated");
-        Assert.Contains(updateEntry.Changes, c => c.Field == "Vervaldatum" && c.Before == "01-01-2026" && c.After == "01-01-2027");
+        Assert.Contains(updateEntry.Changes, c => c.Field == "Vervaldatum" && c.Before == "01/01/2026" && c.After == "01/01/2027");
+        // HR acceptance P2-9: the entry names WHICH qualification changed.
+        Assert.StartsWith("ADR-attest: ", updateEntry.Summary);
+
+        // P2-11: withdrawing reads as "Ingetrokken", the UI's own word — not "Geschorst".
+        await h.Qualifications.SuspendAsync(qualification.Id, CancellationToken.None);
+        var withdrawn = (await h.History.GetHistoryAsync(created.Id, 1, 25, null, EmployeeHistoryAccess.Full, CancellationToken.None))!
+            .Items.First(e => e.Category == "Kwalificaties" && e.Action == "Suspended");
+        Assert.Equal("Ingetrokken", withdrawn.ActionLabel);
+        Assert.Contains(withdrawn.Changes, c => c.After == "Ingetrokken");
+        Assert.DoesNotContain("Geschorst", withdrawn.Summary);
     }
 
     [Fact]

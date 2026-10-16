@@ -629,6 +629,12 @@ button.schedule-chip {
   color: var(--color-warning-text);
 }
 
+/* H5: HR employment status makes the row non-deployable (geschorst / uit dienst / met verlof). */
+.ep-inline-badge-restricted {
+  background: var(--color-danger-bg);
+  color: var(--color-danger-text);
+}
+
 .ep-employee-name {
   font-weight: 600;
   color: var(--text-h);

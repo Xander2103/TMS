@@ -195,6 +195,7 @@ public static class DefaultRoleDefinitions
             [
                 PermissionCodes.DashboardView,
                 PermissionCodes.EmployeesView, PermissionCodes.EmployeesCreate, PermissionCodes.EmployeesEdit,
+                PermissionCodes.EmployeesDeactivate, PermissionCodes.EmployeesViewConfidential,
                 PermissionCodes.EmployeePlanningView, PermissionCodes.EmployeePlanningManage,
                 PermissionCodes.EmployeePlanningConflictOverride,
                 PermissionCodes.AbsencesView, PermissionCodes.AbsencesCreate, PermissionCodes.AbsencesEdit,
@@ -202,6 +203,7 @@ public static class DefaultRoleDefinitions
                 PermissionCodes.AbsencesViewMedical,
                 PermissionCodes.EmployeeDocumentsView, PermissionCodes.EmployeeDocumentsCreate,
                 PermissionCodes.EmployeeDocumentsEdit, PermissionCodes.EmployeeDocumentsDelete,
+                PermissionCodes.EmployeeDocumentsApprove,
                 PermissionCodes.EmployeeDocumentsViewSensitive, PermissionCodes.HrSettingsManage,
                 PermissionCodes.EmployeeNotesView, PermissionCodes.EmployeeNotesManage, PermissionCodes.EmployeeNotesPin,
                 PermissionCodes.IssuedItemsView, PermissionCodes.IssuedItemsManage, PermissionCodes.IssuedItemsManageTemplates,

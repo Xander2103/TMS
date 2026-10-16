@@ -12,6 +12,8 @@ export interface SearchDriversParams {
   expiringWithinDays?: number
   hasExpired?: boolean
   eligibleOnly?: boolean
+  /** yyyy-MM-dd: availability (absence) is evaluated for this day instead of today. */
+  availabilityOn?: string
   page: number
   pageSize: number
 }
@@ -27,6 +29,7 @@ export function searchDrivers(params: SearchDriversParams): Promise<PagedResult<
   if (params.expiringWithinDays !== undefined) query.set('expiringWithinDays', String(params.expiringWithinDays))
   if (params.hasExpired) query.set('hasExpired', 'true')
   if (params.eligibleOnly) query.set('eligibleOnly', 'true')
+  if (params.availabilityOn) query.set('availabilityOn', params.availabilityOn)
   query.set('page', String(params.page))
   query.set('pageSize', String(params.pageSize))
   return apiClient.getJson<PagedResult<DriverListItem>>(`/api/drivers?${query.toString()}`)

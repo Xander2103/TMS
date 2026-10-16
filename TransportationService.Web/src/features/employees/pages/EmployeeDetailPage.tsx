@@ -231,7 +231,11 @@ export function EmployeeDetailPage() {
 
   /** A "documenten" missing item only gets an action when the viewer can open that section. */
   function canNavigateCompleteness(section: string) {
-    return section !== 'documenten' || canViewDocuments
+    if (section === 'documenten') return canViewDocuments
+    // Rijksregisternummer/IBAN live in the confidential block: without the permission there is
+    // no field to land on, so the gap stays informational instead of a dead "Aanvullen".
+    if (section === 'hr') return hasPermission('employees.view_confidential')
+    return true
   }
 
   async function saveProfile(current: EmployeeDetail, values: EmployeeInput) {

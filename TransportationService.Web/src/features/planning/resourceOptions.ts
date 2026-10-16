@@ -21,6 +21,18 @@ export function joinParts(parts: Array<string | null | undefined>, separator: st
   return parts.filter((part): part is string => Boolean(part)).join(separator)
 }
 
+/**
+ * Why a driver is not plainly available, shown in the option BEFORE selection (HR acceptance
+ * P2-7): blocked, absent on the requested day (approved absence), or not deployable (HR employment
+ * status / profile unavailable). Qualification problems still surface in the conflict check.
+ */
+export function driverAvailabilityNote(driver: DriverListItem, t: TranslateFn): string | null {
+  if (driver.isBlocked) return t('planning.driverPicker.blocked')
+  if (driver.availabilityStatus === 'OnLeave') return t('planning.driverPicker.absent')
+  if (driver.availabilityStatus === 'Unavailable') return t('planning.driverPicker.unavailable')
+  return null
+}
+
 /** Driver: first/last name (any order), driver number and personnel number. */
 export function buildDriverOptions(drivers: DriverListItem[], t: TranslateFn): SearchableSelectOption[] {
   return drivers.map((driver) => ({
@@ -28,6 +40,7 @@ export function buildDriverOptions(drivers: DriverListItem[], t: TranslateFn): S
     label: `${driver.fullName} (${driver.driverNumber})`,
     subtitle: joinParts(
       [
+        driverAvailabilityNote(driver, t),
         driver.employeeNumber ? t('planning.detail.employeeNumber', { number: driver.employeeNumber }) : null,
         driver.categoryName,
       ],

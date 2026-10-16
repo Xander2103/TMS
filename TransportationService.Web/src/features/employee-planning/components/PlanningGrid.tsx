@@ -87,6 +87,11 @@ export function PlanningGrid({ rows, days, today, canManage, canViewEmployees, c
                       row.employeeName
                     )}
                     {row.isActive === false && <span className="ep-inline-badge">{t('employeePlanning.picker.inactiveBadge')}</span>}
+                    {row.isActive !== false && row.employmentRestriction && (
+                      <span className="ep-inline-badge ep-inline-badge-restricted" title={t('employeePlanning.picker.notDeployable')}>
+                        {t(`employees.status.${row.employmentRestriction}`)}
+                      </span>
+                    )}
                     {compact && outside && <span className="ep-inline-badge ep-inline-badge-outside">{t('employeePlanning.chips.outsideFilters')}</span>}
                   </div>
                   <div className="ep-employee-meta" title={compact ? groups : undefined}>

@@ -206,5 +206,10 @@
     "movedUp_one": "1 trajet de ce jour figure plus haut (En cours ou En retard).",
     "movedUp_other": "{count} trajets de ce jour figurent plus haut (En cours ou En retard).",
     "dayOnlyAbove": "Tous les trajets de ce jour figurent plus haut (En cours ou En retard)."
+  },
+  "driverPicker": {
+    "blocked": "⚠ Bloqué",
+    "absent": "⚠ Absent ce jour-là",
+    "unavailable": "⚠ Non disponible"
   }
 }

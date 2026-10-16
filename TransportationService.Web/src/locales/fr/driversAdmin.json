@@ -7,6 +7,7 @@
   },
   "readiness": {
     "Ready": "Apte au service",
+    "Incomplete": "Incomplet",
     "Warning": "Attention",
     "NotReady": "Inapte au service",
     "Blocked": "Bloqué"
@@ -15,9 +16,9 @@
     "Valid": "Valide",
     "ExpiringSoon": "Expire bientôt",
     "Expired": "Expiré",
-    "Suspended": "Suspendu",
+    "Suspended": "Retirée",
     "Rejected": "Refusé",
-    "Pending": "En attente"
+    "Pending": "En traitement"
   },
   "fields": {
     "availability": "Disponibilité",

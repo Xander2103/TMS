@@ -200,7 +200,10 @@ public record ScheduleRowDto(
     bool IsActive = true,
     /// <summary>False for a row that is on screen only because it was explicitly picked and falls
     /// outside the active group filters ("Buiten huidige filters"). Never blocks the row.</summary>
-    bool MatchesFilters = true);
+    bool MatchesFilters = true,
+    /// <summary>H5: the EmploymentStatus code (Suspended / Terminated / OnLeave) when the HR status
+    /// makes the person non-deployable; null when "in dienst". Shift saves for such a row are blocked.</summary>
+    string? EmploymentRestriction = null);
 
 /// <param name="TotalInScope">Employees in the tenant that fall within the status scope of the
 /// query, before group filters ("38 van 214 medewerkers").</param>

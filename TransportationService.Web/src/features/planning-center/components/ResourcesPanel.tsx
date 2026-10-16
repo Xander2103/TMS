@@ -22,6 +22,11 @@ interface ResourcesPanelProps {
 }
 
 /** Right zone: draggable drivers / vehicles / trailers with availability context. */
+/** Plannable at all: active profile, not blocked, HR employment "in dienst" (H5). */
+function isDeployable(driver: PlanningDriver): boolean {
+  return driver.isActive && !driver.isBlocked && !driver.employmentRestriction
+}
+
 export function ResourcesPanel({ resources, isLoading, pinnedIds, onTogglePin, onCollapse }: ResourcesPanelProps) {
   const { t } = useLocale()
   const [tab, setTab] = useState<ResourceTab>('drivers')
@@ -33,7 +38,7 @@ export function ResourcesPanel({ resources, isLoading, pinnedIds, onTogglePin, o
   const drivers = useMemo(() => {
     const list = (resources?.drivers ?? [])
       .filter((d) => !term || d.name.toLowerCase().includes(term) || d.driverNumber.toLowerCase().includes(term))
-      .filter((d) => !onlyAvailable || (d.isActive && !d.isBlocked && d.assignments.length === 0 && d.absences.length === 0))
+      .filter((d) => !onlyAvailable || (isDeployable(d) && d.assignments.length === 0 && d.absences.length === 0))
     return sortPinnedFirst(list, pinnedIds, (d) => d.id)
   }, [resources, term, onlyAvailable, pinnedIds])
 
@@ -150,6 +155,9 @@ function DriverCard({ driver, pinned, onTogglePin, t }: {
       </p>
       <div className="pc-resource-badges">
         {!driver.isActive && <Badge tone="danger">{t('planningCenter.resources.inactive')}</Badge>}
+        {driver.employmentRestriction && (
+          <Badge tone="danger">{t(`employees.status.${driver.employmentRestriction}`)}</Badge>
+        )}
         {driver.isBlocked && <Badge tone="danger">{t('planningCenter.resources.blocked')}</Badge>}
         {driver.absences.length > 0 && <Badge tone="warning">{t('planningCenter.resources.absent', { count: driver.absences.length })}</Badge>}
         {driver.qualificationBlocks.length > 0 && (
@@ -158,9 +166,11 @@ function DriverCard({ driver, pinned, onTogglePin, t }: {
         {driver.qualificationWarnings.length > 0 && (
           <Badge tone="warning">{t('planningCenter.resources.qualificationWarnings', { list: driver.qualificationWarnings.join(', ') })}</Badge>
         )}
-        {busyDates > 0
-          ? <Badge tone="info">{t('planningCenter.resources.trips', { count: busyDates })}</Badge>
-          : <Badge tone="success">{t('planningCenter.resources.free')}</Badge>}
+        {busyDates > 0 && <Badge tone="info">{t('planningCenter.resources.trips', { count: busyDates })}</Badge>}
+        {/* "Vrij" only when the driver can actually be planned: never next to "Afwezig"/"Geschorst". */}
+        {busyDates === 0 && isDeployable(driver) && driver.absences.length === 0 && (
+          <Badge tone="success">{t('planningCenter.resources.free')}</Badge>
+        )}
       </div>
     </article>
   )

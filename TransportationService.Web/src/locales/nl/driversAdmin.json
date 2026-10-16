@@ -7,6 +7,7 @@
   },
   "readiness": {
     "Ready": "Inzetbaar",
+    "Incomplete": "Onvolledig",
     "Warning": "Let op",
     "NotReady": "Niet inzetbaar",
     "Blocked": "Geblokkeerd"
@@ -15,8 +16,8 @@
     "Valid": "Geldig",
     "ExpiringSoon": "Verloopt binnenkort",
     "Expired": "Verlopen",
-    "Suspended": "Geschorst",
-    "Rejected": "Afgekeurd",
+    "Suspended": "Ingetrokken",
+    "Rejected": "Afgewezen",
     "Pending": "In behandeling"
   },
   "fields": {

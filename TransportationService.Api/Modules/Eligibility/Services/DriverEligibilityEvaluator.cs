@@ -1,6 +1,7 @@
 namespace TransportationService.Api.Modules.Eligibility.Services;
 using TransportationService.Api.Modules.Eligibility.Models;
 using TransportationService.Api.Modules.Qualifications.Entities;
+using TransportationService.Api.Modules.Qualifications.Services;
 
 /// <summary>
 /// Pure, dependency-free evaluation of the eligibility business rules.
@@ -97,17 +98,15 @@ public class DriverEligibilityEvaluator
         }
     }
 
-    private static bool IsQualificationValidForPeriod(IReadOnlyList<QualificationSnapshot> qualifications, string qualificationTypeCode, DriverEligibilityRequest request)
-    {
-        var match = qualifications.FirstOrDefault(q => q.QualificationTypeCode == qualificationTypeCode);
-        if (match is null) return false;
-
-        if (match.EffectiveStatus is not (QualificationStatus.Valid or QualificationStatus.ExpiringSoon)) return false;
-
-        // A qualification that expires before the planned transport ends is not valid for that transport,
-        // even if it currently reads as Valid/ExpiringSoon "today".
-        if (match.ExpiryDate is { } expiry && expiry < request.PlannedEndDate) return false;
-
-        return true;
-    }
+    /// <summary>
+    /// Any ONE usable record of the type that is still valid when the transport ends satisfies
+    /// the requirement (HR acceptance H4): a withdrawn or expired duplicate never hides a valid
+    /// replacement, and a withdrawn record never satisfies anything. A qualification that expires
+    /// before the planned transport ends is not valid for that transport, even if it reads as
+    /// Valid/ExpiringSoon "today".
+    /// </summary>
+    private static bool IsQualificationValidForPeriod(IReadOnlyList<QualificationSnapshot> qualifications, string qualificationTypeCode, DriverEligibilityRequest request) =>
+        QualificationReadinessPolicy.Satisfies(
+            qualifications.Select(q => new QualificationReadinessPolicy.Record(q.QualificationTypeCode, q.QualificationTypeCode, q.EffectiveStatus, q.ExpiryDate)),
+            qualificationTypeCode, request.PlannedEndDate);
 }

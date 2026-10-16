@@ -206,5 +206,10 @@
     "movedUp_one": "1 trip of this day is listed above under Running or Overdue.",
     "movedUp_other": "{count} trips of this day are listed above under Running or Overdue.",
     "dayOnlyAbove": "Every trip of this day is listed above under Running or Overdue."
+  },
+  "driverPicker": {
+    "blocked": "⚠ Blocked",
+    "absent": "⚠ Absent on this day",
+    "unavailable": "⚠ Not deployable"
   }
 }

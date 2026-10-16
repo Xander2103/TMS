@@ -83,7 +83,7 @@ export function PlanningPage() {
   const [newTripOpen, setNewTripOpen] = useState(false)
   const [newTripDate, setNewTripDate] = useState(date)
   const [newTripDriverId, setNewTripDriverId] = useState<string | null>(null)
-  const { drivers, status: resourceStatus } = usePlanningResources(newTripOpen)
+  const { drivers, status: resourceStatus } = usePlanningResources(newTripOpen, newTripDate)
   const driverOptions = useMemo(() => buildDriverOptions(drivers, t), [drivers, t])
 
   function openNewTrip() {

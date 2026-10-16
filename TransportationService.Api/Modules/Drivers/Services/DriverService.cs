@@ -1,3 +1,5 @@
+using TransportationService.Api.Modules.Employees.Services;
+using TransportationService.Api.Modules.Employees.Entities;
 using TransportationService.Api.Modules.Qualifications;
 using Microsoft.EntityFrameworkCore;
 using TransportationService.Api.Common.Models;
@@ -46,10 +48,13 @@ public class DriverService : IDriverService
         string? search, bool? isActive, bool? isBlocked, Guid? categoryId,
         DriverAvailabilityStatus? availabilityStatus, Guid? qualificationTypeId,
         int? expiringWithinDays, bool hasExpired, bool eligibleOnly,
-        PageRequest page, CancellationToken cancellationToken)
+        PageRequest page, CancellationToken cancellationToken,
+        DateOnly? availabilityOn = null)
     {
         var tenantId = _tenantContext.TenantId;
         var today = DateOnly.FromDateTime(_timeProvider.GetUtcNow().UtcDateTime);
+        // P2-7: the trip picker asks for availability ON THE TRIP DATE, not today.
+        var availabilityDate = availabilityOn ?? today;
         var query = TenantScoped().AsNoTracking();
 
         if (isActive is { } active) query = query.Where(d => d.IsActive == active);
@@ -79,10 +84,32 @@ public class DriverService : IDriverService
 
         if (eligibleOnly)
         {
-            // Inzetbaar: administratively active, not blocked, and no expired qualification.
+            // Inzetbaar — same rules as BuildReadiness (QualificationReadinessPolicy): active, not
+            // blocked, employment "in dienst", not absent today, a live driving licence, and no
+            // expired CORE qualification without a live replacement. Withdrawn/rejected records
+            // are history and count for nothing.
+            var licenceTypeIds = await _dbContext.QualificationTypes.AsNoTracking()
+                .Where(t => t.Code == QualificationTypeCodes.DrivingLicenceB || t.Code == QualificationTypeCodes.DrivingLicenceC
+                            || t.Code == QualificationTypeCodes.DrivingLicenceCE)
+                .Select(t => t.Id).ToListAsync(cancellationToken);
+            var coreTypeIds = await _dbContext.QualificationTypes.AsNoTracking()
+                .Where(t => t.Code == QualificationTypeCodes.DrivingLicenceB || t.Code == QualificationTypeCodes.DrivingLicenceC
+                            || t.Code == QualificationTypeCodes.DrivingLicenceCE || t.Code == QualificationTypeCodes.Code95
+                            || t.Code == QualificationTypeCodes.MedicalFitness || t.Code == QualificationTypeCodes.DriverCard)
+                .Select(t => t.Id).ToListAsync(cancellationToken);
+            var live = _dbContext.EmployeeQualifications.Where(q => q.TenantId == tenantId
+                && q.Status != QualificationStatus.Suspended && q.Status != QualificationStatus.Rejected);
             query = query.Where(d => d.IsActive && !d.IsBlocked
-                && !_dbContext.EmployeeQualifications.Any(q =>
-                    q.TenantId == tenantId && q.EmployeeId == d.EmployeeId && q.ExpiryDate != null && q.ExpiryDate < today));
+                && _dbContext.Employees.Any(e => e.Id == d.EmployeeId && e.TenantId == tenantId
+                                                 && e.IsActive && e.EmploymentStatus == EmploymentStatus.Active)
+                && !_dbContext.Absences.Any(a => a.TenantId == tenantId && a.EmployeeId == d.EmployeeId
+                                                 && a.Status == AbsenceStatus.Approved && a.StartDate <= today && a.EndDate >= today)
+                && live.Any(q => q.EmployeeId == d.EmployeeId && licenceTypeIds.Contains(q.QualificationTypeId)
+                                 && (q.ExpiryDate == null || q.ExpiryDate >= today))
+                && !live.Any(q => q.EmployeeId == d.EmployeeId && coreTypeIds.Contains(q.QualificationTypeId)
+                                  && q.ExpiryDate != null && q.ExpiryDate < today
+                                  && !live.Any(r => r.EmployeeId == d.EmployeeId && r.QualificationTypeId == q.QualificationTypeId
+                                                    && (r.ExpiryDate == null || r.ExpiryDate >= today))));
         }
 
         // Join employee (for name/number and search) and category name — both tenant-scoped.
@@ -116,8 +143,9 @@ public class DriverService : IDriverService
                 _dbContext.Absences.Any(a =>
                     a.TenantId == x.d.TenantId && a.EmployeeId == x.d.EmployeeId
                     && a.Status == AbsenceStatus.Approved
-                    && a.StartDate <= today && a.EndDate >= today)
+                    && a.StartDate <= availabilityDate && a.EndDate >= availabilityDate)
                     ? DriverAvailabilityStatus.OnLeave
+                    : x.e.EmploymentStatus != EmploymentStatus.Active ? DriverAvailabilityStatus.Unavailable
                     : x.d.AvailabilityStatus,
                 x.d.IsActive, x.d.IsBlocked,
                 // D1: fixed vehicle (vehicle side is the source), same tenant, active only.
@@ -413,7 +441,7 @@ public class DriverService : IDriverService
 
         var qualifications = await LoadQualificationsAsync(driver.EmployeeId, cancellationToken);
         var absenceToday = await CurrentAbsenceTypeAsync(driver.EmployeeId, cancellationToken);
-        var readiness = BuildReadiness(driver, qualifications, absenceToday);
+        var readiness = BuildReadiness(driver, qualifications, absenceToday, employee?.EmploymentStatus ?? EmploymentStatus.Active);
 
         // Vehicle assignment is stored on the Vehicle side; resolve both slots from there.
         var fixedVehicle = await _dbContext.Vehicles.AsNoTracking()
@@ -445,7 +473,9 @@ public class DriverService : IDriverService
             employee is null ? string.Empty : $"{employee.FirstName} {employee.LastName}",
             employee?.EmployeeNumber ?? string.Empty,
             driver.DriverCategoryId, categoryName,
-            absenceToday is not null ? DriverAvailabilityStatus.OnLeave : driver.AvailabilityStatus,
+            absenceToday is not null ? DriverAvailabilityStatus.OnLeave
+                : employee is not null && !EmploymentDeployability.IsDeployable(employee.EmploymentStatus) ? DriverAvailabilityStatus.Unavailable
+                : driver.AvailabilityStatus,
             driver.IsActive, driver.IsBlocked, driver.BlockReason,
             fixedVehicle, currentVehicle,
             driver.FixedTrailerId, fixedTrailerLabel,
@@ -503,11 +533,15 @@ public class DriverService : IDriverService
 
     /// <summary>
     /// Driver readiness summary computed on the server (never in the browser). Blocked overrides
-    /// everything; otherwise expired qualifications make a driver not-ready and expiring ones warn.
-    /// An approved absence covering today also makes the driver not-ready.
+    /// everything; an approved absence covering today, a non-deployable employment status (H5) or
+    /// an expired CORE qualification make the driver not-ready. Qualification records follow
+    /// <see cref="QualificationReadinessPolicy"/> (H4: withdrawn records are history, a valid
+    /// replacement satisfies). Without any live driving licence the verdict is "Incomplete" —
+    /// never a green "geen belemmeringen" (H6).
     /// </summary>
     private static DriverReadinessDto BuildReadiness(
-        Driver driver, IReadOnlyList<DriverQualificationDto> qualifications, AbsenceType? absenceToday)
+        Driver driver, IReadOnlyList<DriverQualificationDto> qualifications, AbsenceType? absenceToday,
+        EmploymentStatus employmentStatus)
     {
         var blocking = new List<string>();
         var warnings = new List<string>();
@@ -522,33 +556,27 @@ public class DriverService : IDriverService
             blocking.Add("Chauffeur is inactief.");
         }
 
+        if (EmploymentDeployability.Restriction(employmentStatus) is { } restriction)
+        {
+            blocking.Add($"Dienstverband: {restriction}.");
+        }
+
         if (absenceToday is { } absence)
         {
             blocking.Add($"Vandaag afwezig ({AbsenceTypeLabels[absence]}).");
         }
 
-        foreach (var q in qualifications)
-        {
-            switch (q.Status)
-            {
-                case nameof(QualificationStatus.Expired):
-                    blocking.Add($"{q.TypeName} is verlopen.");
-                    break;
-                case nameof(QualificationStatus.Suspended):
-                case nameof(QualificationStatus.Rejected):
-                    blocking.Add($"{q.TypeName} is niet geldig ({QualificationStatusLabels.Dutch(q.Status)}).");
-                    break;
-                case nameof(QualificationStatus.ExpiringSoon):
-                    warnings.Add($"{q.TypeName} verloopt binnenkort.");
-                    break;
-                case nameof(QualificationStatus.Pending):
-                    warnings.Add($"{q.TypeName} is nog niet bevestigd.");
-                    break;
-            }
-        }
+        var assessment = QualificationReadinessPolicy.Assess(QualificationReadinessPolicy.Evaluate(
+            qualifications.Select(q => new QualificationReadinessPolicy.Record(
+                q.TypeCode, q.TypeName,
+                Enum.TryParse<QualificationStatus>(q.Status, out var parsed) ? parsed : QualificationStatus.Pending,
+                q.ExpiryDate))));
+        blocking.AddRange(assessment.Blocking);
+        warnings.AddRange(assessment.Warnings);
 
         var status = blocking.Count > 0
             ? (driver.IsBlocked ? "Blocked" : "NotReady")
+            : assessment.Incomplete ? "Incomplete"
             : warnings.Count > 0 ? "Warning" : "Ready";
 
         return new DriverReadinessDto(status, blocking, warnings);

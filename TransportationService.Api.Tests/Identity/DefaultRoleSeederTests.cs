@@ -894,6 +894,20 @@ public class DefaultRoleSeederTests
         Assert.Contains(PermissionCodes.LeaveBalancesViewOwn, chauffeur);
         // Planning roles keep the company-wide overview (who is off, when).
         Assert.Contains(PermissionCodes.AbsencesView, await CodesOfAsync(db, roles.Single(r => r.TemplateCode == "planner").Id));
+
+        // H3/H8: HR verifies qualifications, manages identity/bank data and ends employment.
+        var hr = await CodesOfAsync(db, roles.Single(r => r.TemplateCode == "hr").Id);
+        Assert.Contains(PermissionCodes.EmployeeDocumentsApprove, hr);
+        Assert.Contains(PermissionCodes.EmployeesViewConfidential, hr);
+        Assert.Contains(PermissionCodes.EmployeesDeactivate, hr);
+        Assert.DoesNotContain(PermissionCodes.EmployeesAnonymize, hr);
+        foreach (var planning in new[] { "planner", "dispatcher", "chauffeur" })
+        {
+            var codes = await CodesOfAsync(db, roles.Single(r => r.TemplateCode == planning).Id);
+            Assert.DoesNotContain(PermissionCodes.EmployeesViewConfidential, codes);
+            Assert.DoesNotContain(PermissionCodes.EmployeeNotesView, codes);
+            Assert.DoesNotContain(PermissionCodes.AbsencesApprove, codes);
+        }
     }
 
     [Fact]

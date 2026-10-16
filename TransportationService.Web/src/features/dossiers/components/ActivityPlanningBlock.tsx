@@ -115,7 +115,10 @@ function PlanningForm({ dossier, activity, isOpen, onApply, onConflict, onDirtyC
   // Same rule as the planning board: only a Draft or Planned trip is re-assigned.
   const editable = canWrite && (!assignment || (trip !== null && (trip.status === 'Draft' || trip.status === 'Planned')))
 
-  const { drivers, vehicles, trailers, status: listStatus } = usePlanningResources(canWrite)
+  const { drivers, vehicles, trailers, status: listStatus } = usePlanningResources(
+    canWrite,
+    assignment?.tripDate ?? activity.plannedDate,
+  )
   const driverOptions = useMemo(() => buildDriverOptions(drivers, t), [drivers, t])
   const vehicleOptions = useMemo(() => buildVehicleOptions(vehicles), [vehicles])
   const trailerOptions = useMemo(() => buildTrailerOptions(trailers), [trailers])

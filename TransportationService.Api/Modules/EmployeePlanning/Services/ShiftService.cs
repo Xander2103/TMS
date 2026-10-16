@@ -1,3 +1,4 @@
+using TransportationService.Api.Modules.Employees.Services;
 using Microsoft.EntityFrameworkCore;
 using TransportationService.Api.Common.Scheduling;
 using TransportationService.Api.Data;
@@ -122,7 +123,7 @@ public class ShiftService : IShiftService
             new { shift.EmployeeId, shift.Date, shift.StartTime, shift.EndTime, shift.Type }, cancellationToken);
 
         await NotifyEmployeeAsync(request.EmployeeId, "shift_assigned", "Nieuwe shift ingepland",
-            $"{request.Date:dd-MM-yyyy} {request.StartTime:HH\\:mm}–{request.EndTime:HH\\:mm}"
+            $"{request.Date:dd/MM/yyyy} {request.StartTime:HH\\:mm}–{request.EndTime:HH\\:mm}"
             + (shift.WorkLocation is { } location ? $" · {location}" : string.Empty),
             cancellationToken);
 
@@ -170,7 +171,7 @@ public class ShiftService : IShiftService
             new { shift.Date, shift.StartTime, shift.EndTime, shift.Type, shift.WorkLocation }, cancellationToken);
 
         await NotifyEmployeeAsync(shift.EmployeeId, "planning_changed", "Shift aangepast",
-            $"{shift.Date:dd-MM-yyyy} {shift.StartTime:HH\\:mm}–{shift.EndTime:HH\\:mm}", cancellationToken);
+            $"{shift.Date:dd/MM/yyyy} {shift.StartTime:HH\\:mm}–{shift.EndTime:HH\\:mm}", cancellationToken);
 
         return ShiftOperationResult.Success(await MapAsync(shift, cancellationToken));
     }
@@ -199,7 +200,7 @@ public class ShiftService : IShiftService
         if (status == ShiftStatus.Confirmed)
         {
             await NotifyEmployeeAsync(shift.EmployeeId, "shift_assigned", "Shift bevestigd",
-                $"{shift.Date:dd-MM-yyyy} {shift.StartTime:HH\\:mm}–{shift.EndTime:HH\\:mm}", cancellationToken);
+                $"{shift.Date:dd/MM/yyyy} {shift.StartTime:HH\\:mm}–{shift.EndTime:HH\\:mm}", cancellationToken);
 
             await _calendarSyncService.QueueAsync(new CalendarSyncEvent(
                 "shift_confirmed", shift.Id, shift.EmployeeId, shift.Date, shift.Date,
@@ -300,7 +301,7 @@ public class ShiftService : IShiftService
             new { shift.EmployeeId, shift.Date }, null, cancellationToken);
 
         await NotifyEmployeeAsync(shift.EmployeeId, "planning_changed", "Shift geannuleerd",
-            $"{shift.Date:dd-MM-yyyy} {shift.StartTime:HH\\:mm}–{shift.EndTime:HH\\:mm} is geschrapt.", cancellationToken);
+            $"{shift.Date:dd/MM/yyyy} {shift.StartTime:HH\\:mm}–{shift.EndTime:HH\\:mm} is geschrapt.", cancellationToken);
 
         if (shift.Status == ShiftStatus.Confirmed)
         {
@@ -391,6 +392,7 @@ public class ShiftService : IShiftService
             .Select(e => new
             {
                 e.Id, e.FirstName, e.LastName, e.EmployeeNumber, e.DepartmentId, e.ContractTypeId, e.IsActive,
+                e.EmploymentStatus,
                 IsDriver = _dbContext.Drivers.Any(d => d.EmployeeId == e.Id && d.TenantId == tenantId),
             })
             .ToListAsync(cancellationToken);
@@ -499,7 +501,8 @@ public class ShiftService : IShiftService
                 functions.Select(f => f.Name).ToList(),
                 employee.ContractTypeId is { } ct ? contractTypes.GetValueOrDefault(ct) : null,
                 employee.IsActive,
-                matches);
+                matches,
+                EmploymentDeployability.RestrictionCode(employee.EmploymentStatus));
         }).ToList();
 
         return new ScheduleGridDto(from, to, rows, totalInScope);
@@ -729,6 +732,16 @@ public class ShiftService : IShiftService
 
         var blocking = new List<string>();
 
+        // H5: a suspended/terminated employment is not plannable (the HR status is authoritative).
+        var employmentStatus = await _dbContext.Employees.AsNoTracking()
+            .Where(e => e.TenantId == tenantId && e.Id == employeeId)
+            .Select(e => (EmploymentStatus?)e.EmploymentStatus)
+            .FirstOrDefaultAsync(cancellationToken);
+        if (employmentStatus is { } status && EmploymentDeployability.Restriction(status) is { } restriction)
+        {
+            blocking.Add($"Medewerker is niet inzetbaar: dienstverband {restriction}.");
+        }
+
         var trips = await _dbContext.TripPlanningEntries.AsNoTracking()
             .Where(t => t.TenantId == tenantId && t.EmployeeId == employeeId && t.Date == date
                         && t.Status != Planning.Entities.TripStatus.Cancelled)
@@ -763,7 +776,7 @@ public class ShiftService : IShiftService
         {
             if (ScheduleConflictRules.TripVsAbsence(absenceType, trainingSeverity) == ConflictSeverity.Blocking)
             {
-                blocking.Add($"Medewerker is afwezig op {date:dd-MM-yyyy} ({AbsenceLabel(absenceType)}).");
+                blocking.Add($"Medewerker is afwezig op {date:dd/MM/yyyy} ({AbsenceLabel(absenceType)}).");
             }
         }
 

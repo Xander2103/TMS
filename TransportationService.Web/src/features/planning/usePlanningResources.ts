@@ -20,9 +20,11 @@ export interface PlanningResources {
 /**
  * Active drivers, vehicles and trailers for the assignment pickers. Each list settles on its own,
  * so one failing endpoint never blocks the other two. `enabled = false` (read-only host) loads
- * nothing.
+ * nothing. `availabilityOn` (yyyy-MM-dd, the trip date) makes each driver's availability reflect
+ * THAT day — an approved absence or a non-deployable employment shows before selection (HR
+ * acceptance P2-7); the driver list reloads when the date changes.
  */
-export function usePlanningResources(enabled = true): PlanningResources {
+export function usePlanningResources(enabled = true, availabilityOn?: string | null): PlanningResources {
   const [drivers, setDrivers] = useState<DriverListItem[]>([])
   const [vehicles, setVehicles] = useState<VehicleOption[]>([])
   const [trailers, setTrailers] = useState<TrailerOption[]>([])
@@ -35,15 +37,26 @@ export function usePlanningResources(enabled = true): PlanningResources {
   useEffect(() => {
     if (!enabled) return
     let mounted = true
+    searchDrivers({ isActive: true, page: 1, pageSize: 200, availabilityOn: availabilityOn || undefined })
+      .then((data) => {
+        if (!mounted) return
+        setDrivers(data.items)
+        setStatus((current) => ({ ...current, drivers: 'ready' }))
+      })
+      .catch(() => {
+        if (mounted) setStatus((current) => ({ ...current, drivers: 'error' }))
+      })
+    return () => {
+      mounted = false
+    }
+  }, [enabled, availabilityOn])
+
+  useEffect(() => {
+    if (!enabled) return
+    let mounted = true
     const settle = (key: ResourceListKey, next: ResourceListStatus) => {
       if (mounted) setStatus((current) => ({ ...current, [key]: next }))
     }
-    searchDrivers({ isActive: true, page: 1, pageSize: 200 })
-      .then((data) => {
-        if (mounted) setDrivers(data.items)
-        settle('drivers', 'ready')
-      })
-      .catch(() => settle('drivers', 'error'))
     getVehicleOptions()
       .then((data) => {
         if (mounted) setVehicles(data)

@@ -1,3 +1,4 @@
+using TransportationService.Api.Modules.Qualifications.Entities;
 using TransportationService.Api.Common.Scheduling;
 using TransportationService.Api.Modules.Auditing.Services;
 using TransportationService.Api.Modules.Drivers.Entities;
@@ -306,5 +307,95 @@ public class ScheduleConflictTests
         Assert.Equal(ConflictSeverity.Warning, ScheduleConflictRules.Parse(null));
         Assert.Equal(ConflictSeverity.Blocking, ScheduleConflictRules.Parse("blocking"));
         Assert.Equal(ConflictSeverity.Information, ScheduleConflictRules.Parse("Information"));
+    }
+
+    // ===================== HR acceptance 2026-10-16 =====================
+
+    private static void AddQualification(Harness h, string code, string name, QualificationStatus status, DateOnly? expiry)
+    {
+        var type = h.Db.Context.QualificationTypes.Local.FirstOrDefault(t => t.Code == code);
+        if (type is null)
+        {
+            type = new QualificationType { Id = Guid.NewGuid(), Code = code, Name = name, Category = "Test", IsActive = true };
+            h.Db.Context.QualificationTypes.Add(type);
+        }
+
+        h.Db.Context.EmployeeQualifications.Add(new EmployeeQualification
+        {
+            Id = Guid.NewGuid(), TenantId = h.TenantId, EmployeeId = h.EmployeeId, QualificationTypeId = type.Id,
+            ObtainedDate = new DateOnly(2015, 1, 1), ExpiryDate = expiry, Status = status,
+            CreatedAt = Now.UtcDateTime, UpdatedAt = Now.UtcDateTime,
+        });
+    }
+
+    [Fact]
+    public async Task H5_SuspendedEmployment_BlocksTripAssignmentAndShiftSave_AndMarksTheGridRow()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var employee = h.Db.Context.Employees.Single(e => e.Id == h.EmployeeId);
+        employee.EmploymentStatus = EmploymentStatus.Suspended;
+        await h.Db.Context.SaveChangesAsync();
+
+        var conflicts = await h.TripConflicts().EvaluateAsync(Trip(h), CancellationToken.None);
+        Assert.Contains(conflicts, c => c.Blocking && c.Description.Contains("dienstverband geschorst"));
+
+        var shift = await h.Shifts().CreateAsync(
+            new CreateShiftRequest(h.EmployeeId, Date, new(8, 0), new(16, 0), 30, ShiftType.Work, null, null, null),
+            false, CancellationToken.None);
+        Assert.Equal(ShiftOutcome.Conflict, shift.Outcome);
+        Assert.Contains(shift.Conflicts!, c => c.Contains("geschorst"));
+
+        var row = (await h.Shifts().GetScheduleAsync(Date, Date, null, null, CancellationToken.None)).Rows.Single();
+        Assert.Equal("Suspended", row.EmploymentRestriction);
+
+        // Restored to "in dienst": plannable again, history untouched.
+        employee.EmploymentStatus = EmploymentStatus.Active;
+        await h.Db.Context.SaveChangesAsync();
+        var restored = await h.TripConflicts().EvaluateAsync(Trip(h), CancellationToken.None);
+        Assert.DoesNotContain(restored, c => c.Description.Contains("dienstverband"));
+    }
+
+    [Fact]
+    public async Task H4_WithdrawnDuplicateNextToValidCode95_DoesNotBlockTheTrip()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        AddQualification(h, QualificationTypeCodes.Code95, "Code 95", QualificationStatus.Suspended, new DateOnly(2026, 9, 30));
+        AddQualification(h, QualificationTypeCodes.Code95, "Code 95", QualificationStatus.Valid, new DateOnly(2031, 1, 1));
+        await h.Db.Context.SaveChangesAsync();
+
+        var conflicts = await h.TripConflicts().EvaluateAsync(Trip(h), CancellationToken.None);
+        Assert.DoesNotContain(conflicts, c => c.Description.Contains("Code 95"));
+    }
+
+    [Fact]
+    public async Task P2_ExpiredAdr_OnANonAdrTrip_IsAWarningNotABlock_ButExpiredCode95Blocks()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        AddQualification(h, QualificationTypeCodes.Adr, "ADR", QualificationStatus.Valid, new DateOnly(2026, 7, 1));
+        AddQualification(h, QualificationTypeCodes.Code95, "Code 95", QualificationStatus.Valid, new DateOnly(2026, 7, 1));
+        await h.Db.Context.SaveChangesAsync();
+
+        var conflicts = await h.TripConflicts().EvaluateAsync(Trip(h), CancellationToken.None);
+        var adr = Assert.Single(conflicts, c => c.Description.Contains("ADR"));
+        Assert.False(adr.Blocking);
+        Assert.Contains(conflicts, c => c.Blocking && c.Description.Contains("Code 95"));
+    }
+
+    [Fact]
+    public async Task P2_AbsenceConflict_UsesTheDutchTypeName_AndProductDateFormat()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        h.Db.Context.Absences.Add(Approved(h, AbsenceType.Vacation));
+        await h.Db.Context.SaveChangesAsync();
+
+        var conflicts = await h.TripConflicts().EvaluateAsync(Trip(h), CancellationToken.None);
+        var absent = conflicts.Single(c => c.Code == PlanningConflictCode.DriverAbsent);
+        Assert.Contains("(Verlof)", absent.Description);
+        Assert.DoesNotContain("Vacation", absent.Description);
+        Assert.Contains("21/07/2026", absent.Description);
     }
 }

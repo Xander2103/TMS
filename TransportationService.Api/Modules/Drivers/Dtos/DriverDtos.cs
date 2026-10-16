@@ -20,7 +20,7 @@ public record DriverListItemDto(
     string? FixedVehiclePlate = null);
 
 public record DriverReadinessDto(
-    string Status,               // "Ready" | "Warning" | "NotReady" | "Blocked"
+    string Status,               // "Ready" | "Warning" | "Incomplete" | "NotReady" | "Blocked"
     IReadOnlyList<string> BlockingReasons,
     IReadOnlyList<string> Warnings);
 

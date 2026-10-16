@@ -1,3 +1,4 @@
+using TransportationService.Api.Modules.Employees.Services;
 using Microsoft.EntityFrameworkCore;
 using TransportationService.Api.Common.Models;
 using TransportationService.Api.Data;
@@ -377,7 +378,7 @@ public class PlanningBoardService : IPlanningBoardService
                 (d, e) => new
                 {
                     d.Id, d.DriverNumber, d.AvailabilityStatus, d.IsActive, d.IsBlocked, d.BlockReason,
-                    d.EmployeeId, Name = e.FirstName + " " + e.LastName,
+                    d.EmployeeId, Name = e.FirstName + " " + e.LastName, e.EmploymentStatus,
                 })
             .OrderBy(d => d.Name)
             .Take(500)
@@ -403,7 +404,7 @@ public class PlanningBoardService : IPlanningBoardService
             : await _dbContext.EmployeeQualifications.AsNoTracking()
                 .Where(q => q.TenantId == tenantId && employeeIds.Contains(q.EmployeeId))
                 .Join(_dbContext.QualificationTypes.AsNoTracking(), q => q.QualificationTypeId, t => t.Id,
-                    (q, t) => new { Qualification = q, TypeName = t.Name })
+                    (q, t) => new { Qualification = q, TypeName = t.Name, TypeCode = t.Code })
                 .ToListAsync(cancellationToken);
         var qualificationsByEmployee = qualifications.ToLookup(q => q.Qualification.EmployeeId);
 
@@ -455,23 +456,16 @@ public class PlanningBoardService : IPlanningBoardService
 
         var drivers = driverRows.Select(d =>
         {
-            var blocks = new List<string>();
-            var warnings = new List<string>();
-            foreach (var entry in qualificationsByEmployee[d.EmployeeId])
-            {
-                var status = _statusCalculator.CalculateEffectiveStatus(entry.Qualification, today, warningDays);
-                switch (status)
-                {
-                    case QualificationStatus.Expired:
-                    case QualificationStatus.Suspended:
-                    case QualificationStatus.Rejected:
-                        blocks.Add(entry.TypeName);
-                        break;
-                    case QualificationStatus.ExpiringSoon:
-                        warnings.Add(entry.TypeName);
-                        break;
-                }
-            }
+            // Same rule set as driver readiness and the trip check (QualificationReadinessPolicy):
+            // withdrawn records are history, a valid replacement satisfies, only expired CORE
+            // qualifications block; situational expiries and a missing licence are warnings.
+            var assessment = QualificationReadinessPolicy.Assess(QualificationReadinessPolicy.Evaluate(
+                qualificationsByEmployee[d.EmployeeId].Select(entry => new QualificationReadinessPolicy.Record(
+                    entry.TypeCode, entry.TypeName,
+                    _statusCalculator.CalculateEffectiveStatus(entry.Qualification, today, warningDays),
+                    entry.Qualification.ExpiryDate))));
+            var blocks = assessment.BlockingTypeNames.ToList();
+            var warnings = assessment.WarningLabels.ToList();
 
             var fixedVehicle = fixedVehicleByDriver.GetValueOrDefault(d.Id);
             return new PlanningDriverDto(
@@ -481,7 +475,8 @@ public class PlanningBoardService : IPlanningBoardService
                     .Select(t => new ResourceAssignmentDto(t.TripDate, t.Id, t.TripNumber, t.Status)).ToList(),
                 absencesByEmployee[d.EmployeeId]
                     .Select(a => new ResourceAbsenceDto(a.StartDate, a.EndDate, a.Type)).ToList(),
-                blocks, warnings);
+                blocks, warnings,
+                EmploymentDeployability.RestrictionCode(d.EmploymentStatus));
         }).ToList();
 
         var vehicles = vehicleRows.Select(v => new PlanningVehicleDto(

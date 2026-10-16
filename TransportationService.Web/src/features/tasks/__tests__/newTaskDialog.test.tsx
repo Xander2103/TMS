@@ -66,4 +66,35 @@ describe('NewTaskDialog', () => {
     expect(screen.getByLabelText('Medewerker toevoegen')).toBeInTheDocument()
     expect(screen.queryByText('Mijzelf')).not.toBeInTheDocument()
   })
+
+  // HR acceptance H1: datetime-local values are tenant wall clock and go out as UTC instants
+  // (22/10 is summer time, UTC+2) — a zone-less value used to make the API return a 500.
+  it('sends start and deadline as UTC instants', async () => {
+    const createSpy = vi.spyOn(api, 'createTasks').mockResolvedValue([makeTask()])
+    render(<NewTaskDialog onClose={vi.fn()} onCreated={vi.fn()} />)
+
+    fireEvent.change(screen.getByLabelText(/Titel/), { target: { value: 'Medische keuring' } })
+    fireEvent.change(screen.getByLabelText('Start'), { target: { value: '2026-10-22T08:00' } })
+    fireEvent.change(screen.getByLabelText('Deadline'), { target: { value: '2026-10-22T17:00' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Taak aanmaken' }))
+
+    await waitFor(() =>
+      expect(createSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ startAt: '2026-10-22T06:00:00Z', dueAt: '2026-10-22T15:00:00Z' }),
+      ),
+    )
+  })
+
+  it('refuses a deadline before the start without calling the API', async () => {
+    const createSpy = vi.spyOn(api, 'createTasks').mockResolvedValue([makeTask()])
+    render(<NewTaskDialog onClose={vi.fn()} onCreated={vi.fn()} />)
+
+    fireEvent.change(screen.getByLabelText(/Titel/), { target: { value: 'x' } })
+    fireEvent.change(screen.getByLabelText('Start'), { target: { value: '2026-10-22T17:00' } })
+    fireEvent.change(screen.getByLabelText('Deadline'), { target: { value: '2026-10-22T08:00' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Taak aanmaken' }))
+
+    expect(await screen.findByText('De deadline mag niet vóór het startmoment liggen.')).toBeInTheDocument()
+    expect(createSpy).not.toHaveBeenCalled()
+  })
 })
