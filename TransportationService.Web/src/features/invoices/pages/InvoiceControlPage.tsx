@@ -11,6 +11,7 @@ import {
   createInvoice,
   getInvoiceControl,
   snoozeInvoiceControlOrder,
+  type ControlActivity,
   type ControlOrder,
   type InvoiceControl,
   type InvoiceProposal,
@@ -22,6 +23,16 @@ import './invoices.css'
 // import they rendered as native light buttons until the issued-items screen was visited.
 import '../../issued-items/issued-items.css'
 import { formatDate } from '../../../utils/dates'
+
+const ACTIVITY_REASON_KEYS: Record<string, string> = {
+  'activity.price_missing': 'invoices.control.activityReasons.activity_price_missing',
+  'activity.price_zero_unconfirmed': 'invoices.control.activityReasons.activity_price_zero_unconfirmed',
+}
+
+/** "Kraanwerk ter plaatse — Kraan werf B". */
+function activityName(activity: ControlActivity): string {
+  return activity.label ? `${activity.activityTypeName} — ${activity.label}` : activity.activityTypeName
+}
 
 /**
  * Wave 10: de facturatiecontrole-werkplek. Voorstellen volgen de groeperingsvoorkeur van de
@@ -64,9 +75,19 @@ export function InvoiceControlPage() {
     return proposal.orders.filter((o) => !deselected.has(o.transportOrderId))
   }
 
+  /** T-H8: ready standalone activities share the proposal (and the same opt-out set of ids). */
+  function selectedActivities(proposal: InvoiceProposal): ControlActivity[] {
+    return (proposal.activities ?? []).filter((a) => !deselected.has(a.dossierActivityId))
+  }
+
+  function selectedCount(proposal: InvoiceProposal): number {
+    return selectedOrders(proposal).length + selectedActivities(proposal).length
+  }
+
   async function createFromProposal(proposal: InvoiceProposal) {
     const orders = selectedOrders(proposal)
-    if (orders.length === 0) {
+    const activities = selectedActivities(proposal)
+    if (orders.length + activities.length === 0) {
       showError(t('invoices.control.needsOrder'))
       return
     }
@@ -78,8 +99,9 @@ export function InvoiceControlPage() {
         orderIds: orders.map((o) => o.transportOrderId),
         manualLines: [],
         notes: null,
+        ...(activities.length > 0 ? { dossierActivityIds: activities.map((a) => a.dossierActivityId) } : {}),
       })
-      showSuccess(t('invoices.control.created', { number: invoice.invoiceNumber ?? '', total: orders.length }))
+      showSuccess(t('invoices.control.created', { number: invoice.invoiceNumber ?? '', total: orders.length + activities.length }))
       navigate(`/invoices/${invoice.id}`)
     } catch (err) {
       showError(localizeApiError(t, err, t('invoices.new.createError')))
@@ -183,15 +205,15 @@ export function InvoiceControlPage() {
                   <h4 style={{ margin: 0 }}>{proposal.customerName} — {proposal.groupLabel}</h4>
                   <p className="wh-muted">
                     {t('invoices.control.selectedSummary', {
-                      selected: selectedOrders(proposal).length,
-                      total: proposal.orders.length,
+                      selected: selectedCount(proposal),
+                      total: proposal.orders.length + (proposal.activities?.length ?? 0),
                       amount: euro(proposal.totalAmount),
                     })}
                   </p>
                 </div>
                 <Button
                   variant="secondary"
-                  disabled={busy || selectedOrders(proposal).length === 0}
+                  disabled={busy || selectedCount(proposal) === 0}
                   onClick={() => void createFromProposal(proposal)}
                 >
                   {t('invoices.control.createInvoice')}
@@ -231,6 +253,26 @@ export function InvoiceControlPage() {
                           </button>
                         )}
                         <Link to={`/transport-orders/${order.transportOrderId}`}>{t('invoices.control.toOrder')}</Link>
+                      </td>
+                    </tr>
+                  ))}
+                  {(proposal.activities ?? []).map((activity) => (
+                    <tr key={activity.dossierActivityId}>
+                      <td>
+                        <input
+                          type="checkbox"
+                          aria-label={t('invoices.control.includeActivity', { name: activityName(activity) })}
+                          checked={!deselected.has(activity.dossierActivityId)}
+                          disabled={busy}
+                          onChange={() => toggleOrder(activity.dossierActivityId)}
+                        />
+                      </td>
+                      <td>{activityName(activity)}</td>
+                      <td className="nowrap">{activity.date ? formatDate(activity.date) : '—'}</td>
+                      <td>{activity.dossierNumber}</td>
+                      <td>{activity.isFree ? t('invoices.control.activityFree') : activity.agreedPrice !== null ? euro(activity.agreedPrice) : '—'}</td>
+                      <td className="issued-items-row-actions">
+                        <Link to={`/dossiers/${activity.dossierId}`}>{t('invoices.control.toDossier')}</Link>
                       </td>
                     </tr>
                   ))}
@@ -278,6 +320,40 @@ export function InvoiceControlPage() {
                         </button>
                       )}
                       <Link to={`/transport-orders/${order.transportOrderId}`}>{t('invoices.control.toOrder')}</Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </section>
+      )}
+
+      {control && (
+        <section className="ui-form-section">
+          <h3>{t('invoices.control.activitiesReviewTitle', { total: control.activitiesNeedingReview?.length ?? 0 })}</h3>
+          {(control.activitiesNeedingReview ?? []).length === 0 ? (
+            <p className="placeholder-text">{t('invoices.control.activitiesReviewEmpty')}</p>
+          ) : (
+            <table className="issued-items-table">
+              <thead>
+                <tr><th>{t('invoices.control.columns.activity')}</th><th>{t('invoices.control.columns.date')}</th><th>{t('invoices.control.columns.dossier')}</th><th>{t('invoices.control.columns.reasons')}</th><th /></tr>
+              </thead>
+              <tbody>
+                {(control.activitiesNeedingReview ?? []).map((activity) => (
+                  <tr key={activity.dossierActivityId}>
+                    <td>{activityName(activity)}</td>
+                    <td className="nowrap">{activity.date ? formatDate(activity.date) : '—'}</td>
+                    <td>{activity.dossierNumber} · {activity.customerName}</td>
+                    <td>
+                      {activity.reasons.map((reason) => (
+                        <Badge key={reason} tone="warning">
+                          {ACTIVITY_REASON_KEYS[reason] ? t(ACTIVITY_REASON_KEYS[reason]) : reason}
+                        </Badge>
+                      ))}
+                    </td>
+                    <td className="issued-items-row-actions">
+                      <Link to={`/dossiers/${activity.dossierId}`}>{t('invoices.control.toDossier')}</Link>
                     </td>
                   </tr>
                 ))}

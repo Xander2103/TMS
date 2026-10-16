@@ -221,7 +221,7 @@
     "selectedSummary": "{selected} of {total} orders ticked · {amount}",
     "createInvoice": "Create invoice",
     "includeOrder": "Include order {number} on the invoice",
-    "needsOrder": "Tick at least one order for the invoice.",
+    "needsOrder": "Select at least one order or activity for the invoice.",
     "created": "Invoice {number} created ({total} orders).",
     "snoozeAction": "Postpone",
     "toOrder": "To order",
@@ -243,8 +243,18 @@
       "dossier": "File",
       "amount": "Amount",
       "reasons": "Reasons",
-      "snoozedUntil": "Postponed until"
-    }
+      "snoozedUntil": "Postponed until",
+      "activity": "Activity"
+    },
+    "activitiesReviewTitle": "Activities to review ({total})",
+    "activitiesReviewEmpty": "No executed activities without a price.",
+    "activityReasons": {
+      "activity_price_missing": "Sales price missing",
+      "activity_price_zero_unconfirmed": "€ 0 not confirmed as free"
+    },
+    "toDossier": "To dossier",
+    "activityFree": "Free",
+    "includeActivity": "Include {name}"
   },
   "peppolPanel": {
     "title": "Peppol",

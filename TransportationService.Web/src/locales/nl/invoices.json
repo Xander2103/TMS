@@ -221,7 +221,7 @@
     "selectedSummary": "{selected} van {total} orders aangevinkt · {amount}",
     "createInvoice": "Maak factuur",
     "includeOrder": "Order {number} meenemen op de factuur",
-    "needsOrder": "Vink minstens één order aan voor de factuur.",
+    "needsOrder": "Vink minstens één order of activiteit aan voor de factuur.",
     "created": "Factuur {number} aangemaakt ({total} orders).",
     "snoozeAction": "Uitstellen",
     "toOrder": "Naar opdracht",
@@ -243,8 +243,18 @@
       "dossier": "Dossier",
       "amount": "Bedrag",
       "reasons": "Redenen",
-      "snoozedUntil": "Uitgesteld tot"
-    }
+      "snoozedUntil": "Uitgesteld tot",
+      "activity": "Activiteit"
+    },
+    "activitiesReviewTitle": "Activiteiten nakijken ({total})",
+    "activitiesReviewEmpty": "Geen uitgevoerde activiteiten zonder prijs.",
+    "activityReasons": {
+      "activity_price_missing": "Verkoopprijs ontbreekt",
+      "activity_price_zero_unconfirmed": "€ 0 niet bevestigd als gratis"
+    },
+    "toDossier": "Naar dossier",
+    "activityFree": "Gratis",
+    "includeActivity": "{name} meenemen"
   },
   "peppolPanel": {
     "title": "Peppol",

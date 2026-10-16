@@ -221,7 +221,7 @@
     "selectedSummary": "{selected} commandes sur {total} cochées · {amount}",
     "createInvoice": "Créer la facture",
     "includeOrder": "Inclure la commande {number} sur la facture",
-    "needsOrder": "Cochez au moins une commande pour la facture.",
+    "needsOrder": "Cochez au moins une commande ou une activité pour la facture.",
     "created": "Facture {number} créée ({total} commandes).",
     "snoozeAction": "Reporter",
     "toOrder": "Vers la commande",
@@ -243,8 +243,18 @@
       "dossier": "Dossier",
       "amount": "Montant",
       "reasons": "Motifs",
-      "snoozedUntil": "Reportée jusqu'au"
-    }
+      "snoozedUntil": "Reportée jusqu'au",
+      "activity": "Activité"
+    },
+    "activitiesReviewTitle": "Activités à vérifier ({total})",
+    "activitiesReviewEmpty": "Aucune activité exécutée sans prix.",
+    "activityReasons": {
+      "activity_price_missing": "Prix de vente manquant",
+      "activity_price_zero_unconfirmed": "0 € non confirmé comme gratuit"
+    },
+    "toDossier": "Vers le dossier",
+    "activityFree": "Gratuit",
+    "includeActivity": "Inclure {name}"
   },
   "peppolPanel": {
     "title": "Peppol",

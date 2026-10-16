@@ -147,3 +147,59 @@ describe('InvoiceControlPage (P12: selectie + uitstel)', () => {
     await waitFor(() => expect(api.getInvoiceControl).toHaveBeenCalledTimes(2))
   })
 })
+
+describe('InvoiceControlPage (T-H8: standalone activities)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    api.createInvoice.mockResolvedValue({ id: 'inv-1', invoiceNumber: 'F2026-001' })
+  })
+
+  const activity = {
+    dossierActivityId: 'act-a',
+    dossierId: 'dos-1',
+    dossierNumber: 'DOS-0001',
+    activityTypeName: 'Kraanwerk ter plaatse',
+    label: 'A kraan',
+    date: '2026-09-22',
+    agreedPrice: 400,
+    isFree: false,
+    executionStatus: 'Completed',
+    customerId: 'cust-1',
+    customerName: 'Haven BV',
+    reasons: [] as string[],
+  }
+
+  it('invoices ready activities with the proposal and lists unpriced executed ones under review', async () => {
+    const user = userEvent.setup()
+    api.getInvoiceControl.mockResolvedValue(
+      control({
+        proposals: [
+          {
+            customerId: 'cust-1', customerName: 'Haven BV', grouping: 'PerDossier', groupLabel: 'DOS-0001',
+            orders: [controlOrder()],
+            activities: [activity, { ...activity, dossierActivityId: 'act-b', label: 'B plateau', activityTypeName: 'Plateau', agreedPrice: 0, isFree: true }],
+            totalAmount: 500,
+          },
+        ],
+        activitiesNeedingReview: [{ ...activity, dossierActivityId: 'act-c', label: 'C kraan', agreedPrice: null, reasons: ['activity.price_missing'] }],
+      }),
+    )
+    renderPage()
+
+    expect(await screen.findByLabelText('Kraanwerk ter plaatse — A kraan meenemen')).toBeChecked()
+    expect(screen.getByText('Gratis')).toBeInTheDocument()
+    const review = screen.getByRole('heading', { name: 'Activiteiten nakijken (1)' }).closest('section')!
+    expect(within(review).getByText('Kraanwerk ter plaatse — C kraan')).toBeInTheDocument()
+    expect(within(review).getByText('Verkoopprijs ontbreekt')).toBeInTheDocument()
+    expect(within(review).getByRole('link', { name: 'Naar dossier' })).toHaveAttribute('href', '/dossiers/dos-1')
+
+    await user.click(screen.getByLabelText('Plateau — B plateau meenemen'))
+    await user.click(screen.getByRole('button', { name: 'Maak factuur' }))
+
+    await waitFor(() =>
+      expect(api.createInvoice).toHaveBeenCalledWith(
+        expect.objectContaining({ customerId: 'cust-1', orderIds: ['order-1'], dossierActivityIds: ['act-a'] }),
+      ),
+    )
+  })
+})

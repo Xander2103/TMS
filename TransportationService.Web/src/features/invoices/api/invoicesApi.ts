@@ -108,6 +108,24 @@ export interface ControlOrder {
   snoozeReason: string | null
 }
 
+/** T-H8: a billable standalone dossier activity (crane work, plateau, storage) on the control page. */
+export interface ControlActivity {
+  dossierActivityId: string
+  dossierId: string
+  dossierNumber: string
+  activityTypeName: string
+  label: string | null
+  /** Completion date, else the planned date. */
+  date: string | null
+  agreedPrice: number | null
+  isFree: boolean
+  executionStatus: string
+  customerId: string
+  customerName: string
+  /** Review only: `activity.price_missing` | `activity.price_zero_unconfirmed`. */
+  reasons: string[]
+}
+
 export interface InvoiceProposal {
   customerId: string
   customerName: string
@@ -115,6 +133,8 @@ export interface InvoiceProposal {
   groupLabel: string
   orders: ControlOrder[]
   totalAmount: number
+  /** T-H8: ready standalone activities of the same group; absent on older payloads. */
+  activities?: ControlActivity[] | null
 }
 
 export interface InvoiceControl {
@@ -123,6 +143,8 @@ export interface InvoiceControl {
   pendingCharges: string[]
   /** P12: uitgestelde orders — buiten de voorstellen tot hun datum, nooit verborgen. */
   snoozed: ControlOrder[]
+  /** T-H8: executed billable activities without a (confirmed) price — never invisible to accounting. */
+  activitiesNeedingReview?: ControlActivity[] | null
 }
 
 export function getInvoiceControl(): Promise<InvoiceControl> {
