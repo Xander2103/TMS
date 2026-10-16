@@ -53,6 +53,7 @@
     "chooseDates": "Choose a start and end date.",
     "endBeforeStart": "The end date must be on or after the start date.",
     "submitted": "Request submitted — HR will review it as soon as possible.",
+    "leaveTypesFailed": "The configured leave types could not be loaded; you are choosing from the general types. Try again later or contact HR.",
     "submitFailed": "The request could not be submitted.",
     "attachmentAdded": "Attachment added.",
     "attachmentFailed": "The attachment could not be uploaded.",

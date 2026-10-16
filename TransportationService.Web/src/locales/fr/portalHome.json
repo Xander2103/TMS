@@ -53,6 +53,7 @@
     "chooseDates": "Choisissez une date de début et une date de fin.",
     "endBeforeStart": "La date de fin doit être égale ou postérieure à la date de début.",
     "submitted": "Demande envoyée — les RH l'examineront au plus vite.",
+    "leaveTypesFailed": "Les types de congé configurés n'ont pas pu être chargés ; vous choisissez parmi les types généraux. Réessayez plus tard ou contactez le service du personnel.",
     "submitFailed": "La demande n'a pas pu être envoyée.",
     "attachmentAdded": "Pièce jointe ajoutée.",
     "attachmentFailed": "La pièce jointe n'a pas pu être téléversée.",

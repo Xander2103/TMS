@@ -156,9 +156,34 @@
   font-size: var(--text-sm);
 }
 
-.rev-balance-note {
-  color: var(--text);
-  font-style: italic;
+/* P2-17: approved over planned shifts/trips — explicit next step, not just a warning icon. */
+.rev-followup {
+  border: 1px solid var(--color-warning-text);
+  background: var(--color-warning-bg);
+  color: var(--color-warning-text);
+  border-radius: 8px;
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.rev-followup p,
+.rev-followup ul {
+  margin: 0;
+}
+
+.rev-followup ul {
+  padding-left: 18px;
+}
+
+.rev-followup a {
+  color: inherit;
+  text-decoration: underline;
+}
+
+.rev-followup button {
+  align-self: flex-start;
 }
 
 .rev-proposal {

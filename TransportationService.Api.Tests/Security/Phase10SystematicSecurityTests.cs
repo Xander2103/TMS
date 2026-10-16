@@ -46,6 +46,9 @@ public class Phase10SystematicSecurityTests
         // Employee self-service portal: every query resolves the caller's OWN employee link
         // (MyEmployeeIdAsync) — no foreign id is accepted anywhere.
         "MeController.Profile",
+        // Self-service leave-type catalogue (HR acceptance P2-6): tenant configuration only
+        // (active + self-service types), no personal data — what the caller may request.
+        "MeController.LeaveTypes",
         "MeController.Dashboard",
         "MeController.Absences",
         "MeController.CreateAbsence",

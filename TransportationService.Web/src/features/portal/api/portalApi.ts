@@ -4,6 +4,7 @@ import { getActiveLocale } from '../../../i18n/activeLocale'
 import { translate } from '../../../i18n/translations'
 import { getAccessToken } from '../../auth/authStorage'
 import type { Absence, AbsenceInput } from '../../absences/types'
+import type { LeaveType } from '../../leave-balance/types'
 import type { MyDashboard, MyProfile, MyQualification } from '../types'
 
 export function getMyProfile(): Promise<MyProfile> {
@@ -12,6 +13,11 @@ export function getMyProfile(): Promise<MyProfile> {
 
 export function getMyDashboard(): Promise<MyDashboard> {
   return apiClient.getJson<MyDashboard>('/api/me/dashboard')
+}
+
+/** Leave types the employee may request themselves (self-scoped; no employees.view needed). */
+export function listMyLeaveTypes(): Promise<LeaveType[]> {
+  return apiClient.getJson<LeaveType[]>('/api/me/leave-types')
 }
 
 export function listMyAbsences(): Promise<Absence[]> {

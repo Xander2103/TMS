@@ -26,6 +26,17 @@ public class MeController : ControllerBase
         _service = service;
     }
 
+    /// <summary>
+    /// HR acceptance P2-6: the leave types an employee may request themselves (active and
+    /// self-service enabled). The admin catalogue (/api/leave-types) needs employees.view, which a
+    /// chauffeur rightly lacks — the portal used to get a 403 and silently fall back to generic
+    /// types, so requests went in without their configured leave type.
+    /// </summary>
+    [HttpGet("leave-types")]
+    public async Task<ActionResult<IReadOnlyList<LeaveTypeDto>>> LeaveTypes(
+        [FromServices] Hr.Services.ILeaveBalanceService leaveService, CancellationToken cancellationToken)
+        => Ok(await leaveService.ListLeaveTypesAsync(activeOnly: true, selfServiceOnly: true, cancellationToken));
+
     [HttpGet("profile")]
     public async Task<ActionResult<MyProfileDto>> Profile(CancellationToken cancellationToken)
     {

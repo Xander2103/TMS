@@ -52,10 +52,12 @@ interface AbsencesTabProps {
   employeeId: string
   /** Deep-link target: this absence row is highlighted and scrolled into view. */
   highlightAbsenceId?: string | null
+  /** Any absence mutation (request, decision, cancel, delete) — lets the host refresh the leave balance (HR acceptance P2-18). */
+  onChanged?: () => void
 }
 
 /** Absences for one employee: request, edit while requested, approve/reject, cancel, delete. */
-export function AbsencesTab({ employeeId, highlightAbsenceId }: AbsencesTabProps) {
+export function AbsencesTab({ employeeId, highlightAbsenceId, onChanged }: AbsencesTabProps) {
   const { t } = useLocale()
   const { showSuccess, showError } = useToast()
   const { hasPermission } = useAuth()
@@ -163,6 +165,7 @@ export function AbsencesTab({ employeeId, highlightAbsenceId }: AbsencesTabProps
       }
       setEditorOpen(false)
       setReloadToken((t) => t + 1)
+      onChanged?.()
     } catch (err) {
       setFormErrorKey(
         err instanceof ApiError && err.status === 409 ? 'absences.tab.overlap' : 'absences.tab.saveFailed',
@@ -182,6 +185,7 @@ export function AbsencesTab({ employeeId, highlightAbsenceId }: AbsencesTabProps
       setDecideTarget(null)
       setDecisionNote('')
       setReloadToken((t) => t + 1)
+      onChanged?.()
     } catch {
       showError(t('absences.tab.decideFailed'))
     } finally {
@@ -196,6 +200,7 @@ export function AbsencesTab({ employeeId, highlightAbsenceId }: AbsencesTabProps
       showSuccess(t('absences.tab.cancelled'))
       setCancelTarget(null)
       setReloadToken((t) => t + 1)
+      onChanged?.()
     } catch {
       showError(t('absences.tab.cancelFailed'))
       setCancelTarget(null)
@@ -209,6 +214,7 @@ export function AbsencesTab({ employeeId, highlightAbsenceId }: AbsencesTabProps
       showSuccess(t('absences.tab.deleted'))
       setDeleteTarget(null)
       setReloadToken((t) => t + 1)
+      onChanged?.()
     } catch {
       showError(t('absences.tab.deleteFailed'))
       setDeleteTarget(null)
@@ -402,6 +408,7 @@ export function AbsencesTab({ employeeId, highlightAbsenceId }: AbsencesTabProps
           onChanged={(updated) => {
             setReviewTarget(updated)
             setAbsences((current) => current?.map((a) => (a.id === updated.id ? updated : a)) ?? null)
+            onChanged?.()
           }}
         />
       )}

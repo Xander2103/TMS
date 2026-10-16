@@ -1,3 +1,5 @@
+import { getActiveLocale } from '../i18n/activeLocale'
+
 /**
  * Mapping of backend validation errors (RFC 7807 ProblemDetails with an optional
  * "errors" dictionary — emitted by both DomainValidationException and ASP.NET's
@@ -5,6 +7,9 @@
  */
 
 export type FieldErrors = Record<string, string[]>
+
+/** Backend `ErrorCodes.ValidationFailed`: every DomainValidationException carries it. */
+const GENERIC_VALIDATION_CODE = 'common.validation_failed'
 
 /**
  * Normalises a backend field path to the frontend form-field convention:
@@ -84,6 +89,12 @@ export function localizeApiError(
   fallback: string,
 ): string {
   const { message, code } = describeApiError(error, fallback)
+  // The GENERIC validation code carries no information of its own; the server's specific detail
+  // ("Dit e-mailadres is al in gebruik bij …") is what the user needs. That detail is Dutch, so it
+  // wins when the UI is Dutch; other locales keep the translated generic text (HR acceptance P2-5).
+  if (code === GENERIC_VALIDATION_CODE && message !== fallback && getActiveLocale() === 'nl') {
+    return message
+  }
   if (code) {
     const key = `errors.codes.${code}`
     const translated = t(key)

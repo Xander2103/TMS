@@ -53,6 +53,7 @@
     "chooseDates": "Kies een begin- en einddatum.",
     "endBeforeStart": "De einddatum moet op of na de begindatum liggen.",
     "submitted": "Aanvraag ingediend — HR bekijkt ze zo snel mogelijk.",
+    "leaveTypesFailed": "De ingestelde verloftypes konden niet worden geladen; je kiest nu uit de algemene types. Probeer later opnieuw of contacteer de personeelsdienst.",
     "submitFailed": "De aanvraag kon niet worden ingediend.",
     "attachmentAdded": "Bijlage toegevoegd.",
     "attachmentFailed": "De bijlage kon niet worden geüpload.",

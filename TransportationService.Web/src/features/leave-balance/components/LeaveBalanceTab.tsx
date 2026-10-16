@@ -4,6 +4,7 @@ import { RowActionMenu } from '../../../components/ui/RowActionMenu'
 import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
 import { useLocale } from '../../../i18n/localeContext'
+import { formatDecimal } from '../../../utils/numbers'
 import { describeApiError } from '../../../api/problemDetails'
 import {
   addLeaveAdjustment,
@@ -18,8 +19,15 @@ import { SetEntitlementDialog } from './SetEntitlementDialog'
 import { AdjustBalanceDialog } from './AdjustBalanceDialog'
 import './leave-balance.css'
 
+/** Day count in the tenant number format: "1,5", "-1,5", "2" (HR acceptance P2-13). */
+function formatDays(days: number): string {
+  return Number.isInteger(days) ? String(days) : formatDecimal(days, 1)
+}
+
 interface LeaveBalanceTabProps {
   employeeId: string
+  /** Bumped by the host when absences change, so "in aanvraag"/"opgenomen" never go stale (P2-18). */
+  reloadKey?: number
 }
 
 const CURRENT_YEAR = new Date().getFullYear()
@@ -28,7 +36,7 @@ const YEARS = [CURRENT_YEAR + 1, CURRENT_YEAR, CURRENT_YEAR - 1, CURRENT_YEAR - 
 type Dialog = { kind: 'entitlement' | 'adjust'; row: LeaveBalanceRow } | null
 
 /** HR/Management view of an employee's leave balance: year selector, per-balance figures, and management actions. */
-export function LeaveBalanceTab({ employeeId }: LeaveBalanceTabProps) {
+export function LeaveBalanceTab({ employeeId, reloadKey = 0 }: LeaveBalanceTabProps) {
   const { t } = useLocale()
   const { hasPermission } = useAuth()
   const { showSuccess, showError } = useToast()
@@ -43,7 +51,7 @@ export function LeaveBalanceTab({ employeeId }: LeaveBalanceTabProps) {
   const [busy, setBusy] = useState(false)
   const [history, setHistory] = useState<{ balanceTypeId: string; name: string; items: LeaveAdjustment[] } | null>(null)
 
-  const requestKey = `${employeeId}:${year}:${reloadToken}`
+  const requestKey = `${employeeId}:${year}:${reloadToken}:${reloadKey}`
   const balance = state.data
   const loading = state.loadedKey !== requestKey
 
@@ -153,7 +161,7 @@ export function LeaveBalanceTab({ employeeId }: LeaveBalanceTabProps) {
             <ul>
               {history.items.map((a) => (
                 <li key={a.id}>
-                  <strong>{a.days > 0 ? `+${a.days}` : a.days}</strong> · {t(LEAVE_ADJUSTMENT_KIND_LABELS[a.kind])} ·{' '}
+                  <strong>{a.days > 0 ? `+${formatDays(a.days)}` : formatDays(a.days)}</strong> · {t(LEAVE_ADJUSTMENT_KIND_LABELS[a.kind])} ·{' '}
                   {formatDate(a.createdAt)} — {a.reason}
                 </li>
               ))}

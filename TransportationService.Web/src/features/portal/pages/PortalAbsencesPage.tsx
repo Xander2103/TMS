@@ -17,9 +17,9 @@ import {
   type AbsenceStatus,
   type AbsenceType,
 } from '../../absences/types'
-import { cancelMyAbsence, createMyAbsence, listMyAbsences, uploadMyAbsenceAttachment } from '../api/portalApi'
+import { cancelMyAbsence, createMyAbsence, listMyAbsences, listMyLeaveTypes, uploadMyAbsenceAttachment } from '../api/portalApi'
+import { formatDate } from '../../../utils/dates'
 import { MyLeaveBalanceCard } from '../../leave-balance/components/MyLeaveBalanceCard'
-import { getLeaveTypes } from '../../leave-balance/api/leaveBalanceApi'
 import type { LeaveType } from '../../leave-balance/types'
 import './portal.css'
 
@@ -59,6 +59,7 @@ export function PortalAbsencesPage() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [type, setType] = useState<AbsenceType>('Vacation')
   const [leaveTypes, setLeaveTypes] = useState<LeaveType[]>([])
+  const [leaveTypesFailed, setLeaveTypesFailed] = useState(false)
   const [leaveTypeId, setLeaveTypeId] = useState<string>('')
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
@@ -78,14 +79,16 @@ export function PortalAbsencesPage() {
 
   useEffect(() => {
     let mounted = true
-    getLeaveTypes({ activeOnly: true, selfServiceOnly: true })
+    listMyLeaveTypes()
       .then((types) => {
         if (!mounted) return
         setLeaveTypes(types)
         if (types.length > 0) setLeaveTypeId((current) => current || types[0].id)
       })
       .catch(() => {
-        /* leave types optional; the plain type selector stays available */
+        // Never a SILENT fallback (HR acceptance P2-6): the general types stay usable, but the
+        // employee is told the configured leave types could not be loaded.
+        if (mounted) setLeaveTypesFailed(true)
       })
     return () => {
       mounted = false
@@ -176,7 +179,7 @@ export function PortalAbsencesPage() {
               <Badge tone={ABSENCE_STATUS_TONE[absence.status]}>{t(ABSENCE_STATUS_KEYS[absence.status])}</Badge>
             </div>
             <div className="portal-absence-dates">
-              {t('portalHome.absences.period', { start: absence.startDate, end: absence.endDate })}
+              {t('portalHome.absences.period', { start: formatDate(absence.startDate), end: formatDate(absence.endDate) })}
               {absence.partDay !== 'FullDay' && ` · ${t(PART_DAY_KEYS[absence.partDay])}`}
             </div>
             {absence.reason && <div className="portal-absence-reason">{absence.reason}</div>}
@@ -230,7 +233,12 @@ export function PortalAbsencesPage() {
           }
         >
           <form id="portal-absence-form" className="portal-form" onSubmit={handleCreate} noValidate>
-            <FormField label={t('portalHome.absences.typeField')} htmlFor="pa-type" required>
+            <FormField
+              label={t('portalHome.absences.typeField')}
+              htmlFor="pa-type"
+              required
+              hint={leaveTypesFailed ? t('portalHome.absences.leaveTypesFailed') : undefined}
+            >
               {leaveTypes.length > 0 ? (
                 <select id="pa-type" value={leaveTypeId} onChange={(e) => setLeaveTypeId(e.target.value)} disabled={busy}>
                   {leaveTypes.map((t) => (

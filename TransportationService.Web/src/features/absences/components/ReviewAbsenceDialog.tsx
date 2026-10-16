@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { ApiError } from '../../../api/apiClient'
 import { apiBaseUrl } from '../../../config/env'
 import { getAccessToken } from '../../auth/authStorage'
@@ -44,6 +45,9 @@ export function ReviewAbsenceDialog({ absence, onClose, onChanged }: ReviewAbsen
   const [proposedEnd, setProposedEnd] = useState('')
   const [internalNote, setInternalNote] = useState(absence.internalNote ?? '')
   const [busy, setBusy] = useState(false)
+  // Approved while shifts/trips are still planned in the period: the dialog stays open on an
+  // explicit follow-up instead of a bare warning (HR acceptance P2-17).
+  const [approvedWithPlanning, setApprovedWithPlanning] = useState(false)
 
   const pending = absence.status === 'Requested' || absence.status === 'UnderReview'
 
@@ -61,12 +65,19 @@ export function ReviewAbsenceDialog({ absence, onClose, onChanged }: ReviewAbsen
     }
   }, [absence.id])
 
-  async function run(action: () => Promise<Absence>, message: string) {
+  /** `closeAfter`: a decision ends the review (the dialog closes); saving the internal note does not. */
+  async function run(action: () => Promise<Absence>, message: string, closeAfter = false) {
     setBusy(true)
     try {
       const updated = await action()
       showSuccess(message)
       onChanged(updated)
+      if (!closeAfter) return
+      const stillPlanned = updated.status === 'Approved'
+        && context !== null
+        && (context.overlappingShifts.length > 0 || context.overlappingTrips.length > 0)
+      if (stillPlanned) setApprovedWithPlanning(true)
+      else onClose()
     } catch (err) {
       showError(err instanceof ApiError ? err.message : t('absences.review.actionFailed'))
     } finally {
@@ -96,7 +107,7 @@ export function ReviewAbsenceDialog({ absence, onClose, onChanged }: ReviewAbsen
         <p className="rev-summary">
           <Badge tone={ABSENCE_STATUS_TONE[absence.status]}>{t(`absences.status.${absence.status}`)}</Badge>{' '}
           <strong>{t(`absences.type.${absence.type}`)}</strong>{' '}
-          {t('absences.review.period', { from: absence.startDate, to: absence.endDate })}
+          {t('absences.review.period', { from: formatDate(absence.startDate), to: formatDate(absence.endDate) })}
           {absence.partDay !== 'FullDay' && ` (${t(`absences.partDay.${absence.partDay}`)})`}
           {absence.reason && ` — "${absence.reason}"`}
         </p>
@@ -119,7 +130,7 @@ export function ReviewAbsenceDialog({ absence, onClose, onChanged }: ReviewAbsen
                   : t('absences.review.shifts', {
                       count: context.overlappingShifts.length,
                       list: context.overlappingShifts
-                        .map((s) => `${s.date} ${s.startTime.slice(0, 5)}–${s.endTime.slice(0, 5)}`)
+                        .map((s) => `${formatDate(s.date)} ${s.startTime.slice(0, 5)}–${s.endTime.slice(0, 5)}`)
                         .join(', '),
                     })}
               </li>
@@ -145,9 +156,37 @@ export function ReviewAbsenceDialog({ absence, onClose, onChanged }: ReviewAbsen
               </li>
               <li>
                 {t('absences.review.usedVacation', { count: context.usedVacationDaysThisYear })}
-                <span className="rev-balance-note"> {t('absences.review.balanceNote')}</span>
               </li>
             </ul>
+          </div>
+        )}
+
+        {approvedWithPlanning && context && (
+          <div className="rev-followup" role="status">
+            <p>
+              <strong>{t('absences.review.followUpTitle')}</strong>{' '}
+              {t('absences.review.followUpBody', {
+                shifts: context.overlappingShifts.length,
+                trips: context.overlappingTrips.length,
+              })}
+            </p>
+            <ul>
+              {context.overlappingShifts.length > 0 && (
+                <li>
+                  <Link to={`/employee-planning?week=${mondayOf(absence.startDate)}&employees=${absence.employeeId}`}>
+                    {t('absences.review.followUpPlanning')}
+                  </Link>
+                </li>
+              )}
+              {context.overlappingTrips.map((trip) => (
+                <li key={trip.tripId}>
+                  <Link to={`/planning/${trip.tripId}`}>
+                    {t('absences.review.followUpTrip', { tripNumber: trip.tripNumber, date: formatDate(trip.tripDate) })}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+            <Button variant="secondary" onClick={onClose}>{t('absences.review.close')}</Button>
           </div>
         )}
 
@@ -176,7 +215,7 @@ export function ReviewAbsenceDialog({ absence, onClose, onChanged }: ReviewAbsen
               )}
               <Button
                 onClick={() =>
-                  void run(() => decideAbsence(absence.id, true, note.trim() || null), t('absences.review.approveSuccess'))
+                  void run(() => decideAbsence(absence.id, true, note.trim() || null), t('absences.review.approveSuccess'), true)
                 }
                 disabled={busy}
               >
@@ -189,7 +228,7 @@ export function ReviewAbsenceDialog({ absence, onClose, onChanged }: ReviewAbsen
                     showError(t('absences.review.rejectNoteRequired'))
                     return
                   }
-                  void run(() => decideAbsence(absence.id, false, note.trim()), t('absences.review.rejectSuccess'))
+                  void run(() => decideAbsence(absence.id, false, note.trim()), t('absences.review.rejectSuccess'), true)
                 }}
                 disabled={busy}
               >
@@ -206,6 +245,7 @@ export function ReviewAbsenceDialog({ absence, onClose, onChanged }: ReviewAbsen
                     () =>
                       requestAbsenceChanges(absence.id, note.trim(), proposedStart || null, proposedEnd || null),
                     t('absences.review.requestChangesSuccess'),
+                    true,
                   )
                 }}
                 disabled={busy}
@@ -233,4 +273,12 @@ export function ReviewAbsenceDialog({ absence, onClose, onChanged }: ReviewAbsen
       </div>
     </Modal>
   )
+}
+
+/** Monday (yyyy-MM-dd) of the ISO week containing `isoDate` — the personnel-planning week key. */
+function mondayOf(isoDate: string): string {
+  const date = new Date(`${isoDate}T00:00:00Z`)
+  const offset = (date.getUTCDay() + 6) % 7
+  date.setUTCDate(date.getUTCDate() - offset)
+  return date.toISOString().slice(0, 10)
 }

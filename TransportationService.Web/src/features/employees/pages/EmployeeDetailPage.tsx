@@ -140,6 +140,7 @@ export function EmployeeDetailPage() {
   const canViewPlanning = hasPermission('employee_planning.view') || hasPermission('employee_planning.manage')
   const canViewTrips = hasPermission('planning.view')
   const canViewDocuments = hasPermission('employee_documents.view')
+  const [leaveReloadKey, setLeaveReloadKey] = useState(0)
   const canViewIssuedItems = hasPermission('issued_items.view') || hasPermission('issued_items.manage')
   const canViewLeaveBalance = hasPermission('leave_balances.view')
   const canViewAbsences = hasPermission('absences.view')
@@ -467,12 +468,16 @@ export function EmployeeDetailPage() {
         <TabPanel tabId="verlof">
           {canViewLeaveBalance && (
             <section className="employee-section-block">
-              <LeaveBalanceTab employeeId={employee.id} />
+              <LeaveBalanceTab employeeId={employee.id} reloadKey={leaveReloadKey} />
             </section>
           )}
           {canViewAbsences && (
             <section className="employee-section-block">
-              <AbsencesTab employeeId={employee.id} highlightAbsenceId={searchParams.get('absenceId')} />
+              <AbsencesTab
+                employeeId={employee.id}
+                highlightAbsenceId={searchParams.get('absenceId')}
+                onChanged={() => setLeaveReloadKey((key) => key + 1)}
+              />
             </section>
           )}
           {canViewAttendance && (
