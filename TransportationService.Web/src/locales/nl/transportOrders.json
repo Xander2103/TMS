@@ -479,6 +479,7 @@
   },
   "detail": {
     "loadFailed": "De transportopdracht kon niet worden geladen.",
+    "notFound": "Transportopdracht niet gevonden.",
     "loading": "Opdracht laden...",
     "back": "Terug naar opdrachten",
     "subtitle": "Opdracht van {date}",

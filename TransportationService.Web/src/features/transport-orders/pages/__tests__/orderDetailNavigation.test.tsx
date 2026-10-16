@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
+import { ApiError } from '../../../../api/apiClient'
 import { TransportOrderDetailPage } from '../TransportOrderDetailPage'
 import { orderDetail } from '../../../dossiers/__tests__/fixtures'
 import type { OrderPricingSnapshot, TransportOrderDetail } from '../../types'
@@ -494,5 +495,24 @@ describe('order detail — header actions', () => {
     // Document downloads are not permission-gated (unchanged from before the redesign).
     expect(within(header()).getByRole('button', { name: 'CMR' })).toBeInTheDocument()
     expect(within(header()).getByRole('button', { name: 'Leveringsbon' })).toBeInTheDocument()
+  })
+})
+
+describe('order detail — unknown record (M14)', () => {
+  it('says "Transportopdracht niet gevonden" with a way back instead of a retry', async () => {
+    api.getTransportOrder.mockRejectedValue(new ApiError('Not found', 404))
+    renderPage('/transport-orders/does-not-exist')
+
+    expect(await screen.findByText('Transportopdracht niet gevonden.')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Terug naar de lijst' })).toHaveAttribute('href', '/transport-orders')
+    expect(screen.queryByRole('button', { name: 'Opnieuw proberen' })).not.toBeInTheDocument()
+  })
+
+  it('keeps the retry for any other load failure', async () => {
+    api.getTransportOrder.mockRejectedValue(new ApiError('Boom', 500))
+    renderPage()
+
+    expect(await screen.findByText('De transportopdracht kon niet worden geladen.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Opnieuw proberen' })).toBeInTheDocument()
   })
 })

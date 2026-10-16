@@ -479,6 +479,7 @@
   },
   "detail": {
     "loadFailed": "The transport order could not be loaded.",
+    "notFound": "Transport order not found.",
     "loading": "Loading order...",
     "back": "Back to orders",
     "subtitle": "Order of {date}",

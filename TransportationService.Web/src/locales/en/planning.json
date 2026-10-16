@@ -88,6 +88,7 @@
   },
   "detail": {
     "loadError": "The trip could not be loaded.",
+    "notFound": "Trip not found.",
     "loading": "Loading trip...",
     "saveFailedInput": "The trip could not be saved — check the input.",
     "saveFailed": "The trip could not be saved.",

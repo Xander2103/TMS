@@ -4,6 +4,7 @@ import { PageHeader } from '../../../components/layout/PageHeader'
 import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { LoadingState } from '../../../components/feedback/LoadingState'
 import { ErrorState } from '../../../components/feedback/ErrorState'
+import { isNotFoundError } from '../../../api/notFound'
 import { ActionMenu, type ActionMenuItem } from '../../../components/ui/ActionMenu'
 import { AttentionList, type AttentionItem } from '../../../components/ui/AttentionList'
 import { Badge } from '../../../components/ui/Badge'
@@ -176,6 +177,7 @@ export function IncidentDetailPage() {
 
   const [incident, setIncident] = useState<IncidentDetail | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [loadNotFound, setLoadNotFound] = useState(false)
   const [form, setForm] = useState<FormState>({ ...EMPTY_FORM, dossierId: searchParams.get('dossierId') })
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
   const [formError, setFormError] = useState<string | null>(null)
@@ -205,7 +207,10 @@ export function IncidentDetailPage() {
         setResolveDialog(false)
         setConfirmCancel(false)
       })
-      .catch(() => setLoadError(t('incidents.detail.loadError')))
+      .catch((err: unknown) => {
+        setLoadNotFound(isNotFoundError(err))
+        setLoadError(t('incidents.detail.loadError'))
+      })
   }, [id, t])
 
   useEffect(() => {
@@ -263,6 +268,7 @@ export function IncidentDetailPage() {
     }
   }, [incident])
 
+  if (loadError && loadNotFound) return <ErrorState message={t('incidents.detail.notFound')} backTo="/incidents" />
   if (loadError) return <ErrorState message={loadError} onRetry={load} backTo="/incidents" />
   if (!isNew && !incident) return <LoadingState message={t('incidents.detail.loading')} />
 

@@ -23,7 +23,11 @@ import { RouteErrorPage } from '../components/feedback/RouteErrorPage'
 import { LOOKUP_RESOURCES } from '../features/master-data/lookupRegistry'
 import { RequirePermission } from './RequirePermission'
 import { navPermissions } from './routePermissions'
+import { transportRoutePermissions } from './transportRoutePermissions'
 import { EmployeeRecordGuard } from './EmployeeRecordGuard'
+
+/** M14: rights per transport route (see transportRoutePermissions). */
+const TRANSPORT_GUARDS = transportRoutePermissions()
 
 /**
  * Route-based code splitting: every page loads as its own chunk on first visit, so the
@@ -252,22 +256,22 @@ const router = createBrowserRouter(
         {/* Pathless boundary INSIDE the shell: a crashing page keeps the sidebar and the bell. */}
         <Route errorElement={<RouteErrorPage />}>
           <Route path="/dashboard" element={<DashboardPage />} />
-          <Route path="/transport-orders" element={<TransportOrdersPage />} />
-          <Route path="/transport-orders/new" element={<NewTransportOrderPage />} />
+          <Route path="/transport-orders" element={<RequirePermission permissions={TRANSPORT_GUARDS['/transport-orders']}><TransportOrdersPage /></RequirePermission>} />
+          <Route path="/transport-orders/new" element={<RequirePermission permissions={TRANSPORT_GUARDS['/transport-orders/new']}><NewTransportOrderPage /></RequirePermission>} />
           {/* Redesign 2026-09-12: the order shell stays mounted; the optional segment selects the
               subsection (overzicht · lading · prijs · stops · colli · historiek · berichten). */}
-          <Route path="/transport-orders/:id/:section?" element={<TransportOrderDetailPage />} />
+          <Route path="/transport-orders/:id/:section?" element={<RequirePermission permissions={TRANSPORT_GUARDS['/transport-orders/:id']}><TransportOrderDetailPage /></RequirePermission>} />
           <Route path="/order-imports" element={<OrderImportsPage />} />
-          <Route path="/planning" element={<PlanningPage />} />
+          <Route path="/planning" element={<RequirePermission permissions={TRANSPORT_GUARDS['/planning']}><PlanningPage /></RequirePermission>} />
           <Route path="/planning-center" element={<RequirePermission permissions={navPermissions('/planning-center')}><PlanningCenterPage /></RequirePermission>} />
           <Route path="/operations" element={<OperationsPage />} />
           <Route path="/profitability" element={<ProfitabilityPage />} />
           <Route path="/warehouses" element={<WarehousesPage />} />
           <Route path="/warehouse/trace" element={<WarehouseTracePage />} />
           <Route path="/dock-planning" element={<DockPlanningPage />} />
-          <Route path="/planning/:id" element={<TripDetailPage />} />
-          <Route path="/exceptions" element={<ExceptionsPage />} />
-          <Route path="/exceptions/:id" element={<ExceptionDetailPage />} />
+          <Route path="/planning/:id" element={<RequirePermission permissions={TRANSPORT_GUARDS['/planning/:id']}><TripDetailPage /></RequirePermission>} />
+          <Route path="/exceptions" element={<RequirePermission permissions={TRANSPORT_GUARDS['/exceptions']}><ExceptionsPage /></RequirePermission>} />
+          <Route path="/exceptions/:id" element={<RequirePermission permissions={TRANSPORT_GUARDS['/exceptions/:id']}><ExceptionDetailPage /></RequirePermission>} />
           <Route path="/pods/:id" element={<PodDetailPage />} />
           <Route path="/packages/:id" element={<PackageDetailPage />} />
           <Route path="/warehouse" element={<WarehousePage />} />
@@ -285,14 +289,14 @@ const router = createBrowserRouter(
           <Route path="/portal/profile" element={<PortalProfilePage />} />
           <Route path="/my-trips" element={<MyTripsPage />} />
           <Route path="/my-trips/:id" element={<TripExecutionPage />} />
-          <Route path="/invoices" element={<InvoicesPage />} />
-          <Route path="/invoice-control" element={<InvoiceControlPage />} />
-          <Route path="/invoices/new" element={<NewInvoicePage />} />
-          <Route path="/invoices/:id" element={<InvoiceDetailPage />} />
+          <Route path="/invoices" element={<RequirePermission permissions={TRANSPORT_GUARDS['/invoices']}><InvoicesPage /></RequirePermission>} />
+          <Route path="/invoice-control" element={<RequirePermission permissions={TRANSPORT_GUARDS['/invoice-control']}><InvoiceControlPage /></RequirePermission>} />
+          <Route path="/invoices/new" element={<RequirePermission permissions={TRANSPORT_GUARDS['/invoices/new']}><NewInvoicePage /></RequirePermission>} />
+          <Route path="/invoices/:id" element={<RequirePermission permissions={TRANSPORT_GUARDS['/invoices/:id']}><InvoiceDetailPage /></RequirePermission>} />
           <Route path="/notifications" element={<NotificationsPage />} />
-          <Route path="/customers" element={<CustomersPage />} />
-          <Route path="/customers/new" element={<NewCustomerPage />} />
-          <Route path="/customers/:id" element={<CustomerDetailPage />} />
+          <Route path="/customers" element={<RequirePermission permissions={TRANSPORT_GUARDS['/customers']}><CustomersPage /></RequirePermission>} />
+          <Route path="/customers/new" element={<RequirePermission permissions={TRANSPORT_GUARDS['/customers/new']}><NewCustomerPage /></RequirePermission>} />
+          <Route path="/customers/:id" element={<RequirePermission permissions={TRANSPORT_GUARDS['/customers/:id']}><CustomerDetailPage /></RequirePermission>} />
           {/* Driver profiles are merged into the personnel dossier: the list is the
               "Chauffeurs" view of /employees, and driver detail redirects to its tab. */}
           <Route path="/drivers" element={<Navigate to="/employees?view=chauffeurs" replace />} />
@@ -307,15 +311,15 @@ const router = createBrowserRouter(
           <Route path="/trailers/:id" element={<TrailerDetailPage />} />
           <Route path="/tank-cards" element={<TankCardsPage />} />
           <Route path="/maintenance-policies" element={<MaintenancePoliciesPage />} />
-          <Route path="/dossiers" element={<DossiersPage />} />
-          <Route path="/dossiers/new" element={<NewDossierPage />} />
+          <Route path="/dossiers" element={<RequirePermission permissions={TRANSPORT_GUARDS['/dossiers']}><DossiersPage /></RequirePermission>} />
+          <Route path="/dossiers/new" element={<RequirePermission permissions={TRANSPORT_GUARDS['/dossiers/new']}><NewDossierPage /></RequirePermission>} />
           {/* Redesign 2026-09-11: one route element for the dossier shell; the optional segment
               selects the subsection (overzicht · activiteiten · route · goederen · prijs ·
               documenten · historiek) so deep links and back/forward work without remounting. */}
-          <Route path="/dossiers/:id/:section?" element={<DossierDetailPage />} />
-          <Route path="/incidents" element={<IncidentsPage />} />
-          <Route path="/incidents/new" element={<IncidentDetailPage />} />
-          <Route path="/incidents/:id" element={<IncidentDetailPage />} />
+          <Route path="/dossiers/:id/:section?" element={<RequirePermission permissions={TRANSPORT_GUARDS['/dossiers/:id']}><DossierDetailPage /></RequirePermission>} />
+          <Route path="/incidents" element={<RequirePermission permissions={TRANSPORT_GUARDS['/incidents']}><IncidentsPage /></RequirePermission>} />
+          <Route path="/incidents/new" element={<RequirePermission permissions={TRANSPORT_GUARDS['/incidents/new']}><IncidentDetailPage /></RequirePermission>} />
+          <Route path="/incidents/:id" element={<RequirePermission permissions={TRANSPORT_GUARDS['/incidents/:id']}><IncidentDetailPage /></RequirePermission>} />
           <Route path="/cost-rates" element={<CostRatesPage />} />
           <Route path="/settings/pricing" element={<PricingSettingsPage />} />
           <Route path="/pricing/tables" element={<PricingTablesPage />} />

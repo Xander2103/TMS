@@ -73,6 +73,7 @@
   },
   "detail": {
     "loadError": "L'incident n'a pas pu être chargé.",
+    "notFound": "Incident introuvable.",
     "loading": "Chargement de l'incident...",
     "created": "Incident enregistré.",
     "updated": "Incident mis à jour.",

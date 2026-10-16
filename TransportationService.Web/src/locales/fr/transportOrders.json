@@ -479,6 +479,7 @@
   },
   "detail": {
     "loadFailed": "La commande de transport n'a pas pu être chargée.",
+    "notFound": "Ordre de transport introuvable.",
     "loading": "Chargement de la commande...",
     "back": "Retour aux commandes",
     "subtitle": "Commande du {date}",

@@ -73,6 +73,7 @@
   },
   "detail": {
     "loadError": "Het incident kon niet worden geladen.",
+    "notFound": "Incident niet gevonden.",
     "loading": "Incident laden...",
     "created": "Incident geregistreerd.",
     "updated": "Incident bijgewerkt.",

@@ -3,6 +3,7 @@ import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import { addRecentItem } from '../../../hooks/recentItems'
 import { LoadingState } from '../../../components/feedback/LoadingState'
 import { ErrorState } from '../../../components/feedback/ErrorState'
+import { isNotFoundError } from '../../../api/notFound'
 import { Button } from '../../../components/ui/Button'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { FormField } from '../../../components/ui/FormField'
@@ -82,6 +83,7 @@ export function TransportOrderDetailPage() {
 
   const [order, setOrder] = useState<TransportOrderDetail | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [loadNotFound, setLoadNotFound] = useState(false)
   const [reloadToken, setReloadToken] = useState(0)
   const [editing, setEditing] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -128,8 +130,10 @@ export function TransportOrderDetailPage() {
           route: `/transport-orders/${data.id}`,
         })
       })
-      .catch(() => {
-        if (mounted) setLoadError('De transportopdracht kon niet worden geladen.')
+      .catch((err: unknown) => {
+        if (!mounted) return
+        setLoadNotFound(isNotFoundError(err))
+        setLoadError('De transportopdracht kon niet worden geladen.')
       })
     return () => {
       mounted = false
@@ -203,6 +207,7 @@ export function TransportOrderDetailPage() {
     }
   }
 
+  if (loadError && loadNotFound) return <ErrorState message={t('transportOrders.detail.notFound')} backTo="/transport-orders" />
   if (loadError) return <ErrorState message={loadError} onRetry={() => { setLoadError(null); setReloadToken((n) => n + 1) }} backTo="/transport-orders" />
   if (!order) return <LoadingState message="Opdracht laden..." />
   // Redesign 2026-09-12: an unknown segment lands on the overview with a clean URL.

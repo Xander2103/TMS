@@ -88,6 +88,7 @@
   },
   "detail": {
     "loadError": "De rit kon niet worden geladen.",
+    "notFound": "Rit niet gevonden.",
     "loading": "Rit laden...",
     "saveFailedInput": "De rit kon niet worden opgeslagen — controleer de invoer.",
     "saveFailed": "De rit kon niet worden opgeslagen.",

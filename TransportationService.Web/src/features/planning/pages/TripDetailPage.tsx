@@ -5,6 +5,7 @@ import { PageHeader } from '../../../components/layout/PageHeader'
 import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { LoadingState } from '../../../components/feedback/LoadingState'
 import { ErrorState } from '../../../components/feedback/ErrorState'
+import { isNotFoundError } from '../../../api/notFound'
 import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { ActionMenu, type ActionMenuItem } from '../../../components/ui/ActionMenu'
@@ -70,6 +71,7 @@ export function TripDetailPage() {
 
   const [trip, setTrip] = useState<TripDetail | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [loadNotFound, setLoadNotFound] = useState(false)
   const [reloadToken, setReloadToken] = useState(0)
   const [busy, setBusy] = useState(false)
 
@@ -156,8 +158,10 @@ export function TripDetailPage() {
         applyTrip(data)
         setLoadError(null)
       })
-      .catch(() => {
-        if (mounted) setLoadError(t('planning.detail.loadError'))
+      .catch((err: unknown) => {
+        if (!mounted) return
+        setLoadNotFound(isNotFoundError(err))
+        setLoadError(t('planning.detail.loadError'))
       })
     return () => {
       mounted = false
@@ -443,6 +447,7 @@ export function TripDetailPage() {
     [availableOrders, orderIds, t],
   )
 
+  if (loadError && loadNotFound) return <ErrorState message={t('planning.detail.notFound')} backTo="/planning" />
   if (loadError) return <ErrorState message={loadError} onRetry={() => { setLoadError(null); setReloadToken((n) => n + 1) }} backTo="/planning" />
   if (!trip) return <LoadingState message={t('planning.detail.loading')} />
 

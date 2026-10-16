@@ -88,6 +88,7 @@
   },
   "detail": {
     "loadError": "La tournée n'a pas pu être chargée.",
+    "notFound": "Trajet introuvable.",
     "loading": "Chargement de la tournée...",
     "saveFailedInput": "La tournée n'a pas pu être enregistrée — vérifiez la saisie.",
     "saveFailed": "La tournée n'a pas pu être enregistrée.",

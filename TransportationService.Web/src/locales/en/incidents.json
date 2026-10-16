@@ -73,6 +73,7 @@
   },
   "detail": {
     "loadError": "The incident could not be loaded.",
+    "notFound": "Incident not found.",
     "loading": "Loading incident...",
     "created": "Incident registered.",
     "updated": "Incident updated.",
