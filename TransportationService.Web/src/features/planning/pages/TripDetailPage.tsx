@@ -36,6 +36,7 @@ import {
   TRIP_TRANSITION_LABELS,
   type TripDetail,
   type TripStatus,
+  type PlanningConflict,
 } from '../types'
 import { downloadTripDocuments } from '../../transport-orders/api/transportDocumentsApi'
 import {
@@ -55,6 +56,7 @@ import {
 import { usePlanningResources, type ResourceListStatus } from '../usePlanningResources'
 import './planning.css'
 import { formatDate } from '../../../utils/dates'
+import { ConflictDialog } from '../../planning-center/components/ConflictDialog'
 
 /** Lifecycle steps that move a trip forward; the first allowed one is the primary header action. */
 const TRIP_FORWARD_STEPS: TripStatus[] = ['Planned', 'InProgress', 'Completed']
@@ -96,7 +98,7 @@ export function TripDetailPage() {
   const saveStatus = useSaveStatus()
   const [showPackages, setShowPackages] = useState(false)
 
-  const [overrideTarget, setOverrideTarget] = useState<{ status: TripStatus; conflicts: string[] } | null>(null)
+  const [overrideTarget, setOverrideTarget] = useState<{ status: TripStatus; message: string; conflicts: PlanningConflict[] } | null>(null)
   const [cancelTarget, setCancelTarget] = useState<TripStatus | null>(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [execution, setExecution] = useState<TripExecution | null>(null)
@@ -324,33 +326,41 @@ export function TripDetailPage() {
     }
   }
 
-  async function applyTransition(target: TripStatus, override: boolean, release = false) {
+  async function applyTransition(target: TripStatus, override: boolean, release = false, overrideReason: string | null = null) {
     if (!trip) return
     setBusy(true)
     try {
+      // T-H5: a conflict override carries its mandatory reason exactly like the Planbord does.
       const updated = await changeTripStatus(
-        trip.id, target, override, release, release ? releaseReason.trim() || null : null)
+        trip.id, target, override, release, release ? releaseReason.trim() || null : overrideReason)
       applyTrip(updated)
       showSuccess(t('planning.detail.statusChanged', { status: t(TRIP_STATUS_LABELS[target]) }))
       setOverrideTarget(null)
       setReleaseTarget(null)
       setReleaseReason('')
     } catch (err) {
-      const body = err instanceof ApiError ? (err.body as { packageReadiness?: TripPackageReadiness } | null) : null
+      const body = err instanceof ApiError
+        ? (err.body as { packageReadiness?: TripPackageReadiness; message?: string; conflicts?: PlanningConflict[] } | null)
+        : null
       if (err instanceof ApiError && err.status === 409 && body?.packageReadiness) {
         // Departure gate: not all mandatory packages are on the vehicle.
         setReleaseTarget({ status: target, readiness: body.packageReadiness })
         setReadiness(body.packageReadiness)
       } else if (err instanceof ApiError && err.status === 409 && !override) {
-        // Blocking conflicts: offer the override path (guarded server-side by permission).
+        // Blocking conflicts: the SAME dialog as the Planbord — structured conflicts, and an
+        // override (mandatory reason) only for users holding the required permission.
         setOverrideTarget({
           status: target,
-          conflicts: trip.conflicts.filter((c) => c.blocking).map((c) => c.description),
+          message: body?.message ?? t('planning.detail.overrideTitle'),
+          conflicts: body?.conflicts ?? trip.conflicts.filter((c) => c.blocking),
         })
       } else if (err instanceof ApiError && err.status === 403) {
         showError(err.message || t('planning.detail.noPermission'))
         setOverrideTarget(null)
         setReleaseTarget(null)
+      } else if (err instanceof ApiError && err.status === 400 && err.message) {
+        // A refused retry (e.g. missing reason) keeps the dialog open with the server's reason.
+        showError(err.message)
       } else {
         showError(t('planning.detail.statusChangeFailed'))
         setOverrideTarget(null)
@@ -923,13 +933,12 @@ export function TripDetailPage() {
       )}
 
       {overrideTarget && (
-        <ConfirmDialog
-          title={t('planning.detail.overrideTitle')}
-          message={t('planning.detail.overrideMessage', { conflicts: overrideTarget.conflicts.join('\n') })}
-          confirmLabel={t('planning.detail.overrideConfirm')}
-          destructive
-          onConfirm={() => void applyTransition(overrideTarget.status, true)}
-          onCancel={() => setOverrideTarget(null)}
+        <ConflictDialog
+          message={overrideTarget.message}
+          conflicts={overrideTarget.conflicts}
+          busy={busy}
+          onClose={() => setOverrideTarget(null)}
+          onOverride={(reason) => void applyTransition(overrideTarget.status, true, false, reason)}
         />
       )}
 

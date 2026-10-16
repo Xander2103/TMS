@@ -191,4 +191,49 @@ describe('TripDetailPage — B23', () => {
     await user.click(within(section).getByRole('button', { name: 'Toon 16 openstaande colli ▾' }))
     expect(within(section).getByText(/COL-016/)).toBeInTheDocument()
   })
+
+  describe('T-H5 — conflict override uses the Planbord dialog', () => {
+    const conflict = {
+      code: 'DriverDoubleBooked', blocking: true, description: 'Chauffeur Jan Peeters is op 22/09/2026 al ingepland op rit RIT-0002.',
+      severity: 'Blocking', category: 'Availability', relatedEntityType: 'Driver', relatedEntityId: 'd-jan',
+      overrideAllowed: true, requiredPermission: 'planning.override_restriction', suggestedAction: 'Kies een andere chauffeur of verplaats één van de ritten.',
+    }
+    async function rejectWithConflict() {
+      const { ApiError } = await import('../../../api/apiClient')
+      planningApi.getTrip.mockResolvedValue(trip({ allowedTransitions: ['Planned'], conflicts: [conflict] as TripDetail['conflicts'] }))
+      planningApi.changeTripStatus.mockImplementation((_id: string, _status: string, override: boolean, _release: boolean, reason: string | null) =>
+        override && reason
+          ? Promise.resolve(trip({ status: 'Planned' }))
+          : Promise.reject(new ApiError('De rit kan niet worden gepland door conflicten.', 409, { message: 'De rit kan niet worden gepland door conflicten.', conflicts: [conflict] })))
+    }
+
+    it('without the override right: conflicts and suggestion shown, no override action', async () => {
+      const user = userEvent.setup()
+      await rejectWithConflict()
+      await renderPage()
+      await user.click(screen.getByRole('button', { name: 'Inplannen' }))
+      const dialog = await screen.findByRole('dialog')
+      expect(within(dialog).getByText(/al ingepland op rit RIT-0002/)).toBeInTheDocument()
+      expect(within(dialog).getByText(/Kies een andere chauffeur/)).toBeInTheDocument()
+      expect(within(dialog).queryByRole('button', { name: /Overschrijven/ })).toBeNull()
+      expect(within(dialog).queryByLabelText(/Reden voor overschrijven/)).toBeNull()
+    })
+
+    it('with the override right: reason is mandatory and travels with the retry', async () => {
+      const user = userEvent.setup()
+      auth.permissions = new Set(['planning.edit', 'packages.view', 'planning.override_restriction'])
+      await rejectWithConflict()
+      await renderPage()
+      await user.click(screen.getByRole('button', { name: 'Inplannen' }))
+      const dialog = await screen.findByRole('dialog')
+      const confirm = within(dialog).getByRole('button', { name: 'Overschrijven en doorgaan' })
+      expect(confirm).toBeDisabled()
+      await user.type(within(dialog).getByLabelText(/Reden voor overschrijven/), 'Twee korte ritten na elkaar')
+      await user.click(confirm)
+      await waitFor(() =>
+        expect(planningApi.changeTripStatus).toHaveBeenLastCalledWith('trip-1', 'Planned', true, false, 'Twee korte ritten na elkaar'))
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    })
+  })
 })
+
