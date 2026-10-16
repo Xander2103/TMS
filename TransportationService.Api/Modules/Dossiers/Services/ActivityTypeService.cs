@@ -262,6 +262,7 @@ public class ActivityTypeService : IActivityTypeService
         type.IsBillable = request.IsBillable;
         // Null = unchanged: an older client saving the type must not silently clear the flag.
         type.SupportsOnSiteWork = request.SupportsOnSiteWork ?? type.SupportsOnSiteWork;
+        type.RequiresCrane = request.RequiresCrane ?? type.RequiresCrane;
     }
 
     private async Task<ActivityType?> FindAsync(Guid id, CancellationToken cancellationToken) =>
@@ -272,7 +273,7 @@ public class ActivityTypeService : IActivityTypeService
         t.Id, t.Code, t.Name, t.IsActive, t.SortOrder, t.Icon, t.KpiCategory,
         t.HasStops, t.SupportsGoods, t.PlanningRelevant, t.WarehouseRelevant,
         t.AllowsDuration, t.IsQuickStart, t.QuickStartOrder, t.IsSystemDefaultTransport, t.IsBillable,
-        t.SupportsOnSiteWork);
+        t.SupportsOnSiteWork, t.RequiresCrane);
 
     private static string? Trim(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }

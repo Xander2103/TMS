@@ -306,13 +306,21 @@ public class DossierLifecycleTests
     }
 
     [Fact]
-    public async Task ExecutedStandaloneActivity_InThePast_CountsAsDone()
+    public async Task StandaloneActivity_InThePast_CountsAsDone_OnlyOnceCompleted()
     {
+        // T-H7 (2026-10-16), changed by design: a past planned date alone no longer means
+        // "executed" — the activity's own execution status decides (legacy rows were backfilled
+        // to Completed by the StandaloneActivityExecution migration).
         var h = await SeedAsync();
         using var _ = h.Db;
         var (dossier, _) = await h.DossierWithOrdersAsync(TransportOrderStatus.Completed);
         await h.AddStandaloneActivityAsync(dossier.Id, "PLATEAU", new DateOnly(2026, 9, 20));
 
+        Assert.False(await h.Lifecycle().TryAutoConfirmAsync(dossier.Id, "test", CancellationToken.None));
+
+        var plateau = await h.Db.Context.DossierActivities.SingleAsync(a => a.DossierId == dossier.Id && a.LinkedTransportOrderId == null);
+        plateau.ExecutionStatus = DossierActivityExecutionStatus.Completed;
+        await h.Db.Context.SaveChangesAsync();
         Assert.True(await h.Lifecycle().TryAutoConfirmAsync(dossier.Id, "test", CancellationToken.None));
     }
 

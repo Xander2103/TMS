@@ -242,6 +242,89 @@ public class DossiersController : ControllerBase
         return dossier is null ? NotFound() : Ok(dossier);
     }
 
+    // ------------------------------------------------------------ standalone execution (T-H7)
+
+    /// <summary>
+    /// T-H7: driver/operator + vehicle of a standalone planning-relevant activity (crane work,
+    /// plateau). A PLANNING right like "Inplannen". Blocking conflicts answer 409 with the
+    /// conflicts; <c>override</c> + reason needs planning.override_restriction.
+    /// </summary>
+    [HttpPut("{id:guid}/activities/{activityId:guid}/assignment")]
+    [RequirePermission(PermissionCodes.PlanningEdit, PermissionCodes.PlanningCreate)]
+    public async Task<ActionResult<DossierActivityAssignResultDto>> AssignStandaloneActivity(
+        Guid id, Guid activityId, AssignStandaloneActivityRequest request,
+        [FromServices] IDossierActivityExecutionService execution,
+        [FromServices] Modules.Identity.Services.IPermissionAuthorizationService permissions,
+        [FromServices] Modules.Identity.Services.ICurrentUserContext currentUser,
+        CancellationToken cancellationToken)
+    {
+        var overrideAllowed = false;
+        if (request.Override)
+        {
+            overrideAllowed = currentUser.CurrentUserId is { } userId
+                && await permissions.UserHasPermissionAsync(userId, PermissionCodes.PlanningOverrideRestriction, cancellationToken);
+            if (!overrideAllowed)
+            {
+                return StatusCode(StatusCodes.Status403Forbidden,
+                    new { message = "Je hebt geen recht om planningsconflicten te overschrijven." });
+            }
+        }
+
+        try
+        {
+            var result = await execution.AssignAsync(id, activityId, request, overrideAllowed, cancellationToken);
+            return result is null ? NotFound() : Ok(result);
+        }
+        catch (ActivityAssignmentConflictException conflict)
+        {
+            return Conflict(new { message = conflict.Message, conflicts = conflict.Conflicts });
+        }
+    }
+
+    /// <summary>T-H7: Planned → InProgress. Dossier editors and planners.</summary>
+    [HttpPost("{id:guid}/activities/{activityId:guid}/start")]
+    [RequirePermission(PermissionCodes.DossiersManage, PermissionCodes.PlanningEdit)]
+    public async Task<ActionResult<DossierDetailDto>> StartActivity(
+        Guid id, Guid activityId, DossierActivityTransitionRequest request,
+        [FromServices] IDossierActivityExecutionService execution, CancellationToken cancellationToken)
+    {
+        var dossier = await execution.StartAsync(id, activityId, request, cancellationToken);
+        return dossier is null ? NotFound() : Ok(dossier);
+    }
+
+    /// <summary>T-H7: "Afronden" — completes the activity and re-evaluates dossier auto-confirmation.</summary>
+    [HttpPost("{id:guid}/activities/{activityId:guid}/complete")]
+    [RequirePermission(PermissionCodes.DossiersManage, PermissionCodes.PlanningEdit)]
+    public async Task<ActionResult<DossierDetailDto>> CompleteActivity(
+        Guid id, Guid activityId, DossierActivityTransitionRequest request,
+        [FromServices] IDossierActivityExecutionService execution, CancellationToken cancellationToken)
+    {
+        var dossier = await execution.CompleteAsync(id, activityId, request, cancellationToken);
+        return dossier is null ? NotFound() : Ok(dossier);
+    }
+
+    /// <summary>T-H7: cancels the activity (reason required); counts as resolved, like a cancelled order.</summary>
+    [HttpPost("{id:guid}/activities/{activityId:guid}/cancel")]
+    [RequirePermission(PermissionCodes.DossiersManage)]
+    public async Task<ActionResult<DossierDetailDto>> CancelActivity(
+        Guid id, Guid activityId, CancelDossierActivityRequest request,
+        [FromServices] IDossierActivityExecutionService execution, CancellationToken cancellationToken)
+    {
+        var dossier = await execution.CancelAsync(id, activityId, request, cancellationToken);
+        return dossier is null ? NotFound() : Ok(dossier);
+    }
+
+    /// <summary>T-H7: a completed or cancelled activity back to Planned (open dossier, not invoiced).</summary>
+    [HttpPost("{id:guid}/activities/{activityId:guid}/reopen")]
+    [RequirePermission(PermissionCodes.DossiersManage)]
+    public async Task<ActionResult<DossierDetailDto>> ReopenActivity(
+        Guid id, Guid activityId, DossierActivityTransitionRequest request,
+        [FromServices] IDossierActivityExecutionService execution, CancellationToken cancellationToken)
+    {
+        var dossier = await execution.ReopenAsync(id, activityId, request, cancellationToken);
+        return dossier is null ? NotFound() : Ok(dossier);
+    }
+
     [HttpPost("{id:guid}/activities/reorder")]
     [RequirePermission(PermissionCodes.DossiersManage)]
     public async Task<ActionResult<DossierDetailDto>> ReorderActivities(

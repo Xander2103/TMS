@@ -97,6 +97,7 @@ public class DossierActivityService : IDossierActivityService
             LinkedActivityId = request.LinkedActivityId,
             Notes = Trim(request.Notes),
         };
+        ApplyExecutionDetails(activity, request, type);
 
         if (request.CreateLinkedOrder)
         {
@@ -159,6 +160,7 @@ public class DossierActivityService : IDossierActivityService
         {
             activity.Notes = Trim(request.Notes);
         }
+        ApplyExecutionDetails(activity, request, activity.ActivityType!);
         if (durationChanged)
         {
             await RecomputeSiteWorkEndAsync(activity, cancellationToken);
@@ -168,7 +170,8 @@ public class DossierActivityService : IDossierActivityService
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         await _auditService.RecordAsync(EntityType, dossierId.ToString(), "ActivityUpdated", null,
-            new { activity.Id, activity.Label, activity.PlannedDate, activity.DurationHours }, cancellationToken);
+            new { activity.Id, activity.Label, activity.PlannedDate, activity.DurationHours, activity.StartTime, activity.SiteAddress, activity.WorkDescription },
+            cancellationToken);
 
         return await _dossierService.GetAsync(dossierId, cancellationToken);
     }
@@ -389,6 +392,64 @@ public class DossierActivityService : IDossierActivityService
         if (request.Label is { Length: > 200 })
         {
             throw new DomainValidationException("label", "Het label mag maximaal 200 tekens lang zijn.");
+        }
+    }
+
+    /// <summary>
+    /// T-H7: start time, site and work description of an executable standalone activity
+    /// (no stops, planning-relevant). Null = unchanged, "" = clear — an older client that does
+    /// not send them never wipes them.
+    /// </summary>
+    private static void ApplyExecutionDetails(DossierActivity activity, SaveDossierActivityRequest request, ActivityType type)
+    {
+        var any = request.StartTime is not null || request.SiteAddress is not null || request.WorkDescription is not null;
+        if (!any)
+        {
+            return;
+        }
+
+        var executable = !type.HasStops && type.PlanningRelevant;
+        if (!executable && (!string.IsNullOrWhiteSpace(request.StartTime) || !string.IsNullOrWhiteSpace(request.SiteAddress)
+                            || !string.IsNullOrWhiteSpace(request.WorkDescription)))
+        {
+            throw new DomainValidationException(
+                "Starttijd, werflocatie en werkomschrijving gelden alleen voor uitvoerbare activiteiten zonder transportopdracht.");
+        }
+
+        if (request.StartTime is { } start)
+        {
+            if (string.IsNullOrWhiteSpace(start))
+            {
+                activity.StartTime = null;
+            }
+            else if (TimeOnly.TryParse(start.Trim(), System.Globalization.CultureInfo.InvariantCulture, out var parsed))
+            {
+                activity.StartTime = new TimeOnly(parsed.Hour, parsed.Minute);
+            }
+            else
+            {
+                throw new DomainValidationException("startTime", "De starttijd is ongeldig (verwacht UU:MM).");
+            }
+        }
+
+        if (request.SiteAddress is { } site)
+        {
+            if (site.Trim().Length > 500)
+            {
+                throw new DomainValidationException("siteAddress", "De werflocatie mag maximaal 500 tekens lang zijn.");
+            }
+
+            activity.SiteAddress = Trim(site);
+        }
+
+        if (request.WorkDescription is { } work)
+        {
+            if (work.Trim().Length > 2000)
+            {
+                throw new DomainValidationException("workDescription", "De werkomschrijving mag maximaal 2000 tekens lang zijn.");
+            }
+
+            activity.WorkDescription = Trim(work);
         }
     }
 

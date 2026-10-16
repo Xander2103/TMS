@@ -35,7 +35,9 @@ public class ActivityTypeSeeder : IActivityTypeSeeder
         /// <summary>Commercial unit (step 13). Only an empty positioning ride is internal by default.</summary>
         bool IsBillable = true,
         /// <summary>D2: orders of this type may be on-site work (site stop + work description).</summary>
-        bool SupportsOnSiteWork = false);
+        bool SupportsOnSiteWork = false,
+        /// <summary>T-H7: a standalone activity of this type needs a crane vehicle.</summary>
+        bool RequiresCrane = false);
 
     private static readonly Seed[] Defaults =
     [
@@ -51,7 +53,8 @@ public class ActivityTypeSeeder : IActivityTypeSeeder
             SupportsOnSiteWork: true),
         new("KRAANWERK", "Kraanwerk ter plaatse", "crane", 3, "Kraan",
             HasStops: false, SupportsGoods: false, PlanningRelevant: true, WarehouseRelevant: false,
-            AllowsDuration: true, IsQuickStart: false, QuickStartOrder: 0, IsDefaultTransport: false),
+            AllowsDuration: true, IsQuickStart: false, QuickStartOrder: 0, IsDefaultTransport: false,
+            RequiresCrane: true),
         new("PLATEAU", "Plateau", "trailer", 4, "Kraan",
             HasStops: false, SupportsGoods: false, PlanningRelevant: true, WarehouseRelevant: false,
             AllowsDuration: true, IsQuickStart: false, QuickStartOrder: 0, IsDefaultTransport: false),
@@ -114,6 +117,7 @@ public class ActivityTypeSeeder : IActivityTypeSeeder
                 IsSystemDefaultTransport = takeDefaultFlag,
                 IsBillable = seed.IsBillable,
                 SupportsOnSiteWork = seed.SupportsOnSiteWork,
+                RequiresCrane = seed.RequiresCrane,
                 IsActive = true,
             });
         }

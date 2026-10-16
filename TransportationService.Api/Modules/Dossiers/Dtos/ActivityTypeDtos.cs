@@ -19,7 +19,9 @@ public record ActivityTypeDto(
     /// <summary>Commercial unit: carries a sales price and counts in pricing completeness (step 13).</summary>
     bool IsBillable = true,
     /// <summary>D2: orders of this type may be on-site work (OnSiteLifting: site stop + work description).</summary>
-    bool SupportsOnSiteWork = false);
+    bool SupportsOnSiteWork = false,
+    /// <summary>T-H7: a standalone activity of this type needs a vehicle with a crane.</summary>
+    bool RequiresCrane = false);
 
 /// <summary>
 /// Create/update payload for a tenant activity type. <see cref="Code"/> is immutable after
@@ -43,4 +45,6 @@ public record SaveActivityTypeRequest(
     bool IsSystemDefaultTransport = false,
     bool IsBillable = true,
     /// <summary>D2. Null = unchanged (false on create), so a client that does not know the flag never clears it.</summary>
-    bool? SupportsOnSiteWork = null);
+    bool? SupportsOnSiteWork = null,
+    /// <summary>T-H7. Null = unchanged (false on create).</summary>
+    bool? RequiresCrane = null);

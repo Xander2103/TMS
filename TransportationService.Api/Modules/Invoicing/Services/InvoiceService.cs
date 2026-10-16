@@ -5,6 +5,7 @@ using TransportationService.Api.Common.Models;
 using TransportationService.Api.Common.Persistence;
 using TransportationService.Api.Data;
 using TransportationService.Api.Modules.Auditing.Services;
+using TransportationService.Api.Modules.Dossiers.Entities;
 using TransportationService.Api.Modules.Dossiers.Services;
 using TransportationService.Api.Modules.Invoicing.Dtos;
 using TransportationService.Api.Modules.Invoicing.Entities;
@@ -240,7 +241,8 @@ public class InvoiceService : IInvoiceService
     /// so an unpriced activity can never become a € 0 line), has NO linked order (an order-backed
     /// activity is billed through its order — never twice), belongs to a dossier of this customer
     /// and is not on a live (non-cancelled) invoice. A draft-released price (Locked) is a
-    /// candidate again, exactly like a released order.
+    /// candidate again, exactly like a released order. T-H8: never a cancelled activity, and a
+    /// planning-relevant one only once Completed (<c>InvoiceControlService</c> uses the same rule).
     /// </summary>
     public async Task<IReadOnlyList<UninvoicedActivityDto>> ListUninvoicedActivitiesAsync(
         Guid customerId, CancellationToken cancellationToken)
@@ -267,6 +269,11 @@ public class InvoiceService : IInvoiceService
             .Join(_dbContext.ActivityTypes.AsNoTracking().Where(t => t.TenantId == tenantId && t.IsBillable),
                 x => x.Activity.ActivityTypeId, t => t.Id, (x, t) => new { x.Pricing, x.Activity, x.Dossier, Type = t })
             .Where(x => !invoicedActivityIds.Contains(x.Activity.Id))
+            // T-H8: a cancelled activity is never billed, and operational (planning-relevant) work
+            // is only invoice-ready once COMPLETED — the same rule as orders (only Completed orders
+            // are candidates). Purely commercial units (storage …) keep billing on their price alone.
+            .Where(x => x.Activity.ExecutionStatus != DossierActivityExecutionStatus.Cancelled
+                        && (!x.Type.PlanningRelevant || x.Activity.ExecutionStatus == DossierActivityExecutionStatus.Completed))
             .OrderBy(x => x.Dossier.DossierNumber).ThenBy(x => x.Activity.Sequence)
             .Select(x => new
             {

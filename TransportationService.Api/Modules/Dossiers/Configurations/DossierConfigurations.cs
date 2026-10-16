@@ -80,6 +80,15 @@ public class DossierActivityConfiguration : IEntityTypeConfiguration<DossierActi
         builder.Property(a => a.Label).HasMaxLength(200);
         builder.Property(a => a.Notes).HasMaxLength(2000);
         builder.Property(a => a.DurationHours).HasPrecision(8, 2);
+        // Existing rows get "Planned" (or "Completed" for already-executed ones) from the migration's backfill.
+        builder.Property(a => a.ExecutionStatus).HasConversion<string>().HasMaxLength(20);
+        builder.Property(a => a.SiteAddress).HasMaxLength(500);
+        builder.Property(a => a.WorkDescription).HasMaxLength(2000);
+        builder.Property(a => a.CancellationReason).HasMaxLength(500);
+        builder.HasOne<Modules.Drivers.Entities.Driver>().WithMany().HasForeignKey(a => a.DriverId)
+            .OnDelete(DeleteBehavior.SetNull);
+        builder.HasOne<Modules.Fleet.Entities.Vehicle>().WithMany().HasForeignKey(a => a.VehicleId)
+            .OnDelete(DeleteBehavior.SetNull);
 
         builder.HasOne(a => a.ActivityType).WithMany().HasForeignKey(a => a.ActivityTypeId)
             .OnDelete(DeleteBehavior.Restrict);

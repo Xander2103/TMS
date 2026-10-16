@@ -53,6 +53,12 @@ public class ActivityType : AuditableTenantEntity
     /// </summary>
     public bool IsBillable { get; set; } = true;
 
+    /// <summary>
+    /// T-H7: a standalone activity of this type needs a vehicle with a crane — assigning one
+    /// without <c>Vehicle.HasCrane</c> raises the planning conflict <c>OrderRequiresCrane</c>.
+    /// </summary>
+    public bool RequiresCrane { get; set; }
+
     /// <summary>True → offered as a quick-start tile on the New Dossier screen.</summary>
     public bool IsQuickStart { get; set; }
 

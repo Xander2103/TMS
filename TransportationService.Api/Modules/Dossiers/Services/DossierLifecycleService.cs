@@ -46,7 +46,8 @@ public interface IDossierLifecycleService
 ///   <item><b>Auto blockers</b> (pipeline only): no activities; a transport activity without order;
 ///   an order that is not Completed/Invoiced (Cancelled ones are ignored); a delivery stop whose
 ///   latest execution Failed/Skipped/PartiallyCompleted; a planning-relevant standalone activity
-///   without a planned date or planned in the future; nothing executed at all.</item>
+///   that is not Completed or Cancelled (T-H7: its own execution status, no longer its date);
+///   nothing executed at all.</item>
 ///   <item><b>Warnings</b> (manual, acknowledged deliberately): the auto blockers above, POD
 ///   missing, pricing attention, no CMR — so a dossier created AFTER the transport happened can
 ///   be confirmed without inventing trip or order statuses.</item>
@@ -105,7 +106,6 @@ public class DossierLifecycleService : IDossierLifecycleService
     private async Task<DossierConfirmationEvaluationDto> EvaluateAsync(TransportDossier dossier, CancellationToken cancellationToken)
     {
         var tenantId = TenantId;
-        var today = DateOnly.FromDateTime(_timeProvider.GetUtcNow().UtcDateTime);
         var checks = new List<Check>();
 
         if (dossier.Status != DossierStatus.Open)
@@ -127,7 +127,7 @@ public class DossierLifecycleService : IDossierLifecycleService
             .Where(a => a.TenantId == tenantId && a.DossierId == dossier.Id)
             .Join(_dbContext.ActivityTypes.AsNoTracking().Where(t => t.TenantId == tenantId),
                 a => a.ActivityTypeId, t => t.Id,
-                (a, t) => new { a.Id, a.Label, a.LinkedTransportOrderId, a.PlannedDate, TypeName = t.Name, t.HasStops, t.PlanningRelevant, t.IsBillable })
+                (a, t) => new { a.Id, a.Label, a.LinkedTransportOrderId, a.PlannedDate, a.ExecutionStatus, TypeName = t.Name, t.HasStops, t.PlanningRelevant, t.IsBillable })
             .OrderBy(a => a.TypeName)
             .ToListAsync(cancellationToken);
         if (activities.Count == 0)
@@ -168,14 +168,22 @@ public class DossierLifecycleService : IDossierLifecycleService
                 continue;
             }
 
-            if (activity.PlannedDate is null || activity.PlannedDate > today)
+            // T-H7: the activity's own execution status decides — Completed is executed, Cancelled
+            // is resolved (exactly like a cancelled order), anything else still has to happen. A
+            // past planned date alone no longer counts as "executed" (the migration backfilled the
+            // legacy rows that relied on it to Completed).
+            if (activity.ExecutionStatus is DossierActivityExecutionStatus.Completed or DossierActivityExecutionStatus.Cancelled)
             {
-                checks.Add(new Check("activity.not_executed",
-                    activity.PlannedDate is null
-                        ? $"{Ref(activity.TypeName, activity.Label)}: nog niet ingepland."
-                        : $"{Ref(activity.TypeName, activity.Label)}: gepland op {activity.PlannedDate:dd/MM/yyyy}, nog niet uitgevoerd.",
-                    ActivityId: activity.Id));
+                continue;
             }
+
+            checks.Add(new Check("activity.not_executed",
+                activity.PlannedDate is null
+                    ? $"{Ref(activity.TypeName, activity.Label)}: nog niet ingepland."
+                    : activity.ExecutionStatus == DossierActivityExecutionStatus.InProgress
+                        ? $"{Ref(activity.TypeName, activity.Label)}: bezig, nog niet afgerond."
+                        : $"{Ref(activity.TypeName, activity.Label)}: gepland op {activity.PlannedDate:dd/MM/yyyy}, nog niet afgerond.",
+                ActivityId: activity.Id));
         }
 
         var doneOrderIds = orders.Where(o => DoneStatuses.Contains(o.Status)).Select(o => o.Id).ToList();
@@ -217,7 +225,7 @@ public class DossierLifecycleService : IDossierLifecycleService
             checks.Add(new Check("delivery.pod_missing", $"Opdracht {order.OrderNumber}: geen afleverbewijs (POD) geregistreerd.", OrderId: order.Id, BlocksAuto: false));
         }
 
-        var executedStandalone = activities.Count(a => !a.HasStops && a.PlanningRelevant && a.PlannedDate is { } d && d <= today);
+        var executedStandalone = activities.Count(a => !a.HasStops && a.PlanningRelevant && a.ExecutionStatus == DossierActivityExecutionStatus.Completed);
         if (doneOrderIds.Count == 0 && executedStandalone == 0)
         {
             checks.Add(new Check("nothing.completed", "Er is nog niets uitgevoerd: geen voltooide opdracht of uitgevoerde activiteit."));
@@ -248,7 +256,7 @@ public class DossierLifecycleService : IDossierLifecycleService
         // financials (price status Priced or confirmed Free per billable unit), never a second
         // derivation from readiness codes that counted a partially priced order as priced.
         var detail = await _dossiers().GetAsync(dossier.Id, cancellationToken);
-        var billable = detail?.Financials.BillableActivityCount ?? activities.Count(a => a.IsBillable);
+        var billable = detail?.Financials.BillableActivityCount ?? activities.Count(a => a.IsBillable && a.ExecutionStatus != DossierActivityExecutionStatus.Cancelled);
         var pricedUnits = detail?.Financials.SettledActivityCount
                           ?? (billable == 0 ? 0 : billable - readiness.Count(i => i.Code is "pricing.missing"));
 
@@ -272,7 +280,7 @@ public class DossierLifecycleService : IDossierLifecycleService
                 OrdersOpen: orders.Count(o => o.Status != TransportOrderStatus.Cancelled && !DoneStatuses.Contains(o.Status)),
                 DeliveriesFailed: failedDeliveries,
                 PodMissing: podMissing.Count,
-                ActivitiesExecutable: activities.Count(a => !a.HasStops && a.PlanningRelevant),
+                ActivitiesExecutable: activities.Count(a => !a.HasStops && a.PlanningRelevant && a.ExecutionStatus != DossierActivityExecutionStatus.Cancelled),
                 ActivitiesExecuted: executedStandalone,
                 BillableUnits: billable,
                 PricedUnits: Math.Max(0, pricedUnits),

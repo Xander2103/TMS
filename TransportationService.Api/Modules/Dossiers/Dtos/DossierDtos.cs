@@ -47,7 +47,15 @@ public record DossierListItemDto(
     /// Commercial status over the billable units, in the <c>ActivityPriceStatus</c> vocabulary:
     /// "NotPriced" | "PartiallyPriced" | "Priced" | "Free"; null when the dossier has no billable unit.
     /// </summary>
-    string? PriceStatus = null);
+    string? PriceStatus = null,
+    /// <summary>M11: settled units (Priced or confirmed Free) — the SAME count the detail's "x van y onderdelen afgehandeld" shows.</summary>
+    int SettledActivityCount = 0,
+    /// <summary>M11: relevant units without any price.</summary>
+    int UnpricedActivityCount = 0,
+    /// <summary>M11: units explicitly free (confirmed standalone € 0, intentional order € 0).</summary>
+    int FreeActivityCount = 0,
+    /// <summary>M11: order-backed units priced but incomplete (coverage Partial/None or stale).</summary>
+    int PartiallyPricedActivityCount = 0);
 
 /// <summary>
 /// Dossier search sprint 2026-09-23 — the ONE typed query behind the dossier list. Every text
@@ -170,7 +178,13 @@ public record DossierFinancialSummaryDto(
     /// PartiallyPriced, not a € 0 awaiting its decision). The one count both the price tab
     /// ("x van y onderdelen afgehandeld") and the confirmation dialog show.
     /// </summary>
-    int SettledActivityCount = 0);
+    int SettledActivityCount = 0,
+    /// <summary>M11: units explicitly free (confirmed standalone € 0, intentional order € 0).</summary>
+    int FreeActivityCount = 0,
+    /// <summary>M11: order-backed units priced but incomplete (coverage Partial/None or stale).</summary>
+    int PartiallyPricedActivityCount = 0,
+    /// <summary>M11: the dossier-level price status from the shared counts (<c>DossierPriceCounts</c>); null = nothing billable.</summary>
+    string? PriceStatus = null);
 
 /// <summary>One activity card on the dossier: type capabilities + the linked execution record.</summary>
 public record DossierActivityDto(
@@ -230,7 +244,57 @@ public record DossierActivityDto(
     /// <summary>D6: transport documents issued for the activity's order (own unique number), oldest first; empty without order.</summary>
     IReadOnlyList<DossierActivityIssuedDocumentDto>? IssuedDocuments = null,
     /// <summary>D6: OWN documents of the activity's order. Documents of the dossier as a whole are counted on the dossier only.</summary>
-    int DocumentCount = 0);
+    int DocumentCount = 0,
+    // --- T-H7: standalone execution ---
+    /// <summary>The type is planning-relevant (operational work: crane, plateau, …).</summary>
+    bool PlanningRelevant = false,
+    /// <summary>Standalone + planning-relevant: carries driver/vehicle/start time/site/work description.</summary>
+    bool IsExecutable = false,
+    /// <summary>The type needs a crane vehicle (planning conflict when the assigned vehicle has none).</summary>
+    bool RequiresCrane = false,
+    /// <summary>Standalone only: Planned | InProgress | Completed | Cancelled; null for order-backed activities (the order has the status).</summary>
+    string? ExecutionStatus = null,
+    TimeOnly? StartTime = null,
+    /// <summary>Derived: PlannedDate + StartTime + DurationHours (local); null when one of them is missing.</summary>
+    DateTime? PlannedEnd = null,
+    string? SiteAddress = null,
+    string? WorkDescription = null,
+    Guid? DriverId = null,
+    string? DriverName = null,
+    Guid? VehicleId = null,
+    string? VehicleNumber = null,
+    string? VehiclePlate = null,
+    DateTime? StartedAt = null,
+    DateTime? CompletedAt = null,
+    string? CompletedByName = null,
+    DateTime? CancelledAt = null,
+    string? CancellationReason = null,
+    /// <summary>M11: billable and not cancelled — the unit counts in the dossier's price completeness.</summary>
+    bool CountsForPricing = false);
+
+/// <summary>
+/// T-H7: driver/operator and vehicle of a STANDALONE activity (crane work, plateau). Blocking
+/// planning conflicts (absence, employment, blocked driver, vehicle out of service) refuse with
+/// 409 unless <c>Override</c> + reason by a holder of planning.override_restriction.
+/// <c>Version</c> is the DOSSIER token.
+/// </summary>
+public record AssignStandaloneActivityRequest(
+    Guid? DriverId = null,
+    Guid? VehicleId = null,
+    bool Override = false,
+    string? OverrideReason = null,
+    Guid? Version = null);
+
+/// <summary>T-H7: start / complete / reopen of a standalone activity; <c>Version</c> is the DOSSIER token.</summary>
+public record DossierActivityTransitionRequest(Guid? Version = null);
+
+/// <summary>T-H7: cancelling a standalone activity needs a reason.</summary>
+public record CancelDossierActivityRequest(string? Reason = null, Guid? Version = null);
+
+/// <summary>T-H7: the refreshed dossier plus the non-blocking conflicts of the new assignment.</summary>
+public record DossierActivityAssignResultDto(
+    DossierDetailDto Dossier,
+    IReadOnlyList<Modules.Planning.Dtos.PlanningConflictDto> Warnings);
 
 /// <summary>D6: an issued transport document as shown on the activity card (<c>Kind</c>: Cmr | DeliveryNote | WorkOrder).</summary>
 public record DossierActivityIssuedDocumentDto(Guid Id, string Kind, string DocumentNumber);
@@ -483,7 +547,13 @@ public record SaveDossierActivityRequest(
     string? Notes = null,
     /// <summary>HasStops types only: also create a draft order inside this dossier and link it.</summary>
     bool CreateLinkedOrder = false,
-    Guid? Version = null);
+    Guid? Version = null,
+    /// <summary>T-H7 (executable standalone types): "HH:mm"; null = unchanged, "" = clear.</summary>
+    string? StartTime = null,
+    /// <summary>T-H7: null = unchanged, "" = clear.</summary>
+    string? SiteAddress = null,
+    /// <summary>T-H7: null = unchanged, "" = clear.</summary>
+    string? WorkDescription = null);
 
 public record ReorderDossierActivitiesRequest(IReadOnlyList<Guid> ActivityIds, Guid? Version = null);
 

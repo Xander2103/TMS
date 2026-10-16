@@ -51,7 +51,7 @@ public class DossierReadinessService : IDossierReadinessService
         var activities = await _dbContext.DossierActivities.AsNoTracking()
             .Where(a => a.TenantId == tenantId && a.DossierId == dossierId)
             .Join(_dbContext.ActivityTypes.AsNoTracking(), a => a.ActivityTypeId, t => t.Id,
-                (a, t) => new { a.Id, a.Label, a.LinkedTransportOrderId, TypeName = t.Name, t.HasStops, t.IsBillable })
+                (a, t) => new { a.Id, a.Label, a.LinkedTransportOrderId, a.ExecutionStatus, TypeName = t.Name, t.HasStops, t.IsBillable })
             .ToListAsync(cancellationToken);
 
         if (activities.Count == 0)
@@ -72,7 +72,8 @@ public class DossierReadinessService : IDossierReadinessService
         }
 
         // Standalone billable activities: their own price record is the carrier (step 13).
-        var standalone = activities.Where(a => !a.HasStops && a.IsBillable).ToList();
+        // M11: a cancelled standalone activity is no commercial component any more (DossierPriceCounts).
+        var standalone = activities.Where(a => !a.HasStops && a.IsBillable && a.ExecutionStatus != DossierActivityExecutionStatus.Cancelled).ToList();
         if (standalone.Count > 0)
         {
             var standaloneIds = standalone.Select(a => a.Id).ToList();
@@ -202,7 +203,8 @@ public class DossierReadinessService : IDossierReadinessService
         var snapshots = await _dbContext.TransportOrderPricingSnapshots.AsNoTracking()
             .Where(s => s.TenantId == tenantId && orderIds.Contains(s.TransportOrderId)
                         && (s.CoverageStatus == "Partial" || s.CoverageStatus == "None" || s.IsStale))
-            .Join(_dbContext.TransportOrders.AsNoTracking(), s => s.TransportOrderId, o => o.Id,
+            // M11: a cancelled order is no commercial component — no price items for it.
+            .Join(_dbContext.TransportOrders.AsNoTracking().Where(o => o.Status != TransportOrderStatus.Cancelled), s => s.TransportOrderId, o => o.Id,
                 (s, o) => new { s.TransportOrderId, s.CoverageStatus, s.IsStale, o.OrderNumber })
             .ToListAsync(cancellationToken);
         var incompleteOrderIds = new HashSet<Guid>();
@@ -294,9 +296,11 @@ public class DossierReadinessService : IDossierReadinessService
                     .Any(hasStops => hasStops)
                 || _dbContext.DossierActivities
                     .Where(a => a.DossierId == d.Id && a.LinkedTransportOrderId != null)
+                    .Join(_dbContext.TransportOrders.Where(o => o.Status != TransportOrderStatus.Cancelled),
+                        a => a.LinkedTransportOrderId, o => o.Id, (a, o) => o.Id)
                     .Join(_dbContext.TransportOrderPricingSnapshots,
-                        a => a.LinkedTransportOrderId, s => s.TransportOrderId,
-                        (a, s) => new { s.CoverageStatus, s.IsStale })
+                        id => id, s => s.TransportOrderId,
+                        (id, s) => new { s.CoverageStatus, s.IsStale })
                     .Any(s => s.CoverageStatus == "Partial" || s.CoverageStatus == "None" || s.IsStale)
                 // OrderPricingState.IsUnpricedExpression: the same tree as the C# definition, so
                 // SQL NULL (AgreedPrice unknown) counts as unpriced exactly like the helper does.
@@ -312,7 +316,7 @@ public class DossierReadinessService : IDossierReadinessService
                 // the attention tile. Only a standalone € 0 that still awaits confirmation does.
                 // Step 13: a standalone billable activity without a price, or priced at € 0.
                 || _dbContext.DossierActivities
-                    .Where(a => a.DossierId == d.Id)
+                    .Where(a => a.DossierId == d.Id && a.ExecutionStatus != DossierActivityExecutionStatus.Cancelled)
                     .Join(_dbContext.ActivityTypes, a => a.ActivityTypeId, t => t.Id, (a, t) => new { a.Id, t.HasStops, t.IsBillable })
                     .Where(x => x.IsBillable && !x.HasStops)
                     .Any(x => !_dbContext.DossierActivityPricings

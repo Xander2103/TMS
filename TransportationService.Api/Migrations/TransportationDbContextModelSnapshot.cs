@@ -1222,6 +1222,9 @@ namespace TransportationService.Api.Migrations
                     b.Property<int>("QuickStartOrder")
                         .HasColumnType("integer");
 
+                    b.Property<bool>("RequiresCrane")
+                        .HasColumnType("boolean");
+
                     b.Property<int>("SortOrder")
                         .HasColumnType("integer");
 
@@ -1265,6 +1268,22 @@ namespace TransportationService.Api.Migrations
                     b.Property<Guid>("ActivityTypeId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("CancellationReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTime?>("CancelledAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CancelledByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CompletedByUserId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -1280,9 +1299,17 @@ namespace TransportationService.Api.Migrations
                     b.Property<Guid>("DossierId")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("DriverId")
+                        .HasColumnType("uuid");
+
                     b.Property<decimal?>("DurationHours")
                         .HasPrecision(8, 2)
                         .HasColumnType("numeric(8,2)");
+
+                    b.Property<string>("ExecutionStatus")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
 
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
@@ -1307,6 +1334,16 @@ namespace TransportationService.Api.Migrations
                     b.Property<int>("Sequence")
                         .HasColumnType("integer");
 
+                    b.Property<string>("SiteAddress")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<TimeOnly?>("StartTime")
+                        .HasColumnType("time without time zone");
+
+                    b.Property<DateTime?>("StartedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<Guid>("TenantId")
                         .HasColumnType("uuid");
 
@@ -1316,15 +1353,26 @@ namespace TransportationService.Api.Migrations
                     b.Property<Guid?>("UpdatedByUserId")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("VehicleId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("WorkDescription")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
                     b.HasKey("Id");
 
                     b.HasIndex("ActivityTypeId");
 
                     b.HasIndex("DossierId");
 
+                    b.HasIndex("DriverId");
+
                     b.HasIndex("LinkedActivityId");
 
                     b.HasIndex("LinkedTransportOrderId");
+
+                    b.HasIndex("VehicleId");
 
                     b.HasIndex("TenantId", "ActivityTypeId");
 
@@ -15995,6 +16043,11 @@ namespace TransportationService.Api.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("TransportationService.Api.Modules.Drivers.Entities.Driver", null)
+                        .WithMany()
+                        .HasForeignKey("DriverId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("TransportationService.Api.Modules.Dossiers.Entities.DossierActivity", null)
                         .WithMany()
                         .HasForeignKey("LinkedActivityId")
@@ -16003,6 +16056,11 @@ namespace TransportationService.Api.Migrations
                     b.HasOne("TransportationService.Api.Modules.Orders.Entities.TransportOrder", null)
                         .WithMany()
                         .HasForeignKey("LinkedTransportOrderId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("TransportationService.Api.Modules.Fleet.Entities.Vehicle", null)
+                        .WithMany()
+                        .HasForeignKey("VehicleId")
                         .OnDelete(DeleteBehavior.SetNull);
 
                     b.Navigation("ActivityType");

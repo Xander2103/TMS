@@ -190,25 +190,9 @@ public partial class DossierService
         // ---- commercial
         if (!string.IsNullOrWhiteSpace(query.PriceStatus))
         {
-            // The billable/priced unit counts of the list projection (transport units through their
-            // order, standalone units through their own price record, legacy links without activity),
-            // so the filter and the price column of a row can never disagree.
-            var counted = dossiers.Select(d => new
-            {
-                Dossier = d,
-                Billable = _dbContext.DossierActivities.Where(a => a.DossierId == d.Id).Join(_dbContext.ActivityTypes, a => a.ActivityTypeId, t => t.Id, (a, t) => t).Count(t => t.IsBillable)
-                    + _dbContext.DossierOrders.Count(l => l.DossierId == d.Id && !_dbContext.DossierActivities.Any(a => a.DossierId == d.Id && a.LinkedTransportOrderId == l.TransportOrderId)),
-                Priced = _dbContext.DossierActivities.Where(a => a.DossierId == d.Id && a.LinkedTransportOrderId != null).Join(_dbContext.ActivityTypes, a => a.ActivityTypeId, t => t.Id, (a, t) => new { a, t }).Where(x => x.t.IsBillable && x.t.HasStops).Join(_dbContext.TransportOrders, x => x.a.LinkedTransportOrderId, o => o.Id, (x, o) => o).Where(OrderPricingState.IsPricedExpression).Count()
-                    + _dbContext.DossierActivities.Where(a => a.DossierId == d.Id).Join(_dbContext.ActivityTypes, a => a.ActivityTypeId, t => t.Id, (a, t) => new { a, t }).Where(x => x.t.IsBillable && !x.t.HasStops).Join(_dbContext.DossierActivityPricings, x => x.a.Id, p => p.DossierActivityId, (x, p) => p).Where(ActivityPricingState.IsPricedExpression).Count()
-                    + _dbContext.DossierOrders.Where(l => l.DossierId == d.Id && !_dbContext.DossierActivities.Any(a => a.DossierId == d.Id && a.LinkedTransportOrderId == l.TransportOrderId)).Join(_dbContext.TransportOrders, l => l.TransportOrderId, o => o.Id, (l, o) => o).Where(OrderPricingState.IsPricedExpression).Count(),
-            });
-            dossiers = query.PriceStatus.Trim().ToLowerInvariant() switch
-            {
-                "priced" => counted.Where(x => x.Priced > 0 && x.Priced >= x.Billable).Select(x => x.Dossier),
-                "partial" => counted.Where(x => x.Priced > 0 && x.Priced < x.Billable).Select(x => x.Dossier),
-                "unpriced" => counted.Where(x => x.Billable > 0 && x.Priced == 0).Select(x => x.Dossier),
-                _ => throw new DomainValidationException("priceStatus", "Onbekende prijsstatus."),
-            };
+            // M11: the SAME counts as the price column and the detail financials (DossierPriceCounts),
+            // so the filter, the row and the dossier page can never disagree.
+            dossiers = DossierPriceCounts.Filter(_dbContext, dossiers, query.PriceStatus.Trim().ToLowerInvariant());
         }
 
         if (!string.IsNullOrWhiteSpace(query.InvoiceStatus))
