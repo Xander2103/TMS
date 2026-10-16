@@ -681,6 +681,29 @@ public class PlanningConflictService : IPlanningConflictService
             }
         }
 
+        // Transport acceptance M8: crane work (a crane transport or on-site lifting — the order
+        // requires a crane) needs an operator holding a valid crane certificate, exactly like ADR
+        // above. Situational: drivers without the certificate stay plannable for other work.
+        var tripNeedsCrane = await _dbContext.TripOrders.AsNoTracking()
+            .Where(to => to.TenantId == tenantId && to.TripId == trip.Id && !to.IsDeleted)
+            .Join(_dbContext.TransportOrders.AsNoTracking().Where(o => o.TenantId == tenantId),
+                to => to.TransportOrderId, o => o.Id, (to, o) => o.CraneRequired)
+            .AnyAsync(crane => crane, cancellationToken);
+        if (tripNeedsCrane)
+        {
+            var hasValidCraneCertificate = qualifications.Any(q =>
+                (q.Code == QualificationTypeCodes.CraneCertificate
+                 || q.Name.Contains("kraan", StringComparison.OrdinalIgnoreCase)
+                 || q.Name.Contains("crane", StringComparison.OrdinalIgnoreCase))
+                && _statusCalculator.CalculateEffectiveStatus(q.Qualification, today, warningDays)
+                    is QualificationStatus.Valid or QualificationStatus.ExpiringSoon);
+            if (!hasValidCraneCertificate)
+            {
+                conflicts.Add(new(PlanningConflictCode.DriverNotReady, true,
+                    $"Kraanwerk: {driverName} heeft geen geldig kraancertificaat."));
+            }
+        }
+
         var doubleBooked = await OtherTripAsync(trip, t => t.DriverId == driverId, cancellationToken);
         if (doubleBooked is not null)
         {

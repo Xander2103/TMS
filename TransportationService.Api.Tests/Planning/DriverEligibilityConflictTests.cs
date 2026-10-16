@@ -1,6 +1,8 @@
 using TransportationService.Api.Modules.Drivers.Entities;
 using TransportationService.Api.Modules.Employees.Entities;
 using TransportationService.Api.Modules.Fleet.Entities;
+using TransportationService.Api.Modules.Orders.Entities;
+using TransportationService.Api.Modules.Partners.Entities;
 using TransportationService.Api.Modules.Planning.Dtos;
 using TransportationService.Api.Modules.Planning.Entities;
 using TransportationService.Api.Modules.Planning.Services;
@@ -130,5 +132,63 @@ public class DriverEligibilityConflictTests
 
         var conflict = Assert.Single(conflicts, c => c.Code == PlanningConflictCode.TachographOverdue);
         Assert.False(conflict.Blocking);
+    }
+
+    // --- Transport acceptance M8: crane work needs an operator with a valid crane certificate ---
+
+    private static async Task<Trip> PersistTripWithOrderAsync(Harness h, bool craneRequired)
+    {
+        var customerId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
+        h.Db.Context.Customers.Add(new Customer { Id = customerId, TenantId = h.TenantId, CustomerNumber = "KL-1", Name = "Werf BV", IsActive = true });
+        h.Db.Context.TransportOrders.Add(new TransportOrder
+        {
+            Id = orderId, TenantId = h.TenantId, CustomerId = customerId, OrderNumber = "ORD-9",
+            OrderDate = new(2026, 7, 20), Status = TransportOrderStatus.Confirmed, CraneRequired = craneRequired,
+        });
+        var trip = TripFor(h);
+        trip.Orders = [new TripOrder { TenantId = h.TenantId, TransportOrderId = orderId, Sequence = 1 }];
+        h.Db.Context.Trips.Add(trip);
+        await h.Db.Context.SaveChangesAsync();
+        return trip;
+    }
+
+    [Fact]
+    public async Task CraneWork_WithoutCraneCertificate_IsBlocking()
+    {
+        var h = await SeedAsync(requiredLicence: null);
+        using var _ = h.Db;
+        var trip = await PersistTripWithOrderAsync(h, craneRequired: true);
+
+        var conflicts = await h.Sut.EvaluateAsync(trip, CancellationToken.None);
+
+        var conflict = Assert.Single(conflicts, c => c.Description.StartsWith("Kraanwerk:"));
+        Assert.True(conflict.Blocking);
+        Assert.True(conflict.OverrideAllowed);
+    }
+
+    [Fact]
+    public async Task CraneWork_WithValidCraneCertificate_IsAllowed()
+    {
+        var h = await SeedAsync(requiredLicence: null);
+        using var _ = h.Db;
+        await GiveLicenceAsync(h, QualificationTypeCodes.CraneCertificate, new DateOnly(2030, 1, 1));
+        var trip = await PersistTripWithOrderAsync(h, craneRequired: true);
+
+        var conflicts = await h.Sut.EvaluateAsync(trip, CancellationToken.None);
+
+        Assert.DoesNotContain(conflicts, c => c.Description.StartsWith("Kraanwerk:"));
+    }
+
+    [Fact]
+    public async Task NonCraneWork_DoesNotRequireACraneCertificate()
+    {
+        var h = await SeedAsync(requiredLicence: null);
+        using var _ = h.Db;
+        var trip = await PersistTripWithOrderAsync(h, craneRequired: false);
+
+        var conflicts = await h.Sut.EvaluateAsync(trip, CancellationToken.None);
+
+        Assert.DoesNotContain(conflicts, c => c.Description.StartsWith("Kraanwerk:"));
     }
 }
