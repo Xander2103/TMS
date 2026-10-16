@@ -1,3 +1,4 @@
+using TransportationService.Api.Common;
 ﻿using Microsoft.EntityFrameworkCore;
 using TransportationService.Api.Common.Persistence;
 using TransportationService.Api.Common.Reference;
@@ -71,6 +72,10 @@ public class QualificationService : IQualificationService
             throw new Common.InvalidTenantReferenceException("kwalificatietype");
         }
 
+        ValidatePeriod(request.ObtainedDate, request.ExpiryDate);
+        await EnsureNotDuplicateAsync(employeeId, request.QualificationTypeId, request.DocumentNumber,
+            request.ObtainedDate, request.ExpiryDate, excludeId: null, cancellationToken);
+
         var qualification = new EmployeeQualification
         {
             Id = Guid.NewGuid(),
@@ -109,6 +114,10 @@ public class QualificationService : IQualificationService
             qualification.IssuingCountryCode, qualification.Notes,
         };
 
+        ValidatePeriod(request.ObtainedDate, request.ExpiryDate);
+        await EnsureNotDuplicateAsync(qualification.EmployeeId, qualification.QualificationTypeId, request.DocumentNumber,
+            request.ObtainedDate, request.ExpiryDate, excludeId: qualification.Id, cancellationToken);
+
         qualification.DocumentNumber = request.DocumentNumber;
         qualification.ObtainedDate = request.ObtainedDate;
         qualification.ExpiryDate = request.ExpiryDate;
@@ -126,6 +135,43 @@ public class QualificationService : IQualificationService
             }, cancellationToken);
 
         return await MapAsync(qualification, cancellationToken);
+    }
+
+    /// <summary>HR acceptance P2-1: a qualification cannot expire before it was obtained.</summary>
+    private static void ValidatePeriod(DateOnly? obtained, DateOnly? expiry)
+    {
+        if (obtained is { } from && expiry is { } until && until < from)
+        {
+            throw new DomainValidationException("expiryDate", "De vervaldatum mag niet vóór de behaaldatum liggen.");
+        }
+    }
+
+    /// <summary>
+    /// HR acceptance P2-2 — duplicate policy: several records of one type are legitimate (a renewed
+    /// Code 95 next to the old one; readiness uses the best live record), but registering the SAME
+    /// document twice is an input mistake. A live record (not withdrawn/rejected) of the same type
+    /// with the same document number — or, without a number, the same obtained and expiry date —
+    /// is refused with a message naming it.
+    /// </summary>
+    private async Task EnsureNotDuplicateAsync(
+        Guid employeeId, Guid typeId, string? documentNumber, DateOnly? obtained, DateOnly? expiry, Guid? excludeId,
+        CancellationToken cancellationToken)
+    {
+        var number = string.IsNullOrWhiteSpace(documentNumber) ? null : documentNumber.Trim().ToLowerInvariant();
+        var live = await _dbContext.EmployeeQualifications.AsNoTracking()
+            .Where(q => q.TenantId == _tenantContext.TenantId && q.EmployeeId == employeeId && q.QualificationTypeId == typeId
+                        && q.Id != excludeId
+                        && q.Status != QualificationStatus.Suspended && q.Status != QualificationStatus.Rejected)
+            .Select(q => new { q.DocumentNumber, q.ObtainedDate, q.ExpiryDate })
+            .ToListAsync(cancellationToken);
+        var duplicate = live.Any(q => number is not null
+            ? string.Equals(q.DocumentNumber?.Trim(), number, StringComparison.OrdinalIgnoreCase)
+            : string.IsNullOrWhiteSpace(q.DocumentNumber) && q.ObtainedDate == obtained && q.ExpiryDate == expiry);
+        if (duplicate)
+        {
+            throw new DomainValidationException(number is not null ? "documentNumber" : "qualificationTypeId",
+                "Deze kwalificatie is al geregistreerd voor deze medewerker (zelfde documentnummer of zelfde data). Bewerk de bestaande registratie.");
+        }
     }
 
     public async Task<EmployeeQualificationDto?> VerifyAsync(Guid id, Guid verifyingUserId, CancellationToken cancellationToken)

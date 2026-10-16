@@ -443,6 +443,7 @@
     "dialogCreateTitle": "Add qualification",
     "dialogTypeRequired": "Choose a qualification type.",
     "dialogObtainedRequired": "The obtained/issue date is required.",
+    "dialogExpiryBeforeObtained": "The expiry date cannot be before the date obtained.",
     "dialogExpiryRequired": "The expiry date is required for this type.",
     "dialogType": "Type",
     "dialogTypePlaceholder": "Choose a type…",

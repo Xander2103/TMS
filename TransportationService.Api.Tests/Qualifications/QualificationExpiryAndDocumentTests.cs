@@ -223,4 +223,47 @@ public class QualificationExpiryAndDocumentTests
 
         try { Directory.Delete(h.StorageRoot, recursive: true); } catch { /* best effort */ }
     }
+
+    // ---- HR acceptance P2-1 / P2-2 ----
+
+    [Fact]
+    public async Task Create_And_Update_RejectExpiryBeforeObtainedDate()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+
+        var error = await Assert.ThrowsAsync<TransportationService.Api.Common.DomainValidationException>(() =>
+            h.Qualifications.CreateAsync(h.EmployeeId, new CreateEmployeeQualificationRequest(
+                h.TypeCode95Id, null, new DateOnly(2026, 10, 1), new DateOnly(2026, 9, 1), null, null), CancellationToken.None));
+        Assert.Contains("vervaldatum", error.Message);
+
+        var created = await h.Qualifications.CreateAsync(h.EmployeeId, new CreateEmployeeQualificationRequest(
+            h.TypeCode95Id, null, new DateOnly(2026, 1, 1), new DateOnly(2031, 1, 1), null, null), CancellationToken.None);
+        await Assert.ThrowsAsync<TransportationService.Api.Common.DomainValidationException>(() =>
+            h.Qualifications.UpdateAsync(created.Id, new UpdateEmployeeQualificationRequest(
+                null, new DateOnly(2026, 10, 1), new DateOnly(2026, 9, 30), null, null), CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Duplicate_SameDocumentNumberOrSameDates_IsRejected_RenewalIsAllowed()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var first = await h.Qualifications.CreateAsync(h.EmployeeId, new CreateEmployeeQualificationRequest(
+            h.TypeCode95Id, "TEST-C95", new DateOnly(2022, 1, 1), new DateOnly(2027, 1, 1), null, null), CancellationToken.None);
+
+        await Assert.ThrowsAsync<TransportationService.Api.Common.DomainValidationException>(() =>
+            h.Qualifications.CreateAsync(h.EmployeeId, new CreateEmployeeQualificationRequest(
+                h.TypeCode95Id, " test-c95 ", new DateOnly(2023, 1, 1), new DateOnly(2028, 1, 1), null, null), CancellationToken.None));
+
+        // A renewal (new document) is a legitimate second record.
+        var renewal = await h.Qualifications.CreateAsync(h.EmployeeId, new CreateEmployeeQualificationRequest(
+            h.TypeCode95Id, "TEST-C95-2", new DateOnly(2026, 12, 1), new DateOnly(2031, 12, 1), null, null), CancellationToken.None);
+        Assert.NotEqual(first.Id, renewal.Id);
+
+        // Once the old record is withdrawn it no longer counts as a duplicate.
+        await h.Qualifications.SuspendAsync(first.Id, CancellationToken.None);
+        await h.Qualifications.CreateAsync(h.EmployeeId, new CreateEmployeeQualificationRequest(
+            h.TypeCode95Id, "TEST-C95", new DateOnly(2022, 1, 1), new DateOnly(2027, 1, 1), null, null), CancellationToken.None);
+    }
 }

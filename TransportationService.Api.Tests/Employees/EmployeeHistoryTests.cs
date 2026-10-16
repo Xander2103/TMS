@@ -472,4 +472,25 @@ public class EmployeeHistoryTests
         await Assert.ThrowsAsync<DomainValidationException>(
             () => h.History.GetHistoryAsync(created.Id, 1, 25, "GeenBestaandeCategorie", EmployeeHistoryAccess.Full, CancellationToken.None));
     }
+
+    // HR acceptance P2-3: two active employees cannot share one e-mail address.
+    [Fact]
+    public async Task DuplicateEmail_IsRejected_OnCreateAndOnChange_ButUnchangedLegacyEmailStillSaves()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var jan = await h.Employees.CreateAsync(CreateRequest(), false, CancellationToken.None);
+
+        var error = await Assert.ThrowsAsync<DomainValidationException>(() =>
+            h.Employees.CreateAsync(CreateRequest() with { FirstName = "Piet", Email = "JAN@acme.example" }, false, CancellationToken.None));
+        Assert.Contains("al in gebruik", error.Message);
+        Assert.Contains(jan.EmployeeNumber, error.Message);
+
+        var piet = await h.Employees.CreateAsync(CreateRequest() with { FirstName = "Piet", Email = "piet@acme.example" }, false, CancellationToken.None);
+        await Assert.ThrowsAsync<DomainValidationException>(() =>
+            h.Employees.UpdateAsync(piet.Id, UpdateRequest() with { FirstName = "Piet" }, false, CancellationToken.None));
+
+        // Saving Jan with his own (unchanged) address is fine.
+        Assert.NotNull(await h.Employees.UpdateAsync(jan.Id, UpdateRequest(phone: "0470 99 99 99"), false, CancellationToken.None));
+    }
 }

@@ -47,6 +47,11 @@ export function QualificationDialog({ employeeId, existing, onSaved, onCancel }:
       setValidationError(t('employees.qualifications.dialogExpiryRequired'))
       return
     }
+    // ISO yyyy-MM-dd strings compare chronologically (HR acceptance P2-1).
+    if (expiryDate && obtainedDate && expiryDate < obtainedDate) {
+      setValidationError(t('employees.qualifications.dialogExpiryBeforeObtained'))
+      return
+    }
     setValidationError(null)
 
     const payload = {

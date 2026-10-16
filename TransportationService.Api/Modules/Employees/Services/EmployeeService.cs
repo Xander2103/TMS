@@ -231,6 +231,31 @@ public class EmployeeService : IEmployeeService
     public Task<bool> ExistsAsync(Guid id, CancellationToken cancellationToken) =>
         _dbContext.Employees.AnyAsync(e => e.Id == id && e.TenantId == _tenantContext.TenantId, cancellationToken);
 
+    /// <summary>
+    /// HR acceptance P2-3: the personal e-mail identifies the employee (account creation, portal,
+    /// notifications), so two ACTIVE employees may not share one. A former employee keeps theirs
+    /// (rehire = new record). Only checked when the address actually changes, so legacy duplicates
+    /// never block unrelated edits.
+    /// </summary>
+    private async Task EnsureEmailNotInUseAsync(string? email, Guid? excludeEmployeeId, CancellationToken cancellationToken)
+    {
+        var normalized = Trim(email)?.ToLowerInvariant();
+        if (normalized is null)
+        {
+            return;
+        }
+
+        var holder = await TenantScoped().AsNoTracking()
+            .Where(e => e.IsActive && e.Id != excludeEmployeeId && e.Email != null && e.Email.ToLower() == normalized)
+            .Select(e => new { e.FirstName, e.LastName, e.EmployeeNumber })
+            .FirstOrDefaultAsync(cancellationToken);
+        if (holder is not null)
+        {
+            throw new DomainValidationException("email",
+                $"Dit e-mailadres is al in gebruik bij {holder.FirstName} {holder.LastName} ({holder.EmployeeNumber}).");
+        }
+    }
+
     public async Task<EmployeeDetailDto> CreateAsync(CreateEmployeeRequest request, bool canEditConfidential, CancellationToken cancellationToken)
     {
         ValidateRequired(request.FirstName, request.LastName, request.Email,
@@ -239,6 +264,7 @@ public class EmployeeService : IEmployeeService
         await EnsureReferencesInTenantAsync(
             request.DepartmentId, request.ContractTypeId, request.EmploymentEndDate, request.JobFunctionIds, cancellationToken);
         await EnsureQualificationTypesExistAsync(request.Qualifications, cancellationToken);
+        await EnsureEmailNotInUseAsync(request.Email, excludeEmployeeId: null, cancellationToken);
 
         var settings = await _dbContext.TenantSettings
             .FirstOrDefaultAsync(s => s.TenantId == _tenantContext.TenantId, cancellationToken);
@@ -348,6 +374,11 @@ public class EmployeeService : IEmployeeService
         await ValidateLookupCodesAsync(request.NationalityCode, request.PreferredLanguageCode, cancellationToken);
         // Zachte regel (spec §2.4): the missing-end-date gate only blocks an update that itself
         // changes the contract type, not every unrelated edit to a legacy dossier.
+        if (!string.Equals(Trim(request.Email), employee.Email, StringComparison.OrdinalIgnoreCase))
+        {
+            await EnsureEmailNotInUseAsync(request.Email, excludeEmployeeId: employee.Id, cancellationToken);
+        }
+
         var contractTypeChanged = request.ContractTypeId != employee.ContractTypeId;
         await EnsureReferencesInTenantAsync(
             request.DepartmentId, request.ContractTypeId, request.EmploymentEndDate, request.JobFunctionIds, cancellationToken,

@@ -443,6 +443,7 @@
     "dialogCreateTitle": "Kwalificatie toevoegen",
     "dialogTypeRequired": "Kies een kwalificatietype.",
     "dialogObtainedRequired": "Behaal-/uitgiftedatum is verplicht.",
+    "dialogExpiryBeforeObtained": "De vervaldatum mag niet vóór de behaaldatum liggen.",
     "dialogExpiryRequired": "Vervaldatum is verplicht voor dit type.",
     "dialogType": "Type",
     "dialogTypePlaceholder": "Kies een type…",
