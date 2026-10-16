@@ -9,6 +9,8 @@ public record PortalOrderListItemDto(
     Guid Id,
     string OrderNumber,
     DateOnly OrderDate,
+    /// <summary>M5: the CUSTOMER-FACING status (PortalOrderStatusRules), not the internal one —
+    /// e.g. "Completed" while the invoice is still a draft internally.</summary>
     TransportOrderStatus Status,
     string? CustomerReference,
     string? GoodsDescription,
@@ -54,6 +56,8 @@ public record PortalOrderDetailDto(
     Guid Id,
     string OrderNumber,
     DateOnly OrderDate,
+    /// <summary>M5: the CUSTOMER-FACING status (PortalOrderStatusRules), not the internal one —
+    /// e.g. "Completed" while the invoice is still a draft internally.</summary>
     TransportOrderStatus Status,
     string? CustomerReference,
     string? GoodsDescription,

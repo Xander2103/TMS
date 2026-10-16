@@ -148,9 +148,13 @@ public class CustomerPortalService : ICustomerPortalService
             search: null, status: null, customerId: customer.Value.CustomerId,
             fromDate: null, toDate: null, Common.Models.PageRequest.Of(1, 200), cancellationToken);
 
+        // M5: internal drafts are hidden and Invoiced reads "Afgerond" until the invoice is issued.
+        var facing = await PortalOrderStatusRules.ResolveAsync(
+            _dbContext, _tenantContext.TenantId, page.Items.Select(o => (o.Id, o.Status)).ToList(), cancellationToken);
         return PortalResult<IReadOnlyList<PortalOrderListItemDto>>.Success(page.Items
+            .Where(o => facing.ContainsKey(o.Id))
             .Select(o => new PortalOrderListItemDto(
-                o.Id, o.OrderNumber, o.OrderDate, o.Status, o.CustomerReference, o.GoodsDescription,
+                o.Id, o.OrderNumber, o.OrderDate, facing[o.Id], o.CustomerReference, o.GoodsDescription,
                 o.FirstLoadingCity, o.LastUnloadingCity))
             .ToList());
     }
@@ -170,7 +174,12 @@ public class CustomerPortalService : ICustomerPortalService
             return PortalResult<PortalOrderDetailDto>.NotFound();
         }
 
-        return PortalResult<PortalOrderDetailDto>.Success(await TrimAsync(order, cancellationToken));
+        var trimmed = await TrimAsync(order, cancellationToken);
+        // M5: an order the customer may not see (an internal draft) is indistinguishable from a
+        // non-existent one.
+        return trimmed is null
+            ? PortalResult<PortalOrderDetailDto>.NotFound()
+            : PortalResult<PortalOrderDetailDto>.Success(trimmed);
     }
 
     public async Task<PortalResult<PortalOrderDetailDto>> SubmitOrderAsync(
@@ -202,6 +211,15 @@ public class CustomerPortalService : ICustomerPortalService
             }
         }
 
+        // The cargo line's "Type" chooser maps onto the tenant's managed unit, so the internal
+        // order reads "6 × Europallet" instead of "6 × stuks". Only an existing, active code is
+        // used; anything else keeps the legacy free-text unit.
+        var activeUnitCodes = (await _dbContext.UnitTypes.AsNoTracking()
+                .Where(t => t.TenantId == _tenantContext.TenantId && t.IsActive && !t.IsDeleted)
+                .Select(t => t.Code)
+                .ToListAsync(cancellationToken))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
         var createRequest = new CreateTransportOrderRequest(
             customer.Value.CustomerId,
             request.CustomerReference,
@@ -214,12 +232,18 @@ public class CustomerPortalService : ICustomerPortalService
             Notes: request.Remarks,
             Stops: request.Stops.Select(s => new TransportOrderStopInput(
                 s.StopType, s.LocationId, s.LocationName, s.Address, s.PostalCode, s.City, s.CountryCode,
-                PlannedFrom: null, PlannedTo: null, s.Reference, s.Instructions,
+                // The customer's window is both the REQUEST (kept as-is for the customer) and
+                // the initial planning window the planner sees in "Laaddatum / Van / Tot" — he
+                // adjusts it instead of retyping it from the hidden "Geavanceerd" fields.
+                PlannedFrom: s.RequestedFrom, PlannedTo: s.RequestedTo, s.Reference, s.Instructions,
                 RequestedFrom: s.RequestedFrom, RequestedTo: s.RequestedTo)).ToList(),
             CargoItems: (request.CargoItems ?? []).Select(c => new CargoItemInput(
                 c.Description, Barcode: null, c.ExpectedQuantity, c.QuantityUnit, Notes: null,
                 UnitType: c.UnitType, TotalWeightKg: c.TotalWeightKg,
-                AdrRequired: c.AdrRequired, AdrDetails: c.AdrDetails)).ToList());
+                AdrRequired: c.AdrRequired, AdrDetails: c.AdrDetails,
+                QuantityUnitCode: ManagedUnitCodeFor(c.UnitType) is { } code && activeUnitCodes.TryGetValue(code, out var stored)
+                    ? stored
+                    : null)).ToList());
 
         var created = await _orderService.CreateAsync(createRequest, cancellationToken);
         if (created.Outcome != TransportOrderOperationOutcome.Success)
@@ -264,8 +288,27 @@ public class CustomerPortalService : ICustomerPortalService
         }
 
         var detail = await _orderService.GetByIdAsync(entity.Id, cancellationToken);
-        return PortalResult<PortalOrderDetailDto>.Success(await TrimAsync(detail!, cancellationToken));
+        return PortalResult<PortalOrderDetailDto>.Success((await TrimAsync(detail!, cancellationToken))!);
     }
+
+    /// <summary>The seeded managed unit code (ReferenceDataSeeder) for a portal package type.</summary>
+    public static string? ManagedUnitCodeFor(Modules.Packages.Entities.PackageUnitType? type) => type switch
+    {
+        Modules.Packages.Entities.PackageUnitType.Package => "PARCEL",
+        Modules.Packages.Entities.PackageUnitType.Parcel => "PARCEL",
+        Modules.Packages.Entities.PackageUnitType.Colli => "COLLI",
+        Modules.Packages.Entities.PackageUnitType.Pallet => "PALLET",
+        Modules.Packages.Entities.PackageUnitType.EuroPallet => "EUROPALLET",
+        Modules.Packages.Entities.PackageUnitType.BlockPallet => "BLOCKPALLET",
+        Modules.Packages.Entities.PackageUnitType.Box => "BOX",
+        Modules.Packages.Entities.PackageUnitType.Crate => "CRATE",
+        Modules.Packages.Entities.PackageUnitType.RollContainer => "ROLLCONTAINER",
+        Modules.Packages.Entities.PackageUnitType.Drum => "DRUM",
+        Modules.Packages.Entities.PackageUnitType.Container => "CONTAINER",
+        Modules.Packages.Entities.PackageUnitType.Document => "DOCUMENT",
+        Modules.Packages.Entities.PackageUnitType.Other => "OTHER",
+        _ => null,
+    };
 
     public async Task<PortalResult<IReadOnlyList<PortalLocationDto>>> ListMyLocationsAsync(CancellationToken cancellationToken)
     {
@@ -364,9 +407,16 @@ public class CustomerPortalService : ICustomerPortalService
         TransportOrderStatus.InProgress, TransportOrderStatus.Completed, TransportOrderStatus.Cancelled,
     ];
 
-    private async Task<PortalOrderDetailDto> TrimAsync(TransportOrderDetailDto order, CancellationToken cancellationToken)
+    /// <summary>The customer-safe projection, or null when the order is not visible to the customer (M5).</summary>
+    private async Task<PortalOrderDetailDto?> TrimAsync(TransportOrderDetailDto order, CancellationToken cancellationToken)
     {
         var tenantId = _tenantContext.TenantId;
+        var facingStatuses = await PortalOrderStatusRules.ResolveAsync(
+            _dbContext, tenantId, [(order.Id, order.Status)], cancellationToken);
+        if (!facingStatuses.TryGetValue(order.Id, out var customerStatus))
+        {
+            return null;
+        }
 
         var timeline = await _dbContext.TransportOrderStatusHistories.AsNoTracking()
             .Where(h => h.TenantId == tenantId && h.TransportOrderId == order.Id && CustomerVisibleStatuses.Contains(h.ToStatus))
@@ -387,7 +437,8 @@ public class CustomerPortalService : ICustomerPortalService
             .Where(s => s.StopType == StopType.Unloading)
             .Select(s => s.Id)
             .ToList();
-        var expectedDelivery = unloadingStopIds.Count == 0
+        // M5: once delivered (or cancelled) the ETA is history, not a promise — never shown.
+        var expectedDelivery = unloadingStopIds.Count == 0 || PortalOrderStatusRules.IsDelivered(customerStatus)
             ? null
             : await _dbContext.StopEtas.AsNoTracking()
                 .Where(e => e.TenantId == tenantId && unloadingStopIds.Contains(e.TransportOrderStopId))
@@ -404,8 +455,13 @@ public class CustomerPortalService : ICustomerPortalService
 
         // H-14: order.Notes and order.CancellationReason are staff-only and deliberately dropped
         // here — the classification lives in this projection, never in the frontend.
+        if (pod is not null)
+        {
+            expectedDelivery = null;
+        }
+
         return new PortalOrderDetailDto(
-            order.Id, order.OrderNumber, order.OrderDate, order.Status, order.CustomerReference,
+            order.Id, order.OrderNumber, order.OrderDate, customerStatus, order.CustomerReference,
             order.GoodsDescription,
             order.Stops.Select(s => new PortalStopDto(
                 s.Sequence, s.StopType, s.LocationName, s.City, s.RequestedFrom, s.RequestedTo, s.Reference, s.Instructions)).ToList(),

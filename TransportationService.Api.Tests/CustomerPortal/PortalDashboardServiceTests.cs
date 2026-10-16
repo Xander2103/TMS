@@ -52,6 +52,12 @@ public class PortalDashboardServiceTests
             Id = Guid.NewGuid(), TenantId = tenantId, TransportOrderId = confirmedOrderId, Sequence = 2,
             StopType = StopType.Unloading, City = "Gent", ConfirmedFrom = Now.UtcDateTime.AddDays(3),
         });
+        // M5: an already completed order is not an "upcoming delivery", even inside the window.
+        db.Context.TransportOrderStops.Add(new TransportOrderStop
+        {
+            Id = Guid.NewGuid(), TenantId = tenantId, TransportOrderId = completedOrderId, Sequence = 2,
+            StopType = StopType.Unloading, City = "Leuven", PlannedFrom = Now.UtcDateTime.AddDays(1),
+        });
         // Outside the 7-day window: excluded.
         db.Context.TransportOrderStops.Add(new TransportOrderStop
         {

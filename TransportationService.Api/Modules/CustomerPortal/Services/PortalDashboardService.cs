@@ -76,7 +76,11 @@ public class PortalDashboardService : IPortalDashboardService
             from s in _dbContext.TransportOrderStops.AsNoTracking()
             join o in _dbContext.TransportOrders.AsNoTracking() on s.TransportOrderId equals o.Id
             where s.TenantId == tenantId && o.TenantId == tenantId && o.CustomerId == id
-                && s.StopType == StopType.Unloading && o.Status != TransportOrderStatus.Cancelled
+                && s.StopType == StopType.Unloading
+                // M5: only orders still on their way — completed/invoiced/cancelled ones and
+                // internal drafts are not "upcoming"; neither is a stop that already has a POD.
+                && ActiveStatuses.Contains(o.Status)
+                && !_dbContext.ProofsOfDelivery.Any(p => p.TenantId == tenantId && p.TransportOrderStopId == s.Id && p.IsCurrent)
             select new
             {
                 o.Id, o.OrderNumber, s.City,
