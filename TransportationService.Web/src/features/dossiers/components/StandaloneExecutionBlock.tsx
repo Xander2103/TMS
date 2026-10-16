@@ -71,7 +71,7 @@ export function StandaloneExecutionBlock({
   const assignEditable = canAssign && !resolved
   const { drivers, vehicles, status: listStatus } = usePlanningResources(assignEditable, activity.plannedDate)
   const driverOptions = useMemo(() => buildDriverOptions(drivers, t), [drivers, t])
-  const vehicleOptions = useMemo(() => buildVehicleOptions(vehicles), [vehicles])
+  const vehicleOptions = useMemo(() => buildVehicleOptions(vehicles, t), [vehicles, t])
   const assignDirty = driverId !== (activity.driverId ?? '') || vehicleId !== (activity.vehicleId ?? '')
 
   const dirtyRef = useRef(onDirtyChange)

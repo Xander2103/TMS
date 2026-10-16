@@ -83,6 +83,11 @@ export interface VehicleOption {
   licensePlate: string
   brand: string | null
   model: string | null
+  /** M1 picker context (optional: older payloads and test fixtures may omit it). */
+  operationalStatus?: string | null
+  payloadKg?: number | null
+  hasCrane?: boolean
+  adrSuitable?: boolean
 }
 
 export interface VehicleDetail {

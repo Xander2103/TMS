@@ -4,6 +4,7 @@ import { getDriver } from '../drivers/api/driversApi'
 import type { DriverListItem } from '../drivers/types'
 import type { TrailerOption } from '../trailers/types'
 import type { VehicleOption } from '../vehicles/types'
+import { formatInteger } from '../../utils/numbers'
 
 /**
  * Picker options for driver, vehicle and trailer — shared by the trip detail page and the dossier
@@ -50,22 +51,59 @@ export function buildDriverOptions(drivers: DriverListItem[], t: TranslateFn): S
   }))
 }
 
-/** Vehicle: internal number, licence plate (with or without separators) and brand/model. */
-export function buildVehicleOptions(vehicles: VehicleOption[]): SearchableSelectOption[] {
+/**
+ * M1: why a vehicle/trailer is not plainly available — in maintenance or out of service (the
+ * conflict check blocks those), or "in gebruik" (a warning). Available shows nothing.
+ */
+export function equipmentStatusNote(status: string | null | undefined, t: TranslateFn): string | null {
+  switch (status) {
+    case 'InMaintenance':
+      return t('planning.vehiclePicker.inMaintenance')
+    case 'OutOfService':
+      return t('planning.vehiclePicker.outOfService')
+    case 'InUse':
+      return t('planning.vehiclePicker.inUse')
+    default:
+      return null
+  }
+}
+
+/** Vehicle: internal number, licence plate (with or without separators), brand/model, plus the
+ * status, payload and equipment the planner needs to judge suitability before choosing (M1). */
+export function buildVehicleOptions(vehicles: VehicleOption[], t?: TranslateFn): SearchableSelectOption[] {
   return vehicles.map((vehicle) => ({
     value: vehicle.id,
     label: `${vehicle.internalNumber} (${vehicle.licensePlate})`,
-    subtitle: joinParts([vehicle.brand, vehicle.model], ' '),
-    keywords: joinParts([compactPlate(vehicle.licensePlate), vehicle.brand, vehicle.model], ' '),
+    subtitle: joinParts(
+      [
+        t ? equipmentStatusNote(vehicle.operationalStatus, t) : null,
+        joinParts([vehicle.brand, vehicle.model], ' '),
+        t && vehicle.payloadKg ? t('planning.vehiclePicker.payload', { kg: formatInteger(vehicle.payloadKg) }) : null,
+        t && vehicle.hasCrane ? t('planning.vehiclePicker.crane') : null,
+        t && vehicle.adrSuitable ? t('planning.vehiclePicker.adr') : null,
+      ],
+      ' · ',
+    ),
+    keywords: joinParts(
+      [compactPlate(vehicle.licensePlate), vehicle.brand, vehicle.model, vehicle.hasCrane && t ? t('planning.vehiclePicker.crane') : null],
+      ' ',
+    ),
   }))
 }
 
-/** Trailer: internal number and licence plate (with or without separators). */
-export function buildTrailerOptions(trailers: TrailerOption[]): SearchableSelectOption[] {
+/** Trailer: internal number and licence plate (with or without separators), plus status/ADR (M1). */
+export function buildTrailerOptions(trailers: TrailerOption[], t?: TranslateFn): SearchableSelectOption[] {
   return trailers.map((trailer) => ({
     value: trailer.id,
     label: `${trailer.internalNumber} (${trailer.licensePlate})`,
-    subtitle: joinParts([trailer.brand, trailer.model], ' '),
+    subtitle: joinParts(
+      [
+        t ? equipmentStatusNote(trailer.operationalStatus, t) : null,
+        joinParts([trailer.brand, trailer.model], ' '),
+        t && trailer.adrSuitable ? t('planning.vehiclePicker.adr') : null,
+      ],
+      ' · ',
+    ),
     keywords: joinParts([compactPlate(trailer.licensePlate), trailer.brand, trailer.model], ' '),
   }))
 }

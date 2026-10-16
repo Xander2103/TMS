@@ -217,5 +217,13 @@
     "blocked": "⚠ Blocked",
     "absent": "⚠ Absent on this day",
     "unavailable": "⚠ Not deployable"
+  },
+  "vehiclePicker": {
+    "inMaintenance": "⚠ In maintenance",
+    "outOfService": "⚠ Out of service",
+    "inUse": "In use",
+    "payload": "{kg} kg payload",
+    "crane": "Crane",
+    "adr": "ADR"
   }
 }

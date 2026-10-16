@@ -217,5 +217,13 @@
     "blocked": "⚠ Bloqué",
     "absent": "⚠ Absent ce jour-là",
     "unavailable": "⚠ Non disponible"
+  },
+  "vehiclePicker": {
+    "inMaintenance": "⚠ En entretien",
+    "outOfService": "⚠ Hors service",
+    "inUse": "En cours d'utilisation",
+    "payload": "{kg} kg de charge utile",
+    "crane": "Grue",
+    "adr": "ADR"
   }
 }

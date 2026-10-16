@@ -217,5 +217,13 @@
     "blocked": "⚠ Geblokkeerd",
     "absent": "⚠ Afwezig op deze dag",
     "unavailable": "⚠ Niet inzetbaar"
+  },
+  "vehiclePicker": {
+    "inMaintenance": "⚠ In onderhoud",
+    "outOfService": "⚠ Buiten dienst",
+    "inUse": "In gebruik",
+    "payload": "{kg} kg laadvermogen",
+    "crane": "Kraan",
+    "adr": "ADR"
   }
 }

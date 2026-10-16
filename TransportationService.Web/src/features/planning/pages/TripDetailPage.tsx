@@ -422,8 +422,8 @@ export function TripDetailPage() {
   // Picker options: built by the shared builders (planning/resourceOptions.ts), so the dossier
   // planning block searches exactly like this page.
   const driverOptions = useMemo(() => buildDriverOptions(drivers, t), [drivers, t])
-  const vehicleOptions = useMemo(() => buildVehicleOptions(vehicles), [vehicles])
-  const trailerOptions = useMemo(() => buildTrailerOptions(trailers), [trailers])
+  const vehicleOptions = useMemo(() => buildVehicleOptions(vehicles, t), [vehicles, t])
+  const trailerOptions = useMemo(() => buildTrailerOptions(trailers, t), [trailers, t])
 
   const attachableOptions = useMemo<SearchableSelectOption[]>(
     () =>

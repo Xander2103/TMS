@@ -12,7 +12,10 @@ public record TrailerListItemDto(
     TrailerOperationalStatus OperationalStatus,
     bool IsActive);
 
-public record TrailerOptionDto(Guid Id, string InternalNumber, string LicensePlate, string? Brand, string? Model);
+/// <summary>Picker option; M1 adds the operational status and ADR suitability.</summary>
+public record TrailerOptionDto(
+    Guid Id, string InternalNumber, string LicensePlate, string? Brand, string? Model,
+    string? OperationalStatus = null, bool AdrSuitable = false);
 
 public record TrailerDetailDto(
     Guid Id,

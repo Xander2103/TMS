@@ -35,3 +35,20 @@ describe('buildDriverOptions availability', () => {
     expect(free.subtitle).toBe('Personeelsnr. MED-1')
   })
 })
+
+describe('vehicle and trailer picker context (M1)', () => {
+  it('shows status, payload and equipment concisely; available vehicles carry no warning', async () => {
+    const { buildVehicleOptions, buildTrailerOptions } = await import('../resourceOptions')
+    const t = (key: string, vars?: Record<string, unknown>) => (vars ? `${key}:${JSON.stringify(vars)}` : key)
+    const [crane, broken] = buildVehicleOptions([
+      { id: 'v1', internalNumber: 'VRT-0003', licensePlate: '1-KRN-201', brand: 'Volvo', model: 'FH', operationalStatus: 'Available', payloadKg: 18000, hasCrane: true, adrSuitable: false },
+      { id: 'v2', internalNumber: 'VRT-0009', licensePlate: '1-XYZ-999', brand: null, model: null, operationalStatus: 'InMaintenance', payloadKg: null, hasCrane: false, adrSuitable: true },
+    ], t)
+    expect(crane.subtitle).toContain('planning.vehiclePicker.crane')
+    expect(crane.subtitle).toContain('planning.vehiclePicker.payload')
+    expect(crane.subtitle).not.toContain('⚠')
+    expect(broken.subtitle?.startsWith('planning.vehiclePicker.inMaintenance')).toBe(true)
+    const [trailer] = buildTrailerOptions([{ id: 't1', internalNumber: 'OPL-1', licensePlate: 'Q-1', brand: null, model: null, operationalStatus: 'OutOfService' }], t)
+    expect(trailer.subtitle).toBe('planning.vehiclePicker.outOfService')
+  })
+})

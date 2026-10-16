@@ -41,6 +41,9 @@ export interface TrailerOption {
   licensePlate: string
   brand: string | null
   model: string | null
+  /** M1 picker context (optional). */
+  operationalStatus?: string | null
+  adrSuitable?: boolean
 }
 
 export interface TrailerDetail {

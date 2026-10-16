@@ -115,20 +115,23 @@ function PlanningForm({ dossier, activity, isOpen, onApply, onConflict, onDirtyC
   // Same rule as the planning board: only a Draft or Planned trip is re-assigned.
   const editable = canWrite && (!assignment || (trip !== null && (trip.status === 'Draft' || trip.status === 'Planned')))
 
+  const [tripDate, setTripDate] = useState(activity.plannedDate ?? '')
+  // M1: the pickers judge availability (absence, employment, blocked) on the day being planned —
+  // the trip's date, else the date typed here, else the order's own date (what "leeg" means).
+  const orderDate = dossier.orders.find((order) => order.orderId === activity.linkedTransportOrderId)?.orderDate ?? null
   const { drivers, vehicles, trailers, status: listStatus } = usePlanningResources(
     canWrite,
-    assignment?.tripDate ?? activity.plannedDate,
+    assignment?.tripDate ?? (tripDate || activity.plannedDate || orderDate),
   )
   const driverOptions = useMemo(() => buildDriverOptions(drivers, t), [drivers, t])
-  const vehicleOptions = useMemo(() => buildVehicleOptions(vehicles), [vehicles])
-  const trailerOptions = useMemo(() => buildTrailerOptions(trailers), [trailers])
+  const vehicleOptions = useMemo(() => buildVehicleOptions(vehicles, t), [vehicles, t])
+  const trailerOptions = useMemo(() => buildTrailerOptions(trailers, t), [trailers, t])
 
   // Draft edits kept locally until the planner saves.
   const [driverId, setDriverId] = useState(assignment?.driverId ?? '')
   // Vehicle id plus how it got there: a suggestion follows the driver, a manual pick never does.
   const [vehicleDraft, setVehicleDraft] = useState<VehicleDraft>(() => draftFromAssignment(assignment))
   const [trailerId, setTrailerId] = useState(assignment?.trailerId ?? '')
-  const [tripDate, setTripDate] = useState(activity.plannedDate ?? '')
   // Guards the fixed-vehicle lookup against an older driver choice answering last.
   const driverLookupSeq = useRef(0)
 

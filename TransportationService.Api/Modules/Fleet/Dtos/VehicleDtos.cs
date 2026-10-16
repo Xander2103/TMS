@@ -12,7 +12,11 @@ public record VehicleListItemDto(
     VehicleOperationalStatus OperationalStatus,
     bool IsActive);
 
-public record VehicleOptionDto(Guid Id, string InternalNumber, string LicensePlate, string? Brand, string? Model);
+/// <summary>Picker option. M1: the status, payload and equipment flags let the planner judge suitability
+/// BEFORE choosing (not only after the conflict check).</summary>
+public record VehicleOptionDto(
+    Guid Id, string InternalNumber, string LicensePlate, string? Brand, string? Model,
+    string? OperationalStatus = null, decimal? PayloadKg = null, bool HasCrane = false, bool AdrSuitable = false);
 
 public record VehicleDetailDto(
     Guid Id,

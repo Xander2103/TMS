@@ -75,7 +75,8 @@ public class TrailerService : ITrailerService
         return await TenantScoped().AsNoTracking()
             .Where(t => t.IsActive)
             .OrderBy(t => t.InternalNumber)
-            .Select(t => new TrailerOptionDto(t.Id, t.InternalNumber, t.LicensePlate, t.Brand, t.Model))
+            .Select(t => new TrailerOptionDto(t.Id, t.InternalNumber, t.LicensePlate, t.Brand, t.Model,
+                t.OperationalStatus.ToString(), t.AdrSuitable))
             .ToListAsync(cancellationToken);
     }
 

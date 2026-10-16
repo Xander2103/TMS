@@ -75,7 +75,8 @@ public class VehicleService : IVehicleService
         return await TenantScoped().AsNoTracking()
             .Where(v => v.IsActive)
             .OrderBy(v => v.InternalNumber)
-            .Select(v => new VehicleOptionDto(v.Id, v.InternalNumber, v.LicensePlate, v.Brand, v.Model))
+            .Select(v => new VehicleOptionDto(v.Id, v.InternalNumber, v.LicensePlate, v.Brand, v.Model,
+                v.OperationalStatus.ToString(), v.PayloadKg, v.HasCrane, v.AdrSuitable))
             .ToListAsync(cancellationToken);
     }
 
