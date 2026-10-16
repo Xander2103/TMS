@@ -18,6 +18,9 @@ import {
 import { euro } from '../types'
 import { READINESS_REASON_KEYS } from '../utils/readiness'
 import './invoices.css'
+// The link-style row actions (Uitstellen, Naar opdracht) reuse .issued-items-link; without this
+// import they rendered as native light buttons until the issued-items screen was visited.
+import '../../issued-items/issued-items.css'
 import { formatDate } from '../../../utils/dates'
 
 /**
