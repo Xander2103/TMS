@@ -1,3 +1,4 @@
+using TransportationService.Api.Common.Money;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using TransportationService.Api.Common.Models;
@@ -159,12 +160,12 @@ public class InvoiceService : IInvoiceService
         var items = pageRows.Select(r =>
         {
             var invoiceLines = linesByInvoice[r.Id].ToList();
-            var subtotal = Math.Round(invoiceLines.Sum(l => Math.Round(l.Quantity * l.UnitPrice, 2)), 2);
+            var subtotal = Math.Round(invoiceLines.Sum(l => MoneyRounding.LineTotal(l.Quantity, l.UnitPrice)), 2);
             // Same per-rate group rounding as InvoiceTotals/the UBL document.
             var vat = invoiceLines
                 .GroupBy(l => l.VatRatePercent)
                 .Sum(g => Math.Round(
-                    Math.Round(g.Sum(l => Math.Round(l.Quantity * l.UnitPrice, 2)), 2) * g.Key / 100m, 2));
+                    Math.Round(g.Sum(l => MoneyRounding.LineTotal(l.Quantity, l.UnitPrice)), 2) * g.Key / 100m, 2, MidpointRounding.AwayFromZero));
             return new InvoiceListItemDto(
                 r.Id, r.InvoiceNumber, r.InvoiceDate, r.DueDate, r.CustomerId, r.CustomerName,
                 r.Status, r.Currency, subtotal, vat, subtotal + vat, invoiceLines.Count, r.Kind);
@@ -725,7 +726,7 @@ public class InvoiceService : IInvoiceService
                             .Where(l => l.TransportOrderId == o.Id)
                             .Select(l => (
                                 l.SalesCategoryId is { } cid ? activeCategoryById.GetValueOrDefault(cid) : null,
-                                Math.Round(l.Quantity * l.UnitPrice, 2)))),
+                                MoneyRounding.LineTotal(l.Quantity, l.UnitPrice)))),
                     overridesByOrder.GetValueOrDefault(o.Id)))
                 .ToList();
             foreach (var surchargeLine in DieselSurchargeCalculator.BuildLines(surchargeConfig!, bases, invoiceDate, strings))
@@ -1907,7 +1908,7 @@ public class InvoiceService : IInvoiceService
                 l.Id, l.Sequence, l.TransportOrderId,
                 l.TransportOrderId is { } oid ? orderNumbers.GetValueOrDefault(oid) : null,
                 l.Description, l.Quantity, l.UnitPrice, l.VatRatePercent,
-                Math.Round(l.Quantity * l.UnitPrice, 2),
+                MoneyRounding.LineTotal(l.Quantity, l.UnitPrice),
                 l.SalesCategoryId, categoryName, accountNumber, accountName, warning,
                 l.UnitCode,
                 // Frozen after Send; live-derived while Draft so the preview shows what WILL freeze.

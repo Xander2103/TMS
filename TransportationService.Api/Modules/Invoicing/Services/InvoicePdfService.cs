@@ -1,3 +1,4 @@
+using TransportationService.Api.Common.Money;
 using Microsoft.EntityFrameworkCore;
 using TransportationService.Api.Data;
 using TransportationService.Api.Modules.Invoicing.Entities;
@@ -97,7 +98,7 @@ public class InvoicePdfService : IInvoicePdfService
                         l.SalesCategoryId is { } codeId ? salesCodes.GetValueOrDefault(codeId) : null,
                         invoice.LanguageCode)
                     : l.Description,
-                l.Quantity, l.UnitPrice, l.VatRatePercent, Math.Round(l.Quantity * l.UnitPrice, 2)))
+                l.Quantity, l.UnitPrice, l.VatRatePercent, MoneyRounding.LineTotal(l.Quantity, l.UnitPrice)))
             .ToList();
         var subtotal = Math.Round(lines.Sum(l => l.LineTotal), 2);
         var vat = InvoiceTotals.VatTotal(invoice.Lines, invoice.CustomerVatTreatment);

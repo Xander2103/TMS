@@ -1,3 +1,4 @@
+using TransportationService.Api.Common.Money;
 using Microsoft.EntityFrameworkCore;
 using TransportationService.Api.Common;
 using TransportationService.Api.Common.Persistence;
@@ -93,7 +94,7 @@ public class DossierActivityPricingService : IDossierActivityPricingService
             _dbContext.RemoveRange(await LoadLinesAsync(pricing.Id, cancellationToken));
         }
 
-        var amount = request.FixedAmount is { } value ? Math.Round(value, 2) : (decimal?)null;
+        var amount = request.FixedAmount is { } value ? MoneyRounding.Round2(value) : (decimal?)null;
         pricing.PricingSource = amount is null ? ActivityPricingSource.None : ActivityPricingSource.OneOff;
         pricing.FixedAmount = amount;
         // A fixed price has no lines: the agreed amount IS the effective price.
@@ -204,7 +205,7 @@ public class DossierActivityPricingService : IDossierActivityPricingService
             line.Unit = string.IsNullOrWhiteSpace(input.Unit) ? null : input.Unit.Trim();
             line.UnitPrice = input.UnitPrice;
             // The server is the only calculator: a client-sent amount is never read.
-            line.Amount = Math.Round(input.Quantity * input.UnitPrice, 2);
+            line.Amount = MoneyRounding.LineTotal(input.Quantity, input.UnitPrice);
             line.SalesCategoryId = input.SalesCategoryId;
             total += line.Amount;
         }
@@ -217,7 +218,7 @@ public class DossierActivityPricingService : IDossierActivityPricingService
         var priced = inputs.Count > 0 || request.FreeConfirmed;
         pricing.PricingSource = priced ? ActivityPricingSource.Lines : ActivityPricingSource.None;
         pricing.FixedAmount = null;
-        pricing.AgreedPrice = priced ? Math.Round(total, 2) : null;
+        pricing.AgreedPrice = priced ? MoneyRounding.Round2(total) : null;
         pricing.FreeConfirmed = priced && request.FreeConfirmed && pricing.AgreedPrice == 0m;
         pricing.Version = Guid.NewGuid();
 

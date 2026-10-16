@@ -9,6 +9,7 @@ import { formatCurrency, formatQuantity, parseDecimalInput } from '../../../util
 import type { DossierActivity, DossierDetail } from '../types'
 import { saveActivityPriceLines } from './activityPriceLinesApi'
 import type { ActivityPriceLineInput, DossierActivityPriceLine } from './types'
+import { lineTotal } from '../../../utils/money'
 
 export interface ActivityPriceLinesEditorHandle {
   /** Starts a new line and focuses its description. */
@@ -63,7 +64,7 @@ function toDraft(line: DossierActivityPriceLine): DraftRow {
 function previewAmount(row: DraftRow): number | null {
   const quantity = parseDecimalInput(row.quantity)
   const unitPrice = parseDecimalInput(row.unitPrice)
-  return quantity === null || unitPrice === null ? null : Math.round(quantity * unitPrice * 100) / 100
+  return quantity === null || unitPrice === null ? null : lineTotal(quantity, unitPrice)
 }
 
 /** True when the 409 body is the current dossier (the dossier endpoints answer a stale token with it). */

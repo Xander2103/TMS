@@ -18,6 +18,7 @@ import type { OrderPricingWorkspace } from './useOrderPricingEditor'
 import '../pages/transport-orders.css'
 import '../detail/order-detail.css'
 import './order-pricing.css'
+import { lineTotal } from '../../../utils/money'
 
 /**
  * "04/08/2026 om 20:59" — the confirmation stamp next to the prominent total (§9). C-03: the
@@ -37,7 +38,7 @@ function formatConfirmedStamp(isoUtc: string): string {
  */
 function calculationLabel(line: OrderPricingLine): string {
   if (line.quantity != null && line.unitPrice != null) {
-    const computed = Math.round(line.quantity * line.unitPrice * 100) / 100
+    const computed = lineTotal(line.quantity, line.unitPrice)
     if (computed === line.amount) {
       const unit = line.unit ? ` ${line.unit}` : ''
       return `${formatQuantity(line.quantity)}${unit} × ${formatCurrency(line.unitPrice)}`

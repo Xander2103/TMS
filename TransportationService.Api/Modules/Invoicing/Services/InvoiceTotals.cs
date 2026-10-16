@@ -1,3 +1,4 @@
+using TransportationService.Api.Common.Money;
 using TransportationService.Api.Modules.Invoicing.Entities;
 using TransportationService.Api.Modules.Partners.Entities;
 using TransportationService.Api.Modules.Partners.Services;
@@ -23,8 +24,8 @@ public static class InvoiceTotals
                 l.VatRatePercent))
             .Sum(g =>
             {
-                var taxable = Math.Round(g.Sum(l => Math.Round(l.Quantity * l.UnitPrice, 2)), 2);
-                return Math.Round(taxable * g.Key.VatRatePercent / 100m, 2);
+                var taxable = Math.Round(g.Sum(l => MoneyRounding.LineTotal(l.Quantity, l.UnitPrice)), 2);
+                return MoneyRounding.Round2(taxable * g.Key.VatRatePercent / 100m);
             });
     }
 }

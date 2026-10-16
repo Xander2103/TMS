@@ -169,6 +169,42 @@ public class OrderPricingLineTests
         Assert.Equal(baseline + 35m, recalculated.Order.AgreedPrice);
     }
 
+    // --- T-H4: quantity × unit price keeps its basis and its exact cents -------------------------
+
+    [Theory]
+    [InlineData("2.5", "125.33", "313.33")]   // 313.325 — banker's rounding gave 313.32
+    [InlineData("1.5", "0.01", "0.02")]       // 0.015
+    [InlineData("3", "19.99", "59.97")]
+    [InlineData("0.25", "10.10", "2.53")]     // 2.525
+    public async Task TH4_QuantityTimesUnitPrice_RoundsHalfAwayFromZero_AndKeepsTheBasis(string qty, string price, string expected)
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        await SeedRulesAsync(h);
+        var created = await h.Sut.CreateAsync(Request(h.CustomerId, quantity: 3), CancellationToken.None);
+        var baseline = created.Order!.AgreedPrice!.Value;
+        var quantity = decimal.Parse(qty, System.Globalization.CultureInfo.InvariantCulture);
+        var unitPrice = decimal.Parse(price, System.Globalization.CultureInfo.InvariantCulture);
+        var amount = decimal.Parse(expected, System.Globalization.CultureInfo.InvariantCulture);
+
+        var saved = await h.Sut.SaveOrderPriceLinesAsync(
+            created.Order.Id, [new SaveOrderPriceLineRequest(null, "Kraanuren", quantity, unitPrice, null, null)],
+            CancellationToken.None);
+
+        Assert.Equal(TransportOrderOperationOutcome.Success, saved.Outcome);
+        var line = Assert.Single(saved.Order!.PricingLines!, l => l.Kind == OrderPriceLineKind.Manual);
+        Assert.Equal(quantity, line.Quantity);
+        Assert.Equal(unitPrice, line.UnitPrice);
+        Assert.Equal(amount, line.Amount);
+        Assert.Equal(baseline + amount, saved.Order.AgreedPrice);
+
+        // The same values sent with the amount the preview showed are consistent, not a contradiction.
+        var echoed = await h.Sut.SaveOrderPriceLinesAsync(
+            created.Order.Id, [new SaveOrderPriceLineRequest(null, "Kraanuren bis", quantity, unitPrice, amount, null)],
+            CancellationToken.None);
+        Assert.Equal(TransportOrderOperationOutcome.Success, echoed.Outcome);
+    }
+
     // --- Remove semantics ----------------------------------------------------------------------
 
     [Fact]

@@ -1,3 +1,4 @@
+using TransportationService.Api.Common.Money;
 using PdfSharp.Drawing;
 using PdfSharp.Fonts;
 using PdfSharp.Pdf;
@@ -204,7 +205,7 @@ public static class InvoicePdfRenderer
         // --- VAT breakdown by rate ---
         var byRate = invoice.Lines
             .GroupBy(l => l.VatRatePercent)
-            .Select(g => new { Rate = g.Key, Base = g.Sum(l => l.LineTotal), Vat = Math.Round(g.Sum(l => l.LineTotal) * g.Key / 100m, 2) })
+            .Select(g => new { Rate = g.Key, Base = g.Sum(l => l.LineTotal), Vat = MoneyRounding.Round2(g.Sum(l => l.LineTotal) * g.Key / 100m) })
             .OrderBy(g => g.Rate)
             .ToList();
 

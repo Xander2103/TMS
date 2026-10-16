@@ -12,6 +12,7 @@ import {
 } from '../api/transportOrdersApi'
 import type { OrderDetailWorkspace } from '../detail/orderDetailContext'
 import { priceStatusDisplay, type OrderPricingLine, type TransportOrderDetail } from '../types'
+import { lineTotal } from '../../../utils/money'
 
 /**
  * The pricing slice of the order workspace: everything `OrderPricingPanel` renders against. The
@@ -56,9 +57,6 @@ function parseNum(value: string): number | null {
   return Number.isFinite(n) ? n : null
 }
 
-function round2(n: number): number {
-  return Math.round(n * 100) / 100
-}
 
 /** Same members, any order — the goods link is a set. */
 function sameIds(a: string[], b: string[]): boolean {
@@ -203,7 +201,7 @@ export function useOrderPricingEditor(order: TransportOrderDetail | null, { onOr
     }
     const quantity = parseNum(editQuantity)
     const unitPrice = parseNum(editUnitPrice)
-    const computedAmount = quantity !== null && unitPrice !== null ? round2(quantity * unitPrice) : null
+    const computedAmount = quantity !== null && unitPrice !== null ? lineTotal(quantity, unitPrice) : null
     // The link only travels along when the planner changed it: absent = "leave the links alone".
     const linkChanged = !sameIds(editCargoItemIds, editLine.cargoItemIds ?? [])
     await submitPriceLine({
@@ -363,12 +361,12 @@ export function useOrderPricingEditor(order: TransportOrderDetail | null, { onOr
   const addQuantityNum = parseNum(addQuantity)
   const addUnitPriceNum = parseNum(addUnitPrice)
   const computedAddTotal =
-    addMode === 'perUnit' && addQuantityNum !== null && addUnitPriceNum !== null ? round2(addQuantityNum * addUnitPriceNum) : null
+    addMode === 'perUnit' && addQuantityNum !== null && addUnitPriceNum !== null ? lineTotal(addQuantityNum, addUnitPriceNum) : null
 
   const editQuantityNum = parseNum(editQuantity)
   const editUnitPriceNum = parseNum(editUnitPrice)
   const computedEditAmount =
-    editQuantityNum !== null && editUnitPriceNum !== null ? round2(editQuantityNum * editUnitPriceNum) : null
+    editQuantityNum !== null && editUnitPriceNum !== null ? lineTotal(editQuantityNum, editUnitPriceNum) : null
 
   return {
     order,

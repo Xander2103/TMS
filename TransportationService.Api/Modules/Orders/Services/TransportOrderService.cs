@@ -1,3 +1,4 @@
+using TransportationService.Api.Common.Money;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -4513,7 +4514,7 @@ public class TransportOrderService : ITransportOrderService
                 var newLine = new TransportOrderPricingLine
                 {
                     Id = Guid.NewGuid(), TenantId = tenantId, TransportOrderId = orderId,
-                    Sequence = ++maxSequence, Label = request.Label.Trim(), Amount = decimal.Round(amount.Value, 2),
+                    Sequence = ++maxSequence, Label = request.Label.Trim(), Amount = MoneyRounding.Round2(amount.Value),
                     Source = "Manueel", Kind = OrderPriceLineKind.Manual,
                     Quantity = request.Quantity, UnitPrice = request.UnitPrice, Unit = NormalizeUnitCode(request.Unit),
                     AdjustReason = Trim(request.AdjustReason),
@@ -4596,7 +4597,7 @@ public class TransportOrderService : ITransportOrderService
 
             existing.Quantity = effectiveQuantity;
             existing.UnitPrice = effectiveUnitPrice;
-            existing.Amount = decimal.Round(newAmount.Value, 2);
+            existing.Amount = MoneyRounding.Round2(newAmount.Value);
             if (!string.IsNullOrWhiteSpace(request.Unit))
             {
                 existing.Unit = NormalizeUnitCode(request.Unit);
@@ -4664,9 +4665,9 @@ public class TransportOrderService : ITransportOrderService
         && (string.IsNullOrWhiteSpace(request.Label) || request.Label.Trim() == existing.Label)
         && (string.IsNullOrWhiteSpace(request.Unit) || NormalizeUnitCode(request.Unit) == existing.Unit);
 
-    /// <summary>Amount = explicit Amount, else Round(quantity × unitPrice, 2), else null (never invented).</summary>
+    /// <summary>Amount = explicit Amount, else quantity × unitPrice rounded to cents (<see cref="MoneyRounding"/>), else null (never invented).</summary>
     private static decimal? ResolveAmount(decimal? quantity, decimal? unitPrice, decimal? amount) =>
-        amount ?? (quantity is { } q && unitPrice is { } p ? decimal.Round(q * p, 2) : (decimal?)null);
+        amount ?? (quantity is { } q && unitPrice is { } p ? MoneyRounding.LineTotal(q, p) : (decimal?)null);
 
     /// <summary>
     /// Manual price-line guard (Task 5): when quantity, unit price AND amount are all explicitly
@@ -4677,7 +4678,7 @@ public class TransportOrderService : ITransportOrderService
     /// </summary>
     private static string? ValidateQuantityAmountConsistency(decimal? quantity, decimal? unitPrice, decimal? amount)
     {
-        if (quantity is { } q && unitPrice is { } up && amount is { } a && Math.Round(q * up, 2) != Math.Round(a, 2))
+        if (quantity is { } q && unitPrice is { } up && amount is { } a && MoneyRounding.LineTotal(q, up) != MoneyRounding.Round2(a))
         {
             return "Het totaalbedrag komt niet overeen met aantal × eenheidsprijs. Laat het bedrag leeg of corrigeer de waarden.";
         }
