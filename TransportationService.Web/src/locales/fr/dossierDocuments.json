@@ -136,7 +136,27 @@
     },
     "success": "Document de transport {number} créé.",
     "failed": "Le document de transport n'a pas pu être créé.",
-    "failedRetry": "{reason} Réessayez : une nouvelle tentative ne produit jamais un second numéro."
+    "failedRetry": "{reason} Réessayez : une nouvelle tentative ne produit jamais un second numéro.",
+    "replaced": "Remplacé",
+    "replacedBy": "Remplacé par {number}",
+    "replaces": "remplace {number}",
+    "replacementReason": "Motif : {reason}",
+    "replace": {
+      "title": {
+        "Cmr": "Remplacer la lettre de voiture",
+        "DeliveryNote": "Remplacer le bon de livraison",
+        "WorkOrder": "Remplacer le bon de travail"
+      },
+      "message": {
+        "Cmr": "Une lettre de voiture active {number} existe déjà pour cette commande. Créer une nouvelle lettre de voiture en remplacement ?",
+        "DeliveryNote": "Un bon de livraison actif {number} existe déjà pour cette commande. Créer un nouveau bon de livraison en remplacement ?",
+        "WorkOrder": "Un bon de travail actif {number} existe déjà pour cette commande. Créer un nouveau bon de travail en remplacement ?"
+      },
+      "keepsHistory": "{number} est conservé comme « Remplacé » et n'est plus valable ; le nouveau document reçoit un nouveau numéro.",
+      "reasonLabel": "Motif du remplacement",
+      "reasonRequired": "Indiquez pourquoi le document est remplacé.",
+      "confirm": "Remplacer et créer un nouveau document"
+    }
   },
   "activityStatus": {
     "none": "Pas encore créé",

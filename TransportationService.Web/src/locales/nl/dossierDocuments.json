@@ -136,7 +136,27 @@
     },
     "success": "Transportdocument {number} aangemaakt.",
     "failed": "Het transportdocument kon niet worden aangemaakt.",
-    "failedRetry": "{reason} Probeer opnieuw: een herhaalde poging levert nooit een tweede nummer op."
+    "failedRetry": "{reason} Probeer opnieuw: een herhaalde poging levert nooit een tweede nummer op.",
+    "replaced": "Vervangen",
+    "replacedBy": "Vervangen door {number}",
+    "replaces": "vervangt {number}",
+    "replacementReason": "Reden: {reason}",
+    "replace": {
+      "title": {
+        "Cmr": "Vrachtbrief vervangen",
+        "DeliveryNote": "Leveringsbon vervangen",
+        "WorkOrder": "Werkbon vervangen"
+      },
+      "message": {
+        "Cmr": "Er bestaat al een actieve vrachtbrief {number} voor deze opdracht. Nieuwe vrachtbrief maken ter vervanging?",
+        "DeliveryNote": "Er bestaat al een actieve leveringsbon {number} voor deze opdracht. Nieuwe leveringsbon maken ter vervanging?",
+        "WorkOrder": "Er bestaat al een actieve werkbon {number} voor deze opdracht. Nieuwe werkbon maken ter vervanging?"
+      },
+      "keepsHistory": "{number} blijft bewaard als \"Vervangen\" en is niet meer geldig; het nieuwe document krijgt een nieuw nummer.",
+      "reasonLabel": "Reden van vervanging",
+      "reasonRequired": "Geef een reden op waarom het document vervangen wordt.",
+      "confirm": "Vervangen en nieuw document maken"
+    }
   },
   "activityStatus": {
     "none": "Nog niet aangemaakt",

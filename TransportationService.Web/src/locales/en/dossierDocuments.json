@@ -136,7 +136,27 @@
     },
     "success": "Transport document {number} created.",
     "failed": "The transport document could not be created.",
-    "failedRetry": "{reason} Try again: a repeated attempt never produces a second number."
+    "failedRetry": "{reason} Try again: a repeated attempt never produces a second number.",
+    "replaced": "Replaced",
+    "replacedBy": "Replaced by {number}",
+    "replaces": "replaces {number}",
+    "replacementReason": "Reason: {reason}",
+    "replace": {
+      "title": {
+        "Cmr": "Replace consignment note",
+        "DeliveryNote": "Replace delivery note",
+        "WorkOrder": "Replace work order"
+      },
+      "message": {
+        "Cmr": "An active consignment note {number} already exists for this order. Create a new consignment note to replace it?",
+        "DeliveryNote": "An active delivery note {number} already exists for this order. Create a new delivery note to replace it?",
+        "WorkOrder": "An active work order {number} already exists for this order. Create a new work order to replace it?"
+      },
+      "keepsHistory": "{number} is kept as \"Replaced\" and is no longer valid; the new document gets a new number.",
+      "reasonLabel": "Reason for replacement",
+      "reasonRequired": "Enter a reason why the document is replaced.",
+      "confirm": "Replace and create new document"
+    }
   },
   "activityStatus": {
     "none": "Not created yet",

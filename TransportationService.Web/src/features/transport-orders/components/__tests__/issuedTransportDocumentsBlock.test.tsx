@@ -33,6 +33,7 @@ function issued(overrides: Partial<IssuedTransportDocument> = {}): IssuedTranspo
     externalNumber: null,
     issuedAt: '2026-09-21T08:30:00Z',
     issuedByName: 'Planner',
+    isActive: true,
     ...overrides,
   }
 }
@@ -105,16 +106,59 @@ describe('IssuedTransportDocumentsBlock', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 
-  it('uses a fresh requestId for the next document', async () => {
+  it('a second CMR is only made as a confirmed replacement with a reason, and uses a fresh requestId', async () => {
     const user = userEvent.setup()
-    api.issue.mockResolvedValueOnce(issued()).mockResolvedValueOnce(issued({ id: 'i-2', documentNumber: 'CMR-2026-00052' }))
-    render(<IssuedTransportDocumentsBlock orderId="o-1" />)
+    const onIssued = vi.fn()
+    api.issue
+      .mockResolvedValueOnce(issued())
+      .mockResolvedValueOnce(issued({ id: 'i-2', documentNumber: 'CMR-2026-00052', replacesDocumentId: 'i-1', replacesDocumentNumber: 'CMR-2026-00051' }))
+    render(<IssuedTransportDocumentsBlock orderId="o-1" onIssued={onIssued} />)
 
     await user.click(await screen.findByRole('button', { name: 'Vrachtbrief aanmaken' }))
     await screen.findByText('CMR-2026-00051')
+    expect(onIssued).toHaveBeenCalledTimes(1)
+
+    // M9: an active CMR exists — no silent second one; the user confirms the replacement.
     await user.click(screen.getByRole('button', { name: 'Vrachtbrief aanmaken' }))
+    const dialog = await screen.findByRole('dialog')
+    expect(dialog).toHaveTextContent(
+      'Er bestaat al een actieve vrachtbrief CMR-2026-00051 voor deze opdracht. Nieuwe vrachtbrief maken ter vervanging?',
+    )
+    expect(api.issue).toHaveBeenCalledTimes(1)
+
+    await user.click(within(dialog).getByRole('button', { name: 'Vervangen en nieuw document maken' }))
+    expect(within(dialog).getByRole('alert')).toHaveTextContent('Geef een reden op waarom het document vervangen wordt.')
+    expect(api.issue).toHaveBeenCalledTimes(1)
+
+    await user.type(within(dialog).getByLabelText(/Reden van vervanging/), 'Gewicht gecorrigeerd')
+    await user.click(within(dialog).getByRole('button', { name: 'Vervangen en nieuw document maken' }))
     await screen.findByText('CMR-2026-00052')
+    expect(api.issue.mock.calls[1][1]).toMatchObject({ kind: 'Cmr', replacesDocumentId: 'i-1', replacementReason: 'Gewicht gecorrigeerd' })
     expect(api.issue.mock.calls[1][1].requestId).not.toBe(api.issue.mock.calls[0][1].requestId)
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    // The replaced CMR stays listed as history.
+    expect(screen.getByText('Vervangen door CMR-2026-00052')).toBeInTheDocument()
+    expect(screen.getByText('vervangt CMR-2026-00051')).toBeInTheDocument()
+    expect(onIssued).toHaveBeenCalledTimes(2)
+  })
+
+  it('lists a replaced document with its successor and reason; another kind needs no replacement', async () => {
+    const user = userEvent.setup()
+    api.list.mockResolvedValue([
+      issued({ isActive: false, replacedByDocumentId: 'i-2', replacedByDocumentNumber: 'CMR-2026-00052', replacementReason: 'Verkeerde losplaats' }),
+      issued({ id: 'i-2', documentNumber: 'CMR-2026-00052', replacesDocumentId: 'i-1', replacesDocumentNumber: 'CMR-2026-00051' }),
+    ])
+    api.issue.mockResolvedValue(issued({ id: 'i-3', kind: 'DeliveryNote', documentNumber: 'LB-2026-00001' }))
+    render(<IssuedTransportDocumentsBlock orderId="o-1" />)
+
+    expect(await screen.findByText('Vervangen door CMR-2026-00052')).toBeInTheDocument()
+    expect(screen.getByText('Reden: Verkeerde losplaats')).toBeInTheDocument()
+
+    await user.selectOptions(screen.getByLabelText('Soort document'), 'DeliveryNote')
+    await user.click(screen.getByRole('button', { name: 'Leveringsbon aanmaken' }))
+    await screen.findByText('LB-2026-00001')
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(api.issue.mock.calls[0][1].replacesDocumentId).toBeUndefined()
   })
 
   it('offers "Werkbon aanmaken" for an on-site lifting job or a WorkOrder strategy', async () => {
