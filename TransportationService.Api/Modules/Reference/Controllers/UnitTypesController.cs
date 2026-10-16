@@ -35,6 +35,19 @@ public class UnitTypesController : LookupControllerBase<UnitType>
     protected override string ViewPermission => PermissionCodes.UnitTypesView;
     protected override string ManagePermission => PermissionCodes.UnitTypesManage;
 
+    /// <summary>
+    /// Transport acceptance T-H1: everyone who enters or reads goods / sales lines must be able to
+    /// pick a unit. Loading the catalogue is USE, not master-data administration — it never grants
+    /// create/update/delete on unit types (those stay on <see cref="ManagePermission"/>).
+    /// </summary>
+    protected override IReadOnlyList<string> OptionsPermissions =>
+    [
+        PermissionCodes.UnitTypesView, PermissionCodes.UnitTypesManage,
+        PermissionCodes.TariffsView, PermissionCodes.TariffsManage,
+        PermissionCodes.OrdersView, PermissionCodes.OrdersCreate, PermissionCodes.OrdersEdit, PermissionCodes.OrdersManage,
+        PermissionCodes.DossiersView, PermissionCodes.DossiersManage, PermissionCodes.DossiersPrice,
+    ];
+
     /// <summary>All unit types incl. the pricing/order-entry flags (settings page).</summary>
     [HttpGet("settings")]
     [RequirePermission(PermissionCodes.UnitTypesView, PermissionCodes.UnitTypesManage, PermissionCodes.TariffsView, PermissionCodes.TariffsManage)]

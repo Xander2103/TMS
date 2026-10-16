@@ -33,6 +33,13 @@ public abstract class LookupControllerBase<TEntity> : ControllerBase where TEnti
     /// <summary>Permission required to create, update or delete this lookup.</summary>
     protected abstract string ManagePermission { get; }
 
+    /// <summary>
+    /// Permissions that may load the dropdown <c>options</c> (any one suffices). Defaults to the
+    /// view permission; a lookup that other screens must USE (pick from) without administering it
+    /// widens this list — never the manage permission.
+    /// </summary>
+    protected virtual IReadOnlyList<string> OptionsPermissions => [ViewPermission];
+
     [HttpGet]
     public async Task<ActionResult<PagedResult<LookupItemDto>>> Search(
         [FromQuery] string? search,
@@ -50,7 +57,7 @@ public abstract class LookupControllerBase<TEntity> : ControllerBase where TEnti
     [HttpGet("options")]
     public async Task<ActionResult<IReadOnlyList<LookupOptionDto>>> Options(CancellationToken cancellationToken)
     {
-        if (await Denied(ViewPermission, cancellationToken) is { } denied) return denied;
+        if (await DeniedAll(OptionsPermissions, cancellationToken) is { } denied) return denied;
 
         return Ok(await _service.ListOptionsAsync(cancellationToken));
     }
@@ -99,6 +106,20 @@ public abstract class LookupControllerBase<TEntity> : ControllerBase where TEnti
         LookupOperationStatus.DuplicateCode => Conflict(new { message = result.Error }),
         _ => BadRequest(new { message = result.Error }),
     };
+
+    private async Task<ObjectResult?> DeniedAll(IReadOnlyList<string> permissions, CancellationToken cancellationToken)
+    {
+        ObjectResult? last = null;
+        foreach (var permission in permissions)
+        {
+            last = await Denied(permission, cancellationToken);
+            if (last is null) return null;
+        }
+
+        return permissions.Count > 1 && last is { StatusCode: StatusCodes.Status403Forbidden }
+            ? ProblemResult(StatusCodes.Status403Forbidden, "Forbidden", $"Missing permission: {string.Join(" or ", permissions)}")
+            : last;
+    }
 
     private async Task<ObjectResult?> Denied(string permission, CancellationToken cancellationToken)
     {
