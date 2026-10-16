@@ -2,6 +2,7 @@ import { useLocale } from '../../../i18n/localeContext'
 import { activityReference, issueActivity } from '../activityDisplay'
 import type { DossierActivity, ReadinessIssue, ReadinessSection, ReadinessSeverity } from '../types'
 import './attention-panel.css'
+import { Link } from 'react-router-dom'
 
 const SEVERITY_ICON: Record<ReadinessSeverity, string> = {
   Blocking: '⛔',
@@ -50,6 +51,11 @@ interface AttentionPanelProps {
    * The full issue travels along so the host can select the order/activity it is about first.
    */
   onNavigate: (section: ReadinessSection, field: string | null, issue: ReadinessIssue) => void
+  /**
+   * M12: OPEN incidents of the dossier — they block confirmation, so they belong in the strip,
+   * each as a link to the incident.
+   */
+  openIncidents?: { id: string; title: string }[]
 }
 
 /**
@@ -58,14 +64,31 @@ interface AttentionPanelProps {
  * by dividers and wrapping onto a second line when needed. Hidden when there is nothing to say.
  * The warning text itself is clickable too: it performs the same jump (tab + activity + field).
  */
-export function AttentionPanel({ issues, activities = [], onNavigate }: AttentionPanelProps) {
+export function AttentionPanel({ issues, activities = [], onNavigate, openIncidents = [] }: AttentionPanelProps) {
   const { t } = useLocale()
-  if (issues.length === 0) return null
-  const worst = issues.some((i) => i.severity === 'Blocking') ? 'blocking' : issues.some((i) => i.severity === 'Warning') ? 'warning' : 'info'
+  if (issues.length === 0 && openIncidents.length === 0) return null
+  const worst = issues.some((i) => i.severity === 'Blocking') ? 'blocking'
+    : issues.some((i) => i.severity === 'Warning') || openIncidents.length > 0 ? 'warning' : 'info'
   return (
     <section className={`dossier-attention dossier-attention-strip is-${worst}`} aria-label={t('dossiers.attention.title')}>
       <h2>{t('dossiers.attention.title')}:</h2>
       <ul>
+        {openIncidents.length > 0 && (
+          <li className="dossier-attention-warning">
+            <span className="dossier-attention-icon" role="img" aria-label={t(SEVERITY_LABEL_KEYS.Warning)}>
+              {SEVERITY_ICON.Warning}
+            </span>
+            <span className="dossier-attention-message">
+              {t('incidents.related.dossierAttention', { count: openIncidents.length })}{' '}
+              {openIncidents.map((incident, index) => (
+                <span key={incident.id}>
+                  {index > 0 && ', '}
+                  <Link className="ui-id-link" to={`/incidents/${incident.id}`}>{incident.title}</Link>
+                </span>
+              ))}
+            </span>
+          </li>
+        )}
         {issues.map((issue) => (
           <li key={`${issue.code}-${issue.activityId ?? issue.transportOrderId ?? ''}-${issue.message}`} className={`dossier-attention-${issue.severity.toLowerCase()}`}>
             <span className="dossier-attention-icon" role="img" aria-label={t(SEVERITY_LABEL_KEYS[issue.severity])}>

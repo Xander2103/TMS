@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { useLocale } from '../../../i18n/localeContext'
@@ -92,7 +92,7 @@ export function DossierMoreSection({ dossier, canManage, busy, onRemoveRelation,
         <ul className="db-list">
           {dossier.incidents.map((incident) => (
             <li key={incident.id}>
-              <button type="button" className="db-row" onClick={() => navigate(`/incidents/${incident.id}`)}>
+              <Link className="db-row" to={`/incidents/${incident.id}`}>
                 <span className="db-row-main">{incident.title}</span>
                 <span className="db-row-meta">
                   {INCIDENT_TYPE_LABELS[incident.incidentType as IncidentType] ? t(INCIDENT_TYPE_LABELS[incident.incidentType as IncidentType]) : incident.incidentType}
@@ -103,7 +103,7 @@ export function DossierMoreSection({ dossier, canManage, busy, onRemoveRelation,
                     {INCIDENT_STATUS_LABELS[incident.status as IncidentStatus] ? t(INCIDENT_STATUS_LABELS[incident.status as IncidentStatus]) : incident.status}
                   </Badge>
                 </span>
-              </button>
+              </Link>
             </li>
           ))}
         </ul>

@@ -13,7 +13,7 @@ public interface IIncidentService
 {
     Task<IReadOnlyList<IncidentListItemDto>> ListAsync(
         string? search, string? status, string? severity, Guid? dossierId, Guid? customerId,
-        CancellationToken cancellationToken);
+        CancellationToken cancellationToken, Guid? transportOrderId = null, Guid? tripId = null);
 
     Task<IncidentDetailDto> CreateAsync(SaveIncidentRequest request, CancellationToken cancellationToken);
 
@@ -77,7 +77,7 @@ public class IncidentService : IIncidentService
 
     public async Task<IReadOnlyList<IncidentListItemDto>> ListAsync(
         string? search, string? status, string? severity, Guid? dossierId, Guid? customerId,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, Guid? transportOrderId = null, Guid? tripId = null)
     {
         var tenantId = _tenantContext.TenantId;
         var query = _dbContext.Incidents.AsNoTracking().Where(i => i.TenantId == tenantId);
@@ -110,6 +110,17 @@ public class IncidentService : IIncidentService
         if (customerId is { } cid)
         {
             query = query.Where(i => i.CustomerId == cid);
+        }
+
+        // M12: the order and trip pages show the incidents about them.
+        if (transportOrderId is { } oid)
+        {
+            query = query.Where(i => i.TransportOrderId == oid);
+        }
+
+        if (tripId is { } tid)
+        {
+            query = query.Where(i => i.TripId == tid);
         }
 
         if (!string.IsNullOrWhiteSpace(search))

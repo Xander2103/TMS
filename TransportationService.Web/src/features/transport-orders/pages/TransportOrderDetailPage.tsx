@@ -51,6 +51,7 @@ import { OrderHistorySection } from '../detail/OrderHistorySection'
 import { OrderMessagesSection } from '../detail/OrderMessagesSection'
 import { OrderPricingDialogs } from '../pricing/OrderPricingDialogs'
 import { useOrderPricingEditor } from '../pricing/useOrderPricingEditor'
+import { RelatedIncidentsNotice } from '../../incidents/components/RelatedIncidentsNotice'
 
 
 
@@ -271,6 +272,7 @@ export function TransportOrderDetailPage() {
         onCorrectStatus={() => setCorrectDialogOpen(true)}
         onTransition={(target) => void applyTransition(target)}
       />
+      <RelatedIncidentsNotice transportOrderId={order.id} />
 
       {customerChangeOpen && (
         <OrderCustomerChangeDialog

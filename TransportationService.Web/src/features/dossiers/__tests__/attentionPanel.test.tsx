@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 import userEvent from '@testing-library/user-event'
 import { AttentionPanel } from '../components/AttentionPanel'
 import type { ReadinessIssue } from '../types'
@@ -15,6 +16,16 @@ describe('AttentionPanel', () => {
   it('renders nothing when there are no issues', () => {
     const { container } = render(<AttentionPanel issues={[]} onNavigate={vi.fn()} />)
     expect(container).toBeEmptyDOMElement()
+  })
+
+  it('open incidents appear as linked attention items, also without readiness issues (M12)', () => {
+    render(
+      <MemoryRouter>
+        <AttentionPanel issues={[]} onNavigate={vi.fn()} openIncidents={[{ id: 'inc-9', title: 'Verkeerde lossplaats' }]} />
+      </MemoryRouter>,
+    )
+    expect(screen.getByText(/1 open incident — bevestigen kan pas na afhandeling/)).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Verkeerde lossplaats' })).toHaveAttribute('href', '/incidents/inc-9')
   })
 
   it('shows icon + message per issue and navigates to the named section', async () => {

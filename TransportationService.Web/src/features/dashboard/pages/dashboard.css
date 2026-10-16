@@ -108,6 +108,7 @@
   border-bottom: 1px solid var(--border);
   padding: 8px 4px;
   cursor: pointer;
+  text-decoration: none;
 }
 
 .db-row:hover {

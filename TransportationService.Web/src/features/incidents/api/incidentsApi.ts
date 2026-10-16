@@ -2,7 +2,10 @@ import { apiClient } from '../../../api/apiClient'
 import type { IncidentDetail, IncidentInput, IncidentListItem } from '../types'
 
 export function listIncidents(
-  params: { search?: string; status?: string; severity?: string; dossierId?: string; customerId?: string } = {},
+  params: {
+    search?: string; status?: string; severity?: string; dossierId?: string; customerId?: string
+    transportOrderId?: string; tripId?: string
+  } = {},
 ): Promise<IncidentListItem[]> {
   const query = new URLSearchParams()
   if (params.search) query.set('search', params.search)
@@ -10,6 +13,8 @@ export function listIncidents(
   if (params.severity) query.set('severity', params.severity)
   if (params.dossierId) query.set('dossierId', params.dossierId)
   if (params.customerId) query.set('customerId', params.customerId)
+  if (params.transportOrderId) query.set('transportOrderId', params.transportOrderId)
+  if (params.tripId) query.set('tripId', params.tripId)
   const suffix = query.size > 0 ? `?${query.toString()}` : ''
   return apiClient.getJson<IncidentListItem[]>(`/api/incidents${suffix}`)
 }

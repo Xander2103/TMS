@@ -179,5 +179,11 @@
     "AutoCreatedFromFailedStop": "Automatisch aangemaakt na mislukte levering",
     "modeAuto": "Automatisch",
     "modePropose": "Voorstellen"
+  },
+  "related": {
+    "open_one": "1 open incident:",
+    "open_other": "{count} open incidenten:",
+    "dossierAttention_one": "1 open incident — bevestigen kan pas na afhandeling:",
+    "dossierAttention_other": "{count} open incidenten — bevestigen kan pas na afhandeling:"
   }
 }

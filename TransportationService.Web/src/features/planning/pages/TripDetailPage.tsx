@@ -58,6 +58,7 @@ import { usePlanningResources, type ResourceListStatus } from '../usePlanningRes
 import './planning.css'
 import { formatDate } from '../../../utils/dates'
 import { ConflictDialog } from '../../planning-center/components/ConflictDialog'
+import { RelatedIncidentsNotice } from '../../incidents/components/RelatedIncidentsNotice'
 
 /** Lifecycle steps that move a trip forward; the first allowed one is the primary header action. */
 const TRIP_FORWARD_STEPS: TripStatus[] = ['Planned', 'InProgress', 'Completed']
@@ -564,6 +565,7 @@ export function TripDetailPage() {
       />
 
       <UnsavedChangesGuard when={dirty && !busy} />
+      <RelatedIncidentsNotice tripId={trip.id} />
 
       <section className="pl-section pl-card" aria-labelledby="tr-assign-title">
         <header className="pl-section-head">

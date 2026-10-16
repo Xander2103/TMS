@@ -36,9 +36,10 @@ public class IncidentsController : ControllerBase
     public async Task<ActionResult<IReadOnlyList<IncidentListItemDto>>> List(
         [FromQuery] string? search, [FromQuery] string? status, [FromQuery] string? severity,
         [FromQuery] Guid? dossierId, [FromQuery] Guid? customerId,
+        [FromQuery] Guid? transportOrderId, [FromQuery] Guid? tripId,
         CancellationToken cancellationToken)
     {
-        return Ok(await _service.ListAsync(search, status, severity, dossierId, customerId, cancellationToken));
+        return Ok(await _service.ListAsync(search, status, severity, dossierId, customerId, cancellationToken, transportOrderId, tripId));
     }
 
     [HttpPost]

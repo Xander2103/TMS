@@ -179,5 +179,11 @@
     "AutoCreatedFromFailedStop": "Créé automatiquement après une livraison échouée",
     "modeAuto": "Automatique",
     "modePropose": "Proposer"
+  },
+  "related": {
+    "open_one": "1 incident ouvert :",
+    "open_other": "{count} incidents ouverts :",
+    "dossierAttention_one": "1 incident ouvert — la confirmation attend son traitement :",
+    "dossierAttention_other": "{count} incidents ouverts — la confirmation attend leur traitement :"
   }
 }

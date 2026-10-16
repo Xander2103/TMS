@@ -566,7 +566,12 @@ function DossierDetailContent() {
 
         {isOpen && <DossierPortalReview dossier={dossier} onReviewed={load} />}
 
-        <AttentionPanel issues={dossier.readiness} activities={orderedActivities} onNavigate={goToSection} />
+        <AttentionPanel
+          issues={dossier.readiness}
+          activities={orderedActivities}
+          onNavigate={goToSection}
+          openIncidents={dossier.incidents.filter((i) => i.status === 'New' || i.status === 'InProgress')}
+        />
 
         <DossierSubnav ref={subnavRef} dossierId={id} tabs={availableTabs} />
 
