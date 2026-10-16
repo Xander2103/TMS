@@ -31,7 +31,8 @@ public class IssuedTransportDocumentTests
     private static readonly DateTimeOffset Now = new(2026, 09, 21, 9, 0, 0, TimeSpan.Zero);
 
     private sealed record Harness(
-        SqliteTestDbContext Db, Guid TenantId, Guid UserId, Guid TransportOrderId, Guid SecondTransportOrderId, Guid LiftingOrderId, Guid BareOrderId)
+        SqliteTestDbContext Db, Guid TenantId, Guid UserId, Guid TransportOrderId, Guid SecondTransportOrderId, Guid LiftingOrderId, Guid BareOrderId,
+        IReadOnlyList<Guid> ExtraTransportOrderIds)
     {
         /// <summary>A service on its OWN context over the same database — what a second request looks like.</summary>
         public (IssuedTransportDocumentService Sut, TransportationDbContext Context) OnOwnContext(TestClock? clock = null)
@@ -84,6 +85,9 @@ public class IssuedTransportDocumentTests
         var second = Order("ORD-0002", CraneJobKind.None, StopType.Loading, StopType.Unloading);
         var lifting = Order("ORD-0003", CraneJobKind.OnSiteLifting, StopType.Site);
         var bare = Order("ORD-0004", CraneJobKind.None);
+        // M9: one ACTIVE document per order and kind — numbering tests that need many documents
+        // spread them over many orders.
+        var extra = Enumerable.Range(10, 12).Select(i => Order($"ORD-00{i}", CraneJobKind.None, StopType.Loading, StopType.Unloading)).ToList();
         db.Context.TransportDossiers.Add(new TransportDossier
         {
             Id = dossierId, TenantId = tenantId, DossierNumber = "DOS-0042", Title = "Nexans", CustomerId = customerId,
@@ -94,11 +98,14 @@ public class IssuedTransportDocumentTests
             Id = Guid.NewGuid(), TenantId = tenantId, DossierId = dossierId, TransportOrderId = orderId,
         }));
         await db.Context.SaveChangesAsync();
-        return new Harness(db, tenantId, userId, transport, second, lifting, bare);
+        return new Harness(db, tenantId, userId, transport, second, lifting, bare, extra);
     }
 
     private static IssueTransportDocumentRequest Request(string kind, Guid? requestId = null, string? external = null) =>
         new(kind, requestId ?? Guid.NewGuid(), external);
+
+    private static IssueTransportDocumentRequest Replacement(string kind, Guid replaces, string? reason = "Gewicht gecorrigeerd", Guid? requestId = null) =>
+        new(kind, requestId ?? Guid.NewGuid(), null, replaces, reason);
 
     [Fact]
     public async Task Numbers_AreUniqueAcrossOrders_PerKindAndYear()
@@ -108,10 +115,10 @@ public class IssuedTransportDocumentTests
 
         var cmr1 = (await h.Sut().IssueAsync(h.TransportOrderId, Request("Cmr"), CancellationToken.None))!;
         var cmr2 = (await h.Sut().IssueAsync(h.SecondTransportOrderId, Request("Cmr"), CancellationToken.None))!;
-        var cmr3 = (await h.Sut().IssueAsync(h.TransportOrderId, Request("cmr"), CancellationToken.None))!; // several per order
+        var cmr3 = (await h.Sut().IssueAsync(h.TransportOrderId, Replacement("cmr", cmr1.Id), CancellationToken.None))!; // a correction
         var note = (await h.Sut().IssueAsync(h.TransportOrderId, Request("DeliveryNote"), CancellationToken.None))!;
         var work = (await h.Sut().IssueAsync(h.LiftingOrderId, Request("WorkOrder"), CancellationToken.None))!;
-        var nextYear = (await h.Sut(clock: new TestClock(Now.AddYears(1))).IssueAsync(h.TransportOrderId, Request("Cmr"), CancellationToken.None))!;
+        var nextYear = (await h.Sut(clock: new TestClock(Now.AddYears(1))).IssueAsync(h.TransportOrderId, Replacement("Cmr", cmr3.Id), CancellationToken.None))!;
 
         Assert.Equal(
             new[] { "CMR-2026-00001", "CMR-2026-00002", "CMR-2026-00003", "LB-2026-00001", "WB-2026-00001", "CMR-2027-00001" },
@@ -168,7 +175,7 @@ public class IssuedTransportDocumentTests
         Assert.Equal(2, (await h.Db.Context.TransportDocumentSequences.AsNoTracking().SingleAsync()).NextValue); // one number claimed, not two
 
         // The context is clean afterwards: the next issue simply continues the series.
-        var next = (await h.Sut().IssueAsync(h.TransportOrderId, Request("Cmr"), CancellationToken.None))!;
+        var next = (await h.Sut().IssueAsync(h.SecondTransportOrderId, Request("Cmr"), CancellationToken.None))!;
         Assert.Equal("CMR-2026-00002", next.DocumentNumber);
     }
 
@@ -185,14 +192,15 @@ public class IssuedTransportDocumentTests
         var workers = Enumerable.Range(0, 6).Select(_ => h.OnOwnContext()).ToList();
         try
         {
-            foreach (var (sut, _) in workers)
+            foreach (var ((sut, _), index) in workers.Select((w, index) => (w, index)))
             {
-                await sut.IssueAsync(h.TransportOrderId, Request("Cmr"), CancellationToken.None);
+                await sut.IssueAsync(h.ExtraTransportOrderIds[index], Request("Cmr"), CancellationToken.None);
             }
 
-            // One request per context (a DbContext serves one request at a time), alternating orders.
+            // One request per context (a DbContext serves one request at a time), each on its own order
+            // (M9: one active CMR per order).
             var parallel = await Task.WhenAll(workers.Select((w, index) => w.Sut.IssueAsync(
-                index % 2 == 0 ? h.TransportOrderId : h.SecondTransportOrderId, Request("Cmr"), CancellationToken.None)));
+                h.ExtraTransportOrderIds[6 + index], Request("Cmr"), CancellationToken.None)));
 
             var numbers = await h.Db.Context.IssuedTransportDocuments.AsNoTracking().Select(d => d.DocumentNumber).ToListAsync();
             Assert.Equal(12, numbers.Count);
@@ -212,14 +220,14 @@ public class IssuedTransportDocumentTests
         var h = await SeedAsync();
         using var _ = h.Db;
         await h.Sut().IssueAsync(h.TransportOrderId, Request("Cmr"), CancellationToken.None);
-        await h.Sut().IssueAsync(h.TransportOrderId, Request("Cmr"), CancellationToken.None);
+        await h.Sut().IssueAsync(h.SecondTransportOrderId, Request("Cmr"), CancellationToken.None);
         await h.Db.Context.Database.ExecuteSqlRawAsync("UPDATE transport_document_sequences SET \"NextValue\" = 1");
         foreach (var entry in h.Db.Context.ChangeTracker.Entries<TransportDocumentSequence>().ToList())
         {
             entry.State = EntityState.Detached;
         }
 
-        var issued = (await h.Sut().IssueAsync(h.TransportOrderId, Request("Cmr"), CancellationToken.None))!;
+        var issued = (await h.Sut().IssueAsync(h.ExtraTransportOrderIds[0], Request("Cmr"), CancellationToken.None))!;
 
         Assert.Equal("CMR-2026-00003", issued.DocumentNumber); // the unique index is the final arbiter
         Assert.Equal(3, await h.Db.Context.IssuedTransportDocuments.CountAsync());
@@ -235,7 +243,58 @@ public class IssuedTransportDocumentTests
 
         Assert.Equal(("CMR-2026-00001", "BE-CMR-778812"), (issued.DocumentNumber, issued.ExternalNumber));
         await Assert.ThrowsAsync<DomainValidationException>(() =>
-            h.Sut().IssueAsync(h.TransportOrderId, Request("Cmr", external: new string('9', 61)), CancellationToken.None));
+            h.Sut().IssueAsync(h.SecondTransportOrderId, Request("Cmr", external: new string('9', 61)), CancellationToken.None));
+    }
+
+    /// <summary>
+    /// M9 (acceptance 2026-10-16): a second "Vrachtbrief aanmaken" silently produced a second ACTIVE
+    /// CMR. Now: one active document per order and kind; another one only as an explicit
+    /// replacement with a reason. The replaced document is kept and points at its successor.
+    /// </summary>
+    [Fact]
+    public async Task ASecondDocumentOfTheSameKind_IsOnlyIssuedAsAnExplicitReplacement()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var first = (await h.Sut().IssueAsync(h.TransportOrderId, Request("Cmr"), CancellationToken.None))!;
+
+        var silent = await Assert.ThrowsAsync<DomainValidationException>(() =>
+            h.Sut().IssueAsync(h.TransportOrderId, Request("Cmr"), CancellationToken.None));
+        Assert.Contains("CMR-2026-00001", silent.Message);
+        Assert.Contains("replacesDocumentId", silent.FieldErrors!.Keys);
+        var noReason = await Assert.ThrowsAsync<DomainValidationException>(() =>
+            h.Sut().IssueAsync(h.TransportOrderId, Replacement("Cmr", first.Id, reason: "  "), CancellationToken.None));
+        Assert.Contains("replacementReason", noReason.FieldErrors!.Keys);
+        await Assert.ThrowsAsync<DomainValidationException>(() =>
+            h.Sut().IssueAsync(h.TransportOrderId, Replacement("Cmr", Guid.NewGuid()), CancellationToken.None));
+        Assert.Single(h.Db.Context.IssuedTransportDocuments); // refusals claimed no number
+
+        // Another KIND is independent: a delivery note next to the CMR is fine.
+        Assert.True((await h.Sut().IssueAsync(h.TransportOrderId, Request("DeliveryNote"), CancellationToken.None))!.IsActive);
+
+        var requestId = Guid.NewGuid();
+        var second = (await h.Sut().IssueAsync(h.TransportOrderId, Replacement("Cmr", first.Id, requestId: requestId), CancellationToken.None))!;
+        // A double click on the replacement returns the same record, no third number.
+        var replay = (await h.Sut().IssueAsync(h.TransportOrderId, Replacement("Cmr", first.Id, requestId: requestId), CancellationToken.None))!;
+        Assert.Equal((second.Id, "CMR-2026-00002"), (replay.Id, replay.DocumentNumber));
+
+        var list = (await h.Sut().ListAsync(h.TransportOrderId, CancellationToken.None))!.Where(d => d.Kind == IssuedTransportDocumentKind.Cmr).ToList();
+        Assert.Equal(new[] { "CMR-2026-00001", "CMR-2026-00002" }, list.Select(d => d.DocumentNumber));
+        var old = list[0];
+        Assert.False(old.IsActive);
+        Assert.Equal((second.Id, "CMR-2026-00002", "Gewicht gecorrigeerd", Now.UtcDateTime), (old.ReplacedByDocumentId, old.ReplacedByDocumentNumber, old.ReplacementReason, old.ReplacedAt));
+        Assert.True(list[1].IsActive);
+        Assert.Equal((first.Id, "CMR-2026-00001"), (list[1].ReplacesDocumentId, list[1].ReplacesDocumentNumber));
+
+        // Replacing the already-replaced document again is stale.
+        var stale = await Assert.ThrowsAsync<DomainValidationException>(() =>
+            h.Sut().IssueAsync(h.TransportOrderId, Replacement("Cmr", first.Id), CancellationToken.None));
+        Assert.Contains("CMR-2026-00002", stale.Message);
+
+        // The replaced document still renders — marked as replaced.
+        var text = PageText((await h.Sut().RenderPdfAsync(first.Id, CancellationToken.None))!.Value.Content);
+        Assert.Contains("VERVANGEN door CMR-2026-00002", text);
+        Assert.DoesNotContain("VERVANGEN", PageText((await h.Sut().RenderPdfAsync(second.Id, CancellationToken.None))!.Value.Content));
     }
 
     [Fact]

@@ -128,6 +128,7 @@ public class IssuedTransportDocumentConfiguration : IEntityTypeConfiguration<Iss
         builder.Property(d => d.Kind).HasConversion<string>().HasMaxLength(20);
         builder.Property(d => d.DocumentNumber).IsRequired().HasMaxLength(40);
         builder.Property(d => d.ExternalNumber).HasMaxLength(60);
+        builder.Property(d => d.ReplacementReason).HasMaxLength(IssuedTransportDocument.ReplacementReasonMaxLength);
 
         // The database is the final arbiter: a number exists once per tenant, EVER (unfiltered —
         // a soft-deleted document never releases its number), and one request issues one document.

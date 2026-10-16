@@ -72,7 +72,10 @@ public sealed record TransportDocumentWorkOrder(
 /// snapshot) the order number, plus the pre-printed/external number when the user entered one.
 /// Absent on the number-less streamed documents, which render exactly as before.
 /// </summary>
-public sealed record TransportDocumentReference(string DocumentNumber, string? DossierNumber, string? ExternalNumber);
+public sealed record TransportDocumentReference(
+    string DocumentNumber, string? DossierNumber, string? ExternalNumber,
+    /// <summary>M9: set on a REPLACED document — printed as "VERVANGEN door …".</summary>
+    string? ReplacedByNumber = null);
 
 /// <summary>Everything one delivery note / CMR / work order needs — assembled from frozen order data.</summary>
 public sealed record TransportDocumentSnapshot(
@@ -379,6 +382,11 @@ public static class TransportDocumentRenderer
                 {
                     yield return ($"Extern nr.: {external}", Body);
                 }
+
+                if (reference.ReplacedByNumber is { Length: > 0 } successor)
+                {
+                    yield return ($"VERVANGEN door {successor} — niet meer geldig", Heading);
+                }
             }
             else
             {
@@ -677,6 +685,12 @@ public static class TransportDocumentRenderer
         }
 
         gfx.DrawString(string.Join("   ", parts), Body, XBrushes.Black, new XPoint(margin, y + 9));
+        if (reference.ReplacedByNumber is { Length: > 0 } successor)
+        {
+            y += 13;
+            gfx.DrawString($"VERVANGEN door {successor} — niet meer geldig", Heading, XBrushes.Black, new XPoint(margin, y + 9));
+        }
+
         return y + 18;
     }
 
