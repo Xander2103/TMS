@@ -216,7 +216,10 @@ public class DossierActivityExecutionService : IDossierActivityExecutionService
         }
 
         RequirePlannedDate(activity);
-        var today = DateOnly.FromDateTime(Now);
+        // The planned date is a tenant-local calendar day: compare with the tenant's TODAY, not the
+        // UTC date (just after midnight in Brussels the UTC date is still yesterday).
+        var zone = await TenantTimeZone.ForTenantAsync(_dbContext, TenantId, cancellationToken);
+        var today = DateOnly.FromDateTime(TenantTimeZone.ToWallClock(Now, zone));
         if (activity.PlannedDate is { } planned && planned > today)
         {
             throw new DomainValidationException("plannedDate",

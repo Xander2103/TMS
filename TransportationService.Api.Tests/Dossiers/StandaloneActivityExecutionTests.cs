@@ -53,10 +53,10 @@ public class StandaloneActivityExecutionTests
         public DossierActivityService Activities() =>
             new(Db.Context, Tenant, Audit, Dossiers(), new TransportOrderService(Db.Context, Tenant, Audit, new TestClock(Now)), new TestClock(Now));
 
-        public DossierActivityExecutionService Execution() =>
+        public DossierActivityExecutionService Execution(DateTimeOffset? at = null) =>
             new(Db.Context, Tenant, Audit, Dossiers(), Lifecycle(),
-                new PlanningConflictService(Db.Context, Tenant, new QualificationStatusCalculator(), new TestClock(Now)),
-                new DevCurrentUserContext(UserId), new TestClock(Now));
+                new PlanningConflictService(Db.Context, Tenant, new QualificationStatusCalculator(), new TestClock(at ?? Now)),
+                new DevCurrentUserContext(UserId), new TestClock(at ?? Now));
 
         public InvoiceControlService Control() => new(Db.Context, Tenant, new TestClock(Now));
 
@@ -243,6 +243,21 @@ public class StandaloneActivityExecutionTests
         Assert.Contains(executed.Id, ready);
         Assert.Contains(crane.Id, ready);
         Assert.DoesNotContain(historical.Id, ready);
+    }
+
+    [Fact]
+    public async Task ActivityPlannedForToday_CompletesJustAfterLocalMidnight_WhenUtcIsStillYesterday()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var dossier = await h.NewDossierAsync();
+        // 00:30 in Brussels on 24/09 = 22:30 UTC on 23/09.
+        var justAfterMidnight = new DateTimeOffset(2026, 9, 23, 22, 30, 0, TimeSpan.Zero);
+        var crane = await h.AddStandaloneAsync(dossier.Id, "KRAANWERK", "Kraan nacht", new DateOnly(2026, 9, 24));
+
+        var done = await h.Execution(justAfterMidnight).CompleteAsync(dossier.Id, crane, new DossierActivityTransitionRequest(), CancellationToken.None);
+
+        Assert.Equal("Completed", done!.Activities!.Single(a => a.Id == crane).ExecutionStatus);
     }
 
     [Fact]
