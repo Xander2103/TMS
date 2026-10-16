@@ -5,6 +5,7 @@ using TransportationService.Api.Modules.EmployeePlanning.Services;
 using TransportationService.Api.Modules.Identity.Services;
 using TransportationService.Api.Modules.Notifications.Services;
 using TransportationService.Api.Modules.Orders.Entities;
+using TransportationService.Api.Modules.Orders.Services;
 using TransportationService.Api.Modules.Packages.Services;
 using TransportationService.Api.Modules.Planning.Dtos;
 using TransportationService.Api.Modules.Planning.Entities;
@@ -447,7 +448,8 @@ public class TripExecutionService : ITripExecutionService
         int? WaitingMinutes, string? LateArrivalReason, string? StatusReason,
         bool HasPod, string? PodSignedBy, string? Remarks,
         string? ContactName, string? ContactPhone, string? ContactMobile,
-        string? Gate, string? AccessCode, string? Dock, string? RouteDescription, string? OpeningHoursSummary);
+        string? Gate, string? AccessCode, string? Dock, string? RouteDescription, string? OpeningHoursSummary,
+        ExecutionWorkDto? Work, IReadOnlyList<ExecutionGoodsLineDto> Goods, decimal? GoodsTotalWeightKg);
 
     private async Task<List<ExecutionStopRow>> LoadExecutionStopsAsync(Trip trip, CancellationToken cancellationToken)
     {
@@ -463,8 +465,40 @@ public class TripExecutionService : ITripExecutionService
                                 .Where(o => o.TenantId == tenantId && orderIds.Contains(o.Id))
                             join c in _dbContext.Customers.AsNoTracking().Where(c => c.TenantId == tenantId)
                                 on o.CustomerId equals c.Id
-                            select new { o.Id, o.OrderNumber, CustomerName = c.Name })
+                            select new
+                            {
+                                o.Id, o.OrderNumber, CustomerName = c.Name,
+                                // M7: operational work/goods data — deliberately NO price field here.
+                                o.CraneJobKind, o.WorkDescription, o.LiftLoadWeightKg, o.LiftLoadDimensions,
+                                o.LiftRadiusMeters, o.LiftHeightMeters, o.LiftEquipment, o.LiftConditions,
+                                o.GoodsDescription, o.Quantity, o.QuantityUnit, o.QuantityUnitCode, o.WeightKg,
+                            })
             .ToDictionaryAsync(o => o.Id, cancellationToken);
+
+        // M7: goods lines of the trip's orders, with the unit's label instead of its code.
+        var cargo = await _dbContext.CargoItems.AsNoTracking()
+            .Where(c => c.TenantId == tenantId && orderIds.Contains(c.TransportOrderId) && !c.IsDeleted)
+            .OrderBy(c => c.Sequence)
+            .Select(c => new
+            {
+                c.TransportOrderId, c.Description, c.ExpectedQuantity, c.QuantityUnit, c.QuantityUnitCode,
+                c.TotalWeightKg, c.LoadingStopId, c.UnloadingStopId,
+            })
+            .ToListAsync(cancellationToken);
+        var unitCodes = cargo.Select(c => c.QuantityUnitCode)
+            .Concat(orders.Values.Select(o => o.QuantityUnitCode))
+            .Where(code => !string.IsNullOrWhiteSpace(code)).Select(code => code!).Distinct().ToList();
+        var unitNames = unitCodes.Count == 0
+            ? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            : (await _dbContext.UnitTypes.AsNoTracking()
+                    .Where(u => u.TenantId == tenantId && unitCodes.Contains(u.Code))
+                    .Select(u => new { u.Code, u.Name })
+                    .ToListAsync(cancellationToken))
+                .GroupBy(u => u.Code, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(g => g.Key, g => g.First().Name, StringComparer.OrdinalIgnoreCase);
+        string? UnitLabel(string? code, string? freeText) =>
+            code is { Length: > 0 } ? unitNames.GetValueOrDefault(code) ?? freeText ?? code : freeText;
+        var cargoByOrder = cargo.GroupBy(c => c.TransportOrderId).ToDictionary(g => g.Key, g => g.ToList());
 
         var stops = await _dbContext.TransportOrderStops.AsNoTracking()
             .Where(s => s.TenantId == tenantId && orderIds.Contains(s.TransportOrderId))
@@ -523,6 +557,40 @@ public class TripExecutionService : ITripExecutionService
 
                 var status = execution?.Status ?? StopExecutionStatus.Planned;
 
+                // M7: on-site work (crane job) shows WHAT to do on its site stop; a goods stop shows
+                // the goods handled there — lines linked to this stop, or not linked to any stop of
+                // that role. Never a price: only operational fields are read above.
+                var onSiteWork = CraneJobRules.IsOnSiteWork(order.CraneJobKind);
+                ExecutionWorkDto? work = (x.Stop.StopType == StopType.Site || onSiteWork)
+                                         && (onSiteWork || !string.IsNullOrWhiteSpace(order.WorkDescription))
+                    ? new ExecutionWorkDto(
+                        order.CraneJobKind.ToString(), Trim(order.WorkDescription), order.LiftLoadWeightKg, Trim(order.LiftLoadDimensions),
+                        order.LiftRadiusMeters, order.LiftHeightMeters, Trim(order.LiftEquipment), Trim(order.LiftConditions))
+                    : null;
+                IReadOnlyList<ExecutionGoodsLineDto> goods = [];
+                decimal? goodsWeight = null;
+                if (x.Stop.StopType is StopType.Loading or StopType.Unloading)
+                {
+                    var lines = cargoByOrder.GetValueOrDefault(x.Stop.TransportOrderId) ?? [];
+                    var atStop = lines
+                        .Where(c => x.Stop.StopType == StopType.Loading
+                            ? c.LoadingStopId is null || c.LoadingStopId == x.Stop.Id
+                            : c.UnloadingStopId is null || c.UnloadingStopId == x.Stop.Id)
+                        .Select(c => new ExecutionGoodsLineDto(
+                            string.IsNullOrWhiteSpace(c.Description) ? "Goederen" : c.Description.Trim(),
+                            c.ExpectedQuantity, UnitLabel(c.QuantityUnitCode, c.QuantityUnit), c.TotalWeightKg))
+                        .ToList();
+                    if (lines.Count == 0 && !onSiteWork && !string.IsNullOrWhiteSpace(order.GoodsDescription))
+                    {
+                        // Legacy orders without goods lines: the order-level goods description.
+                        atStop = [new ExecutionGoodsLineDto(order.GoodsDescription.Trim(), order.Quantity ?? 1m,
+                            UnitLabel(order.QuantityUnitCode, order.QuantityUnit), order.WeightKg)];
+                    }
+
+                    goods = atStop;
+                    goodsWeight = atStop.Any(l => l.WeightKg is not null) ? atStop.Sum(l => l.WeightKg ?? 0m) : null;
+                }
+
                 // Phase 7 (master-data wave 2026-08-05): the stop's location snapshot is
                 // authoritative — instructions and AppointmentRequired are no longer live-joined
                 // from the master location. The name/address coalesce below is only a LEGACY
@@ -548,7 +616,8 @@ public class TripExecutionService : ITripExecutionService
                     execution?.PodPath is not null || podStopIds.Contains(x.Stop.Id),
                     execution?.PodSignedBy, execution?.Remarks,
                     x.Stop.ContactName, x.Stop.ContactPhone, x.Stop.ContactMobile,
-                    x.Stop.Gate, x.Stop.AccessCode, x.Stop.Dock, x.Stop.RouteDescription, x.Stop.OpeningHoursSummary);
+                    x.Stop.Gate, x.Stop.AccessCode, x.Stop.Dock, x.Stop.RouteDescription, x.Stop.OpeningHoursSummary,
+                    work, goods, goodsWeight);
             })
             .OrderBy(r => r.OrderSequence).ThenBy(r => r.StopSequence)
             .ToList();
@@ -596,7 +665,8 @@ public class TripExecutionService : ITripExecutionService
                 StopStatusMachine.AllowedTargets(r.Status, r.StopType),
                 r.HasPod, r.PodSignedBy, r.Remarks,
                 r.ContactName, r.ContactPhone, r.ContactMobile,
-                r.Gate, r.AccessCode, r.Dock, r.RouteDescription, r.OpeningHoursSummary)).ToList(),
+                r.Gate, r.AccessCode, r.Dock, r.RouteDescription, r.OpeningHoursSummary,
+                r.Work, r.Goods, r.GoodsTotalWeightKg)).ToList(),
             stops.Count(s => StopStatusMachine.IsTerminal(s.Status)),
             stops.Count);
     }

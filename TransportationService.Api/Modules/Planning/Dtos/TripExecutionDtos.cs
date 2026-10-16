@@ -52,7 +52,29 @@ public record ExecutionStopDto(
     string? AccessCode = null,
     string? Dock = null,
     string? RouteDescription = null,
-    string? OpeningHoursSummary = null);
+    string? OpeningHoursSummary = null,
+    /// <summary>
+    /// M7 (acceptance 2026-10-16): what the driver does on site — the work description and lift
+    /// data of on-site work (crane job), on its site stop. Null for ordinary transports without one.
+    /// </summary>
+    ExecutionWorkDto? Work = null,
+    /// <summary>M7: the goods handled at this loading/unloading stop (never prices). Empty when none.</summary>
+    IReadOnlyList<ExecutionGoodsLineDto>? Goods = null,
+    decimal? GoodsTotalWeightKg = null);
+
+/// <summary>M7: on-site work as the driver/operator needs it. Operational data only — never a price.</summary>
+public record ExecutionWorkDto(
+    string? CraneJobKind,
+    string? WorkDescription,
+    decimal? LiftLoadWeightKg,
+    string? LiftLoadDimensions,
+    decimal? LiftRadiusMeters,
+    decimal? LiftHeightMeters,
+    string? LiftEquipment,
+    string? LiftConditions);
+
+/// <summary>M7: one goods line — description, quantity × unit (label), weight. Never a price.</summary>
+public record ExecutionGoodsLineDto(string Description, decimal Quantity, string? Unit, decimal? WeightKg);
 
 public record TripExecutionDto(
     Guid TripId,

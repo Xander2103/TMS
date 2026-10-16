@@ -20,6 +20,7 @@ import { STOP_TYPE_LABELS } from '../../transport-orders/types'
 import { ScanPanel } from '../../scanning/components/ScanPanel'
 import { ReportExceptionDialog } from '../../exceptions/components/ReportExceptionDialog'
 import { PodDialog } from '../../pod/components/PodDialog'
+import { StopWorkAndGoods } from '../components/StopWorkAndGoods'
 import { completeStop, getStopHistory, getTripExecution, transitionStop } from '../api/myTripsApi'
 import {
   STOP_EXECUTION_ICONS,
@@ -383,6 +384,7 @@ export function TripExecutionPage() {
                     : t('myTrips.execution.handlingUnloading', { text: handlingInstructions })}
                 </div>
               )}
+              <StopWorkAndGoods stop={stop} />
 
               {stop.arrivedAt && (
                 <div className="mt-stop-times">

@@ -132,3 +132,55 @@ describe('TripExecutionPage location snapshot (Phase 7)', () => {
     expect(document.querySelector('a[href^="tel:"]')).toBeNull()
   })
 })
+
+describe('TripExecutionPage work description and goods (M7)', () => {
+  it('shows "Omschrijving werkzaamheden" with the lift data on a crane site stop', async () => {
+    api.getTripExecution.mockResolvedValue(
+      execution([
+        stop({
+          stopType: 'Site',
+          locationName: 'Werf Gent',
+          work: {
+            craneJobKind: 'OnSiteLifting',
+            workDescription: 'Airco-unit op het dak plaatsen',
+            liftLoadWeightKg: 850,
+            liftLoadDimensions: null,
+            liftRadiusMeters: null,
+            liftHeightMeters: 18,
+            liftEquipment: 'Hijsbalk 2 t',
+            liftConditions: null,
+          },
+          goods: [],
+        }),
+      ]),
+    )
+    renderPage()
+
+    const work = await screen.findByRole('region', { name: 'Omschrijving werkzaamheden' })
+    expect(work).toHaveTextContent('Airco-unit op het dak plaatsen')
+    expect(work).toHaveTextContent('Gewicht last: 850 kg · Hijshoogte: 18 m · Hijsmateriaal: Hijsbalk 2 t')
+    expect(screen.queryByRole('region', { name: 'Goederen' })).not.toBeInTheDocument()
+  })
+
+  it('shows the goods of a loading stop as quantity × unit, description and weight — never a price', async () => {
+    api.getTripExecution.mockResolvedValue(
+      execution([
+        stop({
+          goods: [
+            { description: 'Kabelhaspels', quantity: 4, unit: 'Europallet', weightKg: 3200 },
+            { description: 'Klein materiaal', quantity: 2, unit: null, weightKg: null },
+          ],
+          goodsTotalWeightKg: 3200,
+        }),
+      ]),
+    )
+    renderPage()
+
+    const goods = await screen.findByRole('region', { name: 'Goederen' })
+    expect(goods).toHaveTextContent('4 × Europallet Kabelhaspels · 3.200 kg')
+    expect(goods).toHaveTextContent('2 Klein materiaal')
+    expect(goods).toHaveTextContent('Totaal gewicht: 3.200 kg')
+    expect(goods).not.toHaveTextContent('€')
+    expect(screen.queryByRole('region', { name: 'Omschrijving werkzaamheden' })).not.toBeInTheDocument()
+  })
+})

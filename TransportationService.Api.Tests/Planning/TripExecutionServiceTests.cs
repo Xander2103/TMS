@@ -111,6 +111,70 @@ public class TripExecutionServiceTests
         Assert.Equal(StopType.Loading, result.Execution.Stops[0].StopType);
     }
 
+    /// <summary>
+    /// M7 (acceptance 2026-10-16): the driver page showed neither "Omschrijving werkzaamheden" of a
+    /// crane job nor the goods. The execution DTO now carries the work description + lift data on
+    /// the site stop and the goods lines on the goods stops — and never a price.
+    /// </summary>
+    [Fact]
+    public async Task Execution_CarriesTheWorkDescriptionAndGoods_ButNoPrice()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var liftingId = Guid.NewGuid();
+        var siteStopId = Guid.NewGuid();
+        var customerId = h.Db.Context.Customers.Single().Id;
+        h.Db.Context.UnitTypes.Add(new TransportationService.Api.Modules.Reference.Entities.UnitType
+        {
+            Id = Guid.NewGuid(), TenantId = h.TenantId, Code = "PAL", Name = "Europallet", IsActive = true,
+        });
+        h.Db.Context.CargoItems.AddRange(
+            new CargoItem
+            {
+                Id = Guid.NewGuid(), TenantId = h.TenantId, TransportOrderId = h.OrderId, Sequence = 1, Description = "Kabelhaspels",
+                ExpectedQuantity = 4, QuantityUnitCode = "PAL", TotalWeightKg = 3200, LoadingStopId = h.LoadStopId, UnloadingStopId = h.UnloadStopId,
+            },
+            new CargoItem
+            {
+                Id = Guid.NewGuid(), TenantId = h.TenantId, TransportOrderId = h.OrderId, Sequence = 2, Description = "Klein materiaal",
+                ExpectedQuantity = 2, QuantityUnit = "dozen",
+            });
+        var lifting = new TransportOrder
+        {
+            Id = liftingId, TenantId = h.TenantId, CustomerId = customerId, OrderNumber = "ORD-0002", OrderDate = new(2026, 7, 21),
+            Status = TransportOrderStatus.InProgress, CraneJobKind = CraneJobKind.OnSiteLifting,
+            WorkDescription = "Airco-unit op het dak plaatsen", LiftLoadWeightKg = 850, LiftHeightMeters = 18, LiftEquipment = "Hijsbalk 2 t",
+            AgreedPrice = 1234.56m, CalculatedPrice = 999.99m, OneOffFixedAmount = 777.77m, OneOffExtraHourlyRate = 88.88m,
+        };
+        h.Db.Context.TransportOrders.Add(lifting);
+        h.Db.Context.TransportOrderStops.Add(new TransportOrderStop
+        {
+            Id = siteStopId, TenantId = h.TenantId, TransportOrderId = liftingId, Sequence = 1, StopType = StopType.Site, City = "Gent",
+        });
+        h.Db.Context.TripOrders.Add(new TripOrder { Id = Guid.NewGuid(), TenantId = h.TenantId, TripId = h.TripId, TransportOrderId = liftingId, Sequence = 2 });
+        await h.Db.Context.SaveChangesAsync();
+
+        var execution = (await h.Sut.GetExecutionAsync(h.TripId, restrictToOwnDriver: true, CancellationToken.None)).Execution!;
+
+        var site = execution.Stops.Single(s => s.TransportOrderStopId == siteStopId);
+        Assert.Equal(new ExecutionWorkDto("OnSiteLifting", "Airco-unit op het dak plaatsen", 850m, null, null, 18m, "Hijsbalk 2 t", null), site.Work);
+        Assert.Empty(site.Goods!);
+
+        var loading = execution.Stops.Single(s => s.TransportOrderStopId == h.LoadStopId);
+        Assert.Null(loading.Work);
+        Assert.Equal(
+            new[] { new ExecutionGoodsLineDto("Kabelhaspels", 4m, "Europallet", 3200m), new ExecutionGoodsLineDto("Klein materiaal", 2m, "dozen", null) },
+            loading.Goods);
+        Assert.Equal(3200m, loading.GoodsTotalWeightKg);
+
+        // Never a price on the driver's payload — no field, no amount.
+        var json = System.Text.Json.JsonSerializer.Serialize(execution, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web));
+        foreach (var forbidden in new[] { "price", "amount", "rate", "tariff", "1234.56", "999.99", "777.77", "88.88" })
+        {
+            Assert.DoesNotContain(forbidden, json, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
     [Fact]
     public async Task Arrive_ThenComplete_TracksTimestampsAndPod()
     {

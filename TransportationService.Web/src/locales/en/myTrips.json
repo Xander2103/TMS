@@ -100,6 +100,20 @@
     },
     "reasonLabel": "Reason",
     "skipPlaceholder": "e.g. location closed",
-    "failPlaceholder": "e.g. load refused"
+    "failPlaceholder": "e.g. load refused",
+    "work": {
+      "title": "Work description",
+      "liftWeight": "Load weight: {kg} kg",
+      "liftDimensions": "Load dimensions: {value}",
+      "liftRadius": "Radius: {m} m",
+      "liftHeight": "Lifting height: {m} m",
+      "liftEquipment": "Lifting gear: {value}",
+      "liftConditions": "Conditions: {value}"
+    },
+    "goods": {
+      "title": "Goods",
+      "weight": "{kg} kg",
+      "total": "Total weight: {kg} kg"
+    }
   }
 }

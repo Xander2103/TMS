@@ -100,6 +100,20 @@
     },
     "reasonLabel": "Motif",
     "skipPlaceholder": "p. ex. site fermé",
-    "failPlaceholder": "p. ex. chargement refusé"
+    "failPlaceholder": "p. ex. chargement refusé",
+    "work": {
+      "title": "Description des travaux",
+      "liftWeight": "Poids de la charge : {kg} kg",
+      "liftDimensions": "Dimensions de la charge : {value}",
+      "liftRadius": "Portée : {m} m",
+      "liftHeight": "Hauteur de levage : {m} m",
+      "liftEquipment": "Matériel de levage : {value}",
+      "liftConditions": "Conditions : {value}"
+    },
+    "goods": {
+      "title": "Marchandises",
+      "weight": "{kg} kg",
+      "total": "Poids total : {kg} kg"
+    }
   }
 }

@@ -234,3 +234,48 @@
   color: var(--color-warning);
   font-size: 0.9rem;
 }
+
+/* M7: what to do at the stop — work description (crane job) and goods, compact. */
+.mt-stop-work,
+.mt-stop-goods {
+  font-size: 14px;
+  color: var(--text-h);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 10px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.mt-stop-work h4,
+.mt-stop-goods h4 {
+  margin: 0 0 2px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.mt-stop-work-text {
+  margin: 0;
+  white-space: pre-line;
+}
+
+.mt-stop-work-facts,
+.mt-goods-total {
+  margin: 2px 0 0;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.mt-stop-goods ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.mt-goods-qty {
+  font-weight: 600;
+}
+
+.mt-goods-weight {
+  color: var(--text-muted);
+}

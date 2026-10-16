@@ -141,6 +141,30 @@ export interface ExecutionStop {
   dock?: string | null
   routeDescription?: string | null
   openingHoursSummary?: string | null
+  /** M7: on-site work (crane job) on its site stop — what to do there. Never a price. */
+  work?: ExecutionWork | null
+  /** M7: goods handled at this loading/unloading stop. Never a price. */
+  goods?: ExecutionGoodsLine[] | null
+  goodsTotalWeightKg?: number | null
+}
+
+export interface ExecutionWork {
+  craneJobKind: string | null
+  workDescription: string | null
+  liftLoadWeightKg: number | null
+  liftLoadDimensions: string | null
+  liftRadiusMeters: number | null
+  liftHeightMeters: number | null
+  liftEquipment: string | null
+  liftConditions: string | null
+}
+
+export interface ExecutionGoodsLine {
+  description: string
+  quantity: number
+  /** Unit label (lookup name), the legacy free text, or null. */
+  unit: string | null
+  weightKg: number | null
 }
 
 export interface TripExecution {
