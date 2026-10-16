@@ -440,6 +440,7 @@
     "colEmployee": "Collaborateur",
     "holdersTitle": "Détenteurs actuels",
     "holdersUnavailable": "Disponible dès que la gestion de stock est activée, ou via les fiches des collaborateurs.",
+    "holdersFailed": "Les détenteurs actuels n'ont pas pu être chargés.",
     "holdersEmpty": "Personne n'utilise cet équipement actuellement.",
     "colNumber": "Numéro",
     "colIssued": "Remis",

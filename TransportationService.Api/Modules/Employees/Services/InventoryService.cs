@@ -814,14 +814,18 @@ public class InventoryService : IInventoryService
             return null;
         }
 
-        return await _dbContext.EmployeeIssuedItems.AsNoTracking()
-            .Where(i => i.TenantId == _tenantContext.TenantId && i.TemplateId == templateId && i.Status == IssuedItemStatus.Issued)
-            .Join(_dbContext.Employees.Where(e => e.TenantId == _tenantContext.TenantId),
-                item => item.EmployeeId, employee => employee.Id,
-                (item, employee) => new CurrentHolderDto(
+        // One query: order on the entity columns BEFORE projecting — ordering on a property of
+        // the record-constructor projection cannot be translated to SQL (HR acceptance H2, a 500).
+        return await (
+                from item in _dbContext.EmployeeIssuedItems.AsNoTracking()
+                where item.TenantId == _tenantContext.TenantId && item.TemplateId == templateId
+                      && item.Status == IssuedItemStatus.Issued
+                join employee in _dbContext.Employees.AsNoTracking().Where(e => e.TenantId == _tenantContext.TenantId)
+                    on item.EmployeeId equals employee.Id
+                orderby employee.FirstName, employee.LastName, item.IssuedDate
+                select new CurrentHolderDto(
                     employee.Id, employee.FirstName + " " + employee.LastName, employee.EmployeeNumber,
                     item.Id, item.VariantSnapshot, item.Quantity, item.IssuedDate, item.SerialNumber))
-            .OrderBy(h => h.EmployeeName)
             .ToListAsync(cancellationToken);
     }
 

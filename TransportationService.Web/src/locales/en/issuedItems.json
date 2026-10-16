@@ -440,6 +440,7 @@
     "colEmployee": "Employee",
     "holdersTitle": "Current holders",
     "holdersUnavailable": "Available once stock management is on, or via the employee files.",
+    "holdersFailed": "The current holders could not be loaded.",
     "holdersEmpty": "Nobody is currently using this asset.",
     "colNumber": "Number",
     "colIssued": "Issued",

@@ -440,6 +440,7 @@
     "colEmployee": "Medewerker",
     "holdersTitle": "Huidige houders",
     "holdersUnavailable": "Beschikbaar zodra voorraadbeheer aan staat, of via de medewerkerfiches.",
+    "holdersFailed": "De huidige houders konden niet worden geladen.",
     "holdersEmpty": "Niemand heeft dit middel momenteel in gebruik.",
     "colNumber": "Nummer",
     "colIssued": "Uitgereikt",

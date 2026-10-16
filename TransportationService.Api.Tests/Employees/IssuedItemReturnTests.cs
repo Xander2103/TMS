@@ -212,4 +212,45 @@ public class IssuedItemReturnTests
         var other = await IssueAsync(h, "Badge", null);
         Assert.True(await h.Sut.DeleteItemAsync(h.EmployeeId, other!.Id, CancellationToken.None));
     }
+
+    // ---- HR acceptance H2: "Huidige houders" ----
+
+    [Fact]
+    public async Task CurrentHolders_ListsEveryActiveHolderOnce_InNameOrder_AndDropsReturnedItems()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var templateId = Guid.NewGuid();
+        var secondEmployeeId = Guid.NewGuid();
+        h.Db.Context.IssuedItemTemplates.Add(new IssuedItemTemplate
+        {
+            Id = templateId, TenantId = h.TenantId, Name = "Fluohesje", Category = "Kleding",
+            StockTrackingEnabled = true, CurrentStock = 10, ReturnRequired = true,
+        });
+        h.Db.Context.Employees.Add(new Employee
+        {
+            Id = secondEmployeeId, TenantId = h.TenantId, EmployeeNumber = "MED-8", FirstName = "Anna", LastName = "Adams",
+            EmploymentStartDate = new(2020, 1, 1), EmploymentStatus = EmploymentStatus.Active, IsActive = true,
+        });
+        await h.Db.Context.SaveChangesAsync();
+
+        async Task<EmployeeIssuedItemDto> Issue(Guid employeeId) => (await h.Sut.UpsertAsync(employeeId, null,
+            new SaveEmployeeIssuedItemRequest(templateId, null, null, IssuedItemStatus.Issued,
+                new DateOnly(2026, 9, 1), 1, null, null, null, null), CancellationToken.None))!;
+
+        var karel = await Issue(h.EmployeeId);
+        await Issue(secondEmployeeId);
+        var inventory = new InventoryService(h.Db.Context, new DevTenantContext(h.TenantId), new DevCurrentUserContext(h.UserId),
+            new AuditService(h.Db.Context, new DevTenantContext(h.TenantId), new DevCurrentUserContext(h.UserId)),
+            InventoryTestFactory.Guard(new DevCurrentUserContext(h.UserId)));
+
+        var holders = await inventory.ListCurrentHoldersAsync(templateId, CancellationToken.None);
+        Assert.Equal(["Anna Adams", "Karel Chauffeur"], holders!.Select(x => x.EmployeeName));
+
+        await h.Sut.ReturnAsync(h.EmployeeId, karel.Id, new ReturnIssuedItemRequest(new DateOnly(2026, 9, 12)), CancellationToken.None);
+
+        var after = await inventory.ListCurrentHoldersAsync(templateId, CancellationToken.None);
+        Assert.Equal("Anna Adams", Assert.Single(after!).EmployeeName);
+        Assert.Null(await inventory.ListCurrentHoldersAsync(Guid.NewGuid(), CancellationToken.None));
+    }
 }

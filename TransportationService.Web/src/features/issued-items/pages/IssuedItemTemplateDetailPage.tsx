@@ -88,6 +88,7 @@ export function IssuedItemTemplateDetailPage() {
   const [allDefinitions, setAllDefinitions] = useState<IssuedItemAttributeDefinition[]>([])
   const [movements, setMovements] = useState<StockMovement[] | null>(null)
   const [holders, setHolders] = useState<CurrentHolder[] | null>(null)
+  const [holdersFailed, setHoldersFailed] = useState(false)
   // Vertaalsleutel in state; vertaling gebeurt pas bij render.
   const [loadErrorKey, setLoadErrorKey] = useState<string | null>(null)
   const [reloadToken, setReloadToken] = useState(0)
@@ -142,9 +143,14 @@ export function IssuedItemTemplateDetailPage() {
       .catch(() => {})
     listCurrentHolders(id)
       .then((data) => {
-        if (mounted) setHolders(data)
+        if (!mounted) return
+        setHolders(data)
+        setHoldersFailed(false)
       })
-      .catch(() => {})
+      .catch(() => {
+        // A failed load must never read as an endless "Laden…".
+        if (mounted) setHoldersFailed(true)
+      })
     return () => {
       mounted = false
     }
@@ -708,7 +714,10 @@ export function IssuedItemTemplateDetailPage() {
         {!stockTracked && (
           <p className="placeholder-text">{t('issuedItems.detail.holdersUnavailable')}</p>
         )}
-        {stockTracked && visibleHolders === null && <p className="placeholder-text">{t('issuedItems.detail.loading')}</p>}
+        {stockTracked && visibleHolders === null && holdersFailed && (
+          <p className="placeholder-text" role="alert">{t('issuedItems.detail.holdersFailed')}</p>
+        )}
+        {stockTracked && visibleHolders === null && !holdersFailed && <p className="placeholder-text">{t('issuedItems.detail.loading')}</p>}
         {visibleHolders !== null && visibleHolders.length === 0 && <p className="placeholder-text">{t('issuedItems.detail.holdersEmpty')}</p>}
         {visibleHolders !== null && visibleHolders.length > 0 && (
           <table className="issued-items-table">
