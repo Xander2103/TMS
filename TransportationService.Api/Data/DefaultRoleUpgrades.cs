@@ -6,18 +6,22 @@ namespace TransportationService.Api.Data;
 /// Versioned evolution of the default-role templates. Each step lists ONLY the permissions
 /// newly introduced for a template at that version; the seeder applies steps above a
 /// tenant's recorded version exactly once (add-if-missing, matched on Role.TemplateCode).
-/// Nothing is ever removed, and a permission a tenant deletes AFTER the step was applied
-/// stays deleted — the per-tenant version marker prevents re-application.
+/// A permission a tenant deletes AFTER the step was applied stays deleted — the per-tenant
+/// version marker prevents re-application. Grants are never removed implicitly; a step may
+/// carry an explicit <see cref="UpgradeStep.RevocationsByTemplateCode"/> list, reserved for
+/// security corrections where a template turned out to grant too much (applied once, on the
+/// stamped template role only — custom roles and later re-grants by an admin are untouched).
 /// </summary>
 public static class DefaultRoleUpgrades
 {
     public sealed record UpgradeStep(
         int Version,
         string Description,
-        IReadOnlyDictionary<string, IReadOnlyList<string>> GrantsByTemplateCode);
+        IReadOnlyDictionary<string, IReadOnlyList<string>> GrantsByTemplateCode,
+        IReadOnlyDictionary<string, IReadOnlyList<string>>? RevocationsByTemplateCode = null);
 
     /// <summary>Version 1 = the original role creation; steps start at 2.</summary>
-    public const int CurrentVersion = 34;
+    public const int CurrentVersion = 35;
 
     public static IReadOnlyList<UpgradeStep> Steps { get; } =
     [
@@ -606,6 +610,17 @@ public static class DefaultRoleUpgrades
             {
                 ["planner"] = [PermissionCodes.DossiersReopen],
                 ["management"] = [PermissionCodes.DossiersReopen],
+            }),
+        new(35,
+            "HR-acceptatie 2026-10-16 (B1): de chauffeur zag via absences.view het bedrijfsbrede "
+            + "afwezigheidsoverzicht (namen, ziekte, vrije redenen van collega's) en kon via "
+            + "absences.create voor ANDERE medewerkers afwezigheden aanmaken. Eigen afwezigheden "
+            + "lopen volledig via het self-service portaal (/api/me/absences, self-scoped), dus "
+            + "beide rechten worden van het chauffeursjabloon ingetrokken.",
+            new Dictionary<string, IReadOnlyList<string>>(),
+            new Dictionary<string, IReadOnlyList<string>>
+            {
+                ["chauffeur"] = [PermissionCodes.AbsencesView, PermissionCodes.AbsencesCreate],
             }),
     ];
 }

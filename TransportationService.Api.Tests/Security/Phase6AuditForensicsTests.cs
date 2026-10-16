@@ -244,7 +244,7 @@ public class Phase6AuditForensicsTests
     }
 
     [Fact]
-    public async Task NonSickAbsence_KeepsItsReason_ForEveryone()
+    public async Task NonSickAbsence_Reason_IsHrText_HiddenFromPlanningButVisibleToReviewerAndSubject()
     {
         var h = await SeedAsync();
         using var _ = h.Db;
@@ -254,9 +254,16 @@ public class Phase6AuditForensicsTests
             new CreateAbsenceRequest(AbsenceType.Vacation, new(2026, 9, 7), new(2026, 9, 11), "Trouwfeest"), CancellationToken.None);
         Assert.Equal(AbsenceOperationOutcome.Success, created.Outcome);
 
+        // HR acceptance B2: a planning role sees the vacation, not the personal reason behind it.
         var planner = h.Absences(h.ViewerUserId);
         var listed = Assert.Single((await planner.ListForEmployeeAsync(h.EmployeeId, CancellationToken.None))!);
-        Assert.Equal("Trouwfeest", listed.Reason);
+        Assert.Equal(AbsenceType.Vacation, listed.Type);
+        Assert.Null(listed.Reason);
+
+        var reviewer = h.Absences(h.HrUserId, PermissionCodes.AbsencesApprove);
+        Assert.Equal("Trouwfeest", Assert.Single((await reviewer.ListForEmployeeAsync(h.EmployeeId, CancellationToken.None))!).Reason);
+        var self = h.Absences(h.EmployeeUserId);
+        Assert.Equal("Trouwfeest", Assert.Single((await self.ListForEmployeeAsync(h.EmployeeId, CancellationToken.None))!).Reason);
     }
 
     [Fact]

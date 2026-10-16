@@ -228,7 +228,8 @@ public static class DefaultRoleDefinitions
                 PermissionCodes.ScanningView, PermissionCodes.ScanningExecute,
                 PermissionCodes.ExceptionsCreate,
                 PermissionCodes.PodFinalize,
-                PermissionCodes.AbsencesView, PermissionCodes.AbsencesCreate,
+                // Own absences run through the self-scoped portal (/api/me/absences); absences.view /
+                // absences.create are company-wide and deliberately NOT granted (HR acceptance B1).
                 PermissionCodes.LeaveBalancesViewOwn,
                 PermissionCodes.AttendanceSelf,
             ]),

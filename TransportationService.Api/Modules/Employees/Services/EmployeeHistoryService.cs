@@ -13,9 +13,21 @@ namespace TransportationService.Api.Modules.Employees.Services;
 /// sensitive-category documents (employee_documents.view_sensitive). The history mirrors the
 /// live screens — a field someone cannot read today must not be readable through its history.
 /// </summary>
+/// HR acceptance B2 adds the HR-only categories planning roles must never read through the
+/// history: HR notes (employee_notes.view) incl. the legacy profile note, the personal text on
+/// absences — request reason, decision/rejection note, internal note — for every absence type
+/// (absences.approve or absences.view_medical), and leave-balance entries (leave_balances.view).
+/// The defaults are fail-closed; <see cref="Full"/> opens everything.
 public sealed record EmployeeHistoryAccess(bool ConfidentialFields, bool MedicalData, bool SensitiveDocuments)
 {
-    public static readonly EmployeeHistoryAccess Full = new(true, true, true);
+    public bool HrNotes { get; init; }
+    public bool AbsenceDetails { get; init; }
+    public bool LeaveBalances { get; init; }
+
+    public static readonly EmployeeHistoryAccess Full = new(true, true, true)
+    {
+        HrNotes = true, AbsenceDetails = true, LeaveBalances = true,
+    };
 }
 
 public interface IEmployeeHistoryService
@@ -332,6 +344,18 @@ public class EmployeeHistoryService : IEmployeeHistoryService
         "Reason", "InternalNote",
     };
 
+    /// <summary>Personal HR text on any absence (absences.approve / view_medical).</summary>
+    private static readonly HashSet<string> PersonalAbsenceFieldKeys = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Reason", "InternalNote", "DecisionNote", "Note", "AttachmentFileName", "FileName",
+    };
+
+    /// <summary>Profile fields that carry HR note text (employee_notes.view).</summary>
+    private static readonly HashSet<string> HrNoteProfileFieldKeys = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Notes",
+    };
+
     public async Task<EmployeeHistoryPageDto?> GetHistoryAsync(
         Guid employeeId, int page, int pageSize, string? category, EmployeeHistoryAccess access,
         CancellationToken cancellationToken)
@@ -411,12 +435,27 @@ public class EmployeeHistoryService : IEmployeeHistoryService
             // employee_documents.view_sensitive — their history entries stay hidden too.
             .Where(row => access.SensitiveDocuments
                 || row.EntityType != "EmployeeDocument" || !sensitiveDocumentKeys.Contains(row.EntityId))
+            // HR notes are not "redacted to a stub": without employee_notes.view the caller does
+            // not learn that a note exists at all, exactly like the notes card.
+            .Where(row => access.HrNotes || row.EntityType != "EmployeeNote")
+            .Where(row => access.LeaveBalances
+                || (row.EntityType != "EmployeeLeaveBalance" && row.EntityType != "LeaveBalanceAdjustment"))
             .Select(row =>
             {
                 var entry = ProjectPending(row.Id, row.EntityType, row.Action, row.OldValuesJson, row.NewValuesJson, row.Timestamp, row.UserId);
                 if (!access.ConfidentialFields)
                 {
                     entry.Changes.RemoveAll(c => ConfidentialFieldKeys.Contains(c.FieldKey));
+                }
+
+                if (!access.HrNotes && row.EntityType == "Employee")
+                {
+                    entry.Changes.RemoveAll(c => HrNoteProfileFieldKeys.Contains(c.FieldKey));
+                }
+
+                if (!access.AbsenceDetails && row.EntityType == "Absence")
+                {
+                    entry.Changes.RemoveAll(c => PersonalAbsenceFieldKeys.Contains(c.FieldKey));
                 }
 
                 if (!access.MedicalData && row.EntityType == "Absence" && sickAbsenceKeys.Contains(row.EntityId))

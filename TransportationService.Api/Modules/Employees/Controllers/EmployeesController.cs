@@ -45,11 +45,22 @@ public class EmployeesController : ControllerBase
             return new EmployeeHistoryAccess(false, false, false);
         }
 
+        var medical = await _authorization.UserHasPermissionAsync(userId, PermissionCodes.AbsencesViewMedical, cancellationToken);
         return new EmployeeHistoryAccess(
             await _authorization.UserHasPermissionAsync(userId, PermissionCodes.EmployeesViewConfidential, cancellationToken),
-            await _authorization.UserHasPermissionAsync(userId, PermissionCodes.AbsencesViewMedical, cancellationToken),
-            await _authorization.UserHasPermissionAsync(userId, PermissionCodes.EmployeeDocumentsViewSensitive, cancellationToken));
+            medical,
+            await _authorization.UserHasPermissionAsync(userId, PermissionCodes.EmployeeDocumentsViewSensitive, cancellationToken))
+        {
+            HrNotes = await _authorization.UserHasPermissionAsync(userId, PermissionCodes.EmployeeNotesView, cancellationToken),
+            AbsenceDetails = medical
+                || await _authorization.UserHasPermissionAsync(userId, PermissionCodes.AbsencesApprove, cancellationToken),
+            LeaveBalances = await _authorization.UserHasPermissionAsync(userId, PermissionCodes.LeaveBalancesView, cancellationToken),
+        };
     }
+
+    private async Task<bool> HasPermissionAsync(string code, CancellationToken cancellationToken)
+        => _currentUser.CurrentUserId is { } userId
+           && await _authorization.UserHasPermissionAsync(userId, code, cancellationToken);
 
     [HttpGet]
     [RequirePermission(PermissionCodes.EmployeesView)]
@@ -78,7 +89,15 @@ public class EmployeesController : ControllerBase
     public async Task<ActionResult<EmployeeDetailDto>> GetById(Guid id, CancellationToken cancellationToken)
     {
         var employee = await _employeeService.GetByIdAsync(id, await HasConfidentialAccessAsync(cancellationToken), cancellationToken);
-        return employee is null ? NotFound() : Ok(employee);
+        if (employee is null)
+        {
+            return NotFound();
+        }
+
+        // The legacy free-text dossier note is HR text: same gate as the notes card (HR acceptance B2).
+        return Ok(await HasPermissionAsync(PermissionCodes.EmployeeNotesView, cancellationToken)
+            ? employee
+            : employee with { Notes = null });
     }
 
     /// <summary>Expiry warnings (documents/qualifications) for the dossier header; refreshable without reloading the employee.</summary>

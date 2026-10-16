@@ -767,7 +767,7 @@ public class DefaultRoleSeederTests
 
         var state = await db.Context.RoleTemplateStates.SingleAsync(s => s.TenantId == tenantId);
         Assert.Equal(DefaultRoleUpgrades.CurrentVersion, state.AppliedVersion);
-        Assert.Equal(34, DefaultRoleUpgrades.CurrentVersion);
+        Assert.Equal(35, DefaultRoleUpgrades.CurrentVersion);
 
 
         var roles = await db.Context.Roles.Where(r => r.TenantId == tenantId).ToListAsync();
@@ -876,5 +876,70 @@ public class DefaultRoleSeederTests
         Assert.Contains(PermissionCodes.DossiersReopen, await CodesOfAsync(db, RoleId("management")));
         Assert.DoesNotContain(PermissionCodes.DossiersReopen, await CodesOfAsync(db, RoleId("dispatcher")));
         Assert.DoesNotContain(PermissionCodes.DossiersReopen, await CodesOfAsync(db, RoleId("boekhouding")));
+    }
+
+    [Fact]
+    public async Task Version35_FreshTenant_ChauffeurHasNoCompanyWideAbsenceRights()
+    {
+        var (db, tenantId) = await SeedTenantWithCatalogAsync();
+        using var _ = db;
+
+        await DefaultRoleSeeder.SyncAsync(db.Context);
+
+        var roles = await db.Context.Roles.Where(r => r.TenantId == tenantId).ToListAsync();
+        var chauffeur = await CodesOfAsync(db, roles.Single(r => r.TemplateCode == "chauffeur").Id);
+        Assert.DoesNotContain(PermissionCodes.AbsencesView, chauffeur);
+        Assert.DoesNotContain(PermissionCodes.AbsencesCreate, chauffeur);
+        // Self-service stays: own balance, own tasks.
+        Assert.Contains(PermissionCodes.LeaveBalancesViewOwn, chauffeur);
+        // Planning roles keep the company-wide overview (who is off, when).
+        Assert.Contains(PermissionCodes.AbsencesView, await CodesOfAsync(db, roles.Single(r => r.TemplateCode == "planner").Id));
+    }
+
+    [Fact]
+    public async Task Version35_RevokesAbsenceRights_FromExistingChauffeurTemplate_ButNotFromCustomRoles()
+    {
+        var (db, tenantId) = await SeedTenantWithCatalogAsync();
+        using var _ = db;
+
+        var absenceView = await db.Context.Permissions.SingleAsync(p => p.Code == PermissionCodes.AbsencesView);
+        var absenceCreate = await db.Context.Permissions.SingleAsync(p => p.Code == PermissionCodes.AbsencesCreate);
+        var stamped = new Role
+        {
+            Id = Guid.NewGuid(), TenantId = tenantId, Name = "Chauffeur", Description = "x",
+            IsSystemRole = false, IsActive = true, TemplateCode = "chauffeur",
+            CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow,
+        };
+        var custom = new Role
+        {
+            Id = Guid.NewGuid(), TenantId = tenantId, Name = "Ploegleider chauffeurs", Description = "x",
+            IsSystemRole = false, IsActive = true, TemplateCode = null,
+            CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow,
+        };
+        db.Context.Roles.AddRange(stamped, custom);
+        db.Context.RolePermissions.AddRange(
+            new RolePermission { RoleId = stamped.Id, PermissionId = absenceView.Id },
+            new RolePermission { RoleId = stamped.Id, PermissionId = absenceCreate.Id },
+            new RolePermission { RoleId = custom.Id, PermissionId = absenceView.Id });
+        db.Context.RoleTemplateStates.Add(new RoleTemplateState
+        {
+            Id = Guid.NewGuid(), TenantId = tenantId, AppliedVersion = 34, UpdatedAt = DateTime.UtcNow,
+        });
+        await db.Context.SaveChangesAsync();
+
+        await DefaultRoleSeeder.SyncAsync(db.Context);
+
+        var chauffeur = await CodesOfAsync(db, stamped.Id);
+        Assert.DoesNotContain(PermissionCodes.AbsencesView, chauffeur);
+        Assert.DoesNotContain(PermissionCodes.AbsencesCreate, chauffeur);
+        Assert.Contains(PermissionCodes.AbsencesView, await CodesOfAsync(db, custom.Id));
+        Assert.Equal(DefaultRoleUpgrades.CurrentVersion,
+            (await db.Context.RoleTemplateStates.SingleAsync(s => s.TenantId == tenantId)).AppliedVersion);
+
+        // Applied once: an administrator re-granting the right afterwards is respected.
+        db.Context.RolePermissions.Add(new RolePermission { RoleId = stamped.Id, PermissionId = absenceView.Id });
+        await db.Context.SaveChangesAsync();
+        await DefaultRoleSeeder.SyncAsync(db.Context);
+        Assert.Contains(PermissionCodes.AbsencesView, await CodesOfAsync(db, stamped.Id));
     }
 }

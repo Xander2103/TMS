@@ -151,6 +151,38 @@ public static class DefaultRoleSeeder
                         changed = true;
                     }
                 }
+
+                foreach (var (templateCode, codes) in step.RevocationsByTemplateCode ?? new Dictionary<string, IReadOnlyList<string>>())
+                {
+                    var role = roles.FirstOrDefault(r => r.TenantId == tenantId && r.TemplateCode == templateCode);
+                    if (role is null)
+                    {
+                        continue;
+                    }
+
+                    foreach (var code in codes)
+                    {
+                        if (!permissionsByCode.TryGetValue(code, out var permission)
+                            || !grantSet.Remove((role.Id, permission.Id)))
+                        {
+                            continue;
+                        }
+
+                        var tracked = dbContext.ChangeTracker.Entries<RolePermission>()
+                            .FirstOrDefault(e => e.Entity.RoleId == role.Id && e.Entity.PermissionId == permission.Id);
+                        if (tracked is { State: EntityState.Added })
+                        {
+                            tracked.State = EntityState.Detached;
+                        }
+                        else
+                        {
+                            dbContext.RolePermissions.Remove(tracked?.Entity
+                                ?? new RolePermission { RoleId = role.Id, PermissionId = permission.Id });
+                        }
+
+                        changed = true;
+                    }
+                }
             }
 
             if (appliedVersion < DefaultRoleUpgrades.CurrentVersion)

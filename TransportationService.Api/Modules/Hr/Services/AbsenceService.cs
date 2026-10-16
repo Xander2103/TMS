@@ -70,10 +70,24 @@ public class AbsenceService : IAbsenceService
     /// (the data subject always sees what they submitted themselves). A missing authorization
     /// service means fail-closed: nobody but the subject sees health fields.
     /// </summary>
-    private sealed record MedicalScope(bool CanViewMedical, Guid? OwnEmployeeId)
+    /// <para>
+    /// HR acceptance B2: the free-text request reason, HR's decision (rejection) note, the
+    /// HR-internal note and any attachment are PERSONAL HR text for every absence type. Planning
+    /// roles (absences.view only) see who is off, when, of which type and with which status —
+    /// nothing more. Those fields need <see cref="PermissionCodes.AbsencesApprove"/> (the HR
+    /// reviewer) or the medical permission, or the absence being the caller's own.
+    /// </para>
+    private sealed record MedicalScope(bool CanViewMedical, Guid? OwnEmployeeId, bool CanViewPersonal = false)
     {
-        public bool CanSee(Guid absenceEmployeeId) =>
-            CanViewMedical || (OwnEmployeeId is { } own && own == absenceEmployeeId);
+        private bool IsOwn(Guid absenceEmployeeId) => OwnEmployeeId is { } own && own == absenceEmployeeId;
+
+        public bool CanSee(Guid absenceEmployeeId) => CanViewMedical || IsOwn(absenceEmployeeId);
+
+        public bool CanSeePersonal(Guid absenceEmployeeId) =>
+            CanViewPersonal || CanViewMedical || IsOwn(absenceEmployeeId);
+
+        /// <summary>The HR-internal note never reaches the data subject; reviewers only.</summary>
+        public bool CanSeeInternalNote => CanViewPersonal || CanViewMedical;
     }
 
     private async Task<MedicalScope> MedicalScopeAsync(CancellationToken cancellationToken)
@@ -85,11 +99,13 @@ public class AbsenceService : IAbsenceService
 
         var canViewMedical = _authorization is not null
             && await _authorization.UserHasPermissionAsync(userId, PermissionCodes.AbsencesViewMedical, cancellationToken);
+        var canViewPersonal = _authorization is not null
+            && await _authorization.UserHasPermissionAsync(userId, PermissionCodes.AbsencesApprove, cancellationToken);
         var ownEmployeeId = await _dbContext.Users.AsNoTracking()
             .Where(u => u.TenantId == _tenantContext.TenantId && u.Id == userId)
             .Select(u => u.EmployeeId)
             .FirstOrDefaultAsync(cancellationToken);
-        return new MedicalScope(canViewMedical, ownEmployeeId);
+        return new MedicalScope(canViewMedical, ownEmployeeId, canViewPersonal);
     }
 
     /// <summary>Fire-and-forget event publication: a notification failure never breaks the
@@ -558,9 +574,10 @@ public class AbsenceService : IAbsenceService
 
         // The certificate on a sick absence is health data: its existence is only shown to
         // callers who are allowed to open it (M7).
+        var reviewScope = await MedicalScopeAsync(cancellationToken);
         var hasVisibleAttachment = absence.AttachmentPath is not null
-            && (absence.Type != AbsenceType.Sick
-                || (await MedicalScopeAsync(cancellationToken)).CanSee(absence.EmployeeId));
+            && reviewScope.CanSeePersonal(absence.EmployeeId)
+            && (absence.Type != AbsenceType.Sick || reviewScope.CanSee(absence.EmployeeId));
 
         return new AbsenceReviewContextDto(shifts, trips, colleagueRows, usedDays, hasVisibleAttachment);
     }
@@ -612,7 +629,7 @@ public class AbsenceService : IAbsenceService
 
         var isMedical = absence.Type == AbsenceType.Sick;
         var scope = await MedicalScopeAsync(cancellationToken);
-        if (isMedical && !scope.CanSee(absence.EmployeeId))
+        if ((isMedical && !scope.CanSee(absence.EmployeeId)) || !scope.CanSeePersonal(absence.EmployeeId))
         {
             return AbsenceAttachmentResult.MedicalAccessDenied;
         }
@@ -715,13 +732,16 @@ public class AbsenceService : IAbsenceService
     private static AbsenceDto Map(JoinedAbsence r, MedicalScope scope)
     {
         var redactMedical = r.Absence.Type == AbsenceType.Sick && !scope.CanSee(r.Absence.EmployeeId);
+        var redact = redactMedical || !scope.CanSeePersonal(r.Absence.EmployeeId);
+        var showInternalNote = !redactMedical && scope.CanSeeInternalNote;
         return new(
             r.Absence.Id, r.Absence.EmployeeId, r.EmployeeName, r.EmployeeNumber, r.IsDriver,
             r.Absence.Type, r.Absence.StartDate, r.Absence.EndDate, r.Absence.Status,
-            redactMedical ? null : r.Absence.Reason, r.Absence.DecisionNote, r.Absence.DecidedAt,
-            r.Absence.PartDay, redactMedical ? null : r.Absence.InternalNote,
-            !redactMedical && r.Absence.AttachmentPath != null,
-            redactMedical ? null : r.Absence.AttachmentFileName, r.Absence.LeaveTypeId);
+            redact ? null : r.Absence.Reason,
+            scope.CanSeePersonal(r.Absence.EmployeeId) ? r.Absence.DecisionNote : null, r.Absence.DecidedAt,
+            r.Absence.PartDay, showInternalNote ? r.Absence.InternalNote : null,
+            !redact && r.Absence.AttachmentPath != null,
+            redact ? null : r.Absence.AttachmentFileName, r.Absence.LeaveTypeId);
     }
 
     /// <summary>
