@@ -374,7 +374,11 @@ public record DossierDetailDto(
     string? ConfirmationSource = null,
     string? ConfirmationReason = null,
     DateTime? CancelledAt = null,
-    string? CancellationReason = null);
+    string? CancellationReason = null,
+    /// <summary>M10: ACTIVE issued transport documents (CMR / leveringsbon / werkbon) of the linked orders — not in <see cref="DocumentCount"/>.</summary>
+    int IssuedDocumentCount = 0,
+    /// <summary>M10: current proofs of delivery of the linked orders — not in <see cref="DocumentCount"/>.</summary>
+    int PodCount = 0);
 
 // ------------------------------------------------------------ lifecycle (confirmation sprint 2026-09-23)
 

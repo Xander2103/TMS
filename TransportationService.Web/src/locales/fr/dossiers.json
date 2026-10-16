@@ -615,7 +615,13 @@
     "documentsForOrder": "Documents de la commande {number}",
     "historyAudit": "Historique des modifications",
     "historyNotes": "Notes",
-    "historyDescription": "Description"
+    "historyDescription": "Description",
+    "issuedDocumentCount_one": "{count} document de transport",
+    "issuedDocumentCount_other": "{count} documents de transport",
+    "podCount_one": "{count} preuve de livraison",
+    "podCount_other": "{count} preuves de livraison",
+    "uploadCount_one": "{count} fichier ajouté",
+    "uploadCount_other": "{count} fichiers ajoutés"
   },
   "lifecycle": {
     "confirm": "Confirmer",

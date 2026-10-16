@@ -615,7 +615,13 @@
     "documentsForOrder": "Documenten van opdracht {number}",
     "historyAudit": "Wijzigingshistoriek",
     "historyNotes": "Notities",
-    "historyDescription": "Omschrijving"
+    "historyDescription": "Omschrijving",
+    "issuedDocumentCount_one": "{count} transportdocument",
+    "issuedDocumentCount_other": "{count} transportdocumenten",
+    "podCount_one": "{count} afleverbewijs",
+    "podCount_other": "{count} afleverbewijzen",
+    "uploadCount_one": "{count} upload",
+    "uploadCount_other": "{count} uploads"
   },
   "lifecycle": {
     "confirm": "Bevestigen",

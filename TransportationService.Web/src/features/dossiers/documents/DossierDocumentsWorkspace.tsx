@@ -50,6 +50,8 @@ interface DossierDocumentsWorkspaceProps {
   craneJobKinds?: Record<string, string | null | undefined>
   /** Fired with the full dossier list after every change, so the overview count stays honest. */
   onDocumentsChange?: (documents: DossierDocument[]) => void
+  /** Fired after a transport document was issued, so the dossier summaries (overview, activity cells) refresh. */
+  onTransportDocumentIssued?: () => void
 }
 
 /**
@@ -66,7 +68,7 @@ interface DossierDocumentsWorkspaceProps {
  * activity documents need `dossiers.manage`, order documents the order rights. Hiding a button
  * is a courtesy; the API refuses on its own.
  */
-export function DossierDocumentsWorkspace({ dossierId, levels, initialOrderId, initialActivityId, craneJobKinds, onDocumentsChange }: DossierDocumentsWorkspaceProps) {
+export function DossierDocumentsWorkspace({ dossierId, levels, initialOrderId, initialActivityId, craneJobKinds, onDocumentsChange, onTransportDocumentIssued }: DossierDocumentsWorkspaceProps) {
   const { t } = useLocale()
   const { hasPermission } = useAuth()
   const { showSuccess, showError } = useToast()
@@ -225,7 +227,7 @@ export function DossierDocumentsWorkspace({ dossierId, levels, initialOrderId, i
                 <DossierDocumentTable documents={ownDocuments} actions={orderActions} emptyText={t('dossierDocuments.empty.order')} emptyAction={uploadAction} />
               </section>
               {sharedDossierDocuments}
-              <IssuedTransportDocumentsBlock key={activeOrder.orderId} orderId={activeOrder.orderId} craneJobKind={craneJobKinds?.[activeOrder.orderId]} />
+              <IssuedTransportDocumentsBlock key={activeOrder.orderId} orderId={activeOrder.orderId} craneJobKind={craneJobKinds?.[activeOrder.orderId]} onIssued={onTransportDocumentIssued} />
             </>
           )}
 

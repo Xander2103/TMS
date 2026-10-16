@@ -342,7 +342,25 @@ describe('Dossier navigation — the Overzicht is a read-only summary', () => {
     const docs = await screen.findByRole('article', { name: 'Documenten' })
     expect(within(docs).getByText('3 documenten')).toBeInTheDocument()
     expect(within(docs).getByText('CMR · Leverbon')).toBeInTheDocument()
+    expect(within(docs).getByText('3 uploads')).toBeInTheDocument()
     expect(within(docs).queryByText('Geen documenten.')).not.toBeInTheDocument()
+  })
+
+  it('M10: counts issued transport documents and PODs next to the uploads, never "Geen documenten."', async () => {
+    api.getDossier.mockResolvedValue(overviewDossier({ documentCount: 1, documentTypes: ['Other'], issuedDocumentCount: 2, podCount: 1 }))
+    renderPage()
+    const docs = await screen.findByRole('article', { name: 'Documenten' })
+    expect(within(docs).getByText('4 documenten')).toBeInTheDocument()
+    expect(within(docs).getByText('2 transportdocumenten · 1 afleverbewijs · 1 upload')).toBeInTheDocument()
+    expect(within(docs).queryByText('Geen documenten.')).not.toBeInTheDocument()
+  })
+
+  it('M10: a dossier with only issued documents is not "0 documenten"', async () => {
+    api.getDossier.mockResolvedValue(overviewDossier({ documentCount: 0, documentTypes: [], issuedDocumentCount: 1 }))
+    renderPage()
+    const docs = await screen.findByRole('article', { name: 'Documenten' })
+    expect(within(docs).getByText('1 document')).toBeInTheDocument()
+    expect(within(docs).getByText('1 transportdocument')).toBeInTheDocument()
   })
 
   it('shows "Geen documenten." when the dossier has none', async () => {

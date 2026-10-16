@@ -220,6 +220,61 @@ public class DossierDocumentScopeTests : IDisposable
         Assert.Empty(activities[2].IssuedDocuments!);
     }
 
+    /// <summary>
+    /// M10 (acceptance 2026-10-16): the Overzicht said "0 documenten" for a dossier with issued
+    /// transport documents and a POD. Those are counted separately from the uploads (never twice),
+    /// and only the ACTIVE issued documents count — on the dossier and on the activity card (M9).
+    /// </summary>
+    [Fact]
+    public async Task DossierDetail_CountsActiveIssuedDocumentsAndPods_NextToTheUploads()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var (dossier, orders) = await h.DossierWithOrdersAsync(2);
+        var replacedId = Guid.NewGuid();
+        var activeId = Guid.NewGuid();
+        h.Db.Context.IssuedTransportDocuments.AddRange(
+            new IssuedTransportDocument
+            {
+                Id = replacedId, TenantId = h.TenantId, TransportOrderId = orders[0], DossierId = dossier.Id, Kind = IssuedTransportDocumentKind.Cmr,
+                DocumentNumber = "CMR-2026-00001", RequestId = Guid.NewGuid(), IssuedAt = Now.UtcDateTime,
+                ReplacedByDocumentId = activeId, ReplacedAt = Now.UtcDateTime.AddMinutes(5), ReplacementReason = "Gewicht gecorrigeerd",
+            },
+            new IssuedTransportDocument
+            {
+                Id = activeId, TenantId = h.TenantId, TransportOrderId = orders[0], DossierId = dossier.Id, Kind = IssuedTransportDocumentKind.Cmr,
+                DocumentNumber = "CMR-2026-00002", RequestId = Guid.NewGuid(), IssuedAt = Now.UtcDateTime.AddMinutes(5),
+            },
+            new IssuedTransportDocument
+            {
+                Id = Guid.NewGuid(), TenantId = h.TenantId, TransportOrderId = orders[1], DossierId = dossier.Id, Kind = IssuedTransportDocumentKind.DeliveryNote,
+                DocumentNumber = "LB-2026-00001", RequestId = Guid.NewGuid(), IssuedAt = Now.UtcDateTime,
+            });
+        var stop = new TransportOrderStop { Id = Guid.NewGuid(), TenantId = h.TenantId, TransportOrderId = orders[1], Sequence = 1, StopType = StopType.Unloading, City = "Gent" };
+        var trip = new Modules.Planning.Entities.Trip { Id = Guid.NewGuid(), TenantId = h.TenantId, TripNumber = "RIT-0001", TripDate = new DateOnly(2026, 10, 16) };
+        h.Db.Context.TransportOrderStops.Add(stop);
+        h.Db.Context.Trips.Add(trip);
+        h.Db.Context.ProofsOfDelivery.AddRange(
+            new Modules.Pod.Entities.ProofOfDelivery
+            {
+                Id = Guid.NewGuid(), TenantId = h.TenantId, TripId = trip.Id, TransportOrderId = orders[1], TransportOrderStopId = stop.Id,
+                RecipientName = "J. Peeters", DeliveredAt = Now.UtcDateTime, IsCurrent = true,
+            },
+            new Modules.Pod.Entities.ProofOfDelivery
+            {
+                Id = Guid.NewGuid(), TenantId = h.TenantId, TripId = trip.Id, TransportOrderId = orders[1], TransportOrderStopId = stop.Id,
+                RecipientName = "J. Peeters (oud)", DeliveredAt = Now.UtcDateTime, IsCurrent = false, Version = 0,
+            });
+        await h.Db.Context.SaveChangesAsync();
+        await h.Documents().CreateForDossierAsync(dossier.Id, General("Veiligheidsplan"), CancellationToken.None);
+
+        var detail = (await h.Dossiers().GetAsync(dossier.Id, CancellationToken.None))!;
+
+        Assert.Equal((1, 2, 1), (detail.DocumentCount, detail.IssuedDocumentCount, detail.PodCount));
+        var transport = detail.Activities!.OrderBy(a => a.Sequence).ToList()[1];
+        Assert.Equal(new[] { "CMR-2026-00002" }, transport.IssuedDocuments!.Select(d => d.DocumentNumber));
+    }
+
     [Fact]
     public async Task LegacyOrderDocument_WithoutDossierId_IsStillListedAndCountedOnce()
     {

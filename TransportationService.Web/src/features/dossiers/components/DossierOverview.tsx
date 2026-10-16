@@ -118,10 +118,20 @@ export function DossierOverview() {
   const liftingWithoutGoods = onSite && cargo.length === 0
 
   // --- Documenten & historiek --------------------------------------------------------------
-  const documentCount = dossier.documentCount ?? 0
+  // M10: uploads, issued transport documents and PODs are separate records — each counted once,
+  // shown as separate parts ("2 transportdocumenten · 1 afleverbewijs · 1 upload").
+  const uploadCount = dossier.documentCount ?? 0
+  const issuedCount = dossier.issuedDocumentCount ?? 0
+  const podCount = dossier.podCount ?? 0
+  const documentCount = uploadCount + issuedCount + podCount
   const documentTypes = (dossier.documentTypes ?? []).map((type) =>
     ORDER_DOCUMENT_TYPE_LABELS[type as OrderDocumentType] ? t(ORDER_DOCUMENT_TYPE_LABELS[type as OrderDocumentType]) : type,
   )
+  const documentParts = [
+    issuedCount > 0 ? t('dossiers.overview.issuedDocumentCount', { count: issuedCount }) : null,
+    podCount > 0 ? t('dossiers.overview.podCount', { count: podCount }) : null,
+    uploadCount > 0 ? t('dossiers.overview.uploadCount', { count: uploadCount }) : null,
+  ].filter((part): part is string => part !== null)
   // D7: dossier-level notes are counted by the API; the legacy free text is no longer shown here.
   const noteCount = dossier.noteCount ?? 0
 
@@ -320,7 +330,10 @@ export function DossierOverview() {
             <p className="dossier-ov-muted">{t('dossiers.overview.documentsNoneHint')}</p>
           </>
         ) : (
-          <p>{documentTypes.join(' · ')}</p>
+          <>
+            <p>{documentParts.join(' · ')}</p>
+            {documentTypes.length > 0 && <p className="dossier-ov-muted">{documentTypes.join(' · ')}</p>}
+          </>
         )}
       </OverviewCard>
 

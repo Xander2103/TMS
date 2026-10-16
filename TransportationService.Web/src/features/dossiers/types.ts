@@ -226,6 +226,10 @@ export interface DossierDetail {
   /** Redesign 2026-09-11 (Overzicht): documents on the linked orders — count + distinct type codes. Absent on older payloads. */
   documentCount?: number
   documentTypes?: string[]
+  /** M10: ACTIVE issued transport documents (CMR / leveringsbon / werkbon) of the linked orders — not in `documentCount`. */
+  issuedDocumentCount?: number
+  /** M10: current proofs of delivery of the linked orders — not in `documentCount`. */
+  podCount?: number
   /** Latest change over the dossier, its activities and linked orders (ISO); null/absent when unknown. */
   lastChangedAt?: string | null
   /** D7: number of dossier-level notes (the legacy free-text `notes` is no longer shown or edited). */

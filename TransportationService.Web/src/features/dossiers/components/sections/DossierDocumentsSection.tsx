@@ -16,7 +16,7 @@ import { useRegisterDossierSection } from '../../sectionRegistry'
  */
 export function DossierDocumentsSection() {
   const { t } = useLocale()
-  const { dossier, activities, legacyOrders, firstOrder, applyDossier } = useDossierWorkspace()
+  const { dossier, activities, legacyOrders, firstOrder, applyDossier, reloadDossier } = useDossierWorkspace()
   const register = useRegisterDossierSection('documenten')
   const [searchParams] = useSearchParams()
 
@@ -49,6 +49,8 @@ export function DossierDocumentsSection() {
         initialActivityId={searchParams.get('activiteit')}
         craneJobKinds={craneJobKinds}
         onDocumentsChange={handleDocumentsChange}
+        // M10: an issued CMR changes the overview count and the activity "CMR / document" cell.
+        onTransportDocumentIssued={reloadDossier}
       />
     </section>
   )

@@ -514,7 +514,8 @@ public partial class DossierService : IDossierService
         var issuedByOrder = activityOrderIds.Count == 0
             ? new Dictionary<Guid, List<DossierActivityIssuedDocumentDto>>()
             : (await _dbContext.IssuedTransportDocuments.AsNoTracking()
-                    .Where(i => i.TenantId == tenantId && activityOrderIds.Contains(i.TransportOrderId))
+                    // M9: the ACTIVE documents only — a replaced CMR is history, shown in the Documenten tab.
+                    .Where(i => i.TenantId == tenantId && activityOrderIds.Contains(i.TransportOrderId) && i.ReplacedByDocumentId == null)
                     .OrderBy(i => i.IssuedAt).ThenBy(i => i.DocumentNumber)
                     .Select(i => new { i.TransportOrderId, i.Id, i.Kind, i.DocumentNumber })
                     .ToListAsync(cancellationToken))
@@ -642,6 +643,18 @@ public partial class DossierService : IDossierService
         // D6: documents of the DOSSIER — the same definition as the dossier document list, so a
         // document is counted exactly once whatever level it hangs on.
         var documentTypes = documentRows.Select(d => d.DocumentType).ToList();
+        // M10 (acceptance 2026-10-16): the Overzicht said "0 documenten" next to issued CMRs and
+        // PODs. Those are separate records (never TransportOrderDocuments), so they are counted
+        // separately — ACTIVE issued transport documents and CURRENT proofs of delivery of the
+        // dossier's linked orders — and never folded into the upload count twice.
+        var issuedDocumentCount = orderIds.Count == 0
+            ? 0
+            : await _dbContext.IssuedTransportDocuments.AsNoTracking()
+                .CountAsync(i => i.TenantId == tenantId && orderIds.Contains(i.TransportOrderId) && i.ReplacedByDocumentId == null, cancellationToken);
+        var podCount = orderIds.Count == 0
+            ? 0
+            : await _dbContext.ProofsOfDelivery.AsNoTracking()
+                .CountAsync(p => p.TenantId == tenantId && orderIds.Contains(p.TransportOrderId) && p.IsCurrent, cancellationToken);
         var lastChangedAt = new[] { dossier.UpdatedAt }
             .Concat(activityRows.Select(a => a.UpdatedAt))
             .Concat(orderRows.Select(o => o.UpdatedAt))
@@ -664,7 +677,9 @@ public partial class DossierService : IDossierService
             ConfirmationSource: dossier.ConfirmationSource?.ToString(),
             ConfirmationReason: dossier.ConfirmationReason,
             CancelledAt: dossier.CancelledAt,
-            CancellationReason: dossier.CancellationReason);
+            CancellationReason: dossier.CancellationReason,
+            IssuedDocumentCount: issuedDocumentCount,
+            PodCount: podCount);
     }
 
     /// <summary>
