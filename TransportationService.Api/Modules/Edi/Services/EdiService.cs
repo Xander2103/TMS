@@ -254,7 +254,7 @@ public class EdiService : IEdiService
                 prepared.CustomerId, prepared.Order.CustomerReference, null, prepared.Order.GoodsDescription,
                 null, null, null, null, null, false, false, null,
                 $"EDI-bericht van {partner.Name} ({prepared.Order.ExternalOrderId})",
-                prepared.Stops, prepared.CargoItems), cancellationToken);
+                prepared.Stops, prepared.CargoItems, ExternalIntake: true), cancellationToken);
 
             if (result.Outcome != TransportOrderOperationOutcome.Success)
             {

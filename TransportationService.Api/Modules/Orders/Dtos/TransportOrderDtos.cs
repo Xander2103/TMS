@@ -570,7 +570,14 @@ public record CreateTransportOrderRequest(
     decimal? LiftRadiusMeters = null,
     decimal? LiftHeightMeters = null,
     string? LiftConditions = null,
-    string? LiftEquipment = null);
+    string? LiftEquipment = null,
+    /// <summary>
+    /// M15: true for intake that does not come from an internal user's own action (customer
+    /// portal, EDI). The auto-created wrapper dossier then gets NO responsible user — a planner
+    /// becomes its owner when accepting the request. Internal creates default the responsible
+    /// user to the creating user.
+    /// </summary>
+    bool ExternalIntake = false);
 
 public record UpdateTransportOrderRequest(
     Guid CustomerId,

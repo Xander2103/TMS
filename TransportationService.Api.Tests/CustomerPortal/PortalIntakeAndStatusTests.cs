@@ -329,6 +329,83 @@ public class PortalIntakeAndStatusTests
         Assert.Null(delivered.Value.ExpectedDeliveryEta);
     }
 
+    // ---- M15 -----------------------------------------------------------------------------
+
+    [Fact]
+    public async Task InternalCreate_MakesTheCreatorResponsible_PortalIntakeStaysUnownedUntilAccepted()
+    {
+        using var h = await SeedAsync();
+
+        // Internal order create → wrapper dossier owned by the planner.
+        var internalOrder = await h.Orders(h.PlannerId).CreateAsync(new CreateTransportOrderRequest(
+            h.CustomerId, null, new DateOnly(2026, 7, 21), "Intern", null, null, null, null, null, false, false, null, null,
+            [
+                new TransportOrderStopInput(StopType.Loading, h.LocationId, null, null, null, null, null, LoadFrom, LoadTo, null, null),
+                new TransportOrderStopInput(StopType.Unloading, null, "Eindklant", "Dorpsstraat 1", "9000", "Gent", "BE", null, null, null, null),
+            ]), CancellationToken.None);
+        Assert.Equal(TransportOrderOperationOutcome.Success, internalOrder.Outcome);
+        Assert.Equal(h.PlannerId, DossierOf(h, internalOrder.Order!.Id).ResponsibleUserId);
+
+        // Portal intake → no owner.
+        var portalOrder = await SubmitAsync(h);
+        Assert.Null(DossierOf(h, portalOrder).ResponsibleUserId);
+
+        // Accepting it makes the accepting planner the owner.
+        var planner = new DevCurrentUserContext(h.PlannerId);
+        var audit = new AuditService(h.Db.Context, h.Tenant, planner);
+        var review = new OrderPortalReviewService(h.Db.Context, h.Tenant, h.Orders(h.PlannerId),
+            new CustomerMessageService(h.Db.Context, h.Tenant, planner, audit, new TestClock(Now)), audit,
+            currentUser: planner);
+        var accepted = await review.ReviewAsync(portalOrder, new PortalReviewRequest(PortalReviewAction.Accept, null), CancellationToken.None);
+        Assert.Equal(TransportOrderOperationOutcome.Success, accepted.Outcome);
+        Assert.Equal(h.PlannerId, DossierOf(h, portalOrder).ResponsibleUserId);
+    }
+
+    [Fact]
+    public async Task AcceptingDoesNotOverrideAnExistingOwner()
+    {
+        using var h = await SeedAsync();
+        var portalOrder = await SubmitAsync(h);
+        var otherPlanner = Guid.NewGuid();
+        h.Db.Context.Users.Add(new User { Id = otherPlanner, TenantId = h.TenantId, Email = "o@acme.be", FirstName = "O", LastName = "Ander", IsActive = true });
+        DossierOf(h, portalOrder).ResponsibleUserId = otherPlanner;
+        await h.Db.Context.SaveChangesAsync();
+
+        var planner = new DevCurrentUserContext(h.PlannerId);
+        var audit = new AuditService(h.Db.Context, h.Tenant, planner);
+        var review = new OrderPortalReviewService(h.Db.Context, h.Tenant, h.Orders(h.PlannerId),
+            new CustomerMessageService(h.Db.Context, h.Tenant, planner, audit, new TestClock(Now)), audit,
+            currentUser: planner);
+        await review.ReviewAsync(portalOrder, new PortalReviewRequest(PortalReviewAction.Accept, null), CancellationToken.None);
+
+        Assert.Equal(otherPlanner, DossierOf(h, portalOrder).ResponsibleUserId);
+    }
+
+    [Fact]
+    public async Task DossierCreate_DefaultsTheResponsibleToTheCreatingInternalUser()
+    {
+        using var h = await SeedAsync();
+        var planner = new DevCurrentUserContext(h.PlannerId);
+        var sut = new DossierService(h.Db.Context, h.Tenant, new AuditService(h.Db.Context, h.Tenant, planner), new TestClock(Now),
+            currentUser: planner);
+
+        var defaulted = await sut.CreateAsync(new SaveDossierRequest(CustomerId: h.CustomerId), CancellationToken.None);
+        Assert.Equal(h.PlannerId, defaulted.ResponsibleUserId);
+
+        // An explicit choice wins; the "Mijn open" filter finds the defaulted one.
+        var colleague = Guid.NewGuid();
+        h.Db.Context.Users.Add(new User { Id = colleague, TenantId = h.TenantId, Email = "c@acme.be", FirstName = "C", LastName = "Collega", IsActive = true });
+        await h.Db.Context.SaveChangesAsync();
+        var explicitChoice = await sut.CreateAsync(new SaveDossierRequest(CustomerId: h.CustomerId, ResponsibleUserId: colleague), CancellationToken.None);
+        Assert.Equal(colleague, explicitChoice.ResponsibleUserId);
+
+        // A customer-portal user never becomes an owner.
+        var portalUser = new DevCurrentUserContext(h.PortalUserId);
+        var asPortal = new DossierService(h.Db.Context, h.Tenant, new AuditService(h.Db.Context, h.Tenant, portalUser), new TestClock(Now),
+            currentUser: portalUser);
+        Assert.Null((await asPortal.CreateAsync(new SaveDossierRequest(CustomerId: h.CustomerId), CancellationToken.None)).ResponsibleUserId);
+    }
+
     private static TransportationService.Api.Modules.Dossiers.Entities.TransportDossier DossierOf(Harness h, Guid orderId)
     {
         var dossierId = h.Db.Context.DossierOrders.AsNoTracking().Single(l => l.TransportOrderId == orderId).DossierId;

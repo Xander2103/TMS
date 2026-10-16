@@ -243,7 +243,9 @@ public class CustomerPortalService : ICustomerPortalService
                 AdrRequired: c.AdrRequired, AdrDetails: c.AdrDetails,
                 QuantityUnitCode: ManagedUnitCodeFor(c.UnitType) is { } code && activeUnitCodes.TryGetValue(code, out var stored)
                     ? stored
-                    : null)).ToList());
+                    : null)).ToList(),
+            // Portal intake: no internal owner until a planner accepts it (M15).
+            ExternalIntake: true);
 
         var created = await _orderService.CreateAsync(createRequest, cancellationToken);
         if (created.Outcome != TransportOrderOperationOutcome.Success)

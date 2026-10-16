@@ -325,7 +325,9 @@ public partial class DossierService : IDossierService
             CustomerReference = Trim(request.CustomerReference),
             DossierDate = dossierDate,
             LegalEntityId = legalEntityId,
-            ResponsibleUserId = request.ResponsibleUserId,
+            // M15: no explicit choice → the creating internal user owns it ("Mijn open").
+            ResponsibleUserId = request.ResponsibleUserId
+                ?? await DossierOwnership.InternalCreatorAsync(_dbContext, tenantId, _currentUser?.CurrentUserId, cancellationToken),
             Notes = Trim(request.Notes),
         };
         _dbContext.Add(dossier);

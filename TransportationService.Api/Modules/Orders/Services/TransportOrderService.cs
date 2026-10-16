@@ -428,6 +428,12 @@ public class TransportOrderService : ITransportOrderService
         // create (EDI, portal, legacy API) gets its own wrapper dossier in the SAME save, so
         // no order exists outside a dossier and no caller has to change.
         Modules.Dossiers.Entities.TransportDossier? wrapperDossier = null;
+        // M15: an internal user's own create makes them the wrapper dossier's responsible person
+        // ("Mijn open"); portal/EDI intake stays unowned until a planner accepts it.
+        var wrapperResponsibleUserId = targetDossier is null && !request.ExternalIntake
+            ? await Modules.Dossiers.Services.DossierOwnership.InternalCreatorAsync(
+                _dbContext, _tenantContext.TenantId, _currentUser?.CurrentUserId, cancellationToken)
+            : null;
         if (targetDossier is not null)
         {
             _dbContext.Add(new Modules.Dossiers.Entities.DossierOrder
@@ -449,6 +455,7 @@ public class TransportOrderService : ITransportOrderService
                 LegalEntityId = order.LegalEntityId,
                 DossierDate = order.OrderDate,
                 OriginTransportOrderId = order.Id,
+                ResponsibleUserId = wrapperResponsibleUserId,
             };
             _dbContext.Add(wrapperDossier);
             if (wrapperTransportType is not null)

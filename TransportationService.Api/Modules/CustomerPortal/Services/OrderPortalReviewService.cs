@@ -43,6 +43,7 @@ public class OrderPortalReviewService : IOrderPortalReviewService
     private readonly IAuditService _auditService;
     private readonly INotificationEventService? _notificationEvents;
     private readonly ILogger<OrderPortalReviewService>? _logger;
+    private readonly Modules.Identity.Services.ICurrentUserContext? _currentUser;
 
     public OrderPortalReviewService(
         TransportationDbContext dbContext,
@@ -51,8 +52,10 @@ public class OrderPortalReviewService : IOrderPortalReviewService
         ICustomerMessageService messageService,
         IAuditService auditService,
         INotificationEventService? notificationEvents = null,
-        ILogger<OrderPortalReviewService>? logger = null)
+        ILogger<OrderPortalReviewService>? logger = null,
+        Modules.Identity.Services.ICurrentUserContext? currentUser = null)
     {
+        _currentUser = currentUser;
         _dbContext = dbContext;
         _tenantContext = tenantContext;
         _orderService = orderService;
@@ -81,7 +84,18 @@ public class OrderPortalReviewService : IOrderPortalReviewService
         switch (request.Action)
         {
             case PortalReviewAction.Accept:
-                return await _orderService.ChangeStatusAsync(orderId, TransportOrderStatus.Confirmed, cancellationToken);
+            {
+                var accepted = await _orderService.ChangeStatusAsync(orderId, TransportOrderStatus.Confirmed, cancellationToken);
+                if (accepted.Outcome == TransportOrderOperationOutcome.Success)
+                {
+                    // M15: the accepting planner owns the (until now unowned) portal dossier.
+                    await Modules.Dossiers.Services.DossierOwnership.AssignIfUnownedAsync(
+                        _dbContext, _tenantContext.TenantId, orderId, _currentUser?.CurrentUserId, cancellationToken);
+                    await _dbContext.SaveChangesAsync(cancellationToken);
+                }
+
+                return accepted;
+            }
 
             case PortalReviewAction.Reject:
                 if (string.IsNullOrWhiteSpace(request.Reason))
