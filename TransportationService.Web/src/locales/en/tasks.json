@@ -160,6 +160,7 @@
     "requiresEvidence": "Evidence (attachment) required",
     "created_one": "Task created.",
     "created_other": "{count} tasks created.",
+    "dueBeforeStart": "The deadline cannot be before the start.",
     "createFailed": "The task could not be created."
   },
   "redistribute": {

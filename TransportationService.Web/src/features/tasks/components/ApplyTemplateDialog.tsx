@@ -3,6 +3,7 @@ import { Button } from '../../../components/ui/Button'
 import { FormField } from '../../../components/ui/FormField'
 import { Modal } from '../../../components/ui/Modal'
 import { useLocale } from '../../../i18n/localeContext'
+import { fromDateTimeLocalInput } from '../../../utils/dates'
 import { EmployeeSelect } from './EmployeePicker'
 
 interface ApplyTemplateDialogProps {
@@ -35,7 +36,7 @@ export function ApplyTemplateDialog({ templateName, busy, onSubmit, onClose }: A
                 setError(t('tasks.applyDialog.chooseEmployee'))
                 return
               }
-              onSubmit(employeeId, startAt || null)
+              onSubmit(employeeId, fromDateTimeLocalInput(startAt))
             }}
             disabled={busy}
           >

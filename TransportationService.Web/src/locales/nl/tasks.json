@@ -160,6 +160,7 @@
     "requiresEvidence": "Bewijs (bijlage) vereist",
     "created_one": "Taak aangemaakt.",
     "created_other": "{count} taken aangemaakt.",
+    "dueBeforeStart": "De deadline mag niet vóór het startmoment liggen.",
     "createFailed": "De taak kon niet worden aangemaakt."
   },
   "redistribute": {

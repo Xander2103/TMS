@@ -379,4 +379,57 @@ public class EmployeeTaskServiceTests
         Assert.Equal(2, summary!.Todo);
         Assert.Equal(1, summary.Overdue);
     }
+
+    // HR acceptance H1: a datetime-local value has no offset. It is tenant wall clock
+    // (Europe/Amsterdam default) and must be stored as a UTC instant — Npgsql rejects
+    // Kind=Unspecified for timestamptz, which used to make every dated task a 500.
+    [Fact]
+    public async Task Create_WithZoneLessStartAndDeadline_StoresUtcInstantsOfTheTenantWallClock()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+
+        var created = Assert.Single(await h.For(h.ManagerUserId).CreateAsync(new CreateTaskRequest(
+            "Medische keuring plannen", [h.WorkerEmployeeId],
+            StartAt: new DateTime(2026, 10, 22, 8, 0, 0, DateTimeKind.Unspecified),
+            DueAt: new DateTime(2026, 10, 22, 17, 0, 0, DateTimeKind.Unspecified)), CancellationToken.None));
+
+        var stored = await h.Db.Context.EmployeeTasks.AsNoTracking().SingleAsync(t => t.Id == created.Id);
+        // 22/10/2026 is still summer time (UTC+2).
+        Assert.Equal(new DateTime(2026, 10, 22, 6, 0, 0), stored.StartAt);
+        Assert.Equal(new DateTime(2026, 10, 22, 15, 0, 0), stored.DueAt);
+        Assert.Equal(DateTimeKind.Utc, EmployeeTaskService.NormalizeMoment(
+            new DateTime(2026, 10, 22, 17, 0, 0, DateTimeKind.Unspecified), TenantTimeZone.Resolve(null))!.Value.Kind);
+        Assert.False(created.IsOverdue);
+
+        var notification = await h.Db.Context.Notifications.SingleAsync(n => n.Type == "task_assigned");
+        Assert.Contains("deadline 22/10/2026 17:00", notification.Message);
+    }
+
+    [Fact]
+    public async Task Create_WithUtcDeadline_KeepsTheInstant_AndPastDeadlineIsOverdue()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+
+        var created = Assert.Single(await h.For(h.ManagerUserId).CreateAsync(
+            NewTask(h.WorkerEmployeeId, dueAt: Now.UtcDateTime.AddHours(-2)), CancellationToken.None));
+
+        var stored = await h.Db.Context.EmployeeTasks.AsNoTracking().SingleAsync(t => t.Id == created.Id);
+        Assert.Equal(Now.UtcDateTime.AddHours(-2), stored.DueAt);
+        Assert.True(created.IsOverdue);
+    }
+
+    [Fact]
+    public async Task Create_DeadlineBeforeStart_IsAValidationError()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+
+        var error = await Assert.ThrowsAsync<DomainValidationException>(() => h.For(h.ManagerUserId).CreateAsync(
+            new CreateTaskRequest("x", [h.WorkerEmployeeId],
+                StartAt: new DateTime(2026, 10, 22, 17, 0, 0, DateTimeKind.Utc),
+                DueAt: new DateTime(2026, 10, 22, 8, 0, 0, DateTimeKind.Utc)), CancellationToken.None));
+        Assert.Contains("deadline", error.Message, StringComparison.OrdinalIgnoreCase);
+    }
 }

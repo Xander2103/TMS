@@ -10,6 +10,7 @@ import { useLookupOptions } from '../../master-data/hooks/useLookupOptions'
 import { createTasks } from '../api/tasksApi'
 import { TASK_PRIORITY_LABELS, type TaskPriority } from '../api/types'
 import { EmployeeMultiSelect } from './EmployeePicker'
+import { fromDateTimeLocalInput } from '../../../utils/dates'
 import './tasks.css'
 
 interface NewTaskDialogProps {
@@ -41,6 +42,7 @@ export function NewTaskDialog({ onClose, onCreated }: NewTaskDialogProps) {
   const [busy, setBusy] = useState(false)
   const [titleError, setTitleError] = useState<string | undefined>()
   const [employeeError, setEmployeeError] = useState<string | undefined>()
+  const [dueError, setDueError] = useState<string | undefined>()
 
   async function submit() {
     let valid = true
@@ -53,6 +55,11 @@ export function NewTaskDialog({ onClose, onCreated }: NewTaskDialogProps) {
       setEmployeeError(canAssign ? t('tasks.new.chooseEmployees') : t('tasks.new.noEmployeeLinked'))
       valid = false
     }
+    // datetime-local values share one format, so string order is chronological order.
+    if (startAt && dueAt && dueAt < startAt) {
+      setDueError(t('tasks.new.dueBeforeStart'))
+      valid = false
+    }
     if (!valid) return
 
     setBusy(true)
@@ -63,8 +70,8 @@ export function NewTaskDialog({ onClose, onCreated }: NewTaskDialogProps) {
         description: description.trim() || undefined,
         categoryId: categoryId || undefined,
         priority,
-        startAt: startAt || undefined,
-        dueAt: dueAt || undefined,
+        startAt: fromDateTimeLocalInput(startAt) ?? undefined,
+        dueAt: fromDateTimeLocalInput(dueAt) ?? undefined,
         requiresReview,
         requiresCompletionNote,
         requiresEvidence,
@@ -178,12 +185,15 @@ export function NewTaskDialog({ onClose, onCreated }: NewTaskDialogProps) {
           />
         </FormField>
 
-        <FormField label={t('tasks.new.due')} htmlFor="task-due">
+        <FormField label={t('tasks.new.due')} htmlFor="task-due" error={dueError}>
           <input
             id="task-due"
             type="datetime-local"
             value={dueAt}
-            onChange={(event) => setDueAt(event.target.value)}
+            onChange={(event) => {
+              setDueAt(event.target.value)
+              setDueError(undefined)
+            }}
             disabled={busy}
           />
         </FormField>

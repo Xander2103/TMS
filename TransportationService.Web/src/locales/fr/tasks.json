@@ -160,6 +160,7 @@
     "requiresEvidence": "Preuve (pièce jointe) exigée",
     "created_one": "Tâche créée.",
     "created_other": "{count} tâches créées.",
+    "dueBeforeStart": "L'échéance ne peut pas précéder le début.",
     "createFailed": "La tâche n'a pas pu être créée."
   },
   "redistribute": {

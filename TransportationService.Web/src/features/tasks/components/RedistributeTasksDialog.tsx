@@ -10,6 +10,7 @@ import { useLocale } from '../../../i18n/localeContext'
 import { getEmployeeOpenTaskSummary, redistributeTasks } from '../api/tasksApi'
 import type { TaskOpenSummary } from '../api/types'
 import { EmployeeSelect } from './EmployeePicker'
+import { fromDateTimeLocalInput } from '../../../utils/dates'
 import './tasks.css'
 
 interface RedistributeTasksDialogProps {
@@ -70,7 +71,7 @@ export function RedistributeTasksDialog({ employeeId, employeeName, onClose }: R
         fromEmployeeId: employeeId,
         action,
         targetEmployeeId: action === 'reassign' ? (targetEmployeeId ?? undefined) : undefined,
-        newDueAt: action === 'reassign' && newDueAt ? newDueAt : undefined,
+        newDueAt: action === 'reassign' ? fromDateTimeLocalInput(newDueAt) ?? undefined : undefined,
         reason: reason.trim(),
       })
       showSuccess(

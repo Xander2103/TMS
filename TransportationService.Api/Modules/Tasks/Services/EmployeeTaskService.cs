@@ -114,6 +114,32 @@ public class EmployeeTaskService : IEmployeeTaskService
 
     // ------------------------------------------------------------- create/update
 
+    /// <summary>
+    /// HR acceptance H1: start/deadline are instants (timestamptz). A client may send them with
+    /// an offset/Z (the web client does) or — like a bare <c>datetime-local</c> value — without
+    /// one; a zone-less value is what the person typed, i.e. tenant wall clock (C-03), never UTC.
+    /// Npgsql rejects <c>Kind=Unspecified</c> for timestamptz, which used to surface as a 500.
+    /// </summary>
+    public static DateTime? NormalizeMoment(DateTime? value, TimeZoneInfo zone) => value switch
+    {
+        null => null,
+        { Kind: DateTimeKind.Utc } v => v,
+        { Kind: DateTimeKind.Local } v => v.ToUniversalTime(),
+        { } v => TenantTimeZone.ToUtc(DateOnly.FromDateTime(v), TimeOnly.FromDateTime(v), zone),
+    };
+
+    private static (DateTime? StartAt, DateTime? DueAt) NormalizeSchedule(DateTime? startAt, DateTime? dueAt, TimeZoneInfo zone)
+    {
+        var start = NormalizeMoment(startAt, zone);
+        var due = NormalizeMoment(dueAt, zone);
+        if (start is { } s && due is { } d && d < s)
+        {
+            throw new DomainValidationException("dueAt", "De deadline mag niet vóór het startmoment liggen.");
+        }
+
+        return (start, due);
+    }
+
     public async Task<IReadOnlyList<EmployeeTaskDto>> CreateAsync(CreateTaskRequest request, CancellationToken cancellationToken)
     {
         var userId = RequireUser();
@@ -144,6 +170,8 @@ public class EmployeeTaskService : IEmployeeTaskService
         }
 
         var category = await ResolveCategoryAsync(request.CategoryId, cancellationToken);
+        var zone = await TenantTimeZone.ForTenantAsync(_dbContext, _tenantContext.TenantId, cancellationToken);
+        var (startAt, dueAt) = NormalizeSchedule(request.StartAt, request.DueAt, zone);
         var now = _timeProvider.GetUtcNow().UtcDateTime;
         var batchId = assigneeIds.Count > 1 ? Guid.NewGuid() : (Guid?)null;
         var created = new List<EmployeeTask>();
@@ -161,8 +189,8 @@ public class EmployeeTaskService : IEmployeeTaskService
                 CategoryId = category?.Id,
                 CategorySnapshot = category?.Name,
                 Priority = request.Priority,
-                StartAt = request.StartAt,
-                DueAt = request.DueAt,
+                StartAt = startAt,
+                DueAt = dueAt,
                 AssignedEmployeeId = assignee.Id,
                 BatchId = batchId,
                 RequiresReview = request.RequiresReview,
@@ -182,7 +210,7 @@ public class EmployeeTaskService : IEmployeeTaskService
             await _auditService.RecordAsync(EntityType, task.Id.ToString(), "Created", null,
                 new { task.Title, task.AssignedEmployeeId, task.Priority, task.DueAt, task.RequiresReview }, cancellationToken);
             await NotifyAssigneeAsync(task, "task_assigned", "Nieuwe taak",
-                $"Taak \"{task.Title}\" is aan jou toegewezen{(task.DueAt is { } due ? $" (deadline {due:dd/MM/yyyy})" : "")}.",
+                $"Taak \"{task.Title}\" is aan jou toegewezen{(task.DueAt is { } due ? $" (deadline {TenantTimeZone.ToWallClock(due, zone):dd/MM/yyyy HH:mm})" : "")}.",
                 cancellationToken);
         }
 
@@ -214,15 +242,17 @@ public class EmployeeTaskService : IEmployeeTaskService
 
         EnsureVersion(task, request.ExpectedVersion);
         var category = await ResolveCategoryAsync(request.CategoryId, cancellationToken);
+        var zone = await TenantTimeZone.ForTenantAsync(_dbContext, _tenantContext.TenantId, cancellationToken);
+        var (startAt, dueAt) = NormalizeSchedule(request.StartAt, request.DueAt, zone);
         var old = new { task.Title, task.Priority, task.DueAt };
-        var dueChanged = task.DueAt != request.DueAt;
+        var dueChanged = task.DueAt != dueAt;
         task.Title = request.Title.Trim();
         task.Description = Trim(request.Description);
         task.CategoryId = category?.Id;
         task.CategorySnapshot = category?.Name;
         task.Priority = request.Priority;
-        task.StartAt = request.StartAt;
-        task.DueAt = request.DueAt;
+        task.StartAt = startAt;
+        task.DueAt = dueAt;
         task.RequiresReview = request.RequiresReview;
         task.RequiresCompletionNote = request.RequiresCompletionNote;
         task.RequiresEvidence = request.RequiresEvidence;
@@ -239,7 +269,7 @@ public class EmployeeTaskService : IEmployeeTaskService
         if (dueChanged)
         {
             await NotifyAssigneeAsync(task, "task_due_changed", "Deadline gewijzigd",
-                $"De deadline van \"{task.Title}\" is {(task.DueAt is { } due ? $"gewijzigd naar {due:dd/MM/yyyy HH:mm}" : "verwijderd")}.",
+                $"De deadline van \"{task.Title}\" is {(task.DueAt is { } due ? $"gewijzigd naar {TenantTimeZone.ToWallClock(due, zone):dd/MM/yyyy HH:mm}" : "verwijderd")}.",
                 cancellationToken);
         }
 
@@ -708,13 +738,14 @@ public class EmployeeTaskService : IEmployeeTaskService
             .ToListAsync(cancellationToken);
 
         var now = _timeProvider.GetUtcNow().UtcDateTime;
+        var redistributeZone = await TenantTimeZone.ForTenantAsync(_dbContext, _tenantContext.TenantId, cancellationToken);
         foreach (var task in open)
         {
             if (action == "reassign")
             {
                 var oldAssignee = task.AssignedEmployeeId;
                 task.AssignedEmployeeId = request.TargetEmployeeId!.Value;
-                if (request.NewDueAt is { } newDue)
+                if (NormalizeMoment(request.NewDueAt, redistributeZone) is { } newDue)
                 {
                     task.DueAt = newDue;
                     task.OverdueNotifiedAt = null;
