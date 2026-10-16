@@ -132,3 +132,27 @@
   overflow-wrap: anywhere;
   color: var(--text-h);
 }
+
+/* Facts (label → value) behind "Uitklappen": events that are not an old → new change. */
+.ui-history-facts {
+  display: grid;
+  grid-template-columns: minmax(0, max-content) minmax(0, 1fr);
+  gap: 4px var(--space-3);
+  margin: var(--space-2) 0 0;
+  font-size: var(--text-sm);
+}
+
+.ui-history-facts > div {
+  display: contents;
+}
+
+.ui-history-facts dt {
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.ui-history-facts dd {
+  margin: 0;
+  color: var(--text-h);
+  overflow-wrap: anywhere;
+}

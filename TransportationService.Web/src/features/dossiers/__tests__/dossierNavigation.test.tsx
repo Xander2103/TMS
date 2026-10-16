@@ -49,6 +49,19 @@ vi.mock('../api/dossierNotesApi', async () => {
   const actual = await vi.importActual<typeof import('../api/dossierNotesApi')>('../api/dossierNotesApi')
   return { ...actual, listDossierNotes: () => Promise.resolve([]) }
 })
+// T-H6: the dossier history is its own endpoint, readable with dossiers.view.
+vi.mock('../api/dossierTimelineApi', async () => {
+  const actual = await vi.importActual<typeof import('../api/dossierTimelineApi')>('../api/dossierTimelineApi')
+  return {
+    ...actual,
+    getDossierTimeline: () => Promise.resolve([
+      {
+        id: 'e-1', timestamp: '2026-09-20T07:00:00Z', category: 'dossier', type: 'dossier.created', title: 'Dossier DOS-2026-0001 aangemaakt',
+        detail: null, actorKind: 'User', actorName: 'Piet Planner', fields: [],
+      },
+    ]),
+  }
+})
 
 const orders = vi.hoisted(() => ({ get: vi.fn(), update: vi.fn(), saveLines: vi.fn(), setOneOff: vi.fn() }))
 vi.mock('../../transport-orders/api/transportOrdersApi', () => ({
@@ -466,7 +479,7 @@ describe('Dossier navigation — subnav, deep links and history', () => {
     expect(document.getElementById('sectie-documenten')).not.toBeNull()
   })
 
-  it('"Open historiek" navigates to the history tab with notes and the permission-gated audit trail', async () => {
+  it('"Open historiek" navigates to the history tab with notes and the dossier timeline', async () => {
     const user = userEvent.setup()
     const { router } = renderPage()
     await screen.findByText('Nexans site Antwerpen')
@@ -476,8 +489,9 @@ describe('Dossier navigation — subnav, deep links and history', () => {
     const history = document.getElementById('sectie-notities')!
     expect(history).not.toBeNull()
     expect(within(history).getByRole('heading', { name: 'Wijzigingshistoriek' })).toBeInTheDocument()
-    // No audit_logs.view: the panel explains instead of fetching.
-    expect(within(history).getByText('Je hebt geen rechten om de historiek te bekijken.')).toBeInTheDocument()
+    // T-H6: no audit_logs.view needed — the dossier's own read right shows the story.
+    expect(await within(history).findByText('Dossier DOS-2026-0001 aangemaakt')).toBeInTheDocument()
+    expect(within(history).queryByText('Je hebt geen rechten om de historiek te bekijken.')).not.toBeInTheDocument()
     expect(await within(history).findByText('Geen notities.')).toBeInTheDocument()
     expect(subnavLink('Historiek')).toHaveAttribute('aria-current', 'page')
   })

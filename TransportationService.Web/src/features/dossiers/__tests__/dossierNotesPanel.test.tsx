@@ -30,7 +30,7 @@ vi.mock('../api/dossierNotesApi', async () => {
   return { ...actual, ...api }
 })
 
-// Only the audit panel talks to apiClient directly here (the notes api is mocked above).
+// Only the dossier timeline talks to apiClient directly here (the notes api is mocked above).
 const getJson = vi.hoisted(() => vi.fn())
 vi.mock('../../../api/apiClient', async () => {
   const actual = await vi.importActual<typeof import('../../../api/apiClient')>('../../../api/apiClient')
@@ -442,54 +442,120 @@ describe('NotePreview', () => {
   })
 })
 
+function renderHistorySection() {
+  const workspace = {
+    dossier: dossierDetail({ notes: 'Legacy vrije tekst' }),
+    canManage: true,
+    isOpen: true,
+    busy: false,
+    removeRelation: vi.fn(),
+    reloadDossier: vi.fn(),
+  } as unknown as DossierWorkspace
+
+  return render(
+    <MemoryRouter>
+      <DossierWorkspaceContext.Provider value={workspace}>
+        <DossierHistorySection />
+      </DossierWorkspaceContext.Provider>
+    </MemoryRouter>,
+  )
+}
+
+const TIMELINE = [
+  {
+    id: 'e-1', timestamp: '2026-10-16T07:12:00Z', category: 'orders', type: 'order.portal_submitted',
+    title: 'Transportaanvraag ORD-0050 ingediend via het klantportaal', detail: null, actorKind: 'User', actorName: 'Karel Klant', fields: [],
+  },
+  {
+    id: 'e-2', timestamp: '2026-10-16T08:04:00Z', category: 'planning', type: 'trip.planned',
+    title: 'Rit RIT-0023 gepland met chauffeur Jan Peeters en voertuig VRT-0001', detail: null, actorKind: 'User', actorName: 'Piet Planner',
+    fields: [{ label: 'Chauffeur', value: 'Jan Peeters', before: null }],
+  },
+  {
+    id: 'e-3', timestamp: '2026-10-16T13:45:00Z', category: 'dossier', type: 'dossier.confirmed_automatically',
+    title: 'Dossier automatisch bevestigd na voltooiing van rit RIT-0023', detail: null, actorKind: 'System', actorName: null,
+    fields: [{ label: 'Aanleiding', value: 'Laatste handeling door Jan Peeters', before: null }],
+  },
+  {
+    id: 'e-4', timestamp: '2026-10-16T15:00:00Z', category: 'dossier', type: 'dossier.reopened',
+    title: 'Dossier heropend', detail: 'Reden: Herlevering toevoegen', actorKind: 'User', actorName: 'Piet Planner',
+    fields: [{ label: 'Status', value: 'Open', before: 'Bevestigd' }],
+  },
+]
+
 describe('DossierHistorySection', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    auth.permissions = new Set(['audit_logs.view'])
+    // T-H6: only the dossier's read right — no audit_logs.view.
+    auth.permissions = new Set(['dossiers.view'])
   })
 
-  it('renders user notes and the audit trail as two separate blocks', async () => {
+  it('renders user notes and the dossier timeline as two separate blocks', async () => {
     api.listDossierNotes.mockResolvedValue([note({ text: 'Handmatige notitie' })])
-    getJson.mockResolvedValue({
-      items: [
-        {
-          id: 'al-1', userId: 'u-1', entityType: 'TransportDossier', entityId: 'd-1', action: 'Updated',
-          oldValuesJson: '{"Title":"Oud"}', newValuesJson: '{"Title":"Nieuw"}', timestamp: '2026-09-20T07:00:00Z',
-        },
-      ],
-      totalCount: 1, page: 1, pageSize: 50,
-    })
-    const workspace = {
-      dossier: dossierDetail({ notes: 'Legacy vrije tekst' }),
-      canManage: true,
-      isOpen: true,
-      busy: false,
-      removeRelation: vi.fn(),
-      reloadDossier: vi.fn(),
-    } as unknown as DossierWorkspace
-
-    render(
-      <MemoryRouter>
-        <DossierWorkspaceContext.Provider value={workspace}>
-          <DossierHistorySection />
-        </DossierWorkspaceContext.Provider>
-      </MemoryRouter>,
-    )
+    getJson.mockResolvedValue(TIMELINE)
+    renderHistorySection()
 
     expect(await screen.findByText('Handmatige notitie')).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Notities' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Wijzigingshistoriek' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: ADD })).toBeInTheDocument()
+    expect(getJson).toHaveBeenCalledWith('/api/dossiers/d-1/timeline', expect.anything())
+    expect(screen.queryByText('Je hebt geen rechten om de historiek te bekijken.')).not.toBeInTheDocument()
 
-    // The audit event lives in the history timeline, never in the notes list — and vice versa (B25).
-    const auditEvent = (await screen.findByText('Titel gewijzigd van Oud naar Nieuw')).closest('article')!
+    // The timeline event lives in the history, never in the notes list — and vice versa (B25).
+    const planned = (await screen.findByText('Rit RIT-0023 gepland met chauffeur Jan Peeters en voertuig VRT-0001')).closest('article')!
     const notesList = screen.getByText('Handmatige notitie').closest('ul, ol')!
-    expect(notesList).not.toContainElement(auditEvent)
-    expect(auditEvent).toHaveTextContent('Bijgewerkt door Onbekende gebruiker')
-    expect(auditEvent).not.toContainElement(screen.getByText('Handmatige notitie'))
-    expect(getJson).toHaveBeenCalledWith(expect.stringContaining('/api/audit-logs?entityType=TransportDossier&entityId=d-1'))
+    expect(notesList).not.toContainElement(planned)
+    expect(planned).toHaveTextContent('Piet Planner')
+    expect(planned).toHaveTextContent('Planning')
 
     // The legacy free text is no longer a separate block once the notes loaded.
     expect(screen.queryByText('Legacy vrije tekst')).not.toBeInTheDocument()
+  })
+
+  it('reads as a story: oldest first, automatic events by Systeem, details behind Uitklappen', async () => {
+    api.listDossierNotes.mockResolvedValue([])
+    getJson.mockResolvedValue(TIMELINE)
+    const user = userEvent.setup()
+    renderHistorySection()
+
+    const auto = (await screen.findByText('Dossier automatisch bevestigd na voltooiing van rit RIT-0023')).closest('article')!
+    expect(within(auto).getByText('Systeem')).toBeInTheDocument()
+    expect(auto).not.toHaveTextContent('Jan Peeters')
+    await user.click(within(auto).getByRole('button', { name: 'Uitklappen' }))
+    expect(within(auto).getByText('Aanleiding')).toBeInTheDocument()
+    expect(within(auto).getByText('Laatste handeling door Jan Peeters')).toBeInTheDocument()
+
+    const reopened = screen.getByText('Dossier heropend').closest('article')!
+    expect(reopened).toHaveTextContent('Reden: Herlevering toevoegen')
+    await user.click(within(reopened).getByRole('button', { name: 'Uitklappen' }))
+    const row = within(reopened).getByRole('row', { name: /Status/ })
+    expect(row).toHaveTextContent('Bevestigd')
+    expect(row).toHaveTextContent('Open')
+
+    const titles = screen.getAllByRole('article').map((article) => article.querySelector('.ui-history-summary')?.textContent)
+    expect(titles.filter(Boolean)).toEqual(TIMELINE.map((event) => event.title))
+  })
+
+  it('filters by category with the chips that have events', async () => {
+    api.listDossierNotes.mockResolvedValue([])
+    getJson.mockResolvedValue(TIMELINE)
+    const user = userEvent.setup()
+    renderHistorySection()
+
+    const chips = await screen.findByRole('group', { name: 'Toon gebeurtenissen' })
+    expect(within(chips).getAllByRole('button').map((b) => b.textContent)).toEqual(['Alles', 'Dossier', 'Opdrachten', 'Planning'])
+    await user.click(within(chips).getByRole('button', { name: 'Planning' }))
+    expect(screen.getByText('Rit RIT-0023 gepland met chauffeur Jan Peeters en voertuig VRT-0001')).toBeInTheDocument()
+    expect(screen.queryByText('Dossier heropend')).not.toBeInTheDocument()
+    expect(screen.queryByText('Transportaanvraag ORD-0050 ingediend via het klantportaal')).not.toBeInTheDocument()
+  })
+
+  it('says so when the history cannot be loaded', async () => {
+    api.listDossierNotes.mockResolvedValue([])
+    getJson.mockRejectedValue(new Error('boom'))
+    renderHistorySection()
+
+    expect(await screen.findByText('De historiek kon niet worden geladen.')).toBeInTheDocument()
   })
 })

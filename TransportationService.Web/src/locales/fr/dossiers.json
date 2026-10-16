@@ -745,5 +745,23 @@
       "documenten": "Documents",
       "notities": "Notes"
     }
+  },
+  "timeline": {
+    "loadFailed": "L'historique n'a pas pu être chargé.",
+    "loading": "Chargement de l'historique…",
+    "empty": "Pas encore d'historique pour ce dossier.",
+    "emptyFiltered": "Aucun événement dans cette catégorie.",
+    "filterLabel": "Afficher les événements",
+    "system": "Système",
+    "unknownUser": "Utilisateur inconnu",
+    "categories": {
+      "all": "Tout",
+      "dossier": "Dossier",
+      "orders": "Ordres",
+      "planning": "Planning",
+      "pricing": "Prix",
+      "documents": "Documents",
+      "incidents": "Incidents"
+    }
   }
 }

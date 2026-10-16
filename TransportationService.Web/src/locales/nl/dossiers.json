@@ -745,5 +745,23 @@
       "documenten": "Documenten",
       "notities": "Notities"
     }
+  },
+  "timeline": {
+    "loadFailed": "De historiek kon niet worden geladen.",
+    "loading": "Historiek laden…",
+    "empty": "Nog geen historiek voor dit dossier.",
+    "emptyFiltered": "Geen gebeurtenissen in deze categorie.",
+    "filterLabel": "Toon gebeurtenissen",
+    "system": "Systeem",
+    "unknownUser": "Onbekende gebruiker",
+    "categories": {
+      "all": "Alles",
+      "dossier": "Dossier",
+      "orders": "Opdrachten",
+      "planning": "Planning",
+      "pricing": "Prijs",
+      "documents": "Documenten",
+      "incidents": "Incidenten"
+    }
   }
 }

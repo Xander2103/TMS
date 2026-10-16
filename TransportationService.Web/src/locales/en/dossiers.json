@@ -745,5 +745,23 @@
       "documenten": "Documents",
       "notities": "Notes"
     }
+  },
+  "timeline": {
+    "loadFailed": "The history could not be loaded.",
+    "loading": "Loading history…",
+    "empty": "No history for this file yet.",
+    "emptyFiltered": "No events in this category.",
+    "filterLabel": "Show events",
+    "system": "System",
+    "unknownUser": "Unknown user",
+    "categories": {
+      "all": "All",
+      "dossier": "File",
+      "orders": "Orders",
+      "planning": "Planning",
+      "pricing": "Price",
+      "documents": "Documents",
+      "incidents": "Incidents"
+    }
   }
 }

@@ -1,17 +1,17 @@
 import { useLocale } from '../../../../i18n/localeContext'
 import { formatDate as formatIsoDate } from '../../../../utils/dates'
-import { AuditHistoryPanel } from '../../../auditing/components/AuditHistoryPanel'
-import { dossierAuditLabels } from '../../dossierAuditLabels'
 import { dossierLifecycleFacts } from '../../dossierDisplay'
 import { useDossierWorkspace } from '../../dossierWorkspace'
 import { DossierNotesPanel } from '../../notes/DossierNotesPanel'
 import { useRegisterDossierSection } from '../../sectionRegistry'
 import { DossierMoreSection } from '../DossierMoreSection'
+import { DossierTimelinePanel } from '../DossierTimelinePanel'
 
 /**
- * Historiek workspace: user notes (left) next to the automatic audit trail (right, permission-gated
- * inside the panel) — two separate sources that are never mixed — plus description, lifecycle
- * facts and the compat block with financials, related dossiers and incidents.
+ * Historiek workspace: user notes (left) next to the dossier's reconstructed story (right, T-H6:
+ * orders, planning, prices, documents, incidents and lifecycle — readable with dossiers.view) —
+ * two separate sources that are never mixed — plus description, lifecycle facts and the compat
+ * block with financials, related dossiers and incidents.
  */
 export function DossierHistorySection() {
   const { t } = useLocale()
@@ -54,7 +54,7 @@ export function DossierHistorySection() {
         </div>
         <div>
           <h3>{t('dossiers.overview.historyAudit')}</h3>
-          <AuditHistoryPanel entityType="TransportDossier" entityId={dossier.id} valueLabels={dossierAuditLabels} />
+          <DossierTimelinePanel dossierId={dossier.id} />
         </div>
       </div>
       <DossierMoreSection

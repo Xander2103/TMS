@@ -30,6 +30,13 @@ export interface HistoryItem {
   /** Free-text reason/note recorded with the event. */
   detail?: string | null
   changes?: HistoryChange[]
+  /** Plain facts behind "Uitklappen" (label → value), for events that are not an old → new change. */
+  facts?: HistoryFact[]
+}
+
+export interface HistoryFact {
+  label: string
+  value: string
 }
 
 export interface HistoryCategoryFilter {
@@ -97,6 +104,8 @@ export function HistoryTimeline({
         <ol className="ui-history-list">
           {shown.map((item) => {
             const changes = item.changes ?? []
+            const facts = item.facts ?? []
+            const expandable = changes.length > 0 || facts.length > 0
             const isOpen = expanded.has(item.id)
             return (
               <li key={item.id}>
@@ -108,10 +117,20 @@ export function HistoryTimeline({
                   </header>
                   {item.summary && <p className="ui-history-summary">{item.summary}</p>}
                   {item.detail && <p className="ui-history-detail">{item.detail}</p>}
-                  {changes.length > 0 && !limit && (
+                  {expandable && !limit && (
                     <button type="button" className="ui-history-toggle" aria-expanded={isOpen} onClick={() => toggle(item.id)}>
                       {isOpen ? t('ui.history.collapse') : t('ui.history.expand')}
                     </button>
+                  )}
+                  {facts.length > 0 && isOpen && (
+                    <dl className="ui-history-facts">
+                      {facts.map((fact, index) => (
+                        <div key={`${item.id}-fact-${index}`}>
+                          <dt>{fact.label}</dt>
+                          <dd>{fact.value}</dd>
+                        </div>
+                      ))}
+                    </dl>
                   )}
                   {changes.length > 0 && isOpen && (
                     <table className="ui-history-table">
