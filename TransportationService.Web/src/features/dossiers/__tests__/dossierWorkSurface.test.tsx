@@ -416,7 +416,7 @@ describe('Dossier work surface — several transport orders', () => {
     expect(orders.get).not.toHaveBeenCalledWith('o-2')
   })
 
-  it('never presents a partial aggregate as the dossier price: € 450 is marked "1 van 2 activiteiten geprijsd"', async () => {
+  it('never presents a partial aggregate as the dossier price: € 450 is marked "1 van 2 onderdelen afgehandeld"', async () => {
     renderPage(PRICE_TAB)
     await screen.findByRole('heading', { name: 'Verkoop & prijs' })
     const price = document.getElementById('sectie-prijs')!
@@ -800,7 +800,7 @@ describe('Dossier work surface — mixed dossier: transport + storage + crane', 
     orders.get.mockResolvedValue(firstOrder())
   })
 
-  it('totals over all priced units: € 650,00 with "2 van 3 activiteiten geprijsd" and one row per unit', async () => {
+  it('totals over all priced units: € 650,00 with "2 van 3 onderdelen afgehandeld" and one row per unit', async () => {
     const user = userEvent.setup()
     renderPage(ROUTE_TAB)
     await screen.findByDisplayValue('Nexans site Antwerpen')

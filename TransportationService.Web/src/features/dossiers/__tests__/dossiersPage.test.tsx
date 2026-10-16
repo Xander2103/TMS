@@ -928,7 +928,7 @@ describe('DossiersPage (lijst)', () => {
       expect(partial).toHaveTextContent(/€\s100,00/)
       expect(within(partial).getByText('Gedeeltelijk 1/2')).toHaveAttribute(
         'title',
-        'Slechts 1 van 2 activiteiten hebben een prijs; het bedrag is geen dossiertotaal.',
+        '1 van 2 onderdelen afgehandeld; het bedrag is geen dossiertotaal.',
       )
 
       // Geen prijs is nooit € 0,00.

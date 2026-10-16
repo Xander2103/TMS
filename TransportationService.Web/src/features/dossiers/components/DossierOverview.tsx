@@ -95,10 +95,11 @@ export function DossierOverview() {
   // --- Verkoop & prijs ---------------------------------------------------------------------
   const fin = dossier.financials
   const billable = fin.billableActivityCount ?? dossier.orders.length
-  const priced = fin.pricedActivityCount ?? fin.pricedOrderCount ?? 0
+  // M11: settled (Priced or confirmed Free) is the shared server count — the same as the list row.
+  const priced = fin.settledActivityCount ?? fin.pricedActivityCount ?? fin.pricedOrderCount ?? 0
   const zero = fin.zeroPricedActivityCount ?? 0
   const isPriced = isDossierPriced(dossier)
-  const priceStatus = !isPriced
+  const priceStatus = !isPriced || fin.priceStatus === 'NotPriced'
     ? { label: t('dossiers.overview.priceNone'), tone: 'danger' as BadgeTone }
     : priced < billable
       ? { label: t('dossiers.overview.pricePartial'), tone: 'warning' as BadgeTone }

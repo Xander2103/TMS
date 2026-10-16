@@ -67,7 +67,7 @@
     "noOrderNoActivity": "Voeg een transportactiviteit toe om een prijs te kunnen invoeren.",
     "orderCreated": "Transportopdracht aangemaakt.",
     "linesPermission": "Je hebt geen rechten om verkooplijnen toe te voegen.",
-    "partialTotal": "{priced} van {total} activiteiten geprijsd",
+    "partialTotal": "{priced} van {total} onderdelen afgehandeld",
     "forActivity": "Activiteit {name}",
     "agreedHintActivity": "Afgesproken verkoopprijs voor deze activiteit. Leeg laten wist de prijs; € 0 is een bewuste prijs.",
     "agreedClearedActivity": "Afgesproken prijs verwijderd.",
@@ -84,7 +84,7 @@
   },
   "list": {
     "partialPriced": "{priced}/{total} geprijsd",
-    "partialPricedTitle": "Slechts {priced} van {total} activiteiten hebben een prijs; het bedrag is geen dossiertotaal.",
+    "partialPricedTitle": "{priced} van {total} onderdelen afgehandeld; het bedrag is geen dossiertotaal.",
     "zeroPricedTitle_one": "Verkoopprijs is € 0,00. Controleer of dit bewust is.",
     "zeroPricedTitle_other": "Verkoopprijs is € 0,00 voor {count} activiteiten. Controleer of dit bewust is."
   }

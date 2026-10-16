@@ -493,7 +493,7 @@ describe('Dossier overview (spec §17)', () => {
     // Sales: the dossier total, "x van y" from the DTO counters and the units still without a price.
     const price = overviewCard('Verkoop & prijs')
     expect(price.getByText(/€\s450,00/)).toBeInTheDocument()
-    expect(price.getByText('2 van 3 activiteiten geprijsd')).toBeInTheDocument()
+    expect(price.getByText('2 van 3 onderdelen afgehandeld')).toBeInTheDocument()
     const missing = within(price.getByRole('list', { name: 'Ontbrekende prijzen' })).getAllByRole('listitem')
     expect(missing).toHaveLength(1)
     expect(missing[0]).toHaveTextContent('0006')

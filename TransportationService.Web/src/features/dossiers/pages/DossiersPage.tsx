@@ -673,7 +673,8 @@ function PriceCell({ row }: { row: DossierListItem }) {
   const { t } = useLocale()
   const status = dossierListPriceStatus(row)
   if (row.agreedPriceTotal === null && !status) return <>{EMPTY}</>
-  const counts = { priced: row.pricedActivityCount, total: row.billableActivityCount }
+  // M11: the SAME settled count as the dossier detail ("x van y onderdelen afgehandeld").
+  const counts = { priced: row.settledActivityCount ?? row.pricedActivityCount, total: row.billableActivityCount }
   const hasAmount = row.agreedPriceTotal !== null
   return (
     <span className="dossier-list-price">

@@ -208,7 +208,8 @@ function DossierDetailContent() {
   // price target is the selected unit, else the route target when billable, else the first
   // STANDALONE billable unit — never a different transport activity than the route works on,
   // because the loaded order belongs to the route target.
-  const billableActivities = orderedActivities.filter((a) => a.isBillable !== false)
+  // M11: a cancelled order/activity is no commercial component any more (server: countsForPricing).
+  const billableActivities = orderedActivities.filter((a) => a.isBillable !== false && a.countsForPricing !== false)
   const priceActivity =
     (selectedActivityId ? billableActivities.find((a) => a.id === selectedActivityId) : undefined) ??
     (routeActivity && routeActivity.isBillable !== false ? routeActivity : undefined) ??

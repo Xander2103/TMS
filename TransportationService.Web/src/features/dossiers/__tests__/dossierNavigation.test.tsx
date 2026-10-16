@@ -309,11 +309,11 @@ describe('Dossier navigation — the Overzicht is a read-only summary', () => {
     expect(within(activities).getByText('+ 1 andere activiteit')).toBeInTheDocument()
   })
 
-  it('summarises the price: € 450,00 marked "1 van 2 activiteiten geprijsd" and "Gedeeltelijk"', async () => {
+  it('summarises the price: € 450,00 marked "1 van 2 onderdelen afgehandeld" and "Gedeeltelijk"', async () => {
     renderPage()
     const price = await screen.findByRole('article', { name: 'Verkoop & prijs' })
     expect(within(price).getByText(/€\s450,00/)).toBeInTheDocument()
-    expect(within(price).getByText('1 van 2 activiteiten geprijsd')).toBeInTheDocument()
+    expect(within(price).getByText('1 van 2 onderdelen afgehandeld')).toBeInTheDocument()
     // The unit that still needs a price is named.
     expect(within(within(price).getByRole('list', { name: 'Ontbrekende prijzen' })).getByRole('listitem')).toHaveTextContent('Opslag')
     expect(within(price).getByText('Gedeeltelijk')).toBeInTheDocument()
@@ -328,7 +328,7 @@ describe('Dossier navigation — the Overzicht is a read-only summary', () => {
     const price = await screen.findByRole('article', { name: 'Verkoop & prijs' })
     expect(within(price).getByText('Nog geen prijs')).toBeInTheDocument()
     expect(within(price).getByText('Geen prijs')).toBeInTheDocument()
-    expect(within(price).getByText('0 van 1 activiteiten geprijsd')).toBeInTheDocument()
+    expect(within(price).getByText('0 van 1 onderdelen afgehandeld')).toBeInTheDocument()
     expect(within(price).queryByText(/€\s0,00/)).not.toBeInTheDocument()
   })
 
