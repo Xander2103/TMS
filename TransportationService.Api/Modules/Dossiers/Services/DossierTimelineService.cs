@@ -229,12 +229,29 @@ public class DossierTimelineService : IDossierTimelineService
                 .Where(e => e.TenantId == tenantId && referencedEntityIds.Contains(e.Id))
                 .ToDictionaryAsync(e => e.Id, e => e.TradingName ?? e.LegalName, cancellationToken);
 
+        // Standalone activity assignments (T-H7) name their operator and vehicle too.
+        var activityResourceIds = dossierAudits
+            .Where(r => r.Action == "ActivityAssigned")
+            .SelectMany(r => { var v = Json(r.NewValuesJson); return new[] { GuidOf(v, "DriverId"), GuidOf(v, "VehicleId") }; })
+            .Where(id => id is not null).Select(id => id!.Value).Where(id => !resourceIds.Contains(id)).Distinct().ToList();
+        if (activityResourceIds.Count > 0)
+        {
+            foreach (var (id, name) in await DriverNamesAsync(tenantId, activityResourceIds, cancellationToken)) driverNames[id] = name;
+            foreach (var v in await _dbContext.Vehicles.AsNoTracking().IgnoreQueryFilters()
+                         .Where(v => v.TenantId == tenantId && activityResourceIds.Contains(v.Id))
+                         .Select(v => new { v.Id, v.InternalNumber, v.LicensePlate }).ToListAsync(cancellationToken))
+            {
+                vehicleNames[v.Id] = Plate(v.InternalNumber, v.LicensePlate);
+            }
+        }
+
         foreach (var row in dossierAudits)
         {
             var after = Json(row.NewValuesJson);
             var before = Json(row.OldValuesJson);
             var ev = DossierAuditEvent(row, before, after, activities, typeNameByCode,
-                id => otherOrderNumbers.GetValueOrDefault(id, OrderNumber(id)), dossierNumbers, customerNames, entityNames);
+                id => otherOrderNumbers.GetValueOrDefault(id, OrderNumber(id)), dossierNumbers, customerNames, entityNames,
+                driverNames, vehicleNames);
             if (ev is not null) events.Add(ev);
         }
 
@@ -774,7 +791,8 @@ public class DossierTimelineService : IDossierTimelineService
         AuditLog row, JsonElement? before, JsonElement? after, IReadOnlyDictionary<Guid, ActivityInfo> activities,
         IReadOnlyDictionary<string, string> typeNameByCode, Func<Guid, string> orderNumber,
         IReadOnlyDictionary<Guid, string> dossierNumbers, IReadOnlyDictionary<Guid, string> customerNames,
-        IReadOnlyDictionary<Guid, string> entityNames)
+        IReadOnlyDictionary<Guid, string> entityNames,
+        IReadOnlyDictionary<Guid, string> driverNames, IReadOnlyDictionary<Guid, string> vehicleNames)
     {
         Event Make(string type, string title, string category = "dossier", int rank = 5) =>
             new() { Id = $"audit:{row.Id}", At = row.Timestamp, Category = category, Type = type, Title = title, UserId = row.UserId, Rank = rank };
@@ -849,6 +867,28 @@ public class DossierTimelineService : IDossierTimelineService
             }
             case "ActivityRemoved":
                 return Make("activity.removed", $"Activiteit {ActivityFromPayload()} verwijderd");
+            // T-H7: standalone activities are executed like orders — their lifecycle is the story too.
+            case "ActivityAssigned":
+            {
+                var driver = GuidOf(after, "DriverId") is { } d ? driverNames.GetValueOrDefault(d) : null;
+                var vehicle = GuidOf(after, "VehicleId") is { } v ? vehicleNames.GetValueOrDefault(v) : null;
+                var ev = Make("activity.assigned", $"Activiteit {ActivityFromPayload()} toegewezen", "planning");
+                ev.Field("Chauffeur", driver).Field("Voertuig", vehicle);
+                if (StrList(after, "OverriddenConflicts").Count > 0) ev.Detail = "Planningsconflict bewust overschreven";
+                return ev;
+            }
+            case "ActivityStarted":
+                return Make("activity.started", $"Activiteit {ActivityFromPayload()} gestart", "planning");
+            case "ActivityCompleted":
+                return Make("activity.completed", $"Activiteit {ActivityFromPayload()} uitgevoerd", "planning", rank: 7);
+            case "ActivityCancelled":
+            {
+                var ev = Make("activity.cancelled", $"Activiteit {ActivityFromPayload()} geannuleerd", "planning");
+                ev.Detail = Str(after, "CancellationReason") is { } reason && !string.IsNullOrWhiteSpace(reason) ? $"Reden: {reason.Trim()}" : null;
+                return ev;
+            }
+            case "ActivityReopened":
+                return Make("activity.reopened", $"Activiteit {ActivityFromPayload()} heropend", "planning");
             case DossierLifecycleService.ActionConfirmedManually:
             {
                 var ev = Make("dossier.confirmed_manually", "Dossier handmatig bevestigd", rank: 9);

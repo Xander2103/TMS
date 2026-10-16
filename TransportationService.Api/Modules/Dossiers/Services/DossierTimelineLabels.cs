@@ -56,6 +56,7 @@ public static class DossierTimelineLabels
         {
             "trip" => $"na voltooiing van rit {reference}",
             "order" => $"na voltooiing van opdracht {reference}",
+            "activity" => $"na afhandeling van activiteit {reference}",
             _ => null,
         };
     }

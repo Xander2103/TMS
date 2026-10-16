@@ -197,6 +197,16 @@ public class StandaloneActivityExecutionTests
         var audit = await h.Db.Context.AuditLogs.AsNoTracking()
             .SingleAsync(a => a.EntityId == dossier.Id.ToString() && a.Action == DossierLifecycleService.ActionConfirmedAutomatically);
         Assert.Contains("activity:Plateau werf B", audit.NewValuesJson);
+
+        // The dossier timeline tells it: both activities executed, then the system confirmed.
+        var timeline = (await new DossierTimelineService(h.Db.Context, new DevTenantContext(h.TenantId))
+            .GetAsync(dossier.Id, CancellationToken.None))!;
+        Assert.Contains(timeline, e => e.Type == "activity.completed" && e.Title.Contains("Kraan werf B") && e.Title.EndsWith("uitgevoerd"));
+        Assert.Contains(timeline, e => e.Type == "activity.completed" && e.Title.Contains("Plateau werf B"));
+        var system = Assert.Single(timeline, e => e.Type == "dossier.confirmed_automatically");
+        Assert.Equal("System", system.ActorKind);
+        Assert.Contains("na afhandeling van activiteit Plateau werf B", system.Title);
+        Assert.DoesNotContain(timeline, e => e.Type == "dossier.changed");
     }
 
     [Fact]
