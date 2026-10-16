@@ -299,6 +299,35 @@ describe('NewDossierPage — one-page intake', () => {
     expect(screen.getByRole('button', { name: 'Dossier aanmaken' })).toBeEnabled()
   })
 
+  it('step navigation (forward/back, Enter) never creates; only "Dossier aanmaken" does (T-H2)', async () => {
+    const user = userEvent.setup()
+    createOrder.mockResolvedValue({ id: 'o-1', orderNumber: 'ORD-0001', dossierId: 'd-77', dossierNumber: 'DOS-0077' })
+    renderPage()
+
+    await pickCustomer(user)
+    await user.click(await screen.findByRole('radio', { name: /Direct transport/ }))
+    const next = (section: string) => screen.getByRole('button', { name: new RegExp(`^Naar ${section}`) })
+    await user.click(next('Route'))
+    await user.type(screen.getAllByLabelText(/Plaats/)[1], 'Gent{Enter}')
+    await user.click(next('Goederen'))
+    await user.type(screen.getByLabelText('Omschrijving'), 'Bouwmateriaal{Enter}')
+    // Back to Route via the step tabs, then forward again with the footer buttons — the
+    // acceptance repro: "Naar Controle" after revisiting a step used to POST.
+    await goTo(user, 'Route')
+    await user.click(next('Goederen'))
+    await user.click(next('Vereisten'))
+    await user.click(next('Controle'))
+    await goTo(user, 'Goederen')
+    await user.click(next('Vereisten'))
+    await user.click(next('Controle'))
+
+    expect(createOrder).not.toHaveBeenCalled()
+    expect(screen.getByText('Bouwmateriaal')).toBeInTheDocument()
+
+    await user.dblClick(screen.getByRole('button', { name: 'Dossier aanmaken' }))
+    await waitFor(() => expect(createOrder).toHaveBeenCalledTimes(1))
+  })
+
   it('submits only once while the request is pending', async () => {
     const user = userEvent.setup()
     let resolveCreate: (value: unknown) => void = () => undefined

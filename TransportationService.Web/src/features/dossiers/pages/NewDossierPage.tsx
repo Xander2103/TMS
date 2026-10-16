@@ -282,6 +282,7 @@ export function NewDossierPage() {
   const { activeId, setActive } = useSectionNavigation(sectionIds, 'basis')
   const activeSection = activeId as NewDossierSectionId
   const sectionHeading = useRef<HTMLHeadingElement>(null)
+  const submittingRef = useRef(false)
   const sectionLabel = (id: NewDossierSectionId) =>
     id === 'vereisten' && onSite ? t('dossiers.new.sections.opmerkingen') : t(`dossiers.new.sections.${id}`)
 
@@ -525,7 +526,22 @@ export function NewDossierPage() {
 
   async function submit(event: FormEvent) {
     event.preventDefault()
-    if (busy) return
+    // Transport acceptance T-H2: ONLY the explicit "Dossier aanmaken" button creates. Implicit
+    // submission (Enter in a field) and any button that changed role while it was being clicked
+    // never reach the create call.
+    const submitter = (event.nativeEvent as SubmitEvent).submitter as HTMLElement | null
+    if (submitter?.dataset.createDossier !== 'true') return
+    // A double click fires two submit events before `busy` re-renders; the ref closes that gap.
+    if (busy || submittingRef.current) return
+    submittingRef.current = true
+    try {
+      await submitConfirmed()
+    } finally {
+      submittingRef.current = false
+    }
+  }
+
+  async function submitConfirmed() {
     if (!customerId) {
       setFormError(t('dossiers.new.customerRequired'))
       goTo('basis')
@@ -982,7 +998,19 @@ export function NewDossierPage() {
       <BackButton to="/dossiers" label={t('dossiers.new.back')} />
       <PageHeader title={t('dossiers.new.title')} subtitle={t('dossiers.new.subtitleIntake')} />
 
-      <form onSubmit={(event) => void submit(event)} noValidate>
+      <form
+        onSubmit={(event) => void submit(event)}
+        onKeyDown={(event) => {
+          // T-H2: Enter in a text field must not trigger the browser's implicit submission
+          // (which "clicks" the default button = Dossier aanmaken). Pickers handle Enter
+          // themselves before this bubbles up; textareas keep their newline.
+          const target = event.target as HTMLElement
+          if (event.key === 'Enter' && target instanceof HTMLInputElement && !['submit', 'button', 'checkbox', 'radio'].includes(target.type)) {
+            event.preventDefault()
+          }
+        }}
+        noValidate
+      >
         <ValidationSummary
           message={formError}
           fieldErrors={{
@@ -1013,21 +1041,21 @@ export function NewDossierPage() {
                 {createIsPrimary ? (
                   <>
                     {nextSection && activeSection !== 'controle' && (
-                      <Button variant="secondary" onClick={() => goTo(nextSection)} disabled={busy}>
+                      <Button key="nav-next" variant="secondary" onClick={() => goTo(nextSection)} disabled={busy}>
                         {t('dossiers.new.nav.next', { section: sectionLabel(nextSection) })}
                       </Button>
                     )}
-                    <Button type="submit" disabled={!submitEnabled}>
+                    <Button key="create" type="submit" data-create-dossier="true" disabled={!submitEnabled}>
                       {busy ? t('dossiers.new.creating') : t('dossiers.new.create')}
                     </Button>
                   </>
                 ) : (
                   <>
-                    <Button type="submit" variant="secondary" disabled={!submitEnabled}>
+                    <Button key="create" type="submit" variant="secondary" data-create-dossier="true" disabled={!submitEnabled}>
                       {busy ? t('dossiers.new.creating') : t('dossiers.new.create')}
                     </Button>
                     {nextSection && (
-                      <Button onClick={() => goTo(nextSection)} disabled={busy}>
+                      <Button key="nav-next" onClick={() => goTo(nextSection)} disabled={busy}>
                         {t('dossiers.new.nav.next', { section: sectionLabel(nextSection) })}
                       </Button>
                     )}
