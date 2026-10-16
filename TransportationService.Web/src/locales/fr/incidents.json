@@ -164,7 +164,9 @@
     "createRedelivery": "Créer une nouvelle livraison",
     "noOrderRights": "Vous n'avez pas les droits pour créer des commandes.",
     "linkOrderFirst": "Liez d'abord la commande originale pour créer une nouvelle livraison.",
-    "changeProposal": "Modifier la proposition"
+    "changeProposal": "Modifier la proposition",
+    "redeliveryConfirmTitle": "Créer une nouvelle livraison ?",
+    "redeliveryConfirmMessage": "Un nouvel ordre de transport (brouillon) est créé pour l'ordre {order}, avec les mêmes arrêts, comme activité « Nouvelle livraison » dans le dossier {dossier}. Le prix et la planification se règlent ensuite."
   },
   "history": {
     "ChargeProposed": "Refacturation proposée",

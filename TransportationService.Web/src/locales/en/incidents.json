@@ -164,7 +164,9 @@
     "createRedelivery": "Create redelivery",
     "noOrderRights": "You do not have permission to create orders.",
     "linkOrderFirst": "Link the original order first to create a redelivery.",
-    "changeProposal": "Change proposal"
+    "changeProposal": "Change proposal",
+    "redeliveryConfirmTitle": "Create redelivery?",
+    "redeliveryConfirmMessage": "A new draft transport order is created for order {order}, with the same stops, as a 'Redelivery' activity in dossier {dossier}. You set price and planning afterwards."
   },
   "history": {
     "ChargeProposed": "Charge proposed",

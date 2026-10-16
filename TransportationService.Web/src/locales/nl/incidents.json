@@ -164,7 +164,9 @@
     "createRedelivery": "Herlevering aanmaken",
     "noOrderRights": "Je hebt geen rechten om orders aan te maken.",
     "linkOrderFirst": "Koppel eerst de originele order om een herlevering aan te maken.",
-    "changeProposal": "Voorstel wijzigen"
+    "changeProposal": "Voorstel wijzigen",
+    "redeliveryConfirmTitle": "Herlevering aanmaken?",
+    "redeliveryConfirmMessage": "Er wordt een nieuwe transportopdracht (concept) aangemaakt voor opdracht {order}, met dezelfde stops, als activiteit 'Herlevering' in dossier {dossier}. Prijs en planning stel je daarna in."
   },
   "history": {
     "ChargeProposed": "Doorrekening voorgesteld",

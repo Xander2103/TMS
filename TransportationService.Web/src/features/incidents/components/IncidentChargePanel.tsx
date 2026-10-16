@@ -4,6 +4,7 @@ import './incidents.css'
 import { formatCurrency } from '../../../utils/numbers'
 import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
+import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { FormField } from '../../../components/ui/FormField'
 import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
@@ -42,6 +43,7 @@ export function IncidentChargePanel({ incident, onUpdated, part = 'all' }: Incid
   const [amount, setAmount] = useState(incident.chargeAmount?.toString() ?? '')
   const [description, setDescription] = useState(incident.chargeDescription ?? '')
   const [busy, setBusy] = useState(false)
+  const [confirmRedelivery, setConfirmRedelivery] = useState(false)
   // B24: while a proposal awaits its decision the form to change it stays folded away.
   const [reproposing, setReproposing] = useState(false)
 
@@ -168,7 +170,7 @@ export function IncidentChargePanel({ incident, onUpdated, part = 'all' }: Incid
           <Button
             variant="secondary"
             disabled={busy}
-            onClick={() => void run(() => createIncidentRedelivery(incident.id), t('incidents.charge.redeliveryCreated'))}
+            onClick={() => setConfirmRedelivery(true)}
           >
             {t('incidents.charge.createRedelivery')}
           </Button>
@@ -177,6 +179,22 @@ export function IncidentChargePanel({ incident, onUpdated, part = 'all' }: Incid
         )
       ) : (
         <p className="customer-form-muted">{t('incidents.charge.linkOrderFirst')}</p>
+      )}
+      {confirmRedelivery && (
+        // M13: a redelivery creates new operational work in the dossier — confirm it first.
+        <ConfirmDialog
+          title={t('incidents.charge.redeliveryConfirmTitle')}
+          message={t('incidents.charge.redeliveryConfirmMessage', {
+            order: incident.transportOrderNumber ?? '—',
+            dossier: incident.dossierNumber ?? '—',
+          })}
+          confirmLabel={t('incidents.charge.createRedelivery')}
+          onConfirm={() => {
+            setConfirmRedelivery(false)
+            void run(() => createIncidentRedelivery(incident.id), t('incidents.charge.redeliveryCreated'))
+          }}
+          onCancel={() => setConfirmRedelivery(false)}
+        />
       )}
     </>
   )

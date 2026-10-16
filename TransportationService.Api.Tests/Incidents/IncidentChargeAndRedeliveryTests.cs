@@ -196,6 +196,27 @@ public class IncidentChargeAndRedeliveryTests
     }
 
     [Fact]
+    public async Task Redelivery_IsAnActivityOfTheDossier_NotOnlyALinkedOrder()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var typeId = Guid.NewGuid();
+        h.Db.Context.ActivityTypes.Add(new TransportationService.Api.Modules.Dossiers.Entities.ActivityType
+        {
+            Id = typeId, TenantId = h.TenantId, Code = "HERLEVERING", Name = "Herlevering", IsActive = true, HasStops = true,
+        });
+        await h.Db.Context.SaveChangesAsync();
+        var id = await h.IncidentAsync();
+
+        var detail = await h.Sut.CreateRedeliveryAsync(id, CancellationToken.None);
+
+        var activity = await h.Db.Context.DossierActivities.SingleAsync(a => a.LinkedTransportOrderId == detail!.LinkedRedeliveryOrderId);
+        Assert.Equal(h.DossierId, activity.DossierId);
+        Assert.Equal(typeId, activity.ActivityTypeId);
+        Assert.Equal("Herlevering ORD-0001", activity.Label);
+    }
+
+    [Fact]
     public async Task ProblemList_MergesOpenIncidentsAndExceptions()
     {
         var h = await SeedAsync();

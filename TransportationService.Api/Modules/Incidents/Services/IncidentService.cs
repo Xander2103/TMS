@@ -815,6 +815,31 @@ public class IncidentService : IIncidentService
                 Id = Guid.NewGuid(), TenantId = tenantId,
                 DossierId = targetDossierId, TransportOrderId = redelivery.Id,
             });
+
+            // Transport acceptance M13: the redelivery is operational work of the dossier — an
+            // activity ("Herlevering" type, else the original order's own activity type) linked to
+            // the new order, so it is planned, priced and executed from the dossier workspace like
+            // any other activity instead of hiding under "Gekoppelde opdrachten".
+            var activityTypeId = await _dbContext.ActivityTypes
+                    .Where(t => t.TenantId == tenantId && t.Code == "HERLEVERING" && t.IsActive)
+                    .Select(t => (Guid?)t.Id)
+                    .FirstOrDefaultAsync(cancellationToken)
+                ?? await _dbContext.DossierActivities
+                    .Where(a => a.TenantId == tenantId && a.LinkedTransportOrderId == originalOrderId)
+                    .Select(a => (Guid?)a.ActivityTypeId)
+                    .FirstOrDefaultAsync(cancellationToken);
+            if (activityTypeId is { } typeId)
+            {
+                var nextSequence = (await _dbContext.DossierActivities
+                    .Where(a => a.TenantId == tenantId && a.DossierId == targetDossierId)
+                    .MaxAsync(a => (int?)a.Sequence, cancellationToken) ?? 0) + 1;
+                _dbContext.DossierActivities.Add(new Modules.Dossiers.Entities.DossierActivity
+                {
+                    Id = Guid.NewGuid(), TenantId = tenantId, DossierId = targetDossierId,
+                    ActivityTypeId = typeId, Sequence = nextSequence, LinkedTransportOrderId = redelivery.Id,
+                    Label = $"Herlevering {original.OrderNumber}",
+                });
+            }
         }
 
         // Original packages flip to RedeliveryPlanned where the lifecycle allows it.
