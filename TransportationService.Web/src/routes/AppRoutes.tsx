@@ -21,6 +21,9 @@ import { LoadingState } from '../components/feedback/LoadingState'
 import { NotFoundPage } from '../components/feedback/NotFoundPage'
 import { RouteErrorPage } from '../components/feedback/RouteErrorPage'
 import { LOOKUP_RESOURCES } from '../features/master-data/lookupRegistry'
+import { RequirePermission } from './RequirePermission'
+import { navPermissions } from './routePermissions'
+import { EmployeeRecordGuard } from './EmployeeRecordGuard'
 
 /**
  * Route-based code splitting: every page loads as its own chunk on first visit, so the
@@ -256,7 +259,7 @@ const router = createBrowserRouter(
           <Route path="/transport-orders/:id/:section?" element={<TransportOrderDetailPage />} />
           <Route path="/order-imports" element={<OrderImportsPage />} />
           <Route path="/planning" element={<PlanningPage />} />
-          <Route path="/planning-center" element={<PlanningCenterPage />} />
+          <Route path="/planning-center" element={<RequirePermission permissions={navPermissions('/planning-center')}><PlanningCenterPage /></RequirePermission>} />
           <Route path="/operations" element={<OperationsPage />} />
           <Route path="/profitability" element={<ProfitabilityPage />} />
           <Route path="/warehouses" element={<WarehousesPage />} />
@@ -270,14 +273,14 @@ const router = createBrowserRouter(
           <Route path="/warehouse" element={<WarehousePage />} />
           <Route path="/portal" element={<PortalDashboardPage />} />
           <Route path="/portal/planning" element={<PortalPlanningPage />} />
-          <Route path="/employee-planning" element={<EmployeePlanningPage />} />
+          <Route path="/employee-planning" element={<RequirePermission permissions={navPermissions('/employee-planning')}><EmployeePlanningPage /></RequirePermission>} />
           <Route path="/messaging" element={<MessagingPage />} />
           <Route path="/edi" element={<EdiPage />} />
           <Route path="/peppol" element={<PeppolPage />} />
           <Route path="/integrations" element={<IntegrationsPage />} />
           <Route path="/portal/absences" element={<PortalAbsencesPage />} />
           <Route path="/portal/time" element={<MyTimePage />} />
-          <Route path="/attendance" element={<AttendanceOverviewPage />} />
+          <Route path="/attendance" element={<RequirePermission permissions={navPermissions('/attendance')}><AttendanceOverviewPage /></RequirePermission>} />
           <Route path="/portal/qualifications" element={<PortalQualificationsPage />} />
           <Route path="/portal/profile" element={<PortalProfilePage />} />
           <Route path="/my-trips" element={<MyTripsPage />} />
@@ -293,8 +296,8 @@ const router = createBrowserRouter(
           {/* Driver profiles are merged into the personnel dossier: the list is the
               "Chauffeurs" view of /employees, and driver detail redirects to its tab. */}
           <Route path="/drivers" element={<Navigate to="/employees?view=chauffeurs" replace />} />
-          <Route path="/drivers/new" element={<NewDriverPage />} />
-          <Route path="/drivers/:id" element={<DriverDetailPage />} />
+          <Route path="/drivers/new" element={<RequirePermission permissions={['drivers.create']}><NewDriverPage /></RequirePermission>} />
+          <Route path="/drivers/:id" element={<RequirePermission permissions={['drivers.view']}><DriverDetailPage /></RequirePermission>} />
           <Route path="/fleet" element={<FleetDashboardPage />} />
           <Route path="/vehicles" element={<VehiclesPage />} />
           <Route path="/vehicles/new" element={<NewVehiclePage />} />
@@ -324,18 +327,18 @@ const router = createBrowserRouter(
           <Route path="/locations" element={<LocationsPage />} />
           <Route path="/locations/new" element={<NewLocationPage />} />
           <Route path="/locations/:id" element={<LocationDetailPage />} />
-          <Route path="/users" element={<UsersPage />} />
-          <Route path="/users/new" element={<NewUserPage />} />
-          <Route path="/users/:id" element={<UserDetailPage />} />
-          <Route path="/roles" element={<RolesPage />} />
+          <Route path="/users" element={<RequirePermission permissions={navPermissions('/users')}><UsersPage /></RequirePermission>} />
+          <Route path="/users/new" element={<RequirePermission permissions={['users.create']}><NewUserPage /></RequirePermission>} />
+          <Route path="/users/:id" element={<RequirePermission permissions={navPermissions('/users')}><UserDetailPage /></RequirePermission>} />
+          <Route path="/roles" element={<RequirePermission permissions={navPermissions('/roles')}><RolesPage /></RequirePermission>} />
           <Route path="/job-function-mappings" element={<JobFunctionMappingsPage />} />
           <Route path="/inbox" element={<InboxPage />} />
-          <Route path="/roles/:id" element={<RoleDetailPage />} />
-          <Route path="/employees" element={<EmployeesPage />} />
-          <Route path="/employees/new" element={<NewEmployeePage />} />
-          <Route path="/employees/:id" element={<EmployeeDetailPage />} />
+          <Route path="/roles/:id" element={<RequirePermission permissions={navPermissions('/roles')}><RoleDetailPage /></RequirePermission>} />
+          <Route path="/employees" element={<RequirePermission permissions={navPermissions('/employees')}><EmployeesPage /></RequirePermission>} />
+          <Route path="/employees/new" element={<RequirePermission permissions={['employees.create']}><NewEmployeePage /></RequirePermission>} />
+          <Route path="/employees/:id" element={<EmployeeRecordGuard><EmployeeDetailPage /></EmployeeRecordGuard>} />
           <Route path="/settings/hr-reminders" element={<HrReminderSettingsPage />} />
-          <Route path="/absences" element={<AbsencesPage />} />
+          <Route path="/absences" element={<RequirePermission permissions={navPermissions('/absences')}><AbsencesPage /></RequirePermission>} />
           <Route path="/qualifications" element={<QualificationsOverviewPage />} />
           <Route path="/tasks" element={<TasksPage />} />
           <Route path="/settings/task-templates" element={<TaskTemplatesPage />} />
@@ -359,7 +362,7 @@ const router = createBrowserRouter(
           <Route path="/issued-items/templates/:id" element={<IssuedItemTemplateDetailPage />} />
           <Route path="/settings/issued-item-templates" element={<Navigate to="/issued-items/templates" replace />} />
           <Route path="/settings/issued-item-templates/:id" element={<LegacyIssuedItemTemplateRedirect />} />
-          <Route path="/inventory" element={<InventoryOverviewPage />} />
+          <Route path="/inventory" element={<RequirePermission permissions={navPermissions('/inventory')}><InventoryOverviewPage /></RequirePermission>} />
           <Route path="/settings/leave" element={<LeaveSettingsPage />} />
           <Route path="/settings/attendance" element={<AttendanceSettingsPage />} />
           <Route path="/settings/activity-types" element={<ActivityTypesPage />} />

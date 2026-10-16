@@ -4,6 +4,7 @@ import { formatDate } from '../../../utils/dates'
 import { PageHeader } from '../../../components/layout/PageHeader'
 import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { LoadingState } from '../../../components/feedback/LoadingState'
+import { AccessDeniedState } from '../../../components/feedback/AccessDeniedState'
 import { ErrorState } from '../../../components/feedback/ErrorState'
 import { Badge } from '../../../components/ui/Badge'
 import { DetailCard } from '../../../components/ui/DetailCard'
@@ -101,7 +102,7 @@ export function EmployeeDetailPage() {
   const toast = useToast()
   const { t } = useLocale()
   const { hasPermission, user } = useAuth()
-  const { employee, isLoading, error, reload } = useEmployee(id)
+  const { employee, isLoading, error, errorStatus, reload } = useEmployee(id)
   const mutations = useEmployeeMutations()
   // B31: a card save keeps the user on the overview — its state shows in that card's title row
   // ("✓ Opgeslagen · 14:22"); a failure keeps the card in edit mode with "Opnieuw proberen".
@@ -207,6 +208,12 @@ export function EmployeeDetailPage() {
   }, [requestedSection, employee?.id])
 
   if (isLoading) return <LoadingState message={t('employees.detail.loading')} />
+  // A missing employee is not a hiccup: no retry, just the way back. 403 = no rights (defence in
+  // depth behind the route guard).
+  if (errorStatus === 404) {
+    return <ErrorState message={t('employees.errors.employeeNotFound')} backTo="/employees" />
+  }
+  if (errorStatus === 403) return <AccessDeniedState />
   if (error || !employee) return <ErrorState message={error ?? t('employees.errors.employeeNotFound')} onRetry={reload} backTo="/employees" />
 
   const fullName = `${employee.firstName} ${employee.lastName}`

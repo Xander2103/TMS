@@ -175,7 +175,11 @@
   "feedback": {
     "retry": "Réessayer",
     "backToList": "Retour à la liste",
-    "back": "Retour"
+    "back": "Retour",
+    "accessDeniedTitle": "Accès refusé",
+    "accessDeniedMessage": "Vous n'avez pas les droits pour cette page. Demandez l'accès à votre administrateur si vous en avez besoin.",
+    "accessDeniedHome": "Vers la page d'accueil",
+    "accessDeniedMyProfile": "Vers mon profil"
   },
   "save": {
     "saving": "Enregistrement…",

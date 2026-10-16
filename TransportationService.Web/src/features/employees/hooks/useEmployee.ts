@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useLocale } from '../../../i18n/localeContext'
+import { ApiError } from '../../../api/apiClient'
 import { getEmployee } from '../api/employeesApi'
 import type { EmployeeDetail } from '../types/employee'
 
@@ -7,6 +8,8 @@ interface UseEmployeeResult {
   employee: EmployeeDetail | null
   isLoading: boolean
   error: string | null
+  /** HTTP status of the failed load (404 = no such employee, 403 = no rights), when known. */
+  errorStatus: number | null
   reload: () => void
 }
 
@@ -17,6 +20,7 @@ export function useEmployee(id: string): UseEmployeeResult {
   const [employee, setEmployee] = useState<EmployeeDetail | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [errorStatus, setErrorStatus] = useState<number | null>(null)
   const [reloadToken, setReloadToken] = useState(0)
 
   useEffect(() => {
@@ -27,11 +31,13 @@ export function useEmployee(id: string): UseEmployeeResult {
         if (!isMounted) return
         setEmployee(data)
         setError(null)
+        setErrorStatus(null)
         setIsLoading(false)
       })
-      .catch(() => {
+      .catch((err: unknown) => {
         if (!isMounted) return
         setError(t(LOAD_ERROR_KEY))
+        setErrorStatus(err instanceof ApiError ? (err.status ?? null) : null)
         setIsLoading(false)
       })
 
@@ -44,5 +50,5 @@ export function useEmployee(id: string): UseEmployeeResult {
     setReloadToken((token) => token + 1)
   }
 
-  return { employee, isLoading, error, reload }
+  return { employee, isLoading, error, errorStatus, reload }
 }

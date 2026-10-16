@@ -175,7 +175,11 @@
   "feedback": {
     "retry": "Try again",
     "backToList": "Back to the list",
-    "back": "Back"
+    "back": "Back",
+    "accessDeniedTitle": "No access",
+    "accessDeniedMessage": "You do not have permission for this page. Ask your administrator for access if you need it.",
+    "accessDeniedHome": "Go to the start page",
+    "accessDeniedMyProfile": "Go to my profile"
   },
   "save": {
     "saving": "Saving…",

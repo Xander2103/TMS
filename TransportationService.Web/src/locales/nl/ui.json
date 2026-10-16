@@ -175,7 +175,11 @@
   "feedback": {
     "retry": "Opnieuw proberen",
     "backToList": "Terug naar de lijst",
-    "back": "Terug"
+    "back": "Terug",
+    "accessDeniedTitle": "Geen toegang",
+    "accessDeniedMessage": "Je hebt geen rechten voor deze pagina. Vraag je beheerder om toegang als je dit nodig hebt.",
+    "accessDeniedHome": "Naar het startscherm",
+    "accessDeniedMyProfile": "Naar mijn profiel"
   },
   "save": {
     "saving": "Opslaan…",
