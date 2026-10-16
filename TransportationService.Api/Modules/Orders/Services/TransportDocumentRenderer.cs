@@ -3,7 +3,49 @@ using PdfSharp.Pdf;
 
 namespace TransportationService.Api.Modules.Orders.Services;
 
-public sealed record TransportDocumentParty(string Name, string? AddressLine, string? VatNumber);
+/// <summary>
+/// A party block on a document. <c>Detail</c> is an optional second name line (the site/location
+/// name when the party is a company that owns that site); <c>Source</c> says how the party was
+/// derived (see <see cref="TransportDocumentPartySource"/>) so tests and support can see the rule.
+/// </summary>
+public sealed record TransportDocumentParty(
+    string Name, string? AddressLine, string? VatNumber,
+    string? Detail = null, string? Source = null);
+
+/// <summary>How a CMR sender/consignee was derived — see <c>TransportDocumentService.ResolveStopParty</c>.</summary>
+public static class TransportDocumentPartySource
+{
+    /// <summary>The stop's master location belongs to a customer: that customer is the party.</summary>
+    public const string LocationOwner = "LocationOwner";
+
+    /// <summary>A free-address / unowned location: the stop's own name and address.</summary>
+    public const string StopLocation = "StopLocation";
+
+    /// <summary>The stop is the ordering customer's own address, or the stop carries no name.</summary>
+    public const string OrderingCustomer = "OrderingCustomer";
+
+    /// <summary>The tenant's issuing legal entity (the carrier).</summary>
+    public const string LegalEntity = "LegalEntity";
+}
+
+/// <summary>CMR box 3 (place of delivery) / box 4 (place and date of taking over).</summary>
+public sealed record TransportDocumentPlace(string? Label, string? AddressLine, string? CountryCode, DateOnly? Date);
+
+/// <summary>
+/// The CMR consignment parties, derived from the order (never typed by hand):
+/// sender = loading party, consignee = unloading party, carrier = the tenant's legal entity, and the
+/// registration of the trip's vehicle/trailer when the order is planned (null = blank line to fill in).
+/// </summary>
+public sealed record TransportDocumentConsignment(
+    TransportDocumentParty Sender,
+    TransportDocumentParty Consignee,
+    TransportDocumentParty Carrier,
+    TransportDocumentPlace? TakingOver,
+    TransportDocumentPlace? Delivery,
+    string? VehicleRegistration,
+    string? TrailerRegistration,
+    /// <summary>Driver of the trip (work order "operator"); never printed on a CMR.</summary>
+    string? DriverName = null);
 
 public sealed record TransportDocumentStop(string Kind, string? Label, string? AddressLine, string? Reference);
 
@@ -48,7 +90,13 @@ public sealed record TransportDocumentSnapshot(
     /// <summary>D2: only for Kind == "WorkOrder".</summary>
     TransportDocumentWorkOrder? WorkOrder = null,
     /// <summary>D6: only for an issued document (see <see cref="TransportDocumentReference"/>).</summary>
-    TransportDocumentReference? Reference = null);
+    TransportDocumentReference? Reference = null,
+    /// <summary>
+    /// Sender / consignee / carrier / places / vehicle. <see cref="Seller"/> stays the issuing
+    /// entity and <see cref="Customer"/> the ORDERING party (delivery note "Klant", invoicing) —
+    /// on a CMR neither is printed as sender or consignee.
+    /// </summary>
+    TransportDocumentConsignment? Consignment = null);
 
 /// <summary>
 /// Wave 9: delivery-note (leveringsbon) and CMR rendering — the same PDFsharp house pattern
@@ -106,6 +154,12 @@ public static class TransportDocumentRenderer
             return;
         }
 
+        if (snapshot.Kind == "Cmr" && snapshot.Consignment is not null)
+        {
+            AppendCmrPage(document, snapshot, snapshot.Consignment);
+            return;
+        }
+
         var page = document.AddPage();
         var gfx = XGraphics.FromPdfPage(page);
         const double margin = 40.0;
@@ -143,8 +197,14 @@ public static class TransportDocumentRenderer
             y += 6;
         }
 
+        // (A CMR without consignment data — only a hand-built snapshot — keeps the legacy layout.)
         Party(snapshot.Kind == "Cmr" ? "1. Afzender / Expéditeur" : "Vervoerder", snapshot.Seller);
         Party(snapshot.Kind == "Cmr" ? "2. Geadresseerde / Destinataire" : "Klant", snapshot.Customer);
+        if (snapshot.Kind != "Cmr" && snapshot.Consignment is { } deliveryConsignment)
+        {
+            // Leveringsbon: who receives the goods = the unloading party (not the ordering customer).
+            Party("Leveren aan", deliveryConsignment.Consignee);
+        }
 
         gfx.DrawString(snapshot.Kind == "Cmr" ? "3-4. Laad- en losplaats" : "Route", Heading, XBrushes.Black, new XPoint(margin, y + 9));
         y += 14;
@@ -196,6 +256,197 @@ public static class TransportDocumentRenderer
         {
             var x = margin + i * (boxWidth + 10);
             gfx.DrawRectangle(new XPen(XColors.Black, 0.75), x, signatureTop, boxWidth, 70);
+            gfx.DrawString(labels[i], Small, XBrushes.Black, new XPoint(x + 4, signatureTop + 12));
+        }
+    }
+
+    private static readonly XFont BoxLabel = new("Arial", 7, XFontStyleEx.Bold);
+
+    /// <summary>
+    /// CMR in the boxes of the convention: 1 sender, 2 consignee, 3 place of delivery, 4 place and
+    /// date of taking over (left); reference, 16 carrier, 25 registration and the ordering party
+    /// (right); then goods (6-9, 11), remarks (13) and the signature boxes 22-24. The carrier is the
+    /// tenant's legal entity — never the sender. An unplanned order prints an empty registration
+    /// line to be filled in by hand.
+    /// </summary>
+    private static void AppendCmrPage(PdfDocument document, TransportDocumentSnapshot snapshot, TransportDocumentConsignment consignment)
+    {
+        var page = document.AddPage();
+        var gfx = XGraphics.FromPdfPage(page);
+        const double margin = 40.0;
+        const double gap = 6.0;
+        var width = page.Width.Point - margin * 2;
+        var columnWidth = (width - gap) / 2;
+        var leftX = margin;
+        var rightX = margin + columnWidth + gap;
+        var pen = new XPen(XColors.Black, 0.75);
+        var y = margin;
+
+        gfx.DrawString("CMR — VRACHTBRIEF / LETTRE DE VOITURE", Title, XBrushes.Black, new XPoint(margin, y + 14));
+        y += 22;
+        gfx.DrawString($"Opdracht {snapshot.OrderNumber} · {snapshot.OrderDate:dd-MM-yyyy}", Small, XBrushes.Black, new XPoint(margin, y + 8));
+        y += 14;
+
+        string Fit(string text, XFont font, double maxWidth)
+        {
+            if (gfx.MeasureString(text, font).Width <= maxWidth)
+            {
+                return text;
+            }
+
+            var cut = text;
+            while (cut.Length > 1 && gfx.MeasureString(cut + "…", font).Width > maxWidth)
+            {
+                cut = cut[..^1];
+            }
+
+            return cut + "…";
+        }
+
+        void Box(double x, double top, double boxWidth, double height, string label, IEnumerable<(string Text, XFont Font)> lines)
+        {
+            gfx.DrawRectangle(pen, x, top, boxWidth, height);
+            gfx.DrawString(Fit(label, BoxLabel, boxWidth - 8), BoxLabel, XBrushes.Black, new XPoint(x + 4, top + 9));
+            var lineY = top + 21;
+            foreach (var (text, font) in lines)
+            {
+                if (lineY > top + height - 3)
+                {
+                    break;
+                }
+
+                gfx.DrawString(Fit(text, font, boxWidth - 8), font, XBrushes.Black, new XPoint(x + 4, lineY));
+                lineY += ReferenceEquals(font, Small) ? 10 : 11.5;
+            }
+        }
+
+        static IEnumerable<(string, XFont)> PartyLines(TransportDocumentParty party)
+        {
+            yield return (party.Name, Heading);
+            if (party.Detail is { Length: > 0 } detail)
+            {
+                yield return (detail, Body);
+            }
+
+            if (party.AddressLine is { Length: > 0 } address)
+            {
+                yield return (address, Body);
+            }
+
+            if (party.VatNumber is { Length: > 0 } vat)
+            {
+                yield return ($"BTW / TVA: {vat}", Small);
+            }
+        }
+
+        static IEnumerable<(string, XFont)> PlaceLines(TransportDocumentPlace? place, bool withDate)
+        {
+            if (place is null)
+            {
+                yield return ("—", Body);
+                yield break;
+            }
+
+            if (place.Label is { Length: > 0 } label)
+            {
+                yield return (label, Body);
+            }
+
+            var address = string.Join(" ", new[] { place.AddressLine, place.CountryCode }.Where(p => !string.IsNullOrWhiteSpace(p)));
+            if (address.Length > 0)
+            {
+                yield return (address, Body);
+            }
+
+            if (withDate)
+            {
+                yield return (place.Date is { } date ? $"Datum / Date: {date:dd-MM-yyyy}" : "Datum / Date: ____ - ____ - ________", Body);
+            }
+        }
+
+        IEnumerable<(string, XFont)> ReferenceLines()
+        {
+            if (snapshot.Reference is { } reference)
+            {
+                yield return ($"Documentnr.: {reference.DocumentNumber}", Heading);
+                if (reference.DossierNumber is { Length: > 0 } dossier)
+                {
+                    yield return ($"Dossier: {dossier}", Body);
+                }
+
+                yield return ($"Opdracht: {snapshot.OrderNumber}", Body);
+                if (reference.ExternalNumber is { Length: > 0 } external)
+                {
+                    yield return ($"Extern nr.: {external}", Body);
+                }
+            }
+            else
+            {
+                yield return ($"Opdracht: {snapshot.OrderNumber}", Heading);
+                yield return ("Ongenummerd voorbeeld — geen uitgegeven vrachtbrief", Small);
+            }
+        }
+
+        IEnumerable<(string, XFont)> RegistrationLines()
+        {
+            yield return ($"Trekker / Tracteur: {consignment.VehicleRegistration ?? "______________________"}", Body);
+            yield return ($"Oplegger / Remorque: {consignment.TrailerRegistration ?? (consignment.VehicleRegistration is null ? "______________________" : "—")}", Body);
+        }
+
+        IEnumerable<(string, XFont)> OrderingPartyLines()
+        {
+            yield return (snapshot.Customer.Name, Body);
+            if (snapshot.CustomerReference is { Length: > 0 } customerReference)
+            {
+                yield return ($"Klantreferentie: {customerReference}", Body);
+            }
+        }
+
+        const double partyHeight = 74;
+        const double placeHeight = 52;
+        Box(leftX, y, columnWidth, partyHeight, "1. Afzender / Expéditeur", PartyLines(consignment.Sender));
+        Box(rightX, y, columnWidth, partyHeight, "Referentie / Référence", ReferenceLines());
+        y += partyHeight;
+        Box(leftX, y, columnWidth, partyHeight, "2. Geadresseerde / Destinataire", PartyLines(consignment.Consignee));
+        Box(rightX, y, columnWidth, partyHeight, "16. Vervoerder / Transporteur", PartyLines(consignment.Carrier));
+        y += partyHeight;
+        Box(leftX, y, columnWidth, placeHeight, "3. Plaats van aflevering / Lieu de livraison", PlaceLines(consignment.Delivery, withDate: false));
+        Box(rightX, y, columnWidth, placeHeight, "25. Kenteken / Immatriculation", RegistrationLines());
+        y += placeHeight;
+        Box(leftX, y, columnWidth, placeHeight, "4. Plaats en datum inontvangstneming / Prise en charge",
+            PlaceLines(consignment.TakingOver, withDate: true));
+        Box(rightX, y, columnWidth, placeHeight, "Opdrachtgever / Donneur d'ordre", OrderingPartyLines());
+        y += placeHeight;
+
+        // Goods: one line per goods line, then the gross weight (box 11).
+        var goodsLines = snapshot.Lines
+            .Select(line => ($"{line.Quantity:0.##} {line.Unit ?? "stuks"} — {line.Description}"
+                + (line.WeightKg is { } weight ? $" ({weight:0.#} kg)" : ""), Body))
+            .ToList();
+        if (snapshot.TotalWeightKg is { } total)
+        {
+            goodsLines.Add(($"11. Brutogewicht / Poids brut: {total:0.#} kg", Heading));
+        }
+
+        var goodsHeight = Math.Clamp(26 + goodsLines.Count * 11.5, 60, 200);
+        Box(leftX, y, width, goodsHeight, "6-9. Merken, aantal, verpakking, aard der goederen / Marques, nombre, emballage, nature", goodsLines);
+        y += goodsHeight;
+
+        var remarks = new List<(string, XFont)>();
+        if (snapshot.Notes is { Length: > 0 } notes)
+        {
+            remarks.AddRange(WrapText(gfx, notes, Body, width - 8).Take(4).Select(line => (line, Body)));
+        }
+
+        Box(leftX, y, width, 62, "13. Instructies afzender, opmerkingen / Instructions de l'expéditeur", remarks);
+
+        var signatureTop = page.Height.Point - margin - 90;
+        var boxWidth = (width - 20) / 3;
+        var labels = new[] { "22. Handtekening afzender", "23. Handtekening vervoerder", "24. Ontvangst geadresseerde" };
+        for (var i = 0; i < labels.Length; i += 1)
+        {
+            var x = margin + i * (boxWidth + 10);
+            gfx.DrawRectangle(pen, x, signatureTop, boxWidth, 70);
             gfx.DrawString(labels[i], Small, XBrushes.Black, new XPoint(x + 4, signatureTop + 12));
         }
     }
@@ -266,6 +517,27 @@ public static class TransportDocumentRenderer
 
         Party("Uitvoerder", snapshot.Seller);
         Party("Klant", snapshot.Customer);
+
+        // Who/what executes the work: the trip's vehicle (crane) and driver (operator) when planned.
+        if (snapshot.Consignment is { } execution
+            && (execution.VehicleRegistration is not null || execution.TrailerRegistration is not null || execution.DriverName is not null))
+        {
+            Section("Uitvoering");
+            if (execution.VehicleRegistration is { } vehicle)
+            {
+                Line($"Voertuig / kraan: {vehicle}");
+            }
+
+            if (execution.TrailerRegistration is { } trailer)
+            {
+                Line($"Aanhangwagen: {trailer}");
+            }
+
+            if (execution.DriverName is { } driver)
+            {
+                Line($"Operator: {driver}");
+            }
+        }
 
         Section("Werfadres");
         foreach (var stop in snapshot.Stops)

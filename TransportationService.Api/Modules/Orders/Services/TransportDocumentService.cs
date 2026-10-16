@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using TransportationService.Api.Common;
 using TransportationService.Api.Data;
 using TransportationService.Api.Modules.Orders.Entities;
+using TransportationService.Api.Modules.Partners.Entities;
 using TransportationService.Api.Modules.Tenancy.Services;
 
 namespace TransportationService.Api.Modules.Orders.Services;
@@ -350,7 +351,8 @@ public class TransportDocumentService : ITransportDocumentService
         _ => "leveringsbonnen",
     };
 
-    private async Task<TransportDocumentSnapshot?> BuildSnapshotAsync(
+    /// <summary>The document model exactly as it is printed (also the seam the document tests assert on).</summary>
+    public async Task<TransportDocumentSnapshot?> BuildSnapshotAsync(
         Guid orderId, string kind, CancellationToken cancellationToken)
     {
         var tenantId = _tenantContext.TenantId;
@@ -394,21 +396,22 @@ public class TransportDocumentService : ITransportDocumentService
             ? await BuildWorkOrderAsync(order, cancellationToken)
             : null;
 
-        static string? Address(string? street, string? number, string? postal, string? city) =>
-            string.Join(" ", new[] { street, number, postal, city }.Where(p => !string.IsNullOrWhiteSpace(p))) is { Length: > 0 } joined
-                ? joined
-                : null;
+        var seller = new TransportDocumentParty(
+            entity?.LegalName ?? "—",
+            Address(entity?.Street, entity?.HouseNumber, entity?.PostalCode, entity?.City),
+            entity?.VatNumber,
+            Source: TransportDocumentPartySource.LegalEntity);
+        var orderingParty = new TransportDocumentParty(
+            customer?.Name ?? "—",
+            Address(customer?.Street, customer?.HouseNumber, customer?.PostalCode, customer?.City),
+            customer?.VatNumber,
+            Source: TransportDocumentPartySource.OrderingCustomer);
+        var consignment = await BuildConsignmentAsync(order, customer, seller, orderingParty, cancellationToken);
 
         return new TransportDocumentSnapshot(
             kind, order.OrderNumber, order.OrderDate,
-            new TransportDocumentParty(
-                entity?.LegalName ?? "—",
-                Address(entity?.Street, entity?.HouseNumber, entity?.PostalCode, entity?.City),
-                entity?.VatNumber),
-            new TransportDocumentParty(
-                customer?.Name ?? "—",
-                Address(customer?.Street, customer?.HouseNumber, customer?.PostalCode, customer?.City),
-                customer?.VatNumber),
+            seller,
+            orderingParty,
             order.Stops.Where(s => !s.IsDeleted).OrderBy(s => s.Sequence)
                 .Select(s => new TransportDocumentStop(
                     s.StopType switch
@@ -425,7 +428,184 @@ public class TransportDocumentService : ITransportDocumentService
             order.WeightKg ?? (cargo.Count > 0 ? cargo.Sum(c => c.TotalWeightKg ?? 0m) : null),
             order.CustomerReference,
             order.Notes,
-            workOrder);
+            workOrder,
+            Consignment: consignment);
+    }
+
+    private static string? Address(string? street, string? number, string? postal, string? city) =>
+        string.Join(" ", new[] { street, number, postal, city }.Where(p => !string.IsNullOrWhiteSpace(p))) is { Length: > 0 } joined
+            ? joined
+            : null;
+
+    /// <summary>
+    /// The CMR parties of an order (T-H3, acceptance 2026-10-16). The order has no explicit
+    /// shipper/consignee fields, so the parties come from its stops:
+    /// <list type="bullet">
+    /// <item>Sender (box 1) = the party of the FIRST loading stop; consignee (box 2) = the party of
+    /// the LAST unloading stop — see <see cref="ResolveStopParty"/> for how a stop becomes a party.</item>
+    /// <item>Carrier (box 16) = the issuing legal entity of the order (else the tenant default) —
+    /// the transport company is the carrier, never the sender.</item>
+    /// <item>Place of taking over (box 4) = loading stop address + its local date (confirmed, else
+    /// planned, else requested window start, else the trip date); place of delivery (box 3) =
+    /// unloading stop address.</item>
+    /// <item>Registration (box 25) = vehicle + trailer of the order's most relevant non-cancelled trip
+    /// (InProgress, Planned, Draft, Completed); none = null → a blank line on the document.</item>
+    /// </list>
+    /// </summary>
+    private async Task<TransportDocumentConsignment> BuildConsignmentAsync(
+        TransportOrder order, Customer? customer, TransportDocumentParty carrier, TransportDocumentParty orderingParty,
+        CancellationToken cancellationToken)
+    {
+        var tenantId = _tenantContext.TenantId;
+        var stops = order.Stops.Where(s => !s.IsDeleted).OrderBy(s => s.Sequence).ToList();
+        var loading = stops.FirstOrDefault(s => s.StopType == StopType.Loading);
+        var unloading = stops.LastOrDefault(s => s.StopType == StopType.Unloading);
+
+        // Owners of the master locations on the two stops — one query each, only when linked.
+        var locationIds = new[] { loading?.LocationId, unloading?.LocationId }.Where(id => id is not null).Select(id => id!.Value).Distinct().ToList();
+        var locationOwners = locationIds.Count == 0
+            ? new Dictionary<Guid, Guid?>()
+            : await _dbContext.Locations.AsNoTracking()
+                .Where(l => l.TenantId == tenantId && locationIds.Contains(l.Id))
+                .Select(l => new { l.Id, l.CustomerId })
+                .ToDictionaryAsync(l => l.Id, l => l.CustomerId, cancellationToken);
+        var ownerIds = locationOwners.Values.Where(id => id is not null && id != customer?.Id).Select(id => id!.Value).Distinct().ToList();
+        var owners = ownerIds.Count == 0
+            ? new Dictionary<Guid, Customer>()
+            : await _dbContext.Customers.AsNoTracking()
+                .Where(c => c.TenantId == tenantId && ownerIds.Contains(c.Id))
+                .ToDictionaryAsync(c => c.Id, cancellationToken);
+        if (customer is not null)
+        {
+            owners[customer.Id] = customer;
+        }
+
+        TransportDocumentParty PartyOf(TransportOrderStop? stop)
+        {
+            Guid? ownerId = stop?.LocationId is { } locationId ? locationOwners.GetValueOrDefault(locationId) : null;
+            return ResolveStopParty(stop, ownerId is { } id ? owners.GetValueOrDefault(id) : null, customer, orderingParty);
+        }
+
+        // The trip the order rides on (same ranking as the dossier's effective assignment).
+        var trips = await _dbContext.TripOrders.AsNoTracking()
+            .Where(to => to.TenantId == tenantId && to.TransportOrderId == order.Id && !to.IsDeleted)
+            .Join(_dbContext.Trips.AsNoTracking().Where(t => t.TenantId == tenantId && t.Status != Modules.Planning.Entities.TripStatus.Cancelled),
+                to => to.TripId, t => t.Id,
+                (to, t) => new { t.Status, t.TripDate, t.TripNumber, t.VehicleId, t.TrailerId, t.DriverId })
+            .ToListAsync(cancellationToken);
+        var trip = trips
+            .OrderBy(t => t.Status switch
+            {
+                Modules.Planning.Entities.TripStatus.InProgress => 0,
+                Modules.Planning.Entities.TripStatus.Planned => 1,
+                Modules.Planning.Entities.TripStatus.Draft => 2,
+                _ => 3,
+            })
+            .ThenByDescending(t => t.TripDate).ThenBy(t => t.TripNumber)
+            .FirstOrDefault();
+
+        string? vehicleRegistration = null;
+        string? trailerRegistration = null;
+        string? driverName = null;
+        if (trip?.VehicleId is { } vehicleId)
+        {
+            vehicleRegistration = await _dbContext.Vehicles.AsNoTracking()
+                .Where(v => v.TenantId == tenantId && v.Id == vehicleId)
+                .Select(v => v.LicensePlate)
+                .FirstOrDefaultAsync(cancellationToken);
+        }
+
+        if (trip?.TrailerId is { } trailerId)
+        {
+            trailerRegistration = await _dbContext.Trailers.AsNoTracking()
+                .Where(t => t.TenantId == tenantId && t.Id == trailerId)
+                .Select(t => t.LicensePlate)
+                .FirstOrDefaultAsync(cancellationToken);
+        }
+
+        if (trip?.DriverId is { } driverId)
+        {
+            driverName = await _dbContext.Drivers.AsNoTracking()
+                .Where(d => d.TenantId == tenantId && d.Id == driverId)
+                .Join(_dbContext.Employees.AsNoTracking(), d => d.EmployeeId, e => e.Id, (d, e) => e.FirstName + " " + e.LastName)
+                .FirstOrDefaultAsync(cancellationToken);
+        }
+
+        DateOnly? takingOverDate = null;
+        if (loading is not null && (loading.ConfirmedFrom ?? loading.PlannedFrom ?? loading.RequestedFrom) is { } loadingAt)
+        {
+            var zone = await TenantTimeZone.ForTenantAsync(_dbContext, tenantId, cancellationToken);
+            takingOverDate = TenantTimeZone.ToLocalDate(loadingAt, zone);
+        }
+
+        takingOverDate ??= trip?.TripDate;
+
+        static TransportDocumentPlace? Place(TransportOrderStop? stop, DateOnly? date) => stop is null
+            ? null
+            : new TransportDocumentPlace(stop.LocationName, Address(stop.Address, null, stop.PostalCode, stop.City), stop.CountryCode, date);
+
+        return new TransportDocumentConsignment(
+            PartyOf(loading),
+            PartyOf(unloading),
+            carrier,
+            Place(loading, takingOverDate),
+            Place(unloading, null),
+            Blank(vehicleRegistration),
+            Blank(trailerRegistration),
+            Blank(driverName?.Trim()));
+    }
+
+    private static string? Blank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    /// <summary>
+    /// How a stop becomes a CMR party, in this order:
+    /// <list type="number">
+    /// <item>The stop references a master location that BELONGS to a customer
+    /// (<c>Location.CustomerId</c>): that customer is the party — its name and VAT, the location name
+    /// as detail line (when it adds something) and the STOP address, where the goods physically are.
+    /// When the owner is the ordering customer, the ordering customer is therefore the party.</item>
+    /// <item>The stop carries a name of its own (free address or an unowned location): that name and
+    /// the stop address — unless the address IS the ordering customer's registered address, which
+    /// makes the ordering customer the party.</item>
+    /// <item>No stop, or a stop without a name: the ordering customer (name, registered address, VAT).</item>
+    /// </list>
+    /// </summary>
+    public static TransportDocumentParty ResolveStopParty(
+        TransportOrderStop? stop, Customer? locationOwner, Customer? orderingCustomer, TransportDocumentParty orderingParty)
+    {
+        if (stop is null)
+        {
+            return orderingParty;
+        }
+
+        var stopAddress = Address(stop.Address, null, stop.PostalCode, stop.City);
+        var stopName = Blank(stop.LocationName);
+        if (locationOwner is not null)
+        {
+            var detail = stopName is not null && !string.Equals(stopName, locationOwner.Name, StringComparison.OrdinalIgnoreCase)
+                ? stopName
+                : null;
+            return new TransportDocumentParty(
+                locationOwner.Name, stopAddress ?? Address(locationOwner.Street, locationOwner.HouseNumber, locationOwner.PostalCode, locationOwner.City),
+                locationOwner.VatNumber, detail, TransportDocumentPartySource.LocationOwner);
+        }
+
+        if (stopName is null || (orderingCustomer is not null && SameAddress(stop, orderingCustomer)))
+        {
+            return orderingParty with { Detail = stopName is not null && !string.Equals(stopName, orderingParty.Name, StringComparison.OrdinalIgnoreCase) ? stopName : null };
+        }
+
+        return new TransportDocumentParty(stopName, stopAddress, null, null, TransportDocumentPartySource.StopLocation);
+    }
+
+    /// <summary>Street + house number and postal code equal, ignoring case, spaces and punctuation.</summary>
+    private static bool SameAddress(TransportOrderStop stop, Customer customer)
+    {
+        static string Key(string? value) => new((value ?? string.Empty).Where(char.IsLetterOrDigit).Select(char.ToLowerInvariant).ToArray());
+        var stopStreet = Key(stop.Address);
+        return stopStreet.Length > 0
+               && stopStreet == Key($"{customer.Street}{customer.HouseNumber}")
+               && Key(stop.PostalCode) == Key(customer.PostalCode);
     }
 
     /// <summary>
