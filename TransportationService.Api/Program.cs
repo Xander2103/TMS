@@ -336,6 +336,8 @@ builder.Services.AddScoped<TransportationService.Api.Modules.Dossiers.Services.I
     TransportationService.Api.Modules.Dossiers.Services.DossierActivityService>();
 builder.Services.AddScoped<TransportationService.Api.Modules.Dossiers.Services.IDossierReadinessService,
     TransportationService.Api.Modules.Dossiers.Services.DossierReadinessService>();
+builder.Services.AddScoped<TransportationService.Api.Modules.Dossiers.Services.IDossierTimelineService,
+    TransportationService.Api.Modules.Dossiers.Services.DossierTimelineService>();
 builder.Services.AddScoped<TransportationService.Api.Modules.Dossiers.Services.IDossierActivityPricingService,
     TransportationService.Api.Modules.Dossiers.Services.DossierActivityPricingService>();
 builder.Services.AddScoped<TransportationService.Api.Modules.Dossiers.Services.IDossierNoteService,
