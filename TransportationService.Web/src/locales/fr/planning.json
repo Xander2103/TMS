@@ -193,7 +193,12 @@
     "showPackages_one": "Afficher 1 colis en attente ▾",
     "showPackages_other": "Afficher {count} colis en attente ▾",
     "detailsTitle": "Distance, notes & coûts",
-    "discard": "Annuler les modifications"
+    "discard": "Annuler les modifications",
+    "startWarnTitle": "Démarrer le trajet ?",
+    "startWarnIntro": "À vérifier avant le départ :",
+    "startWarnEarly": "Le trajet est prévu le {date} ; vous le démarrez plus tôt que prévu.",
+    "startWarnPackages": "{loaded} colis obligatoires sur {mandatory} sont chargés — {notLoaded} manquent.",
+    "startWarnConfirm": "Démarrer quand même"
   },
   "groups": {
     "today": "Aujourd'hui",

@@ -235,5 +235,38 @@ describe('TripDetailPage — B23', () => {
       await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
     })
   })
+
+  describe('M6 — pre-start warnings', () => {
+    beforeEach(() => {
+      packagesApi.getTripPackageReadiness.mockResolvedValue({
+        tripId: 'trip-1', mandatoryPackages: 0, loadedCount: 0, notLoadedCount: 0, missingCount: 0, damagedCount: 0,
+        openExceptionCount: 0, isComplete: true, isBlocked: false, requiresOverride: false, outstandingPackages: [],
+      })
+    })
+    it('starting a future trip asks for confirmation first, then starts', async () => {
+      const user = userEvent.setup()
+      planningApi.getTrip.mockResolvedValue(trip({ status: 'Planned', tripDate: '2099-01-15', allowedTransitions: ['InProgress'] }))
+      planningApi.changeTripStatus.mockResolvedValue(trip({ status: 'InProgress', tripDate: '2099-01-15' }))
+      await renderPage()
+      await user.click(screen.getByRole('button', { name: 'Start rit' }))
+      const dialog = await screen.findByRole('dialog')
+      expect(within(dialog).getByText(/vroeger dan gepland/)).toBeInTheDocument()
+      expect(planningApi.changeTripStatus).not.toHaveBeenCalled()
+      await user.click(within(dialog).getByRole('button', { name: 'Toch starten' }))
+      await waitFor(() => expect(planningApi.changeTripStatus).toHaveBeenCalledWith('trip-1', 'InProgress', false, false, null))
+    })
+
+    it('a trip for today starts without an extra question', async () => {
+      const user = userEvent.setup()
+      const now = new Date()
+      const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+      planningApi.getTrip.mockResolvedValue(trip({ status: 'Planned', tripDate: today, allowedTransitions: ['InProgress'] }))
+      planningApi.changeTripStatus.mockResolvedValue(trip({ status: 'InProgress', tripDate: today }))
+      await renderPage()
+      await user.click(screen.getByRole('button', { name: 'Start rit' }))
+      await waitFor(() => expect(planningApi.changeTripStatus).toHaveBeenCalled())
+      expect(screen.queryByRole('dialog')).toBeNull()
+    })
+  })
 })
 

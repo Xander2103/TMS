@@ -104,6 +104,7 @@ export function TripDetailPage() {
   const [execution, setExecution] = useState<TripExecution | null>(null)
   const [readiness, setReadiness] = useState<TripPackageReadiness | null>(null)
   const [releaseTarget, setReleaseTarget] = useState<{ status: TripStatus; readiness: TripPackageReadiness } | null>(null)
+  const [startWarnings, setStartWarnings] = useState<string[] | null>(null)
   const [releaseReason, setReleaseReason] = useState('')
 
   const canSeeExecution = hasPermission('driver_workflow.view')
@@ -326,6 +327,35 @@ export function TripDetailPage() {
     }
   }
 
+  /**
+   * Transport acceptance M6: starting a trip is a dispatch decision. Hard rules stay on the
+   * server (blocked departure rule, conflicts); conditions the domain merely WARNS about —
+   * starting before the planned day, mandatory colli not loaded under a "warn" departure rule —
+   * are confirmed explicitly instead of passing silently.
+   */
+  function requestTransition(target: TripStatus) {
+    if (!trip || target !== 'InProgress') {
+      void applyTransition(target, false)
+      return
+    }
+    const warnings: string[] = []
+    const today = new Date()
+    const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+    if (trip.tripDate > todayIso) {
+      warnings.push(t('planning.detail.startWarnEarly', { date: formatDate(trip.tripDate) }))
+    }
+    if (readiness && !readiness.isComplete && !readiness.isBlocked && !readiness.requiresOverride) {
+      warnings.push(t('planning.detail.startWarnPackages', {
+        loaded: readiness.loadedCount, mandatory: readiness.mandatoryPackages, notLoaded: readiness.notLoadedCount,
+      }))
+    }
+    if (warnings.length === 0) {
+      void applyTransition(target, false)
+      return
+    }
+    setStartWarnings(warnings)
+  }
+
   async function applyTransition(target: TripStatus, override: boolean, release = false, overrideReason: string | null = null) {
     if (!trip) return
     setBusy(true)
@@ -514,12 +544,12 @@ export function TripDetailPage() {
               {t('planning.detail.deliveryNotesButton')}
             </Button>
             {secondaryTripTransitions.map((target) => (
-              <Button key={target} variant="secondary" onClick={() => void applyTransition(target, false)} disabled={busy || dirty}>
+              <Button key={target} variant="secondary" onClick={() => requestTransition(target)} disabled={busy || dirty}>
                 {t(TRIP_TRANSITION_LABELS[target])}
               </Button>
             ))}
             {primaryTripTransition && (
-              <Button onClick={() => void applyTransition(primaryTripTransition, false)} disabled={busy || dirty}>
+              <Button onClick={() => requestTransition(primaryTripTransition)} disabled={busy || dirty}>
                 {t(TRIP_TRANSITION_LABELS[primaryTripTransition])}
               </Button>
             )}
@@ -930,6 +960,19 @@ export function TripDetailPage() {
             {busy ? t('planning.detail.saving') : t('planning.detail.save')}
           </Button>
         </FormActions>
+      )}
+
+      {startWarnings && (
+        <ConfirmDialog
+          title={t('planning.detail.startWarnTitle')}
+          message={[t('planning.detail.startWarnIntro'), ...startWarnings.map((w) => `• ${w}`)].join('\n')}
+          confirmLabel={t('planning.detail.startWarnConfirm')}
+          onConfirm={() => {
+            setStartWarnings(null)
+            void applyTransition('InProgress', false)
+          }}
+          onCancel={() => setStartWarnings(null)}
+        />
       )}
 
       {overrideTarget && (

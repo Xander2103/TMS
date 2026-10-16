@@ -193,7 +193,12 @@
     "showPackages_one": "Show 1 outstanding package ▾",
     "showPackages_other": "Show {count} outstanding packages ▾",
     "detailsTitle": "Distance, notes & costs",
-    "discard": "Discard changes"
+    "discard": "Discard changes",
+    "startWarnTitle": "Start trip?",
+    "startWarnIntro": "Check before departure:",
+    "startWarnEarly": "The trip is planned for {date}; you are starting it earlier than planned.",
+    "startWarnPackages": "{loaded} of {mandatory} mandatory packages are loaded — {notLoaded} missing.",
+    "startWarnConfirm": "Start anyway"
   },
   "groups": {
     "today": "Today",

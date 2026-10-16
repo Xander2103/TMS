@@ -193,7 +193,12 @@
     "showPackages_one": "Toon 1 openstaand collo ▾",
     "showPackages_other": "Toon {count} openstaande colli ▾",
     "detailsTitle": "Afstand, notities & kosten",
-    "discard": "Wijzigingen ongedaan maken"
+    "discard": "Wijzigingen ongedaan maken",
+    "startWarnTitle": "Rit starten?",
+    "startWarnIntro": "Controleer voor vertrek:",
+    "startWarnEarly": "De rit is gepland op {date}; je start hem vroeger dan gepland.",
+    "startWarnPackages": "{loaded} van {mandatory} verplichte colli zijn geladen — {notLoaded} ontbreken.",
+    "startWarnConfirm": "Toch starten"
   },
   "groups": {
     "today": "Vandaag",
