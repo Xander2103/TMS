@@ -168,15 +168,26 @@ public class DossierTimelineService : IDossierTimelineService
         string OrderNumber(Guid? id) => id is { } value && orders.TryGetValue(value, out var order) ? order.Number : "?";
 
         // ---------------------------------------------------------------- names referenced by the story
-        var driverNames = await DriverNamesAsync(tenantId, cancellationToken);
-        var vehicleNames = await _dbContext.Vehicles.AsNoTracking().IgnoreQueryFilters()
-            .Where(v => v.TenantId == tenantId)
-            .Select(v => new { v.Id, v.InternalNumber, v.LicensePlate })
-            .ToDictionaryAsync(v => v.Id, v => Plate(v.InternalNumber, v.LicensePlate), cancellationToken);
-        var trailerNames = await _dbContext.Trailers.AsNoTracking().IgnoreQueryFilters()
-            .Where(v => v.TenantId == tenantId)
-            .Select(v => new { v.Id, v.InternalNumber, v.LicensePlate })
-            .ToDictionaryAsync(v => v.Id, v => Plate(v.InternalNumber, v.LicensePlate), cancellationToken);
+        // Only the drivers/vehicles/trailers the trips (now or in their audit trail) ever carried.
+        var tripAudits = await AuditAsync(tenantId, "Trip", tripKeys, cancellationToken);
+        var resourceIds = trips.SelectMany(t => new[] { t.DriverId, t.VehicleId, t.TrailerId })
+            .Concat(tripAudits.SelectMany(a =>
+            {
+                var values = Json(a.NewValuesJson);
+                return new[] { GuidOf(values, "DriverId"), GuidOf(values, "VehicleId"), GuidOf(values, "TrailerId") };
+            }))
+            .Where(id => id is not null).Select(id => id!.Value).Distinct().ToList();
+        var driverNames = resourceIds.Count == 0 ? new Dictionary<Guid, string>() : await DriverNamesAsync(tenantId, resourceIds, cancellationToken);
+        var vehicleNames = resourceIds.Count == 0 ? new Dictionary<Guid, string>()
+            : await _dbContext.Vehicles.AsNoTracking().IgnoreQueryFilters()
+                .Where(v => v.TenantId == tenantId && resourceIds.Contains(v.Id))
+                .Select(v => new { v.Id, v.InternalNumber, v.LicensePlate })
+                .ToDictionaryAsync(v => v.Id, v => Plate(v.InternalNumber, v.LicensePlate), cancellationToken);
+        var trailerNames = resourceIds.Count == 0 ? new Dictionary<Guid, string>()
+            : await _dbContext.Trailers.AsNoTracking().IgnoreQueryFilters()
+                .Where(v => v.TenantId == tenantId && resourceIds.Contains(v.Id))
+                .Select(v => new { v.Id, v.InternalNumber, v.LicensePlate })
+                .ToDictionaryAsync(v => v.Id, v => Plate(v.InternalNumber, v.LicensePlate), cancellationToken);
 
         // ---------------------------------------------------------------- 1. the dossier itself
         events.Add(new Event
@@ -252,7 +263,6 @@ public class DossierTimelineService : IDossierTimelineService
         }
 
         // ---------------------------------------------------------------- 2. trips (planning)
-        var tripAudits = await AuditAsync(tenantId, "Trip", tripKeys, cancellationToken);
         var tripEvents = new List<(Guid TripId, DateTime At, string Kind)>();
         var stopHistory = stops.Count == 0
             ? []
@@ -995,9 +1005,9 @@ public class DossierTimelineService : IDossierTimelineService
         return rows.Select(r => new StopHistoryRow(r.Id, r.TransportOrderStopId, r.TripId, r.ToStatus, r.OccurredAt, r.UserId, r.Reason)).ToList();
     }
 
-    private async Task<Dictionary<Guid, string>> DriverNamesAsync(Guid tenantId, CancellationToken cancellationToken) =>
+    private async Task<Dictionary<Guid, string>> DriverNamesAsync(Guid tenantId, List<Guid> driverIds, CancellationToken cancellationToken) =>
         (await _dbContext.Drivers.AsNoTracking().IgnoreQueryFilters()
-            .Where(d => d.TenantId == tenantId)
+            .Where(d => d.TenantId == tenantId && driverIds.Contains(d.Id))
             .Join(_dbContext.Employees.AsNoTracking().IgnoreQueryFilters().Where(e => e.TenantId == tenantId),
                 d => d.EmployeeId, e => e.Id, (d, e) => new { d.Id, e.FirstName, e.LastName })
             .ToListAsync(cancellationToken))
