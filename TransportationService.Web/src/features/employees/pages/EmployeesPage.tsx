@@ -69,8 +69,31 @@ export function EmployeesPage() {
   const { hasPermission } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
   const isDriversView = searchParams.get('view') === 'chauffeurs'
-  const [search, setSearch] = useState('')
-  const [page, setPage] = useState(1)
+  // HR acceptance P2-19: search text and page live in the URL (q, page) next to the view, so
+  // employee → Back restores the exact list. Filters keep their per-browser memory.
+  const search = searchParams.get('q') ?? ''
+  const parsedPage = Number(searchParams.get('page'))
+  const page = Number.isInteger(parsedPage) && parsedPage >= 1 ? parsedPage : 1
+
+  function patchUrl(patch: { q?: string; page?: number; view?: string | null }, replace: boolean) {
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current)
+      if (patch.view !== undefined) {
+        if (patch.view) next.set('view', patch.view)
+        else next.delete('view')
+      }
+      if (patch.q !== undefined) {
+        if (patch.q) next.set('q', patch.q)
+        else next.delete('q')
+      }
+      const nextPage = patch.page ?? 1
+      if (nextPage > 1) next.set('page', String(nextPage))
+      else next.delete('page')
+      return next
+    }, { replace })
+  }
+
+  const setPage = (next: number) => patchUrl({ page: next }, false)
   const [filters, setFilters] = useState<EmployeesFilters>(loadStoredFilters)
 
   const jobFunctions = useLookupOptions('/api/job-functions')
@@ -82,7 +105,7 @@ export function EmployeesPage() {
 
   function updateFilters(patch: Partial<EmployeesFilters>) {
     setFilters((current) => ({ ...current, ...patch }))
-    setPage(1)
+    patchUrl({}, true)
   }
 
   const { items, totalCount, pageSize, isLoading, error } = usePagedQuery<EmployeeListItem>(
@@ -204,8 +227,7 @@ export function EmployeesPage() {
             aria-selected={!isDriversView}
             className={!isDriversView ? 'active' : ''}
             onClick={() => {
-              setSearchParams({}, { replace: true })
-              setPage(1)
+              patchUrl({ view: null }, true)
             }}
           >
             {t('employees.list.allEmployees')}
@@ -216,8 +238,7 @@ export function EmployeesPage() {
             aria-selected={isDriversView}
             className={isDriversView ? 'active' : ''}
             onClick={() => {
-              setSearchParams({ view: 'chauffeurs' }, { replace: true })
-              setPage(1)
+              patchUrl({ view: 'chauffeurs' }, true)
             }}
           >
             {t('employees.list.driversTitle')}
@@ -227,8 +248,8 @@ export function EmployeesPage() {
       <FilterBar
         search={search}
         onSearchChange={(value) => {
-          setSearch(value)
-          setPage(1)
+          // Typing replaces the entry, so Back skips keystrokes.
+          patchUrl({ q: value }, true)
         }}
         searchPlaceholder={t('employees.list.searchPlaceholder')}
         activeFilter={filters.activeFilter}
