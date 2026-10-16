@@ -60,5 +60,41 @@
     "goodsNotApplicable": "Sans objet",
     "dossierNotes_one": "{count} note de dossier — voir dans l’historique",
     "dossierNotes_other": "{count} notes de dossier — voir dans l’historique"
+  },
+  "execution": {
+    "title": "Exécution",
+    "vehicle": "Véhicule / matériel",
+    "status": {
+      "Planned": "Planifiée",
+      "InProgress": "En cours",
+      "Completed": "Terminée",
+      "Cancelled": "Annulée"
+    },
+    "requiresCrane": "Ce travail nécessite un véhicule avec grue.",
+    "assign": "Enregistrer l'affectation",
+    "assigned": "Chauffeur et véhicule affectés.",
+    "assignFailed": "L'affectation n'a pas pu être enregistrée.",
+    "start": "Démarrer",
+    "started": "Activité démarrée.",
+    "complete": "Terminer",
+    "completed": "Activité terminée.",
+    "cancel": "Annuler l'activité",
+    "cancelled": "Activité annulée.",
+    "cancelTitle": "Annuler l'activité",
+    "cancelIntro": "Une activité annulée ne compte plus pour le prix et la facturation et ne bloque pas la confirmation du dossier.",
+    "cancelReason": "Motif",
+    "reopen": "Remettre en planifiée",
+    "reopened": "Activité remise en planifiée.",
+    "failed": "Le statut n'a pas pu être modifié.",
+    "saveFirst": "Enregistrez (ou annulez) vos modifications avant de changer le statut.",
+    "dossierConfirmed": "Tout est exécuté : le dossier a été confirmé automatiquement.",
+    "completedOn": "Terminée le {date}",
+    "cancelledReason": "Motif d'annulation : {reason}",
+    "startTime": "Heure de début",
+    "siteAddress": "Chantier / adresse",
+    "siteAddressPlaceholder": "Rue, numéro, commune ou nom du chantier",
+    "workDescription": "Description des travaux",
+    "end": "Fin {time}",
+    "endNextDay": "Fin {time} (lendemain)"
   }
 }

@@ -2,7 +2,15 @@ import type { BadgeTone } from '../../components/ui/Badge'
 import type { TranslateFn } from '../../i18n/localeContext'
 import { euro } from '../invoices/types'
 import { readActivityPrice } from './pricing/activityPriceDisplay'
-import type { ActivityPriceStatus, DossierActivity, DossierDetail, ReadinessIssue } from './types'
+import type { ActivityPriceStatus, DossierActivity, DossierActivityExecutionStatus, DossierDetail, ReadinessIssue } from './types'
+
+/** T-H7: badge tone per execution status of a standalone activity. */
+export const EXECUTION_STATUS_TONE: Record<DossierActivityExecutionStatus, BadgeTone> = {
+  Planned: 'neutral',
+  InProgress: 'info',
+  Completed: 'success',
+  Cancelled: 'danger',
+}
 
 /**
  * Read-only display rules of one activity, shared by the activity card and the Overzicht so both

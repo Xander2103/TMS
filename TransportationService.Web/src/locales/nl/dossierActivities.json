@@ -60,5 +60,41 @@
     "goodsNotApplicable": "Niet van toepassing",
     "dossierNotes_one": "{count} dossiernotitie — bekijk in Historiek",
     "dossierNotes_other": "{count} dossiernotities — bekijk in Historiek"
+  },
+  "execution": {
+    "title": "Uitvoering",
+    "vehicle": "Voertuig / materieel",
+    "status": {
+      "Planned": "Gepland",
+      "InProgress": "Bezig",
+      "Completed": "Afgerond",
+      "Cancelled": "Geannuleerd"
+    },
+    "requiresCrane": "Dit werk vraagt een voertuig met kraan.",
+    "assign": "Toewijzing opslaan",
+    "assigned": "Chauffeur en voertuig toegewezen.",
+    "assignFailed": "De toewijzing kon niet worden opgeslagen.",
+    "start": "Start",
+    "started": "Activiteit gestart.",
+    "complete": "Afronden",
+    "completed": "Activiteit afgerond.",
+    "cancel": "Annuleren",
+    "cancelled": "Activiteit geannuleerd.",
+    "cancelTitle": "Activiteit annuleren",
+    "cancelIntro": "Een geannuleerde activiteit telt niet meer mee voor prijs en facturatie en blokkeert de bevestiging van het dossier niet.",
+    "cancelReason": "Reden",
+    "reopen": "Terugzetten naar gepland",
+    "reopened": "Activiteit teruggezet naar gepland.",
+    "failed": "De status kon niet worden gewijzigd.",
+    "saveFirst": "Sla eerst je wijzigingen op (of maak ze ongedaan) voor je de status wijzigt.",
+    "dossierConfirmed": "Alles is uitgevoerd: het dossier is automatisch bevestigd.",
+    "completedOn": "Afgerond op {date}",
+    "cancelledReason": "Reden annulatie: {reason}",
+    "startTime": "Starttijd",
+    "siteAddress": "Werflocatie / adres",
+    "siteAddressPlaceholder": "Straat, nummer, gemeente of werfnaam",
+    "workDescription": "Werkomschrijving",
+    "end": "Einde {time}",
+    "endNextDay": "Einde {time} (volgende dag)"
   }
 }

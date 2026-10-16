@@ -3,7 +3,7 @@ import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { useLocale } from '../../../i18n/localeContext'
 import { ORDER_STATUS_LABELS, ORDER_STATUS_TONE, type TransportOrderStatus } from '../../transport-orders/types'
-import { PRICE_STATUS_LABEL_KEYS, PRICE_STATUS_TONE, activityPriceStatus, activityPriceText } from '../activityDisplay'
+import { EXECUTION_STATUS_TONE, PRICE_STATUS_LABEL_KEYS, PRICE_STATUS_TONE, activityPriceStatus, activityPriceText } from '../activityDisplay'
 import { activityTypeIcon } from '../activityTypeIcons'
 import { ActivityDocumentStatus } from '../documents/ActivityDocumentStatus'
 import { formatDate, formatDuration } from '../dossierDisplay'
@@ -43,15 +43,29 @@ export function ActivityCard({ activity, activities, dossier, onOpen, onOpenDeta
     : undefined
 
   const contextParts: string[] = []
-  if (activity.plannedDate) contextParts.push(formatDate(activity.plannedDate))
+  if (activity.plannedDate) {
+    // T-H7: a standalone operational activity shows its time window ("07:30–10:00").
+    const start = activity.startTime ? activity.startTime.slice(0, 5) : null
+    const end = activity.plannedEnd ? activity.plannedEnd.slice(11, 16) : null
+    contextParts.push(start ? `${formatDate(activity.plannedDate)} ${end ? `${start}–${end}` : start}` : formatDate(activity.plannedDate))
+  }
   if (activity.durationHours != null) contextParts.push(formatDuration(activity.durationHours))
   if (linkedTo) contextParts.push(t('dossiers.card.linkedTo', { name: linkedTo.label ?? linkedTo.activityTypeName }))
   if (activity.hasStops && !activity.linkedTransportOrderId) contextParts.push(t('dossiers.card.noOrder'))
 
   const assignment = activity.assignment ?? null
+  // Order-backed: the trip carries driver/vehicle; standalone (T-H7): the activity itself.
+  const driverName = assignment?.driverName ?? activity.driverName ?? null
+  const vehiclePlate = assignment?.vehiclePlate ?? activity.vehiclePlate ?? null
+  const vehicleNumber = assignment?.vehicleNumber ?? activity.vehicleNumber ?? null
+  // A purely commercial unit (storage) only shows its status once it is resolved.
+  const executionStatus =
+    !activity.hasStops && activity.executionStatus && (activity.isExecutable || activity.executionStatus !== 'Planned')
+      ? activity.executionStatus
+      : null
   const priceStatus = activityPriceStatus(dossier, activity)
   const priceText = activityPriceText(t, dossier, activity)
-  const canPlan = Boolean(activity.linkedTransportOrderId) && onOpenDetail !== undefined
+  const canPlan = (Boolean(activity.linkedTransportOrderId) || activity.isExecutable === true) && onOpenDetail !== undefined
 
   return (
     <li
@@ -65,6 +79,9 @@ export function ActivityCard({ activity, activities, dossier, onOpen, onOpenDeta
             {createElement(activityTypeIcon(activity.icon), { size: 18, 'aria-hidden': true })}
             <strong>{activity.activityTypeName}</strong>
             {activity.label && <span className="dossier-activity-label">{activity.label}</span>}
+            {executionStatus && (
+              <Badge tone={EXECUTION_STATUS_TONE[executionStatus]}>{t(`dossierActivities.execution.status.${executionStatus}`)}</Badge>
+            )}
             {activity.linkedOrderNumber && status && (
               <>
                 <code>{activity.linkedOrderNumber}</code>
@@ -104,14 +121,14 @@ export function ActivityCard({ activity, activities, dossier, onOpen, onOpenDeta
         </div>
         <div>
           <dt>{t('dossierActivities.card.driver')}</dt>
-          <dd className={assignment?.driverName ? undefined : 'is-missing'}>
-            {assignment?.driverName ?? t('dossierActivities.card.notAssigned')}
+          <dd className={driverName ? undefined : 'is-missing'}>
+            {driverName ?? t('dossierActivities.card.notAssigned')}
           </dd>
         </div>
         <div>
           <dt>{t('dossierActivities.card.plate')}</dt>
-          <dd className={assignment?.vehiclePlate ? undefined : 'is-missing'} title={assignment?.vehicleNumber ?? undefined}>
-            {assignment?.vehiclePlate ?? '—'}
+          <dd className={vehiclePlate ? undefined : 'is-missing'} title={vehicleNumber ?? undefined}>
+            {vehiclePlate ?? '—'}
             {/* A proposal from the fixed driver-vehicle link is not a definitive assignment. */}
             {assignment?.vehicleId && assignment.vehicleSelectionSource === 'Suggested' && (
               <Badge tone="info">{t('dossierActivities.card.suggested')}</Badge>

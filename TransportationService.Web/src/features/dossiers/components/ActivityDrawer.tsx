@@ -5,7 +5,7 @@ import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { FormField } from '../../../components/ui/FormField'
 import { ValidationSummary } from '../../../components/ui/ValidationSummary'
 import { describeApiError } from '../../../api/problemDetails'
-import { useLocale } from '../../../i18n/localeContext'
+import { useLocale, type TranslateFn } from '../../../i18n/localeContext'
 import { createOrderForActivity, deleteDossierActivity, updateDossierActivity } from '../api/dossiersApi'
 import type { DossierActivity, DossierDetail } from '../types'
 import { DossierNotesPanel } from '../notes/DossierNotesPanel'
@@ -14,6 +14,7 @@ import type { DossierTab } from '../dossierSections'
 import { ActivityOrderContext } from './ActivityOrderContext'
 import { ActivityPlanningBlock } from './ActivityPlanningBlock'
 import { SectionDrawer } from './SectionDrawer'
+import { StandaloneExecutionBlock } from './StandaloneExecutionBlock'
 
 interface ActivityDrawerProps {
   dossier: DossierDetail
@@ -39,6 +40,16 @@ interface ActivityDrawerProps {
  * activiteiten, plus "Transportopdracht aanmaken" voor transportactiviteiten zonder opdracht.
  * Sprint 2026-09-21: the Planning block (trip assignment, D1) and the activity's own notes.
  */
+/** "Einde 10:30" from date + start + duration, or nothing while a part is missing. */
+function endHint(t: TranslateFn, date: string, start: string, duration: string): string | undefined {
+  const hours = Number(duration.replace(',', '.'))
+  if (!date || !start || duration.trim() === '' || !Number.isFinite(hours) || hours < 0) return undefined
+  const [h, m] = start.split(':').map(Number)
+  const total = h * 60 + m + Math.round(hours * 60)
+  const end = `${String(Math.floor(total / 60) % 24).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`
+  return total >= 24 * 60 ? t('dossierActivities.execution.endNextDay', { time: end }) : t('dossierActivities.execution.end', { time: end })
+}
+
 export function ActivityDrawer({
   dossier, activity, canManage, onClose, onUpdated, onConflict, onApply, onReload, initialFocus, onOpenTab,
 }: ActivityDrawerProps) {
@@ -46,6 +57,11 @@ export function ActivityDrawer({
   const [label, setLabel] = useState(activity.label ?? '')
   const [plannedDate, setPlannedDate] = useState(activity.plannedDate ?? '')
   const [durationHours, setDurationHours] = useState(activity.durationHours == null ? '' : String(activity.durationHours))
+  // T-H7: execution facts of an operational standalone activity (crane work, plateau).
+  const executable = !activity.hasStops && activity.isExecutable === true
+  const [startTime, setStartTime] = useState(activity.startTime ? activity.startTime.slice(0, 5) : '')
+  const [siteAddress, setSiteAddress] = useState(activity.siteAddress ?? '')
+  const [workDescription, setWorkDescription] = useState(activity.workDescription ?? '')
   // A half-typed note counts as unsaved work: closing asks first, Opslaan refuses to drop it.
   const [noteDirty, setNoteDirty] = useState(false)
   const [planningDirty, setPlanningDirty] = useState(false)
@@ -118,6 +134,7 @@ export function ActivityDrawer({
           // Legacy free text is no longer edited here (notes have their own panel): sent back unchanged.
           notes: activity.notes ?? null,
           version: dossier.version,
+          ...(executable ? { startTime, siteAddress: siteAddress.trim(), workDescription: workDescription.trim() } : {}),
         }),
       t('dossiers.drawer.saveFailed'),
     )
@@ -235,6 +252,43 @@ export function ActivityDrawer({
           />
         </FormField>
       )}
+      {executable && (
+        <>
+          <FormField
+            label={t('dossierActivities.execution.startTime')}
+            htmlFor="ad-start"
+            hint={endHint(t, plannedDate, startTime, durationHours)}
+          >
+            <input
+              id="ad-start"
+              type="time"
+              value={startTime}
+              onChange={(event) => touch(setStartTime)(event.target.value)}
+              disabled={busy || !canManage}
+            />
+          </FormField>
+          <FormField label={t('dossierActivities.execution.siteAddress')} htmlFor="ad-site">
+            <input
+              id="ad-site"
+              value={siteAddress}
+              onChange={(event) => touch(setSiteAddress)(event.target.value)}
+              maxLength={500}
+              placeholder={t('dossierActivities.execution.siteAddressPlaceholder')}
+              disabled={busy || !canManage}
+            />
+          </FormField>
+          <FormField label={t('dossierActivities.execution.workDescription')} htmlFor="ad-work">
+            <textarea
+              id="ad-work"
+              rows={3}
+              value={workDescription}
+              onChange={(event) => touch(setWorkDescription)(event.target.value)}
+              maxLength={2000}
+              disabled={busy || !canManage}
+            />
+          </FormField>
+        </>
+      )}
       {others.length > 0 && (
         <FormField
           label={t('dossiers.drawer.linked')}
@@ -258,14 +312,26 @@ export function ActivityDrawer({
       )}
 
       <div ref={planningRef} tabIndex={-1} className="dossier-drawer-anchor">
-        <ActivityPlanningBlock
-          dossier={dossier}
-          activity={activity}
-          isOpen={dossier.status === 'Open'}
-          onApply={onApply ?? (() => {})}
-          onConflict={onConflict}
-          onDirtyChange={setPlanningDirty}
-        />
+        {activity.hasStops ? (
+          <ActivityPlanningBlock
+            dossier={dossier}
+            activity={activity}
+            isOpen={dossier.status === 'Open'}
+            onApply={onApply ?? (() => {})}
+            onConflict={onConflict}
+            onDirtyChange={setPlanningDirty}
+          />
+        ) : (
+          <StandaloneExecutionBlock
+            dossier={dossier}
+            activity={activity}
+            canManage={canManage}
+            drawerDirty={dirty}
+            onApply={onApply ?? onUpdated}
+            onConflict={onConflict}
+            onDirtyChange={setPlanningDirty}
+          />
+        )}
       </div>
 
       {/* §19: notes of THIS activity only; self-saving, so independent of the drawer's Opslaan.

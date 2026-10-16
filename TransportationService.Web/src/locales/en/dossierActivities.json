@@ -60,5 +60,41 @@
     "goodsNotApplicable": "Not applicable",
     "dossierNotes_one": "{count} dossier note — view in History",
     "dossierNotes_other": "{count} dossier notes — view in History"
+  },
+  "execution": {
+    "title": "Execution",
+    "vehicle": "Vehicle / equipment",
+    "status": {
+      "Planned": "Planned",
+      "InProgress": "In progress",
+      "Completed": "Completed",
+      "Cancelled": "Cancelled"
+    },
+    "requiresCrane": "This work needs a vehicle with a crane.",
+    "assign": "Save assignment",
+    "assigned": "Driver and vehicle assigned.",
+    "assignFailed": "The assignment could not be saved.",
+    "start": "Start",
+    "started": "Activity started.",
+    "complete": "Complete",
+    "completed": "Activity completed.",
+    "cancel": "Cancel activity",
+    "cancelled": "Activity cancelled.",
+    "cancelTitle": "Cancel activity",
+    "cancelIntro": "A cancelled activity no longer counts for pricing and invoicing and does not block the dossier's confirmation.",
+    "cancelReason": "Reason",
+    "reopen": "Back to planned",
+    "reopened": "Activity set back to planned.",
+    "failed": "The status could not be changed.",
+    "saveFirst": "Save (or undo) your changes before changing the status.",
+    "dossierConfirmed": "Everything is executed: the dossier was confirmed automatically.",
+    "completedOn": "Completed on {date}",
+    "cancelledReason": "Cancellation reason: {reason}",
+    "startTime": "Start time",
+    "siteAddress": "Site / address",
+    "siteAddressPlaceholder": "Street, number, town or site name",
+    "workDescription": "Work description",
+    "end": "Ends {time}",
+    "endNextDay": "Ends {time} (next day)"
   }
 }

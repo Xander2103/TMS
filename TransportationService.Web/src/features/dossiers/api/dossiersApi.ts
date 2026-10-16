@@ -1,5 +1,6 @@
 import { apiClient } from '../../../api/apiClient'
 import type { PagedResult } from '../../../api/types'
+import type { PlanningConflict } from '../../planning/types'
 import type { OrderCustomerChangeImpact } from '../../transport-orders/api/transportOrdersApi'
 import type {
   DossierActivityInput,
@@ -189,6 +190,44 @@ export interface PlanDossierActivityInput {
  * returns the refreshed dossier. Driver/vehicle/trailer live only on the trip; later changes run
  * through the trip endpoints. Needs `planning.create`.
  */
+/** T-H7: driver/vehicle of a standalone activity. 409 with `conflicts` on blocking planning conflicts. */
+export interface AssignStandaloneActivityInput {
+  driverId: string | null
+  vehicleId: string | null
+  override?: boolean
+  overrideReason?: string | null
+  version?: string
+}
+
+export interface StandaloneAssignResult {
+  dossier: DossierDetail
+  warnings: PlanningConflict[]
+}
+
+export function assignStandaloneActivity(id: string, activityId: string, input: AssignStandaloneActivityInput): Promise<StandaloneAssignResult> {
+  return apiClient.putJson<StandaloneAssignResult, AssignStandaloneActivityInput>(`/api/dossiers/${id}/activities/${activityId}/assignment`, input)
+}
+
+export type StandaloneActivityTransition = 'start' | 'complete' | 'reopen'
+
+/** T-H7: Start / Afronden / Terugzetten of a standalone activity. */
+export function transitionStandaloneActivity(
+  id: string,
+  activityId: string,
+  transition: StandaloneActivityTransition,
+  version?: string,
+): Promise<DossierDetail> {
+  return apiClient.postJson<DossierDetail, { version?: string }>(`/api/dossiers/${id}/activities/${activityId}/${transition}`, { version })
+}
+
+/** T-H7: cancel a standalone activity (reason required). */
+export function cancelStandaloneActivity(id: string, activityId: string, reason: string, version?: string): Promise<DossierDetail> {
+  return apiClient.postJson<DossierDetail, { reason: string; version?: string }>(
+    `/api/dossiers/${id}/activities/${activityId}/cancel`,
+    { reason, version },
+  )
+}
+
 export function planDossierActivity(id: string, activityId: string, input: PlanDossierActivityInput = {}): Promise<DossierDetail> {
   return apiClient.postJson<DossierDetail, PlanDossierActivityInput>(`/api/dossiers/${id}/activities/${activityId}/plan`, input)
 }

@@ -48,6 +48,11 @@ export interface DossierListItem {
   version?: string | null
   /** Server roll-up over the billable units; null = nothing billable. Absent on older payloads. */
   priceStatus?: ActivityPriceStatus | null
+  /** M11: settled units (Priced or confirmed Free) — the same count the dossier detail shows. */
+  settledActivityCount?: number
+  unpricedActivityCount?: number
+  freeActivityCount?: number
+  partiallyPricedActivityCount?: number
 }
 
 export type DossierInvoiceStatus = 'NotInvoiced' | 'Draft' | 'Sent' | 'Paid'
@@ -96,6 +101,11 @@ export interface DossierFinancialSummary {
   settledActivityCount?: number
   pricedActivityCount?: number
   zeroPricedActivityCount?: number
+  /** M11: shared server counts (DossierPriceCounts) — identical to the list row. */
+  unpricedActivityCount?: number
+  freeActivityCount?: number
+  partiallyPricedActivityCount?: number
+  priceStatus?: ActivityPriceStatus | null
   invoicedTotal: number
   estimatedIncidentCost: number
   actualIncidentCost: number
@@ -151,7 +161,35 @@ export interface DossierActivity {
   /** D6: issued transport documents (CMR/werkbon) and uploaded documents of the activity's order. */
   issuedDocuments?: { id: string; kind: 'Cmr' | 'DeliveryNote' | 'WorkOrder'; documentNumber: string }[]
   documentCount?: number
+  // --- T-H7 (2026-10-16): standalone execution (absent on older payloads) ---
+  /** Type flag: operational work that is planned and executed (crane, plateau). */
+  planningRelevant?: boolean
+  /** Standalone + planning-relevant: carries start time, site, work description, driver and vehicle. */
+  isExecutable?: boolean
+  requiresCrane?: boolean
+  /** Standalone only; null for order-backed activities (the order carries the status). */
+  executionStatus?: DossierActivityExecutionStatus | null
+  /** "HH:mm:ss" (local). */
+  startTime?: string | null
+  /** Derived: date + start + duration (local ISO, no zone). */
+  plannedEnd?: string | null
+  siteAddress?: string | null
+  workDescription?: string | null
+  driverId?: string | null
+  driverName?: string | null
+  vehicleId?: string | null
+  vehicleNumber?: string | null
+  vehiclePlate?: string | null
+  startedAt?: string | null
+  completedAt?: string | null
+  completedByName?: string | null
+  cancelledAt?: string | null
+  cancellationReason?: string | null
+  /** M11: billable and not cancelled — counts in the dossier's price completeness. */
+  countsForPricing?: boolean
 }
+
+export type DossierActivityExecutionStatus = 'Planned' | 'InProgress' | 'Completed' | 'Cancelled'
 
 /**
  * Commercial status of a billable unit, derived by the SERVER. `ZeroUnconfirmed` (pricing UX sprint
@@ -316,6 +354,10 @@ export interface DossierActivityInput {
   /** HasStops types only: also create a draft order inside this dossier and link it. */
   createLinkedOrder?: boolean
   version?: string
+  /** T-H7 (executable standalone types): "HH:mm"; omitted = unchanged, "" = clear. */
+  startTime?: string
+  siteAddress?: string
+  workDescription?: string
 }
 
 /** Vertaalsleutels per status — renderen als t(DOSSIER_STATUS_LABELS[status]). */
