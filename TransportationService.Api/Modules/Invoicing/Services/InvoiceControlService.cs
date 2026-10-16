@@ -256,7 +256,9 @@ public class InvoiceControlService : IInvoiceControlService
             var pricing = pricings.GetValueOrDefault(r.Id);
             var priced = pricing is not null && ActivityPricingState.IsPriced(pricing);
             var unconfirmedZero = priced && ActivityPricingState.IsUnconfirmedZero(pricing!);
-            var date = r.CompletedAt is { } done ? DateOnly.FromDateTime(done) : r.PlannedDate;
+            // The business day of the work (like an order's date), not the UTC date of the completion
+            // click — completing just after midnight showed yesterday.
+            var date = r.PlannedDate ?? (r.CompletedAt is { } done ? DateOnly.FromDateTime(done) : null);
             ControlActivityDto Dto(IReadOnlyList<string> reasons) => new(
                 r.Id, r.DossierId, r.DossierNumber, r.TypeName, r.Label, date,
                 priced ? pricing!.AgreedPrice : null, priced && ActivityPricingState.IsFree(pricing!),
