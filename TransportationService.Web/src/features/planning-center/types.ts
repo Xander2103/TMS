@@ -124,6 +124,9 @@ export interface PlanningVehicle {
   overdueMaintenanceCount: number
   overdueInspectionCount: number
   assignments: ResourceAssignment[]
+  /** FL-H1/H2/H4: fleet readiness on the first day of the window (server verdict). */
+  readiness?: 'Deployable' | 'Warning' | 'Blocked' | null
+  readinessSummary?: string | null
 }
 
 export interface PlanningTrailer {
@@ -139,6 +142,9 @@ export interface PlanningTrailer {
   overdueMaintenanceCount: number
   overdueInspectionCount: number
   assignments: ResourceAssignment[]
+  /** FL-H1/H2/H4: fleet readiness on the first day of the window (server verdict). */
+  readiness?: 'Deployable' | 'Warning' | 'Blocked' | null
+  readinessSummary?: string | null
 }
 
 export interface PlanningResources {

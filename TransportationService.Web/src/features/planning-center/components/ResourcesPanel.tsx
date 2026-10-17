@@ -45,14 +45,14 @@ export function ResourcesPanel({ resources, isLoading, pinnedIds, onTogglePin, o
   const vehicles = useMemo(() => {
     const list = (resources?.vehicles ?? [])
       .filter((v) => !term || v.internalNumber.toLowerCase().includes(term) || v.licensePlate.toLowerCase().includes(term))
-      .filter((v) => !onlyAvailable || (v.isActive && v.operationalStatus === 'Available' && v.assignments.length === 0))
+      .filter((v) => !onlyAvailable || (v.isActive && v.operationalStatus === 'Available' && v.readiness !== 'Blocked' && v.assignments.length === 0))
     return sortPinnedFirst(list, pinnedIds, (v) => v.id)
   }, [resources, term, onlyAvailable, pinnedIds])
 
   const trailers = useMemo(() => {
     const list = (resources?.trailers ?? [])
       .filter((tr) => !term || tr.internalNumber.toLowerCase().includes(term) || tr.licensePlate.toLowerCase().includes(term))
-      .filter((tr) => !onlyAvailable || (tr.isActive && tr.operationalStatus === 'Available' && tr.assignments.length === 0))
+      .filter((tr) => !onlyAvailable || (tr.isActive && tr.operationalStatus === 'Available' && tr.readiness !== 'Blocked' && tr.assignments.length === 0))
     return sortPinnedFirst(list, pinnedIds, (tr) => tr.id)
   }, [resources, term, onlyAvailable, pinnedIds])
 
@@ -208,6 +208,9 @@ function VehicleCard({ vehicle, pinned, onTogglePin, t }: {
         {vehicle.hasCrane && <Badge tone="info">{t('planningCenter.resources.crane')}</Badge>}
         {vehicle.hasTailLift && <Badge tone="info">{t('planningCenter.resources.tailLift')}</Badge>}
         {vehicle.hasRefrigeration && <Badge tone="info">{t('planningCenter.resources.refrigeration')}</Badge>}
+        {vehicle.readiness && vehicle.readiness !== 'Deployable' && vehicle.readinessSummary && (
+          <Badge tone={vehicle.readiness === 'Blocked' ? 'danger' : 'warning'}>{vehicle.readiness === 'Blocked' ? '⛔ ' : '⚠ '}{vehicle.readinessSummary}</Badge>
+        )}
         {vehicle.overdueMaintenanceCount > 0 && <Badge tone="danger">{t('planningCenter.resources.maintenanceOverdue')}</Badge>}
         {vehicle.overdueInspectionCount > 0 && <Badge tone="danger">{t('planningCenter.resources.inspectionOverdue')}</Badge>}
         {vehicle.assignments.length > 0
@@ -247,6 +250,9 @@ function TrailerCard({ trailer, pinned, onTogglePin, t }: {
         {trailer.operationalStatus !== 'Available' && <Badge tone="warning">{labelFor(t, trailer.operationalStatus, 'trailers.status')}</Badge>}
         {trailer.adrSuitable && <Badge tone="info">ADR</Badge>}
         {trailer.hasRefrigeration && <Badge tone="info">{t('planningCenter.resources.refrigeration')}</Badge>}
+        {trailer.readiness && trailer.readiness !== 'Deployable' && trailer.readinessSummary && (
+          <Badge tone={trailer.readiness === 'Blocked' ? 'danger' : 'warning'}>{trailer.readiness === 'Blocked' ? '⛔ ' : '⚠ '}{trailer.readinessSummary}</Badge>
+        )}
         {trailer.overdueMaintenanceCount > 0 && <Badge tone="danger">{t('planningCenter.resources.maintenanceOverdue')}</Badge>}
         {trailer.overdueInspectionCount > 0 && <Badge tone="danger">{t('planningCenter.resources.inspectionOverdue')}</Badge>}
         {trailer.assignments.length > 0
