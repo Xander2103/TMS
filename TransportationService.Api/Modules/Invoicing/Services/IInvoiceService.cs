@@ -6,8 +6,15 @@ namespace TransportationService.Api.Modules.Invoicing.Services;
 
 public interface IInvoiceService
 {
+    /// <summary>
+    /// List search. <paramref name="search"/> matches the invoice number, customer name and
+    /// number, PO number, and the order numbers / customer references / dossier numbers of the
+    /// invoiced work (ACC-M10). <paramref name="paid"/>: "paid" = Paid, "unpaid" = Sent (issued,
+    /// not yet paid). <paramref name="peppolStatus"/>: newest transmission status of the invoice.
+    /// </summary>
     Task<PagedResult<InvoiceListItemDto>> SearchAsync(
-        string? search, InvoiceStatus? status, Guid? customerId, PageRequest page, CancellationToken cancellationToken, string? sort = null, string? dir = null);
+        string? search, InvoiceStatus? status, Guid? customerId, PageRequest page, CancellationToken cancellationToken, string? sort = null, string? dir = null,
+        DateOnly? dateFrom = null, DateOnly? dateTo = null, string? paid = null, string? peppolStatus = null);
 
     Task<InvoiceDetailDto?> GetByIdAsync(Guid id, CancellationToken cancellationToken);
 

@@ -116,23 +116,61 @@ public class InvoiceService : IInvoiceService
         _dbContext.Invoices.Where(i => i.TenantId == _tenantContext.TenantId);
 
     public async Task<PagedResult<InvoiceListItemDto>> SearchAsync(
-        string? search, InvoiceStatus? status, Guid? customerId, PageRequest page, CancellationToken cancellationToken, string? sort = null, string? dir = null)
+        string? search, InvoiceStatus? status, Guid? customerId, PageRequest page, CancellationToken cancellationToken, string? sort = null, string? dir = null,
+        DateOnly? dateFrom = null, DateOnly? dateTo = null, string? paid = null, string? peppolStatus = null)
     {
+        var tenantId = _tenantContext.TenantId;
         var query = TenantScoped().AsNoTracking();
 
         if (status is { } s) query = query.Where(i => i.Status == s);
         if (customerId is { } c) query = query.Where(i => i.CustomerId == c);
+        if (dateFrom is { } from) query = query.Where(i => i.InvoiceDate >= from);
+        if (dateTo is { } to) query = query.Where(i => i.InvoiceDate <= to);
+        // ACC-M10: "betaald / openstaand" — an issued invoice is open until it is Paid.
+        switch (paid?.Trim().ToLowerInvariant())
+        {
+            case "paid": query = query.Where(i => i.Status == InvoiceStatus.Paid); break;
+            case "unpaid": query = query.Where(i => i.Status == InvoiceStatus.Sent); break;
+        }
+
+        if (!string.IsNullOrWhiteSpace(peppolStatus)
+            && Enum.TryParse<Modules.Peppol.Entities.PeppolTransmissionStatus>(peppolStatus, true, out var wantedPeppol))
+        {
+            // The newest transmission (highest payload version, then most recent) decides.
+            query = query.Where(i => _dbContext.PeppolTransmissions
+                .Where(t => t.TenantId == tenantId && t.InvoiceId == i.Id)
+                .OrderByDescending(t => t.PayloadVersion).ThenByDescending(t => t.CreatedAt)
+                .Select(t => (Modules.Peppol.Entities.PeppolTransmissionStatus?)t.Status)
+                .FirstOrDefault() == wantedPeppol);
+        }
 
         var joined = from i in query
-                     join cu in _dbContext.Customers.AsNoTracking().Where(x => x.TenantId == _tenantContext.TenantId)
+                     join cu in _dbContext.Customers.AsNoTracking().Where(x => x.TenantId == tenantId)
                          on i.CustomerId equals cu.Id
-                     select new { i, CustomerName = cu.Name };
+                     select new { i, CustomerName = cu.Name, cu.CustomerNumber };
 
         if (!string.IsNullOrWhiteSpace(search))
         {
             var term = search.Trim().ToLower();
+            // Number, customer (name/number), PO, and the invoiced work itself: order number,
+            // customer reference and the dossier the order or activity belongs to (ACC-M10).
+            var orders = _dbContext.TransportOrders.AsNoTracking().Where(o => o.TenantId == tenantId);
+            var dossiers = _dbContext.TransportDossiers.AsNoTracking().Where(d => d.TenantId == tenantId);
+            var dossierOrders = _dbContext.DossierOrders.AsNoTracking().Where(d => d.TenantId == tenantId);
+            var activities = _dbContext.DossierActivities.AsNoTracking().Where(a => a.TenantId == tenantId);
+            var lines = _dbContext.InvoiceLines.AsNoTracking().Where(l => l.TenantId == tenantId);
             joined = joined.Where(x =>
-                x.i.InvoiceNumber.ToLower().Contains(term) || x.CustomerName.ToLower().Contains(term));
+                (x.i.InvoiceNumber ?? string.Empty).ToLower().Contains(term)
+                || x.CustomerName.ToLower().Contains(term)
+                || x.CustomerNumber.ToLower().Contains(term)
+                || (x.i.PurchaseOrderNumber != null && x.i.PurchaseOrderNumber.ToLower().Contains(term))
+                || lines.Any(l => l.InvoiceId == x.i.Id && l.TransportOrderId != null && orders.Any(o =>
+                    o.Id == l.TransportOrderId
+                    && (o.OrderNumber.ToLower().Contains(term)
+                        || (o.CustomerReference != null && o.CustomerReference.ToLower().Contains(term))
+                        || dossierOrders.Any(d => d.TransportOrderId == o.Id && dossiers.Any(td => td.Id == d.DossierId && td.DossierNumber.ToLower().Contains(term))))))
+                || lines.Any(l => l.InvoiceId == x.i.Id && l.DossierActivityId != null && activities.Any(a =>
+                    a.Id == l.DossierActivityId && dossiers.Any(td => td.Id == a.DossierId && td.DossierNumber.ToLower().Contains(term)))));
         }
 
         var totalCount = await joined.CountAsync(cancellationToken);
@@ -151,15 +189,23 @@ public class InvoiceService : IInvoiceService
         var pageRows = await ordered
             .Skip(page.Skip)
             .Take(page.PageSize)
-            .Select(x => new { x.i.Id, x.i.InvoiceNumber, x.i.InvoiceDate, x.i.DueDate, x.i.CustomerId, x.CustomerName, x.i.Status, x.i.Currency, x.i.Kind })
+            .Select(x => new { x.i.Id, x.i.InvoiceNumber, x.i.InvoiceDate, x.i.DueDate, x.i.CustomerId, x.CustomerName, x.CustomerNumber, x.i.Status, x.i.Currency, x.i.Kind })
             .ToListAsync(cancellationToken);
 
         var invoiceIds = pageRows.Select(r => r.Id).ToList();
-        var lines = await _dbContext.InvoiceLines.AsNoTracking()
-            .Where(l => l.TenantId == _tenantContext.TenantId && invoiceIds.Contains(l.InvoiceId))
+        var lineRows = await _dbContext.InvoiceLines.AsNoTracking()
+            .Where(l => l.TenantId == tenantId && invoiceIds.Contains(l.InvoiceId))
             .Select(l => new { l.InvoiceId, l.Quantity, l.UnitPrice, l.VatRatePercent })
             .ToListAsync(cancellationToken);
-        var linesByInvoice = lines.ToLookup(l => l.InvoiceId);
+        var linesByInvoice = lineRows.ToLookup(l => l.InvoiceId);
+        var peppolByInvoice = invoiceIds.Count == 0
+            ? new Dictionary<Guid, string>()
+            : (await _dbContext.PeppolTransmissions.AsNoTracking()
+                .Where(t => t.TenantId == tenantId && invoiceIds.Contains(t.InvoiceId))
+                .Select(t => new { t.InvoiceId, t.Status, t.PayloadVersion, t.CreatedAt })
+                .ToListAsync(cancellationToken))
+                .GroupBy(t => t.InvoiceId)
+                .ToDictionary(g => g.Key, g => g.OrderByDescending(t => t.PayloadVersion).ThenByDescending(t => t.CreatedAt).First().Status.ToString());
 
         var items = pageRows.Select(r =>
         {
@@ -172,11 +218,17 @@ public class InvoiceService : IInvoiceService
                     Math.Round(g.Sum(l => MoneyRounding.LineTotal(l.Quantity, l.UnitPrice)), 2) * g.Key / 100m, 2, MidpointRounding.AwayFromZero));
             return new InvoiceListItemDto(
                 r.Id, r.InvoiceNumber, r.InvoiceDate, r.DueDate, r.CustomerId, r.CustomerName,
-                r.Status, r.Currency, subtotal, vat, subtotal + vat, invoiceLines.Count, r.Kind);
+                r.Status, r.Currency, subtotal, vat, subtotal + vat, invoiceLines.Count, r.Kind,
+                r.CustomerNumber, peppolByInvoice.GetValueOrDefault(r.Id), null,
+                DisplayNumberOf(r.InvoiceNumber, r.Id));
         }).ToList();
 
         return new PagedResult<InvoiceListItemDto>(items, totalCount, page.Page, page.PageSize);
     }
+
+    /// <summary>The legal number once issued; a draft shows a reference derived from its id (ACC-H3).</summary>
+    private static string DisplayNumberOf(string? invoiceNumber, Guid id) =>
+        string.IsNullOrEmpty(invoiceNumber) ? "CONCEPT-" + id.ToString("N")[..4].ToUpperInvariant() : invoiceNumber;
 
     public async Task<InvoiceDetailDto?> GetByIdAsync(Guid id, CancellationToken cancellationToken)
     {

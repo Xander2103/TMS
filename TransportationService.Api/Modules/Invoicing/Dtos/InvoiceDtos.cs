@@ -15,7 +15,14 @@ public record InvoiceListItemDto(
     decimal VatAmount,
     decimal Total,
     int LineCount,
-    InvoiceKind Kind = InvoiceKind.Invoice);
+    InvoiceKind Kind = InvoiceKind.Invoice,
+    // ACC-M10: accounting productivity columns/filters (customer number, newest Peppol
+    // transmission status, paid moment) and the number as shown (legal number, or the draft
+    // reference while no legal number exists yet).
+    string? CustomerNumber = null,
+    string? PeppolStatus = null,
+    DateTime? PaidAt = null,
+    string? DisplayNumber = null);
 
 public record InvoiceLineDto(
     Guid Id,
