@@ -10,6 +10,7 @@ import { FormSection } from '../../../components/ui/FormSection'
 import { Modal } from '../../../components/ui/Modal'
 import { ValidationSummary } from '../../../components/ui/ValidationSummary'
 import { useToast } from '../../../components/ui/toastContext'
+import './customer-portal-pages.css'
 import { useAuth } from '../../auth/authContextValue'
 import { useLocale } from '../../../i18n/localeContext'
 import { describeApiError, type FieldErrors } from '../../../api/problemDetails'
@@ -58,6 +59,15 @@ function emptyStop(stopType: StopType): StopRow {
     key: nextKey(), stopType, locationId: '', locationName: '', address: '', postalCode: '', city: '',
     requestedFrom: '', requestedTo: '', reference: '', instructions: '',
   }
+}
+
+/** "Kabelweg 9, 2000 Antwerpen" for a saved location; null when it has no address parts. */
+function selectedAddress(locations: PortalLocation[], id: string): string | null {
+  const location = locations.find((l) => l.id === id)
+  if (!location) return null
+  const street = [location.street, location.houseNumber].filter(Boolean).join(' ')
+  const place = [location.postalCode, location.city].filter(Boolean).join(' ')
+  return [street, place].filter(Boolean).join(', ') || null
 }
 
 /**
@@ -214,6 +224,12 @@ export function CustomerPortalNewOrderPage() {
                         </option>
                       ))}
                     </select>
+                    {stop.locationId !== '' && selectedAddress(locations, stop.locationId) && (
+                      // The picked saved location replaces the address fields: show where it is.
+                      <p className="cp-location-address" data-testid={`cp-loc-address-${stop.key}`}>
+                        {selectedAddress(locations, stop.locationId)}
+                      </p>
+                    )}
                     {canManageLocations && (
                       <button type="button" className="tof-link" onClick={() => setNewLocationFor(stop.key)} disabled={saving}>
                         {t('orders.new.addLocation')}

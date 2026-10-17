@@ -130,3 +130,24 @@ describe('CustomerPortalNewOrderPage — window encoding', () => {
     expect(payload.stops[0].requestedTo).toBeNull()
   })
 })
+
+describe('CustomerPortalNewOrderPage — saved location', () => {
+  it('shows the address of the picked saved location instead of hiding it', async () => {
+    api.listPortalLocations.mockResolvedValue([{
+      id: 'loc-1', name: 'Magazijn Hasselt', street: 'Kanaalkaai', houseNumber: '12', postalCode: '3500', city: 'Hasselt',
+      countryCode: 'BE', isDefaultLoadingLocation: false, isDefaultUnloadingLocation: false,
+    }])
+    const { container } = render(
+      <MemoryRouter>
+        <CustomerPortalNewOrderPage />
+      </MemoryRouter>,
+    )
+    const select = container.querySelector<HTMLSelectElement>('select[id^="cp-loc-"]')!
+    await waitFor(() => expect(select.querySelectorAll('option')).toHaveLength(2))
+    fireEvent.change(select, { target: { value: 'loc-1' } })
+
+    expect(await screen.findByText('Kanaalkaai 12, 3500 Hasselt')).toBeInTheDocument()
+    // The free-address fields are replaced by the saved location for that stop.
+    expect(container.querySelectorAll('input[id^="cp-city-"]')).toHaveLength(1)
+  })
+})

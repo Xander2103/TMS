@@ -287,3 +287,11 @@
   gap: 0.75rem;
   margin-top: 1rem;
 }
+
+/* The address of the saved location picked for a stop (the address fields are hidden then). */
+.cp-location-address {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
