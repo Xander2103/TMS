@@ -479,6 +479,10 @@ public class PlanningBoardService : IPlanningBoardService
                 EmploymentDeployability.RestrictionCode(d.EmploymentStatus));
         }).ToList();
 
+        var fleetReadiness = new Fleet.Services.FleetReadinessService(_dbContext, _tenantContext, _timeProvider);
+        var vehicleReadiness = await fleetReadiness.EvaluateVehiclesAsync(vehicleRows.Select(v => v.Id).ToList(), start, cancellationToken);
+        var trailerReadiness = await fleetReadiness.EvaluateTrailersAsync(trailerRows.Select(t => t.Id).ToList(), start, cancellationToken);
+
         var vehicles = vehicleRows.Select(v => new PlanningVehicleDto(
             v.Id, v.InternalNumber, v.LicensePlate, v.OperationalStatus, v.IsActive,
             v.PayloadKg, v.VolumeM3, v.HasCrane, v.HasTailLift, v.HasRefrigeration, v.AdrSuitable,
@@ -486,14 +490,18 @@ public class PlanningBoardService : IPlanningBoardService
             v.CurrentDriverId, v.CurrentDriverId is { } cd ? driverNamesById.GetValueOrDefault(cd) : null,
             maintenanceByVehicle[v.Id].Count(), inspectionsByVehicle[v.Id].Count(),
             tripsByVehicle[v.Id].OrderBy(t => t.TripDate)
-                .Select(t => new ResourceAssignmentDto(t.TripDate, t.Id, t.TripNumber, t.Status)).ToList())).ToList();
+                .Select(t => new ResourceAssignmentDto(t.TripDate, t.Id, t.TripNumber, t.Status)).ToList(),
+            vehicleReadiness.GetValueOrDefault(v.Id)?.Level,
+            vehicleReadiness.GetValueOrDefault(v.Id) is { Level: not Fleet.Dtos.ReadinessLevel.Deployable } vr ? vr.Summary : null)).ToList();
 
         var trailers = trailerRows.Select(t => new PlanningTrailerDto(
             t.Id, t.InternalNumber, t.LicensePlate, t.OperationalStatus, t.IsActive,
             t.CapacityKg, t.VolumeM3, t.HasRefrigeration, t.AdrSuitable,
             maintenanceByTrailer[t.Id].Count(), inspectionsByTrailer[t.Id].Count(),
             tripsByTrailer[t.Id].OrderBy(x => x.TripDate)
-                .Select(x => new ResourceAssignmentDto(x.TripDate, x.Id, x.TripNumber, x.Status)).ToList())).ToList();
+                .Select(x => new ResourceAssignmentDto(x.TripDate, x.Id, x.TripNumber, x.Status)).ToList(),
+            trailerReadiness.GetValueOrDefault(t.Id)?.Level,
+            trailerReadiness.GetValueOrDefault(t.Id) is { Level: not Fleet.Dtos.ReadinessLevel.Deployable } tr ? tr.Summary : null)).ToList();
 
         return new PlanningResourcesDto(start, end, drivers, vehicles, trailers);
     }

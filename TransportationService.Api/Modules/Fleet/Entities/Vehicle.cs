@@ -57,7 +57,17 @@ public enum VehicleOperationalStatus
 public class Vehicle : AuditableTenantEntity
 {
     public string InternalNumber { get; set; } = string.Empty;
-    public string LicensePlate { get; set; } = string.Empty;
+    private string _licensePlate = string.Empty;
+
+    public string LicensePlate
+    {
+        get => _licensePlate;
+        set
+        {
+            _licensePlate = value;
+            NormalizedLicensePlate = LicensePlates.Normalize(value);
+        }
+    }
 
     /// <summary>
     /// FL-M1: the plate reduced to upper-case letters and digits ("1-TFT-001", "1 tft 001" and

@@ -132,7 +132,10 @@ public record PlanningVehicleDto(
     string? CurrentDriverName,
     int OverdueMaintenanceCount,
     int OverdueInspectionCount,
-    IReadOnlyList<ResourceAssignmentDto> Assignments);
+    IReadOnlyList<ResourceAssignmentDto> Assignments,
+    /// <summary>FL-H1/H2/H4: fleet readiness on the first day of the requested window.</summary>
+    Fleet.Dtos.ReadinessLevel? Readiness = null,
+    string? ReadinessSummary = null);
 
 public record PlanningTrailerDto(
     Guid Id,
@@ -146,7 +149,9 @@ public record PlanningTrailerDto(
     bool AdrSuitable,
     int OverdueMaintenanceCount,
     int OverdueInspectionCount,
-    IReadOnlyList<ResourceAssignmentDto> Assignments);
+    IReadOnlyList<ResourceAssignmentDto> Assignments,
+    Fleet.Dtos.ReadinessLevel? Readiness = null,
+    string? ReadinessSummary = null);
 
 public record PlanningResourcesDto(
     DateOnly From,

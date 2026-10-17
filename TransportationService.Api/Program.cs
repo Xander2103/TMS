@@ -312,6 +312,8 @@ builder.Services.AddScoped<TransportationService.Api.Modules.Fleet.Services.ILea
     TransportationService.Api.Modules.Fleet.Services.LeasingContractService>();
 builder.Services.AddScoped<TransportationService.Api.Modules.Fleet.Services.IFleetDocumentService,
     TransportationService.Api.Modules.Fleet.Services.FleetDocumentService>();
+builder.Services.AddScoped<TransportationService.Api.Modules.Fleet.Services.IFleetReadinessService,
+    TransportationService.Api.Modules.Fleet.Services.FleetReadinessService>();
 builder.Services.AddScoped<TransportationService.Api.Modules.Fleet.Services.IMaintenanceService,
     TransportationService.Api.Modules.Fleet.Services.MaintenanceService>();
 builder.Services.AddScoped<TransportationService.Api.Modules.Fleet.Services.IMaintenancePolicyService,

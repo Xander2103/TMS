@@ -24,4 +24,18 @@ public record FleetDashboardDto(
     IReadOnlyList<ExpiringFleetDocumentDto> DocumentsExpiring,
     int OpenDamageCount,
     IReadOnlyList<RecentDamageDto> RecentDamage,
-    IReadOnlyList<FuelWarningDto> FuelWarnings);
+    IReadOnlyList<FuelWarningDto> FuelWarnings,
+    /// <summary>FL-M9: active leasing contracts that ended or end within 30 days.</summary>
+    int LeasingEndingCount = 0,
+    IReadOnlyList<LeasingEndingDto>? LeasingEnding = null);
+
+public record LeasingEndingDto(
+    Guid Id,
+    Guid? VehicleId,
+    Guid? TrailerId,
+    string OwnerNumber,
+    string OwnerLicensePlate,
+    string LeasingCompany,
+    string? ContractNumber,
+    DateOnly EndDate,
+    bool Ended);

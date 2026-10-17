@@ -119,7 +119,8 @@ public class MaintenanceService : IMaintenanceService
     public async Task<MaintenanceOperationResult> UpdateAsync(
         Guid id, UpdateMaintenanceRequest request, CancellationToken cancellationToken)
     {
-        if (Validate(request.MaintenanceType, request.CustomTypeName, request.Description, trailerOnly: false, request.OdometerTriggerKm) is { } error)
+        if (Validate(request.MaintenanceType, request.CustomTypeName, request.Description, trailerOnly: false, request.OdometerTriggerKm,
+                request.ScheduledDate, request.ScheduledEndDate) is { } error)
         {
             return MaintenanceOperationResult.Invalid(error);
         }
@@ -135,13 +136,19 @@ public class MaintenanceService : IMaintenanceService
             return MaintenanceOperationResult.Invalid("Een kilometertrigger is alleen mogelijk voor voertuigen.");
         }
 
-        var before = new { record.MaintenanceType, record.Status, record.ScheduledDate };
+        if (record.Status is MaintenanceStatus.Completed && request.Status != MaintenanceStatus.Completed)
+        {
+            return MaintenanceOperationResult.Invalid("Afgerond onderhoud kan niet opnieuw geopend worden; plan een nieuw onderhoud.");
+        }
+
+        var before = new { record.MaintenanceType, record.Status, record.ScheduledDate, record.ScheduledEndDate, record.Provider };
 
         record.MaintenanceType = request.MaintenanceType;
         record.CustomTypeName = request.MaintenanceType == MaintenanceType.Other ? Trim(request.CustomTypeName) : null;
         record.Status = request.Status;
         record.Description = request.Description.Trim();
         record.ScheduledDate = request.ScheduledDate;
+        record.ScheduledEndDate = NormalizeEnd(request.ScheduledDate, request.ScheduledEndDate);
         record.OdometerTriggerKm = request.OdometerTriggerKm;
         record.Provider = Trim(request.Provider);
         record.IntervalMonths = NormalizeInterval(request.IntervalMonths, 120);
@@ -150,8 +157,18 @@ public class MaintenanceService : IMaintenanceService
 
         await _dbContext.SaveChangesAsync(cancellationToken);
 
-        await _auditService.RecordAsync(EntityType, record.Id.ToString(), "Updated", before,
-            new { record.MaintenanceType, record.Status, record.ScheduledDate }, cancellationToken);
+        // FL-H3: starting/cancelling is a lifecycle event of its own in the vehicle timeline.
+        var action = before.Status != record.Status
+            ? record.Status switch
+            {
+                MaintenanceStatus.InProgress => "Started",
+                MaintenanceStatus.Cancelled => "Cancelled",
+                _ => "Updated",
+            }
+            : "Updated";
+        await _auditService.RecordAsync(EntityType, record.Id.ToString(), action, before,
+            new { record.MaintenanceType, record.Status, record.ScheduledDate, record.ScheduledEndDate, record.Provider,
+                record.VehicleId, record.TrailerId, record.Description }, cancellationToken);
 
         return MaintenanceOperationResult.Success(await MapWithOwnerOdometerAsync(record, cancellationToken));
     }
@@ -171,7 +188,14 @@ public class MaintenanceService : IMaintenanceService
         }
 
         var before = new { record.Status, record.CompletedDate };
-
+        if (request.CompletedOdometerKm is < 0)
+        {
+            return MaintenanceOperationResult.Invalid("De kilometerstand kan niet negatief zijn.");
+        }
+        if (request.Cost is < 0)
+        {
+            return MaintenanceOperationResult.Invalid("De kosten kunnen niet negatief zijn.");
+        }
         record.Status = MaintenanceStatus.Completed;
         record.CompletedDate = request.CompletedDate;
         record.CompletedOdometerKm = request.CompletedOdometerKm;
@@ -224,7 +248,8 @@ public class MaintenanceService : IMaintenanceService
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         await _auditService.RecordAsync(EntityType, record.Id.ToString(), "Completed", before,
-            new { record.Status, record.CompletedDate, record.Cost, FollowUpId = followUp?.Id }, cancellationToken);
+            new { record.Status, record.CompletedDate, record.CompletedOdometerKm, record.Cost, record.Provider, record.WorkPerformed,
+                record.VehicleId, record.TrailerId, record.Description, FollowUpId = followUp?.Id }, cancellationToken);
 
         return MaintenanceOperationResult.Success(
             await MapWithOwnerOdometerAsync(record, cancellationToken),
@@ -252,7 +277,7 @@ public class MaintenanceService : IMaintenanceService
         Guid? vehicleId, Guid? trailerId, CreateMaintenanceRequest request, CancellationToken cancellationToken)
     {
         if (Validate(request.MaintenanceType, request.CustomTypeName, request.Description,
-                trailerOnly: trailerId is not null, request.OdometerTriggerKm) is { } error)
+                trailerOnly: trailerId is not null, request.OdometerTriggerKm, request.ScheduledDate, request.ScheduledEndDate) is { } error)
         {
             return MaintenanceOperationResult.Invalid(error);
         }
@@ -277,6 +302,7 @@ public class MaintenanceService : IMaintenanceService
             Status = MaintenanceStatus.Planned,
             Description = request.Description.Trim(),
             ScheduledDate = request.ScheduledDate,
+            ScheduledEndDate = NormalizeEnd(request.ScheduledDate, request.ScheduledEndDate),
             OdometerTriggerKm = request.OdometerTriggerKm,
             Provider = Trim(request.Provider),
             IntervalMonths = NormalizeInterval(request.IntervalMonths, 120),
@@ -288,14 +314,27 @@ public class MaintenanceService : IMaintenanceService
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         await _auditService.RecordAsync(EntityType, record.Id.ToString(), "Created", null,
-            new { record.MaintenanceType, record.VehicleId, record.TrailerId, record.ScheduledDate }, cancellationToken);
+            new { record.MaintenanceType, record.VehicleId, record.TrailerId, record.ScheduledDate, record.ScheduledEndDate,
+                record.Provider, record.Description }, cancellationToken);
 
         return MaintenanceOperationResult.Success(await MapWithOwnerOdometerAsync(record, cancellationToken));
     }
 
     private static string? Validate(
-        MaintenanceType type, string? customTypeName, string description, bool trailerOnly, int? odometerTriggerKm)
+        MaintenanceType type, string? customTypeName, string description, bool trailerOnly, int? odometerTriggerKm,
+        DateOnly? scheduledDate = null, DateOnly? scheduledEndDate = null)
     {
+        if (scheduledEndDate is { } end)
+        {
+            if (scheduledDate is not { } start)
+            {
+                return "Geef eerst een startdatum op voor het onderhoudsvenster.";
+            }
+            if (end < start)
+            {
+                return "De einddatum moet op of na de startdatum liggen.";
+            }
+        }
         if (string.IsNullOrWhiteSpace(description))
         {
             return "Een omschrijving is verplicht.";
@@ -319,6 +358,10 @@ public class MaintenanceService : IMaintenanceService
         return null;
     }
 
+    /// <summary>FL-M14: the inclusive end; the same day as the start (or none) is stored as null = single day.</summary>
+    private static DateOnly? NormalizeEnd(DateOnly? start, DateOnly? end) =>
+        start is { } s && end is { } e && e > s ? e : null;
+
     private static int? NormalizeInterval(int? value, int max) =>
         value is { } v ? Math.Clamp(v, 1, max) : null;
 
@@ -341,7 +384,8 @@ public class MaintenanceService : IMaintenanceService
         m.CompletedDate, m.CompletedOdometerKm, m.WorkPerformed, m.Provider, m.Cost,
         m.NextServiceDate, m.NextServiceOdometerKm, m.IntervalMonths, m.IntervalKm,
         HasAttachment: m.AttachmentPath is not null,
-        m.Notes);
+        m.Notes,
+        m.ScheduledEndDate);
 
     private static bool IsOverdue(MaintenanceRecord m, int? currentOdometerKm, DateOnly today) =>
         m.Status is MaintenanceStatus.Planned or MaintenanceStatus.InProgress

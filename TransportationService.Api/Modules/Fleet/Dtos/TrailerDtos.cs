@@ -15,7 +15,9 @@ public record TrailerListItemDto(
 /// <summary>Picker option; M1 adds the operational status and ADR suitability.</summary>
 public record TrailerOptionDto(
     Guid Id, string InternalNumber, string LicensePlate, string? Brand, string? Model,
-    string? OperationalStatus = null, bool AdrSuitable = false);
+    string? OperationalStatus = null, bool AdrSuitable = false,
+    /// <summary>FL-H1/H2/H4: fleet readiness on the requested day and its one-line summary.</summary>
+    ReadinessLevel? Readiness = null, string? ReadinessSummary = null);
 
 public record TrailerDetailDto(
     Guid Id,

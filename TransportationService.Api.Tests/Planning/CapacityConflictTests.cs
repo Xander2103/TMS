@@ -73,7 +73,7 @@ public class CapacityConflictTests
     }
 
     [Fact]
-    public async Task ExceedingWeight_WarnsByDefault_WithTotalsInTheMessage()
+    public async Task ExceedingWeight_IsBlockingEvenWithTheWarningSetting_WithTotalsInTheMessage()
     {
         var h = await SeedAsync(payloadKg: 10000, orderWeight: 12500);
         using var _ = h.Db;
@@ -81,7 +81,9 @@ public class CapacityConflictTests
         var conflicts = await h.Sut.EvaluateAsync(TripFor(h), CancellationToken.None);
 
         var conflict = Assert.Single(conflicts, c => c.Code == PlanningConflictCode.CapacityExceeded);
-        Assert.False(conflict.Blocking);
+        // FL-M4: overloading is a legal/safety matter — always blocking (overrideable with permission + reason).
+        Assert.True(conflict.Blocking);
+        Assert.True(conflict.OverrideAllowed);
         Assert.Contains("12500", conflict.Description.Replace(".", string.Empty).Replace(",", string.Empty));
         Assert.Contains("laadvermogen", conflict.Description);
     }

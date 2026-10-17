@@ -19,7 +19,17 @@ public enum TrailerOperationalStatus
 public class Trailer : AuditableTenantEntity
 {
     public string InternalNumber { get; set; } = string.Empty;
-    public string LicensePlate { get; set; } = string.Empty;
+    private string _licensePlate = string.Empty;
+
+    public string LicensePlate
+    {
+        get => _licensePlate;
+        set
+        {
+            _licensePlate = value;
+            NormalizedLicensePlate = LicensePlates.Normalize(value);
+        }
+    }
 
     /// <summary>FL-M1: upper-case letters and digits only; unique per tenant (see Vehicle).</summary>
     public string NormalizedLicensePlate { get; set; } = string.Empty;

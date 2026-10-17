@@ -60,6 +60,31 @@ public class FleetDashboardService : IFleetDashboardService
                         && d.Status != DamageStatus.Closed)
             .CountAsync(cancellationToken);
 
+        // FL-M9: leases that ended or end within 30 days (active contracts only).
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var horizon = today.AddDays(30);
+        var leases = await _dbContext.LeasingContracts.AsNoTracking()
+            .Where(l => l.TenantId == _tenantContext.TenantId && l.IsActive && l.EndDate != null && l.EndDate <= horizon)
+            .OrderBy(l => l.EndDate)
+            .Select(l => new { l.Id, l.VehicleId, l.TrailerId, l.LeasingCompany, l.ContractNumber, EndDate = l.EndDate!.Value })
+            .ToListAsync(cancellationToken);
+        var leaseVehicleIds = leases.Where(l => l.VehicleId != null).Select(l => l.VehicleId!.Value).ToList();
+        var leaseTrailerIds = leases.Where(l => l.TrailerId != null).Select(l => l.TrailerId!.Value).ToList();
+        var leaseVehicles = await _dbContext.Vehicles.AsNoTracking().Where(v => leaseVehicleIds.Contains(v.Id))
+            .ToDictionaryAsync(v => v.Id, v => (v.InternalNumber, v.LicensePlate), cancellationToken);
+        var leaseTrailers = await _dbContext.Trailers.AsNoTracking().Where(t => leaseTrailerIds.Contains(t.Id))
+            .ToDictionaryAsync(t => t.Id, t => (t.InternalNumber, t.LicensePlate), cancellationToken);
+        var leasingEnding = leases
+            .Select(l =>
+            {
+                var owner = l.VehicleId is { } vid && leaseVehicles.TryGetValue(vid, out var v) ? v
+                    : l.TrailerId is { } tid && leaseTrailers.TryGetValue(tid, out var t) ? t
+                    : (InternalNumber: "—", LicensePlate: "—");
+                return new LeasingEndingDto(l.Id, l.VehicleId, l.TrailerId, owner.InternalNumber, owner.LicensePlate,
+                    l.LeasingCompany, l.ContractNumber, l.EndDate, l.EndDate < today);
+            })
+            .ToList();
+
         return new FleetDashboardDto(
             vehicles,
             trailers,
@@ -71,7 +96,9 @@ public class FleetDashboardService : IFleetDashboardService
             documentsExpiring.Take(TopN).ToList(),
             openDamageCount,
             recentDamage,
-            fuelWarnings);
+            fuelWarnings,
+            leasingEnding.Count,
+            leasingEnding.Take(TopN).ToList());
     }
 
     private async Task<FleetAssetCountsDto> VehicleCountsAsync(CancellationToken cancellationToken)

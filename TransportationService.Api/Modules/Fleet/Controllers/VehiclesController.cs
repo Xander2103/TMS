@@ -15,13 +15,15 @@ public class VehiclesController : ControllerBase
     private readonly IVehicleService _service;
     private readonly IFleetAssignmentService _assignmentService;
     private readonly IMaintenancePolicyService _maintenancePolicies;
+    private readonly IFleetReadinessService _readiness;
 
     public VehiclesController(IVehicleService service, IFleetAssignmentService assignmentService,
-        IMaintenancePolicyService maintenancePolicies)
+        IMaintenancePolicyService maintenancePolicies, IFleetReadinessService readiness)
     {
         _service = service;
         _assignmentService = assignmentService;
         _maintenancePolicies = maintenancePolicies;
+        _readiness = readiness;
     }
 
     [HttpGet]
@@ -43,9 +45,17 @@ public class VehiclesController : ControllerBase
 
     [HttpGet("options")]
     [RequirePermission(PermissionCodes.VehiclesView)]
-    public async Task<ActionResult<IReadOnlyList<VehicleOptionDto>>> Options(CancellationToken cancellationToken)
+    public async Task<ActionResult<IReadOnlyList<VehicleOptionDto>>> Options(
+        [FromQuery] DateOnly? date, CancellationToken cancellationToken)
     {
-        return Ok(await _service.GetOptionsAsync(cancellationToken));
+        // FL-H1/H2/H4: every option carries the fleet readiness for the day it would be used
+        // (the trip date when the picker passes it, otherwise today).
+        var options = await _service.GetOptionsAsync(cancellationToken);
+        var day = date ?? DateOnly.FromDateTime(DateTime.UtcNow);
+        var readiness = await _readiness.EvaluateVehiclesAsync(options.Select(o => o.Id).ToList(), day, cancellationToken);
+        return Ok(options.Select(o => readiness.TryGetValue(o.Id, out var r)
+            ? o with { Readiness = r.Level, ReadinessSummary = r.Level == ReadinessLevel.Deployable ? null : r.Summary }
+            : o).ToList());
     }
 
     [HttpGet("{id:guid}")]

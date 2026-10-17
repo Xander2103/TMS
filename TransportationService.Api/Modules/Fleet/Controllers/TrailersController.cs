@@ -40,9 +40,15 @@ public class TrailersController : ControllerBase
 
     [HttpGet("options")]
     [RequirePermission(PermissionCodes.TrailersView)]
-    public async Task<ActionResult<IReadOnlyList<TrailerOptionDto>>> Options(CancellationToken cancellationToken)
+    public async Task<ActionResult<IReadOnlyList<TrailerOptionDto>>> Options(
+        [FromQuery] DateOnly? date, [FromServices] IFleetReadinessService readinessService, CancellationToken cancellationToken)
     {
-        return Ok(await _service.GetOptionsAsync(cancellationToken));
+        var options = await _service.GetOptionsAsync(cancellationToken);
+        var day = date ?? DateOnly.FromDateTime(DateTime.UtcNow);
+        var readiness = await readinessService.EvaluateTrailersAsync(options.Select(o => o.Id).ToList(), day, cancellationToken);
+        return Ok(options.Select(o => readiness.TryGetValue(o.Id, out var r)
+            ? o with { Readiness = r.Level, ReadinessSummary = r.Level == ReadinessLevel.Deployable ? null : r.Summary }
+            : o).ToList());
     }
 
     [HttpGet("{id:guid}")]

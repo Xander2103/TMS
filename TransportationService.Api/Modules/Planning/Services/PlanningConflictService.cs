@@ -26,17 +26,22 @@ public class PlanningConflictService : IPlanningConflictService
     private readonly ITenantContext _tenantContext;
     private readonly IQualificationStatusCalculator _statusCalculator;
     private readonly TimeProvider _timeProvider;
+    private readonly Fleet.Services.IFleetReadinessService _fleetReadiness;
 
     public PlanningConflictService(
         TransportationDbContext dbContext,
         ITenantContext tenantContext,
         IQualificationStatusCalculator statusCalculator,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        Fleet.Services.IFleetReadinessService? fleetReadiness = null)
     {
         _dbContext = dbContext;
         _tenantContext = tenantContext;
         _statusCalculator = statusCalculator;
         _timeProvider = timeProvider;
+        // FL-H1/H2/H4: the fleet verdict is the ONE source for asset availability (manual status,
+        // maintenance windows, legal documents, damage) — Planning never re-derives it.
+        _fleetReadiness = fleetReadiness ?? new Fleet.Services.FleetReadinessService(dbContext, tenantContext, timeProvider);
     }
 
     public Task<IReadOnlyList<PlanningConflictDto>> EvaluateAsync(Trip trip, CancellationToken cancellationToken)
@@ -82,12 +87,11 @@ public class PlanningConflictService : IPlanningConflictService
                 .FirstOrDefaultAsync(v => v.Id == vehicleId && v.TenantId == tenantId, cancellationToken);
             if (vehicle is not null)
             {
-                if (vehicle.OperationalStatus is VehicleOperationalStatus.InMaintenance or VehicleOperationalStatus.OutOfService)
-                {
-                    conflicts.Add(new(PlanningConflictCode.VehicleNotOperational, true,
-                        $"Voertuig {vehicle.InternalNumber} is niet inzetbaar ({vehicle.OperationalStatus})."));
-                }
-                else if (vehicle.OperationalStatus == VehicleOperationalStatus.InUse)
+                var readiness = await _fleetReadiness.EvaluateVehicleAsync(vehicleId, trip.TripDate, cancellationToken);
+                AddReadinessConflicts(conflicts, readiness, $"Voertuig {vehicle.InternalNumber}",
+                    PlanningConflictCode.VehicleNotOperational, orders.Any(o => o.AdrRequired), orders.Any(o => o.CraneRequired),
+                    orders.Where(o => o.AdrRequired).Select(o => o.OrderNumber), orders.Where(o => o.CraneRequired).Select(o => o.OrderNumber));
+                if (vehicle.OperationalStatus == VehicleOperationalStatus.InUse)
                 {
                     // Warning only: "in gebruik" may simply reflect this very trip's planning.
                     conflicts.Add(new(PlanningConflictCode.VehicleNotOperational, false,
@@ -121,18 +125,6 @@ public class PlanningConflictService : IPlanningConflictService
                         $"Voertuig {vehicle.InternalNumber} is op {trip.TripDate:dd/MM/yyyy} al ingepland op rit {doubleBooked}."));
                 }
 
-                // Tachograph: overdue calibration is a warning (overrideable) on planning.
-                var tachoOverdue = await _dbContext.TachographCalibrations.AsNoTracking()
-                    .Where(c => c.TenantId == tenantId && c.VehicleId == vehicleId)
-                    .OrderByDescending(c => c.CalibrationDate)
-                    .Select(c => (DateOnly?)c.NextCalibrationDue)
-                    .FirstOrDefaultAsync(cancellationToken);
-                if (tachoOverdue is { } due && due < DateOnly.FromDateTime(_timeProvider.GetUtcNow().UtcDateTime))
-                {
-                    conflicts.Add(new(PlanningConflictCode.TachographOverdue, false,
-                        $"De tachograaf-ijking van {vehicle.InternalNumber} is vervallen ({due:dd/MM/yyyy})."));
-                }
-
                 // Driving-licence rank: the driver must hold a valid licence of at least the
                 // rank the vehicle requires (e.g. a CE tractor needs a CE driver).
                 if (trip.DriverId is { } licenceDriverId && vehicle.RequiredLicenceCode is { Length: > 0 } required)
@@ -148,12 +140,11 @@ public class PlanningConflictService : IPlanningConflictService
                 .FirstOrDefaultAsync(t => t.Id == trailerId && t.TenantId == tenantId, cancellationToken);
             if (trailer is not null)
             {
-                if (trailer.OperationalStatus is TrailerOperationalStatus.InMaintenance or TrailerOperationalStatus.OutOfService)
-                {
-                    conflicts.Add(new(PlanningConflictCode.TrailerNotOperational, true,
-                        $"Oplegger {trailer.InternalNumber} is niet inzetbaar ({trailer.OperationalStatus})."));
-                }
-                else if (trailer.OperationalStatus == TrailerOperationalStatus.InUse)
+                var trailerReadiness = await _fleetReadiness.EvaluateTrailerAsync(trailerId, trip.TripDate, cancellationToken);
+                AddReadinessConflicts(conflicts, trailerReadiness, $"Oplegger {trailer.InternalNumber}",
+                    PlanningConflictCode.TrailerNotOperational, orders.Any(o => o.AdrRequired), requiresCrane: false,
+                    orders.Where(o => o.AdrRequired).Select(o => o.OrderNumber), []);
+                if (trailer.OperationalStatus == TrailerOperationalStatus.InUse)
                 {
                     conflicts.Add(new(PlanningConflictCode.TrailerNotOperational, false,
                         $"Oplegger {trailer.InternalNumber} staat gemarkeerd als in gebruik."));
@@ -191,6 +182,55 @@ public class PlanningConflictService : IPlanningConflictService
     }
 
     /// <summary>
+    /// Maps the fleet readiness verdict onto planning conflicts. "inactive" is skipped (the
+    /// dedicated Inactive conflict covers it); conditional items (ADR certificate, kraankeuring)
+    /// only count when the trip carries matching work; tachograph keeps its own warning code.
+    /// </summary>
+    private static void AddReadinessConflicts(
+        List<PlanningConflictDto> conflicts, Fleet.Dtos.VehicleReadinessDto? readiness, string assetLabel,
+        PlanningConflictCode notOperational, bool requiresAdr, bool requiresCrane,
+        IEnumerable<string> adrOrders, IEnumerable<string> craneOrders)
+    {
+        if (readiness is null)
+        {
+            return;
+        }
+
+        foreach (var issue in readiness.Issues)
+        {
+            if (issue.Code == "inactive" || issue.Severity == Fleet.Dtos.ReadinessSeverity.Info)
+            {
+                continue;
+            }
+
+            if (issue.Conditional == "adr")
+            {
+                if (requiresAdr)
+                {
+                    conflicts.Add(new(PlanningConflictCode.OrderRequiresAdr, true,
+                        $"Opdracht(en) {string.Join(", ", adrOrders)} vereisen ADR; {assetLabel}: {issue.Message}"));
+                }
+                continue;
+            }
+
+            if (issue.Conditional == "crane")
+            {
+                if (requiresCrane)
+                {
+                    conflicts.Add(new(PlanningConflictCode.OrderRequiresCrane, true,
+                        $"Opdracht(en) {string.Join(", ", craneOrders)} vereisen een kraan; {assetLabel}: {issue.Message}"));
+                }
+                continue;
+            }
+
+            var code = issue.Code == "tachograph.overdue" ? PlanningConflictCode.TachographOverdue : notOperational;
+            var blocking = issue.Severity == Fleet.Dtos.ReadinessSeverity.Blocking;
+            conflicts.Add(new(code, blocking,
+                blocking ? $"{assetLabel} is niet inzetbaar: {issue.Message}" : $"{assetLabel}: {issue.Message}"));
+        }
+    }
+
+    /// <summary>
     /// Fills the structured fields (category, related entity, override metadata) from one central
     /// table so the rule sites above stay code + description only. Every blocking planning conflict
     /// is overrideable with <c>planning.override_restriction</c> plus a mandatory reason.
@@ -213,8 +253,8 @@ public class PlanningConflictService : IPlanningConflictService
             PlanningConflictCode.DriverInactive => (ConflictCategory.Resource, "Activeer de chauffeur of kies een andere."),
             PlanningConflictCode.VehicleInactive => (ConflictCategory.Resource, "Activeer het voertuig of kies een ander."),
             PlanningConflictCode.TrailerInactive => (ConflictCategory.Resource, "Activeer de oplegger of kies een andere."),
-            PlanningConflictCode.VehicleNotOperational => (ConflictCategory.Resource, "Plan het onderhoud of kies een ander voertuig."),
-            PlanningConflictCode.TrailerNotOperational => (ConflictCategory.Resource, "Plan het onderhoud of kies een andere oplegger."),
+            PlanningConflictCode.VehicleNotOperational => (ConflictCategory.Resource, "Kies een ander voertuig of los de blokkering op in het wagenpark."),
+            PlanningConflictCode.TrailerNotOperational => (ConflictCategory.Resource, "Kies een andere oplegger of los de blokkering op in het wagenpark."),
             PlanningConflictCode.DriverNotReady => (ConflictCategory.Qualification, "Werk de kwalificatie bij of kies een andere chauffeur."),
             PlanningConflictCode.DriverLicenceInsufficient => (ConflictCategory.Qualification, "Kies een chauffeur met het juiste rijbewijs of een ander voertuig."),
             PlanningConflictCode.TachographOverdue => (ConflictCategory.Document, "Laat de tachograaf opnieuw ijken of kies een ander voertuig."),
@@ -357,8 +397,13 @@ public class PlanningConflictService : IPlanningConflictService
 
         if (weightCapacity is { } maxWeight && totalWeight > maxWeight)
         {
-            conflicts.Add(new(PlanningConflictCode.CapacityExceeded, blocking,
-                $"Totaalgewicht {totalWeight:0.##} kg overschrijdt het laadvermogen van {maxWeight:0.##} kg van {assetLabel}."));
+            // FL-M4: overloading is a legal/safety matter, not a tenant preference — above a small
+            // rounding tolerance (0,5 %) it always blocks; only an authorised override with a reason
+            // can plan it. Within the tolerance it stays a warning.
+            var overload = totalWeight > maxWeight * 1.005m;
+            conflicts.Add(new(PlanningConflictCode.CapacityExceeded, overload || blocking,
+                $"Totaalgewicht {totalWeight:0.##} kg overschrijdt het laadvermogen van {maxWeight:0.##} kg van {assetLabel}"
+                + (overload ? $" (+{totalWeight - maxWeight:0.##} kg)." : " (binnen de afrondingsmarge).")));
         }
 
         if (volumeCapacity is { } maxVolume && totalVolume > maxVolume)

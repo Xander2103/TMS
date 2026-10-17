@@ -38,7 +38,8 @@ public class FleetDocumentServiceTests
     private static CreateFleetDocumentRequest Request(
         FleetDocumentType type = FleetDocumentType.Insurance, DateOnly? expiry = null, int? warningDays = null,
         string? customName = null, DateOnly? issue = null) =>
-        new(type, customName, "DOC-1", issue, expiry, warningDays, null);
+        // FL-M2: legally relevant documents need an expiry date — default to a far-future one.
+        new(type, customName, "DOC-1", issue, expiry ?? new DateOnly(2028, 6, 30), warningDays, null);
 
     [Fact]
     public async Task Create_ForVehicleAndTrailer_ListsPerOwner()

@@ -108,7 +108,7 @@ public class FleetDocumentService : IFleetDocumentService
     public async Task<FleetDocumentOperationResult> UpdateAsync(
         Guid id, UpdateFleetDocumentRequest request, CancellationToken cancellationToken)
     {
-        if (Validate(request.DocumentType, request.CustomTypeName, request.IssueDate, request.ExpiryDate) is { } error)
+        if (Validate(request.DocumentType, request.CustomTypeName, request.IssueDate, request.ExpiryDate, request.DocumentNumber) is { } error)
         {
             return FleetDocumentOperationResult.Invalid(error);
         }
@@ -133,7 +133,9 @@ public class FleetDocumentService : IFleetDocumentService
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         await _auditService.RecordAsync(EntityType, document.Id.ToString(), "Updated", before,
-            new { document.DocumentType, document.DocumentNumber, document.ExpiryDate }, cancellationToken);
+            new { document.DocumentType, document.DocumentNumber, document.ExpiryDate, document.IssueDate,
+                document.VehicleId, document.TrailerId }, cancellationToken);
+        await SyncInspectionScheduleAsync(document, cancellationToken);
 
         return FleetDocumentOperationResult.Success(Map(document));
     }
@@ -158,7 +160,7 @@ public class FleetDocumentService : IFleetDocumentService
     private async Task<FleetDocumentOperationResult> CreateAsync(
         Guid? vehicleId, Guid? trailerId, CreateFleetDocumentRequest request, CancellationToken cancellationToken)
     {
-        if (Validate(request.DocumentType, request.CustomTypeName, request.IssueDate, request.ExpiryDate) is { } error)
+        if (Validate(request.DocumentType, request.CustomTypeName, request.IssueDate, request.ExpiryDate, request.DocumentNumber) is { } error)
         {
             return FleetDocumentOperationResult.Invalid(error);
         }
@@ -192,7 +194,9 @@ public class FleetDocumentService : IFleetDocumentService
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         await _auditService.RecordAsync(EntityType, document.Id.ToString(), "Created", null,
-            new { document.DocumentType, document.VehicleId, document.TrailerId, document.ExpiryDate }, cancellationToken);
+            new { document.DocumentType, document.VehicleId, document.TrailerId, document.ExpiryDate, document.IssueDate,
+                document.DocumentNumber, document.CustomTypeName }, cancellationToken);
+        await SyncInspectionScheduleAsync(document, cancellationToken);
 
         return FleetDocumentOperationResult.Success(Map(document));
     }
@@ -270,11 +274,109 @@ public class FleetDocumentService : IFleetDocumentService
         return documents.Select(Map).ToList();
     }
 
-    private static string? Validate(FleetDocumentType type, string? customTypeName, DateOnly? issueDate, DateOnly? expiryDate)
+    /// <summary>
+    /// FL-M3: one coherent inspection model. The Inspection record is the legal schedule (when is
+    /// the next keuring due); a "Technische keuring" / "Kraankeuring" document is the evidence of a
+    /// passed inspection. Registering such a document with an expiry date therefore closes every
+    /// open inspection of that kind that it covers (due on or before the new expiry) as passed and
+    /// plans the next one on the expiry date — no stale "Te laat" next to a valid certificate.
+    /// The closed inspections stay as history.
+    /// </summary>
+    private async Task SyncInspectionScheduleAsync(FleetDocument document, CancellationToken cancellationToken)
+    {
+        if (document.ExpiryDate is not { } expiry
+            || document.DocumentType is not (FleetDocumentType.TechnicalInspection or FleetDocumentType.CraneInspection))
+        {
+            return;
+        }
+
+        var kinds = document.DocumentType == FleetDocumentType.CraneInspection
+            ? new[] { InspectionType.CraneInspection }
+            : new[] { InspectionType.VehicleInspection, InspectionType.TrailerInspection };
+        var open = await _dbContext.Inspections
+            .Where(i => i.TenantId == _tenantContext.TenantId && i.CompletedDate == null
+                        && kinds.Contains(i.InspectionType)
+                        && (document.VehicleId != null ? i.VehicleId == document.VehicleId : i.TrailerId == document.TrailerId))
+            .ToListAsync(cancellationToken);
+        var covered = open.Where(i => i.DueDate < expiry).ToList();
+        var completedOn = document.IssueDate ?? Today;
+        foreach (var inspection in covered)
+        {
+            inspection.CompletedDate = completedOn < inspection.DueDate.AddYears(-1) ? inspection.DueDate : completedOn;
+            inspection.Result = InspectionResult.Passed;
+            inspection.Notes = string.IsNullOrWhiteSpace(inspection.Notes)
+                ? $"Afgesloten via document {document.DocumentNumber ?? "keuringsbewijs"}."
+                : $"{inspection.Notes} — afgesloten via document {document.DocumentNumber ?? "keuringsbewijs"}.";
+        }
+
+        Inspection? next = null;
+        if (!open.Any(i => i.DueDate >= expiry))
+        {
+            var template = covered.FirstOrDefault();
+            next = new Inspection
+            {
+                Id = Guid.NewGuid(),
+                TenantId = _tenantContext.TenantId,
+                VehicleId = document.VehicleId,
+                TrailerId = document.TrailerId,
+                InspectionType = template?.InspectionType
+                    ?? (document.DocumentType == FleetDocumentType.CraneInspection ? InspectionType.CraneInspection
+                        : document.VehicleId is not null ? InspectionType.VehicleInspection : InspectionType.TrailerInspection),
+                DueDate = expiry,
+                IntervalMonths = template?.IntervalMonths,
+                WarningDays = template?.WarningDays ?? document.WarningDays,
+                Notes = $"Volgende keuring volgens document {document.DocumentNumber ?? "keuringsbewijs"}.",
+            };
+            _dbContext.Add(next);
+        }
+
+        if (covered.Count == 0 && next is null)
+        {
+            return;
+        }
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        foreach (var inspection in covered)
+        {
+            await _auditService.RecordAsync("Inspection", inspection.Id.ToString(), "Completed", null,
+                new { inspection.CompletedDate, inspection.Result, inspection.VehicleId, inspection.TrailerId, inspection.InspectionType,
+                    Source = "Document", DocumentId = document.Id, document.DocumentNumber, FollowUpId = next?.Id }, cancellationToken);
+        }
+        if (next is not null)
+        {
+            await _auditService.RecordAsync("Inspection", next.Id.ToString(), "Created", null,
+                new { next.InspectionType, next.DueDate, next.VehicleId, next.TrailerId, Source = "Document", DocumentId = document.Id }, cancellationToken);
+        }
+    }
+
+    /// <summary>Legally relevant documents are about validity: without an expiry date they say nothing.</summary>
+    private static readonly FleetDocumentType[] ExpiryRequiredTypes =
+    [
+        FleetDocumentType.Insurance, FleetDocumentType.TechnicalInspection, FleetDocumentType.AdrCertificate,
+        FleetDocumentType.CraneInspection, FleetDocumentType.RefrigerationCertificate, FleetDocumentType.TachographCalibration,
+    ];
+
+    private static string? Validate(FleetDocumentType type, string? customTypeName, DateOnly? issueDate, DateOnly? expiryDate, string? documentNumber)
     {
         if (type == FleetDocumentType.Other && string.IsNullOrWhiteSpace(customTypeName))
         {
             return "Een naam voor het aangepaste documenttype is verplicht.";
+        }
+
+        // FL-M2: no junk rows — every document needs something that identifies or dates it.
+        if (ExpiryRequiredTypes.Contains(type) && expiryDate is null)
+        {
+            return "Een vervaldatum is verplicht voor dit documenttype.";
+        }
+
+        if (type is FleetDocumentType.Registration or FleetDocumentType.Conformity && string.IsNullOrWhiteSpace(documentNumber))
+        {
+            return "Een documentnummer is verplicht voor dit documenttype.";
+        }
+
+        if (string.IsNullOrWhiteSpace(documentNumber) && issueDate is null && expiryDate is null)
+        {
+            return "Geef minstens een documentnummer, uitgiftedatum of vervaldatum op.";
         }
 
         if (issueDate is { } issue && expiryDate is { } expiry && expiry < issue)
