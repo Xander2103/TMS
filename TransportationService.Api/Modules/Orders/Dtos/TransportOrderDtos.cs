@@ -101,6 +101,9 @@ public enum AddressBookOutcome
     LinkedExisting = 2,
 }
 
+/// <summary>ACC-M12: a document this work is on, so the operational side can jump to accounting.</summary>
+public record InvoiceLinkDto(Guid Id, string? InvoiceNumber, string DisplayNumber, string Status, string Kind);
+
 public record TransportOrderDetailDto(
     Guid Id,
     string OrderNumber,
@@ -186,7 +189,9 @@ public record TransportOrderDetailDto(
     Guid? ActivityId = null,
     Guid? ActivityTypeId = null,
     decimal? ActivityDurationHours = null,
-    bool ActivitySupportsOnSiteWork = false);
+    bool ActivitySupportsOnSiteWork = false,
+    /// <summary>ACC-M12: invoices and credit notes carrying this order (live ones first).</summary>
+    IReadOnlyList<InvoiceLinkDto>? Invoices = null);
 
 /// <summary>Snapshot line of the price calculation stored on the order.</summary>
 public record OrderPricingLineDto(

@@ -270,7 +270,12 @@ public record DossierActivityDto(
     DateTime? CancelledAt = null,
     string? CancellationReason = null,
     /// <summary>M11: billable and not cancelled — the unit counts in the dossier's price completeness.</summary>
-    bool CountsForPricing = false);
+    bool CountsForPricing = false,
+    /// <summary>ACC-M12: the live invoice this standalone activity (or its order) is on; null when not invoiced.</summary>
+    Guid? InvoiceId = null,
+    string? InvoiceNumber = null,
+    string? InvoiceDisplayNumber = null,
+    string? InvoiceStatus = null);
 
 /// <summary>
 /// T-H7: driver/operator and vehicle of a STANDALONE activity (crane work, plateau). Blocking
@@ -442,7 +447,9 @@ public record DossierDetailDto(
     /// <summary>M10: ACTIVE issued transport documents (CMR / leveringsbon / werkbon) of the linked orders — not in <see cref="DocumentCount"/>.</summary>
     int IssuedDocumentCount = 0,
     /// <summary>M10: current proofs of delivery of the linked orders — not in <see cref="DocumentCount"/>.</summary>
-    int PodCount = 0);
+    int PodCount = 0,
+    /// <summary>ACC-M12: every invoice/credit note carrying work of this dossier.</summary>
+    IReadOnlyList<Modules.Orders.Dtos.InvoiceLinkDto>? Invoices = null);
 
 // ------------------------------------------------------------ lifecycle (confirmation sprint 2026-09-23)
 
