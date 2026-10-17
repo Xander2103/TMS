@@ -79,7 +79,7 @@ export function NewTrailerPage() {
     } catch (err) {
       setError(
         err instanceof ApiError && err.status === 409
-          ? t('trailers.new.duplicate')
+          ? ((err.body as { message?: string } | undefined)?.message ?? t('trailers.new.duplicate')) // FL-M1: the server names the plate or VIN that already exists
           : localizeApiError(t, err, t('trailers.new.createFailed')),
       )
       setSubmitting(false)

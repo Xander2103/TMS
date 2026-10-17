@@ -252,7 +252,11 @@
       "allProcessed": "Alle documenten zijn verwerkt."
     },
     "clearTitle": "Bestand wissen",
-    "clearMessage": "Het bijgevoegde bestand van \"{name}\" wissen? Het document zelf blijft bestaan."
+    "clearMessage": "Het bijgevoegde bestand van \"{name}\" wissen? Het document zelf blijft bestaan.",
+    "expiryRequired": "Dit documenttype vereist een vervaldatum.",
+    "numberRequired": "Dit documenttype vereist een documentnummer.",
+    "numberOrExpiryRequired": "Vul een documentnummer of een vervaldatum in.",
+    "expiryBeforeIssue": "De vervaldatum kan niet vóór de uitgiftedatum liggen."
   },
   "dashboard": {
     "loadFailed": "Het vlootoverzicht kon niet worden geladen.",

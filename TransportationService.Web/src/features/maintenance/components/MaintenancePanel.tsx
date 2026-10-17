@@ -1,5 +1,5 @@
+import { localizeApiError } from '../../../api/problemDetails'
 import { useEffect, useState, type FormEvent } from 'react'
-import { ApiError } from '../../../api/apiClient'
 import { Badge, type BadgeTone } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
@@ -163,7 +163,7 @@ export function MaintenancePanel({ ownerType, ownerId }: MaintenancePanelProps) 
       setEditorOpen(false)
       setReloadToken((token) => token + 1)
     } catch (err) {
-      setFormError(err instanceof ApiError && err.status === 400 && err.message ? err.message : t('maintenance.panel.saveFailed'))
+      setFormError(localizeApiError(t, err, t('maintenance.panel.saveFailed')))
     } finally {
       setSaving(false)
     }
@@ -186,7 +186,7 @@ export function MaintenancePanel({ ownerType, ownerId }: MaintenancePanelProps) 
       setCompleteForm(null)
       setReloadToken((token) => token + 1)
     } catch (err) {
-      showError(err instanceof ApiError && err.status === 400 && err.message ? err.message : t('maintenance.panel.completeFailed'))
+      showError(localizeApiError(t, err, t('maintenance.panel.completeFailed')))
     } finally {
       setSaving(false)
     }
@@ -211,7 +211,7 @@ export function MaintenancePanel({ ownerType, ownerId }: MaintenancePanelProps) 
       showSuccess(t('maintenance.panel.started'))
       setReloadToken((token) => token + 1)
     } catch (err) {
-      showError(err instanceof ApiError && err.message ? err.message : t('maintenance.panel.startFailed'))
+      showError(localizeApiError(t, err, t('maintenance.panel.startFailed')))
     }
   }
 

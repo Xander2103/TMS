@@ -252,7 +252,11 @@
       "allProcessed": "All documents have been processed."
     },
     "clearTitle": "Clear file",
-    "clearMessage": "Clear the attached file of \"{name}\"? The document itself is kept."
+    "clearMessage": "Clear the attached file of \"{name}\"? The document itself is kept.",
+    "expiryRequired": "This document type requires an expiry date.",
+    "numberRequired": "This document type requires a document number.",
+    "numberOrExpiryRequired": "Enter a document number or an expiry date.",
+    "expiryBeforeIssue": "The expiry date cannot be before the issue date."
   },
   "dashboard": {
     "loadFailed": "The fleet overview could not be loaded.",

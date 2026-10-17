@@ -1,6 +1,6 @@
+import { localizeApiError } from '../../../api/problemDetails'
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
-import { ApiError } from '../../../api/apiClient'
 import { Badge, type BadgeTone } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
@@ -170,7 +170,7 @@ export function DamagePanel({ ownerType, ownerId }: DamagePanelProps) {
       showSuccess(t('damage.panel.uploaded'))
       setReloadToken((token) => token + 1)
     } catch (err) {
-      showError(err instanceof ApiError && err.message ? err.message : t('damage.panel.uploadFailed'))
+      showError(localizeApiError(t, err, t('damage.panel.uploadFailed')))
     } finally {
       setUploadingId(null)
       setUploadTarget(null)
@@ -265,7 +265,7 @@ export function DamagePanel({ ownerType, ownerId }: DamagePanelProps) {
       setEditorOpen(false)
       setReloadToken((token) => token + 1)
     } catch (err) {
-      setFormError(err instanceof ApiError && err.status === 400 && err.message ? err.message : t('damage.panel.saveFailed'))
+      setFormError(localizeApiError(t, err, t('damage.panel.saveFailed')))
     } finally {
       setSaving(false)
     }

@@ -1,3 +1,4 @@
+import { localizeApiError } from '../../../api/problemDetails'
 import { useState, type FormEvent } from 'react'
 import { ApiError } from '../../../api/apiClient'
 import { Button } from '../../../components/ui/Button'
@@ -49,7 +50,7 @@ export function ReplaceVehicleDialog({ trip, vehicleOptions, trailerOptions, veh
       if (err instanceof ApiError && err.status === 409 && body?.conflicts?.length) {
         setConflicts({ message: body.message ?? err.message, conflicts: body.conflicts })
       } else {
-        setError(err instanceof ApiError && err.message ? err.message : t('planning.replaceVehicle.failed'))
+        setError(localizeApiError(t, err, t('planning.replaceVehicle.failed')))
       }
     } finally {
       setBusy(false)

@@ -1,3 +1,4 @@
+import { localizeApiError } from '../../../api/problemDetails'
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
 import { Badge, type BadgeTone } from '../../../components/ui/Badge'
 import { Download, Upload } from 'lucide-react'
@@ -30,6 +31,7 @@ import {
   type FleetDocumentInput,
   type FleetDocumentType,
 } from '../types'
+import { fleetDocumentValidationKey } from '../validation'
 import './fleet-documents.css'
 import { formatDate } from '../../../utils/dates'
 
@@ -121,8 +123,9 @@ export function FleetDocumentsPanel({ ownerType, ownerId }: FleetDocumentsPanelP
   async function handleSubmit(event: FormEvent) {
     event.preventDefault()
     setFormError(null)
-    if (form.documentType === 'Other' && !form.customTypeName?.trim()) {
-      setFormError(t('fleet.docs.customNameRequired'))
+    const invalid = fleetDocumentValidationKey(form)
+    if (invalid) {
+      setFormError(t(invalid))
       return
     }
     setSaving(true)
@@ -136,8 +139,8 @@ export function FleetDocumentsPanel({ ownerType, ownerId }: FleetDocumentsPanelP
       }
       setEditorOpen(false)
       setReloadToken((token) => token + 1)
-    } catch {
-      setFormError(t('fleet.docs.saveFailed'))
+    } catch (err) {
+      setFormError(localizeApiError(t, err, t('fleet.docs.saveFailed')))
     } finally {
       setSaving(false)
     }

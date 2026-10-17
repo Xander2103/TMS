@@ -1,6 +1,6 @@
+import { localizeApiError } from '../../api/problemDetails'
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ApiError } from '../../api/apiClient'
 import { Button } from '../../components/ui/Button'
 import { Modal } from '../../components/ui/Modal'
 import { useLocale, type TranslateFn } from '../../i18n/localeContext'
@@ -82,7 +82,7 @@ export function AssetDeleteDialog({ kind, assetId, number, isActive, canDeactiva
     try {
       await onDelete()
     } catch (err) {
-      setServerMessage(err instanceof ApiError && err.message ? err.message : t('fleet.references.deleteFailed'))
+      setServerMessage(localizeApiError(t, err, t('fleet.references.deleteFailed')))
     } finally {
       setBusy(false)
     }

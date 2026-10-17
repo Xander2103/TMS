@@ -108,7 +108,7 @@ export function NewVehiclePage() {
     } catch (err) {
       setError(
         err instanceof ApiError && err.status === 409
-          ? t('vehicles.new.duplicate')
+          ? ((err.body as { message?: string } | undefined)?.message ?? t('vehicles.new.duplicate')) // FL-M1: the server names the plate or VIN that already exists
           : localizeApiError(t, err, t('vehicles.new.createFailed')),
       )
       setSubmitting(false)
