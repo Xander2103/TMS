@@ -142,6 +142,27 @@ public class CmrConsignmentPartyTests
     }
 
     [Fact]
+    public async Task Cmr_GoodsLines_PrintTheUnitName_NotTheUnitCode()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var order = Order(h, h.ShipperLocationId, "Nexans magazijn");
+        h.Db.Context.UnitTypes.Add(new Modules.Reference.Entities.UnitType
+        {
+            Id = Guid.NewGuid(), TenantId = h.TenantId, Code = "EUROPALLET", Name = "Europallet", IsActive = true,
+        });
+        h.Db.Context.CargoItems.AddRange(
+            new CargoItem { Id = Guid.NewGuid(), TenantId = h.TenantId, TransportOrderId = order.Id, Sequence = 1, Description = "Kabelhaspels", ExpectedQuantity = 10, QuantityUnitCode = "EUROPALLET" },
+            new CargoItem { Id = Guid.NewGuid(), TenantId = h.TenantId, TransportOrderId = order.Id, Sequence = 2, Description = "Losse kabels", ExpectedQuantity = 3, QuantityUnit = "rollen" });
+        await h.Db.Context.SaveChangesAsync();
+
+        var snapshot = (await h.Sut.BuildSnapshotAsync(order.Id, "Cmr", CancellationToken.None))!;
+
+        // The managed unit prints its name; a legacy free-text unit stays as typed.
+        Assert.Equal(["Europallet", "rollen"], snapshot.Lines.Select(l => l.Unit));
+    }
+
+    [Fact]
     public async Task Cmr_LoadingAtTheOrderingCustomersOwnSite_MakesTheOrderingCustomerTheSender()
     {
         var h = await SeedAsync();

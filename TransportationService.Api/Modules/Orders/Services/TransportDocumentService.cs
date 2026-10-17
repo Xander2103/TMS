@@ -381,16 +381,27 @@ public class TransportDocumentService : ITransportDocumentService
         // D2: on-site work carries no goods, so the legacy "1 × Goederen" fallback line would be
         // invented data there — its document lists goods only when real goods lines exist.
         var onSiteWork = CraneJobRules.IsOnSiteWork(order.CraneJobKind);
+        // A goods unit is a unit-type CODE ("EUROPALLET"): the document prints the tenant's unit
+        // name ("Europallet"), like the screens do; a legacy free-text unit stays as typed.
+        var unitCodes = cargo.Select(c => c.QuantityUnitCode).Append(order.QuantityUnitCode)
+            .OfType<string>().Distinct().ToList();
+        var unitNames = unitCodes.Count == 0
+            ? new Dictionary<string, string>()
+            : await _dbContext.UnitTypes.AsNoTracking()
+                .Where(u => u.TenantId == tenantId && unitCodes.Contains(u.Code))
+                .ToDictionaryAsync(u => u.Code, u => u.Name, cancellationToken);
+        string? UnitText(string? code, string? legacy) =>
+            code is not null ? (unitNames.TryGetValue(code, out var name) ? name : code) : legacy;
         List<TransportDocumentLine> lines = cargo.Count > 0
             ? cargo.Select(c => new TransportDocumentLine(
                     string.IsNullOrWhiteSpace(c.Description) ? "Goederen" : c.Description!,
-                    c.ExpectedQuantity, c.QuantityUnitCode ?? c.QuantityUnit, c.TotalWeightKg))
+                    c.ExpectedQuantity, UnitText(c.QuantityUnitCode, c.QuantityUnit), c.TotalWeightKg))
                 .ToList()
             : onSiteWork || kind == DocumentStrategyResolver.KindWorkOrder
                 ? []
                 : [new TransportDocumentLine(
                     order.GoodsDescription ?? "Goederen", order.Quantity ?? 1m,
-                    order.QuantityUnitCode ?? order.QuantityUnit, order.WeightKg)];
+                    UnitText(order.QuantityUnitCode, order.QuantityUnit), order.WeightKg)];
 
         var workOrder = kind == DocumentStrategyResolver.KindWorkOrder
             ? await BuildWorkOrderAsync(order, cancellationToken)

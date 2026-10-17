@@ -36,11 +36,12 @@ function formatConfirmedStamp(isoUtc: string): string {
  * stored line — showing the stale formula next to the real amount would contradict it, so the
  * formula is only rendered when it actually reproduces the amount (rounding-tolerant).
  */
-function calculationLabel(line: OrderPricingLine): string {
+function calculationLabel(line: OrderPricingLine, unitLabel: UnitLabelResolver): string {
   if (line.quantity != null && line.unitPrice != null) {
     const computed = lineTotal(line.quantity, line.unitPrice)
     if (computed === line.amount) {
-      const unit = line.unit ? ` ${line.unit}` : ''
+      // The unit is a unit-type CODE ("PIECE"): show its managed name, like the goods lines do.
+      const unit = line.unit ? ` ${unitLabel(line.unit, line.unit)}` : ''
       return `${formatQuantity(line.quantity)}${unit} × ${formatCurrency(line.unitPrice)}`
     }
   }
@@ -227,7 +228,7 @@ export function OrderPricingPanel({ ws, unitLabel, isPriced, addLineLabel, secti
                     <td>
                       <Badge tone={ORDER_PRICE_LINE_KIND_TONE[line.kind]}>{t(lineBadge(line))}</Badge>
                     </td>
-                    <td>{calculationLabel(line)}</td>
+                    <td>{calculationLabel(line, unitLabel)}</td>
                     <td className="tof-price-amount">{formatCurrency(line.amount)}</td>
                     {canEditPricingLines && !pricingLocked && (
                       <td className="to-price-line-actions">
