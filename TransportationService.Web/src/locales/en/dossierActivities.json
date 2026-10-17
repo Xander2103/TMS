@@ -7,6 +7,7 @@
     "plate": "Licence plate",
     "price": "Sales price",
     "priceStatus": "Price status",
+    "invoice": "Invoice",
     "notAssigned": "Not assigned",
     "suggested": "suggested",
     "sharedTrip_one": "Trip {tripNumber} · together with {count} other order",

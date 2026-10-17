@@ -4,7 +4,7 @@ import { ArrowRight, Calendar, FileText, History, ListChecks, MapPin, Package, T
 import { Badge, type BadgeTone } from '../../../components/ui/Badge'
 import { useLocale } from '../../../i18n/localeContext'
 import { formatDateTime } from '../../../utils/dates'
-import { euro } from '../../invoices/types'
+import { euro, INVOICE_STATUS_LABELS, type InvoiceStatus } from '../../invoices/types'
 import { useLookupOptions } from '../../master-data/hooks/useLookupOptions'
 import { ORDER_DOCUMENT_TYPE_LABELS, type OrderDocumentType } from '../../transport-orders/api/orderDocumentsApi'
 import { isOnSiteLiftingOrder } from '../../transport-orders/components/onSiteLifting'
@@ -269,6 +269,19 @@ export function DossierOverview() {
           </p>
         )}
         {billable > 0 && <p className="dossier-ov-muted">{t('dossierSheet.price.partialTotal', { priced, total: billable })}</p>}
+        {(dossier.invoices?.length ?? 0) > 0 && (
+          <p className="dossier-ov-muted dossier-ov-invoices">
+            {/* ACC-M12: the reverse link from the dossier to its invoice(s). */}
+            {t('dossiers.overview.invoices')}:{' '}
+            {dossier.invoices!.map((invoice, index) => (
+              <span key={invoice.id}>
+                {index > 0 && ' · '}
+                <Link to={`/invoices/${invoice.id}`}>{invoice.displayNumber || invoice.invoiceNumber || t('invoices.status.Draft')}</Link>
+                {invoice.status in INVOICE_STATUS_LABELS && ` (${t(INVOICE_STATUS_LABELS[invoice.status as InvoiceStatus])})`}
+              </span>
+            ))}
+          </p>
+        )}
         {missingPrices.length > 0 && (
           <ul className="dossier-ov-missing" aria-label={t('dossierActivities.overview.missingPrices')}>
             {missingPrices.map((activity) => (

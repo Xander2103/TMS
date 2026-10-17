@@ -7,6 +7,7 @@
     "plate": "Immatriculation",
     "price": "Prix de vente",
     "priceStatus": "Statut du prix",
+    "invoice": "Facture",
     "notAssigned": "Non attribué",
     "suggested": "proposé",
     "sharedTrip_one": "Tournée {tripNumber} · avec {count} autre ordre",

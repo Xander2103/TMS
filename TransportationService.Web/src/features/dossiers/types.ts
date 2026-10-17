@@ -154,6 +154,10 @@ export interface DossierActivity {
   priceStatus?: ActivityPriceStatus | null
   /** D5: explicitly confirmed as free (shown as "Gratis", never as a missing price). */
   freeConfirmed?: boolean
+  /** ACC-M12: the invoice carrying this unit's line (reverse link); null/absent = not invoiced. */
+  invoiceId?: string | null
+  invoiceNumber?: string | null
+  invoiceStatus?: string | null
   /** D5: sales lines of a STANDALONE activity (server-computed amounts); empty/absent for order-backed ones. */
   priceLines?: DossierActivityPriceLine[] | null
   /** D7: notes on this activity + the latest one (the server cuts the preview to 160 characters). */
@@ -237,6 +241,15 @@ export interface ReadinessIssue {
   activityId?: string | null
 }
 
+/** ACC-M12: one invoice (or credit note) on the dossier overview — the same shape as the order's `invoices`. */
+export interface DossierInvoiceLink {
+  id: string
+  invoiceNumber: string | null
+  displayNumber?: string | null
+  status: string
+  kind?: 'Invoice' | 'CreditNote'
+}
+
 export interface DossierDetail {
   id: string
   dossierNumber: string
@@ -268,6 +281,8 @@ export interface DossierDetail {
   documentTypes?: string[]
   /** M10: ACTIVE issued transport documents (CMR / leveringsbon / werkbon) of the linked orders — not in `documentCount`. */
   issuedDocumentCount?: number
+  /** ACC-M12: invoices / credit notes carrying work of this dossier (reverse link). Absent on older payloads. */
+  invoices?: DossierInvoiceLink[] | null
   /** M10: current proofs of delivery of the linked orders — not in `documentCount`. */
   podCount?: number
   /** Latest change over the dossier, its activities and linked orders (ISO); null/absent when unknown. */

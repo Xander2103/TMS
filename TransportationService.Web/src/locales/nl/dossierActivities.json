@@ -7,6 +7,7 @@
     "plate": "Kenteken",
     "price": "Verkoopprijs",
     "priceStatus": "Prijsstatus",
+    "invoice": "Factuur",
     "notAssigned": "Niet toegewezen",
     "suggested": "voorgesteld",
     "sharedTrip_one": "Rit {tripNumber} · samen met {count} andere opdracht",

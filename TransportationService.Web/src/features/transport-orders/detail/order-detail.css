@@ -690,3 +690,13 @@
     padding-left: 0;
   }
 }
+
+/* ACC-M12: invoice links in the price card — a plain list, one document per line. */
+.tod-invoice-links {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}

@@ -1,7 +1,9 @@
 import { createElement } from 'react'
+import { Link } from 'react-router-dom'
 import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { useLocale } from '../../../i18n/localeContext'
+import { INVOICE_STATUS_LABELS, type InvoiceStatus } from '../../invoices/types'
 import { ORDER_STATUS_LABELS, ORDER_STATUS_TONE, type TransportOrderStatus } from '../../transport-orders/types'
 import { EXECUTION_STATUS_TONE, PRICE_STATUS_LABEL_KEYS, PRICE_STATUS_TONE, activityPriceStatus, activityPriceText } from '../activityDisplay'
 import { activityTypeIcon } from '../activityTypeIcons'
@@ -145,6 +147,18 @@ export function ActivityCard({ activity, activities, dossier, onOpen, onOpenDeta
           <dt>{t('dossierActivities.card.priceStatus')}</dt>
           <dd>{priceStatus ? <Badge tone={PRICE_STATUS_TONE[priceStatus]}>{t(PRICE_STATUS_LABEL_KEYS[priceStatus])}</Badge> : '—'}</dd>
         </div>
+        {activity.invoiceId && (
+          <div>
+            {/* ACC-M12: the reverse link from the unit to the invoice that carries it. */}
+            <dt>{t('dossierActivities.card.invoice')}</dt>
+            <dd>
+              <Link to={`/invoices/${activity.invoiceId}`}>{activity.invoiceNumber || t('invoices.status.Draft')}</Link>
+              {activity.invoiceStatus && activity.invoiceStatus in INVOICE_STATUS_LABELS && (
+                <span className="dossier-activity-muted"> — {t(INVOICE_STATUS_LABELS[activity.invoiceStatus as InvoiceStatus])}</span>
+              )}
+            </dd>
+          </div>
+        )}
       </dl>
 
       {assignment && assignment.otherOrderCount > 0 && (

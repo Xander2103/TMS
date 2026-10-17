@@ -215,6 +215,17 @@ export interface CargoItemInput {
 
 export type OrderPricingSource = 'Contract' | 'OneOff'
 
+/** ACC-M12: one invoice (or credit note) that carries a line of the order / activity / dossier. */
+export interface OrderInvoiceLink {
+  id: string
+  /** Null while the document is still a draft (ACC-H3: the legal number is assigned at issue). */
+  invoiceNumber: string | null
+  /** The number, or the draft reference while there is none. */
+  displayNumber?: string | null
+  status: string
+  kind?: 'Invoice' | 'CreditNote'
+}
+
 export interface TransportOrderDetail {
   id: string
   orderNumber: string
@@ -283,6 +294,8 @@ export interface TransportOrderDetail {
   /** Containing dossier (wrapper or user-created); the detail header links to it. */
   dossierId?: string | null
   dossierNumber?: string | null
+  /** ACC-M12: the invoices/credit notes carrying a line of this order (reverse link). Absent on older payloads. */
+  invoices?: OrderInvoiceLink[] | null
   // --- D2: crane job (absent on older payloads = None) ---
   craneJobKind?: CraneJobKind
   /** What has to be done on site; mandatory for OnSiteLifting. */

@@ -587,6 +587,7 @@
     "priceComplete": "Tarifé",
     "priceNoneBody": "Pas encore de lignes de vente ni de prix.",
     "priceNoneHint": "Ajoutez un prix convenu ou des lignes de vente dans Vente & prix.",
+    "invoices": "Factures",
     "priceProgress": "{priced}/{total} activités tarifées",
     "priceZero": "⚠ Prix de vente de 0,00 € — vérifiez que c’est voulu.",
     "openPrice": "Ouvrir les détails du prix",

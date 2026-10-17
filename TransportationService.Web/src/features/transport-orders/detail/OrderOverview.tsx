@@ -12,7 +12,13 @@ import { listOrderPackages } from '../../packages/api/packagesApi'
 import { listOrderDocuments, ORDER_DOCUMENT_TYPE_LABELS, type OrderDocument } from '../api/orderDocumentsApi'
 import { getTransportOrderTimeline, type OrderTimelineEvent } from '../api/transportOrdersApi'
 import { OrderPortalReviewPanel } from '../components/OrderPortalReviewPanel'
+import { INVOICE_STATUS_LABELS, type InvoiceStatus } from '../../invoices/types'
 import { ORDER_STATUS_LABELS, ORDER_STATUS_TONE, STOP_TYPE_LABELS } from '../types'
+
+/** Translation key of an invoice status, or null for a value this build does not know. */
+function invoiceStatusLabel(status: string): string | null {
+  return status in INVOICE_STATUS_LABELS ? INVOICE_STATUS_LABELS[status as InvoiceStatus] : null
+}
 import { useOrderDetail } from './orderDetailContext'
 import { orderTabPath, type OrderTab } from './orderSections'
 
@@ -180,6 +186,24 @@ export function OrderOverview() {
                 <Badge tone={ORDER_STATUS_TONE[order.status]}>{t(ORDER_STATUS_LABELS[order.status])}</Badge>
               </dd>
             </div>
+            {(order.invoices?.length ?? 0) > 0 && (
+              <div>
+                {/* ACC-M12: the reverse link — from the work to the invoice(s) that carry it. */}
+                <dt>Facturen</dt>
+                <dd>
+                  <ul className="tod-invoice-links">
+                    {order.invoices!.map((invoice) => (
+                      <li key={invoice.id}>
+                        <Link to={`/invoices/${invoice.id}`}>
+                          {invoice.kind === 'CreditNote' ? t('invoices.creditNote') : 'Factuur'} {invoice.displayNumber || invoice.invoiceNumber || 'concept'}
+                        </Link>
+                        {invoiceStatusLabel(invoice.status) && <span className="tod-muted"> — {t(invoiceStatusLabel(invoice.status)!)}</span>}
+                      </li>
+                    ))}
+                  </ul>
+                </dd>
+              </div>
+            )}
           </dl>
           {order.pricingSnapshot?.confirmedAtUtc && (
             <p className="tod-muted">

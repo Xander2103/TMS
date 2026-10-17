@@ -587,6 +587,7 @@
     "priceComplete": "Geprijsd",
     "priceNoneBody": "Nog geen verkooplijnen of prijs.",
     "priceNoneHint": "Voeg een afgesproken prijs of verkooplijnen toe in Verkoop & prijs.",
+    "invoices": "Facturen",
     "priceProgress": "{priced}/{total} activiteiten geprijsd",
     "priceZero": "⚠ Verkoopprijs van € 0,00 — controleer of dit bewust is.",
     "openPrice": "Open prijsdetails",

@@ -587,6 +587,7 @@
     "priceComplete": "Priced",
     "priceNoneBody": "No sales lines or price yet.",
     "priceNoneHint": "Add an agreed price or sales lines in Sales & price.",
+    "invoices": "Invoices",
     "priceProgress": "{priced}/{total} activities priced",
     "priceZero": "⚠ Sales price of € 0.00 — check whether this is intended.",
     "openPrice": "Open price details",

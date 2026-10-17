@@ -86,3 +86,8 @@ li.dossier-activity-card.is-highlighted {
     align-items: flex-start;
   }
 }
+
+/* ACC-M12: the invoice status next to the invoice link. */
+.dossier-activity-muted {
+  color: var(--text);
+}
