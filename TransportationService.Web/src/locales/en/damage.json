@@ -53,6 +53,18 @@
     "notesLabel": "Notes",
     "deleteTitle": "Delete damage report",
     "deleteMessage": "Are you sure you want to delete the damage report of {date}?",
-    "deleteConfirm": "Delete"
+    "deleteConfirm": "Delete",
+    "colTrip": "Trip",
+    "colAttachment": "Photo/document",
+    "tripLabel": "Trip",
+    "tripHint": "Optional: the trip during which the damage occurred.",
+    "noTrip": "No trip (e.g. damage in the yard)",
+    "uploaded": "File added.",
+    "uploadFailed": "The file could not be uploaded (max. 10 MB, pdf/jpg/png).",
+    "downloadFailed": "The file could not be downloaded.",
+    "removeAttachment": "Remove file",
+    "attachmentRemoved": "File removed.",
+    "attachmentRemoveFailed": "The file could not be removed.",
+    "negativeNotAllowed": "Repair cost and downtime cannot be negative."
   }
 }

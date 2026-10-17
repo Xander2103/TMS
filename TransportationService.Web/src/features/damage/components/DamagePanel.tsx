@@ -1,4 +1,6 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
+import { Link } from 'react-router-dom'
+import { ApiError } from '../../../api/apiClient'
 import { Badge, type BadgeTone } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
@@ -12,11 +14,17 @@ import { searchDrivers } from '../../drivers/api/driversApi'
 import type { DriverListItem } from '../../drivers/types'
 import {
   createDamageReport,
+  DAMAGE_ATTACHMENT_ACCEPT,
+  deleteDamageAttachment,
   deleteDamageReport,
+  downloadDamageAttachment,
   listDamageReports,
   updateDamageReport,
+  uploadDamageAttachment,
   type DamageOwnerType,
 } from '../api/damageApi'
+import { getAssetTrips } from '../../fleet-readiness/fleetReadinessApi'
+import type { TripReference } from '../../fleet-readiness/types'
 import {
   DAMAGE_SEVERITY_LABELS,
   DAMAGE_STATUS_LABELS,
@@ -54,6 +62,7 @@ interface DamageForm {
   repairCost: string
   downtimeDays: string
   notes: string
+  tripId: string
 }
 
 const EMPTY_FORM: DamageForm = {
@@ -67,6 +76,7 @@ const EMPTY_FORM: DamageForm = {
   repairCost: '',
   downtimeDays: '',
   notes: '',
+  tripId: '',
 }
 
 function euro(value: number | null): string {
@@ -98,6 +108,10 @@ export function DamagePanel({ ownerType, ownerId }: DamagePanelProps) {
   const [saving, setSaving] = useState(false)
 
   const [deleteTarget, setDeleteTarget] = useState<DamageReport | null>(null)
+  const [trips, setTrips] = useState<TripReference[]>([])
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const [uploadTarget, setUploadTarget] = useState<string | null>(null)
+  const [uploadingId, setUploadingId] = useState<string | null>(null)
 
   useEffect(() => {
     let mounted = true
@@ -128,6 +142,59 @@ export function DamagePanel({ ownerType, ownerId }: DamagePanelProps) {
     }
   }, [])
 
+  // FL-M7: the asset's recent trips for the optional "Rit" link; a failure keeps "Geen rit".
+  useEffect(() => {
+    let mounted = true
+    getAssetTrips(ownerType, ownerId)
+      .then((data) => {
+        if (mounted) setTrips(data)
+      })
+      .catch(() => {})
+    return () => {
+      mounted = false
+    }
+  }, [ownerType, ownerId])
+
+  function pickFile(reportId: string) {
+    setUploadTarget(reportId)
+    fileInputRef.current?.click()
+  }
+
+  async function handleFileSelected(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file || !uploadTarget) return
+    setUploadingId(uploadTarget)
+    try {
+      await uploadDamageAttachment(uploadTarget, file)
+      showSuccess(t('damage.panel.uploaded'))
+      setReloadToken((token) => token + 1)
+    } catch (err) {
+      showError(err instanceof ApiError && err.message ? err.message : t('damage.panel.uploadFailed'))
+    } finally {
+      setUploadingId(null)
+      setUploadTarget(null)
+    }
+  }
+
+  async function handleDownload(report: DamageReport) {
+    try {
+      await downloadDamageAttachment(report.id, `schade-${report.incidentDate}`)
+    } catch {
+      showError(t('damage.panel.downloadFailed'))
+    }
+  }
+
+  async function handleClearAttachment(report: DamageReport) {
+    try {
+      await deleteDamageAttachment(report.id)
+      showSuccess(t('damage.panel.attachmentRemoved'))
+      setReloadToken((token) => token + 1)
+    } catch {
+      showError(t('damage.panel.attachmentRemoveFailed'))
+    }
+  }
+
   function set<K extends keyof DamageForm>(key: K, value: DamageForm[K]) {
     setForm((f) => ({ ...f, [key]: value }))
   }
@@ -152,6 +219,7 @@ export function DamagePanel({ ownerType, ownerId }: DamagePanelProps) {
       repairCost: report.repairCost === null ? '' : String(report.repairCost),
       downtimeDays: report.downtimeDays === null ? '' : String(report.downtimeDays),
       notes: report.notes ?? '',
+      tripId: report.tripId ?? '',
     })
     setFormError(null)
     setEditorOpen(true)
@@ -168,6 +236,10 @@ export function DamagePanel({ ownerType, ownerId }: DamagePanelProps) {
       setFormError(t('damage.panel.descriptionRequired'))
       return
     }
+    if ((form.repairCost !== '' && Number(form.repairCost) < 0) || (form.downtimeDays !== '' && Number(form.downtimeDays) < 0)) {
+      setFormError(t('damage.panel.negativeNotAllowed'))
+      return
+    }
     const base = {
       driverId: form.driverId || null,
       incidentDate: form.incidentDate,
@@ -176,16 +248,14 @@ export function DamagePanel({ ownerType, ownerId }: DamagePanelProps) {
       severity: form.severity,
       insuranceReference: form.insuranceReference.trim() || null,
       notes: form.notes.trim() || null,
+      tripId: form.tripId || null,
+      repairCost: form.repairCost === '' ? null : Number(form.repairCost),
+      downtimeDays: form.downtimeDays === '' ? null : Number(form.downtimeDays),
     }
     setSaving(true)
     try {
       if (editing) {
-        const input: UpdateDamageInput = {
-          ...base,
-          status: form.status,
-          repairCost: form.repairCost === '' ? null : Number(form.repairCost),
-          downtimeDays: form.downtimeDays === '' ? null : Number(form.downtimeDays),
-        }
+        const input: UpdateDamageInput = { ...base, status: form.status }
         await updateDamageReport(editing.id, input)
         showSuccess(t('damage.panel.updated'))
       } else {
@@ -194,8 +264,8 @@ export function DamagePanel({ ownerType, ownerId }: DamagePanelProps) {
       }
       setEditorOpen(false)
       setReloadToken((token) => token + 1)
-    } catch {
-      setFormError(t('damage.panel.saveFailed'))
+    } catch (err) {
+      setFormError(err instanceof ApiError && err.status === 400 && err.message ? err.message : t('damage.panel.saveFailed'))
     } finally {
       setSaving(false)
     }
@@ -240,7 +310,9 @@ export function DamagePanel({ ownerType, ownerId }: DamagePanelProps) {
               <th>{t('damage.panel.colSeverity')}</th>
               <th>{t('damage.panel.colStatus')}</th>
               <th>{t('damage.panel.colDriver')}</th>
+              <th>{t('damage.panel.colTrip')}</th>
               <th>{t('damage.panel.colRepairCost')}</th>
+              <th>{t('damage.panel.colAttachment')}</th>
               <th aria-label={t('damage.panel.colActions')} />
             </tr>
           </thead>
@@ -258,7 +330,33 @@ export function DamagePanel({ ownerType, ownerId }: DamagePanelProps) {
                   <Badge tone={STATUS_TONE[report.status]}>{t(DAMAGE_STATUS_LABELS[report.status])}</Badge>
                 </td>
                 <td>{report.driverName ?? '—'}</td>
+                <td>{report.tripId && report.tripNumber ? <Link to={`/planning/${report.tripId}`}>{report.tripNumber}</Link> : '—'}</td>
                 <td>{euro(report.repairCost)}</td>
+                <td className="dmg-actions">
+                  {report.hasAttachment ? (
+                    <>
+                      <button type="button" className="dmg-link" onClick={() => void handleDownload(report)}>
+                        {t('fleet.common.download')}
+                      </button>
+                      {hasPermission('damage_reports.edit') && (
+                        <button type="button" className="dmg-link dmg-link-danger" onClick={() => void handleClearAttachment(report)}>
+                          {t('damage.panel.removeAttachment')}
+                        </button>
+                      )}
+                    </>
+                  ) : hasPermission('damage_reports.edit') ? (
+                    <button
+                      type="button"
+                      className="dmg-link"
+                      disabled={uploadingId === report.id}
+                      onClick={() => pickFile(report.id)}
+                    >
+                      {uploadingId === report.id ? t('fleet.common.busy') : t('fleet.common.upload')}
+                    </button>
+                  ) : (
+                    '—'
+                  )}
+                </td>
                 <td className="dmg-actions">
                   {hasPermission('damage_reports.edit') && (
                     <button type="button" className="dmg-link" onClick={() => openEdit(report)}>
@@ -361,8 +459,18 @@ export function DamagePanel({ ownerType, ownerId }: DamagePanelProps) {
                 </select>
               </FormField>
             </div>
-            {editing && (
-              <div className="dmg-form-row dmg-form-row-3">
+            <FormField label={t('damage.panel.tripLabel')} htmlFor="dm-trip" hint={t('damage.panel.tripHint')}>
+              <select id="dm-trip" value={form.tripId} onChange={(e) => set('tripId', e.target.value)} disabled={saving}>
+                <option value="">{t('damage.panel.noTrip')}</option>
+                {trips.map((trip) => (
+                  <option key={trip.id} value={trip.id}>
+                    {trip.tripNumber} ({formatDate(trip.tripDate)})
+                  </option>
+                ))}
+              </select>
+            </FormField>
+            <div className="dmg-form-row dmg-form-row-3">
+              {editing && (
                 <FormField label={t('damage.panel.statusLabel')} htmlFor="dm-status" required>
                   <select
                     id="dm-status"
@@ -377,30 +485,30 @@ export function DamagePanel({ ownerType, ownerId }: DamagePanelProps) {
                     ))}
                   </select>
                 </FormField>
-                <FormField label={t('damage.panel.repairCostLabel')} htmlFor="dm-cost">
-                  <input
-                    id="dm-cost"
-                    type="number"
-                    min={0}
-                    step="0.01"
-                    value={form.repairCost}
-                    onChange={(e) => set('repairCost', e.target.value)}
-                    disabled={saving}
-                  />
-                </FormField>
-                <FormField label={t('damage.panel.downtimeLabel')} htmlFor="dm-downtime">
-                  <input
-                    id="dm-downtime"
-                    type="number"
-                    min={0}
-                    max={3650}
-                    value={form.downtimeDays}
-                    onChange={(e) => set('downtimeDays', e.target.value)}
-                    disabled={saving}
-                  />
-                </FormField>
-              </div>
-            )}
+              )}
+              <FormField label={t('damage.panel.repairCostLabel')} htmlFor="dm-cost">
+                <input
+                  id="dm-cost"
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={form.repairCost}
+                  onChange={(e) => set('repairCost', e.target.value)}
+                  disabled={saving}
+                />
+              </FormField>
+              <FormField label={t('damage.panel.downtimeLabel')} htmlFor="dm-downtime">
+                <input
+                  id="dm-downtime"
+                  type="number"
+                  min={0}
+                  max={3650}
+                  value={form.downtimeDays}
+                  onChange={(e) => set('downtimeDays', e.target.value)}
+                  disabled={saving}
+                />
+              </FormField>
+            </div>
             <FormField label={t('damage.panel.insuranceLabel')} htmlFor="dm-insurance">
               <input
                 id="dm-insurance"
@@ -422,6 +530,15 @@ export function DamagePanel({ ownerType, ownerId }: DamagePanelProps) {
           </form>
         </Modal>
       )}
+
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept={DAMAGE_ATTACHMENT_ACCEPT}
+        hidden
+        data-testid="damage-file-input"
+        onChange={(event) => void handleFileSelected(event)}
+      />
 
       {deleteTarget && (
         <ConfirmDialog

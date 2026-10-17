@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
+import { ApiError } from '../../../api/apiClient'
 import { Badge, type BadgeTone } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
@@ -41,6 +42,7 @@ const EMPTY_FORM: MaintenanceInput = {
   customTypeName: null,
   description: '',
   scheduledDate: null,
+  scheduledEndDate: null,
   odometerTriggerKm: null,
   provider: null,
   intervalMonths: null,
@@ -107,6 +109,7 @@ export function MaintenancePanel({ ownerType, ownerId }: MaintenancePanelProps) 
       customTypeName: record.customTypeName,
       description: record.description,
       scheduledDate: record.scheduledDate,
+      scheduledEndDate: record.scheduledEndDate ?? null,
       odometerTriggerKm: record.odometerTriggerKm,
       provider: record.provider,
       intervalMonths: record.intervalMonths,
@@ -140,6 +143,14 @@ export function MaintenancePanel({ ownerType, ownerId }: MaintenancePanelProps) 
       setFormError(t('maintenance.panel.customNameRequired'))
       return
     }
+    if (form.scheduledEndDate && !form.scheduledDate) {
+      setFormError(t('maintenance.panel.endWithoutStart'))
+      return
+    }
+    if (form.scheduledDate && form.scheduledEndDate && form.scheduledEndDate < form.scheduledDate) {
+      setFormError(t('maintenance.panel.endBeforeStart'))
+      return
+    }
     setSaving(true)
     try {
       if (editing) {
@@ -151,8 +162,8 @@ export function MaintenancePanel({ ownerType, ownerId }: MaintenancePanelProps) 
       }
       setEditorOpen(false)
       setReloadToken((token) => token + 1)
-    } catch {
-      setFormError(t('maintenance.panel.saveFailed'))
+    } catch (err) {
+      setFormError(err instanceof ApiError && err.status === 400 && err.message ? err.message : t('maintenance.panel.saveFailed'))
     } finally {
       setSaving(false)
     }
@@ -174,10 +185,33 @@ export function MaintenancePanel({ ownerType, ownerId }: MaintenancePanelProps) 
       setCompleteTarget(null)
       setCompleteForm(null)
       setReloadToken((token) => token + 1)
-    } catch {
-      showError(t('maintenance.panel.completeFailed'))
+    } catch (err) {
+      showError(err instanceof ApiError && err.status === 400 && err.message ? err.message : t('maintenance.panel.completeFailed'))
     } finally {
       setSaving(false)
+    }
+  }
+
+  /** FL-H4: "Starten" puts a planned job in progress — the vehicle is then not deployable. */
+  async function handleStart(record: MaintenanceRecord) {
+    try {
+      await updateMaintenance(record.id, {
+        maintenanceType: record.maintenanceType,
+        customTypeName: record.customTypeName,
+        description: record.description,
+        scheduledDate: record.scheduledDate ?? new Date().toISOString().slice(0, 10),
+        scheduledEndDate: record.scheduledEndDate ?? null,
+        odometerTriggerKm: record.odometerTriggerKm,
+        provider: record.provider,
+        intervalMonths: record.intervalMonths,
+        intervalKm: record.intervalKm,
+        notes: record.notes,
+        status: 'InProgress',
+      })
+      showSuccess(t('maintenance.panel.started'))
+      setReloadToken((token) => token + 1)
+    } catch (err) {
+      showError(err instanceof ApiError && err.message ? err.message : t('maintenance.panel.startFailed'))
     }
   }
 
@@ -232,7 +266,13 @@ export function MaintenancePanel({ ownerType, ownerId }: MaintenancePanelProps) 
                 <td>{t(maintenanceDisplayName(record))}</td>
                 <td className="maint-description">{record.description}</td>
                 <td>
-                  {formatDate(record.scheduledDate) || (record.odometerTriggerKm != null ? `${formatInteger(record.odometerTriggerKm)} km` : '—')}
+                  {record.scheduledDate
+                    ? record.scheduledEndDate && record.scheduledEndDate !== record.scheduledDate
+                      ? `${formatDate(record.scheduledDate)} – ${formatDate(record.scheduledEndDate)}`
+                      : formatDate(record.scheduledDate)
+                    : record.odometerTriggerKm != null
+                      ? `${formatInteger(record.odometerTriggerKm)} km`
+                      : '—'}
                 </td>
                 <td>
                   <span className="maint-badges">
@@ -245,6 +285,11 @@ export function MaintenancePanel({ ownerType, ownerId }: MaintenancePanelProps) 
                 <td className="maint-actions">
                   {canEdit && (record.status === 'Planned' || record.status === 'InProgress') && (
                     <>
+                      {record.status === 'Planned' && (
+                        <button type="button" className="maint-link" onClick={() => void handleStart(record)}>
+                          {t('maintenance.panel.start')}
+                        </button>
+                      )}
                       <button type="button" className="maint-link" onClick={() => openComplete(record)}>
                         {t('maintenance.panel.complete')}
                       </button>
@@ -327,10 +372,30 @@ export function MaintenancePanel({ ownerType, ownerId }: MaintenancePanelProps) 
                   id="mt-scheduled"
                   type="date"
                   value={form.scheduledDate ?? ''}
-                  onChange={(e) => set('scheduledDate', e.target.value || null)}
+                  onChange={(e) => {
+                    const next = e.target.value || null
+                    // The window follows the start day unless the user set a later end on purpose.
+                    setForm((f) => ({
+                      ...f,
+                      scheduledDate: next,
+                      scheduledEndDate: !f.scheduledEndDate || (next && f.scheduledEndDate < next) || f.scheduledEndDate === f.scheduledDate ? next : f.scheduledEndDate,
+                    }))
+                  }}
                   disabled={saving}
                 />
               </FormField>
+              <FormField label={t('maintenance.panel.scheduledEndDate')} htmlFor="mt-scheduled-end" hint={t('maintenance.panel.scheduledEndHint')}>
+                <input
+                  id="mt-scheduled-end"
+                  type="date"
+                  min={form.scheduledDate ?? undefined}
+                  value={form.scheduledEndDate ?? ''}
+                  onChange={(e) => set('scheduledEndDate', e.target.value || null)}
+                  disabled={saving}
+                />
+              </FormField>
+            </div>
+            <div className="maint-form-row">
               {ownerType === 'vehicle' && (
                 <FormField label={t('maintenance.panel.odometerTrigger')} htmlFor="mt-odo">
                   <input

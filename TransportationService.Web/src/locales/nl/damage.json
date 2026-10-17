@@ -53,6 +53,18 @@
     "notesLabel": "Notities",
     "deleteTitle": "Schademelding verwijderen",
     "deleteMessage": "Weet je zeker dat je de schademelding van {date} wilt verwijderen?",
-    "deleteConfirm": "Verwijderen"
+    "deleteConfirm": "Verwijderen",
+    "colTrip": "Rit",
+    "colAttachment": "Foto/document",
+    "tripLabel": "Rit",
+    "tripHint": "Optioneel: de rit waarin de schade ontstond.",
+    "noTrip": "Geen rit (bv. schade op de parking)",
+    "uploaded": "Bestand toegevoegd.",
+    "uploadFailed": "Het bestand kon niet worden geüpload (max. 10 MB, pdf/jpg/png).",
+    "downloadFailed": "Het bestand kon niet worden gedownload.",
+    "removeAttachment": "Bestand wissen",
+    "attachmentRemoved": "Bestand gewist.",
+    "attachmentRemoveFailed": "Het bestand kon niet worden gewist.",
+    "negativeNotAllowed": "Herstelkost en stilstand kunnen niet negatief zijn."
   }
 }

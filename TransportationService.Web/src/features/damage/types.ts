@@ -33,6 +33,9 @@ export interface DamageReport {
   downtimeDays: number | null
   hasAttachment: boolean
   notes: string | null
+  /** FL-M7: the trip during which the damage occurred, when known. */
+  tripId?: string | null
+  tripNumber?: string | null
 }
 
 export interface CreateDamageInput {
@@ -43,10 +46,12 @@ export interface CreateDamageInput {
   severity: DamageSeverity
   insuranceReference: string | null
   notes: string | null
+  /** FL-M7: optional — parking-yard damage has no trip. */
+  tripId: string | null
+  repairCost: number | null
+  downtimeDays: number | null
 }
 
 export interface UpdateDamageInput extends CreateDamageInput {
   status: DamageStatus
-  repairCost: number | null
-  downtimeDays: number | null
 }

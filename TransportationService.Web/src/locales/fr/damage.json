@@ -53,6 +53,18 @@
     "notesLabel": "Notes",
     "deleteTitle": "Supprimer la déclaration de dommage",
     "deleteMessage": "Voulez-vous vraiment supprimer la déclaration de dommage du {date} ?",
-    "deleteConfirm": "Supprimer"
+    "deleteConfirm": "Supprimer",
+    "colTrip": "Trajet",
+    "colAttachment": "Photo/document",
+    "tripLabel": "Trajet",
+    "tripHint": "Facultatif : le trajet pendant lequel le dommage est survenu.",
+    "noTrip": "Aucun trajet (p. ex. dommage au parking)",
+    "uploaded": "Fichier ajouté.",
+    "uploadFailed": "Le fichier n'a pas pu être téléversé (max. 10 Mo, pdf/jpg/png).",
+    "downloadFailed": "Le fichier n'a pas pu être téléchargé.",
+    "removeAttachment": "Supprimer le fichier",
+    "attachmentRemoved": "Fichier supprimé.",
+    "attachmentRemoveFailed": "Le fichier n'a pas pu être supprimé.",
+    "negativeNotAllowed": "Le coût de réparation et l'immobilisation ne peuvent pas être négatifs."
   }
 }

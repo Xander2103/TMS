@@ -31,6 +31,8 @@ export interface MaintenanceRecord {
   isOverdue: boolean
   description: string
   scheduledDate: string | null
+  /** FL-H2/M14: inclusive last day of the unavailability window; null = the scheduled day only. */
+  scheduledEndDate?: string | null
   odometerTriggerKm: number | null
   completedDate: string | null
   completedOdometerKm: number | null
@@ -50,6 +52,8 @@ export interface MaintenanceInput {
   customTypeName: string | null
   description: string
   scheduledDate: string | null
+  /** FL-M14: inclusive end of the window; null = same day as scheduledDate. */
+  scheduledEndDate: string | null
   odometerTriggerKm: number | null
   provider: string | null
   intervalMonths: number | null

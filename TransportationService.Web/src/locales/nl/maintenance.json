@@ -56,7 +56,14 @@
     "workPerformed": "Uitgevoerde werkzaamheden",
     "cost": "Kosten (€)",
     "deleteTitle": "Onderhoud verwijderen",
-    "deleteMessage": "Weet je zeker dat je \"{name} — {description}\" wilt verwijderen?"
+    "deleteMessage": "Weet je zeker dat je \"{name} — {description}\" wilt verwijderen?",
+    "scheduledEndDate": "Tot en met",
+    "scheduledEndHint": "Laatste dag dat het voertuig in onderhoud is. Leeg = alleen de geplande dag.",
+    "endBeforeStart": "De einddatum moet op of na de startdatum liggen.",
+    "endWithoutStart": "Kies eerst een geplande startdatum.",
+    "start": "Starten",
+    "started": "Onderhoud gestart — het voertuig is niet inzetbaar tot het onderhoud is afgerond.",
+    "startFailed": "Het onderhoud kon niet worden gestart."
   },
   "policy": {
     "kind": {

@@ -56,7 +56,14 @@
     "workPerformed": "Travaux effectués",
     "cost": "Coûts (€)",
     "deleteTitle": "Supprimer l'entretien",
-    "deleteMessage": "Voulez-vous vraiment supprimer « {name} — {description} » ?"
+    "deleteMessage": "Voulez-vous vraiment supprimer « {name} — {description} » ?",
+    "scheduledEndDate": "Jusqu'au (inclus)",
+    "scheduledEndHint": "Dernier jour d'immobilisation. Vide = uniquement le jour prévu.",
+    "endBeforeStart": "La date de fin doit être égale ou postérieure à la date de début.",
+    "endWithoutStart": "Choisissez d'abord une date de début.",
+    "start": "Démarrer",
+    "started": "Entretien démarré — le véhicule est indisponible jusqu'à la fin de l'entretien.",
+    "startFailed": "L'entretien n'a pas pu être démarré."
   },
   "policy": {
     "kind": {

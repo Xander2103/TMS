@@ -56,7 +56,14 @@
     "workPerformed": "Work performed",
     "cost": "Cost (€)",
     "deleteTitle": "Delete maintenance",
-    "deleteMessage": "Are you sure you want to delete \"{name} — {description}\"?"
+    "deleteMessage": "Are you sure you want to delete \"{name} — {description}\"?",
+    "scheduledEndDate": "Up to and including",
+    "scheduledEndHint": "Last day the vehicle is in maintenance. Empty = the scheduled day only.",
+    "endBeforeStart": "The end date must be on or after the start date.",
+    "endWithoutStart": "Choose a planned start date first.",
+    "start": "Start",
+    "started": "Maintenance started — the vehicle is not deployable until the maintenance is completed.",
+    "startFailed": "The maintenance could not be started."
   },
   "policy": {
     "kind": {
