@@ -6,6 +6,7 @@ using TransportationService.Api.Modules.Fleet.Dtos;
 using TransportationService.Api.Modules.Fleet.Entities;
 using TransportationService.Api.Modules.Messaging.Entities;
 using TransportationService.Api.Modules.Messaging.Services;
+using TransportationService.Api.Modules.Qualifications.Services;
 using TransportationService.Api.Modules.Tenancy.Services;
 
 namespace TransportationService.Api.Modules.Fleet.Services;
@@ -13,22 +14,26 @@ namespace TransportationService.Api.Modules.Fleet.Services;
 public class DamageReportService : IDamageReportService
 {
     private const string EntityType = "DamageReport";
+    private const string StorageCategory = "damage-reports";
 
     private readonly TransportationDbContext _dbContext;
     private readonly ITenantContext _tenantContext;
     private readonly IAuditService _auditService;
     private readonly INotificationEventService? _notificationEvents;
     private readonly ILogger<DamageReportService>? _logger;
+    private readonly IFileStorageService? _fileStorage;
 
     public DamageReportService(
         TransportationDbContext dbContext, ITenantContext tenantContext, IAuditService auditService,
-        INotificationEventService? notificationEvents = null, ILogger<DamageReportService>? logger = null)
+        INotificationEventService? notificationEvents = null, ILogger<DamageReportService>? logger = null,
+        IFileStorageService? fileStorage = null)
     {
         _dbContext = dbContext;
         _tenantContext = tenantContext;
         _auditService = auditService;
         _notificationEvents = notificationEvents;
         _logger = logger;
+        _fileStorage = fileStorage;
     }
 
     private IQueryable<DamageReport> TenantScoped() =>
@@ -103,9 +108,20 @@ public class DamageReportService : IDamageReportService
             return DamageOperationResult.InvalidReference;
         }
 
-        var before = new { report.Status, report.Severity, report.RepairCost };
+        if (await TripErrorAsync(request.TripId, report.VehicleId, report.TrailerId, cancellationToken) is { } tripError)
+        {
+            return DamageOperationResult.Invalid(tripError);
+        }
+
+        if (request.RepairCost is < 0 || request.DowntimeDays is < 0)
+        {
+            return DamageOperationResult.Invalid("Herstelkost en stilstand kunnen niet negatief zijn.");
+        }
+
+        var before = new { report.Status, report.Severity, report.RepairCost, report.DowntimeDays, report.TripId };
 
         report.DriverId = request.DriverId;
+        report.TripId = request.TripId;
         report.IncidentDate = request.IncidentDate;
         report.Location = Trim(request.Location);
         report.Description = request.Description.Trim();
@@ -119,7 +135,7 @@ public class DamageReportService : IDamageReportService
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         await _auditService.RecordAsync(EntityType, report.Id.ToString(), "Updated", before,
-            new { report.Status, report.Severity, report.RepairCost }, cancellationToken);
+            new { report.Status, report.Severity, report.RepairCost, report.DowntimeDays, report.TripId }, cancellationToken);
 
         return DamageOperationResult.Success(await MapAsync(report, cancellationToken));
     }
@@ -163,6 +179,16 @@ public class DamageReportService : IDamageReportService
             return DamageOperationResult.InvalidReference;
         }
 
+        if (await TripErrorAsync(request.TripId, vehicleId, trailerId, cancellationToken) is { } tripError)
+        {
+            return DamageOperationResult.Invalid(tripError);
+        }
+
+        if (request.RepairCost is < 0 || request.DowntimeDays is < 0)
+        {
+            return DamageOperationResult.Invalid("Herstelkost en stilstand kunnen niet negatief zijn.");
+        }
+
         var report = new DamageReport
         {
             Id = Guid.NewGuid(),
@@ -177,13 +203,16 @@ public class DamageReportService : IDamageReportService
             Status = DamageStatus.Reported,
             InsuranceReference = Trim(request.InsuranceReference),
             Notes = Trim(request.Notes),
+            TripId = request.TripId,
+            RepairCost = request.RepairCost,
+            DowntimeDays = request.DowntimeDays,
         };
 
         _dbContext.Add(report);
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         await _auditService.RecordAsync(EntityType, report.Id.ToString(), "Created", null,
-            new { report.IncidentDate, report.Severity, report.VehicleId, report.TrailerId }, cancellationToken);
+            new { report.IncidentDate, report.Severity, report.VehicleId, report.TrailerId, report.DriverId, report.TripId, report.RepairCost }, cancellationToken);
 
         if (_notificationEvents is not null)
         {
@@ -224,10 +253,18 @@ public class DamageReportService : IDamageReportService
                     on drv.EmployeeId equals e.Id into employees
                 from e in employees.DefaultIfEmpty()
                 orderby d.IncidentDate descending, d.CreatedAt descending
-                select new { Report = d, DriverName = e != null ? e.FirstName + " " + e.LastName : null })
+                join trip in _dbContext.Trips.AsNoTracking().Where(x => x.TenantId == _tenantContext.TenantId)
+                    on d.TripId equals trip.Id into trips
+                from trip in trips.DefaultIfEmpty()
+                select new
+                {
+                    Report = d,
+                    DriverName = e != null ? e.FirstName + " " + e.LastName : null,
+                    TripNumber = trip != null ? trip.TripNumber : null,
+                })
             .ToListAsync(cancellationToken);
 
-        return rows.Select(r => Map(r.Report, r.DriverName)).ToList();
+        return rows.Select(r => Map(r.Report, r.DriverName, r.TripNumber)).ToList();
     }
 
     private async Task<bool> DriverInTenantAsync(Guid? driverId, CancellationToken cancellationToken) =>
@@ -244,16 +281,112 @@ public class DamageReportService : IDamageReportService
                     (d, e) => e.FirstName + " " + e.LastName)
                 .FirstOrDefaultAsync(cancellationToken)
             : null;
+        var tripNumber = report.TripId is { } tripId
+            ? await _dbContext.Trips.AsNoTracking()
+                .Where(t => t.Id == tripId && t.TenantId == _tenantContext.TenantId)
+                .Select(t => t.TripNumber)
+                .FirstOrDefaultAsync(cancellationToken)
+            : null;
 
-        return Map(report, driverName);
+        return Map(report, driverName, tripNumber);
     }
 
-    private static DamageReportDto Map(DamageReport d, string? driverName) => new(
+    private static DamageReportDto Map(DamageReport d, string? driverName, string? tripNumber) => new(
         d.Id, d.VehicleId, d.TrailerId, d.DriverId, driverName,
         d.IncidentDate, d.Location, d.Description, d.Severity, d.Status,
         d.InsuranceReference, d.RepairCost, d.DowntimeDays,
         HasAttachment: d.AttachmentPath is not null,
-        d.Notes);
+        d.Notes,
+        d.TripId,
+        tripNumber);
+
+    /// <summary>FL-M7: a linked trip must exist in this tenant and carry the same vehicle/trailer.</summary>
+    private async Task<string?> TripErrorAsync(Guid? tripId, Guid? vehicleId, Guid? trailerId, CancellationToken cancellationToken)
+    {
+        if (tripId is not { } id)
+        {
+            return null;
+        }
+
+        var trip = await _dbContext.Trips.AsNoTracking()
+            .Where(t => t.Id == id && t.TenantId == _tenantContext.TenantId)
+            .Select(t => new { t.VehicleId, t.TrailerId })
+            .FirstOrDefaultAsync(cancellationToken);
+        var matches = trip is not null
+                      && ((vehicleId is not null && trip.VehicleId == vehicleId)
+                          || (trailerId is not null && trip.TrailerId == trailerId));
+        return matches ? null : (vehicleId is not null
+            ? "De gekozen rit hoort niet bij dit voertuig."
+            : "De gekozen rit hoort niet bij deze oplegger.");
+    }
+
+    public async Task<DamageOperationResult> AttachFileAsync(
+        Guid id, string fileName, string contentType, Stream content, CancellationToken cancellationToken)
+    {
+        var report = await TenantScoped().FirstOrDefaultAsync(d => d.Id == id, cancellationToken);
+        if (report is null)
+        {
+            return DamageOperationResult.NotFound;
+        }
+
+        if (_fileStorage is null)
+        {
+            return DamageOperationResult.Invalid("Bestandsopslag is niet beschikbaar.");
+        }
+
+        var previousKey = report.AttachmentPath;
+        report.AttachmentPath = await _fileStorage.SaveAsync(_tenantContext.TenantId, StorageCategory, fileName, content, cancellationToken);
+        report.AttachmentFileName = fileName;
+        report.AttachmentContentType = contentType;
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        if (previousKey is not null)
+        {
+            await _fileStorage.DeleteAsync(previousKey, cancellationToken);
+        }
+
+        await _auditService.RecordAsync(EntityType, report.Id.ToString(), "DocumentUploaded", null,
+            new { FileName = fileName }, cancellationToken);
+
+        return DamageOperationResult.Success(await MapAsync(report, cancellationToken));
+    }
+
+    public async Task<(Stream Content, string FileName, string ContentType)?> OpenFileAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var report = await TenantScoped().AsNoTracking().FirstOrDefaultAsync(d => d.Id == id, cancellationToken);
+        if (report?.AttachmentPath is null || _fileStorage is null)
+        {
+            return null;
+        }
+
+        var stream = await _fileStorage.OpenReadAsync(report.AttachmentPath, cancellationToken);
+        return (stream, report.AttachmentFileName ?? "schade", report.AttachmentContentType ?? "application/octet-stream");
+    }
+
+    public async Task<DamageOperationResult> RemoveFileAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var report = await TenantScoped().FirstOrDefaultAsync(d => d.Id == id, cancellationToken);
+        if (report is null)
+        {
+            return DamageOperationResult.NotFound;
+        }
+
+        if (report.AttachmentPath is { } key)
+        {
+            report.AttachmentPath = null;
+            report.AttachmentFileName = null;
+            report.AttachmentContentType = null;
+            await _dbContext.SaveChangesAsync(cancellationToken);
+            if (_fileStorage is not null)
+            {
+                await _fileStorage.DeleteAsync(key, cancellationToken);
+            }
+
+            await _auditService.RecordAsync(EntityType, report.Id.ToString(), "DocumentRemoved", null, null, cancellationToken);
+        }
+
+        return DamageOperationResult.Success(await MapAsync(report, cancellationToken));
+    }
 
     private static string? Trim(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }

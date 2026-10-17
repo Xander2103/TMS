@@ -18,4 +18,11 @@ public interface IDamageReportService
     Task<DamageOperationResult> UpdateAsync(Guid id, UpdateDamageReportRequest request, CancellationToken cancellationToken);
 
     Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken);
+
+    /// <summary>FL-M7: attach (or replace) the photo/document of a damage report.</summary>
+    Task<DamageOperationResult> AttachFileAsync(Guid id, string fileName, string contentType, Stream content, CancellationToken cancellationToken);
+
+    Task<(Stream Content, string FileName, string ContentType)?> OpenFileAsync(Guid id, CancellationToken cancellationToken);
+
+    Task<DamageOperationResult> RemoveFileAsync(Guid id, CancellationToken cancellationToken);
 }

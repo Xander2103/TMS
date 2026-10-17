@@ -48,5 +48,9 @@ public class DamageReport : AuditableTenantEntity
     /// <summary>Opaque IFileStorageService storage key for photos/documents, when present.</summary>
     public string? AttachmentPath { get; set; }
 
+    /// <summary>FL-M7: original file name / content type of the attachment (photo or document).</summary>
+    public string? AttachmentFileName { get; set; }
+    public string? AttachmentContentType { get; set; }
+
     public string? Notes { get; set; }
 }

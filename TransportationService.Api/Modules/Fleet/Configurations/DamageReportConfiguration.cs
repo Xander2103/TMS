@@ -23,6 +23,8 @@ public class DamageReportConfiguration : IEntityTypeConfiguration<DamageReport>
         builder.Property(d => d.InsuranceReference).HasMaxLength(100);
         builder.Property(d => d.RepairCost).HasPrecision(12, 2);
         builder.Property(d => d.AttachmentPath).HasMaxLength(300);
+        builder.Property(d => d.AttachmentFileName).HasMaxLength(255);
+        builder.Property(d => d.AttachmentContentType).HasMaxLength(100);
         builder.Property(d => d.Notes).HasMaxLength(2000);
 
         builder.HasIndex(d => new { d.TenantId, d.VehicleId });

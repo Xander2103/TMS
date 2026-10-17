@@ -75,6 +75,58 @@ public class DamageReportsController : ControllerBase
         return await _service.DeleteAsync(id, cancellationToken) ? NoContent() : NotFound();
     }
 
+    private const long MaxAttachmentBytes = 10 * 1024 * 1024;
+    private static readonly string[] AllowedExtensions = [".pdf", ".jpg", ".jpeg", ".png"];
+
+    /// <summary>FL-M7: photo or document of the damage (pdf/jpg/png, max 10 MB).</summary>
+    [HttpPost("api/damage-reports/{id:guid}/document")]
+    [RequirePermission(PermissionCodes.DamageReportsEdit)]
+    [RequestSizeLimit(MaxAttachmentBytes + 1024)]
+    public async Task<ActionResult<DamageReportDto>> UploadDocument(Guid id, IFormFile file, CancellationToken cancellationToken)
+    {
+        if (file.Length == 0 || file.Length > MaxAttachmentBytes)
+        {
+            return BadRequest(new { message = "Het bestand moet tussen 1 byte en 10 MB groot zijn." });
+        }
+
+        var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
+        if (!AllowedExtensions.Contains(extension))
+        {
+            return BadRequest(new { message = "Alleen PDF-, JPG- en PNG-bestanden zijn toegestaan." });
+        }
+
+        if (Modules.Security.UploadValidation.SignatureError(file) is { } signatureError)
+        {
+            return BadRequest(new { message = signatureError });
+        }
+
+        var contentType = extension switch
+        {
+            ".pdf" => "application/pdf",
+            ".jpg" or ".jpeg" => "image/jpeg",
+            ".png" => "image/png",
+            _ => "application/octet-stream",
+        };
+
+        await using var stream = file.OpenReadStream();
+        return Handle(await _service.AttachFileAsync(id, file.FileName, contentType, stream, cancellationToken), created: false);
+    }
+
+    [HttpGet("api/damage-reports/{id:guid}/document")]
+    [RequirePermission(PermissionCodes.DamageReportsView)]
+    public async Task<IActionResult> DownloadDocument(Guid id, CancellationToken cancellationToken)
+    {
+        var file = await _service.OpenFileAsync(id, cancellationToken);
+        return file is { } found ? File(found.Content, found.ContentType, found.FileName) : NotFound();
+    }
+
+    [HttpDelete("api/damage-reports/{id:guid}/document")]
+    [RequirePermission(PermissionCodes.DamageReportsEdit)]
+    public async Task<ActionResult<DamageReportDto>> RemoveDocument(Guid id, CancellationToken cancellationToken)
+    {
+        return Handle(await _service.RemoveFileAsync(id, cancellationToken), created: false);
+    }
+
     private ActionResult<DamageReportDto> Handle(DamageOperationResult result, bool created) => result.Outcome switch
     {
         DamageOperationOutcome.Success when created => StatusCode(StatusCodes.Status201Created, result.Report),
