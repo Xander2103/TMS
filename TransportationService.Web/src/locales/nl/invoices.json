@@ -210,7 +210,11 @@
     "createError": "De factuur kon niet worden aangemaakt.",
     "selectCustomer": "Selecteer eerst een klant.",
     "needsSelection": "Selecteer minstens één opdracht of voeg een lijn toe.",
-    "invalidManualLine": "Elke handmatige lijn heeft een omschrijving en een hoeveelheid groter dan nul nodig."
+    "invalidManualLine": "Elke handmatige lijn heeft een omschrijving en een hoeveelheid groter dan nul nodig.",
+    "vatLabel": "Btw %",
+    "vatFollowsCustomer": "volgt klant",
+    "numberAtIssue": "Het factuurnummer wordt toegekend bij het verzenden; de reeks begint bij {number}.",
+    "createdDraft": "Conceptfactuur aangemaakt."
   },
   "readiness": {
     "ready": "Klaar",
@@ -340,7 +344,44 @@
     "attachmentsTitle": "Bijlagen",
     "loading": "Factuur laden...",
     "loadError": "De factuur kon niet worden geladen.",
-    "ledgerSettingsLink": "Grootboek instellen →"
+    "ledgerSettingsLink": "Grootboek instellen →",
+    "notFound": "Factuur niet gevonden.",
+    "draftLabel": "Concept",
+    "draftNumberHint": "Het factuurnummer wordt toegekend bij het verzenden.",
+    "creditTitle": "Creditnota",
+    "creditSubtitle": "Creditnotadatum {date} · crediteert {number}",
+    "creditReason": "Reden van creditering",
+    "creditTotalLabel": "Te crediteren (incl. btw)",
+    "paidAt": "Betaald gemarkeerd op {date}",
+    "paidBy": "door {name}",
+    "paymentManual": "Handmatig geregistreerd — geen bankkoppeling.",
+    "historyTitle": "Historiek",
+    "preflightTitle": "Vóór verzenden nog op te lossen",
+    "preflightOk": "Alle controles zijn in orde; de factuur kan definitief gemaakt worden.",
+    "preflightLoadError": "De controle kon niet worden uitgevoerd; probeer opnieuw.",
+    "preflightLines": "lijn {lines}",
+    "preflightCodes": {
+      "po_missing": "PO-nummer ontbreekt: deze klant vereist een PO-nummer (Bewerken → PO-nummer).",
+      "category_missing": "Verkoopcategorie ontbreekt op een lijn (Bewerken → Verkoopcategorie).",
+      "ledger_missing": "Grootboekrekening ontbreekt voor een verkoopcategorie (Instellingen → Boekhouding).",
+      "vat_inconsistent": "Btw-tarief past niet bij de btw-behandeling (Bewerken → Btw %).",
+      "source_unpriced": "Een lijn verwijst naar werk zonder prijs; prijs het werk eerst in het dossier.",
+      "lines_empty": "Een factuur heeft minstens één lijn nodig.",
+      "customer_vat_number": "Btw-nummer van de klant ontbreekt (Klant → Fiscaal & Peppol).",
+      "entity_missing": "Kies een actieve facturerende entiteit."
+    },
+    "vatDefaultHint": "Standaard btw-tarief van deze factuur: {rate}%.",
+    "vatDefaultFallback": "Geen btw-behandeling bekend: controleer het btw-tarief van de nieuwe lijn.",
+    "dueDateRecalculated": "Vervaldag herberekend met de betaaltermijn van {days} dagen.",
+    "manualNumberAction": "Handmatig nummer bij verzenden",
+    "manualNumberHint": "Het nummer wordt pas definitief toegekend bij het verzenden; met deze keuze gebruik je dan dit nummer in plaats van de reeks.",
+    "creditDialog": {
+      "title": "Creditnota maken",
+      "intro": "Dit maakt een conceptcreditnota die factuur {number} volledig crediteert ({total}). De verzonden factuur zelf blijft ongewijzigd.",
+      "reasonLabel": "Reden van creditering",
+      "reasonHint": "Verplicht; verschijnt in de historiek van beide documenten.",
+      "confirm": "Creditnota maken"
+    }
   },
   "fiscal": {
     "draftNote": "Voorbeeld — wordt vastgelegd bij verzenden.",
@@ -362,5 +403,11 @@
     },
     "sourceLabel": "bron",
     "treatment": "Btw-behandeling"
+  },
+  "history": {
+    "empty": "Nog geen gebeurtenissen voor deze factuur.",
+    "loadError": "De historiek kon niet worden geladen.",
+    "peppolHint": "Peppol-stappen staan ook in de Peppol-sectie hierboven.",
+    "actorSystem": "Systeem"
   }
 }

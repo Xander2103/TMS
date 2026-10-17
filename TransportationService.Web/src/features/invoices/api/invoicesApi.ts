@@ -4,6 +4,8 @@ import { getAccessToken } from '../../auth/authStorage'
 import type { PagedResult } from '../../../api/types'
 import type {
   InvoiceDetail,
+  InvoiceHistoryEvent,
+  InvoiceIssuePreflight,
   InvoiceListItem,
   InvoiceNumberPreview,
   InvoicePaidFilter,
@@ -219,7 +221,27 @@ export async function fetchInvoicePdfUrl(id: string): Promise<string> {
   return URL.createObjectURL(blob)
 }
 
+export interface CreateCreditNoteInput {
+  /** ACC-M11: why the invoice is credited (required, max 500). */
+  reason: string
+}
+
 /** Creates a DRAFT credit note against a Sent/Paid invoice; the original is never modified. */
-export function createCreditNote(id: string): Promise<InvoiceDetail> {
-  return apiClient.postJson<InvoiceDetail, Record<string, never>>(`/api/invoices/${id}/credit-note`, {})
+export function createCreditNote(id: string, input: CreateCreditNoteInput): Promise<InvoiceDetail> {
+  return apiClient.postJson<InvoiceDetail, CreateCreditNoteInput>(`/api/invoices/${id}/credit-note`, input)
+}
+
+/** ACC-M4: what still blocks issuing this draft (PO, categories, VAT, unpriced sources …). */
+export function getInvoiceIssuePreflight(id: string, options?: { signal?: AbortSignal }): Promise<InvoiceIssuePreflight> {
+  return apiClient.getJson<InvoiceIssuePreflight>(`/api/invoices/${id}/issue-preflight`, options)
+}
+
+/** ACC-M7: the invoice's financial story, oldest first; readable with invoices.view. */
+export function getInvoiceHistory(id: string, options?: { signal?: AbortSignal }): Promise<InvoiceHistoryEvent[]> {
+  return apiClient.getJson<InvoiceHistoryEvent[]>(`/api/invoices/${id}/history`, options)
+}
+
+/** ACC-H1: the VAT % manual lines default to for this customer (falls back to the server default). */
+export function getDefaultVatRate(customerId: string, options?: { signal?: AbortSignal }): Promise<{ vatRatePercent: number }> {
+  return apiClient.getJson<{ vatRatePercent: number }>(`/api/invoices/default-vat?customerId=${encodeURIComponent(customerId)}`, options)
 }

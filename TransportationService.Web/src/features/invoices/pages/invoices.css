@@ -329,4 +329,46 @@
 .inv-list-muted {
   color: var(--text-muted, var(--text));
   font-size: var(--text-sm, 0.875em);
+/* ACC-M4: issue preflight inside the send dialog — the blockers in words, with the fix. */
+.inv-preflight {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: var(--text-sm);
+  color: var(--text-h);
+  background: color-mix(in srgb, var(--color-warning) 12%, var(--bg));
+  border: 1px solid color-mix(in srgb, var(--color-warning) 45%, var(--border));
+}
+
+.inv-preflight ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+
+.inv-preflight li + li {
+  margin-top: 4px;
+}
+
+.inv-preflight-ok {
+  background: color-mix(in srgb, var(--color-success) 12%, var(--bg));
+  border-color: color-mix(in srgb, var(--color-success) 45%, var(--border));
+}
+
+.inv-preflight-error {
+  background: color-mix(in srgb, var(--color-danger) 10%, var(--bg));
+  border-color: color-mix(in srgb, var(--color-danger) 45%, var(--border));
+}
+
+/* ACC-M11: a credit note reads as a credit document. */
+.inv-credit-document .inv-total-row td:last-child {
+  color: var(--color-warning);
+}
+
+.inv-unit-label,
+.inv-paid-info {
+  color: var(--text-muted);
+}
+
+.inv-history {
+  margin-top: 24px;
 }

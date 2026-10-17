@@ -9,11 +9,23 @@ import { Button } from '../../../components/ui/Button'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { FormField } from '../../../components/ui/FormField'
 import { Modal } from '../../../components/ui/Modal'
+import { UnsavedChangesGuard } from '../../../components/ui/UnsavedChangesGuard'
 import { useToast } from '../../../components/ui/toastContext'
 import { describeApiError, getFieldError, localizeApiError, type FieldErrors } from '../../../api/problemDetails'
+import { isNotFoundError } from '../../../api/notFound'
 import { useLocale } from '../../../i18n/localeContext'
 import { useAuth } from '../../auth/authContextValue'
-import { changeInvoiceStatus, completeInvoiceLedgerSnapshots, createCreditNote, deleteInvoice, fetchInvoicePdfUrl, getInvoice, overrideInvoiceNumber, updateInvoice } from '../api/invoicesApi'
+import {
+  changeInvoiceStatus,
+  completeInvoiceLedgerSnapshots,
+  createCreditNote,
+  deleteInvoice,
+  fetchInvoicePdfUrl,
+  getInvoice,
+  getInvoiceIssuePreflight,
+  overrideInvoiceNumber,
+  updateInvoice,
+} from '../api/invoicesApi'
 import { formatQuantity } from '../../../utils/numbers'
 import { fiscalTreatmentLabel } from '../utils/invoiceFiscal'
 import {
@@ -28,18 +40,27 @@ import {
 } from '../api/invoiceAttachmentsApi'
 import { formatFileSize } from '../utils/fileSize'
 import { InvoicePeppolPanel } from '../components/InvoicePeppolPanel'
+import { InvoiceHistoryPanel } from '../components/InvoiceHistoryPanel'
+import { InvoiceIssuePreflightList } from '../components/InvoiceIssuePreflightList'
+import { CreditNoteDialog } from '../components/CreditNoteDialog'
 import { listSalesCategories, type SalesCategory } from '../../accounting/api/accountingApi'
 import {
+  addDaysIso,
+  creditAmount,
+  daysBetweenIso,
   euro,
   INVOICE_STATUS_LABELS,
   INVOICE_STATUS_TONE,
   INVOICE_TRANSITION_LABELS,
+  invoiceDisplayNumber,
+  unitPrice as formatUnitPrice,
   type InvoiceDetail,
+  type InvoiceIssuePreflight,
   type InvoiceStatus,
   type UpdateLineInput,
 } from '../types'
 import { formatPeriod, monthInputToPeriod, periodToMonthInput } from '../utils/invoicePeriod'
-import { formatDate } from '../../../utils/dates'
+import { formatDate, formatDateTime } from '../../../utils/dates'
 import { InvoiceFiscalSummary, InvoiceLineFiscalBadge } from '../components/InvoiceFiscalSummary'
 import './invoices.css'
 
@@ -52,6 +73,15 @@ interface EditableLine extends UpdateLineInput {
 
 let lineKey = 0
 
+interface EditSnapshot {
+  invoiceDate: string
+  dueDate: string
+  periodInput: string
+  notes: string
+  poNumber: string
+  lines: UpdateLineInput[]
+}
+
 export function InvoiceDetailPage() {
   const { id = '' } = useParams<{ id: string }>()
   const navigate = useNavigate()
@@ -62,24 +92,35 @@ export function InvoiceDetailPage() {
   const [invoice, setInvoice] = useState<InvoiceDetail | null>(null)
   // Vertaalsleutel in state; vertaling gebeurt pas bij render.
   const [loadErrorKey, setLoadErrorKey] = useState<string | null>(null)
+  const [loadNotFound, setLoadNotFound] = useState(false)
   const [reloadToken, setReloadToken] = useState(0)
+  const [historyToken, setHistoryToken] = useState(0)
   const [busy, setBusy] = useState(false)
 
   const [editing, setEditing] = useState(false)
   const [invoiceDate, setInvoiceDate] = useState('')
   const [dueDate, setDueDate] = useState('')
+  // ACC-H5: the due date follows the invoice date until the user edits it by hand in this session.
+  const [dueDateTouched, setDueDateTouched] = useState(false)
   const [periodInput, setPeriodInput] = useState('')
   const [notes, setNotes] = useState('')
   const [poNumber, setPoNumber] = useState('')
   const [lines, setLines] = useState<EditableLine[]>([])
+  // ACC-M5: what the form looked like when editing started; "dirty" = differs from this.
+  const [editBaseline, setEditBaseline] = useState<string>('')
+  const [vatFallbackHint, setVatFallbackHint] = useState(false)
 
   const [confirmTransition, setConfirmTransition] = useState<InvoiceStatus | null>(null)
   // Send is irreversible (number, snapshots, descriptions freeze): it always goes through an
   // explicit summary dialog, and a single in-flight guard makes a double click a no-op.
   const [confirmSend, setConfirmSend] = useState(false)
   const sendInFlight = useRef(false)
+  // ACC-M4: the issue preflight shown in the send dialog; null while loading.
+  const [preflight, setPreflight] = useState<InvoiceIssuePreflight | null>(null)
+  const [preflightError, setPreflightError] = useState<string | null>(null)
   const [pdfBusy, setPdfBusy] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [creditDialog, setCreditDialog] = useState(false)
   // Active sales categories for the per-line select in edit mode; empty when the caller
   // lacks the accounting/invoice read permissions — the select simply doesn't render then.
   const [salesCategories, setSalesCategories] = useState<SalesCategory[]>([])
@@ -97,35 +138,83 @@ export function InvoiceDetailPage() {
         if (!mounted) return
         setInvoice(data)
         setLoadErrorKey(null)
+        setLoadNotFound(false)
       })
-      .catch(() => {
-        if (mounted) setLoadErrorKey('invoices.detail.loadError')
+      .catch((err: unknown) => {
+        if (!mounted) return
+        // ACC-M8: a record that does not exist says so, with the way back — retrying never helps.
+        setLoadNotFound(isNotFoundError(err))
+        setLoadErrorKey('invoices.detail.loadError')
       })
     return () => {
       mounted = false
     }
   }, [id, reloadToken])
 
+  // ACC-M4: the send dialog opens with the server's preflight (PO, categories, VAT, sources …).
+  const preflightRequest = useRef(0)
+  function openSendDialog() {
+    if (!invoice) return
+    const request = ++preflightRequest.current
+    setPreflight(null)
+    setPreflightError(null)
+    setConfirmSend(true)
+    getInvoiceIssuePreflight(invoice.id)
+      .then((result) => {
+        if (preflightRequest.current === request) setPreflight(result)
+      })
+      .catch(() => {
+        // The server-side guard still runs on confirm; the dialog only loses its early warning.
+        if (preflightRequest.current === request) setPreflightError(t('invoices.detail.preflightLoadError'))
+      })
+  }
+
+  const snapshotOf = useCallback(
+    (state: EditSnapshot) => JSON.stringify({ ...state, lines: state.lines.map((l) => ({ ...l, salesCategoryId: l.salesCategoryId ?? null })) }),
+    [],
+  )
+
+  function toUpdateLines(rows: EditableLine[]): UpdateLineInput[] {
+    return rows.map((line) => ({
+      id: line.id,
+      description: line.description,
+      quantity: line.quantity,
+      unitPrice: line.unitPrice,
+      vatRatePercent: line.vatRatePercent,
+      salesCategoryId: line.salesCategoryId ?? null,
+    }))
+  }
+
   function startEditing() {
     if (!invoice) return
+    const period = periodToMonthInput(invoice.invoicePeriodYear, invoice.invoicePeriodMonth)
+    const rows: EditableLine[] = invoice.lines.map((l) => ({
+      key: `l-${++lineKey}`,
+      id: l.id,
+      orderNumber: l.orderNumber,
+      dossierNumber: l.dossierNumber,
+      description: l.description,
+      quantity: l.quantity,
+      unitPrice: l.unitPrice,
+      vatRatePercent: l.vatRatePercent,
+      salesCategoryId: l.salesCategoryId,
+    }))
     setInvoiceDate(invoice.invoiceDate)
     setDueDate(invoice.dueDate)
-    setPeriodInput(periodToMonthInput(invoice.invoicePeriodYear, invoice.invoicePeriodMonth))
+    setDueDateTouched(false)
+    setPeriodInput(period)
     setNotes(invoice.notes ?? '')
     setPoNumber(invoice.purchaseOrderNumber ?? '')
-    setLines(
-      invoice.lines.map((l) => ({
-        key: `l-${++lineKey}`,
-        id: l.id,
-        orderNumber: l.orderNumber,
-        dossierNumber: l.dossierNumber,
-        description: l.description,
-        quantity: l.quantity,
-        unitPrice: l.unitPrice,
-        vatRatePercent: l.vatRatePercent,
-        salesCategoryId: l.salesCategoryId,
-      })),
-    )
+    setLines(rows)
+    setVatFallbackHint(false)
+    setEditBaseline(snapshotOf({
+      invoiceDate: invoice.invoiceDate,
+      dueDate: invoice.dueDate,
+      periodInput: period,
+      notes: invoice.notes ?? '',
+      poNumber: invoice.purchaseOrderNumber ?? '',
+      lines: toUpdateLines(rows),
+    }))
     listSalesCategories()
       .then(setSalesCategories)
       .catch(() => setSalesCategories([]))
@@ -135,6 +224,37 @@ export function InvoiceDetailPage() {
   function setLine(key: string, patch: Partial<EditableLine>) {
     setLines((rows) => rows.map((row) => (row.key === key ? { ...row, ...patch } : row)))
   }
+
+  /** ACC-H5: effective payment term — the server's, else what the draft's dates already say. */
+  function effectiveTermDays(): number | null {
+    if (!invoice) return null
+    if (typeof invoice.paymentTermDays === 'number') return invoice.paymentTermDays
+    return daysBetweenIso(invoice.invoiceDate, invoice.dueDate)
+  }
+
+  function handleInvoiceDateChange(value: string) {
+    setInvoiceDate(value)
+    if (dueDateTouched) return
+    const term = effectiveTermDays()
+    if (term !== null && value) setDueDate(addDaysIso(value, term))
+  }
+
+  /** ACC-H1: a new manual line takes the invoice's own default VAT, never a hard-coded 0. */
+  function addLine() {
+    if (!invoice) return
+    const fromInvoice = typeof invoice.defaultVatRatePercent === 'number' ? invoice.defaultVatRatePercent : null
+    const fromLines = lines.length > 0 ? lines[0].vatRatePercent : invoice.lines[0]?.vatRatePercent ?? null
+    const vat = fromInvoice ?? fromLines ?? 21
+    setVatFallbackHint(fromInvoice === null && fromLines === null)
+    setLines((rows) => [
+      ...rows,
+      { key: `l-${++lineKey}`, id: null, orderNumber: null, dossierNumber: null, description: '', quantity: 1, unitPrice: 0, vatRatePercent: vat, salesCategoryId: null },
+    ])
+  }
+
+  const editDirty =
+    editing
+    && snapshotOf({ invoiceDate, dueDate, periodInput, notes, poNumber, lines: toUpdateLines(lines) }) !== editBaseline
 
   async function handleSave() {
     if (!invoice) return
@@ -152,20 +272,15 @@ export function InvoiceDetailPage() {
         invoicePeriodMonth: period?.month ?? null,
         notes: notes.trim() || null,
         purchaseOrderNumber: poNumber.trim() || null,
-        lines: lines.map((line) => ({
-          id: line.id,
-          description: line.description,
-          quantity: line.quantity,
-          unitPrice: line.unitPrice,
-          vatRatePercent: line.vatRatePercent,
-          salesCategoryId: line.salesCategoryId ?? null,
-        })),
+        lines: toUpdateLines(lines),
       })
       setInvoice(updated)
       setEditing(false)
+      setHistoryToken((n) => n + 1)
       showSuccess(t('invoices.internalDetail.updated'))
-    } catch {
-      showError(t('invoices.internalDetail.saveError'))
+    } catch (err) {
+      // ACC-M4: the server names the problem ("Lijn 3 …"); never swap it for a generic sentence.
+      showError(localizeApiError(t, err, t('invoices.internalDetail.saveError')))
     } finally {
       setBusy(false)
     }
@@ -203,18 +318,35 @@ export function InvoiceDetailPage() {
     try {
       const updated = await changeInvoiceStatus(invoice.id, target)
       setInvoice(updated)
+      setHistoryToken((n) => n + 1)
       showSuccess(t('invoices.internalDetail.statusChanged', { status: t(INVOICE_STATUS_LABELS[target]) }))
-    } catch {
-      showError(t('invoices.internalDetail.statusError'))
+    } catch (err) {
+      // ACC-M4: "Deze klant vereist een PO-nummer …" is the message the user needs, not a generic one.
+      showError(localizeApiError(t, err, t('invoices.internalDetail.statusError')))
     } finally {
       setBusy(false)
       setConfirmTransition(null)
     }
   }
 
+  async function handleCreditNote(reason: string) {
+    if (!invoice) return
+    setBusy(true)
+    try {
+      const created = await createCreditNote(invoice.id, { reason })
+      showSuccess(t('invoices.internalDetail.creditNoteCreated', { number: invoiceDisplayNumber(created, t('invoices.detail.draftLabel')) }))
+      setCreditDialog(false)
+      navigate(`/invoices/${created.id}`)
+    } catch (err) {
+      showError(localizeApiError(t, err, t('invoices.internalDetail.creditNoteError')))
+    } finally {
+      setBusy(false)
+    }
+  }
+
   function openOverride() {
     if (!invoice) return
-    setOverrideNumber(invoice.invoiceNumber)
+    setOverrideNumber(invoice.invoiceNumber ?? '')
     setOverrideReason('')
     setOverrideError(null)
     setOverrideFieldErrors({})
@@ -234,7 +366,8 @@ export function InvoiceDetailPage() {
       const updated = await overrideInvoiceNumber(invoice.id, { invoiceNumber: number, reason })
       setInvoice(updated)
       setOverrideOpen(false)
-      showSuccess(t('invoices.override.success', { number: updated.invoiceNumber }))
+      setHistoryToken((n) => n + 1)
+      showSuccess(t('invoices.override.success', { number: updated.invoiceNumber ?? number }))
     } catch (err) {
       const { fieldErrors } = describeApiError(err, '')
       setOverrideError(localizeApiError(t, err, t('invoices.override.error')))
@@ -258,28 +391,44 @@ export function InvoiceDetailPage() {
     }
   }
 
+  if (loadErrorKey && loadNotFound) return <ErrorState message={t('invoices.detail.notFound')} backTo="/invoices" />
   if (loadErrorKey) return <ErrorState message={t(loadErrorKey)} onRetry={() => { setLoadErrorKey(null); setReloadToken((n) => n + 1) }} backTo="/invoices" />
   if (!invoice) return <LoadingState message={t('invoices.detail.loading')} />
 
-  const editable = invoice.status === 'Draft' && hasPermission('invoices.edit')
-  const deletable = (invoice.status === 'Draft' || invoice.status === 'Cancelled') && hasPermission('invoices.delete')
-  const canOverrideNumber = invoice.status === 'Draft' && hasPermission('invoices.override_number')
+  const isDraft = invoice.status === 'Draft'
+  const isCredit = invoice.kind === 'CreditNote'
+  const number = invoiceDisplayNumber(invoice, t('invoices.detail.draftLabel'))
+  const amount = (value: number) => (isCredit ? creditAmount(value, invoice.currency) : euro(value, invoice.currency))
+  const editable = isDraft && hasPermission('invoices.edit')
+  const deletable = (isDraft || invoice.status === 'Cancelled') && hasPermission('invoices.delete')
+  const canOverrideNumber = isDraft && hasPermission('invoices.override_number')
   // H-06: een definitief document (verzonden of betaald) wordt nooit geannuleerd — corrigeren
   // gebeurt met 'Creditnota maken' hieronder. De server weigert het hoe dan ook; deze filter
   // zorgt dat de knop ook niet meer verschijnt bij een oudere/gecachete allowedTransitions.
   const finalized = invoice.status === 'Sent' || invoice.status === 'Paid'
   const offeredTransitions = invoice.allowedTransitions.filter(
-    (target) => !(finalized && target === 'Cancelled'),
+    // ACC-M11: a credit note settles against its invoice; "betaald" is not a state it reaches here.
+    (target) => !(finalized && target === 'Cancelled') && !(isCredit && target === 'Paid'),
   )
+  const canChangeStatus = hasPermission('invoices.change_status')
+  const canCredit = finalized
+    && !isCredit
+    && hasPermission('invoices.create')
+    && !(invoice.creditNotes ?? []).some((note) => note.status !== 'Cancelled')
+  const subtitle = isCredit
+    ? t('invoices.detail.creditSubtitle', { date: formatDate(invoice.invoiceDate), number: invoice.creditedInvoiceNumber ?? invoice.creditedInvoiceId ?? '—' })
+    : t('invoices.internalDetail.subtitle', { date: formatDate(invoice.invoiceDate), dueDate: formatDate(invoice.dueDate) })
 
   return (
-    <div>
-      <Breadcrumbs items={[{ label: t('invoices.list.title'), to: '/invoices' }, { label: invoice.invoiceNumber }]} />
+    <div className={isCredit ? 'inv-credit-document' : undefined}>
+      <UnsavedChangesGuard when={editDirty && !busy} />
+      <Breadcrumbs items={[{ label: t('invoices.list.title'), to: '/invoices' }, { label: number }]} />
       <PageHeader
-        title={`${invoice.invoiceNumber} — ${invoice.customerName}`}
-        subtitle={`${t('invoices.internalDetail.subtitle', { date: formatDate(invoice.invoiceDate), dueDate: formatDate(invoice.dueDate) })}${invoice.customerVatNumber ? ` · ${invoice.customerVatNumber}` : ''}`}
+        title={`${isCredit ? `${t('invoices.detail.creditTitle')} ` : ''}${number} — ${invoice.customerName}`}
+        subtitle={`${subtitle}${invoice.customerVatNumber ? ` · ${invoice.customerVatNumber}` : ''}`}
         action={
           <span className="inv-header-actions">
+            {isCredit && <Badge tone="warning">{t('invoices.creditNote')}</Badge>}
             <Badge tone={INVOICE_STATUS_TONE[invoice.status]}>{t(INVOICE_STATUS_LABELS[invoice.status])}</Badge>
             {invoice.numberIsManual && <Badge tone="warning">{t('invoices.internalDetail.manualNumber')}</Badge>}
             {!editing && (
@@ -292,7 +441,7 @@ export function InvoiceDetailPage() {
                 {pdfBusy ? t('invoices.common.busy') : t('invoices.internalDetail.pdfPreview')}
               </Button>
             )}
-            {hasPermission('invoices.change_status') &&
+            {canChangeStatus &&
               !editing &&
               offeredTransitions.map((target) => (
                 <Button
@@ -302,7 +451,7 @@ export function InvoiceDetailPage() {
                     target === 'Cancelled'
                       ? setConfirmTransition(target)
                       : target === 'Sent'
-                        ? setConfirmSend(true)
+                        ? openSendDialog()
                         : void applyTransition(target)
                   }
                   disabled={busy}
@@ -315,10 +464,25 @@ export function InvoiceDetailPage() {
       />
 
       <p className="inv-meta">
+        {isDraft && <>{t('invoices.detail.draftNumberHint')} · </>}
         {invoice.legalEntityName && <>{t('invoices.fields.billingEntity')}: {invoice.legalEntityName} · </>}
         {t('invoices.internalDetail.periodLabel')}: {formatPeriod(invoice.invoicePeriodYear, invoice.invoicePeriodMonth)}
         {invoice.purchaseOrderNumber && <> · {t('invoices.detail.poNumber', { number: invoice.purchaseOrderNumber })}</>}
       </p>
+      {invoice.status === 'Paid' && !isCredit && (
+        <p className="inv-meta inv-paid-info" data-testid="invoice-paid-info">
+          {invoice.paidAt
+            ? t('invoices.detail.paidAt', { date: formatDateTime(invoice.paidAt) })
+            : t(INVOICE_STATUS_LABELS.Paid)}
+          {invoice.paidByName && <> {t('invoices.detail.paidBy', { name: invoice.paidByName })}</>}
+          {' · '}{t('invoices.detail.paymentManual')}
+        </p>
+      )}
+      {isCredit && invoice.creditReason && (
+        <p className="inv-meta" data-testid="invoice-credit-reason">
+          {t('invoices.detail.creditReason')}: {invoice.creditReason}
+        </p>
+      )}
       <InvoiceFiscalSummary invoice={invoice} />
       {(invoice.creditedInvoiceId || (invoice.creditNotes && invoice.creditNotes.length > 0)) && (
         <p className="inv-meta inv-relations" data-testid="invoice-relations">
@@ -337,7 +501,7 @@ export function InvoiceDetailPage() {
                 <span key={note.id}>
                   {index > 0 && ', '}
                   <button type="button" className="inv-link" onClick={() => navigate(`/invoices/${note.id}`)}>
-                    {note.invoiceNumber}
+                    {note.invoiceNumber ?? t('invoices.detail.draftLabel')}
                   </button>{' '}
                   <Badge tone={INVOICE_STATUS_TONE[note.status]}>{t(INVOICE_STATUS_LABELS[note.status])}</Badge>
                 </span>
@@ -352,11 +516,19 @@ export function InvoiceDetailPage() {
           <div className="inv-edit-dates">
             <label>
               {t('invoices.fields.invoiceDate')}
-              <input type="date" value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} disabled={busy} />
+              <input type="date" value={invoiceDate} onChange={(e) => handleInvoiceDateChange(e.target.value)} disabled={busy} />
             </label>
             <label>
               {t('invoices.fields.dueDate')}
-              <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} disabled={busy} />
+              <input
+                type="date"
+                value={dueDate}
+                onChange={(e) => {
+                  setDueDateTouched(true)
+                  setDueDate(e.target.value)
+                }}
+                disabled={busy}
+              />
             </label>
             <label>
               {t('invoices.fields.period')}
@@ -367,6 +539,11 @@ export function InvoiceDetailPage() {
               <input value={poNumber} onChange={(e) => setPoNumber(e.target.value)} disabled={busy} maxLength={100} />
             </label>
           </div>
+          {!dueDateTouched && effectiveTermDays() !== null && invoiceDate !== invoice.invoiceDate && (
+            <p className="customer-form-muted" data-testid="due-date-recalculated">
+              {t('invoices.detail.dueDateRecalculated', { days: effectiveTermDays() ?? 0 })}
+            </p>
+          )}
           <table className="inv-lines-table">
             <thead>
               <tr>
@@ -411,13 +588,15 @@ export function InvoiceDetailPage() {
                     </select>
                   </td>
                   <td>
-                    <input type="number" min={0.01} step="0.01" value={line.quantity} onChange={(e) => setLine(line.key, { quantity: Number(e.target.value) })} disabled={busy} />
+                    {/* ACC-M2: three decimals for quantities, never rounded on the client. */}
+                    <input type="number" min={0.001} step="0.001" value={line.quantity} aria-label={t('invoices.new.quantityLabel')} onChange={(e) => setLine(line.key, { quantity: Number(e.target.value) })} disabled={busy} />
                   </td>
                   <td>
-                    <input type="number" step="0.01" value={line.unitPrice} onChange={(e) => setLine(line.key, { unitPrice: Number(e.target.value) })} disabled={busy} />
+                    {/* ACC-M2: four decimals for unit prices (km, kg, litre, hour fractions). */}
+                    <input type="number" step="0.0001" value={line.unitPrice} aria-label={t('invoices.new.unitPriceLabel')} onChange={(e) => setLine(line.key, { unitPrice: Number(e.target.value) })} disabled={busy} />
                   </td>
                   <td>
-                    <input type="number" min={0} max={100} step="0.5" value={line.vatRatePercent} onChange={(e) => setLine(line.key, { vatRatePercent: Number(e.target.value) })} disabled={busy} />
+                    <input type="number" min={0} max={100} step="0.5" value={line.vatRatePercent} aria-label={t('invoices.internalLines.columns.vat')} onChange={(e) => setLine(line.key, { vatRatePercent: Number(e.target.value) })} disabled={busy} />
                   </td>
                   <td>
                     <button type="button" className="inv-link inv-link-danger" onClick={() => setLines((rows) => rows.filter((r) => r.key !== line.key))} disabled={busy}>
@@ -428,18 +607,14 @@ export function InvoiceDetailPage() {
               ))}
             </tbody>
           </table>
-          <Button
-            variant="secondary"
-            onClick={() =>
-              setLines((rows) => [
-                ...rows,
-                { key: `l-${++lineKey}`, id: null, orderNumber: null, dossierNumber: null, description: '', quantity: 1, unitPrice: 0, vatRatePercent: 21, salesCategoryId: null },
-              ])
-            }
-            disabled={busy}
-          >
+          <Button variant="secondary" onClick={addLine} disabled={busy}>
             {t('invoices.internalLines.addLine')}
           </Button>
+          {typeof invoice.defaultVatRatePercent === 'number' ? (
+            <p className="customer-form-muted">{t('invoices.detail.vatDefaultHint', { rate: formatQuantity(invoice.defaultVatRatePercent) })}</p>
+          ) : (
+            vatFallbackHint && <p className="inv-period-warning" role="note">{t('invoices.detail.vatDefaultFallback')}</p>
+          )}
           <label className="inv-notes-label">
             {t('invoices.fields.notes')}
             <textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} disabled={busy} maxLength={4000} />
@@ -503,25 +678,28 @@ export function InvoiceDetailPage() {
                     )}
                     <InvoiceLineFiscalBadge line={line} />
                   </td>
-                  <td>{formatQuantity(line.quantity)}</td>
-                  <td>{euro(line.unitPrice, invoice.currency)}</td>
+                  <td>
+                    {formatQuantity(line.quantity, 3)}
+                    {line.unitLabel && <span className="inv-unit-label"> {line.unitLabel}</span>}
+                  </td>
+                  <td>{formatUnitPrice(line.unitPrice, invoice.currency)}</td>
                   <td>{formatQuantity(line.vatRatePercent)}%</td>
-                  <td>{euro(line.lineTotal, invoice.currency)}</td>
+                  <td>{amount(line.lineTotal)}</td>
                 </tr>
               ))}
             </tbody>
             <tfoot>
               <tr>
                 <td colSpan={5}>{t('invoices.detail.subtotal')}</td>
-                <td>{euro(invoice.subtotal, invoice.currency)}</td>
+                <td>{amount(invoice.subtotal)}</td>
               </tr>
               <tr>
                 <td colSpan={5}>{t('invoices.internalDetail.vat')}</td>
-                <td>{euro(invoice.vatAmount, invoice.currency)}</td>
+                <td>{amount(invoice.vatAmount)}</td>
               </tr>
               <tr className="inv-total-row">
-                <td colSpan={5}>{t('invoices.detail.total')}</td>
-                <td>{euro(invoice.total, invoice.currency)}</td>
+                <td colSpan={5}>{isCredit ? t('invoices.detail.creditTotalLabel') : t('invoices.detail.total')}</td>
+                <td data-testid="invoice-total">{amount(invoice.total)}</td>
               </tr>
             </tfoot>
           </table>
@@ -535,8 +713,8 @@ export function InvoiceDetailPage() {
               </Button>
             )}
             {canOverrideNumber && (
-              <Button variant="secondary" onClick={openOverride} disabled={busy}>
-                {t('invoices.override.open')}
+              <Button variant="secondary" onClick={openOverride} disabled={busy} title={t('invoices.detail.manualNumberHint')}>
+                {invoice.invoiceNumber ? t('invoices.override.open') : t('invoices.detail.manualNumberAction')}
               </Button>
             )}
             {deletable && (
@@ -544,31 +722,17 @@ export function InvoiceDetailPage() {
                 {t('ui.actions.delete')}
               </Button>
             )}
-            {(invoice.status === 'Sent' || invoice.status === 'Paid')
-              && invoice.kind !== 'CreditNote'
-              && hasPermission('invoices.create')
-              && !(invoice.creditNotes ?? []).some((note) => note.status !== 'Cancelled') && (
-                <Button
-                  variant="secondary"
-                  title={t('invoices.internalDetail.creditNoteHint')}
-                  onClick={async () => {
-                    setBusy(true)
-                    try {
-                      const created = await createCreditNote(invoice.id)
-                      showSuccess(t('invoices.internalDetail.creditNoteCreated', { number: created.invoiceNumber }))
-                      navigate(`/invoices/${created.id}`)
-                    } catch (err) {
-                      showError(localizeApiError(t, err, t('invoices.internalDetail.creditNoteError')))
-                    } finally {
-                      setBusy(false)
-                    }
-                  }}
-                  disabled={busy}
-                >
-                  {t('invoices.internalDetail.creditNoteAction')}
-                </Button>
-              )}
-            {(invoice.status === 'Sent' || invoice.status === 'Paid')
+            {canCredit && (
+              <Button
+                variant="secondary"
+                title={t('invoices.internalDetail.creditNoteHint')}
+                onClick={() => setCreditDialog(true)}
+                disabled={busy}
+              >
+                {t('invoices.internalDetail.creditNoteAction')}
+              </Button>
+            )}
+            {finalized
               && hasPermission('accounting.manage')
               && invoice.lines.some((line) => !line.ledgerAccountNumber) && (
                 <Button
@@ -578,6 +742,7 @@ export function InvoiceDetailPage() {
                     try {
                       const updated = await completeInvoiceLedgerSnapshots(invoice.id)
                       setInvoice(updated)
+                      setHistoryToken((n) => n + 1)
                       showSuccess(t('invoices.internalDetail.ledgerCompleted'))
                     } catch (err) {
                       showError(localizeApiError(t, err, t('invoices.internalDetail.ledgerError')))
@@ -598,17 +763,29 @@ export function InvoiceDetailPage() {
         <InvoiceAttachmentsSection
           invoiceId={invoice.id}
           canManage={hasPermission('invoice_attachments.manage')}
-          isDraft={invoice.status === 'Draft'}
+          isDraft={isDraft}
         />
       )}
 
       {hasAnyPermission(['peppol.view', 'peppol.validate']) && (
-        <InvoicePeppolPanel invoiceId={invoice.id} invoiceNumber={invoice.invoiceNumber} invoiceStatus={invoice.status} />
+        <InvoicePeppolPanel invoiceId={invoice.id} invoiceNumber={number} invoiceStatus={invoice.status} />
+      )}
+
+      <InvoiceHistoryPanel invoiceId={invoice.id} refreshToken={historyToken} showPeppolHint={hasAnyPermission(['peppol.view', 'peppol.validate'])} />
+
+      {creditDialog && (
+        <CreditNoteDialog
+          invoiceNumber={number}
+          totalLabel={euro(invoice.total, invoice.currency)}
+          busy={busy}
+          onConfirm={(reason) => void handleCreditNote(reason)}
+          onCancel={() => setCreditDialog(false)}
+        />
       )}
 
       {overrideOpen && (
         <Modal
-          title={t('invoices.override.title')}
+          title={invoice.invoiceNumber ? t('invoices.override.title') : t('invoices.detail.manualNumberAction')}
           onClose={() => setOverrideOpen(false)}
           busy={busy}
           footer={
@@ -626,6 +803,7 @@ export function InvoiceDetailPage() {
           }
         >
           <div className="inv-override-form">
+            {!invoice.invoiceNumber && <p className="customer-form-muted">{t('invoices.detail.manualNumberHint')}</p>}
             <FormField
               label={t('invoices.override.numberLabel')}
               htmlFor="inv-override-number"
@@ -674,7 +852,12 @@ export function InvoiceDetailPage() {
               <Button variant="secondary" onClick={() => setConfirmSend(false)} disabled={busy}>
                 {t('ui.actions.cancel')}
               </Button>
-              <Button onClick={() => void handleSend()} disabled={busy} data-testid="invoice-send-confirm">
+              <Button
+                onClick={() => void handleSend()}
+                // ACC-M4: a known blocker disables the confirm; an unknown preflight keeps the server guard.
+                disabled={busy || (preflight !== null && !preflight.canIssue)}
+                data-testid="invoice-send-confirm"
+              >
                 {busy ? t('invoices.internalDetail.sendConfirm.busy') : t('invoices.internalDetail.sendConfirm.confirm')}
               </Button>
             </>
@@ -683,13 +866,13 @@ export function InvoiceDetailPage() {
           <p>{t('invoices.internalDetail.sendConfirm.intro')}</p>
           <dl className="inv-send-summary" data-testid="invoice-send-summary">
             <dt>{t('invoices.internalDetail.sendConfirm.number')}</dt>
-            <dd>{invoice.invoiceNumber}</dd>
+            <dd>{invoice.invoiceNumber ?? t('invoices.detail.draftNumberHint')}</dd>
             <dt>{t('invoices.internalDetail.sendConfirm.customer')}</dt>
             <dd>{invoice.customerName}</dd>
             <dt>{t('invoices.internalDetail.sendConfirm.entity')}</dt>
             <dd>{invoice.legalEntityName ?? '—'}</dd>
             <dt>{t('invoices.internalDetail.sendConfirm.total')}</dt>
-            <dd>{euro(invoice.total, invoice.currency)}</dd>
+            <dd>{amount(invoice.total)}</dd>
             <dt>{t('invoices.internalDetail.sendConfirm.language')}</dt>
             <dd>
               {invoice.languageCode && ['nl', 'fr', 'en', 'de'].includes(invoice.languageCode.toLowerCase())
@@ -699,13 +882,14 @@ export function InvoiceDetailPage() {
             <dt>{t('invoices.internalDetail.sendConfirm.treatment')}</dt>
             <dd>{fiscalTreatmentLabel(t, invoice.customerVatTreatment) ?? '—'}</dd>
           </dl>
+          <InvoiceIssuePreflightList preflight={preflight} error={preflightError} lines={invoice.lines} />
         </Modal>
       )}
 
       {confirmTransition && (
         <ConfirmDialog
           title={t('invoices.internalDetail.cancelTitle')}
-          message={t('invoices.internalDetail.cancelMessage', { number: invoice.invoiceNumber })}
+          message={t('invoices.internalDetail.cancelMessage', { number })}
           confirmLabel={t(INVOICE_TRANSITION_LABELS.Cancelled)}
           destructive
           onConfirm={() => void applyTransition(confirmTransition)}
@@ -716,7 +900,7 @@ export function InvoiceDetailPage() {
       {confirmDelete && (
         <ConfirmDialog
           title={t('invoices.internalDetail.deleteTitle')}
-          message={t('invoices.internalDetail.deleteMessage', { number: invoice.invoiceNumber })}
+          message={t('invoices.internalDetail.deleteMessage', { number })}
           confirmLabel={t('ui.actions.delete')}
           destructive
           onConfirm={handleDelete}

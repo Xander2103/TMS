@@ -47,6 +47,9 @@ const api = vi.hoisted(() => ({
   deleteInvoice: vi.fn(),
   overrideInvoiceNumber: vi.fn(),
   updateInvoice: vi.fn(),
+  getInvoiceIssuePreflight: vi.fn(() => Promise.resolve({ canIssue: true, issues: [] })),
+  getInvoiceHistory: vi.fn(() => Promise.resolve([])),
+  getDefaultVatRate: vi.fn(() => Promise.resolve({ vatRatePercent: 21 })),
 }))
 vi.mock('../api/invoicesApi', () => api)
 
@@ -204,8 +207,14 @@ describe('InvoiceDetailPage — verzenden en voorbeeld', () => {
     expect(screen.queryByRole('button', { name: 'Factuur annuleren' })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Creditnota maken' })).toBeInTheDocument()
 
+    // ACC-M11: crediting is deliberate — a dialog asks for a reason before anything is created.
     await user.click(screen.getByRole('button', { name: 'Creditnota maken' }))
-    await waitFor(() => expect(api.createCreditNote).toHaveBeenCalledWith('inv-1'))
+    const dialog = await screen.findByRole('dialog')
+    expect(api.createCreditNote).not.toHaveBeenCalled()
+    expect(within(dialog).getByTestId('credit-note-confirm')).toBeDisabled()
+    await user.type(within(dialog).getByLabelText(/Reden van creditering/), 'Dubbel gefactureerd')
+    await user.click(within(dialog).getByTestId('credit-note-confirm'))
+    await waitFor(() => expect(api.createCreditNote).toHaveBeenCalledWith('inv-1', { reason: 'Dubbel gefactureerd' }))
     expect(api.changeInvoiceStatus).not.toHaveBeenCalled()
   })
 

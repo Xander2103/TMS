@@ -210,7 +210,11 @@
     "createError": "The invoice could not be created.",
     "selectCustomer": "Select a customer first.",
     "needsSelection": "Select at least one order or add a line.",
-    "invalidManualLine": "Every manual line needs a description and a quantity greater than zero."
+    "invalidManualLine": "Every manual line needs a description and a quantity greater than zero.",
+    "vatLabel": "VAT %",
+    "vatFollowsCustomer": "follows customer",
+    "numberAtIssue": "The invoice number is assigned when the invoice is sent; the sequence continues at {number}.",
+    "createdDraft": "Draft invoice created."
   },
   "readiness": {
     "ready": "Ready",
@@ -340,7 +344,44 @@
     "attachmentsTitle": "Attachments",
     "loading": "Loading invoice...",
     "loadError": "The invoice could not be loaded.",
-    "ledgerSettingsLink": "Set up ledger →"
+    "ledgerSettingsLink": "Set up ledger →",
+    "notFound": "Invoice not found.",
+    "draftLabel": "Draft",
+    "draftNumberHint": "The invoice number is assigned when the invoice is sent.",
+    "creditTitle": "Credit note",
+    "creditSubtitle": "Credit note date {date} · credits {number}",
+    "creditReason": "Credit reason",
+    "creditTotalLabel": "To be credited (incl. VAT)",
+    "paidAt": "Marked as paid on {date}",
+    "paidBy": "by {name}",
+    "paymentManual": "Registered manually — no bank link.",
+    "historyTitle": "History",
+    "preflightTitle": "To resolve before sending",
+    "preflightOk": "All checks pass; the invoice can be finalised.",
+    "preflightLoadError": "The check could not be run; try again.",
+    "preflightLines": "line {lines}",
+    "preflightCodes": {
+      "po_missing": "PO number missing: this customer requires a PO number (Edit → PO number).",
+      "category_missing": "A line has no sales category (Edit → Sales category).",
+      "ledger_missing": "A sales category has no ledger account (Settings → Accounting).",
+      "vat_inconsistent": "A VAT rate does not match the VAT treatment (Edit → VAT %).",
+      "source_unpriced": "A line refers to unpriced work; price the work in the dossier first.",
+      "lines_empty": "An invoice needs at least one line.",
+      "customer_vat_number": "The customer has no VAT number (Customer → Fiscal & Peppol).",
+      "entity_missing": "Choose an active billing entity."
+    },
+    "vatDefaultHint": "Default VAT rate of this invoice: {rate}%.",
+    "vatDefaultFallback": "No VAT treatment known: check the VAT rate of the new line.",
+    "dueDateRecalculated": "Due date recalculated with the {days}-day payment term.",
+    "manualNumberAction": "Manual number at sending",
+    "manualNumberHint": "The number is only assigned when the invoice is sent; this choice uses this number instead of the sequence.",
+    "creditDialog": {
+      "title": "Create credit note",
+      "intro": "This creates a draft credit note that fully credits invoice {number} ({total}). The sent invoice itself stays unchanged.",
+      "reasonLabel": "Credit reason",
+      "reasonHint": "Required; shown in the history of both documents.",
+      "confirm": "Create credit note"
+    }
   },
   "fiscal": {
     "draftNote": "Preview — frozen on send.",
@@ -362,5 +403,11 @@
     },
     "sourceLabel": "source",
     "treatment": "VAT treatment"
+  },
+  "history": {
+    "empty": "No events for this invoice yet.",
+    "loadError": "The history could not be loaded.",
+    "peppolHint": "Peppol steps are also listed in the Peppol section above.",
+    "actorSystem": "System"
   }
 }

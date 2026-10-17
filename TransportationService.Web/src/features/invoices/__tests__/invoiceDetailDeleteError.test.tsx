@@ -49,6 +49,9 @@ const api = vi.hoisted(() => ({
   deleteInvoice: vi.fn(),
   overrideInvoiceNumber: vi.fn(),
   updateInvoice: vi.fn(),
+  getInvoiceIssuePreflight: vi.fn(() => Promise.resolve({ canIssue: true, issues: [] })),
+  getInvoiceHistory: vi.fn(() => Promise.resolve([])),
+  getDefaultVatRate: vi.fn(() => Promise.resolve({ vatRatePercent: 21 })),
 }))
 vi.mock('../api/invoicesApi', () => api)
 
