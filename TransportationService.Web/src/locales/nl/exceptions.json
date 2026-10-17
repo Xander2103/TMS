@@ -51,6 +51,7 @@
   },
   "detail": {
     "loadError": "De afwijking kon niet worden geladen.",
+    "notFound": "Afwijking niet gevonden.",
     "loading": "Afwijking laden...",
     "noteRequired": "Een afhandelingsnotitie is verplicht bij het afsluiten.",
     "statusChanged": "Status gewijzigd naar {status}.",

@@ -51,6 +51,7 @@
   },
   "detail": {
     "loadError": "L'écart n'a pas pu être chargé.",
+    "notFound": "Anomalie introuvable.",
     "loading": "Chargement de l'écart...",
     "noteRequired": "Une note de traitement est obligatoire pour clôturer.",
     "statusChanged": "Statut modifié en {status}.",

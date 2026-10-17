@@ -51,6 +51,7 @@
   },
   "detail": {
     "loadError": "The exception could not be loaded.",
+    "notFound": "Exception not found.",
     "loading": "Loading exception...",
     "noteRequired": "A resolution note is required when closing.",
     "statusChanged": "Status changed to {status}.",

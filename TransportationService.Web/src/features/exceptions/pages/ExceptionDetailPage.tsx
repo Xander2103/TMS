@@ -4,6 +4,7 @@ import { PageHeader } from '../../../components/layout/PageHeader'
 import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { LoadingState } from '../../../components/feedback/LoadingState'
 import { ErrorState } from '../../../components/feedback/ErrorState'
+import { isNotFoundError } from '../../../api/notFound'
 import { ActionMenu, type ActionMenuItem } from '../../../components/ui/ActionMenu'
 import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
@@ -130,8 +131,9 @@ export function ExceptionDetailPage() {
         setStatusTarget(null)
         setDispositionAction(null)
       })
-      .catch(() => {
-        if (mounted) setLoadError(t('exceptions.detail.loadError'))
+      .catch((err: unknown) => {
+        // M14: a record that does not exist says so, with the way back to the list.
+        if (mounted) setLoadError(t(isNotFoundError(err) ? 'exceptions.detail.notFound' : 'exceptions.detail.loadError'))
       })
     return () => {
       mounted = false
@@ -244,7 +246,7 @@ export function ExceptionDetailPage() {
     }
   }
 
-  if (loadError) return <ErrorState message={loadError} />
+  if (loadError) return <ErrorState message={loadError} backTo="/exceptions" />
   if (!detail) return <LoadingState message={t('exceptions.detail.loading')} />
 
   // B05: leaving the page with unsaved edits asks first.

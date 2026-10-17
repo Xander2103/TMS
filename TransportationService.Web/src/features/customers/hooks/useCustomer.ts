@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { getCustomer } from '../api/customersApi'
+import { isNotFoundError } from '../../../api/notFound'
 import type { CustomerDetail } from '../types'
 
 interface UseCustomerResult {
@@ -14,6 +15,9 @@ interface UseCustomerResult {
   error: string | null
   reload: () => void
 }
+
+/** Error key for a customer that does not exist (HTTP 404): retrying never helps. */
+export const CUSTOMER_NOT_FOUND = 'customers.detail.notFound'
 
 export function useCustomer(id: string | undefined): UseCustomerResult {
   const [state, setState] = useState<{ customer: CustomerDetail | null; error: string | null; loadedKey: string }>({
@@ -35,10 +39,11 @@ export function useCustomer(id: string | undefined): UseCustomerResult {
         if (!isMounted) return
         setState({ customer: data, error: null, loadedKey: requestKey })
       })
-      .catch(() => {
+      .catch((err: unknown) => {
         if (!isMounted) return
-        // Vertaalsleutel; de renderende pagina vertaalt via t(error).
-        setState({ customer: null, error: 'customers.detail.loadFailed', loadedKey: requestKey })
+        // Vertaalsleutel; de renderende pagina vertaalt via t(error). M14: a 404 is "niet gevonden".
+        const error = isNotFoundError(err) ? CUSTOMER_NOT_FOUND : 'customers.detail.loadFailed'
+        setState({ customer: null, error, loadedKey: requestKey })
       })
     return () => {
       isMounted = false

@@ -39,7 +39,7 @@ import { CustomerUnitsPanel } from '../components/CustomerUnitsPanel'
 import { CustomerOverview } from '../components/CustomerOverview'
 import { buildCustomerAttention } from '../utils/customerAttention'
 import { CombinedDiscountsPanel } from '../../tarification/components/CombinedDiscountsPanel'
-import { useCustomer } from '../hooks/useCustomer'
+import { CUSTOMER_NOT_FOUND, useCustomer } from '../hooks/useCustomer'
 import { useCustomerMutations } from '../hooks/useCustomerMutations'
 import { useLocale } from '../../../i18n/localeContext'
 import './../components/customers.css'
@@ -160,6 +160,7 @@ export function CustomerDetailPage() {
   // `reload()` after a panel save keeps the current customer on screen so the edit form, the
   // self-saving panels and any open dialog stay mounted (and edits elsewhere survive).
   if (isLoading) return <LoadingState message={t('customers.detail.loading')} />
+  if (error === CUSTOMER_NOT_FOUND) return <ErrorState message={t(CUSTOMER_NOT_FOUND)} backTo="/customers" />
   if (error || !customer) return <ErrorState message={error ? t(error) : t('customers.detail.notFound')} onRetry={reload} backTo="/customers" />
 
   function openNumberDialog() {

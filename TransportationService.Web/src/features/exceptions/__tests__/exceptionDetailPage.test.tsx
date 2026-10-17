@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { ExceptionDetailPage } from '../pages/ExceptionDetailPage'
 import type { ExceptionDetail } from '../types'
+import { ApiError } from '../../../api/apiClient'
 
 const permissions = new Set<string>()
 vi.mock('../../auth/authContextValue', () => ({
@@ -53,6 +54,14 @@ describe('ExceptionDetailPage (B24)', () => {
     vi.clearAllMocks()
     permissions.clear()
     permissions.add('exceptions.resolve')
+  })
+
+  it('an unknown exception (404) says "niet gevonden" with the way back, not a load error (M14)', async () => {
+    api.getException.mockRejectedValue(new ApiError('Not found', 404))
+    renderPage()
+    expect(await screen.findByText('Afwijking niet gevonden.')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /terug/i })).toHaveAttribute('href', '/exceptions')
+    expect(screen.queryByText('De afwijking kon niet worden geladen.')).not.toBeInTheDocument()
   })
 
   it('shows the whole context as compact facts with clickable links', async () => {
