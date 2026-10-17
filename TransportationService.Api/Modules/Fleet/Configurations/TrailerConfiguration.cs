@@ -31,6 +31,10 @@ public class TrailerConfiguration : IEntityTypeConfiguration<Trailer>
 
         builder.HasIndex(t => new { t.TenantId, t.InternalNumber }).IsUnique().HasFilter("\"IsDeleted\" = false");
         builder.HasIndex(t => new { t.TenantId, t.LicensePlate }).IsUnique().HasFilter("\"IsDeleted\" = false");
+        // FL-M1: identity is the normalised plate; the VIN is unique whenever it is known.
+        builder.Property(t => t.NormalizedLicensePlate).HasMaxLength(20);
+        builder.HasIndex(t => new { t.TenantId, t.NormalizedLicensePlate }).IsUnique().HasFilter("\"IsDeleted\" = false");
+        builder.HasIndex(t => new { t.TenantId, t.Vin }).IsUnique().HasFilter("\"Vin\" IS NOT NULL AND \"IsDeleted\" = false");
         builder.HasIndex(t => t.TenantId);
         builder.HasIndex(t => new { t.TenantId, t.IsActive });
         builder.HasIndex(t => new { t.TenantId, t.OperationalStatus });

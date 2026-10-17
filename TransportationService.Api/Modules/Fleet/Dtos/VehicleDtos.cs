@@ -16,7 +16,33 @@ public record VehicleListItemDto(
 /// BEFORE choosing (not only after the conflict check).</summary>
 public record VehicleOptionDto(
     Guid Id, string InternalNumber, string LicensePlate, string? Brand, string? Model,
-    string? OperationalStatus = null, decimal? PayloadKg = null, bool HasCrane = false, bool AdrSuitable = false);
+    string? OperationalStatus = null, decimal? PayloadKg = null, bool HasCrane = false, bool AdrSuitable = false,
+    /// <summary>FL-H1/H2/H4: fleet readiness for today (Deployable / Warning / Blocked) and its one-line summary.</summary>
+    ReadinessLevel? Readiness = null, string? ReadinessSummary = null);
+
+/// <summary>FL-B1/M8: what still references a vehicle — drives the delete guard and the deactivation warning.</summary>
+public record VehicleReferencesDto(
+    int PlannedTrips,
+    int CompletedTrips,
+    int OtherTrips,
+    int Maintenance,
+    int Damage,
+    int Documents,
+    int Inspections,
+    int Fuel,
+    int Leasing,
+    int Tachograph,
+    int TankCards,
+    bool IsFixedDriverVehicle,
+    bool IsCurrentDriverVehicle,
+    IReadOnlyList<TripReferenceDto> UpcomingTrips)
+{
+    public int TotalTrips => PlannedTrips + CompletedTrips + OtherTrips;
+    /// <summary>True when any operational or historical record points at the vehicle.</summary>
+    public bool HasReferences => TotalTrips + Maintenance + Damage + Documents + Inspections + Fuel + Leasing + Tachograph + TankCards > 0;
+}
+
+public record TripReferenceDto(Guid Id, string TripNumber, DateOnly TripDate, string Status);
 
 public record VehicleDetailDto(
     Guid Id,

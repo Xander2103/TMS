@@ -23,7 +23,9 @@ public record MaintenanceRecordDto(
     int? IntervalMonths,
     int? IntervalKm,
     bool HasAttachment,
-    string? Notes);
+    string? Notes,
+    /// <summary>FL-H2/M14: inclusive end of the unavailability window; null = the scheduled day only.</summary>
+    DateOnly? ScheduledEndDate = null);
 
 /// <summary>Row for the maintenance-due overview (fleet dashboard / warnings).</summary>
 public record DueMaintenanceDto(
@@ -49,7 +51,9 @@ public record CreateMaintenanceRequest(
     string? Provider,
     int? IntervalMonths,
     int? IntervalKm,
-    string? Notes);
+    string? Notes,
+    /// <summary>FL-M14: last day of the window (inclusive); null = same day as ScheduledDate. Must be ≥ ScheduledDate.</summary>
+    DateOnly? ScheduledEndDate = null);
 
 public record UpdateMaintenanceRequest(
     MaintenanceType MaintenanceType,
@@ -61,7 +65,8 @@ public record UpdateMaintenanceRequest(
     string? Provider,
     int? IntervalMonths,
     int? IntervalKm,
-    string? Notes);
+    string? Notes,
+    DateOnly? ScheduledEndDate = null);
 
 public record CompleteMaintenanceRequest(
     DateOnly CompletedDate,

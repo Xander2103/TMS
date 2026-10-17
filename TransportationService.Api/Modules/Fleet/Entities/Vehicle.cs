@@ -58,6 +58,12 @@ public class Vehicle : AuditableTenantEntity
 {
     public string InternalNumber { get; set; } = string.Empty;
     public string LicensePlate { get; set; } = string.Empty;
+
+    /// <summary>
+    /// FL-M1: the plate reduced to upper-case letters and digits ("1-TFT-001", "1 tft 001" and
+    /// "1TFT001" are the same physical plate). Unique per tenant; the display plate keeps its formatting.
+    /// </summary>
+    public string NormalizedLicensePlate { get; set; } = string.Empty;
     public string? Vin { get; set; }
 
     public Guid? CategoryId { get; set; }

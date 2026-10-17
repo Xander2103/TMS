@@ -17,7 +17,10 @@ public record DamageReportDto(
     decimal? RepairCost,
     int? DowntimeDays,
     bool HasAttachment,
-    string? Notes);
+    string? Notes,
+    /// <summary>FL-M7: the trip during which the damage occurred, when known.</summary>
+    Guid? TripId = null,
+    string? TripNumber = null);
 
 /// <summary>Row for the recent-damage overview (fleet dashboard).</summary>
 public record RecentDamageDto(
@@ -38,7 +41,11 @@ public record CreateDamageReportRequest(
     string Description,
     DamageSeverity Severity,
     string? InsuranceReference,
-    string? Notes);
+    string? Notes,
+    /// <summary>FL-M7: optional trip and the costs known at reporting time.</summary>
+    Guid? TripId = null,
+    decimal? RepairCost = null,
+    int? DowntimeDays = null);
 
 public record UpdateDamageReportRequest(
     Guid? DriverId,
@@ -50,7 +57,8 @@ public record UpdateDamageReportRequest(
     string? InsuranceReference,
     decimal? RepairCost,
     int? DowntimeDays,
-    string? Notes);
+    string? Notes,
+    Guid? TripId = null);
 
 public enum DamageOperationOutcome
 {

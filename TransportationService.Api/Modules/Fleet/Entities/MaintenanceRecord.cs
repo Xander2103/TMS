@@ -40,6 +40,13 @@ public class MaintenanceRecord : AuditableTenantEntity
 
     // Triggers
     public DateOnly? ScheduledDate { get; set; }
+
+    /// <summary>
+    /// FL-H2/M14: last day of the planned unavailability window (inclusive). Null = the single
+    /// <see cref="ScheduledDate"/> day. The vehicle is not deployable on any day of the window
+    /// while the record is Planned, and on every day while it is InProgress.
+    /// </summary>
+    public DateOnly? ScheduledEndDate { get; set; }
     /// <summary>Job becomes due when the vehicle's odometer reaches this value (vehicles only).</summary>
     public int? OdometerTriggerKm { get; set; }
 

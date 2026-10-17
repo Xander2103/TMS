@@ -38,6 +38,10 @@ public class VehicleConfiguration : IEntityTypeConfiguration<Vehicle>
 
         builder.HasIndex(v => new { v.TenantId, v.InternalNumber }).IsUnique().HasFilter("\"IsDeleted\" = false");
         builder.HasIndex(v => new { v.TenantId, v.LicensePlate }).IsUnique().HasFilter("\"IsDeleted\" = false");
+        // FL-M1: identity is the normalised plate; the VIN is unique whenever it is known.
+        builder.Property(v => v.NormalizedLicensePlate).HasMaxLength(20);
+        builder.HasIndex(v => new { v.TenantId, v.NormalizedLicensePlate }).IsUnique().HasFilter("\"IsDeleted\" = false");
+        builder.HasIndex(v => new { v.TenantId, v.Vin }).IsUnique().HasFilter("\"Vin\" IS NOT NULL AND \"IsDeleted\" = false");
         builder.HasIndex(v => v.TenantId);
         builder.HasIndex(v => new { v.TenantId, v.IsActive });
         builder.HasIndex(v => new { v.TenantId, v.OperationalStatus });

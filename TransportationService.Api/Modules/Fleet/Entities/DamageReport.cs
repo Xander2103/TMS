@@ -32,6 +32,9 @@ public class DamageReport : AuditableTenantEntity
     /// <summary>The driver involved in the incident, when known.</summary>
     public Guid? DriverId { get; set; }
 
+    /// <summary>FL-M7: optional trip during which the damage occurred (parking-yard damage has none).</summary>
+    public Guid? TripId { get; set; }
+
     public DateOnly IncidentDate { get; set; }
     public string? Location { get; set; }
     public string Description { get; set; } = string.Empty;

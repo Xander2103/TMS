@@ -20,6 +20,9 @@ public class Trailer : AuditableTenantEntity
 {
     public string InternalNumber { get; set; } = string.Empty;
     public string LicensePlate { get; set; } = string.Empty;
+
+    /// <summary>FL-M1: upper-case letters and digits only; unique per tenant (see Vehicle).</summary>
+    public string NormalizedLicensePlate { get; set; } = string.Empty;
     public string? Vin { get; set; }
 
     public Guid? CategoryId { get; set; }
