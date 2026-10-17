@@ -42,16 +42,29 @@
   },
   "internalList": {
     "loadError": "Facturen konden niet worden geladen.",
-    "searchPlaceholder": "Zoeken op nummer of klant...",
+    "searchPlaceholder": "Zoeken op factuurnummer, klant, klantnummer, dossier of opdracht…",
+    "searchLabel": "Facturen zoeken",
     "newInvoice": "Nieuwe factuur",
     "empty": "Nog geen facturen.",
+    "draft": "Concept",
+    "filters": {
+      "paidLabel": "Betaald of onbetaald",
+      "paidAll": "Betaald en onbetaald",
+      "paid": "Betaald",
+      "unpaid": "Onbetaald",
+      "dateFrom": "Factuurdatum van",
+      "dateTo": "Factuurdatum tot en met",
+      "peppolLabel": "Peppol-status",
+      "peppolAll": "Alle Peppol-statussen"
+    },
     "columns": {
       "number": "Nummer",
       "date": "Datum",
       "due": "Vervaldag",
       "customer": "Klant",
       "total": "Totaal (incl. btw)",
-      "status": "Status"
+      "status": "Status",
+      "peppol": "Peppol"
     }
   },
   "export": {

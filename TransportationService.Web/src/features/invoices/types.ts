@@ -29,18 +29,31 @@ export const INVOICE_TRANSITION_LABELS: Record<InvoiceStatus, string> = {
 
 export interface InvoiceListItem {
   id: string
+  /** ACC-H3: the legal number is assigned at issue — null/empty while the document is a draft. */
   invoiceNumber: string
+  /** "FAC-2026100006", or the draft reference ("Concept …") while no legal number exists. Absent on older payloads. */
+  displayNumber?: string
+  kind?: 'Invoice' | 'CreditNote'
   invoiceDate: string
   dueDate: string
   customerId: string
   customerName: string
+  /** ACC-M10: shown next to the customer so a number search reads back. Absent on older payloads. */
+  customerNumber?: string | null
   status: InvoiceStatus
   currency: string
   subtotal: number
   vatAmount: number
   total: number
   lineCount: number
+  paidAt?: string | null
+  /** Latest Peppol transmission status of the document; null = never sent through Peppol. */
+  peppolStatus?: string | null
 }
+
+/** ACC-M10: paid/unpaid list filter (the URL value and the query parameter). */
+export const INVOICE_PAID_FILTERS = ['paid', 'unpaid'] as const
+export type InvoicePaidFilter = (typeof INVOICE_PAID_FILTERS)[number]
 
 export interface InvoiceLine {
   id: string

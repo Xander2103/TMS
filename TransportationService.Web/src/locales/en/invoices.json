@@ -42,16 +42,29 @@
   },
   "internalList": {
     "loadError": "The invoices could not be loaded.",
-    "searchPlaceholder": "Search by number or customer...",
+    "searchPlaceholder": "Search by invoice number, customer, customer number, dossier or order…",
+    "searchLabel": "Search invoices",
     "newInvoice": "New invoice",
     "empty": "No invoices yet.",
+    "draft": "Draft",
+    "filters": {
+      "paidLabel": "Paid or unpaid",
+      "paidAll": "Paid and unpaid",
+      "paid": "Paid",
+      "unpaid": "Unpaid",
+      "dateFrom": "Invoice date from",
+      "dateTo": "Invoice date up to",
+      "peppolLabel": "Peppol status",
+      "peppolAll": "All Peppol statuses"
+    },
     "columns": {
       "number": "Number",
       "date": "Date",
       "due": "Due date",
       "customer": "Customer",
       "total": "Total (incl. VAT)",
-      "status": "Status"
+      "status": "Status",
+      "peppol": "Peppol"
     }
   },
   "export": {

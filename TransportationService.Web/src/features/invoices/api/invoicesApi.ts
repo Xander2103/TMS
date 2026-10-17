@@ -6,6 +6,7 @@ import type {
   InvoiceDetail,
   InvoiceListItem,
   InvoiceNumberPreview,
+  InvoicePaidFilter,
   InvoiceStatus,
   ManualLineInput,
   UninvoicedActivity,
@@ -22,6 +23,11 @@ export interface SearchInvoicesParams {
   /** B26: whitelisted server sort key and direction ('' = the list's natural order). */
   sort?: string
   dir?: 'asc' | 'desc' | ''
+  /** ACC-M10: invoice-date window (ISO dates, inclusive), paid/unpaid and the latest Peppol status. */
+  dateFrom?: string
+  dateTo?: string
+  paid?: InvoicePaidFilter | ''
+  peppolStatus?: string
 }
 
 export function searchInvoices(params: SearchInvoicesParams): Promise<PagedResult<InvoiceListItem>> {
@@ -31,6 +37,10 @@ export function searchInvoices(params: SearchInvoicesParams): Promise<PagedResul
   if (params.customerId) query.set('customerId', params.customerId)
   if (params.sort) query.set('sort', params.sort)
   if (params.dir) query.set('dir', params.dir)
+  if (params.dateFrom) query.set('dateFrom', params.dateFrom)
+  if (params.dateTo) query.set('dateTo', params.dateTo)
+  if (params.paid) query.set('paid', params.paid)
+  if (params.peppolStatus) query.set('peppolStatus', params.peppolStatus)
   query.set('page', String(params.page))
   query.set('pageSize', String(params.pageSize))
   return apiClient.getJson<PagedResult<InvoiceListItem>>(`/api/invoices?${query.toString()}`)

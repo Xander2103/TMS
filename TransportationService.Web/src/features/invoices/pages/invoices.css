@@ -317,3 +317,16 @@
   gap: 8px;
   flex-wrap: wrap;
 }
+
+/* ACC-M10: number cell = link + Concept/Creditnota badge; muted customer number next to the name. */
+.inv-list-number {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.inv-list-muted {
+  color: var(--text-muted, var(--text));
+  font-size: var(--text-sm, 0.875em);
+}

@@ -42,16 +42,29 @@
   },
   "internalList": {
     "loadError": "Les factures n'ont pas pu être chargées.",
-    "searchPlaceholder": "Rechercher par numéro ou client...",
+    "searchPlaceholder": "Rechercher par numéro de facture, client, numéro de client, dossier ou commande…",
+    "searchLabel": "Rechercher des factures",
     "newInvoice": "Nouvelle facture",
     "empty": "Pas encore de factures.",
+    "draft": "Brouillon",
+    "filters": {
+      "paidLabel": "Payée ou impayée",
+      "paidAll": "Payées et impayées",
+      "paid": "Payée",
+      "unpaid": "Impayée",
+      "dateFrom": "Date de facture à partir du",
+      "dateTo": "Date de facture jusqu'au",
+      "peppolLabel": "Statut Peppol",
+      "peppolAll": "Tous les statuts Peppol"
+    },
     "columns": {
       "number": "Numéro",
       "date": "Date",
       "due": "Échéance",
       "customer": "Client",
       "total": "Total (TVA incl.)",
-      "status": "Statut"
+      "status": "Statut",
+      "peppol": "Peppol"
     }
   },
   "export": {
