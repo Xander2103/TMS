@@ -195,6 +195,24 @@ public class FleetReadinessTests
     }
 
     [Fact]
+    public async Task CorrectingTheCertificateExpiry_MovesTheScheduledInspection_AndReadinessFollows()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var doc = await h.Documents.CreateForVehicleAsync(h.VehicleId, new CreateFleetDocumentRequest(
+            FleetDocumentType.TechnicalInspection, null, "KEUR-1", new DateOnly(2026, 6, 1), new DateOnly(2027, 6, 1), 30, null), CancellationToken.None);
+        Assert.Equal(ReadinessLevel.Deployable, (await h.Readiness.EvaluateVehicleAsync(h.VehicleId, TripDay, CancellationToken.None))!.Level);
+
+        await h.Documents.UpdateAsync(doc.Document!.Id, new UpdateFleetDocumentRequest(
+            FleetDocumentType.TechnicalInspection, null, "KEUR-1", new DateOnly(2026, 6, 1), new DateOnly(2026, 10, 20), 30, null), CancellationToken.None);
+
+        Assert.Equal(new DateOnly(2026, 10, 20), (await h.Db.Context.Inspections.SingleAsync(i => i.VehicleId == h.VehicleId)).DueDate);
+        var readiness = await h.Readiness.EvaluateVehicleAsync(h.VehicleId, TripDay, CancellationToken.None);
+        Assert.Equal(ReadinessLevel.Blocked, readiness!.Level);
+        Assert.Contains(readiness.Issues, i => i.Code == "inspection.expired");
+    }
+
+    [Fact]
     public async Task ExpiredInsurance_Blocks()
     {
         var h = await SeedAsync();

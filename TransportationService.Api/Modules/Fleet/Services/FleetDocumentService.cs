@@ -135,7 +135,7 @@ public class FleetDocumentService : IFleetDocumentService
         await _auditService.RecordAsync(EntityType, document.Id.ToString(), "Updated", before,
             new { document.DocumentType, document.DocumentNumber, document.ExpiryDate, document.IssueDate,
                 document.VehicleId, document.TrailerId }, cancellationToken);
-        await SyncInspectionScheduleAsync(document, cancellationToken);
+        await SyncInspectionScheduleAsync(document, cancellationToken, before.ExpiryDate);
 
         return FleetDocumentOperationResult.Success(Map(document));
     }
@@ -282,8 +282,34 @@ public class FleetDocumentService : IFleetDocumentService
     /// plans the next one on the expiry date — no stale "Te laat" next to a valid certificate.
     /// The closed inspections stay as history.
     /// </summary>
-    private async Task SyncInspectionScheduleAsync(FleetDocument document, CancellationToken cancellationToken)
+    private async Task SyncInspectionScheduleAsync(FleetDocument document, CancellationToken cancellationToken, DateOnly? previousExpiry = null)
     {
+        // A corrected expiry on the certificate moves the inspection it scheduled (due on the old
+        // expiry) along with it, so the schedule never contradicts the certificate.
+        if (previousExpiry is { } oldExpiry && document.ExpiryDate is { } newExpiry && oldExpiry != newExpiry
+            && document.DocumentType is FleetDocumentType.TechnicalInspection or FleetDocumentType.CraneInspection)
+        {
+            var scheduledByThis = await _dbContext.Inspections
+                .Where(i => i.TenantId == _tenantContext.TenantId && i.CompletedDate == null && i.DueDate == oldExpiry
+                            && (document.VehicleId != null ? i.VehicleId == document.VehicleId : i.TrailerId == document.TrailerId))
+                .ToListAsync(cancellationToken);
+            foreach (var inspection in scheduledByThis)
+            {
+                inspection.DueDate = newExpiry;
+            }
+            if (scheduledByThis.Count > 0)
+            {
+                await _dbContext.SaveChangesAsync(cancellationToken);
+                foreach (var inspection in scheduledByThis)
+                {
+                    await _auditService.RecordAsync("Inspection", inspection.Id.ToString(), "Updated", new { DueDate = oldExpiry },
+                        new { inspection.DueDate, inspection.VehicleId, inspection.TrailerId, inspection.InspectionType, Source = "Document", DocumentId = document.Id },
+                        cancellationToken);
+                }
+                return;
+            }
+        }
+
         if (document.ExpiryDate is not { } expiry
             || document.DocumentType is not (FleetDocumentType.TechnicalInspection or FleetDocumentType.CraneInspection))
         {
