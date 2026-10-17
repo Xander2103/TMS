@@ -137,8 +137,8 @@ describe('InvoiceDetailPage — accounting remediation', () => {
     api.getInvoiceIssuePreflight.mockResolvedValue({
       canIssue: false,
       issues: [
-        { code: 'po.missing', message: 'Deze klant vereist een PO-nummer.', lineIds: [] },
-        { code: 'category.missing', message: 'Lijn zonder verkoopcategorie.', lineIds: ['l1'] },
+        { code: 'po.required', message: 'Deze klant vereist een PO-nummer.', lineIds: [] },
+        { code: 'lines.category_missing', message: 'Lijn zonder verkoopcategorie.', lineIds: ['l1'] },
       ],
     })
     renderPage()

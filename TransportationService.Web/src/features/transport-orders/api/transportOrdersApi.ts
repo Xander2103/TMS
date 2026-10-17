@@ -173,6 +173,11 @@ export interface SetOneOffPriceInput {
   fixedAmount: number | null
   /** Optimistic-concurrency token of the loaded order; a stale token yields 409 with the current state. */
   version: string | null
+  /**
+   * ACC-M1: a € 0 `fixedAmount` is only accepted together with this flag — the planner confirmed
+   * the order is deliberately free. Without it the server refuses the € 0 (unpriced ≠ free).
+   */
+  freeConfirmed?: boolean
 }
 
 /**

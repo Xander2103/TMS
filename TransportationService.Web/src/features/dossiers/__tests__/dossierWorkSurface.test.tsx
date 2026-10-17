@@ -960,7 +960,7 @@ describe('Dossier work surface — intentional € 0 is priced, visible and ques
     await user.type(screen.getByLabelText('Afgesproken prijs (€)'), '0')
     await user.click(screen.getByRole('button', { name: 'Opslaan' }))
     await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Bevestigen als gratis' }))
-    await waitFor(() => expect(orders.setOneOff).toHaveBeenCalledWith('o-1', { fixedAmount: 0, version: 'ov-1' }))
+    await waitFor(() => expect(orders.setOneOff).toHaveBeenCalledWith('o-1', { fixedAmount: 0, version: 'ov-1', freeConfirmed: true }))
     expect(await within(price).findByText('Deze opdracht is bewust gratis (€ 0,00).')).toBeInTheDocument()
     await waitFor(() => expect(within(total).getByText(/€\s0,00/)).toBeInTheDocument())
     expect(within(price).queryByTestId('zero-callout')).not.toBeInTheDocument()

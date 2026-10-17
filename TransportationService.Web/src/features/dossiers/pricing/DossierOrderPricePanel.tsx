@@ -185,7 +185,11 @@ export function DossierOrderPricePanel({ dossier, activity, order, canEditPrice,
       // Price-only command (hardening 2026-09-11). The previous full order PUT echoed the loaded
       // stops and so re-validated an incomplete route ("Elke stop heeft een locatie …") — a valid
       // price must never depend on unrelated route data. Route rules stay on the route save.
-      const updated = await setOrderOneOffPrice(order.id, { fixedAmount: amount, version: order.version })
+      // ACC-M1: € 0 only reaches here after the explicit "Bevestigen als gratis" step, so it is
+      // sent with the flag the server requires to distinguish "gratis" from "niet geprijsd".
+      const updated = await setOrderOneOffPrice(order.id, amount === 0
+        ? { fixedAmount: 0, version: order.version, freeConfirmed: true }
+        : { fixedAmount: amount, version: order.version })
       agreedStatus.setState({ kind: 'saved', at: new Date().toISOString() })
       setConfirmZero(false)
       onOrderSaved(updated)
