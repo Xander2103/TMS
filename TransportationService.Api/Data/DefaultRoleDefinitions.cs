@@ -186,6 +186,38 @@ public static class DefaultRoleDefinitions
                 PermissionCodes.PeppolView, PermissionCodes.PeppolValidate,
                 PermissionCodes.PeppolSend, PermissionCodes.PeppolRetry, PermissionCodes.PeppolViewIncoming,
                 PermissionCodes.AttendanceSelf,
+                // FL-M12: fleet costs are accounting-relevant — read-only, never fleet management.
+                PermissionCodes.VehiclesView, PermissionCodes.TrailersView,
+                PermissionCodes.MaintenanceView, PermissionCodes.DamageReportsView, PermissionCodes.FuelView,
+                PermissionCodes.FleetFinanceView, PermissionCodes.TachographView,
+            ]),
+
+        // Wagenparkbeheer: the fleet manager runs vehicles, trailers and their legal/technical
+        // follow-up, including fleet costs — no user administration, HR or invoicing.
+        new("wagenparkbeheerder", "Wagenparkbeheerder",
+            "Beheert voertuigen, opleggers, documenten, keuringen, onderhoud en schade.",
+            [
+                .. CommonViewPermissions,
+                PermissionCodes.VehiclesCreate, PermissionCodes.VehiclesEdit, PermissionCodes.VehiclesDelete,
+                PermissionCodes.TrailersCreate, PermissionCodes.TrailersEdit, PermissionCodes.TrailersDelete,
+                PermissionCodes.VehicleCategoriesManage, PermissionCodes.TrailerCategoriesManage,
+                PermissionCodes.FleetDocumentsView, PermissionCodes.FleetDocumentsCreate,
+                PermissionCodes.FleetDocumentsEdit, PermissionCodes.FleetDocumentsDelete,
+                PermissionCodes.InspectionsView, PermissionCodes.InspectionsCreate,
+                PermissionCodes.InspectionsEdit, PermissionCodes.InspectionsDelete,
+                PermissionCodes.MaintenanceView, PermissionCodes.MaintenanceCreate,
+                PermissionCodes.MaintenanceEdit, PermissionCodes.MaintenanceDelete,
+                PermissionCodes.MaintenancePoliciesView, PermissionCodes.MaintenancePoliciesManage,
+                PermissionCodes.DamageReportsView, PermissionCodes.DamageReportsCreate,
+                PermissionCodes.DamageReportsEdit, PermissionCodes.DamageReportsDelete,
+                PermissionCodes.FuelView, PermissionCodes.FuelCreate, PermissionCodes.FuelEdit, PermissionCodes.FuelDelete,
+                PermissionCodes.TankCardsView, PermissionCodes.TankCardsCreate, PermissionCodes.TankCardsEdit,
+                PermissionCodes.TankCardsDelete, PermissionCodes.TankCardsBlock,
+                PermissionCodes.TachographView, PermissionCodes.TachographManage,
+                PermissionCodes.FleetFinanceView, PermissionCodes.FleetFinanceManage,
+                PermissionCodes.KpiView,
+                PermissionCodes.PlanningView,
+                PermissionCodes.AttendanceSelf,
             ]),
 
         new("hr", "HR",

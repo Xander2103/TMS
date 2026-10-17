@@ -56,7 +56,7 @@ public class HrWavePermissionTests
     [Fact]
     public void UpgradeStep33_GrantsHrTheMasterDataPermissions_ForExistingTenants()
     {
-        Assert.Equal(36, DefaultRoleUpgrades.CurrentVersion);
+        Assert.Equal(37, DefaultRoleUpgrades.CurrentVersion);
         var step = DefaultRoleUpgrades.Steps.Single(s => s.Version == 33);
         var grants = step.GrantsByTemplateCode["hr"];
         Assert.Contains(PermissionCodes.DepartmentsManage, grants);

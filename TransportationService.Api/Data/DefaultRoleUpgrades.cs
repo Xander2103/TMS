@@ -21,7 +21,7 @@ public static class DefaultRoleUpgrades
         IReadOnlyDictionary<string, IReadOnlyList<string>>? RevocationsByTemplateCode = null);
 
     /// <summary>Version 1 = the original role creation; steps start at 2.</summary>
-    public const int CurrentVersion = 36;
+    public const int CurrentVersion = 37;
 
     public static IReadOnlyList<UpgradeStep> Steps { get; } =
     [
@@ -646,6 +646,21 @@ public static class DefaultRoleUpgrades
             {
                 ["planner"] = [PermissionCodes.LegalEntitiesView],
                 ["dispatcher"] = [PermissionCodes.LegalEntitiesView],
+            }),
+
+        new(37,
+            "Wagenparkremediëring 2026-10-18 (FL-M12): de boekhouding kon de wagenparkkosten (onderhoud, schade, "
+            + "brandstof, leasing) niet inzien. Zij krijgt leesrecht op voertuigen/opleggers en de financiële "
+            + "wagenparkgegevens — geen voertuigbeheer, onderhoudsworkflow of planning. Het nieuwe sjabloon "
+            + "'Wagenparkbeheerder' wordt via de standaardrollen (fase 2) met zijn volledige set aangemaakt.",
+            new Dictionary<string, IReadOnlyList<string>>
+            {
+                ["boekhouding"] =
+                [
+                    PermissionCodes.VehiclesView, PermissionCodes.TrailersView,
+                    PermissionCodes.MaintenanceView, PermissionCodes.DamageReportsView, PermissionCodes.FuelView,
+                    PermissionCodes.FleetFinanceView, PermissionCodes.TachographView,
+                ],
             }),
     ];
 }

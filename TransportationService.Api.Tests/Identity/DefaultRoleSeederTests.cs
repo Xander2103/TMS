@@ -93,7 +93,7 @@ public class DefaultRoleSeederTests
             {
                 "Boekhouding", "Chauffeur", "Dispatcher", "HR", "Klantportaal",
                 "Klantportaal - Documenten", "Klantportaal - Facturen", "Klantportaal - Gebruikersbeheer",
-                "Magazijn", "Management", "Planner",
+                "Magazijn", "Management", "Planner", "Wagenparkbeheerder",
             },
             roles.Select(r => r.Name).OrderBy(n => n).ToArray());
         Assert.All(roles, r => Assert.False(r.IsSystemRole));
@@ -167,7 +167,7 @@ public class DefaultRoleSeederTests
         // …and the next startup must NOT re-grant it or duplicate roles.
         await DefaultRoleSeeder.SyncAsync(db.Context);
 
-        Assert.Equal(11, await db.Context.Roles.CountAsync(r => r.TenantId == tenantId));
+        Assert.Equal(12, await db.Context.Roles.CountAsync(r => r.TenantId == tenantId));
         Assert.False(await db.Context.RolePermissions
             .AnyAsync(rp => rp.RoleId == planner.Id && rp.PermissionId == cancelPermission.Id));
     }
@@ -767,7 +767,7 @@ public class DefaultRoleSeederTests
 
         var state = await db.Context.RoleTemplateStates.SingleAsync(s => s.TenantId == tenantId);
         Assert.Equal(DefaultRoleUpgrades.CurrentVersion, state.AppliedVersion);
-        Assert.Equal(36, DefaultRoleUpgrades.CurrentVersion);
+        Assert.Equal(37, DefaultRoleUpgrades.CurrentVersion);
 
 
         var roles = await db.Context.Roles.Where(r => r.TenantId == tenantId).ToListAsync();
@@ -1019,6 +1019,6 @@ public class DefaultRoleSeederTests
         Assert.DoesNotContain(PermissionCodes.LegalEntitiesView, await CodesOfAsync(db, planner.Id));
         Assert.DoesNotContain(PermissionCodes.LegalEntitiesView, await CodesOfAsync(db, dispatcher.Id));
         Assert.Contains(PermissionCodes.LegalEntitiesView, await CodesOfAsync(db, custom.Id));
-        Assert.Equal(36, (await db.Context.RoleTemplateStates.SingleAsync(s => s.TenantId == tenantId)).AppliedVersion);
+        Assert.Equal(37, (await db.Context.RoleTemplateStates.SingleAsync(s => s.TenantId == tenantId)).AppliedVersion);
     }
 }
