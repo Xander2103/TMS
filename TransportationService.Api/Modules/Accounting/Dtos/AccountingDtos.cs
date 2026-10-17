@@ -44,3 +44,9 @@ public record SaveSalesCategoryRequest(
 
 /// <summary>Configuration health: which active sales categories still miss a ledger account.</summary>
 public record AccountingHealthDto(IReadOnlyList<SalesCategoryDto> UnmappedCategories);
+
+/// <summary>ACC-M9: one issued invoice that would block the accounting export, with the reason per line.</summary>
+public record AccountingExportPreflightInvoiceDto(Guid InvoiceId, string InvoiceNumber, IReadOnlyList<string> Reasons);
+
+/// <summary>ACC-M9: the export's validation report; <c>CanExport</c> is false while any invoice is listed.</summary>
+public record AccountingExportPreflightDto(bool CanExport, IReadOnlyList<AccountingExportPreflightInvoiceDto> Invoices);

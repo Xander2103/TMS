@@ -79,6 +79,16 @@ public class AccountingController : ControllerBase
     public async Task<ActionResult<AccountingHealthDto>> GetHealth(CancellationToken cancellationToken)
         => Ok(await _service.GetHealthAsync(cancellationToken));
 
+    /// <summary>
+    /// ACC-M9: validation report before exporting — every issued invoice in the window that
+    /// would block the export, with the reason per line. Same rights as the export itself.
+    /// </summary>
+    [HttpGet("export/preflight")]
+    [RequirePermission(PermissionCodes.AccountingView, PermissionCodes.AccountingManage)]
+    public async Task<ActionResult<AccountingExportPreflightDto>> ExportPreflight(
+        [FromQuery] DateOnly from, [FromQuery] DateOnly to, CancellationToken cancellationToken)
+        => Ok(await _export.PreflightAsync(from, to, cancellationToken));
+
     /// <summary>XLSX export of Sent/Paid invoice lines with their frozen ledger snapshots (§7.4).</summary>
     [HttpGet("export")]
     [RequirePermission(PermissionCodes.AccountingView, PermissionCodes.AccountingManage)]
