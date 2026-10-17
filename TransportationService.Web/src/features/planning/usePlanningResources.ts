@@ -22,7 +22,9 @@ export interface PlanningResources {
  * so one failing endpoint never blocks the other two. `enabled = false` (read-only host) loads
  * nothing. `availabilityOn` (yyyy-MM-dd, the trip date) makes each driver's availability reflect
  * THAT day — an approved absence or a non-deployable employment shows before selection (HR
- * acceptance P2-7); the driver list reloads when the date changes.
+ * acceptance P2-7); the driver list reloads when the date changes. The same date makes the vehicle
+ * and trailer options carry the fleet readiness of THAT day (planned maintenance window, expired
+ * inspection, …) — FL-H1/H2/H4.
  */
 export function usePlanningResources(enabled = true, availabilityOn?: string | null): PlanningResources {
   const [drivers, setDrivers] = useState<DriverListItem[]>([])
@@ -57,13 +59,13 @@ export function usePlanningResources(enabled = true, availabilityOn?: string | n
     const settle = (key: ResourceListKey, next: ResourceListStatus) => {
       if (mounted) setStatus((current) => ({ ...current, [key]: next }))
     }
-    getVehicleOptions()
+    getVehicleOptions(availabilityOn)
       .then((data) => {
         if (mounted) setVehicles(data)
         settle('vehicles', 'ready')
       })
       .catch(() => settle('vehicles', 'error'))
-    getTrailerOptions()
+    getTrailerOptions(availabilityOn)
       .then((data) => {
         if (mounted) setTrailers(data)
         settle('trailers', 'ready')
@@ -72,7 +74,7 @@ export function usePlanningResources(enabled = true, availabilityOn?: string | n
     return () => {
       mounted = false
     }
-  }, [enabled])
+  }, [enabled, availabilityOn])
 
   return { drivers, vehicles, trailers, status }
 }

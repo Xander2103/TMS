@@ -5,6 +5,8 @@ import type { DriverListItem } from '../drivers/types'
 import type { TrailerOption } from '../trailers/types'
 import type { VehicleOption } from '../vehicles/types'
 import { formatInteger } from '../../utils/numbers'
+import { readinessHint } from '../fleet-readiness/readiness'
+import type { ReadinessLevel } from '../fleet-readiness/types'
 
 /**
  * Picker options for driver, vehicle and trailer — shared by the trip detail page and the dossier
@@ -69,6 +71,21 @@ export function equipmentStatusNote(status: string | null | undefined, t: Transl
   }
 }
 
+/**
+ * FL-H1/H2/H4: the server's fleet readiness for the trip day wins — "⛔ Onderhoud gepland …",
+ * "⚠ Tachograafijking vervallen". Without readiness (older payload) the operational-status note
+ * of M1 stays; "in gebruik" is kept next to a deployable verdict because it is no blocker.
+ */
+export function equipmentNote(
+  option: { operationalStatus?: string | null; readiness?: ReadinessLevel | null; readinessSummary?: string | null },
+  t: TranslateFn,
+): string | null {
+  if (option.readiness) {
+    return readinessHint(option) ?? (option.operationalStatus === 'InUse' ? t('planning.vehiclePicker.inUse') : null)
+  }
+  return equipmentStatusNote(option.operationalStatus, t)
+}
+
 /** Vehicle: internal number, licence plate (with or without separators), brand/model, plus the
  * status, payload and equipment the planner needs to judge suitability before choosing (M1). */
 export function buildVehicleOptions(vehicles: VehicleOption[], t?: TranslateFn): SearchableSelectOption[] {
@@ -77,7 +94,7 @@ export function buildVehicleOptions(vehicles: VehicleOption[], t?: TranslateFn):
     label: `${vehicle.internalNumber} (${vehicle.licensePlate})`,
     subtitle: joinParts(
       [
-        t ? equipmentStatusNote(vehicle.operationalStatus, t) : null,
+        t ? equipmentNote(vehicle, t) : readinessHint(vehicle),
         joinParts([vehicle.brand, vehicle.model], ' '),
         t && vehicle.payloadKg ? t('planning.vehiclePicker.payload', { kg: formatInteger(vehicle.payloadKg) }) : null,
         t && vehicle.hasCrane ? t('planning.vehiclePicker.crane') : null,
@@ -99,7 +116,7 @@ export function buildTrailerOptions(trailers: TrailerOption[], t?: TranslateFn):
     label: `${trailer.internalNumber} (${trailer.licensePlate})`,
     subtitle: joinParts(
       [
-        t ? equipmentStatusNote(trailer.operationalStatus, t) : null,
+        t ? equipmentNote(trailer, t) : readinessHint(trailer),
         joinParts([trailer.brand, trailer.model], ' '),
         t && trailer.adrSuitable ? t('planning.vehiclePicker.adr') : null,
       ],
