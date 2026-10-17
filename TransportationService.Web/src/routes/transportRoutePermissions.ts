@@ -30,5 +30,17 @@ export function transportRoutePermissions(): Record<string, string[]> {
     '/customers': navPermissions('/customers'), //               GET api/customers: customers.view
     '/customers/:id': navPermissions('/customers'),
     '/customers/new': ['customers.create'], //                   POST api/customers
+    // ACC-M8: finance/settings pages that used to render a shell with "Je hebt geen rechten…" or a
+    // raw API "Missing permission" text follow the same route-level guard as everything above.
+    '/settings/legal-entities': navPermissions('/settings/legal-entities'), // GET api/legal-entities: legal_entities.view|manage
+    '/settings/accounting': navPermissions('/settings/accounting'), //         GET api/accounting/*: accounting.view|manage
+    '/peppol': navPermissions('/peppol'), //                                   GET api/peppol/overview: peppol.view
+    // Customer-portal shell: an internal user without the portal right never sees the portal
+    // shell with a load error; the pages inside follow their own API rights.
+    '/klantportaal': ['customer_portal.view'],
+    '/klantportaal/documenten': ['customer_portal.view_documents'],
+    '/klantportaal/facturen': ['customer_portal.view_invoices'],
+    '/klantportaal/berichten': ['customer_portal.messages'],
+    '/klantportaal/gebruikers': ['customer_portal.manage_users'],
   }
 }

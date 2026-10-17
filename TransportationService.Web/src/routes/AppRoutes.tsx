@@ -235,21 +235,25 @@ const router = createBrowserRouter(
             <Route path="/driver/incidents" element={<DriverIncidentsPage />} />
           </Route>
         </Route>
-        {/* Customer-portal shell: portal users never render the internal AppLayout sidebar. */}
+        {/* Customer-portal shell: portal users never render the internal AppLayout sidebar.
+            ACC-M8: without customer_portal.view (internal roles) the route answers "Geen toegang"
+            instead of the portal shell with a load error; each page keeps its own API right. */}
+        <Route element={<RequirePermission permissions={TRANSPORT_GUARDS['/klantportaal']} />}>
         <Route element={<CustomerPortalLayout />}>
           <Route errorElement={<RouteErrorPage />}>
           <Route path="/klantportaal" element={<CustomerPortalOrdersPage />} />
           <Route path="/klantportaal/dashboard" element={<CustomerPortalDashboardPage />} />
           <Route path="/klantportaal/new" element={<CustomerPortalNewOrderPage />} />
           <Route path="/klantportaal/orders/:id" element={<CustomerPortalOrderDetailPage />} />
-          <Route path="/klantportaal/documenten" element={<CustomerPortalDocumentsPage />} />
-          <Route path="/klantportaal/facturen" element={<CustomerPortalInvoicesPage />} />
-          <Route path="/klantportaal/facturen/:id" element={<CustomerPortalInvoiceDetailPage />} />
-          <Route path="/klantportaal/berichten" element={<CustomerPortalMessagesPage />} />
+          <Route path="/klantportaal/documenten" element={<RequirePermission permissions={TRANSPORT_GUARDS['/klantportaal/documenten']}><CustomerPortalDocumentsPage /></RequirePermission>} />
+          <Route path="/klantportaal/facturen" element={<RequirePermission permissions={TRANSPORT_GUARDS['/klantportaal/facturen']}><CustomerPortalInvoicesPage /></RequirePermission>} />
+          <Route path="/klantportaal/facturen/:id" element={<RequirePermission permissions={TRANSPORT_GUARDS['/klantportaal/facturen']}><CustomerPortalInvoiceDetailPage /></RequirePermission>} />
+          <Route path="/klantportaal/berichten" element={<RequirePermission permissions={TRANSPORT_GUARDS['/klantportaal/berichten']}><CustomerPortalMessagesPage /></RequirePermission>} />
           <Route path="/klantportaal/mededelingen" element={<CustomerPortalNoticesPage />} />
-          <Route path="/klantportaal/gebruikers" element={<CustomerPortalUsersPage />} />
+          <Route path="/klantportaal/gebruikers" element={<RequirePermission permissions={TRANSPORT_GUARDS['/klantportaal/gebruikers']}><CustomerPortalUsersPage /></RequirePermission>} />
           <Route path="/klantportaal/voorkeuren" element={<CustomerPortalPreferencesPage />} />
           </Route>
+        </Route>
         </Route>
         <Route element={<InternalOnly />}>
         <Route element={<AppLayout />}>
@@ -280,7 +284,7 @@ const router = createBrowserRouter(
           <Route path="/employee-planning" element={<RequirePermission permissions={navPermissions('/employee-planning')}><EmployeePlanningPage /></RequirePermission>} />
           <Route path="/messaging" element={<MessagingPage />} />
           <Route path="/edi" element={<EdiPage />} />
-          <Route path="/peppol" element={<PeppolPage />} />
+          <Route path="/peppol" element={<RequirePermission permissions={TRANSPORT_GUARDS['/peppol']}><PeppolPage /></RequirePermission>} />
           <Route path="/integrations" element={<IntegrationsPage />} />
           <Route path="/portal/absences" element={<PortalAbsencesPage />} />
           <Route path="/portal/time" element={<MyTimePage />} />
@@ -359,7 +363,7 @@ const router = createBrowserRouter(
           <Route path="/settings/document-rules" element={<DocumentRulesPage />} />
           <Route path="/settings/charge-policies" element={<ChargePoliciesPage />} />
           <Route path="/settings/system" element={<SystemInfoPage />} />
-          <Route path="/settings/legal-entities" element={<LegalEntitiesPage />} />
+          <Route path="/settings/legal-entities" element={<RequirePermission permissions={TRANSPORT_GUARDS['/settings/legal-entities']}><LegalEntitiesPage /></RequirePermission>} />
           {/* Bedrijfsmiddelen (beheer): categories + templates as tabs; the index lands on templates. */}
           <Route path="/issued-items" element={<Navigate to="/issued-items/templates" replace />} />
           <Route path="/issued-items/:tab" element={<IssuedItemsAdminPage />} />
@@ -370,7 +374,7 @@ const router = createBrowserRouter(
           <Route path="/settings/leave" element={<LeaveSettingsPage />} />
           <Route path="/settings/attendance" element={<AttendanceSettingsPage />} />
           <Route path="/settings/activity-types" element={<ActivityTypesPage />} />
-          <Route path="/settings/accounting" element={<AccountingSettingsPage />} />
+          <Route path="/settings/accounting" element={<RequirePermission permissions={TRANSPORT_GUARDS['/settings/accounting']}><AccountingSettingsPage /></RequirePermission>} />
           <Route path="/settings/notifications" element={<NotificationAdminPage />} />
           <Route path="/settings/escalations" element={<EscalationSettingsPage />} />
           <Route path="/settings/portal-announcements" element={<PortalAnnouncementsSettingsPage />} />
