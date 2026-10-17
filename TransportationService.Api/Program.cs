@@ -691,6 +691,8 @@ builder.Services.AddScoped<TransportationService.Api.Modules.Invoicing.Services.
     TransportationService.Api.Modules.Invoicing.Services.InvoiceNumberService>();
 builder.Services.AddScoped<TransportationService.Api.Modules.Invoicing.Services.IInvoiceAttachmentService,
     TransportationService.Api.Modules.Invoicing.Services.InvoiceAttachmentService>();
+builder.Services.AddScoped<TransportationService.Api.Modules.Invoicing.Services.IInvoiceHistoryService,
+    TransportationService.Api.Modules.Invoicing.Services.InvoiceHistoryService>();
 
 // Notifications (in-app)
 builder.Services.AddScoped<TransportationService.Api.Modules.Notifications.Services.INotificationService,
