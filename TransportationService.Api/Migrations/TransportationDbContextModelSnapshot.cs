@@ -3968,6 +3968,14 @@ namespace TransportationService.Api.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<string>("AttachmentContentType")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("AttachmentFileName")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
                     b.Property<string>("AttachmentPath")
                         .HasMaxLength(300)
                         .HasColumnType("character varying(300)");
@@ -4031,6 +4039,9 @@ namespace TransportationService.Api.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<Guid?>("TrailerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("TripId")
                         .HasColumnType("uuid");
 
                     b.Property<DateTime>("UpdatedAt")
@@ -4583,6 +4594,9 @@ namespace TransportationService.Api.Migrations
                     b.Property<DateOnly?>("ScheduledDate")
                         .HasColumnType("date");
 
+                    b.Property<DateOnly?>("ScheduledEndDate")
+                        .HasColumnType("date");
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(20)
@@ -4902,6 +4916,11 @@ namespace TransportationService.Api.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
+                    b.Property<string>("NormalizedLicensePlate")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
                     b.Property<string>("Notes")
                         .HasMaxLength(2000)
                         .HasColumnType("character varying(2000)");
@@ -4961,7 +4980,15 @@ namespace TransportationService.Api.Migrations
                         .IsUnique()
                         .HasFilter("\"IsDeleted\" = false");
 
+                    b.HasIndex("TenantId", "NormalizedLicensePlate")
+                        .IsUnique()
+                        .HasFilter("\"IsDeleted\" = false");
+
                     b.HasIndex("TenantId", "OperationalStatus");
+
+                    b.HasIndex("TenantId", "Vin")
+                        .IsUnique()
+                        .HasFilter("\"Vin\" IS NOT NULL AND \"IsDeleted\" = false");
 
                     b.ToTable("trailers", (string)null);
                 });
@@ -5127,6 +5154,11 @@ namespace TransportationService.Api.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
+                    b.Property<string>("NormalizedLicensePlate")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
                     b.Property<string>("Notes")
                         .HasMaxLength(2000)
                         .HasColumnType("character varying(2000)");
@@ -5213,7 +5245,15 @@ namespace TransportationService.Api.Migrations
                         .IsUnique()
                         .HasFilter("\"IsDeleted\" = false");
 
+                    b.HasIndex("TenantId", "NormalizedLicensePlate")
+                        .IsUnique()
+                        .HasFilter("\"IsDeleted\" = false");
+
                     b.HasIndex("TenantId", "OperationalStatus");
+
+                    b.HasIndex("TenantId", "Vin")
+                        .IsUnique()
+                        .HasFilter("\"Vin\" IS NOT NULL AND \"IsDeleted\" = false");
 
                     b.ToTable("vehicles", (string)null);
                 });
