@@ -226,5 +226,20 @@
     "payload": "{kg} kg payload",
     "crane": "Crane",
     "adr": "ADR"
+  },
+  "replaceVehicle": {
+    "action": "Replace vehicle",
+    "title": "Replace vehicle — {number}",
+    "intro": "The trip stays planned; the new vehicle is fully checked first (deployability, double booking, capacity, equipment).",
+    "vehicle": "New vehicle",
+    "trailer": "Trailer",
+    "reason": "Reason",
+    "confirm": "Replace",
+    "vehicleRequired": "Choose the new vehicle.",
+    "sameVehicle": "Choose a vehicle other than the current one.",
+    "reasonRequired": "Give a reason for the replacement.",
+    "conflictTitle": "Replacement blocked",
+    "failed": "The vehicle could not be replaced.",
+    "done": "Vehicle replaced."
   }
 }

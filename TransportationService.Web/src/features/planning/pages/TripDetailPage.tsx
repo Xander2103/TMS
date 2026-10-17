@@ -58,6 +58,7 @@ import { usePlanningResources, type ResourceListStatus } from '../usePlanningRes
 import './planning.css'
 import { formatDate } from '../../../utils/dates'
 import { ConflictDialog } from '../../planning-center/components/ConflictDialog'
+import { ReplaceVehicleDialog } from '../components/ReplaceVehicleDialog'
 import { RelatedIncidentsNotice } from '../../incidents/components/RelatedIncidentsNotice'
 
 /** Lifecycle steps that move a trip forward; the first allowed one is the primary header action. */
@@ -130,6 +131,8 @@ export function TripDetailPage() {
   const [eta, setEta] = useState<TripEta | null>(null)
   const [etaReload, setEtaReload] = useState(0)
   const [delayOpen, setDelayOpen] = useState(false)
+  /** FL-M13: in-place vehicle replacement on a planned trip. */
+  const [replaceOpen, setReplaceOpen] = useState(false)
   const [delayMinutes, setDelayMinutes] = useState('0')
   const [delayReason, setDelayReason] = useState('')
 
@@ -577,10 +580,15 @@ export function TripDetailPage() {
           />
         </header>
         {!editable && canEditTrip && (trip.status === 'Planned') && (
-          <p className="pl-section-note">
-            {t('planning.detail.editOnBoard')}{' '}
-            <Link to="/planning-center">{t('planning.detail.openBoard')}</Link>
-          </p>
+          <div className="pl-section-note">
+            <p>
+              {t('planning.detail.editOnBoard')}{' '}
+              <Link to={`/planning-center?date=${trip.tripDate}`}>{t('planning.detail.openBoard')}</Link>
+            </p>
+            <Button variant="secondary" onClick={() => setReplaceOpen(true)}>
+              {t('planning.replaceVehicle.action')}
+            </Button>
+          </div>
         )}
         <div className="pl-assign pl-assign-4">
           <FormField label={t('planning.detail.date')} htmlFor="tr-date">
@@ -979,6 +987,21 @@ export function TripDetailPage() {
             void applyTransition('InProgress', false)
           }}
           onCancel={() => setStartWarnings(null)}
+        />
+      )}
+
+      {replaceOpen && (
+        <ReplaceVehicleDialog
+          trip={trip}
+          vehicleOptions={vehicleOptions}
+          trailerOptions={trailerOptions}
+          vehiclesLoading={listStatus.vehicles === 'loading'}
+          onReplaced={(updated) => {
+            applyTrip(updated)
+            setReplaceOpen(false)
+            showSuccess(t('planning.replaceVehicle.done'))
+          }}
+          onClose={() => setReplaceOpen(false)}
         />
       )}
 

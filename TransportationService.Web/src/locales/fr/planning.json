@@ -226,5 +226,20 @@
     "payload": "{kg} kg de charge utile",
     "crane": "Grue",
     "adr": "ADR"
+  },
+  "replaceVehicle": {
+    "action": "Remplacer le véhicule",
+    "title": "Remplacer le véhicule — {number}",
+    "intro": "Le trajet reste planifié ; le nouveau véhicule est d'abord entièrement contrôlé (disponibilité, double réservation, capacité, équipement).",
+    "vehicle": "Nouveau véhicule",
+    "trailer": "Remorque",
+    "reason": "Motif",
+    "confirm": "Remplacer",
+    "vehicleRequired": "Choisissez le nouveau véhicule.",
+    "sameVehicle": "Choisissez un véhicule différent de l'actuel.",
+    "reasonRequired": "Indiquez un motif pour le remplacement.",
+    "conflictTitle": "Remplacement bloqué",
+    "failed": "Le véhicule n'a pas pu être remplacé.",
+    "done": "Véhicule remplacé."
   }
 }

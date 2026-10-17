@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { PageHeader } from '../../../components/layout/PageHeader'
 import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
@@ -34,7 +34,12 @@ export function PlanningPage() {
   const { showError } = useToast()
   const { t } = useLocale()
 
-  const [date, setDate] = useState(todayIso)
+  // FL-M13: links into the trip list may carry ?date=<yyyy-mm-dd>.
+  const [searchParams] = useSearchParams()
+  const [date, setDate] = useState(() => {
+    const requested = searchParams.get('date')
+    return requested && /^\d{4}-\d{2}-\d{2}$/.test(requested) ? requested : todayIso()
+  })
   const [statusFilter, setStatusFilter] = useState<TripStatus | ''>('')
   const [trips, setTrips] = useState<TripListItem[] | null>(null)
   // B20: the operational groups load independently of the chosen day.

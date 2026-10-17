@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { ApiError } from '../../../api/apiClient'
 import { describeApiError } from '../../../api/problemDetails'
 import {
@@ -75,7 +76,12 @@ export function PlanningCenterPage() {
     storeLayout(layout)
   }, [layout])
 
-  const [anchor, setAnchor] = useState(() => toIsoDate(new Date()))
+  // FL-M13: "Planbord openen" from a trip carries ?date=<tripDate>; the board opens on that day.
+  const [searchParams] = useSearchParams()
+  const [anchor, setAnchor] = useState(() => {
+    const requested = searchParams.get('date')
+    return requested && /^\d{4}-\d{2}-\d{2}$/.test(requested) ? requested : toIsoDate(new Date())
+  })
   // The Week view always shows Monday … Sunday, whatever date the planner picked.
   const effectiveAnchor = days === 7 ? startOfWeek(anchor) : anchor
   const dates = useMemo(() => viewDates(effectiveAnchor, days), [effectiveAnchor, days])

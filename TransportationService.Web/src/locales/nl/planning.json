@@ -226,5 +226,20 @@
     "payload": "{kg} kg laadvermogen",
     "crane": "Kraan",
     "adr": "ADR"
+  },
+  "replaceVehicle": {
+    "action": "Voertuig vervangen",
+    "title": "Voertuig vervangen — {number}",
+    "intro": "De rit blijft gepland; het nieuwe voertuig wordt eerst volledig gecontroleerd (inzetbaarheid, dubbele boeking, capaciteit, uitrusting).",
+    "vehicle": "Nieuw voertuig",
+    "trailer": "Oplegger",
+    "reason": "Reden",
+    "confirm": "Vervangen",
+    "vehicleRequired": "Kies het nieuwe voertuig.",
+    "sameVehicle": "Kies een ander voertuig dan het huidige.",
+    "reasonRequired": "Geef een reden op voor de vervanging.",
+    "conflictTitle": "Vervanging geblokkeerd",
+    "failed": "Het voertuig kon niet worden vervangen.",
+    "done": "Voertuig vervangen."
   }
 }

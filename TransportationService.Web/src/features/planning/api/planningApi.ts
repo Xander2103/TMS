@@ -84,6 +84,23 @@ export function changeTripStatus(
   >(`/api/trips/${id}/status`, { status, override, releaseOverride, overrideReason })
 }
 
+export interface ReplaceTripVehicleInput {
+  vehicleId: string
+  trailerId: string | null
+  /** Mandatory: why the planned trip gets another vehicle (audited). */
+  reason: string
+  /** Only with planning.override_restriction, after a 409 with blocking conflicts. */
+  override?: boolean
+}
+
+/**
+ * FL-M13: replaces the vehicle (and optionally the trailer) of a PLANNED trip in place, with the
+ * full conflict check. 409 carries { message, conflicts } when the replacement is blocked.
+ */
+export function replaceTripVehicle(id: string, input: ReplaceTripVehicleInput): Promise<TripDetail> {
+  return apiClient.postJson<TripDetail, ReplaceTripVehicleInput>(`/api/trips/${id}/replace-vehicle`, input)
+}
+
 export function deleteTrip(id: string): Promise<void> {
   return apiClient.deleteRequest(`/api/trips/${id}`)
 }
