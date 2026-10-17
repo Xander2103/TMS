@@ -17,6 +17,8 @@ using TransportationService.Api.Modules.Tenancy.Services;
 using TransportationService.Api.Tests.TestSupport;
 using Xunit;
 
+using TransportationService.Api.Modules.Invoicing.Dtos;
+
 namespace TransportationService.Api.Tests.Peppol;
 
 /// <summary>Phase 12: UBL BIS 3.0 generation, VAT category mapping, credit notes, validation catalog.</summary>
@@ -70,8 +72,10 @@ public class UblGenerationTests
             Street = "Kaai", HouseNumber = "1", PostalCode = "2000", City = "Antwerpen", CountryCode = "BE",
         };
         return new UblDocumentBuilder.UblDocumentInput(
-            invoice, invoiceLines, customer, seller,
-            kind == InvoiceKind.CreditNote ? "2026070001" : null, null);
+            invoice, invoiceLines,
+            UblDocumentBuilder.UblParty.FromInvoiceBuyer(invoice, customer),
+            UblDocumentBuilder.UblParty.FromInvoiceSeller(invoice, seller),
+            kind == InvoiceKind.CreditNote ? "2026070001" : null, null, customer.BuyerReference);
     }
 
     [Theory]
@@ -296,7 +300,7 @@ public class UblGenerationTests
         var (customer, entity) = await SeedPartiesAsync(h);
         var original = await SeedSentInvoiceAsync(h, customer, entity);
 
-        var result = await h.Invoices.CreateCreditNoteAsync(original.Id, CancellationToken.None);
+        var result = await h.Invoices.CreateCreditNoteAsync(original.Id, new CreateCreditNoteRequest("Test creditering"), CancellationToken.None);
 
         Assert.Equal(Modules.Invoicing.Dtos.InvoiceOperationOutcome.Success, result.Outcome);
         var creditNote = result.Invoice!;
@@ -304,7 +308,9 @@ public class UblGenerationTests
         Assert.Equal(original.Id, creditNote.CreditedInvoiceId);
         Assert.Equal(original.InvoiceNumber, creditNote.CreditedInvoiceNumber);
         Assert.Equal(InvoiceStatus.Draft, creditNote.Status);
-        Assert.StartsWith("FCN", creditNote.InvoiceNumber); // CreditNotePrefix null → InvoicePrefix + "CN"
+        // ACC-H3: a draft credit note carries no legal number yet — only its concept reference.
+        Assert.Null(creditNote.InvoiceNumber);
+        Assert.StartsWith("CONCEPT-", creditNote.DisplayNumber);
         var line = Assert.Single(creditNote.Lines);
         Assert.True(line.UnitPrice > 0);
         Assert.True(line.Quantity > 0);
@@ -312,11 +318,11 @@ public class UblGenerationTests
         Assert.Equal("S", line.VatCategoryCode); // copied frozen snapshot
 
         // A second live credit note for the same invoice is refused.
-        var duplicate = await h.Invoices.CreateCreditNoteAsync(original.Id, CancellationToken.None);
+        var duplicate = await h.Invoices.CreateCreditNoteAsync(original.Id, new CreateCreditNoteRequest("Test creditering"), CancellationToken.None);
         Assert.Equal(Modules.Invoicing.Dtos.InvoiceOperationOutcome.InvalidState, duplicate.Outcome);
 
         // A credit note itself can never be credited.
-        var creditOfCredit = await h.Invoices.CreateCreditNoteAsync(creditNote.Id, CancellationToken.None);
+        var creditOfCredit = await h.Invoices.CreateCreditNoteAsync(creditNote.Id, new CreateCreditNoteRequest("Test creditering"), CancellationToken.None);
         Assert.Equal(Modules.Invoicing.Dtos.InvoiceOperationOutcome.InvalidState, creditOfCredit.Outcome);
     }
 
@@ -330,7 +336,7 @@ public class UblGenerationTests
         draft.Status = InvoiceStatus.Draft;
         await h.Db.Context.SaveChangesAsync();
 
-        var result = await h.Invoices.CreateCreditNoteAsync(draft.Id, CancellationToken.None);
+        var result = await h.Invoices.CreateCreditNoteAsync(draft.Id, new CreateCreditNoteRequest("Test creditering"), CancellationToken.None);
 
         Assert.Equal(Modules.Invoicing.Dtos.InvoiceOperationOutcome.InvalidState, result.Outcome);
     }
@@ -344,6 +350,10 @@ public class UblGenerationTests
         var invoice = await SeedSentInvoiceAsync(h, customer, entity,
             VatTreatment.ReverseCharge, vatRate: 0m, frozen: false);
         invoice.Status = InvoiceStatus.Draft;
+        // ACC-H4: the issue step re-snapshots the customer, so the customer must carry the regime.
+        customer.VatTreatment = VatTreatment.ReverseCharge;
+        // ACC-H6: an unclassified line cannot be issued; give it a booked category first.
+        invoice.Lines.Single().SalesCategoryId = await AccountingTestSeed.TransportCategoryAsync(h.Db.Context, h.TenantId);
         await h.Db.Context.SaveChangesAsync();
 
         var result = await h.Invoices.ChangeStatusAsync(invoice.Id, InvoiceStatus.Sent, CancellationToken.None);
@@ -351,6 +361,7 @@ public class UblGenerationTests
         Assert.Equal(Modules.Invoicing.Dtos.InvoiceOperationOutcome.Success, result.Outcome);
         var stored = await h.Db.Context.InvoiceLines.SingleAsync(l => l.InvoiceId == invoice.Id);
         Assert.Equal("AE", stored.VatCategoryCode);
+        Assert.Equal("700000", stored.LedgerAccountNumberSnapshot);
     }
 
     // --- Validation catalog ---
@@ -484,7 +495,7 @@ public class UblGenerationTests
     public void Build_RefusesMissingParticipantIdentity()
     {
         var input = Input();
-        input.Customer.PeppolId = null;
+        input = input with { Customer = input.Customer with { PeppolId = null } };
 
         Assert.Throws<InvalidOperationException>(() => UblDocumentBuilder.Build(input));
     }
@@ -496,17 +507,14 @@ public class UblGenerationTests
         using var _ = h.Db;
         var (customer, entity) = await SeedPartiesAsync(h);
         var original = await SeedSentInvoiceAsync(h, customer, entity);
-        var created = await h.Invoices.CreateCreditNoteAsync(original.Id, CancellationToken.None);
+        var created = await h.Invoices.CreateCreditNoteAsync(original.Id, new CreateCreditNoteRequest("Test creditering"), CancellationToken.None);
         var creditNoteId = created.Invoice!.Id;
-        // Finalize the credit note so validation passes, keeping its copied snapshots.
-        var stored = await h.Db.Context.Invoices.Include(i => i.Lines).SingleAsync(i => i.Id == creditNoteId);
-        stored.Status = InvoiceStatus.Sent;
-        foreach (var line in stored.Lines)
-        {
-            line.LedgerAccountNumberSnapshot = "700000";
-        }
-
-        await h.Db.Context.SaveChangesAsync();
+        // Issue the credit note through the service: the number is assigned here (ACC-H3) and the
+        // line snapshots copied from the credited invoice (VAT category, ledger account) satisfy the
+        // issue preflight without any further classification.
+        var issued = await h.Invoices.ChangeStatusAsync(creditNoteId, InvoiceStatus.Sent, CancellationToken.None);
+        Assert.Equal(Modules.Invoicing.Dtos.InvoiceOperationOutcome.Success, issued.Outcome);
+        Assert.StartsWith("FCN", issued.Invoice!.InvoiceNumber); // CreditNotePrefix null → InvoicePrefix + "CN"
 
         var result = await h.PeppolInvoices.GetXmlAsync(creditNoteId, CancellationToken.None);
 
@@ -514,25 +522,36 @@ public class UblGenerationTests
         Assert.NotNull(result.Value.Xml);
         var xml = XDocument.Parse(result.Value.Xml!);
         Assert.Equal("CreditNote", xml.Root!.Name.LocalName);
+        Assert.Equal(issued.Invoice.InvoiceNumber, xml.Root.Element(Cbc + "ID")!.Value);
         Assert.Equal(original.InvoiceNumber,
             xml.Root.Element(Cac + "BillingReference")!.Element(Cac + "InvoiceDocumentReference")!.Element(Cbc + "ID")!.Value);
     }
 
     [Fact]
-    public async Task CreditNote_SharesMonthlySequenceWithInvoices()
+    public async Task CreditNote_RunsItsOwnSeries_AssignedAtIssue_WithTheCnPrefix()
     {
         var h = await SeedAsync();
         using var _ = h.Db;
         var (customer, entity) = await SeedPartiesAsync(h);
         var original = await SeedSentInvoiceAsync(h, customer, entity);
 
-        var creditNote = (await h.Invoices.CreateCreditNoteAsync(original.Id, CancellationToken.None)).Invoice!;
+        var creditNote = (await h.Invoices.CreateCreditNoteAsync(original.Id, new CreateCreditNoteRequest("Test creditering"), CancellationToken.None)).Invoice!;
 
-        // Same (entity, 2026-07) sequence row advanced; the CN prefix keeps numbers distinct.
-        var sequence = await h.Db.Context.InvoiceSequences.SingleAsync(
-            s => s.LegalEntityId == entity.Id && s.Year == 2026 && s.Month == 7);
+        // Creation claims nothing (ACC-H3): no sequence row exists for either kind yet.
+        Assert.Null(creditNote.InvoiceNumber);
+        Assert.False(await h.Db.Context.InvoiceSequences.AnyAsync(s => s.LegalEntityId == entity.Id));
+
+        var issued = await h.Invoices.ChangeStatusAsync(creditNote.Id, InvoiceStatus.Sent, CancellationToken.None);
+        Assert.Equal(Modules.Invoicing.Dtos.InvoiceOperationOutcome.Success, issued.Outcome);
+
+        // Credit notes run their own (entity, kind, period) counter with the CN prefix; the invoice
+        // series is untouched, so neither document kind can ever leave a gap in the other.
+        var sequence = await h.Db.Context.InvoiceSequences.SingleAsync(s => s.LegalEntityId == entity.Id);
+        Assert.Equal(InvoiceKind.CreditNote, sequence.Kind);
         Assert.Equal(2, sequence.NextValue);
-        Assert.NotEqual(original.InvoiceNumber, creditNote.InvoiceNumber);
+        Assert.StartsWith("FCN", issued.Invoice!.InvoiceNumber);
+        Assert.NotEqual(original.InvoiceNumber, issued.Invoice.InvoiceNumber);
+        Assert.NotNull(issued.Invoice.IssuedAt);
     }
 
     [Fact]
@@ -554,20 +573,25 @@ public class UblGenerationTests
     }
 
     [Fact]
-    public async Task Send_WithoutTreatmentSnapshot_IsRefused()
+    public async Task Send_WithoutTreatmentSnapshot_ReDerivesItFromTheCustomer_AtIssue()
     {
         var h = await SeedAsync();
         using var _ = h.Db;
         var (customer, entity) = await SeedPartiesAsync(h);
-        var invoice = await SeedSentInvoiceAsync(h, customer, entity, frozen: false);
+        var invoice = await SeedSentInvoiceAsync(h, customer, entity);
         invoice.Status = InvoiceStatus.Draft;
         invoice.CustomerVatTreatment = null;
         await h.Db.Context.SaveChangesAsync();
+        h.Db.Context.ChangeTracker.Clear();
 
         var result = await h.Invoices.ChangeStatusAsync(invoice.Id, InvoiceStatus.Sent, CancellationToken.None);
 
-        Assert.Equal(Modules.Invoicing.Dtos.InvoiceOperationOutcome.InvalidState, result.Outcome);
-        Assert.Contains("btw-regeling", result.Error);
+        // ACC-H4: the issue step takes its final snapshot from the customer, so a draft that lost
+        // its treatment is not refused for that — it is frozen with the customer's current regime
+        // (and the ACC-H1 rate check still runs against it).
+        Assert.Equal(Modules.Invoicing.Dtos.InvoiceOperationOutcome.Success, result.Outcome);
+        var stored = await h.Db.Context.Invoices.AsNoTracking().SingleAsync(i => i.Id == invoice.Id);
+        Assert.Equal(VatTreatment.DomesticVat.ToString(), stored.CustomerVatTreatment);
     }
 
     [Fact]

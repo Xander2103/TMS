@@ -193,7 +193,7 @@ public class DieselSurchargeAndPoTests
         // Adding the PO on the draft unblocks sending.
         var updated = await h.Invoices.UpdateAsync(created.Invoice.Id, new UpdateInvoiceRequest(
             created.Invoice.InvoiceDate, created.Invoice.DueDate,
-            [.. created.Invoice.Lines.Select(l => new UpdateInvoiceLineInput(l.Id, l.Description, l.Quantity, l.UnitPrice, l.VatRatePercent))],
+            [.. created.Invoice.Lines.Select(l => new UpdateInvoiceLineInput(l.Id, l.Description, l.Quantity, l.UnitPrice, l.VatRatePercent, l.SalesCategoryId))],
             null, PurchaseOrderNumber: "PO-XYZ"), CancellationToken.None);
         Assert.Equal("PO-XYZ", updated.Invoice!.PurchaseOrderNumber);
         var sent = await h.Invoices.ChangeStatusAsync(created.Invoice.Id, InvoiceStatus.Sent, CancellationToken.None);

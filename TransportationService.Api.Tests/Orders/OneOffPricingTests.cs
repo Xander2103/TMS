@@ -917,7 +917,10 @@ public class OneOffPricingTests
         var created = await h.Sut.CreateAsync(ContractRequest(h.CustomerId, quantity: 3), CancellationToken.None);
         await AddIncompleteStopAsync(h, created.Order!.Id);
 
-        var result = await h.Sut.SetOneOffPriceAsync(created.Order.Id, new SetOneOffPriceRequest(0m, created.Order.Version), CancellationToken.None);
+        // ACC-M1: a bare € 0 is "niet geprijsd", never a price; only the explicit confirmation makes it free.
+        var bare = await h.Sut.SetOneOffPriceAsync(created.Order.Id, new SetOneOffPriceRequest(0m, created.Order.Version), CancellationToken.None);
+        Assert.Equal(TransportOrderOperationOutcome.ValidationFailed, bare.Outcome);
+        var result = await h.Sut.SetOneOffPriceAsync(created.Order.Id, new SetOneOffPriceRequest(0m, created.Order.Version, FreeConfirmed: true), CancellationToken.None);
 
         Assert.Equal(TransportOrderOperationOutcome.Success, result.Outcome);
         Assert.Equal(0m, result.Order!.OneOffFixedAmount);

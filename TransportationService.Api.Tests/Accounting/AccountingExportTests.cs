@@ -120,7 +120,7 @@ public class AccountingExportTests
         using var _ = h.Db;
         var categoryId = await MapCategoryAsync(h, "DIVERS-BINNEN", "700400", "Diverse verkoop binnenland");
         var invoice = await IssueAsync(h, categoryId, new ManualInvoiceLineInput("Transport", 2.5m, 125.33m, 21m, categoryId));
-        var credit = await h.Invoices.CreateCreditNoteAsync(invoice.Id, CancellationToken.None);
+        var credit = await h.Invoices.CreateCreditNoteAsync(invoice.Id, new CreateCreditNoteRequest("Test creditering"), CancellationToken.None);
         await h.Invoices.ChangeStatusAsync(credit.Invoice!.Id, InvoiceStatus.Sent, CancellationToken.None);
 
         var bytes = await h.Export.ExportAsync(new DateOnly(2026, 7, 1), new DateOnly(2026, 7, 31), CancellationToken.None);
@@ -138,7 +138,9 @@ public class AccountingExportTests
         using var _ = h.Db;
         var categoryId = await MapCategoryAsync(h, "DIVERS-BINNEN", "700400", "Diverse verkoop binnenland");
         var complete = await IssueAsync(h, categoryId, new ManualInvoiceLineInput("Compleet", 1m, 100m, 21m, categoryId));
-        var withoutCategory = await IssueAsync(h, categoryId, new ManualInvoiceLineInput("Zonder categorie", 1m, 10m, 21m));
+        // Pre-ACC-H6 shape (issue refuses this today; legacy rows still have it): no category at all.
+        var withoutCategory = await IssueAsync(h, categoryId, new ManualInvoiceLineInput("Zonder categorie", 1m, 10m, 21m, categoryId));
+        await AccountingTestSeed.StripLedgerSnapshotAsync(h.Db.Context, withoutCategory.Id, alsoCategory: true);
 
         var preflight = await h.Export.PreflightAsync(new DateOnly(2026, 7, 1), new DateOnly(2026, 7, 31), CancellationToken.None);
         Assert.False(preflight.CanExport);
@@ -164,8 +166,10 @@ public class AccountingExportTests
     {
         var h = await SeedAsync();
         using var _ = h.Db;
-        var unmapped = (await h.Accounting.ListSalesCategoriesAsync(false, CancellationToken.None)).Single(c => c.Code == "DIVERS-BINNEN").Id;
-        var issued = await IssueAsync(h, unmapped, new ManualInvoiceLineInput("Categorie zonder rekening", 1m, 10m, 21m, unmapped));
+        // Pre-ACC-H6 shape: category known and mapped today, but never frozen on the issued line.
+        var mapped = await MapCategoryAsync(h, "DIVERS-BINNEN", "700400", "Diverse verkoop binnenland");
+        var issued = await IssueAsync(h, mapped, new ManualInvoiceLineInput("Categorie zonder rekening", 1m, 10m, 21m, mapped));
+        await AccountingTestSeed.StripLedgerSnapshotAsync(h.Db.Context, issued.Id);
 
         var preflight = await h.Export.PreflightAsync(new DateOnly(2026, 7, 1), new DateOnly(2026, 7, 31), CancellationToken.None);
         var blocking = Assert.Single(preflight.Invoices);

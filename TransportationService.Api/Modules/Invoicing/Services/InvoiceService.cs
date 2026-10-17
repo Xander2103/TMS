@@ -257,6 +257,7 @@ public class InvoiceService : IInvoiceService
             {
                 o.Id, o.OrderNumber, o.OrderDate, o.GoodsDescription, o.AgreedPrice, o.LegalEntityId,
                 o.InvoiceReadiness, o.InvoiceReadinessReasons,
+                o.PriceIsManual, o.PricingSource, o.OneOffFixedAmount,
                 IsFree = o.FreeConfirmed || (o.PricingSource == OrderPricingSource.OneOff && o.OneOffFixedAmount == 0m) || (o.PriceIsManual && o.AgreedPrice == 0m),
             })
             .ToListAsync(cancellationToken);
@@ -289,8 +290,14 @@ public class InvoiceService : IInvoiceService
                 o.LegalEntityId,
                 o.InvoiceReadiness, o.InvoiceReadinessReasons,
                 o.IsFree,
-                // ACC-B1: only a resolved order (ready, or explicitly free) may be billed.
-                o.InvoiceReadiness == Modules.Orders.Services.InvoiceReadinessEvaluator.ReadyForInvoice || o.IsFree);
+                // ACC-B1: only a resolved order (ready, or explicitly free) may be billed. A completed
+                // order whose readiness projection was never evaluated (still "NotReady" — the
+                // evaluator always yields Ready/ReviewRequired for a completed order) is judged by
+                // its pricing provenance instead, so it is never silently billed at € 0,00 either.
+                o.InvoiceReadiness == Modules.Orders.Services.InvoiceReadinessEvaluator.ReadyForInvoice
+                || o.IsFree
+                || (o.InvoiceReadiness == Modules.Orders.Services.InvoiceReadinessEvaluator.NotReady
+                    && Modules.Orders.Services.OrderPricingState.IsPriced(o.PriceIsManual, o.PricingSource, o.OneOffFixedAmount, o.AgreedPrice)));
         }).ToList();
     }
 

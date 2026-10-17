@@ -83,7 +83,20 @@ public class InvoiceLedgerSnapshotTests
         Assert.Equal("700400", draft.Lines[0].LedgerAccountNumber);
         Assert.Contains("Geen verkoopcategorie gekozen", draft.Lines[1].LedgerWarning);
 
-        // Sending freezes the snapshot from the then-current mapping.
+        // ACC-H6: sending is refused while a line is unclassified — the reason names the line.
+        var refused = await h.Invoices.ChangeStatusAsync(draft.Id, InvoiceStatus.Sent, CancellationToken.None);
+        Assert.Equal(InvoiceOperationOutcome.InvalidState, refused.Outcome);
+        Assert.Contains("Lijn(en) 2 hebben geen verkoopcategorie", refused.Error);
+        var preflight = await h.Invoices.PreflightAsync(draft.Id, CancellationToken.None);
+        Assert.False(preflight!.CanIssue);
+        var issue = Assert.Single(preflight.Issues, i => i.Code == "lines.category_missing");
+        Assert.Equal([draft.Lines[1].Id], issue.LineIds);
+
+        // Classified, sending freezes the snapshot from the then-current mapping.
+        var classified = await h.Invoices.UpdateAsync(draft.Id, new UpdateInvoiceRequest(draft.InvoiceDate, draft.DueDate,
+            [.. draft.Lines.Select(l => new UpdateInvoiceLineInput(l.Id, l.Description, l.Quantity, l.UnitPrice, l.VatRatePercent, categoryId))],
+            null), CancellationToken.None);
+        Assert.Equal(InvoiceOperationOutcome.Success, classified.Outcome);
         var sent = await h.Invoices.ChangeStatusAsync(draft.Id, InvoiceStatus.Sent, CancellationToken.None);
         Assert.Equal(InvoiceOperationOutcome.Success, sent.Outcome);
         var storedLine = await h.Db.Context.InvoiceLines.SingleAsync(l => l.Description == "Verkoop binnenland");
@@ -126,16 +139,19 @@ public class InvoiceLedgerSnapshotTests
             Assert.Equal(200d, sheet.Cell(2, 9).GetDouble()); // netto 2 × 100
         }
 
-        // An invoice sent WITHOUT a frozen account blocks the export by name.
+        // An issued invoice WITHOUT a frozen account (the pre-ACC-H6 shape — issue now refuses
+        // it, see the finalization guard) still blocks the export by name.
         var incomplete = await h.Invoices.CreateAsync(new CreateInvoiceRequest(
-            h.CustomerId, null, [], [new ManualInvoiceLineInput("Zonder mapping", 1m, 10m, 21m)], null),
+            h.CustomerId, null, [], [new ManualInvoiceLineInput("Zonder mapping", 1m, 10m, 21m, categoryId)], null),
             CancellationToken.None);
-        await h.Invoices.ChangeStatusAsync(incomplete.Invoice!.Id, InvoiceStatus.Sent, CancellationToken.None);
+        var incompleteSent = await h.Invoices.ChangeStatusAsync(incomplete.Invoice!.Id, InvoiceStatus.Sent, CancellationToken.None);
+        Assert.Equal(InvoiceOperationOutcome.Success, incompleteSent.Outcome);
+        await AccountingTestSeed.StripLedgerSnapshotAsync(h.Db.Context, incomplete.Invoice.Id, alsoCategory: true);
 
         var ex = await Assert.ThrowsAsync<DomainValidationException>(() =>
             h.Export.ExportAsync(new DateOnly(2026, 7, 1), new DateOnly(2026, 7, 31), CancellationToken.None));
         Assert.Contains("Boekhoudexport geblokkeerd", ex.Message);
-        Assert.Contains(incomplete.Invoice!.InvoiceNumber, ex.Message);
+        Assert.Contains(incompleteSent.Invoice!.InvoiceNumber!, ex.Message);
     }
 
     [Fact]
@@ -143,24 +159,22 @@ public class InvoiceLedgerSnapshotTests
     {
         var h = await SeedAsync();
         using var _ = h.Db;
-        // Sent while the category existed but the MAPPING was still missing.
-        var categories = await h.Accounting.ListSalesCategoriesAsync(false, CancellationToken.None);
-        var category = categories.Single(c => c.Code == "DIVERS-BINNEN");
+        // Issued in the pre-ACC-H6 shape: the category is mapped today, but the line never froze
+        // an account (issue now refuses that; legacy rows still carry it).
+        var categoryId = await MapCategoryAsync(h, "DIVERS-BINNEN", "700400", "Diverse verkoop binnenland");
         var created = await h.Invoices.CreateAsync(new CreateInvoiceRequest(
-            h.CustomerId, null, [], [new ManualInvoiceLineInput("Verkoop binnenland", 1m, 100m, 21m, category.Id)], null),
+            h.CustomerId, null, [], [new ManualInvoiceLineInput("Verkoop binnenland", 1m, 100m, 21m, categoryId)], null),
             CancellationToken.None);
-        await h.Invoices.ChangeStatusAsync(created.Invoice!.Id, InvoiceStatus.Sent, CancellationToken.None);
+        Assert.Equal(InvoiceOperationOutcome.Success,
+            (await h.Invoices.ChangeStatusAsync(created.Invoice!.Id, InvoiceStatus.Sent, CancellationToken.None)).Outcome);
+        await AccountingTestSeed.StripLedgerSnapshotAsync(h.Db.Context, created.Invoice.Id);
 
         // Export is blocked and points at the fix.
         var ex = await Assert.ThrowsAsync<DomainValidationException>(() =>
             h.Export.ExportAsync(new DateOnly(2026, 7, 1), new DateOnly(2026, 7, 31), CancellationToken.None));
         Assert.Contains("Boekhoudsnapshot aanvullen", ex.Message);
 
-        // Map the category, run the remediation → snapshots filled, export unblocked.
-        var account = await h.Accounting.CreateLedgerAccountAsync(
-            new SaveLedgerAccountRequest("700400", "Diverse verkoop binnenland"), CancellationToken.None);
-        await h.Accounting.UpdateSalesCategoryAsync(category.Id, new SaveSalesCategoryRequest(
-            category.Code, category.Name, category.SystemRole, account.Id, true, category.SortOrder), CancellationToken.None);
+        // Run the remediation → snapshots filled from the mapping, export unblocked.
         var completed = await h.Invoices.CompleteLedgerSnapshotsAsync(created.Invoice.Id, CancellationToken.None);
         Assert.Equal(InvoiceOperationOutcome.Success, completed.Outcome);
         Assert.Equal("700400", completed.Invoice!.Lines[0].LedgerAccountNumber);
@@ -170,7 +184,7 @@ public class InvoiceLedgerSnapshotTests
 
         // Draft invoices are refused by the remediation endpoint.
         var draft = await h.Invoices.CreateAsync(new CreateInvoiceRequest(
-            h.CustomerId, null, [], [new ManualInvoiceLineInput("Concept", 1m, 10m, 21m, category.Id)], null),
+            h.CustomerId, null, [], [new ManualInvoiceLineInput("Concept", 1m, 10m, 21m, categoryId)], null),
             CancellationToken.None);
         var refused = await h.Invoices.CompleteLedgerSnapshotsAsync(draft.Invoice!.Id, CancellationToken.None);
         Assert.Equal(InvoiceOperationOutcome.InvalidState, refused.Outcome);

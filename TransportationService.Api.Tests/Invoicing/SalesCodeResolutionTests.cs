@@ -194,12 +194,13 @@ public class SalesCodeResolutionTests
         var h = await SeedAsync();
         using var _ = h.Db;
         var exportId = await CreateCategoryAsync(h, "EXPORT", "Export buiten EU", vatCategoryOverride: "G");
+        var plainId = await CreateCategoryAsync(h, "DIVERS", "Diverse verkoop"); // classified (ACC-H6), no override
 
         var created = await h.Invoices.CreateAsync(new CreateInvoiceRequest(
             h.CustomerId, null, [],
             [
                 new ManualInvoiceLineInput("Exportzending", 1m, 100m, 0m, exportId),
-                new ManualInvoiceLineInput("Zonder override", 1m, 50m, 21m),
+                new ManualInvoiceLineInput("Zonder override", 1m, 50m, 21m, plainId),
             ], null), CancellationToken.None);
         Assert.Equal(InvoiceOperationOutcome.Success, created.Outcome);
 

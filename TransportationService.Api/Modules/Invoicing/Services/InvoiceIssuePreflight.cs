@@ -67,13 +67,23 @@ public static class InvoiceIssuePreflight
         var lineOrderIds = lines.Where(l => l.TransportOrderId is not null).Select(l => l.TransportOrderId!.Value).Distinct().ToList();
         var orders = lineOrderIds.Count == 0
             ? new Dictionary<Guid, OrderFacts>()
-            : await db.TransportOrders.AsNoTracking()
+            : (await db.TransportOrders.AsNoTracking()
                 .Where(o => o.TenantId == tenantId && lineOrderIds.Contains(o.Id))
-                .Select(o => new OrderFacts(o.Id, o.OrderNumber, o.LegalEntityId, o.AgreedPrice,
+                .Select(o => new
+                {
+                    o.Id, o.OrderNumber, o.LegalEntityId, o.AgreedPrice, o.InvoiceReadiness, o.Status,
                     // ACC-M1: explicitly free = the flag, or the pre-existing intentional-zero shapes (one-off 0 / override 0).
-                    o.FreeConfirmed || (o.PricingSource == OrderPricingSource.OneOff && o.OneOffFixedAmount == 0m) || (o.PriceIsManual && o.AgreedPrice == 0m),
-                    o.InvoiceReadiness, o.Status))
-                .ToDictionaryAsync(o => o.Id, cancellationToken);
+                    Free = o.FreeConfirmed || (o.PricingSource == OrderPricingSource.OneOff && o.OneOffFixedAmount == 0m) || (o.PriceIsManual && o.AgreedPrice == 0m),
+                    o.PriceIsManual, o.PricingSource, o.OneOffFixedAmount,
+                })
+                .ToListAsync(cancellationToken))
+                .ToDictionary(o => o.Id, o => new OrderFacts(o.Id, o.OrderNumber, o.LegalEntityId, o.AgreedPrice, o.Free, o.InvoiceReadiness, o.Status,
+                    // Resolved = ready for invoicing, or explicitly free. A completed order whose readiness
+                    // projection was never evaluated ("NotReady" never describes a completed order) is
+                    // judged by its pricing provenance instead — the same rule the invoice builder applies.
+                    Resolved: o.InvoiceReadiness == InvoiceReadinessEvaluator.ReadyForInvoice || o.Free
+                              || (o.InvoiceReadiness == InvoiceReadinessEvaluator.NotReady
+                                  && OrderPricingState.IsPriced(o.PriceIsManual, o.PricingSource, o.OneOffFixedAmount, o.AgreedPrice))));
 
         var mismatched = orders.Values
             .Where(o => o.LegalEntityId != null && o.LegalEntityId != invoice.LegalEntityId)
@@ -112,7 +122,7 @@ public static class InvoiceIssuePreflight
         // can never leave the building as € 0,00.
         var unpricedOrderLines = lines
             .Where(l => l.TransportOrderId is { } oid && orders.TryGetValue(oid, out var o)
-                        && o.InvoiceReadiness != InvoiceReadinessEvaluator.ReadyForInvoice && !o.FreeConfirmed
+                        && !o.Resolved
                         // An already-issued line (re-run on a Sent document) keeps its facts; only drafts are judged.
                         && invoice.Status == InvoiceStatus.Draft)
             .ToList();
@@ -178,8 +188,11 @@ public static class InvoiceIssuePreflight
                     .Where(c => c.TenantId == tenantId && categoryIds.Contains(c.Id))
                     .ToDictionaryAsync(c => c.Id, cancellationToken);
             var info = VatTreatmentCatalog.Resolve(t);
+            // A MIRRORED credit-note line is a frozen copy of the credited document (H-06): its VAT,
+            // category and ledger are the credited invoice's truth and are never re-judged here.
+            var ownLines = lines.Where(l => !InvoiceLineMirror.IsMirrored(invoice, l)).ToList();
             var mismatches = new List<(InvoiceLine Line, string Why)>();
-            foreach (var line in lines)
+            foreach (var line in ownLines)
             {
                 var category = line.SalesCategoryId is { } cid ? categories.GetValueOrDefault(cid) : null;
                 var lineOverride = Enum.TryParse<VatTreatment>(line.VatTreatmentOverride, out var o) ? (VatTreatment?)o : null;
@@ -196,9 +209,12 @@ public static class InvoiceIssuePreflight
                 }
                 else if (resolution.Treatment == VatTreatment.DomesticVat)
                 {
-                    if (line.VatRatePercent == 0m && resolution.VatCategoryCode == "S")
+                    // The exact ACC-H1 defect: 0% under domestic VAT without any exemption. The
+                    // catalogue derives "Z" for ANY domestic 0% line, so the exemption must be
+                    // declared on the sales code itself (a zero-rated or exempt category override).
+                    var declaredExemption = category?.VatCategoryOverride?.Trim().ToUpperInvariant() is "Z" or "E";
+                    if (line.VatRatePercent == 0m && !declaredExemption)
                     {
-                        // The exact ACC-H1 defect: 0% under domestic VAT without any exemption.
                         mismatches.Add((line, "0% btw onder de binnenlandse btw-regeling zonder vrijstelling"));
                     }
                     else if (!info.AllowsCustomRate && !info.StandardRates.Contains(line.VatRatePercent))
@@ -216,7 +232,9 @@ public static class InvoiceIssuePreflight
             }
 
             // --- ACC-H6: accounting classification must be complete BEFORE issue. ---
-            var noCategory = lines.Where(l => l.SalesCategoryId is null).ToList();
+            // A line that already carries a frozen ledger account (a mirrored credit-note line, or a
+            // legacy line classified before categories existed) is booked and exported as-is.
+            var noCategory = ownLines.Where(l => l.SalesCategoryId is null && l.LedgerAccountNumberSnapshot is null).ToList();
             if (noCategory.Count > 0)
             {
                 Add(CategoryMissing,
@@ -224,11 +242,17 @@ public static class InvoiceIssuePreflight
                     noCategory);
             }
 
-            var noLedger = lines
-                .Where(l => l.SalesCategoryId is { } cid && categories.TryGetValue(cid, out var c)
-                            && Modules.Accounting.Services.InvoiceLineFiscalResolver.LedgerFor(c, invoice.LegalEntityId).LedgerAccountId is null
-                            && l.LedgerAccountNumberSnapshot is null)
-                .ToList();
+            // The ledger account is demanded as soon as the tenant has configured accounting at all
+            // (any ledger account on file); a tenant that never set up its chart of accounts keeps
+            // issuing, and the accounting export's own guard still refuses the document until it is.
+            var accountingConfigured = await db.LedgerAccounts.AnyAsync(a => a.TenantId == tenantId && a.IsActive, cancellationToken);
+            var noLedger = accountingConfigured
+                ? ownLines
+                    .Where(l => l.SalesCategoryId is { } cid && categories.TryGetValue(cid, out var c)
+                                && Modules.Accounting.Services.InvoiceLineFiscalResolver.LedgerFor(c, invoice.LegalEntityId).LedgerAccountId is null
+                                && l.LedgerAccountNumberSnapshot is null)
+                    .ToList()
+                : [];
             if (noLedger.Count > 0)
             {
                 var names = noLedger.Select(l => categories[l.SalesCategoryId!.Value].Name).Distinct();
@@ -251,7 +275,8 @@ public static class InvoiceIssuePreflight
     private static string Sequences(IEnumerable<InvoiceLine> lines) => string.Join(", ", lines.Select(l => l.Sequence));
 
     private sealed record OrderFacts(
-        Guid Id, string OrderNumber, Guid? LegalEntityId, decimal? AgreedPrice, bool FreeConfirmed, string InvoiceReadiness, TransportOrderStatus Status);
+        Guid Id, string OrderNumber, Guid? LegalEntityId, decimal? AgreedPrice, bool FreeConfirmed, string InvoiceReadiness, TransportOrderStatus Status,
+        bool Resolved);
 
     private static async Task<bool> IsFreeActivityAsync(TransportationDbContext db, Guid tenantId, Guid activityId, CancellationToken cancellationToken)
     {

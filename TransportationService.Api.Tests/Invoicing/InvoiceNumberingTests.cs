@@ -12,12 +12,16 @@ using TransportationService.Api.Tests.TestSupport;
 
 namespace TransportationService.Api.Tests.Invoicing;
 
-/// <summary>Entity-scoped monthly invoice numbering (business-feedback wave).</summary>
+/// <summary>
+/// Entity-scoped monthly invoice numbering (business-feedback wave), assigned AT ISSUE (ACC-H3):
+/// a draft carries only its concept reference, the legal number is claimed atomically when the
+/// invoice is sent, so cancelled or deleted drafts never consume a number and the series has no gaps.
+/// </summary>
 public class InvoiceNumberingTests
 {
     private static readonly DateTimeOffset Now = new(2026, 08, 12, 12, 0, 0, TimeSpan.Zero); // August: July is "previous month"
 
-    private sealed record Harness(SqliteTestDbContext Db, InvoiceService Sut, Guid TenantId, Guid CustomerId, LegalEntity Entity, LegalEntity SecondEntity);
+    private sealed record Harness(SqliteTestDbContext Db, InvoiceService Sut, Guid TenantId, Guid CustomerId, LegalEntity Entity, LegalEntity SecondEntity, Guid CategoryId);
 
     private static async Task<Harness> SeedAsync()
     {
@@ -41,6 +45,7 @@ public class InvoiceNumberingTests
         };
         db.Context.LegalEntities.AddRange(entity, secondEntity);
         await db.Context.SaveChangesAsync();
+        var categoryId = await AccountingTestSeed.TransportCategoryAsync(db.Context, tenantId);
 
         var tenant = new DevTenantContext(tenantId);
         var sut = new InvoiceService(db.Context, tenant,
@@ -48,45 +53,67 @@ public class InvoiceNumberingTests
             new InvoiceNumberService(db.Context, tenant),
             new TransportationService.Api.Modules.Partners.Services.CustomerBillingConfigService(db.Context, tenant, new AuditService(db.Context, tenant, new DevCurrentUserContext(null)), new TestClock(Now)),
             new TransportationService.Api.Modules.Accounting.Services.AccountingService(db.Context, tenant, new AuditService(db.Context, tenant, new DevCurrentUserContext(null))));
-        return new Harness(db, sut, tenantId, customerId, entity, secondEntity);
+        return new Harness(db, sut, tenantId, customerId, entity, secondEntity, categoryId);
     }
 
     private static CreateInvoiceRequest Request(Harness h, Guid? entityId = null, int? year = null, int? month = null) => new(
-        h.CustomerId, null, [], [new ManualInvoiceLineInput("Transport", 1m, 100m, 21m)], null,
+        h.CustomerId, null, [], [new ManualInvoiceLineInput("Transport", 1m, 100m, 21m, h.CategoryId)], null,
         entityId, year, month);
 
-    [Fact]
-    public async Task Create_UsesDefaultEntity_AndMonthPrefixedNumber()
+    private static async Task<InvoiceDetailDto> CreateAsync(Harness h, Guid? entityId = null, int? year = null, int? month = null)
     {
-        var h = await SeedAsync();
-        using var _ = h.Db;
-
-        var result = await h.Sut.CreateAsync(Request(h), CancellationToken.None);
-
+        var result = await h.Sut.CreateAsync(Request(h, entityId, year, month), CancellationToken.None);
         Assert.Equal(InvoiceOperationOutcome.Success, result.Outcome);
-        Assert.Equal("2026080001", result.Invoice!.InvoiceNumber);
-        Assert.Equal(h.Entity.Id, result.Invoice.LegalEntityId);
-        Assert.Equal(2026, result.Invoice.InvoicePeriodYear);
-        Assert.Equal(8, result.Invoice.InvoicePeriodMonth);
+        return result.Invoice!;
+    }
+
+    private static async Task<InvoiceDetailDto> IssueAsync(Harness h, Guid invoiceId)
+    {
+        var result = await h.Sut.ChangeStatusAsync(invoiceId, InvoiceStatus.Sent, CancellationToken.None);
+        Assert.Equal(InvoiceOperationOutcome.Success, result.Outcome);
+        return result.Invoice!;
     }
 
     [Fact]
-    public async Task Create_SequencesArePerEntityAndPerMonth()
+    public async Task Create_AssignsNoNumber_Issue_AssignsTheMonthPrefixedNumber_OfTheDefaultEntity()
     {
         var h = await SeedAsync();
         using var _ = h.Db;
 
-        var a1 = await h.Sut.CreateAsync(Request(h), CancellationToken.None);
-        var a2 = await h.Sut.CreateAsync(Request(h), CancellationToken.None);
-        var july = await h.Sut.CreateAsync(Request(h, year: 2026, month: 7), CancellationToken.None);
-        var other = await h.Sut.CreateAsync(Request(h, entityId: h.SecondEntity.Id), CancellationToken.None);
+        var draft = await CreateAsync(h);
 
-        Assert.Equal("2026080001", a1.Invoice!.InvoiceNumber);
-        Assert.Equal("2026080002", a2.Invoice!.InvoiceNumber);
+        // A draft is a concept: no legal number, only a reference derived from its id.
+        Assert.Null(draft.InvoiceNumber);
+        Assert.StartsWith("CONCEPT-", draft.DisplayNumber);
+        Assert.Equal(h.Entity.Id, draft.LegalEntityId);
+        Assert.Equal(2026, draft.InvoicePeriodYear);
+        Assert.Equal(8, draft.InvoicePeriodMonth);
+        Assert.Null(draft.IssuedAt);
+
+        var issued = await IssueAsync(h, draft.Id);
+
+        Assert.Equal("2026080001", issued.InvoiceNumber);
+        Assert.Equal("2026080001", issued.DisplayNumber);
+        Assert.NotNull(issued.IssuedAt);
+    }
+
+    [Fact]
+    public async Task Issue_SequencesArePerEntityAndPerMonth()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+
+        var a1 = await CreateAsync(h);
+        var a2 = await CreateAsync(h);
+        var july = await CreateAsync(h, year: 2026, month: 7);
+        var other = await CreateAsync(h, entityId: h.SecondEntity.Id);
+
+        Assert.Equal("2026080001", (await IssueAsync(h, a1.Id)).InvoiceNumber);
+        Assert.Equal("2026080002", (await IssueAsync(h, a2.Id)).InvoiceNumber);
         // Previous-month invoicing gets the July sequence, independent of August.
-        Assert.Equal("2026070001", july.Invoice!.InvoiceNumber);
+        Assert.Equal("2026070001", (await IssueAsync(h, july.Id)).InvoiceNumber);
         // The second entity runs its own sequence and format.
-        Assert.Equal("LOG2608-001", other.Invoice!.InvoiceNumber);
+        Assert.Equal("LOG2608-001", (await IssueAsync(h, other.Id)).InvoiceNumber);
     }
 
     [Fact]
@@ -117,25 +144,28 @@ public class InvoiceNumberingTests
     }
 
     [Fact]
-    public async Task Update_PeriodChange_ReissuesNumber_InNewPeriod_AndNeverReusesOldOne()
+    public async Task Update_PeriodChange_OnADraft_ClaimsNothing_TheNumberFollowsThePeriodAtIssue()
     {
         var h = await SeedAsync();
         using var _ = h.Db;
-        var created = await h.Sut.CreateAsync(Request(h), CancellationToken.None);
-        Assert.Equal("2026080001", created.Invoice!.InvoiceNumber);
+        var created = await CreateAsync(h);
+        Assert.Null(created.InvoiceNumber);
 
-        var updated = await h.Sut.UpdateAsync(created.Invoice.Id, new UpdateInvoiceRequest(
-            created.Invoice.InvoiceDate, created.Invoice.DueDate,
-            [.. created.Invoice.Lines.Select(l => new UpdateInvoiceLineInput(l.Id, l.Description, l.Quantity, l.UnitPrice, l.VatRatePercent))],
+        var updated = await h.Sut.UpdateAsync(created.Id, new UpdateInvoiceRequest(
+            created.InvoiceDate, created.DueDate,
+            [.. created.Lines.Select(l => new UpdateInvoiceLineInput(l.Id, l.Description, l.Quantity, l.UnitPrice, l.VatRatePercent, l.SalesCategoryId))],
             null, 2026, 7), CancellationToken.None);
 
         Assert.Equal(InvoiceOperationOutcome.Success, updated.Outcome);
-        Assert.Equal("2026070001", updated.Invoice!.InvoiceNumber);
+        Assert.Null(updated.Invoice!.InvoiceNumber);
         Assert.Equal(7, updated.Invoice.InvoicePeriodMonth);
+        Assert.False(await h.Db.Context.InvoiceSequences.AnyAsync());
 
-        // A new August invoice continues after the abandoned number: 0001 was consumed.
-        var next = await h.Sut.CreateAsync(Request(h), CancellationToken.None);
-        Assert.Equal("2026080002", next.Invoice!.InvoiceNumber);
+        // Issued in July: the July series. The abandoned August draft period consumed nothing, so
+        // the next August invoice is still 0001 — no gap.
+        Assert.Equal("2026070001", (await IssueAsync(h, created.Id)).InvoiceNumber);
+        var next = await CreateAsync(h);
+        Assert.Equal("2026080001", (await IssueAsync(h, next.Id)).InvoiceNumber);
     }
 
     [Fact]
@@ -143,17 +173,17 @@ public class InvoiceNumberingTests
     {
         var h = await SeedAsync();
         using var _ = h.Db;
-        var first = await h.Sut.CreateAsync(Request(h), CancellationToken.None);
-        Assert.Equal("2026080001", first.Invoice!.InvoiceNumber);
+        var first = await CreateAsync(h);
+        Assert.Equal("2026080001", (await IssueAsync(h, first.Id)).InvoiceNumber);
 
         // A "concurrent" request advances the sequence behind the tracked entity's back.
         await h.Db.Context.Database.ExecuteSqlRawAsync(
             "UPDATE invoice_sequences SET \"NextValue\" = 9");
 
-        var second = await h.Sut.CreateAsync(Request(h), CancellationToken.None);
+        var second = await CreateAsync(h);
+        var issued = await IssueAsync(h, second.Id);
 
-        Assert.Equal(InvoiceOperationOutcome.Success, second.Outcome);
-        Assert.Equal("2026080009", second.Invoice!.InvoiceNumber);
+        Assert.Equal("2026080009", issued.InvoiceNumber);
         var storedNext = await h.Db.Context.InvoiceSequences
             .Where(s => s.LegalEntityId == h.Entity.Id && s.Month == 8)
             .Select(s => s.NextValue).FirstAsync();
@@ -161,36 +191,43 @@ public class InvoiceNumberingTests
     }
 
     [Fact]
-    public async Task CancelAndDelete_NeverReleaseNumbers()
+    public async Task DraftCancelAndDelete_ConsumeNoNumber_AndTheSeriesHasNoGaps()
     {
         var h = await SeedAsync();
         using var _ = h.Db;
-        var first = await h.Sut.CreateAsync(Request(h), CancellationToken.None);
-        await h.Sut.ChangeStatusAsync(first.Invoice!.Id, InvoiceStatus.Cancelled, CancellationToken.None);
-        await h.Sut.DeleteAsync(first.Invoice.Id, CancellationToken.None);
+        var abandoned = await CreateAsync(h);
+        await h.Sut.ChangeStatusAsync(abandoned.Id, InvoiceStatus.Cancelled, CancellationToken.None);
+        await h.Sut.DeleteAsync(abandoned.Id, CancellationToken.None);
 
-        var next = await h.Sut.CreateAsync(Request(h), CancellationToken.None);
+        // Nothing was claimed by the draft: the first issued invoice of the month is 0001.
+        var first = await CreateAsync(h);
+        Assert.Equal("2026080001", (await IssueAsync(h, first.Id)).InvoiceNumber);
+        var second = await CreateAsync(h);
+        Assert.Equal("2026080002", (await IssueAsync(h, second.Id)).InvoiceNumber);
 
-        Assert.Equal("2026080002", next.Invoice!.InvoiceNumber);
+        // An issued number is final: the series only moves forward.
+        var sequence = await h.Db.Context.InvoiceSequences.SingleAsync(s => s.LegalEntityId == h.Entity.Id);
+        Assert.Equal(3, sequence.NextValue);
+        Assert.Equal(InvoiceKind.Invoice, sequence.Kind);
     }
 
     [Fact]
-    public async Task OverrideNumber_RequiresReason_BlocksDuplicates_AndAudits()
+    public async Task OverrideNumber_RequiresReason_BlocksDuplicates_AndAudits_AndIsKeptAtIssue()
     {
         var h = await SeedAsync();
         using var _ = h.Db;
-        var first = await h.Sut.CreateAsync(Request(h), CancellationToken.None);
-        var second = await h.Sut.CreateAsync(Request(h), CancellationToken.None);
+        var first = await IssueAsync(h, (await CreateAsync(h)).Id);
+        var second = await CreateAsync(h);
 
-        var noReason = await h.Sut.OverrideNumberAsync(second.Invoice!.Id,
+        var noReason = await h.Sut.OverrideNumberAsync(second.Id,
             new OverrideInvoiceNumberRequest("2026089999", " "), CancellationToken.None);
         Assert.Equal(InvoiceOperationOutcome.ValidationFailed, noReason.Outcome);
 
-        var duplicate = await h.Sut.OverrideNumberAsync(second.Invoice.Id,
-            new OverrideInvoiceNumberRequest(first.Invoice!.InvoiceNumber, "correctie"), CancellationToken.None);
+        var duplicate = await h.Sut.OverrideNumberAsync(second.Id,
+            new OverrideInvoiceNumberRequest(first.InvoiceNumber!, "correctie"), CancellationToken.None);
         Assert.Equal(InvoiceOperationOutcome.ValidationFailed, duplicate.Outcome);
 
-        var ok = await h.Sut.OverrideNumberAsync(second.Invoice.Id,
+        var ok = await h.Sut.OverrideNumberAsync(second.Id,
             new OverrideInvoiceNumberRequest("2026089999", "correctie boekhouding"), CancellationToken.None);
         Assert.Equal(InvoiceOperationOutcome.Success, ok.Outcome);
         Assert.Equal("2026089999", ok.Invoice!.InvoiceNumber);
@@ -201,6 +238,11 @@ public class InvoiceNumberingTests
             .ToListAsync();
         Assert.Single(audit);
         Assert.Contains("correctie boekhouding", audit[0].NewValuesJson);
+
+        // The manual number survives the issue step; the series is not advanced for it.
+        Assert.Equal("2026089999", (await IssueAsync(h, second.Id)).InvoiceNumber);
+        var sequence = await h.Db.Context.InvoiceSequences.SingleAsync(s => s.LegalEntityId == h.Entity.Id);
+        Assert.Equal(2, sequence.NextValue);
     }
 
     [Fact]
@@ -208,17 +250,16 @@ public class InvoiceNumberingTests
     {
         var h = await SeedAsync();
         using var _ = h.Db;
-        var first = await h.Sut.CreateAsync(Request(h), CancellationToken.None);
-        await h.Sut.ChangeStatusAsync(first.Invoice!.Id, InvoiceStatus.Sent, CancellationToken.None);
+        var first = await IssueAsync(h, (await CreateAsync(h)).Id);
 
-        var result = await h.Sut.OverrideNumberAsync(first.Invoice.Id,
+        var result = await h.Sut.OverrideNumberAsync(first.Id,
             new OverrideInvoiceNumberRequest("X-1", "reden"), CancellationToken.None);
 
         Assert.Equal(InvoiceOperationOutcome.InvalidState, result.Outcome);
     }
 
     [Fact]
-    public async Task Preview_ShowsNextNumber_WithoutClaiming()
+    public async Task Preview_ShowsNextNumber_WithoutClaiming_DraftsDoNotMoveIt()
     {
         var h = await SeedAsync();
         using var _ = h.Db;
@@ -230,8 +271,13 @@ public class InvoiceNumberingTests
         var preview2 = await h.Sut.PreviewNextNumberAsync(null, 2026, 8, CancellationToken.None);
         Assert.Equal("2026080001", preview2!.InvoiceNumber);
 
-        await h.Sut.CreateAsync(Request(h), CancellationToken.None);
+        // A draft claims nothing either; only the issue step moves the series.
+        var draft = await CreateAsync(h);
         var preview3 = await h.Sut.PreviewNextNumberAsync(h.Entity.Id, 2026, 8, CancellationToken.None);
-        Assert.Equal("2026080002", preview3!.InvoiceNumber);
+        Assert.Equal("2026080001", preview3!.InvoiceNumber);
+
+        await IssueAsync(h, draft.Id);
+        var preview4 = await h.Sut.PreviewNextNumberAsync(h.Entity.Id, 2026, 8, CancellationToken.None);
+        Assert.Equal("2026080002", preview4!.InvoiceNumber);
     }
 }

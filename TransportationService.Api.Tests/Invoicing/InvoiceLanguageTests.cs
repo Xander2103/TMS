@@ -25,7 +25,7 @@ public class InvoiceLanguageTests
 {
     private static readonly DateTimeOffset Now = new(2026, 08, 12, 12, 0, 0, TimeSpan.Zero);
 
-    private sealed record Harness(SqliteTestDbContext Db, InvoiceService Invoices, Guid TenantId, Guid CustomerId);
+    private sealed record Harness(SqliteTestDbContext Db, InvoiceService Invoices, Guid TenantId, Guid CustomerId, Guid CategoryId);
 
     private static async Task<Harness> SeedAsync(string? invoiceLanguage, string? defaultLanguage)
     {
@@ -44,19 +44,19 @@ public class InvoiceLanguageTests
             InvoiceLanguageCode = invoiceLanguage, DefaultLanguageCode = defaultLanguage,
         });
         await db.Context.SaveChangesAsync();
-
+        var categoryId = await AccountingTestSeed.TransportCategoryAsync(db.Context, tenantId);
         var tenant = new DevTenantContext(tenantId);
         var audit = new AuditService(db.Context, tenant, new DevCurrentUserContext(null));
         var invoices = new InvoiceService(db.Context, tenant, audit, new TestClock(Now),
             new InvoiceNumberService(db.Context, tenant),
             new CustomerBillingConfigService(db.Context, tenant, audit, new TestClock(Now)),
             new Modules.Accounting.Services.AccountingService(db.Context, tenant, audit));
-        return new Harness(db, invoices, tenantId, customerId);
+        return new Harness(db, invoices, tenantId, customerId, categoryId);
     }
 
     private static Task<InvoiceOperationResult> CreateAsync(Harness h) =>
         h.Invoices.CreateAsync(new CreateInvoiceRequest(
-            h.CustomerId, null, [], [new ManualInvoiceLineInput("Prestation", 1m, 100m, 21m)], null),
+            h.CustomerId, null, [], [new ManualInvoiceLineInput("Prestation", 1m, 100m, 21m, h.CategoryId)], null),
             CancellationToken.None);
 
     [Theory]
@@ -89,7 +89,7 @@ public class InvoiceLanguageTests
         customer.InvoiceLanguageCode = "en";
         await h.Db.Context.SaveChangesAsync();
 
-        var credit = await h.Invoices.CreateCreditNoteAsync(created.Invoice!.Id, CancellationToken.None);
+        var credit = await h.Invoices.CreateCreditNoteAsync(created.Invoice!.Id, new CreateCreditNoteRequest("Test creditering"), CancellationToken.None);
         Assert.Equal(InvoiceOperationOutcome.Success, credit.Outcome);
         var stored = await h.Db.Context.Invoices.SingleAsync(i => i.Id == credit.Invoice!.Id);
         Assert.Equal("fr", stored.LanguageCode);

@@ -3187,6 +3187,20 @@ public class TransportOrderService : ITransportOrderService
                 .AnyAsync(t => t.TenantId == order.TenantId && t.Id == linkedActivity.ActivityTypeId
                                && t.HasStops && t.SupportsOnSiteWork, cancellationToken);
 
+        // ACC-M12: the documents this order is on (live first), so operations can jump to accounting.
+        var invoiceLinks = await _dbContext.InvoiceLines.AsNoTracking()
+            .Where(l => l.TenantId == order.TenantId && l.TransportOrderId == order.Id)
+            .Join(_dbContext.Invoices.AsNoTracking().Where(i => i.TenantId == order.TenantId),
+                l => l.InvoiceId, i => i.Id, (l, i) => new { i.Id, i.InvoiceNumber, i.Status, i.Kind, i.InvoiceDate })
+            .Distinct()
+            .OrderByDescending(i => i.InvoiceDate)
+            .ToListAsync(cancellationToken);
+        var invoices = invoiceLinks
+            .OrderBy(i => i.Status == Modules.Invoicing.Entities.InvoiceStatus.Cancelled ? 1 : 0).ThenByDescending(i => i.InvoiceDate)
+            .Select(i => new InvoiceLinkDto(i.Id, i.InvoiceNumber,
+                i.InvoiceNumber ?? "CONCEPT-" + i.Id.ToString("N")[..8].ToUpperInvariant(), i.Status.ToString(), i.Kind.ToString()))
+            .ToList();
+
         return new TransportOrderDetailDto(
             order.Id, order.OrderNumber, order.OrderDate, order.CustomerId, customerName,
             order.CustomerReference, order.Status, order.GoodsDescription,
@@ -3213,7 +3227,8 @@ public class TransportOrderService : ITransportOrderService
             order.CraneJobKind, order.WorkDescription,
             order.LiftLoadWeightKg, order.LiftLoadDimensions, order.LiftRadiusMeters, order.LiftHeightMeters,
             order.LiftConditions, order.LiftEquipment,
-            linkedActivity?.Id, linkedActivity?.ActivityTypeId, linkedActivity?.DurationHours, activitySupportsOnSiteWork);
+            linkedActivity?.Id, linkedActivity?.ActivityTypeId, linkedActivity?.DurationHours, activitySupportsOnSiteWork,
+            Invoices: invoices);
     }
 
     /// <summary>

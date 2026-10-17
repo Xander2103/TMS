@@ -415,6 +415,33 @@ public partial class DossierService : IDossierService
         // Step 13: price carriers per unit — the order's snapshot status for transport activities,
         // the activity's own record for standalone ones.
         var orderIds = orderRows.Select(o => o.Id).ToList();
+        // ACC-M12: the live invoice each component is on (order-backed through its order, standalone
+        // through the activity line); cancelled documents do not count as "invoiced".
+        var componentActivityIds = activityRows.Select(a => a.Id).ToList();
+        var dossierInvoiceLines = await _dbContext.InvoiceLines.AsNoTracking()
+            .Where(l => l.TenantId == tenantId && (l.TransportOrderId != null || l.DossierActivityId != null))
+            .Join(_dbContext.Invoices.AsNoTracking().Where(i => i.TenantId == tenantId),
+                l => l.InvoiceId, i => i.Id, (l, i) => new { l.TransportOrderId, l.DossierActivityId, i.Id, i.InvoiceNumber, i.Status, i.Kind })
+            .Where(x => (x.TransportOrderId != null && orderIds.Contains(x.TransportOrderId.Value))
+                        || (x.DossierActivityId != null && componentActivityIds.Contains(x.DossierActivityId.Value)))
+            .ToListAsync(cancellationToken);
+        var liveInvoiceByOrder = dossierInvoiceLines
+            .Where(x => x.TransportOrderId != null && x.Kind == Modules.Invoicing.Entities.InvoiceKind.Invoice && x.Status != Modules.Invoicing.Entities.InvoiceStatus.Cancelled)
+            .GroupBy(x => x.TransportOrderId!.Value)
+            .ToDictionary(g => g.Key, g => new ComponentInvoiceRef(g.First().Id, g.First().InvoiceNumber, g.First().Status));
+        var liveInvoiceByActivity = dossierInvoiceLines
+            .Where(x => x.DossierActivityId != null && x.Kind == Modules.Invoicing.Entities.InvoiceKind.Invoice && x.Status != Modules.Invoicing.Entities.InvoiceStatus.Cancelled)
+            .GroupBy(x => x.DossierActivityId!.Value)
+            .ToDictionary(g => g.Key, g => new ComponentInvoiceRef(g.First().Id, g.First().InvoiceNumber, g.First().Status));
+        ComponentInvoiceRef? ComponentInvoice(Guid activityId, Guid? linkedOrderId) =>
+            linkedOrderId is { } oid && liveInvoiceByOrder.TryGetValue(oid, out var byOrder) ? byOrder
+            : liveInvoiceByActivity.TryGetValue(activityId, out var byActivity) ? byActivity : null;
+        var dossierInvoices = dossierInvoiceLines
+            .Select(x => new { x.Id, x.InvoiceNumber, x.Status, x.Kind })
+            .Distinct()
+            .Select(x => new Modules.Orders.Dtos.InvoiceLinkDto(x.Id, x.InvoiceNumber, ComponentInvoiceRef.DisplayNumberOf(x.InvoiceNumber, x.Id), x.Status.ToString(), x.Kind.ToString()))
+            .OrderBy(x => x.Status == "Cancelled" ? 1 : 0).ThenBy(x => x.DisplayNumber)
+            .ToList();
         var snapshotByOrder = orderIds.Count == 0
             ? []
             : await _dbContext.TransportOrderPricingSnapshots.AsNoTracking()
@@ -581,7 +608,11 @@ public partial class DossierService : IDossierService
                     CompletedByName: standalone && a.CompletedByUserId is { } cid ? completerNames.GetValueOrDefault(cid) : null,
                     CancelledAt: standalone ? a.CancelledAt : null,
                     CancellationReason: standalone ? a.CancellationReason : null,
-                    CountsForPricing: a.IsBillable && !cancelled);
+                    CountsForPricing: a.IsBillable && !cancelled,
+                    InvoiceId: ComponentInvoice(a.Id, a.LinkedTransportOrderId)?.Id,
+                    InvoiceNumber: ComponentInvoice(a.Id, a.LinkedTransportOrderId)?.InvoiceNumber,
+                    InvoiceDisplayNumber: ComponentInvoice(a.Id, a.LinkedTransportOrderId)?.DisplayNumber,
+                    InvoiceStatus: ComponentInvoice(a.Id, a.LinkedTransportOrderId)?.Status.ToString());
                 return (Dto: dto, IsZero: isZero);
             })
             .ToList();
@@ -636,7 +667,8 @@ public partial class DossierService : IDossierService
             CancelledAt: dossier.CancelledAt,
             CancellationReason: dossier.CancellationReason,
             IssuedDocumentCount: issuedDocumentCount,
-            PodCount: podCount);
+            PodCount: podCount,
+            Invoices: dossierInvoices);
     }
 
     /// <summary>
@@ -1247,4 +1279,11 @@ public partial class DossierService : IDossierService
     }
 
     private static string? Trim(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    /// <summary>ACC-M12: one component's live invoice (id, number or draft reference, status).</summary>
+    private sealed record ComponentInvoiceRef(Guid Id, string? InvoiceNumber, Modules.Invoicing.Entities.InvoiceStatus Status)
+    {
+        public string DisplayNumber => DisplayNumberOf(InvoiceNumber, Id);
+        public static string DisplayNumberOf(string? number, Guid id) => number ?? "CONCEPT-" + id.ToString("N")[..8].ToUpperInvariant();
+    }
 }

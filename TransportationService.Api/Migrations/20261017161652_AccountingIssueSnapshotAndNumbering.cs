@@ -152,6 +152,16 @@ namespace TransportationService.Api.Migrations
                 nullable: false,
                 defaultValue: 0);
 
+            // ACC-H5: existing documents carry the term their due date was computed with, so the
+            // PDF's payment-terms line and later due-date recalculations start from the real term
+            // instead of a meaningless 0 (credit notes keep 0: nothing is payable on them).
+            migrationBuilder.Sql(
+                """
+                UPDATE invoices
+                SET "PaymentTermDays" = GREATEST(0, "DueDate" - "InvoiceDate")
+                WHERE "Kind" <> 'CreditNote' AND "DueDate" >= "InvoiceDate";
+                """);
+
             migrationBuilder.AddColumn<string>(
                 name: "SellerBic",
                 table: "invoices",

@@ -20,7 +20,7 @@ public class InvoiceEntityAndAttachmentTests
     private static readonly DateTimeOffset Now = new(2026, 07, 18, 12, 0, 0, TimeSpan.Zero);
 
     private sealed record Harness(SqliteTestDbContext Db, InvoiceService Invoices, InvoiceAttachmentService Attachments,
-        Guid TenantId, Guid CustomerId, LegalEntity DefaultEntity, LegalEntity CustomerEntity);
+        Guid TenantId, Guid CustomerId, LegalEntity DefaultEntity, LegalEntity CustomerEntity, Guid CategoryId);
 
     private static async Task<Harness> SeedAsync()
     {
@@ -49,7 +49,7 @@ public class InvoiceEntityAndAttachmentTests
             DefaultLegalEntityId = customerEntity.Id,
         });
         await db.Context.SaveChangesAsync();
-
+        var categoryId = await AccountingTestSeed.TransportCategoryAsync(db.Context, tenantId);
         var tenant = new DevTenantContext(tenantId);
         var audit = new AuditService(db.Context, tenant, new DevCurrentUserContext(null));
         var invoices = new InvoiceService(db.Context, tenant, audit, new TestClock(Now),
@@ -58,11 +58,11 @@ public class InvoiceEntityAndAttachmentTests
             new TransportationService.Api.Modules.Accounting.Services.AccountingService(db.Context, tenant, audit));
         var storageRoot = Path.Combine(Path.GetTempPath(), "ts-tests", Guid.NewGuid().ToString("N"));
         var attachments = new InvoiceAttachmentService(db.Context, tenant, audit, new LocalFileStorageService(storageRoot));
-        return new Harness(db, invoices, attachments, tenantId, customerId, defaultEntity, customerEntity);
+        return new Harness(db, invoices, attachments, tenantId, customerId, defaultEntity, customerEntity, categoryId);
     }
 
     private static CreateInvoiceRequest Request(Harness h, Guid? entityId = null) => new(
-        h.CustomerId, null, [], [new ManualInvoiceLineInput("Transport", 1m, 100m, 21m)], null, entityId);
+        h.CustomerId, null, [], [new ManualInvoiceLineInput("Transport", 1m, 100m, 21m, h.CategoryId)], null, entityId);
 
     [Fact]
     public async Task Create_InheritsCustomerDefaultEntity_AndSnapshotsSellerData()

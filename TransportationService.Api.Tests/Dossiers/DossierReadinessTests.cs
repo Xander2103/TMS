@@ -264,13 +264,16 @@ public class DossierReadinessTests
         Assert.Contains(engineZero, i => i.Code == "pricing.missing" && i.TransportOrderId == order.Id && i.ActivityId == activityId);
         Assert.DoesNotContain(engineZero, i => i.Code == "pricing.zero");
 
-        // One-off agreement at € 0 through the real command: priced AND settled — an order has
-        // no separate "free" confirmation (the one-off command at 0 IS the decision), so the
-        // dossier reads Free and pricing.zero is purely informational (pricing UX sprint 2026-10-08).
+        // One-off agreement at € 0 through the real command: priced AND settled only with the
+        // explicit "gratis" confirmation (ACC-M1, same semantics as activities) — a bare € 0 is
+        // refused so an unpriced order never passes as free. Confirmed, the dossier reads Free and
+        // pricing.zero is purely informational (pricing UX sprint 2026-10-08).
         var tenant = new DevTenantContext(h.TenantId);
         var orders = new TransportOrderService(h.Db.Context, tenant,
             new AuditService(h.Db.Context, tenant, new DevCurrentUserContext(null)), new TestClock(Now));
-        var oneOff = await orders.SetOneOffPriceAsync(order.Id, new SetOneOffPriceRequest(0m, order.Version), CancellationToken.None);
+        var bareZero = await orders.SetOneOffPriceAsync(order.Id, new SetOneOffPriceRequest(0m, order.Version), CancellationToken.None);
+        Assert.Equal(TransportOrderOperationOutcome.ValidationFailed, bareZero.Outcome);
+        var oneOff = await orders.SetOneOffPriceAsync(order.Id, new SetOneOffPriceRequest(0m, order.Version, FreeConfirmed: true), CancellationToken.None);
         Assert.Equal(TransportOrderOperationOutcome.Success, oneOff.Outcome);
         var oneOffIssues = await readiness.EvaluateAsync(dossier.Id, CancellationToken.None);
         var zero = Assert.Single(oneOffIssues, i => i.Code == "pricing.zero");

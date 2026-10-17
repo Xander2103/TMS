@@ -326,7 +326,7 @@ public class InvoiceFinalizationGuardTests
         await h.Accounting.UpdateSalesCategoryAsync(category.Id, new SaveSalesCategoryRequest(
             category.Code, category.Name, category.SystemRole, newAccount.Id, true, category.SortOrder), CancellationToken.None);
 
-        var credit = await h.Sut.CreateCreditNoteAsync(created.Invoice.Id, CancellationToken.None);
+        var credit = await h.Sut.CreateCreditNoteAsync(created.Invoice.Id, new CreateCreditNoteRequest("Test creditering"), CancellationToken.None);
         Assert.Equal(InvoiceOperationOutcome.Success, credit.Outcome);
         var sentCredit = await h.Sut.ChangeStatusAsync(credit.Invoice!.Id, InvoiceStatus.Sent, CancellationToken.None);
         Assert.Equal(InvoiceOperationOutcome.Success, sentCredit.Outcome);
@@ -369,7 +369,7 @@ public class InvoiceFinalizationGuardTests
             new CreateInvoiceRequest(h.CustomerId, null, [h.OrderId], [], null), CancellationToken.None);
         await h.Sut.ChangeStatusAsync(created.Invoice!.Id, InvoiceStatus.Sent, CancellationToken.None);
 
-        var credit = await h.Sut.CreateCreditNoteAsync(created.Invoice.Id, CancellationToken.None);
+        var credit = await h.Sut.CreateCreditNoteAsync(created.Invoice.Id, new CreateCreditNoteRequest("Test creditering"), CancellationToken.None);
 
         Assert.Equal(InvoiceOperationOutcome.Success, credit.Outcome);
         Assert.Equal(InvoiceKind.CreditNote, credit.Invoice!.Kind);
@@ -379,7 +379,7 @@ public class InvoiceFinalizationGuardTests
         Assert.Equal(OrderPricingStatus.Invoiced,
             (await h.Db.Context.TransportOrderPricingSnapshots.FindAsync(snapshotId))!.Status);
 
-        var second = await h.Sut.CreateCreditNoteAsync(created.Invoice.Id, CancellationToken.None);
+        var second = await h.Sut.CreateCreditNoteAsync(created.Invoice.Id, new CreateCreditNoteRequest("Test creditering"), CancellationToken.None);
         Assert.Equal(InvoiceOperationOutcome.InvalidState, second.Outcome);
     }
 
@@ -395,24 +395,21 @@ public class InvoiceFinalizationGuardTests
     {
         var h = await SeedAsync();
         using var _ = h.Db;
-        // Sent while the category existed but the MAPPING was still missing.
-        var category = (await h.Accounting.ListSalesCategoriesAsync(false, CancellationToken.None))
-            .Single(c => c.Code == "DIVERS-BINNEN");
+        // A document issued before ACC-H6 enforced classification at issue: the category is known
+        // but no ledger account was ever frozen on the line (the shape such legacy rows have).
+        var categoryId = await MapDiversBinnenAsync(h, "700400", "Diverse verkoop binnenland");
         var created = await h.Sut.CreateAsync(new CreateInvoiceRequest(
-            h.CustomerId, null, [], [new ManualInvoiceLineInput("Verkoop binnenland", 1m, 100m, 21m, category.Id)], null),
+            h.CustomerId, null, [], [new ManualInvoiceLineInput("Verkoop binnenland", 1m, 100m, 21m, categoryId)], null),
             CancellationToken.None);
-        await h.Sut.ChangeStatusAsync(created.Invoice!.Id, InvoiceStatus.Sent, CancellationToken.None);
+        Assert.Equal(InvoiceOperationOutcome.Success,
+            (await h.Sut.ChangeStatusAsync(created.Invoice!.Id, InvoiceStatus.Sent, CancellationToken.None)).Outcome);
+        await AccountingTestSeed.StripLedgerSnapshotAsync(h.Db.Context, created.Invoice.Id);
         var originalLine = await h.Db.Context.InvoiceLines.SingleAsync(l => l.InvoiceId == created.Invoice.Id);
         Assert.Null(originalLine.LedgerAccountNumberSnapshot);
         Assert.NotNull(originalLine.VatTreatmentSnapshot);
 
-        // The category gets its account only AFTER the invoice went out.
-        var account = await h.Accounting.CreateLedgerAccountAsync(
-            new SaveLedgerAccountRequest("700400", "Diverse verkoop binnenland"), CancellationToken.None);
-        await h.Accounting.UpdateSalesCategoryAsync(category.Id, new SaveSalesCategoryRequest(
-            category.Code, category.Name, category.SystemRole, account.Id, true, category.SortOrder), CancellationToken.None);
-
-        var credit = await h.Sut.CreateCreditNoteAsync(created.Invoice.Id, CancellationToken.None);
+        // The category HAS its account today — but the credited line never carried it.
+        var credit = await h.Sut.CreateCreditNoteAsync(created.Invoice.Id, new CreateCreditNoteRequest("Test creditering"), CancellationToken.None);
         var sentCredit = await h.Sut.ChangeStatusAsync(credit.Invoice!.Id, InvoiceStatus.Sent, CancellationToken.None);
         Assert.Equal(InvoiceOperationOutcome.Success, sentCredit.Outcome);
 
@@ -444,7 +441,7 @@ public class InvoiceFinalizationGuardTests
             h.CustomerId, null, [], [new ManualInvoiceLineInput("Verkoop binnenland", 1m, 100m, 21m, category.Id)], null),
             CancellationToken.None);
         await h.Sut.ChangeStatusAsync(created.Invoice!.Id, InvoiceStatus.Sent, CancellationToken.None);
-        var credit = await h.Sut.CreateCreditNoteAsync(created.Invoice.Id, CancellationToken.None);
+        var credit = await h.Sut.CreateCreditNoteAsync(created.Invoice.Id, new CreateCreditNoteRequest("Test creditering"), CancellationToken.None);
         var mirrored = credit.Invoice!.Lines.Single();
 
         var updated = await h.Sut.UpdateAsync(credit.Invoice.Id, new UpdateInvoiceRequest(
@@ -521,7 +518,7 @@ public class InvoiceFinalizationGuardTests
 
         await ReclassifyCodeAsReverseChargeAsync(h, categoryId);
 
-        var credit = await h.Sut.CreateCreditNoteAsync(created.Invoice.Id, CancellationToken.None);
+        var credit = await h.Sut.CreateCreditNoteAsync(created.Invoice.Id, new CreateCreditNoteRequest("Test creditering"), CancellationToken.None);
         Assert.Equal(InvoiceOperationOutcome.Success, credit.Outcome);
         // The draft view already shows the mirror, not today's live mapping.
         Assert.Equal("700400", credit.Invoice!.Lines.Single().LedgerAccountNumber);
@@ -572,7 +569,7 @@ public class InvoiceFinalizationGuardTests
 
         await ReclassifyCodeAsReverseChargeAsync(h, categoryId);
 
-        var credit = await h.Sut.CreateCreditNoteAsync(created.Invoice.Id, CancellationToken.None);
+        var credit = await h.Sut.CreateCreditNoteAsync(created.Invoice.Id, new CreateCreditNoteRequest("Test creditering"), CancellationToken.None);
         await h.Sut.ChangeStatusAsync(credit.Invoice!.Id, InvoiceStatus.Sent, CancellationToken.None);
 
         var creditLine = await h.Db.Context.InvoiceLines.SingleAsync(l => l.InvoiceId == credit.Invoice.Id);
@@ -599,7 +596,7 @@ public class InvoiceFinalizationGuardTests
         originalLine.VatTreatmentSnapshot = null;
         await h.Db.Context.SaveChangesAsync();
 
-        var credit = await h.Sut.CreateCreditNoteAsync(created.Invoice.Id, CancellationToken.None);
+        var credit = await h.Sut.CreateCreditNoteAsync(created.Invoice.Id, new CreateCreditNoteRequest("Test creditering"), CancellationToken.None);
         var mirrored = credit.Invoice!.Lines.Single();
 
         var refused = await h.Sut.UpdateAsync(credit.Invoice.Id, new UpdateInvoiceRequest(
@@ -629,7 +626,7 @@ public class InvoiceFinalizationGuardTests
             h.CustomerId, null, [], [new ManualInvoiceLineInput("Verkoop binnenland", 1m, 100m, 21m, category.Id)], null),
             CancellationToken.None);
         await h.Sut.ChangeStatusAsync(created.Invoice!.Id, InvoiceStatus.Sent, CancellationToken.None);
-        var credit = await h.Sut.CreateCreditNoteAsync(created.Invoice.Id, CancellationToken.None);
+        var credit = await h.Sut.CreateCreditNoteAsync(created.Invoice.Id, new CreateCreditNoteRequest("Test creditering"), CancellationToken.None);
         var mirrored = credit.Invoice!.Lines.Single();
 
         var refused = await h.Sut.UpdateAsync(credit.Invoice.Id, new UpdateInvoiceRequest(
@@ -693,26 +690,25 @@ public class InvoiceFinalizationGuardTests
         var h = await SeedAsync();
         using var _ = h.Db;
         var export = new AccountingExportService(h.Db.Context, new DevTenantContext(h.TenantId));
-        var category = (await h.Accounting.ListSalesCategoriesAsync(false, CancellationToken.None))
-            .Single(c => c.Code == "DIVERS-BINNEN");
 
-        // Sent while the sales code had no ledger account at all.
+        // Both documents in the pre-ACC-H6 shape: issued, category known, no frozen ledger account.
+        var categoryId = await MapDiversBinnenAsync(h, "700400", "Diverse verkoop binnenland");
         var created = await h.Sut.CreateAsync(new CreateInvoiceRequest(
-            h.CustomerId, null, [], [new ManualInvoiceLineInput("Verkoop binnenland", 1m, 100m, 21m, category.Id)], null),
+            h.CustomerId, null, [], [new ManualInvoiceLineInput("Verkoop binnenland", 1m, 100m, 21m, categoryId)], null),
             CancellationToken.None);
-        await h.Sut.ChangeStatusAsync(created.Invoice!.Id, InvoiceStatus.Sent, CancellationToken.None);
-        var credit = await h.Sut.CreateCreditNoteAsync(created.Invoice.Id, CancellationToken.None);
-        await h.Sut.ChangeStatusAsync(credit.Invoice!.Id, InvoiceStatus.Sent, CancellationToken.None);
+        Assert.Equal(InvoiceOperationOutcome.Success,
+            (await h.Sut.ChangeStatusAsync(created.Invoice!.Id, InvoiceStatus.Sent, CancellationToken.None)).Outcome);
+        await AccountingTestSeed.StripLedgerSnapshotAsync(h.Db.Context, created.Invoice.Id);
+        var credit = await h.Sut.CreateCreditNoteAsync(created.Invoice.Id, new CreateCreditNoteRequest("Test creditering"), CancellationToken.None);
+        Assert.Equal(InvoiceOperationOutcome.Success,
+            (await h.Sut.ChangeStatusAsync(credit.Invoice!.Id, InvoiceStatus.Sent, CancellationToken.None)).Outcome);
+        await AccountingTestSeed.StripLedgerSnapshotAsync(h.Db.Context, credit.Invoice.Id);
 
         var window = (From: new DateOnly(2026, 8, 1), To: new DateOnly(2026, 8, 31));
         await Assert.ThrowsAsync<TransportationService.Api.Common.DomainValidationException>(
             () => export.ExportAsync(window.From, window.To, CancellationToken.None));
 
-        // The bookkeeper configures the mapping and completes the ORIGINAL…
-        var account = await h.Accounting.CreateLedgerAccountAsync(
-            new SaveLedgerAccountRequest("700400", "Diverse verkoop binnenland"), CancellationToken.None);
-        await h.Accounting.UpdateSalesCategoryAsync(category.Id, new SaveSalesCategoryRequest(
-            category.Code, category.Name, category.SystemRole, account.Id, true, category.SortOrder), CancellationToken.None);
+        // The bookkeeper completes the ORIGINAL from today's mapping…
         await h.Sut.CompleteLedgerSnapshotsAsync(created.Invoice.Id, CancellationToken.None);
         // …and then the credit note, which copies from the line it credits.
         var completed = await h.Sut.CompleteLedgerSnapshotsAsync(credit.Invoice.Id, CancellationToken.None);
@@ -742,19 +738,18 @@ public class InvoiceFinalizationGuardTests
     {
         var h = await SeedAsync();
         using var _ = h.Db;
-        var category = (await h.Accounting.ListSalesCategoriesAsync(false, CancellationToken.None))
-            .Single(c => c.Code == "DIVERS-BINNEN");
+        // Both documents in the pre-ACC-H6 shape: issued, category known, no frozen ledger account.
+        var categoryId = await MapDiversBinnenAsync(h, "700400", "Diverse verkoop binnenland");
         var created = await h.Sut.CreateAsync(new CreateInvoiceRequest(
-            h.CustomerId, null, [], [new ManualInvoiceLineInput("Verkoop binnenland", 1m, 100m, 21m, category.Id)], null),
+            h.CustomerId, null, [], [new ManualInvoiceLineInput("Verkoop binnenland", 1m, 100m, 21m, categoryId)], null),
             CancellationToken.None);
-        await h.Sut.ChangeStatusAsync(created.Invoice!.Id, InvoiceStatus.Sent, CancellationToken.None);
-        var credit = await h.Sut.CreateCreditNoteAsync(created.Invoice.Id, CancellationToken.None);
-        await h.Sut.ChangeStatusAsync(credit.Invoice!.Id, InvoiceStatus.Sent, CancellationToken.None);
-
-        var account = await h.Accounting.CreateLedgerAccountAsync(
-            new SaveLedgerAccountRequest("700400", "Diverse verkoop binnenland"), CancellationToken.None);
-        await h.Accounting.UpdateSalesCategoryAsync(category.Id, new SaveSalesCategoryRequest(
-            category.Code, category.Name, category.SystemRole, account.Id, true, category.SortOrder), CancellationToken.None);
+        Assert.Equal(InvoiceOperationOutcome.Success,
+            (await h.Sut.ChangeStatusAsync(created.Invoice!.Id, InvoiceStatus.Sent, CancellationToken.None)).Outcome);
+        await AccountingTestSeed.StripLedgerSnapshotAsync(h.Db.Context, created.Invoice.Id);
+        var credit = await h.Sut.CreateCreditNoteAsync(created.Invoice.Id, new CreateCreditNoteRequest("Test creditering"), CancellationToken.None);
+        Assert.Equal(InvoiceOperationOutcome.Success,
+            (await h.Sut.ChangeStatusAsync(credit.Invoice!.Id, InvoiceStatus.Sent, CancellationToken.None)).Outcome);
+        await AccountingTestSeed.StripLedgerSnapshotAsync(h.Db.Context, credit.Invoice.Id);
 
         // Completing ONLY the credit note must not invent an account the original never used.
         await h.Sut.CompleteLedgerSnapshotsAsync(credit.Invoice.Id, CancellationToken.None);

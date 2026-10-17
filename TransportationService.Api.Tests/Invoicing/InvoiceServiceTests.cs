@@ -59,7 +59,9 @@ public class InvoiceServiceTests
             new CreateInvoiceRequest(h.CustomerId, null, [h.OrderId], [], null), CancellationToken.None);
 
         Assert.Equal(InvoiceOperationOutcome.Success, result.Outcome);
-        Assert.Equal("FAC-0001", result.Invoice!.InvoiceNumber);
+        // ACC-H3: a draft has no legal number; the legacy tenant series assigns it at issue.
+        Assert.Null(result.Invoice!.InvoiceNumber);
+        Assert.StartsWith("CONCEPT-", result.Invoice.DisplayNumber);
         Assert.Equal(new DateOnly(2026, 8, 17), result.Invoice.DueDate); // +30 dagen betalingstermijn
         var line = Assert.Single(result.Invoice.Lines);
         Assert.StartsWith("ORD-0001", line.Description);
@@ -69,6 +71,11 @@ public class InvoiceServiceTests
         Assert.Equal(304.5m, result.Invoice.VatAmount);
         Assert.Equal(1754.5m, result.Invoice.Total);
         Assert.Equal(TransportOrderStatus.Invoiced, (await h.Db.Context.TransportOrders.FindAsync(h.OrderId))!.Status);
+
+        var issued = await h.Sut.ChangeStatusAsync(result.Invoice.Id, InvoiceStatus.Sent, CancellationToken.None);
+        Assert.Equal(InvoiceOperationOutcome.Success, issued.Outcome);
+        Assert.Equal("FAC-0001", issued.Invoice!.InvoiceNumber);
+        Assert.Equal("FAC-0001", issued.Invoice.DisplayNumber);
     }
 
     /// <summary>Spec ch. 24-26: invoice generation is the only path that sets a pricing snapshot to Invoiced.</summary>
@@ -331,7 +338,8 @@ public class InvoiceServiceTests
         var result = await h.Sut.SearchAsync(null, null, null, PageRequest.Of(1, 25), CancellationToken.None);
 
         var single = Assert.Single(result.Items);
-        Assert.Equal("FAC-0001", single.InvoiceNumber);
+        Assert.Null(single.InvoiceNumber); // still a draft: no legal number yet (ACC-H3)
+        Assert.StartsWith("CONCEPT-", single.DisplayNumber);
         Assert.Equal(1754.5m, single.Total);
     }
 

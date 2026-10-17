@@ -93,14 +93,16 @@ public class InvoiceFiscalSnapshotTests
             CancellationToken.None);
         var invoiceId = created.Invoice!.Id;
 
-        // A line carrying the sales code, still holding the code's own default text.
+        // A line carrying the sales code, still holding the code's own default text, at the rate
+        // the invoice's treatment dictates (ACC-H1 refuses a contradicting rate at issue).
         // Added through the DbSet with an explicit InvoiceId: adding to a tracked navigation
         // makes EF classify the brand-new line as Modified.
         h.Db.Context.Set<InvoiceLine>().Add(new InvoiceLine
         {
             Id = Guid.NewGuid(), TenantId = h.TenantId, InvoiceId = invoiceId,
             Sequence = 99, Description = "Administratieve kost", Quantity = 1m, UnitPrice = 25m,
-            VatRatePercent = 21m, SalesCategoryId = salesCategoryId,
+            VatRatePercent = created.Invoice.Lines.Count > 0 ? created.Invoice.Lines[0].VatRatePercent : 21m,
+            SalesCategoryId = salesCategoryId,
         });
         await h.Db.Context.SaveChangesAsync();
 
