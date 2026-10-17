@@ -18,10 +18,12 @@ public interface IPortalInvoiceService
 }
 
 /// <summary>
-/// Customer-facing invoice list/detail/PDF/attachments — own customer only, Draft invoices
-/// never surface (a Draft is an internal working document, not yet a real invoice to the
-/// customer). PeppolStatus shows the newest transmission's progress; internal failure
-/// states are deliberately hidden from customers.
+/// Customer-facing invoice list/detail/PDF/attachments — own customer only. Visibility is an
+/// explicit allow-list (<see cref="IsCustomerVisible"/>): only ISSUED documents (Sent/Paid
+/// invoices and credit notes) exist for the customer. Drafts, cancelled drafts and deleted
+/// drafts are internal working documents and answer 404 — never a 403 that would confirm
+/// they exist (ACC-H2). PeppolStatus shows the newest transmission's progress; internal
+/// failure states are deliberately hidden from customers.
 /// </summary>
 public class PortalInvoiceService : IPortalInvoiceService
 {
@@ -72,6 +74,10 @@ public class PortalInvoiceService : IPortalInvoiceService
             });
     }
 
+    /// <summary>The customer only ever sees issued documents: Sent or Paid, invoice or credit note.</summary>
+    public static bool IsCustomerVisible(InvoiceStatus status) =>
+        status is InvoiceStatus.Sent or InvoiceStatus.Paid;
+
     private async Task<Guid?> MyCustomerIdAsync(CancellationToken cancellationToken)
     {
         if (_currentUserContext.CurrentUserId is not { } userId)
@@ -92,7 +98,7 @@ public class PortalInvoiceService : IPortalInvoiceService
         }
 
         var page = await _invoiceService.SearchAsync(null, null, customerId, PageRequest.Of(1, 200), cancellationToken);
-        var visible = page.Items.Where(i => i.Status != InvoiceStatus.Draft).ToList();
+        var visible = page.Items.Where(i => IsCustomerVisible(i.Status)).ToList();
         var peppolStatuses = await LatestPeppolStatusesAsync(visible.Select(i => i.Id).ToList(), cancellationToken);
         var items = visible
             .Select(i => new PortalInvoiceListItemDto(
@@ -111,7 +117,7 @@ public class PortalInvoiceService : IPortalInvoiceService
         }
 
         var invoice = await _invoiceService.GetByIdAsync(invoiceId, cancellationToken);
-        if (invoice is null || invoice.CustomerId != customerId || invoice.Status == InvoiceStatus.Draft)
+        if (invoice is null || invoice.CustomerId != customerId || !IsCustomerVisible(invoice.Status))
         {
             return PortalResult<PortalInvoiceDetailDto>.NotFound();
         }
@@ -140,7 +146,7 @@ public class PortalInvoiceService : IPortalInvoiceService
         }
 
         var invoice = await _invoiceService.GetByIdAsync(invoiceId, cancellationToken);
-        if (invoice is null || invoice.CustomerId != customerId || invoice.Status == InvoiceStatus.Draft)
+        if (invoice is null || invoice.CustomerId != customerId || !IsCustomerVisible(invoice.Status))
         {
             return PortalResult<PortalFileDto>.NotFound();
         }
@@ -161,7 +167,7 @@ public class PortalInvoiceService : IPortalInvoiceService
         }
 
         var invoice = await _invoiceService.GetByIdAsync(invoiceId, cancellationToken);
-        if (invoice is null || invoice.CustomerId != customerId || invoice.Status == InvoiceStatus.Draft)
+        if (invoice is null || invoice.CustomerId != customerId || !IsCustomerVisible(invoice.Status))
         {
             return PortalResult<PortalFileDto>.NotFound();
         }

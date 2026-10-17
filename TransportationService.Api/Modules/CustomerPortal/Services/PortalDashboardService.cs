@@ -105,7 +105,8 @@ public class PortalDashboardService : IPortalDashboardService
 
         var invoicePage = await _invoiceService.SearchAsync(null, null, id, PageRequest.Of(1, 50), cancellationToken);
         var recentInvoices = invoicePage.Items
-            .Where(i => i.Status != InvoiceStatus.Draft)
+            // ACC-H2: the same allow-list as the invoice pages — issued documents only.
+            .Where(i => PortalInvoiceService.IsCustomerVisible(i.Status))
             .OrderByDescending(i => i.InvoiceDate)
             .Take(5)
             .Select(i => new PortalRecentInvoiceDto(i.Id, i.InvoiceNumber, i.InvoiceDate, i.Status, i.Total))

@@ -43,14 +43,14 @@ public class PortalInvoiceServiceTests
             CustomerId = customerId, IsActive = true,
         });
 
-        void AddInvoice(Guid id, Guid customer, string number, InvoiceStatus status)
+        void AddInvoice(Guid id, Guid customer, string number, InvoiceStatus status, InvoiceKind kind = InvoiceKind.Invoice)
         {
             db.Context.Invoices.Add(new Invoice
             {
                 Id = id, TenantId = tenantId, CustomerId = customer, InvoiceNumber = number,
                 InvoicePeriodYear = 2026, InvoicePeriodMonth = 7,
                 InvoiceDate = new DateOnly(2026, 7, 30), DueDate = new DateOnly(2026, 8, 29),
-                Status = status, Currency = "EUR",
+                Status = status, Currency = "EUR", Kind = kind,
                 SellerName = "Acme Transport BV", SellerVatNumber = "BE0123456789", SellerIban = "BE68539007547034",
             });
             db.Context.InvoiceLines.Add(new InvoiceLine
@@ -66,6 +66,9 @@ public class PortalInvoiceServiceTests
         AddInvoice(draftId, customerId, "2026070001", InvoiceStatus.Draft);
         AddInvoice(sentId, customerId, "2026070002", InvoiceStatus.Sent);
         AddInvoice(otherCustomerInvoiceId, otherCustomerId, "2026070003", InvoiceStatus.Sent);
+        // ACC-H2: a draft cancelled before issue and an issued credit note of the own customer.
+        AddInvoice(Guid.NewGuid(), customerId, "2026070004", InvoiceStatus.Cancelled);
+        AddInvoice(Guid.NewGuid(), customerId, "CN2026070005", InvoiceStatus.Sent, InvoiceKind.CreditNote);
         await db.Context.SaveChangesAsync();
 
         var tenant = new DevTenantContext(tenantId);
@@ -96,9 +99,36 @@ public class PortalInvoiceServiceTests
         var result = await h.Sut.ListMyInvoicesAsync(CancellationToken.None);
         Assert.Equal(PortalOutcomeKind.Success, result.Outcome);
         var items = result.Value!;
-        Assert.Single(items);
-        Assert.Equal("2026070002", items[0].InvoiceNumber);
+        // Only ISSUED documents: the Sent invoice and the issued credit note. The draft, the
+        // cancelled draft and the other customer's invoice never surface (ACC-H2).
+        Assert.Equal(["2026070002", "CN2026070005"], items.Select(i => i.InvoiceNumber).OrderBy(n => n.Length).ToArray());
+        Assert.Equal("CreditNote", items.Single(i => i.InvoiceNumber == "CN2026070005").Kind);
         Assert.Null(items[0].PeppolStatus);
+    }
+
+    [Fact]
+    public async Task CancelledDraft_IsHiddenEverywhere_LikeADraft()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+
+        var cancelled = await h.Db.Context.Invoices.FirstAsync(i => i.Status == InvoiceStatus.Cancelled);
+        Assert.Equal(PortalOutcomeKind.NotFound, (await h.Sut.GetMyInvoiceAsync(cancelled.Id, CancellationToken.None)).Outcome);
+        Assert.Equal(PortalOutcomeKind.NotFound, (await h.Sut.GetInvoicePdfAsync(cancelled.Id, CancellationToken.None)).Outcome);
+        Assert.Equal(PortalOutcomeKind.NotFound, (await h.Sut.GetInvoiceAttachmentAsync(cancelled.Id, Guid.NewGuid(), CancellationToken.None)).Outcome);
+    }
+
+    [Fact]
+    public async Task IssuedCreditNote_IsVisible_WithItsKind()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+
+        var creditNote = await h.Db.Context.Invoices.FirstAsync(i => i.Kind == InvoiceKind.CreditNote);
+        var detail = await h.Sut.GetMyInvoiceAsync(creditNote.Id, CancellationToken.None);
+        Assert.Equal(PortalOutcomeKind.Success, detail.Outcome);
+        Assert.Equal("CreditNote", detail.Value!.Kind);
+        Assert.Equal(PortalOutcomeKind.Success, (await h.Sut.GetInvoicePdfAsync(creditNote.Id, CancellationToken.None)).Outcome);
     }
 
     [Fact]
