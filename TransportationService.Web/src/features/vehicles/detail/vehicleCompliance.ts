@@ -3,6 +3,7 @@ import type { Inspection } from '../../inspections/types'
 import type { MaintenanceRecord } from '../../maintenance/types'
 import type { DamageReport } from '../../damage/types'
 import type { TachographCalibration } from '../../fleet-compliance/tachographApi'
+import type { LeasingContract } from '../../fleet-compliance/leasingApi'
 import type { VehicleDetail } from '../types'
 
 /**
@@ -16,6 +17,8 @@ export interface VehicleCompliance {
   maintenance: MaintenanceRecord[] | null
   damage: DamageReport[] | null
   tachograph: TachographCalibration[] | null
+  /** FL-M9: leasing contracts (optional: callers without it simply get no lease line). */
+  leasing?: LeasingContract[] | null
 }
 
 /** The sub-block of a grouped section an attention item or overview link jumps to (`?focus=`). */
@@ -56,6 +59,8 @@ export type VehicleAttentionKind =
   | 'maintenanceInProgress'
   | 'maintenancePlanned'
   | 'damageOpen'
+  | 'leaseEnding'
+  | 'leaseEnded'
   | 'equipmentDocumentMissing'
   | 'baseDocumentsMissing'
 
@@ -74,6 +79,8 @@ export interface VehicleAttentionFact {
 
 const OPEN_DAMAGE = new Set(['Reported', 'UnderAssessment', 'InRepair'])
 const SEVERE_DAMAGE = new Set(['Severe', 'TotalLoss'])
+/** FL-M9: an active lease ending this close by needs a decision (extend, return, buy). */
+const LEASE_WINDOW_DAYS = 30
 /** Maintenance planned this close by is worth a quiet line on the overview. */
 const PLANNED_WINDOW_DAYS = 14
 
@@ -168,6 +175,17 @@ export function buildVehicleAttention(
         focus: 'schade',
         count: open.length,
       })
+  }
+
+  if (data.leasing) {
+    for (const contract of data.leasing) {
+      if (!contract.isActive || !contract.endDate) continue
+      const days = daysUntil(contract.endDate, today)
+      if (days < 0)
+        facts.push({ key: `lease-${contract.id}`, kind: 'leaseEnded', severity: 'warning', focus: 'leasing', label: contract.leasingCompany, date: contract.endDate })
+      else if (days <= LEASE_WINDOW_DAYS)
+        facts.push({ key: `lease-${contract.id}`, kind: 'leaseEnding', severity: 'info', focus: 'leasing', label: contract.leasingCompany, date: contract.endDate })
+    }
   }
 
   if (data.documents) {

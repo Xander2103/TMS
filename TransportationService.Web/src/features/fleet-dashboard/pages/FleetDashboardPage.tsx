@@ -64,6 +64,7 @@ export function FleetDashboardPage() {
   function ownerLink(vehicleId: string | null, trailerId: string | null): string {
     return vehicleId ? `/vehicles/${vehicleId}` : `/trailers/${trailerId}`
   }
+  const todayIso = new Date().toISOString().slice(0, 10)
 
   return (
     <div>
@@ -213,6 +214,34 @@ export function FleetDashboardPage() {
                 ))}
               </ul>
             </section>
+
+            {dashboard.leasingEnding !== undefined && (
+              <section className="fd-panel" data-testid="fd-leasing-ending">
+                <h3>
+                  {t('fleet.dashboard.leasingEnding')}{' '}
+                  <Badge tone={(dashboard.leasingEndingCount ?? dashboard.leasingEnding.length) > 0 ? 'warning' : 'success'}>
+                    {dashboard.leasingEndingCount ?? dashboard.leasingEnding.length}
+                  </Badge>
+                </h3>
+                {dashboard.leasingEnding.length === 0 && <p className="fd-empty">{t('fleet.dashboard.emptyLeasing')}</p>}
+                <ul>
+                  {dashboard.leasingEnding.map((item) => (
+                    <li key={item.id}>
+                      <button type="button" className="fd-row" onClick={() => navigate(ownerLink(item.vehicleId, item.trailerId))}>
+                        <span className="fd-row-owner">{item.ownerNumber}</span>
+                        <span className="fd-row-main">{item.leasingCompany}</span>
+                        <span className="fd-row-meta">
+                          {formatDate(item.endDate)}
+                          <Badge tone={item.endDate < todayIso ? 'danger' : 'warning'}>
+                            {t(item.endDate < todayIso ? 'fleet.dashboard.leasingEnded' : 'fleet.dashboard.leasingEndsSoon')}
+                          </Badge>
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
 
             <section className="fd-panel">
               <h3>

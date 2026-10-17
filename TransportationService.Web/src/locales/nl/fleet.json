@@ -265,7 +265,11 @@
     "emptyDamage": "Geen recente schademeldingen.",
     "fuelWarnings": "Brandstofwaarschuwingen",
     "emptyFuel": "Geen afwijkende tankbeurten.",
-    "inactive": "Inactief"
+    "inactive": "Inactief",
+    "leasingEnding": "Leasing eindigt",
+    "emptyLeasing": "Geen leasingcontracten die binnen 30 dagen eindigen.",
+    "leasingEndsSoon": "Eindigt binnenkort",
+    "leasingEnded": "Afgelopen"
   },
   "kpi": {
     "from": "Van",

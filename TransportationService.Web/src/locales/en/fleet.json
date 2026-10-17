@@ -265,7 +265,11 @@
     "emptyDamage": "No recent damage reports.",
     "fuelWarnings": "Fuel warnings",
     "emptyFuel": "No anomalous fuel transactions.",
-    "inactive": "Inactive"
+    "inactive": "Inactive",
+    "leasingEnding": "Leases ending",
+    "emptyLeasing": "No lease contracts ending within 30 days.",
+    "leasingEndsSoon": "Ends soon",
+    "leasingEnded": "Ended"
   },
   "kpi": {
     "from": "From",

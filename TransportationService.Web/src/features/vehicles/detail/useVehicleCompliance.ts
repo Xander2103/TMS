@@ -5,9 +5,10 @@ import { listInspections } from '../../inspections/api/inspectionsApi'
 import { listMaintenance } from '../../maintenance/api/maintenanceApi'
 import { listDamageReports } from '../../damage/api/damageApi'
 import { listTachographCalibrations } from '../../fleet-compliance/tachographApi'
+import { listLeasingContracts } from '../../fleet-compliance/leasingApi'
 import type { VehicleCompliance } from './vehicleCompliance'
 
-const EMPTY: VehicleCompliance = { documents: null, inspections: null, maintenance: null, damage: null, tachograph: null }
+const EMPTY: VehicleCompliance = { documents: null, inspections: null, maintenance: null, damage: null, tachograph: null, leasing: null }
 
 /**
  * Loads the vehicle's compliance lists for the overview — in parallel, each only when the user
@@ -23,6 +24,8 @@ export function useVehicleCompliance(vehicleId: string, enabled: boolean) {
     maintenance: hasPermission('maintenance.view'),
     damage: hasPermission('damage_reports.view'),
     tachograph: hasPermission('tachograph.view'),
+    // Contract rows (no amounts) are readable with vehicles.view.
+    leasing: hasPermission('vehicles.view') || hasPermission('fleet_finance.view'),
   }
   const permissionKey = Object.values(can).join(',')
   const [state, setState] = useState<{ key: string; data: VehicleCompliance } | null>(null)
@@ -39,8 +42,9 @@ export function useVehicleCompliance(vehicleId: string, enabled: boolean) {
       optional(can.maintenance, () => listMaintenance('vehicle', vehicleId)),
       optional(can.damage, () => listDamageReports('vehicle', vehicleId)),
       optional(can.tachograph, () => listTachographCalibrations(vehicleId)),
-    ]).then(([documents, inspections, maintenance, damage, tachograph]) => {
-      if (!cancelled) setState({ key: requestKey, data: { documents, inspections, maintenance, damage, tachograph } })
+      optional(can.leasing, () => listLeasingContracts('vehicle', vehicleId)),
+    ]).then(([documents, inspections, maintenance, damage, tachograph, leasing]) => {
+      if (!cancelled) setState({ key: requestKey, data: { documents, inspections, maintenance, damage, tachograph, leasing } })
     })
     return () => {
       cancelled = true

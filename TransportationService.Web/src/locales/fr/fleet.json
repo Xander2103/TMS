@@ -265,7 +265,11 @@
     "emptyDamage": "Aucune déclaration de dommage récente.",
     "fuelWarnings": "Alertes carburant",
     "emptyFuel": "Aucun plein anormal.",
-    "inactive": "Inactif"
+    "inactive": "Inactif",
+    "leasingEnding": "Fin de leasing",
+    "emptyLeasing": "Aucun contrat de leasing ne se termine dans les 30 jours.",
+    "leasingEndsSoon": "Se termine bientôt",
+    "leasingEnded": "Terminé"
   },
   "kpi": {
     "from": "Du",

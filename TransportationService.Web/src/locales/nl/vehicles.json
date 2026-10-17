@@ -146,7 +146,9 @@
       "equipmentDocumentMissing": "Geen {label} geregistreerd",
       "baseDocumentsMissing": "Niet geregistreerd: {labels}",
       "view": "Bekijken",
-      "add": "Toevoegen"
+      "add": "Toevoegen",
+      "leaseEnding": "Leasingcontract ({label}) eindigt op {date}",
+      "leaseEnded": "Leasingcontract ({label}) is afgelopen sinds {date}"
     },
     "notFound": "Voertuig niet gevonden.",
     "forbidden": "Geen toegang tot dit voertuig."

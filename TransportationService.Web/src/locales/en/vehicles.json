@@ -146,7 +146,9 @@
       "equipmentDocumentMissing": "No {label} registered",
       "baseDocumentsMissing": "Not registered: {labels}",
       "view": "View",
-      "add": "Add"
+      "add": "Add",
+      "leaseEnding": "Lease contract ({label}) ends on {date}",
+      "leaseEnded": "Lease contract ({label}) ended on {date}"
     },
     "notFound": "Vehicle not found.",
     "forbidden": "No access to this vehicle."

@@ -146,7 +146,9 @@
       "equipmentDocumentMissing": "Aucun {label} enregistré",
       "baseDocumentsMissing": "Non enregistré : {labels}",
       "view": "Voir",
-      "add": "Ajouter"
+      "add": "Ajouter",
+      "leaseEnding": "Contrat de leasing ({label}) se termine le {date}",
+      "leaseEnded": "Contrat de leasing ({label}) terminé depuis le {date}"
     },
     "notFound": "Véhicule introuvable.",
     "forbidden": "Pas d'accès à ce véhicule."

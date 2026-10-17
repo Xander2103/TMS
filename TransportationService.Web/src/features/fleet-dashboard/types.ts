@@ -74,4 +74,17 @@ export interface FleetDashboard {
   openDamageCount: number
   recentDamage: RecentDamageItem[]
   fuelWarnings: FuelWarning[]
+  /** FL-M9: active leasing contracts ending within 30 days or already ended (optional on older APIs). */
+  leasingEndingCount?: number
+  leasingEnding?: LeasingEndingItem[]
+}
+
+export interface LeasingEndingItem {
+  id: string
+  vehicleId: string | null
+  trailerId: string | null
+  ownerNumber: string
+  ownerLicensePlate: string
+  leasingCompany: string
+  endDate: string
 }
