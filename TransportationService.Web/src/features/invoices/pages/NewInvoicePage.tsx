@@ -15,7 +15,8 @@ import type { CustomerListItem } from '../../customers/types'
 import { getPoPolicy } from '../../customers/api/customerBillingConfigApi'
 import { getActiveLegalEntity, getLegalEntityOptions } from '../../legal-entities/api/legalEntitiesApi'
 import type { LegalEntityOption } from '../../legal-entities/types'
-import { createInvoice, getNextInvoiceNumber, listUninvoicedActivities, listUninvoicedOrders } from '../api/invoicesApi'
+import { localizeApiError } from '../../../api/problemDetails'
+import { createInvoice, getDefaultVatRate, getNextInvoiceNumber, listUninvoicedActivities, listUninvoicedOrders } from '../api/invoicesApi'
 import { euro, type ManualLineInput, type UninvoicedActivity, type UninvoicedOrder } from '../types'
 import { comparePeriods, dateToPeriod, formatPeriod, monthInputToPeriod, periodToMonthInput } from '../utils/invoicePeriod'
 import { READINESS_REASON_KEYS } from '../utils/readiness'
@@ -57,6 +58,10 @@ export function NewInvoicePage() {
   const [poPolicyRequired, setPoPolicyRequired] = useState(false)
   const [invoiceGrouping, setInvoiceGrouping] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+
+  // ACC-H1: the VAT % manual lines default to for this customer; null = unknown → the server
+  // derives it from the customer's VAT treatment (never a silent 0).
+  const [defaultVat, setDefaultVat] = useState<number | null>(null)
 
   const [entities, setEntities] = useState<LegalEntityOption[]>([])
   const [legalEntityId, setLegalEntityId] = useState('')
@@ -190,10 +195,18 @@ export function NewInvoicePage() {
     setPoPolicyRequired(false)
     // Wave 2 §4: hint only — the proposal engine that acts on the preference is Wave 10.
     setInvoiceGrouping(null)
+    setDefaultVat(null)
     if (value) {
       getCustomer(value)
         .then((detail) => setInvoiceGrouping(detail.invoiceGrouping ?? null))
         .catch(() => {})
+      getDefaultVatRate(value)
+        .then((result) => {
+          setDefaultVat(result.vatRatePercent)
+          // Lines added before the answer arrived follow the customer too.
+          setManualLines((rows) => rows.map((row) => (row.vatRatePercent === null ? { ...row, vatRatePercent: result.vatRatePercent } : row)))
+        })
+        .catch(() => setDefaultVat(null))
     }
   }
 
@@ -220,7 +233,8 @@ export function NewInvoicePage() {
     (activities ?? [])
       .filter((a) => selectedActivityIds.includes(a.id))
       .reduce((sum, a) => sum + a.agreedPrice, 0) +
-    manualLines.reduce((sum, l) => sum + l.quantity * l.unitPrice, 0)
+    // ACC-M2: each line rounds to currency precision exactly like the server (half away from zero).
+    manualLines.reduce((sum, l) => sum + Math.round(Math.abs(l.quantity * l.unitPrice) * 100 + 1e-9) / 100 * Math.sign(l.quantity * l.unitPrice || 1), 0)
 
   async function handleCreate() {
     if (!customerId) {
@@ -256,10 +270,12 @@ export function NewInvoicePage() {
         invoicePeriodYear: period?.year ?? null,
         invoicePeriodMonth: period?.month ?? null,
       })
-      showSuccess(t('invoices.new.created', { number: invoice.invoiceNumber }))
+      // ACC-H3: a draft has no legal number yet; it gets one when it is sent.
+      showSuccess(invoice.invoiceNumber ? t('invoices.new.created', { number: invoice.invoiceNumber }) : t('invoices.new.createdDraft'))
       navigate(`/invoices/${invoice.id}`)
-    } catch {
-      showError(t('invoices.new.createError'))
+    } catch (err) {
+      // ACC-M4: the server names the problem (unpriced source, PO, …); never a generic sentence.
+      showError(localizeApiError(t, err, t('invoices.new.createError')))
     } finally {
       setBusy(false)
     }
@@ -325,7 +341,7 @@ export function NewInvoicePage() {
         </div>
         {nextNumber && (
           <p className="inv-next-number">
-            {t('invoices.new.nextNumber')} <strong>{nextNumber}</strong>
+            {t('invoices.new.numberAtIssue', { number: nextNumber })}
           </p>
         )}
         {isPastPeriod && period && (
@@ -462,7 +478,8 @@ export function NewInvoicePage() {
               onClick={() =>
                 setManualLines((rows) => [
                   ...rows,
-                  { key: `m-${++manualKey}`, description: '', quantity: 1, unitPrice: 0, vatRatePercent: null },
+                  // ACC-H1: the VAT follows the customer (server default when still unknown), never 0.
+                  { key: `m-${++manualKey}`, description: '', quantity: 1, unitPrice: 0, vatRatePercent: defaultVat },
                 ])
               }
               disabled={busy}
@@ -479,10 +496,11 @@ export function NewInvoicePage() {
                 disabled={busy}
                 maxLength={500}
               />
+              {/* ACC-M2: three decimals for quantities, four for unit prices; nothing is rounded here. */}
               <input
                 type="number"
-                min={0.01}
-                step="0.01"
+                min={0.001}
+                step="0.001"
                 value={line.quantity}
                 onChange={(e) => setManual(line.key, { quantity: Number(e.target.value) })}
                 disabled={busy}
@@ -491,11 +509,23 @@ export function NewInvoicePage() {
               <input
                 type="number"
                 min={0}
-                step="0.01"
+                step="0.0001"
                 value={line.unitPrice}
                 onChange={(e) => setManual(line.key, { unitPrice: Number(e.target.value) })}
                 disabled={busy}
                 aria-label={t('invoices.new.unitPriceLabel')}
+              />
+              <input
+                type="number"
+                min={0}
+                max={100}
+                step="0.5"
+                value={line.vatRatePercent ?? ''}
+                placeholder={t('invoices.new.vatFollowsCustomer')}
+                onChange={(e) => setManual(line.key, { vatRatePercent: e.target.value === '' ? null : Number(e.target.value) })}
+                disabled={busy}
+                aria-label={t('invoices.new.vatLabel')}
+                title={t('invoices.new.vatLabel')}
               />
               <button
                 type="button"

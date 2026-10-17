@@ -34,6 +34,7 @@ const api = vi.hoisted(() => ({
   getNextInvoiceNumber: vi.fn(),
   listUninvoicedOrders: vi.fn(),
   listUninvoicedActivities: vi.fn(),
+  getDefaultVatRate: vi.fn(() => Promise.resolve({ vatRatePercent: 21 })),
 }))
 vi.mock('../api/invoicesApi', () => api)
 
