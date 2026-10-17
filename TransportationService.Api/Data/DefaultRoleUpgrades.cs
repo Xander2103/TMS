@@ -21,7 +21,7 @@ public static class DefaultRoleUpgrades
         IReadOnlyDictionary<string, IReadOnlyList<string>>? RevocationsByTemplateCode = null);
 
     /// <summary>Version 1 = the original role creation; steps start at 2.</summary>
-    public const int CurrentVersion = 35;
+    public const int CurrentVersion = 36;
 
     public static IReadOnlyList<UpgradeStep> Steps { get; } =
     [
@@ -634,6 +634,18 @@ public static class DefaultRoleUpgrades
             new Dictionary<string, IReadOnlyList<string>>
             {
                 ["chauffeur"] = [PermissionCodes.AbsencesView, PermissionCodes.AbsencesCreate],
+            }),
+
+        new(36,
+            "Boekhoudremediëring 2026-10-17 (ACC-M8): Planner en Dispatcher lazen via legal_entities.view het "
+            + "volledige overzicht 'Eigen bedrijven' (IBAN/BIC, factuurnummering, Peppol-ID). Operationeel hebben zij "
+            + "enkel de entiteitskeuze nodig; die loopt via /api/legal-entities/options, dat voor elke aangemelde "
+            + "gebruiker open staat. Het leesrecht op de bedrijfsinstellingen blijft bij Management en Boekhouding.",
+            new Dictionary<string, IReadOnlyList<string>>(),
+            new Dictionary<string, IReadOnlyList<string>>
+            {
+                ["planner"] = [PermissionCodes.LegalEntitiesView],
+                ["dispatcher"] = [PermissionCodes.LegalEntitiesView],
             }),
     ];
 }

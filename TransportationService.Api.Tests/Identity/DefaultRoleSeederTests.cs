@@ -767,7 +767,7 @@ public class DefaultRoleSeederTests
 
         var state = await db.Context.RoleTemplateStates.SingleAsync(s => s.TenantId == tenantId);
         Assert.Equal(DefaultRoleUpgrades.CurrentVersion, state.AppliedVersion);
-        Assert.Equal(35, DefaultRoleUpgrades.CurrentVersion);
+        Assert.Equal(36, DefaultRoleUpgrades.CurrentVersion);
 
 
         var roles = await db.Context.Roles.Where(r => r.TenantId == tenantId).ToListAsync();
@@ -955,5 +955,70 @@ public class DefaultRoleSeederTests
         await db.Context.SaveChangesAsync();
         await DefaultRoleSeeder.SyncAsync(db.Context);
         Assert.Contains(PermissionCodes.AbsencesView, await CodesOfAsync(db, stamped.Id));
+    }
+
+    /// <summary>
+    /// ACC-M8 (accounting remediation 2026-10-17): Planner and Dispatcher no longer read the full
+    /// "Eigen bedrijven" settings (IBAN/BIC, numbering, Peppol-ID); the entity picker they need
+    /// is served by the auth-only options endpoint. Management and Boekhouding keep the view.
+    /// </summary>
+    [Fact]
+    public async Task Version36_FreshTenant_PlannerAndDispatcherDoNotReadLegalEntitySettings()
+    {
+        var (db, tenantId) = await SeedTenantWithCatalogAsync();
+        using var _ = db;
+
+        await DefaultRoleSeeder.SyncAsync(db.Context);
+
+        var roles = await db.Context.Roles.Where(r => r.TenantId == tenantId).ToListAsync();
+        foreach (var operational in new[] { "planner", "dispatcher" })
+        {
+            Assert.DoesNotContain(PermissionCodes.LegalEntitiesView, await CodesOfAsync(db, roles.Single(r => r.TemplateCode == operational).Id));
+        }
+
+        Assert.Contains(PermissionCodes.LegalEntitiesView, await CodesOfAsync(db, roles.Single(r => r.TemplateCode == "management").Id));
+        var boekhouding = await CodesOfAsync(db, roles.Single(r => r.TemplateCode == "boekhouding").Id);
+        Assert.Contains(PermissionCodes.LegalEntitiesView, boekhouding);
+        Assert.Contains(PermissionCodes.LegalEntitiesManage, boekhouding);
+    }
+
+    [Fact]
+    public async Task Version36_RevokesLegalEntityView_FromStampedPlannerAndDispatcher_ButNotFromCustomRoles()
+    {
+        var (db, tenantId) = await SeedTenantWithCatalogAsync();
+        using var _ = db;
+
+        var view = await db.Context.Permissions.SingleAsync(p => p.Code == PermissionCodes.LegalEntitiesView);
+        Role Stamped(string code, string name) => new()
+        {
+            Id = Guid.NewGuid(), TenantId = tenantId, Name = name, Description = "x",
+            IsSystemRole = false, IsActive = true, TemplateCode = code,
+            CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow,
+        };
+        var planner = Stamped("planner", "Planner");
+        var dispatcher = Stamped("dispatcher", "Dispatcher");
+        var custom = new Role
+        {
+            Id = Guid.NewGuid(), TenantId = tenantId, Name = "Planner met bedrijfsinstellingen", Description = "x",
+            IsSystemRole = false, IsActive = true, TemplateCode = null,
+            CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow,
+        };
+        db.Context.Roles.AddRange(planner, dispatcher, custom);
+        db.Context.RolePermissions.AddRange(
+            new RolePermission { RoleId = planner.Id, PermissionId = view.Id },
+            new RolePermission { RoleId = dispatcher.Id, PermissionId = view.Id },
+            new RolePermission { RoleId = custom.Id, PermissionId = view.Id });
+        db.Context.RoleTemplateStates.Add(new RoleTemplateState
+        {
+            Id = Guid.NewGuid(), TenantId = tenantId, AppliedVersion = 35, UpdatedAt = DateTime.UtcNow,
+        });
+        await db.Context.SaveChangesAsync();
+
+        await DefaultRoleSeeder.SyncAsync(db.Context);
+
+        Assert.DoesNotContain(PermissionCodes.LegalEntitiesView, await CodesOfAsync(db, planner.Id));
+        Assert.DoesNotContain(PermissionCodes.LegalEntitiesView, await CodesOfAsync(db, dispatcher.Id));
+        Assert.Contains(PermissionCodes.LegalEntitiesView, await CodesOfAsync(db, custom.Id));
+        Assert.Equal(36, (await db.Context.RoleTemplateStates.SingleAsync(s => s.TenantId == tenantId)).AppliedVersion);
     }
 }
