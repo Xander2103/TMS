@@ -474,6 +474,12 @@ public class FleetHistoryService : IFleetHistoryService
                         Join(record?.Description, record?.Provider), link: link));
                     break;
                 }
+                case "Started":
+                    lines.Add(Line.From(a, "maintenance", $"Onderhoud gestart: {label}", record?.Description, link: link));
+                    break;
+                case "Cancelled":
+                    lines.Add(Line.From(a, "maintenance", $"Onderhoud geannuleerd: {label}", record?.Description, link: link));
+                    break;
                 case "Updated":
                 {
                     var oldStatus = Str(before, "Status");
