@@ -134,6 +134,22 @@ public class FleetReadinessTests
     }
 
     [Fact]
+    public async Task MaintenanceStartedEarlierThanPlanned_BlocksFromToday_UntilCompleted()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var created = await h.Maintenance.CreateForVehicleAsync(h.VehicleId, Maintenance(TripDay, TripDay.AddDays(1)), CancellationToken.None);
+        await h.Maintenance.UpdateAsync(created.Record!.Id, new UpdateMaintenanceRequest(
+            MaintenanceType.PeriodicService, null, MaintenanceStatus.InProgress, "TEST service", TripDay, null, "Garage", null, null, null,
+            TripDay.AddDays(1)), CancellationToken.None);
+
+        var today = await h.Readiness.EvaluateVehicleAsync(h.VehicleId, Today, CancellationToken.None);
+
+        Assert.Equal(ReadinessLevel.Blocked, today!.Level);
+        Assert.Contains(today.Issues, i => i.Code == "maintenance.active");
+    }
+
+    [Fact]
     public async Task MaintenanceWindow_EndBeforeStart_IsRejected()
     {
         var h = await SeedAsync();

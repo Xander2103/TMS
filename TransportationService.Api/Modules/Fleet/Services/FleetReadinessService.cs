@@ -166,7 +166,8 @@ public class FleetReadinessService : IFleetReadinessService
             {
                 // In the garage now: unavailable from (planned) start until completion. A date beyond
                 // the planned end is only a warning — the work may well be finished by then.
-                var from = start is { } st && st < today ? st : start ?? today;
+                // Started (possibly earlier than planned): in the garage from today at the latest.
+                var from = start is { } st && st <= today ? st : today;
                 if (date >= from && (end is null || date <= end || date <= today))
                 {
                     issues.Add(new("maintenance.active", $"Onderhoud bezig: {label}{Window(start, end)}.", ReadinessSeverity.Blocking, from, end));
