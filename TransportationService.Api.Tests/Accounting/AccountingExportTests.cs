@@ -114,6 +114,24 @@ public class AccountingExportTests
     }
 
     [Fact]
+    public async Task Export_CarriesTheCustomerNameFrozenOnTheDocument_NotTodaysMasterData()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var categoryId = await MapCategoryAsync(h, "DIVERS-BINNEN", "700400", "Diverse verkoop binnenland");
+        await IssueAsync(h, categoryId, new ManualInvoiceLineInput("Transport", 1m, 100m, 21m, categoryId));
+
+        // ACC-H4: the customer is renamed AFTER the invoice went out.
+        var customer = await h.Db.Context.Customers.SingleAsync(c => c.Id == h.CustomerId);
+        customer.Name = "Haven BV (nieuwe naam)";
+        await h.Db.Context.SaveChangesAsync();
+
+        var bytes = await h.Export.ExportAsync(new DateOnly(2026, 7, 1), new DateOnly(2026, 7, 31), CancellationToken.None);
+        using var workbook = new ClosedXML.Excel.XLWorkbook(new MemoryStream(bytes));
+        Assert.Equal("Haven BV", workbook.Worksheet("Boekhoudexport").Cell(2, 4).GetString());
+    }
+
+    [Fact]
     public async Task Export_CreditNoteRows_CarryTheNegativeSign_AndReconcile()
     {
         var h = await SeedAsync();

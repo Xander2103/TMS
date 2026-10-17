@@ -128,6 +128,15 @@ public class InvoiceHistoryService : IInvoiceHistoryService
             }
         }
 
+        // The issue step writes two audits (the status transition and the numbered "Issued" record);
+        // the reader wants ONE line for that moment — the one that carries the number (ACC-M7).
+        var numberedIssues = rows.Where(r => r.Type == "invoice.issued" && r.Detail is not null).ToList();
+        if (numberedIssues.Count > 0)
+        {
+            rows.RemoveAll(r => r.Type == "invoice.issued" && r.Detail is null
+                                && numberedIssues.Any(n => Math.Abs((n.At - r.At).TotalSeconds) < 5));
+        }
+
         var userIds = rows.Where(r => r.UserId is not null).Select(r => r.UserId!.Value).Distinct().ToList();
         var names = userIds.Count == 0
             ? new Dictionary<Guid, string>()

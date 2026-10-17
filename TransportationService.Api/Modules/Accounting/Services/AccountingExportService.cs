@@ -55,7 +55,8 @@ public class AccountingExportService : IAccountingExportService
                         && (i.Status == InvoiceStatus.Sent || i.Status == InvoiceStatus.Paid)
                         && i.InvoiceDate >= from && i.InvoiceDate <= to)
             .Join(_db.Customers.AsNoTracking().Where(c => c.TenantId == tenantId),
-                i => i.CustomerId, c => c.Id, (i, c) => new { Invoice = i, CustomerName = c.Name })
+                // ACC-H4: the booked customer is the one frozen on the document, never today's master data.
+                i => i.CustomerId, c => c.Id, (i, c) => new { Invoice = i, CustomerName = i.CustomerNameSnapshot ?? c.Name })
             .OrderBy(x => x.Invoice.InvoiceDate).ThenBy(x => x.Invoice.InvoiceNumber)
             .ToListAsync(cancellationToken);
         var invoiceIds = invoices.Select(x => x.Invoice.Id).ToList();

@@ -278,6 +278,22 @@ public class SalesCodeFiscalTests
     }
 
     [Fact]
+    public void AStoredZeroCustomerRate_WithoutAnExemptionOnTheCode_IsNotADefault_TheTenantRateApplies()
+    {
+        // ACC-H1: the customer form stores 0 for "not configured"; under domestic VAT that must
+        // never become a silent 0 % line — the tenant's standard rate applies.
+        var resolution = InvoiceLineFiscalResolver.Resolve(
+            null, Code(), VatTreatment.DomesticVat, 0m, TenantDefaultRate);
+
+        Assert.Equal(TenantDefaultRate, resolution.RatePercent);
+        Assert.Equal("S", resolution.VatCategoryCode);
+        Assert.Equal(FiscalTreatmentSource.Customer, resolution.Source);
+
+        var withoutCode = InvoiceLineFiscalResolver.Resolve(null, null, VatTreatment.DomesticVat, 0m, TenantDefaultRate);
+        Assert.Equal(TenantDefaultRate, withoutCode.RatePercent);
+    }
+
+    [Fact]
     public void ALineOverride_DerivesItsCategoryFromTheOverride_NotFromTheCode()
     {
         var code = Code();

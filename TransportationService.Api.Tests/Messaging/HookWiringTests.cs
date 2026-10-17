@@ -109,7 +109,9 @@ public class HookWiringTests
         var mine = new NotificationService(db.Context, tenant, new DevCurrentUserContext(holderId), clock);
         var notified = await mine.ListMineAsync(new NotificationQuery(false, null, false, 10), CancellationToken.None);
         var notice = Assert.Single(notified, n => n.Type == MessageKinds.InvoiceDraftReady);
-        Assert.Contains(result.Invoice!.InvoiceNumber, notice.Message);
+        // ACC-H3: a draft has no legal number yet; the notice names its concept reference.
+        Assert.Null(result.Invoice!.InvoiceNumber);
+        Assert.Contains(result.Invoice.DisplayNumber, notice.Message);
     }
 
     // --- InvoiceService.ChangeStatusAsync(Sent) -> invoice_sent ---
@@ -166,10 +168,12 @@ public class HookWiringTests
         var created = await sut.CreateAsync(new CreateInvoiceRequest(customerId, null, [orderId], [], null), CancellationToken.None);
         Assert.Equal(InvoiceOperationOutcome.Success, created.Outcome);
         var invoiceId = created.Invoice!.Id;
-        var invoiceNumber = created.Invoice.InvoiceNumber;
 
         var sent = await sut.ChangeStatusAsync(invoiceId, InvoiceStatus.Sent, CancellationToken.None);
         Assert.Equal(InvoiceOperationOutcome.Success, sent.Outcome);
+        // ACC-H3: the legal number exists from the issue step on; the mail carries that number.
+        var invoiceNumber = sent.Invoice!.InvoiceNumber;
+        Assert.NotNull(invoiceNumber);
 
         var message = Assert.Single(db.Context.OutboxMessages, m => m.Kind == MessageKinds.InvoiceSent);
         Assert.Equal("facturatie@haven.be", message.RecipientAddress);

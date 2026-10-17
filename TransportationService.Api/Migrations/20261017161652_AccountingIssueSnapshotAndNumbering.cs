@@ -291,6 +291,17 @@ namespace TransportationService.Api.Migrations
                 columns: new[] { "TenantId", "LegalEntityId", "Kind", "Year", "Month" },
                 unique: true,
                 filter: "\"IsDeleted\" = false");
+
+            // ACC-H3: credit notes now run their own series per (entity, period). Before this
+            // migration they shared the invoice counter, so the new series CONTINUES from that
+            // counter: no number ever issued under the shared regime can be handed out again.
+            migrationBuilder.Sql(
+                """
+                INSERT INTO invoice_sequences ("Id", "LegalEntityId", "Year", "Month", "NextValue", "TenantId", "CreatedAt", "UpdatedAt", "IsDeleted", "Kind")
+                SELECT gen_random_uuid(), "LegalEntityId", "Year", "Month", "NextValue", "TenantId", now(), now(), false, 'CreditNote'
+                FROM invoice_sequences
+                WHERE "Kind" = 'Invoice' AND NOT "IsDeleted";
+                """);
         }
 
         /// <inheritdoc />

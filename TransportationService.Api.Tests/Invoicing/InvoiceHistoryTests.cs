@@ -96,6 +96,26 @@ public class InvoiceHistoryTests
     }
 
     [Fact]
+    public async Task Issue_WritesTwoAudits_TheHistoryShowsOneLine_TheNumberedOne()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var id = h.InvoiceId.ToString();
+        // The real issue step records the status transition AND the numbered "Issued" record in
+        // the same second (ACC-H3); the reader must see one line that carries the number.
+        h.Db.Context.AuditLogs.AddRange(
+            Audit(h, "Invoice", id, "StatusChanged", "{\"Status\":\"Draft\"}", "{\"Status\":\"Sent\"}", 2, h.UserId),
+            Audit(h, "Invoice", id, "Issued", "{\"DraftReference\":\"CONCEPT-ABCDEF12\"}", "{\"InvoiceNumber\":\"FAC-2026100006\",\"IssuedAt\":\"2026-10-17T14:02:00Z\"}", 2, h.UserId));
+        await h.Db.Context.SaveChangesAsync();
+
+        var history = (await h.Sut.GetAsync(h.InvoiceId, CancellationToken.None))!;
+
+        var issued = Assert.Single(history, e => e.Type == "invoice.issued");
+        Assert.Equal("Factuur definitief gemaakt en verzonden", issued.Title);
+        Assert.Equal("Nummer FAC-2026100006", issued.Detail);
+    }
+
+    [Fact]
     public async Task History_OfAnotherTenantsInvoice_IsNull()
     {
         var h = await SeedAsync();

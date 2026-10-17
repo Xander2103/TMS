@@ -77,8 +77,15 @@ public static class InvoiceLineFiscalResolver
         var info = VatTreatmentCatalog.Resolve(treatment);
 
         // A treatment with a fixed statutory rate (0% for reverse charge, exempt, …) wins over
-        // any stored customer rate: that rate only expresses WHICH domestic rate applies.
-        var rate = info.DefaultRatePercent ?? customerRatePercent ?? tenantDefaultRatePercent;
+        // any stored customer rate: that rate only expresses WHICH domestic rate applies. A stored
+        // 0 % is only such a choice when the sales code itself declares a zero-rated/exempt
+        // refinement ("Z"/"E", the legacy Wave 2 override); otherwise it is the customer form's
+        // "not configured" and must not silently zero every line (ACC-H1).
+        var legacyOverride = salesCode?.VatCategoryOverride?.Trim().ToUpperInvariant();
+        var customerRate = customerRatePercent is > 0m || (customerRatePercent == 0m && legacyOverride is "Z" or "E")
+            ? customerRatePercent
+            : null;
+        var rate = info.DefaultRatePercent ?? customerRate ?? tenantDefaultRatePercent;
 
         // The UBL category is DERIVED from the resolved treatment. The legacy Wave 2 category
         // override on the code is honoured only as a refinement of the customer's own treatment
@@ -86,7 +93,6 @@ public static class InvoiceLineFiscalResolver
         // code's own statutory classification decided, and never when it would contradict the
         // resolved treatment (an "AE" category on a 21% domestic line is invalid UBL).
         var derived = VatTreatmentCatalog.ResolveVatCategory(treatment, rate).Code;
-        var legacyOverride = salesCode?.VatCategoryOverride?.Trim().ToUpperInvariant();
         var category = source == FiscalTreatmentSource.Customer || source == FiscalTreatmentSource.TenantDefault
             ? !string.IsNullOrWhiteSpace(legacyOverride) && IsCompatibleCategory(legacyOverride, treatment, rate)
                 ? legacyOverride
