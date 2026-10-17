@@ -7,6 +7,7 @@ import { SectionedForm, type SectionDef } from '../../../components/ui/Sectioned
 import { UnsavedChangesGuard } from '../../../components/ui/UnsavedChangesGuard'
 import { firstSectionWithError, useSectionNavigation } from '../../../components/ui/useSectionNavigation'
 import { useLocale } from '../../../i18n/localeContext'
+import { negativeFieldErrors } from '../../../utils/nonNegative'
 import { computeVolumeM3 } from '../../../utils/volume'
 import { LookupSelect } from '../../master-data/components/LookupSelect'
 import type { DriverListItem } from '../../drivers/types'
@@ -45,6 +46,8 @@ export interface VehicleFormProps {
 const SECTION_FIELD_KEYS: Record<string, string[]> = {
   algemeen: ['licensePlate'],
   registratie: ['year'],
+  capaciteit: ['grossVehicleWeightKg', 'payloadKg', 'axleCount', 'lengthMeters', 'widthMeters', 'heightMeters', 'volumeM3', 'loadingMeters'],
+  techniek: ['odometerKm', 'odometerCorrectionReason', 'consumptionLPer100Km'],
 }
 
 /**
@@ -71,6 +74,9 @@ export function VehicleForm({
 
   const currentYear = new Date().getFullYear()
   const autoVolume = computeVolumeM3(form.lengthMeters, form.widthMeters, form.heightMeters)
+  /** FL-M6: lowering the odometer is a correction and needs a reason; the server rejects it otherwise. */
+  const currentOdometer = initial.odometerKm
+  const odometerLowered = mode === 'edit' && form.odometerKm < currentOdometer
 
   const sectionIds = useMemo(() => {
     const ids = ['algemeen', 'registratie', 'capaciteit', 'techniek', 'documenten', 'onderhoud']
@@ -91,6 +97,27 @@ export function VehicleForm({
     if (form.year !== null && form.year > currentYear) {
       errors.year = t('fleet.form.yearFuture', { year: currentYear })
     }
+    Object.assign(
+      errors,
+      negativeFieldErrors(
+        {
+          grossVehicleWeightKg: form.grossVehicleWeightKg,
+          payloadKg: form.payloadKg,
+          axleCount: form.axleCount,
+          lengthMeters: form.lengthMeters,
+          widthMeters: form.widthMeters,
+          heightMeters: form.heightMeters,
+          volumeM3: form.volumeIsManual ? form.volumeM3 : null,
+          loadingMeters: form.loadingMeters,
+          odometerKm: form.odometerKm,
+          consumptionLPer100Km: form.consumptionLPer100Km,
+        },
+        t('fleet.form.negativeNotAllowed'),
+      ),
+    )
+    if (odometerLowered && !form.odometerCorrectionReason?.trim()) {
+      errors.odometerCorrectionReason = t('vehicles.form.odometerReasonRequired')
+    }
     return errors
   }
 
@@ -107,7 +134,7 @@ export function VehicleForm({
       return
     }
     setDirty(false)
-    await onSubmit(form)
+    await onSubmit({ ...form, odometerCorrectionReason: odometerLowered ? form.odometerCorrectionReason?.trim() || null : null })
   }
 
   const sectionHasError = (id: string) => (SECTION_FIELD_KEYS[id] ?? []).some((key) => fieldErrors[key])
@@ -216,31 +243,38 @@ export function VehicleForm({
       optional: true,
       render: () => (
         <FormSection title={t('fleet.sections.capacity')} columns={3}>
-          <FormField label={t('vehicles.form.gvw')} htmlFor="vf-gvw" hint={t('vehicles.form.gvwHint')}>
-            <input id="vf-gvw" type="number" min={0} value={form.grossVehicleWeightKg ?? ''} onChange={(e) => set('grossVehicleWeightKg', e.target.value === '' ? null : Number(e.target.value))} disabled={isSubmitting} />
+          <FormField label={t('vehicles.form.gvw')} htmlFor="vf-gvw" error={fieldErrors.grossVehicleWeightKg} hint={t('vehicles.form.gvwHint')}>
+            <input id="vf-gvw"
+              aria-invalid={fieldErrors.grossVehicleWeightKg ? 'true' : undefined} type="number" min={0} value={form.grossVehicleWeightKg ?? ''} onChange={(e) => set('grossVehicleWeightKg', e.target.value === '' ? null : Number(e.target.value))} disabled={isSubmitting} />
           </FormField>
-          <FormField label={t('fleet.form.payloadKg')} htmlFor="vf-payload">
-            <input id="vf-payload" type="number" min={0} value={form.payloadKg ?? ''} onChange={(e) => set('payloadKg', e.target.value === '' ? null : Number(e.target.value))} disabled={isSubmitting} />
+          <FormField label={t('fleet.form.payloadKg')} htmlFor="vf-payload" error={fieldErrors.payloadKg}>
+            <input id="vf-payload"
+              aria-invalid={fieldErrors.payloadKg ? 'true' : undefined} type="number" min={0} value={form.payloadKg ?? ''} onChange={(e) => set('payloadKg', e.target.value === '' ? null : Number(e.target.value))} disabled={isSubmitting} />
           </FormField>
-          <FormField label={t('fleet.form.axles')} htmlFor="vf-axles" hint={t('fleet.form.axlesHint')}>
-            <input id="vf-axles" type="number" min={0} max={12} value={form.axleCount} onChange={(e) => set('axleCount', Number(e.target.value) || 0)} disabled={isSubmitting} />
+          <FormField label={t('fleet.form.axles')} htmlFor="vf-axles" error={fieldErrors.axleCount} hint={t('fleet.form.axlesHint')}>
+            <input id="vf-axles"
+              aria-invalid={fieldErrors.axleCount ? 'true' : undefined} type="number" min={0} max={12} value={form.axleCount} onChange={(e) => set('axleCount', Number(e.target.value) || 0)} disabled={isSubmitting} />
           </FormField>
-          <FormField label={t('fleet.form.length')} htmlFor="vf-length">
-            <input id="vf-length" type="number" min={0} step="0.01" value={form.lengthMeters ?? ''} onChange={(e) => set('lengthMeters', e.target.value === '' ? null : Number(e.target.value))} disabled={isSubmitting} />
+          <FormField label={t('fleet.form.length')} htmlFor="vf-length" error={fieldErrors.lengthMeters}>
+            <input id="vf-length"
+              aria-invalid={fieldErrors.lengthMeters ? 'true' : undefined} type="number" min={0} step="0.01" value={form.lengthMeters ?? ''} onChange={(e) => set('lengthMeters', e.target.value === '' ? null : Number(e.target.value))} disabled={isSubmitting} />
           </FormField>
-          <FormField label={t('fleet.form.width')} htmlFor="vf-width">
-            <input id="vf-width" type="number" min={0} step="0.01" value={form.widthMeters ?? ''} onChange={(e) => set('widthMeters', e.target.value === '' ? null : Number(e.target.value))} disabled={isSubmitting} />
+          <FormField label={t('fleet.form.width')} htmlFor="vf-width" error={fieldErrors.widthMeters}>
+            <input id="vf-width"
+              aria-invalid={fieldErrors.widthMeters ? 'true' : undefined} type="number" min={0} step="0.01" value={form.widthMeters ?? ''} onChange={(e) => set('widthMeters', e.target.value === '' ? null : Number(e.target.value))} disabled={isSubmitting} />
           </FormField>
-          <FormField label={t('fleet.form.height')} htmlFor="vf-height">
-            <input id="vf-height" type="number" min={0} step="0.01" value={form.heightMeters ?? ''} onChange={(e) => set('heightMeters', e.target.value === '' ? null : Number(e.target.value))} disabled={isSubmitting} />
+          <FormField label={t('fleet.form.height')} htmlFor="vf-height" error={fieldErrors.heightMeters}>
+            <input id="vf-height"
+              aria-invalid={fieldErrors.heightMeters ? 'true' : undefined} type="number" min={0} step="0.01" value={form.heightMeters ?? ''} onChange={(e) => set('heightMeters', e.target.value === '' ? null : Number(e.target.value))} disabled={isSubmitting} />
           </FormField>
           <FormField
             label={t('fleet.form.volume')}
-            htmlFor="vf-volume"
+            htmlFor="vf-volume" error={fieldErrors.volumeM3}
             hint={form.volumeIsManual ? t('fleet.form.volumeManualHint') : t('fleet.form.volumeAutoHint')}
           >
             <input
               id="vf-volume"
+              aria-invalid={fieldErrors.volumeM3 ? 'true' : undefined}
               type="number"
               min={0}
               step="0.001"
@@ -261,8 +295,9 @@ export function VehicleForm({
               <span>{t('fleet.common.equipment.manualFill')}</span>
             </label>
           </FormField>
-          <FormField label={t('fleet.form.loadingMeters')} htmlFor="vf-ldm">
-            <input id="vf-ldm" type="number" min={0} step="0.01" value={form.loadingMeters} onChange={(e) => set('loadingMeters', Number(e.target.value) || 0)} disabled={isSubmitting} />
+          <FormField label={t('fleet.form.loadingMeters')} htmlFor="vf-ldm" error={fieldErrors.loadingMeters}>
+            <input id="vf-ldm"
+              aria-invalid={fieldErrors.loadingMeters ? 'true' : undefined} type="number" min={0} step="0.01" value={form.loadingMeters} onChange={(e) => set('loadingMeters', Number(e.target.value) || 0)} disabled={isSubmitting} />
           </FormField>
         </FormSection>
       ),
@@ -301,12 +336,32 @@ export function VehicleForm({
               ))}
             </select>
           </FormField>
-          <FormField label={t('vehicles.form.odometer')} htmlFor="vf-odometer">
-            <input id="vf-odometer" type="number" min={0} value={form.odometerKm} onChange={(e) => set('odometerKm', Number(e.target.value) || 0)} disabled={isSubmitting} />
+          <FormField label={t('vehicles.form.odometer')} htmlFor="vf-odometer" error={fieldErrors.odometerKm}>
+            <input id="vf-odometer"
+              aria-invalid={fieldErrors.odometerKm ? 'true' : undefined} type="number" min={0} value={form.odometerKm} onChange={(e) => set('odometerKm', Number(e.target.value) || 0)} disabled={isSubmitting} />
           </FormField>
-          <FormField label={t('vehicles.form.consumption')} htmlFor="vf-consumption" hint={t('vehicles.form.consumptionHint')}>
+          {odometerLowered && (
+            <FormField
+              label={t('vehicles.form.odometerReason')}
+              htmlFor="vf-odometer-reason"
+              required
+              hint={t('vehicles.form.odometerReasonHint', { current: currentOdometer })}
+              error={fieldErrors.odometerCorrectionReason}
+            >
+              <input
+                id="vf-odometer-reason"
+                value={form.odometerCorrectionReason ?? ''}
+                onChange={(e) => set('odometerCorrectionReason', e.target.value || null)}
+                aria-invalid={fieldErrors.odometerCorrectionReason ? 'true' : undefined}
+                maxLength={500}
+                disabled={isSubmitting}
+              />
+            </FormField>
+          )}
+          <FormField label={t('vehicles.form.consumption')} htmlFor="vf-consumption" error={fieldErrors.consumptionLPer100Km} hint={t('vehicles.form.consumptionHint')}>
             <input
               id="vf-consumption"
+              aria-invalid={fieldErrors.consumptionLPer100Km ? 'true' : undefined}
               type="number"
               min={0}
               step="0.1"

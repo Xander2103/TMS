@@ -80,7 +80,8 @@
     "volumeAutoHint": "Calculated automatically from length × width × height.",
     "internalNotes": "Internal notes",
     "docsAfterCreate": "Documents become available after creation.",
-    "payloadKg": "Payload (kg)"
+    "payloadKg": "Payload (kg)",
+    "negativeNotAllowed": "This value cannot be negative."
   },
   "assignmentSlot": {
     "notAssigned": "Not assigned",

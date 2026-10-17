@@ -57,7 +57,10 @@
     "assignmentDescription": "Can also be managed later via the Assignment tab.",
     "fixedDriver": "Fixed driver",
     "currentDriver": "Current driver",
-    "create": "Create vehicle"
+    "create": "Create vehicle",
+    "odometerReason": "Correction reason",
+    "odometerReasonHint": "The new odometer reading is lower than the current one ({current} km). Explain why.",
+    "odometerReasonRequired": "Provide a reason for the lower odometer reading."
   },
   "new": {
     "created": "Vehicle {number} created.",

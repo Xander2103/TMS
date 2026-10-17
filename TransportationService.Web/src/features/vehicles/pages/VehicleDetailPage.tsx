@@ -13,6 +13,7 @@ import { useDetailTab, type DetailTabAlias } from '../../../hooks/useDetailTab'
 import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
 import { ApiError } from '../../../api/apiClient'
+import { localizeApiError } from '../../../api/problemDetails'
 import { useLocale } from '../../../i18n/localeContext'
 import { formatInteger } from '../../../utils/numbers'
 import { AuditHistoryPanel } from '../../auditing/components/AuditHistoryPanel'
@@ -77,6 +78,8 @@ export function VehicleDetailPage() {
   const [editing, setEditing] = useState(false)
   const [form, setForm] = useState<VehicleInput | null>(null)
   const [saving, setSaving] = useState(false)
+  /** FL-M5/M6: the server's validation reason stays visible above the edit form. */
+  const [editError, setEditError] = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [confirmActive, setConfirmActive] = useState<null | 'activate' | 'deactivate'>(null)
 
@@ -182,12 +185,14 @@ export function VehicleDetailPage() {
       notes: vehicle.notes,
       volumeIsManual: vehicle.volumeIsManual,
     })
+    setEditError(null)
     setEditing(true)
   }
 
   async function saveEdit(values: VehicleInput) {
     if (!id) return
     setSaving(true)
+    setEditError(null)
     try {
       const updated = await updateVehicle(id, values)
       setVehicle(updated)
@@ -195,7 +200,9 @@ export function VehicleDetailPage() {
       setEditing(false)
       showSuccess(t('vehicles.detail.updated'))
     } catch (err) {
-      showError(err instanceof ApiError ? err.message : t('fleet.common.saveChangesFailed'))
+      const message = localizeApiError(t, err, t('fleet.common.saveChangesFailed'))
+      setEditError(message)
+      showError(message)
     } finally {
       setSaving(false)
     }
@@ -299,6 +306,7 @@ export function VehicleDetailPage() {
           mode="edit"
           initial={{ ...form, fixedDriverId: vehicle.fixedDriverId, currentDriverId: vehicle.currentDriverId }}
           isSubmitting={saving}
+          submitError={editError}
           onSubmit={saveEdit}
           onCancel={() => setEditing(false)}
           documentsSection={<FleetDocumentsPanel ownerType="vehicle" ownerId={vehicle.id} />}

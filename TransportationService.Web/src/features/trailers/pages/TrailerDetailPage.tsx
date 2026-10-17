@@ -12,6 +12,7 @@ import { TabPanel, Tabs } from '../../../components/ui/Tabs'
 import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
 import { ApiError } from '../../../api/apiClient'
+import { localizeApiError } from '../../../api/problemDetails'
 import { useLocale } from '../../../i18n/localeContext'
 import { AuditHistoryPanel } from '../../auditing/components/AuditHistoryPanel'
 import { FleetHistoryPanel } from '../../fleet-history/FleetHistoryPanel'
@@ -57,6 +58,8 @@ export function TrailerDetailPage() {
   const [editing, setEditing] = useState(false)
   const [form, setForm] = useState<TrailerInput | null>(null)
   const [saving, setSaving] = useState(false)
+  /** FL-M5/M6: the server's validation reason stays visible above the edit form. */
+  const [editError, setEditError] = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [confirmActive, setConfirmActive] = useState<null | 'activate' | 'deactivate'>(null)
 
@@ -116,12 +119,14 @@ export function TrailerDetailPage() {
       notes: trailer.notes,
       volumeIsManual: trailer.volumeIsManual,
     })
+    setEditError(null)
     setEditing(true)
   }
 
   async function saveEdit(values: TrailerInput) {
     if (!id) return
     setSaving(true)
+    setEditError(null)
     try {
       const updated = await updateTrailer(id, values)
       setTrailer(updated)
@@ -129,7 +134,9 @@ export function TrailerDetailPage() {
       setEditing(false)
       showSuccess(t('trailers.detail.updated'))
     } catch (err) {
-      showError(err instanceof ApiError ? err.message : t('fleet.common.saveChangesFailed'))
+      const message = localizeApiError(t, err, t('fleet.common.saveChangesFailed'))
+      setEditError(message)
+      showError(message)
     } finally {
       setSaving(false)
     }
@@ -217,6 +224,7 @@ export function TrailerDetailPage() {
           mode="edit"
           initial={form}
           isSubmitting={saving}
+          submitError={editError}
           onSubmit={saveEdit}
           onCancel={() => setEditing(false)}
           documentsSection={<FleetDocumentsPanel ownerType="trailer" ownerId={trailer.id} />}

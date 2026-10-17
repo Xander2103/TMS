@@ -7,6 +7,7 @@ import { SectionedForm, type SectionDef } from '../../../components/ui/Sectioned
 import { UnsavedChangesGuard } from '../../../components/ui/UnsavedChangesGuard'
 import { firstSectionWithError, useSectionNavigation } from '../../../components/ui/useSectionNavigation'
 import { useLocale } from '../../../i18n/localeContext'
+import { negativeFieldErrors } from '../../../utils/nonNegative'
 import { computeVolumeM3 } from '../../../utils/volume'
 import { LookupSelect } from '../../master-data/components/LookupSelect'
 import {
@@ -34,6 +35,7 @@ export interface TrailerFormProps {
 const SECTION_FIELD_KEYS: Record<string, string[]> = {
   algemeen: ['licensePlate'],
   registratie: ['year'],
+  capaciteit: ['capacityKg', 'axleCount', 'loadingMeters', 'lengthMeters', 'widthMeters', 'heightMeters', 'volumeM3'],
 }
 
 /**
@@ -75,6 +77,21 @@ export function TrailerForm({
     if (form.year !== null && form.year > currentYear) {
       errors.year = t('fleet.form.yearFuture', { year: currentYear })
     }
+    Object.assign(
+      errors,
+      negativeFieldErrors(
+        {
+          capacityKg: form.capacityKg,
+          axleCount: form.axleCount,
+          loadingMeters: form.loadingMeters,
+          lengthMeters: form.lengthMeters,
+          widthMeters: form.widthMeters,
+          heightMeters: form.heightMeters,
+          volumeM3: form.volumeIsManual ? form.volumeM3 : null,
+        },
+        t('fleet.form.negativeNotAllowed'),
+      ),
+    )
     return errors
   }
 
@@ -200,31 +217,38 @@ export function TrailerForm({
       optional: true,
       render: () => (
         <FormSection title={t('fleet.sections.capacity')} columns={3}>
-          <FormField label={t('fleet.form.payloadKg')} htmlFor="tf-capacity">
-            <input id="tf-capacity" type="number" step="0.01" value={form.capacityKg ?? ''} onChange={(e) => set('capacityKg', e.target.value === '' ? null : Number(e.target.value))} disabled={isSubmitting} />
+          <FormField label={t('fleet.form.payloadKg')} htmlFor="tf-capacity" error={fieldErrors.capacityKg}>
+            <input id="tf-capacity"
+              aria-invalid={fieldErrors.capacityKg ? 'true' : undefined} type="number" min={0} step="0.01" value={form.capacityKg ?? ''} onChange={(e) => set('capacityKg', e.target.value === '' ? null : Number(e.target.value))} disabled={isSubmitting} />
           </FormField>
-          <FormField label={t('fleet.form.axles')} htmlFor="tf-axles" hint={t('fleet.form.axlesHint')}>
-            <input id="tf-axles" type="number" min={0} max={12} value={form.axleCount} onChange={(e) => set('axleCount', Number(e.target.value) || 0)} disabled={isSubmitting} />
+          <FormField label={t('fleet.form.axles')} htmlFor="tf-axles" error={fieldErrors.axleCount} hint={t('fleet.form.axlesHint')}>
+            <input id="tf-axles"
+              aria-invalid={fieldErrors.axleCount ? 'true' : undefined} type="number" min={0} max={12} value={form.axleCount} onChange={(e) => set('axleCount', Number(e.target.value) || 0)} disabled={isSubmitting} />
           </FormField>
-          <FormField label={t('fleet.form.loadingMeters')} htmlFor="tf-ldm">
-            <input id="tf-ldm" type="number" min={0} step="0.01" value={form.loadingMeters} onChange={(e) => set('loadingMeters', Number(e.target.value) || 0)} disabled={isSubmitting} />
+          <FormField label={t('fleet.form.loadingMeters')} htmlFor="tf-ldm" error={fieldErrors.loadingMeters}>
+            <input id="tf-ldm"
+              aria-invalid={fieldErrors.loadingMeters ? 'true' : undefined} type="number" min={0} step="0.01" value={form.loadingMeters} onChange={(e) => set('loadingMeters', Number(e.target.value) || 0)} disabled={isSubmitting} />
           </FormField>
-          <FormField label={t('fleet.form.length')} htmlFor="tf-length">
-            <input id="tf-length" type="number" step="0.01" value={form.lengthMeters ?? ''} onChange={(e) => set('lengthMeters', e.target.value === '' ? null : Number(e.target.value))} disabled={isSubmitting} />
+          <FormField label={t('fleet.form.length')} htmlFor="tf-length" error={fieldErrors.lengthMeters}>
+            <input id="tf-length"
+              aria-invalid={fieldErrors.lengthMeters ? 'true' : undefined} type="number" min={0} step="0.01" value={form.lengthMeters ?? ''} onChange={(e) => set('lengthMeters', e.target.value === '' ? null : Number(e.target.value))} disabled={isSubmitting} />
           </FormField>
-          <FormField label={t('fleet.form.width')} htmlFor="tf-width">
-            <input id="tf-width" type="number" step="0.01" value={form.widthMeters ?? ''} onChange={(e) => set('widthMeters', e.target.value === '' ? null : Number(e.target.value))} disabled={isSubmitting} />
+          <FormField label={t('fleet.form.width')} htmlFor="tf-width" error={fieldErrors.widthMeters}>
+            <input id="tf-width"
+              aria-invalid={fieldErrors.widthMeters ? 'true' : undefined} type="number" min={0} step="0.01" value={form.widthMeters ?? ''} onChange={(e) => set('widthMeters', e.target.value === '' ? null : Number(e.target.value))} disabled={isSubmitting} />
           </FormField>
-          <FormField label={t('fleet.form.height')} htmlFor="tf-height">
-            <input id="tf-height" type="number" step="0.01" value={form.heightMeters ?? ''} onChange={(e) => set('heightMeters', e.target.value === '' ? null : Number(e.target.value))} disabled={isSubmitting} />
+          <FormField label={t('fleet.form.height')} htmlFor="tf-height" error={fieldErrors.heightMeters}>
+            <input id="tf-height"
+              aria-invalid={fieldErrors.heightMeters ? 'true' : undefined} type="number" min={0} step="0.01" value={form.heightMeters ?? ''} onChange={(e) => set('heightMeters', e.target.value === '' ? null : Number(e.target.value))} disabled={isSubmitting} />
           </FormField>
           <FormField
             label={t('fleet.form.volume')}
-            htmlFor="tf-volume"
+            htmlFor="tf-volume" error={fieldErrors.volumeM3}
             hint={form.volumeIsManual ? t('fleet.form.volumeManualHint') : t('fleet.form.volumeAutoHint')}
           >
             <input
               id="tf-volume"
+              aria-invalid={fieldErrors.volumeM3 ? 'true' : undefined}
               type="number"
               min={0}
               step="0.001"

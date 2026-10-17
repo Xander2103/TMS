@@ -80,7 +80,8 @@
     "volumeAutoHint": "Automatisch berekend uit lengte × breedte × hoogte.",
     "internalNotes": "Interne notities",
     "docsAfterCreate": "Documenten zijn beschikbaar na het aanmaken.",
-    "payloadKg": "Laadvermogen (kg)"
+    "payloadKg": "Laadvermogen (kg)",
+    "negativeNotAllowed": "Deze waarde kan niet negatief zijn."
   },
   "assignmentSlot": {
     "notAssigned": "Niet toegewezen",

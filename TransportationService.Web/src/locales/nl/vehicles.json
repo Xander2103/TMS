@@ -57,7 +57,10 @@
     "assignmentDescription": "Kan later ook via het tabblad Toewijzing beheerd worden.",
     "fixedDriver": "Vaste chauffeur",
     "currentDriver": "Huidige chauffeur",
-    "create": "Voertuig aanmaken"
+    "create": "Voertuig aanmaken",
+    "odometerReason": "Reden van correctie",
+    "odometerReasonHint": "De nieuwe kilometerstand ligt lager dan de huidige ({current} km). Leg uit waarom.",
+    "odometerReasonRequired": "Geef een reden op voor de lagere kilometerstand."
   },
   "new": {
     "created": "Voertuig {number} aangemaakt.",

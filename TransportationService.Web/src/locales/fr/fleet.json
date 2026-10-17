@@ -80,7 +80,8 @@
     "volumeAutoHint": "Calculé automatiquement à partir de longueur × largeur × hauteur.",
     "internalNotes": "Notes internes",
     "docsAfterCreate": "Les documents seront disponibles après la création.",
-    "payloadKg": "Charge utile (kg)"
+    "payloadKg": "Charge utile (kg)",
+    "negativeNotAllowed": "Cette valeur ne peut pas être négative."
   },
   "assignmentSlot": {
     "notAssigned": "Non affecté",

@@ -57,7 +57,10 @@
     "assignmentDescription": "Peut aussi être géré plus tard via l'onglet Affectation.",
     "fixedDriver": "Chauffeur attitré",
     "currentDriver": "Chauffeur actuel",
-    "create": "Créer le véhicule"
+    "create": "Créer le véhicule",
+    "odometerReason": "Motif de la correction",
+    "odometerReasonHint": "Le nouveau kilométrage est inférieur à l'actuel ({current} km). Expliquez pourquoi.",
+    "odometerReasonRequired": "Indiquez un motif pour le kilométrage inférieur."
   },
   "new": {
     "created": "Véhicule {number} créé.",

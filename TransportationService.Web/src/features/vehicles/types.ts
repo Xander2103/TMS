@@ -143,7 +143,10 @@ export interface VehicleDetail {
 export type VehicleInput = Omit<
   VehicleDetail,
   'id' | 'internalNumber' | 'categoryName' | 'fixedDriverId' | 'fixedDriverName' | 'currentDriverId' | 'currentDriverName'
->
+> & {
+  /** FL-M6: mandatory when the odometer is lowered on edit; ignored otherwise. */
+  odometerCorrectionReason?: string | null
+}
 
 /** Create-only variant: initial driver assignment may be supplied when registering a vehicle. */
 export interface CreateVehicleInput extends VehicleInput {
