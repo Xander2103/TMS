@@ -189,7 +189,7 @@ public class InvoiceService : IInvoiceService
         var pageRows = await ordered
             .Skip(page.Skip)
             .Take(page.PageSize)
-            .Select(x => new { x.i.Id, x.i.InvoiceNumber, x.i.InvoiceDate, x.i.DueDate, x.i.CustomerId, x.CustomerName, x.CustomerNumber, x.i.Status, x.i.Currency, x.i.Kind })
+            .Select(x => new { x.i.Id, x.i.InvoiceNumber, x.i.InvoiceDate, x.i.DueDate, x.i.CustomerId, x.CustomerName, x.CustomerNumber, x.i.Status, x.i.Currency, x.i.Kind, x.i.PaidAt })
             .ToListAsync(cancellationToken);
 
         var invoiceIds = pageRows.Select(r => r.Id).ToList();
@@ -219,7 +219,7 @@ public class InvoiceService : IInvoiceService
             return new InvoiceListItemDto(
                 r.Id, r.InvoiceNumber, r.InvoiceDate, r.DueDate, r.CustomerId, r.CustomerName,
                 r.Status, r.Currency, subtotal, vat, subtotal + vat, invoiceLines.Count, r.Kind,
-                r.CustomerNumber, peppolByInvoice.GetValueOrDefault(r.Id), null,
+                r.CustomerNumber, peppolByInvoice.GetValueOrDefault(r.Id), r.PaidAt,
                 DisplayNumberOf(r.InvoiceNumber, r.Id));
         }).ToList();
 
@@ -228,7 +228,7 @@ public class InvoiceService : IInvoiceService
 
     /// <summary>The legal number once issued; a draft shows a reference derived from its id (ACC-H3).</summary>
     private static string DisplayNumberOf(string? invoiceNumber, Guid id) =>
-        string.IsNullOrEmpty(invoiceNumber) ? "CONCEPT-" + id.ToString("N")[..4].ToUpperInvariant() : invoiceNumber;
+        string.IsNullOrEmpty(invoiceNumber) ? "CONCEPT-" + id.ToString("N")[..8].ToUpperInvariant() : invoiceNumber;
 
     public async Task<InvoiceDetailDto?> GetByIdAsync(Guid id, CancellationToken cancellationToken)
     {

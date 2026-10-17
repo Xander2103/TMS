@@ -6535,6 +6535,10 @@ namespace TransportationService.Api.Migrations
                     b.Property<Guid?>("CreatedByUserId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("CreditReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
                     b.Property<Guid?>("CreditedInvoiceId")
                         .HasColumnType("uuid");
 
@@ -6543,8 +6547,52 @@ namespace TransportationService.Api.Migrations
                         .HasMaxLength(3)
                         .HasColumnType("character varying(3)");
 
+                    b.Property<string>("CustomerBuyerReferenceSnapshot")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("CustomerCitySnapshot")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("CustomerCompanyNumberSnapshot")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<string>("CustomerCountryCodeSnapshot")
+                        .HasMaxLength(2)
+                        .HasColumnType("character varying(2)");
+
+                    b.Property<string>("CustomerHouseNumberSnapshot")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
                     b.Property<Guid>("CustomerId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("CustomerLegalNameSnapshot")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("CustomerNameSnapshot")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("CustomerPeppolIdSnapshot")
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)");
+
+                    b.Property<string>("CustomerPeppolSchemeSnapshot")
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)");
+
+                    b.Property<string>("CustomerPostalCodeSnapshot")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("CustomerStreetSnapshot")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
 
                     b.Property<string>("CustomerVatNumberSnapshot")
                         .HasMaxLength(30)
@@ -6563,11 +6611,13 @@ namespace TransportationService.Api.Migrations
                     b.Property<DateOnly>("DueDate")
                         .HasColumnType("date");
 
+                    b.Property<bool>("DueDateIsManual")
+                        .HasColumnType("boolean");
+
                     b.Property<DateOnly>("InvoiceDate")
                         .HasColumnType("date");
 
                     b.Property<string>("InvoiceNumber")
-                        .IsRequired()
                         .HasMaxLength(30)
                         .HasColumnType("character varying(30)");
 
@@ -6579,6 +6629,9 @@ namespace TransportationService.Api.Migrations
 
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
+
+                    b.Property<DateTime?>("IssuedAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("Kind")
                         .IsRequired()
@@ -6601,9 +6654,18 @@ namespace TransportationService.Api.Migrations
                     b.Property<bool>("NumberIsManual")
                         .HasColumnType("boolean");
 
+                    b.Property<DateTime?>("PaidAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("PaidByUserId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("PaymentReference")
                         .HasMaxLength(30)
                         .HasColumnType("character varying(30)");
+
+                    b.Property<int>("PaymentTermDays")
+                        .HasColumnType("integer");
 
                     b.Property<string>("PurchaseOrderNumber")
                         .HasMaxLength(100)
@@ -6613,11 +6675,55 @@ namespace TransportationService.Api.Migrations
                         .HasMaxLength(300)
                         .HasColumnType("character varying(300)");
 
+                    b.Property<string>("SellerBic")
+                        .HasMaxLength(11)
+                        .HasColumnType("character varying(11)");
+
+                    b.Property<string>("SellerCity")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("SellerCompanyNumber")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<string>("SellerCountryCode")
+                        .HasMaxLength(2)
+                        .HasColumnType("character varying(2)");
+
+                    b.Property<string>("SellerHouseNumber")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
                     b.Property<string>("SellerIban")
                         .HasMaxLength(34)
                         .HasColumnType("character varying(34)");
 
+                    b.Property<string>("SellerInvoiceFooter")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("SellerLegalName")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
                     b.Property<string>("SellerName")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("SellerPeppolId")
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)");
+
+                    b.Property<string>("SellerPeppolScheme")
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)");
+
+                    b.Property<string>("SellerPostalCode")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("SellerStreet")
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
@@ -6659,7 +6765,7 @@ namespace TransportationService.Api.Migrations
 
                     b.HasIndex("TenantId", "InvoiceNumber")
                         .IsUnique()
-                        .HasFilter("\"IsDeleted\" = false");
+                        .HasFilter("\"IsDeleted\" = false AND \"InvoiceNumber\" IS NOT NULL");
 
                     b.HasIndex("TenantId", "Status");
 
@@ -6791,8 +6897,8 @@ namespace TransportationService.Api.Migrations
                         .HasColumnType("character varying(30)");
 
                     b.Property<decimal>("Quantity")
-                        .HasPrecision(12, 2)
-                        .HasColumnType("numeric(12,2)");
+                        .HasPrecision(14, 3)
+                        .HasColumnType("numeric(14,3)");
 
                     b.Property<Guid?>("SalesCategoryId")
                         .HasColumnType("uuid");
@@ -6821,9 +6927,13 @@ namespace TransportationService.Api.Migrations
                         .HasColumnType("character varying(10)")
                         .HasDefaultValue("C62");
 
+                    b.Property<string>("UnitLabel")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
                     b.Property<decimal>("UnitPrice")
-                        .HasPrecision(12, 2)
-                        .HasColumnType("numeric(12,2)");
+                        .HasPrecision(14, 4)
+                        .HasColumnType("numeric(14,4)");
 
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -6901,6 +7011,13 @@ namespace TransportationService.Api.Migrations
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
 
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValue("Invoice");
+
                     b.Property<Guid>("LegalEntityId")
                         .HasColumnType("uuid");
 
@@ -6927,7 +7044,7 @@ namespace TransportationService.Api.Migrations
 
                     b.HasIndex("LegalEntityId");
 
-                    b.HasIndex("TenantId", "LegalEntityId", "Year", "Month")
+                    b.HasIndex("TenantId", "LegalEntityId", "Kind", "Year", "Month")
                         .IsUnique()
                         .HasFilter("\"IsDeleted\" = false");
 
@@ -8780,6 +8897,9 @@ namespace TransportationService.Api.Migrations
 
                     b.Property<int?>("ExtraTimeRoundingStepMinutes")
                         .HasColumnType("integer");
+
+                    b.Property<bool>("FreeConfirmed")
+                        .HasColumnType("boolean");
 
                     b.Property<string>("GoodsDescription")
                         .HasMaxLength(1000)
