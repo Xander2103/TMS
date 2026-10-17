@@ -1,0 +1,15 @@
+.fleet-history-audit {
+  margin-top: 1.5rem;
+  border-top: 1px solid var(--border);
+  padding-top: 0.75rem;
+}
+
+.fleet-history-audit > summary {
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 0.875rem;
+}
+
+.fleet-history-audit[open] > summary {
+  margin-bottom: 0.75rem;
+}

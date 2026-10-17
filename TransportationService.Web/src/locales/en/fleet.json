@@ -279,5 +279,38 @@
   "api": {
     "uploadFailed": "Upload failed.",
     "downloadFailed": "The file could not be downloaded."
+  },
+  "history": {
+    "loading": "Loading history…",
+    "loadFailed": "The history could not be loaded.",
+    "empty": "No events yet.",
+    "emptyFiltered": "No events for this filter.",
+    "filterLabel": "Show",
+    "system": "System",
+    "unknownUser": "Unknown user",
+    "technical": "Technical details",
+    "filters": {
+      "all": "All",
+      "status": "Status & readiness",
+      "documents": "Documents & inspections",
+      "maintenance": "Maintenance & damage",
+      "planning": "Planning",
+      "costs": "Costs"
+    },
+    "categories": {
+      "lifecycle": "Details",
+      "status": "Status",
+      "readiness": "Readiness",
+      "assignment": "Assignment",
+      "document": "Document",
+      "inspection": "Inspection",
+      "tachograph": "Tachograph",
+      "maintenance": "Maintenance",
+      "damage": "Damage",
+      "fuel": "Fuel",
+      "leasing": "Leasing",
+      "planning": "Planning"
+    },
+    "auditTrail": "Audit trail (technical)"
   }
 }

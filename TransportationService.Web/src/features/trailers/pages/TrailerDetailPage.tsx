@@ -14,6 +14,7 @@ import { useAuth } from '../../auth/authContextValue'
 import { ApiError } from '../../../api/apiClient'
 import { useLocale } from '../../../i18n/localeContext'
 import { AuditHistoryPanel } from '../../auditing/components/AuditHistoryPanel'
+import { FleetHistoryPanel } from '../../fleet-history/FleetHistoryPanel'
 import { FleetDocumentsPanel } from '../../fleet-documents/components/FleetDocumentsPanel'
 import { MaintenancePanel } from '../../maintenance/components/MaintenancePanel'
 import { MaintenancePolicySummary } from '../../maintenance-policies/components/MaintenancePolicySummary'
@@ -282,7 +283,13 @@ export function TrailerDetailPage() {
           )}
           {tab === 'historiek' && (
             <TabPanel tabId="historiek">
-              <AuditHistoryPanel entityType="Trailer" entityId={trailer.id} />
+              <FleetHistoryPanel assetKind="trailer" assetId={trailer.id} />
+              {hasPermission('audit_logs.view') && (
+                <details className="fleet-history-audit">
+                  <summary>{t('fleet.history.auditTrail')}</summary>
+                  <AuditHistoryPanel entityType="Trailer" entityId={trailer.id} />
+                </details>
+              )}
             </TabPanel>
           )}
         </>

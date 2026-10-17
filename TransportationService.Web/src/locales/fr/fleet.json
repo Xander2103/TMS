@@ -279,5 +279,38 @@
   "api": {
     "uploadFailed": "Le téléversement a échoué.",
     "downloadFailed": "Le fichier n'a pas pu être téléchargé."
+  },
+  "history": {
+    "loading": "Chargement de l’historique…",
+    "loadFailed": "L’historique n’a pas pu être chargé.",
+    "empty": "Aucun événement pour l’instant.",
+    "emptyFiltered": "Aucun événement pour ce filtre.",
+    "filterLabel": "Afficher",
+    "system": "Système",
+    "unknownUser": "Utilisateur inconnu",
+    "technical": "Détails techniques",
+    "filters": {
+      "all": "Tout",
+      "status": "Statut & disponibilité",
+      "documents": "Documents & contrôles",
+      "maintenance": "Entretien & dégâts",
+      "planning": "Planning",
+      "costs": "Coûts"
+    },
+    "categories": {
+      "lifecycle": "Données",
+      "status": "Statut",
+      "readiness": "Disponibilité",
+      "assignment": "Affectation",
+      "document": "Document",
+      "inspection": "Contrôle",
+      "tachograph": "Tachygraphe",
+      "maintenance": "Entretien",
+      "damage": "Dégât",
+      "fuel": "Carburant",
+      "leasing": "Leasing",
+      "planning": "Planning"
+    },
+    "auditTrail": "Journal d’audit (technique)"
   }
 }

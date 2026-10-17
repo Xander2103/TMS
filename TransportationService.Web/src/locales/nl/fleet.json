@@ -279,5 +279,38 @@
   "api": {
     "uploadFailed": "Uploaden is mislukt.",
     "downloadFailed": "Bestand kon niet worden gedownload."
+  },
+  "history": {
+    "loading": "Historiek laden…",
+    "loadFailed": "De historiek kon niet worden geladen.",
+    "empty": "Nog geen gebeurtenissen.",
+    "emptyFiltered": "Geen gebeurtenissen voor deze filter.",
+    "filterLabel": "Toon",
+    "system": "Systeem",
+    "unknownUser": "Onbekende gebruiker",
+    "technical": "Technische details",
+    "filters": {
+      "all": "Alles",
+      "status": "Status & inzetbaarheid",
+      "documents": "Documenten & keuringen",
+      "maintenance": "Onderhoud & schade",
+      "planning": "Planning",
+      "costs": "Kosten"
+    },
+    "categories": {
+      "lifecycle": "Gegevens",
+      "status": "Status",
+      "readiness": "Inzetbaarheid",
+      "assignment": "Toewijzing",
+      "document": "Document",
+      "inspection": "Keuring",
+      "tachograph": "Tachograaf",
+      "maintenance": "Onderhoud",
+      "damage": "Schade",
+      "fuel": "Brandstof",
+      "leasing": "Leasing",
+      "planning": "Planning"
+    },
+    "auditTrail": "Audittrail (technisch)"
   }
 }

@@ -50,6 +50,7 @@ vi.mock('../../../damage/components/DamagePanel', () => ({ DamagePanel: stub('da
 vi.mock('../../../fuel/components/FuelPanel', () => ({ FuelPanel: stub('fuel') }))
 vi.mock('../../../fleet-kpi/FleetKpiPanel', () => ({ FleetKpiPanel: stub('kpi') }))
 vi.mock('../../../auditing/components/AuditHistoryPanel', () => ({ AuditHistoryPanel: stub('history') }))
+vi.mock('../../../fleet-history/FleetHistoryPanel', () => ({ FleetHistoryPanel: stub('fleet-history') }))
 vi.mock('../../../fleet-assignment/AssignmentSlot', () => ({ AssignmentSlot: ({ title }: { title: string }) => <div>{`slot:${title}`}</div> }))
 vi.mock('../../../drivers/api/driversApi', () => ({ searchDrivers: () => Promise.resolve({ items: [] }) }))
 
@@ -66,7 +67,7 @@ function renderPage(url = '/vehicles/v1') {
 }
 
 const ALL = [
-  'vehicles.edit', 'vehicles.delete', 'fleet_documents.view', 'inspections.view', 'tachograph.view', 'maintenance.view',
+  'vehicles.view', 'vehicles.edit', 'vehicles.delete', 'fleet_documents.view', 'inspections.view', 'tachograph.view', 'maintenance.view',
   'damage_reports.view', 'fuel.view', 'kpi.view', 'audit_logs.view',
 ]
 
@@ -120,8 +121,15 @@ describe('VehicleDetailPage (B16)', () => {
     expect(screen.queryByText('panel:kpi')).not.toBeInTheDocument()
     expect(screen.queryByRole('tab', { name: 'Documenten & keuringen' })).not.toBeInTheDocument()
     expect(screen.queryByRole('tab', { name: 'Onderhoud & schade' })).not.toBeInTheDocument()
-    // Without audit rights the history tab would only say "no permission".
+    // Without vehicles.view there is no timeline to read either.
     expect(screen.queryByRole('tab', { name: 'Historiek' })).not.toBeInTheDocument()
+  })
+
+  it('FL-H3: Historiek shows the fleet timeline for every vehicle viewer; the raw audit trail only with audit_logs.view', async () => {
+    auth.granted = new Set(['vehicles.view'])
+    renderPage('/vehicles/v1?tab=historiek')
+    expect(await screen.findByText('panel:fleet-history')).toBeInTheDocument()
+    expect(screen.queryByText('panel:history')).not.toBeInTheDocument()
   })
 
   it('never requests compliance lists without permission and then claims nothing', async () => {

@@ -16,6 +16,7 @@ import { ApiError } from '../../../api/apiClient'
 import { useLocale } from '../../../i18n/localeContext'
 import { formatInteger } from '../../../utils/numbers'
 import { AuditHistoryPanel } from '../../auditing/components/AuditHistoryPanel'
+import { FleetHistoryPanel } from '../../fleet-history/FleetHistoryPanel'
 import { AssignmentSlot } from '../../fleet-assignment/AssignmentSlot'
 import { FleetDocumentsPanel } from '../../fleet-documents/components/FleetDocumentsPanel'
 import { MaintenancePanel } from '../../maintenance/components/MaintenancePanel'
@@ -77,8 +78,10 @@ export function VehicleDetailPage() {
   const canViewDocumentsGroup = hasPermission('fleet_documents.view') || hasPermission('inspections.view') || hasPermission('tachograph.view')
   const canViewMaintenanceGroup =
     hasPermission('maintenance.view') || hasPermission('damage_reports.view') || hasPermission('maintenance_policies.view') || hasPermission('maintenance_policies.manage')
-  // Without audit rights the history tab could only say "no permission": leave it out.
-  const canViewHistory = hasPermission('audit_logs.view')
+  // FL-H3: the fleet timeline is readable by every vehicle viewer (amounts are shaped server-side);
+  // the raw audit trail stays an extra for audit_logs.view holders.
+  const canViewHistory = hasPermission('vehicles.view')
+  const canViewAudit = hasPermission('audit_logs.view')
   const tabIds: VehicleTab[] = [
     'overzicht',
     'techniek',
@@ -415,7 +418,13 @@ export function VehicleDetailPage() {
 
           {tab === 'historiek' && (
             <TabPanel tabId="historiek">
-              <AuditHistoryPanel entityType="Vehicle" entityId={vehicle.id} />
+              <FleetHistoryPanel assetKind="vehicle" assetId={vehicle.id} />
+              {canViewAudit && (
+                <details className="fleet-history-audit">
+                  <summary>{t('fleet.history.auditTrail')}</summary>
+                  <AuditHistoryPanel entityType="Vehicle" entityId={vehicle.id} />
+                </details>
+              )}
             </TabPanel>
           )}
         </>
