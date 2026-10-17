@@ -267,6 +267,20 @@ describe('InvoiceDetailPage — accounting remediation', () => {
     expect(dueDate).toHaveValue('2026-12-20')
   })
 
+  it('ACC-H5: a hand-set due date (dueDateIsManual) survives a new edit session and a date change', async () => {
+    api.getInvoice.mockResolvedValue(invoice({ dueDate: '2026-12-20', dueDateIsManual: true }))
+    const user = userEvent.setup()
+    renderPage()
+    await user.click(await screen.findByRole('button', { name: 'Bewerken' }))
+    const invoiceDate = screen.getByLabelText('Factuurdatum')
+    const dueDate = screen.getByLabelText('Vervaldag')
+    expect(dueDate).toHaveValue('2026-12-20')
+    await user.clear(invoiceDate)
+    await user.type(invoiceDate, '2026-10-29')
+    expect(dueDate).toHaveValue('2026-12-20')
+    expect(screen.queryByTestId('due-date-recalculated')).not.toBeInTheDocument()
+  })
+
   it('ACC-H3: a draft without a legal number shows its draft reference and the issue hint', async () => {
     api.getInvoice.mockResolvedValue(invoice({ invoiceNumber: null, displayNumber: 'CONCEPT-A3FC' }))
     renderPage()

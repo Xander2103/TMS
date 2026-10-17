@@ -58,6 +58,28 @@ describe('NewInvoicePage — VAT default, precision, numbering, server reasons',
     api.getDefaultVatRate.mockResolvedValue({ vatRatePercent: 21 })
   })
 
+  it('ACC-B1: a "Nakijken" order is listed but never pre-selected nor selectable; only billable work is sent', async () => {
+    const order = (id: string, orderNumber: string, ready: boolean) => ({
+      id, orderNumber, orderDate: '2026-10-17', goodsDescription: 'TEST goederen', loadingCity: 'Antwerpen', unloadingCity: 'Gent',
+      agreedPrice: ready ? 480 : null, legalEntityId: null, isFree: false, isInvoiceable: ready,
+      invoiceReadiness: ready ? 'ReadyForInvoice' : 'ReviewRequired', invoiceReadinessReasons: ready ? null : 'pricing.none',
+    })
+    api.listUninvoicedOrders.mockResolvedValue([order('o-ready', 'ORD-0064', true), order('o-review', 'ORD-0065', false)])
+    api.createInvoice.mockResolvedValue({ id: 'inv-1', invoiceNumber: null, displayNumber: 'CONCEPT-ABCDEF12' })
+    const user = await chooseCustomer()
+    const review = await screen.findByLabelText('Selecteer ORD-0065')
+    expect(review).toBeDisabled()
+    expect(review).not.toBeChecked()
+    expect(screen.getByLabelText('Selecteer ORD-0064')).toBeChecked()
+    expect(screen.getByText(/Geschat subtotaal/).parentElement).toHaveTextContent('480,00')
+    // Clicking the row does not sneak it in either.
+    await user.click(screen.getByText('ORD-0065'))
+    expect(review).not.toBeChecked()
+    await user.click(screen.getByRole('button', { name: 'Factuur aanmaken' }))
+    await waitFor(() => expect(api.createInvoice).toHaveBeenCalled())
+    expect(api.createInvoice.mock.calls[0][0]).toMatchObject({ orderIds: ['o-ready'] })
+  })
+
   it('a manual line takes the customer VAT (21) and the inputs accept 3/4 decimals', async () => {
     const user = await chooseCustomer()
     await waitFor(() => expect(api.getDefaultVatRate).toHaveBeenCalledWith('cust-1'))

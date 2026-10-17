@@ -201,7 +201,9 @@ export function InvoiceDetailPage() {
     }))
     setInvoiceDate(invoice.invoiceDate)
     setDueDate(invoice.dueDate)
-    setDueDateTouched(false)
+    // ACC-H5: a due date the accountant set by hand stays theirs across edit sessions — only an
+    // automatically derived one follows the invoice date.
+    setDueDateTouched(invoice.dueDateIsManual ?? false)
     setPeriodInput(period)
     setNotes(invoice.notes ?? '')
     setPoNumber(invoice.purchaseOrderNumber ?? '')

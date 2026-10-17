@@ -127,6 +127,8 @@ export interface InvoiceDetail {
   defaultVatRatePercent?: number | null
   /** ACC-H5: effective payment term (customer → legal entity → tenant) in days. */
   paymentTermDays?: number | null
+  /** ACC-H5: true when the accountant set the due date by hand; it then no longer follows the invoice date. */
+  dueDateIsManual?: boolean
   paidAt?: string | null
   paidByName?: string | null
   /** ACC-M11: why the credit note was made (credit notes only). */
@@ -186,6 +188,8 @@ export interface UninvoicedOrder {
   invoiceReadiness?: string
   /** Puntkomma-gescheiden redencodes bij ReviewRequired (bv. pricing.stale;pod.missing). */
   invoiceReadinessReasons?: string | null
+  /** ACC-B1: false = listed for context only ("Nakijken"); the server refuses it on an invoice. */
+  isInvoiceable?: boolean
 }
 
 /** Mirrors UninvoicedActivityDto (GET /api/invoices/uninvoiced-activities): a priced dossier activity without an invoice line. */
@@ -237,7 +241,8 @@ export function unitPrice(value: number, currency = 'EUR'): string {
   const body = formatQuantity(value, decimals)
   // formatQuantity drops trailing zeros; pad back to at least two so prices read as money.
   const [integer, fraction = ''] = body.split(/[.,]/)
-  const separator = body.includes(',') ? ',' : '.'
+  // The locale's decimal separator, also when the value has no fraction at all ("480" → "480,00").
+  const separator = formatQuantity(0.5, 1).replace(/\d/g, '') || ','
   const padded = fraction.length >= 2 ? body : `${integer}${separator}${fraction.padEnd(2, '0')}`
   return currency === 'EUR' ? `€ ${padded}` : `${currency} ${padded}`
 }

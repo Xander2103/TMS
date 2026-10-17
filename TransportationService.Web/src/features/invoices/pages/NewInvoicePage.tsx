@@ -142,7 +142,8 @@ export function NewInvoicePage() {
       .then((data) => {
         if (!mounted) return
         setOrders(data)
-        setSelectedOrderIds(data.map((o) => o.id)) // default: everything selected
+        // default: everything BILLABLE selected — a "Nakijken" order is never pre-selected (ACC-B1)
+        setSelectedOrderIds(data.filter((o) => o.isInvoiceable !== false).map((o) => o.id))
       })
       .catch(() => {
         if (mounted) setOrders([])
@@ -211,6 +212,7 @@ export function NewInvoicePage() {
   }
 
   function toggleOrder(id: string) {
+    if (orders?.some((o) => o.id === id && o.isInvoiceable === false)) return // ACC-B1: not billable from here
     setSelectedOrderIds((ids) => (ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]))
   }
 
@@ -383,6 +385,8 @@ export function NewInvoicePage() {
                           checked={selectedOrderIds.includes(order.id)}
                           onChange={() => toggleOrder(order.id)}
                           onClick={(e) => e.stopPropagation()}
+                          disabled={order.isInvoiceable === false}
+                          title={order.isInvoiceable === false ? readinessTooltip(t, order.invoiceReadinessReasons) : undefined}
                           aria-label={t('invoices.new.selectOrder', { number: order.orderNumber })}
                         />
                       </td>
