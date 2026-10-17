@@ -27,8 +27,9 @@ export function searchVehicles(params: SearchVehiclesParams): Promise<PagedResul
   return apiClient.getJson<PagedResult<VehicleListItem>>(`/api/vehicles?${query.toString()}`)
 }
 
-export function getVehicleOptions(): Promise<VehicleOption[]> {
-  return apiClient.getJson<VehicleOption[]>('/api/vehicles/options')
+/** FL-H1/H2: `date` (YYYY-MM-DD, e.g. the trip date) evaluates each option's readiness for that day; default today. */
+export function getVehicleOptions(date?: string | null): Promise<VehicleOption[]> {
+  return apiClient.getJson<VehicleOption[]>(`/api/vehicles/options${date ? `?date=${date}` : ''}`)
 }
 
 export function getVehicle(id: string, signal?: AbortSignal): Promise<VehicleDetail> {

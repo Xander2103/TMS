@@ -42,6 +42,8 @@
     "deactivateMessage": "Désactiver {number} ? L'historique est conservé, mais la semi-remorque ne peut plus être affectée à de nouvelles tournées.",
     "reactivateMessage": "Réactiver {number} ? La semi-remorque sera de nouveau disponible.",
     "deactivated": "Semi-remorque désactivée.",
-    "reactivated": "Semi-remorque réactivée."
+    "reactivated": "Semi-remorque réactivée.",
+    "notFound": "Remorque introuvable.",
+    "forbidden": "Pas d'accès à cette remorque."
   }
 }

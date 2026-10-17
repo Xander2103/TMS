@@ -24,10 +24,13 @@ import { LOOKUP_RESOURCES } from '../features/master-data/lookupRegistry'
 import { RequirePermission } from './RequirePermission'
 import { navPermissions } from './routePermissions'
 import { transportRoutePermissions } from './transportRoutePermissions'
+import { fleetRoutePermissions } from './fleetRoutePermissions'
 import { EmployeeRecordGuard } from './EmployeeRecordGuard'
 
 /** M14: rights per transport route (see transportRoutePermissions). */
 const TRANSPORT_GUARDS = transportRoutePermissions()
+/** FL-M10: rights per fleet route (see fleetRoutePermissions). */
+const FLEET_GUARDS = fleetRoutePermissions()
 
 /**
  * Route-based code splitting: every page loads as its own chunk on first visit, so the
@@ -306,15 +309,15 @@ const router = createBrowserRouter(
           <Route path="/drivers" element={<Navigate to="/employees?view=chauffeurs" replace />} />
           <Route path="/drivers/new" element={<RequirePermission permissions={['drivers.create']}><NewDriverPage /></RequirePermission>} />
           <Route path="/drivers/:id" element={<RequirePermission permissions={['drivers.view']}><DriverDetailPage /></RequirePermission>} />
-          <Route path="/fleet" element={<FleetDashboardPage />} />
-          <Route path="/vehicles" element={<VehiclesPage />} />
-          <Route path="/vehicles/new" element={<NewVehiclePage />} />
-          <Route path="/vehicles/:id" element={<VehicleDetailPage />} />
-          <Route path="/trailers" element={<TrailersPage />} />
-          <Route path="/trailers/new" element={<NewTrailerPage />} />
-          <Route path="/trailers/:id" element={<TrailerDetailPage />} />
-          <Route path="/tank-cards" element={<TankCardsPage />} />
-          <Route path="/maintenance-policies" element={<MaintenancePoliciesPage />} />
+          <Route path="/fleet" element={<RequirePermission permissions={FLEET_GUARDS['/fleet']}><FleetDashboardPage /></RequirePermission>} />
+          <Route path="/vehicles" element={<RequirePermission permissions={FLEET_GUARDS['/vehicles']}><VehiclesPage /></RequirePermission>} />
+          <Route path="/vehicles/new" element={<RequirePermission permissions={FLEET_GUARDS['/vehicles/new']}><NewVehiclePage /></RequirePermission>} />
+          <Route path="/vehicles/:id" element={<RequirePermission permissions={FLEET_GUARDS['/vehicles/:id']}><VehicleDetailPage /></RequirePermission>} />
+          <Route path="/trailers" element={<RequirePermission permissions={FLEET_GUARDS['/trailers']}><TrailersPage /></RequirePermission>} />
+          <Route path="/trailers/new" element={<RequirePermission permissions={FLEET_GUARDS['/trailers/new']}><NewTrailerPage /></RequirePermission>} />
+          <Route path="/trailers/:id" element={<RequirePermission permissions={FLEET_GUARDS['/trailers/:id']}><TrailerDetailPage /></RequirePermission>} />
+          <Route path="/tank-cards" element={<RequirePermission permissions={FLEET_GUARDS['/tank-cards']}><TankCardsPage /></RequirePermission>} />
+          <Route path="/maintenance-policies" element={<RequirePermission permissions={FLEET_GUARDS['/maintenance-policies']}><MaintenancePoliciesPage /></RequirePermission>} />
           <Route path="/dossiers" element={<RequirePermission permissions={TRANSPORT_GUARDS['/dossiers']}><DossiersPage /></RequirePermission>} />
           <Route path="/dossiers/new" element={<RequirePermission permissions={TRANSPORT_GUARDS['/dossiers/new']}><NewDossierPage /></RequirePermission>} />
           {/* Redesign 2026-09-11: one route element for the dossier shell; the optional segment

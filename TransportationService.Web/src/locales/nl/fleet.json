@@ -312,5 +312,53 @@
       "planning": "Planning"
     },
     "auditTrail": "Audittrail (technisch)"
+  },
+  "readiness": {
+    "title": "Inzetbaarheid",
+    "loading": "Inzetbaarheid laden…",
+    "loadFailed": "De inzetbaarheid kon niet worden bepaald.",
+    "conditional": "alleen voor specifieke opdrachten",
+    "level": {
+      "Deployable": "Inzetbaar",
+      "Warning": "Met aandachtspunten",
+      "Blocked": "Niet inzetbaar"
+    }
+  },
+  "references": {
+    "vehicle": "voertuig",
+    "trailer": "oplegger",
+    "deleteTitle": "Verwijderen",
+    "cannotDeleteTitle": "Verwijderen niet mogelijk",
+    "confirmDelete": "Weet je zeker dat je {noun} {number} wilt verwijderen? Er zijn geen ritten of wagenparkgegevens aan gekoppeld.",
+    "cannotDelete": "Dit {noun} ({number}) kan niet worden verwijderd omdat het nog gekoppeld is aan: {parts}.",
+    "deactivateInstead": "Deactiveer het {noun} in plaats daarvan: het blijft zichtbaar op bestaande ritten en in de historiek, maar kan niet meer ingepland worden.",
+    "alreadyInactive": "Het {noun} is al gedeactiveerd; de historiek blijft behouden.",
+    "deleteFailed": "Het verwijderen is mislukt.",
+    "loadFailed": "De koppelingen konden niet worden opgehaald. Probeer opnieuw.",
+    "plannedTripsWarning_one": "Dit {noun} heeft 1 geplande rit:",
+    "plannedTripsWarning_other": "Dit {noun} heeft {count} geplande ritten:",
+    "plannedTripsConsequence": "Deze ritten worden niet geannuleerd of ontkoppeld, maar tonen daarna een blokkerend conflict tot er een ander voertuig is toegewezen.",
+    "plannedTrips_one": "1 geplande rit",
+    "plannedTrips_other": "{count} geplande ritten",
+    "completedTrips_one": "1 afgeronde rit",
+    "completedTrips_other": "{count} afgeronde ritten",
+    "otherTrips_one": "1 andere rit (concept/geannuleerd)",
+    "otherTrips_other": "{count} andere ritten (concept/geannuleerd)",
+    "maintenance_one": "1 onderhoudsbeurt",
+    "maintenance_other": "{count} onderhoudsbeurten",
+    "damage_one": "1 schademelding",
+    "damage_other": "{count} schademeldingen",
+    "documents_one": "1 document",
+    "documents_other": "{count} documenten",
+    "inspections_one": "1 keuring",
+    "inspections_other": "{count} keuringen",
+    "fuel_one": "1 tankbeurt",
+    "fuel_other": "{count} tankbeurten",
+    "leasing_one": "1 leasingcontract",
+    "leasing_other": "{count} leasingcontracten",
+    "tachograph_one": "1 tachograafijking",
+    "tachograph_other": "{count} tachograafijkingen",
+    "tankCards_one": "1 tankkaart",
+    "tankCards_other": "{count} tankkaarten"
   }
 }

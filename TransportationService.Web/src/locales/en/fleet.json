@@ -312,5 +312,53 @@
       "planning": "Planning"
     },
     "auditTrail": "Audit trail (technical)"
+  },
+  "readiness": {
+    "title": "Deployability",
+    "loading": "Loading deployability…",
+    "loadFailed": "Deployability could not be determined.",
+    "conditional": "only for specific orders",
+    "level": {
+      "Deployable": "Deployable",
+      "Warning": "With attention points",
+      "Blocked": "Not deployable"
+    }
+  },
+  "references": {
+    "vehicle": "vehicle",
+    "trailer": "trailer",
+    "deleteTitle": "Delete",
+    "cannotDeleteTitle": "Cannot delete",
+    "confirmDelete": "Delete {noun} {number}? No trips or fleet records refer to it.",
+    "cannotDelete": "This {noun} ({number}) cannot be deleted because it is still linked to: {parts}.",
+    "deactivateInstead": "Deactivate the {noun} instead: it stays visible on existing trips and in the history but can no longer be planned.",
+    "alreadyInactive": "The {noun} is already deactivated; its history is kept.",
+    "deleteFailed": "Deleting failed.",
+    "loadFailed": "The links could not be loaded. Try again.",
+    "plannedTripsWarning_one": "This {noun} has 1 planned trip:",
+    "plannedTripsWarning_other": "This {noun} has {count} planned trips:",
+    "plannedTripsConsequence": "These trips are not cancelled or unassigned, but will show a blocking conflict until another vehicle is assigned.",
+    "plannedTrips_one": "1 planned trip",
+    "plannedTrips_other": "{count} planned trips",
+    "completedTrips_one": "1 completed trip",
+    "completedTrips_other": "{count} completed trips",
+    "otherTrips_one": "1 other trip (draft/cancelled)",
+    "otherTrips_other": "{count} other trips (draft/cancelled)",
+    "maintenance_one": "1 maintenance record",
+    "maintenance_other": "{count} maintenance records",
+    "damage_one": "1 damage report",
+    "damage_other": "{count} damage reports",
+    "documents_one": "1 document",
+    "documents_other": "{count} documents",
+    "inspections_one": "1 inspection",
+    "inspections_other": "{count} inspections",
+    "fuel_one": "1 fuel entry",
+    "fuel_other": "{count} fuel entries",
+    "leasing_one": "1 leasing contract",
+    "leasing_other": "{count} leasing contracts",
+    "tachograph_one": "1 tachograph calibration",
+    "tachograph_other": "{count} tachograph calibrations",
+    "tankCards_one": "1 fuel card",
+    "tankCards_other": "{count} fuel cards"
   }
 }

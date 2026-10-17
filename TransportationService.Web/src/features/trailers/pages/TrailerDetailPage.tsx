@@ -34,6 +34,8 @@ import {
 import './trailer-form.css'
 import { formatDate } from '../../../utils/dates'
 import { ErrorState } from '../../../components/feedback/ErrorState'
+import { AssetDeactivateDialog, AssetDeleteDialog } from '../../fleet-readiness/AssetLifecycleDialogs'
+import { ReadinessBlock } from '../../fleet-readiness/ReadinessBlock'
 import { ActionMenu } from '../../../components/ui/ActionMenu'
 
 const TAB_IDS = ['overzicht', 'techniek', 'documenten', 'leasing', 'onderhoud', 'keuringen', 'schade', 'kpi', 'historiek'] as const
@@ -49,6 +51,8 @@ export function TrailerDetailPage() {
 
   const [trailer, setTrailer] = useState<TrailerDetail | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [loadErrorKind, setLoadErrorKind] = useState<'notFound' | 'forbidden' | 'failed'>('failed')
+  const [readinessToken, setReadinessToken] = useState(0)
   const [reloadToken, setReloadToken] = useState(0)
   const [editing, setEditing] = useState(false)
   const [form, setForm] = useState<TrailerInput | null>(null)
@@ -68,8 +72,11 @@ export function TrailerDetailPage() {
         setTrailer(result)
         setLoadError(null)
       })
-      .catch(() => {
-        if (mounted) setLoadError(t('trailers.detail.loadFailed'))
+      .catch((err) => {
+        if (!mounted) return
+        const kind = err instanceof ApiError && err.status === 404 ? 'notFound' : err instanceof ApiError && err.status === 403 ? 'forbidden' : 'failed'
+        setLoadErrorKind(kind)
+        setLoadError(t(kind === 'notFound' ? 'trailers.detail.notFound' : kind === 'forbidden' ? 'trailers.detail.forbidden' : 'trailers.detail.loadFailed'))
       })
     return () => {
       mounted = false
@@ -118,6 +125,7 @@ export function TrailerDetailPage() {
     try {
       const updated = await updateTrailer(id, values)
       setTrailer(updated)
+      setReadinessToken((n) => n + 1)
       setEditing(false)
       showSuccess(t('trailers.detail.updated'))
     } catch (err) {
@@ -127,20 +135,39 @@ export function TrailerDetailPage() {
     }
   }
 
+  /** FL-B1: errors (409 "nog gekoppeld aan …") propagate to the dialog, which shows the reason. */
   async function handleDelete() {
     if (!id) return
+    await deleteTrailer(id)
+    showSuccess(t('trailers.detail.deleted'))
+    navigate('/trailers')
+  }
+
+  async function applyActive(isActive: boolean) {
+    if (!id) return
     try {
-      await deleteTrailer(id)
-      showSuccess(t('trailers.detail.deleted'))
-      navigate('/trailers')
-    } catch {
-      showError(t('trailers.detail.deleteFailed'))
-      setConfirmDelete(false)
+      await setTrailerActive(id, isActive)
+      showSuccess(isActive ? t('trailers.detail.reactivated') : t('trailers.detail.deactivated'))
+      setTrailer(await getTrailer(id))
+      setReadinessToken((n) => n + 1)
+    } catch (err) {
+      showError(err instanceof ApiError ? err.message : t('fleet.common.actionFailed'))
+    } finally {
+      setConfirmActive(null)
     }
   }
 
   if (loading) return <p className="placeholder-text">{t('trailers.detail.loading')}</p>
-  if (loadError || !trailer) return <ErrorState message={loadError ?? t('fleet.common.notFound')} onRetry={() => { setLoadError(null); setReloadToken((n) => n + 1) }} backTo="/trailers" />
+  if (loadError || !trailer) {
+    return (
+      <ErrorState
+        message={loadError ?? t('trailers.detail.notFound')}
+        onRetry={loadErrorKind === 'failed' ? () => { setLoadError(null); setReloadToken((n) => n + 1) } : undefined}
+        backTo="/trailers"
+        backLabel={t('trailers.detail.back')}
+      />
+    )
+  }
 
   return (
     <div>
@@ -216,6 +243,9 @@ export function TrailerDetailPage() {
           {tab === 'overzicht' && (
             <TabPanel tabId="overzicht">
               <div className="trailer-detail-grid">
+                <FormField label={t('fleet.readiness.title')} className="trailer-detail-full">
+                  <ReadinessBlock kind="trailer" assetId={trailer.id} reloadToken={readinessToken} />
+                </FormField>
                 <FormField label={t('fleet.form.plate')}><span>{trailer.licensePlate}</span></FormField>
                 <FormField label={t('vehicles.detail.vin')}><span>{trailer.vin ?? '—'}</span></FormField>
                 <FormField label={t('fleet.form.category')}><span>{trailer.categoryName ?? '—'}</span></FormField>
@@ -296,38 +326,37 @@ export function TrailerDetailPage() {
       )}
 
       {confirmDelete && (
-        <ConfirmDialog
-          title={t('trailers.detail.confirmDeleteTitle')}
-          message={t('trailers.detail.confirmDeleteMessage', { number: trailer.internalNumber })}
-          confirmLabel={t('ui.actions.delete')}
-          destructive
-          onConfirm={handleDelete}
+        <AssetDeleteDialog
+          kind="trailer"
+          assetId={trailer.id}
+          number={trailer.internalNumber}
+          isActive={trailer.isActive}
+          canDeactivate={canEdit}
+          onDelete={handleDelete}
+          onDeactivate={() => {
+            setConfirmDelete(false)
+            setConfirmActive('deactivate')
+          }}
           onCancel={() => setConfirmDelete(false)}
         />
       )}
 
-      {confirmActive && (
+      {confirmActive === 'deactivate' && (
+        <AssetDeactivateDialog
+          kind="trailer"
+          assetId={trailer.id}
+          message={t('trailers.detail.deactivateMessage', { number: trailer.internalNumber })}
+          confirmLabel={t('vehicles.detail.deactivate')}
+          onConfirm={() => void applyActive(false)}
+          onCancel={() => setConfirmActive(null)}
+        />
+      )}
+      {confirmActive === 'activate' && (
         <ConfirmDialog
-          title={confirmActive === 'deactivate' ? t('trailers.detail.deactivateTitle') : t('trailers.detail.reactivateTitle')}
-          message={
-            confirmActive === 'deactivate'
-              ? t('trailers.detail.deactivateMessage', { number: trailer.internalNumber })
-              : t('trailers.detail.reactivateMessage', { number: trailer.internalNumber })
-          }
-          confirmLabel={confirmActive === 'deactivate' ? t('vehicles.detail.deactivate') : t('vehicles.detail.reactivate')}
-          onConfirm={async () => {
-            if (!id) return
-            try {
-              await setTrailerActive(id, confirmActive === 'activate')
-              showSuccess(confirmActive === 'activate' ? t('trailers.detail.reactivated') : t('trailers.detail.deactivated'))
-              setConfirmActive(null)
-              const refreshed = await getTrailer(id)
-              setTrailer(refreshed)
-            } catch (err) {
-              showError(err instanceof ApiError ? err.message : t('fleet.common.actionFailed'))
-              setConfirmActive(null)
-            }
-          }}
+          title={t('trailers.detail.reactivateTitle')}
+          message={t('trailers.detail.reactivateMessage', { number: trailer.internalNumber })}
+          confirmLabel={t('vehicles.detail.reactivate')}
+          onConfirm={() => void applyActive(true)}
           onCancel={() => setConfirmActive(null)}
         />
       )}

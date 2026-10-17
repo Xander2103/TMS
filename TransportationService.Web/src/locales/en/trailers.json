@@ -42,6 +42,8 @@
     "deactivateMessage": "Deactivate {number}? History is kept, but the trailer can no longer be used for new trips.",
     "reactivateMessage": "Reactivate {number}? The trailer will be available again.",
     "deactivated": "Trailer deactivated.",
-    "reactivated": "Trailer reactivated."
+    "reactivated": "Trailer reactivated.",
+    "notFound": "Trailer not found.",
+    "forbidden": "No access to this trailer."
   }
 }

@@ -17,11 +17,14 @@ import {
   OWNERSHIP_TYPE_LABELS,
   type VehicleDetail,
 } from '../types'
+import { ReadinessBlock } from '../../fleet-readiness/ReadinessBlock'
 import { buildUpcoming, buildVehicleAttention, type VehicleCompliance, type VehicleFocus } from './vehicleCompliance'
 
 interface VehicleOverviewProps {
   vehicle: VehicleDetail
   compliance: VehicleCompliance
+  /** Bumped by the page after edits so the readiness verdict is re-fetched. */
+  readinessToken?: number
   complianceLoading: boolean
   canEdit: boolean
   /** Opens the grouped section that hosts a sub-block and scrolls to it. */
@@ -35,7 +38,7 @@ interface VehicleOverviewProps {
  * to the block that resolves it), who drives it (assignment), what is it (technical summary)
  * and what is coming (scheduled). Everything else lives one section away.
  */
-export function VehicleOverview({ vehicle, compliance, complianceLoading, canEdit, onFocus, onOpenTechnical }: VehicleOverviewProps) {
+export function VehicleOverview({ vehicle, compliance, readinessToken = 0, complianceLoading, canEdit, onFocus, onOpenTechnical }: VehicleOverviewProps) {
   const { t } = useLocale()
   const labels = {
     document: (doc: Parameters<typeof fleetDocumentDisplayName>[0]) => t(fleetDocumentDisplayName(doc)),
@@ -87,6 +90,11 @@ export function VehicleOverview({ vehicle, compliance, complianceLoading, canEdi
                     {vehicle.statusReason && <span className="vehicle-muted"> — {vehicle.statusReason}</span>}
                   </>
                 ),
+              },
+              {
+                key: 'readiness',
+                label: t('fleet.readiness.title'),
+                value: <ReadinessBlock kind="vehicle" assetId={vehicle.id} reloadToken={readinessToken} />,
               },
               { key: 'admin', label: t('vehicles.detail.overview.administrative'), value: t(vehicle.isActive ? 'vehicles.detail.overview.active' : 'vehicles.detail.overview.inactive') },
               { key: 'category', label: t('fleet.form.category'), value: vehicle.categoryName },

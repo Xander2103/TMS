@@ -312,5 +312,53 @@
       "planning": "Planning"
     },
     "auditTrail": "Journal d’audit (technique)"
+  },
+  "readiness": {
+    "title": "Disponibilité",
+    "loading": "Chargement de la disponibilité…",
+    "loadFailed": "La disponibilité n'a pas pu être déterminée.",
+    "conditional": "uniquement pour certains ordres",
+    "level": {
+      "Deployable": "Disponible",
+      "Warning": "Avec points d'attention",
+      "Blocked": "Indisponible"
+    }
+  },
+  "references": {
+    "vehicle": "véhicule",
+    "trailer": "remorque",
+    "deleteTitle": "Supprimer",
+    "cannotDeleteTitle": "Suppression impossible",
+    "confirmDelete": "Supprimer {noun} {number} ? Aucun trajet ni donnée de flotte n'y est lié.",
+    "cannotDelete": "Ce {noun} ({number}) ne peut pas être supprimé car il est encore lié à : {parts}.",
+    "deactivateInstead": "Désactivez plutôt le {noun} : il reste visible sur les trajets existants et dans l'historique, mais ne peut plus être planifié.",
+    "alreadyInactive": "Le {noun} est déjà désactivé ; l'historique est conservé.",
+    "deleteFailed": "La suppression a échoué.",
+    "loadFailed": "Les liens n'ont pas pu être chargés. Réessayez.",
+    "plannedTripsWarning_one": "Ce {noun} a 1 trajet planifié :",
+    "plannedTripsWarning_other": "Ce {noun} a {count} trajets planifiés :",
+    "plannedTripsConsequence": "Ces trajets ne sont ni annulés ni détachés, mais affichent ensuite un conflit bloquant jusqu'à l'attribution d'un autre véhicule.",
+    "plannedTrips_one": "1 trajet planifié",
+    "plannedTrips_other": "{count} trajets planifiés",
+    "completedTrips_one": "1 trajet terminé",
+    "completedTrips_other": "{count} trajets terminés",
+    "otherTrips_one": "1 autre trajet (brouillon/annulé)",
+    "otherTrips_other": "{count} autres trajets (brouillon/annulé)",
+    "maintenance_one": "1 entretien",
+    "maintenance_other": "{count} entretiens",
+    "damage_one": "1 déclaration de dommage",
+    "damage_other": "{count} déclarations de dommage",
+    "documents_one": "1 document",
+    "documents_other": "{count} documents",
+    "inspections_one": "1 contrôle",
+    "inspections_other": "{count} contrôles",
+    "fuel_one": "1 plein",
+    "fuel_other": "{count} pleins",
+    "leasing_one": "1 contrat de leasing",
+    "leasing_other": "{count} contrats de leasing",
+    "tachograph_one": "1 étalonnage tachygraphe",
+    "tachograph_other": "{count} étalonnages tachygraphe",
+    "tankCards_one": "1 carte carburant",
+    "tankCards_other": "{count} cartes carburant"
   }
 }

@@ -1,3 +1,4 @@
+import type { ReadinessLevel } from '../fleet-readiness/types'
 export type FuelType = 'Diesel' | 'Petrol' | 'Electric' | 'Hybrid' | 'Lng' | 'Cng' | 'Hydrogen' | 'Other'
 export type EmissionClass =
   | 'Euro0'
@@ -88,6 +89,9 @@ export interface VehicleOption {
   payloadKg?: number | null
   hasCrane?: boolean
   adrSuitable?: boolean
+  /** FL-H1/H2/H4: server fleet readiness for the requested day (absent on older payloads). */
+  readiness?: ReadinessLevel | null
+  readinessSummary?: string | null
 }
 
 export interface VehicleDetail {

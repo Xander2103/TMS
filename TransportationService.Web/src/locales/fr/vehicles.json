@@ -147,6 +147,8 @@
       "baseDocumentsMissing": "Non enregistré : {labels}",
       "view": "Voir",
       "add": "Ajouter"
-    }
+    },
+    "notFound": "Véhicule introuvable.",
+    "forbidden": "Pas d'accès à ce véhicule."
   }
 }

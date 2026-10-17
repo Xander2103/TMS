@@ -27,8 +27,9 @@ export function searchTrailers(params: SearchTrailersParams): Promise<PagedResul
   return apiClient.getJson<PagedResult<TrailerListItem>>(`/api/trailers?${query.toString()}`)
 }
 
-export function getTrailerOptions(): Promise<TrailerOption[]> {
-  return apiClient.getJson<TrailerOption[]>('/api/trailers/options')
+/** FL-H1/H2: `date` (YYYY-MM-DD) evaluates each option's readiness for that day; default today. */
+export function getTrailerOptions(date?: string | null): Promise<TrailerOption[]> {
+  return apiClient.getJson<TrailerOption[]>(`/api/trailers/options${date ? `?date=${date}` : ''}`)
 }
 
 export function getTrailer(id: string): Promise<TrailerDetail> {

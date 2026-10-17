@@ -1,0 +1,38 @@
+.fleet-readiness {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.35rem;
+}
+
+.fleet-readiness-issues {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.875rem;
+}
+
+.fleet-readiness-blocking {
+  color: var(--color-danger);
+}
+
+.fleet-readiness-warning {
+  color: var(--color-text);
+}
+
+.fleet-readiness-muted {
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+}
+
+.fleet-references-list {
+  margin: 0.5rem 0 0;
+  padding-left: 1.1rem;
+}
+
+.fleet-references-list li + li {
+  margin-top: 0.15rem;
+}

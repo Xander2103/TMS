@@ -43,6 +43,7 @@ import './vehicle-form.css'
 import '../detail/vehicle-detail.css'
 import { formatDate } from '../../../utils/dates'
 import { ErrorState } from '../../../components/feedback/ErrorState'
+import { AssetDeactivateDialog, AssetDeleteDialog } from '../../fleet-readiness/AssetLifecycleDialogs'
 import { ActionMenu } from '../../../components/ui/ActionMenu'
 import { VehicleOverview } from '../detail/VehicleOverview'
 import { useVehicleCompliance } from '../detail/useVehicleCompliance'
@@ -68,6 +69,10 @@ export function VehicleDetailPage() {
 
   const [vehicle, setVehicle] = useState<VehicleDetail | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
+  /** FL-M10: 404 → "niet gevonden" with a way back; 403 → no access; anything else → retry. */
+  const [loadErrorKind, setLoadErrorKind] = useState<'notFound' | 'forbidden' | 'failed'>('failed')
+  /** Re-fetches the readiness block after edits that may change it. */
+  const [readinessToken, setReadinessToken] = useState(0)
   const [reloadToken, setReloadToken] = useState(0)
   const [editing, setEditing] = useState(false)
   const [form, setForm] = useState<VehicleInput | null>(null)
@@ -103,8 +108,11 @@ export function VehicleDetailPage() {
         setVehicle(result)
         setLoadError(null)
       })
-      .catch(() => {
-        if (mounted) setLoadError(t('vehicles.detail.loadFailed'))
+      .catch((err) => {
+        if (!mounted) return
+        const kind = err instanceof ApiError && err.status === 404 ? 'notFound' : err instanceof ApiError && err.status === 403 ? 'forbidden' : 'failed'
+        setLoadErrorKind(kind)
+        setLoadError(t(kind === 'notFound' ? 'vehicles.detail.notFound' : kind === 'forbidden' ? 'vehicles.detail.forbidden' : 'vehicles.detail.loadFailed'))
       })
     return () => {
       mounted = false
@@ -133,7 +141,10 @@ export function VehicleDetailPage() {
   function reloadVehicle() {
     if (!id) return
     getVehicle(id)
-      .then(setVehicle)
+      .then((next) => {
+        setVehicle(next)
+        setReadinessToken((n) => n + 1)
+      })
       .catch(() => showError(t('vehicles.detail.reloadFailed')))
   }
 
@@ -180,6 +191,7 @@ export function VehicleDetailPage() {
     try {
       const updated = await updateVehicle(id, values)
       setVehicle(updated)
+      setReadinessToken((n) => n + 1)
       setEditing(false)
       showSuccess(t('vehicles.detail.updated'))
     } catch (err) {
@@ -189,15 +201,24 @@ export function VehicleDetailPage() {
     }
   }
 
+  /** FL-B1: errors (409 "nog gekoppeld aan …") propagate to the dialog, which shows the reason. */
   async function handleDelete() {
     if (!id) return
+    await deleteVehicle(id)
+    showSuccess(t('vehicles.detail.deleted'))
+    navigate('/vehicles')
+  }
+
+  async function applyActive(isActive: boolean) {
+    if (!id) return
     try {
-      await deleteVehicle(id)
-      showSuccess(t('vehicles.detail.deleted'))
-      navigate('/vehicles')
-    } catch {
-      showError(t('vehicles.detail.deleteFailed'))
-      setConfirmDelete(false)
+      await setVehicleActive(id, isActive)
+      showSuccess(isActive ? t('vehicles.detail.reactivated') : t('vehicles.detail.deactivated'))
+      reloadVehicle()
+    } catch (err) {
+      showError(err instanceof ApiError ? err.message : t('fleet.common.actionFailed'))
+    } finally {
+      setConfirmActive(null)
     }
   }
 
@@ -212,7 +233,16 @@ export function VehicleDetailPage() {
   }
 
   if (loading) return <p className="placeholder-text">{t('vehicles.detail.loading')}</p>
-  if (loadError || !vehicle) return <ErrorState message={loadError ?? t('fleet.common.notFound')} onRetry={() => { setLoadError(null); setReloadToken((n) => n + 1) }} backTo="/vehicles" />
+  if (loadError || !vehicle) {
+    return (
+      <ErrorState
+        message={loadError ?? t('vehicles.detail.notFound')}
+        onRetry={loadErrorKind === 'failed' ? () => { setLoadError(null); setReloadToken((n) => n + 1) } : undefined}
+        backTo="/vehicles"
+        backLabel={t('vehicles.detail.back')}
+      />
+    )
+  }
 
   const hasFuel = hasPermission('fuel.view')
   const hasKpi = hasPermission('kpi.view')
@@ -294,6 +324,7 @@ export function VehicleDetailPage() {
               <VehicleOverview
                 vehicle={vehicle}
                 compliance={compliance.data}
+                readinessToken={readinessToken}
                 complianceLoading={compliance.isLoading}
                 canEdit={canEdit}
                 onFocus={openFocus}
@@ -431,37 +462,37 @@ export function VehicleDetailPage() {
       )}
 
       {confirmDelete && (
-        <ConfirmDialog
-          title={t('vehicles.detail.confirmDeleteTitle')}
-          message={t('vehicles.detail.confirmDeleteMessage', { number: vehicle.internalNumber })}
-          confirmLabel={t('ui.actions.delete')}
-          destructive
-          onConfirm={handleDelete}
+        <AssetDeleteDialog
+          kind="vehicle"
+          assetId={vehicle.id}
+          number={vehicle.internalNumber}
+          isActive={vehicle.isActive}
+          canDeactivate={canEdit}
+          onDelete={handleDelete}
+          onDeactivate={() => {
+            setConfirmDelete(false)
+            setConfirmActive('deactivate')
+          }}
           onCancel={() => setConfirmDelete(false)}
         />
       )}
 
-      {confirmActive && (
+      {confirmActive === 'deactivate' && (
+        <AssetDeactivateDialog
+          kind="vehicle"
+          assetId={vehicle.id}
+          message={t('vehicles.detail.deactivateMessage', { number: vehicle.internalNumber })}
+          confirmLabel={t('vehicles.detail.deactivate')}
+          onConfirm={() => void applyActive(false)}
+          onCancel={() => setConfirmActive(null)}
+        />
+      )}
+      {confirmActive === 'activate' && (
         <ConfirmDialog
-          title={confirmActive === 'deactivate' ? t('vehicles.detail.deactivateTitle') : t('vehicles.detail.reactivateTitle')}
-          message={
-            confirmActive === 'deactivate'
-              ? t('vehicles.detail.deactivateMessage', { number: vehicle.internalNumber })
-              : t('vehicles.detail.reactivateMessage', { number: vehicle.internalNumber })
-          }
-          confirmLabel={confirmActive === 'deactivate' ? t('vehicles.detail.deactivate') : t('vehicles.detail.reactivate')}
-          onConfirm={async () => {
-            if (!id) return
-            try {
-              await setVehicleActive(id, confirmActive === 'activate')
-              showSuccess(confirmActive === 'activate' ? t('vehicles.detail.reactivated') : t('vehicles.detail.deactivated'))
-              setConfirmActive(null)
-              reloadVehicle()
-            } catch (err) {
-              showError(err instanceof ApiError ? err.message : t('fleet.common.actionFailed'))
-              setConfirmActive(null)
-            }
-          }}
+          title={t('vehicles.detail.reactivateTitle')}
+          message={t('vehicles.detail.reactivateMessage', { number: vehicle.internalNumber })}
+          confirmLabel={t('vehicles.detail.reactivate')}
+          onConfirm={() => void applyActive(true)}
           onCancel={() => setConfirmActive(null)}
         />
       )}

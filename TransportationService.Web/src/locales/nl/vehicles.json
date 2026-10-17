@@ -147,6 +147,8 @@
       "baseDocumentsMissing": "Niet geregistreerd: {labels}",
       "view": "Bekijken",
       "add": "Toevoegen"
-    }
+    },
+    "notFound": "Voertuig niet gevonden.",
+    "forbidden": "Geen toegang tot dit voertuig."
   }
 }

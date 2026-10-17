@@ -1,3 +1,4 @@
+import type { ReadinessLevel } from '../fleet-readiness/types'
 export type TrailerOwnershipType = 'Owned' | 'Rented' | 'Leased'
 export type TrailerOperationalStatus = 'Available' | 'InUse' | 'InMaintenance' | 'OutOfService'
 
@@ -44,6 +45,9 @@ export interface TrailerOption {
   /** M1 picker context (optional). */
   operationalStatus?: string | null
   adrSuitable?: boolean
+  /** FL-H1/H2/H4: server fleet readiness for the requested day (absent on older payloads). */
+  readiness?: ReadinessLevel | null
+  readinessSummary?: string | null
 }
 
 export interface TrailerDetail {
