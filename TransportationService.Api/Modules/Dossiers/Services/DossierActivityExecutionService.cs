@@ -396,7 +396,8 @@ public class DossierActivityExecutionService : IDossierActivityExecutionService
     /// <summary>
     /// The existing conflict engine on a transient (never saved) trip of the activity's date and
     /// time window: absence, employment, blocked/inactive driver, qualifications, licence rank,
-    /// vehicle state, tachograph. Trip-only checks are dropped; double bookings only warn.
+    /// vehicle state, tachograph, and the operator's crane certificate when the type requires a crane
+    /// (M8). Trip-only checks are dropped; double bookings only warn.
     /// </summary>
     private async Task<IReadOnlyList<PlanningConflictDto>> EvaluateConflictsAsync(
         DossierActivity activity, Guid? driverId, Guid? vehicleId, CancellationToken cancellationToken)
@@ -421,7 +422,7 @@ public class DossierActivityExecutionService : IDossierActivityExecutionService
         };
 
         // Without a date there is no day to check availability against: only resource state counts.
-        foreach (var conflict in await _conflicts.EvaluateAsync(probe, cancellationToken))
+        foreach (var conflict in await _conflicts.EvaluateAsync(probe, activity.ActivityType!.RequiresCrane, cancellationToken))
         {
             if (TripOnlyCodes.Contains(conflict.Code))
             {

@@ -39,7 +39,11 @@ public class PlanningConflictService : IPlanningConflictService
         _timeProvider = timeProvider;
     }
 
-    public async Task<IReadOnlyList<PlanningConflictDto>> EvaluateAsync(Trip trip, CancellationToken cancellationToken)
+    public Task<IReadOnlyList<PlanningConflictDto>> EvaluateAsync(Trip trip, CancellationToken cancellationToken)
+        => EvaluateAsync(trip, requiresCraneOperator: false, cancellationToken);
+
+    public async Task<IReadOnlyList<PlanningConflictDto>> EvaluateAsync(
+        Trip trip, bool requiresCraneOperator, CancellationToken cancellationToken)
     {
         var tenantId = _tenantContext.TenantId;
         var conflicts = new List<PlanningConflictDto>();
@@ -69,7 +73,7 @@ public class PlanningConflictService : IPlanningConflictService
 
         if (trip.DriverId is { } driverId)
         {
-            await EvaluateDriverAsync(conflicts, trip, driverId, cancellationToken);
+            await EvaluateDriverAsync(conflicts, trip, driverId, requiresCraneOperator, cancellationToken);
         }
 
         if (trip.VehicleId is { } vehicleId)
@@ -530,7 +534,8 @@ public class PlanningConflictService : IPlanningConflictService
     }
 
     private async Task EvaluateDriverAsync(
-        List<PlanningConflictDto> conflicts, Trip trip, Guid driverId, CancellationToken cancellationToken)
+        List<PlanningConflictDto> conflicts, Trip trip, Guid driverId, bool requiresCraneOperator,
+        CancellationToken cancellationToken)
     {
         var tenantId = _tenantContext.TenantId;
         var driver = await _dbContext.Drivers.AsNoTracking()
@@ -684,7 +689,8 @@ public class PlanningConflictService : IPlanningConflictService
         // Transport acceptance M8: crane work (a crane transport or on-site lifting — the order
         // requires a crane) needs an operator holding a valid crane certificate, exactly like ADR
         // above. Situational: drivers without the certificate stay plannable for other work.
-        var tripNeedsCrane = await _dbContext.TripOrders.AsNoTracking()
+        // A standalone crane activity (ActivityType.RequiresCrane) states the requirement itself.
+        var tripNeedsCrane = requiresCraneOperator || await _dbContext.TripOrders.AsNoTracking()
             .Where(to => to.TenantId == tenantId && to.TripId == trip.Id && !to.IsDeleted)
             .Join(_dbContext.TransportOrders.AsNoTracking().Where(o => o.TenantId == tenantId),
                 to => to.TransportOrderId, o => o.Id, (to, o) => o.CraneRequired)

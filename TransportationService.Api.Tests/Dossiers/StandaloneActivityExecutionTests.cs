@@ -17,6 +17,8 @@ using TransportationService.Api.Modules.Partners.Entities;
 using TransportationService.Api.Modules.Planning.Dtos;
 using TransportationService.Api.Modules.Planning.Entities;
 using TransportationService.Api.Modules.Planning.Services;
+using TransportationService.Api.Modules.Qualifications;
+using TransportationService.Api.Modules.Qualifications.Entities;
 using TransportationService.Api.Modules.Qualifications.Services;
 using TransportationService.Api.Modules.Tenancy.Entities;
 using TransportationService.Api.Modules.Tenancy.Services;
@@ -368,6 +370,7 @@ public class StandaloneActivityExecutionTests
             new Vehicle { Id = craneTruck, TenantId = h.TenantId, InternalNumber = "KR-1", LicensePlate = "1-KRA-001", IsActive = true, HasCrane = true },
             new Vehicle { Id = van, TenantId = h.TenantId, InternalNumber = "BE-2", LicensePlate = "1-BES-002", IsActive = true, HasCrane = false });
         await h.Db.Context.SaveChangesAsync();
+        await GiveCraneCertificateAsync(h, employeeId);
 
         var assigned = await h.Execution().AssignAsync(dossier.Id, crane,
             new AssignStandaloneActivityRequest(driverId, craneTruck, Version: (await h.Current(dossier.Id)).Version), overrideAllowed: false, CancellationToken.None);
@@ -394,6 +397,55 @@ public class StandaloneActivityExecutionTests
         var overridden = await h.Execution().AssignAsync(dossier.Id, crane,
             new AssignStandaloneActivityRequest(driverId, craneTruck, Override: true, OverrideReason: "Verlof ingetrokken"), overrideAllowed: true, CancellationToken.None);
         Assert.NotNull(overridden);
+    }
+
+    private static async Task GiveCraneCertificateAsync(Harness h, Guid employeeId)
+    {
+        var typeId = Guid.NewGuid();
+        h.Db.Context.QualificationTypes.Add(new QualificationType
+        {
+            Id = typeId, Code = QualificationTypeCodes.CraneCertificate, Name = "Kraancertificaat",
+            Category = "Certificaat", RequiresExpiryDate = true, IsActive = true,
+        });
+        h.Db.Context.EmployeeQualifications.Add(new EmployeeQualification
+        {
+            Id = Guid.NewGuid(), TenantId = h.TenantId, EmployeeId = employeeId, QualificationTypeId = typeId,
+            ObtainedDate = new(2020, 1, 1), ExpiryDate = new(2030, 1, 1), Status = QualificationStatus.Valid,
+        });
+        await h.Db.Context.SaveChangesAsync();
+    }
+
+    [Fact]
+    public async Task CraneActivity_NeedsAnOperatorWithACraneCertificate_PlateauDoesNot()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var dossier = await h.NewDossierAsync();
+        var crane = await h.AddStandaloneAsync(dossier.Id, "KRAANWERK", "Kraan");
+        var plateau = await h.AddStandaloneAsync(dossier.Id, "PLATEAU", "Plateau");
+        var employeeId = Guid.NewGuid();
+        var driverId = Guid.NewGuid();
+        var craneTruck = Guid.NewGuid();
+        h.Db.Context.Employees.Add(new Employee { Id = employeeId, TenantId = h.TenantId, EmployeeNumber = "E-2", FirstName = "An", LastName = "Smet", IsActive = true });
+        h.Db.Context.Drivers.Add(new Driver { Id = driverId, TenantId = h.TenantId, DriverNumber = "CH-2", EmployeeId = employeeId, IsActive = true });
+        h.Db.Context.Vehicles.Add(new Vehicle { Id = craneTruck, TenantId = h.TenantId, InternalNumber = "KR-2", LicensePlate = "1-KRA-002", IsActive = true, HasCrane = true });
+        await h.Db.Context.SaveChangesAsync();
+
+        // M8: lifting on site without a valid crane certificate blocks, exactly like a crane order on a trip.
+        var missing = await Assert.ThrowsAsync<ActivityAssignmentConflictException>(() => h.Execution().AssignAsync(dossier.Id, crane,
+            new AssignStandaloneActivityRequest(driverId, craneTruck), overrideAllowed: false, CancellationToken.None));
+        Assert.Contains(missing.Conflicts, c => c.Code == PlanningConflictCode.DriverNotReady && c.Blocking
+            && c.Description.Contains("kraancertificaat"));
+
+        // Work that does not require a crane never asks for the certificate.
+        var plateauAssigned = await h.Execution().AssignAsync(dossier.Id, plateau,
+            new AssignStandaloneActivityRequest(driverId, craneTruck), overrideAllowed: false, CancellationToken.None);
+        Assert.NotNull(plateauAssigned);
+
+        await GiveCraneCertificateAsync(h, employeeId);
+        var craneAssigned = await h.Execution().AssignAsync(dossier.Id, crane,
+            new AssignStandaloneActivityRequest(driverId, craneTruck), overrideAllowed: false, CancellationToken.None);
+        Assert.DoesNotContain(craneAssigned!.Warnings, c => c.Description.Contains("kraancertificaat"));
     }
 
     // ------------------------------------------------------------ T-H8: accounting
