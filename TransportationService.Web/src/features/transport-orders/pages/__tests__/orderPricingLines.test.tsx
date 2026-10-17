@@ -219,7 +219,8 @@ describe('TransportOrderDetailPage pricing lines', () => {
       const row = screen.getByText(label).closest('tr')!
       return within(row).getAllByRole('cell')[2]
     }
-    expect(cell('Picking').textContent).toBe(`3 COLLI × ${money(1.25)}`)
+    // The unit is the unit-type CODE; the cell shows its managed name (no raw "COLLI").
+    expect(cell('Picking').textContent).toBe(`3 Colli × ${money(1.25)}`)
     expect(cell('Vaste kost').textContent).toBe('Vast bedrag')
     expect(cell('Onbekende berekening').textContent).toBe('—')
   })
