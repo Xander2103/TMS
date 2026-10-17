@@ -31,6 +31,7 @@ export function driverAvailabilityNote(driver: DriverListItem, t: TranslateFn): 
   if (driver.isBlocked) return t('planning.driverPicker.blocked')
   if (driver.availabilityStatus === 'OnLeave') return t('planning.driverPicker.absent')
   if (driver.availabilityStatus === 'Unavailable') return t('planning.driverPicker.unavailable')
+  if (driver.hasQualificationIssue) return t('planning.driverPicker.qualification')
   return null
 }
 

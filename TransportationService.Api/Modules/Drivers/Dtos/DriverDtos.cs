@@ -17,7 +17,9 @@ public record DriverListItemDto(
     /// </summary>
     Guid? FixedVehicleId = null,
     string? FixedVehicleNumber = null,
-    string? FixedVehiclePlate = null);
+    string? FixedVehiclePlate = null,
+    /// <summary>M1: no live driving licence, or an expired core qualification, on the availability date.</summary>
+    bool HasQualificationIssue = false);
 
 public record DriverReadinessDto(
     string Status,               // "Ready" | "Warning" | "Incomplete" | "NotReady" | "Blocked"

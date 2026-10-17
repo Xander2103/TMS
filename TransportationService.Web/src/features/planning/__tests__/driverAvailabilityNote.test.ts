@@ -7,6 +7,7 @@ const t = (key: string, vars?: Record<string, unknown>) =>
     'planning.driverPicker.blocked': '⚠ Geblokkeerd',
     'planning.driverPicker.absent': '⚠ Afwezig op deze dag',
     'planning.driverPicker.unavailable': '⚠ Niet inzetbaar',
+    'planning.driverPicker.qualification': '⚠ Kwalificaties nakijken',
     'planning.detail.employeeNumber': `Personeelsnr. ${String(vars?.number)}`,
   })[key] ?? key
 
@@ -33,6 +34,18 @@ describe('buildDriverOptions availability', () => {
     expect(suspended.subtitle).toContain('⚠ Niet inzetbaar')
     expect(blocked.subtitle).toContain('⚠ Geblokkeerd')
     expect(free.subtitle).toBe('Personeelsnr. MED-1')
+  })
+})
+
+describe('driver picker qualification indicator (M1)', () => {
+  it('flags a major qualification issue, but availability problems take precedence', () => {
+    const [issue, absentAndIssue] = buildDriverOptions(
+      [driver({ hasQualificationIssue: true }), driver({ availabilityStatus: 'OnLeave', hasQualificationIssue: true })],
+      t as never,
+    )
+    expect(issue.subtitle).toContain('⚠ Kwalificaties nakijken')
+    expect(absentAndIssue.subtitle).toContain('⚠ Afwezig op deze dag')
+    expect(absentAndIssue.subtitle).not.toContain('Kwalificaties')
   })
 })
 

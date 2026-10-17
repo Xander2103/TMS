@@ -6,6 +6,7 @@ using TransportationService.Api.Modules.Drivers.Services;
 using TransportationService.Api.Modules.Employees.Entities;
 using TransportationService.Api.Modules.Hr.Entities;
 using TransportationService.Api.Modules.Identity.Services;
+using TransportationService.Api.Modules.Qualifications.Entities;
 using TransportationService.Api.Modules.Qualifications.Services;
 using TransportationService.Api.Modules.Tenancy.Entities;
 using TransportationService.Api.Modules.Tenancy.Services;
@@ -94,5 +95,34 @@ public class DriverAbsenceIntegrationTests
         // "Incomplete" — H6 — rather than "Ready".)
         Assert.Empty(detail!.Readiness.BlockingReasons);
         Assert.Equal("Incomplete", detail.Readiness.Status);
+    }
+
+    [Fact]
+    public async Task PickerFlagsAMajorQualificationIssue_OnTheRequestedDate()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        async Task<bool> IssueOn(string? date) => (await h.Sut.SearchAsync(null, null, null, null, null, null, null, false, false,
+            PageRequest.Of(1, 25), CancellationToken.None, date is null ? null : DateOnly.Parse(date))).Items[0].HasQualificationIssue;
+
+        // M1: no live driving licence registered — deployability unknown, the picker says so.
+        Assert.True(await IssueOn(null));
+
+        var licenceType = Guid.NewGuid();
+        h.Db.Context.QualificationTypes.Add(new QualificationType
+        {
+            Id = licenceType, Code = QualificationTypeCodes.DrivingLicenceC, Name = "Rijbewijs C",
+            Category = "Rijbewijs", RequiresExpiryDate = true, IsActive = true,
+        });
+        h.Db.Context.EmployeeQualifications.Add(new EmployeeQualification
+        {
+            Id = Guid.NewGuid(), TenantId = h.TenantId, EmployeeId = h.EmployeeId, QualificationTypeId = licenceType,
+            ObtainedDate = new(2020, 1, 1), ExpiryDate = new(2026, 8, 1), Status = QualificationStatus.Valid,
+        });
+        await h.Db.Context.SaveChangesAsync();
+
+        Assert.False(await IssueOn("2026-07-20"));
+        // The licence has expired by the planned day: flagged before selection, not only after.
+        Assert.True(await IssueOn("2026-08-10"));
     }
 }

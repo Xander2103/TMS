@@ -216,7 +216,8 @@
   "driverPicker": {
     "blocked": "⚠ Bloqué",
     "absent": "⚠ Absent ce jour-là",
-    "unavailable": "⚠ Non disponible"
+    "unavailable": "⚠ Non disponible",
+    "qualification": "⚠ Vérifier les qualifications"
   },
   "vehiclePicker": {
     "inMaintenance": "⚠ En entretien",

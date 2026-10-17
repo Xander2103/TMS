@@ -82,23 +82,25 @@ public class DriverService : IDriverService
                 q.TenantId == tenantId && q.EmployeeId == d.EmployeeId && q.ExpiryDate != null && q.ExpiryDate < today));
         }
 
+        // Licence/core qualification types (QualificationReadinessPolicy). Withdrawn/rejected
+        // records are history and count for nothing.
+        var licenceTypeIds = await _dbContext.QualificationTypes.AsNoTracking()
+            .Where(t => t.Code == QualificationTypeCodes.DrivingLicenceB || t.Code == QualificationTypeCodes.DrivingLicenceC
+                        || t.Code == QualificationTypeCodes.DrivingLicenceCE)
+            .Select(t => t.Id).ToListAsync(cancellationToken);
+        var coreTypeIds = await _dbContext.QualificationTypes.AsNoTracking()
+            .Where(t => t.Code == QualificationTypeCodes.DrivingLicenceB || t.Code == QualificationTypeCodes.DrivingLicenceC
+                        || t.Code == QualificationTypeCodes.DrivingLicenceCE || t.Code == QualificationTypeCodes.Code95
+                        || t.Code == QualificationTypeCodes.MedicalFitness || t.Code == QualificationTypeCodes.DriverCard)
+            .Select(t => t.Id).ToListAsync(cancellationToken);
+        var live = _dbContext.EmployeeQualifications.Where(q => q.TenantId == tenantId
+            && q.Status != QualificationStatus.Suspended && q.Status != QualificationStatus.Rejected);
+
         if (eligibleOnly)
         {
             // Inzetbaar — same rules as BuildReadiness (QualificationReadinessPolicy): active, not
             // blocked, employment "in dienst", not absent today, a live driving licence, and no
-            // expired CORE qualification without a live replacement. Withdrawn/rejected records
-            // are history and count for nothing.
-            var licenceTypeIds = await _dbContext.QualificationTypes.AsNoTracking()
-                .Where(t => t.Code == QualificationTypeCodes.DrivingLicenceB || t.Code == QualificationTypeCodes.DrivingLicenceC
-                            || t.Code == QualificationTypeCodes.DrivingLicenceCE)
-                .Select(t => t.Id).ToListAsync(cancellationToken);
-            var coreTypeIds = await _dbContext.QualificationTypes.AsNoTracking()
-                .Where(t => t.Code == QualificationTypeCodes.DrivingLicenceB || t.Code == QualificationTypeCodes.DrivingLicenceC
-                            || t.Code == QualificationTypeCodes.DrivingLicenceCE || t.Code == QualificationTypeCodes.Code95
-                            || t.Code == QualificationTypeCodes.MedicalFitness || t.Code == QualificationTypeCodes.DriverCard)
-                .Select(t => t.Id).ToListAsync(cancellationToken);
-            var live = _dbContext.EmployeeQualifications.Where(q => q.TenantId == tenantId
-                && q.Status != QualificationStatus.Suspended && q.Status != QualificationStatus.Rejected);
+            // expired CORE qualification without a live replacement.
             query = query.Where(d => d.IsActive && !d.IsBlocked
                 && _dbContext.Employees.Any(e => e.Id == d.EmployeeId && e.TenantId == tenantId
                                                  && e.IsActive && e.EmploymentStatus == EmploymentStatus.Active)
@@ -157,7 +159,15 @@ public class DriverService : IDriverService
                     .OrderBy(v => v.InternalNumber).Select(v => v.InternalNumber).FirstOrDefault(),
                 _dbContext.Vehicles
                     .Where(v => v.TenantId == x.d.TenantId && v.FixedDriverId == x.d.Id && v.IsActive)
-                    .OrderBy(v => v.InternalNumber).Select(v => v.LicensePlate).FirstOrDefault()),
+                    .OrderBy(v => v.InternalNumber).Select(v => v.LicensePlate).FirstOrDefault(),
+                // M1: a major qualification issue ON THE AVAILABILITY DATE — no live driving licence,
+                // or an expired core qualification without a live replacement — so pickers can flag it.
+                !live.Any(q => q.EmployeeId == x.d.EmployeeId && licenceTypeIds.Contains(q.QualificationTypeId)
+                               && (q.ExpiryDate == null || q.ExpiryDate >= availabilityDate))
+                || live.Any(q => q.EmployeeId == x.d.EmployeeId && coreTypeIds.Contains(q.QualificationTypeId)
+                                 && q.ExpiryDate != null && q.ExpiryDate < availabilityDate
+                                 && !live.Any(r => r.EmployeeId == x.d.EmployeeId && r.QualificationTypeId == q.QualificationTypeId
+                                                   && (r.ExpiryDate == null || r.ExpiryDate >= availabilityDate)))),
             cancellationToken);
     }
 

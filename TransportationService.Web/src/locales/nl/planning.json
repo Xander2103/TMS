@@ -216,7 +216,8 @@
   "driverPicker": {
     "blocked": "⚠ Geblokkeerd",
     "absent": "⚠ Afwezig op deze dag",
-    "unavailable": "⚠ Niet inzetbaar"
+    "unavailable": "⚠ Niet inzetbaar",
+    "qualification": "⚠ Kwalificaties nakijken"
   },
   "vehiclePicker": {
     "inMaintenance": "⚠ In onderhoud",

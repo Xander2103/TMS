@@ -16,6 +16,8 @@ export interface DriverListItem {
   fixedVehicleId?: string | null
   fixedVehicleNumber?: string | null
   fixedVehiclePlate?: string | null
+  /** M1: no live driving licence or an expired core qualification on the requested date. */
+  hasQualificationIssue?: boolean
 }
 
 export interface DriverReadiness {
