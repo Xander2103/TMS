@@ -177,6 +177,14 @@ public record AssignResourceRequest(
     Guid? ResourceId, Guid? Version = null, bool Override = false, string? OverrideReason = null,
     VehicleSelectionSource? VehicleSelectionSource = null);
 
+/// <summary>
+/// FL-M13: replace the vehicle of a Planned trip (e.g. its vehicle went into maintenance).
+/// <c>TrailerId</c> null keeps the current trailer. <c>Reason</c> is mandatory and doubles as the
+/// override reason when <c>Override</c> is set (planning.override_restriction only).
+/// </summary>
+public record ReplaceTripVehicleRequest(
+    Guid VehicleId, Guid? TrailerId, string Reason, bool Override = false, Guid? Version = null);
+
 public record RescheduleTripRequest(
     DateOnly TripDate, DateTime? PlannedStart, DateTime? PlannedEnd,
     Guid? Version = null, bool Override = false, string? OverrideReason = null);

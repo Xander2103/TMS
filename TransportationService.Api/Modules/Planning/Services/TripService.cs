@@ -455,6 +455,72 @@ public class TripService : ITripService
         return result;
     }
 
+    public async Task<TripOperationResult> ReplaceVehicleAsync(
+        Guid id, ReplaceTripVehicleRequest request, bool allowOverride, CancellationToken cancellationToken)
+    {
+        var reason = request.Reason?.Trim();
+        if (string.IsNullOrEmpty(reason))
+        {
+            return TripOperationResult.Invalid("Geef een reden op voor het vervangen van het voertuig.");
+        }
+
+        var current = await TenantScoped().AsNoTracking()
+            .Where(t => t.Id == id)
+            .Select(t => new { t.Status, t.VehicleId, t.TrailerId })
+            .FirstOrDefaultAsync(cancellationToken);
+        if (current is null)
+        {
+            return TripOperationResult.NotFound;
+        }
+
+        if (current.Status != TripStatus.Planned)
+        {
+            return TripOperationResult.InvalidState(current.Status == TripStatus.Draft
+                ? "Een conceptrit pas je gewoon aan in de rit zelf; vervangen is bedoeld voor geplande ritten."
+                : "Alleen het voertuig van een geplande rit kan worden vervangen.");
+        }
+
+        var changed = false;
+        var result = await ApplyTargetedAsync(id, request.Version, allowOverride, allowOverride ? reason : null,
+            "VehicleReplaced",
+            async trip =>
+            {
+                if (!await _dbContext.Vehicles.AnyAsync(
+                        v => v.Id == request.VehicleId && v.TenantId == _tenantContext.TenantId, cancellationToken))
+                {
+                    return TripOperationResult.InvalidReference("Het gekozen voertuig bestaat niet.");
+                }
+
+                if (request.TrailerId is { } trailerId && !await _dbContext.Trailers.AnyAsync(
+                        t => t.Id == trailerId && t.TenantId == _tenantContext.TenantId, cancellationToken))
+                {
+                    return TripOperationResult.InvalidReference("De gekozen oplegger bestaat niet.");
+                }
+
+                changed = trip.VehicleId != request.VehicleId
+                          || (request.TrailerId is not null && trip.TrailerId != request.TrailerId);
+                trip.VehicleId = request.VehicleId;
+                trip.VehicleSelectionSource = VehicleSelectionSource.Manual;
+                if (request.TrailerId is { } newTrailer)
+                {
+                    trip.TrailerId = newTrailer;
+                }
+
+                return null;
+            },
+            cancellationToken,
+            auditReason: reason);
+
+        if (result.Outcome == TripOperationOutcome.Success && changed)
+        {
+            await NotifyAssignedDriverAsync(result.Trip!,
+                $"Rit {result.Trip!.TripNumber}: het voertuig is vervangen door {result.Trip.VehicleNumber ?? "een ander voertuig"}.",
+                cancellationToken);
+        }
+
+        return result;
+    }
+
     public async Task<TripOperationResult> AssignTrailerAsync(
         Guid id, AssignResourceRequest request, CancellationToken cancellationToken)
     {
@@ -560,7 +626,8 @@ public class TripService : ITripService
     /// </summary>
     private async Task<TripOperationResult> ApplyTargetedAsync(
         Guid id, Guid? version, bool allowOverride, string? overrideReason, string auditAction,
-        Func<Trip, Task<TripOperationResult?>> mutateAsync, CancellationToken cancellationToken)
+        Func<Trip, Task<TripOperationResult?>> mutateAsync, CancellationToken cancellationToken,
+        string? auditReason = null)
     {
         var trip = await TenantScoped().Include(t => t.Orders).FirstOrDefaultAsync(t => t.Id == id, cancellationToken);
         if (trip is null)
@@ -644,6 +711,7 @@ public class TripService : ITripService
                 trip.DriverId, trip.VehicleId, trip.TrailerId,
                 OrderCount = trip.Orders.Count(o => !o.IsDeleted),
                 Overridden = allowOverride ? overrideReason : null,
+                Reason = auditReason,
             }, cancellationToken);
         await AuditPlanningSyncAsync(sync, cancellationToken);
 
@@ -1062,13 +1130,13 @@ public class TripService : ITripService
 
         var vehicles = vehicleIds.Count == 0
             ? []
-            : await _dbContext.Vehicles.AsNoTracking()
+            : await _dbContext.Vehicles.AsNoTracking().IgnoreQueryFilters()
                 .Where(v => v.TenantId == tenantId && vehicleIds.Contains(v.Id))
                 .ToDictionaryAsync(v => v.Id, v => (v.InternalNumber, v.LicensePlate), cancellationToken);
 
         var trailers = trailerIds.Count == 0
             ? []
-            : await _dbContext.Trailers.AsNoTracking()
+            : await _dbContext.Trailers.AsNoTracking().IgnoreQueryFilters()
                 .Where(t => t.TenantId == tenantId && trailerIds.Contains(t.Id))
                 .ToDictionaryAsync(t => t.Id, t => t.InternalNumber, cancellationToken);
 

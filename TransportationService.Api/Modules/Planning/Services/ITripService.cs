@@ -49,6 +49,12 @@ public interface ITripService
 
     Task<TripOperationResult> AssignVehicleAsync(Guid id, AssignResourceRequest request, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// FL-M13: guided replacement of the vehicle (and optionally the trailer) of a PLANNED trip —
+    /// the trip stays Planned, the full conflict engine re-runs, a reason is mandatory and audited.
+    /// </summary>
+    Task<TripOperationResult> ReplaceVehicleAsync(Guid id, ReplaceTripVehicleRequest request, bool allowOverride, CancellationToken cancellationToken);
+
     Task<TripOperationResult> AssignTrailerAsync(Guid id, AssignResourceRequest request, CancellationToken cancellationToken);
 
     Task<TripOperationResult> RescheduleAsync(Guid id, RescheduleTripRequest request, CancellationToken cancellationToken);

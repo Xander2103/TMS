@@ -230,6 +230,23 @@ public class TripsController : ControllerBase
         return Handle(await _service.AssignVehicleAsync(id, request, cancellationToken), created: false);
     }
 
+    /// <summary>
+    /// FL-M13: replace the vehicle of a Planned trip in one guided step (no detour via "Terug naar
+    /// concept"). Conflicts are re-evaluated; overriding blocking ones needs planning.override_restriction.
+    /// </summary>
+    [HttpPost("{id:guid}/replace-vehicle")]
+    [RequirePermission(PermissionCodes.PlanningEdit)]
+    public async Task<ActionResult<TripDetailDto>> ReplaceVehicle(
+        Guid id, ReplaceTripVehicleRequest request, CancellationToken cancellationToken)
+    {
+        if (await GuardOverrideAsync(request.Override, cancellationToken) is { } forbidden)
+        {
+            return forbidden;
+        }
+
+        return Handle(await _service.ReplaceVehicleAsync(id, request, request.Override, cancellationToken), created: false);
+    }
+
     [HttpPut("{id:guid}/trailer")]
     [RequirePermission(PermissionCodes.PlanningEdit)]
     public async Task<ActionResult<TripDetailDto>> AssignTrailer(
