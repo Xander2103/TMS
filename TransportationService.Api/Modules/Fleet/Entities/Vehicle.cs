@@ -59,6 +59,7 @@ public class Vehicle : AuditableTenantEntity
     public string InternalNumber { get; set; } = string.Empty;
     private string _licensePlate = string.Empty;
 
+    /// <summary>Display plate; setting it keeps <see cref="NormalizedLicensePlate"/> in sync (FL-M1).</summary>
     public string LicensePlate
     {
         get => _licensePlate;

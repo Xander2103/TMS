@@ -45,9 +45,13 @@ public class TrailerService : ITrailerService
         {
             // Case-insensitive on both PostgreSQL and SQLite (plain LIKE is case-sensitive on PostgreSQL).
             var term = search.Trim().ToLowerInvariant();
+            // FL-M1: normalised plate and chassis number are searchable too.
+            var plateTerm = FleetIdentifiers.NormalizePlate(search);
             query = query.Where(t =>
                 t.InternalNumber.ToLower().Contains(term) ||
                 t.LicensePlate.ToLower().Contains(term) ||
+                (plateTerm != "" && t.NormalizedLicensePlate.Contains(plateTerm)) ||
+                (t.Vin != null && t.Vin.ToLower().Contains(term)) ||
                 (t.Brand != null && t.Brand.ToLower().Contains(term)) ||
                 (t.Model != null && t.Model.ToLower().Contains(term)));
         }
@@ -88,10 +92,10 @@ public class TrailerService : ITrailerService
 
     public async Task<TrailerOperationResult> CreateAsync(CreateTrailerRequest request, CancellationToken cancellationToken)
     {
-        var plate = request.LicensePlate.Trim().ToUpperInvariant();
-        if (await TenantScoped().AnyAsync(t => t.LicensePlate == plate, cancellationToken))
+        var plate = FleetIdentifiers.DisplayPlate(request.LicensePlate);
+        if (await IdentityConflictAsync(null, plate, request.Vin, cancellationToken) is { } conflict)
         {
-            return TrailerOperationResult.DuplicateLicensePlate;
+            return conflict;
         }
 
         if (!await CategoryInTenantAsync(request.CategoryId, cancellationToken))
@@ -113,8 +117,7 @@ public class TrailerService : ITrailerService
         ApplyEditableFields(trailer, request.Vin, request.CategoryId, request.Brand, request.Model, request.Year,
             request.FirstRegistrationDate, request.CapacityKg, request.LengthMeters, request.WidthMeters, request.HeightMeters,
             request.VolumeM3, request.VolumeIsManual, request.HasRefrigeration, request.AdrSuitable, request.OwnershipType, request.Notes);
-        trailer.AxleCount = Math.Clamp(request.AxleCount, 0, 12);
-        trailer.LoadingMeters = request.LoadingMeters < 0 ? 0 : Math.Round(request.LoadingMeters, 2);
+        ApplyMautFields(trailer, request.AxleCount, request.LoadingMeters);
 
         _dbContext.Add(trailer);
         try
@@ -126,7 +129,9 @@ public class TrailerService : ITrailerService
         }
         catch (DbUpdateException e) when (e is not DbUpdateConcurrencyException)
         {
-            return TrailerOperationResult.DuplicateLicensePlate;
+            _dbContext.Entry(trailer).State = EntityState.Detached;
+            return await IdentityConflictAsync(null, plate, request.Vin, cancellationToken)
+                   ?? TrailerOperationResult.DuplicateLicensePlate;
         }
 
         await _auditService.RecordAsync(EntityType, trailer.Id.ToString(), "Created", null,
@@ -143,10 +148,10 @@ public class TrailerService : ITrailerService
             return TrailerOperationResult.NotFound;
         }
 
-        var plate = request.LicensePlate.Trim().ToUpperInvariant();
-        if (await TenantScoped().AnyAsync(t => t.LicensePlate == plate && t.Id != id, cancellationToken))
+        var plate = FleetIdentifiers.DisplayPlate(request.LicensePlate);
+        if (await IdentityConflictAsync(id, plate, request.Vin, cancellationToken) is { } conflict)
         {
-            return TrailerOperationResult.DuplicateLicensePlate;
+            return conflict;
         }
 
         if (!await CategoryInTenantAsync(request.CategoryId, cancellationToken))
@@ -166,16 +171,16 @@ public class TrailerService : ITrailerService
         ApplyEditableFields(trailer, request.Vin, request.CategoryId, request.Brand, request.Model, request.Year,
             request.FirstRegistrationDate, request.CapacityKg, request.LengthMeters, request.WidthMeters, request.HeightMeters,
             request.VolumeM3, request.VolumeIsManual, request.HasRefrigeration, request.AdrSuitable, request.OwnershipType, request.Notes);
-        trailer.AxleCount = Math.Clamp(request.AxleCount, 0, 12);
-        trailer.LoadingMeters = request.LoadingMeters < 0 ? 0 : Math.Round(request.LoadingMeters, 2);
+        ApplyMautFields(trailer, request.AxleCount, request.LoadingMeters);
 
         try
         {
             await _dbContext.SaveChangesAsync(cancellationToken);
         }
-        catch (DbUpdateException)
+        catch (DbUpdateException e) when (e is not DbUpdateConcurrencyException)
         {
-            return TrailerOperationResult.DuplicateLicensePlate;
+            return await IdentityConflictAsync(id, plate, request.Vin, cancellationToken)
+                   ?? TrailerOperationResult.DuplicateLicensePlate;
         }
 
         await _auditService.RecordAsync(EntityType, trailer.Id.ToString(), "Updated", before,
@@ -205,12 +210,20 @@ public class TrailerService : ITrailerService
         return true;
     }
 
-    public async Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken)
+    public async Task<FleetDeleteResult> DeleteAsync(Guid id, CancellationToken cancellationToken)
     {
         var trailer = await TenantScoped().FirstOrDefaultAsync(t => t.Id == id, cancellationToken);
         if (trailer is null)
         {
-            return false;
+            return FleetDeleteResult.NotFound;
+        }
+
+        // FL-B1: a trailer that any trip or fleet record points at is history; deactivate instead.
+        var references = await FleetReferences.ForTrailerAsync(_dbContext, _tenantContext.TenantId, id, cancellationToken);
+        if (references.HasReferences)
+        {
+            return new FleetDeleteResult(FleetDeleteOutcome.Refused,
+                FleetReferences.RefusalMessage("Deze oplegger", "ze", references), references);
         }
 
         _dbContext.Remove(trailer); // soft delete via interceptor
@@ -219,7 +232,72 @@ public class TrailerService : ITrailerService
         await _auditService.RecordAsync(EntityType, trailer.Id.ToString(), "Deleted",
             new { trailer.InternalNumber, trailer.LicensePlate }, null, cancellationToken);
 
-        return true;
+        return FleetDeleteResult.Deleted;
+    }
+
+    public async Task<VehicleReferencesDto?> GetReferencesAsync(Guid id, CancellationToken cancellationToken)
+    {
+        if (!await TenantScoped().AnyAsync(t => t.Id == id, cancellationToken))
+        {
+            return null;
+        }
+
+        return await FleetReferences.ForTrailerAsync(_dbContext, _tenantContext.TenantId, id, cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<TripReferenceDto>?> ListRecentTripsAsync(Guid id, int limit, CancellationToken cancellationToken)
+    {
+        if (!await TenantScoped().AnyAsync(t => t.Id == id, cancellationToken))
+        {
+            return null;
+        }
+
+        var rows = await _dbContext.Trips.AsNoTracking()
+            .Where(t => t.TenantId == _tenantContext.TenantId && t.TrailerId == id)
+            .OrderByDescending(t => t.TripDate).ThenByDescending(t => t.TripNumber)
+            .Take(Math.Clamp(limit, 1, 100))
+            .Select(t => new { t.Id, t.TripNumber, t.TripDate, t.Status })
+            .ToListAsync(cancellationToken);
+        return rows.Select(t => new TripReferenceDto(t.Id, t.TripNumber, t.TripDate, t.Status.ToString())).ToList();
+    }
+
+    /// <summary>FL-M1: normalised plate + VIN uniqueness; the conflict names the existing trailer.</summary>
+    private async Task<TrailerOperationResult?> IdentityConflictAsync(
+        Guid? selfId, string plate, string? vin, CancellationToken cancellationToken)
+    {
+        var normalizedPlate = FleetIdentifiers.NormalizePlate(plate);
+        var plateOwner = await TenantScoped().AsNoTracking()
+            .Where(t => t.NormalizedLicensePlate == normalizedPlate && t.Id != selfId)
+            .Select(t => new { t.InternalNumber, t.LicensePlate })
+            .FirstOrDefaultAsync(cancellationToken);
+        if (plateOwner is not null)
+        {
+            return new TrailerOperationResult(TrailerOperationOutcome.DuplicateLicensePlate, null,
+                $"Er bestaat al een oplegger met dit kenteken ({plateOwner.LicensePlate}, {plateOwner.InternalNumber}).");
+        }
+
+        if (FleetIdentifiers.NormalizeVin(vin) is { } normalizedVin)
+        {
+            var vinOwner = await TenantScoped().AsNoTracking()
+                .Where(t => t.Vin == normalizedVin && t.Id != selfId)
+                .Select(t => new { t.InternalNumber, t.LicensePlate })
+                .FirstOrDefaultAsync(cancellationToken);
+            if (vinOwner is not null)
+            {
+                return new TrailerOperationResult(TrailerOperationOutcome.DuplicateVin, null,
+                    $"Er bestaat al een oplegger met dit chassisnummer (VIN): {vinOwner.InternalNumber} ({vinOwner.LicensePlate}).");
+            }
+        }
+
+        return null;
+    }
+
+    private static void ApplyMautFields(Trailer t, int axleCount, decimal loadingMeters)
+    {
+        FleetFieldRules.RequireNonNegative(axleCount, "axleCount", "Het aantal assen");
+        FleetFieldRules.RequireNonNegative(loadingMeters, "loadingMeters", "Het aantal laadmeters");
+        t.AxleCount = Math.Clamp(axleCount, 0, 12);
+        t.LoadingMeters = Math.Round(loadingMeters, 2);
     }
 
     private void ApplyEditableFields(
@@ -228,9 +306,14 @@ public class TrailerService : ITrailerService
         bool volumeIsManual, bool refrigeration, bool adr, VehicleOwnershipType ownership, string? notes)
     {
         FleetFieldRules.ValidateConstructionYear(year, _timeProvider.GetUtcNow().Year);
+        // FL-M5: impossible physical values are refused, never silently clamped.
+        FleetFieldRules.RequireNonNegative(capacity, "capacityKg", "Het laadvermogen");
+        FleetFieldRules.RequireNonNegative(length, "lengthMeters", "De lengte");
+        FleetFieldRules.RequireNonNegative(width, "widthMeters", "De breedte");
+        FleetFieldRules.RequireNonNegative(height, "heightMeters", "De hoogte");
         var (resolvedVolume, isManual) = FleetFieldRules.ResolveVolume(length, width, height, volume, volumeIsManual);
 
-        t.Vin = Trim(vin);
+        t.Vin = FleetIdentifiers.NormalizeVin(vin);
         t.CategoryId = categoryId;
         t.Brand = Trim(brand);
         t.Model = Trim(model);

@@ -70,4 +70,25 @@ public static class FleetFieldRules
 
         return hasTailLift ? capacityKg : null;
     }
+
+    /// <summary>
+    /// FL-M5: physical measures can never be negative. Throws a field-level validation error with a
+    /// Dutch message naming the field (null = unknown is fine).
+    /// </summary>
+    public static void RequireNonNegative(decimal? value, string field, string label)
+    {
+        if (value is < 0)
+        {
+            throw new DomainValidationException(field, $"{label} mag niet negatief zijn.");
+        }
+    }
+
+    /// <inheritdoc cref="RequireNonNegative(decimal?, string, string)"/>
+    public static void RequireNonNegative(int? value, string field, string label)
+    {
+        if (value is < 0)
+        {
+            throw new DomainValidationException(field, $"{label} mag niet negatief zijn.");
+        }
+    }
 }

@@ -94,13 +94,13 @@ public class TripExecutionService : ITripExecutionService
         {
             var stops = await LoadExecutionStopsAsync(trip, cancellationToken);
             var vehicle = trip.VehicleId is { } v
-                ? await _dbContext.Vehicles.AsNoTracking()
+                ? await _dbContext.Vehicles.AsNoTracking().IgnoreQueryFilters()
                     .Where(x => x.Id == v && x.TenantId == _tenantContext.TenantId)
                     .Select(x => new { x.InternalNumber, x.LicensePlate })
                     .FirstOrDefaultAsync(cancellationToken)
                 : null;
             var trailerNumber = trip.TrailerId is { } tr
-                ? await _dbContext.Trailers.AsNoTracking()
+                ? await _dbContext.Trailers.AsNoTracking().IgnoreQueryFilters()
                     .Where(x => x.Id == tr && x.TenantId == _tenantContext.TenantId)
                     .Select(x => x.InternalNumber)
                     .FirstOrDefaultAsync(cancellationToken)
@@ -642,7 +642,7 @@ public class TripExecutionService : ITripExecutionService
             : null;
 
         var vehicle = trip.VehicleId is { } v
-            ? await _dbContext.Vehicles.AsNoTracking()
+            ? await _dbContext.Vehicles.AsNoTracking().IgnoreQueryFilters()
                 .Where(x => x.Id == v && x.TenantId == tenantId)
                 .Select(x => new { x.InternalNumber, x.LicensePlate })
                 .FirstOrDefaultAsync(cancellationToken)

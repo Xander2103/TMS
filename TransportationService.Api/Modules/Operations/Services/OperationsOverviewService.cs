@@ -337,10 +337,10 @@ public class OperationsOverviewService : IOperationsOverviewService
         }
 
         return isVehicle
-            ? await _dbContext.Vehicles.AsNoTracking()
+            ? await _dbContext.Vehicles.AsNoTracking().IgnoreQueryFilters()
                 .Where(v => v.TenantId == _tenantContext.TenantId && idList.Contains(v.Id))
                 .ToDictionaryAsync(v => v.Id, v => v.InternalNumber, cancellationToken)
-            : await _dbContext.Trailers.AsNoTracking()
+            : await _dbContext.Trailers.AsNoTracking().IgnoreQueryFilters()
                 .Where(t => t.TenantId == _tenantContext.TenantId && idList.Contains(t.Id))
                 .ToDictionaryAsync(t => t.Id, t => t.InternalNumber, cancellationToken);
     }

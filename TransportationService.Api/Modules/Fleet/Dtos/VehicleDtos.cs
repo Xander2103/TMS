@@ -150,7 +150,12 @@ public record UpdateVehicleRequest(
     decimal LoadingMeters = 0,
     string? RequiredLicenceCode = null,
     /// <summary>D4: tail-lift capacity in kg (null = unknown); only meaningful with HasTailLift.</summary>
-    decimal? TailLiftCapacityKg = null);
+    decimal? TailLiftCapacityKg = null,
+    /// <summary>
+    /// FL-M6: required to LOWER the odometer (a correction); a decrease without it is refused.
+    /// Recorded in the audit trail.
+    /// </summary>
+    string? OdometerCorrectionReason = null);
 
 public record SetVehicleActiveRequest(bool IsActive);
 
@@ -165,9 +170,12 @@ public enum VehicleOperationOutcome
     InvalidReference,
     /// <summary>The requested driver already holds another vehicle in that slot.</summary>
     DriverAlreadyAssigned,
+    /// <summary>FL-M1: another vehicle already carries this chassis number.</summary>
+    DuplicateVin,
 }
 
-public record VehicleOperationResult(VehicleOperationOutcome Outcome, VehicleDetailDto? Vehicle)
+/// <remarks>FL-M1: <c>Message</c> carries the Dutch conflict text (naming the existing record) when set.</remarks>
+public record VehicleOperationResult(VehicleOperationOutcome Outcome, VehicleDetailDto? Vehicle, string? Message = null)
 {
     public static VehicleOperationResult Success(VehicleDetailDto vehicle) => new(VehicleOperationOutcome.Success, vehicle);
     public static readonly VehicleOperationResult NotFound = new(VehicleOperationOutcome.NotFound, null);

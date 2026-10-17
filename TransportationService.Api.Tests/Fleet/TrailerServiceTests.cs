@@ -87,7 +87,7 @@ public class TrailerServiceTests
 
         var deleted = await h.Sut.DeleteAsync(created.Trailer!.Id, CancellationToken.None);
 
-        Assert.True(deleted);
+        Assert.Equal(FleetDeleteOutcome.Deleted, deleted.Outcome);
         Assert.Null(await h.Sut.GetByIdAsync(created.Trailer.Id, CancellationToken.None));
     }
 

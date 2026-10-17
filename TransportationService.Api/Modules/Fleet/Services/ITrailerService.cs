@@ -20,5 +20,12 @@ public interface ITrailerService
 
     Task<bool> SetActiveAsync(Guid id, SetTrailerActiveRequest request, CancellationToken cancellationToken);
 
-    Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken);
+    /// <summary>FL-B1: refused (with message + references) when anything still points at the trailer.</summary>
+    Task<FleetDeleteResult> DeleteAsync(Guid id, CancellationToken cancellationToken);
+
+    /// <summary>FL-B1/M8: what references the trailer (same shape as vehicles); null when unknown.</summary>
+    Task<VehicleReferencesDto?> GetReferencesAsync(Guid id, CancellationToken cancellationToken);
+
+    /// <summary>FL-M7: the trailer's most recent trips (newest first) for the damage trip picker.</summary>
+    Task<IReadOnlyList<TripReferenceDto>?> ListRecentTripsAsync(Guid id, int limit, CancellationToken cancellationToken);
 }

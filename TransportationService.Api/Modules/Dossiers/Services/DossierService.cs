@@ -738,13 +738,13 @@ public partial class DossierService : IDossierService
                 .ToDictionaryAsync(x => x.Id, x => x.Name, cancellationToken);
         var vehicles = vehicleIds.Count == 0
             ? []
-            : await _dbContext.Vehicles.AsNoTracking()
+            : await _dbContext.Vehicles.AsNoTracking().IgnoreQueryFilters()
                 .Where(v => v.TenantId == tenantId && vehicleIds.Contains(v.Id))
                 .Select(v => new { v.Id, v.InternalNumber, v.LicensePlate })
                 .ToDictionaryAsync(v => v.Id, cancellationToken);
         var trailers = trailerIds.Count == 0
             ? []
-            : await _dbContext.Trailers.AsNoTracking()
+            : await _dbContext.Trailers.AsNoTracking().IgnoreQueryFilters()
                 .Where(t => t.TenantId == tenantId && trailerIds.Contains(t.Id))
                 .Select(t => new { t.Id, t.InternalNumber, t.LicensePlate })
                 .ToDictionaryAsync(t => t.Id, cancellationToken);

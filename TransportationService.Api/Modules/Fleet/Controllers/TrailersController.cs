@@ -103,7 +103,31 @@ public class TrailersController : ControllerBase
     [RequirePermission(PermissionCodes.TrailersDelete)]
     public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
     {
-        return await _service.DeleteAsync(id, cancellationToken) ? NoContent() : NotFound();
+        var result = await _service.DeleteAsync(id, cancellationToken);
+        return result.Outcome switch
+        {
+            FleetDeleteOutcome.Deleted => NoContent(),
+            FleetDeleteOutcome.Refused => Conflict(new { message = result.Message, references = result.References }),
+            _ => NotFound(),
+        };
+    }
+
+    /// <summary>FL-B1/M8: what still references the trailer (delete guard + deactivation warning).</summary>
+    [HttpGet("{id:guid}/references")]
+    [RequirePermission(PermissionCodes.TrailersView)]
+    public async Task<ActionResult<VehicleReferencesDto>> References(Guid id, CancellationToken cancellationToken)
+    {
+        var references = await _service.GetReferencesAsync(id, cancellationToken);
+        return references is null ? NotFound() : Ok(references);
+    }
+
+    /// <summary>FL-M7: recent trips of the trailer (newest first), e.g. to link a damage report.</summary>
+    [HttpGet("{id:guid}/trips")]
+    [RequirePermission(PermissionCodes.TrailersView)]
+    public async Task<ActionResult<IReadOnlyList<TripReferenceDto>>> Trips(Guid id, [FromQuery] int? limit, CancellationToken cancellationToken)
+    {
+        var trips = await _service.ListRecentTripsAsync(id, limit ?? 30, cancellationToken);
+        return trips is null ? NotFound() : Ok(trips);
     }
 
     private ActionResult<TrailerDetailDto> Handle(TrailerOperationResult result, bool created) => result.Outcome switch
@@ -111,7 +135,8 @@ public class TrailersController : ControllerBase
         TrailerOperationOutcome.Success when created => CreatedAtAction(nameof(GetById), new { id = result.Trailer!.Id }, result.Trailer),
         TrailerOperationOutcome.Success => Ok(result.Trailer),
         TrailerOperationOutcome.NotFound => NotFound(),
-        TrailerOperationOutcome.DuplicateLicensePlate => Conflict(new { message = "Er bestaat al een oplegger met dit kenteken." }),
+        TrailerOperationOutcome.DuplicateLicensePlate => Conflict(new { message = result.Message ?? "Er bestaat al een oplegger met dit kenteken." }),
+        TrailerOperationOutcome.DuplicateVin => Conflict(new { message = result.Message ?? "Er bestaat al een oplegger met dit chassisnummer (VIN)." }),
         TrailerOperationOutcome.InvalidReference => BadRequest(new { message = "De gekoppelde categorie bestaat niet." }),
         _ => Conflict(),
     };

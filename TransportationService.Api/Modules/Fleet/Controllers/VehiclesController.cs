@@ -110,7 +110,31 @@ public class VehiclesController : ControllerBase
     [RequirePermission(PermissionCodes.VehiclesDelete)]
     public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
     {
-        return await _service.DeleteAsync(id, cancellationToken) ? NoContent() : NotFound();
+        var result = await _service.DeleteAsync(id, cancellationToken);
+        return result.Outcome switch
+        {
+            FleetDeleteOutcome.Deleted => NoContent(),
+            FleetDeleteOutcome.Refused => Conflict(new { message = result.Message, references = result.References }),
+            _ => NotFound(),
+        };
+    }
+
+    /// <summary>FL-B1/M8: what still references the vehicle (delete guard + deactivation warning).</summary>
+    [HttpGet("{id:guid}/references")]
+    [RequirePermission(PermissionCodes.VehiclesView)]
+    public async Task<ActionResult<VehicleReferencesDto>> References(Guid id, CancellationToken cancellationToken)
+    {
+        var references = await _service.GetReferencesAsync(id, cancellationToken);
+        return references is null ? NotFound() : Ok(references);
+    }
+
+    /// <summary>FL-M7: recent trips of the vehicle (newest first), e.g. to link a damage report.</summary>
+    [HttpGet("{id:guid}/trips")]
+    [RequirePermission(PermissionCodes.VehiclesView)]
+    public async Task<ActionResult<IReadOnlyList<TripReferenceDto>>> Trips(Guid id, [FromQuery] int? limit, CancellationToken cancellationToken)
+    {
+        var trips = await _service.ListRecentTripsAsync(id, limit ?? 30, cancellationToken);
+        return trips is null ? NotFound() : Ok(trips);
     }
 
     [HttpPut("{id:guid}/assignments/fixed-driver")]
@@ -146,7 +170,8 @@ public class VehiclesController : ControllerBase
         VehicleOperationOutcome.Success when created => CreatedAtAction(nameof(GetById), new { id = result.Vehicle!.Id }, result.Vehicle),
         VehicleOperationOutcome.Success => Ok(result.Vehicle),
         VehicleOperationOutcome.NotFound => NotFound(),
-        VehicleOperationOutcome.DuplicateLicensePlate => Conflict(new { message = "Er bestaat al een voertuig met dit kenteken." }),
+        VehicleOperationOutcome.DuplicateLicensePlate => Conflict(new { message = result.Message ?? "Er bestaat al een voertuig met dit kenteken." }),
+        VehicleOperationOutcome.DuplicateVin => Conflict(new { message = result.Message ?? "Er bestaat al een voertuig met dit chassisnummer (VIN)." }),
         VehicleOperationOutcome.InvalidReference => BadRequest(new { message = "Eén of meer gekoppelde records (categorie of chauffeur) bestaan niet." }),
         _ => Conflict(),
     };

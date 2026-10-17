@@ -99,9 +99,12 @@ public enum TrailerOperationOutcome
     NotFound,
     DuplicateLicensePlate,
     InvalidReference,
+    /// <summary>FL-M1: another trailer already carries this chassis number.</summary>
+    DuplicateVin,
 }
 
-public record TrailerOperationResult(TrailerOperationOutcome Outcome, TrailerDetailDto? Trailer)
+/// <remarks>FL-M1: <c>Message</c> carries the Dutch conflict text (naming the existing record) when set.</remarks>
+public record TrailerOperationResult(TrailerOperationOutcome Outcome, TrailerDetailDto? Trailer, string? Message = null)
 {
     public static TrailerOperationResult Success(TrailerDetailDto trailer) => new(TrailerOperationOutcome.Success, trailer);
     public static readonly TrailerOperationResult NotFound = new(TrailerOperationOutcome.NotFound, null);

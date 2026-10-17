@@ -90,7 +90,7 @@ public class VehicleServiceTests
 
         var deleted = await h.Sut.DeleteAsync(created.Vehicle!.Id, CancellationToken.None);
 
-        Assert.True(deleted);
+        Assert.Equal(FleetDeleteOutcome.Deleted, deleted.Outcome);
         Assert.Null(await h.Sut.GetByIdAsync(created.Vehicle.Id, CancellationToken.None));
     }
 
@@ -118,7 +118,7 @@ public class VehicleServiceTests
         var created = await h.Sut.CreateAsync(CreateRequest(), CancellationToken.None);
         await h.Sut.UpdateAsync(created.Vehicle!.Id, new UpdateVehicleRequest(
             created.Vehicle.LicensePlate, null, null, null, null, null, null, FuelType.Diesel, null,
-            null, null, null, null, null, null, 0, null, false, false, false, false,
+            null, null, null, null, null, null, created.Vehicle.OdometerKm, null, false, false, false, false,
             VehicleOwnershipType.Owned, VehicleOperationalStatus.Available, IsActive: false, null), CancellationToken.None);
 
         var options = await h.Sut.GetOptionsAsync(CancellationToken.None);
@@ -152,7 +152,7 @@ public class VehicleServiceTests
         Assert.False(auto.Vehicle.VolumeIsManual);
 
         var manual = await h.Sut.CreateAsync(
-            CreateRequest("1-AAA-002") with { VolumeIsManual = true, VolumeM3 = 90m }, CancellationToken.None);
+            CreateRequest("1-AAA-002") with { Vin = "VF1ABC000000002", VolumeIsManual = true, VolumeM3 = 90m }, CancellationToken.None);
         Assert.Equal(90m, manual.Vehicle!.VolumeM3);
         Assert.True(manual.Vehicle.VolumeIsManual);
     }

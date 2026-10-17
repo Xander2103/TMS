@@ -165,12 +165,12 @@ public class DriverAppService : IDriverAppService
 
         var vehicleNumbers = vehicleIds.Count == 0
             ? []
-            : await _dbContext.Vehicles.AsNoTracking()
+            : await _dbContext.Vehicles.AsNoTracking().IgnoreQueryFilters()
                 .Where(v => v.TenantId == tenantId && vehicleIds.Contains(v.Id))
                 .ToDictionaryAsync(v => v.Id, v => v.InternalNumber, cancellationToken);
         var trailerNumbers = trailerIds.Count == 0
             ? []
-            : await _dbContext.Trailers.AsNoTracking()
+            : await _dbContext.Trailers.AsNoTracking().IgnoreQueryFilters()
                 .Where(t => t.TenantId == tenantId && trailerIds.Contains(t.Id))
                 .ToDictionaryAsync(t => t.Id, t => t.InternalNumber, cancellationToken);
 

@@ -45,9 +45,13 @@ public class VehicleService : IVehicleService
         {
             // Case-insensitive on both PostgreSQL and SQLite (plain LIKE is case-sensitive on PostgreSQL).
             var term = search.Trim().ToLowerInvariant();
+            // FL-M1: "1tft001" finds "1-TFT-001" (normalised plate) and the chassis number is searchable.
+            var plateTerm = FleetIdentifiers.NormalizePlate(search);
             query = query.Where(v =>
                 v.InternalNumber.ToLower().Contains(term) ||
                 v.LicensePlate.ToLower().Contains(term) ||
+                (plateTerm != "" && v.NormalizedLicensePlate.Contains(plateTerm)) ||
+                (v.Vin != null && v.Vin.ToLower().Contains(term)) ||
                 (v.Brand != null && v.Brand.ToLower().Contains(term)) ||
                 (v.Model != null && v.Model.ToLower().Contains(term)));
         }
@@ -88,10 +92,10 @@ public class VehicleService : IVehicleService
 
     public async Task<VehicleOperationResult> CreateAsync(CreateVehicleRequest request, CancellationToken cancellationToken)
     {
-        var plate = request.LicensePlate.Trim().ToUpperInvariant();
-        if (await TenantScoped().AnyAsync(v => v.LicensePlate == plate, cancellationToken))
+        var plate = FleetIdentifiers.DisplayPlate(request.LicensePlate);
+        if (await IdentityConflictAsync(null, plate, request.Vin, cancellationToken) is { } conflict)
         {
-            return VehicleOperationResult.DuplicateLicensePlate;
+            return conflict;
         }
 
         if (!await ReferencesInTenantAsync(request.CategoryId, request.FixedDriverId, request.CurrentDriverId, cancellationToken))
@@ -144,7 +148,10 @@ public class VehicleService : IVehicleService
         }
         catch (DbUpdateException e) when (e is not DbUpdateConcurrencyException)
         {
-            return VehicleOperationResult.DuplicateLicensePlate;
+            // Race: a concurrent request claimed the same plate/VIN between the check and the insert.
+            _dbContext.Entry(vehicle).State = EntityState.Detached;
+            return await IdentityConflictAsync(null, plate, request.Vin, cancellationToken)
+                   ?? VehicleOperationResult.DuplicateLicensePlate;
         }
 
         await _auditService.RecordAsync(EntityType, vehicle.Id.ToString(), "Created", null,
@@ -161,10 +168,10 @@ public class VehicleService : IVehicleService
             return VehicleOperationResult.NotFound;
         }
 
-        var plate = request.LicensePlate.Trim().ToUpperInvariant();
-        if (await TenantScoped().AnyAsync(v => v.LicensePlate == plate && v.Id != id, cancellationToken))
+        var plate = FleetIdentifiers.DisplayPlate(request.LicensePlate);
+        if (await IdentityConflictAsync(id, plate, request.Vin, cancellationToken) is { } conflict)
         {
-            return VehicleOperationResult.DuplicateLicensePlate;
+            return conflict;
         }
 
         if (!await ReferencesInTenantAsync(request.CategoryId, null, null, cancellationToken))
@@ -172,7 +179,23 @@ public class VehicleService : IVehicleService
             return VehicleOperationResult.InvalidReference;
         }
 
-        var before = new { vehicle.LicensePlate, vehicle.OperationalStatus, vehicle.StatusReason, vehicle.IsActive };
+        // FL-M6: the odometer only moves forward through an ordinary edit; lowering it is a
+        // correction that needs a reason (recorded in the audit trail).
+        var correctionReason = Trim(request.OdometerCorrectionReason);
+        if (request.OdometerKm < vehicle.OdometerKm && correctionReason is null)
+        {
+            throw new Common.DomainValidationException("odometerKm",
+                $"De kilometerstand kan niet lager zijn dan de huidige stand ({vehicle.OdometerKm.ToString("N0", Dutch)} km). " +
+                "Geef een correctiereden op als dit een correctie is.");
+        }
+
+        var before = new
+        {
+            vehicle.LicensePlate, vehicle.Vin, vehicle.OperationalStatus, vehicle.StatusReason, vehicle.IsActive,
+            vehicle.OdometerKm, vehicle.PayloadKg, vehicle.GrossVehicleWeightKg, vehicle.CategoryId, vehicle.Brand, vehicle.Model,
+            vehicle.HasCrane, vehicle.AdrSuitable, vehicle.RequiredLicenceCode,
+        };
+        var odometerCorrected = request.OdometerKm < vehicle.OdometerKm;
 
         vehicle.LicensePlate = plate;
         vehicle.OperationalStatus = request.OperationalStatus;
@@ -195,13 +218,20 @@ public class VehicleService : IVehicleService
         {
             await _dbContext.SaveChangesAsync(cancellationToken);
         }
-        catch (DbUpdateException)
+        catch (DbUpdateException e) when (e is not DbUpdateConcurrencyException)
         {
-            return VehicleOperationResult.DuplicateLicensePlate;
+            return await IdentityConflictAsync(id, plate, request.Vin, cancellationToken)
+                   ?? VehicleOperationResult.DuplicateLicensePlate;
         }
 
         await _auditService.RecordAsync(EntityType, vehicle.Id.ToString(), "Updated", before,
-            new { vehicle.LicensePlate, vehicle.OperationalStatus, vehicle.StatusReason, vehicle.IsActive }, cancellationToken);
+            new
+            {
+                vehicle.LicensePlate, vehicle.Vin, vehicle.OperationalStatus, vehicle.StatusReason, vehicle.IsActive,
+                vehicle.OdometerKm, vehicle.PayloadKg, vehicle.GrossVehicleWeightKg, vehicle.CategoryId, vehicle.Brand, vehicle.Model,
+                vehicle.HasCrane, vehicle.AdrSuitable, vehicle.RequiredLicenceCode,
+                OdometerCorrectionReason = odometerCorrected ? correctionReason : null,
+            }, cancellationToken);
 
         return VehicleOperationResult.Success(await MapToDetailAsync(vehicle, cancellationToken));
     }
@@ -227,21 +257,93 @@ public class VehicleService : IVehicleService
         return true;
     }
 
-    public async Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken)
+    public async Task<FleetDeleteResult> DeleteAsync(Guid id, CancellationToken cancellationToken)
     {
         var vehicle = await TenantScoped().FirstOrDefaultAsync(v => v.Id == id, cancellationToken);
         if (vehicle is null)
         {
-            return false;
+            return FleetDeleteResult.NotFound;
         }
 
+        // FL-B1: a vehicle that any trip or fleet record points at is history, never deletable —
+        // deleting it blanked planned trips and made its history unreachable. Deactivate instead.
+        var references = await FleetReferences.ForVehicleAsync(_dbContext, _tenantContext.TenantId, id, cancellationToken);
+        if (references.HasReferences)
+        {
+            return new FleetDeleteResult(FleetDeleteOutcome.Refused,
+                FleetReferences.RefusalMessage("Dit voertuig", "het", references), references);
+        }
+
+        // Unused master-data record: the standing driver slots are released with it.
+        vehicle.FixedDriverId = null;
+        vehicle.CurrentDriverId = null;
         _dbContext.Remove(vehicle); // soft delete via interceptor
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         await _auditService.RecordAsync(EntityType, vehicle.Id.ToString(), "Deleted",
             new { vehicle.InternalNumber, vehicle.LicensePlate }, null, cancellationToken);
 
-        return true;
+        return FleetDeleteResult.Deleted;
+    }
+
+    public async Task<VehicleReferencesDto?> GetReferencesAsync(Guid id, CancellationToken cancellationToken)
+    {
+        if (!await TenantScoped().AnyAsync(v => v.Id == id, cancellationToken))
+        {
+            return null;
+        }
+
+        return await FleetReferences.ForVehicleAsync(_dbContext, _tenantContext.TenantId, id, cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<TripReferenceDto>?> ListRecentTripsAsync(Guid id, int limit, CancellationToken cancellationToken)
+    {
+        if (!await TenantScoped().AnyAsync(v => v.Id == id, cancellationToken))
+        {
+            return null;
+        }
+
+        var rows = await _dbContext.Trips.AsNoTracking()
+            .Where(t => t.TenantId == _tenantContext.TenantId && t.VehicleId == id)
+            .OrderByDescending(t => t.TripDate).ThenByDescending(t => t.TripNumber)
+            .Take(Math.Clamp(limit, 1, 100))
+            .Select(t => new { t.Id, t.TripNumber, t.TripDate, t.Status })
+            .ToListAsync(cancellationToken);
+        return rows.Select(t => new TripReferenceDto(t.Id, t.TripNumber, t.TripDate, t.Status.ToString())).ToList();
+    }
+
+    /// <summary>
+    /// FL-M1: plate identity is the normalised plate; the VIN is unique whenever it is known.
+    /// Returns the conflict result (with a message naming the existing vehicle) or null.
+    /// </summary>
+    private async Task<VehicleOperationResult?> IdentityConflictAsync(
+        Guid? selfId, string plate, string? vin, CancellationToken cancellationToken)
+    {
+        var normalizedPlate = FleetIdentifiers.NormalizePlate(plate);
+        var plateOwner = await TenantScoped().AsNoTracking()
+            .Where(v => v.NormalizedLicensePlate == normalizedPlate && v.Id != selfId)
+            .Select(v => new { v.InternalNumber, v.LicensePlate })
+            .FirstOrDefaultAsync(cancellationToken);
+        if (plateOwner is not null)
+        {
+            return new VehicleOperationResult(VehicleOperationOutcome.DuplicateLicensePlate, null,
+                $"Er bestaat al een voertuig met dit kenteken ({plateOwner.LicensePlate}, {plateOwner.InternalNumber}).");
+        }
+
+        if (FleetIdentifiers.NormalizeVin(vin) is { } normalizedVin)
+        {
+            var vinOwner = await TenantScoped().AsNoTracking()
+                .Where(v => v.Vin == normalizedVin && v.Id != selfId)
+                .Select(v => new { v.InternalNumber, v.LicensePlate })
+                .FirstOrDefaultAsync(cancellationToken);
+            if (vinOwner is not null)
+            {
+                return new VehicleOperationResult(VehicleOperationOutcome.DuplicateVin, null,
+                    $"Er bestaat al een voertuig met dit chassisnummer (VIN): {vinOwner.InternalNumber} ({vinOwner.LicensePlate}).");
+            }
+        }
+
+        return null;
     }
 
     private void ApplyEditableFields(
@@ -252,9 +354,17 @@ public class VehicleService : IVehicleService
         VehicleOwnershipType ownership, string? notes)
     {
         FleetFieldRules.ValidateConstructionYear(year, _timeProvider.GetUtcNow().Year);
+        // FL-M5: impossible physical values are refused, never silently clamped.
+        FleetFieldRules.RequireNonNegative(grossWeight, "grossVehicleWeightKg", "De MTM");
+        FleetFieldRules.RequireNonNegative(payload, "payloadKg", "Het laadvermogen");
+        FleetFieldRules.RequireNonNegative(length, "lengthMeters", "De lengte");
+        FleetFieldRules.RequireNonNegative(width, "widthMeters", "De breedte");
+        FleetFieldRules.RequireNonNegative(height, "heightMeters", "De hoogte");
+        FleetFieldRules.RequireNonNegative(odometer, "odometerKm", "De kilometerstand");
+        FleetFieldRules.RequireNonNegative(consumptionLPer100Km, "consumptionLPer100Km", "Het verbruik");
         var (resolvedVolume, isManual) = FleetFieldRules.ResolveVolume(length, width, height, volume, volumeIsManual);
 
-        v.Vin = Trim(vin);
+        v.Vin = FleetIdentifiers.NormalizeVin(vin);
         v.CategoryId = categoryId;
         v.Brand = Trim(brand);
         v.Model = Trim(model);
@@ -269,8 +379,8 @@ public class VehicleService : IVehicleService
         v.HeightMeters = height;
         v.VolumeM3 = resolvedVolume;
         v.VolumeIsManual = isManual;
-        v.OdometerKm = odometer < 0 ? 0 : odometer;
-        v.ConsumptionLPer100Km = consumptionLPer100Km is < 0 ? null : consumptionLPer100Km;
+        v.OdometerKm = odometer;
+        v.ConsumptionLPer100Km = consumptionLPer100Km;
         v.HasCrane = crane;
         v.HasRefrigeration = refrigeration;
         v.HasTailLift = tailLift;
@@ -281,6 +391,8 @@ public class VehicleService : IVehicleService
 
     private static void ApplyMautFields(Vehicle v, int axleCount, decimal loadingMeters, string? requiredLicenceCode)
     {
+        FleetFieldRules.RequireNonNegative(axleCount, "axleCount", "Het aantal assen");
+        FleetFieldRules.RequireNonNegative(loadingMeters, "loadingMeters", "Het aantal laadmeters");
         v.AxleCount = Math.Clamp(axleCount, 0, 12);
         v.LoadingMeters = loadingMeters < 0 ? 0 : Math.Round(loadingMeters, 2);
         v.RequiredLicenceCode = string.IsNullOrWhiteSpace(requiredLicenceCode) ? null : requiredLicenceCode.Trim().ToUpperInvariant();
@@ -357,4 +469,6 @@ public class VehicleService : IVehicleService
     }
 
     private static string? Trim(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private static readonly System.Globalization.CultureInfo Dutch = System.Globalization.CultureInfo.GetCultureInfo("nl-BE");
 }
