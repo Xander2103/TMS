@@ -115,5 +115,27 @@
       "weight": "{kg} kg",
       "total": "Totaal gewicht: {kg} kg"
     }
+  },
+  "activities": {
+    "title": "Mijn activiteiten",
+    "subtitle": "Werk zonder rit, zoals kraanwerk ter plaatse.",
+    "loadError": "Je activiteiten konden niet worden geladen.",
+    "site": "Werf",
+    "work": "Werkomschrijving",
+    "vehicle": "Voertuig",
+    "time": "{start}–{end}",
+    "start": "Starten",
+    "complete": "Afronden",
+    "completeTitle": "Activiteit afronden?",
+    "completeMessage": "Bevestig dat {label} volledig uitgevoerd is. Daarna kan je dit niet meer zelf wijzigen.",
+    "started": "Activiteit gestart.",
+    "completed": "Activiteit afgerond.",
+    "actionFailed": "De activiteit kon niet worden bijgewerkt.",
+    "status": {
+      "Planned": "Gepland",
+      "InProgress": "Bezig",
+      "Completed": "Afgerond",
+      "Cancelled": "Geannuleerd"
+    }
   }
 }

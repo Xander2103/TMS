@@ -71,7 +71,8 @@ public interface IDossierActivityExecutionService
 ///   Double bookings against trips of the same day only warn: a crane operator often drives the
 ///   crane transport and then lifts on site the same day.</item>
 /// </list>
-/// Driver-side completion (driver app) is not part of this wave: the driver app runs on trips.
+/// The assigned driver starts and completes the work from the driver app through
+/// <see cref="MyActivitiesService"/>, which reuses these transitions.
 /// </summary>
 public class DossierActivityExecutionService : IDossierActivityExecutionService
 {

@@ -346,6 +346,8 @@ builder.Services.AddScoped<TransportationService.Api.Modules.Dossiers.Services.I
     TransportationService.Api.Modules.Dossiers.Services.DossierActivityPlanningService>();
 builder.Services.AddScoped<TransportationService.Api.Modules.Dossiers.Services.IDossierActivityExecutionService,
     TransportationService.Api.Modules.Dossiers.Services.DossierActivityExecutionService>();
+builder.Services.AddScoped<TransportationService.Api.Modules.Dossiers.Services.IMyActivitiesService,
+    TransportationService.Api.Modules.Dossiers.Services.MyActivitiesService>();
 builder.Services.AddScoped<TransportationService.Api.Modules.Dossiers.Services.IActivityTypeService,
     TransportationService.Api.Modules.Dossiers.Services.ActivityTypeService>();
 builder.Services.AddScoped<TransportationService.Api.Modules.Incidents.Services.IIncidentService,

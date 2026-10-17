@@ -566,3 +566,25 @@ public record AddDossierRelationRequest(
     Guid TargetDossierId,
     string RelationType,
     string? Notes = null);
+
+/// <summary>
+/// T-H7 driver app: a standalone activity (crane work on site, plateau …) assigned to the signed-in
+/// driver. Operational fields only — never a price, internal note or other commercial data.
+/// </summary>
+public record MyActivityDto(
+    Guid Id,
+    string DossierNumber,
+    string? CustomerName,
+    string TypeName,
+    string? Label,
+    DateOnly? PlannedDate,
+    TimeOnly? StartTime,
+    decimal? DurationHours,
+    DateTime? PlannedEnd,
+    string? SiteAddress,
+    string? WorkDescription,
+    string? VehicleNumber,
+    string? VehiclePlate,
+    string ExecutionStatus,
+    DateTime? StartedAt,
+    DateTime? CompletedAt);

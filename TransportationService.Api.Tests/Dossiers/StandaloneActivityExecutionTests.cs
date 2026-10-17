@@ -448,6 +448,70 @@ public class StandaloneActivityExecutionTests
         Assert.DoesNotContain(craneAssigned!.Warnings, c => c.Description.Contains("kraancertificaat"));
     }
 
+    [Fact]
+    public async Task DriverApp_TheAssignedOperatorSeesStartsAndCompletesOwnWork_WithoutPrices_AndTheSystemConfirms()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var dossier = await h.NewDossierAsync();
+        var crane = await h.AddStandaloneAsync(dossier.Id, "KRAANWERK", "Kraan werf C");
+        var plateau = await h.AddStandaloneAsync(dossier.Id, "PLATEAU", "Plateau werf C");
+        h.Price(crane, 400m);
+
+        var operatorUser = Guid.NewGuid();
+        var (operatorEmployee, operatorDriver, otherEmployee, otherDriver) = (Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+        h.Db.Context.Employees.AddRange(
+            new Employee { Id = operatorEmployee, TenantId = h.TenantId, EmployeeNumber = "E-3", FirstName = "Kris", LastName = "Kraan", IsActive = true },
+            new Employee { Id = otherEmployee, TenantId = h.TenantId, EmployeeNumber = "E-4", FirstName = "Ann", LastName = "Ander", IsActive = true });
+        h.Db.Context.Drivers.AddRange(
+            new Driver { Id = operatorDriver, TenantId = h.TenantId, DriverNumber = "CH-3", EmployeeId = operatorEmployee, IsActive = true },
+            new Driver { Id = otherDriver, TenantId = h.TenantId, DriverNumber = "CH-4", EmployeeId = otherEmployee, IsActive = true });
+        h.Db.Context.Users.Add(new Modules.Identity.Entities.User
+        {
+            Id = operatorUser, TenantId = h.TenantId, Email = "kris@acme.be", FirstName = "Kris", LastName = "Kraan", IsActive = true, EmployeeId = operatorEmployee,
+        });
+        var activities = await h.Db.Context.DossierActivities.Where(a => a.Id == crane || a.Id == plateau).ToListAsync();
+        activities.Single(a => a.Id == crane).DriverId = operatorDriver;
+        activities.Single(a => a.Id == crane).WorkDescription = "Dakkoepel plaatsen, 2,4 t";
+        activities.Single(a => a.Id == crane).SiteAddress = "Werfstraat 1, Mechelen";
+        activities.Single(a => a.Id == plateau).DriverId = otherDriver;
+        await h.Db.Context.SaveChangesAsync();
+
+        var tenant = new DevTenantContext(h.TenantId);
+        var asOperator = new DevCurrentUserContext(operatorUser);
+        var audit = new AuditService(h.Db.Context, tenant, asOperator);
+        var dossiers = new DossierService(h.Db.Context, tenant, audit, new TestClock(Now));
+        var execution = new DossierActivityExecutionService(h.Db.Context, tenant, audit, dossiers,
+            new DossierLifecycleService(h.Db.Context, tenant, audit, new TestClock(Now), asOperator, () => dossiers, new DossierReadinessService(h.Db.Context, tenant)),
+            new PlanningConflictService(h.Db.Context, tenant, new QualificationStatusCalculator(), new TestClock(Now)),
+            asOperator, new TestClock(Now));
+        var mine = new MyActivitiesService(h.Db.Context, tenant, asOperator, execution, new TestClock(Now));
+
+        // Only the operator's own work, with what is needed on site and nothing commercial.
+        var list = await mine.ListMineAsync(Yesterday, Yesterday.AddDays(7), CancellationToken.None);
+        var item = Assert.Single(list);
+        Assert.Equal((crane, "Dakkoepel plaatsen, 2,4 t", "Werfstraat 1, Mechelen", "Nexans NV"),
+            (item.Id, item.WorkDescription, item.SiteAddress, item.CustomerName));
+        var json = System.Text.Json.JsonSerializer.Serialize(list);
+        Assert.DoesNotContain("400", json);
+        Assert.DoesNotContain("Price", json, StringComparison.OrdinalIgnoreCase);
+
+        // Someone else's activity does not exist for this driver.
+        Assert.Null(await mine.StartMineAsync(plateau, CancellationToken.None));
+        Assert.Null(await mine.CompleteMineAsync(plateau, CancellationToken.None));
+
+        Assert.Equal("InProgress", (await mine.StartMineAsync(crane, CancellationToken.None))!.ExecutionStatus);
+        Assert.Equal("Completed", (await mine.CompleteMineAsync(crane, CancellationToken.None))!.ExecutionStatus);
+        Assert.Equal("Open", (await h.Current(dossier.Id)).Status);
+
+        // The office completes the plateau: the dossier confirms automatically, attributed to the system.
+        Assert.Equal("Closed", (await h.Complete(dossier.Id, plateau))!.Status);
+        var timeline = (await new DossierTimelineService(h.Db.Context, tenant).GetAsync(dossier.Id, CancellationToken.None))!;
+        var done = Assert.Single(timeline, e => e.Type == "activity.completed" && e.Title.Contains("Kraan werf C"));
+        Assert.Equal("Kris Kraan", done.ActorName);
+        Assert.Equal("System", Assert.Single(timeline, e => e.Type == "dossier.confirmed_automatically").ActorKind);
+    }
+
     // ------------------------------------------------------------ T-H8: accounting
 
     [Fact]

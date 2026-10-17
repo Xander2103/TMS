@@ -115,5 +115,27 @@
       "weight": "{kg} kg",
       "total": "Total weight: {kg} kg"
     }
+  },
+  "activities": {
+    "title": "My activities",
+    "subtitle": "Work without a trip, such as on-site crane work.",
+    "loadError": "Your activities could not be loaded.",
+    "site": "Site",
+    "work": "Work description",
+    "vehicle": "Vehicle",
+    "time": "{start}–{end}",
+    "start": "Start",
+    "complete": "Complete",
+    "completeTitle": "Complete activity?",
+    "completeMessage": "Confirm that {label} has been fully carried out. You cannot change this yourself afterwards.",
+    "started": "Activity started.",
+    "completed": "Activity completed.",
+    "actionFailed": "The activity could not be updated.",
+    "status": {
+      "Planned": "Planned",
+      "InProgress": "In progress",
+      "Completed": "Completed",
+      "Cancelled": "Cancelled"
+    }
   }
 }

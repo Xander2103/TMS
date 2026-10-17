@@ -9,6 +9,7 @@ import type { EtaSource } from '../../operations/types'
 import { getMyDashboard } from '../api/driverApi'
 import { DriverActivityCard } from '../../time-attendance/components/DriverActivityCard'
 import type { MyDashboard } from '../types'
+import { MyActivitiesSection } from '../../my-trips/components/MyActivitiesSection'
 import { formatDate, formatTime } from '../../../utils/dates'
 
 const SNAPSHOT_PREFIX = 'ts.driverSnapshot.v1'
@@ -173,6 +174,9 @@ export function DriverHomePage() {
           </div>
         </section>
       )}
+
+      {/* T-H7: today's standalone work (crane on site …) is on the home screen too, not only under Ritten. */}
+      <MyActivitiesSection />
     </div>
   )
 }

@@ -115,5 +115,27 @@
       "weight": "{kg} kg",
       "total": "Poids total : {kg} kg"
     }
+  },
+  "activities": {
+    "title": "Mes activités",
+    "subtitle": "Travaux sans trajet, comme le levage sur chantier.",
+    "loadError": "Vos activités n’ont pas pu être chargées.",
+    "site": "Chantier",
+    "work": "Description des travaux",
+    "vehicle": "Véhicule",
+    "time": "{start}–{end}",
+    "start": "Démarrer",
+    "complete": "Terminer",
+    "completeTitle": "Terminer l’activité ?",
+    "completeMessage": "Confirmez que {label} a été entièrement réalisé. Vous ne pourrez plus le modifier vous-même ensuite.",
+    "started": "Activité démarrée.",
+    "completed": "Activité terminée.",
+    "actionFailed": "L’activité n’a pas pu être mise à jour.",
+    "status": {
+      "Planned": "Planifiée",
+      "InProgress": "En cours",
+      "Completed": "Terminée",
+      "Cancelled": "Annulée"
+    }
   }
 }

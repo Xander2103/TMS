@@ -1,6 +1,6 @@
 import { apiClient } from '../../../api/apiClient'
 import { OfflineQueuedError, queueStopAction } from '../../driver/offlineActions'
-import type { MyTrip, StopExecutionStatus, StopStatusHistoryEntry, TripExecution } from '../types'
+import type { MyActivity, MyTrip, StopExecutionStatus, StopStatusHistoryEntry, TripExecution } from '../types'
 
 /** Network failure (no HTTP status) vs a server verdict; server verdicts always propagate. */
 function isNetworkError(error: unknown): boolean {
@@ -13,6 +13,19 @@ export function listMyTrips(from?: string, to?: string): Promise<MyTrip[]> {
   if (to) query.set('to', to)
   const suffix = query.toString()
   return apiClient.getJson<MyTrip[]>(`/api/my/trips${suffix ? `?${suffix}` : ''}`)
+}
+
+/** T-H7: my standalone activities (crane work on site, plateau …) for the coming week. */
+export function listMyActivities(): Promise<MyActivity[]> {
+  return apiClient.getJson<MyActivity[]>('/api/my/activities')
+}
+
+export function startMyActivity(activityId: string): Promise<MyActivity> {
+  return apiClient.postJson<MyActivity, Record<string, never>>(`/api/my/activities/${activityId}/start`, {})
+}
+
+export function completeMyActivity(activityId: string): Promise<MyActivity> {
+  return apiClient.postJson<MyActivity, Record<string, never>>(`/api/my/activities/${activityId}/complete`, {})
 }
 
 export function getTripExecution(tripId: string): Promise<TripExecution> {

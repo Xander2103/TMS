@@ -5,6 +5,7 @@ import { Badge } from '../../../components/ui/Badge'
 import { useLocale } from '../../../i18n/localeContext'
 import { TRIP_STATUS_LABELS, TRIP_STATUS_TONE } from '../../planning/types'
 import { listMyTrips } from '../api/myTripsApi'
+import { MyActivitiesSection } from '../components/MyActivitiesSection'
 import type { MyTrip } from '../types'
 import './my-trips.css'
 import { formatDate } from '../../../utils/dates'
@@ -63,6 +64,8 @@ export function MyTripsPage() {
           ))}
         </div>
       )}
+
+      <MyActivitiesSection />
     </div>
   )
 }

@@ -279,3 +279,57 @@
 .mt-goods-weight {
   color: var(--text-muted);
 }
+
+/* T-H7: standalone work assigned to the driver (crane work on site, plateau …). */
+.mt-activities {
+  margin-top: 28px;
+}
+
+.mt-section-title {
+  margin: 0 0 4px;
+  font-size: 18px;
+  color: var(--text-h);
+}
+
+.mt-section-subtitle {
+  margin: 0 0 12px;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.mt-activity-card {
+  cursor: default;
+}
+
+.mt-activity-card:hover {
+  border-color: var(--border);
+}
+
+.mt-activity-facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 10px;
+  margin: 4px 0 0;
+  font-size: 14px;
+}
+
+.mt-activity-facts dt {
+  color: var(--text);
+}
+
+.mt-activity-facts dd {
+  margin: 0;
+  color: var(--text-h);
+  overflow-wrap: anywhere;
+}
+
+.mt-activity-work {
+  white-space: pre-line;
+}
+
+.mt-activity-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}

@@ -194,3 +194,27 @@ export function effectiveLatestBound(stop: ExecutionStop): string | null {
 }
 
 export type { TransportOrderStatus }
+
+/** T-H7: standalone work (crane on site, plateau …) assigned to the signed-in driver; no prices. */
+export type MyActivityStatus = 'Planned' | 'InProgress' | 'Completed' | 'Cancelled'
+
+export interface MyActivity {
+  id: string
+  dossierNumber: string
+  customerName: string | null
+  typeName: string
+  label: string | null
+  plannedDate: string | null
+  /** Local wall-clock "HH:mm[:ss]". */
+  startTime: string | null
+  durationHours: number | null
+  /** Local wall-clock "yyyy-MM-ddTHH:mm:ss" (start + duration), no time zone. */
+  plannedEnd: string | null
+  siteAddress: string | null
+  workDescription: string | null
+  vehicleNumber: string | null
+  vehiclePlate: string | null
+  executionStatus: MyActivityStatus
+  startedAt: string | null
+  completedAt: string | null
+}
