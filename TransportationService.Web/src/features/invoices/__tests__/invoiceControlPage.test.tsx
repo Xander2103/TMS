@@ -8,6 +8,14 @@ import type { ControlOrder, InvoiceControl } from '../api/invoicesApi'
 vi.mock('../../../components/ui/toastContext', () => ({
   useToast: () => ({ showToast: vi.fn(), showSuccess: vi.fn(), showError: vi.fn() }),
 }))
+// ACC-M8: the workspace shows only the actions the user may execute (default: Boekhouding).
+const auth = vi.hoisted(() => ({ permissions: ['invoices.view', 'invoices.create', 'invoices.edit'] as string[] }))
+vi.mock('../../auth/authContextValue', () => ({
+  useAuth: () => ({
+    hasPermission: (code: string) => auth.permissions.includes(code),
+    hasAnyPermission: (codes: string[]) => codes.some((c) => auth.permissions.includes(c)),
+  }),
+}))
 
 const api = vi.hoisted(() => ({
   getInvoiceControl: vi.fn(),
@@ -78,10 +86,11 @@ describe('InvoiceControlPage (P12: selectie + uitstel)', () => {
     const secondCheckbox = screen.getByLabelText('Order ORD-0002 meenemen op de factuur')
     expect(firstCheckbox).toBeChecked()
     expect(secondCheckbox).toBeChecked()
-    expect(screen.getByText(/2 van 2 orders aangevinkt/)).toBeInTheDocument()
+    // ACC-M12: the proposal counts "onderdelen" (orders AND standalone activities), not "orders".
+    expect(screen.getByText(/2 van 2 onderdelen aangevinkt/)).toBeInTheDocument()
 
     await user.click(firstCheckbox)
-    expect(screen.getByText(/1 van 2 orders aangevinkt/)).toBeInTheDocument()
+    expect(screen.getByText(/1 van 2 onderdelen aangevinkt/)).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Maak factuur' }))
 
@@ -201,5 +210,45 @@ describe('InvoiceControlPage (T-H8: standalone activities)', () => {
         expect.objectContaining({ customerId: 'cust-1', orderIds: ['order-1'], dossierActivityIds: ['act-a'] }),
       ),
     )
+  })
+})
+
+describe('InvoiceControlPage (ACC-M8: actions follow the real permissions)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    api.getInvoiceControl.mockResolvedValue(
+      control({ needsReview: [controlOrder({ transportOrderId: 'order-5', orderNumber: 'ORD-0005', invoiceReadiness: 'ReviewRequired', reasons: ['pricing.none'] })], snoozed: [controlOrder({ transportOrderId: 'order-9', orderNumber: 'ORD-0009', snoozedUntil: '2026-09-15' })] }),
+    )
+  })
+
+  it('a viewer (Management: invoices.view only) reads the lists without Maak factuur, Uitstellen or Uitstel opheffen', async () => {
+    auth.permissions = ['invoices.view']
+    renderPage()
+    expect(await screen.findByText('ORD-0001')).toBeInTheDocument()
+    expect(screen.getByText(/Je kunt de facturatiecontrole bekijken/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Maak factuur' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Uitstellen' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Uitstel opheffen' })).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Order ORD-0001 meenemen op de factuur')).toBeDisabled()
+    // Reading stays complete: review reasons and the source links are still there.
+    expect(screen.getByText('ORD-0005')).toBeInTheDocument()
+    expect(screen.getAllByRole('link', { name: 'Naar opdracht' }).length).toBeGreaterThan(0)
+  })
+
+  it('invoices.edit without invoices.create may postpone but not create', async () => {
+    auth.permissions = ['invoices.view', 'invoices.edit']
+    renderPage()
+    expect(await screen.findByText('ORD-0001')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Maak factuur' })).not.toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: 'Uitstellen' }).length).toBeGreaterThan(0)
+    expect(screen.getByRole('button', { name: 'Uitstel opheffen' })).toBeInTheDocument()
+    expect(screen.queryByText(/Je kunt de facturatiecontrole bekijken/)).not.toBeInTheDocument()
+  })
+
+  it('Boekhouding keeps every action', async () => {
+    auth.permissions = ['invoices.view', 'invoices.create', 'invoices.edit']
+    renderPage()
+    expect(await screen.findByRole('button', { name: 'Maak factuur' })).toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: 'Uitstellen' }).length).toBeGreaterThan(0)
   })
 })

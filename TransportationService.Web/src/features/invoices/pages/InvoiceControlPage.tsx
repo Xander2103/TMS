@@ -7,6 +7,7 @@ import { Button } from '../../../components/ui/Button'
 import { useToast } from '../../../components/ui/toastContext'
 import { localizeApiError } from '../../../api/problemDetails'
 import { useLocale } from '../../../i18n/localeContext'
+import { useAuth } from '../../auth/authContextValue'
 import {
   createInvoice,
   getInvoiceControl,
@@ -46,6 +47,12 @@ export function InvoiceControlPage() {
   const navigate = useNavigate()
   const { t } = useLocale()
   const { showSuccess, showError } = useToast()
+  const { hasPermission, hasAnyPermission } = useAuth()
+  // ACC-M8: a viewer (Management) reads the workspace; only the rights behind the endpoints show
+  // the actions (POST api/invoices → invoices.create, snooze → invoices.edit|create).
+  const canCreate = hasPermission('invoices.create')
+  const canSnooze = hasAnyPermission(['invoices.edit', 'invoices.create'])
+  const readOnly = !canCreate && !canSnooze
   const [control, setControl] = useState<InvoiceControl | null>(null)
   const [busy, setBusy] = useState(false)
   // Order ids the user UNchecked — default is everything selected.
@@ -101,7 +108,9 @@ export function InvoiceControlPage() {
         notes: null,
         ...(activities.length > 0 ? { dossierActivityIds: activities.map((a) => a.dossierActivityId) } : {}),
       })
-      showSuccess(t('invoices.control.created', { number: invoice.invoiceNumber ?? '', total: orders.length + activities.length }))
+      // ACC-H3: a fresh draft carries no legal number yet — the toast names its draft reference.
+      const created = invoice as { invoiceNumber?: string | null; displayNumber?: string | null }
+      showSuccess(t('invoices.control.created', { number: created.displayNumber ?? created.invoiceNumber ?? '', total: orders.length + activities.length }))
       navigate(`/invoices/${invoice.id}`)
     } catch (err) {
       showError(localizeApiError(t, err, t('invoices.new.createError')))
@@ -183,6 +192,8 @@ export function InvoiceControlPage() {
         subtitle={t('invoices.control.subtitle')}
       />
 
+      {readOnly && <p className="placeholder-text">{t('invoices.control.readOnlyNote')}</p>}
+
       {control === null && <p className="placeholder-text">{t('invoices.control.loading')}</p>}
 
       {control && control.pendingCharges.length > 0 && (
@@ -211,13 +222,15 @@ export function InvoiceControlPage() {
                     })}
                   </p>
                 </div>
-                <Button
-                  variant="secondary"
-                  disabled={busy || selectedCount(proposal) === 0}
-                  onClick={() => void createFromProposal(proposal)}
-                >
-                  {t('invoices.control.createInvoice')}
-                </Button>
+                {canCreate && (
+                  <Button
+                    variant="secondary"
+                    disabled={busy || selectedCount(proposal) === 0}
+                    onClick={() => void createFromProposal(proposal)}
+                  >
+                    {t('invoices.control.createInvoice')}
+                  </Button>
+                )}
               </div>
               <table className="issued-items-table">
                 <thead>
@@ -231,7 +244,7 @@ export function InvoiceControlPage() {
                           type="checkbox"
                           aria-label={t('invoices.control.includeOrder', { number: order.orderNumber })}
                           checked={!deselected.has(order.transportOrderId)}
-                          disabled={busy}
+                          disabled={busy || !canCreate}
                           onChange={() => toggleOrder(order.transportOrderId)}
                         />
                       </td>
@@ -240,7 +253,7 @@ export function InvoiceControlPage() {
                       <td>{order.dossierNumber ?? '—'}</td>
                       <td>{order.agreedPrice !== null ? euro(order.agreedPrice) : '—'}</td>
                       <td className="issued-items-row-actions">
-                        {snoozeTargetId === order.transportOrderId ? (
+                        {canSnooze && (snoozeTargetId === order.transportOrderId ? (
                           snoozeEditor(order)
                         ) : (
                           <button
@@ -251,7 +264,7 @@ export function InvoiceControlPage() {
                           >
                             {t('invoices.control.snoozeAction')}
                           </button>
-                        )}
+                        ))}
                         <Link to={`/transport-orders/${order.transportOrderId}`}>{t('invoices.control.toOrder')}</Link>
                       </td>
                     </tr>
@@ -263,7 +276,7 @@ export function InvoiceControlPage() {
                           type="checkbox"
                           aria-label={t('invoices.control.includeActivity', { name: activityName(activity) })}
                           checked={!deselected.has(activity.dossierActivityId)}
-                          disabled={busy}
+                          disabled={busy || !canCreate}
                           onChange={() => toggleOrder(activity.dossierActivityId)}
                         />
                       </td>
@@ -307,7 +320,7 @@ export function InvoiceControlPage() {
                       ))}
                     </td>
                     <td className="issued-items-row-actions">
-                      {snoozeTargetId === order.transportOrderId ? (
+                      {canSnooze && (snoozeTargetId === order.transportOrderId ? (
                         snoozeEditor(order)
                       ) : (
                         <button
@@ -318,7 +331,7 @@ export function InvoiceControlPage() {
                         >
                           {t('invoices.control.snoozeAction')}
                         </button>
-                      )}
+                      ))}
                       <Link to={`/transport-orders/${order.transportOrderId}`}>{t('invoices.control.toOrder')}</Link>
                     </td>
                   </tr>
@@ -380,14 +393,16 @@ export function InvoiceControlPage() {
                   <td className="nowrap">{order.snoozedUntil ? formatDate(order.snoozedUntil) : '—'}</td>
                   <td>{order.snoozeReason ?? '—'}</td>
                   <td className="issued-items-row-actions">
-                    <button
-                      type="button"
-                      className="issued-items-link"
-                      disabled={busy}
-                      onClick={() => void clearSnooze(order.transportOrderId)}
-                    >
-                      {t('invoices.control.clearSnooze')}
-                    </button>
+                    {canSnooze && (
+                      <button
+                        type="button"
+                        className="issued-items-link"
+                        disabled={busy}
+                        onClick={() => void clearSnooze(order.transportOrderId)}
+                      >
+                        {t('invoices.control.clearSnooze')}
+                      </button>
+                    )}
                     <Link to={`/transport-orders/${order.transportOrderId}`}>{t('invoices.control.toOrder')}</Link>
                   </td>
                 </tr>
