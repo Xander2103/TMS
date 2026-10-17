@@ -15,9 +15,11 @@ public interface IInvoicePdfService
 }
 
 /// <summary>
-/// Assembles the frozen seller/customer snapshot already on <see cref="Invoice"/> plus the
-/// (live, never snapshotted) legal-entity footer/logo/banking details into a printable PDF via
-/// <see cref="InvoicePdfRenderer"/>. Never the structured Peppol document — presentation only.
+/// Assembles the printable PDF from the invoice's FROZEN seller/customer snapshot (ACC-H4):
+/// once issued, nothing here reads the live Customer or LegalEntity any more, so later master
+/// data changes never alter an issued document. A draft preview falls back to live data only
+/// for fields a pre-remediation draft never snapshotted. The logo is the one live asset
+/// (binary, not snapshotted). Never the structured Peppol document — presentation only.
 /// </summary>
 public class InvoicePdfService : IInvoicePdfService
 {
@@ -43,20 +45,27 @@ public class InvoicePdfService : IInvoicePdfService
             return null;
         }
 
-        var customer = await _dbContext.Customers.AsNoTracking()
-            .Where(c => c.TenantId == tenantId && c.Id == invoice.CustomerId)
-            .Select(c => new { c.Name, c.Street, c.HouseNumber, c.PostalCode, c.City, c.CountryCode })
-            .FirstOrDefaultAsync(cancellationToken);
+        var isDraft = invoice.Status == InvoiceStatus.Draft;
+        var issued = invoice.Status is InvoiceStatus.Sent or InvoiceStatus.Paid;
 
-        LegalEntitySnapshot? legalEntity = invoice.LegalEntityId is { } entityId
+        // Live fallbacks exist for legacy rows only; an issued document never needs them, and a
+        // draft gets its snapshot refreshed on every save.
+        var liveCustomer = invoice.CustomerNameSnapshot is null && !issued
+            ? await _dbContext.Customers.AsNoTracking()
+                .Where(c => c.TenantId == tenantId && c.Id == invoice.CustomerId)
+                .Select(c => new { c.Name, c.LegalName, c.CompanyNumber, c.Street, c.HouseNumber, c.PostalCode, c.City, c.CountryCode })
+                .FirstOrDefaultAsync(cancellationToken)
+            : null;
+
+        var liveEntity = invoice.LegalEntityId is { } entityId
             ? await _dbContext.LegalEntities.AsNoTracking()
                 .Where(e => e.TenantId == tenantId && e.Id == entityId)
-                .Select(e => new LegalEntitySnapshot(e.Bic, e.InvoiceFooter, e.LogoStorageKey))
+                .Select(e => new { e.Bic, e.InvoiceFooter, e.LogoStorageKey, e.CompanyNumber, e.LegalName })
                 .FirstOrDefaultAsync(cancellationToken)
             : null;
 
         byte[]? logoBytes = null;
-        if (legalEntity?.LogoStorageKey is { Length: > 0 } logoKey)
+        if (liveEntity?.LogoStorageKey is { Length: > 0 } logoKey)
         {
             try
             {
@@ -74,10 +83,8 @@ public class InvoicePdfService : IInvoicePdfService
 
         // A draft renders the description the customer WILL read (same rule Send freezes with);
         // after Send the line text is already frozen and the sales code is not consulted.
-        var isDraft = invoice.Status == InvoiceStatus.Draft;
         // H-06: a MIRRORED credit-note line carries the credited document's wording from the moment
         // it is copied and Send never re-derives it — so the preview must not re-derive it either.
-        // A line typed on the draft credit note itself is not mirrored and follows the normal rule.
         var liveLines = invoice.Lines.Where(l => !l.IsDeleted).OrderBy(l => l.Sequence).ToList();
         bool ResolveLive(Entities.InvoiceLine line) => isDraft && !InvoiceLineMirror.IsMirrored(invoice, line);
         var codeIds = isDraft
@@ -98,7 +105,8 @@ public class InvoicePdfService : IInvoicePdfService
                         l.SalesCategoryId is { } codeId ? salesCodes.GetValueOrDefault(codeId) : null,
                         invoice.LanguageCode)
                     : l.Description,
-                l.Quantity, l.UnitPrice, l.VatRatePercent, MoneyRounding.LineTotal(l.Quantity, l.UnitPrice)))
+                l.Quantity, l.UnitPrice, l.VatRatePercent, MoneyRounding.LineTotal(l.Quantity, l.UnitPrice),
+                l.UnitLabel ?? UnEceUnitCodeMap.LabelFor(l.UnitCode)))
             .ToList();
         var subtotal = Math.Round(lines.Sum(l => l.LineTotal), 2);
         var vat = InvoiceTotals.VatTotal(invoice.Lines, invoice.CustomerVatTreatment);
@@ -110,28 +118,29 @@ public class InvoicePdfService : IInvoicePdfService
                 .FirstOrDefaultAsync(cancellationToken)
             : null;
 
-        var customerAddress = customer is null
-            ? null
-            : string.Join(", ", new[]
-            {
-                string.Join(' ', new[] { customer.Street, customer.HouseNumber }.Where(s => !string.IsNullOrWhiteSpace(s))),
-                string.Join(' ', new[] { customer.PostalCode, customer.City }.Where(s => !string.IsNullOrWhiteSpace(s))),
-                customer.CountryCode,
-            }.Where(s => !string.IsNullOrWhiteSpace(s)));
+        var customerName = invoice.CustomerLegalNameSnapshot ?? invoice.CustomerNameSnapshot
+                           ?? liveCustomer?.LegalName ?? liveCustomer?.Name ?? string.Empty;
+        var customerAddress = invoice.CustomerNameSnapshot is not null
+            ? InvoiceService.AddressLine(invoice.CustomerStreetSnapshot, invoice.CustomerHouseNumberSnapshot,
+                invoice.CustomerPostalCodeSnapshot, invoice.CustomerCitySnapshot, invoice.CustomerCountryCodeSnapshot)
+            : liveCustomer is null ? null
+            : InvoiceService.AddressLine(liveCustomer.Street, liveCustomer.HouseNumber, liveCustomer.PostalCode, liveCustomer.City, liveCustomer.CountryCode);
+        var strings = InvoicePdfStrings.For(invoice.LanguageCode);
 
         var snapshot = new InvoicePdfSnapshot(
-            invoice.SellerName ?? string.Empty,
+            invoice.SellerLegalName ?? invoice.SellerName ?? liveEntity?.LegalName ?? string.Empty,
             invoice.SellerAddressLine,
             invoice.SellerVatNumber,
             invoice.SellerIban,
-            legalEntity?.Bic,
-            legalEntity?.InvoiceFooter,
+            // Frozen at issue; a legacy issued row (no snapshot) keeps its historic live reading.
+            invoice.SellerBic ?? (issued && invoice.SellerName is not null && invoice.SellerLegalName is not null ? null : liveEntity?.Bic),
+            invoice.SellerInvoiceFooter ?? (invoice.SellerLegalName is not null ? null : liveEntity?.InvoiceFooter),
             invoice.VatLegalText,
             logoBytes,
-            invoice.InvoiceNumber,
+            invoice.DisplayNumber,
             invoice.InvoiceDate,
             invoice.DueDate,
-            customer?.Name ?? invoice.SellerName ?? string.Empty,
+            customerName,
             customerAddress,
             invoice.CustomerVatNumberSnapshot,
             invoice.PurchaseOrderNumber,
@@ -144,14 +153,17 @@ public class InvoicePdfService : IInvoicePdfService
             invoice.Kind == InvoiceKind.CreditNote,
             creditedInvoiceNumber,
             invoice.LanguageCode,
-            IsDraft: isDraft);
+            IsDraft: isDraft,
+            SellerCompanyNumber: invoice.SellerCompanyNumber ?? (invoice.SellerLegalName is not null ? null : liveEntity?.CompanyNumber),
+            CustomerCompanyNumber: invoice.CustomerCompanyNumberSnapshot ?? liveCustomer?.CompanyNumber,
+            PaymentTermsText: invoice.Kind == InvoiceKind.CreditNote ? null : strings.PaymentTermsText(invoice.PaymentTermDays, invoice.DueDate),
+            PaymentReference: invoice.PaymentReference ?? invoice.InvoiceNumber,
+            CreditReason: invoice.CreditReason);
 
         var bytes = InvoicePdfRenderer.Render(snapshot);
         var prefix = invoice.Kind == InvoiceKind.CreditNote ? "creditnota" : "factuur";
         if (isDraft) prefix = "concept-" + prefix;
-        var fileName = $"{prefix}-{invoice.InvoiceNumber.Replace('/', '-')}.pdf";
+        var fileName = $"{prefix}-{invoice.DisplayNumber.Replace('/', '-')}.pdf";
         return (bytes, fileName);
     }
-
-    private sealed record LegalEntitySnapshot(string? Bic, string? InvoiceFooter, string? LogoStorageKey);
 }

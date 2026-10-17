@@ -4827,9 +4827,18 @@ public class TransportOrderService : ITransportOrderService
             return TransportOrderOperationResult.Invalid(includedTimeOverrideError);
         }
 
+        // ACC-M1: € 0 is a commercial decision that must be confirmed as such — "gratis" is never
+        // the accidental result of typing a zero; and an unpriced order is never free.
+        if (request.FixedAmount == 0m && !request.FreeConfirmed)
+        {
+            return TransportOrderOperationResult.Invalid(
+                "Een prijs van € 0 vereist een expliciete bevestiging als gratis (FreeConfirmed). Laat de prijs leeg als er nog geen prijs is.");
+        }
+
         var previous = (order.PricingSource, order.OneOffFixedAmount, order.OneOffIncludedLoadingMinutes, order.OneOffIncludedUnloadingMinutes,
-            order.OneOffIncludedCombinedMinutes, order.OneOffExtraHourlyRate, order.OneOffNotes);
+            order.OneOffIncludedCombinedMinutes, order.OneOffExtraHourlyRate, order.OneOffNotes, order.FreeConfirmed);
         ApplyOneOffPricing(order, pricingSource, request.FixedAmount, includedLoading, includedUnloading, includedCombined, extraHourlyRate, notes);
+        order.FreeConfirmed = request.FixedAmount == 0m && request.FreeConfirmed;
 
         var cargoItems = await _dbContext.CargoItems
             .Where(c => c.TenantId == tenantId && c.TransportOrderId == orderId && !c.IsDeleted)
@@ -4855,13 +4864,14 @@ public class TransportOrderService : ITransportOrderService
             // Refused (e.g. no override rights): leave the tracked entity as it was loaded.
             ApplyOneOffPricing(order, previous.PricingSource, previous.OneOffFixedAmount, previous.OneOffIncludedLoadingMinutes,
                 previous.OneOffIncludedUnloadingMinutes, previous.OneOffIncludedCombinedMinutes, previous.OneOffExtraHourlyRate, previous.OneOffNotes);
+            order.FreeConfirmed = previous.FreeConfirmed;
             return pricingError;
         }
 
         order.Version = Guid.NewGuid();
         await _dbContext.SaveChangesAsync(cancellationToken);
-        await _auditService.RecordAsync("OrderPricing", orderId.ToString(), "oneOffPriceSet", null,
-            new { order.PricingSource, order.OneOffFixedAmount, order.AgreedPrice }, cancellationToken);
+        await _auditService.RecordAsync("OrderPricing", orderId.ToString(), order.FreeConfirmed ? "orderConfirmedFree" : "oneOffPriceSet", null,
+            new { order.PricingSource, order.OneOffFixedAmount, order.AgreedPrice, order.FreeConfirmed }, cancellationToken);
 
         return TransportOrderOperationResult.Success(await MapDetailAsync(order, cancellationToken));
     }

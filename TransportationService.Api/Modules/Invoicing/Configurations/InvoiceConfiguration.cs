@@ -14,7 +14,7 @@ public class InvoiceConfiguration : IEntityTypeConfiguration<Invoice>
 
         builder.HasKey(i => i.Id);
 
-        builder.Property(i => i.InvoiceNumber).IsRequired().HasMaxLength(30);
+        builder.Property(i => i.InvoiceNumber).HasMaxLength(30);
         builder.Property(i => i.PurchaseOrderNumber).HasMaxLength(100);
         builder.Property(i => i.SellerName).HasMaxLength(200);
         builder.Property(i => i.SellerVatNumber).HasMaxLength(30);
@@ -23,6 +23,31 @@ public class InvoiceConfiguration : IEntityTypeConfiguration<Invoice>
         builder.Property(i => i.CustomerVatTreatment).HasMaxLength(30);
         builder.Property(i => i.CustomerVatNumberSnapshot).HasMaxLength(30);
         builder.Property(i => i.VatLegalText).HasMaxLength(300);
+        builder.Property(i => i.SellerLegalName).HasMaxLength(200);
+        builder.Property(i => i.SellerCompanyNumber).HasMaxLength(30);
+        builder.Property(i => i.SellerStreet).HasMaxLength(200);
+        builder.Property(i => i.SellerHouseNumber).HasMaxLength(20);
+        builder.Property(i => i.SellerPostalCode).HasMaxLength(20);
+        builder.Property(i => i.SellerCity).HasMaxLength(100);
+        builder.Property(i => i.SellerCountryCode).HasMaxLength(2);
+        builder.Property(i => i.SellerBic).HasMaxLength(11);
+        builder.Property(i => i.SellerPeppolScheme).HasMaxLength(10);
+        builder.Property(i => i.SellerPeppolId).HasMaxLength(60);
+        builder.Property(i => i.SellerInvoiceFooter).HasMaxLength(500);
+        builder.Property(i => i.CustomerNameSnapshot).HasMaxLength(200);
+        builder.Property(i => i.CustomerLegalNameSnapshot).HasMaxLength(200);
+        builder.Property(i => i.CustomerCompanyNumberSnapshot).HasMaxLength(30);
+        builder.Property(i => i.CustomerStreetSnapshot).HasMaxLength(200);
+        builder.Property(i => i.CustomerHouseNumberSnapshot).HasMaxLength(20);
+        builder.Property(i => i.CustomerPostalCodeSnapshot).HasMaxLength(20);
+        builder.Property(i => i.CustomerCitySnapshot).HasMaxLength(100);
+        builder.Property(i => i.CustomerCountryCodeSnapshot).HasMaxLength(2);
+        builder.Property(i => i.CustomerPeppolSchemeSnapshot).HasMaxLength(10);
+        builder.Property(i => i.CustomerPeppolIdSnapshot).HasMaxLength(60);
+        builder.Property(i => i.CustomerBuyerReferenceSnapshot).HasMaxLength(100);
+        builder.Property(i => i.CreditReason).HasMaxLength(500);
+        builder.Ignore(i => i.DraftReference);
+        builder.Ignore(i => i.DisplayNumber);
         builder.Property(i => i.Status).HasConversion<string>().HasMaxLength(20);
         builder.Property(i => i.Currency).IsRequired().HasMaxLength(3);
         builder.Property(i => i.Notes).HasMaxLength(4000);
@@ -30,9 +55,10 @@ public class InvoiceConfiguration : IEntityTypeConfiguration<Invoice>
         builder.Property(i => i.PaymentReference).HasMaxLength(30);
         builder.Property(i => i.LanguageCode).HasMaxLength(5);
 
+        // Drafts carry no number (NULL never collides); issued numbers are unique per tenant.
         builder.HasIndex(i => new { i.TenantId, i.InvoiceNumber })
             .IsUnique()
-            .HasFilter("\"IsDeleted\" = false");
+            .HasFilter("\"IsDeleted\" = false AND \"InvoiceNumber\" IS NOT NULL");
         builder.HasIndex(i => new { i.TenantId, i.CustomerId });
         builder.HasIndex(i => new { i.TenantId, i.InvoiceDate });
         builder.HasIndex(i => new { i.TenantId, i.Status });
@@ -92,7 +118,9 @@ public class InvoiceSequenceConfiguration : IEntityTypeConfiguration<InvoiceSequ
         // Concurrency token: two concurrent claims of the same value conflict at SaveChanges.
         builder.Property(s => s.NextValue).IsConcurrencyToken();
 
-        builder.HasIndex(s => new { s.TenantId, s.LegalEntityId, s.Year, s.Month })
+        builder.Property(s => s.Kind).HasConversion<string>().HasMaxLength(20).HasDefaultValue(InvoiceKind.Invoice);
+
+        builder.HasIndex(s => new { s.TenantId, s.LegalEntityId, s.Kind, s.Year, s.Month })
             .IsUnique()
             .HasFilter("\"IsDeleted\" = false");
 
@@ -112,8 +140,11 @@ public class InvoiceLineConfiguration : IEntityTypeConfiguration<InvoiceLine>
         builder.HasKey(l => l.Id);
 
         builder.Property(l => l.Description).IsRequired().HasMaxLength(500);
-        builder.Property(l => l.Quantity).HasPrecision(12, 2);
-        builder.Property(l => l.UnitPrice).HasPrecision(12, 2);
+        // ACC-M2: unit prices keep up to 4 decimals (per km/kg/hour tariffs) and quantities 3;
+        // only the line TOTAL is money and rounds to cents (MoneyRounding.LineTotal).
+        builder.Property(l => l.Quantity).HasPrecision(14, 3);
+        builder.Property(l => l.UnitPrice).HasPrecision(14, 4);
+        builder.Property(l => l.UnitLabel).HasMaxLength(50);
         builder.Property(l => l.VatRatePercent).HasPrecision(5, 2);
         builder.Property(l => l.UnitCode).IsRequired().HasMaxLength(10).HasDefaultValue("C62");
         builder.Property(l => l.VatCategoryCode).HasMaxLength(10);

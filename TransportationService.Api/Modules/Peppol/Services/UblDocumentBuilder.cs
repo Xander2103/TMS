@@ -23,14 +23,61 @@ public static class UblDocumentBuilder
     private static readonly XNamespace Cac = "urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2";
     private static readonly XNamespace Cbc = "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2";
 
+    /// <summary>
+    /// One party as the e-invoice states it. ACC-H4/P1: built from the invoice's FROZEN snapshot
+    /// (<see cref="FromInvoiceSeller"/> / <see cref="FromInvoiceBuyer"/>); the live Customer and
+    /// LegalEntity only fill fields a pre-remediation invoice never froze.
+    /// </summary>
+    public sealed record UblParty(
+        string? PeppolScheme,
+        string? PeppolId,
+        string Name,
+        string LegalName,
+        string? Street,
+        string? HouseNumber,
+        string? City,
+        string? PostalCode,
+        string? CountryCode,
+        string? VatNumber,
+        string? CompanyNumber)
+    {
+        public static UblParty FromInvoiceSeller(Invoice invoice, LegalEntity? live) => new(
+            invoice.SellerPeppolScheme ?? live?.PeppolScheme,
+            invoice.SellerPeppolId ?? live?.PeppolId,
+            invoice.SellerName ?? live?.TradingName ?? live?.LegalName ?? string.Empty,
+            invoice.SellerLegalName ?? live?.LegalName ?? invoice.SellerName ?? string.Empty,
+            invoice.SellerStreet ?? live?.Street,
+            invoice.SellerHouseNumber ?? live?.HouseNumber,
+            invoice.SellerCity ?? live?.City,
+            invoice.SellerPostalCode ?? live?.PostalCode,
+            invoice.SellerCountryCode ?? live?.CountryCode,
+            invoice.SellerVatNumber ?? live?.VatNumber,
+            invoice.SellerCompanyNumber ?? live?.CompanyNumber);
+
+        public static UblParty FromInvoiceBuyer(Invoice invoice, Customer? live) => new(
+            invoice.CustomerPeppolSchemeSnapshot ?? live?.PeppolScheme,
+            invoice.CustomerPeppolIdSnapshot ?? live?.PeppolId,
+            invoice.CustomerNameSnapshot ?? live?.Name ?? string.Empty,
+            invoice.CustomerLegalNameSnapshot ?? invoice.CustomerNameSnapshot ?? live?.LegalName ?? live?.Name ?? string.Empty,
+            invoice.CustomerStreetSnapshot ?? live?.Street,
+            invoice.CustomerHouseNumberSnapshot ?? live?.HouseNumber,
+            invoice.CustomerCitySnapshot ?? live?.City,
+            invoice.CustomerPostalCodeSnapshot ?? live?.PostalCode,
+            invoice.CustomerCountryCodeSnapshot ?? live?.CountryCode,
+            invoice.CustomerVatNumberSnapshot ?? live?.VatNumber,
+            invoice.CustomerCompanyNumberSnapshot ?? live?.CompanyNumber);
+    }
+
     /// <summary>Everything the builder needs, pre-resolved by the caller (no DbContext here).</summary>
     public sealed record UblDocumentInput(
         Invoice Invoice,
         IReadOnlyList<InvoiceLine> Lines,
-        Customer Customer,
-        LegalEntity Seller,
+        UblParty Customer,
+        UblParty Seller,
         string? CreditedInvoiceNumber,
-        string? DefaultInvoiceNote);
+        string? DefaultInvoiceNote,
+        /// <summary>BuyerReference frozen on the invoice (customer buyer reference at issue).</summary>
+        string? BuyerReference = null);
 
     public static string Build(UblDocumentInput input)
     {
@@ -52,6 +99,11 @@ public static class UblDocumentBuilder
         if (string.IsNullOrWhiteSpace(input.Seller.CountryCode) || string.IsNullOrWhiteSpace(input.Customer.CountryCode))
         {
             throw new InvalidOperationException("UBL build refused: seller or customer has no country code.");
+        }
+
+        if (string.IsNullOrWhiteSpace(invoice.InvoiceNumber))
+        {
+            throw new InvalidOperationException("UBL build refused: the document has no issued number (drafts are not e-invoices).");
         }
         var root = isCreditNote ? CreditNoteNs + "CreditNote" : InvoiceNs + "Invoice";
         var treatment = Enum.TryParse<VatTreatment>(invoice.CustomerVatTreatment, out var parsed)
@@ -83,7 +135,7 @@ public static class UblDocumentBuilder
         var taxTotal = groups.Sum(g => g.Tax);
         var taxInclusive = lineExtensionTotal + taxTotal;
 
-        var buyerReference = FirstNonEmpty(input.Customer.BuyerReference, invoice.PurchaseOrderNumber, invoice.InvoiceNumber);
+        var buyerReference = FirstNonEmpty(input.BuyerReference ?? invoice.CustomerBuyerReferenceSnapshot, invoice.PurchaseOrderNumber, invoice.InvoiceNumber);
         var note = FirstNonEmpty(invoice.Notes, input.DefaultInvoiceNote);
 
         var document = new XElement(root,
@@ -109,9 +161,10 @@ public static class UblDocumentBuilder
                     new XElement(Cac + "InvoiceDocumentReference",
                         new XElement(Cbc + "ID", input.CreditedInvoiceNumber)))
                 : null,
-            SellerParty(input.Seller, invoice),
-            BuyerParty(input.Customer, invoice),
+            SellerParty(input.Seller),
+            BuyerParty(input.Customer),
             PaymentMeans(invoice),
+            PaymentTerms(invoice),
             TaxTotalElement(invoice, treatment, groups.Select(g => (g.Category, g.Rate, g.Taxable, g.Tax)).ToList(), taxTotal),
             new XElement(Cac + "LegalMonetaryTotal",
                 Amount("LineExtensionAmount", lineExtensionTotal, invoice.Currency),
@@ -154,27 +207,32 @@ public static class UblDocumentBuilder
             new XElement(Cbc + "EndDate", end.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)));
     }
 
-    private static XElement SellerParty(LegalEntity seller, Invoice invoice) =>
-        new(Cac + "AccountingSupplierParty",
-            new XElement(Cac + "Party",
-                new XElement(Cbc + "EndpointID", new XAttribute("schemeID", seller.PeppolScheme ?? string.Empty), seller.PeppolId ?? string.Empty),
-                new XElement(Cac + "PartyName",
-                    new XElement(Cbc + "Name", invoice.SellerName ?? seller.TradingName ?? seller.LegalName)),
-                Address(seller.Street, seller.HouseNumber, seller.City, seller.PostalCode, seller.CountryCode ?? "BE"),
-                TaxParty(invoice.SellerVatNumber ?? seller.VatNumber),
-                new XElement(Cac + "PartyLegalEntity",
-                    new XElement(Cbc + "RegistrationName", seller.LegalName))));
+    private static XElement SellerParty(UblParty seller) =>
+        new(Cac + "AccountingSupplierParty", Party(seller));
 
-    private static XElement BuyerParty(Customer customer, Invoice invoice) =>
-        new(Cac + "AccountingCustomerParty",
-            new XElement(Cac + "Party",
-                new XElement(Cbc + "EndpointID", new XAttribute("schemeID", customer.PeppolScheme ?? string.Empty), customer.PeppolId ?? string.Empty),
-                new XElement(Cac + "PartyName",
-                    new XElement(Cbc + "Name", customer.LegalName ?? customer.Name)),
-                Address(customer.Street, customer.HouseNumber, customer.City, customer.PostalCode, customer.CountryCode ?? "BE"),
-                TaxParty(invoice.CustomerVatNumberSnapshot ?? customer.VatNumber),
-                new XElement(Cac + "PartyLegalEntity",
-                    new XElement(Cbc + "RegistrationName", customer.LegalName ?? customer.Name))));
+    private static XElement BuyerParty(UblParty buyer) =>
+        new(Cac + "AccountingCustomerParty", Party(buyer));
+
+    /// <summary>BG-4/BG-7 from the frozen party snapshot; the company number becomes the legal registration id (BT-30/BT-47).</summary>
+    private static XElement Party(UblParty party) =>
+        new(Cac + "Party",
+            new XElement(Cbc + "EndpointID", new XAttribute("schemeID", party.PeppolScheme ?? string.Empty), party.PeppolId ?? string.Empty),
+            new XElement(Cac + "PartyName",
+                new XElement(Cbc + "Name", party.LegalName)),
+            Address(party.Street, party.HouseNumber, party.City, party.PostalCode, party.CountryCode ?? "BE"),
+            TaxParty(party.VatNumber),
+            new XElement(Cac + "PartyLegalEntity",
+                new XElement(Cbc + "RegistrationName", party.LegalName),
+                string.IsNullOrWhiteSpace(party.CompanyNumber)
+                    ? null
+                    : new XElement(Cbc + "CompanyID", new string(party.CompanyNumber.Where(char.IsLetterOrDigit).ToArray()))));
+
+    /// <summary>BT-20: the payment terms as frozen on the invoice (never on a credit note).</summary>
+    private static XElement? PaymentTerms(Invoice invoice) =>
+        invoice.Kind == InvoiceKind.CreditNote || invoice.PaymentTermDays <= 0
+            ? null
+            : new XElement(Cac + "PaymentTerms",
+                new XElement(Cbc + "Note", $"Betaling binnen {invoice.PaymentTermDays} dagen, uiterlijk op {invoice.DueDate:yyyy-MM-dd}."));
 
     private static XElement Address(string? street, string? houseNumber, string? city, string? postalCode, string countryCode)
     {
@@ -204,11 +262,13 @@ public static class UblDocumentBuilder
 
         return new XElement(Cac + "PaymentMeans",
             new XElement(Cbc + "PaymentMeansCode", "30"),
-            string.IsNullOrWhiteSpace(invoice.PaymentReference)
-                ? null
-                : new XElement(Cbc + "PaymentID", invoice.PaymentReference),
+            new XElement(Cbc + "PaymentID", FirstNonEmpty(invoice.PaymentReference, invoice.InvoiceNumber)),
             new XElement(Cac + "PayeeFinancialAccount",
-                new XElement(Cbc + "ID", invoice.SellerIban)));
+                new XElement(Cbc + "ID", invoice.SellerIban),
+                // BT-86: the BIC frozen with the IBAN (P6).
+                string.IsNullOrWhiteSpace(invoice.SellerBic)
+                    ? null
+                    : new XElement(Cac + "FinancialInstitutionBranch", new XElement(Cbc + "ID", invoice.SellerBic))));
     }
 
     private static XElement TaxTotalElement(
@@ -240,7 +300,7 @@ public static class UblDocumentBuilder
             new XElement(Cbc + "ID", line.Sequence.ToString(CultureInfo.InvariantCulture)),
             new XElement(Cbc + (isCreditNote ? "CreditedQuantity" : "InvoicedQuantity"),
                 new XAttribute("unitCode", line.UnitCode),
-                Decimal2(line.Quantity)),
+                Quantity(line.Quantity)),
             Amount("LineExtensionAmount", LineExtension(line), invoice.Currency),
             new XElement(Cac + "Item",
                 new XElement(Cbc + "Name", Truncate(line.Description, 100)),
@@ -248,8 +308,10 @@ public static class UblDocumentBuilder
                     new XElement(Cbc + "ID", EffectiveCategory(line, treatment)),
                     new XElement(Cbc + "Percent", Percent(line.VatRatePercent)),
                     new XElement(Cac + "TaxScheme", new XElement(Cbc + "ID", "VAT")))),
+            // ACC-M2: the structured unit price keeps its precision (BIS allows more than 2 decimals
+            // on BT-146); only amounts are money and round to cents.
             new XElement(Cac + "Price",
-                Amount("PriceAmount", line.UnitPrice, invoice.Currency)));
+                new XElement(Cbc + "PriceAmount", new XAttribute("currencyID", invoice.Currency), Price(line.UnitPrice))));
 
     /// <summary>Frozen snapshot wins; drafts derive live from the invoice's treatment snapshot.</summary>
     private static string EffectiveCategory(InvoiceLine line, VatTreatment treatment) =>
@@ -263,6 +325,12 @@ public static class UblDocumentBuilder
         new(Cbc + name, new XAttribute("currencyID", currency), Decimal2(value));
 
     private static string Decimal2(decimal value) => value.ToString("0.00", CultureInfo.InvariantCulture);
+
+    /// <summary>Up to 3 decimals, never fewer than 2 (stable byte-equal output for the payload hash).</summary>
+    private static string Quantity(decimal value) => value.ToString("0.00#", CultureInfo.InvariantCulture);
+
+    /// <summary>Up to 4 decimals, never fewer than 2.</summary>
+    private static string Price(decimal value) => value.ToString("0.00##", CultureInfo.InvariantCulture);
 
     private static string Percent(decimal value) => value.ToString("0.##", CultureInfo.InvariantCulture);
 

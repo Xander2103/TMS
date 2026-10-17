@@ -40,17 +40,29 @@ public static class InvoiceReadinessEvaluator
         var reasons = new List<string>();
         var tenantId = order.TenantId;
 
+        // ACC-M1: an explicitly free order is commercially RESOLVED (€ 0 by decision) — no pricing
+        // reason applies. A zero that was never confirmed as free is not.
+        var explicitlyFree = order.FreeConfirmed
+                             || OrderPricingState.IsIntentionalZero(order.PriceIsManual, order.PricingSource, order.OneOffFixedAmount, order.AgreedPrice);
         var snapshot = await db.TransportOrderPricingSnapshots.AsNoTracking()
             .Where(s => s.TenantId == tenantId && s.TransportOrderId == order.Id)
             .Select(s => new { s.CoverageStatus, s.IsStale })
             .FirstOrDefaultAsync(cancellationToken);
+        if (explicitlyFree)
+        {
+            // Nothing to price; only staleness could still matter and does not for a free order.
+        }
         // No snapshot at all: acceptable only when a manual/agreed price exists (pre-engine
         // orders keep invoicing exactly as before) — otherwise there is nothing to invoice.
-        if (snapshot is null)
+        else if (snapshot is null)
         {
             if (order.AgreedPrice is null)
             {
                 reasons.Add("pricing.none");
+            }
+            else if (order.AgreedPrice == 0m)
+            {
+                reasons.Add("pricing.zero_unconfirmed");
             }
         }
         else
@@ -64,6 +76,26 @@ public static class InvoiceReadinessEvaluator
             {
                 reasons.Add("pricing.stale");
             }
+
+            if (order.AgreedPrice == 0m && reasons.Count == 0)
+            {
+                reasons.Add("pricing.zero_unconfirmed");
+            }
+        }
+
+        // ACC-M4: a customer that requires a PO is not invoice-ready without one — the control
+        // workspace says so BEFORE an invoice is drafted, the issue guard enforces it again.
+        var customerPolicy = await db.Customers.AsNoTracking()
+            .Where(c => c.TenantId == tenantId && c.Id == order.CustomerId)
+            .Select(c => new { c.PurchaseOrderPolicy })
+            .FirstOrDefaultAsync(cancellationToken);
+        if (customerPolicy?.PurchaseOrderPolicy == Modules.Partners.Entities.PurchaseOrderPolicy.Required
+            && !await db.CustomerPurchaseOrderNumbers.AsNoTracking().AnyAsync(
+                po => po.TenantId == tenantId && po.CustomerId == order.CustomerId
+                      && po.ValidFrom <= order.OrderDate
+                      && (po.ValidUntil == null || po.ValidUntil >= order.OrderDate), cancellationToken))
+        {
+            reasons.Add("po.missing");
         }
 
         // POD requirement only when the order actually ran on a completed trip; a directly

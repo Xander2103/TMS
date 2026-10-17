@@ -31,7 +31,13 @@ public interface IInvoiceService
     /// amounts (the sign lives in the document Kind), snapshots copied from the credited
     /// document, numbered in the same monthly series with the credit-note prefix.
     /// </summary>
-    Task<InvoiceOperationResult> CreateCreditNoteAsync(Guid id, CancellationToken cancellationToken);
+    Task<InvoiceOperationResult> CreateCreditNoteAsync(Guid id, CreateCreditNoteRequest request, CancellationToken cancellationToken);
+
+    /// <summary>ACC-M4: the issue rules, evaluated without issuing; null when the invoice is not this tenant's.</summary>
+    Task<InvoiceIssuePreflightDto?> PreflightAsync(Guid id, CancellationToken cancellationToken);
+
+    /// <summary>ACC-H1: the rate a manual line defaults to for this customer; null when the customer is unknown.</summary>
+    Task<decimal?> DefaultVatRateForCustomerAsync(Guid customerId, CancellationToken cancellationToken);
 
     Task<InvoiceOperationResult> DeleteAsync(Guid id, CancellationToken cancellationToken);
 

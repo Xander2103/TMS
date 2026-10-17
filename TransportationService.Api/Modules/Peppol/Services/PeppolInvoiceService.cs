@@ -73,26 +73,28 @@ public class PeppolInvoiceService : IPeppolInvoiceService
         var subtotal = Math.Round(lines.Sum(l => Math.Round(l.Quantity * l.UnitPrice, 2)), 2);
         var vat = groups.Sum(g => g.VatAmount);
 
+        var sellerParty = graph.Seller is null ? null : UblDocumentBuilder.UblParty.FromInvoiceSeller(graph.Invoice, graph.Seller);
+        var buyerParty = UblDocumentBuilder.UblParty.FromInvoiceBuyer(graph.Invoice, graph.Customer);
         return new PeppolInvoicePreviewDto(
-            graph.Invoice.InvoiceNumber,
+            graph.Invoice.DisplayNumber,
             graph.Invoice.Kind.ToString(),
             graph.Invoice.InvoiceDate,
             graph.Invoice.Currency,
             new PeppolPreviewPartyDto(
-                graph.Invoice.SellerName ?? graph.Seller?.LegalName ?? string.Empty,
-                graph.Invoice.SellerVatNumber ?? graph.Seller?.VatNumber,
-                Participant(graph.Seller?.PeppolScheme, graph.Seller?.PeppolId)),
+                sellerParty?.LegalName ?? graph.Invoice.SellerName ?? string.Empty,
+                sellerParty?.VatNumber,
+                Participant(sellerParty?.PeppolScheme, sellerParty?.PeppolId)),
             new PeppolPreviewPartyDto(
-                graph.Customer.LegalName ?? graph.Customer.Name,
-                graph.Invoice.CustomerVatNumberSnapshot ?? graph.Customer.VatNumber,
-                Participant(graph.Customer.PeppolScheme, graph.Customer.PeppolId)),
+                buyerParty.LegalName,
+                buyerParty.VatNumber,
+                Participant(buyerParty.PeppolScheme, buyerParty.PeppolId)),
             lines.Select(l => new PeppolPreviewLineDto(
                 l.Sequence, l.Description, l.Quantity, l.UnitCode, l.UnitPrice,
                 Math.Round(l.Quantity * l.UnitPrice, 2),
                 l.VatCategoryCode ?? VatTreatmentCatalog.ResolveVatCategory(treatment, l.VatRatePercent).Code,
                 l.VatRatePercent)).ToList(),
             groups, subtotal, vat, subtotal + vat,
-            FirstNonEmpty(graph.Customer.BuyerReference, graph.Invoice.PurchaseOrderNumber, graph.Invoice.InvoiceNumber),
+            FirstNonEmpty(graph.Invoice.CustomerBuyerReferenceSnapshot ?? graph.Customer.BuyerReference, graph.Invoice.PurchaseOrderNumber, graph.Invoice.InvoiceNumber),
             graph.Invoice.PurchaseOrderNumber,
             graph.CreditedInvoiceNumber);
     }
@@ -112,9 +114,14 @@ public class PeppolInvoiceService : IPeppolInvoiceService
             return (null, validation);
         }
 
+        // ACC-H4/P1: the e-invoice states the parties as FROZEN on the issued document; the live
+        // records only back-fill pre-remediation rows that never froze them.
         var xml = UblDocumentBuilder.Build(new UblDocumentBuilder.UblDocumentInput(
-            graph.Invoice, graph.Lines, graph.Customer, graph.Seller,
-            graph.CreditedInvoiceNumber, graph.Settings?.DefaultInvoiceNote));
+            graph.Invoice, graph.Lines,
+            UblDocumentBuilder.UblParty.FromInvoiceBuyer(graph.Invoice, graph.Customer),
+            UblDocumentBuilder.UblParty.FromInvoiceSeller(graph.Invoice, graph.Seller),
+            graph.CreditedInvoiceNumber, graph.Settings?.DefaultInvoiceNote,
+            graph.Invoice.CustomerBuyerReferenceSnapshot ?? graph.Customer.BuyerReference));
         return (xml, null);
     }
 
@@ -161,44 +168,47 @@ public class PeppolInvoiceService : IPeppolInvoiceService
 
         var invoice = graph.Invoice;
         var treatment = ParseTreatment(invoice);
+        // ACC-H4: an issued document is judged on what it FROZE; a draft on today's master data.
+        var seller = graph.Seller is null ? null : UblDocumentBuilder.UblParty.FromInvoiceSeller(invoice, graph.Seller);
+        var buyer = UblDocumentBuilder.UblParty.FromInvoiceBuyer(invoice, graph.Customer);
 
         // --- Own company / configuration ---
-        if (graph.Seller is null)
+        if (graph.Seller is null || seller is null)
         {
             Add("company.missing", "Deze factuur heeft geen facturerende entiteit; kies eerst een eigen bedrijf.");
         }
         else
         {
-            if (string.IsNullOrWhiteSpace(graph.Seller.PeppolId) || string.IsNullOrWhiteSpace(graph.Seller.PeppolScheme))
+            if (string.IsNullOrWhiteSpace(seller.PeppolId) || string.IsNullOrWhiteSpace(seller.PeppolScheme))
             {
-                Add("company.peppol_identity", $"Het eigen bedrijf '{graph.Seller.LegalName}' heeft geen Peppol-ID en -schema.");
+                Add("company.peppol_identity", $"Het eigen bedrijf '{seller.LegalName}' heeft geen Peppol-ID en -schema.");
             }
 
-            if (string.IsNullOrWhiteSpace(invoice.SellerVatNumber ?? graph.Seller.VatNumber))
+            if (string.IsNullOrWhiteSpace(seller.VatNumber))
             {
-                Add("company.vat", $"Het eigen bedrijf '{graph.Seller.LegalName}' heeft geen BTW-nummer.");
+                Add("company.vat", $"Het eigen bedrijf '{seller.LegalName}' heeft geen BTW-nummer.");
             }
 
             if (invoice.Kind == InvoiceKind.Invoice && string.IsNullOrWhiteSpace(invoice.SellerIban ?? graph.Seller.Iban))
             {
-                Add("company.iban", $"Het eigen bedrijf '{graph.Seller.LegalName}' heeft geen IBAN voor de betaalgegevens.");
+                Add("company.iban", $"Het eigen bedrijf '{seller.LegalName}' heeft geen IBAN voor de betaalgegevens.");
             }
 
-            if (string.IsNullOrWhiteSpace(graph.Seller.CountryCode))
+            if (string.IsNullOrWhiteSpace(seller.CountryCode))
             {
-                Add("company.address", $"Het eigen bedrijf '{graph.Seller.LegalName}' heeft geen land in het adres.");
+                Add("company.address", $"Het eigen bedrijf '{seller.LegalName}' heeft geen land in het adres.");
             }
 
             if (graph.Settings is not { Enabled: true })
             {
-                Add("company.peppol_disabled", $"Peppol is niet ingeschakeld voor '{graph.Seller.LegalName}' (Instellingen → Peppol).");
+                Add("company.peppol_disabled", $"Peppol is niet ingeschakeld voor '{seller.LegalName}' (Instellingen → Peppol).");
             }
         }
 
         // --- Customer ---
-        if (string.IsNullOrWhiteSpace(graph.Customer.PeppolId) || string.IsNullOrWhiteSpace(graph.Customer.PeppolScheme))
+        if (string.IsNullOrWhiteSpace(buyer.PeppolId) || string.IsNullOrWhiteSpace(buyer.PeppolScheme))
         {
-            Add("customer.peppol_identity", $"Klant '{graph.Customer.Name}' heeft geen Peppol-ID en -schema.");
+            Add("customer.peppol_identity", $"Klant '{buyer.Name}' heeft geen Peppol-ID en -schema.");
         }
         else if (graph.Customer.PeppolValidationStatus == CustomerPeppolValidationStatus.NotFound)
         {
@@ -210,15 +220,14 @@ public class PeppolInvoiceService : IPeppolInvoiceService
             Add("customer.peppol_disabled", $"Peppol is niet ingeschakeld voor klant '{graph.Customer.Name}' (fiscale gegevens).");
         }
 
-        if (VatTreatmentCatalog.Resolve(treatment).RequiresVatNumber
-            && string.IsNullOrWhiteSpace(invoice.CustomerVatNumberSnapshot ?? graph.Customer.VatNumber))
+        if (VatTreatmentCatalog.Resolve(treatment).RequiresVatNumber && string.IsNullOrWhiteSpace(buyer.VatNumber))
         {
             Add("customer.vat", "Deze btw-regeling vereist een BTW-nummer van de klant.");
         }
 
-        if (string.IsNullOrWhiteSpace(graph.Customer.CountryCode))
+        if (string.IsNullOrWhiteSpace(buyer.CountryCode))
         {
-            Add("customer.address", $"Klant '{graph.Customer.Name}' heeft geen land in het adres.");
+            Add("customer.address", $"Klant '{buyer.Name}' heeft geen land in het adres.");
         }
 
         // --- Invoice state ---
@@ -231,7 +240,7 @@ public class PeppolInvoiceService : IPeppolInvoiceService
             Add("invoice.cancelled", "Een geannuleerde factuur kan niet via Peppol verstuurd worden.");
         }
 
-        if (string.IsNullOrWhiteSpace(invoice.InvoiceNumber))
+        if (string.IsNullOrWhiteSpace(invoice.InvoiceNumber) && invoice.Status != InvoiceStatus.Draft)
         {
             Add("invoice.number", "De factuur heeft geen factuurnummer.");
         }

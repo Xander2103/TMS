@@ -283,7 +283,8 @@ public record SetOrderPricingStatusRequest(OrderPricingStatus Status);
 /// contract pricing. Never touches stops or goods, so an incomplete route cannot block it;
 /// route validation stays on the order PUT and the confirmation gate.
 /// </summary>
-public record SetOneOffPriceRequest(decimal? FixedAmount, Guid? Version = null);
+/// <summary>ACC-M1: <c>FixedAmount = 0</c> is only accepted together with <c>FreeConfirmed = true</c> (an explicit "gratis").</summary>
+public record SetOneOffPriceRequest(decimal? FixedAmount, Guid? Version = null, bool FreeConfirmed = false);
 
 /// <summary>
 /// Body for "Prijs bevestigen" (wave 2026-08-04 §8/§10). UnpricedGoodsReason is only consulted —

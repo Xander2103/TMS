@@ -13,10 +13,10 @@ public interface IInvoiceNumberService
     /// context in the same SaveChanges (invoice + order flips + counter). Retry-safe:
     /// concurrent claims conflict on the sequence concurrency token and re-claim.
     /// </summary>
-    Task ClaimAsync(LegalEntity entity, int year, int month, Action<string> assignNumber, CancellationToken cancellationToken);
+    Task ClaimAsync(LegalEntity entity, InvoiceKind kind, int year, int month, Action<string> assignNumber, CancellationToken cancellationToken);
 
-    /// <summary>Next expected number for (entity, period) WITHOUT claiming it. Purely informative.</summary>
-    Task<string> PreviewAsync(LegalEntity entity, int year, int month, CancellationToken cancellationToken);
+    /// <summary>Next expected number for (entity, kind, period) WITHOUT claiming it. Purely informative.</summary>
+    Task<string> PreviewAsync(LegalEntity entity, InvoiceKind kind, int year, int month, CancellationToken cancellationToken);
 }
 
 public class InvoiceNumberService : IInvoiceNumberService
@@ -32,24 +32,40 @@ public class InvoiceNumberService : IInvoiceNumberService
         _tenantContext = tenantContext;
     }
 
-    public static string Compose(LegalEntity entity, int year, int month, int sequenceValue)
+    /// <summary>
+    /// Credit notes form their own series (ACC-H3/M11): the configured credit-note prefix, else
+    /// the invoice prefix + "CN". A format without {PREFIX} gets it prepended so the prefix can
+    /// never silently disappear and the two series can never collide.
+    /// </summary>
+    public static string Compose(LegalEntity entity, InvoiceKind kind, int year, int month, int sequenceValue)
     {
         var padding = Math.Clamp(entity.InvoiceSequencePadding, 2, 8);
-        return entity.InvoiceNumberFormat
-            .Replace("{PREFIX}", entity.InvoicePrefix ?? string.Empty, StringComparison.Ordinal)
+        var format = entity.InvoiceNumberFormat;
+        var prefix = entity.InvoicePrefix ?? string.Empty;
+        if (kind == InvoiceKind.CreditNote)
+        {
+            prefix = entity.CreditNotePrefix ?? $"{entity.InvoicePrefix}CN";
+            if (!format.Contains("{PREFIX}", StringComparison.Ordinal))
+            {
+                format = "{PREFIX}" + format;
+            }
+        }
+
+        return format
+            .Replace("{PREFIX}", prefix, StringComparison.Ordinal)
             .Replace("{YYYY}", year.ToString("D4"), StringComparison.Ordinal)
             .Replace("{YY}", (year % 100).ToString("D2"), StringComparison.Ordinal)
             .Replace("{MM}", month.ToString("D2"), StringComparison.Ordinal)
             .Replace("{SEQ}", sequenceValue.ToString().PadLeft(padding, '0'), StringComparison.Ordinal);
     }
 
-    public async Task ClaimAsync(LegalEntity entity, int year, int month, Action<string> assignNumber, CancellationToken cancellationToken)
+    public async Task ClaimAsync(LegalEntity entity, InvoiceKind kind, int year, int month, Action<string> assignNumber, CancellationToken cancellationToken)
     {
         for (var attempt = 0; ; attempt++)
         {
-            var sequence = await GetOrAddSequenceAsync(entity.Id, year, month, cancellationToken);
+            var sequence = await GetOrAddSequenceAsync(entity.Id, kind, year, month, cancellationToken);
 
-            assignNumber(Compose(entity, year, month, sequence.NextValue));
+            assignNumber(Compose(entity, kind, year, month, sequence.NextValue));
             sequence.NextValue++;
 
             try
@@ -80,21 +96,21 @@ public class InvoiceNumberService : IInvoiceNumberService
         }
     }
 
-    public async Task<string> PreviewAsync(LegalEntity entity, int year, int month, CancellationToken cancellationToken)
+    public async Task<string> PreviewAsync(LegalEntity entity, InvoiceKind kind, int year, int month, CancellationToken cancellationToken)
     {
         var next = await _dbContext.InvoiceSequences.AsNoTracking()
-            .Where(s => s.TenantId == _tenantContext.TenantId && s.LegalEntityId == entity.Id && s.Year == year && s.Month == month)
+            .Where(s => s.TenantId == _tenantContext.TenantId && s.LegalEntityId == entity.Id && s.Kind == kind && s.Year == year && s.Month == month)
             .Select(s => (int?)s.NextValue)
             .FirstOrDefaultAsync(cancellationToken) ?? 1;
-        return Compose(entity, year, month, next);
+        return Compose(entity, kind, year, month, next);
     }
 
-    private async Task<InvoiceSequence> GetOrAddSequenceAsync(Guid legalEntityId, int year, int month, CancellationToken cancellationToken)
+    private async Task<InvoiceSequence> GetOrAddSequenceAsync(Guid legalEntityId, InvoiceKind kind, int year, int month, CancellationToken cancellationToken)
     {
         var sequence = _dbContext.InvoiceSequences.Local.FirstOrDefault(
-                s => s.TenantId == _tenantContext.TenantId && s.LegalEntityId == legalEntityId && s.Year == year && s.Month == month)
+                s => s.TenantId == _tenantContext.TenantId && s.LegalEntityId == legalEntityId && s.Kind == kind && s.Year == year && s.Month == month)
             ?? await _dbContext.InvoiceSequences.FirstOrDefaultAsync(
-                s => s.TenantId == _tenantContext.TenantId && s.LegalEntityId == legalEntityId && s.Year == year && s.Month == month,
+                s => s.TenantId == _tenantContext.TenantId && s.LegalEntityId == legalEntityId && s.Kind == kind && s.Year == year && s.Month == month,
                 cancellationToken);
 
         if (sequence is null)
@@ -104,6 +120,7 @@ public class InvoiceNumberService : IInvoiceNumberService
                 Id = Guid.NewGuid(),
                 TenantId = _tenantContext.TenantId,
                 LegalEntityId = legalEntityId,
+                Kind = kind,
                 Year = year,
                 Month = month,
                 NextValue = 1,

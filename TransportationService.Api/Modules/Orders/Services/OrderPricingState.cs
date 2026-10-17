@@ -36,6 +36,7 @@ public static class OrderPricingState
     /// <summary>EF-translatable predicate (use with <c>Where</c>/<c>Count</c>/<c>Any</c> on TransportOrders).</summary>
     public static readonly Expression<Func<TransportOrder, bool>> IsPricedExpression = o =>
         o.PriceIsManual
+        || o.FreeConfirmed
         || (o.PricingSource == OrderPricingSource.OneOff && o.OneOffFixedAmount != null)
         || o.AgreedPrice > 0m;
 

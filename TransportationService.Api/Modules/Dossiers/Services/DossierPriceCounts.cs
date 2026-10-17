@@ -88,7 +88,7 @@ public sealed class DossierPriceCounts
 
     /// <summary>Intentional € 0 on an order (one-off at 0 or override at 0) — <see cref="OrderPricingState.IsIntentionalZero"/> as a tree.</summary>
     private static readonly Expression<Func<TransportOrder, bool>> IntentionalZero = o =>
-        (o.PricingSource == OrderPricingSource.OneOff && o.OneOffFixedAmount == 0m) || (o.PriceIsManual && o.AgreedPrice == 0m);
+        o.FreeConfirmed || (o.PricingSource == OrderPricingSource.OneOff && o.OneOffFixedAmount == 0m) || (o.PriceIsManual && o.AgreedPrice == 0m);
 
     private static readonly Expression<Func<TransportOrder, bool>> NotIntentionalZero =
         Expression.Lambda<Func<TransportOrder, bool>>(Expression.Not(IntentionalZero.Body), IntentionalZero.Parameters);

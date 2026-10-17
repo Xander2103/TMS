@@ -23,7 +23,9 @@ public record InvoiceLineDto(
     Guid? TransportOrderId,
     string? OrderNumber,
     string Description,
+    /// <summary>Up to 3 decimals.</summary>
     decimal Quantity,
+    /// <summary>Up to 4 decimals (ACC-M2); the line total is what rounds to cents.</summary>
     decimal UnitPrice,
     decimal VatRatePercent,
     decimal LineTotal,
@@ -54,11 +56,14 @@ public record InvoiceLineDto(
     string? CustomerDescription = null,
     /// <summary>The standalone dossier activity this line bills (traceability); null otherwise.</summary>
     Guid? DossierActivityId = null,
-    string? DossierNumber = null);
+    string? DossierNumber = null,
+    /// <summary>Human unit ("uur", "Europallet") next to the structured <see cref="UnitCode"/>.</summary>
+    string? UnitLabel = null);
 
 public record InvoiceDetailDto(
     Guid Id,
-    string InvoiceNumber,
+    /// <summary>Null while Draft — the legal number is claimed at issue (ACC-H3).</summary>
+    string? InvoiceNumber,
     DateOnly InvoiceDate,
     DateOnly DueDate,
     Guid CustomerId,
@@ -89,10 +94,38 @@ public record InvoiceDetailDto(
     /// <summary>Statutory text for the header treatment, when it has one.</summary>
     string? VatLegalText = null,
     /// <summary>Credit notes issued against THIS invoice (any status), so the relation is visible both ways.</summary>
-    IReadOnlyList<InvoiceReferenceDto>? CreditNotes = null);
+    IReadOnlyList<InvoiceReferenceDto>? CreditNotes = null,
+    /// <summary>"CONCEPT-A3FCFE3E" while Draft (ACC-H3).</summary>
+    string? DraftReference = null,
+    /// <summary>The number once issued, else the draft reference — what screens print.</summary>
+    string? DisplayNumber = null,
+    /// <summary>The VAT rate a manual line defaults to under this invoice's treatment (ACC-H1).</summary>
+    decimal? DefaultVatRatePercent = null,
+    /// <summary>Effective payment term (customer → entity → tenant) the due date follows (ACC-H5).</summary>
+    int? PaymentTermDays = null,
+    bool DueDateIsManual = false,
+    DateTime? IssuedAt = null,
+    DateTime? PaidAt = null,
+    string? PaidByName = null,
+    string? CreditReason = null,
+    /// <summary>Frozen party presentation (issued) or the current master data (draft preview).</summary>
+    string? CustomerLegalName = null,
+    string? CustomerAddressLine = null,
+    string? SellerLegalName = null,
+    string? SellerCompanyNumber = null,
+    string? PaymentTermsText = null);
 
 /// <summary>A related document reference (original ↔ credit note).</summary>
-public record InvoiceReferenceDto(Guid Id, string InvoiceNumber, InvoiceStatus Status);
+public record InvoiceReferenceDto(Guid Id, string? InvoiceNumber, InvoiceStatus Status, string? DisplayNumber = null);
+
+/// <summary>ACC-M4/H6: one reason an invoice cannot be issued yet, with the lines it concerns.</summary>
+public record InvoiceIssueIssueDto(string Code, string Message, IReadOnlyList<Guid> LineIds);
+
+/// <summary>Issue preflight: the SAME rules the Draft → Sent transition enforces.</summary>
+public record InvoiceIssuePreflightDto(bool CanIssue, IReadOnlyList<InvoiceIssueIssueDto> Issues);
+
+/// <summary>ACC-M11: crediting is a deliberate, motivated act.</summary>
+public record CreateCreditNoteRequest(string? Reason);
 
 /// <summary>Completed, not-yet-invoiced order offered in the invoice builder.</summary>
 public record UninvoicedOrderDto(
@@ -108,7 +141,11 @@ public record UninvoicedOrderDto(
     /// <summary>Wave 2 §6: NotReady | ReadyForInvoice | ReviewRequired — informational, never a gate.</summary>
     string InvoiceReadiness = "NotReady",
     /// <summary>Semicolon-separated reason codes when ReviewRequired (e.g. pricing.stale;pod.missing).</summary>
-    string? InvoiceReadinessReasons = null);
+    string? InvoiceReadinessReasons = null,
+    /// <summary>ACC-M1: explicitly free transport (resolved € 0), never confused with "no price".</summary>
+    bool IsFree = false,
+    /// <summary>ACC-B1: only ReadyForInvoice orders can be put on an invoice; the rest is listed for context.</summary>
+    bool IsInvoiceable = false);
 
 /// <summary>
 /// Closure sprint 2026-09-23: a priced STANDALONE dossier activity (no linked order) of the
@@ -137,6 +174,7 @@ public record ManualInvoiceLineInput(
     string Description,
     decimal Quantity,
     decimal UnitPrice,
+    /// <summary>Null = the rate the invoice's VAT treatment dictates (ACC-H1); never a silent 0.</summary>
     decimal? VatRatePercent,
     Guid? SalesCategoryId = null,
     /// <summary>UN/ECE rec 20 unit code; null = C62 (stuk).</summary>
@@ -168,6 +206,7 @@ public record UpdateInvoiceRequest(
 /// <summary>Draft-only manual invoice-number correction; requires invoices.override_number + reason.</summary>
 public record OverrideInvoiceNumberRequest(string InvoiceNumber, string Reason);
 
+/// <summary>The number the NEXT issued document would get (informative; nothing is claimed until issue).</summary>
 public record InvoiceNumberPreviewDto(string InvoiceNumber, Guid LegalEntityId, int Year, int Month);
 
 /// <summary>Existing lines keep their id; new manual lines come without one. Order-backed lines cannot be added here.</summary>
@@ -176,11 +215,14 @@ public record UpdateInvoiceLineInput(
     string Description,
     decimal Quantity,
     decimal UnitPrice,
-    decimal VatRatePercent,
+    /// <summary>Null = the rate the invoice's VAT treatment dictates (ACC-H1).</summary>
+    decimal? VatRatePercent,
     /// <summary>The line's sales category; null explicitly clears it (the editor round-trips the current value).</summary>
     Guid? SalesCategoryId = null,
     /// <summary>UN/ECE rec 20 unit code; null keeps the current value (new lines: C62).</summary>
-    string? UnitCode = null);
+    string? UnitCode = null,
+    /// <summary>Human unit label; null keeps the current value.</summary>
+    string? UnitLabel = null);
 
 public record ChangeInvoiceStatusRequest(InvoiceStatus Status);
 

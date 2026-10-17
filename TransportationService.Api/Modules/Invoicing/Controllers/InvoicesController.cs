@@ -160,13 +160,31 @@ public class InvoicesController : ControllerBase
         return Handle(result, created: false);
     }
 
-    /// <summary>Creates a Draft credit note for a Sent/Paid invoice (positive amounts, linked to the original).</summary>
+    /// <summary>Creates a Draft credit note for a Sent/Paid invoice (positive amounts, linked to the original); a reason is required.</summary>
     [HttpPost("{id:guid}/credit-note")]
     [RequirePermission(PermissionCodes.InvoicesCreate)]
-    public async Task<ActionResult<InvoiceDetailDto>> CreateCreditNote(Guid id, CancellationToken cancellationToken)
+    public async Task<ActionResult<InvoiceDetailDto>> CreateCreditNote(Guid id, [FromBody] CreateCreditNoteRequest? request, CancellationToken cancellationToken)
     {
-        var result = await _service.CreateCreditNoteAsync(id, cancellationToken);
+        var result = await _service.CreateCreditNoteAsync(id, request ?? new CreateCreditNoteRequest(null), cancellationToken);
         return Handle(result, created: true);
+    }
+
+    /// <summary>ACC-M4: every reason the draft cannot be issued yet — the same rules the Draft → Sent transition enforces.</summary>
+    [HttpGet("{id:guid}/issue-preflight")]
+    [RequirePermission(PermissionCodes.InvoicesView)]
+    public async Task<ActionResult<InvoiceIssuePreflightDto>> IssuePreflight(Guid id, CancellationToken cancellationToken)
+    {
+        var preflight = await _service.PreflightAsync(id, cancellationToken);
+        return preflight is null ? NotFound() : Ok(preflight);
+    }
+
+    /// <summary>ACC-H1: the VAT rate a manual line defaults to for a customer (its treatment, never a silent 0).</summary>
+    [HttpGet("default-vat")]
+    [RequirePermission(PermissionCodes.InvoicesView, PermissionCodes.InvoicesCreate)]
+    public async Task<ActionResult<object>> DefaultVat([FromQuery] Guid customerId, CancellationToken cancellationToken)
+    {
+        var rate = await _service.DefaultVatRateForCustomerAsync(customerId, cancellationToken);
+        return rate is null ? NotFound() : Ok(new { vatRatePercent = rate.Value });
     }
 
     [HttpPost("{id:guid}/status")]

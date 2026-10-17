@@ -67,6 +67,7 @@ public class InvoiceService : IInvoiceService
     private readonly Accounting.Services.IAccountingService _accounting;
     private readonly INotificationEventService? _notificationEvents;
     private readonly ILogger<InvoiceService>? _logger;
+    private readonly Identity.Services.ICurrentUserContext? _currentUser;
 
     public InvoiceService(
         TransportationDbContext dbContext,
@@ -77,8 +78,10 @@ public class InvoiceService : IInvoiceService
         Partners.Services.ICustomerBillingConfigService billingConfig,
         Accounting.Services.IAccountingService accounting,
         INotificationEventService? notificationEvents = null,
-        ILogger<InvoiceService>? logger = null)
+        ILogger<InvoiceService>? logger = null,
+        Identity.Services.ICurrentUserContext? currentUser = null)
     {
+        _currentUser = currentUser;
         _dbContext = dbContext;
         _tenantContext = tenantContext;
         _auditService = auditService;
@@ -202,6 +205,7 @@ public class InvoiceService : IInvoiceService
             {
                 o.Id, o.OrderNumber, o.OrderDate, o.GoodsDescription, o.AgreedPrice, o.LegalEntityId,
                 o.InvoiceReadiness, o.InvoiceReadinessReasons,
+                IsFree = o.FreeConfirmed || (o.PricingSource == OrderPricingSource.OneOff && o.OneOffFixedAmount == 0m) || (o.PriceIsManual && o.AgreedPrice == 0m),
             })
             .ToListAsync(cancellationToken);
 
@@ -231,7 +235,10 @@ public class InvoiceService : IInvoiceService
                 orderStops.LastOrDefault(s => s.StopType is StopType.Unloading or StopType.Site)?.City,
                 o.AgreedPrice,
                 o.LegalEntityId,
-                o.InvoiceReadiness, o.InvoiceReadinessReasons);
+                o.InvoiceReadiness, o.InvoiceReadinessReasons,
+                o.IsFree,
+                // ACC-B1: only a resolved order (ready, or explicitly free) may be billed.
+                o.InvoiceReadiness == Modules.Orders.Services.InvoiceReadinessEvaluator.ReadyForInvoice || o.IsFree);
         }).ToList();
     }
 
@@ -308,15 +315,9 @@ public class InvoiceService : IInvoiceService
     {
         var tenantId = _tenantContext.TenantId;
 
-        var customerVat = await _dbContext.Customers
-            .Where(c => c.Id == request.CustomerId && c.TenantId == tenantId)
-            .Select(c => new
-            {
-                c.VatTreatment, c.DefaultVatRatePercent, c.DefaultLegalEntityId, c.VatNumber,
-                c.InvoiceLanguageCode, c.DefaultLanguageCode,
-            })
-            .FirstOrDefaultAsync(cancellationToken);
-        if (customerVat is null)
+        var customerRow = await _dbContext.Customers.AsNoTracking()
+            .FirstOrDefaultAsync(c => c.Id == request.CustomerId && c.TenantId == tenantId, cancellationToken);
+        if (customerRow is null)
         {
             return InvoiceOperationResult.InvalidReference("De gekoppelde klant bestaat niet.");
         }
@@ -369,6 +370,15 @@ public class InvoiceService : IInvoiceService
                         "Een geselecteerde opdracht is niet factureerbaar (niet afgerond, andere klant of al gefactureerd).");
                 }
 
+                // ACC-B1 (layer 1): a completed order without a resolved price is "Nakijken" — it is
+                // listed for context but can never become a € 0,00 invoice line.
+                if (!dto.IsInvoiceable)
+                {
+                    var reasons = InvoiceReadinessReasonLabels(dto.InvoiceReadinessReasons);
+                    return InvoiceOperationResult.Invalid(
+                        $"Opdracht {dto.OrderNumber} is niet factureerbaar ({reasons}). Prijs de opdracht of markeer ze expliciet als gratis; niet-geprijsd werk wordt nooit als € 0,00 gefactureerd.");
+                }
+
                 orderDtos.Add(dto);
             }
         }
@@ -400,8 +410,9 @@ public class InvoiceService : IInvoiceService
         // code → customer → tenant). The invoice-level rate below is what the customer's own
         // treatment yields; a sales code with a statutory classification deviates per line.
         var tenantDefaultRate = settings?.DefaultVatRatePercent ?? 21m;
+        _defaultTenantRate = tenantDefaultRate;
         var vatRate = Modules.Accounting.Services.InvoiceLineFiscalResolver
-            .Resolve(null, null, customerVat.VatTreatment, customerVat.DefaultVatRatePercent, tenantDefaultRate)
+            .Resolve(null, null, customerRow.VatTreatment, customerRow.DefaultVatRatePercent, tenantDefaultRate)
             .RatePercent;
         var invoiceDate = request.InvoiceDate ?? DateOnly.FromDateTime(_timeProvider.GetUtcNow().UtcDateTime);
 
@@ -418,7 +429,7 @@ public class InvoiceService : IInvoiceService
         }
         else
         {
-            legalEntity = customerVat.DefaultLegalEntityId is { } customerDefault
+            legalEntity = customerRow.DefaultLegalEntityId is { } customerDefault
                 ? await _dbContext.LegalEntities.FirstOrDefaultAsync(
                     e => e.TenantId == tenantId && e.Id == customerDefault && e.IsActive, cancellationToken)
                 : null;
@@ -478,12 +489,35 @@ public class InvoiceService : IInvoiceService
             InvoicePeriodYear = periodYear,
             InvoicePeriodMonth = periodMonth,
             InvoiceDate = invoiceDate,
-            DueDate = invoiceDate.AddDays(settings?.PaymentTermDays ?? 30),
+            // ACC-H5: customer term → legal entity term → tenant default; the draft's due date follows
+            // the invoice date until a user deliberately sets another one.
+            PaymentTermDays = EffectivePaymentTermDays(customerRow, legalEntity, settings),
             Currency = legalEntity?.DefaultCurrency ?? settings?.DefaultCurrency ?? "EUR",
             Notes = Trim(request.Notes),
             // Wave 2 §3: the document language freezes at creation, like the seller snapshot.
-            LanguageCode = customerVat.InvoiceLanguageCode ?? customerVat.DefaultLanguageCode ?? "nl",
+            LanguageCode = customerRow.InvoiceLanguageCode ?? customerRow.DefaultLanguageCode ?? "nl",
         };
+        invoice.DueDate = invoiceDate.AddDays(invoice.PaymentTermDays);
+
+        // ACC-M12: the customer reads WHAT was transported, not only an order number and a route.
+        var cargoByOrder = request.OrderIds.Count == 0
+            ? new Dictionary<Guid, List<Modules.Orders.Entities.CargoItem>>()
+            : (await _dbContext.CargoItems.AsNoTracking()
+                .Where(c => c.TenantId == tenantId && request.OrderIds.Contains(c.TransportOrderId) && !c.IsDeleted)
+                .OrderBy(c => c.Sequence)
+                .ToListAsync(cancellationToken))
+                .GroupBy(c => c.TransportOrderId)
+                .ToDictionary(g => g.Key, g => g.ToList());
+        var unitNames = await _dbContext.UnitTypes.AsNoTracking()
+            .Where(u => u.TenantId == tenantId)
+            .Select(u => new { u.Code, u.Name, u.Symbol })
+            .ToListAsync(cancellationToken);
+        var unitNameByCode = unitNames.ToDictionary(u => u.Code, u => u.Name, StringComparer.OrdinalIgnoreCase);
+        string? UnitLabelFor(string? unit) =>
+            string.IsNullOrWhiteSpace(unit) ? null
+            : unitNameByCode.TryGetValue(unit.Trim(), out var name) ? name
+            : unitNames.FirstOrDefault(u => string.Equals(u.Name, unit.Trim(), StringComparison.OrdinalIgnoreCase))?.Name
+            ?? UnEceUnitCodeMap.LabelFor(unit) ?? unit.Trim();
 
         // Snapshotted service lines become separate invoice lines; the base transport line
         // excludes their amounts (AgreedPrice is the order TOTAL incl. services).
@@ -514,7 +548,7 @@ public class InvoiceService : IInvoiceService
         decimal RateFor(Guid? categoryId) =>
             categoryId is { } cid && activeCategoryById.TryGetValue(cid, out var category)
                 ? Modules.Accounting.Services.InvoiceLineFiscalResolver
-                    .Resolve(null, category, customerVat.VatTreatment, customerVat.DefaultVatRatePercent, tenantDefaultRate)
+                    .Resolve(null, category, customerRow.VatTreatment, customerRow.DefaultVatRatePercent, tenantDefaultRate)
                     .RatePercent
                 : vatRate;
 
@@ -559,15 +593,19 @@ public class InvoiceService : IInvoiceService
                 : string.Empty;
             var orderServiceLines = serviceLinesByOrder.GetValueOrDefault(order.Id) ?? [];
             var serviceTotal = orderServiceLines.Sum(l => l.Amount);
+            var goods = GoodsSummary(order.GoodsDescription, cargoByOrder.GetValueOrDefault(order.Id), UnitLabelFor, strings);
+            var freeSuffix = order.IsFree ? $" ({strings.FreeLabel})" : string.Empty;
             invoice.Lines.Add(new InvoiceLine
             {
                 Id = Guid.NewGuid(),
                 TenantId = tenantId,
                 TransportOrderId = order.Id,
                 Sequence = sequence++,
-                Description = $"{order.OrderNumber} — {order.GoodsDescription}{route}",
+                Description = $"{order.OrderNumber} — {goods}{route}{freeSuffix}",
                 Quantity = 1m,
-                UnitPrice = (order.AgreedPrice ?? 0m) - serviceTotal,
+                // ACC-M1: an explicitly free transport is a deliberate € 0 line; an unpriced one never
+                // gets here (ListUninvoicedOrdersAsync marks it non-invoiceable, the guard above refuses).
+                UnitPrice = order.IsFree ? 0m : (order.AgreedPrice ?? 0m) - serviceTotal,
                 VatRatePercent = RateFor(StampedBaseCategory(order.Id) ?? transportCategoryId),
                 SalesCategoryId = StampedBaseCategory(order.Id) ?? transportCategoryId,
             });
@@ -595,9 +633,16 @@ public class InvoiceService : IInvoiceService
                         ? stamped
                         : surchargeCategoryId,
                     UnitCode = serviceLine.Kind == Modules.Tarification.Entities.SurchargeKind.PerHour ? "HUR" : "C62",
+                    UnitLabel = serviceLine.Quantity is null ? null
+                        : serviceLine.Kind == Modules.Tarification.Entities.SurchargeKind.PerHour ? strings.HourUnit : strings.StopsUnit,
                 });
             }
         }
+
+        // ACC-H6: standalone activity lines carry no system role; without a stamped sales code they
+        // default to the "Diensten & toeslagen" category (services rendered), so every line is
+        // classified before issue — the issue preflight still blocks a line that ends up without one.
+        var activityDefaultCategoryId = surchargeCategoryId;
 
         // Standalone activities: a OneOff price is one line; a Lines price reproduces every
         // sales line (quantity, unit, unit price, stamped sales code). A confirmed-free activity
@@ -640,9 +685,11 @@ public class InvoiceService : IInvoiceService
                         Description = $"{heading} — {priceLine.Label}",
                         Quantity = priceLine.Quantity,
                         UnitPrice = priceLine.UnitPrice,
-                        VatRatePercent = RateFor(stamped),
-                        SalesCategoryId = stamped,
+                        VatRatePercent = RateFor(stamped ?? activityDefaultCategoryId),
+                        SalesCategoryId = stamped ?? activityDefaultCategoryId,
+                        // P7: structured UN/ECE code from the unit type / symbol, human label kept apart.
                         UnitCode = UnEceUnitCodeMap.Resolve(priceLine.Unit),
+                        UnitLabel = UnitLabelFor(priceLine.Unit),
                     });
                 }
             }
@@ -654,11 +701,11 @@ public class InvoiceService : IInvoiceService
                     TenantId = tenantId,
                     DossierActivityId = activity.Id,
                     Sequence = sequence++,
-                    Description = heading,
+                    Description = activity.IsFree ? $"{heading} ({strings.FreeLabel})" : heading,
                     Quantity = 1m,
                     UnitPrice = activity.AgreedPrice,
-                    VatRatePercent = RateFor(null),
-                    SalesCategoryId = null,
+                    VatRatePercent = RateFor(activityDefaultCategoryId),
+                    SalesCategoryId = activityDefaultCategoryId,
                 });
             }
 
@@ -678,6 +725,7 @@ public class InvoiceService : IInvoiceService
                 Description = manual.Description.Trim(),
                 Quantity = manual.Quantity,
                 UnitPrice = manual.UnitPrice,
+                // ACC-H1: null = what the treatment dictates (never a silent 0 under domestic VAT).
                 VatRatePercent = manual.VatRatePercent ?? RateFor(manual.SalesCategoryId),
                 SalesCategoryId = manual.SalesCategoryId,
                 // Wave 2: the sales code's default unit fills in when the caller gave none
@@ -687,6 +735,7 @@ public class InvoiceService : IInvoiceService
                     ?? (manual.SalesCategoryId is { } mcid
                         ? activeCategoryById.GetValueOrDefault(mcid)?.DefaultUnitCode
                         : null)),
+                UnitLabel = UnEceUnitCodeMap.LabelFor(Trim(manual.UnitCode)),
             });
         }
 
@@ -758,37 +807,27 @@ public class InvoiceService : IInvoiceService
             ?? await _billingConfig.ResolveEffectivePoNumberAsync(request.CustomerId, invoiceDate, cancellationToken)
             ?? SingleDistinctReference(orders);
 
-        ApplySnapshots(invoice, legalEntity, customerVat.VatTreatment, customerVat.VatNumber);
+        ApplySnapshots(invoice, legalEntity, customerRow);
 
+        // ACC-H3: a draft has NO legal number — it is claimed atomically at issue, so deleting or
+        // cancelling this draft never leaves a gap in the series.
+        invoice.InvoiceNumber = null;
         _dbContext.Add(invoice);
-        if (legalEntity is not null)
-        {
-            // Entity-scoped monthly sequence (concurrency-safe claim + save in one go).
-            await _numberService.ClaimAsync(legalEntity, periodYear, periodMonth,
-                number => invoice.InvoiceNumber = number, cancellationToken);
-        }
-        else
-        {
-            // No legal entity configured (pre-seed edge case): legacy tenant counter.
-            await TenantNumbering.SaveWithClaimedNumberAsync(
-                _dbContext, settings,
-                () => invoice.InvoiceNumber = GenerateInvoiceNumber(settings),
-                cancellationToken);
-        }
+        await _dbContext.SaveChangesAsync(cancellationToken);
 
         await _auditService.RecordAsync(EntityType, invoice.Id.ToString(), "Created", null,
-            new { invoice.InvoiceNumber, invoice.CustomerId, LineCount = invoice.Lines.Count }, cancellationToken);
+            new { invoice.DraftReference, invoice.CustomerId, LineCount = invoice.Lines.Count }, cancellationToken);
 
         var draftCustomerName = await _dbContext.Customers.AsNoTracking()
             .Where(c => c.Id == invoice.CustomerId && c.TenantId == tenantId)
             .Select(c => c.Name).FirstOrDefaultAsync(cancellationToken) ?? string.Empty;
         await PublishEventAsync(MessageKinds.InvoiceDraftReady, new NotificationEventContext(
             EntityType, invoice.Id.ToString(),
-            new Dictionary<string, string> { ["invoiceNumber"] = invoice.InvoiceNumber ?? string.Empty, ["customerName"] = draftCustomerName })
+            new Dictionary<string, string> { ["invoiceNumber"] = invoice.DisplayNumber, ["customerName"] = draftCustomerName })
         {
             CustomerId = invoice.CustomerId,
             LinkPath = $"/invoices/{invoice.Id}",
-            InAppMessage = $"Conceptfactuur {invoice.InvoiceNumber} voor {draftCustomerName} is klaar.",
+            InAppMessage = $"Conceptfactuur {invoice.DisplayNumber} voor {draftCustomerName} is klaar.",
         }, cancellationToken);
 
         return InvoiceOperationResult.Success(await MapDetailAsync(invoice, cancellationToken));
@@ -856,8 +895,18 @@ public class InvoiceService : IInvoiceService
             return InvoiceOperationResult.Invalid(periodError);
         }
 
+        // ACC-H5: the due date follows the invoice date through the effective term, unless the user
+        // deliberately set another date — a due date equal to the previous (automatic) value is
+        // "unchanged" and is recalculated; a different one is a manual override that is kept.
+        var previousAutoDue = invoice.InvoiceDate.AddDays(invoice.PaymentTermDays);
+        var dueIsManual = invoice.DueDateIsManual
+            ? request.DueDate != previousAutoDue && request.DueDate != request.InvoiceDate.AddDays(invoice.PaymentTermDays)
+            : request.DueDate != invoice.DueDate && request.DueDate != previousAutoDue && request.DueDate != request.InvoiceDate.AddDays(invoice.PaymentTermDays);
         invoice.InvoiceDate = request.InvoiceDate;
-        invoice.DueDate = request.DueDate < request.InvoiceDate ? request.InvoiceDate : request.DueDate;
+        invoice.DueDateIsManual = dueIsManual;
+        invoice.DueDate = dueIsManual
+            ? (request.DueDate < request.InvoiceDate ? request.InvoiceDate : request.DueDate)
+            : request.InvoiceDate.AddDays(invoice.PaymentTermDays);
         invoice.Notes = Trim(request.Notes);
         invoice.PurchaseOrderNumber = Trim(request.PurchaseOrderNumber);
         var paymentReference = Trim(request.PaymentReference);
@@ -879,14 +928,15 @@ public class InvoiceService : IInvoiceService
                     e => e.TenantId == _tenantContext.TenantId && e.Id == snapEntityId, cancellationToken)
                 : null;
             var snapshotCustomer = await _dbContext.Customers.AsNoTracking()
-                .Where(c => c.TenantId == _tenantContext.TenantId && c.Id == invoice.CustomerId)
-                .Select(c => new { c.VatTreatment, c.VatNumber })
-                .FirstOrDefaultAsync(cancellationToken);
+                .FirstOrDefaultAsync(c => c.TenantId == _tenantContext.TenantId && c.Id == invoice.CustomerId, cancellationToken);
             if (snapshotCustomer is not null)
             {
-                ApplySnapshots(invoice, snapshotEntity, snapshotCustomer.VatTreatment, snapshotCustomer.VatNumber);
+                ApplySnapshots(invoice, snapshotEntity, snapshotCustomer);
             }
         }
+
+        // ACC-H1: a line without an explicit rate takes what the treatment dictates.
+        var defaultRate = DefaultVatRate(invoice);
 
         var requestedCategoryIds = request.Lines
             .Where(l => l.SalesCategoryId is not null).Select(l => l.SalesCategoryId!.Value).Distinct().ToList();
@@ -948,8 +998,9 @@ public class InvoiceService : IInvoiceService
                 existing.Description = line.Description.Trim();
                 existing.Quantity = line.Quantity;
                 existing.UnitPrice = line.UnitPrice;
-                existing.VatRatePercent = line.VatRatePercent;
+                existing.VatRatePercent = line.VatRatePercent ?? defaultRate;
                 existing.UnitCode = NormalizeUnitCode(line.UnitCode ?? existing.UnitCode);
+                existing.UnitLabel = Trim(line.UnitLabel) ?? existing.UnitLabel ?? UnEceUnitCodeMap.LabelFor(existing.UnitCode);
                 // The draft editor always round-trips the current value, so an explicit null IS
                 // a deliberate clear ("— Geen —") — silently keeping the old category would
                 // freeze and export a category the user removed.
@@ -966,9 +1017,10 @@ public class InvoiceService : IInvoiceService
                     Description = line.Description.Trim(),
                     Quantity = line.Quantity,
                     UnitPrice = line.UnitPrice,
-                    VatRatePercent = line.VatRatePercent,
+                    VatRatePercent = line.VatRatePercent ?? defaultRate,
                     SalesCategoryId = line.SalesCategoryId,
                     UnitCode = NormalizeUnitCode(line.UnitCode),
+                    UnitLabel = Trim(line.UnitLabel) ?? UnEceUnitCodeMap.LabelFor(NormalizeUnitCode(line.UnitCode)),
                 });
             }
         }
@@ -979,28 +1031,14 @@ public class InvoiceService : IInvoiceService
 
         if (periodChanged)
         {
-            var oldPeriod = new { invoice.InvoicePeriodYear, invoice.InvoicePeriodMonth, invoice.InvoiceNumber };
+            // ACC-H3: the period only decides which sequence the number is claimed from AT ISSUE;
+            // nothing is claimed or abandoned here.
+            var oldPeriod = new { invoice.InvoicePeriodYear, invoice.InvoicePeriodMonth };
             invoice.InvoicePeriodYear = newPeriodYear;
             invoice.InvoicePeriodMonth = newPeriodMonth;
-
-            var legalEntity = invoice.LegalEntityId is { } entityId
-                ? await _dbContext.LegalEntities.FirstOrDefaultAsync(
-                    e => e.TenantId == _tenantContext.TenantId && e.Id == entityId, cancellationToken)
-                : null;
-
-            if (legalEntity is not null && !invoice.NumberIsManual)
-            {
-                // The old number is abandoned, never reused: sequences only move forward.
-                await _numberService.ClaimAsync(legalEntity, newPeriodYear, newPeriodMonth,
-                    number => invoice.InvoiceNumber = number, cancellationToken);
-            }
-            else
-            {
-                await _dbContext.SaveChangesAsync(cancellationToken);
-            }
-
+            await _dbContext.SaveChangesAsync(cancellationToken);
             await _auditService.RecordAsync(EntityType, invoice.Id.ToString(), "PeriodChanged", oldPeriod,
-                new { invoice.InvoicePeriodYear, invoice.InvoicePeriodMonth, invoice.InvoiceNumber }, cancellationToken);
+                new { invoice.InvoicePeriodYear, invoice.InvoicePeriodMonth }, cancellationToken);
         }
         else
         {
@@ -1039,72 +1077,55 @@ public class InvoiceService : IInvoiceService
 
         if (target == InvoiceStatus.Sent)
         {
-            // H-06 (wave 1 fix A / A8): the editor cannot empty an invoice, but the customer- and
-            // entity-change flows delete an order's draft lines and deliberately leave the (now
-            // possibly empty) draft in place. Sending it would consume an issued invoice number on
-            // a €0,00 document that can afterwards never be cancelled, only credited.
-            if (!invoice.Lines.Any(l => !l.IsDeleted))
+            // ACC-H4: the final refresh from master data happens here, right before the freeze, so
+            // the issued document shows the customer and seller as they are at issue — never later.
+            if (invoice.Kind != InvoiceKind.CreditNote)
             {
-                return InvoiceOperationResult.InvalidState("Een factuur zonder lijnen kan niet verzonden worden.");
-            }
-
-            // Fail-safe: sending requires a valid, active, same-tenant issuing entity. Only
-            // a tenant with NO entities configured at all (pre-seed legacy) is exempt.
-            var entityValid = invoice.LegalEntityId is { } entityId
-                ? await _dbContext.LegalEntities.AnyAsync(
-                    e => e.TenantId == _tenantContext.TenantId && e.Id == entityId && e.IsActive, cancellationToken)
-                : !await _dbContext.LegalEntities.AnyAsync(
-                    e => e.TenantId == _tenantContext.TenantId, cancellationToken);
-            if (!entityValid)
-            {
-                return InvoiceOperationResult.InvalidState(
-                    "Deze factuur heeft geen geldige facturerende entiteit en kan niet worden verzonden.");
-            }
-
-            // Hard entity gate (also covers drafts that predate the create-time validation):
-            // an order-backed line whose order carries a different issuing entity blocks Send.
-            var lineOrderIds = invoice.Lines
-                .Where(l => l.TransportOrderId is not null)
-                .Select(l => l.TransportOrderId!.Value)
-                .Distinct()
-                .ToList();
-            if (lineOrderIds.Count > 0)
-            {
-                var mismatchedOrders = await _dbContext.TransportOrders
-                    .Where(o => o.TenantId == _tenantContext.TenantId && lineOrderIds.Contains(o.Id)
-                                && o.LegalEntityId != null && o.LegalEntityId != invoice.LegalEntityId)
-                    .Select(o => o.OrderNumber)
-                    .ToListAsync(cancellationToken);
-                if (mismatchedOrders.Count > 0)
+                var issueEntity = invoice.LegalEntityId is { } issueEntityId
+                    ? await _dbContext.LegalEntities.AsNoTracking().FirstOrDefaultAsync(
+                        e => e.TenantId == _tenantContext.TenantId && e.Id == issueEntityId, cancellationToken)
+                    : null;
+                var issueCustomer = await _dbContext.Customers.AsNoTracking()
+                    .FirstOrDefaultAsync(c => c.TenantId == _tenantContext.TenantId && c.Id == invoice.CustomerId, cancellationToken);
+                if (issueCustomer is not null)
                 {
-                    return InvoiceOperationResult.InvalidState(
-                        $"De facturerende entiteit wijkt af van die van opdracht(en) {string.Join(", ", mismatchedOrders)}. " +
-                        "Corrigeer de factuur of de opdrachten voor verzending.");
+                    ApplySnapshots(invoice, issueEntity, issueCustomer);
                 }
             }
 
-            var customerChecks = await _dbContext.Customers
-                .Where(c => c.TenantId == _tenantContext.TenantId && c.Id == invoice.CustomerId)
-                .Select(c => new { c.PurchaseOrderPolicy, c.VatTreatment, c.VatNumber })
-                .FirstOrDefaultAsync(cancellationToken);
-
-            // PO policy: a Required customer blocks sending without an effective PO number.
-            if (customerChecks?.PurchaseOrderPolicy == Partners.Entities.PurchaseOrderPolicy.Required
-                && string.IsNullOrWhiteSpace(invoice.PurchaseOrderNumber))
+            // ACC-B1/H1/H6/M4: ONE preflight decides; the same list is shown beforehand by the
+            // issue-preflight endpoint, so nothing here can surprise the accountant.
+            var issues = await InvoiceIssuePreflight.EvaluateAsync(_dbContext, _tenantContext.TenantId, invoice, cancellationToken);
+            if (issues.Count > 0)
             {
-                return InvoiceOperationResult.InvalidState(
-                    "Deze klant vereist een PO-nummer. Voeg een geldig PO-nummer toe voor verzending.");
+                return InvoiceOperationResult.InvalidState(InvoiceIssuePreflight.Summarize(issues));
+            }
+        }
+
+        if (target == InvoiceStatus.Paid)
+        {
+            // ACC-M6: a document that is fully credited has nothing left to pay.
+            var credited = await TenantScoped().AsNoTracking()
+                .Where(i => i.CreditedInvoiceId == invoice.Id && i.Status != InvoiceStatus.Cancelled)
+                .Select(i => i.Id)
+                .ToListAsync(cancellationToken);
+            if (credited.Count > 0)
+            {
+                var creditedTotal = await _dbContext.InvoiceLines.AsNoTracking()
+                    .Where(l => l.TenantId == _tenantContext.TenantId && credited.Contains(l.InvoiceId))
+                    .Select(l => new { l.Quantity, l.UnitPrice })
+                    .ToListAsync(cancellationToken);
+                var creditedAmount = creditedTotal.Sum(l => MoneyRounding.LineTotal(l.Quantity, l.UnitPrice));
+                var invoiceAmount = invoice.Lines.Where(l => !l.IsDeleted).Sum(l => MoneyRounding.LineTotal(l.Quantity, l.UnitPrice));
+                if (creditedAmount >= invoiceAmount)
+                {
+                    return InvoiceOperationResult.InvalidState(
+                        "Deze factuur is volledig gecrediteerd; er valt niets meer te betalen. Markeer ze niet als betaald.");
+                }
             }
 
-            // Coherent VAT model: treatments like reverse charge / intra-community require
-            // the customer's VAT number on the invoice.
-            if (customerChecks is not null
-                && Partners.Services.VatTreatmentCatalog.Resolve(customerChecks.VatTreatment).RequiresVatNumber
-                && string.IsNullOrWhiteSpace(invoice.CustomerVatNumberSnapshot ?? customerChecks.VatNumber))
-            {
-                return InvoiceOperationResult.InvalidState(
-                    "Deze btw-regeling vereist een BTW-nummer van de klant. Vul het BTW-nummer aan voor verzending.");
-            }
+            invoice.PaidAt = _timeProvider.GetUtcNow().UtcDateTime;
+            invoice.PaidByUserId = _currentUser?.CurrentUserId;
         }
 
         var before = new { invoice.Status };
@@ -1146,10 +1167,49 @@ public class InvoiceService : IInvoiceService
             await CancelQueuedPeppolTransmissionsAsync(invoice, cancellationToken);
         }
 
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        if (target == InvoiceStatus.Sent)
+        {
+            // ACC-H3/P4: the legal number is claimed HERE, atomically with the status flip and the
+            // frozen snapshots (ClaimAsync saves everything in one SaveChanges and retries on a
+            // concurrent claim). A manually reserved number (NumberIsManual) is kept as is.
+            invoice.IssuedAt = _timeProvider.GetUtcNow().UtcDateTime;
+            if (invoice.NumberIsManual && !string.IsNullOrWhiteSpace(invoice.InvoiceNumber))
+            {
+                await _dbContext.SaveChangesAsync(cancellationToken);
+            }
+            else
+            {
+                var issuingEntity = invoice.LegalEntityId is { } numberingEntityId
+                    ? await _dbContext.LegalEntities.FirstOrDefaultAsync(
+                        e => e.TenantId == _tenantContext.TenantId && e.Id == numberingEntityId, cancellationToken)
+                    : null;
+                if (issuingEntity is not null)
+                {
+                    await _numberService.ClaimAsync(issuingEntity, invoice.Kind, invoice.InvoicePeriodYear, invoice.InvoicePeriodMonth,
+                        number => invoice.InvoiceNumber = number, cancellationToken);
+                }
+                else
+                {
+                    // No legal entity configured (pre-seed edge case): legacy tenant counter.
+                    var legacySettings = await _dbContext.TenantSettings
+                        .FirstOrDefaultAsync(s => s.TenantId == _tenantContext.TenantId, cancellationToken);
+                    await TenantNumbering.SaveWithClaimedNumberAsync(
+                        _dbContext, legacySettings,
+                        () => invoice.InvoiceNumber = (invoice.Kind == InvoiceKind.CreditNote ? "CN" : string.Empty) + GenerateInvoiceNumber(legacySettings),
+                        cancellationToken);
+                }
+            }
 
-        await _auditService.RecordAsync(EntityType, invoice.Id.ToString(), "StatusChanged", before,
-            new { invoice.Status }, cancellationToken);
+            await _auditService.RecordAsync(EntityType, invoice.Id.ToString(), "Issued",
+                new { invoice.DraftReference }, new { invoice.InvoiceNumber, invoice.IssuedAt }, cancellationToken);
+        }
+        else
+        {
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
+
+        await _auditService.RecordAsync(EntityType, invoice.Id.ToString(), target == InvoiceStatus.Paid ? "Paid" : "StatusChanged", before,
+            target == InvoiceStatus.Paid ? new { invoice.Status, invoice.PaidAt, invoice.PaidByUserId } : new { invoice.Status, PaidAt = (DateTime?)null, PaidByUserId = (Guid?)null }, cancellationToken);
 
         if (target == InvoiceStatus.Sent)
         {
@@ -1204,7 +1264,7 @@ public class InvoiceService : IInvoiceService
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         await _auditService.RecordAsync(EntityType, invoice.Id.ToString(), "Deleted",
-            new { invoice.InvoiceNumber, invoice.Status }, null, cancellationToken);
+            new { invoice.DisplayNumber, invoice.Status }, null, cancellationToken);
 
         return InvoiceOperationResult.Success(await MapDetailAsync(invoice, cancellationToken));
     }
@@ -1220,7 +1280,8 @@ public class InvoiceService : IInvoiceService
 
         if (invoice.Status != InvoiceStatus.Draft)
         {
-            return InvoiceOperationResult.InvalidState("Alleen het nummer van een conceptfactuur kan worden gecorrigeerd.");
+            return InvoiceOperationResult.InvalidState(
+                "Een toegekend factuurnummer wordt nooit meer gewijzigd. Alleen op een concept kan vooraf een handmatig nummer worden vastgelegd; het wordt bij verzenden gebruikt.");
         }
 
         var newNumber = request.InvoiceNumber?.Trim();
@@ -1268,27 +1329,169 @@ public class InvoiceService : IInvoiceService
         var today = DateOnly.FromDateTime(_timeProvider.GetUtcNow().UtcDateTime);
         var previewYear = year ?? today.Year;
         var previewMonth = Math.Clamp(month ?? today.Month, 1, 12);
-        var number = await _numberService.PreviewAsync(legalEntity, previewYear, previewMonth, cancellationToken);
+        var number = await _numberService.PreviewAsync(legalEntity, InvoiceKind.Invoice, previewYear, previewMonth, cancellationToken);
         return new InvoiceNumberPreviewDto(number, legalEntity.Id, previewYear, previewMonth);
     }
 
-    /// <summary>Freezes seller + customer fiscal facts on the invoice (refreshed while Draft only).</summary>
-    private static void ApplySnapshots(Invoice invoice, LegalEntity? entity, VatTreatment treatment, string? customerVatNumber)
+    /// <summary>
+    /// Freezes seller + customer presentation and fiscal facts on the invoice (refreshed while
+    /// Draft, final refresh at issue, never afterwards — ACC-H4/P1/P5/P6). Structured address
+    /// fields feed the UBL party blocks; the joined address line feeds the PDF.
+    /// </summary>
+    private static void ApplySnapshots(Invoice invoice, LegalEntity? entity, Customer customer)
     {
         if (entity is not null)
         {
             invoice.SellerName = entity.TradingName ?? entity.LegalName;
+            invoice.SellerLegalName = entity.LegalName;
+            invoice.SellerCompanyNumber = entity.CompanyNumber;
             invoice.SellerVatNumber = entity.VatNumber;
             invoice.SellerIban = entity.Iban;
-            var streetPart = string.Join(' ', new[] { entity.Street, entity.HouseNumber }.Where(v => !string.IsNullOrWhiteSpace(v)));
-            var cityPart = string.Join(' ', new[] { entity.PostalCode, entity.City }.Where(v => !string.IsNullOrWhiteSpace(v)));
-            var line = string.Join(", ", new[] { streetPart, cityPart }.Where(v => !string.IsNullOrWhiteSpace(v)));
-            invoice.SellerAddressLine = string.IsNullOrWhiteSpace(line) ? null : line;
+            invoice.SellerBic = entity.Bic;
+            invoice.SellerStreet = entity.Street;
+            invoice.SellerHouseNumber = entity.HouseNumber;
+            invoice.SellerPostalCode = entity.PostalCode;
+            invoice.SellerCity = entity.City;
+            invoice.SellerCountryCode = Trim(entity.CountryCode)?.ToUpperInvariant();
+            invoice.SellerPeppolScheme = entity.PeppolScheme;
+            invoice.SellerPeppolId = entity.PeppolId;
+            invoice.SellerInvoiceFooter = entity.InvoiceFooter;
+            invoice.SellerAddressLine = AddressLine(entity.Street, entity.HouseNumber, entity.PostalCode, entity.City, null);
         }
 
-        invoice.CustomerVatTreatment = treatment.ToString();
-        invoice.CustomerVatNumberSnapshot = customerVatNumber;
-        invoice.VatLegalText = Partners.Services.VatTreatmentCatalog.Resolve(treatment).InvoiceLegalText;
+        invoice.CustomerVatTreatment = customer.VatTreatment.ToString();
+        invoice.CustomerVatNumberSnapshot = customer.VatNumber;
+        invoice.CustomerNameSnapshot = customer.Name;
+        invoice.CustomerLegalNameSnapshot = customer.LegalName;
+        invoice.CustomerCompanyNumberSnapshot = customer.CompanyNumber;
+        invoice.CustomerStreetSnapshot = customer.Street;
+        invoice.CustomerHouseNumberSnapshot = customer.HouseNumber;
+        invoice.CustomerPostalCodeSnapshot = customer.PostalCode;
+        invoice.CustomerCitySnapshot = customer.City;
+        invoice.CustomerCountryCodeSnapshot = Trim(customer.CountryCode)?.ToUpperInvariant();
+        invoice.CustomerPeppolSchemeSnapshot = customer.PeppolScheme;
+        invoice.CustomerPeppolIdSnapshot = customer.PeppolId;
+        invoice.CustomerBuyerReferenceSnapshot = customer.BuyerReference;
+        invoice.VatLegalText = Partners.Services.VatTreatmentCatalog.Resolve(customer.VatTreatment).InvoiceLegalText;
+    }
+
+    /// <summary>"Straat 12, 2000 Antwerpen, BE" — the display form of a structured address.</summary>
+    public static string? AddressLine(string? street, string? houseNumber, string? postalCode, string? city, string? countryCode)
+    {
+        var streetPart = string.Join(' ', new[] { street, houseNumber }.Where(v => !string.IsNullOrWhiteSpace(v)));
+        var cityPart = string.Join(' ', new[] { postalCode, city }.Where(v => !string.IsNullOrWhiteSpace(v)));
+        var line = string.Join(", ", new[] { streetPart, cityPart, countryCode }.Where(v => !string.IsNullOrWhiteSpace(v)));
+        return string.IsNullOrWhiteSpace(line) ? null : line;
+    }
+
+    /// <summary>ACC-H5: customer term → legal entity term → tenant default.</summary>
+    private static int EffectivePaymentTermDays(Customer customer, LegalEntity? entity, TenantSettings? settings) =>
+        customer.PaymentTermDays > 0 ? customer.PaymentTermDays
+        : entity is { PaymentTermDays: > 0 } ? entity.PaymentTermDays
+        : settings?.PaymentTermDays ?? 30;
+
+    /// <summary>The rate a manual line takes under this invoice's frozen treatment (ACC-H1).</summary>
+    private decimal DefaultVatRate(Invoice invoice)
+    {
+        var treatment = Enum.TryParse<VatTreatment>(invoice.CustomerVatTreatment, out var parsed) ? parsed : VatTreatment.DomesticVat;
+        var info = Partners.Services.VatTreatmentCatalog.Resolve(treatment);
+        if (info.DefaultRatePercent is { } fixedRate)
+        {
+            return fixedRate;
+        }
+
+        // Domestic: the rate the invoice already charges (its order/activity lines), else the tenant default.
+        var charged = invoice.Lines.Where(l => !l.IsDeleted && l.VatRatePercent > 0m).Select(l => l.VatRatePercent).FirstOrDefault();
+        return charged > 0m ? charged : _defaultTenantRate ?? 21m;
+    }
+
+    private decimal? _defaultTenantRate;
+
+    /// <summary>"2 Europallet TEST pallets; 1 Colli kabels" — what the customer reads on the transport line (ACC-M12).</summary>
+    private static string GoodsSummary(
+        string? goodsDescription, IReadOnlyList<Modules.Orders.Entities.CargoItem>? cargo, Func<string?, string?> unitLabel, InvoicePdfStrings strings)
+    {
+        if (cargo is { Count: > 0 })
+        {
+            var parts = cargo.Take(3).Select(c =>
+            {
+                var unit = unitLabel(c.QuantityUnitCode ?? c.QuantityUnit) ?? c.QuantityUnit;
+                var quantity = $"{c.ExpectedQuantity:0.##}{(string.IsNullOrWhiteSpace(unit) ? string.Empty : " " + unit)}";
+                return string.IsNullOrWhiteSpace(c.Description) ? quantity : $"{quantity} {c.Description.Trim()}";
+            });
+            var summary = string.Join("; ", parts) + (cargo.Count > 3 ? " …" : string.Empty);
+            return string.IsNullOrWhiteSpace(goodsDescription) ? summary : $"{goodsDescription.Trim()} — {summary}";
+        }
+
+        return string.IsNullOrWhiteSpace(goodsDescription) ? strings.TransportLabel : goodsDescription.Trim();
+    }
+
+    /// <summary>Readiness reason codes as the accountant reads them in Facturatiecontrole.</summary>
+    private static string InvoiceReadinessReasonLabels(string? reasons) =>
+        string.IsNullOrWhiteSpace(reasons)
+            ? "niet klaar voor facturatie"
+            : string.Join(", ", reasons.Split(';', StringSplitOptions.RemoveEmptyEntries).Select(r => r switch
+            {
+                "pricing.none" => "geen verkoopprijs",
+                "pricing.coverage.partial" => "niet alle onderdelen geprijsd",
+                "pricing.coverage.none" => "geen onderdeel geprijsd",
+                "pricing.stale" => "prijs is verouderd",
+                "pricing.zero_unconfirmed" => "€ 0 zonder bevestiging als gratis",
+                "pod.missing" => "afleverbewijs ontbreekt",
+                "po.missing" => "PO-nummer ontbreekt",
+                _ => r,
+            }));
+
+    public async Task<InvoiceIssuePreflightDto?> PreflightAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var invoice = await TenantScoped().AsNoTracking().Include(i => i.Lines).FirstOrDefaultAsync(i => i.Id == id, cancellationToken);
+        if (invoice is null)
+        {
+            return null;
+        }
+
+        if (invoice.Status != InvoiceStatus.Draft)
+        {
+            return new InvoiceIssuePreflightDto(false,
+                [new InvoiceIssueIssueDto("invoice.not_draft", "Alleen een concept kan verzonden worden.", [])]);
+        }
+
+        // Same refresh the issue itself performs, so the preview judges tomorrow's freeze, not yesterday's.
+        if (invoice.Kind != InvoiceKind.CreditNote)
+        {
+            var entity = invoice.LegalEntityId is { } entityId
+                ? await _dbContext.LegalEntities.AsNoTracking().FirstOrDefaultAsync(e => e.TenantId == _tenantContext.TenantId && e.Id == entityId, cancellationToken)
+                : null;
+            var customer = await _dbContext.Customers.AsNoTracking()
+                .FirstOrDefaultAsync(c => c.TenantId == _tenantContext.TenantId && c.Id == invoice.CustomerId, cancellationToken);
+            if (customer is not null)
+            {
+                ApplySnapshots(invoice, entity, customer);
+            }
+        }
+
+        var issues = await InvoiceIssuePreflight.EvaluateAsync(_dbContext, _tenantContext.TenantId, invoice, cancellationToken);
+        return InvoiceIssuePreflight.ToDto(issues);
+    }
+
+    public async Task<decimal?> DefaultVatRateForCustomerAsync(Guid customerId, CancellationToken cancellationToken)
+    {
+        var customer = await _dbContext.Customers.AsNoTracking()
+            .Where(c => c.TenantId == _tenantContext.TenantId && c.Id == customerId)
+            .Select(c => new { c.VatTreatment, c.DefaultVatRatePercent })
+            .FirstOrDefaultAsync(cancellationToken);
+        if (customer is null)
+        {
+            return null;
+        }
+
+        var settings = await _dbContext.TenantSettings.AsNoTracking()
+            .Where(s => s.TenantId == _tenantContext.TenantId)
+            .Select(s => (decimal?)s.DefaultVatRatePercent)
+            .FirstOrDefaultAsync(cancellationToken);
+        return Modules.Accounting.Services.InvoiceLineFiscalResolver
+            .Resolve(null, null, customer.VatTreatment, customer.DefaultVatRatePercent, settings ?? 21m)
+            .RatePercent;
     }
 
     private async Task<LegalEntity?> GetDefaultLegalEntityAsync(CancellationToken cancellationToken)
@@ -1583,8 +1786,20 @@ public class InvoiceService : IInvoiceService
         }
     }
 
-    public async Task<InvoiceOperationResult> CreateCreditNoteAsync(Guid id, CancellationToken cancellationToken)
+    public async Task<InvoiceOperationResult> CreateCreditNoteAsync(Guid id, CreateCreditNoteRequest request, CancellationToken cancellationToken)
     {
+        // ACC-M11: crediting is a deliberate, motivated act.
+        var reason = Trim(request.Reason);
+        if (reason is null)
+        {
+            return InvoiceOperationResult.Invalid("Geef een reden op voor de creditnota.");
+        }
+
+        if (reason.Length > 500)
+        {
+            return InvoiceOperationResult.Invalid("De reden mag maximaal 500 tekens lang zijn.");
+        }
+
         var original = await TenantScoped().Include(i => i.Lines).FirstOrDefaultAsync(i => i.Id == id, cancellationToken);
         if (original is null)
         {
@@ -1625,19 +1840,44 @@ public class InvoiceService : IInvoiceService
             InvoicePeriodYear = today.Year,
             InvoicePeriodMonth = today.Month,
             InvoiceDate = today,
-            DueDate = today.AddDays(settings?.PaymentTermDays ?? 30),
+            // A credit note has nothing to pay: no term, the due date equals the document date.
+            DueDate = today,
+            PaymentTermDays = 0,
             Currency = original.Currency,
             PurchaseOrderNumber = original.PurchaseOrderNumber,
             LanguageCode = original.LanguageCode,
-            Notes = $"Creditnota voor factuur {original.InvoiceNumber}.",
+            CreditReason = reason,
+            Notes = $"Creditnota voor factuur {original.InvoiceNumber}. Reden: {reason}",
             // Snapshot copy FROM the credited document, never from live master data: the credit
-            // note must mirror exactly what it credits.
+            // note must mirror exactly what it credits (ACC-H4: the whole party snapshot travels).
             SellerName = original.SellerName,
             SellerVatNumber = original.SellerVatNumber,
             SellerIban = original.SellerIban,
             SellerAddressLine = original.SellerAddressLine,
+            SellerLegalName = original.SellerLegalName,
+            SellerCompanyNumber = original.SellerCompanyNumber,
+            SellerStreet = original.SellerStreet,
+            SellerHouseNumber = original.SellerHouseNumber,
+            SellerPostalCode = original.SellerPostalCode,
+            SellerCity = original.SellerCity,
+            SellerCountryCode = original.SellerCountryCode,
+            SellerBic = original.SellerBic,
+            SellerPeppolScheme = original.SellerPeppolScheme,
+            SellerPeppolId = original.SellerPeppolId,
+            SellerInvoiceFooter = original.SellerInvoiceFooter,
             CustomerVatTreatment = original.CustomerVatTreatment,
             CustomerVatNumberSnapshot = original.CustomerVatNumberSnapshot,
+            CustomerNameSnapshot = original.CustomerNameSnapshot,
+            CustomerLegalNameSnapshot = original.CustomerLegalNameSnapshot,
+            CustomerCompanyNumberSnapshot = original.CustomerCompanyNumberSnapshot,
+            CustomerStreetSnapshot = original.CustomerStreetSnapshot,
+            CustomerHouseNumberSnapshot = original.CustomerHouseNumberSnapshot,
+            CustomerPostalCodeSnapshot = original.CustomerPostalCodeSnapshot,
+            CustomerCitySnapshot = original.CustomerCitySnapshot,
+            CustomerCountryCodeSnapshot = original.CustomerCountryCodeSnapshot,
+            CustomerPeppolSchemeSnapshot = original.CustomerPeppolSchemeSnapshot,
+            CustomerPeppolIdSnapshot = original.CustomerPeppolIdSnapshot,
+            CustomerBuyerReferenceSnapshot = original.CustomerBuyerReferenceSnapshot,
             VatLegalText = original.VatLegalText,
         };
 
@@ -1666,6 +1906,7 @@ public class InvoiceService : IInvoiceService
                 UnitPrice = line.UnitPrice,
                 VatRatePercent = line.VatRatePercent,
                 UnitCode = line.UnitCode,
+                UnitLabel = line.UnitLabel,
                 VatCategoryCode = line.VatCategoryCode
                     ?? Partners.Services.VatTreatmentCatalog.ResolveVatCategory(creditedTreatment, line.VatRatePercent).Code,
                 SalesCategoryId = line.SalesCategoryId,
@@ -1688,45 +1929,16 @@ public class InvoiceService : IInvoiceService
             });
         }
 
+        // ACC-H3: like an invoice, the credit note gets its number from its own series at issue.
+        creditNote.InvoiceNumber = null;
         _dbContext.Add(creditNote);
-
-        var legalEntity = original.LegalEntityId is { } entityId
-            ? await _dbContext.LegalEntities.FirstOrDefaultAsync(
-                e => e.TenantId == tenantId && e.Id == entityId, cancellationToken)
-            : null;
-        if (legalEntity is not null)
-        {
-            // Same monthly sequence as invoices, distinguished by the credit-note prefix
-            // (CreditNotePrefix, else InvoicePrefix + "CN"). A format without {PREFIX} gets it
-            // prepended so the prefix can never silently disappear.
-            var format = legalEntity.InvoiceNumberFormat.Contains("{PREFIX}", StringComparison.Ordinal)
-                ? legalEntity.InvoiceNumberFormat
-                : "{PREFIX}" + legalEntity.InvoiceNumberFormat;
-            var numberingEntity = new LegalEntity
-            {
-                Id = legalEntity.Id,
-                InvoiceNumberFormat = format,
-                InvoiceSequencePadding = legalEntity.InvoiceSequencePadding,
-                InvoicePrefix = legalEntity.CreditNotePrefix ?? $"{legalEntity.InvoicePrefix}CN",
-            };
-            await _numberService.ClaimAsync(numberingEntity, today.Year, today.Month,
-                number => creditNote.InvoiceNumber = number, cancellationToken);
-        }
-        else
-        {
-            var writableSettings = await _dbContext.TenantSettings
-                .FirstOrDefaultAsync(s => s.TenantId == tenantId, cancellationToken);
-            await TenantNumbering.SaveWithClaimedNumberAsync(
-                _dbContext, writableSettings,
-                () => creditNote.InvoiceNumber = $"CN{GenerateInvoiceNumber(writableSettings)}",
-                cancellationToken);
-        }
+        await _dbContext.SaveChangesAsync(cancellationToken);
 
         await _auditService.RecordAsync(EntityType, creditNote.Id.ToString(), "CreditNoteCreated",
             new { CreditedInvoiceNumber = original.InvoiceNumber },
-            new { creditNote.InvoiceNumber, LineCount = creditNote.Lines.Count }, cancellationToken);
+            new { creditNote.DraftReference, LineCount = creditNote.Lines.Count, Reason = reason }, cancellationToken);
         await _auditService.RecordAsync(EntityType, original.Id.ToString(), "Credited",
-            null, new { CreditNoteNumber = creditNote.InvoiceNumber, CreditNoteId = creditNote.Id }, cancellationToken);
+            null, new { CreditNoteReference = creditNote.DraftReference, CreditNoteId = creditNote.Id, Reason = reason }, cancellationToken);
 
         return InvoiceOperationResult.Success(await MapDetailAsync(creditNote, cancellationToken));
     }
@@ -1924,7 +2136,8 @@ public class InvoiceService : IInvoiceService
                 // Draft: what Send will freeze (same rule as Send and the draft PDF); frozen: as stored.
                 frozen ? l.Description : InvoiceLineDescriptions.CustomerFacing(l.Description, live, invoice.LanguageCode),
                 l.DossierActivityId,
-                l.DossierActivityId is { } aid ? dossierNumbersByActivity.GetValueOrDefault(aid) : null);
+                l.DossierActivityId is { } aid ? dossierNumbersByActivity.GetValueOrDefault(aid) : null,
+                l.UnitLabel ?? UnEceUnitCodeMap.LabelFor(l.UnitCode));
         }).ToList();
 
         var subtotal = Math.Round(lines.Sum(l => l.LineTotal), 2);
@@ -1945,17 +2158,36 @@ public class InvoiceService : IInvoiceService
             : null;
 
         // The relation the other way round: which credit notes were issued against this invoice.
-        var creditNotes = invoice.Kind == InvoiceKind.Invoice
+        var creditNoteRows = invoice.Kind == InvoiceKind.Invoice
             ? await _dbContext.Invoices.AsNoTracking()
                 .Where(i => i.TenantId == tenantId && i.CreditedInvoiceId == invoice.Id)
                 .OrderBy(i => i.InvoiceDate).ThenBy(i => i.InvoiceNumber)
-                .Select(i => new InvoiceReferenceDto(i.Id, i.InvoiceNumber, i.Status))
+                .Select(i => new { i.Id, i.InvoiceNumber, i.Status })
                 .ToListAsync(cancellationToken)
             : [];
+        var creditNotes = creditNoteRows
+            .Select(i => new InvoiceReferenceDto(i.Id, i.InvoiceNumber, i.Status, i.InvoiceNumber ?? "CONCEPT-" + i.Id.ToString("N")[..8].ToUpperInvariant()))
+            .ToList();
+
+        var paidByName = invoice.PaidByUserId is { } paidBy
+            ? await _dbContext.Users.AsNoTracking()
+                .Where(u => u.TenantId == tenantId && u.Id == paidBy)
+                .Select(u => u.FirstName + " " + u.LastName)
+                .FirstOrDefaultAsync(cancellationToken)
+            : null;
+
+        // Presentation: the frozen snapshot once issued; while Draft the snapshot is refreshed on
+        // every save, so it reads as the current master data (legacy drafts fall back to live).
+        var customerAddress = AddressLine(invoice.CustomerStreetSnapshot, invoice.CustomerHouseNumberSnapshot,
+            invoice.CustomerPostalCodeSnapshot, invoice.CustomerCitySnapshot, invoice.CustomerCountryCodeSnapshot);
+        var paymentTermsText = invoice.Kind == InvoiceKind.CreditNote
+            ? null
+            : InvoicePdfStrings.For(invoice.LanguageCode).PaymentTermsText(invoice.PaymentTermDays, invoice.DueDate);
 
         return new InvoiceDetailDto(
             invoice.Id, invoice.InvoiceNumber, invoice.InvoiceDate, invoice.DueDate,
-            invoice.CustomerId, customer?.Name ?? string.Empty, customer?.VatNumber,
+            invoice.CustomerId, invoice.CustomerNameSnapshot ?? customer?.Name ?? string.Empty,
+            invoice.CustomerVatNumberSnapshot ?? customer?.VatNumber,
             invoice.Status, invoice.Currency, invoice.Notes,
             lines, subtotal, vat, subtotal + vat, Transitions[invoice.Status],
             invoice.LegalEntityId, legalEntityName,
@@ -1964,7 +2196,21 @@ public class InvoiceService : IInvoiceService
             invoice.Kind, invoice.CreditedInvoiceId, creditedInvoiceNumber, invoice.PaymentReference,
             invoice.CustomerVatTreatment, invoice.LanguageCode,
             Partners.Services.VatTreatmentCatalog.Resolve(mappedTreatment).InvoiceLegalText,
-            creditNotes);
+            creditNotes,
+            invoice.Status == InvoiceStatus.Draft ? invoice.DraftReference : null,
+            invoice.DisplayNumber,
+            DefaultVatRate(invoice),
+            invoice.PaymentTermDays,
+            invoice.DueDateIsManual,
+            invoice.IssuedAt,
+            invoice.PaidAt,
+            paidByName,
+            invoice.CreditReason,
+            invoice.CustomerLegalNameSnapshot ?? invoice.CustomerNameSnapshot ?? customer?.Name,
+            customerAddress,
+            invoice.SellerLegalName ?? invoice.SellerName,
+            invoice.SellerCompanyNumber,
+            paymentTermsText);
     }
 
     private static string GenerateInvoiceNumber(TenantSettings? settings)

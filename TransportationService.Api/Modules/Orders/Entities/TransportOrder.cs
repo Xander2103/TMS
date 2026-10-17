@@ -182,6 +182,13 @@ public class TransportOrder : AuditableTenantEntity, IVersionedEntity
     /// </summary>
     public decimal? AgreedPrice { get; set; }
 
+    /// <summary>
+    /// ACC-M1: the transport is EXPLICITLY free — a commercial decision (€ 0, resolved), as
+    /// opposed to an order without a price (unresolved, "Nakijken"). Same semantics as
+    /// <c>DossierActivityPricing.FreeConfirmed</c>. Setting it stores AgreedPrice = 0.
+    /// </summary>
+    public bool FreeConfirmed { get; set; }
+
     /// <summary>Engine result at last save; null when nothing could be calculated.</summary>
     public decimal? CalculatedPrice { get; set; }
 

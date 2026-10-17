@@ -28,7 +28,21 @@ public enum InvoiceKind
 /// </summary>
 public class Invoice : AuditableTenantEntity
 {
-    public string InvoiceNumber { get; set; } = string.Empty;
+    /// <summary>
+    /// The LEGAL document number. Null while Draft: the number is claimed atomically at issue
+    /// (Draft → Sent) from the entity's sequence, so a deleted or cancelled draft never consumes
+    /// one and the series stays gap-free. A draft is referred to by <see cref="DraftReference"/>.
+    /// </summary>
+    public string? InvoiceNumber { get; set; }
+
+    /// <summary>Human reference of a draft ("CONCEPT-A3FCFE3E"), derived from the id — never stored.</summary>
+    public string DraftReference => "CONCEPT-" + Id.ToString("N")[..8].ToUpperInvariant();
+
+    /// <summary>The number once issued, otherwise the draft reference.</summary>
+    public string DisplayNumber => InvoiceNumber ?? DraftReference;
+
+    /// <summary>When the document was issued (number claimed, snapshot frozen).</summary>
+    public DateTime? IssuedAt { get; set; }
 
     public Guid CustomerId { get; set; }
 
@@ -57,13 +71,55 @@ public class Invoice : AuditableTenantEntity
     public string? PurchaseOrderNumber { get; set; }
 
     // Seller/customer snapshot: copied from the legal entity + customer at creation and
-    // refreshed while Draft. Once Sent, later master-data changes never mutate these.
+    // refreshed while Draft. Once Sent, later master-data changes never mutate these: the PDF
+    // and the UBL e-invoice render from these fields only (ACC-H4).
     public string? SellerName { get; set; }
     public string? SellerVatNumber { get; set; }
     public string? SellerIban { get; set; }
     public string? SellerAddressLine { get; set; }
+    public string? SellerLegalName { get; set; }
+    public string? SellerCompanyNumber { get; set; }
+    public string? SellerStreet { get; set; }
+    public string? SellerHouseNumber { get; set; }
+    public string? SellerPostalCode { get; set; }
+    public string? SellerCity { get; set; }
+    public string? SellerCountryCode { get; set; }
+    public string? SellerBic { get; set; }
+    public string? SellerPeppolScheme { get; set; }
+    public string? SellerPeppolId { get; set; }
+    public string? SellerInvoiceFooter { get; set; }
     public string? CustomerVatTreatment { get; set; }
     public string? CustomerVatNumberSnapshot { get; set; }
+    public string? CustomerNameSnapshot { get; set; }
+    public string? CustomerLegalNameSnapshot { get; set; }
+    public string? CustomerCompanyNumberSnapshot { get; set; }
+    public string? CustomerStreetSnapshot { get; set; }
+    public string? CustomerHouseNumberSnapshot { get; set; }
+    public string? CustomerPostalCodeSnapshot { get; set; }
+    public string? CustomerCitySnapshot { get; set; }
+    public string? CustomerCountryCodeSnapshot { get; set; }
+    public string? CustomerPeppolSchemeSnapshot { get; set; }
+    public string? CustomerPeppolIdSnapshot { get; set; }
+    public string? CustomerBuyerReferenceSnapshot { get; set; }
+
+    /// <summary>
+    /// Effective payment term (days) the due date was computed with: customer term → legal
+    /// entity term → tenant default (ACC-H5). Frozen with the rest at issue.
+    /// </summary>
+    public int PaymentTermDays { get; set; } = 30;
+
+    /// <summary>
+    /// True once a user saved a due date that differs from invoice date + term; a manual due
+    /// date is kept when the invoice date changes, an automatic one is recalculated.
+    /// </summary>
+    public bool DueDateIsManual { get; set; }
+
+    /// <summary>Manual payment registration (ACC-M6): when and by whom "Betaald" was set.</summary>
+    public DateTime? PaidAt { get; set; }
+    public Guid? PaidByUserId { get; set; }
+
+    /// <summary>Why a credit note was made (required at creation, audited).</summary>
+    public string? CreditReason { get; set; }
     /// <summary>Legal VAT text (e.g. "Btw verlegd ...") from the treatment catalog.</summary>
     public string? VatLegalText { get; set; }
 
@@ -103,6 +159,9 @@ public class Invoice : AuditableTenantEntity
 public class InvoiceSequence : AuditableTenantEntity
 {
     public Guid LegalEntityId { get; set; }
+
+    /// <summary>Invoices and credit notes number in their own series (credit-note prefix).</summary>
+    public InvoiceKind Kind { get; set; } = InvoiceKind.Invoice;
     public int Year { get; set; }
     public int Month { get; set; }
     public int NextValue { get; set; } = 1;
@@ -149,6 +208,9 @@ public class InvoiceLine : AuditableTenantEntity
 
     /// <summary>UN/ECE Recommendation 20 unit code for the quantity ("C62" = piece, default).</summary>
     public string UnitCode { get; set; } = "C62";
+
+    /// <summary>Human unit as the customer reads it ("uur", "Europallet"); the structured code above is for e-invoicing.</summary>
+    public string? UnitLabel { get; set; }
 
     /// <summary>
     /// UNCL5305 VAT category (S/Z/AE/K/G/E) frozen at Send from the customer's VAT treatment —
