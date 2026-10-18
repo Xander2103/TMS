@@ -154,7 +154,8 @@ public static class TransportDocumentRenderer
         return stream.ToArray();
     }
 
-    public const string ConceptBanner = "CONCEPT / VOORBEELD — geen officieel document, geen documentnummer. Officieel: uitgeven via Documenten.";
+    public const string ConceptBanner = "CONCEPT / VOORBEELD — geen officieel document";
+    public const string ConceptBannerDetail = "Ongenummerd voorbeeld uit de huidige ordergegevens. Het officiële document: uitgeven via Documenten.";
 
     private static readonly XFont ConceptStamp = new("Arial", 96, XFontStyleEx.Bold);
 
@@ -164,10 +165,11 @@ public static class TransportDocumentRenderer
         var width = page.Width.Point;
         var height = page.Height.Point;
 
-        // Banner across the very top (above the document's own header).
-        gfx.DrawRectangle(new XSolidBrush(XColor.FromArgb(235, 255, 236, 179)), 0, 0, width, 22);
-        gfx.DrawString(ConceptBanner, Heading, new XSolidBrush(XColor.FromArgb(255, 153, 27, 27)),
-            new XRect(0, 0, width, 22), XStringFormats.Center);
+        // Banner across the very top (above the document's own header), two lines that fit A4.
+        var bannerInk = new XSolidBrush(XColor.FromArgb(255, 153, 27, 27));
+        gfx.DrawRectangle(new XSolidBrush(XColor.FromArgb(235, 255, 236, 179)), 0, 0, width, 28);
+        gfx.DrawString(ConceptBanner, Heading, bannerInk, new XRect(0, 2, width, 14), XStringFormats.Center);
+        gfx.DrawString(ConceptBannerDetail, Small, bannerInk, new XRect(0, 15, width, 11), XStringFormats.Center);
 
         // Diagonal stamp through the middle of the page.
         var state = gfx.Save();
