@@ -161,6 +161,11 @@ public class IssuedTransportDocumentService : IIssuedTransportDocumentService
         var now = _timeProvider.GetUtcNow().UtcDateTime;
         var documentId = Guid.NewGuid();
 
+        // MD-B1: the content is frozen NOW, in the same save as the number claim — every later
+        // download renders exactly this, whatever happens to customer, carrier, vehicle or unit.
+        var content = await _documents.BuildCurrentSnapshotAsync(orderId, kind.ToString(), cancellationToken)
+            ?? throw new DomainValidationException("orderId", "De opdracht kon niet worden geladen om het document uit te geven.");
+
         // M9: one ACTIVE document per order and kind — another one only as an explicit replacement.
         var replaced = await ClaimReplacementAsync(orderId, kind, documentId, request, now, cancellationToken);
         if (replaced is { Winner: { } replayed })
@@ -181,6 +186,9 @@ public class IssuedTransportDocumentService : IIssuedTransportDocumentService
             IssuedAt = now,
             // The issuer IS the creator (the interceptor stamps the same user inside a request).
             CreatedByUserId = _currentUser?.CurrentUserId,
+            SnapshotJson = FrozenTransportDocumentJson.Serialize(owner?.DossierNumber, content),
+            SnapshotVersion = FrozenTransportDocumentJson.CurrentVersion,
+            SnapshotFrozenAt = now,
         };
 
         try
@@ -380,13 +388,34 @@ public class IssuedTransportDocumentService : IIssuedTransportDocumentService
             return null;
         }
 
-        // The dossier number AS ISSUED; an order that sat in no dossier then shows its current one.
-        var dossierNumber = document.DossierId is { } dossierId
-            ? await _dbContext.TransportDossiers.AsNoTracking()
-                .Where(d => d.TenantId == tenantId && d.Id == dossierId)
-                .Select(d => d.DossierNumber)
-                .FirstOrDefaultAsync(cancellationToken)
-            : (await OwningDossierResolver.ResolveAsync(_dbContext, tenantId, document.TransportOrderId, cancellationToken))?.DossierNumber;
+        if (document.SnapshotJson is null)
+        {
+            // A pre-MD-B1 document the startup backfill has not reached (e.g. issued by an older
+            // instance during a rolling deploy): frozen once now, never again — the conditional
+            // update keeps a concurrent first freeze from being overwritten.
+            if (!await IssuedTransportDocumentSnapshotBackfill.FreezeAsync(
+                    _dbContext, document, _timeProvider.GetUtcNow().UtcDateTime, cancellationToken))
+            {
+                return null;
+            }
+
+            await _dbContext.IssuedTransportDocuments
+                .Where(d => d.TenantId == tenantId && d.Id == id && d.SnapshotJson == null)
+                .ExecuteUpdateAsync(set => set
+                    .SetProperty(d => d.SnapshotJson, document.SnapshotJson)
+                    .SetProperty(d => d.SnapshotVersion, document.SnapshotVersion)
+                    .SetProperty(d => d.SnapshotFrozenAt, document.SnapshotFrozenAt)
+                    .SetProperty(d => d.SnapshotIsBackfilled, true), cancellationToken);
+            document = await _dbContext.IssuedTransportDocuments.AsNoTracking()
+                .FirstAsync(d => d.TenantId == tenantId && d.Id == id, cancellationToken);
+        }
+
+        // MD-B1: an issued document renders its FROZEN content only — never the live order,
+        // customer, legal entity, vehicle, driver or unit master.
+        if (!FrozenTransportDocumentJson.TryDeserialize(document.SnapshotJson, out var frozen))
+        {
+            return null;
+        }
 
         // M9: a replaced document still renders (it is history), marked with its successor.
         var replacedByNumber = document.ReplacedByDocumentId is { } successorId
@@ -396,13 +425,11 @@ public class IssuedTransportDocumentService : IIssuedTransportDocumentService
                 .FirstOrDefaultAsync(cancellationToken)
             : null;
 
-        var rendered = await _documents.RenderIssuedAsync(
-            document.TransportOrderId, document.Kind.ToString(),
-            new TransportDocumentReference(document.DocumentNumber, dossierNumber, document.ExternalNumber, replacedByNumber),
-            cancellationToken);
-        return rendered is null
-            ? null
-            : (rendered.Value.Content, $"{document.DocumentNumber}.pdf", rendered.Value.Snapshot);
+        var snapshot = frozen.Document with
+        {
+            Reference = new TransportDocumentReference(document.DocumentNumber, frozen.DossierNumber, document.ExternalNumber, replacedByNumber),
+        };
+        return (TransportDocumentRenderer.RenderIssued(snapshot, document.Id, document.IssuedAt), $"{document.DocumentNumber}.pdf", snapshot);
     }
 
     /// <summary>

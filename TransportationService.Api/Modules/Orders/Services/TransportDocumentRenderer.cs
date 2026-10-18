@@ -134,6 +134,83 @@ public static class TransportDocumentRenderer
         return stream.ToArray();
     }
 
+    /// <summary>
+    /// MD-B1: an ISSUED document renders byte-identically on every download — the PDF metadata
+    /// (creation/modification date, trailer document id) is pinned to the issue instead of "now"
+    /// and a fresh GUID, so the same frozen snapshot always yields the same file.
+    /// </summary>
+    public static byte[] RenderIssued(TransportDocumentSnapshot snapshot, Guid documentId, DateTime issuedAtUtc)
+    {
+        using var document = new PdfDocument();
+        AppendPage(document, snapshot);
+        var stamp = DateTime.SpecifyKind(issuedAtUtc, DateTimeKind.Utc);
+        document.Info.CreationDate = stamp;
+        document.Info.ModificationDate = stamp;
+        var id = documentId.ToString("N").ToUpperInvariant();
+        document.Internals.FirstDocumentID = id;
+        document.Internals.SecondDocumentID = id;
+        using var stream = new MemoryStream();
+        document.Save(stream);
+        return PinVolatileMetadata(stream.ToArray(), documentId);
+    }
+
+    private static readonly System.Text.RegularExpressions.Regex XmpUuid = new(
+        "(?<=uuid:)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
+        System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+
+    /// <summary>
+    /// PDFsharp writes two volatile values besides the dates: random font-subset tags and the XMP
+    /// DocumentID/InstanceID uuids. Both are replaced by same-length values derived from the issued
+    /// document, so every byte offset in the cross-reference table stays valid.
+    /// </summary>
+    private static byte[] PinVolatileMetadata(byte[] pdf, Guid documentId)
+    {
+        var text = System.Text.Encoding.Latin1.GetString(PinFontSubsetTags(pdf));
+        var bytes = documentId.ToByteArray();
+        var index = 0;
+        text = XmpUuid.Replace(text, _ =>
+        {
+            var derived = (byte[])bytes.Clone();
+            derived[15] ^= (byte)index++;
+            return new Guid(derived).ToString("D");
+        });
+        return System.Text.Encoding.Latin1.GetBytes(text);
+    }
+
+    private static readonly System.Text.RegularExpressions.Regex SubsetTag = new(
+        // Only in /BaseFont and /FontName entries — never inside binary (compressed) stream data.
+        "(?<=/(?:BaseFont|FontName)\\s*/)[A-Z]{6}(?=\\+)", System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+
+    /// <summary>
+    /// PDFsharp names every embedded font subset with a RANDOM six-letter tag ("/QWERTY+Arial").
+    /// The tags are renumbered in order of appearance (AAAAAA, AAAAAB, …) — same length, so every
+    /// byte offset in the cross-reference table stays valid. Latin-1 maps bytes 1:1.
+    /// </summary>
+    private static byte[] PinFontSubsetTags(byte[] pdf)
+    {
+        var text = System.Text.Encoding.Latin1.GetString(pdf);
+        var tags = new Dictionary<string, string>(StringComparer.Ordinal);
+        var pinned = SubsetTag.Replace(text, match =>
+        {
+            if (!tags.TryGetValue(match.Value, out var tag))
+            {
+                var n = tags.Count;
+                var chars = new char[6];
+                for (var i = 5; i >= 0; i--)
+                {
+                    chars[i] = (char)('A' + n % 26);
+                    n /= 26;
+                }
+
+                tag = new string(chars);
+                tags[match.Value] = tag;
+            }
+
+            return tag;
+        });
+        return System.Text.Encoding.Latin1.GetBytes(pinned);
+    }
+
     /// <summary>One merged PDF, one page per document — the batch print run.</summary>
     public static byte[] RenderBatch(IReadOnlyList<TransportDocumentSnapshot> snapshots)
     {

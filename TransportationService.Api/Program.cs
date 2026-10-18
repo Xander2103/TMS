@@ -748,6 +748,11 @@ using (var referenceScope = app.Services.CreateScope())
     await TransportationService.Api.Modules.Locations.Services.AddressMasterBackfillSeeder.SyncAsync(
         referenceDbContext);
 
+    // MD-B1: issued CMRs / delivery notes / work orders from before the immutable snapshot are
+    // frozen ONCE from the current data (documented legacy policy); idempotent afterwards.
+    await TransportationService.Api.Modules.Orders.Services.IssuedTransportDocumentSnapshotBackfill.SyncAsync(
+        referenceDbContext, app.Logger);
+
     // Release flow (every environment): the permission catalogue and the versioned role
     // templates follow the code — new permission codes and role upgrades reach existing
     // databases at startup, idempotently, without a manual step. Catalogue BEFORE roles.

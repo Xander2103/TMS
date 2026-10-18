@@ -8695,6 +8695,18 @@ namespace TransportationService.Api.Migrations
                     b.Property<Guid>("RequestId")
                         .HasColumnType("uuid");
 
+                    b.Property<DateTime?>("SnapshotFrozenAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("SnapshotIsBackfilled")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("SnapshotJson")
+                        .HasColumnType("text");
+
+                    b.Property<int?>("SnapshotVersion")
+                        .HasColumnType("integer");
+
                     b.Property<Guid>("TenantId")
                         .HasColumnType("uuid");
 

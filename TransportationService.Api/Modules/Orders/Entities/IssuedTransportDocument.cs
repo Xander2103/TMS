@@ -48,6 +48,29 @@ public class IssuedTransportDocument : AuditableTenantEntity
     public Guid RequestId { get; set; }
 
     public DateTime IssuedAt { get; set; }
+
+    /// <summary>
+    /// MD-B1 (master-data remediation 2026-10-18): the document EXACTLY as issued — the structured
+    /// <c>TransportDocumentSnapshot</c> (parties, carrier, vehicle/trailer/driver, goods lines with
+    /// their unit LABEL, stops, references) plus the dossier number, serialized at issue in the same
+    /// transaction as the number claim. An issued document renders from this and nothing else:
+    /// later customer, legal-entity, vehicle or unit changes never reach it. Written once, never
+    /// updated. Null only for pre-remediation rows until the one-time backfill froze them.
+    /// </summary>
+    public string? SnapshotJson { get; set; }
+
+    /// <summary>Shape version of <see cref="SnapshotJson"/> (1 = first frozen shape).</summary>
+    public int? SnapshotVersion { get; set; }
+
+    /// <summary>When the snapshot was frozen (= IssuedAt for documents issued after MD-B1).</summary>
+    public DateTime? SnapshotFrozenAt { get; set; }
+
+    /// <summary>
+    /// True when the snapshot was NOT taken at issue but reconstructed once from the master data
+    /// as it stood when the remediation was deployed (documents issued before MD-B1 stored no
+    /// content). From then on it is just as immutable; the flag keeps that limitation visible.
+    /// </summary>
+    public bool SnapshotIsBackfilled { get; set; }
 }
 
 /// <summary>

@@ -32,12 +32,11 @@ public interface ITransportDocumentService
     Task<(byte[] Content, string FileName)?> RenderAsync(Guid orderId, string kind, CancellationToken cancellationToken);
 
     /// <summary>
-    /// D6: the same document through the same renderer, with the reference block of an ISSUED
-    /// document (own number, dossier, external number). The snapshot is returned next to the bytes
-    /// so callers and tests can see exactly what was printed. Null = unknown order.
+    /// MD-B1: the document model of an order AS IT STANDS NOW, for <paramref name="kind"/> (Cmr |
+    /// DeliveryNote | WorkOrder) — what an issue freezes. Issued documents never call this to
+    /// render: they render their frozen snapshot. Null = unknown order.
     /// </summary>
-    Task<(byte[] Content, TransportDocumentSnapshot Snapshot)?> RenderIssuedAsync(
-        Guid orderId, string kind, TransportDocumentReference reference, CancellationToken cancellationToken);
+    Task<TransportDocumentSnapshot?> BuildCurrentSnapshotAsync(Guid orderId, string kind, CancellationToken cancellationToken);
 
     /// <summary>Merged batch for every order on the trip (route order); null = unknown trip.
     /// Orders whose document strategy says "customer document" or "no document" are excluded.</summary>
@@ -92,18 +91,9 @@ public class TransportDocumentService : ITransportDocumentService
         return (TransportDocumentRenderer.Render(snapshot), $"{prefix}-{snapshot.OrderNumber}.pdf");
     }
 
-    public async Task<(byte[] Content, TransportDocumentSnapshot Snapshot)?> RenderIssuedAsync(
-        Guid orderId, string kind, TransportDocumentReference reference, CancellationToken cancellationToken)
-    {
-        var snapshot = await BuildSnapshotAsync(orderId, NormalizeKind(kind), cancellationToken);
-        if (snapshot is null)
-        {
-            return null;
-        }
-
-        snapshot = snapshot with { Reference = reference };
-        return (TransportDocumentRenderer.Render(snapshot), snapshot);
-    }
+    public Task<TransportDocumentSnapshot?> BuildCurrentSnapshotAsync(
+        Guid orderId, string kind, CancellationToken cancellationToken) =>
+        BuildSnapshotAsync(orderId, NormalizeKind(kind), cancellationToken);
 
     public async Task<(byte[] Content, string FileName)?> RenderTripBatchAsync(
         Guid tripId, string kind, CancellationToken cancellationToken)
@@ -136,7 +126,7 @@ public class TransportDocumentService : ITransportDocumentService
                 continue;
             }
 
-            if (await BuildSnapshotAsync(tripOrder.TransportOrderId, normalized, cancellationToken) is { } snapshot)
+            if (await IssuedOrCurrentSnapshotAsync(tripOrder.TransportOrderId, normalized, cancellationToken) is { } snapshot)
             {
                 snapshots.Add(snapshot);
             }
@@ -230,7 +220,7 @@ public class TransportDocumentService : ITransportDocumentService
                 continue;
             }
 
-            if (await BuildSnapshotAsync(order.Id, normalized, cancellationToken) is { } snapshot)
+            if (await IssuedOrCurrentSnapshotAsync(order.Id, normalized, cancellationToken) is { } snapshot)
             {
                 snapshots.Add(snapshot);
             }
@@ -335,6 +325,37 @@ public class TransportDocumentService : ITransportDocumentService
         return DocumentStrategyResolver.Resolve(
             order.DocumentPreference, customerStrategy, crossBorder, order.AdrRequired, activityTypeId, rules,
             onSiteWork: CraneJobRules.IsOnSiteWork(order.CraneJobKind));
+    }
+
+    /// <summary>
+    /// MD-B1: a batch print run reprints an order's ACTIVE issued document of the kind exactly as
+    /// issued (frozen snapshot, with its number); only an order without one gets a fresh,
+    /// number-less document from the current data.
+    /// </summary>
+    private async Task<TransportDocumentSnapshot?> IssuedOrCurrentSnapshotAsync(
+        Guid orderId, string normalizedKind, CancellationToken cancellationToken)
+    {
+        var tenantId = _tenantContext.TenantId;
+        var issuedKind = normalizedKind switch
+        {
+            "Cmr" => IssuedTransportDocumentKind.Cmr,
+            DocumentStrategyResolver.KindWorkOrder => IssuedTransportDocumentKind.WorkOrder,
+            _ => IssuedTransportDocumentKind.DeliveryNote,
+        };
+        var issued = await _dbContext.IssuedTransportDocuments.AsNoTracking()
+            .Where(d => d.TenantId == tenantId && d.TransportOrderId == orderId && d.Kind == issuedKind
+                        && d.ReplacedByDocumentId == null && d.SnapshotJson != null)
+            .OrderByDescending(d => d.IssuedAt)
+            .FirstOrDefaultAsync(cancellationToken);
+        if (issued is not null && FrozenTransportDocumentJson.TryDeserialize(issued.SnapshotJson, out var frozen))
+        {
+            return frozen.Document with
+            {
+                Reference = new TransportDocumentReference(issued.DocumentNumber, frozen.DossierNumber, issued.ExternalNumber),
+            };
+        }
+
+        return await BuildSnapshotAsync(orderId, normalizedKind, cancellationToken);
     }
 
     private static string NormalizeKind(string kind) =>
