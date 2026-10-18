@@ -65,6 +65,19 @@ public static class DefaultRoleSeeder
             changed = true;
         }
 
+        // Phase 1b — correct a superseded (misleading) template description, only while untouched.
+        foreach (var role in roles.Where(r => r.TemplateCode is not null && r.Description is not null))
+        {
+            if (DefaultRoleDefinitions.SupersededDescriptions.TryGetValue(role.TemplateCode!, out var superseded)
+                && superseded.Contains(role.Description!)
+                && DefaultRoleDefinitions.All.FirstOrDefault(t => t.Code == role.TemplateCode) is { } current)
+            {
+                role.Description = current.Description;
+                role.UpdatedAt = now;
+                changed = true;
+            }
+        }
+
         // Phase 2 — create missing template roles (full current permission set at creation).
         foreach (var tenantId in tenantIds)
         {

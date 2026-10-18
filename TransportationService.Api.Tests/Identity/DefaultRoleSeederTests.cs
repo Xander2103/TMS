@@ -1114,4 +1114,33 @@ public class DefaultRoleSeederTests
         Assert.Equal(40, (await db.Context.RoleTemplateStates.AsNoTracking().SingleAsync(s => s.TenantId == tenantId)).AppliedVersion);
         Assert.Equal(1, await db.Context.RoleTemplateStates.CountAsync(s => s.TenantId == tenantId));
     }
+
+    [Fact]
+    public async Task ManagementDescription_SupersededReadOnlyText_IsCorrected_ATenantEditIsKept_NoVersionBump()
+    {
+        // Security M4: "Leest alles, …" described Management as read-only; it is not.
+        var (db, tenantId) = await SeedTenantWithCatalogAsync();
+        using var _ = db;
+        var otherTenant = Guid.NewGuid();
+        await AddTenantAsync(db, otherTenant, "beta");
+        await DefaultRoleSeeder.SyncAsync(db.Context);
+        var superseded = DefaultRoleDefinitions.SupersededDescriptions["management"].Single();
+        await db.Context.Roles.Where(r => r.TemplateCode == "management" && r.TenantId == tenantId)
+            .ExecuteUpdateAsync(x => x.SetProperty(r => r.Description, superseded));
+        await db.Context.Roles.Where(r => r.TemplateCode == "management" && r.TenantId == otherTenant)
+            .ExecuteUpdateAsync(x => x.SetProperty(r => r.Description, "Eigen omschrijving van de klant"));
+        var grantsBefore = await db.Context.RolePermissions.CountAsync();
+        db.Context.ChangeTracker.Clear(); // a startup sync runs on a fresh context
+
+        await DefaultRoleSeeder.SyncAsync(db.Context);
+
+        db.Context.ChangeTracker.Clear();
+        var corrected = await db.Context.Roles.SingleAsync(r => r.TemplateCode == "management" && r.TenantId == tenantId);
+        Assert.Equal(DefaultRoleDefinitions.All.Single(t => t.Code == "management").Description, corrected.Description);
+        Assert.DoesNotContain("Leest alles,", corrected.Description);
+        Assert.Equal("Eigen omschrijving van de klant",
+            (await db.Context.Roles.SingleAsync(r => r.TemplateCode == "management" && r.TenantId == otherTenant)).Description);
+        Assert.Equal(grantsBefore, await db.Context.RolePermissions.CountAsync());
+        Assert.Equal(40, DefaultRoleUpgrades.CurrentVersion);
+    }
 }

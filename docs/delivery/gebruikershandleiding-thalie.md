@@ -393,10 +393,11 @@ Het systeem levert deze standaardrollen mee:
 | **Administrator** (systeemrol, altijd alle rechten) | Beheerder |
 | **Planner** | Plant opdrachten en ritten; beheert klanten en adressen |
 | **Dispatcher** | Stuurt de dagelijkse uitvoering aan |
-| **Management** | Leest alles, keurt afwezigheden goed, mag planningsbeperkingen overschrijven, keurt doorrekeningen goed |
+| **Management** | Leest alles en beslist mee: keurt afwezigheden en doorrekeningen goed, overschrijft planningsbeperkingen en prijzen, beheert tarieven, dossiers, vlootfinanciën en Peppol-verzending (geen alleen-lezen rol) |
 | **Boekhouding** | Facturen, factuurgegevens van klanten, boekhoudexport, doorrekeningen goedkeuren |
 | **HR** | Medewerkers, personeelsplanning, afwezigheden, kwalificaties |
 | **Chauffeur** | Eigen ritten, eigen afwezigheden |
+| **Wagenparkbeheerder** | Voertuigen, opleggers, keuringen, onderhoud, schade, brandstof, vlootfinanciën |
 | **Magazijn** | Laden en scannen, ritten vrijgeven, afwijkingen melden |
 | **Klantportaal** (+ add-ons *Documenten*, *Facturen*, *Gebruikersbeheer*) | Klantgebruikers |
 

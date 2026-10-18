@@ -37,6 +37,21 @@ public static class DefaultRoleDefinitions
         PermissionCodes.LeaveBalancesViewOwn,
     ];
 
+    private const string ManagementDescription =
+        "Leest alles en beslist mee: keurt afwezigheden en doorrekeningen goed, overschrijft planningsbeperkingen en prijzen, "
+        + "beheert tarieven, dossiers, vlootfinanciën en Peppol-verzending.";
+
+    /// <summary>
+    /// Earlier seeded descriptions that were wrong, per template code. The seeder replaces a stamped
+    /// role's description only while it still equals one of these exact texts, so a description a
+    /// tenant edited is never touched (no role-template version: no permission changes).
+    /// </summary>
+    public static IReadOnlyDictionary<string, IReadOnlyList<string>> SupersededDescriptions { get; } =
+        new Dictionary<string, IReadOnlyList<string>>
+        {
+            ["management"] = ["Leest alles, keurt afwezigheden goed en mag planningsbeperkingen overschrijven."],
+        };
+
     public static IReadOnlyList<RoleTemplate> All { get; } =
     [
         new("planner", "Planner",
@@ -107,8 +122,10 @@ public static class DefaultRoleDefinitions
                 PermissionCodes.AttendanceSelf,
             ]),
 
+        // Security M4: NOT read-only. The accepted policy (v13/v14/v21/v24/v27/v28) gives Management
+        // commercial and financial decisions; the description says so instead of "leest alles".
         new("management", "Management",
-            "Leest alles, keurt afwezigheden goed en mag planningsbeperkingen overschrijven.",
+            ManagementDescription,
             [
                 .. CommonViewPermissions,
                 PermissionCodes.OrdersView, PermissionCodes.OrdersExport,

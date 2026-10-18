@@ -2,7 +2,7 @@
 
 Volledige catalogus: `Modules/Identity/PermissionCodes.cs` (autoritatief, geseed door
 `PermissionCatalogSeeder`). Role-template-defaults: `Data/DefaultRoleDefinitions.cs` +
-versiestappen in `Data/DefaultRoleUpgrades.cs` (huidige versie: **30**). Guards:
+versiestappen in `Data/DefaultRoleUpgrades.cs` (huidige versie: **40**; zie ook `docs/security/security-final-remediation-20261018.md`). Guards:
 `Phase8SupplyChainTests` (elke cataloguscode wordt ergens afgedwongen),
 `Phase10SystematicSecurityTests` (elk endpoint bewust geclassificeerd),
 `DefaultRoleSeederTests.Version23_…`/`Version24_…`/`Version25_…` (positieve én negatieve
