@@ -15,7 +15,9 @@ export interface PortalModuleDef {
  */
 export const PORTAL_MODULES: PortalModuleDef[] = [
   { to: '/my-trips', icon: '🚚', label: 'portalHome.modules.myTrips.label', description: 'portalHome.modules.myTrips.description', permissions: ['driver_workflow.view'] },
-  { to: '/my-trips', icon: '📦', label: 'portalHome.modules.scanning.label', description: 'portalHome.modules.scanning.description', permissions: ['scanning.execute'] },
+  // Scanning runs inside trip execution (/my-trips, guarded by driver_workflow.view), so the tile
+  // follows that guard; warehouse profiles scan from their own Magazijn tile (/warehouse).
+  { to: '/my-trips', icon: '📦', label: 'portalHome.modules.scanning.label', description: 'portalHome.modules.scanning.description', permissions: ['driver_workflow.view'] },
   { to: '/exceptions', icon: '⚠️', label: 'portalHome.modules.exceptions.label', description: 'portalHome.modules.exceptions.description', permissions: ['exceptions.view', 'exceptions.create'] },
   { to: '/warehouse', icon: '🏭', label: 'portalHome.modules.warehouse.label', description: 'portalHome.modules.warehouse.description', permissions: ['warehouse.view'] },
   { to: '/tasks?mine=1', icon: '✅', label: 'portalHome.modules.myTasks.label', description: 'portalHome.modules.myTasks.description', permissions: ['tasks.view_own'] },
