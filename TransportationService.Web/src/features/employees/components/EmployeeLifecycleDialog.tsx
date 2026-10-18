@@ -18,8 +18,8 @@ interface EmployeeLifecycleDialogProps {
 
 /**
  * Offboarding / re-onboarding confirmation. Deactivating an employee is a cascade on the server
- * (linked login blocked + sessions revoked, driver no longer plannable, fixed vehicle slots
- * released; history kept), so the dialog spells those consequences out. A refusal — e.g. the
+ * (linked login blocked + sessions revoked, driver no longer plannable, fixed/current vehicle
+ * assignment and fixed trailer released; history kept), so the dialog spells those consequences out. A refusal — e.g. the
  * linked account is the last active administrator — stays in the dialog with the server's own
  * (Dutch) message instead of a generic toast. Reactivation deliberately re-enables neither the
  * login nor the driver; the dialog says so up front.

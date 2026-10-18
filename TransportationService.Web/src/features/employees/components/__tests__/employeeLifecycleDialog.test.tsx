@@ -44,7 +44,13 @@ describe('EmployeeLifecycleDialog', () => {
     expect(warning).toHaveTextContent('Deze medewerker heeft nog 1 bedrijfsmiddel in bezit.')
     expect(warning).toHaveTextContent('BM-0001 · TEST WH Golden Scanner')
     expect(warning).toHaveTextContent('serienummer SER-GOLD-001')
+    expect(warning).toHaveTextContent(/uitgegeven 18\/10\/2026/)
+    expect(warning).toHaveTextContent(/terug verwacht 01\/11\/2026/)
+    expect(warning).toHaveTextContent('de items worden niet automatisch teruggenomen')
     expect(outstanding).toHaveBeenCalledWith('emp-1')
+    // Integration (Core + Warehouse): the warning sits next to Core's final offboarding consequences.
+    expect(screen.getByText(/gekoppelde gebruikersaccount wordt geblokkeerd/)).toBeInTheDocument()
+    expect(screen.getByText(/de vaste\/huidige voertuigtoewijzing en de vaste aanhangwagen vervallen/)).toBeInTheDocument()
 
     await userEvent.click(screen.getByRole('button', { name: 'Inactief zetten' }))
     await waitFor(() => expect(onDone).toHaveBeenCalledTimes(1))
