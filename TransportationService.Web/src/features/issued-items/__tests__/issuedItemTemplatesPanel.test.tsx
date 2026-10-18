@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
+import { ApiError } from '../../../api/apiClient'
 import { IssuedItemTemplatesPanel } from '../components/IssuedItemTemplatesPanel'
 import type { IssuedItemTemplate } from '../issuedItemsApi'
 
@@ -75,12 +76,14 @@ function makeTemplate(overrides: Partial<IssuedItemTemplate>): IssuedItemTemplat
 }
 
 const templates = vi.hoisted(() => ({ value: [] as IssuedItemTemplate[] }))
+const deleteTemplate = vi.hoisted(() => vi.fn())
 
 vi.mock('../issuedItemsApi', async () => {
   const actual = await vi.importActual<typeof import('../issuedItemsApi')>('../issuedItemsApi')
   return {
     ...actual,
     listIssuedItemTemplates: () => Promise.resolve(templates.value),
+    deleteIssuedItemTemplate: (...args: unknown[]) => deleteTemplate(...args),
   }
 })
 
@@ -227,5 +230,35 @@ describe('IssuedItemTemplatesPanel — the Bedrijfsmiddelen overview', () => {
 
     expect(toast.showError).toHaveBeenCalledWith(expect.stringContaining('M'))
     expect(screen.getByTestId('location')).toHaveTextContent('/issued-items/templates/t-saved?tab=varianten')
+  })
+
+  it('explains a refused delete (409 record_referenced) with the server message and the counts', async () => {
+    const message =
+      'Dit artikel kan niet worden verwijderd omdat er historische of operationele gegevens aan gekoppeld zijn: 4 uitgiftes. Zet het artikel inactief.'
+    deleteTemplate.mockRejectedValue(
+      new ApiError(message, 409, {
+        code: 'common.record_referenced',
+        message,
+        references: [{ key: 'issuedItems', count: 4, label: '4 uitgiftes' }],
+        canDeactivate: true,
+      }),
+    )
+    templates.value = [makeTemplate({ id: 't-4', name: 'Fluohesje' })]
+    toast.showError.mockClear()
+    renderPanel()
+    const row = (await screen.findByRole('link', { name: 'Fluohesje' })).closest('tr')!
+
+    await userEvent.click(within(row).getByRole('button', { name: 'Acties Fluohesje' }))
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Verwijderen' }))
+    await userEvent.click(within(await screen.findByRole('dialog', { name: 'Bedrijfsmiddel verwijderen' })).getByRole('button', { name: 'Verwijderen' }))
+
+    const dialog = await screen.findByRole('dialog', { name: 'Bedrijfsmiddel kan niet worden verwijderd' })
+    expect(within(dialog).getByText(message)).toBeInTheDocument()
+    expect(within(dialog).getByRole('listitem')).toHaveTextContent('4 uitgiftes')
+    expect(toast.showError).not.toHaveBeenCalled()
+
+    // The way out: open the item's edit form (where "Actief" lives).
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Artikel bewerken' }))
+    expect(screen.getByTestId('form-stub')).toHaveAttribute('data-editing', 't-4')
   })
 })

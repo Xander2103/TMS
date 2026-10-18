@@ -69,6 +69,8 @@ export interface SalesCategory extends SalesCategoryWave2Fields, SalesCodeFields
   ledgerAccountName: string | null
   isActive: boolean
   sortOrder: number
+  /** MD-M2: optimistic-concurrency token; echoed as `expectedVersion`. Absent on older payloads. */
+  version?: number
 }
 
 export interface SalesCategoryInput extends SalesCodeFields {
@@ -81,6 +83,8 @@ export interface SalesCategoryInput extends SalesCodeFields {
   vatCategoryOverride?: string | null
   isActive: boolean
   sortOrder: number
+  /** MD-M2: the version the dialog was opened on; a stale one yields 409 concurrency_conflict. */
+  expectedVersion?: number
 }
 
 export interface AccountingHealth {
@@ -102,6 +106,16 @@ export const createSalesCategory = (input: SalesCategoryInput): Promise<SalesCat
   apiClient.postJson('/api/accounting/sales-categories', input)
 export const updateSalesCategory = (id: string, input: SalesCategoryInput): Promise<SalesCategory> =>
   apiClient.putJson(`/api/accounting/sales-categories/${id}`, input)
+/**
+ * MD-H1: the inline default-ledger control on a category row. Changes ONLY the default ledger
+ * account — never route it through the full PUT, which would rewrite every other field.
+ */
+export const setSalesCategoryLedgerAccount = (
+  id: string,
+  ledgerAccountId: string | null,
+  expectedVersion?: number,
+): Promise<SalesCategory> =>
+  apiClient.putJson(`/api/accounting/sales-categories/${id}/ledger-account`, { ledgerAccountId, expectedVersion })
 
 export const getAccountingHealth = (): Promise<AccountingHealth> => apiClient.getJson('/api/accounting/health')
 

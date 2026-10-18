@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react'
+import { isConcurrencyConflict } from '../../../api/conflicts'
 import { describeApiError, type FieldErrors } from '../../../api/problemDetails'
 import { useLocale } from '../../../i18n/localeContext'
 import {
@@ -18,6 +19,13 @@ interface UseCustomerMutationsResult {
   error: string | null
   /** Per-field backend validation messages of the last failed action. */
   fieldErrors: FieldErrors
+  /**
+   * True when the last failure was a stale save (HTTP 409 `common.concurrency_conflict`):
+   * someone else changed the customer since the form was loaded. Never retried silently.
+   */
+  isConflict: boolean
+  /** Forgets the last failure (e.g. after the stale form was reloaded). */
+  clearError: () => void
   create: (input: CustomerInput) => Promise<CustomerDetail | null>
   update: (id: string, input: UpdateCustomerInput) => Promise<CustomerDetail | null>
   remove: (id: string) => Promise<boolean>
@@ -34,12 +42,14 @@ export function useCustomerMutations(): UseCustomerMutationsResult {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
+  const [isConflict, setIsConflict] = useState(false)
   const isMounted = useRef(true)
 
   async function run<T>(action: () => Promise<T>, fallback: T): Promise<T> {
     setIsSubmitting(true)
     setError(null)
     setFieldErrors({})
+    setIsConflict(false)
     try {
       return await action()
     } catch (err) {
@@ -47,6 +57,7 @@ export function useCustomerMutations(): UseCustomerMutationsResult {
         const described = describeApiError(err, t('customers.common.actionFailed'))
         setError(described.message)
         setFieldErrors(described.fieldErrors)
+        setIsConflict(isConcurrencyConflict(err))
       }
       return fallback
     } finally {
@@ -58,6 +69,12 @@ export function useCustomerMutations(): UseCustomerMutationsResult {
     isSubmitting,
     error,
     fieldErrors,
+    isConflict,
+    clearError: () => {
+      setError(null)
+      setFieldErrors({})
+      setIsConflict(false)
+    },
     create: (input) => run(() => createCustomer(input), null),
     update: (id, input) => run(() => updateCustomer(id, input), null),
     remove: (id) => run(async () => (await deleteCustomer(id), true), false),

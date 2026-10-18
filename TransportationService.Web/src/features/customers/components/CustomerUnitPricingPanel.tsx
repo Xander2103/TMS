@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { formatCurrency } from '../../../utils/numbers'
+import { todayLocalIsoDate } from '../../../utils/dates'
 import { Link } from 'react-router-dom'
 import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
@@ -154,7 +155,8 @@ function adjustmentLabel(t: TranslateFn, percent: number | null, fixed: number |
   return parts.length > 0 ? parts.join(', ') : t('customers.pricing.noAdjustment')
 }
 
-const today = () => new Date().toISOString().slice(0, 10)
+/** Tenant-local today (yyyy-MM-dd) — never the UTC date. */
+const today = () => todayLocalIsoDate()
 
 /** Swaps the item at `from` with its neighbour at `to`; out-of-range is a no-op (edge buttons). */
 function moveItem<T>(list: T[], from: number, to: number): T[] {

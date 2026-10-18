@@ -2,11 +2,13 @@ import { apiClient } from '../../../api/apiClient'
 import { apiBaseUrl } from '../../../config/env'
 import { getAccessToken } from '../../auth/authStorage'
 import type { PagedResult } from '../../../api/types'
+import type { ReferenceCount } from '../../../api/conflicts'
 import type {
   ChangeCustomerNumberInput,
   CustomerContact,
   CustomerContactInput,
   CustomerDetail,
+  CustomerIdentityMatch,
   CustomerInput,
   CustomerListItem,
   CustomerPeppolVerifyResult,
@@ -72,6 +74,24 @@ export function updateCustomer(id: string, input: UpdateCustomerInput): Promise<
 
 export function deleteCustomer(id: string): Promise<void> {
   return apiClient.deleteRequest(`/api/customers/${id}`)
+}
+
+/** What still references the customer (orders, invoices, …); empty = it can be deleted. */
+export function getCustomerReferences(id: string): Promise<ReferenceCount[]> {
+  return apiClient.getJson<ReferenceCount[]>(`/api/customers/${id}/references`)
+}
+
+/** Other customers already using this VAT / company number (advisory: saving stays allowed). */
+export function getCustomerIdentityMatches(params: {
+  vatNumber: string | null
+  companyNumber: string | null
+  excludeId?: string
+}): Promise<CustomerIdentityMatch[]> {
+  const query = new URLSearchParams()
+  if (params.vatNumber) query.set('vatNumber', params.vatNumber)
+  if (params.companyNumber) query.set('companyNumber', params.companyNumber)
+  if (params.excludeId) query.set('excludeId', params.excludeId)
+  return apiClient.getJson<CustomerIdentityMatch[]>(`/api/customers/identity-matches?${query.toString()}`)
 }
 
 /** Manual customer-number change (customers.override_number); reason is audited. */

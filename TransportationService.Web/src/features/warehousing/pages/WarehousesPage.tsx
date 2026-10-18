@@ -1,6 +1,8 @@
 import { PageHeader } from '../../../components/layout/PageHeader'
 import { useEffect, useState, type FormEvent } from 'react'
 import { localizeApiError } from '../../../api/problemDetails'
+import { getReferenceConflict, type ReferenceConflict } from '../../../api/conflicts'
+import { ReferenceConflictDialog } from '../../../components/ui/ReferenceConflictDialog'
 import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
@@ -41,6 +43,7 @@ export function WarehousesPage() {
   const [editing, setEditing] = useState<{ id: string | null; input: WarehouseInput } | null>(null)
   const [dockEditing, setDockEditing] = useState<{ warehouseId: string; dockId: string | null; input: DockInput } | null>(null)
   const [dockDelete, setDockDelete] = useState<{ warehouseId: string; dock: Dock } | null>(null)
+  const [dockDeleteConflict, setDockDeleteConflict] = useState<ReferenceConflict | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -110,7 +113,15 @@ export function WarehousesPage() {
       setDockDelete(null)
       setReloadToken((token) => token + 1)
     } catch (error) {
-      showError(localizeApiError(t, error, t('warehousing.warehouses.deleteFailed')))
+      // Appointments still reference the dock (409 record_referenced): the server's explanation
+      // plus the counts replace the generic failure toast.
+      const conflict = getReferenceConflict(error)
+      if (conflict) {
+        setDockDelete(null)
+        setDockDeleteConflict(conflict)
+      } else {
+        showError(localizeApiError(t, error, t('warehousing.warehouses.deleteFailed')))
+      }
     } finally {
       setBusy(false)
     }
@@ -298,6 +309,14 @@ export function WarehousesPage() {
           busy={busy}
           onConfirm={() => void confirmDockDelete()}
           onCancel={() => setDockDelete(null)}
+        />
+      )}
+
+      {dockDeleteConflict && (
+        <ReferenceConflictDialog
+          title={t('warehousing.docks.deleteRefusedTitle')}
+          conflict={dockDeleteConflict}
+          onClose={() => setDockDeleteConflict(null)}
         />
       )}
     </div>

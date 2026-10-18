@@ -55,6 +55,7 @@
     "active": "Actif",
     "deleteTitle": "Supprimer le quai",
     "deleteMessage": "Le quai {code} sera supprimé. Cette action est irréversible.",
+    "deleteRefusedTitle": "Le quai ne peut pas être supprimé",
     "deleted": "Quai supprimé."
   },
   "locations": {

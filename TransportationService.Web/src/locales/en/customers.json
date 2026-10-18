@@ -78,7 +78,7 @@
     "percentField": "Percentage (%)",
     "percentPlaceholder": "e.g. 3.5",
     "percentRange": "The surcharge percentage must be between 0 and 100.",
-    "poAdded": "PO number added.",
+    "poAdded": "PO number added. Completed orders were re-checked for invoicing readiness.",
     "poEditTitle": "Edit PO number",
     "poEmpty": "No PO numbers registered yet.",
     "poHistoryTitle": "PO history",
@@ -94,7 +94,7 @@
     "poRemoved": "PO number removed.",
     "poSaveFailed": "The PO number could not be saved.",
     "poTitle": "PO policy",
-    "poUpdated": "PO number updated.",
+    "poUpdated": "PO number updated. Completed orders were re-checked for invoicing readiness.",
     "policyField": "Policy",
     "policyHint": "With 'Required', an invoice without a PO number cannot be sent.",
     "presentationField": "Presentation",
@@ -301,7 +301,13 @@
     "unblocked": "Customer unblocked.",
     "updated": "Customer updated.",
     "tabOverview": "Overview",
-    "tabDocuments": "Documents per day"
+    "tabDocuments": "Documents per day",
+    "deleteFailed": "Delete failed.",
+    "deleteBlockedTitle": "Customer cannot be deleted",
+    "deleteBlockedIntro": "This customer cannot be deleted because historical data is linked to it:",
+    "deleteBlockedHint": "Use \"Deactivate\" to make the customer unavailable for new orders.",
+    "deleteBlockedInactiveHint": "The customer is already deactivated and no longer available for new orders.",
+    "paymentTermFallback": "Payment term of the invoicing entity"
   },
   "dieselBasis": {
     "InvoiceSubtotal": "On invoice subtotal",
@@ -465,7 +471,12 @@
     "vatRateLockedHint": "This rate is fixed for this VAT regime.",
     "vatRateRange": "Enter a rate between 0 and 100.",
     "vatTreatment": "VAT treatment",
-    "website": "Website"
+    "website": "Website",
+    "paymentTermHint": "Empty = payment term of the invoicing entity",
+    "paymentTermInvalid": "Enter a payment term of 0 or more whole days, or leave the field empty.",
+    "duplicateVat": "Note: this VAT number is already used by {name} ({number}).",
+    "duplicateCompanyNumber": "Note: this company number is already used by {name} ({number}).",
+    "reloadStale": "Reload data"
   },
   "history": {
     "actorLine": "{action} by {name}",

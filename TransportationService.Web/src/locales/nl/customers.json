@@ -78,7 +78,7 @@
     "percentField": "Percentage (%)",
     "percentPlaceholder": "bv. 3,5",
     "percentRange": "Het toeslagpercentage moet tussen 0 en 100 liggen.",
-    "poAdded": "PO-nummer toegevoegd.",
+    "poAdded": "PO-nummer toegevoegd. Afgewerkte opdrachten zijn opnieuw gecontroleerd op factureerbaarheid.",
     "poEditTitle": "PO-nummer bewerken",
     "poEmpty": "Nog geen PO-nummers geregistreerd.",
     "poHistoryTitle": "PO-historiek",
@@ -94,7 +94,7 @@
     "poRemoved": "PO-nummer verwijderd.",
     "poSaveFailed": "Het PO-nummer kon niet worden opgeslagen.",
     "poTitle": "PO-beleid",
-    "poUpdated": "PO-nummer bijgewerkt.",
+    "poUpdated": "PO-nummer bijgewerkt. Afgewerkte opdrachten zijn opnieuw gecontroleerd op factureerbaarheid.",
     "policyField": "Beleid",
     "policyHint": "Bij 'Verplicht' kan een factuur zonder PO-nummer niet worden verzonden.",
     "presentationField": "Weergave",
@@ -301,7 +301,13 @@
     "unblocked": "Klant gedeblokkeerd.",
     "updated": "Klant bijgewerkt.",
     "tabOverview": "Overzicht",
-    "tabDocuments": "Documenten per dag"
+    "tabDocuments": "Documenten per dag",
+    "deleteFailed": "Verwijderen is mislukt.",
+    "deleteBlockedTitle": "Klant kan niet worden verwijderd",
+    "deleteBlockedIntro": "Deze klant kan niet worden verwijderd omdat er historische gegevens aan gekoppeld zijn:",
+    "deleteBlockedHint": "Gebruik \"Deactiveren\" om de klant niet langer beschikbaar te maken voor nieuwe opdrachten.",
+    "deleteBlockedInactiveHint": "De klant is al gedeactiveerd en is niet langer beschikbaar voor nieuwe opdrachten.",
+    "paymentTermFallback": "Betaaltermijn van de facturerende entiteit"
   },
   "dieselBasis": {
     "InvoiceSubtotal": "Op factuursubtotaal",
@@ -465,7 +471,12 @@
     "vatRateLockedHint": "Dit tarief ligt vast voor deze btw-regeling.",
     "vatRateRange": "Geef een tarief tussen 0 en 100 op.",
     "vatTreatment": "BTW-behandeling",
-    "website": "Website"
+    "website": "Website",
+    "paymentTermHint": "Leeg = betaaltermijn van de facturerende entiteit",
+    "paymentTermInvalid": "Geef een betaaltermijn van 0 of meer hele dagen in, of laat het veld leeg.",
+    "duplicateVat": "Let op: dit btw-nummer wordt al gebruikt door {name} ({number}).",
+    "duplicateCompanyNumber": "Let op: dit ondernemingsnummer wordt al gebruikt door {name} ({number}).",
+    "reloadStale": "Gegevens herladen"
   },
   "history": {
     "actorLine": "{action} door {name}",

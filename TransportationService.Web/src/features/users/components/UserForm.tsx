@@ -3,6 +3,7 @@ import { SearchableSelect, type SearchableSelectSearchFn } from '../../../compon
 import { getEmployee, searchEmployees } from '../../employees/api/employeesApi'
 import { getCustomer, searchCustomers } from '../../customers/api/customersApi'
 import { Button } from '../../../components/ui/Button'
+import { getFieldError } from '../../../api/problemDetails'
 import { useLocale } from '../../../i18n/localeContext'
 import { useUserMutations } from '../hooks/useUserMutations'
 import {
@@ -50,7 +51,8 @@ export function UserForm({ user, onSaved, secondaryAction }: UserFormProps) {
   const isEditMode = Boolean(user)
   const [values, setValues] = useState<UserFormValues>(() => valuesFromUser(user))
   const [errors, setErrors] = useState<UserFormErrors>({})
-  const { isSubmitting, error, create, update } = useUserMutations()
+  const { isSubmitting, error, fieldErrors, create, update } = useUserMutations()
+  const [emailEditedSinceSubmit, setEmailEditedSinceSubmit] = useState(false)
   // Labels for the ids the user already carries; later picks carry their own label.
   const [employeeLabel, setEmployeeLabel] = useState<string | undefined>(undefined)
   const [customerLabel, setCustomerLabel] = useState<string | undefined>(undefined)
@@ -93,6 +95,7 @@ export function UserForm({ user, onSaved, secondaryAction }: UserFormProps) {
 
     setValues((previous) => ({ ...previous, [field]: value }))
     setErrors((previous) => ({ ...previous, [field]: undefined }))
+    if (field === 'email') setEmailEditedSinceSubmit(true)
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -108,6 +111,7 @@ export function UserForm({ user, onSaved, secondaryAction }: UserFormProps) {
       return
     }
 
+    setEmailEditedSinceSubmit(false)
     const saved = isEditMode && user
       ? await update(user.id, toUpdateUserInput(values))
       : await create(toCreateUserInput(values, []))
@@ -116,6 +120,11 @@ export function UserForm({ user, onSaved, secondaryAction }: UserFormProps) {
       onSaved(saved)
     }
   }
+
+  // The server's duplicate-e-mail message ("Er bestaat al een gebruiker met dit e-mailadres …")
+  // belongs under the e-mail field; it clears as soon as the address is edited.
+  const serverEmailMessage = getFieldError(fieldErrors, 'email')
+  const emailError = errors.email ?? (emailEditedSinceSubmit ? undefined : serverEmailMessage)
 
   return (
     <form className="user-form" onSubmit={handleSubmit} noValidate>
@@ -131,12 +140,12 @@ export function UserForm({ user, onSaved, secondaryAction }: UserFormProps) {
           value={values.email}
           onChange={handleChange}
           disabled={isEditMode}
-          aria-invalid={Boolean(errors.email)}
-          aria-describedby={errors.email ? 'email-error' : undefined}
+          aria-invalid={Boolean(emailError)}
+          aria-describedby={emailError ? 'email-error' : undefined}
         />
-        {errors.email && (
+        {emailError && (
           <p id="email-error" className="field-error">
-            {errors.email}
+            {emailError}
           </p>
         )}
       </div>
@@ -214,7 +223,7 @@ export function UserForm({ user, onSaved, secondaryAction }: UserFormProps) {
         <p className="field-hint">{t('usersRoles.users.form.customerHint')}</p>
       </div>
 
-      {error && (
+      {error && error !== serverEmailMessage && (
         <p className="form-error" role="alert">
           {error}
         </p>

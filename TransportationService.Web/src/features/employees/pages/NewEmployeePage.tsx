@@ -9,6 +9,7 @@ import { SearchableSelect } from '../../../components/ui/SearchableSelect'
 import type { SectionDef } from '../../../components/ui/SectionedForm'
 import { useToast } from '../../../components/ui/toastContext'
 import { useLocale } from '../../../i18n/localeContext'
+import { todayLocalIsoDate } from '../../../utils/dates'
 import { useAuth } from '../../auth/authContextValue'
 import { useLookupOptions } from '../../master-data/hooks/useLookupOptions'
 import { EmployeeForm } from '../components/EmployeeForm'
@@ -146,7 +147,7 @@ function NewEmployeePageContent({ onSavedAndNew }: { onSavedAndNew: () => void }
         key: crypto.randomUUID(),
         qualificationTypeId: null,
         documentNumber: '',
-        obtainedDate: new Date().toISOString().slice(0, 10),
+        obtainedDate: todayLocalIsoDate(),
         expiryDate: '',
       },
     ])

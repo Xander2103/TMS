@@ -48,7 +48,8 @@
   "toasts": {
     "added": "Item toegevoegd.",
     "updated": "Item bijgewerkt.",
-    "deleted": "Item verwijderd."
+    "deleted": "Item verwijderd.",
+    "deactivated": "Item gedeactiveerd."
   },
   "deleteDialog": {
     "title": "{singular} verwijderen",
@@ -93,9 +94,15 @@
     "optionsLoadFailed": "Keuzelijst kon niet worden geladen."
   },
   "units": {
-    "subtitle": "Globale eenheden met code, categorie, afmetingen en fysieke standaardwaarden. Klant-specifieke voorkeuren en tarieven staan op de klantenfiche."
+    "subtitle": "Globale eenheden met code, categorie, afmetingen en fysieke standaardwaarden. Klant-specifieke voorkeuren en tarieven staan op de klantenfiche.",
+    "retainedInactive": "{name} (inactief)",
+    "retainedUnavailable": "{name} (niet meer selecteerbaar)"
   },
   "services": {
     "subtitle": "Globale diensten en toeslagen met berekeningswijze en standaardprijs. Klant-specifieke overrides beheer je op de klantenfiche."
+  },
+  "deleteBlocked": {
+    "title": "{singular} kan niet worden verwijderd",
+    "deactivate": "Deactiveren"
   }
 }

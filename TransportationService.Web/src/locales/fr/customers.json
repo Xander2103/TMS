@@ -78,7 +78,7 @@
     "percentField": "Pourcentage (%)",
     "percentPlaceholder": "p. ex. 3,5",
     "percentRange": "Le pourcentage du supplément doit être compris entre 0 et 100.",
-    "poAdded": "Numéro de commande ajouté.",
+    "poAdded": "Numéro de commande ajouté. Les commandes terminées ont été revérifiées pour la facturation.",
     "poEditTitle": "Modifier le numéro de commande",
     "poEmpty": "Aucun numéro de commande enregistré.",
     "poHistoryTitle": "Historique des commandes",
@@ -94,7 +94,7 @@
     "poRemoved": "Numéro de commande supprimé.",
     "poSaveFailed": "Le numéro de commande n'a pas pu être enregistré.",
     "poTitle": "Politique de bon de commande",
-    "poUpdated": "Numéro de commande mis à jour.",
+    "poUpdated": "Numéro de commande mis à jour. Les commandes terminées ont été revérifiées pour la facturation.",
     "policyField": "Politique",
     "policyHint": "Avec « Obligatoire », une facture sans numéro de commande ne peut pas être envoyée.",
     "presentationField": "Affichage",
@@ -301,7 +301,13 @@
     "unblocked": "Client débloqué.",
     "updated": "Client mis à jour.",
     "tabOverview": "Aperçu",
-    "tabDocuments": "Documents par jour"
+    "tabDocuments": "Documents par jour",
+    "deleteFailed": "La suppression a échoué.",
+    "deleteBlockedTitle": "Le client ne peut pas être supprimé",
+    "deleteBlockedIntro": "Ce client ne peut pas être supprimé car des données historiques y sont liées :",
+    "deleteBlockedHint": "Utilisez « Désactiver » pour que le client ne soit plus disponible pour de nouvelles commandes.",
+    "deleteBlockedInactiveHint": "Le client est déjà désactivé et n’est plus disponible pour de nouvelles commandes.",
+    "paymentTermFallback": "Délai de paiement de l’entité de facturation"
   },
   "dieselBasis": {
     "InvoiceSubtotal": "Sur le sous-total de la facture",
@@ -465,7 +471,12 @@
     "vatRateLockedHint": "Ce taux est fixe pour ce régime de TVA.",
     "vatRateRange": "Indiquez un taux entre 0 et 100.",
     "vatTreatment": "Traitement TVA",
-    "website": "Site web"
+    "website": "Site web",
+    "paymentTermHint": "Vide = délai de paiement de l’entité de facturation",
+    "paymentTermInvalid": "Indiquez un délai de paiement de 0 jour entier ou plus, ou laissez le champ vide.",
+    "duplicateVat": "Attention : ce numéro de TVA est déjà utilisé par {name} ({number}).",
+    "duplicateCompanyNumber": "Attention : ce numéro d’entreprise est déjà utilisé par {name} ({number}).",
+    "reloadStale": "Recharger les données"
   },
   "history": {
     "actorLine": "{action} par {name}",

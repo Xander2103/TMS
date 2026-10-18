@@ -10,7 +10,7 @@ import { useLocale } from '../../../i18n/localeContext'
 import { LocationQuickCreateDialog } from '../../locations/components/LocationQuickCreateDialog'
 import type { LocationOption } from '../../locations/types'
 import { useAuth } from '../../auth/authContextValue'
-import { useLookupOptions } from '../../master-data/hooks/useLookupOptions'
+import { useUnitTypes } from '../../master-data/hooks/useUnitTypes'
 import type { TransportOrderDetail, TransportOrderInput } from '../types'
 import { GeneralSection } from './sections/GeneralSection'
 import { RouteSection } from './sections/RouteSection'
@@ -147,7 +147,9 @@ export function TransportOrderForm({ mode, order, onSubmit, onCancel, submitLabe
   const [saving, setSaving] = useState(false)
 
   // --- Pricing state (spec 7): configured units, service options, live preview, override ---
-  const { options: unitOptions } = useLookupOptions('/api/unit-types')
+  // Pickers offer the order-entry units; a code the order already carries stays selectable as
+  // "<naam> (inactief)" so editing an old order never silently drops it. Display uses all labels.
+  const units = useUnitTypes()
   const [selectedServiceOptionIds, setSelectedServiceOptionIds] = useState<string[]>(() => serviceIdsFromOrder(order))
   // Entered quantities for per-hour/per-stop services — and the billable pallet-days for
   // per-pallet-day services (auto-filled from pallets × days, manually correctable).
@@ -273,7 +275,13 @@ export function TransportOrderForm({ mode, order, onSubmit, onCancel, submitLabe
   // Wave 2026-08-04 §2: commercial goods lines are the source of truth as soon as any row
   // exists — the order summary derives from them and the header inputs disappear.
   const derivedFromCargo = cargoItems.length > 0
-  const cargoSummary = derivedFromCargo ? computeCargoSummary(cargoItems, unitOptions) : null
+  const cargoSummary = derivedFromCargo ? computeCargoSummary(cargoItems, units.displayUnits) : null
+  const unitOptions = units.orderPickerOptions([
+    order?.quantityUnitCode,
+    ...(order?.cargoItems ?? []).map((c) => c.quantityUnitCode),
+    quantityUnitCode,
+    ...cargoItems.map((c) => c.quantityUnitCode),
+  ])
   const effectiveWeightKg = cargoSummary?.weight ?? (weightKg === '' ? null : Number(weightKg))
   const effectivePalletCount = cargoSummary?.pallets ?? (palletCount === '' ? null : Number(palletCount))
 
@@ -283,7 +291,7 @@ export function TransportOrderForm({ mode, order, onSubmit, onCancel, submitLabe
     .filter((w) => stops.some((s) => s.locationId !== null && s.locationId === w.locationId))
     .map((w) => w.id)
   // Live price preview, debounced on the pricing-relevant inputs (extracted hook).
-  const preview = useOrderPricePreview(values, unitOptions, touchedWarehouseIds, effectiveWeightKg, effectivePalletCount)
+  const preview = useOrderPricePreview(values, units.orderOptions, touchedWarehouseIds, effectiveWeightKg, effectivePalletCount)
 
   // Every write to the stop list — including a single-field patch — goes through the one mutation
   // path, so nothing can start from a stale list when two writes land in the same tick (N-1).
@@ -496,7 +504,7 @@ export function TransportOrderForm({ mode, order, onSubmit, onCancel, submitLabe
         <SummarySection
           {...{
             order, customers, customerId, stops, cargoItems, quantity, quantityUnit, quantityUnitCode,
-            weightKg, unitOptions, serviceOptions, selectedServiceOptionIds, preview,
+            weightKg, unitOptions: units.displayUnits, serviceOptions, selectedServiceOptionIds, preview,
             priceIsManual, agreedPrice, notes, setNotes, saving,
           }}
         />

@@ -62,7 +62,11 @@
     "colStatus": "Statut",
     "colExpiry": "Date d'échéance",
     "deleteTitle": "Supprimer le chauffeur",
-    "deleteMessage": "Voulez-vous vraiment supprimer le chauffeur {number} ? Le dossier du personnel est conservé."
+    "deleteMessage": "Voulez-vous vraiment supprimer le chauffeur {number} ? Le dossier du personnel est conservé.",
+    "deleteRefusedTitle": "Le chauffeur ne peut pas être supprimé",
+    "deactivateInstead": "Désactiver le chauffeur",
+    "deactivated": "Chauffeur désactivé. L'historique est conservé.",
+    "deactivateFailed": "Le chauffeur n'a pas pu être désactivé."
   },
   "newPage": {
     "breadcrumb": "Chauffeurs",

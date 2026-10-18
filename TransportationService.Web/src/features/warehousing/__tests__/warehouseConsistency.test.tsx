@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { ApiError } from '../../../api/apiClient'
 import { WarehousesPage } from '../pages/WarehousesPage'
 import { DockPlanningPage } from '../pages/DockPlanningPage'
 import { WarehouseDayToggle } from '../components/WarehouseDayToggle'
@@ -95,6 +96,29 @@ describe('Magazijnen — dock delete', () => {
     await userEvent.click(within(dialog).getByRole('button', { name: 'Verwijderen' }))
 
     await waitFor(() => expect(api.deleteDock).toHaveBeenCalledWith('wh-1', 'dock-1'))
+  })
+
+  it('explains a refused delete (409 record_referenced) with the server message and the counts', async () => {
+    const message =
+      'Deze dock kan niet worden verwijderd omdat er historische of operationele gegevens aan gekoppeld zijn: 7 dockafspraken. Zet de dock inactief.'
+    api.deleteDock.mockRejectedValue(
+      new ApiError(message, 409, {
+        code: 'common.record_referenced',
+        message,
+        references: [{ key: 'appointments', count: 7, label: '7 dockafspraken' }],
+        canDeactivate: true,
+      }),
+    )
+    render(<WarehousesPage />)
+    await screen.findByText('D1')
+
+    await userEvent.click(screen.getByRole('button', { name: 'Verwijderen' }))
+    await userEvent.click(within(await screen.findByRole('dialog', { name: 'Dock verwijderen' })).getByRole('button', { name: 'Verwijderen' }))
+
+    const refused = await screen.findByRole('dialog', { name: 'Dock kan niet worden verwijderd' })
+    expect(within(refused).getByText(message)).toBeInTheDocument()
+    expect(within(refused).getByRole('listitem')).toHaveTextContent('7 dockafspraken')
+    expect(screen.queryByRole('dialog', { name: 'Dock verwijderen' })).not.toBeInTheDocument()
   })
 })
 

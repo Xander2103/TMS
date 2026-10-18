@@ -4,6 +4,7 @@ import { FormField } from '../../../components/ui/FormField'
 import { Modal } from '../../../components/ui/Modal'
 import { useLocale } from '../../../i18n/localeContext'
 import { describeApiError } from '../../../api/problemDetails'
+import { todayLocalIsoDate } from '../../../utils/dates'
 import {
   saveEmployeeIssuedItem,
   type EmployeeIssuedItemInput,
@@ -65,7 +66,7 @@ export function BulkIssueModal({
   const [rows, setRows] = useState<Record<string, RowState>>({})
   const [variantsByTemplate, setVariantsByTemplate] = useState<Record<string, IssuedItemVariant[]>>({})
   const [variantsLoading, setVariantsLoading] = useState<Record<string, boolean>>({})
-  const [issuedDate, setIssuedDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const [issuedDate, setIssuedDate] = useState(() => todayLocalIsoDate())
   const [notes, setNotes] = useState('')
   const [error, setError] = useState<string | null>(null)
   // busy spans the whole batch (from the first save to the last) so the submit button and

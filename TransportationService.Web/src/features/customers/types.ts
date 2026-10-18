@@ -311,6 +311,7 @@ export interface CustomerDetail extends CustomerVatProfile {
   city: string | null
   countryCode: string | null
   invoiceEmail: string | null
+  /** 0 = not configured: invoices fall back to the billing entity / company term. */
   paymentTermDays: number
   defaultLanguageCode: string | null
   notes: string | null
@@ -336,6 +337,8 @@ export interface CustomerDetail extends CustomerVatProfile {
   /** GenerateOwn | CustomerDocument | PerOrder — wie het transportdocument aanlevert. */
   documentStrategy?: string
   contacts: CustomerContact[]
+  /** Optimistic-concurrency token; echoed as `expectedVersion` on PUT. */
+  version: number
 }
 
 export interface CustomerInput extends CustomerVatProfile {
@@ -359,7 +362,8 @@ export interface CustomerInput extends CustomerVatProfile {
   city: string | null
   countryCode: string | null
   invoiceEmail: string | null
-  paymentTermDays: number
+  /** Null = no own term: the billing entity / company term applies. Never negative. */
+  paymentTermDays: number | null
   defaultLanguageCode: string | null
   notes: string | null
   nickname: string | null
@@ -381,6 +385,17 @@ export interface CustomerInput extends CustomerVatProfile {
 
 export interface UpdateCustomerInput extends CustomerInput {
   isActive: boolean
+  /** The `version` the edit form was loaded with; a stale save is refused with HTTP 409. */
+  expectedVersion?: number | null
+}
+
+/** GET /api/customers/identity-matches: another customer with the same VAT / company number. */
+export interface CustomerIdentityMatch {
+  id: string
+  customerNumber: string
+  name: string
+  isActive: boolean
+  matchedOn: 'Vat' | 'CompanyNumber'
 }
 
 export interface ChangeCustomerNumberInput {

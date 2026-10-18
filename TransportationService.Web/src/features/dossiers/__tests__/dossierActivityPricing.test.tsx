@@ -69,6 +69,12 @@ vi.mock('../../legal-entities/api/legalEntitiesApi', () => ({ getLegalEntityOpti
 vi.mock('../../master-data/hooks/useLookupOptions', () => ({
   useLookupOptions: () => ({ options: [{ id: 'u-1', code: 'EUROPALLET', name: 'Europallet' }], isLoading: false, error: null }),
 }))
+// Units come from order-options + labels (useUnitTypes); same catalogue as above.
+vi.mock('../../master-data/hooks/useUnitTypes', async () => {
+  const { unitTypesFixture } = await import('../../master-data/__tests__/unitTypesFixture')
+  const units = unitTypesFixture([{ id: 'u-1', code: 'EUROPALLET', name: 'Europallet' }])
+  return { useUnitTypes: () => units }
+})
 
 function renderPage(initialPath = '/dossiers/d-1/prijs') {
   const router = createMemoryRouter([{ path: '/dossiers/:id/:section?', element: <DossierDetailPage /> }], {

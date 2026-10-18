@@ -1,3 +1,5 @@
+import { todayLocalIsoDate } from '../../../utils/dates'
+
 /**
  * Conversion helpers between <input type="month"> values ("2026-07") and the
  * backend's { invoicePeriodYear, invoicePeriodMonth } pair.
@@ -28,12 +30,16 @@ export function formatPeriod(year: number, month: number): string {
   return `${String(month).padStart(2, '0')}-${String(year).padStart(4, '0')}`
 }
 
-/** Period of an ISO date string ("2026-07-21"); falls back to today's month when absent/invalid. */
+/**
+ * Period of an ISO date string ("2026-07-21"); falls back to today's month when absent/invalid.
+ * MD-M3: "today" is the TENANT-local calendar day — the same day the server stamps as the
+ * invoice date — so the default period never lags a month behind around midnight on the 1st.
+ */
 export function dateToPeriod(isoDate?: string | null): InvoicePeriod {
   const parsed = isoDate ? monthInputToPeriod(isoDate.slice(0, 7)) : null
   if (parsed) return parsed
-  const now = new Date()
-  return { year: now.getFullYear(), month: now.getMonth() + 1 }
+  const [year, month] = todayLocalIsoDate().split('-').map(Number)
+  return { year, month }
 }
 
 /** Negative when a lies before b, zero when equal, positive when after (in months). */

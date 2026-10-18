@@ -34,6 +34,16 @@ vi.mock('../../../master-data/hooks/useLookupOptions', () => ({
     error: null,
   }),
 }))
+// Units come from order-options + labels (useUnitTypes); same catalogue as above.
+vi.mock('../../../master-data/hooks/useUnitTypes', async () => {
+  const { unitTypesFixture } = await import('../../../master-data/__tests__/unitTypesFixture')
+  const units = unitTypesFixture([
+    { id: 'u-pallet', code: 'EUROPALLET', name: 'Europallet' },
+    { id: 'u-colli', code: 'COLLI', name: 'Colli' },
+    { id: 'u-kg', code: 'KG', name: 'Kilogram' },
+  ])
+  return { useUnitTypes: () => units }
+})
 vi.mock('../../components/OrderDocumentsPanel', () => ({ OrderDocumentsPanel: () => <div /> }))
 vi.mock('../../components/OrderTimelinePanel', () => ({ OrderTimelinePanel: () => <div /> }))
 vi.mock('../../components/StopExecutionPlanDialog', () => ({ StopExecutionPlanDialog: () => <div /> }))

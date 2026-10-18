@@ -8,6 +8,9 @@ import { RowActionMenu } from '../../../components/ui/RowActionMenu'
 import { TruncatedText } from '../../../components/ui/TruncatedText'
 import { useToast } from '../../../components/ui/toastContext'
 import { useLocale } from '../../../i18n/localeContext'
+import { describeApiError } from '../../../api/problemDetails'
+import { getReferenceConflict, type ReferenceConflict } from '../../../api/conflicts'
+import { ReferenceConflictDialog } from '../../../components/ui/ReferenceConflictDialog'
 import {
   deleteIssuedItemTemplate,
   listIssuedItemTemplates,
@@ -41,6 +44,7 @@ export function IssuedItemTemplatesPanel() {
   const [editorOpen, setEditorOpen] = useState(false)
   const [editing, setEditing] = useState<IssuedItemTemplate | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<IssuedItemTemplate | null>(null)
+  const [deleteConflict, setDeleteConflict] = useState<{ template: IssuedItemTemplate; conflict: ReferenceConflict } | null>(null)
 
   useEffect(() => {
     let mounted = true
@@ -83,8 +87,12 @@ export function IssuedItemTemplatesPanel() {
       showSuccess(t('issuedItems.templates.deleted'))
       setDeleteTarget(null)
       setReloadToken((token) => token + 1)
-    } catch {
-      showError(t('issuedItems.templates.deleteFailed'))
+    } catch (err) {
+      // Issued/stock history still points at the item (409 record_referenced): explain why,
+      // with the counts, instead of a generic failure.
+      const conflict = getReferenceConflict(err)
+      if (conflict) setDeleteConflict({ template: deleteTarget, conflict })
+      else showError(describeApiError(err, t('issuedItems.templates.deleteFailed')).message)
       setDeleteTarget(null)
     }
   }
@@ -255,6 +263,27 @@ export function IssuedItemTemplatesPanel() {
           destructive
           onConfirm={handleDelete}
           onCancel={() => setDeleteTarget(null)}
+        />
+      )}
+
+      {deleteConflict && (
+        <ReferenceConflictDialog
+          title={t('issuedItems.templates.deleteRefusedTitle')}
+          conflict={deleteConflict.conflict}
+          onClose={() => setDeleteConflict(null)}
+          // Deactivating lives in the edit form ("Actief"); open it straight away.
+          action={
+            deleteConflict.conflict.canDeactivate && deleteConflict.template.isActive
+              ? {
+                  label: t('issuedItems.templates.editToDeactivate'),
+                  onSelect: () => {
+                    setEditing(deleteConflict.template)
+                    setEditorOpen(true)
+                    setDeleteConflict(null)
+                  },
+                }
+              : undefined
+          }
         />
       )}
     </div>

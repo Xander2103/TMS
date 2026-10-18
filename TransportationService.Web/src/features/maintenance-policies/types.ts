@@ -28,7 +28,13 @@ export interface MaintenancePolicy {
   warningDays: number
   description: string | null
   isActive: boolean
+  /** MD-M11: the rule's level, explicit. A rule of a deleted vehicle/trailer keeps its asset scope. */
+  scope: MaintenancePolicyScope
+  /** MD-M11: the vehicle/trailer of an asset-level rule was deleted; the rule applies to nothing. */
+  assetDeleted: boolean
 }
+
+export type MaintenancePolicyScope = 'CompanyDefault' | 'Category' | 'Vehicle' | 'Trailer'
 
 export interface MaintenancePolicyInput {
   kind: MaintenancePolicyKind
@@ -60,13 +66,28 @@ export interface EffectivePolicies {
   inspection: EffectivePolicy | null
 }
 
-/** Human description of which level a rule targets (resolution: asset > category > company). */
+/**
+ * Human description of which level a rule targets (resolution: asset > category > company).
+ * Driven by the explicit `scope`, never by which name happens to be filled in: a rule of a
+ * DELETED vehicle has no current vehicle and used to read as "Bedrijfsstandaard" (MD-M11).
+ */
 export function policyLevelLabel(
   t: (key: string, params?: Record<string, string | number>) => string,
-  policy: MaintenancePolicy,
+  policy: Pick<MaintenancePolicy, 'scope' | 'assetDeleted' | 'categoryName' | 'vehicleNumber' | 'trailerNumber'>,
 ): string {
-  if (policy.vehicleNumber) return t('maintenance.policies.levelVehicle', { number: policy.vehicleNumber })
-  if (policy.trailerNumber) return t('maintenance.policies.levelTrailer', { number: policy.trailerNumber })
-  if (policy.categoryName) return t('maintenance.policies.levelCategory', { name: policy.categoryName })
-  return t('maintenance.policies.levelCompany')
+  const unknown = t('maintenance.policies.levelUnknownName')
+  switch (policy.scope) {
+    case 'Vehicle': {
+      const label = t('maintenance.policies.levelVehicle', { number: policy.vehicleNumber ?? unknown })
+      return policy.assetDeleted ? `${label} ${t('maintenance.policies.vehicleDeletedSuffix')}` : label
+    }
+    case 'Trailer': {
+      const label = t('maintenance.policies.levelTrailer', { number: policy.trailerNumber ?? unknown })
+      return policy.assetDeleted ? `${label} ${t('maintenance.policies.trailerDeletedSuffix')}` : label
+    }
+    case 'Category':
+      return t('maintenance.policies.levelCategory', { name: policy.categoryName ?? unknown })
+    default:
+      return t('maintenance.policies.levelCompany')
+  }
 }

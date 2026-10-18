@@ -54,7 +54,9 @@
       "unloadingMinutes": "Temps de déchargement (min)",
       "qualificationWarningDays": "Avertissement qualification (jours)",
       "defaultPageSize": "Taille de page par défaut",
-      "logoReference": "Référence du logo"
+      "logoReference": "Référence du logo",
+      "defaultPaymentTermDays": "Délai de paiement par défaut (jours)",
+      "defaultPaymentTermDaysHint": "Utilisé uniquement si ni le client ni l'entité de facturation n'en ont un."
     },
     "language": {
       "section": "Langue",
@@ -102,9 +104,12 @@
       "vehiclePrefix": "Préfixe véhicule",
       "vehicleNext": "N° suivant véhicule",
       "trailerPrefix": "Préfixe semi-remorque",
-      "trailerNext": "N° suivant semi-remorque"
+      "trailerNext": "N° suivant semi-remorque",
+      "invoiceNumberingNote": "La numérotation des factures se configure par entité de facturation (Entités propres)."
     },
-    "brandingHint": "Référence vers un fichier de logo. Le téléversement de fichiers viendra dans une phase ultérieure."
+    "brandingHint": "Référence vers un fichier de logo. Le téléversement de fichiers viendra dans une phase ultérieure.",
+    "invoiceIbanNote": "L'IBAN des factures provient de l'entité de facturation.",
+    "brandingNote": "Le logo des factures et documents se configure par entité de facturation (Entités propres)."
   },
   "system": {
     "title": "Informations système",
@@ -265,5 +270,12 @@
       "Cmr": "CMR",
       "None": "Aucun document"
     }
+  },
+  "dialogs": {
+    "discardTitle": "Abandonner les modifications ?",
+    "discardMessage": "Vous avez des modifications non enregistrées. Fermer sans enregistrer ?",
+    "discardConfirm": "Fermer sans enregistrer",
+    "conflictMessage": "Ces données ont entre-temps été modifiées par un autre utilisateur.",
+    "conflictReload": "Recharger"
   }
 }

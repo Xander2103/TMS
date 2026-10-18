@@ -36,7 +36,11 @@
     "street": "Street",
     "tradingName": "Trading name",
     "vatNumber": "VAT number",
-    "website": "Website"
+    "website": "Website",
+    "logoPending": "New logo (not saved yet):",
+    "logoPendingRemoval": "The logo will be removed when you click Save.",
+    "logoUndo": "Undo logo change",
+    "logoAppliedOnSave": "A logo change is only saved when you click Save. Invoices already issued keep their logo; new invoices use the new logo."
   },
   "page": {
     "columnDefault": "Default",
@@ -64,7 +68,8 @@
     "saveFailed": "The company could not be saved.",
     "saved": "Company saved.",
     "savingBusy": "Saving…",
-    "subtitle": "Invoicing entities of this organisation."
+    "subtitle": "Invoicing entities of this organisation.",
+    "savedLogoFailed": "The company was saved, but the logo change was not: {message} Click Save again to retry the logo."
   },
   "switcher": {
     "defaultSuffix": "(default)",

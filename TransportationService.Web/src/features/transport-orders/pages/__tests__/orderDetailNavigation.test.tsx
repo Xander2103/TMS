@@ -40,6 +40,12 @@ vi.mock('../../../master-data/hooks/useLookupOptions', () => ({
     error: null,
   }),
 }))
+// Units come from order-options + labels (useUnitTypes); same catalogue as above.
+vi.mock('../../../master-data/hooks/useUnitTypes', async () => {
+  const { unitTypesFixture } = await import('../../../master-data/__tests__/unitTypesFixture')
+  const units = unitTypesFixture([{ id: 'u-pallet', code: 'EUROPALLET', name: 'Europallet' }])
+  return { useUnitTypes: () => units }
+})
 // Subsection panels with their own fetches: stubbed, exactly like the other detail-page suites.
 vi.mock('../../components/OrderDocumentsPanel', () => ({ OrderDocumentsPanel: () => <div /> }))
 vi.mock('../../components/OrderDocumentStrategyPanel', () => ({ OrderDocumentStrategyPanel: () => <div /> }))

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react'
+import { isConcurrencyConflict } from '../../../api/conflicts'
 import { describeApiError, getFieldError, type FieldErrors } from '../../../api/problemDetails'
 import { PageHeader } from '../../../components/layout/PageHeader'
 import { Badge } from '../../../components/ui/Badge'
@@ -14,9 +15,12 @@ import { useLocale } from '../../../i18n/localeContext'
 import { getPeppolSchemes } from '../../customers/api/customersApi'
 import { PeppolFieldGroup } from '../../customers/components/PeppolFieldGroup'
 import type { PeppolScheme } from '../../customers/types'
+import { ConcurrencyConflictNotice } from '../../settings/components/ConcurrencyConflictNotice'
+import { useDirtyDialogClose } from '../../settings/components/useDirtyDialogClose'
 import {
   createLegalEntity,
   deleteLegalEntityLogo,
+  getLegalEntity,
   listLegalEntities,
   setLegalEntityActive,
   updateLegalEntity,
@@ -94,8 +98,26 @@ interface EditorState {
   /** null = create. */
   id: string | null
   form: SaveLegalEntityInput
-  /** Full entity for the logo section (edit mode only). */
+  /** Full entity for the logo section and the concurrency version (edit mode only). */
   entity: LegalEntity | null
+  /** MD-M2: JSON of the form as opened — drives the discard confirmation. */
+  baseline: string
+  /** MD-M10: the logo chosen in the dialog; uploaded only after Opslaan stored the entity. */
+  pendingLogo: File | null
+  /** MD-M10: "Logo verwijderen" was pressed; applied on Opslaan, never immediately. */
+  removeLogo: boolean
+}
+
+function editorFor(entity: LegalEntity | null): EditorState {
+  const form = entity ? toInput(entity) : EMPTY_FORM
+  return {
+    id: entity?.id ?? null,
+    form,
+    entity,
+    baseline: JSON.stringify(form),
+    pendingLogo: null,
+    removeLogo: false,
+  }
 }
 
 /** Beheer van eigen (facturerende) juridische entiteiten. */
@@ -113,9 +135,16 @@ export function LegalEntitiesPage() {
   const [editor, setEditor] = useState<EditorState | null>(null)
   const [formError, setFormError] = useState<string | null>(null)
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
+  // MD-M2: the entity was saved by someone else since the dialog opened (409).
+  const [conflict, setConflict] = useState(false)
   const [busy, setBusy] = useState(false)
   const [deactivating, setDeactivating] = useState<LegalEntity | null>(null)
   const logoInputRef = useRef<HTMLInputElement | null>(null)
+
+  const editorDirty =
+    editor !== null &&
+    (JSON.stringify(editor.form) !== editor.baseline || editor.pendingLogo !== null || editor.removeLogo)
+  const editorClose = useDirtyDialogClose(editorDirty, busy, () => setEditor(null))
 
   // Authoritative Peppol scheme catalog for the grouped Peppol control (same source as customers).
   const [peppolSchemes, setPeppolSchemes] = useState<PeppolScheme[]>([])
@@ -158,16 +187,11 @@ export function LegalEntitiesPage() {
     setReloadToken((token) => token + 1)
   }, [])
 
-  function openCreate() {
+  function openEditor(entity: LegalEntity | null) {
     setFormError(null)
     setFieldErrors({})
-    setEditor({ id: null, form: EMPTY_FORM, entity: null })
-  }
-
-  function openEdit(entity: LegalEntity) {
-    setFormError(null)
-    setFieldErrors({})
-    setEditor({ id: entity.id, form: toInput(entity), entity })
+    setConflict(false)
+    setEditor(editorFor(entity))
   }
 
   function setField<K extends keyof SaveLegalEntityInput>(key: K, value: SaveLegalEntityInput[K]) {
@@ -200,22 +224,64 @@ export function LegalEntitiesPage() {
   async function handleSubmit(event: FormEvent) {
     event.preventDefault()
     if (!editor) return
+    const { pendingLogo, removeLogo } = editor
     setBusy(true)
     setFormError(null)
     setFieldErrors({})
+    setConflict(false)
     try {
-      if (editor.id) {
-        await updateLegalEntity(editor.id, editor.form)
-      } else {
-        await createLegalEntity(editor.form)
+      let saved: LegalEntity
+      try {
+        saved = editor.id
+          ? await updateLegalEntity(editor.id, { ...editor.form, expectedVersion: editor.entity?.version })
+          : await createLegalEntity(editor.form)
+      } catch (error) {
+        if (isConcurrencyConflict(error)) {
+          setConflict(true)
+        } else {
+          // Server rules (IBAN mod-97, BIC, Peppol scheme+id, …) land next to their fields.
+          const described = describeApiError(error, t('legalEntities.page.saveFailed'))
+          setFormError(described.message)
+          setFieldErrors(described.fieldErrors)
+        }
+        return
       }
+
+      // MD-M10: the logo change follows only once the entity data is stored.
+      try {
+        if (pendingLogo) saved = await uploadLegalEntityLogo(saved.id, pendingLogo)
+        else if (removeLogo && saved.hasLogo) saved = await deleteLegalEntityLogo(saved.id)
+      } catch (error) {
+        // The entity IS saved: stay open on the saved version with the logo choice still pending,
+        // so pressing Opslaan again retries just the logo.
+        const fallback = pendingLogo ? t('legalEntities.page.logoUploadFailed') : t('legalEntities.page.logoRemoveFailed')
+        setEditor({ ...editorFor(saved), pendingLogo, removeLogo })
+        setFormError(t('legalEntities.page.savedLogoFailed', { message: describeApiError(error, fallback).message }))
+        reload()
+        return
+      }
+
       showSuccess(t('legalEntities.page.saved'))
       setEditor(null)
       reload()
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  // MD-M2: replace the draft with the current server version after a 409.
+  async function reloadEditor() {
+    if (!editor?.id) return
+    setBusy(true)
+    try {
+      const fresh = await getLegalEntity(editor.id)
+      setConflict(false)
+      setFormError(null)
+      setFieldErrors({})
+      setEditor(editorFor(fresh))
+      reload()
     } catch (error) {
-      const described = describeApiError(error, t('legalEntities.page.saveFailed'))
-      setFormError(described.message)
-      setFieldErrors(described.fieldErrors)
+      setFormError(describeApiError(error, t('legalEntities.page.loadFailed')).message)
     } finally {
       setBusy(false)
     }
@@ -250,36 +316,21 @@ export function LegalEntitiesPage() {
     }
   }
 
-  async function handleLogoUpload(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0]
-    if (!file || !editor?.id) return
-    setBusy(true)
-    try {
-      const updated = await uploadLegalEntityLogo(editor.id, file)
-      setEditor((current) => (current ? { ...current, entity: updated } : current))
-      showSuccess(t('legalEntities.page.logoUploaded'))
-      reload()
-    } catch (error) {
-      showError(describeApiError(error, t('legalEntities.page.logoUploadFailed')).message)
-    } finally {
-      setBusy(false)
-      if (logoInputRef.current) logoInputRef.current.value = ''
-    }
+  // MD-M10: choosing a file only stages it; Opslaan uploads it (Annuleren discards it).
+  function handleLogoChosen(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0] ?? null
+    if (!file) return
+    setEditor((current) => (current ? { ...current, pendingLogo: file, removeLogo: false } : current))
   }
 
-  async function handleLogoDelete() {
-    if (!editor?.id) return
-    setBusy(true)
-    try {
-      const updated = await deleteLegalEntityLogo(editor.id)
-      setEditor((current) => (current ? { ...current, entity: updated } : current))
-      showSuccess(t('legalEntities.page.logoRemoved'))
-      reload()
-    } catch (error) {
-      showError(describeApiError(error, t('legalEntities.page.logoRemoveFailed')).message)
-    } finally {
-      setBusy(false)
-    }
+  function handleLogoRemove() {
+    if (logoInputRef.current) logoInputRef.current.value = ''
+    setEditor((current) => (current ? { ...current, pendingLogo: null, removeLogo: true } : current))
+  }
+
+  function handleLogoUndo() {
+    if (logoInputRef.current) logoInputRef.current.value = ''
+    setEditor((current) => (current ? { ...current, pendingLogo: null, removeLogo: false } : current))
   }
 
   const columns: Column<LegalEntity>[] = [
@@ -317,7 +368,7 @@ export function LegalEntitiesPage() {
             align: 'right',
             render: (row: LegalEntity) => (
               <div className="le-actions">
-                <button type="button" className="le-link" onClick={() => openEdit(row)}>
+                <button type="button" className="le-link" onClick={() => openEditor(row)}>
                   {t('ui.actions.edit')}
                 </button>
                 {row.isActive ? (
@@ -341,7 +392,7 @@ export function LegalEntitiesPage() {
       <PageHeader
         title={t('navigation.menu.legalEntities')}
         subtitle={t('legalEntities.page.subtitle')}
-        action={canManage ? <Button onClick={openCreate}>{t('legalEntities.page.newEntity')}</Button> : undefined}
+        action={canManage ? <Button onClick={() => openEditor(null)}>{t('legalEntities.page.newEntity')}</Button> : undefined}
       />
 
       <DataTable
@@ -357,10 +408,11 @@ export function LegalEntitiesPage() {
       {editor && (
         <Modal
           title={editor.id ? t('legalEntities.page.editTitle') : t('legalEntities.page.newEntity')}
-          onClose={() => setEditor(null)}
+          onClose={editorClose.requestClose}
           busy={busy}
         >
           <form className="le-form" onSubmit={(event) => void handleSubmit(event)}>
+            {conflict && <ConcurrencyConflictNotice onReload={() => void reloadEditor()} busy={busy} />}
             {formError && (
               <p className="le-form-error" role="alert">
                 {formError}
@@ -501,38 +553,49 @@ export function LegalEntitiesPage() {
               </label>
             </FormSection>
 
-            {editor.id && (
-              <FormSection title={t('legalEntities.form.sectionLogo')} columns={1}>
-                <div className="le-logo">
-                  {editor.entity?.hasLogo ? (
-                    <p className="le-logo-current">
-                      {t('legalEntities.form.currentLogo')} <strong>{editor.entity.logoFileName ?? 'logo'}</strong>
-                    </p>
+            <FormSection title={t('legalEntities.form.sectionLogo')} columns={1}>
+              <div className="le-logo">
+                {editor.pendingLogo ? (
+                  <p className="le-logo-current">
+                    {t('legalEntities.form.logoPending')} <strong>{editor.pendingLogo.name}</strong>
+                  </p>
+                ) : editor.removeLogo ? (
+                  <p className="le-logo-current">{t('legalEntities.form.logoPendingRemoval')}</p>
+                ) : editor.entity?.hasLogo ? (
+                  <p className="le-logo-current">
+                    {t('legalEntities.form.currentLogo')} <strong>{editor.entity.logoFileName ?? 'logo'}</strong>
+                  </p>
+                ) : (
+                  <p className="le-logo-current">{t('legalEntities.form.noLogoYet')}</p>
+                )}
+                <div className="le-logo-actions">
+                  <input
+                    ref={logoInputRef}
+                    type="file"
+                    accept=".png,.jpg,.jpeg,.svg"
+                    disabled={busy}
+                    aria-label={t('legalEntities.form.logoUploadAria')}
+                    onChange={handleLogoChosen}
+                  />
+                  {editor.pendingLogo || editor.removeLogo ? (
+                    <Button variant="secondary" onClick={handleLogoUndo} disabled={busy}>
+                      {t('legalEntities.form.logoUndo')}
+                    </Button>
                   ) : (
-                    <p className="le-logo-current">{t('legalEntities.form.noLogoYet')}</p>
-                  )}
-                  <div className="le-logo-actions">
-                    <input
-                      ref={logoInputRef}
-                      type="file"
-                      accept=".png,.jpg,.jpeg,.svg"
-                      disabled={busy}
-                      aria-label={t('legalEntities.form.logoUploadAria')}
-                      onChange={(event) => void handleLogoUpload(event)}
-                    />
-                    {editor.entity?.hasLogo && (
-                      <Button variant="danger" onClick={() => void handleLogoDelete()} disabled={busy}>
+                    editor.entity?.hasLogo && (
+                      <Button variant="danger" onClick={handleLogoRemove} disabled={busy}>
                         {t('legalEntities.form.logoDelete')}
                       </Button>
-                    )}
-                  </div>
-                  <p className="le-logo-hint">{t('legalEntities.form.logoHint')}</p>
+                    )
+                  )}
                 </div>
-              </FormSection>
-            )}
+                <p className="le-logo-hint">{t('legalEntities.form.logoHint')}</p>
+                <p className="le-logo-hint">{t('legalEntities.form.logoAppliedOnSave')}</p>
+              </div>
+            </FormSection>
 
             <div className="le-form-actions">
-              <Button variant="secondary" type="button" onClick={() => setEditor(null)} disabled={busy}>
+              <Button variant="secondary" type="button" onClick={editorClose.requestClose} disabled={busy}>
                 {t('ui.actions.cancel')}
               </Button>
               <Button type="submit" disabled={busy}>
@@ -542,6 +605,7 @@ export function LegalEntitiesPage() {
           </form>
         </Modal>
       )}
+      {editor && editorClose.guard}
 
       {deactivating && (
         <ConfirmDialog

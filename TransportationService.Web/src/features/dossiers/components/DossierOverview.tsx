@@ -5,7 +5,7 @@ import { Badge, type BadgeTone } from '../../../components/ui/Badge'
 import { useLocale } from '../../../i18n/localeContext'
 import { formatDateTime } from '../../../utils/dates'
 import { euro, INVOICE_STATUS_LABELS, type InvoiceStatus } from '../../invoices/types'
-import { useLookupOptions } from '../../master-data/hooks/useLookupOptions'
+import { useUnitTypes } from '../../master-data/hooks/useUnitTypes'
 import { ORDER_DOCUMENT_TYPE_LABELS, type OrderDocumentType } from '../../transport-orders/api/orderDocumentsApi'
 import { isOnSiteLiftingOrder } from '../../transport-orders/components/onSiteLifting'
 import { unitLabelFrom } from '../../transport-orders/pricing/cargoLabels'
@@ -67,8 +67,8 @@ export function DossierOverview() {
   const { t } = useLocale()
   const ws = useDossierWorkspace()
   const { dossier, activities, transportActivities, routeActivity, firstOrder, firstOrderLoading, firstLinkedOrderId } = ws
-  const { options: unitTypes } = useLookupOptions('/api/unit-types')
-  const unitLabel = unitLabelFrom(unitTypes)
+  // Labels of every unit ever used: a retired unit on an old order still shows its name.
+  const unitLabel = unitLabelFrom(useUnitTypes().displayUnits)
   const hasRoute = activities.some((a) => a.hasStops)
   const hasGoods = activities.some((a) => a.supportsGoods)
 

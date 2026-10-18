@@ -17,6 +17,9 @@ import { deleteDriver, getDriver, setDriverBlocked, setDriverVehicle, updateDriv
 import { AVAILABILITY_LABELS, type DriverAvailabilityStatus, type DriverDetail } from '../types'
 import '../pages/driver-detail.css'
 import { formatDate } from '../../../utils/dates'
+import { describeApiError } from '../../../api/problemDetails'
+import { getReferenceConflict, type ReferenceConflict } from '../../../api/conflicts'
+import { ReferenceConflictDialog } from '../../../components/ui/ReferenceConflictDialog'
 
 const READINESS_TONE: Record<DriverDetail['readiness']['status'], BadgeTone> = {
   Ready: 'success',
@@ -85,6 +88,9 @@ export function DriverProfilePanel({ driverId, onChanged, onDeleted }: DriverPro
   const [blocking, setBlocking] = useState(false)
   const [blockReason, setBlockReason] = useState('')
   const [confirmDelete, setConfirmDelete] = useState(false)
+  // Delete refused because trips/POD/damage still reference the driver (409 record_referenced).
+  const [deleteConflict, setDeleteConflict] = useState<ReferenceConflict | null>(null)
+  const [deactivating, setDeactivating] = useState(false)
 
   useEffect(() => {
     let mounted = true
@@ -167,9 +173,36 @@ export function DriverProfilePanel({ driverId, onChanged, onDeleted }: DriverPro
       await deleteDriver(driverId)
       showSuccess(t('driversAdmin.panel.deleted'))
       onDeleted?.()
-    } catch {
-      showError(t('driversAdmin.panel.deleteFailed'))
+    } catch (err) {
       setConfirmDelete(false)
+      const conflict = getReferenceConflict(err)
+      if (conflict) setDeleteConflict(conflict)
+      else showError(describeApiError(err, t('driversAdmin.panel.deleteFailed')).message)
+    }
+  }
+
+  /** The way out of a refused delete: keep the history, stop the driver from being planned. */
+  async function deactivateInstead() {
+    if (!driver) return
+    setDeactivating(true)
+    try {
+      const updated = await updateDriver(driverId, {
+        // Both category fields null = leave the category set untouched.
+        driverCategoryId: null,
+        driverCategoryIds: null,
+        availabilityStatus: driver.availabilityStatus,
+        isActive: false,
+        fixedTrailerId: driver.fixedTrailerId,
+        notes: driver.notes,
+      })
+      setDriver(updated)
+      setDeleteConflict(null)
+      showSuccess(t('driversAdmin.panel.deactivated'))
+      onChanged?.()
+    } catch (err) {
+      showError(describeApiError(err, t('driversAdmin.panel.deactivateFailed')).message)
+    } finally {
+      setDeactivating(false)
     }
   }
 
@@ -428,6 +461,19 @@ export function DriverProfilePanel({ driverId, onChanged, onDeleted }: DriverPro
           destructive
           onConfirm={handleDelete}
           onCancel={() => setConfirmDelete(false)}
+        />
+      )}
+
+      {deleteConflict && (
+        <ReferenceConflictDialog
+          title={t('driversAdmin.panel.deleteRefusedTitle')}
+          conflict={deleteConflict}
+          onClose={() => setDeleteConflict(null)}
+          action={
+            deleteConflict.canDeactivate && driver.isActive && canEdit
+              ? { label: t('driversAdmin.panel.deactivateInstead'), onSelect: deactivateInstead, busy: deactivating }
+              : undefined
+          }
         />
       )}
     </div>

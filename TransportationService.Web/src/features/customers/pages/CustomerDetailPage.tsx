@@ -15,11 +15,14 @@ import { Tabs, TabPanel } from '../../../components/ui/Tabs'
 import { useDetailTab } from '../../../hooks/useDetailTab'
 import { useToast } from '../../../components/ui/toastContext'
 import { describeApiError, getFieldError, type FieldErrors } from '../../../api/problemDetails'
+import { getReferenceConflict, type ReferenceCount } from '../../../api/conflicts'
 import { useAuth } from '../../auth/authContextValue'
 import {
   addCustomerContact,
   changeCustomerNumber,
+  deleteCustomer,
   getCustomerFiscalWarnings,
+  getCustomerReferences,
   removeCustomerContact,
   updateCustomerContact,
   type CustomerFiscalWarning,
@@ -41,6 +44,7 @@ import { buildCustomerAttention } from '../utils/customerAttention'
 import { CombinedDiscountsPanel } from '../../tarification/components/CombinedDiscountsPanel'
 import { CUSTOMER_NOT_FOUND, useCustomer } from '../hooks/useCustomer'
 import { useCustomerMutations } from '../hooks/useCustomerMutations'
+import type { CustomerDetail } from '../types'
 import { useLocale } from '../../../i18n/localeContext'
 import './../components/customers.css'
 import '../customers.css'
@@ -110,6 +114,18 @@ export function CustomerDetailPage() {
   const [showBlockDialog, setShowBlockDialog] = useState(false)
   const [blockReason, setBlockReason] = useState('')
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [deleteBusy, setDeleteBusy] = useState(false)
+  // Delete refused because history references the customer: the references, shown with the
+  // "Deactiveren" alternative instead of a confirm that can only fail.
+  const [deleteBlockedBy, setDeleteBlockedBy] = useState<ReferenceCount[] | null>(null)
+  // "Gegevens herladen" after a stale save: the edit form is remounted (formKey) once the
+  // refetched customer replaces the stale one we were showing (`reloadingFrom`).
+  const [formKey, setFormKey] = useState(0)
+  const [reloadingFrom, setReloadingFrom] = useState<CustomerDetail | null>(null)
+  if (reloadingFrom && customer && customer !== reloadingFrom) {
+    setReloadingFrom(null)
+    setFormKey((key) => key + 1)
+  }
   const [showUnblockConfirm, setShowUnblockConfirm] = useState(false)
   const [showActiveConfirm, setShowActiveConfirm] = useState<null | 'activate' | 'deactivate'>(null)
   const [showNumberDialog, setShowNumberDialog] = useState(false)
@@ -238,6 +254,52 @@ export function CustomerDetailPage() {
     />
   )
 
+  /** "Verwijderen": pre-check the references so a customer with history never gets a doomed confirm. */
+  async function requestDelete() {
+    if (!id) return
+    mutations.clearError()
+    setDeleteBusy(true)
+    try {
+      const references = await getCustomerReferences(id)
+      if (references.length > 0) setDeleteBlockedBy(references)
+      else setShowDeleteConfirm(true)
+    } catch {
+      // The pre-check is advisory: the DELETE itself still refuses (409) and is handled below.
+      setShowDeleteConfirm(true)
+    } finally {
+      setDeleteBusy(false)
+    }
+  }
+
+  async function confirmDelete() {
+    if (!id) return
+    setDeleteBusy(true)
+    try {
+      await deleteCustomer(id)
+      toast.showSuccess(t('customers.detail.deleted'))
+      navigate('/customers')
+    } catch (err) {
+      // Race: history got linked between the pre-check and the delete.
+      const conflict = getReferenceConflict(err)
+      if (conflict) {
+        setShowDeleteConfirm(false)
+        setDeleteBlockedBy(conflict.references)
+      } else {
+        toast.showError(describeApiError(err, t('customers.detail.deleteFailed')).message)
+      }
+    } finally {
+      setDeleteBusy(false)
+    }
+  }
+
+  /** After a stale save: drop the edit form's values and start again from the current data. */
+  function reloadStaleForm() {
+    if (!customer) return
+    mutations.clearError()
+    setReloadingFrom(customer)
+    reload()
+  }
+
   async function handleBlock(event: FormEvent) {
     event.preventDefault()
     if (!id) return
@@ -317,7 +379,7 @@ export function CustomerDetailPage() {
                       ]
                     : []),
                   ...(canDelete
-                    ? [{ key: 'delete', label: t('ui.actions.delete'), onSelect: () => setShowDeleteConfirm(true), danger: true }]
+                    ? [{ key: 'delete', label: t('ui.actions.delete'), onSelect: () => void requestDelete(), danger: true, disabled: deleteBusy }]
                     : []),
                 ]}
               />
@@ -329,15 +391,23 @@ export function CustomerDetailPage() {
 
       {!isEditing && <AttentionList items={attention} />}
 
-      {isEditing ? (
+      {isEditing && reloadingFrom ? (
+        <LoadingState message={t('customers.detail.loading')} />
+      ) : isEditing ? (
         <CustomerForm
+          key={formKey}
           mode="edit"
           initial={customer}
           initialSectionId={editSection ?? undefined}
           isSubmitting={mutations.isSubmitting}
           submitError={mutations.error}
           serverFieldErrors={mutations.fieldErrors}
-          onCancel={() => setIsEditing(false)}
+          staleConflict={mutations.isConflict}
+          onReload={reloadStaleForm}
+          onCancel={() => {
+            mutations.clearError()
+            setIsEditing(false)
+          }}
           editPanels={{
             adressen:
               canViewLocations && id ? (
@@ -561,17 +631,56 @@ export function CustomerDetailPage() {
           message={t('customers.detail.deleteMessage', { name: customer.name })}
           confirmLabel={t('ui.actions.delete')}
           destructive
-          busy={mutations.isSubmitting}
-          onConfirm={async () => {
-            if (!id) return
-            const ok = await mutations.remove(id)
-            if (ok) {
-              toast.showSuccess(t('customers.detail.deleted'))
-              navigate('/customers')
-            }
-          }}
+          busy={deleteBusy}
+          onConfirm={confirmDelete}
           onCancel={() => setShowDeleteConfirm(false)}
         />
+      )}
+
+      {deleteBlockedBy && (
+        <Modal
+          title={t('customers.detail.deleteBlockedTitle')}
+          onClose={() => setDeleteBlockedBy(null)}
+          busy={mutations.isSubmitting}
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setDeleteBlockedBy(null)} disabled={mutations.isSubmitting}>
+                {t('ui.actions.close')}
+              </Button>
+              {canDeactivate && customer.isActive && (
+                <Button
+                  disabled={mutations.isSubmitting}
+                  onClick={async () => {
+                    if (!id) return
+                    const ok = await mutations.setActive(id, false)
+                    if (ok) {
+                      toast.showSuccess(t('customers.detail.deactivated'))
+                      setDeleteBlockedBy(null)
+                      reload()
+                    }
+                  }}
+                >
+                  {t('customers.detail.deactivate')}
+                </Button>
+              )}
+            </>
+          }
+        >
+          {mutations.error && (
+            <p className="customer-import-message customer-import-message-error" role="alert">
+              {mutations.error}
+            </p>
+          )}
+          <p>{t('customers.detail.deleteBlockedIntro')}</p>
+          <ul className="customer-delete-references">
+            {deleteBlockedBy.map((reference) => (
+              <li key={reference.key}>{reference.label}</li>
+            ))}
+          </ul>
+          <p>
+            {customer.isActive ? t('customers.detail.deleteBlockedHint') : t('customers.detail.deleteBlockedInactiveHint')}
+          </p>
+        </Modal>
       )}
     </div>
   )

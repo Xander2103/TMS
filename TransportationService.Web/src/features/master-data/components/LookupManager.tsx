@@ -7,8 +7,10 @@ import { Pagination } from '../../../components/ui/Pagination'
 import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
+import { Modal } from '../../../components/ui/Modal'
 import { useToast } from '../../../components/ui/toastContext'
 import { ApiError } from '../../../api/apiClient'
+import { getReferenceConflict, type ReferenceConflict } from '../../../api/conflicts'
 import { usePagedQuery } from '../../../hooks/usePagedQuery'
 import { useLocale } from '../../../i18n/localeContext'
 import { useAuth } from '../../auth/authContextValue'
@@ -38,6 +40,10 @@ export function LookupManager({ config }: { config: LookupResourceConfig }) {
   const [dialog, setDialog] = useState<DialogState>(null)
   const [deleteTarget, setDeleteTarget] = useState<LookupItem | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
+  // Delete refused because history references the item: the server message (counts + the
+  // "Deactiveren" hint) with that alternative one click away.
+  const [deleteBlocked, setDeleteBlocked] = useState<{ item: LookupItem; conflict: ReferenceConflict } | null>(null)
+  const [isDeactivating, setIsDeactivating] = useState(false)
 
   const { items, totalCount, pageSize, isLoading, error, reload } = usePagedQuery<LookupItem>(
     (args) => api.search(args),
@@ -71,6 +77,12 @@ export function LookupManager({ config }: { config: LookupResourceConfig }) {
       if (items.length === 1 && page > 1) setPage(page - 1)
       else reload()
     } catch (error) {
+      const conflict = getReferenceConflict(error)
+      if (conflict) {
+        setDeleteBlocked({ item: deleteTarget, conflict })
+        setDeleteTarget(null)
+        return
+      }
       const message =
         error instanceof ApiError && error.status === 409
           ? t('masterData.errors.inUse')
@@ -78,6 +90,28 @@ export function LookupManager({ config }: { config: LookupResourceConfig }) {
       toast.showError(message)
     } finally {
       setIsDeleting(false)
+    }
+  }
+
+  async function deactivateBlocked() {
+    if (!deleteBlocked) return
+    const { item } = deleteBlocked
+    setIsDeactivating(true)
+    try {
+      await api.update(item.id, {
+        code: item.code,
+        name: item.name,
+        description: item.description,
+        isActive: false,
+        sortOrder: item.sortOrder,
+      })
+      toast.showSuccess(t('masterData.toasts.deactivated'))
+      setDeleteBlocked(null)
+      reload()
+    } catch {
+      toast.showError(t('masterData.errors.saveFailed'))
+    } finally {
+      setIsDeactivating(false)
     }
   }
 
@@ -180,6 +214,28 @@ export function LookupManager({ config }: { config: LookupResourceConfig }) {
           onConfirm={confirmDelete}
           onCancel={() => setDeleteTarget(null)}
         />
+      )}
+
+      {deleteBlocked && (
+        <Modal
+          title={t('masterData.deleteBlocked.title', { singular })}
+          onClose={() => setDeleteBlocked(null)}
+          busy={isDeactivating}
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setDeleteBlocked(null)} disabled={isDeactivating}>
+                {t('ui.actions.close')}
+              </Button>
+              {deleteBlocked.conflict.canDeactivate && deleteBlocked.item.isActive && (
+                <Button onClick={() => void deactivateBlocked()} disabled={isDeactivating}>
+                  {t('masterData.deleteBlocked.deactivate')}
+                </Button>
+              )}
+            </>
+          }
+        >
+          <p role="alert">{deleteBlocked.conflict.message}</p>
+        </Modal>
       )}
     </div>
   )

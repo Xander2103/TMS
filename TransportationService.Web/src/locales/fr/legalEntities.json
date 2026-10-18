@@ -36,7 +36,11 @@
     "street": "Rue",
     "tradingName": "Nom commercial",
     "vatNumber": "Numéro de TVA",
-    "website": "Site web"
+    "website": "Site web",
+    "logoPending": "Nouveau logo (pas encore enregistré) :",
+    "logoPendingRemoval": "Le logo sera supprimé lorsque vous cliquerez sur Enregistrer.",
+    "logoUndo": "Annuler la modification du logo",
+    "logoAppliedOnSave": "Une modification du logo n'est enregistrée que lorsque vous cliquez sur Enregistrer. Les factures déjà émises conservent leur logo ; les nouvelles factures utilisent le nouveau logo."
   },
   "page": {
     "columnDefault": "Par défaut",
@@ -64,7 +68,8 @@
     "saveFailed": "L'entreprise n'a pas pu être enregistrée.",
     "saved": "Entreprise enregistrée.",
     "savingBusy": "Enregistrement…",
-    "subtitle": "Entités facturantes de cette organisation."
+    "subtitle": "Entités facturantes de cette organisation.",
+    "savedLogoFailed": "La société est enregistrée, mais pas la modification du logo : {message} Cliquez à nouveau sur Enregistrer pour réessayer le logo."
   },
   "switcher": {
     "defaultSuffix": "(par défaut)",

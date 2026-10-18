@@ -38,7 +38,7 @@ function nullable(value: string): string | null {
 }
 
 /**
- * Same payload shape and defaults as `CustomerForm` in create mode (payment term 30 days,
+ * Same payload shape and defaults as `CustomerForm` in create mode (no own payment term,
  * DomesticVat, Peppol off, no contacts), so a quick-created customer is indistinguishable from
  * one created on the Klanten page — one backend rule set, one DTO.
  */
@@ -57,7 +57,8 @@ export function buildQuickCustomerInput(fields: QuickCustomerFields, options: { 
     city: nullable(fields.city),
     countryCode: fields.countryCode || null,
     invoiceEmail: null,
-    paymentTermDays: 30,
+    // Null = the billing entity's / company's term applies (no hard-coded 30 days).
+    paymentTermDays: null,
     defaultLanguageCode: null,
     notes: null,
     nickname: null,

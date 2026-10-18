@@ -20,7 +20,8 @@ import type { LookupOption } from '../../master-data/types'
 import { CountryCombobox } from '../../reference/components/CountryCombobox'
 import { EmployeeNotesPanel } from './EmployeeNotesPanel'
 import { formatIban, formatNrn, validateIban, validateNrn } from '../utils/personFormats'
-import { addContractEndDate, todayIsoDate, CONTRACT_END_DATE_PRESETS } from '../utils/contractPresets'
+import { addContractEndDate, CONTRACT_END_DATE_PRESETS } from '../utils/contractPresets'
+import { todayLocalIsoDate } from '../../../utils/dates'
 import {
   addEmergencyContactRow,
   emergencyContactRowsFromDetail,
@@ -267,7 +268,7 @@ export function EmployeeForm({
       : undefined
 
   function applyEndDatePreset(months: number) {
-    setEmploymentEndDate(addContractEndDate(employmentStartDate || todayIsoDate(), months))
+    setEmploymentEndDate(addContractEndDate(employmentStartDate || todayLocalIsoDate(), months))
     touch()
   }
 

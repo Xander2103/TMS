@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import { resetTimeZonePreference, setTimeZonePreference, todayLocalIsoDate } from '../../../utils/dates'
 import {
   comparePeriods,
   dateToPeriod,
@@ -53,12 +54,25 @@ describe('dateToPeriod', () => {
     expect(dateToPeriod('2025-01-01')).toEqual({ year: 2025, month: 1 })
   })
 
-  it('falls back to the current month for missing or invalid input', () => {
-    const now = new Date()
-    const expected = { year: now.getFullYear(), month: now.getMonth() + 1 }
+  it('falls back to the current (tenant-local) month for missing or invalid input', () => {
+    const [year, month] = todayLocalIsoDate().split('-').map(Number)
+    const expected = { year, month }
     expect(dateToPeriod(null)).toEqual(expected)
     expect(dateToPeriod(undefined)).toEqual(expected)
     expect(dateToPeriod('kapot')).toEqual(expected)
+  })
+
+  it('MD-M3: uses the tenant time zone, not UTC, right after local midnight on the 1st', () => {
+    // 2026-11-01 00:30 in Brussels is still 2026-10-31 23:30 UTC.
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-10-31T23:30:00Z'))
+    setTimeZonePreference('Europe/Brussels')
+    try {
+      expect(dateToPeriod(null)).toEqual({ year: 2026, month: 11 })
+    } finally {
+      resetTimeZonePreference()
+      vi.useRealTimers()
+    }
   })
 })
 

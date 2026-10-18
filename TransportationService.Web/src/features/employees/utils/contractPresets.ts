@@ -17,12 +17,6 @@ function toIsoDate(year: number, monthIndex0: number, day: number): string {
   return `${year}-${mm}-${dd}`
 }
 
-/** Today's calendar date as a local (not UTC-shifted) "yyyy-MM-dd" string. */
-export function todayIsoDate(): string {
-  const now = new Date()
-  return toIsoDate(now.getFullYear(), now.getMonth(), now.getDate())
-}
-
 /**
  * Computes `addMonths(start, months) - 1 day`, the conventional "contract runs for N months"
  * end date: a contract starting on the 1st of a month and running one month ends the day

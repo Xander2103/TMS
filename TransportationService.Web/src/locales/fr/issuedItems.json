@@ -243,6 +243,8 @@
     "deleteFailed": "Le matériel n'a pas pu être supprimé.",
     "deleteTitle": "Supprimer le matériel",
     "deleteMessage": "Voulez-vous vraiment supprimer « {name} » ? Les équipements déjà remis sont conservés.",
+    "deleteRefusedTitle": "L'équipement ne peut pas être supprimé",
+    "editToDeactivate": "Modifier l'article",
     "variantsPartiallyFailed": "Le matériel a été créé, mais ces variantes n'ont pas pu être ajoutées : {labels}. Ajoutez-les dans l'onglet Variantes.",
     "rowActions": "Actions {name}"
   },

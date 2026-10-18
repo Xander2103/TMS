@@ -15,7 +15,13 @@ import { useAuth } from '../../auth/authContextValue'
 import { useLookupOptions } from '../../master-data/hooks/useLookupOptions'
 import { LookupSelect } from '../../master-data/components/LookupSelect'
 import { CountryCombobox } from '../../reference/components/CountryCombobox'
-import { getVatTreatments, registryLookup, getPeppolSchemes, verifyCustomerPeppol } from '../api/customersApi'
+import {
+  getCustomerIdentityMatches,
+  getPeppolSchemes,
+  getVatTreatments,
+  registryLookup,
+  verifyCustomerPeppol,
+} from '../api/customersApi'
 import { getLegalEntityOptions } from '../../legal-entities/api/legalEntitiesApi'
 import type { LegalEntityOption } from '../../legal-entities/types'
 import { validateVatNumber } from '../utils/vatNumber'
@@ -45,6 +51,7 @@ import {
   type CustomerContactType,
   type CustomerDetail,
   type CustomerDocumentStrategy,
+  type CustomerIdentityMatch,
   type CustomerInput,
   type CustomerPeppolVerifyResult,
   type PeppolDeliveryPreference,
@@ -94,6 +101,13 @@ interface CustomerFormProps {
   stagedLocationsSlot?: ReactNode
   /** Edit mode opened from an overview card: start on that card's section (B17). */
   initialSectionId?: string
+  /**
+   * Edit only: the last save was refused because someone else changed the customer meanwhile
+   * (HTTP 409). The form then shows `submitError` with a "Gegevens herladen" action instead
+   * of retrying; `onReload` discards this (stale) form and reloads the customer.
+   */
+  staleConflict?: boolean
+  onReload?: () => void
 }
 
 /** Vertaalsleutels per backend-veldpad, voor de validatiesamenvatting (render via t). */
@@ -116,6 +130,7 @@ const FIELD_LABEL_KEYS: Record<string, string> = {
   peppolEnabled: 'customers.fields.peppolEnabled',
   peppolDeliveryPreference: 'customers.fields.peppolDeliveryPreference',
   buyerReference: 'customers.fields.buyerReference',
+  paymentTermDays: 'customers.form.paymentTermDays',
 }
 
 function nullable(value: string): string | null {
@@ -143,7 +158,7 @@ type PeppolVerifyState =
   | { kind: 'error'; message: string }
   | { kind: 'result'; result: CustomerPeppolVerifyResult }
 
-export function CustomerForm({ mode, initial, isSubmitting, submitError, serverFieldErrors, onSubmit, onCancel, editPanels, stagedLocationsSlot, initialSectionId }: CustomerFormProps) {
+export function CustomerForm({ mode, initial, isSubmitting, submitError, serverFieldErrors, onSubmit, onCancel, editPanels, stagedLocationsSlot, initialSectionId, staleConflict, onReload }: CustomerFormProps) {
   const { t } = useLocale()
   const languages = useLookupOptions('/api/languages')
   const { hasPermission } = useAuth()
@@ -248,7 +263,12 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
   const [invoiceGrouping, setInvoiceGrouping] = useState(initial?.invoiceGrouping || 'Manual') // '' = legacy rows → Manual
   const [documentStrategy, setDocumentStrategy] = useState(initial?.documentStrategy || 'GenerateOwn') // '' = legacy rows → default
   const [invoiceLanguageCode, setInvoiceLanguageCode] = useState(initial?.invoiceLanguageCode ?? '')
-  const [paymentTermDays, setPaymentTermDays] = useState(String(initial?.paymentTermDays ?? 30))
+  // Blank = no own term (sent as null → the billing entity / company term applies). A stored 0
+  // means "not configured" and is shown as an empty field; new customers no longer default to 30.
+  const [paymentTermDays, setPaymentTermDays] = useState(initial?.paymentTermDays ? String(initial.paymentTermDays) : '')
+  const [paymentTermError, setPaymentTermError] = useState<string | undefined>(undefined)
+  // The version this form was loaded with — echoed as expectedVersion so a stale save is refused.
+  const [loadedVersion] = useState(initial?.version ?? null)
   const [defaultLanguageCode, setDefaultLanguageCode] = useState(initial?.defaultLanguageCode ?? '')
   const [purchaseOrderRequired, setPurchaseOrderRequired] = useState(initial?.purchaseOrderRequired ?? false)
   const [signedDeliveryNoteRequired, setSignedDeliveryNoteRequired] = useState(initial?.signedDeliveryNoteRequired ?? false)
@@ -265,6 +285,9 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
   const [vatRateError, setVatRateError] = useState<string | undefined>(undefined)
   const [dirty, setDirty] = useState(false)
   const [lookup, setLookup] = useState<LookupState>({ kind: 'idle' })
+  // Advisory duplicate check (on blur): other customers already using this VAT / company number.
+  const [identityMatches, setIdentityMatches] = useState<CustomerIdentityMatch[]>([])
+  const identitySeqRef = useRef(0)
   const [registryConflict, setRegistryConflict] = useState<{
     result: CompanyRegistryResult
     conflicts: { label: string; current: string; next: string }[]
@@ -305,6 +328,42 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
     if (!Number.isFinite(parsed) || parsed < 0 || parsed > 100) return { ok: false, value: null }
     return { ok: true, value: parsed }
   }
+
+  /**
+   * Non-blocking duplicate warning: saving stays allowed (group companies may share a number).
+   * Only the latest check wins; a failed check simply shows nothing.
+   */
+  async function checkIdentityMatches() {
+    const seq = ++identitySeqRef.current
+    const vat = vatNumber.trim()
+    const company = companyNumber.trim()
+    if (!vat && !company) {
+      setIdentityMatches([])
+      return
+    }
+    try {
+      const matches = await getCustomerIdentityMatches({
+        vatNumber: vat || null,
+        companyNumber: company || null,
+        excludeId: initial?.id,
+      })
+      if (seq === identitySeqRef.current) setIdentityMatches(matches)
+    } catch {
+      if (seq === identitySeqRef.current) setIdentityMatches([])
+    }
+  }
+
+  const identityWarnings = (matchedOn: CustomerIdentityMatch['matchedOn']) =>
+    identityMatches
+      .filter((m) => m.matchedOn === matchedOn)
+      .map((m) => (
+        <p key={m.id} className="customer-form-warning" role="status">
+          {t(matchedOn === 'Vat' ? 'customers.form.duplicateVat' : 'customers.form.duplicateCompanyNumber', {
+            name: m.name,
+            number: m.customerNumber,
+          })}
+        </p>
+      ))
 
   async function handleRegistryLookup() {
     const number = vatNumber.trim() || companyNumber.trim()
@@ -410,6 +469,7 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
   if (vatError) combinedErrorKeys.add('vatNumber')
   if (peppolProblem) combinedErrorKeys.add('peppolId')
   if (vatRateError) combinedErrorKeys.add('defaultVatRatePercent')
+  if (paymentTermError) combinedErrorKeys.add('paymentTermDays')
   for (const key of Object.keys(contactRowErrors)) combinedErrorKeys.add(key)
   for (const key of Object.keys(serverFieldErrors ?? {})) combinedErrorKeys.add(key)
   const sectionHasError = (id: string) =>
@@ -723,6 +783,7 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
                 onBlur={() => {
                   const key = validateVatNumber(vatNumber)
                   setVatError(key ? t(key) : undefined)
+                  void checkIdentityMatches()
                 }}
                 aria-invalid={vatError || getFieldError(serverFieldErrors, 'vatNumber') ? 'true' : undefined}
                 maxLength={30}
@@ -733,6 +794,7 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
                   {t('customers.form.vatNumberMissingWarning')}
                 </p>
               )}
+              {identityWarnings('Vat')}
             </>
           </FormField>
           <FormField
@@ -741,13 +803,17 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
             hint={t('customers.form.companyNumberHint')}
             error={getFieldError(serverFieldErrors, 'companyNumber')}
           >
-            <input
-              id="c-company-number"
-              value={companyNumber}
-              onChange={(e) => setCompanyNumber(e.target.value)}
-              maxLength={30}
-              disabled={!canManageFiscal}
-            />
+            <>
+              <input
+                id="c-company-number"
+                value={companyNumber}
+                onChange={(e) => setCompanyNumber(e.target.value)}
+                onBlur={() => void checkIdentityMatches()}
+                maxLength={30}
+                disabled={!canManageFiscal}
+              />
+              {identityWarnings('CompanyNumber')}
+            </>
           </FormField>
           <div className="customer-form-lookup form-span-all">
             <div className="customer-form-lookup-row">
@@ -1113,8 +1179,21 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
               ))}
             </select>
           </FormField>
-          <FormField label={t('customers.form.paymentTermDays')} htmlFor="c-payterm">
-            <input id="c-payterm" type="number" min={0} value={paymentTermDays} onChange={(e) => setPaymentTermDays(e.target.value)} />
+          <FormField
+            label={t('customers.form.paymentTermDays')}
+            htmlFor="c-payterm"
+            hint={t('customers.form.paymentTermHint')}
+            error={paymentTermError ?? getFieldError(serverFieldErrors, 'paymentTermDays')}
+          >
+            {/* No native min/step: the Dutch validation in handleSubmit explains a wrong value. */}
+            <input
+              id="c-payterm"
+              type="number"
+              inputMode="numeric"
+              value={paymentTermDays}
+              onChange={(e) => setPaymentTermDays(e.target.value)}
+              aria-invalid={paymentTermError || getFieldError(serverFieldErrors, 'paymentTermDays') ? 'true' : undefined}
+            />
           </FormField>
           <FormField
             label={t('customers.form.defaultLegalEntity')}
@@ -1254,6 +1333,17 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
       valid = false
     }
 
+    // Blank is valid (no own term); otherwise a whole number of days, never negative.
+    const paymentTerm = paymentTermDays.trim() === '' ? null : Number(paymentTermDays)
+    if (paymentTerm !== null && (!Number.isInteger(paymentTerm) || paymentTerm < 0)) {
+      const termMessage = t('customers.form.paymentTermInvalid')
+      setPaymentTermError(termMessage)
+      errorKeys.paymentTermDays = termMessage
+      valid = false
+    } else {
+      setPaymentTermError(undefined)
+    }
+
     const rate = resolveVatRate()
     if (!rate.ok) {
       const rateMessage = t('customers.form.vatRateRange')
@@ -1345,7 +1435,7 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
       invoiceEmail: nullable(invoiceEmail),
       invoiceGrouping,
       documentStrategy,
-      paymentTermDays: Number.isFinite(Number(paymentTermDays)) ? Number(paymentTermDays) : 0,
+      paymentTermDays: paymentTerm,
       defaultLanguageCode: defaultLanguageCode || null,
       defaultLegalEntityId: defaultLegalEntityId || null,
       allowedLegalEntityIds,
@@ -1361,7 +1451,10 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
     // Clear the guard before the parent saves + navigates away. In edit mode the Actief
     // checkbox is authoritative; a create is always active.
     setDirty(false)
-    onSubmit({ ...base, isActive: isEdit ? isActive : true }, intent)
+    onSubmit(
+      { ...base, isActive: isEdit ? isActive : true, ...(isEdit ? { expectedVersion: loadedVersion } : {}) },
+      intent,
+    )
   }
 
   // B39: one sticky action bar at the bottom of the form (the duplicate top bar is gone).
@@ -1397,8 +1490,18 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
   return (
     <form onSubmit={handleSubmit} className="customer-form" onChange={touch}>
       <UnsavedChangesGuard when={dirty && !isSubmitting} />
+      {staleConflict && submitError && (
+        <div className="customer-import-message customer-import-message-error customer-form-stale" role="alert">
+          <p>{submitError}</p>
+          {onReload && (
+            <Button variant="secondary" onClick={onReload}>
+              {t('customers.form.reloadStale')}
+            </Button>
+          )}
+        </div>
+      )}
       <ValidationSummary
-        message={submitError}
+        message={staleConflict ? null : submitError}
         fieldErrors={serverFieldErrors}
         fieldLabels={Object.fromEntries(Object.entries(FIELD_LABEL_KEYS).map(([path, key]) => [path, t(key)]))}
       />

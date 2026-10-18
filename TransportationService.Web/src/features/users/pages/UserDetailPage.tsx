@@ -18,7 +18,7 @@ export function UserDetailPage() {
   const { t } = useLocale()
   const { id = '' } = useParams<{ id: string }>()
   const { user, isLoading, error, reload } = useUser(id)
-  const { isSubmitting, setActive, setBlocked } = useUserMutations()
+  const { isSubmitting, error: statusError, setActive, setBlocked } = useUserMutations()
   // B03: deactivating and blocking ask through the app's own dialog, not window.confirm.
   const [confirm, setConfirm] = useState<'deactivate' | 'block' | null>(null)
   const { hasPermission } = useAuth()
@@ -89,6 +89,12 @@ export function UserDetailPage() {
             {user.isBlocked ? t('usersRoles.users.detail.unblock') : t('usersRoles.users.detail.block')}
           </Button>
         </div>
+        {/* e.g. the last active administrator cannot be deactivated or blocked. */}
+        {statusError && (
+          <p className="form-error" role="alert">
+            {statusError}
+          </p>
+        )}
       </section>
 
       {/* H7: every account has a visible next step to sign in — the one-time activation link. */}

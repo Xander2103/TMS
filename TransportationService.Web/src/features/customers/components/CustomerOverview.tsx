@@ -99,7 +99,13 @@ export function CustomerOverview({ customer, onEdit, canViewDossiers, canViewInv
               },
               { label: 'Peppol', value: peppol },
               { label: t('customers.form.invoiceEmail'), value: customer.invoiceEmail },
-              { label: t('customers.detail.paymentTermLabel'), value: t('customers.detail.paymentTermDays', { days: customer.paymentTermDays }) },
+              {
+                label: t('customers.detail.paymentTermLabel'),
+                // 0 = no own term: the billing entity / company term applies.
+                value: customer.paymentTermDays
+                  ? t('customers.detail.paymentTermDays', { days: customer.paymentTermDays })
+                  : t('customers.detail.paymentTermFallback'),
+              },
               customer.invoiceGrouping
                 ? { label: t('customers.overview.invoiceGrouping'), value: t(`customers.invoiceGrouping.${customer.invoiceGrouping}`) }
                 : null,

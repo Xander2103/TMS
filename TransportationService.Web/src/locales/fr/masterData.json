@@ -48,7 +48,8 @@
   "toasts": {
     "added": "Élément ajouté.",
     "updated": "Élément mis à jour.",
-    "deleted": "Élément supprimé."
+    "deleted": "Élément supprimé.",
+    "deactivated": "Élément désactivé."
   },
   "deleteDialog": {
     "title": "Supprimer {singular}",
@@ -93,9 +94,15 @@
     "optionsLoadFailed": "Impossible de charger la liste de choix."
   },
   "units": {
-    "subtitle": "Unités globales avec code, catégorie, dimensions et valeurs physiques par défaut. Les préférences et tarifs spécifiques au client se trouvent sur la fiche client."
+    "subtitle": "Unités globales avec code, catégorie, dimensions et valeurs physiques par défaut. Les préférences et tarifs spécifiques au client se trouvent sur la fiche client.",
+    "retainedInactive": "{name} (inactif)",
+    "retainedUnavailable": "{name} (plus sélectionnable)"
   },
   "services": {
     "subtitle": "Services et suppléments globaux avec mode de calcul et prix par défaut. Les dérogations spécifiques au client se gèrent sur la fiche client."
+  },
+  "deleteBlocked": {
+    "title": "Impossible de supprimer : {singular}",
+    "deactivate": "Désactiver"
   }
 }

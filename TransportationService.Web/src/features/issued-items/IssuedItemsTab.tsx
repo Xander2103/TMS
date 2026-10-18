@@ -10,7 +10,7 @@ import { useToast } from '../../components/ui/toastContext'
 import { useAuth } from '../auth/authContextValue'
 import { useLocale } from '../../i18n/localeContext'
 import { describeApiError } from '../../api/problemDetails'
-import { formatDate } from '../../utils/dates'
+import { formatDate, todayLocalIsoDate } from '../../utils/dates'
 import {
   deleteEmployeeIssuedItem,
   downloadIssuedItemsAcknowledgement,
@@ -56,7 +56,7 @@ interface ReturnDraft {
 }
 
 function today(): string {
-  return new Date().toISOString().slice(0, 10)
+  return todayLocalIsoDate()
 }
 
 function emptyReturnDraft(): ReturnDraft {

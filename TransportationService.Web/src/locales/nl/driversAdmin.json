@@ -62,7 +62,11 @@
     "colStatus": "Status",
     "colExpiry": "Vervaldatum",
     "deleteTitle": "Chauffeur verwijderen",
-    "deleteMessage": "Weet je zeker dat je chauffeur {number} wilt verwijderen? Het personeelsdossier blijft behouden."
+    "deleteMessage": "Weet je zeker dat je chauffeur {number} wilt verwijderen? Het personeelsdossier blijft behouden.",
+    "deleteRefusedTitle": "Chauffeur kan niet worden verwijderd",
+    "deactivateInstead": "Chauffeur inactief zetten",
+    "deactivated": "Chauffeur inactief gezet. De historiek blijft bewaard.",
+    "deactivateFailed": "Chauffeur kon niet inactief gezet worden."
   },
   "newPage": {
     "breadcrumb": "Chauffeurs",

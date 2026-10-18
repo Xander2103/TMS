@@ -377,6 +377,26 @@
   color: var(--color-danger);
 }
 
+/* Stale save (HTTP 409): the server message with the "Gegevens herladen" action beside it. */
+.customer-form-stale {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-bottom: 12px;
+}
+
+.customer-form-stale p {
+  margin: 0;
+  flex: 1 1 240px;
+}
+
+/* Refused delete: the referencing history as a short list. */
+.customer-delete-references {
+  margin: 8px 0;
+  padding-left: 20px;
+}
+
 .customer-import-summary {
   margin: 0;
   display: flex;

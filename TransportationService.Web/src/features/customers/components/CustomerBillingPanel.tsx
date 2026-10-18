@@ -12,6 +12,7 @@ import { useSaveStatus } from '../../../components/ui/useSaveStatus'
 import { describeApiError, getFieldError, type FieldErrors } from '../../../api/problemDetails'
 import { useAuth } from '../../auth/authContextValue'
 import { useLocale } from '../../../i18n/localeContext'
+import { todayLocalIsoDate } from '../../../utils/dates'
 import {
   addPoNumber,
   deletePoNumber,
@@ -454,7 +455,8 @@ function PoNumberDialog({
 }) {
   const { t } = useLocale()
   const [poNumber, setPoNumber] = useState(po?.poNumber ?? '')
-  const [validFrom, setValidFrom] = useState(po?.validFrom ?? new Date().toISOString().slice(0, 10))
+  // Tenant-local today: a UTC slice defaulted to yesterday/tomorrow around midnight.
+  const [validFrom, setValidFrom] = useState(po?.validFrom ?? todayLocalIsoDate())
   const [validUntil, setValidUntil] = useState(po?.validUntil ?? '')
   const [notes, setNotes] = useState(po?.notes ?? '')
   const [localErrors, setLocalErrors] = useState<{ poNumber?: string; validFrom?: string; validUntil?: string }>({})

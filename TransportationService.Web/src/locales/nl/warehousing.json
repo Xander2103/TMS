@@ -55,6 +55,7 @@
     "active": "Actief",
     "deleteTitle": "Dock verwijderen",
     "deleteMessage": "Dock {code} wordt verwijderd. Dit kan niet ongedaan worden gemaakt.",
+    "deleteRefusedTitle": "Dock kan niet worden verwijderd",
     "deleted": "Dock verwijderd."
   },
   "locations": {

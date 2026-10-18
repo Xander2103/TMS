@@ -57,7 +57,7 @@ function customer(overrides: Partial<CustomerDetail> = {}): CustomerDetail {
     invoiceEmail: null, paymentTermDays: 30, defaultLanguageCode: null, notes: null,
     isActive: true, isBlocked: false, blockReason: null, nickname: null, companyNumber: null,
     currencyCode: 'EUR', iban: null, bic: null, bankName: null, bankAccountNumber: null,
-    defaultLegalEntityId: null, contacts: [contact()],
+    defaultLegalEntityId: null, contacts: [contact()], version: 1,
     vatTreatment: 'DomesticVat', defaultVatRatePercent: null, vatCountryCode: null, vatNotes: null,
     peppolId: null, peppolScheme: null, invoiceLanguageCode: null, purchaseOrderRequired: false,
     signedDeliveryNoteRequired: false, customerReferenceRequired: false,

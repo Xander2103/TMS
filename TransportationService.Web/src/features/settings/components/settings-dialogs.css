@@ -1,0 +1,20 @@
+/* MD-M2: "changed by someone else" notice inside a settings edit dialog. */
+.settings-conflict {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  margin: 0 0 12px;
+  padding: 10px 14px;
+  border: 1px solid var(--warning-border);
+  border-radius: 8px;
+  background: var(--warning-bg);
+  color: var(--text-h);
+  font-size: 14px;
+}
+
+.settings-conflict p {
+  margin: 0;
+  flex: 1 1 240px;
+}

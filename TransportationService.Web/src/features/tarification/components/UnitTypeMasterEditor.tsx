@@ -18,6 +18,7 @@ import {
   type UnitTypeMaster,
 } from '../api/pricingApi'
 import { suggestUnitCode } from '../unitCodeSuggestion'
+import { useDirtyDialogClose } from '../../settings/components/useDirtyDialogClose'
 
 interface UnitDraft {
   unit: UnitTypeMaster | null
@@ -61,13 +62,20 @@ export function UnitTypeMasterEditor() {
   const canView =
     hasPermission('unit_types.view') || hasPermission('unit_types.manage')
     || hasPermission('tariffs.view') || hasPermission('tariffs.manage')
-  const canManage = hasPermission('unit_types.manage') || hasPermission('tariffs.manage')
+  // MD-M8: the unit master itself is master data — unit_types.manage only (tariffs.manage governs
+  // a unit's use in pricing, not the unit).
+  const canManage = hasPermission('unit_types.manage')
 
   const [units, setUnits] = useState<UnitTypeMaster[] | null>(null)
   const [loadErrorKey, setLoadErrorKey] = useState<string | null>(null)
   const [draft, setDraft] = useState<UnitDraft | null>(null)
   const [draftError, setDraftError] = useState<string | null>(null)
+  const [codeError, setCodeError] = useState<string | null>(null)
+  const [initialDraft, setInitialDraft] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  // MD-M9: Escape / × / Annuleren on a dirty unit dialog ask before discarding.
+  const dirty = draft !== null && initialDraft !== null && JSON.stringify(draft) !== initialDraft
+  const { requestClose, guard } = useDirtyDialogClose(dirty, busy, () => setDraft(null))
 
   const reload = useCallback(() => {
     if (!canView) return
@@ -89,7 +97,8 @@ export function UnitTypeMasterEditor() {
 
   function openDraft(unit: UnitTypeMaster | null) {
     setDraftError(null)
-    setDraft(
+    setCodeError(null)
+    const next: UnitDraft =
       unit
         ? {
             unit,
@@ -136,8 +145,9 @@ export function UnitTypeMasterEditor() {
             allowForInventory: false,
             isActive: true,
             sortOrder: String((units ?? []).length),
-          },
-    )
+          }
+    setDraft(next)
+    setInitialDraft(JSON.stringify(next))
   }
 
   async function submitDraft(event: FormEvent) {
@@ -178,7 +188,12 @@ export function UnitTypeMasterEditor() {
       setDraft(null)
       reload()
     } catch (err) {
-      setDraftError(localizeApiError(t, err, t('tarification.unitMaster.saveError')))
+      // MD-H8: a used code can't be changed or a deleted unit's code re-used — the server says so
+      // on the code field; everything else stays a form-level message.
+      const fieldErrors = (err as { fieldErrors?: Record<string, string[]> }).fieldErrors
+      const onCode = fieldErrors?.code?.[0] ?? null
+      setCodeError(onCode)
+      setDraftError(onCode ? null : localizeApiError(t, err, t('tarification.unitMaster.saveError')))
     } finally {
       setBusy(false)
     }
@@ -234,11 +249,11 @@ export function UnitTypeMasterEditor() {
       {draft && (
         <Modal
           title={draft.unit ? t('tarification.unitMaster.editTitle', { name: draft.unit.name }) : t('tarification.unitMaster.addTitle')}
-          onClose={() => setDraft(null)}
+          onClose={requestClose}
           busy={busy}
           footer={
             <>
-              <Button variant="secondary" onClick={() => setDraft(null)} disabled={busy}>
+              <Button variant="secondary" onClick={requestClose} disabled={busy}>
                 {t('ui.actions.cancel')}
               </Button>
               <Button type="submit" form="unit-master-form" disabled={busy}>
@@ -273,12 +288,16 @@ export function UnitTypeMasterEditor() {
                   }
                 />
               </FormField>
-              <FormField label={t('tarification.unitMaster.codeLabel')} htmlFor="um-code" required hint={t('tarification.unitMaster.codeHint')}>
+              <FormField label={t('tarification.unitMaster.codeLabel')} htmlFor="um-code" required hint={t('tarification.unitMaster.codeHint')}
+                error={codeError ?? undefined}>
                 <input
                   id="um-code"
                   value={draft.code}
                   maxLength={20}
-                  onChange={(e) => setDraft((d) => (d ? { ...d, code: e.target.value.toUpperCase(), codeTouched: true } : d))}
+                  onChange={(e) => {
+                    setCodeError(null)
+                    setDraft((d) => (d ? { ...d, code: e.target.value.toUpperCase(), codeTouched: true } : d))
+                  }}
                 />
               </FormField>
             </div>
@@ -368,6 +387,7 @@ export function UnitTypeMasterEditor() {
           </form>
         </Modal>
       )}
+      {draft && guard}
     </section>
   )
 }

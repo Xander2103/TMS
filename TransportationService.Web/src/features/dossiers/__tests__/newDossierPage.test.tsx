@@ -51,6 +51,12 @@ vi.mock('../../master-data/hooks/useLookupOptions', () => ({
     error: null,
   }),
 }))
+// Units come from order-options + labels (useUnitTypes); same catalogue as above.
+vi.mock('../../master-data/hooks/useUnitTypes', async () => {
+  const { unitTypesFixture } = await import('../../master-data/__tests__/unitTypesFixture')
+  const units = unitTypesFixture([{ id: 'u-pallet', code: 'EUROPALLET', name: 'Europallet' }])
+  return { useUnitTypes: () => units }
+})
 vi.mock('../../locations/components/LocationSelect', () => ({
   LocationSelect: ({ id }: { id?: string }) => <input id={id} aria-label="locatie" />,
 }))
@@ -639,7 +645,7 @@ describe('NewDossierPage — + Nieuwe klant', () => {
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Nieuwe klant' })).not.toBeInTheDocument())
     expect(createCustomer).toHaveBeenCalledTimes(1)
     expect(createCustomer).toHaveBeenCalledWith(
-      expect.objectContaining({ name: 'Quick Test Customer', city: 'Gent', paymentTermDays: 30, vatTreatment: 'DomesticVat', peppolEnabled: false, vatNumber: null }),
+      expect.objectContaining({ name: 'Quick Test Customer', city: 'Gent', paymentTermDays: null, vatTreatment: 'DomesticVat', peppolEnabled: false, vatNumber: null }),
     )
     // Auto-selected (focus is back on the field), no second search; the earlier reference is still there.
     await waitFor(() => expectSelectedCustomer('Quick Test Customer'))

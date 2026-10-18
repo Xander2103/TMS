@@ -54,7 +54,9 @@
       "unloadingMinutes": "Lostijd (min)",
       "qualificationWarningDays": "Waarschuwing kwalificatie (dagen)",
       "defaultPageSize": "Standaard paginagrootte",
-      "logoReference": "Logo-referentie"
+      "logoReference": "Logo-referentie",
+      "defaultPaymentTermDays": "Standaard betaaltermijn (dagen)",
+      "defaultPaymentTermDaysHint": "Alleen gebruikt als klant en facturerende entiteit er geen hebben."
     },
     "language": {
       "section": "Taal",
@@ -102,9 +104,12 @@
       "vehiclePrefix": "Voertuig prefix",
       "vehicleNext": "Voertuig volgnr",
       "trailerPrefix": "Oplegger prefix",
-      "trailerNext": "Oplegger volgnr"
+      "trailerNext": "Oplegger volgnr",
+      "invoiceNumberingNote": "Factuurnummering stel je in per facturerende entiteit (Eigen bedrijven)."
     },
-    "brandingHint": "Verwijzing naar een logobestand. Uploaden van bestanden komt in een latere fase."
+    "brandingHint": "Verwijzing naar een logobestand. Uploaden van bestanden komt in een latere fase.",
+    "invoiceIbanNote": "Het IBAN op facturen komt van de facturerende entiteit.",
+    "brandingNote": "Het logo op facturen en documenten stel je in per facturerende entiteit (Eigen bedrijven)."
   },
   "system": {
     "title": "Systeeminformatie",
@@ -265,5 +270,12 @@
       "Cmr": "CMR",
       "None": "Geen document"
     }
+  },
+  "dialogs": {
+    "discardTitle": "Wijzigingen verwerpen?",
+    "discardMessage": "Je hebt wijzigingen die nog niet zijn opgeslagen. Sluit je zonder op te slaan?",
+    "discardConfirm": "Sluiten zonder opslaan",
+    "conflictMessage": "Deze gegevens zijn intussen gewijzigd door een andere gebruiker.",
+    "conflictReload": "Opnieuw laden"
   }
 }

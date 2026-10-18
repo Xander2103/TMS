@@ -10,12 +10,16 @@ import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
 import { useLocale } from '../../../i18n/localeContext'
 import { localizeApiError } from '../../../api/problemDetails'
+import { isConcurrencyConflict } from '../../../api/conflicts'
+import { ConcurrencyConflictNotice } from '../../settings/components/ConcurrencyConflictNotice'
+import { useDirtyDialogClose } from '../../settings/components/useDirtyDialogClose'
 import {
   createLedgerAccount,
   createSalesCategory,
   deleteLedgerAccount,
   listLedgerAccounts,
   listSalesCategories,
+  setSalesCategoryLedgerAccount,
   updateLedgerAccount,
   updateSalesCategory,
   SYSTEM_ROLE_LABELS,
@@ -56,6 +60,37 @@ interface CategoryDraft {
   ledgerMappings: SalesCategoryLedgerMapping[]
 }
 
+function accountDraftFrom(account: LedgerAccount | null): AccountDraft {
+  return {
+    account,
+    accountNumber: account?.accountNumber ?? '',
+    name: account?.name ?? '',
+    externalCode: account?.externalCode ?? '',
+    description: account?.description ?? '',
+    isActive: account?.isActive ?? true,
+  }
+}
+
+function categoryDraftFrom(category: SalesCategory | null): CategoryDraft {
+  return {
+    category,
+    code: category?.code ?? '',
+    name: category?.name ?? '',
+    systemRole: category?.systemRole ?? 'None',
+    isActive: category?.isActive ?? true,
+    invoiceDescriptionNl: category?.invoiceDescriptionNl ?? '',
+    invoiceDescriptionFr: category?.invoiceDescriptionFr ?? '',
+    invoiceDescriptionEn: category?.invoiceDescriptionEn ?? '',
+    invoiceDescriptionDe: category?.invoiceDescriptionDe ?? '',
+    includeInDieselBase: category?.includeInDieselBase ?? false,
+    vatTreatmentOverride: category?.vatTreatmentOverride ?? '',
+    costCentre: category?.costCentre ?? '',
+    defaultUnitCode: category?.defaultUnitCode ?? '',
+    vatCategoryOverride: category?.vatCategoryOverride ?? '',
+    ledgerMappings: category?.ledgerMappings ?? [],
+  }
+}
+
 /**
  * Bedrijfsinstellingen → Boekhouding (corrections wave §7): tenant-specific ledger accounts
  * and the sales-category → account mappings. The mapping here is live configuration only —
@@ -74,9 +109,34 @@ export function AccountingSettingsPage() {
   const [loadErrorKey, setLoadErrorKey] = useState<string | null>(null)
   const [accountDraft, setAccountDraft] = useState<AccountDraft | null>(null)
   const [categoryDraft, setCategoryDraft] = useState<CategoryDraft | null>(null)
+  // MD-M2: the draft as opened (JSON) — Escape/Annuleren on a changed draft asks first.
+  const [accountBaseline, setAccountBaseline] = useState<string | null>(null)
+  const [categoryBaseline, setCategoryBaseline] = useState<string | null>(null)
   const [draftError, setDraftError] = useState<string | null>(null)
+  // MD-M2: the category was saved by someone else since the dialog opened (409).
+  const [categoryConflict, setCategoryConflict] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<LedgerAccount | null>(null)
   const [busy, setBusy] = useState(false)
+
+  const accountDirty = accountDraft !== null && JSON.stringify(accountDraft) !== accountBaseline
+  const categoryDirty = categoryDraft !== null && JSON.stringify(categoryDraft) !== categoryBaseline
+  const accountClose = useDirtyDialogClose(accountDirty, busy, () => setAccountDraft(null))
+  const categoryClose = useDirtyDialogClose(categoryDirty, busy, () => setCategoryDraft(null))
+
+  function openAccountDraft(account: LedgerAccount | null) {
+    const draft = accountDraftFrom(account)
+    setDraftError(null)
+    setAccountDraft(draft)
+    setAccountBaseline(JSON.stringify(draft))
+  }
+
+  function openCategoryDraft(category: SalesCategory | null) {
+    const draft = categoryDraftFrom(category)
+    setDraftError(null)
+    setCategoryConflict(false)
+    setCategoryDraft(draft)
+    setCategoryBaseline(JSON.stringify(draft))
+  }
 
   const reload = useCallback(() => {
     if (!canView) return
@@ -100,20 +160,38 @@ export function AccountingSettingsPage() {
   const activeAccounts = accounts.filter((a) => a.isActive)
   const unmapped = categories.filter((c) => c.isActive && c.ledgerAccountId === null)
 
+  // MD-H1: the inline control changes the default ledger account ONLY (dedicated endpoint); the
+  // full PUT used to wipe descriptions, VAT overrides, cost centre and the per-entity mappings.
   async function changeMapping(category: SalesCategory, ledgerAccountId: string | null) {
     try {
-      await updateSalesCategory(category.id, {
-        code: category.code,
-        name: category.name,
-        systemRole: category.systemRole,
-        ledgerAccountId,
-        isActive: category.isActive,
-        sortOrder: category.sortOrder,
-      })
+      const updated = await setSalesCategoryLedgerAccount(category.id, ledgerAccountId, category.version)
+      setCategories((current) => current?.map((c) => (c.id === updated.id ? updated : c)) ?? current)
       showSuccess(t('accounting.categories.mappingUpdated', { name: category.name }))
-      reload()
     } catch (err) {
+      if (isConcurrencyConflict(err)) {
+        // Nothing typed to lose here: show the row as it is now on the server.
+        showError(t('settingsPages.dialogs.conflictMessage'))
+        reload()
+        return
+      }
       showError(localizeApiError(t, err, t('accounting.categories.mappingSaveFailed')))
+    }
+  }
+
+  async function reloadCategoryDraft() {
+    const id = categoryDraft?.category?.id
+    if (!id) return
+    setBusy(true)
+    try {
+      const fresh = await listSalesCategories(true)
+      setCategories(fresh)
+      const current = fresh.find((c) => c.id === id)
+      if (current) openCategoryDraft(current)
+      else setCategoryDraft(null)
+    } catch (err) {
+      setDraftError(localizeApiError(t, err, t('accounting.page.loadFailed')))
+    } finally {
+      setBusy(false)
     }
   }
 
@@ -151,6 +229,11 @@ export function AccountingSettingsPage() {
     if (!categoryDraft) return
     setBusy(true)
     setDraftError(null)
+    setCategoryConflict(false)
+    const existing = categoryDraft.category
+    // MD-H1: null = "mappings unchanged" — only send the list when the user edited it here.
+    const mappingsChanged =
+      existing === null || JSON.stringify(categoryDraft.ledgerMappings) !== JSON.stringify(existing.ledgerMappings ?? [])
     try {
       const input = {
         code: categoryDraft.code.trim(),
@@ -168,12 +251,16 @@ export function AccountingSettingsPage() {
         includeInDieselBase: categoryDraft.includeInDieselBase,
         vatTreatmentOverride: categoryDraft.vatTreatmentOverride || null,
         costCentre: categoryDraft.costCentre.trim() || null,
+        // Not edited in this dialog: echo the stored values so the full PUT never clears them.
+        defaultUnitPrice: existing?.defaultUnitPrice ?? null,
+        defaultPricingBasis: existing?.defaultPricingBasis ?? null,
+        notes: existing?.notes ?? null,
         // Sprint 5: the per-entity ledger overrides as edited in the dialog (rows without an
         // account are already dropped by the editor = "use the default account").
-        ledgerMappings: categoryDraft.ledgerMappings,
+        ledgerMappings: mappingsChanged ? categoryDraft.ledgerMappings : null,
       }
-      if (categoryDraft.category) {
-        await updateSalesCategory(categoryDraft.category.id, input)
+      if (existing) {
+        await updateSalesCategory(existing.id, { ...input, expectedVersion: existing.version })
         showSuccess(t('accounting.categories.updated'))
       } else {
         await createSalesCategory(input)
@@ -182,7 +269,8 @@ export function AccountingSettingsPage() {
       setCategoryDraft(null)
       reload()
     } catch (err) {
-      setDraftError(localizeApiError(t, err, t('accounting.categories.saveFailed')))
+      if (isConcurrencyConflict(err)) setCategoryConflict(true)
+      else setDraftError(localizeApiError(t, err, t('accounting.categories.saveFailed')))
     } finally {
       setBusy(false)
     }
@@ -203,16 +291,7 @@ export function AccountingSettingsPage() {
         <div className="accounting-card-head">
           <h3>{t('accounting.categories.title')}</h3>
           {canManage && (
-            <Button variant="secondary" onClick={() => {
-              setDraftError(null)
-              setCategoryDraft({
-                category: null, code: '', name: '', systemRole: 'None', isActive: true,
-                invoiceDescriptionNl: '', defaultUnitCode: '', vatCategoryOverride: '',
-                invoiceDescriptionFr: '', invoiceDescriptionEn: '', invoiceDescriptionDe: '',
-                includeInDieselBase: false, vatTreatmentOverride: '', costCentre: '',
-                ledgerMappings: [],
-              })
-            }}>
+            <Button variant="secondary" onClick={() => openCategoryDraft(null)}>
               {t('accounting.categories.add')}
             </Button>
           )}
@@ -276,26 +355,7 @@ export function AccountingSettingsPage() {
                     <button
                       type="button"
                       className="issued-items-link"
-                      onClick={() => {
-                        setDraftError(null)
-                        setCategoryDraft({
-                          category,
-                          code: category.code,
-                          name: category.name,
-                          systemRole: category.systemRole,
-                          isActive: category.isActive,
-                          invoiceDescriptionNl: category.invoiceDescriptionNl ?? '',
-                          invoiceDescriptionFr: category.invoiceDescriptionFr ?? '',
-                          invoiceDescriptionEn: category.invoiceDescriptionEn ?? '',
-                          invoiceDescriptionDe: category.invoiceDescriptionDe ?? '',
-                          includeInDieselBase: category.includeInDieselBase ?? false,
-                          vatTreatmentOverride: category.vatTreatmentOverride ?? '',
-                          costCentre: category.costCentre ?? '',
-                          defaultUnitCode: category.defaultUnitCode ?? '',
-                          vatCategoryOverride: category.vatCategoryOverride ?? '',
-                          ledgerMappings: category.ledgerMappings ?? [],
-                        })
-                      }}
+                      onClick={() => openCategoryDraft(category)}
                     >
                       {t('ui.actions.edit')}
                     </button>
@@ -311,10 +371,7 @@ export function AccountingSettingsPage() {
         <div className="accounting-card-head">
           <h3>{t('accounting.accounts.title')}</h3>
           {canManage && (
-            <Button variant="secondary" onClick={() => {
-              setDraftError(null)
-              setAccountDraft({ account: null, accountNumber: '', name: '', externalCode: '', description: '', isActive: true })
-            }}>
+            <Button variant="secondary" onClick={() => openAccountDraft(null)}>
               {t('accounting.accounts.add')}
             </Button>
           )}
@@ -349,17 +406,7 @@ export function AccountingSettingsPage() {
                       <button
                         type="button"
                         className="issued-items-link"
-                        onClick={() => {
-                          setDraftError(null)
-                          setAccountDraft({
-                            account,
-                            accountNumber: account.accountNumber,
-                            name: account.name,
-                            externalCode: account.externalCode ?? '',
-                            description: account.description ?? '',
-                            isActive: account.isActive,
-                          })
-                        }}
+                        onClick={() => openAccountDraft(account)}
                       >
                         {t('ui.actions.edit')}
                       </button>
@@ -386,11 +433,11 @@ export function AccountingSettingsPage() {
               ? t('accounting.accounts.editTitle', { number: accountDraft.account.accountNumber })
               : t('accounting.accounts.addTitle')
           }
-          onClose={() => setAccountDraft(null)}
+          onClose={accountClose.requestClose}
           busy={busy}
           footer={
             <>
-              <Button variant="secondary" onClick={() => setAccountDraft(null)} disabled={busy}>{t('ui.actions.cancel')}</Button>
+              <Button variant="secondary" onClick={accountClose.requestClose} disabled={busy}>{t('ui.actions.cancel')}</Button>
               <Button type="submit" form="ledger-account-form" disabled={busy}>{t('ui.actions.save')}</Button>
             </>
           }
@@ -421,6 +468,7 @@ export function AccountingSettingsPage() {
           </form>
         </Modal>
       )}
+      {accountDraft && accountClose.guard}
 
       {categoryDraft && (
         <Modal
@@ -429,16 +477,17 @@ export function AccountingSettingsPage() {
               ? t('accounting.categories.editTitle', { name: categoryDraft.category.name })
               : t('accounting.categories.addTitle')
           }
-          onClose={() => setCategoryDraft(null)}
+          onClose={categoryClose.requestClose}
           busy={busy}
           footer={
             <>
-              <Button variant="secondary" onClick={() => setCategoryDraft(null)} disabled={busy}>{t('ui.actions.cancel')}</Button>
+              <Button variant="secondary" onClick={categoryClose.requestClose} disabled={busy}>{t('ui.actions.cancel')}</Button>
               <Button type="submit" form="sales-category-form" disabled={busy}>{t('ui.actions.save')}</Button>
             </>
           }
         >
           <form id="sales-category-form" onSubmit={submitCategory} noValidate>
+            {categoryConflict && <ConcurrencyConflictNotice onReload={() => void reloadCategoryDraft()} busy={busy} />}
             {draftError && <div role="alert" className="issued-items-form-error">{draftError}</div>}
             <FormField label={t('accounting.categories.codeLabel')} htmlFor="sc-code" required hint={t('accounting.categories.codeHint')}>
               <input id="sc-code" value={categoryDraft.code} maxLength={50}
@@ -538,6 +587,7 @@ export function AccountingSettingsPage() {
           </form>
         </Modal>
       )}
+      {categoryDraft && categoryClose.guard}
 
       {deleteTarget && (
         <ConfirmDialog

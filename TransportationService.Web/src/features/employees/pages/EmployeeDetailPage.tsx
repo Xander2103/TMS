@@ -23,6 +23,7 @@ import { getEmployeeAttention } from '../api/employeesApi'
 import { CompletenessCard } from '../components/CompletenessCard'
 import { EmployeeAttentionStrip } from '../components/EmployeeAttentionStrip'
 import { EmployeeHistoryPanel } from '../components/EmployeeHistoryPanel'
+import { EmployeeLifecycleDialog } from '../components/EmployeeLifecycleDialog'
 import { getDriver, updateDriver } from '../../drivers/api/driversApi'
 import { DriverProfilePanel } from '../../drivers/components/DriverProfilePanel'
 import { IssuedItemsTab } from '../../issued-items/IssuedItemsTab'
@@ -542,30 +543,25 @@ export function EmployeeDetailPage() {
       )}
 
       {confirmLifecycle === 'deactivate' && (
-        <ConfirmDialog
-          title={t('employees.detail.deactivateTitle')}
-          message={t('employees.detail.deactivateMessage', { name: fullName })}
-          confirmLabel={t('employees.detail.deactivateConfirm')}
-          destructive
-          busy={mutations.isSubmitting}
-          onConfirm={async () => {
-            const ok = await mutations.deactivate(employee.id)
-            if (ok) {
-              toast.showSuccess(t('employees.detail.deactivated'))
-              setConfirmLifecycle(null)
-              reload()
-              // Offer (never force) redistributing any open tasks left behind — only meaningful
-              // for users who may reassign them.
-              if (canAssignTasks) {
-                getEmployeeOpenTaskSummary(employee.id)
-                  .then((summary) => {
-                    const openCount = summary.todo + summary.inProgress + summary.blocked + summary.waitingForReview
-                    if (openCount > 0) setOfferTaskRedistribution(true)
-                  })
-                  .catch(() => {
-                    /* takenoverzicht is optioneel; deactivatie is al gelukt */
-                  })
-              }
+        <EmployeeLifecycleDialog
+          mode="deactivate"
+          employeeId={employee.id}
+          employeeName={fullName}
+          onDone={() => {
+            toast.showSuccess(t('employees.detail.deactivated'))
+            setConfirmLifecycle(null)
+            reload()
+            // Offer (never force) redistributing any open tasks left behind — only meaningful
+            // for users who may reassign them.
+            if (canAssignTasks) {
+              getEmployeeOpenTaskSummary(employee.id)
+                .then((summary) => {
+                  const openCount = summary.todo + summary.inProgress + summary.blocked + summary.waitingForReview
+                  if (openCount > 0) setOfferTaskRedistribution(true)
+                })
+                .catch(() => {
+                  /* takenoverzicht is optioneel; deactivatie is al gelukt */
+                })
             }
           }}
           onCancel={() => setConfirmLifecycle(null)}
@@ -581,18 +577,15 @@ export function EmployeeDetailPage() {
       )}
 
       {confirmLifecycle === 'reactivate' && (
-        <ConfirmDialog
-          title={t('employees.detail.reactivateTitle')}
-          message={t('employees.detail.reactivateMessage', { name: `${employee.firstName} ${employee.lastName}` })}
-          confirmLabel={t('employees.detail.reactivate')}
-          busy={mutations.isSubmitting}
-          onConfirm={async () => {
-            const ok = await mutations.reactivate(employee.id)
-            if (ok) {
-              toast.showSuccess(t('employees.detail.reactivated'))
-              setConfirmLifecycle(null)
-              reload()
-            }
+        <EmployeeLifecycleDialog
+          mode="reactivate"
+          employeeId={employee.id}
+          employeeName={`${employee.firstName} ${employee.lastName}`}
+          onDone={() => {
+            // The login and the driver profile stay inactive on purpose — say so after the fact too.
+            toast.showSuccess(`${t('employees.detail.reactivated')} ${t('employees.detail.reactivateHint')}`)
+            setConfirmLifecycle(null)
+            reload()
           }}
           onCancel={() => setConfirmLifecycle(null)}
         />

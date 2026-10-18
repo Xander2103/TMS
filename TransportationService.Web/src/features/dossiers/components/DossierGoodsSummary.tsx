@@ -7,7 +7,7 @@ import { isOnSiteLiftingOrder } from '../../transport-orders/components/onSiteLi
 import { computeCargoWeightTotals } from '../../transport-orders/components/sections/cargoWeight'
 import { unitLabelFrom } from '../../transport-orders/pricing/cargoLabels'
 import type { TransportOrderDetail } from '../../transport-orders/types'
-import { useLookupOptions } from '../../master-data/hooks/useLookupOptions'
+import { useUnitTypes } from '../../master-data/hooks/useUnitTypes'
 
 interface DossierGoodsSummaryProps {
   order: TransportOrderDetail | null
@@ -27,8 +27,8 @@ export function DossierGoodsSummary({
   const { t } = useLocale()
   // Same resolver as the order shell: catalogue name for a managed code (the code itself while
   // the catalogue is still loading or does not know it), else the preserved legacy free text.
-  const { options: unitTypes } = useLookupOptions('/api/unit-types')
-  const unitLabel = unitLabelFrom(unitTypes)
+  // Labels of every unit ever used: a retired unit on an old order still shows its name.
+  const unitLabel = unitLabelFrom(useUnitTypes().displayUnits)
   const lines = order?.cargoItems ?? []
   // D2: an on-site lifting job lifts a load — it has no goods lines, and that is not an omission.
   const liftingWithoutGoods = isOnSiteLiftingOrder(order) && lines.length === 0

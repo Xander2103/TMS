@@ -3,7 +3,7 @@ import { ApiError } from '../../../api/apiClient'
 import { Button } from '../../../components/ui/Button'
 import { ValidationSummary } from '../../../components/ui/ValidationSummary'
 import { useLocale } from '../../../i18n/localeContext'
-import { useLookupOptions } from '../../master-data/hooks/useLookupOptions'
+import { useUnitTypes } from '../../master-data/hooks/useUnitTypes'
 import { updateTransportOrder } from '../../transport-orders/api/transportOrdersApi'
 import type { TransportOrderDetail } from '../../transport-orders/types'
 import { GoodsSection } from '../../transport-orders/components/sections/GoodsSection'
@@ -62,7 +62,7 @@ export function GoodsDrawer({ order, onClose, onSaved, vehiclePayloadKg, tailLif
   const [conflict, setConflict] = useState<TransportOrderDetail | null>(null)
 
   const stops = stopsFromOrder(baseOrder)
-  const { options: unitOptions } = useLookupOptions('/api/unit-types')
+  const units = useUnitTypes()
   const { unitMaster, serviceOptions, customerConfig } = useOrderFormData(baseOrder.customerId, stops)
   const preferredUnits = customerConfig?.preferredUnits ?? []
 
@@ -85,7 +85,14 @@ export function GoodsDrawer({ order, onClose, onSaved, vehiclePayloadKg, tailLif
   }
 
   const derivedFromCargo = cargoItems.length > 0
-  const cargoSummary = derivedFromCargo ? computeCargoSummary(cargoItems, unitOptions) : null
+  const cargoSummary = derivedFromCargo ? computeCargoSummary(cargoItems, units.displayUnits) : null
+  // Order-entry units; a code the order already carries stays selectable as "<naam> (inactief)".
+  const unitOptions = units.orderPickerOptions([
+    baseOrder.quantityUnitCode,
+    ...baseOrder.cargoItems.map((c) => c.quantityUnitCode),
+    quantityUnitCode,
+    ...cargoItems.map((c) => c.quantityUnitCode),
+  ])
 
   function currentValues() {
     return {

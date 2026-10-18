@@ -81,6 +81,7 @@ function customerDetail(overrides: Partial<CustomerDetail> = {}): CustomerDetail
     peppolValidatedAt: null,
     peppolValidationReference: null,
     contacts: [],
+    version: 1,
     ...overrides,
   }
 }

@@ -54,7 +54,9 @@
       "unloadingMinutes": "Unloading time (min)",
       "qualificationWarningDays": "Qualification expiry warning (days)",
       "defaultPageSize": "Default page size",
-      "logoReference": "Logo reference"
+      "logoReference": "Logo reference",
+      "defaultPaymentTermDays": "Default payment term (days)",
+      "defaultPaymentTermDaysHint": "Only used when neither the customer nor the invoicing entity has one."
     },
     "language": {
       "section": "Language",
@@ -102,9 +104,12 @@
       "vehiclePrefix": "Vehicle prefix",
       "vehicleNext": "Vehicle next no.",
       "trailerPrefix": "Trailer prefix",
-      "trailerNext": "Trailer next no."
+      "trailerNext": "Trailer next no.",
+      "invoiceNumberingNote": "Invoice numbering is set per invoicing entity (Own companies)."
     },
-    "brandingHint": "Reference to a logo file. File uploads will come in a later phase."
+    "brandingHint": "Reference to a logo file. File uploads will come in a later phase.",
+    "invoiceIbanNote": "The IBAN on invoices comes from the invoicing entity.",
+    "brandingNote": "The logo on invoices and documents is set per invoicing entity (Own companies)."
   },
   "system": {
     "title": "System information",
@@ -265,5 +270,12 @@
       "Cmr": "CMR",
       "None": "No document"
     }
+  },
+  "dialogs": {
+    "discardTitle": "Discard changes?",
+    "discardMessage": "You have changes that have not been saved yet. Close without saving?",
+    "discardConfirm": "Close without saving",
+    "conflictMessage": "This data has been changed by another user in the meantime.",
+    "conflictReload": "Reload"
   }
 }

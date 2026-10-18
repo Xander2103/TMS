@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Button } from '../../../components/ui/Button'
 import { FormField } from '../../../components/ui/FormField'
 import { useLocale } from '../../../i18n/localeContext'
+import { todayLocalIsoDate } from '../../../utils/dates'
 import type { IssuedItemTemplate } from '../../issued-items/issuedItemsApi'
 import { getTemplateDetail, type IssuedItemVariant } from '../../issued-items/inventoryApi'
 import type { PreparedIssuedItem } from '../utils/preparedFollowUp'
@@ -25,7 +26,7 @@ function newKey(): string {
  */
 export function PreparedIssuedItemsEditor({ value, onChange, templates, isLoading }: PreparedIssuedItemsEditorProps) {
   const { t } = useLocale()
-  const today = new Date().toISOString().slice(0, 10)
+  const today = todayLocalIsoDate()
   const [variantsByTemplate, setVariantsByTemplate] = useState<Record<string, IssuedItemVariant[]>>({})
 
   async function addFromTemplate(templateId: string) {

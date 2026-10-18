@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { localizeApiError } from '../../../api/problemDetails'
 import { useLocale } from '../../../i18n/localeContext'
 import { assignRolePermissions, createRole, deactivateRole, updateRole } from '../api/rolesApi'
 import type { CreateRoleInput, Role, UpdateRoleInput } from '../types/role'
@@ -37,10 +38,13 @@ export function useRoleMutations(): UseRoleMutationsResult {
       return result
     } catch (err) {
       if (isMountedRef.current) {
+        // The server's own (Dutch) message wins — e.g. "Er bestaat al een rol met deze naam
+        // (hoofdletters maken geen verschil)…", sent as 400 or, after a lost race, as 409. Only
+        // bodies without a message (the system-role 409 is a bare string) fall back to our text.
         const status = (err as { status?: number }).status
-        setError(
-          status === 409 ? t('usersRoles.roles.mutations.systemRoleConflict') : t('usersRoles.roles.mutations.submitFailed'),
-        )
+        const fallback =
+          status === 409 ? t('usersRoles.roles.mutations.systemRoleConflict') : t('usersRoles.roles.mutations.submitFailed')
+        setError(localizeApiError(t, err, fallback))
         setIsSubmitting(false)
       }
       return null

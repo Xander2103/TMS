@@ -10,7 +10,7 @@ import { isRetryableSaveError, useSaveStatus } from '../../../components/ui/useS
 import { useLocale } from '../../../i18n/localeContext'
 import { parseDecimalInput } from '../../../utils/numbers'
 import { euro } from '../../invoices/types'
-import { useLookupOptions } from '../../master-data/hooks/useLookupOptions'
+import { useUnitTypes } from '../../master-data/hooks/useUnitTypes'
 import { setOrderOneOffPrice } from '../../transport-orders/api/transportOrdersApi'
 import { unitLabelFrom } from '../../transport-orders/pricing/cargoLabels'
 import { OrderPricingDialogs } from '../../transport-orders/pricing/OrderPricingDialogs'
@@ -97,7 +97,7 @@ export function DossierOrderPricePanel({ dossier, activity, order, canEditPrice,
   const [lastAgreedAmount, setLastAgreedAmount] = useState<number | null>(null)
   const navigate = useNavigate()
   const agreedInputRef = useRef<HTMLInputElement>(null)
-  const { options: unitTypes } = useLookupOptions('/api/unit-types')
+  const units = useUnitTypes()
   const editor = useOrderPricingEditor(order, { onOrderChanged: onOrderSaved, readOnly: !isOpen })
 
   const [agreedInput, setAgreedInput] = useState(() => currentAgreedAmount(order))
@@ -276,7 +276,7 @@ export function DossierOrderPricePanel({ dossier, activity, order, canEditPrice,
       {showLines && (
         <OrderPricingPanel
           ws={{ ...editor, order }}
-          unitLabel={unitLabelFrom(unitTypes)}
+          unitLabel={unitLabelFrom(units.displayUnits)}
           isPriced={orderIsPriced}
           addLineLabel={t('dossierPricing.addLine')}
         />
@@ -312,7 +312,11 @@ export function DossierOrderPricePanel({ dossier, activity, order, canEditPrice,
         />
       )}
 
-      <OrderPricingDialogs editor={editor} unitTypes={unitTypes} />
+      {/* Price-line picker: active pricing units; the goods units stay resolvable for the cargo links. */}
+      <OrderPricingDialogs
+        editor={editor}
+        unitTypes={units.pricingPickerOptions([editor.addUnit, ...order.cargoItems.map((c) => c.quantityUnitCode)])}
+      />
     </div>
   )
 }

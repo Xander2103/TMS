@@ -7,7 +7,7 @@ import { UnsavedChangesGuard } from '../../../components/ui/UnsavedChangesGuard'
 import { useToast } from '../../../components/ui/toastContext'
 import { SaveStatus } from '../../../components/ui/SaveStatus'
 import { useSaveStatus } from '../../../components/ui/useSaveStatus'
-import { describeApiError } from '../../../api/problemDetails'
+import { describeApiError, getFieldError, type FieldErrors } from '../../../api/problemDetails'
 import { useAuth } from '../../auth/authContextValue'
 import { useLocale } from '../../../i18n/localeContext'
 import { LANGUAGE_NAMES } from '../../../i18n/languageNames'
@@ -29,7 +29,6 @@ type NumericField =
   | 'driverNumberNextValue'
   | 'orderNumberNextValue'
   | 'tripNumberNextValue'
-  | 'invoiceNumberNextValue'
   | 'vehicleNumberNextValue'
   | 'trailerNumberNextValue'
   | 'defaultPageSize'
@@ -46,6 +45,9 @@ export function SettingsPage() {
   const [form, setForm] = useState<CompanySettings | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  // MD-H5: server field errors (e.g. a numbering counter lowered onto numbers already in use)
+  // shown next to their input; the user's input stays as typed.
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
 
   useEffect(() => {
     let mounted = true
@@ -82,12 +84,19 @@ export function SettingsPage() {
 
   function setField<K extends keyof CompanySettings>(key: K, value: CompanySettings[K]) {
     setForm((current) => (current ? { ...current, [key]: value } : current))
+    // Editing a field answers its error; the next save re-validates everything.
+    setFieldErrors((current) => {
+      if (!(key in current)) return current
+      const next = { ...current }
+      delete next[key]
+      return next
+    })
   }
 
   function text(key: keyof CompanySettings, label: string, opts?: { required?: boolean; maxLength?: number }): ReactNode {
     const value = (form![key] as string | null) ?? ''
     return (
-      <FormField label={label} htmlFor={`f-${key}`} required={opts?.required}>
+      <FormField label={label} htmlFor={`f-${key}`} required={opts?.required} error={getFieldError(fieldErrors, key)}>
         <input
           id={`f-${key}`}
           type="text"
@@ -100,9 +109,9 @@ export function SettingsPage() {
     )
   }
 
-  function num(key: NumericField, label: string, opts?: { min?: number; max?: number; step?: number }): ReactNode {
+  function num(key: NumericField, label: string, opts?: { min?: number; max?: number; step?: number; hint?: string }): ReactNode {
     return (
-      <FormField label={label} htmlFor={`f-${key}`}>
+      <FormField label={label} htmlFor={`f-${key}`} hint={opts?.hint} error={getFieldError(fieldErrors, key)}>
         <input
           id={`f-${key}`}
           type="number"
@@ -117,6 +126,11 @@ export function SettingsPage() {
     )
   }
 
+  function restore() {
+    setForm(loaded)
+    setFieldErrors({})
+  }
+
   async function handleSave() {
     if (!form) return
     if (form.defaultCurrency.trim().length !== 3) {
@@ -124,8 +138,11 @@ export function SettingsPage() {
       return
     }
     setSaving(true)
+    setFieldErrors({})
     saveStatus.setState({ kind: 'saving' })
     try {
+      // MD-M15: the legacy invoice counter, company IBAN and logo reference are no longer
+      // editable here, but the form still carries their loaded values so the PUT never clears them.
       const updated = await updateCompanySettings(form)
       setLoaded(updated)
       setForm(updated)
@@ -133,8 +150,11 @@ export function SettingsPage() {
       setDateFormatPreference(updated.dateFormat)
       saveStatus.setState({ kind: 'saved', at: new Date().toISOString() })
     } catch (err) {
-      // Preserve the backend's specific validation message (e.g. an unknown country code).
-      saveStatus.setState({ kind: 'error', message: describeApiError(err, t('settingsPages.company.saveFailed')).message })
+      // Preserve the backend's specific validation message (e.g. an unknown country code); field
+      // errors also appear next to their input.
+      const described = describeApiError(err, t('settingsPages.company.saveFailed'))
+      setFieldErrors(described.fieldErrors)
+      saveStatus.setState({ kind: 'error', message: described.message })
     } finally {
       setSaving(false)
     }
@@ -154,7 +174,7 @@ export function SettingsPage() {
           canManage ? (
             <div className="settings-actions">
               {dirty && (
-                <Button variant="secondary" onClick={() => setForm(loaded)} disabled={saving}>
+                <Button variant="secondary" onClick={restore} disabled={saving}>
                   {t('settingsPages.company.restore')}
                 </Button>
               )}
@@ -291,11 +311,16 @@ export function SettingsPage() {
         <section className="settings-card">
           <h2>{t('settingsPages.company.sections.invoicing')}</h2>
           <div className="settings-grid">
-            {text('iban', t('settingsPages.company.fields.iban'))}
             {text('invoiceEmail', t('settingsPages.company.fields.invoiceEmail'))}
-            {num('paymentTermDays', t('settingsPages.company.fields.paymentTermDays'), { min: 0, max: 365 })}
+            {num('paymentTermDays', t('settingsPages.company.fields.defaultPaymentTermDays'), {
+              min: 0,
+              max: 365,
+              hint: t('settingsPages.company.fields.defaultPaymentTermDaysHint'),
+            })}
             {num('defaultVatRatePercent', t('settingsPages.company.fields.defaultVatRate'), { min: 0, max: 100, step: 0.01 })}
           </div>
+          {/* MD-M15: the IBAN on an invoice comes from the invoicing legal entity, not from here. */}
+          <p className="settings-hint">{t('settingsPages.company.invoiceIbanNote')}</p>
         </section>
 
         <section className="settings-card">
@@ -405,27 +430,24 @@ export function SettingsPage() {
             {num('orderNumberNextValue', t('settingsPages.company.numbering.orderNext'), { min: 1 })}
             {text('tripNumberPrefix', t('settingsPages.company.numbering.tripPrefix'), { maxLength: 20 })}
             {num('tripNumberNextValue', t('settingsPages.company.numbering.tripNext'), { min: 1 })}
-            {text('invoiceNumberPrefix', t('settingsPages.company.numbering.invoicePrefix'), { maxLength: 20 })}
-            {num('invoiceNumberNextValue', t('settingsPages.company.numbering.invoiceNext'), { min: 1 })}
             {text('vehicleNumberPrefix', t('settingsPages.company.numbering.vehiclePrefix'), { maxLength: 20 })}
             {num('vehicleNumberNextValue', t('settingsPages.company.numbering.vehicleNext'), { min: 1 })}
             {text('trailerNumberPrefix', t('settingsPages.company.numbering.trailerPrefix'), { maxLength: 20 })}
             {num('trailerNumberNextValue', t('settingsPages.company.numbering.trailerNext'), { min: 1 })}
           </div>
+          {/* MD-M15: invoice numbering lives on each legal entity; the legacy counter is not used. */}
+          <p className="settings-hint">{t('settingsPages.company.numbering.invoiceNumberingNote')}</p>
         </section>
 
         <section className="settings-card">
           <h2>{t('settingsPages.company.sections.branding')}</h2>
-          <div className="settings-grid">
-            {text('logoReference', t('settingsPages.company.fields.logoReference'), { maxLength: 300 })}
-          </div>
-          <p className="settings-hint">{t('settingsPages.company.brandingHint')}</p>
+          <p className="settings-hint">{t('settingsPages.company.brandingNote')}</p>
         </section>
       </div>
 
       {canManage && (
         <FormActions dirty={dirty}>
-          <Button variant="secondary" onClick={() => setForm(loaded)} disabled={!dirty || saving}>
+          <Button variant="secondary" onClick={restore} disabled={!dirty || saving}>
             {t('settingsPages.company.restore')}
           </Button>
           <Button onClick={handleSave} disabled={!dirty || saving}>

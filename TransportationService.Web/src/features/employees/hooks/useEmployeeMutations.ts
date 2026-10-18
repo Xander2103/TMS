@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { ApiError } from '../../../api/apiClient'
 import { describeApiError, type FieldErrors } from '../../../api/problemDetails'
 import { useLocale } from '../../../i18n/localeContext'
-import { createEmployee, deactivateEmployee, reactivateEmployee, updateEmployee } from '../api/employeesApi'
+import { createEmployee, updateEmployee } from '../api/employeesApi'
 import type { CreateEmployeeInput, EmployeeDetail, UpdateEmployeeInput } from '../types/employee'
 
 const SUBMIT_ERROR_KEY = 'employees.errors.actionFailedRetry'
@@ -14,8 +14,6 @@ interface UseEmployeeMutationsResult {
   fieldErrors: FieldErrors
   create: (input: CreateEmployeeInput) => Promise<EmployeeDetail | null>
   update: (id: string, input: UpdateEmployeeInput) => Promise<EmployeeDetail | null>
-  deactivate: (id: string) => Promise<boolean>
-  reactivate: (id: string) => Promise<boolean>
 }
 
 export function useEmployeeMutations(): UseEmployeeMutationsResult {
@@ -62,7 +60,5 @@ export function useEmployeeMutations(): UseEmployeeMutationsResult {
     fieldErrors,
     create: (input) => run(() => createEmployee(input), null),
     update: (id, input) => run(() => updateEmployee(id, input), null),
-    deactivate: (id) => run(async () => { await deactivateEmployee(id); return true }, false),
-    reactivate: (id) => run(async () => { await reactivateEmployee(id); return true }, false),
   }
 }

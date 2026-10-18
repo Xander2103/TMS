@@ -22,7 +22,7 @@ import {
 import { TransportOrderForm } from '../components/TransportOrderForm'
 import { OrderDocumentsPanel } from '../components/OrderDocumentsPanel'
 import { StopExecutionPlanDialog } from '../components/StopExecutionPlanDialog'
-import { useLookupOptions } from '../../master-data/hooks/useLookupOptions'
+import { useUnitTypes } from '../../master-data/hooks/useUnitTypes'
 import { OrderCustomerChangeDialog } from '../components/OrderCustomerChangeDialog'
 import { OrderLegalEntityDialog } from '../components/OrderLegalEntityDialog'
 import { getLegalEntityOptions } from '../../legal-entities/api/legalEntitiesApi'
@@ -65,11 +65,12 @@ export function TransportOrderDetailPage() {
   const navigate = useNavigate()
   const { showSuccess, showError } = useToast()
   const { hasPermission, hasAnyPermission } = useAuth()
-  const { options: unitTypes } = useLookupOptions('/api/unit-types')
+  const units = useUnitTypes()
 
-  // Managed unit-type name when a code is set, else the preserved legacy free-text value.
+  // Managed unit-type name when a code is set (labels cover retired units too), else the
+  // preserved legacy free-text value.
   const unitLabel = (code: string | null, legacy: string | null): string =>
-    (code ? unitTypes.find((u) => u.code === code)?.name ?? code : null) ?? legacy ?? ''
+    (code ? units.labelOf(code) : null) ?? legacy ?? ''
 
   // Commercial "Lading" summary: cargo lines grouped by unit, quantities summed per group —
   // distinct from the scanable colli generated per line on confirmation.
@@ -431,7 +432,11 @@ export function TransportOrderDetailPage() {
         />
       )}
 
-      <OrderPricingDialogs editor={pricing} unitTypes={unitTypes} />
+      {/* Price-line picker: active pricing units; the goods units stay resolvable for the cargo links. */}
+      <OrderPricingDialogs
+        editor={pricing}
+        unitTypes={units.pricingPickerOptions([pricing.addUnit, ...(order?.cargoItems ?? []).map((c) => c.quantityUnitCode)])}
+      />
     </div>
     </OrderDetailContext.Provider>
   )

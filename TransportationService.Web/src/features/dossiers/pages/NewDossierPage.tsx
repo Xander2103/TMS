@@ -28,7 +28,7 @@ import { GoodsSection } from '../../transport-orders/components/sections/GoodsSe
 import { useOrderFormData } from '../../transport-orders/components/sections/useOrderFormData'
 import { useStopMutation } from '../../transport-orders/components/sections/useStopMutation'
 import { buildSubmitPayload } from '../../transport-orders/components/sections/orderFormPayload'
-import { useLookupOptions } from '../../master-data/hooks/useLookupOptions'
+import { useUnitTypes } from '../../master-data/hooks/useUnitTypes'
 import { LocationQuickCreateDialog } from '../../locations/components/LocationQuickCreateDialog'
 import { CustomerQuickCreateDialog } from '../../customers/components/CustomerQuickCreateDialog'
 import type { CustomerDetail } from '../../customers/types'
@@ -126,7 +126,7 @@ export function NewDossierPage() {
   const [createdCustomers, setCreatedCustomers] = useState<CustomerDetail[]>([])
 
   const { customers, serviceOptions, unitMaster, locationHours, customerConfig } = useOrderFormData(customerId ?? '', stops)
-  const { options: unitOptions } = useLookupOptions('/api/unit-types')
+  const units = useUnitTypes()
   const preferredUnits = customerConfig?.preferredUnits ?? []
   // Customers created from this page come first (the one-shot list of 200 never re-fetches).
   const customerOptions = useMemo<SearchableSelectOption[]>(
@@ -192,7 +192,9 @@ export function NewDossierPage() {
   const intakeTouched = onSite ? siteTouched || durationValue !== null : routeTouched || goodsTouched || durationValue !== null
 
   const derivedFromCargo = cargoItems.length > 0
-  const cargoSummary = derivedFromCargo ? computeCargoSummary(cargoItems, unitOptions) : null
+  const cargoSummary = derivedFromCargo ? computeCargoSummary(cargoItems, units.displayUnits) : null
+  // Order-entry units only; a chosen code that became unavailable stays visible as "(inactief)".
+  const unitOptions = units.orderPickerOptions([quantityUnitCode, ...cargoItems.map((c) => c.quantityUnitCode)])
 
   const values: OrderFormValues = useMemo(
     () => ({

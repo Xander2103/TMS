@@ -7,6 +7,7 @@ import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { DataTable, type Column } from '../../../components/ui/DataTable'
 import { FormField } from '../../../components/ui/FormField'
 import { Modal } from '../../../components/ui/Modal'
+import { SearchableSelect, type SearchableSelectOption } from '../../../components/ui/SearchableSelect'
 import { ValidationSummary } from '../../../components/ui/ValidationSummary'
 import { useToast } from '../../../components/ui/toastContext'
 import { describeApiError, getFieldError, localizeApiError, type FieldErrors } from '../../../api/problemDetails'
@@ -14,6 +15,9 @@ import { useLocale } from '../../../i18n/localeContext'
 import { formatInteger } from '../../../utils/numbers'
 import { useAuth } from '../../auth/authContextValue'
 import { useLookupOptions } from '../../master-data/hooks/useLookupOptions'
+import { useDirtyDialogClose } from '../../settings/components/useDirtyDialogClose'
+import { getTrailerOptions } from '../../trailers/api/trailersApi'
+import { getVehicleOptions } from '../../vehicles/api/vehiclesApi'
 import {
   createMaintenancePolicy,
   deleteMaintenancePolicy,
@@ -168,43 +172,124 @@ export function MaintenancePoliciesPage() {
   )
 }
 
+/** The level a rule is bound to; 'Asset' = the specific vehicle or trailer of the chosen asset type. */
+type PolicyLevel = 'CompanyDefault' | 'Category' | 'Asset'
+
+interface PolicyDraft {
+  kind: MaintenancePolicyKind
+  assetKind: FleetAssetKind
+  level: PolicyLevel
+  categoryId: string | null
+  assetId: string | null
+  intervalMonths: string
+  intervalKm: string
+  warningDays: string
+  description: string
+  isActive: boolean
+}
+
+function draftOf(policy: MaintenancePolicy | null): PolicyDraft {
+  const scope = policy?.scope ?? 'CompanyDefault'
+  return {
+    kind: policy?.kind ?? 'Maintenance',
+    assetKind: policy?.assetKind ?? 'Vehicle',
+    level: scope === 'Vehicle' || scope === 'Trailer' ? 'Asset' : scope,
+    categoryId: policy?.categoryId ?? null,
+    assetId: policy?.vehicleId ?? policy?.trailerId ?? null,
+    intervalMonths: policy?.intervalMonths?.toString() ?? '',
+    intervalKm: policy?.intervalKm?.toString() ?? '',
+    warningDays: policy?.warningDays?.toString() ?? '30',
+    description: policy?.description ?? '',
+    isActive: policy?.isActive ?? true,
+  }
+}
+
+function sameDraft(a: PolicyDraft, b: PolicyDraft): boolean {
+  return (Object.keys(a) as (keyof PolicyDraft)[]).every((key) => a[key] === b[key])
+}
+
 function PolicyDialog({ policy, onClose }: { policy: MaintenancePolicy | null; onClose: (saved: boolean) => void }) {
   const { t } = useLocale()
   const vehicleCategories = useLookupOptions('/api/vehicle-categories')
   const trailerCategories = useLookupOptions('/api/trailer-categories')
 
-  const [kind, setKind] = useState<MaintenancePolicyKind>(policy?.kind ?? 'Maintenance')
-  const [assetKind, setAssetKind] = useState<FleetAssetKind>(policy?.assetKind ?? 'Vehicle')
-  const [categoryId, setCategoryId] = useState<string | null>(policy?.categoryId ?? null)
-  const [intervalMonths, setIntervalMonths] = useState(policy?.intervalMonths?.toString() ?? '')
-  const [intervalKm, setIntervalKm] = useState(policy?.intervalKm?.toString() ?? '')
-  const [warningDays, setWarningDays] = useState(policy?.warningDays?.toString() ?? '30')
-  const [description, setDescription] = useState(policy?.description ?? '')
-  const [isActive, setIsActive] = useState(policy?.isActive ?? true)
+  const [initial] = useState(() => draftOf(policy))
+  const [draft, setDraft] = useState<PolicyDraft>(initial)
   const [error, setError] = useState<string | null>(null)
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
   const [saving, setSaving] = useState(false)
+  // Vehicle/trailer pickers, loaded on demand per asset type (only the "specific asset" level needs them).
+  const [assetOptions, setAssetOptions] = useState<{ kind: FleetAssetKind; options: SearchableSelectOption[] } | null>(null)
+  const [assetOptionsError, setAssetOptionsError] = useState<string | null>(null)
 
+  const dirty = !sameDraft(draft, initial)
+  const { requestClose, guard } = useDirtyDialogClose(dirty, saving, () => onClose(false))
+
+  const { assetKind, level } = draft
   const categories = assetKind === 'Vehicle' ? vehicleCategories.options : trailerCategories.options
+  const needsAssetOptions = level === 'Asset' && assetOptions?.kind !== assetKind
+
+  useEffect(() => {
+    if (!needsAssetOptions) return
+    let mounted = true
+    const load = assetKind === 'Vehicle'
+      ? getVehicleOptions().then((rows) => rows.map((row) => ({ value: row.id, label: `${row.internalNumber} · ${row.licensePlate}`, keywords: row.licensePlate })))
+      : getTrailerOptions().then((rows) => rows.map((row) => ({ value: row.id, label: `${row.internalNumber} · ${row.licensePlate}`, keywords: row.licensePlate })))
+    load
+      .then((options) => {
+        if (!mounted) return
+        setAssetOptions({ kind: assetKind, options })
+        setAssetOptionsError(null)
+      })
+      .catch(() => {
+        if (mounted) setAssetOptionsError(t('maintenance.policies.assetOptionsFailed'))
+      })
+    return () => {
+      mounted = false
+    }
+  }, [needsAssetOptions, assetKind, t])
+
+  // The rule's own (possibly deleted) asset is not in the options list; keep it selectable/visible.
+  const ownAssetId = policy?.vehicleId ?? policy?.trailerId ?? null
+  const loadedAssetOptions = assetOptions?.kind === assetKind ? assetOptions.options : []
+  const pickerOptions: SearchableSelectOption[] =
+    policy && ownAssetId && policy.assetKind === assetKind && !loadedAssetOptions.some((option) => option.value === ownAssetId)
+      ? [...loadedAssetOptions, { value: ownAssetId, label: policyLevelLabel(t, policy) }]
+      : loadedAssetOptions
+
+  function patch(next: Partial<PolicyDraft>) {
+    setDraft((current) => ({ ...current, ...next }))
+  }
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault()
+    // Client-side: a chosen level needs its target. Everything else is validated server-side.
+    const missing: FieldErrors = {}
+    if (level === 'Category' && !draft.categoryId) missing.categoryId = [t('maintenance.policies.categoryRequired')]
+    if (level === 'Asset' && !draft.assetId) {
+      const field = assetKind === 'Vehicle' ? 'vehicleId' : 'trailerId'
+      missing[field] = [t(assetKind === 'Vehicle' ? 'maintenance.policies.vehicleRequired' : 'maintenance.policies.trailerRequired')]
+    }
+    if (Object.keys(missing).length > 0) {
+      setError(null)
+      setFieldErrors(missing)
+      return
+    }
+
     setSaving(true)
     setError(null)
     setFieldErrors({})
     const input: MaintenancePolicyInput = {
-      kind,
+      kind: draft.kind,
       assetKind,
-      categoryId: categoryId || null,
-      // Asset-specific overrides are managed from the asset detail pages later; this screen
-      // covers category rules and the company default.
-      vehicleId: policy?.vehicleId ?? null,
-      trailerId: policy?.trailerId ?? null,
-      intervalMonths: intervalMonths === '' ? null : Number(intervalMonths),
-      intervalKm: intervalKm === '' || assetKind !== 'Vehicle' ? null : Number(intervalKm),
-      warningDays: Number(warningDays) || 0,
-      description: description.trim() || null,
-      isActive,
+      categoryId: level === 'Category' ? draft.categoryId : null,
+      vehicleId: level === 'Asset' && assetKind === 'Vehicle' ? draft.assetId : null,
+      trailerId: level === 'Asset' && assetKind === 'Trailer' ? draft.assetId : null,
+      intervalMonths: draft.intervalMonths === '' ? null : Number(draft.intervalMonths),
+      intervalKm: draft.intervalKm === '' || assetKind !== 'Vehicle' ? null : Number(draft.intervalKm),
+      warningDays: Number(draft.warningDays) || 0,
+      description: draft.description.trim() || null,
+      isActive: draft.isActive,
     }
     try {
       if (policy) {
@@ -214,6 +299,8 @@ function PolicyDialog({ policy, onClose }: { policy: MaintenancePolicy | null; o
       }
       onClose(true)
     } catch (err) {
+      // A second ACTIVE rule at the same level is refused with a Dutch 400 ("Er bestaat al een
+      // actieve onderhoudsregel voor …") — shown as-is in the summary.
       const described = describeApiError(err, t('maintenance.policies.saveFailed'))
       setError(localizeApiError(t, err, t('maintenance.policies.saveFailed')))
       setFieldErrors(described.fieldErrors)
@@ -221,85 +308,129 @@ function PolicyDialog({ policy, onClose }: { policy: MaintenancePolicy | null; o
     }
   }
 
+  const assetLevelLabel = t(assetKind === 'Vehicle' ? 'maintenance.policies.levelOptVehicle' : 'maintenance.policies.levelOptTrailer')
+  const assetFieldKey = assetKind === 'Vehicle' ? 'vehicleId' : 'trailerId'
+
   return (
-    <Modal
-      title={policy ? t('maintenance.policies.editTitle') : t('maintenance.policies.newTitle')}
-      onClose={() => onClose(false)}
-      busy={saving}
-      footer={
-        <>
-          <Button variant="secondary" onClick={() => onClose(false)} disabled={saving}>
-            {t('ui.actions.cancel')}
-          </Button>
-          <Button type="submit" form="policy-form" disabled={saving}>
-            {saving ? t('fleet.common.saving') : t('ui.actions.save')}
-          </Button>
-        </>
-      }
-    >
-      <form id="policy-form" onSubmit={handleSubmit} noValidate>
-        <ValidationSummary
-          message={error}
-          fieldErrors={fieldErrors}
-          fieldLabels={{ intervalMonths: t('maintenance.policy.intervalMonths'), intervalKm: t('maintenance.policy.intervalKm'), warningDays: t('maintenance.policies.warningTermLabel') }}
-        />
-        <FormField label={t('maintenance.policies.colKind')} htmlFor="mp-kind">
-          <select id="mp-kind" value={kind} onChange={(e) => setKind(e.target.value as MaintenancePolicyKind)} disabled={saving}>
-            {Object.entries(POLICY_KIND_LABELS).map(([value, label]) => (
-              <option key={value} value={value}>
-                {t(label)}
-              </option>
-            ))}
-          </select>
-        </FormField>
-        <FormField label={t('maintenance.policies.colAssetKind')} htmlFor="mp-asset">
-          <select
-            id="mp-asset"
-            value={assetKind}
-            onChange={(e) => {
-              setAssetKind(e.target.value as FleetAssetKind)
-              setCategoryId(null)
+    <>
+      <Modal
+        title={policy ? t('maintenance.policies.editTitle') : t('maintenance.policies.newTitle')}
+        onClose={requestClose}
+        busy={saving}
+        footer={
+          <>
+            <Button variant="secondary" onClick={requestClose} disabled={saving}>
+              {t('ui.actions.cancel')}
+            </Button>
+            <Button type="submit" form="policy-form" disabled={saving}>
+              {saving ? t('fleet.common.saving') : t('ui.actions.save')}
+            </Button>
+          </>
+        }
+      >
+        <form id="policy-form" onSubmit={handleSubmit} noValidate>
+          <ValidationSummary
+            message={error}
+            fieldErrors={fieldErrors}
+            fieldLabels={{
+              intervalMonths: t('maintenance.policy.intervalMonths'),
+              intervalKm: t('maintenance.policy.intervalKm'),
+              warningDays: t('maintenance.policies.warningTermLabel'),
+              categoryId: t('maintenance.policies.fieldCategory'),
+              vehicleId: t('maintenance.policies.fieldVehicle'),
+              trailerId: t('maintenance.policies.fieldTrailer'),
             }}
-            disabled={saving}
-          >
-            {Object.entries(ASSET_KIND_LABELS).map(([value, label]) => (
-              <option key={value} value={value}>
-                {t(label)}
-              </option>
-            ))}
-          </select>
-        </FormField>
-        <FormField label={t('maintenance.policies.fieldCategory')} htmlFor="mp-category" hint={t('maintenance.policies.categoryHint')}>
-          <select id="mp-category" value={categoryId ?? ''} onChange={(e) => setCategoryId(e.target.value || null)} disabled={saving}>
-            <option value="">{t('maintenance.policies.companyDefaultOption')}</option>
-            {categories.map((category) => (
-              <option key={category.id} value={category.id}>
-                {category.name}
-              </option>
-            ))}
-          </select>
-        </FormField>
-        <FormField label={t('maintenance.policy.intervalMonths')} htmlFor="mp-months" error={getFieldError(fieldErrors, 'intervalMonths')}>
-          <input id="mp-months" type="number" min={1} value={intervalMonths} onChange={(e) => setIntervalMonths(e.target.value)} disabled={saving} />
-        </FormField>
-        {assetKind === 'Vehicle' && (
-          <FormField label={t('maintenance.policy.intervalKm')} htmlFor="mp-km" error={getFieldError(fieldErrors, 'intervalKm')} hint={t('maintenance.policies.intervalKmOnlyVehicles')}>
-            <input id="mp-km" type="number" min={1} value={intervalKm} onChange={(e) => setIntervalKm(e.target.value)} disabled={saving} />
+          />
+          <FormField label={t('maintenance.policies.colKind')} htmlFor="mp-kind">
+            <select id="mp-kind" value={draft.kind} onChange={(e) => patch({ kind: e.target.value as MaintenancePolicyKind })} disabled={saving}>
+              {Object.entries(POLICY_KIND_LABELS).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {t(label)}
+                </option>
+              ))}
+            </select>
           </FormField>
-        )}
-        <FormField label={t('maintenance.policy.warningDaysBefore')} htmlFor="mp-warning" error={getFieldError(fieldErrors, 'warningDays')}>
-          <input id="mp-warning" type="number" min={0} max={365} value={warningDays} onChange={(e) => setWarningDays(e.target.value)} disabled={saving} />
-        </FormField>
-        <FormField label={t('maintenance.policy.description')} htmlFor="mp-description">
-          <input id="mp-description" value={description} onChange={(e) => setDescription(e.target.value)} maxLength={500} disabled={saving} />
-        </FormField>
-        <FormField label={t('maintenance.policies.colStatus')} htmlFor="mp-active">
-          <label className="customer-form-checkbox">
-            <input id="mp-active" type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} disabled={saving} />
-            {t('maintenance.policies.isActive')}
-          </label>
-        </FormField>
-      </form>
-    </Modal>
+          <FormField label={t('maintenance.policies.colAssetKind')} htmlFor="mp-asset">
+            <select
+              id="mp-asset"
+              value={assetKind}
+              // A category or asset of the other type never applies: clear the target, keep the level.
+              onChange={(e) => patch({ assetKind: e.target.value as FleetAssetKind, categoryId: null, assetId: null })}
+              disabled={saving}
+            >
+              {Object.entries(ASSET_KIND_LABELS).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {t(label)}
+                </option>
+              ))}
+            </select>
+          </FormField>
+          <FormField label={t('maintenance.policies.fieldLevel')} htmlFor="mp-level" hint={t('maintenance.policies.levelHint')}>
+            <select
+              id="mp-level"
+              value={level}
+              onChange={(e) => patch({ level: e.target.value as PolicyLevel, categoryId: null, assetId: null })}
+              disabled={saving}
+            >
+              <option value="CompanyDefault">{t('maintenance.policies.levelOptCompany')}</option>
+              <option value="Category">{t('maintenance.policies.levelOptCategory')}</option>
+              <option value="Asset">{assetLevelLabel}</option>
+            </select>
+          </FormField>
+          {level === 'Category' && (
+            <FormField label={t('maintenance.policies.fieldCategory')} htmlFor="mp-category" required error={getFieldError(fieldErrors, 'categoryId')}>
+              <select id="mp-category" value={draft.categoryId ?? ''} onChange={(e) => patch({ categoryId: e.target.value || null })} disabled={saving}>
+                <option value="">{t('maintenance.policies.categoryPlaceholder')}</option>
+                {categories.map((category) => (
+                  <option key={category.id} value={category.id}>
+                    {category.name}
+                  </option>
+                ))}
+              </select>
+            </FormField>
+          )}
+          {level === 'Asset' && (
+            <FormField
+              label={t(assetKind === 'Vehicle' ? 'maintenance.policies.fieldVehicle' : 'maintenance.policies.fieldTrailer')}
+              htmlFor="mp-target-asset"
+              required
+              error={getFieldError(fieldErrors, assetFieldKey)}
+            >
+              <SearchableSelect
+                id="mp-target-asset"
+                value={draft.assetId}
+                onChange={(value) => patch({ assetId: value })}
+                options={pickerOptions}
+                isLoading={needsAssetOptions && !assetOptionsError}
+                errorMessage={assetOptionsError}
+                placeholder={t(assetKind === 'Vehicle' ? 'maintenance.policies.vehiclePlaceholder' : 'maintenance.policies.trailerPlaceholder')}
+                disabled={saving}
+              />
+            </FormField>
+          )}
+          <FormField label={t('maintenance.policy.intervalMonths')} htmlFor="mp-months" error={getFieldError(fieldErrors, 'intervalMonths')}>
+            <input id="mp-months" type="number" min={1} value={draft.intervalMonths} onChange={(e) => patch({ intervalMonths: e.target.value })} disabled={saving} />
+          </FormField>
+          {assetKind === 'Vehicle' && (
+            <FormField label={t('maintenance.policy.intervalKm')} htmlFor="mp-km" error={getFieldError(fieldErrors, 'intervalKm')} hint={t('maintenance.policies.intervalKmOnlyVehicles')}>
+              <input id="mp-km" type="number" min={1} value={draft.intervalKm} onChange={(e) => patch({ intervalKm: e.target.value })} disabled={saving} />
+            </FormField>
+          )}
+          <FormField label={t('maintenance.policy.warningDaysBefore')} htmlFor="mp-warning" error={getFieldError(fieldErrors, 'warningDays')}>
+            <input id="mp-warning" type="number" min={0} max={365} value={draft.warningDays} onChange={(e) => patch({ warningDays: e.target.value })} disabled={saving} />
+          </FormField>
+          <FormField label={t('maintenance.policy.description')} htmlFor="mp-description">
+            <input id="mp-description" value={draft.description} onChange={(e) => patch({ description: e.target.value })} maxLength={500} disabled={saving} />
+          </FormField>
+          <FormField label={t('maintenance.policies.colStatus')} htmlFor="mp-active">
+            <label className="customer-form-checkbox">
+              <input id="mp-active" type="checkbox" checked={draft.isActive} onChange={(e) => patch({ isActive: e.target.checked })} disabled={saving} />
+              {t('maintenance.policies.isActive')}
+            </label>
+          </FormField>
+        </form>
+      </Modal>
+      {guard}
+    </>
   )
 }

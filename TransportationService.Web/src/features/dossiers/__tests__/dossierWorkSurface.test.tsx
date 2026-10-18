@@ -63,6 +63,10 @@ const lookup = vi.hoisted(() => ({ options: [] as { id: string; code: string; na
 vi.mock('../../master-data/hooks/useLookupOptions', () => ({
   useLookupOptions: () => ({ options: lookup.options, isLoading: false, error: null }),
 }))
+vi.mock('../../master-data/hooks/useUnitTypes', async () => {
+  const { unitTypesFixture } = await import('../../master-data/__tests__/unitTypesFixture')
+  return { useUnitTypes: () => unitTypesFixture(lookup.options) }
+})
 vi.mock('../../locations/components/LocationSelect', () => ({
   // The stand-in keeps the host's contract visible: a create hook renders the "+ Nieuw klantadres"
   // action (the real select does the same), so the wiring of the dossier editor stays testable.

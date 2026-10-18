@@ -55,6 +55,7 @@
     "active": "Active",
     "deleteTitle": "Delete dock",
     "deleteMessage": "Dock {code} will be deleted. This cannot be undone.",
+    "deleteRefusedTitle": "Dock cannot be deleted",
     "deleted": "Dock deleted."
   },
   "locations": {

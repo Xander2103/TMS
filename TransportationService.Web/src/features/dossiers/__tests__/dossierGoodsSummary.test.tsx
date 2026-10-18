@@ -17,6 +17,10 @@ const lookup = vi.hoisted(() => ({
 vi.mock('../../master-data/hooks/useLookupOptions', () => ({
   useLookupOptions: () => ({ options: lookup.options, isLoading: lookup.isLoading, error: null, refresh: () => Promise.resolve() }),
 }))
+vi.mock('../../master-data/hooks/useUnitTypes', async () => {
+  const { unitTypesFixture } = await import('../../master-data/__tests__/unitTypesFixture')
+  return { useUnitTypes: () => unitTypesFixture(lookup.options) }
+})
 
 function cargo(overrides: Partial<CargoItem>): CargoItem {
   return { ...orderDetail().cargoItems[0], ...overrides }

@@ -3,6 +3,8 @@ import { Modal } from '../../../components/ui/Modal'
 import { Button } from '../../../components/ui/Button'
 import { FormField } from '../../../components/ui/FormField'
 import { ApiError } from '../../../api/apiClient'
+import { describeApiError, getFieldError } from '../../../api/problemDetails'
+import { useDirtyDialogClose } from '../../settings/components/useDirtyDialogClose'
 import { useLocale } from '../../../i18n/localeContext'
 import type { LookupApi } from '../api/lookupApi'
 import type { LookupInput, LookupItem } from '../types'
@@ -37,6 +39,14 @@ export function LookupFormDialog({ config, api, item, onSaved, onClose }: Lookup
   // Simple lookups fold code + sort order away; a code error must still be visible, so the
   // disclosure opens itself in that case.
   const [advancedOpen, setAdvancedOpen] = useState(false)
+  // Escape, × and Annuleren ask before discarding typed input (shared dialog close model).
+  const dirty =
+    code !== (item?.code ?? '') ||
+    name !== (item?.name ?? '') ||
+    description !== (item?.description ?? '') ||
+    isActive !== (item?.isActive ?? true) ||
+    sortOrder !== String(item?.sortOrder ?? 0)
+  const { requestClose, guard } = useDirtyDialogClose(dirty, isSubmitting, onClose)
 
   function validate(): FormErrors {
     const next: FormErrors = {}
@@ -75,6 +85,13 @@ export function LookupFormDialog({ config, api, item, onSaved, onClose }: Lookup
       if (error instanceof ApiError && error.status === 409) {
         setErrors({ code: t('masterData.errors.duplicateCode', { code: input.code ?? '' }) })
         setAdvancedOpen(true)
+      } else if (error instanceof ApiError && error.status === 400) {
+        // Server rules (e.g. a used code cannot change) arrive as Dutch field errors.
+        const described = describeApiError(error, t('masterData.errors.saveFailed'))
+        const codeError = getFieldError(described.fieldErrors, 'code')
+        const nameError = getFieldError(described.fieldErrors, 'name')
+        setErrors({ code: codeError, name: nameError, form: codeError || nameError ? undefined : described.message })
+        if (codeError) setAdvancedOpen(true)
       } else {
         setErrors({ form: t('masterData.errors.saveFailed') })
       }
@@ -141,54 +158,57 @@ export function LookupFormDialog({ config, api, item, onSaved, onClose }: Lookup
   )
 
   return (
-    <Modal
-      title={isEdit ? t('masterData.form.editTitle', { singular: t(config.singular) }) : t(`masterData.newLabel.${config.slug}`)}
-      onClose={onClose}
-      busy={isSubmitting}
-      footer={
-        <>
-          <Button variant="secondary" onClick={onClose} disabled={isSubmitting}>
-            {t('ui.actions.cancel')}
-          </Button>
-          <Button type="submit" form="lookup-form" disabled={isSubmitting}>
-            {isSubmitting ? t('masterData.form.saving') : t('ui.actions.save')}
-          </Button>
-        </>
-      }
-    >
-      <form id="lookup-form" onSubmit={handleSubmit} className="lookup-form">
-        {errors.form && (
-          <p className="ui-form-field-error" role="alert">
-            {errors.form}
-          </p>
-        )}
-        {!simple && codeField}
-        {nameField}
-        {descriptionField}
-        {simple && activeField}
-        {simple ? (
-          <details className="lookup-form-advanced" open={advancedOpen}>
-            <summary
-              onClick={(event) => {
-                // Controlled by React state so a code error can open it; the native toggle
-                // would fight that, hence preventDefault.
-                event.preventDefault()
-                setAdvancedOpen((open) => !open)
-              }}
-            >
-              {t('masterData.form.advanced')}
-            </summary>
-            <p className="lookup-form-advanced-hint">{t('masterData.form.advancedHint')}</p>
-            {codeField}
-            {sortField}
-          </details>
-        ) : (
+    <>
+      <Modal
+        title={isEdit ? t('masterData.form.editTitle', { singular: t(config.singular) }) : t(`masterData.newLabel.${config.slug}`)}
+        onClose={requestClose}
+        busy={isSubmitting}
+        footer={
           <>
-            {sortField}
-            {activeField}
+            <Button variant="secondary" onClick={requestClose} disabled={isSubmitting}>
+              {t('ui.actions.cancel')}
+            </Button>
+            <Button type="submit" form="lookup-form" disabled={isSubmitting}>
+              {isSubmitting ? t('masterData.form.saving') : t('ui.actions.save')}
+            </Button>
           </>
-        )}
-      </form>
-    </Modal>
+        }
+      >
+        <form id="lookup-form" onSubmit={handleSubmit} className="lookup-form">
+          {errors.form && (
+            <p className="ui-form-field-error" role="alert">
+              {errors.form}
+            </p>
+          )}
+          {!simple && codeField}
+          {nameField}
+          {descriptionField}
+          {simple && activeField}
+          {simple ? (
+            <details className="lookup-form-advanced" open={advancedOpen}>
+              <summary
+                onClick={(event) => {
+                  // Controlled by React state so a code error can open it; the native toggle
+                  // would fight that, hence preventDefault.
+                  event.preventDefault()
+                  setAdvancedOpen((open) => !open)
+                }}
+              >
+                {t('masterData.form.advanced')}
+              </summary>
+              <p className="lookup-form-advanced-hint">{t('masterData.form.advancedHint')}</p>
+              {codeField}
+              {sortField}
+            </details>
+          ) : (
+            <>
+              {sortField}
+              {activeField}
+            </>
+          )}
+        </form>
+      </Modal>
+      {guard}
+    </>
   )
 }

@@ -48,7 +48,8 @@
   "toasts": {
     "added": "Item added.",
     "updated": "Item updated.",
-    "deleted": "Item deleted."
+    "deleted": "Item deleted.",
+    "deactivated": "Item deactivated."
   },
   "deleteDialog": {
     "title": "Delete {singular}",
@@ -93,9 +94,15 @@
     "optionsLoadFailed": "The list could not be loaded."
   },
   "units": {
-    "subtitle": "Global units with code, category, dimensions and physical defaults. Customer-specific preferences and rates live on the customer record."
+    "subtitle": "Global units with code, category, dimensions and physical defaults. Customer-specific preferences and rates live on the customer record.",
+    "retainedInactive": "{name} (inactive)",
+    "retainedUnavailable": "{name} (no longer selectable)"
   },
   "services": {
     "subtitle": "Global services and surcharges with calculation method and default price. Customer-specific overrides are managed on the customer record."
+  },
+  "deleteBlocked": {
+    "title": "Cannot delete {singular}",
+    "deactivate": "Deactivate"
   }
 }

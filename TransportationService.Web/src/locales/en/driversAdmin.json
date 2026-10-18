@@ -62,7 +62,11 @@
     "colStatus": "Status",
     "colExpiry": "Expiry date",
     "deleteTitle": "Delete driver",
-    "deleteMessage": "Are you sure you want to delete driver {number}? The personnel file is kept."
+    "deleteMessage": "Are you sure you want to delete driver {number}? The personnel file is kept.",
+    "deleteRefusedTitle": "Driver cannot be deleted",
+    "deactivateInstead": "Deactivate driver",
+    "deactivated": "Driver deactivated. The history is kept.",
+    "deactivateFailed": "The driver could not be deactivated."
   },
   "newPage": {
     "breadcrumb": "Drivers",

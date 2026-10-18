@@ -36,7 +36,11 @@
     "street": "Straat",
     "tradingName": "Handelsnaam",
     "vatNumber": "BTW-nummer",
-    "website": "Website"
+    "website": "Website",
+    "logoPending": "Nieuw logo (nog niet opgeslagen):",
+    "logoPendingRemoval": "Het logo wordt verwijderd wanneer je op Opslaan klikt.",
+    "logoUndo": "Logowijziging ongedaan maken",
+    "logoAppliedOnSave": "Een logowijziging wordt pas opgeslagen wanneer je op Opslaan klikt. Reeds uitgegeven facturen behouden hun logo; nieuwe facturen gebruiken het nieuwe logo."
   },
   "page": {
     "columnDefault": "Standaard",
@@ -64,7 +68,8 @@
     "saveFailed": "Het bedrijf kon niet worden opgeslagen.",
     "saved": "Bedrijf opgeslagen.",
     "savingBusy": "Opslaan…",
-    "subtitle": "Facturerende entiteiten van deze organisatie."
+    "subtitle": "Facturerende entiteiten van deze organisatie.",
+    "savedLogoFailed": "Het bedrijf is opgeslagen, maar de logowijziging niet: {message} Klik opnieuw op Opslaan om het logo nog eens te proberen."
   },
   "switcher": {
     "defaultSuffix": "(standaard)",

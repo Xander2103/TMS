@@ -29,6 +29,8 @@ export interface LegalEntity {
   logoFileName: string | null
   isActive: boolean
   isDefault: boolean
+  /** MD-M2: optimistic-concurrency token; echoed as `expectedVersion`. Absent on older payloads. */
+  version?: number
 }
 
 /** Mirrors LegalEntityOptionDto — compact shape for pickers (sidebar switcher, invoice forms). */
@@ -67,6 +69,8 @@ export interface SaveLegalEntityInput {
   creditNotePrefix: string | null
   invoiceFooter: string | null
   isDefault: boolean
+  /** MD-M2: the version the edit is based on (update only); a stale one yields 409 concurrency_conflict. */
+  expectedVersion?: number
 }
 
 /** Mirrors ActiveLegalEntityDto — the user's own (cosmetic) active-entity preference. */
