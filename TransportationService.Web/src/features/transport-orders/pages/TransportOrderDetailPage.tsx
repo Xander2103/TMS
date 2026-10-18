@@ -10,6 +10,7 @@ import { FormField } from '../../../components/ui/FormField'
 import { Modal } from '../../../components/ui/Modal'
 import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
+import { useCanViewPrices } from '../../auth/commercialVisibility'
 import { ApiError } from '../../../api/apiClient'
 import {
   cancelTransportOrder,
@@ -66,6 +67,7 @@ export function TransportOrderDetailPage() {
   const navigate = useNavigate()
   const { showSuccess, showError } = useToast()
   const { hasPermission, hasAnyPermission } = useAuth()
+  const canViewPrices = useCanViewPrices()
   const units = useUnitTypes()
 
   // Managed unit-type name when a code is set (labels cover retired units too), else the
@@ -217,6 +219,8 @@ export function TransportOrderDetailPage() {
   if (!order) return <LoadingState message="Opdracht laden..." />
   // Redesign 2026-09-12: an unknown segment lands on the overview with a clean URL.
   if (section !== undefined && !isOrderTab(section)) return <Navigate to={orderTabPath(id, 'overzicht')} replace />
+  // SEC-M1: without a price right the API strips every amount, so there is no price tab to open.
+  if (activeTab === 'prijs' && !canViewPrices) return <Navigate to={orderTabPath(id, 'overzicht')} replace />
 
   const editable =
     (order.status === 'Draft' || order.status === 'Confirmed') && hasPermission('orders.edit')
@@ -240,6 +244,7 @@ export function TransportOrderDetailPage() {
     canViewMessages: hasPermission('customer_messages.view'),
     canChangeStatus: hasAnyPermission(['orders.change_status', 'orders.manage']),
     canEditOrder: hasPermission('orders.edit'),
+    canViewPrices,
     pricingStatus: pricing.pricingStatus,
     pricingLocked: pricing.pricingLocked,
     pricingBusy: pricing.pricingBusy,
@@ -326,7 +331,7 @@ export function TransportOrderDetailPage() {
       ) : (
         <>
           <OrderAttention />
-          <OrderSubnav orderId={order.id} tabs={[...ORDER_TABS]} />
+          <OrderSubnav orderId={order.id} tabs={ORDER_TABS.filter((tab) => tab !== 'prijs' || canViewPrices)} />
           <div className="tod-subsection" data-tab={activeTab}>
             {activeTab === 'overzicht' && <OrderOverview />}
             {activeTab === 'lading' && <OrderLadingSection />}

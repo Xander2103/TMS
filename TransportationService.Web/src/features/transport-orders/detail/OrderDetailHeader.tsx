@@ -48,7 +48,7 @@ export function OrderDetailHeader({ onEdit, onDelete, onCancel, onCorrectStatus,
   const { hasPermission, hasAnyPermission } = useAuth()
   const ws = useOrderDetail()
   const { order, busy, editing, entities, editable, deletable, priceDisplay } = ws
-  const showPriceChip = Boolean(order.pricingSnapshot) || ws.totalPrice !== null
+  const showPriceChip = ws.canViewPrices && (Boolean(order.pricingSnapshot) || ws.totalPrice !== null)
 
   // MD-B1 follow-up: the CMR / LB action opens THE official document when one is issued; without
   // one it renders a stamped CONCEPT from the live order data — and the button says which.

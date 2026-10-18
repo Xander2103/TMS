@@ -18,7 +18,7 @@ import { useOrderDetail } from './orderDetailContext'
  */
 export function OrderLadingSection() {
   const { t } = useLocale()
-  const { order, unitLabel, aggregateCargo, editing } = useOrderDetail()
+  const { order, unitLabel, aggregateCargo, editing, canViewPrices } = useOrderDetail()
   // D2: an on-site lifting job lifts a load — no goods lines is its normal state, not a gap.
   const liftingWithoutGoods = isOnSiteLiftingOrder(order) && order.cargoItems.length === 0
   const weightTotals = computeCargoWeightTotals(order.cargoItems)
@@ -66,10 +66,12 @@ export function OrderLadingSection() {
             <dt>Paletten</dt>
             <dd>{order.palletCount ?? '—'}</dd>
           </div>
-          <div>
-            <dt>Prijs</dt>
-            <dd>{order.agreedPrice !== null ? formatCurrency(order.agreedPrice) : '—'}</dd>
-          </div>
+          {canViewPrices && (
+            <div>
+              <dt>Prijs</dt>
+              <dd>{order.agreedPrice !== null ? formatCurrency(order.agreedPrice) : '—'}</dd>
+            </div>
+          )}
           <div>
             <dt>Kenmerken</dt>
             <dd>

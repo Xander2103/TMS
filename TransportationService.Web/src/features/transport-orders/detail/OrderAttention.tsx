@@ -24,7 +24,7 @@ export function OrderAttention() {
   if (order.status === 'Cancelled' && order.cancellationReason) {
     items.push({ key: 'cancelled', tone: 'info', title: 'Geannuleerd', text: order.cancellationReason })
   }
-  const hasPriceCarrier = Boolean(order.pricingSnapshot) || totalPrice !== null
+  const hasPriceCarrier = ws.canViewPrices && (Boolean(order.pricingSnapshot) || totalPrice !== null)
   if (hasPriceCarrier && order.status !== 'Cancelled') {
     if (order.pricingSnapshot?.isStale) {
       items.push({

@@ -107,7 +107,7 @@ export function OrderOverview() {
   const { t } = useLocale()
   const { hasAnyPermission } = useAuth()
   const ws = useOrderDetail()
-  const { order, priceDisplay, totalPrice, unitLabel, canViewPackages, canViewMessages, canChangeStatus } = ws
+  const { order, priceDisplay, totalPrice, unitLabel, canViewPackages, canViewMessages, canChangeStatus, canViewPrices } = ws
   const data = useOverviewData(order.id, order.customerId, canViewPackages, canViewMessages)
 
   const cargoTotals = ws.aggregateCargo(order.cargoItems)
@@ -164,54 +164,56 @@ export function OrderOverview() {
           )}
         </OverviewCard>
 
-        <OverviewCard tab="prijs" icon={Euro} title="Verkoop & prijs" action="Open prijsdetails">
-          <dl className="tod-kv tod-kv-price">
-            <div>
-              <dt>Totaalprijs</dt>
-              <dd className="tod-amount">{totalPrice !== null ? formatCurrency(totalPrice) : '—'}</dd>
-            </div>
-            <div>
-              <dt>Prijsstatus</dt>
-              <dd>
-                {order.pricingSnapshot || totalPrice !== null ? (
-                  <Badge tone={priceDisplay.tone}>{t(priceDisplay.labelKey)}</Badge>
-                ) : (
-                  <span className="tod-muted">Nog geen prijs</span>
-                )}
-              </dd>
-            </div>
-            <div>
-              <dt>Opdracht</dt>
-              <dd>
-                <Badge tone={ORDER_STATUS_TONE[order.status]}>{t(ORDER_STATUS_LABELS[order.status])}</Badge>
-              </dd>
-            </div>
-            {(order.invoices?.length ?? 0) > 0 && (
+        {canViewPrices && (
+          <OverviewCard tab="prijs" icon={Euro} title="Verkoop & prijs" action="Open prijsdetails">
+            <dl className="tod-kv tod-kv-price">
               <div>
-                {/* ACC-M12: the reverse link — from the work to the invoice(s) that carry it. */}
-                <dt>Facturen</dt>
+                <dt>Totaalprijs</dt>
+                <dd className="tod-amount">{totalPrice !== null ? formatCurrency(totalPrice) : '—'}</dd>
+              </div>
+              <div>
+                <dt>Prijsstatus</dt>
                 <dd>
-                  <ul className="tod-invoice-links">
-                    {order.invoices!.map((invoice) => (
-                      <li key={invoice.id}>
-                        <Link to={`/invoices/${invoice.id}`}>
-                          {invoice.kind === 'CreditNote' ? t('invoices.creditNote') : 'Factuur'} {invoice.displayNumber || invoice.invoiceNumber || 'concept'}
-                        </Link>
-                        {invoiceStatusLabel(invoice.status) && <span className="tod-muted"> — {t(invoiceStatusLabel(invoice.status)!)}</span>}
-                      </li>
-                    ))}
-                  </ul>
+                  {order.pricingSnapshot || totalPrice !== null ? (
+                    <Badge tone={priceDisplay.tone}>{t(priceDisplay.labelKey)}</Badge>
+                  ) : (
+                    <span className="tod-muted">Nog geen prijs</span>
+                  )}
                 </dd>
               </div>
+              <div>
+                <dt>Opdracht</dt>
+                <dd>
+                  <Badge tone={ORDER_STATUS_TONE[order.status]}>{t(ORDER_STATUS_LABELS[order.status])}</Badge>
+                </dd>
+              </div>
+              {(order.invoices?.length ?? 0) > 0 && (
+                <div>
+                  {/* ACC-M12: the reverse link — from the work to the invoice(s) that carry it. */}
+                  <dt>Facturen</dt>
+                  <dd>
+                    <ul className="tod-invoice-links">
+                      {order.invoices!.map((invoice) => (
+                        <li key={invoice.id}>
+                          <Link to={`/invoices/${invoice.id}`}>
+                            {invoice.kind === 'CreditNote' ? t('invoices.creditNote') : 'Factuur'} {invoice.displayNumber || invoice.invoiceNumber || 'concept'}
+                          </Link>
+                          {invoiceStatusLabel(invoice.status) && <span className="tod-muted"> — {t(invoiceStatusLabel(invoice.status)!)}</span>}
+                        </li>
+                      ))}
+                    </ul>
+                  </dd>
+                </div>
+              )}
+            </dl>
+            {order.pricingSnapshot?.confirmedAtUtc && (
+              <p className="tod-muted">
+                Bevestigd op {formatDateTime(order.pricingSnapshot.confirmedAtUtc)}
+                {order.pricingSnapshot.confirmedByName ? ` door ${order.pricingSnapshot.confirmedByName}` : ''}.
+              </p>
             )}
-          </dl>
-          {order.pricingSnapshot?.confirmedAtUtc && (
-            <p className="tod-muted">
-              Bevestigd op {formatDateTime(order.pricingSnapshot.confirmedAtUtc)}
-              {order.pricingSnapshot.confirmedByName ? ` door ${order.pricingSnapshot.confirmedByName}` : ''}.
-            </p>
-          )}
-        </OverviewCard>
+          </OverviewCard>
+        )}
 
         <OverviewCard tab="lading" icon={Package} title="Lading / Goederen" action="Open lading">
           <dl className="tod-kv">

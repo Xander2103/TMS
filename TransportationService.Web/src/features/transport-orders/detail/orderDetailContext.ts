@@ -25,6 +25,8 @@ export interface OrderDetailWorkspace {
   canViewMessages: boolean
   canChangeStatus: boolean
   canEditOrder: boolean
+  /** SEC-M1: holds a price right; without it the API returns no amounts and no price UI renders. */
+  canViewPrices: boolean
 
   // pricing read model (computed once in the shell)
   pricingStatus: OrderPricingSnapshot['status'] | 'Draft'

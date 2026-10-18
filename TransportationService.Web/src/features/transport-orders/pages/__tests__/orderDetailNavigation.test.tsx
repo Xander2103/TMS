@@ -568,3 +568,55 @@ describe('order detail — unknown record (M14)', () => {
     expect(screen.getByRole('button', { name: 'Opnieuw proberen' })).toBeInTheDocument()
   })
 })
+
+describe('order detail — without a price right (SEC-M1)', () => {
+  // Dispatcher: orders.view / dossiers.view / planning.* — no price right, so the API strips every
+  // amount. The UI leaves the price surfaces out instead of rendering "—" or "Nog geen prijs".
+  const DISPATCHER = ['orders.view', 'dossiers.view', 'planning.view', 'planning.create']
+  const strippedOrder = () =>
+    order({ agreedPrice: null, calculatedPrice: null, pricingSnapshot: null, pricingLines: [], invoices: [] })
+
+  beforeEach(() => {
+    auth.permissions = new Set(DISPATCHER)
+    api.getTransportOrder.mockResolvedValue(strippedOrder())
+  })
+
+  it('has no Prijs tab, no price card, no price chip and no price warnings — operational data stays', async () => {
+    renderPage()
+    await screen.findByText('ORD-0001 — Nexans NV')
+
+    expect(within(subnav()).getAllByRole('link').map((link) => link.textContent)).toEqual(ALL_TABS.filter((tab) => tab !== 'Prijs'))
+    expect(screen.queryByRole('article', { name: 'Verkoop & prijs' })).not.toBeInTheDocument()
+    expect(screen.queryByText('Nog geen prijs')).not.toBeInTheDocument()
+    expect(screen.queryByText('Totaalprijs')).not.toBeInTheDocument()
+    expect(screen.queryByText(/Prijs nog te bevestigen/)).not.toBeInTheDocument()
+    expect(card('Route / Stops')).toHaveTextContent('Nexans site Antwerpen')
+    expect(cardByHeading('Lading / Goederen')).toBeInTheDocument()
+  })
+
+  it('a deep link to /prijs lands on the overview with a clean URL', async () => {
+    const { router } = renderPage(PRICE_TAB)
+    await screen.findByRole('article', { name: 'Route / Stops' })
+
+    await waitFor(() => expect(router.state.location.pathname).toBe(OVERVIEW))
+    expect(screen.queryByText('Totaalprijs')).not.toBeInTheDocument()
+  })
+
+  it('the Lading tab shows the goods without a Prijs row', async () => {
+    renderPage('/transport-orders/order-1/lading')
+    await screen.findByRole('heading', { name: 'Lading' })
+
+    expect(screen.getByText('Goederen')).toBeInTheDocument()
+    expect(screen.queryByText('Prijs')).not.toBeInTheDocument()
+  })
+
+  it('a planner with a price right keeps the Prijs tab and the price card', async () => {
+    auth.permissions = new Set(FULL_RIGHTS)
+    api.getTransportOrder.mockResolvedValue(pricedOrder({ agreedPrice: 428.5 }))
+    renderPage()
+    await screen.findByText('ORD-0001 — Nexans NV')
+
+    expect(subnavLink('Prijs')).toBeInTheDocument()
+    expect(card('Verkoop & prijs')).toHaveTextContent('Totaalprijs')
+  })
+})
