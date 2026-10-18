@@ -26,7 +26,9 @@ using TransportationService.Api.Modules.Fleet.Services;
 using TransportationService.Api.Modules.Identity.Authorization;
 using TransportationService.Api.Modules.Identity.Entities;
 using TransportationService.Api.Modules.Identity.Services;
+using TransportationService.Api.Modules.Planning.Dtos;
 using TransportationService.Api.Modules.Planning.Entities;
+using TransportationService.Api.Modules.Planning.Services;
 using TransportationService.Api.Modules.Qualifications.Services;
 using TransportationService.Api.Modules.Tenancy.Entities;
 using TransportationService.Api.Modules.Tenancy.Services;
@@ -233,6 +235,21 @@ public class EmployeeOffboardingPathsTests
 
         Assert.Equal(DriverAvailabilityStatus.Available, await On(h.Today.AddDays(30)));   // the last working day
         Assert.Equal(DriverAvailabilityStatus.Unavailable, await On(h.Today.AddDays(31))); // the day after
+    }
+
+    [Fact]
+    public async Task Planning_RefusesATripAfterTheLastWorkingDay_AsABlockingConflict()
+    {
+        using var h = await SeedAsync();
+        await h.Employees.UpdateAsync(h.EmployeeId, Edit(EmploymentStatus.Active, h.Today.AddDays(30)), false, CancellationToken.None);
+        var conflicts = new PlanningConflictService(h.Db.Context, h.Tenant, new QualificationStatusCalculator(), TimeProvider.System);
+
+        var before = await conflicts.EvaluateAsync(new Trip { Id = Guid.NewGuid(), TenantId = h.TenantId, TripDate = h.Today.AddDays(30), DriverId = h.DriverId }, CancellationToken.None);
+        Assert.DoesNotContain(before, c => c.Description.Contains("niet meer in dienst"));
+        var after = await conflicts.EvaluateAsync(new Trip { Id = Guid.NewGuid(), TenantId = h.TenantId, TripDate = h.Today.AddDays(31), DriverId = h.DriverId }, CancellationToken.None);
+        var conflict = Assert.Single(after, c => c.Description.Contains("niet meer in dienst"));
+        Assert.Equal(PlanningConflictCode.DriverInactive, conflict.Code);
+        Assert.True(conflict.Blocking);
     }
 
     [Fact]

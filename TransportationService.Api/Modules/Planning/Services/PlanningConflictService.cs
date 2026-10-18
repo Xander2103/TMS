@@ -592,7 +592,7 @@ public class PlanningConflictService : IPlanningConflictService
 
         var person = await _dbContext.Employees.AsNoTracking()
             .Where(e => e.Id == driver.EmployeeId && e.TenantId == tenantId)
-            .Select(e => new { Name = e.FirstName + " " + e.LastName, e.EmploymentStatus })
+            .Select(e => new { Name = e.FirstName + " " + e.LastName, e.EmploymentStatus, e.EmploymentEndDate })
             .FirstOrDefaultAsync(cancellationToken);
         var driverName = person?.Name ?? driver.DriverNumber;
 
@@ -613,6 +613,14 @@ public class PlanningConflictService : IPlanningConflictService
         {
             conflicts.Add(new(PlanningConflictCode.DriverInactive, true,
                 $"Chauffeur {driverName} is niet inzetbaar: dienstverband {restriction}."));
+        }
+
+        // MD-H6 follow-up: the employment end date is the LAST working day — a trip after it cannot
+        // be planned for this driver (same rule as the planning picker and the access checks).
+        if (person?.EmploymentEndDate is { } lastWorkingDay && lastWorkingDay < trip.TripDate)
+        {
+            conflicts.Add(new(PlanningConflictCode.DriverInactive, true,
+                $"Chauffeur {driverName} is op {trip.TripDate:dd-MM-yyyy} niet meer in dienst (laatste werkdag {lastWorkingDay:dd-MM-yyyy})."));
         }
 
         var settings = await _dbContext.TenantSettings.AsNoTracking()
