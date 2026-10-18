@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using TransportationService.Api.Common;
 using TransportationService.Api.Data;
 using TransportationService.Api.Modules.Auditing.Services;
+using TransportationService.Api.Modules.Reference.Services;
 using TransportationService.Api.Modules.Tarification.Dtos;
 using TransportationService.Api.Modules.Tarification.Entities;
 using TransportationService.Api.Modules.Tenancy.Services;
@@ -1131,7 +1132,7 @@ public class PricingAdminService : IPricingAdminService
             return null;
         }
 
-        await ValidateRuleAsync(request, cancellationToken);
+        await ValidateRuleAsync(request, cancellationToken, currentUnitTypeId: rule.UnitTypeId);
         _dbContext.PriceRuleBrackets.RemoveRange(rule.Brackets);
         rule.Brackets.Clear();
         ApplyRule(rule, request);
@@ -1383,7 +1384,7 @@ public class PricingAdminService : IPricingAdminService
             return null;
         }
 
-        await ValidateOptionAsync(request, cancellationToken);
+        await ValidateOptionAsync(request, cancellationToken, currentUnitTypeId: option.UnitTypeId);
         ApplyOption(option, request);
         await ApplyWarehouseConditionsAsync(option, request.WarehouseIds, cancellationToken);
         await ApplyTimeConditionsAsync(option, request.TimeConditions, cancellationToken);
@@ -1660,6 +1661,13 @@ public class PricingAdminService : IPricingAdminService
             throw new DomainValidationException("units", "Eén of meer eenheden bestaan niet.");
         }
 
+        // MD-H8 final: a NEWLY mapped customer unit is active and allowed for pricing; units the
+        // customer already maps stay (deactivating a unit later never blocks this screen).
+        var alreadyMapped = await _dbContext.CustomerPreferredUnits.AsNoTracking()
+            .Where(u => u.TenantId == TenantId && u.CustomerId == customerId)
+            .Select(u => u.UnitTypeId).ToListAsync(cancellationToken);
+        await UnitTypeUsage.EnsureIdsAsync(_dbContext, TenantId, unitIds, UnitUsage.Pricing, alreadyMapped, "units", cancellationToken);
+
         foreach (var unit in units)
         {
             if (unit.CustomerLabel is { Length: > 150 } || unit.EdiCode is { Length: > 50 } || unit.ExcelCode is { Length: > 50 })
@@ -1868,6 +1876,14 @@ public class PricingAdminService : IPricingAdminService
             throw new InvalidTenantReferenceException("eenheid");
         }
 
+        // MD-H8 final: newly added units are active and allowed for pricing.
+        var alreadyInDiscount = discountId is { } existingDiscount
+            ? await _dbContext.CombinedUnitDiscountUnits.AsNoTracking()
+                .Where(u => u.TenantId == TenantId && u.DiscountId == existingDiscount)
+                .Select(u => u.UnitTypeId).ToListAsync(cancellationToken)
+            : [];
+        await UnitTypeUsage.EnsureIdsAsync(_dbContext, TenantId, unitTypeIds, UnitUsage.Pricing, alreadyInDiscount, "units", cancellationToken);
+
         foreach (var tier in request.Tiers)
         {
             if (tier.FromCount < 0)
@@ -2037,7 +2053,7 @@ public class PricingAdminService : IPricingAdminService
         }
     }
 
-    private async Task ValidateRuleAsync(SavePriceRuleRequest request, CancellationToken cancellationToken)
+    private async Task ValidateRuleAsync(SavePriceRuleRequest request, CancellationToken cancellationToken, Guid? currentUnitTypeId = null)
     {
         if (string.IsNullOrWhiteSpace(request.Name))
         {
@@ -2194,6 +2210,14 @@ public class PricingAdminService : IPricingAdminService
             throw new InvalidTenantReferenceException("eenheid");
         }
 
+        // MD-H8 final: a newly chosen tariff unit is active and allowed for pricing; the unit the
+        // rule already carries stays valid.
+        if (request.UnitTypeId is { } pricedUnit)
+        {
+            await UnitTypeUsage.EnsureIdsAsync(_dbContext, tenantId, [pricedUnit], UnitUsage.Pricing,
+                currentUnitTypeId is { } current ? [current] : [], "unitTypeId", cancellationToken);
+        }
+
         if (request.ZoneId is { } zoneId
             && !await _dbContext.PricingZones.AnyAsync(z => z.Id == zoneId && z.TenantId == tenantId, cancellationToken))
         {
@@ -2271,7 +2295,7 @@ public class PricingAdminService : IPricingAdminService
         }
     }
 
-    private async Task ValidateOptionAsync(SaveServiceOptionRequest request, CancellationToken cancellationToken)
+    private async Task ValidateOptionAsync(SaveServiceOptionRequest request, CancellationToken cancellationToken, Guid? currentUnitTypeId = null)
     {
         if (string.IsNullOrWhiteSpace(request.Code) || string.IsNullOrWhiteSpace(request.Name))
         {
@@ -2295,10 +2319,16 @@ public class PricingAdminService : IPricingAdminService
                 throw new DomainValidationException("unitTypeId", "Kies de eenheid waarop deze service telt.");
             }
 
-            if (request.UnitTypeId is not null && !await _dbContext.UnitTypes.AnyAsync(
-                    u => u.TenantId == TenantId && u.Id == request.UnitTypeId && u.IsActive, cancellationToken))
+            if (request.UnitTypeId is { } optionUnit)
             {
-                throw new InvalidTenantReferenceException("eenheid");
+                if (!await _dbContext.UnitTypes.AnyAsync(u => u.TenantId == TenantId && u.Id == optionUnit, cancellationToken))
+                {
+                    throw new InvalidTenantReferenceException("eenheid");
+                }
+
+                // MD-H8 final: active and allowed for pricing (the option's current unit stays valid).
+                await UnitTypeUsage.EnsureIdsAsync(_dbContext, TenantId, [optionUnit], UnitUsage.Pricing,
+                    currentUnitTypeId is { } current ? [current] : [], "unitTypeId", cancellationToken);
             }
         }
         else if (request.UnitTypeId is not null)

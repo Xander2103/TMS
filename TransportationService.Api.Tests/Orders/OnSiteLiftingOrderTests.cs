@@ -70,6 +70,8 @@ public class OnSiteLiftingOrderTests
         {
             Id = customerId, TenantId = tenantId, CustomerNumber = "KL-1", Name = "Bouwbedrijf Peeters", IsActive = true,
         });
+        // MD-H8 final: manual price lines only take units of the master (crane hours = a tenant unit).
+        db.Context.UnitTypes.Add(new Modules.Reference.Entities.UnitType { Id = Guid.NewGuid(), TenantId = tenantId, Code = "UUR", Name = "Uur", IsActive = true });
         await db.Context.SaveChangesAsync();
         await new ActivityTypeSeeder(db.Context, new DevTenantContext(tenantId)).EnsureSeededAsync(CancellationToken.None);
     }

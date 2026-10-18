@@ -50,6 +50,8 @@ public class OrderPricingLineTests
         });
         db.Context.Customers.Add(new Customer { Id = customerId, TenantId = tenantId, CustomerNumber = "KL-1", Name = "Klant X", IsActive = true });
         db.Context.UnitTypes.Add(new UnitType { Id = palletUnitId, TenantId = tenantId, Code = "EUROPALLET", Name = "Europallet", IsActive = true });
+        // MD-H8 final: manual price lines only take units of the master.
+        db.Context.UnitTypes.Add(new UnitType { Id = Guid.NewGuid(), TenantId = tenantId, Code = "COLLI", Name = "Colli", IsActive = true });
         await db.Context.SaveChangesAsync();
 
         var tenant = new DevTenantContext(tenantId);

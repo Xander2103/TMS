@@ -47,7 +47,7 @@ can still be deleted. Explicit, per-domain checks (no reflection):
 |---|---|---|
 | Customer | orders, dossiers, invoices, credit notes, issued transport documents, incidents, portal users, customer messages, order imports | `CustomerReferences` |
 | Driver | trips, activities, POD, damage, fuel, incidents, execution exceptions, dock appointments (an unused driver releases its vehicle slots / tank card) | `DriverReferences` |
-| Unit type | orders, goods lines, price lines, tariff rules, sales-category default unit | `UnitTypeReferenceGuard` |
+| Unit type | orders, goods lines, order/activity price lines, tariff rules, combined-unit discounts, scheduled price-adjustment filters, service options, customer unit mappings, sales-category default unit | `UnitTypeReferenceGuard` |
 | Vehicle / trailer / customer / driver category, department, job function, item category | the records classified by it | `ILookupReferenceGuard<T>` registrations |
 | Issued-item template | stock on hand, stock movements, issued items, reorder proposals | `IssuedItemTemplateReferences` (reusable by the warehouse remediation) |
 | Dock | dock appointments | `WarehouseAdminService.DeleteDockAsync` |
@@ -55,8 +55,22 @@ can still be deleted. Explicit, per-domain checks (no reflection):
 
 Business identifiers that history prints are never handed out again: customer numbers are unique
 case-insensitively over **all** rows (deleted included); a unit code that history stores cannot be changed
-and the code of a deleted unit cannot be re-created. New orders only accept units that exist, are active and
-are allowed for order entry; existing lines keep their (possibly now inactive) unit.
+and the code of a deleted unit cannot be re-created.
+
+**Unit types — one invariant for every mutation path.** `UnitTypeReferenceGuard` owns the unit identity
+rules (`NormalizeCode`: uppercase, `^[A-Z0-9_-]{2,20}$`; `EnsureCodeMayChangeAsync`: a referenced unit keeps
+its code). Both the unit master service (`/api/unit-types/master`, `/{id}/master`) and the inherited generic
+lookup routes (`POST/PUT/DELETE /api/unit-types[/{id}]`) call it — the generic `LookupService` invokes the
+guard hooks of `ILookupReferenceGuard<T>`, so other lookups keep their plain behaviour. Name, description,
+sort order and active flag of a referenced unit stay editable; deactivating is the way out.
+
+**Choosing a unit** goes through `UnitTypeUsage` (one validator): a NEWLY chosen unit must exist in the
+tenant, be active and be allowed for the context (`AllowForOrderEntry` for orders / goods lines,
+`AllowForPricing` for tariff rules, Excel tariff import, combined-unit discounts, service options, customer
+unit mappings and manual order price lines). Units a record already carries stay valid, so deactivating a
+unit never blocks editing an existing order or tariff. A scheduled price-adjustment filter only needs to be a
+unit of the tenant. Not unit-master references: the sales-category default unit and invoice-line unit codes
+(UN/ECE codes such as `C62`, `XPX`, `HUR`) and the free-text unit label on dossier-activity price lines.
 
 ## 3. Employee offboarding ends access
 

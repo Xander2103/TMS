@@ -29,6 +29,18 @@ public interface ILookupReferenceGuard<in TEntity> where TEntity : LookupEntity
     bool ReservesDeletedCodes => false;
 
     Task<ReferenceReport> ReferencesAsync(TEntity entity, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// MD-H8 final: normalizes an explicitly typed code. Called by EVERY mutation path — the generic
+    /// lookup create/update and any type-specific service — so they cannot disagree. Default: as typed.
+    /// </summary>
+    string NormalizeCode(string code) => code;
+
+    /// <summary>
+    /// MD-H8 final: called by EVERY mutation path before a row's code changes. Where the code is the
+    /// identity history depends on, a referenced row refuses the change. Default: free.
+    /// </summary>
+    Task EnsureCodeMayChangeAsync(TEntity entity, string newCode, CancellationToken cancellationToken) => Task.CompletedTask;
 }
 
 internal static class LookupGuardText
@@ -37,31 +49,70 @@ internal static class LookupGuardText
 }
 
 /// <summary>
-/// Units are stored by CODE on goods lines, order lines, price lines and sales categories, so a
-/// referenced unit is never deleted and the code of a deleted unit is never handed out again.
+/// Units are stored by CODE on goods lines, order lines, price lines and sales categories, and by id
+/// on tariff rules, service options, customer unit mappings and scheduled price adjustments. A
+/// referenced unit is never deleted, its code never changes (history would silently follow the new
+/// code or orphan), and the code of a deleted unit is never handed out again. This guard is the ONE
+/// invariant for every UnitType mutation path: the generic <c>/api/unit-types/{id}</c> lookup PUT and
+/// the unit master service (<c>/master</c>) both call it.
 /// </summary>
-public sealed class UnitTypeReferenceGuard(TransportationDbContext db, ITenantContext tenant) : ILookupReferenceGuard<UnitType>
+public sealed partial class UnitTypeReferenceGuard(TransportationDbContext db, ITenantContext tenant) : ILookupReferenceGuard<UnitType>
 {
     public string Subject => "Deze eenheid";
 
     public bool ReservesDeletedCodes => true;
 
+    [System.Text.RegularExpressions.GeneratedRegex("^[A-Z0-9_-]{2,20}$")]
+    private static partial System.Text.RegularExpressions.Regex CodePattern();
+
+    public string NormalizeCode(string code)
+    {
+        var normalized = code.Trim().ToUpperInvariant();
+        if (!CodePattern().IsMatch(normalized))
+        {
+            throw new DomainValidationException("code", "Code moet 2-20 tekens zijn (A-Z, 0-9, - of _).");
+        }
+
+        return normalized;
+    }
+
+    public async Task EnsureCodeMayChangeAsync(UnitType unit, string newCode, CancellationToken cancellationToken)
+    {
+        if (string.Equals(unit.Code, newCode, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        if ((await ReferencesAsync(unit, cancellationToken)).HasReferences)
+        {
+            throw new DomainValidationException("code",
+                $"De code {unit.Code} is al gebruikt in opdrachten, prijzen of klantinstellingen en kan niet meer gewijzigd worden. Wijzig de naam, of maak een nieuwe eenheid aan en zet deze inactief.");
+        }
+    }
+
     public async Task<ReferenceReport> ReferencesAsync(UnitType unit, CancellationToken cancellationToken)
     {
         var tenantId = tenant.TenantId;
-        var code = unit.Code;
+        // Codes on orders / goods / order price lines are stored uppercased; activity price lines and
+        // legacy rows may differ in case — compare case-insensitively so nothing escapes the count.
+        var code = unit.Code.ToUpperInvariant();
         return new ReferenceReport()
-            .Add("orders", await db.TransportOrders.CountAsync(o => o.TenantId == tenantId && o.QuantityUnitCode == code, cancellationToken),
+            .Add("orders", await db.TransportOrders.CountAsync(o => o.TenantId == tenantId && o.QuantityUnitCode != null && o.QuantityUnitCode.ToUpper() == code, cancellationToken),
                 "opdracht", "opdrachten")
-            .Add("cargo", await db.CargoItems.CountAsync(c => c.TenantId == tenantId && c.QuantityUnitCode == code, cancellationToken),
+            .Add("cargo", await db.CargoItems.CountAsync(c => c.TenantId == tenantId && c.QuantityUnitCode != null && c.QuantityUnitCode.ToUpper() == code, cancellationToken),
                 "goederenlijn", "goederenlijnen")
-            .Add("priceLines", await db.TransportOrderPricingLines.CountAsync(l => l.TenantId == tenantId && l.Unit == code, cancellationToken)
-                               + await db.DossierActivityPriceLines.CountAsync(l => l.TenantId == tenantId && l.Unit == code, cancellationToken),
+            .Add("priceLines", await db.TransportOrderPricingLines.CountAsync(l => l.TenantId == tenantId && l.Unit != null && l.Unit.ToUpper() == code, cancellationToken)
+                               + await db.DossierActivityPriceLines.CountAsync(l => l.TenantId == tenantId && l.Unit != null && l.Unit.ToUpper() == code, cancellationToken),
                 "prijslijn", "prijslijnen")
             .Add("priceRules", await db.PriceRules.CountAsync(r => r.TenantId == tenantId && r.UnitTypeId == unit.Id, cancellationToken)
-                               + await db.CombinedUnitDiscountUnits.CountAsync(u => u.TenantId == tenantId && u.UnitTypeId == unit.Id, cancellationToken),
+                               + await db.CombinedUnitDiscountUnits.CountAsync(u => u.TenantId == tenantId && u.UnitTypeId == unit.Id, cancellationToken)
+                               + await db.ScheduledPriceAdjustments.CountAsync(a => a.TenantId == tenantId && a.UnitTypeIdFilter == unit.Id, cancellationToken),
                 "tariefregel", "tariefregels")
-            .Add("salesCategories", await db.SalesCategories.CountAsync(s => s.TenantId == tenantId && s.DefaultUnitCode == code, cancellationToken),
+            .Add("serviceOptions", await db.ServiceOptions.CountAsync(o => o.TenantId == tenantId && o.UnitTypeId == unit.Id, cancellationToken),
+                "service-optie", "service-opties")
+            .Add("customerUnits", await db.CustomerPreferredUnits.CountAsync(u => u.TenantId == tenantId && u.UnitTypeId == unit.Id, cancellationToken),
+                "klanteenheid", "klanteenheden")
+            .Add("salesCategories", await db.SalesCategories.CountAsync(s => s.TenantId == tenantId && s.DefaultUnitCode != null && s.DefaultUnitCode.ToUpper() == code, cancellationToken),
                 "verkoopcategorie", "verkoopcategorieën");
     }
 }

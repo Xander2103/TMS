@@ -4474,6 +4474,28 @@ public class TransportOrderService : ITransportOrderService
         var byKey = existingLines.Where(l => l.LineKey is not null).ToLookup(l => l.LineKey!);
         var maxSequence = existingLines.Count == 0 ? 0 : existingLines.Max(l => l.Sequence);
 
+        // MD-H8 final: a price line never stores an unknown unit code. A NEWLY chosen unit is active
+        // and allowed for pricing; the units this order already carries (its lines, its goods, its
+        // own unit) stay valid — the picker offers exactly those plus the active pricing units.
+        var requestedUnits = requests
+            .Select((r, i) => (Code: NormalizeUnitCode(r.Unit), Field: $"lines[{i}].unit"))
+            .Where(r => r.Code is not null)
+            .Select(r => (r.Code!, r.Field))
+            .ToList();
+        if (requestedUnits.Count > 0)
+        {
+            var orderUnits = existingLines.Select(l => NormalizeUnitCode(l.Unit))
+                .Concat(await _dbContext.CargoItems.AsNoTracking()
+                    .Where(c => c.TenantId == tenantId && c.TransportOrderId == orderId)
+                    .Select(c => c.QuantityUnitCode).ToListAsync(cancellationToken))
+                .Append(order.QuantityUnitCode)
+                .Select(NormalizeUnitCode)
+                .OfType<string>()
+                .ToHashSet(StringComparer.Ordinal);
+            await Reference.Services.UnitTypeUsage.EnsureCodesAsync(
+                _dbContext, tenantId, requestedUnits, Reference.Services.UnitUsage.Pricing, orderUnits, cancellationToken);
+        }
+
         var auditBefore = new List<object>();
         var auditAfter = new List<object>();
 
@@ -5248,32 +5270,8 @@ public class TransportOrderService : ITransportOrderService
             }
         }
 
-        var toCheck = requested.Where(r => !alreadyUsed.Contains(r.Code)).ToList();
-        if (toCheck.Count == 0)
-        {
-            return;
-        }
-
-        var codes = toCheck.Select(r => r.Code).Distinct().ToList();
-        var units = await _dbContext.UnitTypes.AsNoTracking()
-            .Where(u => u.TenantId == _tenantContext.TenantId && codes.Contains(u.Code))
-            .Select(u => new { u.Code, u.Name, u.IsActive, u.AllowForOrderEntry })
-            .ToListAsync(cancellationToken);
-        var byCode = units.ToDictionary(u => u.Code, StringComparer.Ordinal);
-        foreach (var (code, field) in toCheck)
-        {
-            var message = byCode.GetValueOrDefault(code) switch
-            {
-                null => $"Onbekende eenheid '{code}'. Kies een eenheid uit de stamgegevens.",
-                { IsActive: false } unit => $"De eenheid '{unit.Name}' is inactief en kan niet meer gekozen worden voor nieuwe opdrachten.",
-                { AllowForOrderEntry: false } unit => $"De eenheid '{unit.Name}' is niet toegelaten voor orderinvoer.",
-                _ => null,
-            };
-            if (message is not null)
-            {
-                throw new DomainValidationException(field, message);
-            }
-        }
+        await Reference.Services.UnitTypeUsage.EnsureCodesAsync(
+            _dbContext, _tenantContext.TenantId, requested, Reference.Services.UnitUsage.OrderEntry, alreadyUsed, cancellationToken);
     }
 
     private static string GenerateOrderNumber(TenantSettings? settings)

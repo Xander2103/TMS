@@ -90,14 +90,10 @@ public partial class UnitTypeMasterService : IUnitTypeMasterService
         }
 
         await ValidateAsync(request, existingId: id, cancellationToken);
-        var newCode = request.Code.Trim().ToUpperInvariant();
-        if (!string.Equals(unit.Code, newCode, StringComparison.Ordinal)
-            && (await new UnitTypeReferenceGuard(_dbContext, _tenantContext).ReferencesAsync(unit, cancellationToken)).HasReferences)
-        {
-            // MD-H8: history stores the CODE — renaming it would orphan every line that uses it.
-            throw new DomainValidationException("code",
-                $"De code {unit.Code} is al gebruikt in opdrachten of prijzen en kan niet meer gewijzigd worden. Wijzig de naam, of maak een nieuwe eenheid aan en zet deze inactief.");
-        }
+        // MD-H8: history stores the CODE — the ONE code-identity rule lives in the unit guard, which
+        // the generic lookup PUT calls too.
+        var guard = new UnitTypeReferenceGuard(_dbContext, _tenantContext);
+        await guard.EnsureCodeMayChangeAsync(unit, guard.NormalizeCode(request.Code), cancellationToken);
 
         var before = AuditShape(unit);
         Apply(unit, request);

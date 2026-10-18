@@ -805,6 +805,10 @@ public class PricingExcelService : IPricingExcelService
             .ToListAsync(cancellationToken);
         var existingById = existingRules.ToDictionary(r => r.Id);
         var (unitCodes, zoneCodes, unitIdsByCode, zoneIdsByCode) = await LoadCodesAsync(cancellationToken);
+        // MD-H8 final: a unit newly put on a rule must be active and allowed for pricing.
+        var unusableUnitIds = await _dbContext.UnitTypes.AsNoTracking()
+            .Where(u => u.TenantId == TenantId && (!u.IsActive || !u.AllowForPricing))
+            .Select(u => u.Id).ToListAsync(cancellationToken);
 
         var errors = new List<(int Row, string Message)>();
         var warnings = new List<(int Row, string Message)>();
@@ -870,6 +874,11 @@ public class PricingExcelService : IPricingExcelService
             if (unitCode is not null && !unitIdsByCode.ContainsKey(unitCode))
             {
                 errors.Add((rowNumber, $"Eenheid '{unitCode}' is onbekend."));
+            }
+            else if (unitCode is not null && unusableUnitIds.Contains(unitIdsByCode[unitCode])
+                     && !(regelId is { } keptRule && existingById.TryGetValue(keptRule, out var kept) && kept.UnitTypeId == unitIdsByCode[unitCode]))
+            {
+                errors.Add((rowNumber, $"Eenheid '{unitCode}' is inactief of niet toegelaten voor prijzen."));
             }
 
             if (zoneCode is not null && !zoneIdsByCode.ContainsKey(zoneCode))

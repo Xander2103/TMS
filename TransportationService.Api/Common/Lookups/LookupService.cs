@@ -97,7 +97,7 @@ public class LookupService<TEntity> : ILookupService<TEntity> where TEntity : Lo
             return LookupOperationResult.Invalid("Naam is verplicht.");
         }
 
-        var explicitCode = Normalize(request.Code);
+        var explicitCode = Normalize(request.Code) is { } typed ? _guard?.NormalizeCode(typed) ?? typed : null;
         if (explicitCode is not null && await CodeExistsAsync(explicitCode, excludingId: null, cancellationToken))
         {
             return LookupOperationResult.Duplicate(explicitCode);
@@ -178,10 +178,17 @@ public class LookupService<TEntity> : ILookupService<TEntity> where TEntity : Lo
             return LookupOperationResult.NotFound();
         }
 
-        var code = request.Code.Trim();
+        var code = _guard?.NormalizeCode(request.Code) ?? request.Code.Trim();
         if (await CodeExistsAsync(code, excludingId: id, cancellationToken))
         {
             return LookupOperationResult.Duplicate(code);
+        }
+
+        // MD-H8 final: the generic PUT obeys the same code-identity rule as the type-specific service
+        // (a referenced unit keeps its code) — it can no longer re-code what history depends on.
+        if (_guard is not null)
+        {
+            await _guard.EnsureCodeMayChangeAsync(entity, code, cancellationToken);
         }
 
         var oldValues = new { entity.Code, entity.Name, entity.IsActive };

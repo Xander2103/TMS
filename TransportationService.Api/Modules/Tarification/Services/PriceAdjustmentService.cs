@@ -108,6 +108,14 @@ public class PriceAdjustmentService : IPriceAdjustmentService
         Guid? customerId, Guid? agreementId, CreatePriceAdjustmentRequest request, CancellationToken cancellationToken)
     {
         Validate(request.EffectiveDate, request.Percent, request.AmountDelta, request.RoundingStep, customerId, agreementId);
+        // MD-H8 final: the stored unit filter must be a unit of this tenant (an inactive unit is a
+        // legitimate filter: it selects the existing rules that still use it).
+        if (request.UnitTypeIdFilter is { } unitFilter
+            && !await _dbContext.UnitTypes.AnyAsync(u => u.TenantId == TenantId && u.Id == unitFilter, cancellationToken))
+        {
+            throw new InvalidTenantReferenceException("eenheid");
+        }
+
         var rules = await LoadAdjustableRulesAsync(
             customerId, agreementId, request.EffectiveDate, request.RuleIds,
             request.BasisFilter, request.UnitTypeIdFilter, cancellationToken);
