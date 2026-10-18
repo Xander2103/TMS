@@ -186,7 +186,8 @@ export function getNavModules(): NavModule[] {
       icon: Warehouse,
       items: [
         { label: 'navigation.menu.warehouseScanning', to: '/warehouse', permissions: ['warehouse.view'] },
-        { label: 'navigation.menu.warehouseTrace', to: '/warehouse/trace', permissions: ['warehouse.view', 'scanning.execute'] },
+        // SEC-H1: GET api/warehouse/trace no longer admits scanning-only roles (drivers).
+        { label: 'navigation.menu.warehouseTrace', to: '/warehouse/trace', permissions: ['warehouse.view', 'warehouse.manage'] },
         { label: 'navigation.menu.warehousesAdmin', to: '/warehouses', permissions: ['warehouse.view', 'warehouse.manage'] },
         { label: 'navigation.menu.dockPlanning', to: '/dock-planning', permissions: ['warehouse.view', 'warehouse.schedule'] },
       ],

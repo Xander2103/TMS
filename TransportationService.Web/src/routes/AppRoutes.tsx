@@ -25,12 +25,15 @@ import { RequirePermission } from './RequirePermission'
 import { navPermissions } from './routePermissions'
 import { transportRoutePermissions } from './transportRoutePermissions'
 import { fleetRoutePermissions } from './fleetRoutePermissions'
+import { appRoutePermissions } from './appRoutePermissions'
 import { EmployeeRecordGuard } from './EmployeeRecordGuard'
 
 /** M14: rights per transport route (see transportRoutePermissions). */
 const TRANSPORT_GUARDS = transportRoutePermissions()
 /** FL-M10: rights per fleet route (see fleetRoutePermissions). */
 const FLEET_GUARDS = fleetRoutePermissions()
+/** SEC-M5: rights per remaining internal route (see appRoutePermissions). */
+const APP_GUARDS = appRoutePermissions()
 
 /**
  * Route-based code splitting: every page loads as its own chunk on first visit, so the
@@ -236,9 +239,12 @@ const router = createBrowserRouter(
         <Route element={<InternalOnly />}>
         <Route element={<DriverLayout />}>
           <Route errorElement={<RouteErrorPage />}>
-            <Route path="/driver" element={<DriverHomePage />} />
-            <Route path="/driver/documents" element={<DriverDocumentsPage />} />
-            <Route path="/driver/incidents" element={<DriverIncidentsPage />} />
+            {/* SEC-M5: inside the driver shell, so the tabs stay as a way out of "Geen toegang". */}
+            <Route element={<RequirePermission permissions={APP_GUARDS['/driver']} />}>
+              <Route path="/driver" element={<DriverHomePage />} />
+              <Route path="/driver/documents" element={<DriverDocumentsPage />} />
+              <Route path="/driver/incidents" element={<DriverIncidentsPage />} />
+            </Route>
           </Route>
         </Route>
         </Route>
@@ -266,7 +272,7 @@ const router = createBrowserRouter(
         <Route element={<AppLayout />}>
         {/* Pathless boundary INSIDE the shell: a crashing page keeps the sidebar and the bell. */}
         <Route errorElement={<RouteErrorPage />}>
-          <Route path="/dashboard" element={<DashboardPage />} />
+          <Route path="/dashboard" element={<RequirePermission permissions={APP_GUARDS['/dashboard']}><DashboardPage /></RequirePermission>} />
           <Route path="/transport-orders" element={<RequirePermission permissions={TRANSPORT_GUARDS['/transport-orders']}><TransportOrdersPage /></RequirePermission>} />
           <Route path="/transport-orders/new" element={<RequirePermission permissions={TRANSPORT_GUARDS['/transport-orders/new']}><NewTransportOrderPage /></RequirePermission>} />
           {/* Redesign 2026-09-12: the order shell stays mounted; the optional segment selects the
@@ -275,31 +281,31 @@ const router = createBrowserRouter(
           <Route path="/order-imports" element={<OrderImportsPage />} />
           <Route path="/planning" element={<RequirePermission permissions={TRANSPORT_GUARDS['/planning']}><PlanningPage /></RequirePermission>} />
           <Route path="/planning-center" element={<RequirePermission permissions={navPermissions('/planning-center')}><PlanningCenterPage /></RequirePermission>} />
-          <Route path="/operations" element={<OperationsPage />} />
-          <Route path="/profitability" element={<ProfitabilityPage />} />
-          <Route path="/warehouses" element={<WarehousesPage />} />
-          <Route path="/warehouse/trace" element={<WarehouseTracePage />} />
-          <Route path="/dock-planning" element={<DockPlanningPage />} />
+          <Route path="/operations" element={<RequirePermission permissions={APP_GUARDS['/operations']}><OperationsPage /></RequirePermission>} />
+          <Route path="/profitability" element={<RequirePermission permissions={APP_GUARDS['/profitability']}><ProfitabilityPage /></RequirePermission>} />
+          <Route path="/warehouses" element={<RequirePermission permissions={APP_GUARDS['/warehouses']}><WarehousesPage /></RequirePermission>} />
+          <Route path="/warehouse/trace" element={<RequirePermission permissions={APP_GUARDS['/warehouse/trace']}><WarehouseTracePage /></RequirePermission>} />
+          <Route path="/dock-planning" element={<RequirePermission permissions={APP_GUARDS['/dock-planning']}><DockPlanningPage /></RequirePermission>} />
           <Route path="/planning/:id" element={<RequirePermission permissions={TRANSPORT_GUARDS['/planning/:id']}><TripDetailPage /></RequirePermission>} />
           <Route path="/exceptions" element={<RequirePermission permissions={TRANSPORT_GUARDS['/exceptions']}><ExceptionsPage /></RequirePermission>} />
           <Route path="/exceptions/:id" element={<RequirePermission permissions={TRANSPORT_GUARDS['/exceptions/:id']}><ExceptionDetailPage /></RequirePermission>} />
-          <Route path="/pods/:id" element={<PodDetailPage />} />
-          <Route path="/packages/:id" element={<PackageDetailPage />} />
-          <Route path="/warehouse" element={<WarehousePage />} />
+          <Route path="/pods/:id" element={<RequirePermission permissions={APP_GUARDS['/pods/:id']}><PodDetailPage /></RequirePermission>} />
+          <Route path="/packages/:id" element={<RequirePermission permissions={APP_GUARDS['/packages/:id']}><PackageDetailPage /></RequirePermission>} />
+          <Route path="/warehouse" element={<RequirePermission permissions={APP_GUARDS['/warehouse']}><WarehousePage /></RequirePermission>} />
           <Route path="/portal" element={<PortalDashboardPage />} />
           <Route path="/portal/planning" element={<PortalPlanningPage />} />
           <Route path="/employee-planning" element={<RequirePermission permissions={navPermissions('/employee-planning')}><EmployeePlanningPage /></RequirePermission>} />
           <Route path="/messaging" element={<MessagingPage />} />
           <Route path="/edi" element={<EdiPage />} />
           <Route path="/peppol" element={<RequirePermission permissions={TRANSPORT_GUARDS['/peppol']}><PeppolPage /></RequirePermission>} />
-          <Route path="/integrations" element={<IntegrationsPage />} />
+          <Route path="/integrations" element={<RequirePermission permissions={APP_GUARDS['/integrations']}><IntegrationsPage /></RequirePermission>} />
           <Route path="/portal/absences" element={<PortalAbsencesPage />} />
           <Route path="/portal/time" element={<MyTimePage />} />
           <Route path="/attendance" element={<RequirePermission permissions={navPermissions('/attendance')}><AttendanceOverviewPage /></RequirePermission>} />
           <Route path="/portal/qualifications" element={<PortalQualificationsPage />} />
           <Route path="/portal/profile" element={<PortalProfilePage />} />
-          <Route path="/my-trips" element={<MyTripsPage />} />
-          <Route path="/my-trips/:id" element={<TripExecutionPage />} />
+          <Route path="/my-trips" element={<RequirePermission permissions={APP_GUARDS['/my-trips']}><MyTripsPage /></RequirePermission>} />
+          <Route path="/my-trips/:id" element={<RequirePermission permissions={APP_GUARDS['/my-trips/:id']}><TripExecutionPage /></RequirePermission>} />
           <Route path="/invoices" element={<RequirePermission permissions={TRANSPORT_GUARDS['/invoices']}><InvoicesPage /></RequirePermission>} />
           <Route path="/invoice-control" element={<RequirePermission permissions={TRANSPORT_GUARDS['/invoice-control']}><InvoiceControlPage /></RequirePermission>} />
           <Route path="/invoices/new" element={<RequirePermission permissions={TRANSPORT_GUARDS['/invoices/new']}><NewInvoicePage /></RequirePermission>} />
@@ -331,45 +337,45 @@ const router = createBrowserRouter(
           <Route path="/incidents" element={<RequirePermission permissions={TRANSPORT_GUARDS['/incidents']}><IncidentsPage /></RequirePermission>} />
           <Route path="/incidents/new" element={<RequirePermission permissions={TRANSPORT_GUARDS['/incidents/new']}><IncidentDetailPage /></RequirePermission>} />
           <Route path="/incidents/:id" element={<RequirePermission permissions={TRANSPORT_GUARDS['/incidents/:id']}><IncidentDetailPage /></RequirePermission>} />
-          <Route path="/cost-rates" element={<CostRatesPage />} />
-          <Route path="/settings/pricing" element={<PricingSettingsPage />} />
-          <Route path="/pricing/tables" element={<PricingTablesPage />} />
-          <Route path="/pricing/tables/:id" element={<PricingTableDetailPage />} />
-          <Route path="/kpi" element={<KpiDashboardPage />} />
-          <Route path="/kpi/trips" element={<KpiTripsPage />} />
-          <Route path="/reports" element={<ReportsPage />} />
-          <Route path="/reports/:reportId" element={<ReportViewerPage />} />
-          <Route path="/locations" element={<LocationsPage />} />
-          <Route path="/locations/new" element={<NewLocationPage />} />
-          <Route path="/locations/:id" element={<LocationDetailPage />} />
+          <Route path="/cost-rates" element={<RequirePermission permissions={APP_GUARDS['/cost-rates']}><CostRatesPage /></RequirePermission>} />
+          <Route path="/settings/pricing" element={<RequirePermission permissions={APP_GUARDS['/settings/pricing']}><PricingSettingsPage /></RequirePermission>} />
+          <Route path="/pricing/tables" element={<RequirePermission permissions={APP_GUARDS['/pricing/tables']}><PricingTablesPage /></RequirePermission>} />
+          <Route path="/pricing/tables/:id" element={<RequirePermission permissions={APP_GUARDS['/pricing/tables/:id']}><PricingTableDetailPage /></RequirePermission>} />
+          <Route path="/kpi" element={<RequirePermission permissions={APP_GUARDS['/kpi']}><KpiDashboardPage /></RequirePermission>} />
+          <Route path="/kpi/trips" element={<RequirePermission permissions={APP_GUARDS['/kpi/trips']}><KpiTripsPage /></RequirePermission>} />
+          <Route path="/reports" element={<RequirePermission permissions={APP_GUARDS['/reports']}><ReportsPage /></RequirePermission>} />
+          <Route path="/reports/:reportId" element={<RequirePermission permissions={APP_GUARDS['/reports/:reportId']}><ReportViewerPage /></RequirePermission>} />
+          <Route path="/locations" element={<RequirePermission permissions={APP_GUARDS['/locations']}><LocationsPage /></RequirePermission>} />
+          <Route path="/locations/new" element={<RequirePermission permissions={APP_GUARDS['/locations/new']}><NewLocationPage /></RequirePermission>} />
+          <Route path="/locations/:id" element={<RequirePermission permissions={APP_GUARDS['/locations/:id']}><LocationDetailPage /></RequirePermission>} />
           <Route path="/users" element={<RequirePermission permissions={navPermissions('/users')}><UsersPage /></RequirePermission>} />
           <Route path="/users/new" element={<RequirePermission permissions={['users.create']}><NewUserPage /></RequirePermission>} />
           <Route path="/users/:id" element={<RequirePermission permissions={navPermissions('/users')}><UserDetailPage /></RequirePermission>} />
           <Route path="/roles" element={<RequirePermission permissions={navPermissions('/roles')}><RolesPage /></RequirePermission>} />
-          <Route path="/job-function-mappings" element={<JobFunctionMappingsPage />} />
+          <Route path="/job-function-mappings" element={<RequirePermission permissions={APP_GUARDS['/job-function-mappings']}><JobFunctionMappingsPage /></RequirePermission>} />
           <Route path="/inbox" element={<InboxPage />} />
           <Route path="/roles/:id" element={<RequirePermission permissions={navPermissions('/roles')}><RoleDetailPage /></RequirePermission>} />
           <Route path="/employees" element={<RequirePermission permissions={navPermissions('/employees')}><EmployeesPage /></RequirePermission>} />
           <Route path="/employees/new" element={<RequirePermission permissions={['employees.create']}><NewEmployeePage /></RequirePermission>} />
           <Route path="/employees/:id" element={<EmployeeRecordGuard><EmployeeDetailPage /></EmployeeRecordGuard>} />
-          <Route path="/settings/hr-reminders" element={<HrReminderSettingsPage />} />
+          <Route path="/settings/hr-reminders" element={<RequirePermission permissions={APP_GUARDS['/settings/hr-reminders']}><HrReminderSettingsPage /></RequirePermission>} />
           <Route path="/absences" element={<RequirePermission permissions={navPermissions('/absences')}><AbsencesPage /></RequirePermission>} />
-          <Route path="/qualifications" element={<QualificationsOverviewPage />} />
-          <Route path="/tasks" element={<TasksPage />} />
-          <Route path="/settings/task-templates" element={<TaskTemplatesPage />} />
+          <Route path="/qualifications" element={<RequirePermission permissions={APP_GUARDS['/qualifications']}><QualificationsOverviewPage /></RequirePermission>} />
+          <Route path="/tasks" element={<RequirePermission permissions={APP_GUARDS['/tasks']}><TasksPage /></RequirePermission>} />
+          <Route path="/settings/task-templates" element={<RequirePermission permissions={APP_GUARDS['/settings/task-templates']}><TaskTemplatesPage /></RequirePermission>} />
           <Route
             path="/master-data"
             element={<Navigate to={`/master-data/${LOOKUP_RESOURCES[0].slug}`} replace />}
           />
-          <Route path="/master-data/eenheden" element={<UnitTypesPage />} />
-          <Route path="/master-data/services" element={<ServiceOptionsPage />} />
+          <Route path="/master-data/eenheden" element={<RequirePermission permissions={APP_GUARDS['/master-data/eenheden']}><UnitTypesPage /></RequirePermission>} />
+          <Route path="/master-data/services" element={<RequirePermission permissions={APP_GUARDS['/master-data/services']}><ServiceOptionsPage /></RequirePermission>} />
           {/* Bedrijfsmiddelcategorieën live with their templates under Personeel → Bedrijfsmiddelen. */}
           <Route path="/master-data/issued-item-categories" element={<Navigate to="/issued-items/categories" replace />} />
           <Route path="/master-data/:resource" element={<LookupPage />} />
-          <Route path="/settings" element={<SettingsPage />} />
-          <Route path="/settings/document-rules" element={<DocumentRulesPage />} />
-          <Route path="/settings/charge-policies" element={<ChargePoliciesPage />} />
-          <Route path="/settings/system" element={<SystemInfoPage />} />
+          <Route path="/settings" element={<RequirePermission permissions={APP_GUARDS['/settings']}><SettingsPage /></RequirePermission>} />
+          <Route path="/settings/document-rules" element={<RequirePermission permissions={APP_GUARDS['/settings/document-rules']}><DocumentRulesPage /></RequirePermission>} />
+          <Route path="/settings/charge-policies" element={<RequirePermission permissions={APP_GUARDS['/settings/charge-policies']}><ChargePoliciesPage /></RequirePermission>} />
+          <Route path="/settings/system" element={<RequirePermission permissions={APP_GUARDS['/settings/system']}><SystemInfoPage /></RequirePermission>} />
           <Route path="/settings/legal-entities" element={<RequirePermission permissions={TRANSPORT_GUARDS['/settings/legal-entities']}><LegalEntitiesPage /></RequirePermission>} />
           {/* Bedrijfsmiddelen (beheer): categories + templates as tabs; the index lands on templates. */}
           <Route path="/issued-items" element={<Navigate to="/issued-items/templates" replace />} />
@@ -379,14 +385,14 @@ const router = createBrowserRouter(
           <Route path="/settings/issued-item-templates/:id" element={<LegacyIssuedItemTemplateRedirect />} />
           <Route path="/inventory" element={<RequirePermission permissions={navPermissions('/inventory')}><InventoryOverviewPage /></RequirePermission>} />
           <Route path="/inventory/issues" element={<RequirePermission permissions={navPermissions('/inventory/issues')}><InventoryIssuesPage /></RequirePermission>} />
-          <Route path="/settings/leave" element={<LeaveSettingsPage />} />
-          <Route path="/settings/attendance" element={<AttendanceSettingsPage />} />
-          <Route path="/settings/activity-types" element={<ActivityTypesPage />} />
+          <Route path="/settings/leave" element={<RequirePermission permissions={APP_GUARDS['/settings/leave']}><LeaveSettingsPage /></RequirePermission>} />
+          <Route path="/settings/attendance" element={<RequirePermission permissions={APP_GUARDS['/settings/attendance']}><AttendanceSettingsPage /></RequirePermission>} />
+          <Route path="/settings/activity-types" element={<RequirePermission permissions={APP_GUARDS['/settings/activity-types']}><ActivityTypesPage /></RequirePermission>} />
           <Route path="/settings/accounting" element={<RequirePermission permissions={TRANSPORT_GUARDS['/settings/accounting']}><AccountingSettingsPage /></RequirePermission>} />
-          <Route path="/settings/notifications" element={<NotificationAdminPage />} />
-          <Route path="/settings/escalations" element={<EscalationSettingsPage />} />
-          <Route path="/settings/portal-announcements" element={<PortalAnnouncementsSettingsPage />} />
-          <Route path="/settings/portal-messages" element={<PortalMessagesPage />} />
+          <Route path="/settings/notifications" element={<RequirePermission permissions={APP_GUARDS['/settings/notifications']}><NotificationAdminPage /></RequirePermission>} />
+          <Route path="/settings/escalations" element={<RequirePermission permissions={APP_GUARDS['/settings/escalations']}><EscalationSettingsPage /></RequirePermission>} />
+          <Route path="/settings/portal-announcements" element={<RequirePermission permissions={APP_GUARDS['/settings/portal-announcements']}><PortalAnnouncementsSettingsPage /></RequirePermission>} />
+          <Route path="/settings/portal-messages" element={<RequirePermission permissions={APP_GUARDS['/settings/portal-messages']}><PortalMessagesPage /></RequirePermission>} />
           <Route path="*" element={<NotFoundPage />} />
         </Route>
         </Route>
