@@ -144,10 +144,12 @@ public class InvoiceService : IInvoiceService
                 .FirstOrDefault() == wantedPeppol);
         }
 
+        // MD-H3/MD-B2: an issued invoice is listed under the customer name it was issued to, and a
+        // (legacy) deleted customer never makes its invoices disappear from the list.
         var joined = from i in query
-                     join cu in _dbContext.Customers.AsNoTracking().Where(x => x.TenantId == tenantId)
+                     join cu in _dbContext.Customers.IgnoreQueryFilters().AsNoTracking().Where(x => x.TenantId == tenantId)
                          on i.CustomerId equals cu.Id
-                     select new { i, CustomerName = cu.Name, cu.CustomerNumber };
+                     select new { i, CustomerName = i.PartySnapshotFrozenAt != null && i.CustomerNameSnapshot != null ? i.CustomerNameSnapshot : cu.Name, cu.CustomerNumber };
 
         if (!string.IsNullOrWhiteSpace(search))
         {
@@ -2244,7 +2246,11 @@ public class InvoiceService : IInvoiceService
         var subtotal = Math.Round(lines.Sum(l => l.LineTotal), 2);
         var vat = InvoiceTotals.VatTotal(liveLines, invoice.CustomerVatTreatment);
 
-        var legalEntityName = invoice.LegalEntityId is { } entityId
+        // MD-H3: an issued invoice names the seller AS ISSUED (found in the browser regression:
+        // the header read the entity's later name while the PDF showed the snapshot).
+        var legalEntityName = invoice.PartySnapshotIsFinal && (invoice.SellerName ?? invoice.SellerLegalName) is { } issuedSeller
+            ? issuedSeller
+            : invoice.LegalEntityId is { } entityId
             ? await _dbContext.LegalEntities.AsNoTracking()
                 .Where(e => e.TenantId == tenantId && e.Id == entityId)
                 .Select(e => e.TradingName ?? e.LegalName)
@@ -2287,8 +2293,10 @@ public class InvoiceService : IInvoiceService
 
         return new InvoiceDetailDto(
             invoice.Id, invoice.InvoiceNumber, invoice.InvoiceDate, invoice.DueDate,
-            invoice.CustomerId, invoice.CustomerNameSnapshot ?? customer?.Name ?? string.Empty,
-            invoice.CustomerVatNumberSnapshot ?? customer?.VatNumber,
+            invoice.CustomerId,
+            // MD-H3: a FINAL snapshot never falls back to live data — an empty VAT stays empty.
+            invoice.CustomerNameSnapshot ?? (invoice.PartySnapshotIsFinal ? null : customer?.Name) ?? string.Empty,
+            invoice.PartySnapshotIsFinal ? invoice.CustomerVatNumberSnapshot : invoice.CustomerVatNumberSnapshot ?? customer?.VatNumber,
             invoice.Status, invoice.Currency, invoice.Notes,
             lines, subtotal, vat, subtotal + vat, Transitions[invoice.Status],
             invoice.LegalEntityId, legalEntityName,

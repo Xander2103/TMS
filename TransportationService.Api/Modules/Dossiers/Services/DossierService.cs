@@ -696,6 +696,8 @@ public partial class DossierService : IDossierService
                 {
                     to.TransportOrderId, TripId = t.Id, t.TripNumber, t.TripDate, t.Status,
                     t.DriverId, t.VehicleId, t.TrailerId, t.VehicleSelectionSource,
+                    // MD-M6: a completed trip shows the identity it was executed with.
+                    t.ExecutedDriverName, t.ExecutedVehicleNumber, t.ExecutedVehiclePlate, t.ExecutedTrailerNumber, t.ExecutedTrailerPlate,
                 })
             .ToListAsync(cancellationToken);
         if (links.Count == 0)
@@ -755,10 +757,10 @@ public partial class DossierService : IDossierService
             var trailer = trip.TrailerId is { } tid ? trailers.GetValueOrDefault(tid) : null;
             result[orderId] = new DossierActivityAssignmentDto(
                 trip.TripId, trip.TripNumber, trip.TripDate, trip.Status.ToString(),
-                trip.DriverId, trip.DriverId is { } did ? drivers.GetValueOrDefault(did) : null,
-                trip.VehicleId, vehicle?.InternalNumber, vehicle?.LicensePlate,
+                trip.DriverId, trip.ExecutedDriverName ?? (trip.DriverId is { } did ? drivers.GetValueOrDefault(did) : null),
+                trip.VehicleId, trip.ExecutedVehicleNumber ?? vehicle?.InternalNumber, trip.ExecutedVehiclePlate ?? vehicle?.LicensePlate,
                 trip.VehicleSelectionSource?.ToString(),
-                trip.TrailerId, trailer?.InternalNumber, trailer?.LicensePlate,
+                trip.TrailerId, trip.ExecutedTrailerNumber ?? trailer?.InternalNumber, trip.ExecutedTrailerPlate ?? trailer?.LicensePlate,
                 tripCount,
                 Math.Max(0, orderCountByTrip.GetValueOrDefault(trip.TripId, 1) - 1));
         }

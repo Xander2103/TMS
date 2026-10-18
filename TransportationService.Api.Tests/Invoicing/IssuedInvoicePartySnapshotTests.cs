@@ -155,6 +155,13 @@ public class IssuedInvoicePartySnapshotTests : IDisposable
         Assert.Null(previewAfter.Buyer.VatNumber);
         Assert.NotEqual("LATER-TOEGEVOEGD", previewAfter.BuyerReference);
 
+        // The invoice SCREEN reads the same snapshot (found in the browser regression): no later VAT,
+        // and the seller as issued even after the legal entity is renamed.
+        await h.Db.Context.LegalEntities.Where(e => e.Id == h.EntityId).ExecuteUpdateAsync(s => s.SetProperty(e => e.LegalName, "Trans BV HERNOEMD"));
+        var detail = (await h.Invoices.GetByIdAsync(issuedId, CancellationToken.None))!;
+        Assert.Null(detail.CustomerVatNumber);
+        Assert.Equal("Trans BV", detail.LegalEntityName);
+
         // A NEW invoice issued now carries the new customer data and the new logo.
         var newId = await IssueAsync(h);
         var newPdf = (await h.Pdf.RenderAsync(newId, CancellationToken.None))!.Value.Bytes;

@@ -111,8 +111,9 @@ public class TripService : ITripService
         var items = new List<TripListItemDto>(trips.Count);
         foreach (var trip in trips)
         {
-            // Conflicts are recomputed live so the board always reflects the current data.
-            var conflicts = await _conflictService.EvaluateAsync(trip, cancellationToken);
+            // Conflicts are recomputed live so the board always reflects the current data — for work
+            // that can still change; executed / cancelled history is never re-judged (MD-M6).
+            var conflicts = await ConflictsForAsync(trip, cancellationToken);
             items.Add(new TripListItemDto(
                 trip.Id, trip.TripNumber, trip.TripDate, trip.Status,
                 // MD-M6: a completed trip shows the identity it was executed with.
@@ -1117,6 +1118,16 @@ public class TripService : ITripService
             Sequence = index + 1,
         }).ToList();
 
+    /// <summary>
+    /// MD-M6 (found in the browser regression): a completed trip showed "Chauffeur … is inactief" as a
+    /// BLOCKING conflict after the driver left — planning conflicts describe work that can still be
+    /// changed, so executed and cancelled trips are not re-evaluated against today's master data.
+    /// </summary>
+    private async Task<IReadOnlyList<PlanningConflictDto>> ConflictsForAsync(Trip trip, CancellationToken cancellationToken) =>
+        trip.Status is TripStatus.Completed or TripStatus.Cancelled
+            ? []
+            : await _conflictService.EvaluateAsync(trip, cancellationToken);
+
     /// <summary>MD-M6: freezes driver / vehicle / trailer identity at completion (never overwritten).</summary>
     private async Task FreezeExecutionIdentityAsync(Trip trip, CancellationToken cancellationToken)
     {
@@ -1208,7 +1219,8 @@ public class TripService : ITripService
                          .Where(o => o.TenantId == tenantId && orderIds.Contains(o.Id))
                      join c in _dbContext.Customers.AsNoTracking().Where(c => c.TenantId == tenantId)
                          on o.CustomerId equals c.Id
-                     select new { o.Id, o.OrderNumber, CustomerName = c.Name, o.Status, o.GoodsDescription, o.AdrRequired, o.CraneRequired, o.CustomerReference })
+                     // MD-M6: a completed order lists the customer it was executed for.
+                     select new { o.Id, o.OrderNumber, CustomerName = o.CustomerNameAtCompletion ?? c.Name, o.Status, o.GoodsDescription, o.AdrRequired, o.CraneRequired, o.CustomerReference })
                 .ToListAsync(cancellationToken);
         var orderById = orderRows.ToDictionary(o => o.Id);
 
@@ -1257,7 +1269,7 @@ public class TripService : ITripService
             })
             .ToList();
 
-        var conflicts = await _conflictService.EvaluateAsync(trip, cancellationToken);
+        var conflicts = await ConflictsForAsync(trip, cancellationToken);
 
         // Override trail: newest first, actor resolved to a display name for the timeline.
         var overrides = await _dbContext.ConflictOverrides.AsNoTracking()

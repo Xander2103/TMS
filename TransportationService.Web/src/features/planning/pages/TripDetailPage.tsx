@@ -263,6 +263,8 @@ export function TripDetailPage() {
   }, [])
 
   const editable = trip?.status === 'Draft' && hasPermission('planning.edit')
+  // MD-M6: executed history shows the identity frozen at completion.
+  const executed = trip?.status === 'Completed'
 
   function markDirty() {
     setDirty(true)
@@ -608,7 +610,9 @@ export function TripDetailPage() {
               id="tr-driver"
               value={driverId || null}
               onChange={handleDriverChange}
-              options={driverOptions}
+              // MD-M6: a completed trip shows the identity it was EXECUTED with (the DTO's snapshot),
+              // never today's option label of a re-plated vehicle or renamed driver.
+              options={executed ? [] : driverOptions}
               // A driver that left the active list (or a list that failed) still shows by name.
               selectedLabel={driverId === trip.driverId ? (trip.driverName ?? undefined) : undefined}
               placeholder={editable ? t('planning.detail.driverSearchPlaceholder') : t('planning.detail.none')}
@@ -630,7 +634,7 @@ export function TripDetailPage() {
                 setVehicleDraft(vehicleDraftAfterManualPick(next))
                 markDirty()
               }}
-              options={vehicleOptions}
+              options={executed ? [] : vehicleOptions}
               selectedLabel={
                 vehicleId === trip.vehicleId && trip.vehicleNumber
                   ? trip.vehicleLicensePlate
@@ -652,7 +656,7 @@ export function TripDetailPage() {
                 setTrailerId(next ?? '')
                 markDirty()
               }}
-              options={trailerOptions}
+              options={executed ? [] : trailerOptions}
               selectedLabel={trailerId === trip.trailerId ? (trip.trailerNumber ?? undefined) : undefined}
               placeholder={editable ? t('planning.detail.trailerSearchPlaceholder') : t('planning.detail.none')}
               isLoading={listStatus.trailers === 'loading'}
