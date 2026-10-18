@@ -28,7 +28,8 @@ public static class InvoicePartySnapshotBackfill
         while (true)
         {
             var batch = await db.Invoices.IgnoreQueryFilters()
-                .Where(i => i.Status != InvoiceStatus.Draft && i.PartySnapshotFrozenAt == null)
+                .Include(i => i.Lines)
+                .Where(i => i.Status != InvoiceStatus.Draft && (i.PartySnapshotFrozenAt == null || i.UblNoteSnapshot == null))
                 .OrderBy(i => i.Id)
                 .Take(BatchSize)
                 .ToListAsync(cancellationToken);
@@ -39,7 +40,16 @@ public static class InvoicePartySnapshotBackfill
 
             foreach (var invoice in batch)
             {
-                await FreezeAsync(db, invoice, DateTime.UtcNow, cancellationToken);
+                if (invoice.PartySnapshotIsFinal)
+                {
+                    // Frozen before the note / category-name snapshot existed: complete it once.
+                    await FreezeUblNoteAsync(db, invoice, cancellationToken);
+                    await FreezeCategoryNamesAsync(db, invoice, cancellationToken);
+                }
+                else
+                {
+                    await FreezeAsync(db, invoice, DateTime.UtcNow, cancellationToken);
+                }
             }
 
             await db.SaveChangesAsync(cancellationToken);
@@ -58,6 +68,7 @@ public static class InvoicePartySnapshotBackfill
     public static async Task<bool> EnsureFrozenAsync(TransportationDbContext db, Guid tenantId, Guid invoiceId, CancellationToken cancellationToken)
     {
         var invoice = await db.Invoices.IgnoreQueryFilters()
+            .Include(i => i.Lines)
             .FirstOrDefaultAsync(i => i.TenantId == tenantId && i.Id == invoiceId, cancellationToken);
         if (invoice is null || invoice.Status == InvoiceStatus.Draft || invoice.PartySnapshotIsFinal)
         {
@@ -77,6 +88,8 @@ public static class InvoicePartySnapshotBackfill
                 .FirstOrDefaultAsync(e => e.TenantId == invoice.TenantId && e.Id == entityId, cancellationToken)
             : null;
         invoice.SellerLogoStorageKey ??= entity?.LogoStorageKey;
+        await FreezeUblNoteAsync(db, invoice, cancellationToken);
+        await FreezeCategoryNamesAsync(db, invoice, cancellationToken);
 
         if (invoice.IssuedAt is not null)
         {
@@ -123,5 +136,50 @@ public static class InvoicePartySnapshotBackfill
 
         invoice.PartySnapshotFrozenAt = now;
         invoice.PartySnapshotBackfilled = true;
+    }
+
+    /// <summary>
+    /// MD-H3 follow-up: freezes the UBL note at issue — the invoice's own note, else the issuing
+    /// entity's Peppol default note as it is NOW; "" = no note. Never overwrites a frozen value.
+    /// </summary>
+    public static async Task FreezeUblNoteAsync(TransportationDbContext db, Invoice invoice, CancellationToken cancellationToken)
+    {
+        if (invoice.UblNoteSnapshot is not null)
+        {
+            return;
+        }
+
+        var defaultNote = invoice.LegalEntityId is { } entityId
+            ? await db.PeppolSettings.IgnoreQueryFilters().AsNoTracking()
+                .Where(s => s.TenantId == invoice.TenantId && s.LegalEntityId == entityId && !s.IsDeleted)
+                .Select(s => s.DefaultInvoiceNote)
+                .FirstOrDefaultAsync(cancellationToken)
+            : null;
+        invoice.UblNoteSnapshot = !string.IsNullOrWhiteSpace(invoice.Notes) ? invoice.Notes
+            : !string.IsNullOrWhiteSpace(defaultNote) ? defaultNote
+            : string.Empty;
+    }
+
+    /// <summary>
+    /// MD-H3 follow-up (legacy lines only): an issued line with a sales category but no frozen
+    /// category name gets today's name once — the documented legacy policy; never overwritten.
+    /// Requires <c>invoice.Lines</c> to be loaded.
+    /// </summary>
+    private static async Task FreezeCategoryNamesAsync(TransportationDbContext db, Invoice invoice, CancellationToken cancellationToken)
+    {
+        var open = invoice.Lines.Where(l => l.SalesCategoryId is not null && l.SalesCategoryNameSnapshot is null).ToList();
+        if (open.Count == 0)
+        {
+            return;
+        }
+
+        var ids = open.Select(l => l.SalesCategoryId!.Value).Distinct().ToList();
+        var names = await db.SalesCategories.IgnoreQueryFilters().AsNoTracking()
+            .Where(c => c.TenantId == invoice.TenantId && ids.Contains(c.Id))
+            .ToDictionaryAsync(c => c.Id, c => c.Name, cancellationToken);
+        foreach (var line in open)
+        {
+            line.SalesCategoryNameSnapshot = names.GetValueOrDefault(line.SalesCategoryId!.Value);
+        }
     }
 }

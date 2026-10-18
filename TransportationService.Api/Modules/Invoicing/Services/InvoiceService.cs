@@ -149,7 +149,7 @@ public class InvoiceService : IInvoiceService
         var joined = from i in query
                      join cu in _dbContext.Customers.IgnoreQueryFilters().AsNoTracking().Where(x => x.TenantId == tenantId)
                          on i.CustomerId equals cu.Id
-                     select new { i, CustomerName = i.PartySnapshotFrozenAt != null && i.CustomerNameSnapshot != null ? i.CustomerNameSnapshot : cu.Name, cu.CustomerNumber };
+                     select new { i, CustomerName = i.PartySnapshotFrozenAt != null ? i.CustomerNameSnapshot ?? string.Empty : cu.Name, cu.CustomerNumber };
 
         if (!string.IsNullOrWhiteSpace(search))
         {
@@ -234,6 +234,9 @@ public class InvoiceService : IInvoiceService
 
     public async Task<InvoiceDetailDto?> GetByIdAsync(Guid id, CancellationToken cancellationToken)
     {
+        // MD-H3 follow-up: a legacy issued invoice the startup backfill has not reached is frozen
+        // before the screen reads it (as the PDF and UBL already did) — never a live fallback.
+        await InvoicePartySnapshotBackfill.EnsureFrozenAsync(_dbContext, _tenantContext.TenantId, id, cancellationToken);
         var invoice = await TenantScoped().AsNoTracking()
             .Include(i => i.Lines)
             .FirstOrDefaultAsync(i => i.Id == id, cancellationToken);
@@ -1236,6 +1239,7 @@ public class InvoiceService : IInvoiceService
             invoice.IssuedAt = _timeProvider.GetUtcNow().UtcDateTime;
             // MD-H3: from here on PDF, UBL and Peppol validation read this snapshot only.
             invoice.PartySnapshotFrozenAt = invoice.IssuedAt;
+            await InvoicePartySnapshotBackfill.FreezeUblNoteAsync(_dbContext, invoice, cancellationToken);
             if (invoice.NumberIsManual && !string.IsNullOrWhiteSpace(invoice.InvoiceNumber))
             {
                 await _dbContext.SaveChangesAsync(cancellationToken);
@@ -2196,7 +2200,8 @@ public class InvoiceService : IInvoiceService
             // credited invoice and Send will not touch it (H-06). Same marker as the freeze guards,
             // so the preview can never disagree with what Send stores.
             var frozen = !isDraft || InvoiceLineMirror.IsMirrored(invoice, l);
-            var categoryName = l.SalesCategoryNameSnapshot ?? live?.Name;
+            // MD-H3: an issued line shows the category name it was issued with — never a later rename.
+            var categoryName = frozen ? l.SalesCategoryNameSnapshot : l.SalesCategoryNameSnapshot ?? live?.Name;
             var accountNumber = frozen ? l.LedgerAccountNumberSnapshot : live?.LedgerAccount?.AccountNumber;
             var accountName = frozen ? l.LedgerAccountNameSnapshot : live?.LedgerAccount?.Name;
 
@@ -2248,8 +2253,8 @@ public class InvoiceService : IInvoiceService
 
         // MD-H3: an issued invoice names the seller AS ISSUED (found in the browser regression:
         // the header read the entity's later name while the PDF showed the snapshot).
-        var legalEntityName = invoice.PartySnapshotIsFinal && (invoice.SellerName ?? invoice.SellerLegalName) is { } issuedSeller
-            ? issuedSeller
+        var legalEntityName = invoice.PartySnapshotIsFinal
+            ? invoice.SellerName ?? invoice.SellerLegalName
             : invoice.LegalEntityId is { } entityId
             ? await _dbContext.LegalEntities.AsNoTracking()
                 .Where(e => e.TenantId == tenantId && e.Id == entityId)
@@ -2315,7 +2320,7 @@ public class InvoiceService : IInvoiceService
             invoice.PaidAt,
             paidByName,
             invoice.CreditReason,
-            invoice.CustomerLegalNameSnapshot ?? invoice.CustomerNameSnapshot ?? customer?.Name,
+            invoice.CustomerLegalNameSnapshot ?? invoice.CustomerNameSnapshot ?? (invoice.PartySnapshotIsFinal ? null : customer?.Name),
             customerAddress,
             invoice.SellerLegalName ?? invoice.SellerName,
             invoice.SellerCompanyNumber,

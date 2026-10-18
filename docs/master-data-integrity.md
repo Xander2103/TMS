@@ -8,17 +8,24 @@ These are the invariants the Core enforces; the code comments carry the finding 
 | Record | What is frozen | When | Where |
 |---|---|---|---|
 | CMR / delivery note / work order | the complete printed model (parties, carrier, vehicle/trailer/driver, goods lines with the unit **label**, stops, references, dossier number) as structured JSON | at issue, in the same save as the number claim | `issued_transport_documents.SnapshotJson` |
-| Invoice / credit note | seller + customer identity, structured addresses, VAT, Peppol scheme/id, buyer reference, IBAN/BIC, footer, logo **file version** | at issue (`PartySnapshotFrozenAt`) | `invoices.*Snapshot`, `Seller*`, `SellerLogoStorageKey` |
+| Invoice / credit note | seller + customer identity, structured addresses, VAT, Peppol scheme/id, buyer reference, IBAN/BIC, footer, logo **file version**, the UBL note (own note, else the entity's Peppol default note at issue; `""` = none) | at issue (`PartySnapshotFrozenAt`) | `invoices.*Snapshot`, `Seller*`, `SellerLogoStorageKey`, `UblNoteSnapshot` |
 | Invoice line ledger | resolved ledger account: legal-entity mapping → category default | at issue | `invoice_lines.LedgerAccount*Snapshot` |
 | Completed trip | driver name, vehicle number + plate, trailer number + plate | at completion | `trips.Executed*` |
 | Completed order | customer display name | at completion | `transport_orders.CustomerNameAtCompletion` |
 
 * An issued document renders **only** from its snapshot. An empty snapshot field means "empty at issue" —
-  never "fill in from today's customer / legal entity". PDF, UBL, Peppol validation, the invoice screen and
-  the invoice list all read the snapshot.
+  never "fill in from today's customer / legal entity". PDF, UBL (including `cbc:Note`), Peppol preview and
+  validation, the invoice screen (seller, customer legal name, line sales-category name), the invoice list
+  and the accounting export all read the snapshot. A legacy issued invoice is frozen before the screen
+  reads it (lazy `EnsureFrozenAsync`), exactly like the PDF and UBL.
 * Issued PDFs (transport documents and invoices) are **byte-identical** on every download
   (`Modules/Pdf/DeterministicPdf`: dates, document id, font-subset tags and XMP ids pinned to the document).
 * A replaced CMR keeps rendering its own snapshot, marked "VERVANGEN door …" (lifecycle marker, not content).
+* The order header's CMR / leveringsbon action (`GET /api/orders/{id}/documents/{kind}`) opens the order's
+  ACTIVE issued document of that kind. Without one it renders a **CONCEPT** from the live data: diagonal
+  stamp + banner "geen officieel document, geen documentnummer" on every page, `concept-*.pdf`,
+  `X-Document-Status: concept`. The trip / day batch print runs keep their existing rule (issued snapshot
+  when one exists, else an unnumbered page).
 * A logo file that an issued invoice printed is never deleted when the legal entity uploads another logo.
 * Draft invoices and open orders/trips legitimately follow the current master data.
 * Live by design: the dossier header's customer name (the dossier is the customer relationship), the

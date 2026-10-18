@@ -56,7 +56,12 @@ public class AccountingExportService : IAccountingExportService
                         && i.InvoiceDate >= from && i.InvoiceDate <= to)
             .Join(_db.Customers.AsNoTracking().Where(c => c.TenantId == tenantId),
                 // ACC-H4: the booked customer is the one frozen on the document, never today's master data.
-                i => i.CustomerId, c => c.Id, (i, c) => new { Invoice = i, CustomerName = i.CustomerNameSnapshot ?? c.Name })
+                i => i.CustomerId, c => c.Id, (i, c) => new
+                {
+                    Invoice = i,
+                    // MD-H3: a frozen invoice books its snapshot name only (empty at issue stays empty).
+                    CustomerName = i.PartySnapshotFrozenAt != null ? i.CustomerNameSnapshot ?? string.Empty : i.CustomerNameSnapshot ?? c.Name,
+                })
             .OrderBy(x => x.Invoice.InvoiceDate).ThenBy(x => x.Invoice.InvoiceNumber)
             .ToListAsync(cancellationToken);
         var invoiceIds = invoices.Select(x => x.Invoice.Id).ToList();

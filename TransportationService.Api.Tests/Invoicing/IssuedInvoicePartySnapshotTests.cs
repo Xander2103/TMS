@@ -215,6 +215,81 @@ public class IssuedInvoicePartySnapshotTests : IDisposable
         Assert.Null(preview.Buyer.Participant);
     }
 
+    /// <summary>A customer that CAN receive Peppol (so the UBL is produced).</summary>
+    private static async Task MakeCustomerPeppolReadyAsync(Harness h)
+    {
+        await h.Db.Context.Customers.Where(c => c.Id == h.CustomerId).ExecuteUpdateAsync(s => s
+            .SetProperty(c => c.VatNumber, "BE0888777148").SetProperty(c => c.Street, "Laterstraat").SetProperty(c => c.HouseNumber, "9")
+            .SetProperty(c => c.PostalCode, "9000").SetProperty(c => c.City, "Gent").SetProperty(c => c.PeppolScheme, "0208")
+            .SetProperty(c => c.PeppolId, "0888777148").SetProperty(c => c.PeppolEnabled, true));
+        h.Db.Context.ChangeTracker.Clear();
+    }
+
+    private static Task SetDefaultNoteAsync(Harness h, string? note) =>
+        h.Db.Context.PeppolSettings.Where(p => p.LegalEntityId == h.EntityId).ExecuteUpdateAsync(s => s.SetProperty(p => p.DefaultInvoiceNote, note));
+
+    /// <summary>
+    /// MD-H3 follow-up: the UBL note of an issued invoice is the note AS ISSUED. Empty at issue stays
+    /// empty; a default note in force at issue stays — a later default note never reaches it.
+    /// </summary>
+    [Fact]
+    public async Task IssuedUbl_KeepsItsNoteAsIssued_LaterDefaultNotesNeverAppear()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        await MakeCustomerPeppolReadyAsync(h);
+
+        var withoutNote = await IssueAsync(h);
+        await SetDefaultNoteAsync(h, "TEST CORE standaardnota A");
+        var xmlWithout = (await h.Peppol.GetXmlAsync(withoutNote, CancellationToken.None))!.Value.Xml!;
+        Assert.DoesNotContain("standaardnota", xmlWithout);
+
+        var withDefault = await IssueAsync(h);
+        await SetDefaultNoteAsync(h, "TEST CORE standaardnota B");
+        h.Db.Context.ChangeTracker.Clear();
+        var xmlWithDefault = (await h.Peppol.GetXmlAsync(withDefault, CancellationToken.None))!.Value.Xml!;
+        Assert.Contains("TEST CORE standaardnota A", xmlWithDefault);
+        Assert.DoesNotContain("standaardnota B", xmlWithDefault);
+        Assert.DoesNotContain("standaardnota", (await h.Peppol.GetXmlAsync(withoutNote, CancellationToken.None))!.Value.Xml!);
+    }
+
+    /// <summary>MD-H3 follow-up: the invoice screen never fills an issued name from today's master data.</summary>
+    [Fact]
+    public async Task IssuedScreen_ShowsTheCategoryAndSellerAsIssued_EmptyStaysEmpty()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var issuedId = await IssueAsync(h);
+        var issuedCategory = (await h.Invoices.GetByIdAsync(issuedId, CancellationToken.None))!.Lines.Single().SalesCategoryName;
+        Assert.NotNull(issuedCategory);
+
+        await h.Db.Context.SalesCategories.Where(c => c.Id == h.CategoryId).ExecuteUpdateAsync(s => s.SetProperty(c => c.Name, "HERNOEMDE CATEGORIE"));
+        // A seller name that was EMPTY at issue stays empty (simulated: no trading / legal name frozen).
+        await h.Db.Context.Invoices.Where(i => i.Id == issuedId).ExecuteUpdateAsync(s => s
+            .SetProperty(i => i.SellerName, (string?)null).SetProperty(i => i.SellerLegalName, (string?)null));
+        h.Db.Context.ChangeTracker.Clear();
+
+        var detail = (await h.Invoices.GetByIdAsync(issuedId, CancellationToken.None))!;
+        Assert.Equal(issuedCategory, detail.Lines.Single().SalesCategoryName);
+        Assert.Null(detail.LegalEntityName);
+    }
+
+    [Fact]
+    public async Task FrozenInvoiceWithoutANoteSnapshot_GetsItOnce_FromTheDeploymentState()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var issuedId = await IssueAsync(h);
+        await h.Db.Context.Invoices.Where(i => i.Id == issuedId).ExecuteUpdateAsync(s => s.SetProperty(i => i.UblNoteSnapshot, (string?)null));
+        await SetDefaultNoteAsync(h, "TEST CORE nota bij uitrol");
+        h.Db.Context.ChangeTracker.Clear();
+
+        Assert.Equal(1, await InvoicePartySnapshotBackfill.SyncAsync(h.Db.Context));
+        Assert.Equal(0, await InvoicePartySnapshotBackfill.SyncAsync(h.Db.Context));
+        Assert.Equal("TEST CORE nota bij uitrol",
+            (await h.Db.Context.Invoices.AsNoTracking().SingleAsync(i => i.Id == issuedId)).UblNoteSnapshot);
+    }
+
     private static string PdfText(byte[] pdf)
     {
         using var document = PdfSharp.Pdf.IO.PdfReader.Open(new MemoryStream(pdf), PdfSharp.Pdf.IO.PdfDocumentOpenMode.Modify);

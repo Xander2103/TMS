@@ -73,7 +73,10 @@ public class PeppolInvoiceService : IPeppolInvoiceService
         var subtotal = Math.Round(lines.Sum(l => Math.Round(l.Quantity * l.UnitPrice, 2)), 2);
         var vat = groups.Sum(g => g.VatAmount);
 
-        var sellerParty = graph.Seller is null ? null : UblDocumentBuilder.UblParty.FromInvoiceSeller(graph.Invoice, graph.Seller);
+        // MD-H3: a FINAL invoice previews its snapshot, also when the live entity is gone.
+        var sellerParty = graph.Seller is null && !graph.Invoice.PartySnapshotIsFinal
+            ? null
+            : UblDocumentBuilder.UblParty.FromInvoiceSeller(graph.Invoice, graph.Seller);
         var buyerParty = UblDocumentBuilder.UblParty.FromInvoiceBuyer(graph.Invoice, graph.Customer);
         return new PeppolInvoicePreviewDto(
             graph.Invoice.DisplayNumber,

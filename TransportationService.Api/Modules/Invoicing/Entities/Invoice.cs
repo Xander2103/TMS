@@ -117,6 +117,13 @@ public class Invoice : AuditableTenantEntity
     /// </summary>
     public DateTime? PartySnapshotFrozenAt { get; set; }
 
+    /// <summary>
+    /// MD-H3 follow-up: the UBL <c>cbc:Note</c> as issued — the invoice's own note, else the legal
+    /// entity's Peppol default note at that moment; "" = no note at issue. A FINAL invoice's UBL reads
+    /// only this (a later default note never appears on an issued document). Null = draft / not frozen.
+    /// </summary>
+    public string? UblNoteSnapshot { get; set; }
+
     /// <summary>True when the one-time backfill (not the issue) froze the snapshot of a legacy row.</summary>
     public bool PartySnapshotBackfilled { get; set; }
 

@@ -146,7 +146,10 @@ public static class UblDocumentBuilder
         var taxInclusive = lineExtensionTotal + taxTotal;
 
         var buyerReference = FirstNonEmpty(input.BuyerReference ?? invoice.CustomerBuyerReferenceSnapshot, invoice.PurchaseOrderNumber, invoice.InvoiceNumber);
-        var note = FirstNonEmpty(invoice.Notes, input.DefaultInvoiceNote);
+        // MD-H3 follow-up: an issued invoice carries the note AS ISSUED — never today's default note.
+        var note = invoice.PartySnapshotIsFinal
+            ? FirstNonEmpty(invoice.UblNoteSnapshot ?? invoice.Notes)
+            : FirstNonEmpty(invoice.Notes, input.DefaultInvoiceNote);
 
         var document = new XElement(root,
             new XAttribute(XNamespace.Xmlns + "cac", Cac),
