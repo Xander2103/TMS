@@ -208,6 +208,13 @@ public class IssuedItemService : IIssuedItemService
             return false;
         }
 
+        // MD-H9: stock, movements and issued items keep the template — deactivate instead.
+        var references = await IssuedItemTemplateReferences.ForTemplateAsync(_dbContext, _tenantContext.TenantId, id, cancellationToken);
+        if (references.HasReferences)
+        {
+            throw Common.Integrity.ReferencedRecordException.For("Dit artikel", references, IssuedItemTemplateReferences.DeactivateHint);
+        }
+
         _dbContext.Remove(template); // soft delete; historical employee items keep their snapshot
         await _dbContext.SaveChangesAsync(cancellationToken);
         await _auditService.RecordAsync(TemplateEntity, template.Id.ToString(), "Deleted", new { template.Name }, null, cancellationToken);

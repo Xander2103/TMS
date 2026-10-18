@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using TransportationService.Api.Common;
+using TransportationService.Api.Common.Integrity;
 using TransportationService.Api.Common.Models;
 using TransportationService.Api.Common.Persistence;
 using TransportationService.Api.Common.Reference;
@@ -32,6 +33,25 @@ public class CustomerService : ICustomerService
 
     private IQueryable<Customer> TenantScoped() =>
         _dbContext.Customers.Where(c => c.TenantId == _tenantContext.TenantId);
+
+    /// <summary>
+    /// MD-M1/MD-B2: a customer number is taken when ANY customer of the tenant — deleted ones
+    /// included — carries it, compared case-insensitively ("tmk-001" = "TMK-001"). Null = free.
+    /// </summary>
+    private async Task<string?> NumberConflictAsync(string number, Guid? selfId, CancellationToken cancellationToken)
+    {
+        var normalized = Customer.NormalizeNumber(number);
+        var holder = await _dbContext.Customers.IgnoreQueryFilters().AsNoTracking()
+            .Where(c => c.TenantId == _tenantContext.TenantId && c.NormalizedCustomerNumber == normalized && c.Id != selfId)
+            .Select(c => new { c.CustomerNumber, c.Name, c.IsDeleted })
+            .FirstOrDefaultAsync(cancellationToken);
+        return holder switch
+        {
+            null => null,
+            { IsDeleted: true } => $"Klantnummer '{number}' werd al gebruikt door een verwijderde klant en wordt niet opnieuw toegekend.",
+            _ => $"Klantnummer '{number}' is al in gebruik door {holder.Name} ({holder.CustomerNumber}).",
+        };
+    }
 
     public async Task<PagedResult<CustomerListItemDto>> SearchAsync(
         string? search, bool? isActive, Guid? categoryId, PageRequest page, CancellationToken cancellationToken, string? sort = null, string? dir = null)
@@ -149,7 +169,7 @@ public class CustomerService : ICustomerService
             City = Trim(request.City),
             CountryCode = await _countryValidator.NormalizeAndValidateAsync(request.CountryCode, "adresland", cancellationToken, "countryCode"),
             InvoiceEmail = Trim(request.InvoiceEmail),
-            PaymentTermDays = request.PaymentTermDays < 0 ? 0 : request.PaymentTermDays,
+            PaymentTermDays = PaymentTerm(request.PaymentTermDays),
             DefaultLanguageCode = Trim(request.DefaultLanguageCode),
             Notes = Trim(request.Notes),
             IsActive = true,
@@ -211,10 +231,9 @@ public class CustomerService : ICustomerService
                 throw new DomainValidationException("customerNumber", "Het klantnummer mag maximaal 30 tekens lang zijn.");
             }
 
-            var inUse = await TenantScoped().AnyAsync(c => c.CustomerNumber == explicitNumber, cancellationToken);
-            if (inUse)
+            if (await NumberConflictAsync(explicitNumber, null, cancellationToken) is { } conflict)
             {
-                throw new DomainValidationException("customerNumber", $"Klantnummer '{explicitNumber}' is al in gebruik.");
+                throw new DomainValidationException("customerNumber", conflict);
             }
 
             customer.CustomerNumber = explicitNumber;
@@ -307,6 +326,8 @@ public class CustomerService : ICustomerService
         }
 
         await EnsureCategoryInTenantAsync(request.CategoryId, cancellationToken);
+        // MD-M2: an edit based on an older version would silently erase another user's change.
+        OptimisticConcurrency.Check(customer, request.ExpectedVersion);
 
         var oldValues = await BuildCustomerSnapshotAsync(customer, cancellationToken);
 
@@ -328,7 +349,7 @@ public class CustomerService : ICustomerService
         customer.City = Trim(request.City);
         customer.CountryCode = await _countryValidator.NormalizeAndValidateAsync(request.CountryCode, "adresland", cancellationToken, "countryCode");
         customer.InvoiceEmail = Trim(request.InvoiceEmail);
-        customer.PaymentTermDays = request.PaymentTermDays < 0 ? 0 : request.PaymentTermDays;
+        customer.PaymentTermDays = PaymentTerm(request.PaymentTermDays);
         customer.DefaultLanguageCode = Trim(request.DefaultLanguageCode);
         customer.Notes = Trim(request.Notes);
         customer.IsActive = request.IsActive;
@@ -452,11 +473,9 @@ public class CustomerService : ICustomerService
 
         if (!string.Equals(customer.CustomerNumber, newNumber, StringComparison.Ordinal))
         {
-            var inUse = await TenantScoped().AnyAsync(
-                c => c.Id != customer.Id && c.CustomerNumber == newNumber, cancellationToken);
-            if (inUse)
+            if (await NumberConflictAsync(newNumber, customer.Id, cancellationToken) is { } conflict)
             {
-                throw new DomainValidationException("customerNumber", $"Klantnummer '{newNumber}' is al in gebruik.");
+                throw new DomainValidationException("customerNumber", conflict);
             }
 
             var oldNumber = customer.CustomerNumber;
@@ -473,12 +492,29 @@ public class CustomerService : ICustomerService
             await LoadAllowedLegalEntityIdsAsync(customer.Id, cancellationToken));
     }
 
+    public async Task<IReadOnlyList<ReferenceCountDto>?> GetReferencesAsync(Guid id, CancellationToken cancellationToken)
+    {
+        if (!await TenantScoped().AnyAsync(c => c.Id == id, cancellationToken))
+        {
+            return null;
+        }
+
+        return (await CustomerReferences.ForCustomerAsync(_dbContext, _tenantContext.TenantId, id, cancellationToken)).Items;
+    }
+
     public async Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken)
     {
         var customer = await TenantScoped().FirstOrDefaultAsync(c => c.Id == id, cancellationToken);
         if (customer is null)
         {
             return false;
+        }
+
+        // MD-B2: history and live work keep the customer — deactivate instead of deleting.
+        var references = await CustomerReferences.ForCustomerAsync(_dbContext, _tenantContext.TenantId, id, cancellationToken);
+        if (references.HasReferences)
+        {
+            throw ReferencedRecordException.For("Deze klant", references, CustomerReferences.DeactivateHint);
         }
 
         _dbContext.Customers.Remove(customer);
@@ -804,6 +840,18 @@ public class CustomerService : ICustomerService
 
     private static string? Trim(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
+    /// <summary>
+    /// MD-M5: no own term (null) is stored as 0 = "not configured", so the invoice falls back to the
+    /// legal entity / tenant term; a negative term is refused instead of silently becoming 0.
+    /// </summary>
+    private static int PaymentTerm(int? days) => days switch
+    {
+        null => 0,
+        < 0 => throw new DomainValidationException("paymentTermDays", "De betaaltermijn kan niet negatief zijn."),
+        > 365 => throw new DomainValidationException("paymentTermDays", "De betaaltermijn mag maximaal 365 dagen zijn."),
+        _ => days.Value,
+    };
+
     private static bool AnyFiscalValueProvided(CreateCustomerRequest r) =>
         !string.IsNullOrWhiteSpace(r.VatNumber) || r.VatTreatment != VatTreatment.DomesticVat
         || r.DefaultVatRatePercent is not null || !string.IsNullOrWhiteSpace(r.VatCountryCode)
@@ -1000,7 +1048,7 @@ public class CustomerService : ICustomerService
         c.DefaultLegalEntityId,
         c.PeppolEnabled, c.PeppolDeliveryPreference.ToString(), c.BuyerReference,
         c.PeppolValidationStatus.ToString(), c.PeppolValidatedAt, c.PeppolValidationReference,
-        allowedLegalEntityIds, c.InvoiceGrouping, c.DocumentStrategy);
+        allowedLegalEntityIds, c.InvoiceGrouping, c.DocumentStrategy, c.Version);
 
     private Task<List<Guid>> LoadAllowedLegalEntityIdsAsync(Guid customerId, CancellationToken cancellationToken) =>
         _dbContext.CustomerAllowedLegalEntities.AsNoTracking()

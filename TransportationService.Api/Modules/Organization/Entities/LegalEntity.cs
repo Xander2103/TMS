@@ -9,8 +9,11 @@ namespace TransportationService.Api.Modules.Organization.Entities;
 /// (see InvoiceSequence). The default entity is bootstrapped from TenantSettings company data.
 /// Selecting an "active" entity in the UI is a user preference and never widens tenant access.
 /// </summary>
-public class LegalEntity : AuditableTenantEntity
+public class LegalEntity : AuditableTenantEntity, TransportationService.Api.Common.Integrity.IVersionedEntity
 {
+    /// <summary>MD-M2: optimistic-concurrency token (bumped on every edit).</summary>
+    public int Version { get; set; }
+
     public string LegalName { get; set; } = string.Empty;
     public string? TradingName { get; set; }
     public string? CompanyNumber { get; set; }

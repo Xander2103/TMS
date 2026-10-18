@@ -1232,6 +1232,8 @@ public class InvoiceService : IInvoiceService
             // frozen snapshots (ClaimAsync saves everything in one SaveChanges and retries on a
             // concurrent claim). A manually reserved number (NumberIsManual) is kept as is.
             invoice.IssuedAt = _timeProvider.GetUtcNow().UtcDateTime;
+            // MD-H3: from here on PDF, UBL and Peppol validation read this snapshot only.
+            invoice.PartySnapshotFrozenAt = invoice.IssuedAt;
             if (invoice.NumberIsManual && !string.IsNullOrWhiteSpace(invoice.InvoiceNumber))
             {
                 await _dbContext.SaveChangesAsync(cancellationToken);
@@ -1416,6 +1418,8 @@ public class InvoiceService : IInvoiceService
             invoice.SellerPeppolId = entity.PeppolId;
             invoice.SellerInvoiceFooter = entity.InvoiceFooter;
             invoice.SellerAddressLine = AddressLine(entity.Street, entity.HouseNumber, entity.PostalCode, entity.City, null);
+            // MD-H3: the logo file VERSION of the moment (a new upload gets a new key).
+            invoice.SellerLogoStorageKey = entity.LogoStorageKey;
         }
 
         invoice.CustomerVatTreatment = customer.VatTreatment.ToString();
@@ -1695,16 +1699,20 @@ public class InvoiceService : IInvoiceService
             return;
         }
 
+        // MD-H2 (master-data acceptance 2026-10-18): the ledger is resolved with ONE precedence —
+        // the invoicing entity's mapping, else the category default (InvoiceLineFiscalResolver.
+        // LedgerFor). Freezing the category default here first made the entity mapping unreachable.
         var categories = await _dbContext.SalesCategories.AsNoTracking()
+            .Include(c => c.LedgerMappings)
             .Where(c => c.TenantId == _tenantContext.TenantId && categoryIds.Contains(c.Id))
-            .Select(c => new
-            {
-                c.Id, c.Name, c.LedgerAccountId,
-                AccountNumber = (string?)c.LedgerAccount!.AccountNumber,
-                AccountName = (string?)c.LedgerAccount.Name,
-                c.VatCategoryOverride,
-            })
             .ToDictionaryAsync(c => c.Id, cancellationToken);
+        var accountIds = categories.Values
+            .SelectMany(c => c.LedgerMappings.Select(m => (Guid?)m.LedgerAccountId).Append(c.LedgerAccountId))
+            .OfType<Guid>().Distinct().ToList();
+        var accounts = await _dbContext.LedgerAccounts.IgnoreQueryFilters().AsNoTracking()
+            .Where(a => a.TenantId == _tenantContext.TenantId && accountIds.Contains(a.Id))
+            .Select(a => new { a.Id, a.AccountNumber, a.Name })
+            .ToDictionaryAsync(a => a.Id, cancellationToken);
 
         foreach (var line in lines)
         {
@@ -1730,10 +1738,12 @@ public class InvoiceService : IInvoiceService
                 continue;
             }
 
+            var (ledgerAccountId, _) = Modules.Accounting.Services.InvoiceLineFiscalResolver.LedgerFor(category, invoice.LegalEntityId);
+            var account = ledgerAccountId is { } accountId ? accounts.GetValueOrDefault(accountId) : null;
             line.SalesCategoryNameSnapshot = category.Name;
-            line.LedgerAccountId = category.LedgerAccountId;
-            line.LedgerAccountNumberSnapshot = category.AccountNumber;
-            line.LedgerAccountNameSnapshot = category.AccountName;
+            line.LedgerAccountId = account?.Id;
+            line.LedgerAccountNumberSnapshot = account?.AccountNumber;
+            line.LedgerAccountNameSnapshot = account?.Name;
             // Wave 2: a sales code can force the UNCL5305 VAT category; an explicit line value
             // always wins, and null keeps the customer's VAT-treatment chain authoritative.
             line.VatCategoryCode ??= category.VatCategoryOverride;
@@ -1865,6 +1875,13 @@ public class InvoiceService : IInvoiceService
             return InvoiceOperationResult.NotFound;
         }
 
+        // MD-H3: the credit note copies the credited document's FINAL snapshot — a legacy original
+        // is frozen once first, so the copy never inherits "not frozen yet" gaps.
+        if (original.Status != InvoiceStatus.Draft && !original.PartySnapshotIsFinal)
+        {
+            await InvoicePartySnapshotBackfill.FreezeAsync(_dbContext, original, _timeProvider.GetUtcNow().UtcDateTime, cancellationToken);
+        }
+
         if (original.Kind != InvoiceKind.Invoice)
         {
             return InvoiceOperationResult.InvalidState("Een creditnota kan zelf niet gecrediteerd worden.");
@@ -1924,6 +1941,7 @@ public class InvoiceService : IInvoiceService
             SellerPeppolScheme = original.SellerPeppolScheme,
             SellerPeppolId = original.SellerPeppolId,
             SellerInvoiceFooter = original.SellerInvoiceFooter,
+            SellerLogoStorageKey = original.SellerLogoStorageKey,
             CustomerVatTreatment = original.CustomerVatTreatment,
             CustomerVatNumberSnapshot = original.CustomerVatNumberSnapshot,
             CustomerNameSnapshot = original.CustomerNameSnapshot,

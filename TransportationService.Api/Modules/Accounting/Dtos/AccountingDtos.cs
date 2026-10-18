@@ -25,7 +25,9 @@ public record SalesCategoryDto(
     string? CostCentre = null, decimal? DefaultUnitPrice = null, string? DefaultPricingBasis = null,
     string? Notes = null,
     /// <summary>Per-invoicing-entity ledger overrides.</summary>
-    IReadOnlyList<SalesCategoryLedgerMappingDto>? LedgerMappings = null);
+    IReadOnlyList<SalesCategoryLedgerMappingDto>? LedgerMappings = null,
+    /// <summary>MD-M2: optimistic-concurrency version; send it back as <c>ExpectedVersion</c>.</summary>
+    int Version = 0);
 
 /// <summary>One entity-specific ledger override for a sales code (sprint 5G).</summary>
 public record SalesCategoryLedgerMappingDto(
@@ -40,7 +42,16 @@ public record SaveSalesCategoryRequest(
     VatTreatment? VatTreatmentOverride = null,
     string? CostCentre = null, decimal? DefaultUnitPrice = null, string? DefaultPricingBasis = null,
     string? Notes = null,
-    IReadOnlyList<SalesCategoryLedgerMappingDto>? LedgerMappings = null);
+    /// <summary>MD-H1: null = leave the per-entity mappings UNCHANGED; an empty list clears them.</summary>
+    IReadOnlyList<SalesCategoryLedgerMappingDto>? LedgerMappings = null,
+    /// <summary>MD-M2: the version the edit is based on; a stale one is refused (409).</summary>
+    int? ExpectedVersion = null);
+
+/// <summary>
+/// MD-H1: the inline "standaard grootboekrekening" control changes THAT field only — a partial
+/// full-object PUT used to wipe descriptions, VAT overrides, cost centre and entity mappings.
+/// </summary>
+public record SetSalesCategoryLedgerRequest(Guid? LedgerAccountId, int? ExpectedVersion = null);
 
 /// <summary>Configuration health: which active sales categories still miss a ledger account.</summary>
 public record AccountingHealthDto(IReadOnlyList<SalesCategoryDto> UnmappedCategories);

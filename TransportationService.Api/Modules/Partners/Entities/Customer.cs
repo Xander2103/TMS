@@ -7,9 +7,32 @@ namespace TransportationService.Api.Modules.Partners.Entities;
 /// A customer (shipper/consignor) of the transport company. Master record used across
 /// quoting, order intake and invoicing.
 /// </summary>
-public class Customer : AuditableTenantEntity
+public class Customer : AuditableTenantEntity, TransportationService.Api.Common.Integrity.IVersionedEntity
 {
-    public string CustomerNumber { get; set; } = string.Empty;
+    /// <summary>MD-M2: optimistic-concurrency token (bumped on every edit).</summary>
+    public int Version { get; set; }
+
+    public string CustomerNumber
+    {
+        get => _customerNumber;
+        set
+        {
+            _customerNumber = value;
+            NormalizedCustomerNumber = NormalizeNumber(value);
+        }
+    }
+
+    private string _customerNumber = string.Empty;
+
+    /// <summary>
+    /// MD-M1 (master-data acceptance 2026-10-18): the identity of the customer number — trimmed and
+    /// upper-cased, so "TMK-001" and "tmk-001" are the same customer number. Unique per tenant over
+    /// ALL rows, deleted ones included: a number that ever appeared on orders, invoices or CMRs is
+    /// never handed to another customer (MD-B2). Display keeps <see cref="CustomerNumber"/> as typed.
+    /// </summary>
+    public string NormalizedCustomerNumber { get; private set; } = string.Empty;
+
+    public static string NormalizeNumber(string? number) => (number ?? string.Empty).Trim().ToUpperInvariant();
     public string Name { get; set; } = string.Empty;
     public string? LegalName { get; set; }
 

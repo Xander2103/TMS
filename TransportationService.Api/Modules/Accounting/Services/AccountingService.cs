@@ -20,6 +20,9 @@ public interface IAccountingService
     Task<SalesCategoryDto> CreateSalesCategoryAsync(SaveSalesCategoryRequest request, CancellationToken cancellationToken);
     Task<SalesCategoryDto?> UpdateSalesCategoryAsync(Guid id, SaveSalesCategoryRequest request, CancellationToken cancellationToken);
 
+    /// <summary>MD-H1: changes ONLY the default ledger account of a sales category.</summary>
+    Task<SalesCategoryDto?> SetSalesCategoryLedgerAsync(Guid id, SetSalesCategoryLedgerRequest request, CancellationToken cancellationToken);
+
     Task<AccountingHealthDto> GetHealthAsync(CancellationToken cancellationToken);
 
     /// <summary>Idempotent per-tenant seeding of the default Dutch sales categories (add-if-missing by code; deleted ones stay deleted).</summary>
@@ -186,7 +189,7 @@ public class AccountingService : IAccountingService
         _db.SalesCategories.Add(category);
         await _db.SaveChangesAsync(cancellationToken);
         await _audit.RecordAsync("SalesCategory", category.Id.ToString(), "Created", null,
-            new { category.Code, category.Name, category.SystemRole, category.LedgerAccountId }, cancellationToken);
+            await CategoryAuditShapeAsync(category, cancellationToken), cancellationToken);
         return await MapCategoryAsync(category, cancellationToken);
     }
 
@@ -200,25 +203,83 @@ public class AccountingService : IAccountingService
         }
 
         await ValidateCategoryAsync(request, existingId: id, cancellationToken);
+        Common.Integrity.OptimisticConcurrency.Check(category, request.ExpectedVersion);
 
-        // Mapping changes are audited explicitly with old account → new account.
-        var oldAccount = category.LedgerAccountId is { } oldId
-            ? await _db.LedgerAccounts.IgnoreQueryFilters().AsNoTracking()
-                .Where(a => a.Id == oldId).Select(a => a.AccountNumber + " — " + a.Name).FirstOrDefaultAsync(cancellationToken)
-            : null;
-        var oldValues = new { category.Code, category.Name, category.SystemRole, category.IsActive, Grootboekrekening = oldAccount };
-
+        // MD-M10: every configured field is audited, old → new (only what changed).
+        var before = await CategoryAuditShapeAsync(category, cancellationToken);
         await ApplyCategoryAsync(category, request, cancellationToken);
-        await ApplyLedgerMappingsAsync(category, request.LedgerMappings, cancellationToken);
-        await _db.SaveChangesAsync(cancellationToken);
+        if (request.LedgerMappings is not null)
+        {
+            // MD-H1: an omitted mapping list means "unchanged", never "clear".
+            await ApplyLedgerMappingsAsync(category, request.LedgerMappings, cancellationToken);
+        }
 
-        var newAccount = category.LedgerAccountId is { } newId
-            ? await _db.LedgerAccounts.AsNoTracking()
-                .Where(a => a.Id == newId).Select(a => a.AccountNumber + " — " + a.Name).FirstOrDefaultAsync(cancellationToken)
-            : null;
-        await _audit.RecordAsync("SalesCategory", category.Id.ToString(), "Updated", oldValues,
-            new { category.Code, category.Name, category.SystemRole, category.IsActive, Grootboekrekening = newAccount }, cancellationToken);
+        await _db.SaveChangesAsync(cancellationToken);
+        await AuditCategoryChangeAsync(category, before, cancellationToken);
         return await MapCategoryAsync(category, cancellationToken);
+    }
+
+    public async Task<SalesCategoryDto?> SetSalesCategoryLedgerAsync(
+        Guid id, SetSalesCategoryLedgerRequest request, CancellationToken cancellationToken)
+    {
+        var category = await _db.SalesCategories.Include(c => c.LedgerMappings)
+            .FirstOrDefaultAsync(c => c.TenantId == TenantId && c.Id == id, cancellationToken);
+        if (category is null)
+        {
+            return null;
+        }
+
+        Common.Integrity.OptimisticConcurrency.Check(category, request.ExpectedVersion);
+        var before = await CategoryAuditShapeAsync(category, cancellationToken);
+        if (request.LedgerAccountId is { } accountId && accountId != category.LedgerAccountId)
+        {
+            var account = await _db.LedgerAccounts.AsNoTracking()
+                .FirstOrDefaultAsync(a => a.TenantId == TenantId && a.Id == accountId, cancellationToken)
+                ?? throw new InvalidTenantReferenceException("grootboekrekening");
+            if (!account.IsActive)
+            {
+                throw new DomainValidationException("ledgerAccountId",
+                    "Een inactieve grootboekrekening kan niet meer worden toegewezen. Heractiveer de rekening eerst.");
+            }
+        }
+
+        category.LedgerAccountId = request.LedgerAccountId;
+        await _db.SaveChangesAsync(cancellationToken);
+        await AuditCategoryChangeAsync(category, before, cancellationToken);
+        return await MapCategoryAsync(category, cancellationToken);
+    }
+
+    /// <summary>MD-M10: the auditable fields of a sales category, accounts as "nummer — naam".</summary>
+    private async Task<object> CategoryAuditShapeAsync(SalesCategory c, CancellationToken cancellationToken)
+    {
+        var accountIds = c.LedgerMappings.Select(m => m.LedgerAccountId).Append(c.LedgerAccountId ?? Guid.Empty).Distinct().ToList();
+        var accounts = await _db.LedgerAccounts.IgnoreQueryFilters().AsNoTracking()
+            .Where(a => a.TenantId == TenantId && accountIds.Contains(a.Id))
+            .ToDictionaryAsync(a => a.Id, a => a.AccountNumber + " — " + a.Name, cancellationToken);
+        var entityIds = c.LedgerMappings.Select(m => m.LegalEntityId).ToList();
+        var entities = await _db.LegalEntities.IgnoreQueryFilters().AsNoTracking()
+            .Where(e => e.TenantId == TenantId && entityIds.Contains(e.Id))
+            .ToDictionaryAsync(e => e.Id, e => e.LegalName, cancellationToken);
+        return new
+        {
+            c.Code, c.Name, c.SystemRole, c.IsActive, c.SortOrder,
+            Grootboekrekening = c.LedgerAccountId is { } id ? accounts.GetValueOrDefault(id) : null,
+            c.InvoiceDescriptionNl, c.InvoiceDescriptionFr, c.InvoiceDescriptionEn, c.InvoiceDescriptionDe,
+            c.DefaultUnitCode, c.VatCategoryOverride, c.VatTreatmentOverride, c.IncludeInDieselBase, c.CostCentre,
+            c.DefaultUnitPrice, c.DefaultPricingBasis, c.Notes,
+            Entiteitsrekeningen = c.LedgerMappings.OrderBy(m => entities.GetValueOrDefault(m.LegalEntityId))
+                .Select(m => $"{entities.GetValueOrDefault(m.LegalEntityId) ?? m.LegalEntityId.ToString()}: {accounts.GetValueOrDefault(m.LedgerAccountId)}"
+                             + (m.CostCentre is null ? string.Empty : $" (kostenplaats {m.CostCentre})"))
+                .ToList(),
+        };
+    }
+
+    private async Task AuditCategoryChangeAsync(SalesCategory category, object before, CancellationToken cancellationToken)
+    {
+        if (Common.Integrity.AuditDiff.Changes(before, await CategoryAuditShapeAsync(category, cancellationToken)) is { } diff)
+        {
+            await _audit.RecordAsync("SalesCategory", category.Id.ToString(), "Updated", diff.Old, diff.New, cancellationToken);
+        }
     }
 
     public async Task<AccountingHealthDto> GetHealthAsync(CancellationToken cancellationToken)
@@ -486,6 +547,7 @@ public class AccountingService : IAccountingService
             category.CostCentre, category.DefaultUnitPrice, category.DefaultPricingBasis, category.Notes,
             category.LedgerMappings
                 .Select(m => new SalesCategoryLedgerMappingDto(m.LegalEntityId, m.LedgerAccountId, m.CostCentre))
-                .ToList());
+                .ToList(),
+            category.Version);
     }
 }

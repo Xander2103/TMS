@@ -326,6 +326,15 @@ public class DriverService : IDriverService
             return false;
         }
 
+        // MD-H7: a driver with history keeps its identity on that history — deactivate instead.
+        var references = await DriverReferences.ForDriverAsync(_dbContext, _tenantContext.TenantId, id, cancellationToken);
+        if (references.HasReferences)
+        {
+            throw Common.Integrity.ReferencedRecordException.For("Deze chauffeur", references, DriverReferences.DeactivateHint);
+        }
+
+        // Unused driver: the vehicle slots / tank card pointing at it are released, never left dangling.
+        await DriverReferences.ReleaseStandingSlotsAsync(_dbContext, _tenantContext.TenantId, id, cancellationToken);
         _dbContext.Remove(driver); // soft delete via interceptor
         await _dbContext.SaveChangesAsync(cancellationToken);
 

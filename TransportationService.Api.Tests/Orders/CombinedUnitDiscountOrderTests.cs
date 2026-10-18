@@ -93,7 +93,6 @@ public class CombinedUnitDiscountOrderTests
             [
                 new CargoItemInput("Pallets stop 1", null, 2, null, null, UnloadingStopIndex: 1, QuantityUnitCode: "EUROPALLET"),
                 new CargoItemInput("Pallets stop 2", null, 3, null, null, UnloadingStopIndex: 2, QuantityUnitCode: "EUROPALLET"),
-                new CargoItemInput("Onbeheerde eenheid", null, 5, null, null, UnloadingStopIndex: 1, QuantityUnitCode: "ONBEHEERD"),
                 new CargoItemInput("Geen losstop toegewezen", null, 1, null, null, QuantityUnitCode: "EUROPALLET"),
             ]);
 
@@ -101,6 +100,15 @@ public class CombinedUnitDiscountOrderTests
         Assert.Equal(TransportOrderOperationOutcome.Success, created.Outcome);
 
         var order = await h.Db.Context.TransportOrders.Include(o => o.Stops).SingleAsync(o => o.Id == created.Order!.Id);
+        // MD-H8: a new order only accepts master units, so the unmanaged unit is a LEGACY line
+        // (stored before that rule) whose code the unit master does not know.
+        h.Db.Context.CargoItems.Add(new CargoItem
+        {
+            Id = Guid.NewGuid(), TenantId = order.TenantId, TransportOrderId = order.Id, Sequence = 9, Description = "Onbeheerde eenheid",
+            ExpectedQuantity = 5, QuantityUnitCode = "ONBEHEERD",
+            UnloadingStopId = order.Stops.Where(s => s.StopType == StopType.Unloading).OrderBy(s => s.Sequence).First().Id,
+        });
+        await h.Db.Context.SaveChangesAsync();
         var cargoItems = await h.Db.Context.CargoItems.Where(c => c.TransportOrderId == order.Id).ToListAsync();
 
         var method = typeof(TransportOrderService).GetMethod("BuildPricingGroupsAsync", BindingFlags.NonPublic | BindingFlags.Instance)!;

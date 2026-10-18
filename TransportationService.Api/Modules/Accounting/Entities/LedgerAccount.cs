@@ -41,8 +41,11 @@ public enum SalesCategorySystemRole
 /// LIVE configuration — invoice lines snapshot the resolved account at finalization, so
 /// changing it later never rewrites history.
 /// </summary>
-public class SalesCategory : AuditableTenantEntity
+public class SalesCategory : AuditableTenantEntity, Common.Integrity.IVersionedEntity
 {
+    /// <summary>MD-M2: optimistic-concurrency token (bumped on every edit).</summary>
+    public int Version { get; set; }
+
     public string Code { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
     public SalesCategorySystemRole SystemRole { get; set; } = SalesCategorySystemRole.None;

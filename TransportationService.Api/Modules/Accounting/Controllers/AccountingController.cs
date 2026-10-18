@@ -65,6 +65,16 @@ public class AccountingController : ControllerBase
         SaveSalesCategoryRequest request, CancellationToken cancellationToken)
         => Ok(await _service.CreateSalesCategoryAsync(request, cancellationToken));
 
+    /// <summary>MD-H1: the inline default-ledger control — changes that one field, nothing else.</summary>
+    [HttpPut("sales-categories/{id:guid}/ledger-account")]
+    [RequirePermission(PermissionCodes.AccountingManage)]
+    public async Task<ActionResult<SalesCategoryDto>> SetSalesCategoryLedger(
+        Guid id, SetSalesCategoryLedgerRequest request, CancellationToken cancellationToken)
+    {
+        var updated = await _service.SetSalesCategoryLedgerAsync(id, request, cancellationToken);
+        return updated is null ? NotFound() : Ok(updated);
+    }
+
     [HttpPut("sales-categories/{id:guid}")]
     [RequirePermission(PermissionCodes.AccountingManage)]
     public async Task<ActionResult<SalesCategoryDto>> UpdateSalesCategory(

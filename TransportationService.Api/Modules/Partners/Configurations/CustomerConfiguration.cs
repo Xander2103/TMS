@@ -10,6 +10,7 @@ public class CustomerConfiguration : IEntityTypeConfiguration<Customer>
     public void Configure(EntityTypeBuilder<Customer> builder)
     {
         builder.ToTable("customers");
+        builder.Property(c => c.Version).IsConcurrencyToken(); // MD-M2
         builder.HasKey(c => c.Id);
 
         builder.Property(c => c.CustomerNumber).IsRequired().HasMaxLength(30);
@@ -53,7 +54,10 @@ public class CustomerConfiguration : IEntityTypeConfiguration<Customer>
             .HasDefaultValue(PeppolDeliveryPreference.Peppol);
         builder.Property(c => c.InvoiceLanguageCode).HasMaxLength(10);
 
-        builder.HasIndex(c => new { c.TenantId, c.CustomerNumber }).IsUnique().HasFilter("\"IsDeleted\" = false");
+        // MD-M1/MD-B2: one customer number per tenant, case-insensitive, EVER (deleted rows included).
+        builder.Property(c => c.NormalizedCustomerNumber).IsRequired().HasMaxLength(30);
+        builder.HasIndex(c => new { c.TenantId, c.NormalizedCustomerNumber }).IsUnique();
+        builder.HasIndex(c => new { c.TenantId, c.CustomerNumber });
         builder.HasIndex(c => c.TenantId);
         builder.HasIndex(c => new { c.TenantId, c.IsActive });
         builder.HasIndex(c => new { c.TenantId, c.CategoryId });

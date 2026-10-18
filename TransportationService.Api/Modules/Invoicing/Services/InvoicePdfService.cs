@@ -37,6 +37,7 @@ public class InvoicePdfService : IInvoicePdfService
     public async Task<(byte[] Bytes, string FileName)?> RenderAsync(Guid invoiceId, CancellationToken cancellationToken)
     {
         var tenantId = _tenantContext.TenantId;
+        await InvoicePartySnapshotBackfill.EnsureFrozenAsync(_dbContext, tenantId, invoiceId, cancellationToken);
         var invoice = await _dbContext.Invoices.AsNoTracking()
             .Include(i => i.Lines.Where(l => !l.IsDeleted))
             .FirstOrDefaultAsync(i => i.TenantId == tenantId && i.Id == invoiceId, cancellationToken);
@@ -46,18 +47,19 @@ public class InvoicePdfService : IInvoicePdfService
         }
 
         var isDraft = invoice.Status == InvoiceStatus.Draft;
-        var issued = invoice.Status is InvoiceStatus.Sent or InvoiceStatus.Paid;
 
-        // Live fallbacks exist for legacy rows only; an issued document never needs them, and a
-        // draft gets its snapshot refreshed on every save.
-        var liveCustomer = invoice.CustomerNameSnapshot is null && !issued
+        // MD-H3: a FINAL (issued) snapshot is the whole truth — no live customer or legal entity
+        // is read, so an empty field stays empty and a later logo upload never reaches this PDF.
+        // Only a draft (refreshed on every save) may still fall back to the current master data.
+        var final = invoice.PartySnapshotIsFinal;
+        var liveCustomer = invoice.CustomerNameSnapshot is null && !final
             ? await _dbContext.Customers.AsNoTracking()
                 .Where(c => c.TenantId == tenantId && c.Id == invoice.CustomerId)
                 .Select(c => new { c.Name, c.LegalName, c.CompanyNumber, c.Street, c.HouseNumber, c.PostalCode, c.City, c.CountryCode })
                 .FirstOrDefaultAsync(cancellationToken)
             : null;
 
-        var liveEntity = invoice.LegalEntityId is { } entityId
+        var liveEntity = invoice.LegalEntityId is { } entityId && !final
             ? await _dbContext.LegalEntities.AsNoTracking()
                 .Where(e => e.TenantId == tenantId && e.Id == entityId)
                 .Select(e => new { e.Bic, e.InvoiceFooter, e.LogoStorageKey, e.CompanyNumber, e.LegalName })
@@ -65,7 +67,7 @@ public class InvoicePdfService : IInvoicePdfService
             : null;
 
         byte[]? logoBytes = null;
-        if (liveEntity?.LogoStorageKey is { Length: > 0 } logoKey)
+        if ((final ? invoice.SellerLogoStorageKey : liveEntity?.LogoStorageKey) is { Length: > 0 } logoKey)
         {
             try
             {
@@ -106,7 +108,8 @@ public class InvoicePdfService : IInvoicePdfService
                         invoice.LanguageCode)
                     : l.Description,
                 l.Quantity, l.UnitPrice, l.VatRatePercent, MoneyRounding.LineTotal(l.Quantity, l.UnitPrice),
-                l.UnitLabel ?? UnEceUnitCodeMap.LabelFor(l.UnitCode)))
+                // MD-M13: a known structured code always prints a label ("stuk" for C62), never a blank.
+                l.UnitLabel ?? UnEceUnitCodeMap.DisplayLabelFor(l.UnitCode)))
             .ToList();
         var subtotal = Math.Round(lines.Sum(l => l.LineTotal), 2);
         var vat = InvoiceTotals.VatTotal(invoice.Lines, invoice.CustomerVatTreatment);
@@ -132,9 +135,9 @@ public class InvoicePdfService : IInvoicePdfService
             invoice.SellerAddressLine,
             invoice.SellerVatNumber,
             invoice.SellerIban,
-            // Frozen at issue; a legacy issued row (no snapshot) keeps its historic live reading.
-            invoice.SellerBic ?? (issued && invoice.SellerName is not null && invoice.SellerLegalName is not null ? null : liveEntity?.Bic),
-            invoice.SellerInvoiceFooter ?? (invoice.SellerLegalName is not null ? null : liveEntity?.InvoiceFooter),
+            // Frozen at issue (liveEntity is null for a final snapshot).
+            invoice.SellerBic ?? liveEntity?.Bic,
+            invoice.SellerInvoiceFooter ?? liveEntity?.InvoiceFooter,
             invoice.VatLegalText,
             logoBytes,
             invoice.DisplayNumber,
@@ -154,7 +157,7 @@ public class InvoicePdfService : IInvoicePdfService
             creditedInvoiceNumber,
             invoice.LanguageCode,
             IsDraft: isDraft,
-            SellerCompanyNumber: invoice.SellerCompanyNumber ?? (invoice.SellerLegalName is not null ? null : liveEntity?.CompanyNumber),
+            SellerCompanyNumber: invoice.SellerCompanyNumber ?? liveEntity?.CompanyNumber,
             CustomerCompanyNumber: invoice.CustomerCompanyNumberSnapshot ?? liveCustomer?.CompanyNumber,
             PaymentTermsText: invoice.Kind == InvoiceKind.CreditNote ? null : strings.PaymentTermsText(invoice.PaymentTermDays, invoice.DueDate),
             PaymentReference: invoice.PaymentReference ?? invoice.InvoiceNumber,

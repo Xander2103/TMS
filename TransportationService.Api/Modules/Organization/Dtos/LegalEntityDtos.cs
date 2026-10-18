@@ -29,7 +29,9 @@ public record LegalEntityDto(
     string? LogoFileName,
     bool IsActive,
     bool IsDefault,
-    string? CreditNotePrefix = null);
+    string? CreditNotePrefix = null,
+    /// <summary>MD-M2: optimistic-concurrency version; send it back as <c>ExpectedVersion</c>.</summary>
+    int Version = 0);
 
 /// <summary>Compact shape for dropdowns (entity pickers, top-bar selector).</summary>
 public record LegalEntityOptionDto(Guid Id, string DisplayName, string? VatNumber, bool IsDefault, bool IsActive);
@@ -59,6 +61,8 @@ public record SaveLegalEntityRequest(
     string? InvoicePrefix,
     string? InvoiceFooter,
     bool IsDefault,
-    string? CreditNotePrefix = null);
+    string? CreditNotePrefix = null,
+    /// <summary>MD-M2: the version the edit is based on; a stale one is refused (409).</summary>
+    int? ExpectedVersion = null);
 
 public record ActiveLegalEntityDto(Guid? LegalEntityId);

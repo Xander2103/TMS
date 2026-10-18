@@ -51,6 +51,7 @@ public class OrderStopPinEvidenceTests
         var locationId = Guid.NewGuid();
 
         db.Context.Tenants.Add(new Tenant { Id = tenantId, Name = "Acme", Slug = "acme", IsActive = true, CreatedAt = Now.UtcDateTime });
+        TestUnitCatalog.Seed(db.Context, tenantId);
         db.Context.TenantSettings.Add(new TenantSettings
         {
             Id = Guid.NewGuid(), TenantId = tenantId, OrderNumberPrefix = "ORD-", OrderNumberNextValue = 1,

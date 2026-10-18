@@ -107,6 +107,9 @@ public abstract class LookupControllerBase<TEntity> : ControllerBase where TEnti
         _ => BadRequest(new { message = result.Error }),
     };
 
+    /// <summary>Null when the caller may read this lookup's options (<see cref="OptionsPermissions"/>), else the 401/403.</summary>
+    protected Task<ObjectResult?> DeniedOptionsAsync(CancellationToken cancellationToken) => DeniedAll(OptionsPermissions, cancellationToken);
+
     private async Task<ObjectResult?> DeniedAll(IReadOnlyList<string> permissions, CancellationToken cancellationToken)
     {
         ObjectResult? last = null;

@@ -27,6 +27,10 @@ builder.Services
         options.Filters.Add<TransportationService.Api.Common.InvalidTenantReferenceExceptionFilter>();
         options.Filters.Add<TransportationService.Api.Common.DomainValidationExceptionFilter>();
         options.Filters.Add<TransportationService.Api.Common.NegativeStockConfirmationFilter>();
+        // Master-data integrity: a delete refused because history still references the record → 409.
+        options.Filters.Add<TransportationService.Api.Common.Integrity.ReferencedRecordExceptionFilter>();
+        // MD-M2: a stale master-data edit → 409 "intussen gewijzigd", never a silent overwrite.
+        options.Filters.Add<TransportationService.Api.Common.Integrity.ConcurrencyConflictExceptionFilter>();
         // Stale dossier-version mutations → 409 with the current state (rebase contract).
         options.Filters.Add<TransportationService.Api.Modules.Dossiers.DossierVersionConflictExceptionFilter>();
         // Per-request session-revocation (security stamp) + mandatory-password-change enforcement,
@@ -254,6 +258,23 @@ builder.Services.AddScoped<TransportationService.Api.Common.Reference.ICountryCo
 // Generic tenant lookup CRUD (departments, functions, categories, reference data, ...)
 builder.Services.AddScoped(typeof(TransportationService.Api.Common.Lookups.ILookupService<>),
     typeof(TransportationService.Api.Common.Lookups.LookupService<>));
+// MD-H8/M12: lookups with history refuse a destructive delete of a referenced row (explicit checks).
+builder.Services.AddScoped<TransportationService.Api.Common.Lookups.ILookupReferenceGuard<TransportationService.Api.Modules.Reference.Entities.UnitType>,
+    TransportationService.Api.Common.Lookups.UnitTypeReferenceGuard>();
+builder.Services.AddScoped<TransportationService.Api.Common.Lookups.ILookupReferenceGuard<TransportationService.Api.Modules.Fleet.Entities.VehicleCategory>,
+    TransportationService.Api.Common.Lookups.VehicleCategoryReferenceGuard>();
+builder.Services.AddScoped<TransportationService.Api.Common.Lookups.ILookupReferenceGuard<TransportationService.Api.Modules.Fleet.Entities.TrailerCategory>,
+    TransportationService.Api.Common.Lookups.TrailerCategoryReferenceGuard>();
+builder.Services.AddScoped<TransportationService.Api.Common.Lookups.ILookupReferenceGuard<TransportationService.Api.Modules.Partners.Entities.CustomerCategory>,
+    TransportationService.Api.Common.Lookups.CustomerCategoryReferenceGuard>();
+builder.Services.AddScoped<TransportationService.Api.Common.Lookups.ILookupReferenceGuard<TransportationService.Api.Modules.Drivers.Entities.DriverCategory>,
+    TransportationService.Api.Common.Lookups.DriverCategoryReferenceGuard>();
+builder.Services.AddScoped<TransportationService.Api.Common.Lookups.ILookupReferenceGuard<TransportationService.Api.Modules.Organization.Entities.Department>,
+    TransportationService.Api.Common.Lookups.DepartmentReferenceGuard>();
+builder.Services.AddScoped<TransportationService.Api.Common.Lookups.ILookupReferenceGuard<TransportationService.Api.Modules.Organization.Entities.JobFunction>,
+    TransportationService.Api.Common.Lookups.JobFunctionReferenceGuard>();
+builder.Services.AddScoped<TransportationService.Api.Common.Lookups.ILookupReferenceGuard<TransportationService.Api.Modules.Employees.Entities.IssuedItemCategory>,
+    TransportationService.Api.Common.Lookups.IssuedItemCategoryReferenceGuard>();
 
 // Partners
 builder.Services.AddScoped<TransportationService.Api.Modules.Partners.Services.ICustomerImportService,
@@ -751,6 +772,10 @@ using (var referenceScope = app.Services.CreateScope())
     // MD-B1: issued CMRs / delivery notes / work orders from before the immutable snapshot are
     // frozen ONCE from the current data (documented legacy policy); idempotent afterwards.
     await TransportationService.Api.Modules.Orders.Services.IssuedTransportDocumentSnapshotBackfill.SyncAsync(
+        referenceDbContext, app.Logger);
+
+    // MD-H3: issued invoices from before the final-snapshot marker are frozen once (documented policy).
+    await TransportationService.Api.Modules.Invoicing.Services.InvoicePartySnapshotBackfill.SyncAsync(
         referenceDbContext, app.Logger);
 
     // Release flow (every environment): the permission catalogue and the versioned role

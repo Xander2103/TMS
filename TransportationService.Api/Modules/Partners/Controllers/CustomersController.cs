@@ -154,6 +154,16 @@ public class CustomersController : ControllerBase
         return await _customerService.DeleteAsync(id, cancellationToken) ? NoContent() : NotFound();
     }
 
+    /// <summary>MD-B2: what still references the customer — the delete pre-check of the UI.</summary>
+    [HttpGet("{id:guid}/references")]
+    [RequirePermission(PermissionCodes.CustomersView)]
+    public async Task<ActionResult<IReadOnlyList<TransportationService.Api.Common.Integrity.ReferenceCountDto>>> References(
+        Guid id, CancellationToken cancellationToken)
+    {
+        var references = await _customerService.GetReferencesAsync(id, cancellationToken);
+        return references is null ? NotFound() : Ok(references);
+    }
+
     /// <summary>Manual customer-number change: accounting-significant, so gated + audited.</summary>
     [HttpPost("{id:guid}/number")]
     [RequirePermission(PermissionCodes.CustomersOverrideNumber)]

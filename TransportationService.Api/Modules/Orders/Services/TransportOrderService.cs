@@ -364,6 +364,7 @@ public class TransportOrderService : ITransportOrderService
 
         // D3: every stop of a new order is new — country lookup + postal-code format apply.
         await ValidateStopAddressesAsync(stopInputs, existingStops: null, cancellationToken);
+        await ValidateUnitCodesAsync(request.QuantityUnitCode, request.CargoItems, alreadyUsed: new HashSet<string>(), cancellationToken);
         // D3 "Opslaan in adresboek": decided here, staged right before the save (same transaction).
         var addressBookCustomerId = targetDossier?.CustomerId ?? request.CustomerId;
         var addressBook = await PlanAddressBookAsync(stopInputs, addressBookCustomerId, cancellationToken);
@@ -871,6 +872,9 @@ public class TransportOrderService : ITransportOrderService
             .ToListAsync(cancellationToken);
         var cargoBefore = existingCargo
             .Select(c => new { c.Description, c.ExpectedQuantity, c.QuantityUnitCode }).ToList();
+        await ValidateUnitCodesAsync(request.QuantityUnitCode, request.CargoItems,
+            existingCargo.Select(c => c.QuantityUnitCode).Append(order.QuantityUnitCode).OfType<string>().ToHashSet(StringComparer.Ordinal),
+            cancellationToken);
 
         // A1b: a goods line may only be moved to another stop while its colli can follow it. Still
         // part of the fail-before-mutate block — the refusal must leave the order untouched.
@@ -5210,6 +5214,57 @@ public class TransportOrderService : ITransportOrderService
     /// <summary>Uppercases a managed unit code; blank → null (free-text QuantityUnit is the fallback).</summary>
     private static string? NormalizeUnitCode(string? code) =>
         string.IsNullOrWhiteSpace(code) ? null : code.Trim().ToUpperInvariant();
+
+    /// <summary>
+    /// MD-H8 (master-data acceptance 2026-10-18): an order accepted any unit code ("NIETBESTAAND").
+    /// A unit code on an order must be a unit of the tenant's master that is active and allowed for
+    /// order entry. Codes the order already carries stay valid (a unit deactivated later never
+    /// blocks editing an existing order); only NEW codes are checked.
+    /// </summary>
+    private async Task ValidateUnitCodesAsync(
+        string? orderUnitCode, IReadOnlyList<CargoItemInput>? cargo, IReadOnlySet<string> alreadyUsed, CancellationToken cancellationToken)
+    {
+        var requested = new List<(string Code, string Field)>();
+        if (NormalizeUnitCode(orderUnitCode) is { } orderCode)
+        {
+            requested.Add((orderCode, "quantityUnitCode"));
+        }
+
+        for (var i = 0; i < (cargo?.Count ?? 0); i++)
+        {
+            if (NormalizeUnitCode(cargo![i].QuantityUnitCode) is { } code)
+            {
+                requested.Add((code, $"cargoItems[{i}].quantityUnitCode"));
+            }
+        }
+
+        var toCheck = requested.Where(r => !alreadyUsed.Contains(r.Code)).ToList();
+        if (toCheck.Count == 0)
+        {
+            return;
+        }
+
+        var codes = toCheck.Select(r => r.Code).Distinct().ToList();
+        var units = await _dbContext.UnitTypes.AsNoTracking()
+            .Where(u => u.TenantId == _tenantContext.TenantId && codes.Contains(u.Code))
+            .Select(u => new { u.Code, u.Name, u.IsActive, u.AllowForOrderEntry })
+            .ToListAsync(cancellationToken);
+        var byCode = units.ToDictionary(u => u.Code, StringComparer.Ordinal);
+        foreach (var (code, field) in toCheck)
+        {
+            var message = byCode.GetValueOrDefault(code) switch
+            {
+                null => $"Onbekende eenheid '{code}'. Kies een eenheid uit de stamgegevens.",
+                { IsActive: false } unit => $"De eenheid '{unit.Name}' is inactief en kan niet meer gekozen worden voor nieuwe opdrachten.",
+                { AllowForOrderEntry: false } unit => $"De eenheid '{unit.Name}' is niet toegelaten voor orderinvoer.",
+                _ => null,
+            };
+            if (message is not null)
+            {
+                throw new DomainValidationException(field, message);
+            }
+        }
+    }
 
     private static string GenerateOrderNumber(TenantSettings? settings)
     {

@@ -16,6 +16,7 @@ public class LegalEntityConfiguration : IEntityTypeConfiguration<LegalEntity>
         builder.Property(e => e.CompanyNumber).HasMaxLength(30);
         builder.Property(e => e.VatNumber).HasMaxLength(30);
         builder.Property(e => e.PeppolId).HasMaxLength(64);
+        builder.Property(e => e.Version).IsConcurrencyToken(); // MD-M2
         builder.Property(e => e.PeppolScheme).HasMaxLength(10);
         builder.Property(e => e.Street).HasMaxLength(200);
         builder.Property(e => e.HouseNumber).HasMaxLength(20);

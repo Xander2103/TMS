@@ -24,6 +24,7 @@ public class SalesCategoryConfiguration : IEntityTypeConfiguration<SalesCategory
     public void Configure(EntityTypeBuilder<SalesCategory> builder)
     {
         builder.ToTable("sales_categories");
+        builder.Property(c => c.Version).IsConcurrencyToken(); // MD-M2
         builder.HasKey(c => c.Id);
         builder.Property(c => c.Code).IsRequired().HasMaxLength(50);
         builder.Property(c => c.Name).IsRequired().HasMaxLength(200);

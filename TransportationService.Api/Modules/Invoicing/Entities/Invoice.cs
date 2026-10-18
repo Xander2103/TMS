@@ -103,6 +103,27 @@ public class Invoice : AuditableTenantEntity
     public string? CustomerBuyerReferenceSnapshot { get; set; }
 
     /// <summary>
+    /// MD-H3 (master-data acceptance 2026-10-18): the seller logo AS ISSUED — the storage key of the
+    /// logo file version that was current at issue (every upload gets a new key; a key referenced by
+    /// an issued invoice is never deleted). Null = the invoice was issued without a logo.
+    /// </summary>
+    public string? SellerLogoStorageKey { get; set; }
+
+    /// <summary>
+    /// MD-H3: set when the seller/customer snapshot became FINAL (at issue). From then on the PDF,
+    /// UBL and Peppol validation read the snapshot ONLY — an empty snapshot field means "empty at
+    /// issue", never "fill in from today's customer or legal entity". Null = a draft (refreshed on
+    /// every save) or a legacy row not yet frozen by the one-time backfill.
+    /// </summary>
+    public DateTime? PartySnapshotFrozenAt { get; set; }
+
+    /// <summary>True when the one-time backfill (not the issue) froze the snapshot of a legacy row.</summary>
+    public bool PartySnapshotBackfilled { get; set; }
+
+    /// <summary>MD-H3: true once the party snapshot is final — no live master data may fill it.</summary>
+    public bool PartySnapshotIsFinal => PartySnapshotFrozenAt is not null;
+
+    /// <summary>
     /// Effective payment term (days) the due date was computed with: customer term → legal
     /// entity term → tenant default (ACC-H5). Frozen with the rest at issue.
     /// </summary>

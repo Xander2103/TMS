@@ -85,7 +85,9 @@ public record CustomerDetailDto(
     /// <summary>Wave 2: PerDossier | Weekly | Monthly | ByReference | Manual (default).</summary>
     string InvoiceGrouping = "Manual",
     /// <summary>P1: GenerateOwn | CustomerDocument | PerOrder — who supplies the transport document.</summary>
-    string DocumentStrategy = "GenerateOwn");
+    string DocumentStrategy = "GenerateOwn",
+    /// <summary>MD-M2: optimistic-concurrency version; send it back as <c>ExpectedVersion</c>.</summary>
+    int Version = 0);
 
 public record CreateCustomerRequest(
     string Name,
@@ -101,7 +103,7 @@ public record CreateCustomerRequest(
     string? City,
     string? CountryCode,
     string? InvoiceEmail,
-    int PaymentTermDays,
+    int? PaymentTermDays,
     string? DefaultLanguageCode,
     string? Notes,
     VatTreatment VatTreatment = VatTreatment.DomesticVat,
@@ -149,7 +151,8 @@ public record UpdateCustomerRequest(
     string? City,
     string? CountryCode,
     string? InvoiceEmail,
-    int PaymentTermDays,
+    /// <summary>MD-M5: null/blank = no own term (falls back to the legal entity / tenant); negative is refused.</summary>
+    int? PaymentTermDays,
     string? DefaultLanguageCode,
     string? Notes,
     bool IsActive,
@@ -179,7 +182,9 @@ public record UpdateCustomerRequest(
     /// <summary>Wave 2: invoice grouping preference; null = leave as-is.</summary>
     string? InvoiceGrouping = null,
     /// <summary>P1: document strategy; null = leave as-is.</summary>
-    string? DocumentStrategy = null);
+    string? DocumentStrategy = null,
+    /// <summary>MD-M2: the version the edit is based on; a stale one is refused (409).</summary>
+    int? ExpectedVersion = null);
 
 public record SetCustomerBlockedRequest(bool IsBlocked, string? Reason);
 

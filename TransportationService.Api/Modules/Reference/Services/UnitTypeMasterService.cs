@@ -1,5 +1,7 @@
 ﻿using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
+using TransportationService.Api.Common.Integrity;
+using TransportationService.Api.Common.Lookups;
 using TransportationService.Api.Common;
 using TransportationService.Api.Data;
 using TransportationService.Api.Modules.Auditing.Services;
@@ -73,8 +75,7 @@ public partial class UnitTypeMasterService : IUnitTypeMasterService
         Apply(unit, request);
         _dbContext.UnitTypes.Add(unit);
         await _dbContext.SaveChangesAsync(cancellationToken);
-        await _auditService.RecordAsync("UnitType", unit.Id.ToString(), "Created", null,
-            new { unit.Code, unit.Name, unit.Category, unit.DimensionBehavior }, cancellationToken);
+        await _auditService.RecordAsync("UnitType", unit.Id.ToString(), "Created", null, AuditShape(unit), cancellationToken);
         await _dbContext.SaveChangesAsync(cancellationToken);
         return ToDto(unit);
     }
@@ -89,12 +90,23 @@ public partial class UnitTypeMasterService : IUnitTypeMasterService
         }
 
         await ValidateAsync(request, existingId: id, cancellationToken);
-        var old = new { unit.Code, unit.Name, unit.Category, unit.DimensionBehavior };
+        var newCode = request.Code.Trim().ToUpperInvariant();
+        if (!string.Equals(unit.Code, newCode, StringComparison.Ordinal)
+            && (await new UnitTypeReferenceGuard(_dbContext, _tenantContext).ReferencesAsync(unit, cancellationToken)).HasReferences)
+        {
+            // MD-H8: history stores the CODE — renaming it would orphan every line that uses it.
+            throw new DomainValidationException("code",
+                $"De code {unit.Code} is al gebruikt in opdrachten of prijzen en kan niet meer gewijzigd worden. Wijzig de naam, of maak een nieuwe eenheid aan en zet deze inactief.");
+        }
+
+        var before = AuditShape(unit);
         Apply(unit, request);
         await _dbContext.SaveChangesAsync(cancellationToken);
-        await _auditService.RecordAsync("UnitType", unit.Id.ToString(), "Updated", old,
-            new { unit.Code, unit.Name, unit.Category, unit.DimensionBehavior }, cancellationToken);
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        if (AuditDiff.Changes(before, AuditShape(unit)) is { } diff)
+        {
+            await _auditService.RecordAsync("UnitType", unit.Id.ToString(), "Updated", diff.Old, diff.New, cancellationToken);
+        }
+
         return ToDto(unit);
     }
 
@@ -129,13 +141,31 @@ public partial class UnitTypeMasterService : IUnitTypeMasterService
             }
         }
 
-        var codeTaken = await _dbContext.UnitTypes
-            .AnyAsync(u => u.TenantId == TenantId && u.Code == code && u.Id != existingId, cancellationToken);
-        if (codeTaken)
+        // MD-H8: the code of a DELETED unit stays reserved — historical lines still carry it, so a
+        // re-created code would silently give old documents and orders a new meaning.
+        var holder = await _dbContext.UnitTypes.IgnoreQueryFilters().AsNoTracking()
+            .Where(u => u.TenantId == TenantId && u.Code == code && u.Id != existingId)
+            .Select(u => new { u.IsDeleted })
+            .FirstOrDefaultAsync(cancellationToken);
+        if (holder is { IsDeleted: true })
+        {
+            throw new DomainValidationException("code",
+                $"De code {code} werd vroeger gebruikt door een verwijderde eenheid en kan niet opnieuw gebruikt worden. Kies een andere code.");
+        }
+
+        if (holder is not null)
         {
             throw new DomainValidationException($"De code {code} bestaat al voor een andere eenheid.");
         }
     }
+
+    /// <summary>MD-M10: every auditable unit field (the audit keeps only what changed).</summary>
+    public static object AuditShape(UnitType u) => new
+    {
+        u.Code, u.Name, u.Description, u.IsActive, u.SortOrder, u.AllowForOrderEntry, u.AllowForPricing, u.AllowForInventory,
+        u.Category, u.Decimals, u.Symbol, u.DimensionBehavior, u.DefaultLengthCm, u.DefaultWidthCm, u.DefaultHeightCm,
+        u.DefaultWeightKg, u.MaxWeightKg, u.DefaultVolumeM3, u.DefaultLoadingMeters, u.DefaultPalletPlaces,
+    };
 
     private static void Apply(UnitType unit, SaveUnitTypeMasterRequest request)
     {

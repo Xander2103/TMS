@@ -24,7 +24,11 @@ public interface ICustomerService
     /// <summary>Manual customer-number change (customers.override_number + reason; audited).</summary>
     Task<CustomerDetailDto?> ChangeNumberAsync(Guid id, ChangeCustomerNumberRequest request, CancellationToken cancellationToken);
 
+    /// <summary>MD-B2: throws <c>ReferencedRecordException</c> when history still references the customer.</summary>
     Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken);
+
+    /// <summary>MD-B2: what still references the customer (delete pre-check). Null = unknown customer.</summary>
+    Task<IReadOnlyList<Common.Integrity.ReferenceCountDto>?> GetReferencesAsync(Guid id, CancellationToken cancellationToken);
 
     Task<bool> SetBlockedAsync(Guid id, SetCustomerBlockedRequest request, CancellationToken cancellationToken);
 

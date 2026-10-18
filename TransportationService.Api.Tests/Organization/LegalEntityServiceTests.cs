@@ -45,7 +45,8 @@ public class LegalEntityServiceTests
         Email: null, PhoneNumber: null, Website: null,
         Iban: "BE68 5390 0754 7034", Bic: "bbru bebb".Replace(" ", string.Empty), BankName: "Belfius",
         DefaultCurrency: "eur", PaymentTermDays: 30,
-        InvoiceNumberFormat: "{YYYY}{MM}{SEQ}", InvoiceSequencePadding: 4, InvoicePrefix: null, InvoiceFooter: null,
+        // MD-H5: every entity of a tenant prints its own series.
+        InvoiceNumberFormat: "{PREFIX}{YYYY}{MM}{SEQ}", InvoiceSequencePadding: 4, InvoicePrefix: name[..2].ToUpperInvariant(), InvoiceFooter: null,
         IsDefault: isDefault);
 
     [Fact]

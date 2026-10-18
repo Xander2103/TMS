@@ -41,7 +41,17 @@ public static class UblDocumentBuilder
         string? VatNumber,
         string? CompanyNumber)
     {
-        public static UblParty FromInvoiceSeller(Invoice invoice, LegalEntity? live) => new(
+        /// <summary>
+        /// MD-H3: once the snapshot is FINAL (issued) the live record is never consulted — a field
+        /// that was empty at issue stays empty in the UBL and in Peppol validation.
+        /// </summary>
+        public static UblParty FromInvoiceSeller(Invoice invoice, LegalEntity? live) =>
+            FromSeller(invoice, invoice.PartySnapshotIsFinal ? null : live);
+
+        public static UblParty FromInvoiceBuyer(Invoice invoice, Customer? live) =>
+            FromBuyer(invoice, invoice.PartySnapshotIsFinal ? null : live);
+
+        private static UblParty FromSeller(Invoice invoice, LegalEntity? live) => new(
             invoice.SellerPeppolScheme ?? live?.PeppolScheme,
             invoice.SellerPeppolId ?? live?.PeppolId,
             invoice.SellerName ?? live?.TradingName ?? live?.LegalName ?? string.Empty,
@@ -54,7 +64,7 @@ public static class UblDocumentBuilder
             invoice.SellerVatNumber ?? live?.VatNumber,
             invoice.SellerCompanyNumber ?? live?.CompanyNumber);
 
-        public static UblParty FromInvoiceBuyer(Invoice invoice, Customer? live) => new(
+        private static UblParty FromBuyer(Invoice invoice, Customer? live) => new(
             invoice.CustomerPeppolSchemeSnapshot ?? live?.PeppolScheme,
             invoice.CustomerPeppolIdSnapshot ?? live?.PeppolId,
             invoice.CustomerNameSnapshot ?? live?.Name ?? string.Empty,

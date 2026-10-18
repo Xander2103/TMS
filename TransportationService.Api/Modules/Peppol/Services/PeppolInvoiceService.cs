@@ -94,7 +94,7 @@ public class PeppolInvoiceService : IPeppolInvoiceService
                 l.VatCategoryCode ?? VatTreatmentCatalog.ResolveVatCategory(treatment, l.VatRatePercent).Code,
                 l.VatRatePercent)).ToList(),
             groups, subtotal, vat, subtotal + vat,
-            FirstNonEmpty(graph.Invoice.CustomerBuyerReferenceSnapshot ?? graph.Customer.BuyerReference, graph.Invoice.PurchaseOrderNumber, graph.Invoice.InvoiceNumber),
+            FirstNonEmpty(BuyerReference(graph), graph.Invoice.PurchaseOrderNumber, graph.Invoice.InvoiceNumber),
             graph.Invoice.PurchaseOrderNumber,
             graph.CreditedInvoiceNumber);
     }
@@ -121,13 +121,15 @@ public class PeppolInvoiceService : IPeppolInvoiceService
             UblDocumentBuilder.UblParty.FromInvoiceBuyer(graph.Invoice, graph.Customer),
             UblDocumentBuilder.UblParty.FromInvoiceSeller(graph.Invoice, graph.Seller),
             graph.CreditedInvoiceNumber, graph.Settings?.DefaultInvoiceNote,
-            graph.Invoice.CustomerBuyerReferenceSnapshot ?? graph.Customer.BuyerReference));
+            BuyerReference(graph)));
         return (xml, null);
     }
 
     private async Task<InvoiceGraph?> LoadAsync(Guid invoiceId, CancellationToken cancellationToken)
     {
         var tenantId = _tenant.TenantId;
+        // MD-H3: a legacy issued invoice is frozen once before anything reads it.
+        await Invoicing.Services.InvoicePartySnapshotBackfill.EnsureFrozenAsync(_db, tenantId, invoiceId, cancellationToken);
         var invoice = await _db.Invoices.AsNoTracking()
             .Include(i => i.Lines)
             .FirstOrDefaultAsync(i => i.TenantId == tenantId && i.Id == invoiceId, cancellationToken);
@@ -136,7 +138,8 @@ public class PeppolInvoiceService : IPeppolInvoiceService
             return null;
         }
 
-        var customer = await _db.Customers.AsNoTracking()
+        // A (legacy) deleted customer never makes an issued invoice unreadable (MD-B2).
+        var customer = await _db.Customers.IgnoreQueryFilters().AsNoTracking()
             .FirstOrDefaultAsync(c => c.TenantId == tenantId && c.Id == invoice.CustomerId, cancellationToken);
         if (customer is null)
         {
@@ -160,6 +163,12 @@ public class PeppolInvoiceService : IPeppolInvoiceService
         return new InvoiceGraph(
             invoice, invoice.Lines.Where(l => !l.IsDeleted).ToList(), customer, seller, settings, creditedNumber);
     }
+
+    /// <summary>MD-H3: the buyer reference AS ISSUED; only a draft falls back to the customer's current one.</summary>
+    private static string? BuyerReference(InvoiceGraph graph) =>
+        graph.Invoice.PartySnapshotIsFinal
+            ? graph.Invoice.CustomerBuyerReferenceSnapshot
+            : graph.Invoice.CustomerBuyerReferenceSnapshot ?? graph.Customer.BuyerReference;
 
     private static PeppolInvoiceValidationResultDto Validate(InvoiceGraph graph)
     {
@@ -189,7 +198,7 @@ public class PeppolInvoiceService : IPeppolInvoiceService
                 Add("company.vat", $"Het eigen bedrijf '{seller.LegalName}' heeft geen BTW-nummer.");
             }
 
-            if (invoice.Kind == InvoiceKind.Invoice && string.IsNullOrWhiteSpace(invoice.SellerIban ?? graph.Seller.Iban))
+            if (invoice.Kind == InvoiceKind.Invoice && string.IsNullOrWhiteSpace(invoice.PartySnapshotIsFinal ? invoice.SellerIban : invoice.SellerIban ?? graph.Seller.Iban))
             {
                 Add("company.iban", $"Het eigen bedrijf '{seller.LegalName}' heeft geen IBAN voor de betaalgegevens.");
             }

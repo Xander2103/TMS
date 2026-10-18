@@ -20,12 +20,15 @@ public class LookupService<TEntity> : ILookupService<TEntity> where TEntity : Lo
     private readonly TransportationDbContext _dbContext;
     private readonly ITenantContext _tenantContext;
     private readonly IAuditService _auditService;
+    private readonly ILookupReferenceGuard<TEntity>? _guard;
 
-    public LookupService(TransportationDbContext dbContext, ITenantContext tenantContext, IAuditService auditService)
+    public LookupService(TransportationDbContext dbContext, ITenantContext tenantContext, IAuditService auditService,
+        IEnumerable<ILookupReferenceGuard<TEntity>>? guards = null)
     {
         _dbContext = dbContext;
         _tenantContext = tenantContext;
         _auditService = auditService;
+        _guard = guards?.FirstOrDefault();
     }
 
     private IQueryable<TEntity> TenantScoped() =>
@@ -213,6 +216,12 @@ public class LookupService<TEntity> : ILookupService<TEntity> where TEntity : Lo
             return false;
         }
 
+        // MD-H8/M12: a row that history still references is deactivated, never deleted.
+        if (_guard is not null && await _guard.ReferencesAsync(entity, cancellationToken) is { HasReferences: true } references)
+        {
+            throw Integrity.ReferencedRecordException.For(_guard.Subject, references, LookupGuardText.DeactivateHint);
+        }
+
         // Interceptor converts this Remove into a soft delete.
         _dbContext.Set<TEntity>().Remove(entity);
         await _dbContext.SaveChangesAsync(cancellationToken);
@@ -223,10 +232,15 @@ public class LookupService<TEntity> : ILookupService<TEntity> where TEntity : Lo
         return true;
     }
 
+    /// <summary>
+    /// Case-insensitive. Where history stores the code itself (units, MD-H8) the code of a DELETED
+    /// row stays taken too, so it can never come back with another meaning.
+    /// </summary>
     private Task<bool> CodeExistsAsync(string code, Guid? excludingId, CancellationToken cancellationToken) =>
-        TenantScoped().AnyAsync(
-            e => e.Code.ToLower() == code.ToLower() && (excludingId == null || e.Id != excludingId),
-            cancellationToken);
+        (_guard?.ReservesDeletedCodes == true
+                ? _dbContext.Set<TEntity>().IgnoreQueryFilters().Where(e => e.TenantId == _tenantContext.TenantId)
+                : TenantScoped())
+            .AnyAsync(e => e.Code.ToLower() == code.ToLower() && (excludingId == null || e.Id != excludingId), cancellationToken);
 
     private static string? Validate(string code, string name)
     {

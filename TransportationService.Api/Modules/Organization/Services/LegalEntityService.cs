@@ -64,6 +64,8 @@ public class LegalEntityService : ILegalEntityService
     {
         var entity = new LegalEntity { Id = Guid.NewGuid(), TenantId = _tenantContext.TenantId };
         await ApplyAsync(entity, request, cancellationToken);
+        await EnsurePeppolIdentityFreeAsync(entity, cancellationToken);
+        await EnsureDistinctNumberSeriesAsync(entity, cancellationToken);
 
         var anyExisting = await _dbContext.LegalEntities
             .AnyAsync(e => e.TenantId == _tenantContext.TenantId, cancellationToken);
@@ -76,8 +78,7 @@ public class LegalEntityService : ILegalEntityService
         _dbContext.LegalEntities.Add(entity);
         await _dbContext.SaveChangesAsync(cancellationToken);
 
-        await _auditService.RecordAsync(EntityType, entity.Id.ToString(), "Created", null,
-            new { entity.LegalName, entity.VatNumber, entity.IsDefault }, cancellationToken);
+        await _auditService.RecordAsync(EntityType, entity.Id.ToString(), "Created", null, AuditShape(entity), cancellationToken);
 
         return Map(entity);
     }
@@ -90,9 +91,19 @@ public class LegalEntityService : ILegalEntityService
             return null;
         }
 
-        var before = new { entity.LegalName, entity.VatNumber, entity.InvoiceNumberFormat, entity.InvoicePrefix, entity.IsDefault };
+        // MD-M2: refuse an edit based on an older version (another user saved in between).
+        Common.Integrity.OptimisticConcurrency.Check(entity, request.ExpectedVersion);
+        var before = AuditShape(entity);
 
+        var numberingBefore = (entity.InvoiceNumberFormat, entity.InvoicePrefix, entity.CreditNotePrefix, entity.InvoiceSequencePadding, entity.IsActive);
         await ApplyAsync(entity, request, cancellationToken);
+        await EnsurePeppolIdentityFreeAsync(entity, cancellationToken);
+        if (numberingBefore != (entity.InvoiceNumberFormat, entity.InvoicePrefix, entity.CreditNotePrefix, entity.InvoiceSequencePadding, entity.IsActive))
+        {
+            // Only a numbering CHANGE is judged: an untouched legacy configuration stays editable
+            // (an actual collision at issue is still refused with a clear message).
+            await EnsureDistinctNumberSeriesAsync(entity, cancellationToken);
+        }
 
         if (request.IsDefault && !entity.IsDefault)
         {
@@ -112,8 +123,11 @@ public class LegalEntityService : ILegalEntityService
 
         await _dbContext.SaveChangesAsync(cancellationToken);
 
-        await _auditService.RecordAsync(EntityType, entity.Id.ToString(), "Updated", before,
-            new { entity.LegalName, entity.VatNumber, entity.InvoiceNumberFormat, entity.InvoicePrefix, entity.IsDefault }, cancellationToken);
+        // MD-H4/M10: WHAT changed — legal identity, address, bank, term, footer, Peppol, numbering, default.
+        if (Common.Integrity.AuditDiff.Changes(before, AuditShape(entity)) is { } diff)
+        {
+            await _auditService.RecordAsync(EntityType, entity.Id.ToString(), "Updated", diff.Old, diff.New, cancellationToken);
+        }
 
         return Map(entity);
     }
@@ -166,15 +180,31 @@ public class LegalEntityService : ILegalEntityService
         entity.LogoContentType = contentType;
         await _dbContext.SaveChangesAsync(cancellationToken);
 
-        if (previousKey is not null)
-        {
-            await _fileStorage.DeleteAsync(previousKey, cancellationToken);
-        }
+        await DeleteLogoFileUnlessIssuedAsync(previousKey, cancellationToken);
 
         await _auditService.RecordAsync(EntityType, entity.Id.ToString(), "LogoUploaded", null,
-            new { FileName = fileName }, cancellationToken);
+            new { FileName = fileName, ContentType = contentType, Replaced = previousKey is not null }, cancellationToken);
 
         return Map(entity);
+    }
+
+    /// <summary>
+    /// MD-H3: a logo file version that an issued invoice (or credit note) printed is part of that
+    /// legal document and is kept; only a version no invoice references is removed.
+    /// </summary>
+    private async Task DeleteLogoFileUnlessIssuedAsync(string? key, CancellationToken cancellationToken)
+    {
+        if (key is null)
+        {
+            return;
+        }
+
+        var referenced = await _dbContext.Invoices.IgnoreQueryFilters()
+            .AnyAsync(i => i.TenantId == _tenantContext.TenantId && i.SellerLogoStorageKey == key, cancellationToken);
+        if (!referenced)
+        {
+            await _fileStorage.DeleteAsync(key, cancellationToken);
+        }
     }
 
     public async Task<(Stream Content, string FileName, string ContentType)?> OpenLogoAsync(Guid id, CancellationToken cancellationToken)
@@ -204,7 +234,7 @@ public class LegalEntityService : ILegalEntityService
             entity.LogoFileName = null;
             entity.LogoContentType = null;
             await _dbContext.SaveChangesAsync(cancellationToken);
-            await _fileStorage.DeleteAsync(key, cancellationToken);
+            await DeleteLogoFileUnlessIssuedAsync(key, cancellationToken);
             await _auditService.RecordAsync(EntityType, entity.Id.ToString(), "LogoRemoved", null, null, cancellationToken);
         }
 
@@ -316,8 +346,21 @@ public class LegalEntityService : ILegalEntityService
         entity.TradingName = Trim(request.TradingName);
         entity.CompanyNumber = Trim(request.CompanyNumber);
         entity.VatNumber = VatNumberValidator.NormalizeAndValidate(request.VatNumber);
-        entity.PeppolId = Trim(request.PeppolId);
+        // MD-H4: the same Peppol participant rules as a customer's (scheme apart, both or neither).
+        var peppolId = Trim(request.PeppolId);
+        if (peppolId is not null && peppolId.Contains(':'))
+        {
+            throw new DomainValidationException("peppolId", "Het Peppol-ID mag geen schema bevatten; vul het schema apart in (bv. 0208 en 0123456749).");
+        }
+
         entity.PeppolScheme = ValidatePeppolScheme(request.PeppolScheme);
+        if ((peppolId is null) != (entity.PeppolScheme is null))
+        {
+            throw new DomainValidationException(peppolId is null ? "peppolId" : "peppolScheme",
+                "Vul het Peppol-schema en het Peppol-ID samen in, of laat beide leeg.");
+        }
+
+        entity.PeppolId = peppolId;
 
         entity.Street = Trim(request.Street);
         entity.HouseNumber = Trim(request.HouseNumber);
@@ -329,8 +372,9 @@ public class LegalEntityService : ILegalEntityService
         entity.PhoneNumber = Trim(request.PhoneNumber);
         entity.Website = Trim(request.Website);
 
-        entity.Iban = Trim(request.Iban)?.Replace(" ", string.Empty).ToUpperInvariant();
-        entity.Bic = Trim(request.Bic)?.ToUpperInvariant();
+        // MD-H4: the shared IBAN (mod-97) and BIC validators — an invoice states these as payment details.
+        entity.Iban = Common.Validation.BankingValidators.NormalizeIban(request.Iban);
+        entity.Bic = Common.Validation.BankingValidators.NormalizeBic(request.Bic);
         entity.BankName = Trim(request.BankName);
 
         var currency = Trim(request.DefaultCurrency)?.ToUpperInvariant() ?? "EUR";
@@ -340,7 +384,12 @@ public class LegalEntityService : ILegalEntityService
         }
 
         entity.DefaultCurrency = currency;
-        entity.PaymentTermDays = Math.Clamp(request.PaymentTermDays, 0, 365);
+        if (request.PaymentTermDays is < 0 or > 365)
+        {
+            throw new DomainValidationException("paymentTermDays", "De betaaltermijn moet tussen 0 en 365 dagen liggen.");
+        }
+
+        entity.PaymentTermDays = request.PaymentTermDays;
 
         var format = Trim(request.InvoiceNumberFormat) ?? "{YYYY}{MM}{SEQ}";
         if (!format.Contains("{SEQ}", StringComparison.Ordinal))
@@ -354,6 +403,71 @@ public class LegalEntityService : ILegalEntityService
         entity.CreditNotePrefix = Trim(request.CreditNotePrefix);
         entity.InvoiceFooter = Trim(request.InvoiceFooter);
     }
+
+    /// <summary>
+    /// MD-H5: invoice numbers are unique per tenant, so two active entities whose format + prefix
+    /// print the SAME numbers would collide at issue (a 500 before). Refused when saving the entity:
+    /// the series must differ, typically through {PREFIX} with an own prefix.
+    /// </summary>
+    private async Task EnsureDistinctNumberSeriesAsync(LegalEntity entity, CancellationToken cancellationToken)
+    {
+        if (!entity.IsActive)
+        {
+            return;
+        }
+
+        var others = await _dbContext.LegalEntities.AsNoTracking()
+            .Where(e => e.TenantId == _tenantContext.TenantId && e.Id != entity.Id && e.IsActive)
+            .ToListAsync(cancellationToken);
+        foreach (var other in others)
+        {
+            foreach (var kind in new[] { Invoicing.Entities.InvoiceKind.Invoice, Invoicing.Entities.InvoiceKind.CreditNote })
+            {
+                if (Invoicing.Services.InvoiceNumberService.Compose(entity, kind, 2026, 1, 1)
+                    == Invoicing.Services.InvoiceNumberService.Compose(other, kind, 2026, 1, 1))
+                {
+                    throw new DomainValidationException("invoiceNumberFormat",
+                        $"Dit factuurnummerformaat geeft dezelfde nummers als dat van {other.LegalName}. Gebruik {{PREFIX}} in het formaat met een eigen prefix per entiteit.");
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// MD-M14: one Peppol participant per network identity — a second active entity with the same
+    /// scheme + id was a database 500. Refused with a clear message (the unique index stays the backstop).
+    /// </summary>
+    private async Task EnsurePeppolIdentityFreeAsync(LegalEntity entity, CancellationToken cancellationToken)
+    {
+        if (entity.PeppolId is null || entity.PeppolScheme is null || !entity.IsActive)
+        {
+            return;
+        }
+
+        var holder = await _dbContext.LegalEntities.AsNoTracking()
+            .Where(e => e.Id != entity.Id && e.IsActive && e.PeppolScheme == entity.PeppolScheme && e.PeppolId == entity.PeppolId)
+            .Select(e => new { e.TenantId, e.LegalName })
+            .FirstOrDefaultAsync(cancellationToken);
+        if (holder is not null)
+        {
+            throw new DomainValidationException("peppolId", holder.TenantId == _tenantContext.TenantId
+                ? $"Het Peppol-ID {entity.PeppolScheme}:{entity.PeppolId} is al in gebruik door {holder.LegalName}."
+                : $"Het Peppol-ID {entity.PeppolScheme}:{entity.PeppolId} is al geregistreerd en kan hier niet gebruikt worden.");
+        }
+    }
+
+    /// <summary>
+    /// MD-H4/M10: every legally relevant field of the entity, for the audit diff. The logo is
+    /// audited by its own LogoUploaded / LogoRemoved events (file metadata only); no secrets here.
+    /// </summary>
+    private static object AuditShape(LegalEntity e) => new
+    {
+        e.LegalName, e.TradingName, e.CompanyNumber, e.VatNumber, e.PeppolScheme, e.PeppolId,
+        e.Street, e.HouseNumber, e.PostalCode, e.City, e.CountryCode, e.Email, e.PhoneNumber, e.Website,
+        e.Iban, e.Bic, e.BankName, e.DefaultCurrency, e.PaymentTermDays,
+        e.InvoiceNumberFormat, e.InvoiceSequencePadding, e.InvoicePrefix, e.CreditNotePrefix, e.InvoiceFooter,
+        e.IsDefault, e.IsActive,
+    };
 
     private static string? ValidatePeppolScheme(string? scheme)
     {
@@ -381,5 +495,5 @@ public class LegalEntityService : ILegalEntityService
         e.DefaultCurrency, e.PaymentTermDays,
         e.InvoiceNumberFormat, e.InvoiceSequencePadding, e.InvoicePrefix, e.InvoiceFooter,
         e.LogoStorageKey is not null, e.LogoFileName,
-        e.IsActive, e.IsDefault, e.CreditNotePrefix);
+        e.IsActive, e.IsDefault, e.CreditNotePrefix, e.Version);
 }

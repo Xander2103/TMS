@@ -181,6 +181,10 @@ namespace TransportationService.Api.Migrations
                     b.Property<int?>("VatTreatmentOverride")
                         .HasColumnType("integer");
 
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("integer");
+
                     b.HasKey("Id");
 
                     b.HasIndex("LedgerAccountId");
@@ -6700,6 +6704,12 @@ namespace TransportationService.Api.Migrations
                     b.Property<Guid?>("PaidByUserId")
                         .HasColumnType("uuid");
 
+                    b.Property<bool>("PartySnapshotBackfilled")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime?>("PartySnapshotFrozenAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("PaymentReference")
                         .HasMaxLength(30)
                         .HasColumnType("character varying(30)");
@@ -6746,6 +6756,9 @@ namespace TransportationService.Api.Migrations
                     b.Property<string>("SellerLegalName")
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
+
+                    b.Property<string>("SellerLogoStorageKey")
+                        .HasColumnType("text");
 
                     b.Property<string>("SellerName")
                         .HasMaxLength(200)
@@ -10074,6 +10087,10 @@ namespace TransportationService.Api.Migrations
                         .HasMaxLength(30)
                         .HasColumnType("character varying(30)");
 
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("integer");
+
                     b.Property<string>("Website")
                         .HasMaxLength(250)
                         .HasColumnType("character varying(250)");
@@ -10743,6 +10760,11 @@ namespace TransportationService.Api.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
+                    b.Property<string>("NormalizedCustomerNumber")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
                     b.Property<string>("Notes")
                         .HasMaxLength(2000)
                         .HasColumnType("character varying(2000)");
@@ -10833,6 +10855,10 @@ namespace TransportationService.Api.Migrations
                         .HasMaxLength(30)
                         .HasColumnType("character varying(30)");
 
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("integer");
+
                     b.Property<string>("Website")
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
@@ -10845,11 +10871,12 @@ namespace TransportationService.Api.Migrations
 
                     b.HasIndex("TenantId", "CategoryId");
 
-                    b.HasIndex("TenantId", "CustomerNumber")
-                        .IsUnique()
-                        .HasFilter("\"IsDeleted\" = false");
+                    b.HasIndex("TenantId", "CustomerNumber");
 
                     b.HasIndex("TenantId", "IsActive");
+
+                    b.HasIndex("TenantId", "NormalizedCustomerNumber")
+                        .IsUnique();
 
                     b.ToTable("customers", (string)null);
                 });

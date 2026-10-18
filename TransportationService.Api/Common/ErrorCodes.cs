@@ -22,6 +22,12 @@ public static class ErrorCodes
     public const string UnsupportedLanguage = "common.unsupported_language";
     public const string InvalidReference = "common.invalid_reference";
 
+    // Master-data integriteit (remediation 2026-10-18)
+    /// <summary>Verwijderen geweigerd: historiek of operationele gegevens verwijzen nog naar het record.</summary>
+    public const string RecordReferenced = "common.record_referenced";
+    /// <summary>Optimistic concurrency: iemand anders wijzigde het record sinds het geladen werd.</summary>
+    public const string ConcurrencyConflict = "common.concurrency_conflict";
+
     // Attendance (spiegel van AttendancePunchOutcome / AttendanceCorrectionOutcome)
     public const string AttendanceAlreadyClockedIn = "attendance.already_clocked_in";
     public const string AttendanceNotClockedIn = "attendance.not_clocked_in";

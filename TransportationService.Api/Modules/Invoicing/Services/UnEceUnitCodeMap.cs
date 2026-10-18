@@ -65,6 +65,13 @@ public static class UnEceUnitCodeMap
             ? label
             : null;
 
+    /// <summary>
+    /// MD-M13: the label a DOCUMENT prints for a structured code — like <see cref="LabelFor"/> but
+    /// the default piece reads "stuk" instead of an empty column. Null only for an unknown code.
+    /// </summary>
+    public static string? DisplayLabelFor(string? unitCode) =>
+        !string.IsNullOrWhiteSpace(unitCode) && LabelByCode.TryGetValue(unitCode.Trim(), out var label) ? label : null;
+
     /// <summary>UN/ECE code for a tenant unit code or symbol; C62 when unknown or empty.</summary>
     public static string Resolve(string? unitTypeCodeOrSymbol)
     {

@@ -173,6 +173,17 @@ public class WarehouseAdminService : IWarehouseAdminService
             return false;
         }
 
+        // MD-M12: a dock with appointments (planned or history) is deactivated, never deleted —
+        // the appointments would lose their dock.
+        var appointments = await _dbContext.DockAppointments.CountAsync(
+            a => a.TenantId == _tenantContext.TenantId && a.DockId == dockId, cancellationToken);
+        if (appointments > 0)
+        {
+            throw Common.Integrity.ReferencedRecordException.For("Deze dock",
+                new Common.Integrity.ReferenceReport().Add("appointments", appointments, "dockafspraak", "dockafspraken"),
+                "Zet de dock inactief: de afspraken blijven bewaard en er kan niets nieuws op gepland worden.");
+        }
+
         _dbContext.Remove(dock); // soft delete via interceptor
         await _dbContext.SaveChangesAsync(cancellationToken);
         await _auditService.RecordAsync(EntityType, warehouseId.ToString(), "DockDeleted",

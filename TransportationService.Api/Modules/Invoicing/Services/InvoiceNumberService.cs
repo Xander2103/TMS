@@ -65,7 +65,8 @@ public class InvoiceNumberService : IInvoiceNumberService
         {
             var sequence = await GetOrAddSequenceAsync(entity.Id, kind, year, month, cancellationToken);
 
-            assignNumber(Compose(entity, kind, year, month, sequence.NextValue));
+            var number = Compose(entity, kind, year, month, sequence.NextValue);
+            assignNumber(number);
             sequence.NextValue++;
 
             try
@@ -92,9 +93,22 @@ public class InvoiceNumberService : IInvoiceNumberService
                 {
                     await entry.ReloadAsync(cancellationToken);
                 }
+
+                // MD-H5: a number that already exists (another series printing the same numbers)
+                // is a configuration conflict — never retried into a 500, never skipped (a legal
+                // series has no gaps).
+                if (await NumberTakenAsync(number, cancellationToken))
+                {
+                    throw new Common.DomainValidationException("invoiceNumber",
+                        $"Factuurnummer {number} bestaat al in een andere nummerreeks. Pas het factuurnummerformaat of de prefix van de facturerende entiteit aan.");
+                }
             }
         }
     }
+
+    private Task<bool> NumberTakenAsync(string number, CancellationToken cancellationToken) =>
+        _dbContext.Invoices.IgnoreQueryFilters().AsNoTracking()
+            .AnyAsync(i => i.TenantId == _tenantContext.TenantId && i.InvoiceNumber == number, cancellationToken);
 
     public async Task<string> PreviewAsync(LegalEntity entity, InvoiceKind kind, int year, int month, CancellationToken cancellationToken)
     {
