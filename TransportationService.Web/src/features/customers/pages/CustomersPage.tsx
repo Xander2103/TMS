@@ -35,7 +35,7 @@ export function CustomersPage() {
   const [density, setDensity] = useListDensity('customers')
   const [showImportDialog, setShowImportDialog] = useState(false)
 
-  const { items, totalCount, pageSize, isLoading, error, reload } = usePagedQuery<CustomerListItem>(
+  const { items, totalCount, pageSize, isLoading, error, errorCause, reload } = usePagedQuery<CustomerListItem>(
     (args) => searchCustomers({ ...args, sort: state.sort, dir: state.dir as 'asc' | 'desc' | '' }),
     { search, isActive: activeFilter, page, errorMessage: t('customers.list.loadFailed'), extra: { sort: state.sort, dir: state.dir } },
   )
@@ -102,6 +102,7 @@ export function CustomersPage() {
         rowKey={(row) => row.id}
         isLoading={isLoading}
         error={error}
+        errorCause={errorCause}
         emptyMessage={t('customers.list.empty')}
         emptyAction={hasPermission('customers.create') ? <Button onClick={() => navigate('/customers/new')}>{t('customers.list.newCustomer')}</Button> : undefined}
         onRetry={reload}

@@ -33,7 +33,7 @@ export function VehiclesPage() {
   const activeFilter = state.active === '' ? undefined : state.active === 'true'
   const [density, setDensity] = useListDensity('vehicles')
 
-  const { items, totalCount, pageSize, isLoading, error, reload } = usePagedQuery<VehicleListItem>(
+  const { items, totalCount, pageSize, isLoading, error, errorCause, reload } = usePagedQuery<VehicleListItem>(
     (args) => searchVehicles({ ...args, sort: state.sort, dir: state.dir as 'asc' | 'desc' | '' }),
     { search, isActive: activeFilter, page, errorMessage: t('vehicles.list.loadFailed'), extra: { sort: state.sort, dir: state.dir } },
   )
@@ -89,6 +89,7 @@ export function VehiclesPage() {
         rowKey={(row) => row.id}
         isLoading={isLoading}
         error={error}
+        errorCause={errorCause}
         emptyMessage={t('vehicles.list.empty')}
         emptyAction={hasPermission('vehicles.create') ? <Button onClick={() => navigate('/vehicles/new')}>{t('vehicles.list.new')}</Button> : undefined}
         onRetry={reload}

@@ -206,7 +206,7 @@ export function DossiersPage() {
 
   // --- data ------------------------------------------------------------------------------------
   const { search, page, ...extra } = filters
-  const { items, totalCount, pageSize, isLoading, error, reload } = usePagedQuery<DossierListItem>(
+  const { items, totalCount, pageSize, isLoading, error, errorCause, reload } = usePagedQuery<DossierListItem>(
     (args) => searchDossiers({ ...toSearchDossiersParams(filters, args.pageSize), search: args.search || undefined, page: args.page }),
     {
       search,
@@ -523,6 +523,7 @@ export function DossiersPage() {
           rowKey={(row) => row.id}
           isLoading={isLoading}
           error={error}
+          errorCause={errorCause}
           emptyMessage={t('dossiers.list.empty')}
           emptyAction={canManage ? <Button onClick={() => navigate('/dossiers/new')}>{t('dossiers.list.new')}</Button> : undefined}
           onRetry={reload}

@@ -113,7 +113,7 @@ export function TransportOrdersPage() {
     }
   }
 
-  const { items, totalCount, pageSize, isLoading, error, reload } = usePagedQuery<TransportOrderListItem>(
+  const { items, totalCount, pageSize, isLoading, error, errorCause, reload } = usePagedQuery<TransportOrderListItem>(
     (args) => searchTransportOrders({ ...args, status: statusFilter || undefined, sort: state.sort, dir: state.dir as 'asc' | 'desc' | '' }),
     {
       search,
@@ -270,6 +270,7 @@ export function TransportOrdersPage() {
         rowKey={(row) => row.id}
         isLoading={isLoading}
         error={error}
+        errorCause={errorCause}
         emptyMessage={t('transportOrders.list.empty')}
         emptyAction={hasAnyPermission(['orders.create', 'orders.manage']) ? <Button onClick={() => navigate('/transport-orders/new')}>{t('transportOrders.list.newOrder')}</Button> : undefined}
         onRetry={reload}

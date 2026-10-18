@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { PageHeader } from '../../../components/layout/PageHeader'
+import { ErrorState } from '../../../components/feedback/ErrorState'
 import { DataTable, type Column, type SortState } from '../../../components/ui/DataTable'
 import { FilterBar } from '../../../components/ui/FilterBar'
 import { Pagination } from '../../../components/ui/Pagination'
@@ -203,7 +204,7 @@ function FlatLocationsView({ filters }: { filters: LocationFilters }) {
     setPage(1)
   }
 
-  const { items, totalCount, pageSize, isLoading, error, reload } = usePagedQuery<LocationListItem>(
+  const { items, totalCount, pageSize, isLoading, error, errorCause, reload } = usePagedQuery<LocationListItem>(
     (args) =>
       searchLocations({
         ...args,
@@ -240,6 +241,7 @@ function FlatLocationsView({ filters }: { filters: LocationFilters }) {
         rowKey={(row) => row.id}
         isLoading={isLoading}
         error={error}
+        errorCause={errorCause}
         emptyMessage={t('locations.list.empty')}
         emptyAction={hasPermission('locations.create') ? <Button onClick={() => navigate('/locations/new')}>{t('locations.list.new')}</Button> : undefined}
         onRetry={reload}
@@ -270,7 +272,7 @@ function GroupedLocationsView({ filters }: { filters: LocationFilters }) {
     setPage(1)
   }
 
-  const { items, totalCount, pageSize, isLoading, error } = usePagedQuery<LocationGroup>(
+  const { items, totalCount, pageSize, isLoading, error, errorCause } = usePagedQuery<LocationGroup>(
     (args) =>
       searchLocationsGrouped({
         search: args.search || undefined,
@@ -304,7 +306,7 @@ function GroupedLocationsView({ filters }: { filters: LocationFilters }) {
   )
 
   if (isLoading) return <p className="placeholder-text">{t('locations.list.loading')}</p>
-  if (error) return <p className="placeholder-text">{error}</p>
+  if (error) return <ErrorState message={error} error={errorCause} />
 
   return (
     <div className="locations-grouped">

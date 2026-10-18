@@ -2,6 +2,8 @@ import { useEffect } from 'react'
 import { isRouteErrorResponse, useLocation, useNavigate, useRouteError } from 'react-router-dom'
 import { Button } from '../ui/Button'
 import { useLocale } from '../../i18n/localeContext'
+import { isForbiddenError, isNotFoundError } from '../../api/notFound'
+import { AccessDeniedState } from './AccessDeniedState'
 import { NotFoundPage } from './NotFoundPage'
 import './Feedback.css'
 
@@ -24,7 +26,11 @@ export function RouteErrorPage() {
     console.error(`[route-error] ${location.pathname}${location.search}`, error)
   }, [error, location.pathname, location.search])
 
-  if (isRouteErrorResponse(error) && error.status === 404) {
+  // SEC-M5: a refusal or a missing record that escapes a page never gets "Opnieuw proberen".
+  if ((isRouteErrorResponse(error) && error.status === 403) || isForbiddenError(error)) {
+    return <AccessDeniedState />
+  }
+  if ((isRouteErrorResponse(error) && error.status === 404) || isNotFoundError(error)) {
     return <NotFoundPage />
   }
 

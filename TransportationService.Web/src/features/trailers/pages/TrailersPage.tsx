@@ -33,7 +33,7 @@ export function TrailersPage() {
   const activeFilter = state.active === '' ? undefined : state.active === 'true'
   const [density, setDensity] = useListDensity('trailers')
 
-  const { items, totalCount, pageSize, isLoading, error, reload } = usePagedQuery<TrailerListItem>(
+  const { items, totalCount, pageSize, isLoading, error, errorCause, reload } = usePagedQuery<TrailerListItem>(
     (args) => searchTrailers({ ...args, sort: state.sort, dir: state.dir as 'asc' | 'desc' | '' }),
     { search, isActive: activeFilter, page, errorMessage: t('trailers.list.loadFailed'), extra: { sort: state.sort, dir: state.dir } },
   )
@@ -89,6 +89,7 @@ export function TrailersPage() {
         rowKey={(row) => row.id}
         isLoading={isLoading}
         error={error}
+        errorCause={errorCause}
         emptyMessage={t('trailers.list.empty')}
         emptyAction={hasPermission('trailers.create') ? <Button onClick={() => navigate('/trailers/new')}>{t('trailers.list.new')}</Button> : undefined}
         onRetry={reload}

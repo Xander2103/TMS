@@ -179,7 +179,9 @@
     "accessDeniedTitle": "No access",
     "accessDeniedMessage": "You do not have permission for this page. Ask your administrator for access if you need it.",
     "accessDeniedHome": "Go to the start page",
-    "accessDeniedMyProfile": "Go to my profile"
+    "accessDeniedMyProfile": "Go to my profile",
+    "notFoundTitle": "Not found",
+    "notFoundMessage": "This item does not exist (anymore) or has been moved."
   },
   "save": {
     "saving": "Saving…",

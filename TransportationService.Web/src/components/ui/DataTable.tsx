@@ -35,6 +35,11 @@ interface DataTableProps<TRow> {
   rowKey: (row: TRow) => string
   isLoading?: boolean
   error?: string | null
+  /**
+   * The error behind `error` (usePagedQuery's errorCause): a 403 renders "Geen toegang", a 404
+   * "Niet gevonden", and neither offers "Opnieuw proberen".
+   */
+  errorCause?: unknown
   emptyMessage?: string
   /** Next step offered inside the empty state (e.g. a "Nieuw dossier" button). */
   emptyAction?: ReactNode
@@ -70,6 +75,7 @@ export function DataTable<TRow>({
   rowKey,
   isLoading = false,
   error = null,
+  errorCause,
   emptyMessage,
   emptyAction,
   onRetry,
@@ -84,7 +90,7 @@ export function DataTable<TRow>({
 }: DataTableProps<TRow>) {
   const { t } = useLocale()
   if (isLoading) return <LoadingState message={loadingMessage ?? t('ui.table.loading')} />
-  if (error) return <ErrorState message={error} onRetry={onRetry} />
+  if (error) return <ErrorState message={error} error={errorCause} onRetry={onRetry} />
   if (rows.length === 0) return <EmptyState message={emptyMessage ?? t('ui.table.empty')} action={emptyAction} />
 
   function handleSortClick(sortKey: string) {

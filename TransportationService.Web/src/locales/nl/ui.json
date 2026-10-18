@@ -179,7 +179,9 @@
     "accessDeniedTitle": "Geen toegang",
     "accessDeniedMessage": "Je hebt geen rechten voor deze pagina. Vraag je beheerder om toegang als je dit nodig hebt.",
     "accessDeniedHome": "Naar het startscherm",
-    "accessDeniedMyProfile": "Naar mijn profiel"
+    "accessDeniedMyProfile": "Naar mijn profiel",
+    "notFoundTitle": "Niet gevonden",
+    "notFoundMessage": "Dit item bestaat niet (meer) of is verplaatst."
   },
   "save": {
     "saving": "Opslaan…",

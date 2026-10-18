@@ -71,7 +71,7 @@ export function AbsencesPage() {
   const to = ISO_DATE.test(state.to) ? state.to : toIsoDate(addDays(new Date(`${from}T00:00:00`), DEFAULT_RANGE_DAYS))
   const [density, setDensity] = useListDensity('absences')
 
-  const { items, totalCount, pageSize, isLoading, error, reload } = usePagedQuery<Absence>(
+  const { items, totalCount, pageSize, isLoading, error, errorCause, reload } = usePagedQuery<Absence>(
     (args) =>
       searchAbsences({
         ...args,
@@ -253,6 +253,7 @@ export function AbsencesPage() {
         rowKey={(row) => row.id}
         isLoading={isLoading}
         error={error}
+        errorCause={errorCause}
         onRetry={reload}
         emptyMessage={t('absences.page.empty')}
         loadingMessage={t('absences.page.loading')}

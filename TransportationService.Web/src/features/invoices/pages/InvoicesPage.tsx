@@ -74,7 +74,7 @@ export function InvoicesPage() {
   const [exportTo, setExportTo] = useState('')
   const [exportBusy, setExportBusy] = useState(false)
 
-  const { items, totalCount, pageSize, isLoading, error, reload } = usePagedQuery<InvoiceListItem>(
+  const { items, totalCount, pageSize, isLoading, error, errorCause, reload } = usePagedQuery<InvoiceListItem>(
     (args) =>
       searchInvoices({
         ...args,
@@ -235,6 +235,7 @@ export function InvoicesPage() {
         rowKey={(row) => row.id}
         isLoading={isLoading}
         error={error}
+        errorCause={errorCause}
         emptyMessage={t('invoices.internalList.empty')}
         emptyAction={undefined}
         onRetry={reload}

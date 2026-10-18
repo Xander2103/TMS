@@ -30,6 +30,11 @@ interface UsePagedQueryResult<T> {
   pageSize: number
   isLoading: boolean
   error: string | null
+  /**
+   * The error the last load failed with (usually an ApiError), for ErrorState/DataTable to tell a
+   * permission refusal (403) or missing record (404) from a retryable failure. Null on success.
+   */
+  errorCause: unknown
   reload: () => void
 }
 
@@ -54,10 +59,17 @@ export function usePagedQuery<T>(
     extra,
   } = options
 
-  const [state, setState] = useState<{ items: T[]; totalCount: number; error: string | null; loadedKey: string }>({
+  const [state, setState] = useState<{
+    items: T[]
+    totalCount: number
+    error: string | null
+    errorCause: unknown
+    loadedKey: string
+  }>({
     items: [],
     totalCount: 0,
     error: null,
+    errorCause: null,
     loadedKey: '',
   })
   const [reloadToken, setReloadToken] = useState(0)
@@ -75,11 +87,11 @@ export function usePagedQuery<T>(
       fetcher({ search, isActive, page, pageSize })
         .then((data) => {
           if (!isMounted) return
-          setState({ items: data.items, totalCount: data.totalCount, error: null, loadedKey: requestKey })
+          setState({ items: data.items, totalCount: data.totalCount, error: null, errorCause: null, loadedKey: requestKey })
         })
-        .catch(() => {
+        .catch((cause: unknown) => {
           if (!isMounted) return
-          setState((current) => ({ ...current, error: errorMessage, loadedKey: requestKey }))
+          setState((current) => ({ ...current, error: errorMessage, errorCause: cause, loadedKey: requestKey }))
         })
     }, debounceMs)
 
@@ -96,6 +108,7 @@ export function usePagedQuery<T>(
     pageSize,
     isLoading: state.loadedKey !== requestKey,
     error: state.error,
+    errorCause: state.errorCause,
     reload,
   }
 }

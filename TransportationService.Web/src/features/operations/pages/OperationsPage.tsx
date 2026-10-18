@@ -1,7 +1,9 @@
 import { PageHeader } from '../../../components/layout/PageHeader'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { describeApiError } from '../../../api/problemDetails'
+import { isForbiddenError, isRetryableError } from '../../../api/notFound'
+import { AccessDeniedState } from '../../../components/feedback/AccessDeniedState'
 import { Badge } from '../../../components/ui/Badge'
 import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
@@ -36,32 +38,61 @@ export function OperationsPage() {
   const [alertFilter, setAlertFilter] = useState<AlertStatus | 'Open'>('Open')
   const [tick, setTick] = useState(0)
   const [busyAlertId, setBusyAlertId] = useState<string | null>(null)
+  // SEC-M5: a 4xx answer (403 after a role change mid-session, …) never changes on the next poll,
+  // so it stops the polling; a 403 replaces the page with "Geen toegang". Network/5xx keep polling.
+  const [forbidden, setForbidden] = useState(false)
+  const [pollingStopped, setPollingStopped] = useState(false)
+  const [overviewFailed, setOverviewFailed] = useState(false)
+  const [alertsFailed, setAlertsFailed] = useState(false)
+  const [alertsRetryable, setAlertsRetryable] = useState(true)
+  /** Toast once per outage, not once per 30-second poll. */
+  const overviewFailedRef = useRef(false)
 
   useEffect(() => {
+    if (pollingStopped) return
     const handle = setInterval(() => setTick((value) => value + 1), POLL_INTERVAL_MS)
     return () => clearInterval(handle)
-  }, [])
-
-  const [alertsFailed, setAlertsFailed] = useState(false)
+  }, [pollingStopped])
 
   useEffect(() => {
     let cancelled = false
     // ONE refresh cycle: the overview call also syncs the alert table on the server, so the
     // alert list is read AFTER it — the "Open meldingen" tile and the panel then describe the
     // same rows (B21). A failed alert read is shown, never silently rendered as "no alerts".
+    // A refusal on either call ends the cycle: no alert read after a 403/4xx overview.
+    let refused = false
+    const handleRefusal = (error: unknown) => {
+      if (isRetryableError(error)) return false
+      refused = true
+      if (cancelled) return true
+      setPollingStopped(true)
+      if (isForbiddenError(error)) setForbidden(true)
+      return true
+    }
     getOperationsOverview()
       .then((data) => {
-        if (!cancelled) setOverview(data)
-      })
-      .catch((error: unknown) => showError(describeApiError(error, t('operations.page.overviewLoadFailed')).message))
-      .then(() => listAlerts())
-      .then((data) => {
         if (cancelled) return
+        setOverview(data)
+        setOverviewFailed(false)
+        overviewFailedRef.current = false
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return
+        setOverviewFailed(true)
+        if (handleRefusal(error) && isForbiddenError(error)) return
+        if (!overviewFailedRef.current) showError(describeApiError(error, t('operations.page.overviewLoadFailed')).message)
+        overviewFailedRef.current = true
+      })
+      .then(() => (refused ? null : listAlerts()))
+      .then((data) => {
+        if (cancelled || data === null) return
         setAlerts(data)
         setAlertsFailed(false)
       })
-      .catch(() => {
-        if (!cancelled) setAlertsFailed(true)
+      .catch((error: unknown) => {
+        if (cancelled) return
+        setAlertsFailed(true)
+        setAlertsRetryable(!handleRefusal(error))
       })
     return () => {
       cancelled = true
@@ -87,13 +118,17 @@ export function OperationsPage() {
 
   const counters = overview?.counters
 
+  if (forbidden) return <AccessDeniedState />
+
   return (
     <div className="ops-page">
       <PageHeader
         title={t('operations.page.title')}
         subtitle={(
           <span className="ops-refresh">
-            {overview ? t('operations.page.updatedAt', { time: formatTime(overview.generatedAt) }) : t('operations.page.loading')}
+            {overview
+              ? t('operations.page.updatedAt', { time: formatTime(overview.generatedAt) })
+              : overviewFailed ? t('operations.page.overviewLoadFailed') : t('operations.page.loading')}
             {' · '}{t('operations.page.refreshEvery')}
           </span>
         )}
@@ -260,8 +295,13 @@ export function OperationsPage() {
             })}
             {alertsFailed && (
               <li className="ops-sub ops-alert-empty">
-                {t('operations.page.alertsLoadFailed')}{' '}
-                <button type="button" className="ops-link-button" onClick={() => setTick((value) => value + 1)}>{t('operations.page.retry')}</button>
+                {t('operations.page.alertsLoadFailed')}
+                {alertsRetryable && (
+                  <>
+                    {' '}
+                    <button type="button" className="ops-link-button" onClick={() => setTick((value) => value + 1)}>{t('operations.page.retry')}</button>
+                  </>
+                )}
               </li>
             )}
             {!alertsFailed && visibleAlerts.length === 0 && (

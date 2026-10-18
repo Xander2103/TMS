@@ -101,7 +101,7 @@ export function TankCardsPage() {
   const statusFilter = state.status as TankCardStatus | ''
   const [density, setDensity] = useListDensity('tank-cards')
 
-  const { items, totalCount, pageSize, isLoading, error, reload } = usePagedQuery<TankCard>(
+  const { items, totalCount, pageSize, isLoading, error, errorCause, reload } = usePagedQuery<TankCard>(
     (args) => searchTankCards({ ...args, status: statusFilter || undefined }),
     { search, page, errorMessage: t('tankCards.page.loadFailed'), extra: { status: statusFilter } },
   )
@@ -338,6 +338,7 @@ export function TankCardsPage() {
         rowKey={(row) => row.id}
         isLoading={isLoading}
         error={error}
+        errorCause={errorCause}
         emptyMessage={t('tankCards.page.empty')}
         emptyAction={hasPermission('tank_cards.create') ? <Button onClick={openCreate}>{t('tankCards.page.new')}</Button> : undefined}
         onRetry={reload}

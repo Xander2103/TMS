@@ -108,7 +108,7 @@ export function EmployeesPage() {
     patchUrl({}, true)
   }
 
-  const { items, totalCount, pageSize, isLoading, error } = usePagedQuery<EmployeeListItem>(
+  const { items, totalCount, pageSize, isLoading, error, errorCause } = usePagedQuery<EmployeeListItem>(
     (args) =>
       searchEmployees({
         ...args,
@@ -322,6 +322,7 @@ export function EmployeesPage() {
         rowKey={(row) => row.id}
         isLoading={isLoading}
         error={error}
+        errorCause={errorCause}
         emptyMessage={t('employees.list.empty')}
         loadingMessage={t('employees.list.loading')}
         onRowClick={(row) => navigate(`/employees/${row.id}`)}

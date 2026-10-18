@@ -45,7 +45,7 @@ export function LookupManager({ config }: { config: LookupResourceConfig }) {
   const [deleteBlocked, setDeleteBlocked] = useState<{ item: LookupItem; conflict: ReferenceConflict } | null>(null)
   const [isDeactivating, setIsDeactivating] = useState(false)
 
-  const { items, totalCount, pageSize, isLoading, error, reload } = usePagedQuery<LookupItem>(
+  const { items, totalCount, pageSize, isLoading, error, errorCause, reload } = usePagedQuery<LookupItem>(
     (args) => api.search(args),
     { search, isActive: activeFilter, page, errorMessage: t('masterData.list.loadFailed', { title }) },
   )
@@ -187,6 +187,7 @@ export function LookupManager({ config }: { config: LookupResourceConfig }) {
         rowKey={(row) => row.id}
         isLoading={isLoading}
         error={error}
+        errorCause={errorCause}
         emptyMessage={t('masterData.list.empty', { titleLower: title.toLowerCase() })}
         loadingMessage={t('masterData.list.loading', { title })}
         onRowClick={(row) => setDialog({ mode: 'edit', item: row })}
