@@ -388,7 +388,9 @@
       "reasonLabel": "Reden van creditering",
       "reasonHint": "Verplicht; verschijnt in de historiek van beide documenten.",
       "confirm": "Creditnota maken"
-    }
+    },
+    "credits": "Crediteert factuur {number}",
+    "creditedBy": "Deze factuur is (deels) gecrediteerd door:"
   },
   "fiscal": {
     "draftNote": "Voorbeeld — wordt vastgelegd bij verzenden.",

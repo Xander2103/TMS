@@ -199,7 +199,9 @@
     "startWarnIntro": "À vérifier avant le départ :",
     "startWarnEarly": "Le trajet est prévu le {date} ; vous le démarrez plus tôt que prévu.",
     "startWarnPackages": "{loaded} colis obligatoires sur {mandatory} sont chargés — {notLoaded} manquent.",
-    "startWarnConfirm": "Démarrer quand même"
+    "startWarnConfirm": "Démarrer quand même",
+    "recordPod": "Enregistrer la POD",
+    "podRecorded": "Preuve de livraison enregistrée."
   },
   "groups": {
     "today": "Aujourd'hui",

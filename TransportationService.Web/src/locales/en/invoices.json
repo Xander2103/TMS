@@ -388,7 +388,9 @@
       "reasonLabel": "Credit reason",
       "reasonHint": "Required; shown in the history of both documents.",
       "confirm": "Create credit note"
-    }
+    },
+    "credits": "Credits invoice {number}",
+    "creditedBy": "This invoice is (partly) credited by:"
   },
   "fiscal": {
     "draftNote": "Preview — frozen on send.",

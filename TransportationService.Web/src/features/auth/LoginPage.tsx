@@ -32,6 +32,9 @@ function LoginPageContent() {
   const [submitting, setSubmitting] = useState(false)
 
   const from = (location.state as LocationState | null)?.from?.pathname ?? '/'
+  // Sent here from a protected page (RequireAuth passes `from` unless the user signed out
+  // explicitly): a visitor, or a session that expired or was revoked — say so instead of a bare form.
+  const redirected = (location.state as LocationState | null)?.from != null
 
   // Already signed in (e.g. navigated to /login manually) — bounce to the app.
   if (status === 'authenticated') {
@@ -67,6 +70,11 @@ function LoginPageContent() {
         </div>
 
         <form className="login-form" onSubmit={handleSubmit} noValidate>
+          {redirected && !error && (
+            <div className="login-notice" role="status">
+              {t('auth.login.sessionNotice')}
+            </div>
+          )}
           {error && (
             <div className="login-error" role="alert">
               {error}

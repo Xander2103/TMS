@@ -156,7 +156,13 @@
       "reasonLabel": "Reason for replacement",
       "reasonRequired": "Enter a reason why the document is replaced.",
       "confirm": "Replace and create new document"
-    }
+    },
+    "publish": "Publish to customer",
+    "withdraw": "Withdraw from customer",
+    "visibleForCustomer": "Visible in customer portal",
+    "published": "{number} is now in the customer portal.",
+    "withdrawn": "{number} is no longer visible to the customer.",
+    "publishFailed": "The visibility could not be changed."
   },
   "activityStatus": {
     "none": "Not created yet",

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { Link, useParams } from 'react-router-dom'
 import { PageHeader } from '../../../components/layout/PageHeader'
 import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { BackButton } from '../../../components/ui/BackButton'
@@ -82,6 +82,27 @@ export function CustomerPortalInvoiceDetailPage() {
         </p>
       )}
       {invoice.purchaseOrderNumber && <p>{t('invoices.detail.poNumber', { number: invoice.purchaseOrderNumber })}</p>}
+      {/* KP-09: the relation both ways, so a credited invoice is not paid twice. */}
+      {invoice.kind === 'CreditNote' && invoice.creditedInvoiceNumber && (
+        <p className="cpp-credit-ref">
+          {invoice.creditedInvoiceId ? (
+            <Link to={`/klantportaal/facturen/${invoice.creditedInvoiceId}`}>{t('invoices.detail.credits', { number: invoice.creditedInvoiceNumber })}</Link>
+          ) : (
+            t('invoices.detail.credits', { number: invoice.creditedInvoiceNumber })
+          )}
+        </p>
+      )}
+      {(invoice.creditedBy ?? []).length > 0 && (
+        <p className="cpp-credit-ref" role="note">
+          {t('invoices.detail.creditedBy')}{' '}
+          {(invoice.creditedBy ?? []).map((cn, index) => (
+            <span key={cn.id}>
+              {index > 0 && ', '}
+              <Link to={`/klantportaal/facturen/${cn.id}`}>{cn.invoiceNumber}</Link>
+            </span>
+          ))}
+        </p>
+      )}
 
       <section className="cpp-panel">
         <h2>{t('invoices.detail.linesTitle')}</h2>
@@ -111,7 +132,7 @@ export function CustomerPortalInvoiceDetailPage() {
           {t('invoices.detail.subtotal')}: {formatCurrency(invoice.subtotal, invoice.currency)} · {t('invoices.detail.vatAmount')}:{' '}
           {formatCurrency(invoice.vatAmount, invoice.currency)} ·{' '}
           <strong>
-            {t('invoices.detail.total')}: {formatCurrency(invoice.total, invoice.currency)}
+            {t('invoices.detail.total')}: {formatCurrency(invoice.kind === 'CreditNote' ? -Math.abs(invoice.total) : invoice.total, invoice.currency)}
           </strong>
         </p>
       </section>

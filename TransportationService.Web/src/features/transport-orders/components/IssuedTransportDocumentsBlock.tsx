@@ -12,6 +12,7 @@ import {
   downloadIssuedTransportDocumentPdf,
   issueTransportDocument,
   listIssuedTransportDocuments,
+  setIssuedDocumentCustomerVisibility,
   type IssuedTransportDocument,
   type IssuedTransportDocumentKind,
 } from '../api/issuedDocumentsApi'
@@ -160,6 +161,20 @@ export function IssuedTransportDocumentsBlock({ orderId, craneJobKind, onIssued 
     void issue({ document: replacing, reason: trimmed })
   }
 
+  async function togglePublication(doc: IssuedTransportDocument) {
+    try {
+      const updated = await setIssuedDocumentCustomerVisibility(doc.id, !doc.customerVisible)
+      setDocuments((current) => (current ?? []).map((d) => (d.id === updated.id ? { ...d, customerVisible: updated.customerVisible } : d)))
+      showSuccess(
+        updated.customerVisible
+          ? t('dossierDocuments.issued.published', { number: updated.documentNumber })
+          : t('dossierDocuments.issued.withdrawn', { number: updated.documentNumber }),
+      )
+    } catch (err) {
+      showError(describeApiError(err, t('dossierDocuments.issued.publishFailed')).message)
+    }
+  }
+
   function handleDownload(doc: IssuedTransportDocument) {
     downloadIssuedTransportDocumentPdf(doc).catch((err: unknown) =>
       showError(describeApiError(err, t('dossierDocuments.issued.pdfFailed')).message),
@@ -212,6 +227,15 @@ export function IssuedTransportDocumentsBlock({ orderId, craneJobKind, onIssued 
               >
                 <FileText size={14} aria-hidden="true" /> PDF
               </button>
+              {isActive(doc) && doc.customerVisible && (
+                <span className="itd-meta itd-published">{t('dossierDocuments.issued.visibleForCustomer')}</span>
+              )}
+              {isActive(doc) && canIssue && (
+                // KP-06: the customer downloads exactly this frozen document from the portal.
+                <button type="button" className="itd-pdf" onClick={() => void togglePublication(doc)}>
+                  {doc.customerVisible ? t('dossierDocuments.issued.withdraw') : t('dossierDocuments.issued.publish')}
+                </button>
+              )}
               {!isActive(doc) && doc.replacementReason && (
                 <span className="itd-reason">{t('dossierDocuments.issued.replacementReason', { reason: doc.replacementReason })}</span>
               )}

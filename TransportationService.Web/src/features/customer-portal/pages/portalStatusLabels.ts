@@ -42,23 +42,38 @@ export function documentSourceLabel(t: TranslateFn, code: string): string {
   return statusLabel(t, 'documents.source', code)
 }
 
+type StatusTone = 'neutral' | 'success' | 'warning' | 'danger' | 'info'
+
+/** Tone per customer-facing status code; the code itself is decided server-side. */
+const CUSTOMER_STATUS_TONE: Record<string, StatusTone> = {
+  Received: 'neutral',
+  InReview: 'neutral',
+  InfoRequested: 'warning',
+  Confirmed: 'info',
+  Planned: 'info',
+  InTransit: 'info',
+  Delivered: 'success',
+  PartiallyDelivered: 'warning',
+  NotDelivered: 'danger',
+  RedeliveryPlanned: 'warning',
+  Redelivered: 'success',
+  ExecutionClosed: 'warning',
+  Rejected: 'danger',
+  Cancelled: 'neutral',
+}
+
 /**
- * EX-08: a finished order whose goods did not (fully) arrive never reads "Afgerond" — the
- * delivery outcome replaces the lifecycle label. Delivered (or unknown) keeps the status label.
+ * The customer-facing status (PortalOrderStatusRules on the server already folded drafts, the
+ * EX-08 delivery outcome and an open "Info opvragen" question into one code): only translated
+ * and toned here — the portal never decides a status itself.
  */
-export function portalOrderStatus(
-  t: TranslateFn, status: string, outcome: string | null | undefined,
-): { label: string; tone: 'warning' | 'info' | null } {
-  switch (outcome) {
-    case 'NotDelivered':
-    case 'PartiallyDelivered':
-      return { label: statusLabel(t, 'orders.deliveryOutcome', outcome), tone: 'warning' }
-    case 'RedeliveryPlanned':
-    case 'Redelivered':
-      return { label: statusLabel(t, 'orders.deliveryOutcome', outcome), tone: 'info' }
-    default:
-      return { label: orderStatusLabel(t, status), tone: null }
-  }
+export function portalOrderStatus(t: TranslateFn, status: string): { label: string; tone: StatusTone } {
+  return { label: statusLabel(t, 'orders.customerStatus', status), tone: CUSTOMER_STATUS_TONE[status] ?? 'neutral' }
+}
+
+/** True for the statuses whose explanation sentence (orders.detail.deliveryOutcome.*) is shown. */
+export function isShortfallStatus(status: string): boolean {
+  return status === 'NotDelivered' || status === 'PartiallyDelivered' || status === 'RedeliveryPlanned' || status === 'Redelivered'
 }
 
 export function portalExceptionTypeLabel(t: TranslateFn, code: string): string {

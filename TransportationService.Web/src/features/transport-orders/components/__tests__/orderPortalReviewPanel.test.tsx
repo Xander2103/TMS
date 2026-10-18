@@ -3,6 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { OrderPortalReviewPanel } from '../OrderPortalReviewPanel'
 import type { TransportOrderDetail } from '../../types'
+import type { PortalReviewState } from '../../api/transportOrdersApi'
 
 const toast = vi.hoisted(() => ({ showSuccess: vi.fn(), showError: vi.fn() }))
 vi.mock('../../../../components/ui/toastContext', () => ({
@@ -10,8 +11,10 @@ vi.mock('../../../../components/ui/toastContext', () => ({
 }))
 
 const reviewSpy = vi.hoisted(() => vi.fn())
+const stateSpy = vi.hoisted(() => vi.fn((): Promise<PortalReviewState> => Promise.resolve({ infoRequest: null })))
 vi.mock('../../api/transportOrdersApi', () => ({
   reviewPortalOrder: reviewSpy,
+  getPortalReviewState: stateSpy,
 }))
 
 function order(overrides: Partial<TransportOrderDetail> = {}): TransportOrderDetail {
@@ -26,6 +29,28 @@ function order(overrides: Partial<TransportOrderDetail> = {}): TransportOrderDet
 }
 
 describe('OrderPortalReviewPanel', () => {
+  it('shows the open question, then the customer answer, where the planner reviews', async () => {
+    stateSpy.mockResolvedValueOnce({
+      infoRequest: {
+        question: 'Wat is het gewicht per pallet?',
+        askedAt: '2026-10-18T08:00:00Z',
+        answers: [{ body: '650 kg per pallet.', at: '2026-10-18T09:00:00Z' }],
+      },
+    })
+    render(<OrderPortalReviewPanel order={order()} onReviewed={vi.fn()} />)
+
+    expect(await screen.findByText(/650 kg per pallet\./)).toBeInTheDocument()
+    expect(screen.getByText(/Wat is het gewicht per pallet\?/)).toBeInTheDocument()
+    expect(stateSpy).toHaveBeenCalledWith('o1')
+  })
+
+  it('says the request waits for the customer while the question is open', async () => {
+    stateSpy.mockResolvedValueOnce({ infoRequest: { question: 'Laadadres?', askedAt: '2026-10-18T08:00:00Z', answers: [] } })
+    render(<OrderPortalReviewPanel order={order()} onReviewed={vi.fn()} />)
+
+    expect(await screen.findByText(/Wacht op antwoord van de klant/)).toBeInTheDocument()
+  })
+
   it('renders nothing when the order is not Submitted', () => {
     const { container } = render(<OrderPortalReviewPanel order={order({ status: 'Confirmed' })} onReviewed={vi.fn()} />)
     expect(container).toBeEmptyDOMElement()

@@ -91,6 +91,8 @@ export function TransportOrderDetailPage() {
   const [editing, setEditing] = useState(false)
   const [busy, setBusy] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  // KP-01: sending a PORTAL request back to draft is a deliberate step, never a stray click.
+  const [confirmBackToDraft, setConfirmBackToDraft] = useState(false)
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false)
   const [cancelReason, setCancelReason] = useState('')
   const [correctDialogOpen, setCorrectDialogOpen] = useState(false)
@@ -272,7 +274,9 @@ export function TransportOrderDetailPage() {
         onDelete={() => setConfirmDelete(true)}
         onCancel={() => setCancelDialogOpen(true)}
         onCorrectStatus={() => setCorrectDialogOpen(true)}
-        onTransition={(target) => void applyTransition(target)}
+        onTransition={(target) =>
+          target === 'Draft' && order.status === 'Submitted' ? setConfirmBackToDraft(true) : void applyTransition(target)
+        }
       />
       <RelatedIncidentsNotice transportOrderId={order.id} />
       <DeliveryContextNotice transportOrderId={order.id} />
@@ -420,6 +424,19 @@ export function TransportOrderDetailPage() {
             setOrder(updated)
             setPlanStop(null)
           }}
+        />
+      )}
+
+      {confirmBackToDraft && (
+        <ConfirmDialog
+          title={`${order.orderNumber} terug naar concept zetten?`}
+          message="Deze aanvraag kwam via het klantportaal. Als concept kun je ze intern corrigeren; de klant krijgt GEEN bericht en ziet in het portaal 'Wordt beoordeeld'. Wil je de aanvraag weigeren of de klant iets vragen, gebruik dan 'Afwijzen' of 'Info opvragen'."
+          confirmLabel="Terug naar concept"
+          onConfirm={() => {
+            setConfirmBackToDraft(false)
+            void applyTransition('Draft')
+          }}
+          onCancel={() => setConfirmBackToDraft(false)}
         />
       )}
 

@@ -26,6 +26,8 @@ export interface IssuedTransportDocument {
   replacementReason?: string | null
   replacesDocumentId?: string | null
   replacesDocumentNumber?: string | null
+  /** KP-06: published to the customer portal (only ever the active document; frozen snapshot). */
+  customerVisible?: boolean
 }
 
 export interface IssueTransportDocumentInput {
@@ -47,3 +49,7 @@ export const issueTransportDocument = (orderId: string, input: IssueTransportDoc
 
 export const downloadIssuedTransportDocumentPdf = (document: Pick<IssuedTransportDocument, 'id' | 'documentNumber'>): Promise<void> =>
   apiClient.downloadFile(`/api/issued-transport-documents/${document.id}/pdf`, `${document.documentNumber}.pdf`)
+
+/** KP-06: publish the ACTIVE document to the customer portal, or withdraw it. */
+export const setIssuedDocumentCustomerVisibility = (id: string, customerVisible: boolean): Promise<IssuedTransportDocument> =>
+  apiClient.putJson(`/api/issued-transport-documents/${id}/customer-visibility`, { customerVisible })

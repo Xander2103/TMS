@@ -156,7 +156,13 @@
       "reasonLabel": "Reden van vervanging",
       "reasonRequired": "Geef een reden op waarom het document vervangen wordt.",
       "confirm": "Vervangen en nieuw document maken"
-    }
+    },
+    "publish": "Publiceren voor klant",
+    "withdraw": "Intrekken bij klant",
+    "visibleForCustomer": "Zichtbaar in klantportaal",
+    "published": "{number} staat in het klantportaal.",
+    "withdrawn": "{number} is niet langer zichtbaar voor de klant.",
+    "publishFailed": "De zichtbaarheid kon niet worden gewijzigd."
   },
   "activityStatus": {
     "none": "Nog niet aangemaakt",

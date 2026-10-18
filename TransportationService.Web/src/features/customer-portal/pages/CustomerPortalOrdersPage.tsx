@@ -6,7 +6,6 @@ import { Button } from '../../../components/ui/Button'
 import { DataTable, type Column } from '../../../components/ui/DataTable'
 import { useAuth } from '../../auth/authContextValue'
 import { useLocale } from '../../../i18n/localeContext'
-import { ORDER_STATUS_TONE } from '../../transport-orders/types'
 import { getPortalContext, listPortalOrders, type PortalOrderListItem } from '../api/customerPortalApi'
 import { portalOrderStatus } from './portalStatusLabels'
 
@@ -63,8 +62,18 @@ export function CustomerPortalOrdersPage() {
       key: 'status',
       header: t('orders.list.columns.status'),
       render: (row) => {
-        const shown = portalOrderStatus(t, row.status, row.deliveryOutcome)
-        return <Badge tone={shown.tone ?? ORDER_STATUS_TONE[row.status]}>{shown.label}</Badge>
+        const shown = portalOrderStatus(t, row.status)
+        return (
+          <>
+            <Badge tone={shown.tone}>{shown.label}</Badge>
+            {row.invoiceAvailable && (
+              <>
+                {' '}
+                <Badge tone="info">{t('orders.detail.invoiceAvailable')}</Badge>
+              </>
+            )}
+          </>
+        )
       },
     },
   ]

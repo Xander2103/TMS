@@ -14,5 +14,7 @@
   "upcomingTitle": "Livraisons à venir (7 jours)",
   "noDeliveries": "Aucune livraison planifiée.",
   "recentInvoicesTitle": "Factures récentes",
-  "noInvoices": "Pas encore de factures."
+  "noInvoices": "Pas encore de factures.",
+  "awaitingReplyTitle": "En attente de votre réponse",
+  "awaitingReplyItem": "notre planning a une question sur cette demande"
 }

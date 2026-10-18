@@ -49,7 +49,7 @@ export function CustomerPortalInvoicesPage() {
     },
     { key: 'date', header: t('invoices.list.columns.date'), render: (row) => formatDate(row.invoiceDate) },
     { key: 'due', header: t('invoices.list.columns.dueDate'), render: (row) => formatDate(row.dueDate) },
-    { key: 'amount', header: t('invoices.list.columns.amount'), render: (row) => formatCurrency(row.total, row.currency) },
+    { key: 'amount', header: t('invoices.list.columns.amount'), render: (row) => formatCurrency(row.kind === 'CreditNote' ? -Math.abs(row.total) : row.total, row.currency) },
     {
       key: 'status',
       header: t('invoices.list.columns.status'),

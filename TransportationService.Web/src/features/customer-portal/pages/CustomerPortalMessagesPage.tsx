@@ -1,11 +1,12 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { PageHeader } from '../../../components/layout/PageHeader'
 import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { Button } from '../../../components/ui/Button'
 import { LoadingState } from '../../../components/feedback/LoadingState'
 import { useLocale } from '../../../i18n/localeContext'
 import {
+  getPortalOrder,
   listPortalMessages,
   markPortalMessagesRead,
   sendPortalMessage,
@@ -24,6 +25,8 @@ export function CustomerPortalMessagesPage() {
   const [error, setError] = useState<string | null>(null)
   const [body, setBody] = useState('')
   const [sending, setSending] = useState(false)
+  // KP-13: the thread is named after the order NUMBER — never its internal id.
+  const [orderNumber, setOrderNumber] = useState<string | null>(null)
 
   function load() {
     listPortalMessages(orderId)
@@ -41,6 +44,11 @@ export function CustomerPortalMessagesPage() {
   useEffect(() => {
     load()
     void markPortalMessagesRead(orderId ?? null).catch(() => {})
+    if (orderId) {
+      getPortalOrder(orderId)
+        .then((order) => setOrderNumber(order.orderNumber))
+        .catch(() => setOrderNumber(null))
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orderId])
 
@@ -64,8 +72,13 @@ export function CustomerPortalMessagesPage() {
       <Breadcrumbs items={[{ label: t('navigation.portalName'), to: '/klantportaal' }, { label: t('messages.title') }]} />
       <PageHeader
         title={t('messages.title')}
-        subtitle={orderId ? t('messages.orderSubtitle', { orderId }) : t('messages.general')}
+        subtitle={
+          orderId
+            ? t('messages.orderSubtitle', { orderNumber: orderNumber ?? messages.find((m) => m.orderNumber)?.orderNumber ?? '…' })
+            : t('messages.general')
+        }
       />
+      {orderId && <Link to={`/klantportaal/orders/${orderId}`}>{t('messages.backToOrder')}</Link>}
 
       {!loaded && <LoadingState message={t('messages.loading')} />}
       {loaded && (
@@ -76,6 +89,7 @@ export function CustomerPortalMessagesPage() {
               <div key={m.id} className={m.authorIsStaff ? 'cpp-message cpp-message-staff' : 'cpp-message'}>
                 <span className="cpp-message-meta">
                   {m.authorIsStaff ? m.authorName : t('messages.you')} · {formatDateTime(m.createdAt)}
+                  {m.isInfoRequest && <> · <strong>{t('messages.infoRequestTag')}</strong></>}
                 </span>
                 <span className="cpp-message-body">{m.body}</span>
               </div>

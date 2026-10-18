@@ -433,7 +433,11 @@ export function TripExecutionPage() {
                   )}
                 </div>
               )}
-              {executable && canFinalizePod && !stop.hasPod && (stop.arrivedAt || isTerminal) && (
+              {/* KP-02: "Afronden" on the last stop completes the trip; the delivery proof can still be
+                  taken afterwards for a finished delivery stop (the API accepts it on a completed trip). */}
+              {canFinalizePod && !stop.hasPod
+                && ((executable && (stop.arrivedAt || isTerminal))
+                  || (execution.tripStatus === 'Completed' && canExecute && isTerminal && stop.stopType === 'Unloading')) && (
                 <div className="mt-stop-actions">
                   <Button variant="secondary" onClick={() => setPodStop(stop)} disabled={busy}>
                     ✍ {t('myTrips.execution.recordPod')}

@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Button } from '../../../components/ui/Button'
 import { FormField } from '../../../components/ui/FormField'
 import { Modal } from '../../../components/ui/Modal'
 import { useToast } from '../../../components/ui/toastContext'
-import { reviewPortalOrder, type PortalReviewAction } from '../api/transportOrdersApi'
+import { formatDateTime } from '../../../utils/dates'
+import { getPortalReviewState, reviewPortalOrder, type PortalReviewAction, type PortalReviewState } from '../api/transportOrdersApi'
 import type { TransportOrderDetail } from '../types'
 import './order-portal-review-panel.css'
 
@@ -38,10 +39,31 @@ export function OrderPortalReviewPanel({ order, onReviewed, heading }: OrderPort
   const [dialog, setDialog] = useState<Exclude<PortalReviewAction, 'Accept'> | null>(null)
   const [reason, setReason] = useState('')
   const [busy, setBusy] = useState(false)
+  const [state, setState] = useState<PortalReviewState | null>(null)
+  const [stateToken, setStateToken] = useState(0)
+
+  // The info-request round trip: the planner sees the question asked and the customer's answer
+  // right where they decide — no switch to the messages module (which they may not even have).
+  useEffect(() => {
+    if (order.status !== 'Submitted') return
+    let mounted = true
+    getPortalReviewState(order.id)
+      .then((loaded) => {
+        if (mounted) setState(loaded)
+      })
+      .catch(() => {
+        // Non-fatal: the decision buttons stay available.
+      })
+    return () => {
+      mounted = false
+    }
+  }, [order.id, order.status, stateToken])
 
   if (order.status !== 'Submitted') {
     return null
   }
+
+  const infoRequest = state?.infoRequest ?? null
 
   async function handleAccept() {
     setBusy(true)
@@ -65,6 +87,7 @@ export function OrderPortalReviewPanel({ order, onReviewed, heading }: OrderPort
       showSuccess(dialog === 'Reject' ? 'Opdracht geweigerd.' : 'Informatie opgevraagd bij de klant.')
       setDialog(null)
       setReason('')
+      setStateToken((n) => n + 1)
     } catch {
       showError('De actie kon niet worden uitgevoerd.')
     } finally {
@@ -76,6 +99,24 @@ export function OrderPortalReviewPanel({ order, onReviewed, heading }: OrderPort
     <section className="opr-panel" aria-label="Klantportaal-beoordeling">
       <h2>{heading ?? 'Ingediend via het klantportaal'}</h2>
       <p>Beoordeel deze opdracht: accepteer, weiger, of vraag meer informatie op bij de klant.</p>
+      {infoRequest && (
+        <div className="opr-info" data-testid="opr-info-request">
+          <p className="opr-info-question">
+            <strong>Gevraagd op {formatDateTime(infoRequest.askedAt)}:</strong> {infoRequest.question}
+          </p>
+          {infoRequest.answers.length === 0 ? (
+            <p className="opr-info-waiting">Wacht op antwoord van de klant — de klant ziet "Informatie gevraagd".</p>
+          ) : (
+            <ul className="opr-info-answers">
+              {infoRequest.answers.map((answer, index) => (
+                <li key={index}>
+                  <strong>Antwoord van de klant ({formatDateTime(answer.at)}):</strong> {answer.body}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
       <div className="opr-actions">
         <Button onClick={() => void handleAccept()} disabled={busy}>
           Accepteren

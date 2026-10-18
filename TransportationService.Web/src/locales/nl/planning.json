@@ -199,7 +199,9 @@
     "startWarnIntro": "Controleer voor vertrek:",
     "startWarnEarly": "De rit is gepland op {date}; je start hem vroeger dan gepland.",
     "startWarnPackages": "{loaded} van {mandatory} verplichte colli zijn geladen — {notLoaded} ontbreken.",
-    "startWarnConfirm": "Toch starten"
+    "startWarnConfirm": "Toch starten",
+    "recordPod": "POD registreren",
+    "podRecorded": "Leveringsbewijs geregistreerd."
   },
   "groups": {
     "today": "Vandaag",

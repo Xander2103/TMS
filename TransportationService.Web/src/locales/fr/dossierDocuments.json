@@ -156,7 +156,13 @@
       "reasonLabel": "Motif du remplacement",
       "reasonRequired": "Indiquez pourquoi le document est remplacé.",
       "confirm": "Remplacer et créer un nouveau document"
-    }
+    },
+    "publish": "Publier pour le client",
+    "withdraw": "Retirer du client",
+    "visibleForCustomer": "Visible dans le portail client",
+    "published": "{number} est disponible dans le portail client.",
+    "withdrawn": "{number} n'est plus visible pour le client.",
+    "publishFailed": "La visibilité n'a pas pu être modifiée."
   },
   "activityStatus": {
     "none": "Pas encore créé",

@@ -59,6 +59,7 @@ import './planning.css'
 import { formatDate } from '../../../utils/dates'
 import { ConflictDialog } from '../../planning-center/components/ConflictDialog'
 import { ReplaceVehicleDialog } from '../components/ReplaceVehicleDialog'
+import { PodDialog } from '../../pod/components/PodDialog'
 import { RelatedIncidentsNotice } from '../../incidents/components/RelatedIncidentsNotice'
 
 /** Lifecycle steps that move a trip forward; the first allowed one is the primary header action. */
@@ -113,6 +114,9 @@ export function TripDetailPage() {
 
   const canSeeExecution = hasPermission('driver_workflow.view')
   const canOpenPod = hasPermission('pod.view')
+  // KP-02: the office fallback when the driver could not take the delivery proof on the road.
+  const canRecordPod = hasPermission('pod.finalize') && hasPermission('pod.correct')
+  const [podStop, setPodStop] = useState<{ id: string; label: string } | null>(null)
   const canEditPlanning = hasPermission('planning.edit')
   const canSeePackages = hasPermission('packages.view')
   const canReleaseTrip = hasPermission('warehouse.release_trip')
@@ -809,6 +813,11 @@ export function TripDetailPage() {
                       ✍ {t('planning.detail.viewPod')}
                     </button>
                   )}
+                  {!stop.hasPod && canRecordPod && stop.stopType === 'Unloading' && stop.allowedTransitions.length === 0 && (
+                    <button type="button" className="pl-link" onClick={() => setPodStop({ id: stop.transportOrderStopId, label: stop.locationName })}>
+                      ✍ {t('planning.detail.recordPod')}
+                    </button>
+                  )}
                 </li>
               )
             })}
@@ -991,6 +1000,20 @@ export function TripDetailPage() {
             void applyTransition('InProgress', false)
           }}
           onCancel={() => setStartWarnings(null)}
+        />
+      )}
+
+      {podStop && (
+        <PodDialog
+          tripId={id}
+          stopId={podStop.id}
+          stopLabel={podStop.label}
+          onClose={() => setPodStop(null)}
+          onFinalized={() => {
+            setPodStop(null)
+            showSuccess(t('planning.detail.podRecorded'))
+            void getTripExecution(id).then(setExecution).catch(() => {})
+          }}
         />
       )}
 

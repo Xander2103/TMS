@@ -92,7 +92,26 @@
     },
     "redeliveryLink": "Redelivery {order}",
     "noticesTitle": "Notices",
-    "completedShortfall": "Execution closed — not fully delivered"
+    "completedShortfall": "Execution closed — not fully delivered",
+    "invoiceAvailable": "Invoice available",
+    "statusHint": {
+      "Received": "We received your request. Our planners will review it and let you know whether it is accepted.",
+      "InReview": "Our planners are reviewing your request. No action is needed.",
+      "Rejected": "This request was not accepted. You will find the reason in this order's messages.",
+      "Cancelled": "This order was cancelled."
+    },
+    "infoRequest": {
+      "title": "We need more information",
+      "answeredTitle": "Your answer to our question",
+      "question": "Question from our planners ({time}):",
+      "answered": "Your answer was received on {time}. Our planners are reviewing your request again.",
+      "answerLabel": "Your answer",
+      "send": "Send answer",
+      "sending": "Sending…",
+      "answerRequired": "Please write your answer first.",
+      "answerFailed": "Your answer could not be sent. Please try again.",
+      "noMessageRight": "You cannot send messages yourself. Ask a colleague with access to Messages to answer, or contact us."
+    }
   },
   "new": {
     "title": "Submit a new transport order",
@@ -137,7 +156,8 @@
     "submitting": "Submitting…",
     "stopNeedsLocation": "Each stop needs a location or at least a town or city.",
     "submitFailed": "The order could not be submitted.",
-    "submitted": "Order {orderNumber} submitted. Our planning team will take it from here."
+    "submitted": "Order {orderNumber} submitted. Our planning team will take it from here.",
+    "country": "Country"
   },
   "locationDialog": {
     "title": "New location",
@@ -149,7 +169,8 @@
     "nameRequired": "A name is required.",
     "create": "Create location",
     "creating": "Creating…",
-    "createFailed": "The location could not be created."
+    "createFailed": "The location could not be created.",
+    "country": "Country"
   },
   "deliveryOutcome": {
     "NotDelivered": "Not delivered",
@@ -176,5 +197,21 @@
     "VehicleIssue": "Vehicle issue",
     "Delay": "Delay",
     "Other": "Other deviation"
+  },
+  "customerStatus": {
+    "Received": "Request received",
+    "InReview": "Under review",
+    "InfoRequested": "Information requested",
+    "Confirmed": "Confirmed",
+    "Planned": "Planned",
+    "InTransit": "In transit",
+    "Delivered": "Delivered",
+    "PartiallyDelivered": "Partially delivered",
+    "NotDelivered": "Not delivered",
+    "RedeliveryPlanned": "Redelivery planned",
+    "Redelivered": "Redelivered",
+    "Rejected": "Declined",
+    "Cancelled": "Cancelled",
+    "ExecutionClosed": "Execution closed — not fully delivered"
   }
 }

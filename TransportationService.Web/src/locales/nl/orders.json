@@ -92,7 +92,26 @@
     },
     "redeliveryLink": "Herlevering {order}",
     "noticesTitle": "Mededelingen",
-    "completedShortfall": "Uitvoering afgesloten — niet volledig geleverd"
+    "completedShortfall": "Uitvoering afgesloten — niet volledig geleverd",
+    "invoiceAvailable": "Factuur beschikbaar",
+    "statusHint": {
+      "Received": "Wij hebben uw aanvraag ontvangen. Onze planning beoordeelt ze en laat u weten of ze aanvaard is.",
+      "InReview": "Onze planning beoordeelt uw aanvraag. U hoeft niets te doen.",
+      "Rejected": "Deze aanvraag werd niet aanvaard. De reden vindt u bij de berichten van deze opdracht.",
+      "Cancelled": "Deze opdracht werd geannuleerd."
+    },
+    "infoRequest": {
+      "title": "Wij hebben extra informatie nodig",
+      "answeredTitle": "Uw antwoord op onze vraag",
+      "question": "Vraag van onze planning ({time}):",
+      "answered": "Uw antwoord is ontvangen op {time}. Onze planning beoordeelt uw aanvraag opnieuw.",
+      "answerLabel": "Uw antwoord",
+      "send": "Antwoord versturen",
+      "sending": "Versturen…",
+      "answerRequired": "Schrijf eerst uw antwoord.",
+      "answerFailed": "Uw antwoord kon niet worden verstuurd. Probeer het opnieuw.",
+      "noMessageRight": "U kunt zelf geen berichten sturen. Vraag een collega met toegang tot Berichten om te antwoorden of neem contact met ons op."
+    }
   },
   "new": {
     "title": "Nieuwe transportopdracht indienen",
@@ -137,7 +156,8 @@
     "submitting": "Indienen…",
     "stopNeedsLocation": "Elke stop heeft een locatie of minstens een plaatsnaam nodig.",
     "submitFailed": "De opdracht kon niet worden ingediend.",
-    "submitted": "Opdracht {orderNumber} ingediend. Onze planning neemt deze in behandeling."
+    "submitted": "Opdracht {orderNumber} ingediend. Onze planning neemt deze in behandeling.",
+    "country": "Land"
   },
   "locationDialog": {
     "title": "Nieuwe locatie",
@@ -149,7 +169,8 @@
     "nameRequired": "Een naam is verplicht.",
     "create": "Locatie aanmaken",
     "creating": "Aanmaken…",
-    "createFailed": "De locatie kon niet worden aangemaakt."
+    "createFailed": "De locatie kon niet worden aangemaakt.",
+    "country": "Land"
   },
   "deliveryOutcome": {
     "NotDelivered": "Niet geleverd",
@@ -176,5 +197,21 @@
     "VehicleIssue": "Probleem met het voertuig",
     "Delay": "Vertraging",
     "Other": "Andere afwijking"
+  },
+  "customerStatus": {
+    "Received": "Aanvraag ontvangen",
+    "InReview": "Wordt beoordeeld",
+    "InfoRequested": "Informatie gevraagd",
+    "Confirmed": "Bevestigd",
+    "Planned": "Gepland",
+    "InTransit": "Onderweg",
+    "Delivered": "Geleverd",
+    "PartiallyDelivered": "Gedeeltelijk geleverd",
+    "NotDelivered": "Niet geleverd",
+    "RedeliveryPlanned": "Herlevering gepland",
+    "Redelivered": "Herleverd",
+    "Rejected": "Afgewezen",
+    "Cancelled": "Geannuleerd",
+    "ExecutionClosed": "Uitvoering afgesloten — niet volledig geleverd"
   }
 }

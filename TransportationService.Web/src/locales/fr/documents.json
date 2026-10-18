@@ -3,7 +3,8 @@
   "source": {
     "OrderDocument": "Document de commande",
     "Pod": "Preuve de livraison",
-    "InvoiceAttachment": "Pièce jointe de facture"
+    "InvoiceAttachment": "Pièce jointe de facture",
+    "IssuedTransportDocument": "Lettre de voiture / bon de livraison"
   },
   "columns": {
     "document": "Document",

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { PageHeader } from '../../../components/layout/PageHeader'
 import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
@@ -9,17 +9,18 @@ import { LoadingState } from '../../../components/feedback/LoadingState'
 import { ErrorState } from '../../../components/feedback/ErrorState'
 import { useAuth } from '../../auth/authContextValue'
 import { useLocale, type TranslateFn } from '../../../i18n/localeContext'
-import { ORDER_STATUS_TONE } from '../../transport-orders/types'
 import {
   downloadPortalDocument,
   getPortalOrder,
   listPortalDocuments,
+  sendPortalMessage,
   type PortalDocument,
   type PortalOrderDetail,
 } from '../api/customerPortalApi'
 import {
+  documentSourceLabel,
   exceptionStatusLabel,
-  orderStatusLabel,
+  isShortfallStatus,
   portalExceptionTypeLabel,
   portalOrderStatus,
   stopTypeLabel,
@@ -52,6 +53,29 @@ export function CustomerPortalOrderDetailPage() {
   const [documents, setDocuments] = useState<PortalDocument[]>([])
   const [error, setError] = useState(false)
   const [downloadError, setDownloadError] = useState(false)
+  const [answer, setAnswer] = useState('')
+  const [answering, setAnswering] = useState(false)
+  const [answerError, setAnswerError] = useState<string | null>(null)
+
+  async function submitAnswer(event: FormEvent) {
+    event.preventDefault()
+    if (!order || answering) return
+    if (!answer.trim()) {
+      setAnswerError(t('orders.detail.infoRequest.answerRequired'))
+      return
+    }
+    setAnswering(true)
+    setAnswerError(null)
+    try {
+      await sendPortalMessage(order.id, answer.trim())
+      setAnswer('')
+      setOrder(await getPortalOrder(order.id))
+    } catch {
+      setAnswerError(t('orders.detail.infoRequest.answerFailed'))
+    } finally {
+      setAnswering(false)
+    }
+  }
 
   useEffect(() => {
     let mounted = true
@@ -84,7 +108,8 @@ export function CustomerPortalOrderDetailPage() {
     order.customerReference ? ` · ${t('orders.detail.yourRef', { reference: order.customerReference })}` : ''
   }`
 
-  const shownStatus = portalOrderStatus(t, order.status, order.deliveryOutcome)
+  const shownStatus = portalOrderStatus(t, order.status)
+  const canMessage = hasPermission('customer_portal.messages')
 
   return (
     <div>
@@ -95,7 +120,13 @@ export function CustomerPortalOrderDetailPage() {
         subtitle={subtitle}
         action={
           <>
-            <Badge tone={shownStatus.tone ?? ORDER_STATUS_TONE[order.status]}>{shownStatus.label}</Badge>{' '}
+            <Badge tone={shownStatus.tone}>{shownStatus.label}</Badge>{' '}
+            {order.invoiceAvailable && (
+              // Invoicing is shown next to — never instead of — the delivery status.
+              <Link to="/klantportaal/facturen" className="cpp-invoice-link">
+                <Badge tone="info">{t('orders.detail.invoiceAvailable')}</Badge>
+              </Link>
+            )}{' '}
             {hasPermission('customer_portal.messages') && (
               <Link to={`/klantportaal/berichten?orderId=${order.id}`}>
                 <Button variant="secondary">{t('orders.detail.messagesButton')}</Button>
@@ -105,10 +136,52 @@ export function CustomerPortalOrderDetailPage() {
         }
       />
 
-      {shownStatus.tone && (
+      {order.status === 'Received' && <p className="cpp-eta" role="status">{t('orders.detail.statusHint.Received')}</p>}
+      {order.status === 'InReview' && !order.infoRequest?.answeredAt && (
+        <p className="cpp-eta" role="status">{t('orders.detail.statusHint.InReview')}</p>
+      )}
+      {(order.status === 'Rejected' || order.status === 'Cancelled') && (
+        <p className="cpp-eta" role="status">{t(`orders.detail.statusHint.${order.status}`)}</p>
+      )}
+
+      {order.infoRequest && (
+        <section className="cpp-panel cpp-info-request" aria-labelledby="cpp-info-request-title">
+          <h2 id="cpp-info-request-title">
+            {order.infoRequest.answeredAt ? t('orders.detail.infoRequest.answeredTitle') : t('orders.detail.infoRequest.title')}
+          </h2>
+          <p className="cpp-info-question">
+            <span className="cpp-info-label">{t('orders.detail.infoRequest.question', { time: formatDateTime(order.infoRequest.askedAt) })}</span>
+            <q>{order.infoRequest.question}</q>
+          </p>
+          {order.infoRequest.answeredAt ? (
+            <p role="status">{t('orders.detail.infoRequest.answered', { time: formatDateTime(order.infoRequest.answeredAt) })}</p>
+          ) : canMessage ? (
+            <form onSubmit={submitAnswer} noValidate>
+              <label htmlFor="cpp-info-answer">{t('orders.detail.infoRequest.answerLabel')}</label>
+              <textarea
+                id="cpp-info-answer"
+                rows={3}
+                maxLength={4000}
+                value={answer}
+                onChange={(e) => setAnswer(e.target.value)}
+                disabled={answering}
+                aria-invalid={answerError ? true : undefined}
+              />
+              {answerError && <p className="cpp-field-error" role="alert">{answerError}</p>}
+              <Button type="submit" disabled={answering}>
+                {answering ? t('orders.detail.infoRequest.sending') : t('orders.detail.infoRequest.send')}
+              </Button>
+            </form>
+          ) : (
+            <p>{t('orders.detail.infoRequest.noMessageRight')}</p>
+          )}
+        </section>
+      )}
+
+      {isShortfallStatus(order.status) && (
         // EX-08: the truthful outcome, and the redelivery once the customer may see that order.
         <p className="cpp-eta" role="status">
-          {t(`orders.detail.deliveryOutcome.${order.deliveryOutcome}`)}
+          {t(`orders.detail.deliveryOutcome.${order.status}`)}
           {order.redeliveryOrderId && order.redeliveryOrderNumber && (
             <>
               {' '}
@@ -165,10 +238,9 @@ export function CustomerPortalOrderDetailPage() {
             {order.timeline.map((event, index) => (
               <li key={index} className="cpp-row">
                 <span>
-                  {/* EX-08: the operational close of a not (fully) delivered order is never shown as a plain "Afgerond". */}
-                  <Badge tone={shownStatus.tone && event.status === 'Completed' ? shownStatus.tone : ORDER_STATUS_TONE[event.status]}>
-                    {shownStatus.tone && event.status === 'Completed' ? t('orders.detail.completedShortfall') : orderStatusLabel(t, event.status)}
-                  </Badge>
+                  {/* Customer language per step, decided server-side; the close of a not (fully)
+                      delivered order reads "Uitvoering afgesloten — niet volledig geleverd". */}
+                  <Badge tone={portalOrderStatus(t, event.status).tone}>{portalOrderStatus(t, event.status).label}</Badge>
                 </span>
                 <span>{formatDateTime(event.changedAt)}</span>
               </li>
@@ -269,6 +341,7 @@ export function CustomerPortalOrderDetailPage() {
                 >
                   {doc.title}
                 </button>
+                {doc.source === 'IssuedTransportDocument' && <span className="cpp-doc-kind"> · {documentSourceLabel(t, doc.source)}</span>}
               </li>
             ))}
           </ul>

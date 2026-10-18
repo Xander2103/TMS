@@ -17,3 +17,24 @@
   margin-top: 0.6rem;
   flex-wrap: wrap;
 }
+
+.opr-info {
+  margin-top: 0.6rem;
+  padding: 0.6rem 0.75rem;
+  border-left: 3px solid var(--accent);
+  background: var(--surface, transparent);
+  border-radius: 6px;
+}
+
+.opr-info p,
+.opr-info ul {
+  margin: 0.2rem 0;
+}
+
+.opr-info-answers {
+  padding-left: 1.1rem;
+}
+
+.opr-info-waiting {
+  color: var(--text-muted, inherit);
+}

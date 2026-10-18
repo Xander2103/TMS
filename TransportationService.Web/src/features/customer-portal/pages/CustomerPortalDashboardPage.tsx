@@ -135,6 +135,24 @@ export function CustomerPortalDashboardPage() {
         )}
       </div>
 
+      {(dashboard.awaitingYourReply ?? []).length > 0 && (
+        // A planner asked a question: the request waits for the customer, say so first.
+        <section className="cpp-panel cpp-info-request">
+          <h2>{t('dashboard.awaitingReplyTitle')}</h2>
+          <ul className="cpp-list">
+            {(dashboard.awaitingYourReply ?? []).map((item) => (
+              <li key={item.orderId}>
+                <button type="button" className="cpp-row" onClick={() => navigate(`/klantportaal/orders/${item.orderId}`)}>
+                  <span>
+                    <strong>{item.orderNumber}</strong> — {t('dashboard.awaitingReplyItem')}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       <section className="cpp-panel">
         <h2>{t('dashboard.upcomingTitle')}</h2>
         {dashboard.upcomingDeliveries.length === 0 && <p className="placeholder-text">{t('dashboard.noDeliveries')}</p>}
@@ -167,7 +185,9 @@ export function CustomerPortalDashboardPage() {
                       <strong>{i.invoiceNumber}</strong> — {formatDate(i.invoiceDate)}
                     </span>
                     <span>
-                      {formatCurrency(i.total)}{' '}
+                      {/* KP-09: a credit note reduces the balance — shown as such, with its sign. */}
+                      {i.kind === 'CreditNote' && <Badge tone="info">{t('invoices.creditNote')}</Badge>}{' '}
+                      {formatCurrency(i.kind === 'CreditNote' ? -Math.abs(i.total) : i.total, i.currency)}{' '}
                       <Badge tone={INVOICE_STATUS_TONE[i.status as InvoiceStatus] ?? 'neutral'}>
                         {invoiceStatusLabel(t, i.status)}
                       </Badge>

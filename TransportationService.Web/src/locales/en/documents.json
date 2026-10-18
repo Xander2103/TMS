@@ -3,7 +3,8 @@
   "source": {
     "OrderDocument": "Order document",
     "Pod": "Proof of delivery",
-    "InvoiceAttachment": "Invoice attachment"
+    "InvoiceAttachment": "Invoice attachment",
+    "IssuedTransportDocument": "Consignment / delivery note"
   },
   "columns": {
     "document": "Document",

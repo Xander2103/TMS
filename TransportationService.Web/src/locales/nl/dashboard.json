@@ -14,5 +14,7 @@
   "upcomingTitle": "Aankomende leveringen (7 dagen)",
   "noDeliveries": "Geen leveringen gepland.",
   "recentInvoicesTitle": "Recente facturen",
-  "noInvoices": "Nog geen facturen."
+  "noInvoices": "Nog geen facturen.",
+  "awaitingReplyTitle": "Wacht op uw antwoord",
+  "awaitingReplyItem": "onze planning heeft een vraag over deze aanvraag"
 }

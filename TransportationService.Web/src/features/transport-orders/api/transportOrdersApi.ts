@@ -116,6 +116,15 @@ export function deleteTransportOrder(id: string): Promise<void> {
   return apiClient.deleteRequest(`/api/transport-orders/${id}`)
 }
 
+/** The latest "Info opvragen" question on a portal request and the customer's answers since. */
+export interface PortalReviewState {
+  infoRequest: { question: string; askedAt: string; answers: { body: string; at: string }[] } | null
+}
+
+export function getPortalReviewState(id: string): Promise<PortalReviewState> {
+  return apiClient.getJson<PortalReviewState>(`/api/transport-orders/${id}/portal-review`)
+}
+
 /** Internal accept/reject/request-info decision on a customer-submitted (Submitted-status) order. */
 export type PortalReviewAction = 'Accept' | 'Reject' | 'RequestInfo'
 

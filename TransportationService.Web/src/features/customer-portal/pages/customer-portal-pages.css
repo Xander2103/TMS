@@ -72,6 +72,14 @@
   font-size: 0.9rem;
 }
 
+/* KP-07: on a phone a wide table (invoice lines) scrolls inside its panel, never the page. */
+@media (max-width: 640px) {
+  .cpp-table {
+    display: block;
+    overflow-x: auto;
+  }
+}
+
 .cpp-table th,
 .cpp-table td {
   text-align: left;

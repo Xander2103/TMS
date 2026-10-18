@@ -112,3 +112,11 @@
   font-size: 14px;
   text-align: center;
 }
+
+.login-notice {
+  padding: 0.6rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  font-size: 0.9rem;
+}

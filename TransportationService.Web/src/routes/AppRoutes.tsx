@@ -231,13 +231,16 @@ const router = createBrowserRouter(
       <Route element={<RequireAuth />}>
         <Route path="/" element={<RootRedirect />} />
         <Route path="/change-password" element={<ChangePasswordPage />} />
-        {/* Mobile-first driver shell (bottom tabs); execution pages stay shared under /my-trips. */}
+        {/* Mobile-first driver shell (bottom tabs); execution pages stay shared under /my-trips.
+            KP-15: internal only — a portal user is bounced to their own shell, not an empty driver app. */}
+        <Route element={<InternalOnly />}>
         <Route element={<DriverLayout />}>
           <Route errorElement={<RouteErrorPage />}>
             <Route path="/driver" element={<DriverHomePage />} />
             <Route path="/driver/documents" element={<DriverDocumentsPage />} />
             <Route path="/driver/incidents" element={<DriverIncidentsPage />} />
           </Route>
+        </Route>
         </Route>
         {/* Customer-portal shell: portal users never render the internal AppLayout sidebar.
             ACC-M8: without customer_portal.view (internal roles) the route answers "Geen toegang"

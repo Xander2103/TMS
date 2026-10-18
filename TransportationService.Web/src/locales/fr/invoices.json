@@ -388,7 +388,9 @@
       "reasonLabel": "Motif du crédit",
       "reasonHint": "Obligatoire ; apparaît dans l’historique des deux documents.",
       "confirm": "Créer la note de crédit"
-    }
+    },
+    "credits": "Crédite la facture {number}",
+    "creditedBy": "Cette facture est (partiellement) créditée par :"
   },
   "fiscal": {
     "draftNote": "Aperçu — figé à l’envoi.",

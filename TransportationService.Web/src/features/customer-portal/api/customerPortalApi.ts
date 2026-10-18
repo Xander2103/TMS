@@ -2,7 +2,7 @@ import { ApiError, apiClient } from '../../../api/apiClient'
 import { apiBaseUrl } from '../../../config/env'
 import { getAccessToken } from '../../auth/authStorage'
 import type { PackageUnitType } from '../../packages/types'
-import type { StopType, TransportOrderStatus } from '../../transport-orders/types'
+import type { StopType } from '../../transport-orders/types'
 import type { PortalAnnouncement } from './portalAnnouncementsApi'
 
 export interface PortalContext {
@@ -12,17 +12,31 @@ export interface PortalContext {
   preferredLanguage: 'nl' | 'fr' | 'en' | null
 }
 
+/**
+ * The customer-facing status, decided server-side (PortalOrderStatusRules) — never an internal
+ * lifecycle key such as Draft, Completed or Invoiced. The portal only translates it.
+ */
+export type PortalCustomerStatus =
+  | 'Received' | 'InReview' | 'InfoRequested' | 'Confirmed' | 'Planned' | 'InTransit'
+  | 'Delivered' | 'PartiallyDelivered' | 'NotDelivered' | 'RedeliveryPlanned' | 'Redelivered'
+  | 'Rejected' | 'Cancelled'
+
+/** Timeline steps use the same codes plus the close of a not (fully) delivered order. */
+export type PortalTimelineStatus = PortalCustomerStatus | 'ExecutionClosed'
+
 export interface PortalOrderListItem {
   id: string
   orderNumber: string
   orderDate: string
-  status: TransportOrderStatus
+  status: PortalCustomerStatus
   customerReference: string | null
   goodsDescription: string | null
   firstLoadingCity: string | null
   lastUnloadingCity: string | null
   /** EX-08: wat de geadresseerde echt ontving (null = geen uitvoeringsgegevens). */
   deliveryOutcome?: PortalDeliveryOutcome | null
+  /** "Factuur beschikbaar" — apart van de leveringsstatus; enkel met factuurrecht. */
+  invoiceAvailable?: boolean
 }
 
 export type PortalDeliveryOutcome = 'Delivered' | 'PartiallyDelivered' | 'NotDelivered' | 'RedeliveryPlanned' | 'Redelivered'
@@ -57,8 +71,15 @@ export interface PortalCargo {
  * statushistoriek is door planners getypte interne motivering en verlaat de server niet.
  */
 export interface PortalTimelineEvent {
-  status: TransportOrderStatus
+  status: PortalTimelineStatus
   changedAt: string
+}
+
+/** A planner's "Info opvragen" question; answered on the order's message thread. */
+export interface PortalInfoRequest {
+  question: string
+  askedAt: string
+  answeredAt: string | null
 }
 
 export interface PortalException {
@@ -79,7 +100,7 @@ export interface PortalOrderDetail {
   id: string
   orderNumber: string
   orderDate: string
-  status: TransportOrderStatus
+  status: PortalCustomerStatus
   customerReference: string | null
   goodsDescription: string | null
   // H-14: `notes` (planningsnotities) en `cancellationReason` zijn interne velden en worden
@@ -98,6 +119,9 @@ export interface PortalOrderDetail {
   redeliveryOrderNumber?: string | null
   /** Klantgerichte berichten van kantoor over deze opdracht. */
   notices?: PortalNotice[]
+  invoiceAvailable?: boolean
+  /** De (laatste) vraag van de planner zolang de aanvraag beoordeeld wordt. */
+  infoRequest?: PortalInfoRequest | null
 }
 
 export interface PortalStopInput {
@@ -278,6 +302,13 @@ export interface PortalRecentInvoice {
   invoiceDate: string
   status: string
   total: number
+  kind?: 'Invoice' | 'CreditNote'
+  currency?: string
+}
+
+export interface PortalActionItem {
+  orderId: string
+  orderNumber: string
 }
 
 export interface PortalDashboard {
@@ -287,6 +318,8 @@ export interface PortalDashboard {
   unreadMessages: number
   recentInvoices: PortalRecentInvoice[]
   announcements: PortalAnnouncement[]
+  /** Requests waiting for the customer's answer to a planner's question. */
+  awaitingYourReply?: PortalActionItem[]
 }
 
 export function getPortalDashboard(): Promise<PortalDashboard> {
@@ -309,6 +342,8 @@ export interface CustomerMessage {
   authorName: string
   body: string
   createdAt: string
+  /** A planner's "Info opvragen" question. */
+  isInfoRequest?: boolean
 }
 
 export function listPortalMessages(orderId?: string): Promise<CustomerMessage[]> {
@@ -416,6 +451,11 @@ export interface PortalInvoiceDetail {
   /** See PortalInvoiceListItem.peppolStatus. */
   peppolStatus: string | null
   kind: 'Invoice' | 'CreditNote'
+  /** KP-09: the invoice a credit note credits. */
+  creditedInvoiceNumber?: string | null
+  creditedInvoiceId?: string | null
+  /** KP-09: issued credit notes against this invoice. */
+  creditedBy?: { id: string; invoiceNumber: string }[]
 }
 
 export function listPortalInvoices(): Promise<PortalInvoiceListItem[]> {
@@ -452,7 +492,7 @@ export function downloadPortalInvoiceAttachment(invoiceId: string, attachmentId:
 
 // --- Documents ---
 
-export type PortalDocumentSource = 'OrderDocument' | 'Pod' | 'InvoiceAttachment'
+export type PortalDocumentSource = 'OrderDocument' | 'Pod' | 'InvoiceAttachment' | 'IssuedTransportDocument'
 
 export interface PortalDocument {
   id: string

@@ -41,11 +41,15 @@ export function resolveNotificationLink(linkPath: string | null): ResolvedNotifi
   if (!path) return null
   const legacyOrder = /^\/orders\/([^/?]+)(.*)$/.exec(path)
   if (legacyOrder) path = `/transport-orders/${legacyOrder[1]}${legacyOrder[2]}`
+  // Customer review notices were once written as /portal/orders/{id} — the employee portal, where
+  // no such route exists. The customer's order page is /klantportaal/orders/{id}.
+  const legacyPortalOrder = /^\/portal\/orders\/([^/?]+)(.*)$/.exec(path)
+  if (legacyPortalOrder) path = `/klantportaal/orders/${legacyPortalOrder[1]}${legacyPortalOrder[2]}`
   return { path, kind: linkKindFor(path) }
 }
 
 function linkKindFor(path: string): NotificationLinkKind {
-  if (path.startsWith('/transport-orders/') || path.startsWith('/portal/orders/')) return 'order'
+  if (path.startsWith('/transport-orders/') || path.startsWith('/klantportaal/orders/')) return 'order'
   if (path.startsWith('/dossiers/')) return 'dossier'
   if (path.startsWith('/invoices/')) return 'invoice'
   if (path.startsWith('/planning')) return 'planning'

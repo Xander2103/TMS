@@ -92,7 +92,26 @@
     },
     "redeliveryLink": "Nouvelle livraison {order}",
     "noticesTitle": "Communications",
-    "completedShortfall": "Exécution clôturée — livraison incomplète"
+    "completedShortfall": "Exécution clôturée — livraison incomplète",
+    "invoiceAvailable": "Facture disponible",
+    "statusHint": {
+      "Received": "Nous avons reçu votre demande. Notre planning l'examine et vous informera de son acceptation.",
+      "InReview": "Notre planning examine votre demande. Aucune action n'est requise.",
+      "Rejected": "Cette demande n'a pas été acceptée. Vous trouverez la raison dans les messages de cet ordre.",
+      "Cancelled": "Cet ordre a été annulé."
+    },
+    "infoRequest": {
+      "title": "Nous avons besoin d'informations complémentaires",
+      "answeredTitle": "Votre réponse à notre question",
+      "question": "Question de notre planning ({time}) :",
+      "answered": "Votre réponse a été reçue le {time}. Notre planning réexamine votre demande.",
+      "answerLabel": "Votre réponse",
+      "send": "Envoyer la réponse",
+      "sending": "Envoi…",
+      "answerRequired": "Rédigez d'abord votre réponse.",
+      "answerFailed": "Votre réponse n'a pas pu être envoyée. Réessayez.",
+      "noMessageRight": "Vous ne pouvez pas envoyer de messages. Demandez à un collègue ayant accès aux Messages de répondre ou contactez-nous."
+    }
   },
   "new": {
     "title": "Soumettre une nouvelle commande de transport",
@@ -137,7 +156,8 @@
     "submitting": "Soumission en cours…",
     "stopNeedsLocation": "Chaque arrêt requiert un lieu ou au moins une localité.",
     "submitFailed": "La commande n'a pas pu être soumise.",
-    "submitted": "Commande {orderNumber} soumise. Notre service planning va la prendre en charge."
+    "submitted": "Commande {orderNumber} soumise. Notre service planning va la prendre en charge.",
+    "country": "Pays"
   },
   "locationDialog": {
     "title": "Nouveau lieu",
@@ -149,7 +169,8 @@
     "nameRequired": "Un nom est obligatoire.",
     "create": "Créer le lieu",
     "creating": "Création en cours…",
-    "createFailed": "Le lieu n'a pas pu être créé."
+    "createFailed": "Le lieu n'a pas pu être créé.",
+    "country": "Pays"
   },
   "deliveryOutcome": {
     "NotDelivered": "Non livré",
@@ -176,5 +197,21 @@
     "VehicleIssue": "Problème de véhicule",
     "Delay": "Retard",
     "Other": "Autre écart"
+  },
+  "customerStatus": {
+    "Received": "Demande reçue",
+    "InReview": "En cours d'examen",
+    "InfoRequested": "Informations demandées",
+    "Confirmed": "Confirmé",
+    "Planned": "Planifié",
+    "InTransit": "En route",
+    "Delivered": "Livré",
+    "PartiallyDelivered": "Partiellement livré",
+    "NotDelivered": "Non livré",
+    "RedeliveryPlanned": "Nouvelle livraison planifiée",
+    "Redelivered": "Relivré",
+    "Rejected": "Refusé",
+    "Cancelled": "Annulé",
+    "ExecutionClosed": "Exécution clôturée — pas entièrement livré"
   }
 }

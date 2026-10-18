@@ -102,6 +102,9 @@
   max-width: 960px;
   margin: 0 auto;
   padding: 1.25rem;
+  /* KP-07: width 100% + padding must not push the page 40px past a phone screen. */
+  box-sizing: border-box;
+  min-width: 0;
 }
 
 .cpl-footer {

@@ -199,7 +199,9 @@
     "startWarnIntro": "Check before departure:",
     "startWarnEarly": "The trip is planned for {date}; you are starting it earlier than planned.",
     "startWarnPackages": "{loaded} of {mandatory} mandatory packages are loaded — {notLoaded} missing.",
-    "startWarnConfirm": "Start anyway"
+    "startWarnConfirm": "Start anyway",
+    "recordPod": "Record POD",
+    "podRecorded": "Proof of delivery recorded."
   },
   "groups": {
     "today": "Today",

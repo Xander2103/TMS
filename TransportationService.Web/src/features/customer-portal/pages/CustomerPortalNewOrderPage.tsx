@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { PageHeader } from '../../../components/layout/PageHeader'
 import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
@@ -14,7 +14,7 @@ import './customer-portal-pages.css'
 import { useAuth } from '../../auth/authContextValue'
 import { useLocale } from '../../../i18n/localeContext'
 import { describeApiError, type FieldErrors } from '../../../api/problemDetails'
-import { fromDateTimeLocalInput } from '../../../utils/dates'
+import { fromDateTimeLocalInput, todayLocalIsoDate } from '../../../utils/dates'
 import { UNIT_TYPE_LABELS, type PackageUnitType } from '../../packages/types'
 import type { StopType } from '../../transport-orders/types'
 import {
@@ -26,12 +26,38 @@ import {
 } from '../api/customerPortalApi'
 import { stopTypeLabel, unitTypeLabel } from './portalStatusLabels'
 
+/** KP-08: the countries a portal customer can pick for a free address or a new location; the API
+ * validates the postcode per country (a Dutch "4811 AA" is valid once NL is chosen). */
+const PORTAL_COUNTRIES = ['BE', 'NL', 'LU', 'FR', 'DE'] as const
+
+function countryName(locale: string, code: string): string {
+  try {
+    return new Intl.DisplayNames([locale], { type: 'region' }).of(code) ?? code
+  } catch {
+    return code
+  }
+}
+
+function CountrySelect({ id, value, onChange, disabled }: { id: string; value: string; onChange: (code: string) => void; disabled: boolean }) {
+  const { locale } = useLocale()
+  return (
+    <select id={id} value={value} onChange={(e) => onChange(e.target.value)} disabled={disabled}>
+      {PORTAL_COUNTRIES.map((code) => (
+        <option key={code} value={code}>
+          {countryName(locale, code)}
+        </option>
+      ))}
+    </select>
+  )
+}
+
 interface StopRow {
   key: string
   stopType: StopType
   locationId: string
   locationName: string
   address: string
+  countryCode: string
   postalCode: string
   city: string
   requestedFrom: string
@@ -56,7 +82,7 @@ const nextKey = () => `p-${(portalKey += 1)}`
 
 function emptyStop(stopType: StopType): StopRow {
   return {
-    key: nextKey(), stopType, locationId: '', locationName: '', address: '', postalCode: '', city: '',
+    key: nextKey(), stopType, locationId: '', locationName: '', address: '', countryCode: 'BE', postalCode: '', city: '',
     requestedFrom: '', requestedTo: '', reference: '', instructions: '',
   }
 }
@@ -84,7 +110,8 @@ export function CustomerPortalNewOrderPage() {
 
   const [locations, setLocations] = useState<PortalLocation[]>([])
   const [customerReference, setCustomerReference] = useState('')
-  const [orderDate, setOrderDate] = useState(new Date().toISOString().slice(0, 10))
+  // KP-11: "today" in the carrier's time zone — the UTC date is still yesterday after midnight.
+  const [orderDate, setOrderDate] = useState(() => todayLocalIsoDate())
   const [goodsDescription, setGoodsDescription] = useState('')
   const [remarks, setRemarks] = useState('')
   const [stops, setStops] = useState<StopRow[]>([emptyStop('Loading'), emptyStop('Unloading')])
@@ -93,6 +120,8 @@ export function CustomerPortalNewOrderPage() {
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
   const [saving, setSaving] = useState(false)
   const [newLocationFor, setNewLocationFor] = useState<string | null>(null)
+  // A second click/Enter before React re-renders the disabled button must not submit twice.
+  const submittingRef = useRef(false)
 
   useEffect(() => {
     let mounted = true
@@ -125,6 +154,8 @@ export function CustomerPortalNewOrderPage() {
       }
     }
 
+    if (submittingRef.current) return
+    submittingRef.current = true
     setSaving(true)
     try {
       const payload = {
@@ -139,7 +170,7 @@ export function CustomerPortalNewOrderPage() {
           address: stop.locationId ? null : stop.address.trim() || null,
           postalCode: stop.locationId ? null : stop.postalCode.trim() || null,
           city: stop.locationId ? null : stop.city.trim() || null,
-          countryCode: stop.locationId ? null : 'BE',
+          countryCode: stop.locationId ? null : stop.countryCode,
           // C-03: the datetime-local fields hold TENANT wall clock (the carrier's dock time).
           // They used to travel as a bare "2026-07-15T08:00" — no zone at all, which the API
           // cannot store as an instant; they now travel as the UTC instant the wire expects.
@@ -162,12 +193,14 @@ export function CustomerPortalNewOrderPage() {
       }
       const created = await submitPortalOrder(payload)
       toast.showSuccess(t('orders.new.submitted', { orderNumber: created.orderNumber }))
-      navigate('/klantportaal')
+      // The confirmation IS the request: its page shows "Aanvraag ontvangen" and what was sent.
+      navigate(`/klantportaal/orders/${created.id}`)
     } catch (err) {
       const described = describeApiError(err, t('orders.new.submitFailed'))
       setError(described.message)
       setFieldErrors(described.fieldErrors)
       setSaving(false)
+      submittingRef.current = false
     }
   }
 
@@ -249,6 +282,9 @@ export function CustomerPortalNewOrderPage() {
                       </FormField>
                       <FormField label={t('orders.new.city')} htmlFor={`cp-city-${stop.key}`} required>
                         <input id={`cp-city-${stop.key}`} value={stop.city} onChange={(e) => setStop(stop.key, { city: e.target.value })} maxLength={100} disabled={saving} />
+                      </FormField>
+                      <FormField label={t('orders.new.country')} htmlFor={`cp-country-${stop.key}`}>
+                        <CountrySelect id={`cp-country-${stop.key}`} value={stop.countryCode} onChange={(code) => setStop(stop.key, { countryCode: code })} disabled={saving} />
                       </FormField>
                     </>
                   )}
@@ -372,6 +408,7 @@ function PortalLocationDialog({ onClose }: { onClose: (created: PortalLocation |
   const [houseNumber, setHouseNumber] = useState('')
   const [postalCode, setPostalCode] = useState('')
   const [city, setCity] = useState('')
+  const [countryCode, setCountryCode] = useState('BE')
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
@@ -389,7 +426,7 @@ function PortalLocationDialog({ onClose }: { onClose: (created: PortalLocation |
         houseNumber: houseNumber.trim() || null,
         postalCode: postalCode.trim() || null,
         city: city.trim() || null,
-        countryCode: 'BE',
+        countryCode,
       })
       onClose(created)
     } catch (err) {
@@ -430,6 +467,9 @@ function PortalLocationDialog({ onClose }: { onClose: (created: PortalLocation |
         </FormField>
         <FormField label={t('orders.locationDialog.city')} htmlFor="cpl-city">
           <input id="cpl-city" value={city} onChange={(e) => setCity(e.target.value)} maxLength={100} disabled={saving} />
+        </FormField>
+        <FormField label={t('orders.locationDialog.country')} htmlFor="cpl-country">
+          <CountrySelect id="cpl-country" value={countryCode} onChange={setCountryCode} disabled={saving} />
         </FormField>
       </form>
     </Modal>

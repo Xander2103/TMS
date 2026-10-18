@@ -3,7 +3,8 @@
   "source": {
     "OrderDocument": "Opdrachtdocument",
     "Pod": "Afleverbewijs",
-    "InvoiceAttachment": "Factuurbijlage"
+    "InvoiceAttachment": "Factuurbijlage",
+    "IssuedTransportDocument": "Vrachtbrief / leveringsbon"
   },
   "columns": {
     "document": "Document",

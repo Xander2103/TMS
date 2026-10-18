@@ -52,6 +52,7 @@ vi.mock('../../transport-orders/api/transportOrdersApi', () => ({
   setOrderOneOffPrice: vi.fn(),
   searchTransportOrders: () => Promise.resolve({ items: [], totalCount: 0 }),
   reviewPortalOrder: orders.reviewPortalOrder,
+  getPortalReviewState: () => Promise.resolve({ infoRequest: null }),
 }))
 vi.mock('../../customers/api/customersApi', () => ({
   searchCustomers: () => Promise.resolve({ items: [], totalCount: 0 }),
