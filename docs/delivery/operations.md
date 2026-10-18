@@ -501,6 +501,51 @@ Twee productielessen, allebei structureel afgedekt:
 
 ---
 
+
+### 3.6 Master-data-preflight vóór de migraties van 2026-10-18
+
+Twee migraties van de core/master-data-remediatie maken identiteiten hoofdletterongevoelig en
+**breken af** (`RAISE EXCEPTION`, niets half toegepast) zodra ze dubbels tegenkomen — ze voegen
+bewust nooit zelf samen of hernoemen niets:
+
+| Migratie | Controle |
+|---|---|
+| `20261018120257_ReferenceIntegrityAndFinalInvoiceSnapshot` | klantnummers uniek per tenant op `upper(btrim(nummer))`, **verwijderde klanten tellen mee** |
+| `20261018123011_IdentityNormalization` | e-mailadressen uniek per tenant op `lower(btrim(email))`; rolnamen uniek per tenant op `lower(naam)` |
+
+**Controle (read-only, ook los te draaien vóór het onderhoudsvenster):**
+
+```bash
+psql -X -A -t -F $'\t' -v ON_ERROR_STOP=1 -h <host> -U tms -d <db> -f scripts/preflight-master-data.sql
+```
+
+Geen uitvoer = geen conflicten. Elke regel = één conflict: `soort  tenant  genormaliseerde-waarde
+aantal  rijen` (per rij: id, de waarde zoals opgeslagen, naam, `[verwijderd]` / `[inactief]` /
+`[systeemrol]`, bij rollen het aantal gebruikers). Het deployscript draait dezelfde query in
+**stap 8** en stopt vóór de downtime als er iets gevonden wordt.
+
+**Oplossen (manueel, per conflict, na overleg met de eigenaar van de gegevens):**
+
+1. **Dubbel klantnummer** (`customer_number`): beslis welke klant het nummer houdt (meestal die met
+   facturen / opdrachten). Geef de andere in de applicatie een nieuw, vrij nummer
+   (Klant → Bewerken → Klantnummer). Is het een verwijderde klant, wijzig het nummer via SQL in een
+   transactie, bv. `UPDATE customers SET "CustomerNumber" = "CustomerNumber" || '-OUD1' WHERE "Id" = '<id>';`
+   — de historiek (facturen, documenten) bewaart het nummer al in haar eigen snapshot.
+2. **Dubbel e-mailadres** (`user_email`): twee accounts die hetzelfde adres in andere hoofdletters
+   gebruiken. Bepaal welk account de persoon echt gebruikt (laatste login in het audit-log). Zet het
+   andere inactief en geef het een uniek adres (bv. `+oud` vóór de `@`) via Gebruikers → Bewerken, of
+   via SQL op `users."Email"`. **Niet** samenvoegen door rijen te verwijderen: audit en historiek
+   verwijzen naar het account-id.
+3. **Dubbele rolnaam** (`role_name`): hernoem de niet-systeemrol (bv. `Planner (2)`) via Rollen →
+   Bewerken. Hernoem nooit een `[systeemrol]`. Wil je ze samenvoegen, wijs eerst de gebruikers van de
+   ene rol aan de andere toe en deactiveer daarna de overbodige rol.
+4. Draai de preflight opnieuw tot ze **niets** meer toont; daarna pas de deploy (of
+   `dotnet ef database update`).
+
+Breekt een migratie toch af (bv. een conflict dat ná de preflight ontstond), dan staat de melding
+met de botsende waarden in de deploylog; de vorige release blijft draaien (§3.4 stap 13). Los op
+zoals hierboven en deploy opnieuw.
+
 ## 4. Omgeving & configuratie
 
 Alle secrets via omgevingsvariabelen (`Sectie__Sleutel`) of een vault; in Development via

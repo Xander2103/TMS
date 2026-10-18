@@ -318,6 +318,18 @@ SCHEMA_CREATE="$(psql_q -c "SELECT has_schema_privilege(current_user, 'public', 
 [[ "$SCHEMA_CREATE" == "t" ]] || fail "'$DB_USER' heeft geen CREATE-recht op schema public (nodig voor nieuwe tabellen)."
 note "Eigenaarschap en rechten OK voor '$DB_USER'."
 
+# Master-data identiteit (2026-10-18): de migraties ReferenceIntegrityAndFinalInvoiceSnapshot en
+# IdentityNormalization breken BEWUST af op dubbels die enkel in hoofdletters verschillen (klantnummers,
+# e-mailadressen, rolnamen) en voegen nooit zelf samen. Read-only preflight: stop hier, vóór de downtime.
+IDENTITY_CONFLICTS="$(psql_q -F $'\t' -f "$REPO_DIR/scripts/preflight-master-data.sql")"
+if [[ -n "$IDENTITY_CONFLICTS" ]]; then
+    note "Master-data-conflicten (soort, tenant, genormaliseerde waarde, aantal, rijen):"
+    printf '%s\n' "$IDENTITY_CONFLICTS"
+    note "Los ze eerst manueel op volgens docs/delivery/operations.md §3.6; er wordt niets automatisch samengevoegd."
+    fail "master-data-preflight mislukt."
+fi
+note "Master-data-preflight OK (geen dubbele klantnummers, e-mailadressen of rolnamen)."
+
 APPLIED_COUNT="$(psql_q -c "SELECT count(*) FROM \"__EFMigrationsHistory\";")"
 NEWEST_APPLIED="$(psql_q -c "SELECT \"MigrationId\" FROM \"__EFMigrationsHistory\" ORDER BY \"MigrationId\" DESC LIMIT 1;")"
 note "Toegepast in database: $APPLIED_COUNT migratie(s), nieuwste: ${NEWEST_APPLIED:-(geen)}"
