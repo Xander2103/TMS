@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { ArrowRight, Calendar, FileText, History, ListChecks, MapPin, Package, Tag } from 'lucide-react'
 import { Badge, type BadgeTone } from '../../../components/ui/Badge'
 import { useLocale } from '../../../i18n/localeContext'
+import { useCanViewPrices } from '../../auth/commercialVisibility'
 import { formatDateTime } from '../../../utils/dates'
 import { euro, INVOICE_STATUS_LABELS, type InvoiceStatus } from '../../invoices/types'
 import { useUnitTypes } from '../../master-data/hooks/useUnitTypes'
@@ -66,6 +67,7 @@ const MAX_ACTIVITY_PREVIEW = 3
 export function DossierOverview() {
   const { t } = useLocale()
   const ws = useDossierWorkspace()
+  const canViewPrices = useCanViewPrices()
   const { dossier, activities, transportActivities, routeActivity, firstOrder, firstOrderLoading, firstLinkedOrderId } = ws
   // Labels of every unit ever used: a retired unit on an old order still shows its name.
   const unitLabel = unitLabelFrom(useUnitTypes().displayUnits)
@@ -159,7 +161,8 @@ export function DossierOverview() {
   /** Driver · plate · price (or price status) — the same rules as the activity card. */
   function activityFacts(activity: DossierActivity): ReactNode {
     const assignment = activity.assignment ?? null
-    const status = activityPriceStatus(dossier, activity)
+    // SEC-M1: no price right → no price facts (the API sent none).
+    const status = canViewPrices ? activityPriceStatus(dossier, activity) : null
     return (
       <span className="dossier-ov-facts">
         {activity.hasStops && (
@@ -257,49 +260,51 @@ export function DossierOverview() {
         )}
       </OverviewCard>
 
-      <OverviewCard tab="prijs" icon={Tag} title={t('dossiers.overview.priceTitle')} status={priceStatus} action={t('dossiers.overview.openPrice')}>
-        {isPriced ? (
-          <p className="dossier-ov-amount">
-            <strong>{euro(fin.agreedOrderTotal)}</strong>
-            {zero > 0 && <span className="dossier-ov-zero" title={t('dossiers.overview.priceZero')}>⚠</span>}
-          </p>
-        ) : (
-          <p className="dossier-ov-amount">
-            <strong className="dossier-price-none">{t('dossierSheet.price.noPrice')}</strong>
-          </p>
-        )}
-        {billable > 0 && <p className="dossier-ov-muted">{t('dossierSheet.price.partialTotal', { priced, total: billable })}</p>}
-        {(dossier.invoices?.length ?? 0) > 0 && (
-          <p className="dossier-ov-muted dossier-ov-invoices">
-            {/* ACC-M12: the reverse link from the dossier to its invoice(s). */}
-            {t('dossiers.overview.invoices')}:{' '}
-            {dossier.invoices!.map((invoice, index) => (
-              <span key={invoice.id}>
-                {index > 0 && ' · '}
-                <Link to={`/invoices/${invoice.id}`}>{invoice.displayNumber || invoice.invoiceNumber || t('invoices.status.Draft')}</Link>
-                {invoice.status in INVOICE_STATUS_LABELS && ` (${t(INVOICE_STATUS_LABELS[invoice.status as InvoiceStatus])})`}
-              </span>
-            ))}
-          </p>
-        )}
-        {missingPrices.length > 0 && (
-          <ul className="dossier-ov-missing" aria-label={t('dossierActivities.overview.missingPrices')}>
-            {missingPrices.map((activity) => (
-              <li key={activity.id}>
-                {activityReference(activity)}
-                {activity.linkedOrderNumber && <span className="dossier-ov-muted"> · {activity.activityTypeName}</span>}:{' '}
-                {t(PRICE_STATUS_LABEL_KEYS[activityPriceStatus(dossier, activity) ?? 'NotPriced'])}
-              </li>
-            ))}
-          </ul>
-        )}
-        {!isPriced && (
-          <p className="dossier-ov-muted">
-            {t('dossiers.overview.priceNoneBody')} {t('dossiers.overview.priceNoneHint')}
-          </p>
-        )}
-        {zero > 0 && <p className="dossier-price-zero-warning">{t('dossiers.overview.priceZero')}</p>}
-      </OverviewCard>
+      {canViewPrices && (
+        <OverviewCard tab="prijs" icon={Tag} title={t('dossiers.overview.priceTitle')} status={priceStatus} action={t('dossiers.overview.openPrice')}>
+          {isPriced ? (
+            <p className="dossier-ov-amount">
+              <strong>{euro(fin.agreedOrderTotal)}</strong>
+              {zero > 0 && <span className="dossier-ov-zero" title={t('dossiers.overview.priceZero')}>⚠</span>}
+            </p>
+          ) : (
+            <p className="dossier-ov-amount">
+              <strong className="dossier-price-none">{t('dossierSheet.price.noPrice')}</strong>
+            </p>
+          )}
+          {billable > 0 && <p className="dossier-ov-muted">{t('dossierSheet.price.partialTotal', { priced, total: billable })}</p>}
+          {(dossier.invoices?.length ?? 0) > 0 && (
+            <p className="dossier-ov-muted dossier-ov-invoices">
+              {/* ACC-M12: the reverse link from the dossier to its invoice(s). */}
+              {t('dossiers.overview.invoices')}:{' '}
+              {dossier.invoices!.map((invoice, index) => (
+                <span key={invoice.id}>
+                  {index > 0 && ' · '}
+                  <Link to={`/invoices/${invoice.id}`}>{invoice.displayNumber || invoice.invoiceNumber || t('invoices.status.Draft')}</Link>
+                  {invoice.status in INVOICE_STATUS_LABELS && ` (${t(INVOICE_STATUS_LABELS[invoice.status as InvoiceStatus])})`}
+                </span>
+              ))}
+            </p>
+          )}
+          {missingPrices.length > 0 && (
+            <ul className="dossier-ov-missing" aria-label={t('dossierActivities.overview.missingPrices')}>
+              {missingPrices.map((activity) => (
+                <li key={activity.id}>
+                  {activityReference(activity)}
+                  {activity.linkedOrderNumber && <span className="dossier-ov-muted"> · {activity.activityTypeName}</span>}:{' '}
+                  {t(PRICE_STATUS_LABEL_KEYS[activityPriceStatus(dossier, activity) ?? 'NotPriced'])}
+                </li>
+              ))}
+            </ul>
+          )}
+          {!isPriced && (
+            <p className="dossier-ov-muted">
+              {t('dossiers.overview.priceNoneBody')} {t('dossiers.overview.priceNoneHint')}
+            </p>
+          )}
+          {zero > 0 && <p className="dossier-price-zero-warning">{t('dossiers.overview.priceZero')}</p>}
+        </OverviewCard>
+      )}
 
       {hasGoods && (
         <OverviewCard

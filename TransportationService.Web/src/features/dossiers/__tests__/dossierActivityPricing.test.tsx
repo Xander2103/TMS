@@ -474,7 +474,8 @@ describe('Price per activity — sales lines of a standalone activity', () => {
   })
 
   it('is read-only without dossiers.price, with a short explanation', async () => {
-    auth.permissions = new Set(['dossiers.view', 'dossiers.manage'])
+    // invoices.view: may SEE prices (SEC-M1) but not change them.
+    auth.permissions = new Set(['dossiers.view', 'dossiers.manage', 'invoices.view'])
     api.getDossier.mockResolvedValue(
       plateauOnly(plateau({ pricingSource: 'Lines', isPriced: true, agreedPrice: 125, priceStatus: 'Priced', priceLines: [line('pl-1', 1, 'Transport', 1, 125, 125)] }), 125),
     )
@@ -921,7 +922,8 @@ describe('Pricing UX — € 0 needs an explicit decision; master-detail keeps e
   })
 
   it('without dossiers.price the callout explains the state but offers no actions', async () => {
-    auth.permissions = new Set(['dossiers.view', 'dossiers.manage'])
+    // invoices.view: may SEE prices (SEC-M1) but not change them.
+    auth.permissions = new Set(['dossiers.view', 'dossiers.manage', 'invoices.view'])
     api.getDossier.mockResolvedValue(zeroDossier())
     renderPage()
     const callout = await screen.findByTestId('zero-callout')

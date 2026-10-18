@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { useLocale } from '../../../i18n/localeContext'
+import { useCanViewPrices } from '../../auth/commercialVisibility'
 import { formatDate } from '../../../utils/dates'
 import { getTransportOrder } from '../../transport-orders/api/transportOrdersApi'
 import { ORDER_STATUS_LABELS, ORDER_STATUS_TONE, type TransportOrderDetail } from '../../transport-orders/types'
@@ -30,6 +31,7 @@ interface ActivityOrderContextProps {
  */
 export function ActivityOrderContext({ dossier, activity, canEdit, onOpenTab }: ActivityOrderContextProps) {
   const { t } = useLocale()
+  const canViewPrices = useCanViewPrices()
   const orderId = activity.linkedTransportOrderId!
   const [loaded, setLoaded] = useState<{ id: string; order: TransportOrderDetail | null } | null>(null)
 
@@ -83,7 +85,7 @@ export function ActivityOrderContext({ dossier, activity, canEdit, onOpenTab }: 
         </section>
       )}
 
-      {activity.isBillable !== false && (
+      {canViewPrices && activity.isBillable !== false && (
         <section id="ad-sec-prijs" className="ad-section" aria-labelledby="ad-h-prijs">
           <h4 id="ad-h-prijs">{t('dossiers.orderView.price')}</h4>
           <p className="ad-inline">

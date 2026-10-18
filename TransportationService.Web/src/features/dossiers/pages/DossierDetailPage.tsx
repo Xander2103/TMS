@@ -14,6 +14,7 @@ import { describeApiError, getFieldError, type FieldErrors } from '../../../api/
 import { useLocale } from '../../../i18n/localeContext'
 import { addRecentItem } from '../../../hooks/recentItems'
 import { useAuth } from '../../auth/authContextValue'
+import { useCanViewPrices } from '../../auth/commercialVisibility'
 import { searchCustomers } from '../../customers/api/customersApi'
 import { getTransportOrder } from '../../transport-orders/api/transportOrdersApi'
 import type { TransportOrderDetail } from '../../transport-orders/types'
@@ -90,6 +91,8 @@ function DossierDetailContent() {
   // has its own right — neither orders.edit nor dossiers.manage implies it.
   const canEditActivityPrice = hasPermission('dossiers.price')
   const canCreateLocations = hasPermission('locations.create')
+  // SEC-M1: without a price right the API strips every amount — no price tab, no price warnings.
+  const canViewPrices = useCanViewPrices()
   const goTo = useDossierNavigator()
   const routeEditorRef = useRef<DossierRouteEditorHandle>(null)
   const pricePanelRef = useRef<DossierPricePanelHandle>(null)
@@ -252,8 +255,8 @@ function DossierDetailContent() {
   const hasRoute = activities.some((a) => a.hasStops)
   const hasGoods = activities.some((a) => a.supportsGoods)
   const availableTabs = useMemo(
-    () => DOSSIER_TABS.filter((tab) => (tab === 'route' ? hasRoute : tab === 'goederen' ? hasGoods : true)),
-    [hasRoute, hasGoods],
+    () => DOSSIER_TABS.filter((tab) => (tab === 'route' ? hasRoute : tab === 'goederen' ? hasGoods : tab === 'prijs' ? canViewPrices : true)),
+    [hasRoute, hasGoods, canViewPrices],
   )
   const requestedTab: DossierTab | null = section === undefined ? 'overzicht' : isDossierTab(section) ? section : null
   const activeTab: DossierTab = requestedTab && availableTabs.includes(requestedTab) ? requestedTab : 'overzicht'
@@ -568,7 +571,7 @@ function DossierDetailContent() {
         {isOpen && <DossierPortalReview dossier={dossier} onReviewed={load} />}
 
         <AttentionPanel
-          issues={dossier.readiness}
+          issues={canViewPrices ? dossier.readiness : dossier.readiness.filter((issue) => issue.section !== 'prijs')}
           activities={orderedActivities}
           onNavigate={goToSection}
           openIncidents={dossier.incidents.filter((i) => i.status === 'New' || i.status === 'InProgress')}

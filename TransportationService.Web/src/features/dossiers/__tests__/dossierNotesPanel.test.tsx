@@ -14,7 +14,10 @@ import { dossierDetail } from './fixtures'
 
 const auth = vi.hoisted(() => ({ permissions: new Set<string>() }))
 vi.mock('../../auth/authContextValue', () => ({
-  useAuth: () => ({ hasPermission: (code: string) => auth.permissions.has(code) }),
+  useAuth: () => ({
+    hasPermission: (code: string) => auth.permissions.has(code),
+    hasAnyPermission: (codes: string[]) => codes.some((code) => auth.permissions.has(code)),
+  }),
 }))
 const toast = vi.hoisted(() => ({ showToast: vi.fn(), showSuccess: vi.fn(), showError: vi.fn() }))
 vi.mock('../../../components/ui/toastContext', () => ({ useToast: () => toast }))

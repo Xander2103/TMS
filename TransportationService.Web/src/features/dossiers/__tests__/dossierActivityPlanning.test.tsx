@@ -458,7 +458,8 @@ describe('Dossier overview (spec §17)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     clearVehicleCapacityCache()
-    auth.permissions = new Set(['dossiers.view'])
+    // A read-only reader WITH a price right (SEC-M1): invoices.view sees prices, edits nothing.
+    auth.permissions = new Set(['dossiers.view', 'invoices.view'])
     window.HTMLElement.prototype.scrollIntoView = vi.fn()
   })
 

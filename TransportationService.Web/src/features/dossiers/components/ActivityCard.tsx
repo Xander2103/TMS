@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { useLocale } from '../../../i18n/localeContext'
+import { useCanViewPrices } from '../../auth/commercialVisibility'
 import { INVOICE_STATUS_LABELS, type InvoiceStatus } from '../../invoices/types'
 import { ORDER_STATUS_LABELS, ORDER_STATUS_TONE, type TransportOrderStatus } from '../../transport-orders/types'
 import { EXECUTION_STATUS_TONE, PRICE_STATUS_LABEL_KEYS, PRICE_STATUS_TONE, activityPriceStatus, activityPriceText } from '../activityDisplay'
@@ -39,6 +40,7 @@ interface ActivityCardProps {
  */
 export function ActivityCard({ activity, activities, dossier, onOpen, onOpenDetail, onOpenDocuments, highlighted = false }: ActivityCardProps) {
   const { t } = useLocale()
+  const canViewPrices = useCanViewPrices()
   const status = activity.linkedOrderStatus as TransportOrderStatus | null
   const linkedTo = activity.linkedActivityId
     ? activities.find((a) => a.id === activity.linkedActivityId)
@@ -137,17 +139,22 @@ export function ActivityCard({ activity, activities, dossier, onOpen, onOpenDeta
             )}
           </dd>
         </div>
-        <div>
-          <dt>{t('dossierActivities.card.price')}</dt>
-          <dd className={priceStatus === 'NotPriced' ? 'is-missing' : undefined}>
-            {priceText ?? t('dossierActivities.price.notBillable')}
-          </dd>
-        </div>
-        <div>
-          <dt>{t('dossierActivities.card.priceStatus')}</dt>
-          <dd>{priceStatus ? <Badge tone={PRICE_STATUS_TONE[priceStatus]}>{t(PRICE_STATUS_LABEL_KEYS[priceStatus])}</Badge> : '—'}</dd>
-        </div>
-        {activity.invoiceId && (
+        {/* SEC-M1: price, price status and invoice only for a price right (the API sends none otherwise). */}
+        {canViewPrices && (
+          <>
+            <div>
+              <dt>{t('dossierActivities.card.price')}</dt>
+              <dd className={priceStatus === 'NotPriced' ? 'is-missing' : undefined}>
+                {priceText ?? t('dossierActivities.price.notBillable')}
+              </dd>
+            </div>
+            <div>
+              <dt>{t('dossierActivities.card.priceStatus')}</dt>
+              <dd>{priceStatus ? <Badge tone={PRICE_STATUS_TONE[priceStatus]}>{t(PRICE_STATUS_LABEL_KEYS[priceStatus])}</Badge> : '—'}</dd>
+            </div>
+          </>
+        )}
+        {canViewPrices && activity.invoiceId && (
           <div>
             {/* ACC-M12: the reverse link from the unit to the invoice that carries it. */}
             <dt>{t('dossierActivities.card.invoice')}</dt>

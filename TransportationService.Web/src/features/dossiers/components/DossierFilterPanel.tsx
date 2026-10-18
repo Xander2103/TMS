@@ -24,6 +24,8 @@ interface DossierFilterPanelProps {
   currentUserId?: string | null
   /** Patches the URL-backed filter state; `replace` for keystrokes so Back skips them. */
   onChange: (patch: Partial<DossierSearchFilters>, options?: { replace?: boolean }) => void
+  /** SEC-M1: false hides the invoice-status filter, which the API refuses without a price right. */
+  canViewPrices?: boolean
 }
 
 /**
@@ -31,7 +33,7 @@ interface DossierFilterPanelProps {
  * URL-backed filter state — it holds no filter state of its own, so closing it never drops a
  * filter. Every field maps 1:1 to a parameter of GET /api/dossiers/search.
  */
-export function DossierFilterPanel({ id, filters, lookups, currentUserId = null, onChange }: DossierFilterPanelProps) {
+export function DossierFilterPanel({ id, filters, lookups, currentUserId = null, onChange, canViewPrices = true }: DossierFilterPanelProps) {
   const { t } = useLocale()
   const idPrefix = useId()
   const fieldId = (key: DossierFilterKey) => `${idPrefix}-${key}`
@@ -194,13 +196,17 @@ export function DossierFilterPanel({ id, filters, lookups, currentUserId = null,
           { value: 'Partial', label: t('dossiers.filters.options.partial') },
           { value: 'Unpriced', label: t('dossiers.filters.options.unpriced') },
         ]),
-        selectField('invoiceStatus', [
-          { value: 'ReadyToInvoice', label: t('dossiers.filters.options.readyToInvoice') },
-          { value: 'NotInvoiced', label: t('dossiers.filters.options.notInvoiced') },
-          { value: 'Draft', label: t('dossiers.filters.options.invoiceDraft') },
-          { value: 'Sent', label: t('dossiers.filters.options.invoiceSent') },
-          { value: 'Paid', label: t('dossiers.filters.options.invoicePaid') },
-        ]),
+        ...(canViewPrices
+          ? [
+              selectField('invoiceStatus', [
+                { value: 'ReadyToInvoice', label: t('dossiers.filters.options.readyToInvoice') },
+                { value: 'NotInvoiced', label: t('dossiers.filters.options.notInvoiced') },
+                { value: 'Draft', label: t('dossiers.filters.options.invoiceDraft') },
+                { value: 'Sent', label: t('dossiers.filters.options.invoiceSent') },
+                { value: 'Paid', label: t('dossiers.filters.options.invoicePaid') },
+              ]),
+            ]
+          : []),
       ])}
       {group('documents', [
         selectField('hasCmr', [

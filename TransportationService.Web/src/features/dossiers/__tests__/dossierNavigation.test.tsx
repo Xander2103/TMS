@@ -640,7 +640,8 @@ describe('Dossier navigation — permissions', () => {
   })
 
   it('without orders.edit the overview still renders and the route tab is read-only', async () => {
-    auth.permissions = new Set(['dossiers.view', 'dossiers.manage'])
+    // tariffs.view keeps the price card (SEC-M1) without any order edit right.
+    auth.permissions = new Set(['dossiers.view', 'dossiers.manage', 'tariffs.view'])
     const user = userEvent.setup()
     renderPage()
     expect(await screen.findByRole('article', { name: 'Route' })).toBeInTheDocument()
@@ -658,7 +659,10 @@ describe('Dossier navigation — permissions', () => {
     renderPage()
     expect(await screen.findByRole('article', { name: 'Route' })).toBeInTheDocument()
     expect(await within(card('Route')).findByText('Nexans site Antwerpen')).toBeInTheDocument()
-    expect(within(subnav()).getAllByRole('link')).toHaveLength(7)
+    // SEC-M1: no price right → no Prijs tab and no price card (the API sent no amounts).
+    expect(within(subnav()).getAllByRole('link')).toHaveLength(6)
+    expect(within(subnav()).queryByRole('link', { name: /Prijs/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('article', { name: 'Verkoop & prijs' })).not.toBeInTheDocument()
     expect(document.querySelectorAll('input, textarea, select')).toHaveLength(0)
     expect(screen.queryByRole('button', { name: '+ Activiteit' })).not.toBeInTheDocument()
   })

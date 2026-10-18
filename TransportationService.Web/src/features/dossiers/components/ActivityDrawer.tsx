@@ -6,6 +6,7 @@ import { FormField } from '../../../components/ui/FormField'
 import { ValidationSummary } from '../../../components/ui/ValidationSummary'
 import { describeApiError } from '../../../api/problemDetails'
 import { useLocale, type TranslateFn } from '../../../i18n/localeContext'
+import { useCanViewPrices } from '../../auth/commercialVisibility'
 import { createOrderForActivity, deleteDossierActivity, updateDossierActivity } from '../api/dossiersApi'
 import type { DossierActivity, DossierDetail } from '../types'
 import { DossierNotesPanel } from '../notes/DossierNotesPanel'
@@ -54,6 +55,7 @@ export function ActivityDrawer({
   dossier, activity, canManage, onClose, onUpdated, onConflict, onApply, onReload, initialFocus, onOpenTab,
 }: ActivityDrawerProps) {
   const { t } = useLocale()
+  const canViewPrices = useCanViewPrices()
   const [label, setLabel] = useState(activity.label ?? '')
   const [plannedDate, setPlannedDate] = useState(activity.plannedDate ?? '')
   const [durationHours, setDurationHours] = useState(activity.durationHours == null ? '' : String(activity.durationHours))
@@ -144,7 +146,7 @@ export function ActivityDrawer({
   // documents sit in this drawer; the full order page is one secondary link away.
   const orderBacked = activity.hasStops && Boolean(activity.linkedTransportOrderId)
   const sections = [
-    ...(orderBacked ? ['overzicht', 'stops', ...(activity.supportsGoods ? ['lading'] : []), ...(activity.isBillable !== false ? ['prijs'] : [])] : []),
+    ...(orderBacked ? ['overzicht', 'stops', ...(activity.supportsGoods ? ['lading'] : []), ...(canViewPrices && activity.isBillable !== false ? ['prijs'] : [])] : []),
     ...(activity.hasStops ? ['planning'] : []),
     ...(orderBacked ? ['documenten'] : []),
     'notities',

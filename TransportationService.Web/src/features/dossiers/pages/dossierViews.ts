@@ -13,6 +13,8 @@ export const DOSSIER_PRESETS: readonly DossierPresetId[] = ['all', 'myOpen', 'un
 export interface PresetContext {
   /** The signed-in user; without one "Mijn open" cannot be built and is hidden. */
   userId: string | null
+  /** SEC-M1: false hides the invoice-status preset — the API refuses that filter without a price right. */
+  canViewPrices?: boolean
   now?: Date
 }
 
@@ -41,7 +43,7 @@ export function presetPatch(id: DossierPresetId, context: PresetContext): Dossie
     case 'unpriced':
       return { status: 'Open', priceStatus: 'Unpriced' }
     case 'toInvoice':
-      return { status: 'Closed', invoiceStatus: 'ReadyToInvoice' }
+      return context.canViewPrices === false ? null : { status: 'Closed', invoiceStatus: 'ReadyToInvoice' }
     case 'openIncident':
       return { status: 'Open', hasOpenIncident: 'true' }
   }

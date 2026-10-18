@@ -6,6 +6,8 @@ import { DOSSIER_DEFAULT_OPTIONAL, DOSSIER_OPTIONAL_COLUMNS, type DossierColumnK
 interface DossierColumnChooserProps {
   optional: readonly DossierColumnKey[]
   onChange: (optional: DossierColumnKey[]) => void
+  /** The optional columns this user may pick (default: all of them). */
+  available?: readonly DossierColumnKey[]
 }
 
 /**
@@ -13,7 +15,7 @@ interface DossierColumnChooserProps {
  * defaults. The fixed columns (number, status, customer, date) are not offered: a dossier row
  * without them answers nothing.
  */
-export function DossierColumnChooser({ optional, onChange }: DossierColumnChooserProps) {
+export function DossierColumnChooser({ optional, onChange, available = DOSSIER_OPTIONAL_COLUMNS }: DossierColumnChooserProps) {
   const { t } = useLocale()
   const [open, setOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
@@ -56,7 +58,7 @@ export function DossierColumnChooser({ optional, onChange }: DossierColumnChoose
       </button>
       {open && (
         <div id={panelId} className="dossier-columns-panel" role="group" aria-label={t('dossiers.list.columnsPanelLabel')}>
-          {DOSSIER_OPTIONAL_COLUMNS.map((key) => (
+          {available.map((key) => (
             <label key={key} className="dossier-columns-option">
               <input type="checkbox" checked={optional.includes(key)} onChange={(event) => toggle(key, event.target.checked)} />
               {t(`dossiers.list.columns.${key}`)}

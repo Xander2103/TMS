@@ -10,7 +10,11 @@ import { dossierDetail, dossierListItem } from './fixtures'
 
 const auth = vi.hoisted(() => ({ permissions: new Set<string>() }))
 vi.mock('../../auth/authContextValue', () => ({
-  useAuth: () => ({ hasPermission: (code: string) => auth.permissions.has(code), user: { id: 'u-1' } }),
+  useAuth: () => ({
+    hasPermission: (code: string) => auth.permissions.has(code),
+    hasAnyPermission: (codes: string[]) => codes.some((code) => auth.permissions.has(code)),
+    user: { id: 'u-1' },
+  }),
 }))
 
 const toast = vi.hoisted(() => ({ showToast: vi.fn(), showSuccess: vi.fn(), showError: vi.fn() }))
@@ -135,7 +139,8 @@ async function expectLastSearch(params: Record<string, unknown>) {
 describe('DossiersPage (lijst)', () => {
   beforeEach(() => {
     window.localStorage.clear()
-    auth.permissions = new Set(['dossiers.view', 'dossiers.manage', 'dossiers.reopen'])
+    // A planner: orders.edit is a price right (SEC-M1), so the Prijs/Facturatie columns are there.
+    auth.permissions = new Set(['dossiers.view', 'dossiers.manage', 'dossiers.reopen', 'orders.edit'])
     toast.showSuccess.mockReset()
     toast.showError.mockReset()
     api.searchDossiers.mockReset()
@@ -1316,4 +1321,47 @@ describe('DossiersPage (lijst)', () => {
     })
   })
 
+  // ---- SEC-M1: zonder prijsrecht -------------------------------------------------------------------
+
+  describe('zonder prijsrecht (Dispatcher)', () => {
+    beforeEach(() => {
+      // orders.view / dossiers.view / planning.*: no price right, so the API sends no amounts.
+      auth.permissions = new Set(['dossiers.view', 'orders.view', 'planning.view'])
+      api.searchDossiers.mockResolvedValue(paged([dossierListItem({ agreedPriceTotal: null, invoiceStatus: null })]))
+    })
+
+    it('toont geen Prijs- en Facturatiekolom en biedt ze ook niet aan onder "Kolommen"', async () => {
+      const user = userEvent.setup()
+      renderPage()
+      await screen.findByRole('table')
+
+      expect(headerTexts()).toEqual(['Dossiernr.', 'Status', 'Klant', 'Referentie', 'Datum', 'Transport', 'Planning', ''])
+      expect(within(await findRow()).queryByText(/€|Niet geprijsd/)).toBeNull()
+
+      await user.click(screen.getByRole('button', { name: 'Kolommen' }))
+      const panel = screen.getByRole('group', { name: /kolommen/i })
+      expect(within(panel).queryByRole('checkbox', { name: 'Prijs' })).toBeNull()
+      expect(within(panel).queryByRole('checkbox', { name: 'Facturatie' })).toBeNull()
+      expect(within(panel).getByRole('checkbox', { name: 'Referentie' })).toBeInTheDocument()
+    })
+
+    it('biedt geen facturatiestatusfilter en geen weergave "Te factureren" aan; prijsstatus blijft', async () => {
+      const user = userEvent.setup()
+      renderPage()
+      await screen.findByRole('table')
+
+      expect(within(screen.getByRole('group', { name: 'Weergave' })).queryByRole('button', { name: 'Te factureren' })).toBeNull()
+      const panel = await openPanel(user)
+      expect(within(panel).queryByLabelText('Facturatiestatus')).toBeNull()
+      expect(within(panel).getByLabelText('Prijsstatus')).toBeInTheDocument()
+    })
+
+    it('stuurt een facturatiestatus uit een oude link nooit mee (de API weigert die met 400)', async () => {
+      renderPage('/dossiers?status=Closed&invoiceStatus=ReadyToInvoice')
+      await screen.findByRole('table')
+
+      await expectLastSearch({ status: 'Closed' })
+      expect(chipTexts()).toEqual(['Bevestigd'])
+    })
+  })
 })

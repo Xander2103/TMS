@@ -16,6 +16,7 @@ import { getActiveLocale } from '../../../i18n/activeLocale'
 import { useLocale } from '../../../i18n/localeContext'
 import { formatDate } from '../../../utils/dates'
 import { useAuth } from '../../auth/authContextValue'
+import { useCanViewPrices } from '../../auth/commercialVisibility'
 import { searchCustomers } from '../../customers/api/customersApi'
 import { searchDrivers } from '../../drivers/api/driversApi'
 import { euro } from '../../invoices/types'
@@ -50,6 +51,8 @@ import {
   type DossierFilterKey,
 } from './dossierSearchParams'
 import {
+  DOSSIER_OPTIONAL_COLUMNS,
+  DOSSIER_PRICE_COLUMNS,
   fitColumns,
   readDossierListPrefs,
   tableMinWidth,
@@ -135,8 +138,15 @@ export function DossiersPage() {
   const canManage = hasPermission('dossiers.manage')
   const canReopen = hasPermission('dossiers.reopen')
   const userId = user?.id ?? null
+  const canViewPrices = useCanViewPrices()
 
-  const { filters, apply } = useDossierFilters()
+  const { filters: urlFilters, apply } = useDossierFilters()
+  // SEC-M1: without a price right the API answers an invoice-status filter with 400, so one that
+  // arrives through an old link or a saved view is ignored — never sent, never shown as a chip.
+  const filters = useMemo(
+    () => (canViewPrices || urlFilters.invoiceStatus === '' ? urlFilters : { ...urlFilters, invoiceStatus: '' as const }),
+    [canViewPrices, urlFilters],
+  )
 
   // --- B10: columns + density (per user, browser-local) + the responsive fit -------------------
   const [prefs, setPrefs] = useState<DossierListPrefs>(() => readDossierListPrefs(userId))
@@ -156,7 +166,15 @@ export function DossiersPage() {
     observer.observe(element)
     return () => observer.disconnect()
   }, [])
-  const chosenColumns = useMemo(() => visibleColumns(prefs.optional), [prefs.optional])
+  // SEC-M1: no price right → no Prijs / Facturatie columns (the API sends neither).
+  const availableOptional = useMemo(
+    () => DOSSIER_OPTIONAL_COLUMNS.filter((key) => canViewPrices || !DOSSIER_PRICE_COLUMNS.includes(key)),
+    [canViewPrices],
+  )
+  const chosenColumns = useMemo(
+    () => visibleColumns(prefs.optional.filter((key) => availableOptional.includes(key))),
+    [prefs.optional, availableOptional],
+  )
   const shownColumns = useMemo(() => fitColumns(chosenColumns, containerWidth), [chosenColumns, containerWidth])
   const hiddenByWidth = chosenColumns.filter((key) => !shownColumns.includes(key))
 
@@ -166,7 +184,7 @@ export function DossiersPage() {
     setSavedViews(next)
     writeSavedViews(userId, next)
   }
-  const presetContext = useMemo(() => ({ userId }), [userId])
+  const presetContext = useMemo(() => ({ userId, canViewPrices }), [userId, canViewPrices])
 
   const chips = activeFilterChips(filters)
   const hasActiveFilters = chips.length > 0 || filters.search !== ''
@@ -438,7 +456,7 @@ export function DossiersPage() {
           </button>
         </FilterBar>
 
-        {panelOpen && <DossierFilterPanel id={panelId} filters={filters} lookups={lookups} currentUserId={userId} onChange={apply} />}
+        {panelOpen && <DossierFilterPanel id={panelId} filters={filters} lookups={lookups} currentUserId={userId} onChange={apply} canViewPrices={canViewPrices} />}
 
         {hasActiveFilters && (
           <div className="dossier-active-filters">
@@ -499,7 +517,7 @@ export function DossiersPage() {
               ))}
             </select>
           </label>
-          <DossierColumnChooser optional={prefs.optional} onChange={(optional) => updatePrefs({ optional })} />
+          <DossierColumnChooser optional={prefs.optional} available={availableOptional} onChange={(optional) => updatePrefs({ optional })} />
           <div className="dossier-density" role="group" aria-label={t('dossiers.list.densityLabel')}>
             {(['compact', 'normal'] as DossierListDensity[]).map((option) => (
               <button

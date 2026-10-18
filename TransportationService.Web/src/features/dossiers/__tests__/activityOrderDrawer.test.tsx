@@ -8,6 +8,7 @@ import { dossierActivity, dossierDetail, orderDetail } from './fixtures'
 const getOrder = vi.hoisted(() => vi.fn())
 vi.mock('../../transport-orders/api/transportOrdersApi', () => ({ getTransportOrder: getOrder }))
 vi.mock('../../auth/authContextValue', () => ({ useAuth: () => ({ hasPermission: () => false, user: { id: 'u-1' } }) }))
+vi.mock('../../auth/commercialVisibility', () => ({ useCanViewPrices: () => true }))
 vi.mock('../../master-data/hooks/useLookupOptions', () => ({ useLookupOptions: () => ({ options: [] }) }))
 vi.mock('../notes/DossierNotesPanel', () => ({ DossierNotesPanel: () => <p>notes</p> }))
 vi.mock('../components/ActivityPlanningBlock', () => ({ ActivityPlanningBlock: () => <p>planning-block</p> }))

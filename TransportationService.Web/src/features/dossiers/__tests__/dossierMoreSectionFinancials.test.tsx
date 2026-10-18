@@ -1,8 +1,15 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { DossierMoreSection } from '../components/DossierMoreSection'
 import type { DossierDetail } from '../types'
+
+const prices = vi.hoisted(() => ({ visible: true }))
+vi.mock('../../auth/commercialVisibility', () => ({ useCanViewPrices: () => prices.visible }))
+
+beforeEach(() => {
+  prices.visible = true
+})
 
 // A missing price is not € 0,00: the financial block in "Meer" follows the same provenance rule
 // (isDossierPriced) as the price tab and the overview.
@@ -36,5 +43,18 @@ describe('DossierMoreSection — agreed revenue', () => {
   it('shows the server total once something is priced, also a deliberate € 0', () => {
     const kpi = renderSection(dossier({ pricedActivityCount: 1, billableActivityCount: 2, agreedOrderTotal: 125 }))
     expect(kpi.getByText(/125,00/)).toBeInTheDocument()
+  })
+})
+
+describe('DossierMoreSection without a price right (SEC-M1)', () => {
+  it('leaves the financial block out instead of showing € 0,00 tiles', () => {
+    prices.visible = false
+    render(
+      <MemoryRouter>
+        <DossierMoreSection dossier={dossier({})} canManage={false} busy={false} onRemoveRelation={vi.fn()} defaultOpen />
+      </MemoryRouter>,
+    )
+    expect(screen.queryByText('Afgesproken omzet')).not.toBeInTheDocument()
+    expect(screen.queryByText(/€/)).not.toBeInTheDocument()
   })
 })

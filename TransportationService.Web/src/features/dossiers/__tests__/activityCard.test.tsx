@@ -6,6 +6,9 @@ import { ActivityList } from '../components/ActivityList'
 import type { DossierActivity, DossierActivityAssignment } from '../types'
 import { dossierActivity, dossierDetail } from './fixtures'
 
+// The card is read by a price viewer here; SEC-M1 (no price right) is covered in activityCardInvoiceLink.
+vi.mock('../../auth/commercialVisibility', () => ({ useCanViewPrices: () => true }))
+
 /**
  * Master sprint 2026-09-21 (spec §16) — the activity card shows what the DTO states and nothing
  * else: real driver / plate / price / CMR / note preview, and an explicit "missing" for whatever

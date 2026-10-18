@@ -9,7 +9,10 @@ import type { DossierDetail } from '../types'
 
 const auth = vi.hoisted(() => ({ permissions: new Set<string>(['dossiers.view', 'dossiers.manage']) }))
 vi.mock('../../auth/authContextValue', () => ({
-  useAuth: () => ({ hasPermission: (code: string) => auth.permissions.has(code) }),
+  useAuth: () => ({
+    hasPermission: (code: string) => auth.permissions.has(code),
+    hasAnyPermission: (codes: string[]) => codes.some((code) => auth.permissions.has(code)),
+  }),
 }))
 vi.mock('../../../components/ui/toastContext', () => ({
   useToast: () => ({ showToast: vi.fn(), showSuccess: vi.fn(), showError: vi.fn() }),

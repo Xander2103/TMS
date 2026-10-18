@@ -32,6 +32,12 @@ export const DOSSIER_FIXED_COLUMNS: readonly DossierColumnKey[] = ['number', 'st
 /** Columns offered in "Kolommen ▾", in display order. */
 export const DOSSIER_OPTIONAL_COLUMNS: readonly DossierColumnKey[] = ['reference', 'transport', 'planning', 'driver', 'price', 'invoice', 'responsible']
 
+/**
+ * SEC-M1: the commercial columns. Without a price right the API sends no amount and no invoice
+ * status, so these are neither shown nor offered (the stored preference is kept for later).
+ */
+export const DOSSIER_PRICE_COLUMNS: readonly DossierColumnKey[] = ['price', 'invoice']
+
 /** Default visible optional columns: the daily questions (planned? priced? invoiced?) plus route and reference. */
 export const DOSSIER_DEFAULT_OPTIONAL: readonly DossierColumnKey[] = ['reference', 'transport', 'planning', 'price', 'invoice']
 

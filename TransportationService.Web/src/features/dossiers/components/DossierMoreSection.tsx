@@ -2,6 +2,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { useLocale } from '../../../i18n/localeContext'
+import { useCanViewPrices } from '../../auth/commercialVisibility'
 import { euro } from '../../invoices/types'
 import {
   INCIDENT_SEVERITY_LABELS,
@@ -29,6 +30,8 @@ interface DossierMoreSectionProps {
 export function DossierMoreSection({ dossier, canManage, busy, onRemoveRelation, defaultOpen = false }: DossierMoreSectionProps) {
   const { t } = useLocale()
   const navigate = useNavigate()
+  // SEC-M1: the financial block is all amounts; without a price right the API zeroes them.
+  const canViewPrices = useCanViewPrices()
   return (
     <details className="dossier-collapsed" id="sectie-meer" open={defaultOpen}>
       <summary>
@@ -37,28 +40,32 @@ export function DossierMoreSection({ dossier, canManage, busy, onRemoveRelation,
           : t('dossiers.more.summary')}
       </summary>
 
-      <h3>{t('dossiers.more.financialTitle')}</h3>
-      <div className="db-kpis">
-        <div className="db-kpi">
-          <span className="db-kpi-label">{t('dossiers.more.agreedRevenue')}</span>
-          {/* A missing price is not € 0,00: same rule (and same helper) as the price tab and the overview. */}
-          <span className="db-kpi-value">
-            {isDossierPriced(dossier) ? euro(dossier.financials.agreedOrderTotal) : t('dossierSheet.price.noPrice')}
-          </span>
-        </div>
-        <div className="db-kpi">
-          <span className="db-kpi-label">{t('dossiers.more.invoiced')}</span>
-          <span className="db-kpi-value">{euro(dossier.financials.invoicedTotal)}</span>
-        </div>
-        <div className="db-kpi">
-          <span className="db-kpi-label">{t('dossiers.more.estimatedIncidentCost')}</span>
-          <span className="db-kpi-value">{euro(dossier.financials.estimatedIncidentCost)}</span>
-        </div>
-        <div className="db-kpi">
-          <span className="db-kpi-label">{t('dossiers.more.actualIncidentCost')}</span>
-          <span className="db-kpi-value">{euro(dossier.financials.actualIncidentCost)}</span>
-        </div>
-      </div>
+      {canViewPrices && (
+        <>
+          <h3>{t('dossiers.more.financialTitle')}</h3>
+          <div className="db-kpis">
+            <div className="db-kpi">
+              <span className="db-kpi-label">{t('dossiers.more.agreedRevenue')}</span>
+              {/* A missing price is not € 0,00: same rule (and same helper) as the price tab and the overview. */}
+              <span className="db-kpi-value">
+                {isDossierPriced(dossier) ? euro(dossier.financials.agreedOrderTotal) : t('dossierSheet.price.noPrice')}
+              </span>
+            </div>
+            <div className="db-kpi">
+              <span className="db-kpi-label">{t('dossiers.more.invoiced')}</span>
+              <span className="db-kpi-value">{euro(dossier.financials.invoicedTotal)}</span>
+            </div>
+            <div className="db-kpi">
+              <span className="db-kpi-label">{t('dossiers.more.estimatedIncidentCost')}</span>
+              <span className="db-kpi-value">{euro(dossier.financials.estimatedIncidentCost)}</span>
+            </div>
+            <div className="db-kpi">
+              <span className="db-kpi-label">{t('dossiers.more.actualIncidentCost')}</span>
+              <span className="db-kpi-value">{euro(dossier.financials.actualIncidentCost)}</span>
+            </div>
+          </div>
+        </>
+      )}
 
       <h3>{t('dossiers.more.relatedTitle', { count: dossier.relations.length })}</h3>
       {dossier.relations.length === 0 && <p className="placeholder-text">{t('dossiers.more.noRelated')}</p>}
