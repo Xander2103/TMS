@@ -444,8 +444,11 @@ public class LegalEntityService : ILegalEntityService
             return;
         }
 
-        var holder = await _dbContext.LegalEntities.AsNoTracking()
-            .Where(e => e.Id != entity.Id && e.IsActive && e.PeppolScheme == entity.PeppolScheme && e.PeppolId == entity.PeppolId)
+        // The identity is GLOBAL (index across tenants): look past the request's tenant query filter,
+        // otherwise another tenant's holder is invisible here and the unique index answers with a 500.
+        var holder = await _dbContext.LegalEntities.IgnoreQueryFilters().AsNoTracking()
+            .Where(e => e.Id != entity.Id && e.IsActive && !e.IsDeleted
+                        && e.PeppolScheme == entity.PeppolScheme && e.PeppolId == entity.PeppolId)
             .Select(e => new { e.TenantId, e.LegalName })
             .FirstOrDefaultAsync(cancellationToken);
         if (holder is not null)

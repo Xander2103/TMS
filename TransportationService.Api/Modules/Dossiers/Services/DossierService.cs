@@ -229,7 +229,8 @@ public partial class DossierService : IDossierService
             }
         }
 
-        var dossierDate = request.DossierDate ?? DateOnly.FromDateTime(_timeProvider.GetUtcNow().UtcDateTime);
+        // MD-M3: the default dossier date is the TENANT's today (UTC is still yesterday after midnight).
+        var dossierDate = request.DossierDate ?? await Common.TenantTimeZone.TodayAsync(_dbContext, tenantId, _timeProvider, cancellationToken);
         var legalEntityId = await ResolveInheritedLegalEntityAsync(customer.DefaultLegalEntityId, cancellationToken);
 
         var settings = await _dbContext.TenantSettings

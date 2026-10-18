@@ -204,6 +204,40 @@ public class MasterConfigurationIntegrityTests
             h.Entities.CreateAsync(EntityRequest("Vierde", term: -5), CancellationToken.None));
     }
 
+    /// <summary>
+    /// MD-M14 follow-up: the Peppol identity is unique ACROSS tenants. In a request the tenant query
+    /// filter hid the other tenant's holder, so the friendly check missed it and the global index 500'd.
+    /// </summary>
+    [Fact]
+    public async Task LegalEntity_PeppolIdHeldByAnotherTenant_IsAClearValidationError_UnderTheTenantFilter()
+    {
+        var tenantId = Guid.NewGuid();
+        var otherTenantId = Guid.NewGuid();
+        using var db = new SqliteTestDbContext(ambientTenantId: tenantId);
+        db.Context.Tenants.AddRange(
+            new Tenant { Id = tenantId, Name = "t", Slug = $"t-{tenantId:N}", CreatedAt = Now.UtcDateTime },
+            new Tenant { Id = otherTenantId, Name = "o", Slug = $"o-{otherTenantId:N}", CreatedAt = Now.UtcDateTime });
+        db.Context.LegalEntities.Add(new LegalEntity
+        {
+            Id = Guid.NewGuid(), TenantId = otherTenantId, LegalName = "Andere Tenant BV", CountryCode = "BE", InvoicePrefix = "X",
+            PeppolScheme = "0208", PeppolId = "0888777148", IsActive = true,
+        });
+        await db.Context.SaveChangesAsync();
+        await Data.CountrySeeder.SyncAsync(db.Context);
+        Assert.Empty(await db.Context.LegalEntities.ToListAsync()); // the filter really hides the other tenant
+
+        var tenant = new DevTenantContext(tenantId);
+        var user = new DevCurrentUserContext(Guid.NewGuid());
+        var audit = new AuditService(db.Context, tenant, user);
+        var entities = new LegalEntityService(db.Context, tenant, user, audit, new CountryCodeValidator(db.Context),
+            new LocalFileStorageService(Path.Combine(Path.GetTempPath(), "ts-mci", Guid.NewGuid().ToString("N"))));
+
+        var refused = await Assert.ThrowsAsync<DomainValidationException>(() =>
+            entities.CreateAsync(EntityRequest("TEST CORE Eigen", peppolScheme: "0208", peppolId: "0888777148"), CancellationToken.None));
+        Assert.Contains("al geregistreerd en kan hier niet gebruikt worden", refused.Message);
+        Assert.DoesNotContain("Andere Tenant", refused.Message); // nothing about the other tenant leaks
+    }
+
     [Fact]
     public async Task LegalEntity_WhoseNumbersWouldCollideWithAnotherEntity_IsRefused()
     {

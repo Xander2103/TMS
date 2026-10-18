@@ -54,6 +54,7 @@ import {
   type StopFormRow,
 } from '../../transport-orders/components/sections/orderFormState'
 import './new-dossier.css'
+import { todayLocalIsoDate } from '../../../utils/dates'
 
 /**
  * One-page transport intake (2026-09 rework): klant → transporttype → the full operational
@@ -74,7 +75,7 @@ export function NewDossierPage() {
 
   const [customerId, setCustomerId] = useState<string | null>(null)
   const [customerReference, setCustomerReference] = useState('')
-  const [dossierDate, setDossierDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const [dossierDate, setDossierDate] = useState(() => todayLocalIsoDate())
   const [quickStartTypes, setQuickStartTypes] = useState<ActivityType[]>([])
   const [typesFailed, setTypesFailed] = useState(false)
   /** 'blanco' = escape hatch; otherwise the selected quick-start type id; null = nothing chosen yet. */

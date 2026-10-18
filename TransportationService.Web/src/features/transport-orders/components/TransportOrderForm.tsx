@@ -48,6 +48,7 @@ import {
   type StopFormRow,
 } from './sections/orderFormState'
 import './transport-order-form.css'
+import { todayLocalIsoDate } from '../../../utils/dates'
 
 interface TransportOrderFormProps {
   /**
@@ -92,7 +93,7 @@ export function TransportOrderForm({ mode, order, onSubmit, onCancel, submitLabe
 
   const [customerId, setCustomerId] = useState(order?.customerId ?? '')
   const [customerReference, setCustomerReference] = useState(order?.customerReference ?? '')
-  const [orderDate, setOrderDate] = useState(order?.orderDate ?? new Date().toISOString().slice(0, 10))
+  const [orderDate, setOrderDate] = useState(order?.orderDate ?? todayLocalIsoDate())
   const [goodsDescription, setGoodsDescription] = useState(order?.goodsDescription ?? '')
   const [quantity, setQuantity] = useState(order?.quantity === null || order === undefined ? '' : String(order.quantity))
   // Legacy free-text unit is preserved (still submitted) but no longer editable — the managed
