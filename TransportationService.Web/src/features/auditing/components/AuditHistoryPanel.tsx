@@ -59,6 +59,7 @@ const ACTION_LABELS: Record<string, string> = {
 const ENTITY_ACTION_PREFIX: Record<string, string> = {
   TransportDossier: 'dossiers.history',
   Incident: 'incidents.history',
+  ExecutionException: 'exceptions.history',
 }
 
 function actionLabel(t: (key: string) => string, entityType: string, action: string): string {
@@ -82,22 +83,30 @@ interface AuditHistoryPanelProps {
   entityId: string
   /** Entity-specific value renderers (enum ordinals → labels, codes → names). */
   valueLabels?: AuditValueLabels
+  /**
+   * A domain-history endpoint of the entity itself (e.g. /api/incidents/{id}/history): readable by
+   * everyone who may see the record — when / who / what, sensitive fields redacted server-side —
+   * instead of the raw audit log that needs audit_logs.view.
+   */
+  historyPath?: string
 }
 
-export function AuditHistoryPanel({ entityType, entityId, valueLabels }: AuditHistoryPanelProps) {
+export function AuditHistoryPanel({ entityType, entityId, valueLabels, historyPath }: AuditHistoryPanelProps) {
   const { t } = useLocale()
   const { hasPermission } = useAuth()
-  const canView = hasPermission('audit_logs.view')
+  const canView = !!historyPath || hasPermission('audit_logs.view')
   const [page, setPage] = useState(1)
   const [loaded, setLoaded] = useState<{ key: string; data: AuditLogPage | null; error: string | null } | null>(null)
-  const requestKey = `${entityType}:${entityId}:${page}`
+  const requestKey = `${historyPath ?? entityType}:${entityId}:${page}`
 
   useEffect(() => {
     if (!canView) return
     let mounted = true
     apiClient
       .getJson<AuditLogPage>(
-        `/api/audit-logs?entityType=${encodeURIComponent(entityType)}&entityId=${encodeURIComponent(entityId)}&page=${page}&pageSize=${PAGE_SIZE}`,
+        historyPath
+          ? `${historyPath}?page=${page}&pageSize=${PAGE_SIZE}`
+          : `/api/audit-logs?entityType=${encodeURIComponent(entityType)}&entityId=${encodeURIComponent(entityId)}&page=${page}&pageSize=${PAGE_SIZE}`,
       )
       .then((data) => {
         if (mounted) setLoaded({ key: requestKey, data, error: null })

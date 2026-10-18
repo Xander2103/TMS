@@ -84,7 +84,7 @@ describe('ExceptionDetailPage (B24)', () => {
     expect(within(header).getByRole('button', { name: 'Aan mij toewijzen' })).toBeInTheDocument()
     expect(within(header).queryByRole('button', { name: /Oplossen/ })).not.toBeInTheDocument()
     await userEvent.click(within(header).getByRole('button', { name: 'Meer' }))
-    expect(screen.getAllByRole('menuitem').map((item) => item.textContent)).toEqual(['Oplossen…', 'Actie klant vereist', 'Afwijzen…'])
+    expect(screen.getAllByRole('menuitem').map((item) => item.textContent)).toEqual(['Oplossen…', 'Actie klant vereist', 'Verantwoordelijke kiezen…', 'Afwijzen…'])
   })
 
   it('requires a resolution note to resolve', async () => {

@@ -657,7 +657,9 @@
       "documentsValue": "{count} document(s)",
       "cmrPresent": "CMR présente",
       "cmrMissing": "pas de CMR",
-      "incidents": "Incidents ouverts"
+      "incidents": "Incidents ouverts",
+      "exceptions": "Écarts ouverts",
+      "exceptionsHolding": "{count} bloquant(s)"
     },
     "confirmedBadge": "Confirmé",
     "confirmedAt": "Confirmé le {date}",
@@ -681,7 +683,12 @@
     "cancelFailed": "Le dossier n’a pas pu être annulé.",
     "reasonRequired": "Indiquez un motif.",
     "reopenShort": "Rouvrir",
-    "conflict": "Le dossier a été modifié entre-temps. La liste a été actualisée ; vérifiez le dossier et réessayez."
+    "conflict": "Le dossier a été modifié entre-temps. La liste a été actualisée ; vérifiez le dossier et réessayez.",
+    "holdTitle": "Bloquant",
+    "holdHint": "Ces écarts ouverts bloquent la confirmation automatique. Une confirmation manuelle exige une décision consciente et un motif.",
+    "reasonRequiredLabel": "Motif (obligatoire)",
+    "reasonRequiredHint": "Pourquoi confirmez-vous le dossier malgré le(s) écart(s) bloquant(s) ?",
+    "openException": "Ouvrir l'écart"
   },
   "portalReview": {
     "heading": "{number} · soumis via le portail client",

@@ -20,16 +20,22 @@ import { Modal } from '../../../components/ui/Modal'
 import { SearchableSelect, type SearchableSelectOption } from '../../../components/ui/SearchableSelect'
 import { ValidationSummary } from '../../../components/ui/ValidationSummary'
 import { useToast } from '../../../components/ui/toastContext'
-import { describeApiError, getFieldError, type FieldErrors } from '../../../api/problemDetails'
+import { getFieldError, localizeApiError, describeApiError, type FieldErrors } from '../../../api/problemDetails'
 import { useAuth } from '../../auth/authContextValue'
 import { useLocale } from '../../../i18n/localeContext'
 import { AuditHistoryPanel } from '../../auditing/components/AuditHistoryPanel'
 import { searchCustomers } from '../../customers/api/customersApi'
 import { searchTransportOrders } from '../../transport-orders/api/transportOrdersApi'
-import { getUsers } from '../../users/api/usersApi'
 import { getVehicleOptions } from '../../vehicles/api/vehiclesApi'
 import { listDossiers } from '../../dossiers/api/dossiersApi'
-import { changeIncidentStatus, createIncident, getIncident, updateIncident } from '../api/incidentsApi'
+import {
+  changeIncidentStatus,
+  createIncident,
+  createIncidentDamageReport,
+  getAssignableUsers,
+  getIncident,
+  updateIncident,
+} from '../api/incidentsApi'
 import { IncidentChargePanel } from '../components/IncidentChargePanel'
 import { useIncidentAuditLabels } from '../incidentAuditLabels'
 import {
@@ -39,12 +45,16 @@ import {
   INCIDENT_STATUS_TONE,
   INCIDENT_TYPE_LABELS,
   RESPONSIBLE_PARTY_LABELS,
+  DAMAGE_SEVERITIES,
   incidentTypeLabel,
+  suggestedDamageSeverity,
   type IncidentDetail,
   type IncidentInput,
   type IncidentSeverity,
   type IncidentStatus,
   type IncidentType,
+  type IncidentUpdate,
+  type LinkedDamageSeverity,
 } from '../types'
 import { formatDate } from '../../../utils/dates'
 import { formatCurrency } from '../../../utils/numbers'
@@ -71,6 +81,8 @@ interface FormState {
   /** Wave 6 §1. */
   responsibleParty: string
   responsibilityNotes: string
+  /** Klantgerichte tekst (de omschrijving blijft intern). */
+  customerMessage: string
 }
 
 const EMPTY_FORM: FormState = {
@@ -93,6 +105,7 @@ const EMPTY_FORM: FormState = {
   actualCost: '',
   responsibleParty: 'Unknown',
   responsibilityNotes: '',
+  customerMessage: '',
 }
 
 function toForm(incident: IncidentDetail): FormState {
@@ -116,10 +129,11 @@ function toForm(incident: IncidentDetail): FormState {
     actualCost: incident.actualCost !== null ? String(incident.actualCost) : '',
     responsibleParty: incident.responsibleParty,
     responsibilityNotes: incident.responsibilityNotes ?? '',
+    customerMessage: incident.customerMessage ?? '',
   }
 }
 
-function toInput(form: FormState): IncidentInput {
+function toInput(form: FormState, tripId: string | null): IncidentInput {
   return {
     title: form.title,
     description: form.description,
@@ -140,6 +154,43 @@ function toInput(form: FormState): IncidentInput {
     dueDate: form.dueDate || null,
     responsibleParty: form.responsibleParty,
     responsibilityNotes: form.responsibilityNotes || null,
+    tripId,
+    customerMessage: form.customerMessage || null,
+  }
+}
+
+/**
+ * EX-01: only the edited card's section travels. Relations the form does not show (trip, driver,
+ * trailer) are sent unchanged — and the server never lets an office edit clear or move them.
+ */
+function toUpdate(section: EditSection, form: FormState, incident: IncidentDetail): IncidentUpdate {
+  const input = toInput(form, null)
+  switch (section) {
+    case 'report':
+      return {
+        report: {
+          title: input.title, description: input.description, incidentType: input.incidentType, severity: input.severity,
+          customTypeName: input.customTypeName, cause: input.cause, responsibleUserId: input.responsibleUserId, dueDate: input.dueDate,
+        },
+      }
+    case 'links':
+      return {
+        links: {
+          customerId: input.customerId, dossierId: input.dossierId, transportOrderId: input.transportOrderId, vehicleId: input.vehicleId,
+          trailerId: incident.trailerId, tripId: incident.tripId, driverId: incident.driverId,
+        },
+      }
+    case 'impact':
+      return {
+        impact: {
+          customerImpact: input.customerImpact, operationalImpact: input.operationalImpact, financialImpact: input.financialImpact,
+          estimatedCost: input.estimatedCost, actualCost: input.actualCost,
+        },
+      }
+    case 'responsibility':
+      return { responsibility: { responsibleParty: input.responsibleParty ?? 'Unknown', responsibilityNotes: input.responsibilityNotes ?? null } }
+    case 'communication':
+      return { communication: { customerMessage: input.customerMessage ?? null } }
   }
 }
 
@@ -153,8 +204,8 @@ function todayIso(): string {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
 }
 
-/** B24: the blocks a user edits one at a time; the save still sends the whole incident. */
-type EditSection = 'report' | 'links' | 'impact' | 'responsibility'
+/** B24: the blocks a user edits one at a time; EX-01: a save sends only that block. */
+type EditSection = 'report' | 'links' | 'impact' | 'responsibility' | 'communication'
 
 const OPEN_STATUSES: IncidentStatus[] = ['New', 'InProgress']
 
@@ -173,12 +224,20 @@ export function IncidentDetailPage() {
   const { t } = useLocale()
   const incidentAuditLabels = useIncidentAuditLabels()
   const canManage = hasPermission('incidents.manage')
+  // The linked damage report is a problem-handler command (the fleet reports on the vehicle itself).
+  const canCreateDamage = canManage
   const isNew = id === undefined
+  const contextTripId = searchParams.get('tripId')
 
   const [incident, setIncident] = useState<IncidentDetail | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [loadNotFound, setLoadNotFound] = useState(false)
-  const [form, setForm] = useState<FormState>({ ...EMPTY_FORM, dossierId: searchParams.get('dossierId') })
+  const [form, setForm] = useState<FormState>({
+    ...EMPTY_FORM,
+    dossierId: searchParams.get('dossierId'),
+    transportOrderId: searchParams.get('transportOrderId'),
+    vehicleId: searchParams.get('vehicleId'),
+  })
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
   const [formError, setFormError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -194,6 +253,10 @@ export function IncidentDetailPage() {
   const [resolution, setResolution] = useState('')
   const [resolveError, setResolveError] = useState<string | null>(null)
   const [confirmCancel, setConfirmCancel] = useState(false)
+  const [damageDialog, setDamageDialog] = useState(false)
+  const [damageSeverity, setDamageSeverity] = useState<LinkedDamageSeverity>('Moderate')
+  const [damageLocation, setDamageLocation] = useState('')
+  const [damageError, setDamageError] = useState<string | null>(null)
 
   const load = useCallback(() => {
     if (!id) return
@@ -206,6 +269,7 @@ export function IncidentDetailPage() {
         setEditing(null)
         setResolveDialog(false)
         setConfirmCancel(false)
+        setDamageDialog(false)
       })
       .catch((err: unknown) => {
         setLoadNotFound(isNotFoundError(err))
@@ -226,11 +290,12 @@ export function IncidentDetailPage() {
   if (needsUsers && !usersRequested) setUsersRequested(true)
   if (needsLinks && !linksRequested) setLinksRequested(true)
 
+  // EX-07: the responsible picker reads the dedicated, safe endpoint — no general users.view needed.
   useEffect(() => {
     if (!usersRequested) return
-    getUsers()
+    getAssignableUsers()
       .then((users) =>
-        setUserOptions(users.filter((u) => u.isActive).map((u) => ({ value: u.id, label: `${u.firstName} ${u.lastName}` }))),
+        setUserOptions(users.map((u) => ({ value: u.id, label: u.displayName, description: u.roleName ?? undefined }))),
       )
       .catch(() => setUserOptions([]))
   }, [usersRequested])
@@ -274,7 +339,9 @@ export function IncidentDetailPage() {
 
   const editable = canManage && (isNew || incident!.status !== 'Cancelled')
   // B05: compare against what was loaded (or the empty form), key order independent.
-  const baselineForm: FormState = incident ? toForm(incident) : { ...EMPTY_FORM, dossierId: searchParams.get('dossierId') }
+  const baselineForm: FormState = incident
+    ? toForm(incident)
+    : { ...EMPTY_FORM, dossierId: searchParams.get('dossierId'), transportOrderId: searchParams.get('transportOrderId'), vehicleId: searchParams.get('vehicleId') }
   const dirty = stableJson(form) !== stableJson(baselineForm)
 
   function set<K extends keyof FormState>(key: K, value: FormState[K]) {
@@ -306,11 +373,11 @@ export function IncidentDetailPage() {
     setFieldErrors({})
     try {
       if (isNew) {
-        const created = await createIncident(toInput(form))
+        const created = await createIncident(toInput(form, contextTripId))
         toast.showSuccess(t('incidents.detail.created'))
         navigate(`/incidents/${created.id}`, { replace: true })
       } else {
-        const updated = await updateIncident(id!, toInput(form))
+        const updated = await updateIncident(id!, toUpdate(editing ?? 'report', form, incident!))
         setIncident(updated)
         setForm(toForm(updated))
         setEditing(null)
@@ -318,7 +385,7 @@ export function IncidentDetailPage() {
       }
     } catch (err) {
       const described = describeApiError(err, t('incidents.detail.saveFailed'))
-      setFormError(described.message)
+      setFormError(localizeApiError(t, err, t('incidents.detail.saveFailed')))
       setFieldErrors(described.fieldErrors)
     } finally {
       setBusy(false)
@@ -336,11 +403,11 @@ export function IncidentDetailPage() {
       setConfirmCancel(false)
       toast.showSuccess(t('incidents.detail.statusChanged', { status: t(INCIDENT_STATUS_LABELS[status]) }))
     } catch (err) {
-      const described = describeApiError(err, t('incidents.detail.statusChangeFailed'))
+      const message = localizeApiError(t, err, t('incidents.detail.statusChangeFailed'))
       if (resolutionText !== undefined) {
-        setResolveError(described.message)
+        setResolveError(message)
       } else {
-        toast.showError(described.message)
+        toast.showError(message)
       }
     } finally {
       setBusy(false)
@@ -360,6 +427,29 @@ export function IncidentDetailPage() {
       return
     }
     void changeStatus('Resolved', resolution.trim())
+  }
+
+  function openDamage() {
+    setDamageSeverity(suggestedDamageSeverity(incident!.severity))
+    setDamageLocation('')
+    setDamageError(null)
+    setDamageDialog(true)
+  }
+
+  async function submitDamage() {
+    setBusy(true)
+    setDamageError(null)
+    try {
+      const updated = await createIncidentDamageReport(id!, { severity: damageSeverity, location: damageLocation.trim() || null })
+      setIncident(updated)
+      setForm(toForm(updated))
+      setDamageDialog(false)
+      toast.showSuccess(t('incidents.fleet.created'))
+    } catch (err) {
+      setDamageError(localizeApiError(t, err, t('incidents.fleet.createFailed')))
+    } finally {
+      setBusy(false)
+    }
   }
 
   // ---- form fields per card (also used, all together, by the registration form) ----
@@ -469,7 +559,12 @@ export function IncidentDetailPage() {
           disabled={busy}
         />
       </FormField>
-      <FormField label={t('incidents.detail.orderLabel')} htmlFor="inc-order" error={getFieldError(fieldErrors, 'transportOrderId')}>
+      <FormField
+        label={t('incidents.detail.orderLabel')}
+        htmlFor="inc-order"
+        error={getFieldError(fieldErrors, 'transportOrderId')}
+        hint={form.transportOrderId && !form.dossierId ? t('incidents.detail.derivedFromOrder') : undefined}
+      >
         <SearchableSelect
           id="inc-order"
           value={form.transportOrderId}
@@ -487,7 +582,34 @@ export function IncidentDetailPage() {
           disabled={busy}
         />
       </FormField>
+      {!isNew && (incident?.tripNumber || incident?.driverName) && (
+        <p className="inc-edit-wide inc-locked-links">
+          {t('incidents.detail.executionLinksLocked', {
+            trip: incident?.tripNumber ?? '—',
+            driver: incident?.driverName ?? '—',
+          })}
+        </p>
+      )}
     </>
+  )
+
+  const communicationFields = (
+    <FormField
+      label={t('incidents.detail.customerMessageLabel')}
+      htmlFor="inc-customer-message"
+      hint={t('incidents.detail.customerMessageHint')}
+      error={getFieldError(fieldErrors, 'customerMessage')}
+      className="inc-edit-wide"
+    >
+      <textarea
+        id="inc-customer-message"
+        value={form.customerMessage}
+        onChange={(event) => set('customerMessage', event.target.value)}
+        rows={3}
+        maxLength={2000}
+        disabled={busy}
+      />
+    </FormField>
   )
 
   const impactFields = (
@@ -526,6 +648,9 @@ export function IncidentDetailPage() {
           <FormSection title={t('incidents.detail.sectionLinks')}>{linkFields}</FormSection>
           <FormSection title={t('incidents.detail.sectionImpact')} collapsible defaultOpen={false}>
             {impactFields}
+          </FormSection>
+          <FormSection title={t('incidents.detail.sectionCommunication')} collapsible defaultOpen={false}>
+            {communicationFields}
           </FormSection>
           {editable && (
             <FormActions>
@@ -601,6 +726,21 @@ export function IncidentDetailPage() {
       action: { label: t('incidents.detail.attention.view'), onSelect: () => scrollToCard('incident-charge') },
     })
   }
+  if (current.vehicleSafetyIssue && !current.damageReportId && current.status !== 'Cancelled') {
+    attention.push({
+      key: 'fleet',
+      severity: 'critical',
+      text: t('incidents.detail.attention.vehicleSafety', { vehicle: current.vehicleLabel ?? current.trailerLabel ?? '—' }),
+      action: canCreateDamage && current.canCreateDamageReport ? { label: t('incidents.fleet.create'), onSelect: openDamage } : undefined,
+    })
+  }
+  if ((current.confirmedDossierNumbers ?? []).length > 0) {
+    attention.push({
+      key: 'confirmed-dossier',
+      severity: 'warning',
+      text: t('incidents.detail.attention.afterConfirmation', { dossiers: (current.confirmedDossierNumbers ?? []).join(', ') }),
+    })
+  }
   if (current.status !== 'Cancelled' && current.redeliverySuggested && !current.linkedRedeliveryOrderId) {
     attention.push({
       key: 'redelivery',
@@ -613,6 +753,7 @@ export function IncidentDetailPage() {
   const subtitleParts = [
     incidentTypeLabel(current, t),
     t('incidents.detail.reportedOn', { date: formatDate(current.createdAt) }),
+    current.source && current.source !== 'Office' ? t(`incidents.detail.source.${current.source}`) : null,
     current.resolvedAt ? t('incidents.detail.resolvedOn', { date: formatDate(current.resolvedAt) }) : null,
   ].filter(Boolean)
 
@@ -676,6 +817,12 @@ export function IncidentDetailPage() {
       {current.status === 'Resolved' && current.resolution && (
         <DetailCard title={t('incidents.detail.resolutionTitle')} id="incident-resolution" className="inc-resolution-card">
           <p className="inc-description">{current.resolution}</p>
+          <p className="ui-detail-empty">
+            {t('incidents.detail.resolvedBy', {
+              name: current.resolvedByName ?? t('incidents.detail.unknownActor'),
+              date: formatDate(current.resolvedAt),
+            })}
+          </p>
         </DetailCard>
       )}
 
@@ -732,6 +879,11 @@ export function IncidentDetailPage() {
                 { key: 'vehicle', label: t('incidents.detail.vehicleLabel'), value: current.vehicleId ? link(`/vehicles/${current.vehicleId}`, current.vehicleLabel) : null },
                 !!current.trailerId && { key: 'trailer', label: t('incidents.detail.trailerLabel'), value: link(`/trailers/${current.trailerId}`, current.trailerLabel) },
                 !!current.driverName && { key: 'driver', label: t('incidents.detail.driverLabel'), value: current.driverId ? link(`/drivers/${current.driverId}`, current.driverName, false) : current.driverName },
+                !!current.sourceExceptionId && {
+                  key: 'source-exception',
+                  label: t('incidents.detail.sourceExceptionLabel'),
+                  value: link(`/exceptions/${current.sourceExceptionId}`, current.sourceExceptionLabel ?? t('incidents.detail.sourceExceptionFallback'), false),
+                },
               ]}
             />
           )}
@@ -770,12 +922,92 @@ export function IncidentDetailPage() {
             />
           )}
         </DetailCard>
+        <DetailCard
+          title={t('incidents.detail.sectionCommunication')}
+          id="incident-communication"
+          action={editing === 'communication' ? undefined : editButton('communication')}
+        >
+          {editing === 'communication' ? (
+            editForm(communicationFields)
+          ) : current.customerMessage ? (
+            <p className="inc-description">{current.customerMessage}</p>
+          ) : (
+            <p className="ui-detail-empty">{t('incidents.detail.noCustomerMessage')}</p>
+          )}
+        </DetailCard>
+
+        {(current.vehicleId || current.trailerId || current.damageReportId) && (
+          <DetailCard title={t('incidents.fleet.title')} id="incident-fleet">
+            {current.damageReportId ? (
+              <FactList
+                facts={[
+                  {
+                    key: 'damage',
+                    label: t('incidents.fleet.damageReport'),
+                    value: current.vehicleId
+                      ? <Link to={`/vehicles/${current.vehicleId}?tab=schade`}>{t('incidents.fleet.openDamage')}</Link>
+                      : t('incidents.fleet.registered'),
+                  },
+                  { key: 'severity', label: t('incidents.fleet.severity'), value: current.damageReportSeverity ? t(`incidents.fleet.damageSeverity.${current.damageReportSeverity}`) : null },
+                  { key: 'status', label: t('incidents.fleet.status'), value: current.damageReportStatus ? t(`incidents.fleet.damageStatus.${current.damageReportStatus}`) : null },
+                ]}
+              />
+            ) : (
+              <>
+                <p className="ui-detail-empty">{t('incidents.fleet.noDamage')}</p>
+                {canCreateDamage && current.canCreateDamageReport && (
+                  <Button variant={current.vehicleSafetyIssue ? 'primary' : 'secondary'} onClick={openDamage} disabled={busy || editing !== null}>
+                    {t('incidents.fleet.create')}
+                  </Button>
+                )}
+              </>
+            )}
+          </DetailCard>
+        )}
       </DetailGrid>
 
       <DetailCard title={t('incidents.detail.historyTitle')} id="incident-history">
-        {/* Re-read after every in-page change, so the new step appears without a reload. */}
-        <AuditHistoryPanel key={historyKey(current)} entityType="Incident" entityId={current.id} valueLabels={incidentAuditLabels} />
+        {/* Re-read after every in-page change, so the new step appears without a reload. Domain
+            history: readable by everyone who may see the incident, financial fields redacted. */}
+        <AuditHistoryPanel
+          key={historyKey(current)}
+          entityType="Incident"
+          entityId={current.id}
+          valueLabels={incidentAuditLabels}
+          historyPath={`/api/incidents/${current.id}/history`}
+        />
       </DetailCard>
+
+      {damageDialog && (
+        <Modal
+          title={t('incidents.fleet.dialogTitle')}
+          onClose={() => setDamageDialog(false)}
+          busy={busy}
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setDamageDialog(false)} disabled={busy}>
+                {t('incidents.detail.cancel')}
+              </Button>
+              <Button disabled={busy} onClick={() => void submitDamage()}>
+                {t('incidents.fleet.create')}
+              </Button>
+            </>
+          }
+        >
+          <ValidationSummary message={damageError} />
+          <p>{t('incidents.fleet.dialogIntro', { vehicle: current.vehicleLabel ?? current.trailerLabel ?? '—', trip: current.tripNumber ?? '—' })}</p>
+          <FormField label={t('incidents.fleet.severity')} htmlFor="inc-damage-severity" required hint={t('incidents.fleet.severityHint')}>
+            <select id="inc-damage-severity" value={damageSeverity} onChange={(event) => setDamageSeverity(event.target.value as LinkedDamageSeverity)}>
+              {DAMAGE_SEVERITIES.map((value) => (
+                <option key={value} value={value}>{t(`incidents.fleet.damageSeverity.${value}`)}</option>
+              ))}
+            </select>
+          </FormField>
+          <FormField label={t('incidents.fleet.location')} htmlFor="inc-damage-location">
+            <input id="inc-damage-location" value={damageLocation} onChange={(event) => setDamageLocation(event.target.value)} maxLength={300} />
+          </FormField>
+        </Modal>
+      )}
 
       {confirmCancel && (
         <ConfirmDialog

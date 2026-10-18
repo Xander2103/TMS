@@ -83,3 +83,8 @@
 .inc-resolution-card {
   margin-bottom: var(--space-4);
 }
+
+/* EX-01: trip/driver are execution relations — shown, never edited from the office form. */
+.inc-locked-links { margin: 0; font-size: 0.875rem; color: var(--color-text-muted); }
+.inc-filter-picker { min-width: 11rem; }
+.inc-filter-date { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.875rem; }

@@ -41,3 +41,26 @@ export function peppolStatusLabel(t: TranslateFn, code: string): string {
 export function documentSourceLabel(t: TranslateFn, code: string): string {
   return statusLabel(t, 'documents.source', code)
 }
+
+/**
+ * EX-08: a finished order whose goods did not (fully) arrive never reads "Afgerond" — the
+ * delivery outcome replaces the lifecycle label. Delivered (or unknown) keeps the status label.
+ */
+export function portalOrderStatus(
+  t: TranslateFn, status: string, outcome: string | null | undefined,
+): { label: string; tone: 'warning' | 'info' | null } {
+  switch (outcome) {
+    case 'NotDelivered':
+    case 'PartiallyDelivered':
+      return { label: statusLabel(t, 'orders.deliveryOutcome', outcome), tone: 'warning' }
+    case 'RedeliveryPlanned':
+    case 'Redelivered':
+      return { label: statusLabel(t, 'orders.deliveryOutcome', outcome), tone: 'info' }
+    default:
+      return { label: orderStatusLabel(t, status), tone: null }
+  }
+}
+
+export function portalExceptionTypeLabel(t: TranslateFn, code: string): string {
+  return statusLabel(t, 'orders.exceptionType', code)
+}

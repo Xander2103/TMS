@@ -83,7 +83,16 @@
     },
     "documentsTitle": "Documents",
     "loading": "Loading order...",
-    "loadError": "The order could not be loaded."
+    "loadError": "The order could not be loaded.",
+    "deliveryOutcome": {
+      "NotDelivered": "The delivery could not be completed. We will contact you to arrange a new delivery.",
+      "PartiallyDelivered": "Not all goods were delivered. We will contact you about the remainder.",
+      "RedeliveryPlanned": "The delivery was not completed; a redelivery is planned.",
+      "Redelivered": "The delivery was first not completed and has since been redelivered."
+    },
+    "redeliveryLink": "Redelivery {order}",
+    "noticesTitle": "Notices",
+    "completedShortfall": "Execution closed — not fully delivered"
   },
   "new": {
     "title": "Submit a new transport order",
@@ -141,5 +150,31 @@
     "create": "Create location",
     "creating": "Creating…",
     "createFailed": "The location could not be created."
+  },
+  "deliveryOutcome": {
+    "NotDelivered": "Not delivered",
+    "PartiallyDelivered": "Partially delivered",
+    "RedeliveryPlanned": "Redelivery planned",
+    "Redelivered": "Redelivered"
+  },
+  "exceptionType": {
+    "MissingPackage": "Missing package",
+    "WrongPackage": "Wrong package",
+    "DamagedPackage": "Damaged package",
+    "UnknownPackage": "Unknown package",
+    "WrongRoutePackage": "Package for another trip",
+    "WrongStopPackage": "Package for another stop",
+    "IncompleteQuantity": "Incomplete quantity",
+    "UnreadableBarcode": "Unreadable barcode",
+    "LabelMissing": "Label missing",
+    "RejectedBeforeLoading": "Refused before loading",
+    "RejectedDelivery": "Delivery refused",
+    "PartialDelivery": "Partial delivery",
+    "AddressIssue": "Address issue",
+    "CustomerUnavailable": "Recipient not present",
+    "AccessDenied": "Access denied",
+    "VehicleIssue": "Vehicle issue",
+    "Delay": "Delay",
+    "Other": "Other deviation"
   }
 }

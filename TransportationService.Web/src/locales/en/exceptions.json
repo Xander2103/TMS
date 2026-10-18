@@ -10,7 +10,14 @@
     "AccessDenied": "No access",
     "VehicleIssue": "Vehicle issue",
     "Delay": "Delay",
-    "Other": "Other"
+    "Other": "Other",
+    "UnknownPackage": "Unknown package",
+    "WrongRoutePackage": "Package for another trip",
+    "WrongStopPackage": "Package for another stop",
+    "IncompleteQuantity": "Incomplete quantity",
+    "UnreadableBarcode": "Unreadable barcode",
+    "LabelMissing": "Label missing",
+    "RejectedBeforeLoading": "Refused before loading"
   },
   "severity": {
     "Low": "Low",
@@ -119,7 +126,31 @@
     "customer": "Customer",
     "assignee": "Assigned to",
     "outcomeResolved": "Resolved",
-    "outcomeRejected": "Rejected"
+    "outcomeRejected": "Rejected",
+    "assigned": "Responsible set.",
+    "chooseResponsible": "Choose responsible…",
+    "escalate": "Escalate to incident",
+    "escalated": "Incident created from the deviation.",
+    "escalateFailed": "The deviation could not be escalated.",
+    "customerMessageSaved": "Message for the customer saved.",
+    "damageCreated": "Damage report created and linked.",
+    "damageFailed": "The damage report could not be created.",
+    "createDamage": "Create damage report",
+    "vehicle": "Vehicle",
+    "escalatedIncident": "Incident",
+    "openIncident": "Open incident",
+    "damageReport": "Damage report",
+    "openDamage": "Open damage report",
+    "damageRegistered": "Registered",
+    "customerMessageTitle": "Message for the customer",
+    "customerMessageLabel": "Message for the customer",
+    "customerMessageHint": "What the customer reads in the portal. The driver's report stays internal.",
+    "noCustomerMessage": "No message yet; the customer only sees the kind of problem.",
+    "notCustomerVisible": "This deviation is not visible to the customer.",
+    "photosLocked": "Evidence of a closed or escalated deviation can no longer be deleted.",
+    "damageIntro": "Vehicle {vehicle}, trip {trip}. The damage report is linked to this deviation.",
+    "damageSeverity": "Damage severity",
+    "vehicleSafety": "Serious vehicle problem on {vehicle} — no damage report for the fleet yet."
   },
   "report": {
     "descriptionRequired": "A description of the problem is required.",
@@ -142,5 +173,10 @@
     "photosHint": "Take a photo or choose from the gallery (max 10 MB per photo).",
     "photosSelected_one": "1 photo selected",
     "photosSelected_other": "{count} photos selected"
+  },
+  "history": {
+    "EscalatedToIncident": "Escalated to incident",
+    "DamageReportCreated": "Damage report created",
+    "CustomerMessageChanged": "Message for the customer changed"
   }
 }

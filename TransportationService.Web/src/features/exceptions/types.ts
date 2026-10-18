@@ -1,7 +1,15 @@
+/** Every server type (scan- and package-level ones included) — none may render blank or raw. */
 export type ExecutionExceptionType =
   | 'MissingPackage'
   | 'WrongPackage'
   | 'DamagedPackage'
+  | 'UnknownPackage'
+  | 'WrongRoutePackage'
+  | 'WrongStopPackage'
+  | 'IncompleteQuantity'
+  | 'UnreadableBarcode'
+  | 'LabelMissing'
+  | 'RejectedBeforeLoading'
   | 'RejectedDelivery'
   | 'PartialDelivery'
   | 'AddressIssue'
@@ -20,6 +28,13 @@ export const EXCEPTION_TYPE_LABELS: Record<ExecutionExceptionType, string> = {
   MissingPackage: 'exceptions.type.MissingPackage',
   WrongPackage: 'exceptions.type.WrongPackage',
   DamagedPackage: 'exceptions.type.DamagedPackage',
+  UnknownPackage: 'exceptions.type.UnknownPackage',
+  WrongRoutePackage: 'exceptions.type.WrongRoutePackage',
+  WrongStopPackage: 'exceptions.type.WrongStopPackage',
+  IncompleteQuantity: 'exceptions.type.IncompleteQuantity',
+  UnreadableBarcode: 'exceptions.type.UnreadableBarcode',
+  LabelMissing: 'exceptions.type.LabelMissing',
+  RejectedBeforeLoading: 'exceptions.type.RejectedBeforeLoading',
   RejectedDelivery: 'exceptions.type.RejectedDelivery',
   PartialDelivery: 'exceptions.type.PartialDelivery',
   AddressIssue: 'exceptions.type.AddressIssue',
@@ -43,6 +58,9 @@ export const EXCEPTION_TYPES: ExecutionExceptionType[] = [
   'Delay',
   'Other',
 ]
+
+/** Filter lists: every type, also the scan/package ones the driver dialog does not offer. */
+export const EXCEPTION_ALL_TYPES = Object.keys(EXCEPTION_TYPE_LABELS) as ExecutionExceptionType[]
 
 export const EXCEPTION_SEVERITY_LABELS: Record<ExceptionSeverity, string> = {
   Low: 'exceptions.severity.Low',
@@ -162,6 +180,18 @@ export interface ExceptionDetail {
   dossierNumber?: string | null
   customerId?: string | null
   customerName?: string | null
+  /** Klantgerichte tekst; de omschrijving van de chauffeur blijft intern. */
+  customerMessage?: string | null
+  /** Afwijking → Incident. */
+  escalatedIncidentId?: string | null
+  escalatedIncidentTitle?: string | null
+  vehicleId?: string | null
+  vehicleLabel?: string | null
+  damageReportId?: string | null
+  canCreateDamageReport?: boolean
+  vehicleSafetyIssue?: boolean
+  /** Foto's van een afgehandelde/geëscaleerde afwijking zijn bewijsmateriaal. */
+  photosLocked?: boolean
 }
 
 export interface ReportExceptionInput {

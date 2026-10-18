@@ -657,7 +657,9 @@
       "documentsValue": "{count} document(en)",
       "cmrPresent": "CMR aanwezig",
       "cmrMissing": "geen CMR",
-      "incidents": "Open incidenten"
+      "incidents": "Open incidenten",
+      "exceptions": "Open afwijkingen",
+      "exceptionsHolding": "{count} blokkerend"
     },
     "confirmedBadge": "Bevestigd",
     "confirmedAt": "Bevestigd op {date}",
@@ -681,7 +683,12 @@
     "cancelFailed": "Het dossier kon niet worden geannuleerd.",
     "reasonRequired": "Geef een reden op.",
     "reopenShort": "Heropenen",
-    "conflict": "Het dossier is intussen gewijzigd. De lijst is vernieuwd; controleer het dossier en probeer opnieuw."
+    "conflict": "Het dossier is intussen gewijzigd. De lijst is vernieuwd; controleer het dossier en probeer opnieuw.",
+    "holdTitle": "Blokkerend",
+    "holdHint": "Deze open afwijkingen houden de automatische bevestiging tegen. Handmatig bevestigen kan enkel bewust en met een reden.",
+    "reasonRequiredLabel": "Reden (verplicht)",
+    "reasonRequiredHint": "Waarom bevestig je het dossier ondanks de blokkerende afwijking(en)?",
+    "openException": "Afwijking openen"
   },
   "portalReview": {
     "heading": "{number} · ingediend via het klantportaal",

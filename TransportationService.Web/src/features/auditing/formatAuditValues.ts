@@ -51,6 +51,13 @@ const FIELD_LABELS: Record<string, string> = {
   From: 'Van', To: 'Naar', IncidentType: 'Type', ResponsibleParty: 'Verantwoordelijke partij',
   ResponsibilityNotes: 'Toelichting verantwoordelijkheid', ChargeDecision: 'Doorrekening', ChargeAmount: 'Bedrag doorrekening',
   ChargeDescription: 'Omschrijving doorrekening', PolicyId: 'Doorrekenbeleid', Mode: 'Werkwijze',
+  // Exception-management remediation: incident/afwijking follow-up keys.
+  CustomerMessage: 'Bericht voor de klant', DueDate: 'Deadline', Cause: 'Oorzaak', CustomTypeName: 'Typenaam',
+  CustomerImpact: 'Impact op de klant', OperationalImpact: 'Operationele impact', FinancialImpact: 'Financiële impact',
+  EstimatedCost: 'Geschatte kost', ActualCost: 'Werkelijke kost', DamageReportId: 'Schademelding',
+  SourceExceptionId: 'Bron-afwijking', ExceptionId: 'Afwijking', IncidentId: 'Incident',
+  RedeliveryOrderId: 'Herleveringsorder', QuantityBasis: 'Bepaling hoeveelheid', Free: 'Gratis',
+  DispatcherNotes: 'Dispatchernotities', CustomerVisible: 'Zichtbaar voor klant',
 }
 
 /** Optional per-field value renderers (an entity can map its enum ordinals or codes to labels). */
@@ -78,6 +85,7 @@ const VALUE_WORDS: Record<string, string> = {
   Completed: 'Afgerond', Invoiced: 'Gefactureerd', Cancelled: 'Geannuleerd', Requested: 'Aangevraagd',
   Approved: 'Goedgekeurd', Rejected: 'Afgewezen', Resolved: 'Opgelost', Sent: 'Verzonden', Paid: 'Betaald',
   Low: 'Laag', Medium: 'Gemiddeld', High: 'Hoog', Critical: 'Kritiek', Normal: 'Normaal', Urgent: 'Dringend',
+  Minor: 'Lichte schade', Moderate: 'Matige schade', Severe: 'Zware schade', TotalLoss: 'Totaal verlies',
   Manual: 'Handmatig', Automatic: 'Automatisch', Locked: 'Bevestigd', Reviewed: 'Nagekeken',
 }
 

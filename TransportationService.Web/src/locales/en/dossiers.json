@@ -657,7 +657,9 @@
       "documentsValue": "{count} document(s)",
       "cmrPresent": "CMR present",
       "cmrMissing": "no CMR",
-      "incidents": "Open incidents"
+      "incidents": "Open incidents",
+      "exceptions": "Open deviations",
+      "exceptionsHolding": "{count} blocking"
     },
     "confirmedBadge": "Confirmed",
     "confirmedAt": "Confirmed on {date}",
@@ -681,7 +683,12 @@
     "cancelFailed": "The file could not be cancelled.",
     "reasonRequired": "Enter a reason.",
     "reopenShort": "Reopen",
-    "conflict": "The file was changed in the meantime. The list has been refreshed; check the file and try again."
+    "conflict": "The file was changed in the meantime. The list has been refreshed; check the file and try again.",
+    "holdTitle": "Blocking",
+    "holdHint": "These open deviations hold automatic confirmation. Manual confirmation needs a deliberate decision and a reason.",
+    "reasonRequiredLabel": "Reason (required)",
+    "reasonRequiredHint": "Why do you confirm the file despite the blocking deviation(s)?",
+    "openException": "Open deviation"
   },
   "portalReview": {
     "heading": "{number} · submitted via the customer portal",

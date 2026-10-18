@@ -15,13 +15,22 @@ import {
   INCIDENT_SEVERITY_TONE,
   INCIDENT_STATUS_LABELS,
   INCIDENT_STATUS_TONE,
+  INCIDENT_TYPE_LABELS,
   incidentTypeLabel,
   type IncidentListItem,
+  type IncidentType,
   type IncidentSeverity,
   type IncidentStatus,
 } from '../types'
 import { formatDate } from '../../../utils/dates'
-import { EXCEPTION_SEVERITY_LABELS, EXCEPTION_STATUS_LABELS, type ExceptionSeverity, type ExecutionExceptionStatus } from '../../exceptions/types'
+import {
+  EXCEPTION_SEVERITY_LABELS,
+  EXCEPTION_STATUS_LABELS,
+  EXCEPTION_TYPE_LABELS,
+  type ExceptionSeverity,
+  type ExecutionExceptionStatus,
+  type ExecutionExceptionType,
+} from '../../exceptions/types'
 import { labelFor } from '../../../utils/labels'
 import { TruncatedText } from '../../../components/ui/TruncatedText'
 import { OverdueDate } from '../../../components/ui/OverdueDate'
@@ -29,14 +38,22 @@ import { Pagination } from '../../../components/ui/Pagination'
 import { DensityToggle } from '../../../components/ui/DensityToggle'
 import { useListDensity } from '../../../components/ui/listDensity'
 import { tableSortOf, useUrlListState } from '../../../hooks/useUrlListState'
+import { SearchableSelect, type SearchableSelectOption } from '../../../components/ui/SearchableSelect'
+import { searchCustomers } from '../../customers/api/customersApi'
+import { searchDrivers } from '../../drivers/api/driversApi'
+import { getVehicleOptions } from '../../vehicles/api/vehiclesApi'
 
 const PAGE_SIZE = 25
 const SEVERITY_RANK: Record<string, number> = { Low: 0, Medium: 1, High: 2, Critical: 3 }
 
 /** B26: the register's view in the URL. The API returns the filtered set (≤ 500), sorted and paged here. */
 const LIST_STATE = {
-  defaults: { search: '', status: '', severity: '', sort: '', dir: '' },
-  allowed: { sort: ['title', 'severity', 'customer', 'due', 'status'], dir: ['asc', 'desc'] },
+  defaults: {
+    search: '', status: '', severity: '', sort: '', dir: '',
+    // Operational filters (exception remediation): mine / customer / driver / vehicle / period.
+    mine: '', customer: '', driver: '', vehicle: '', from: '', to: '',
+  },
+  allowed: { sort: ['title', 'severity', 'customer', 'due', 'status'], dir: ['asc', 'desc'], mine: ['', '1'] },
 }
 const DESC_BY_DEFAULT = ['severity']
 
@@ -75,6 +92,25 @@ function problemStatusLabel(t: TranslateFn, problem: ProblemLike): string {
   return key ? t(key) : labelFor(t, problem.status, 'exceptions.status')
 }
 
+/** Type column: incident types via the incident catalogue, afwijking types via theirs; the server label as fallback. */
+function problemTypeLabel(t: TranslateFn, problem: ProblemListItem): string {
+  const code = problem.typeCode ?? ''
+  if (problem.kind === 'Incident') {
+    const key = INCIDENT_TYPE_LABELS[code as IncidentType]
+    return code === 'Other' ? (problem.typeLabel ?? t(key)) : key ? t(key) : (problem.typeLabel ?? '—')
+  }
+  const key = EXCEPTION_TYPE_LABELS[code as ExecutionExceptionType]
+  return key ? t(key) : (problem.typeLabel ?? '—')
+}
+
+/** The server prefixes an afwijking's description with its Dutch type label; the type has its own column. */
+function problemDescription(problem: ProblemListItem): string {
+  if (problem.kind === 'Exception' && problem.typeLabel && problem.title.startsWith(`${problem.typeLabel}: `)) {
+    return problem.title.slice(problem.typeLabel.length + 2)
+  }
+  return problem.title
+}
+
 export function IncidentsPage() {
   const navigate = useNavigate()
   const { hasPermission } = useAuth()
@@ -90,11 +126,32 @@ export function IncidentsPage() {
   const severityFilter = state.severity as '' | IncidentSeverity
   const [density, setDensity] = useListDensity('incidents')
 
+  const [customerOptions, setCustomerOptions] = useState<SearchableSelectOption[]>([])
+  const [driverOptions, setDriverOptions] = useState<SearchableSelectOption[]>([])
+  const [vehicleOptions, setVehicleOptions] = useState<SearchableSelectOption[]>([])
+  useEffect(() => {
+    searchCustomers({ page: 1, pageSize: 200 })
+      .then((result) => setCustomerOptions(result.items.map((c) => ({ value: c.id, label: c.name }))))
+      .catch(() => setCustomerOptions([]))
+    searchDrivers({ page: 1, pageSize: 200, isActive: true })
+      .then((result) => setDriverOptions(result.items.map((d) => ({ value: d.id, label: d.fullName, description: d.driverNumber }))))
+      .catch(() => setDriverOptions([]))
+    getVehicleOptions()
+      .then((vehicles) => setVehicleOptions(vehicles.map((v) => ({ value: v.id, label: `${v.internalNumber} · ${v.licensePlate}` }))))
+      .catch(() => setVehicleOptions([]))
+  }, [])
+
   const reload = useCallback(() => {
     listIncidents({
       search: search || undefined,
       status: statusFilter || undefined,
       severity: severityFilter || undefined,
+      mine: state.mine === '1',
+      customerId: state.customer || undefined,
+      driverId: state.driver || undefined,
+      vehicleId: state.vehicle || undefined,
+      from: state.from || undefined,
+      to: state.to || undefined,
     })
       .then((data) => {
         setIncidents(data)
@@ -105,7 +162,7 @@ export function IncidentsPage() {
         setError(t('incidents.list.loadError'))
         setLoaded(true)
       })
-  }, [search, statusFilter, severityFilter, t])
+  }, [search, statusFilter, severityFilter, state.mine, state.customer, state.driver, state.vehicle, state.from, state.to, t])
 
   useEffect(() => {
     const timer = window.setTimeout(reload, 250)
@@ -132,6 +189,16 @@ export function IncidentsPage() {
     },
     { key: 'customer', header: t('incidents.list.colCustomer'), width: '150px', sortKey: 'customer', render: (row) => (row.customerName ? <TruncatedText tooltip={row.customerName}>{row.customerName}</TruncatedText> : '—') },
     { key: 'dossier', header: t('incidents.list.colDossier'), width: '115px', render: (row) => (row.dossierNumber ? <code className="ui-nowrap">{row.dossierNumber}</code> : '—') },
+    {
+      key: 'transport',
+      header: t('incidents.list.colTransport'),
+      width: '170px',
+      className: 'ui-col-optional',
+      render: (row) => {
+        const parts = [row.orderNumber, row.tripNumber, row.vehicleLabel].filter(Boolean).join(' · ')
+        return parts ? <TruncatedText tooltip={[parts, row.driverName].filter(Boolean).join(' · ')}>{parts}</TruncatedText> : '—'
+      },
+    },
     { key: 'responsible', header: t('incidents.list.colResponsible'), width: '150px', className: 'ui-col-optional', render: (row) => (row.responsibleName ? <TruncatedText tooltip={row.responsibleName}>{row.responsibleName}</TruncatedText> : '—') },
     {
       key: 'due',
@@ -199,6 +266,53 @@ export function IncidentsPage() {
             </option>
           ))}
         </select>
+        <select
+          className="ui-filter-select"
+          value={state.mine}
+          onChange={(event) => apply({ mine: event.target.value })}
+          aria-label={t('incidents.list.responsibleFilter')}
+        >
+          <option value="">{t('incidents.list.everyone')}</option>
+          <option value="1">{t('incidents.list.mine')}</option>
+        </select>
+        <div className="inc-filter-picker">
+          <SearchableSelect
+            id="inc-filter-customer"
+            value={state.customer || null}
+            onChange={(value) => apply({ customer: value ?? '' })}
+            options={customerOptions}
+            placeholder={t('incidents.list.allCustomers')}
+            ariaLabel={t('incidents.list.customerFilter')}
+          />
+        </div>
+        <div className="inc-filter-picker">
+          <SearchableSelect
+            id="inc-filter-driver"
+            value={state.driver || null}
+            onChange={(value) => apply({ driver: value ?? '' })}
+            options={driverOptions}
+            placeholder={t('incidents.list.allDrivers')}
+            ariaLabel={t('incidents.list.driverFilter')}
+          />
+        </div>
+        <div className="inc-filter-picker">
+          <SearchableSelect
+            id="inc-filter-vehicle"
+            value={state.vehicle || null}
+            onChange={(value) => apply({ vehicle: value ?? '' })}
+            options={vehicleOptions}
+            placeholder={t('incidents.list.allVehicles')}
+            ariaLabel={t('incidents.list.vehicleFilter')}
+          />
+        </div>
+        <label className="inc-filter-date">
+          {t('incidents.list.from')}
+          <input type="date" value={state.from} onChange={(event) => apply({ from: event.target.value })} />
+        </label>
+        <label className="inc-filter-date">
+          {t('incidents.list.to')}
+          <input type="date" value={state.to} onChange={(event) => apply({ to: event.target.value })} />
+        </label>
       </FilterBar>
 
       {error && <p className="placeholder-text">{error}</p>}
@@ -253,9 +367,11 @@ function ProblemsPanel() {
               <thead>
                 <tr>
                   <th>{t('incidents.problems.colKind')}</th>
+                  <th>{t('incidents.problems.colType')}</th>
                   <th>{t('incidents.problems.colDescription')}</th>
                   <th>{t('incidents.problems.colSeverity')}</th>
                   <th>{t('incidents.problems.colStatus')}</th>
+                  <th>{t('incidents.problems.colResponsible')}</th>
                   <th>{t('incidents.problems.colOrder')}</th>
                   <th>{t('incidents.problems.colTrip')}</th>
                   <th>{t('incidents.problems.colCharge')}</th>
@@ -266,16 +382,15 @@ function ProblemsPanel() {
                   <tr
                     key={`${problem.kind}-${problem.id}`}
                     className="inv-order-row"
-                    onClick={() => navigate(problem.kind === 'Incident'
-                      ? `/incidents/${problem.id}`
-                      : problem.tripId
-                        ? `/trips/${problem.tripId}`
-                        : '/incidents')}
+                    // Every problem opens its own detail page (an afwijking is not a trip).
+                    onClick={() => navigate(problem.kind === 'Incident' ? `/incidents/${problem.id}` : `/exceptions/${problem.id}`)}
                   >
                     <td>{problem.kind === 'Incident' ? t('incidents.problems.kindIncident') : t('incidents.problems.kindException')}</td>
-                    <td>{problem.title}</td>
+                    <td>{problemTypeLabel(t, problem)}</td>
+                    <td>{problemDescription(problem)}</td>
                     <td>{problemSeverityLabel(t, problem)}</td>
                     <td>{problemStatusLabel(t, problem)}</td>
+                    <td>{problem.responsibleName ?? '—'}</td>
                     <td>{problem.orderNumber ?? '—'}</td>
                     <td>{problem.tripNumber ?? '—'}</td>
                     <td>{problem.kind === 'Incident' ? t(CHARGE_DECISION_LABELS[problem.chargeDecision] ?? problem.chargeDecision) : '—'}</td>

@@ -55,11 +55,23 @@
     "colDue": "Échéance",
     "overdueSuffix": "en retard",
     "colStatus": "Statut",
-    "empty": "Aucun incident trouvé."
+    "empty": "Aucun incident trouvé.",
+    "colTransport": "Ordre · trajet · véhicule",
+    "responsibleFilter": "Responsable",
+    "everyone": "Tout le monde",
+    "mine": "Mes incidents",
+    "allCustomers": "Tous les clients",
+    "customerFilter": "Client",
+    "allDrivers": "Tous les chauffeurs",
+    "driverFilter": "Chauffeur",
+    "allVehicles": "Tous les véhicules",
+    "vehicleFilter": "Véhicule",
+    "from": "Du",
+    "to": "Au"
   },
   "problems": {
     "toggleHide": "Masquer tous les problèmes ouverts",
-    "toggleShow": "Tous les problèmes ouverts (incidents + écarts d'exécution)",
+    "toggleShow": "Tous les problèmes ouverts (incidents + écarts)",
     "empty": "Aucun problème ouvert.",
     "colKind": "Type",
     "colDescription": "Description",
@@ -69,7 +81,9 @@
     "colTrip": "Tournée",
     "colCharge": "Refacturation",
     "kindIncident": "Incident",
-    "kindException": "Écart"
+    "kindException": "Écart",
+    "colType": "Type",
+    "colResponsible": "Responsable"
   },
   "detail": {
     "loadError": "L'incident n'a pas pu être chargé.",
@@ -141,8 +155,25 @@
       "assign": "Attribuer",
       "chargeProposed": "Refacturation de {amount} en attente de décision",
       "redelivery": "Nouvelle livraison recommandée après échec",
-      "view": "Voir"
-    }
+      "view": "Voir",
+      "vehicleSafety": "Problème grave sur le véhicule {vehicle} — pas encore de déclaration de dommage pour le parc",
+      "afterConfirmation": "Signalé après la confirmation du dossier {dossiers} ; le dossier reste confirmé."
+    },
+    "derivedFromOrder": "Le dossier et le client sont déduits automatiquement de l'ordre.",
+    "executionLinksLocked": "Le trajet {trip} et le chauffeur {driver} proviennent du signalement et restent fixes.",
+    "sectionCommunication": "Message pour le client",
+    "customerMessageLabel": "Message pour le client",
+    "customerMessageHint": "Ce que voit le client (portail client). La description interne reste interne.",
+    "noCustomerMessage": "Pas encore de message pour le client. La description interne n'est jamais montrée au client.",
+    "source": {
+      "Driver": "Signalé par le chauffeur",
+      "FailedDelivery": "Automatique après une livraison échouée",
+      "Exception": "Escaladé depuis un écart"
+    },
+    "resolvedBy": "Traité par {name} le {date}",
+    "unknownActor": "inconnu",
+    "sourceExceptionLabel": "Écart d'origine",
+    "sourceExceptionFallback": "Ouvrir l'écart"
   },
   "charge": {
     "actionFailed": "L'action n'a pas pu être exécutée.",
@@ -163,11 +194,16 @@
     "redeliveryOrder": "Commande de nouvelle livraison :",
     "redeliveryCreated": "Commande de nouvelle livraison créée dans le même dossier.",
     "createRedelivery": "Créer une nouvelle livraison",
-    "noOrderRights": "Vous n'avez pas les droits pour créer des commandes.",
+    "noOrderRights": "Vous n'avez pas les droits pour créer une nouvelle livraison.",
     "linkOrderFirst": "Liez d'abord la commande originale pour créer une nouvelle livraison.",
     "changeProposal": "Modifier la proposition",
     "redeliveryConfirmTitle": "Créer une nouvelle livraison ?",
-    "redeliveryConfirmMessage": "Un nouvel ordre de transport (brouillon) est créé pour l'ordre {order}, avec les mêmes arrêts, comme activité « Nouvelle livraison » dans le dossier {dossier}. Le prix et la planification se règlent ensuite."
+    "redeliveryConfirmMessage": "Un nouvel ordre de transport (brouillon) est créé pour l'ordre {order}, avec les mêmes arrêts, comme activité « Nouvelle livraison » dans le dossier {dossier}. Le prix et la planification se règlent ensuite.",
+    "redeliveryQuantity": "Quantité à relivrer",
+    "redeliveryQuantityHint": "Vide = la quantité non livrée déduite par le système (écart ou livraison échouée).",
+    "redeliveryFree": "Nouvelle livraison gratuite (confirmée gratuite)",
+    "redeliveryFreeReason": "Motif de la gratuité",
+    "redeliveryUnpriced": "La nouvelle livraison démarre sans prix (à vérifier) ; rien n'est facturé automatiquement."
   },
   "history": {
     "ChargeProposed": "Refacturation proposée",
@@ -178,12 +214,54 @@
     "RedeliveryCreated": "Nouvelle livraison créée",
     "AutoCreatedFromFailedStop": "Créé automatiquement après une livraison échouée",
     "modeAuto": "Automatique",
-    "modePropose": "Proposer"
+    "modePropose": "Proposer",
+    "EscalatedFromException": "Créé depuis un écart",
+    "DamageReportCreated": "Déclaration de dommage créée"
   },
   "related": {
     "open_one": "1 incident ouvert :",
     "open_other": "{count} incidents ouverts :",
     "dossierAttention_one": "1 incident ouvert — la confirmation attend son traitement :",
     "dossierAttention_other": "{count} incidents ouverts — la confirmation attend leur traitement :"
+  },
+  "fleet": {
+    "title": "Parc",
+    "damageReport": "Déclaration de dommage",
+    "openDamage": "Ouvrir la déclaration",
+    "registered": "Enregistrée",
+    "severity": "Gravité du dommage",
+    "status": "Statut",
+    "noDamage": "Pas encore de déclaration de dommage. Elle détermine la disponibilité du véhicule.",
+    "create": "Créer une déclaration de dommage",
+    "created": "Déclaration de dommage créée et liée.",
+    "createFailed": "La déclaration de dommage n'a pas pu être créée.",
+    "dialogTitle": "Créer une déclaration de dommage",
+    "dialogIntro": "Véhicule {vehicle}, trajet {trip}. La déclaration est liée à cet incident ; le parc la voit sur le véhicule.",
+    "severityHint": "Un dommage grave ou une perte totale rend le véhicule indisponible ; un dommage moyen donne un avertissement.",
+    "location": "Lieu",
+    "damageSeverity": {
+      "Minor": "Dommage léger",
+      "Moderate": "Dommage moyen",
+      "Severe": "Dommage grave",
+      "TotalLoss": "Perte totale"
+    },
+    "damageStatus": {
+      "Reported": "Signalé",
+      "UnderAssessment": "En évaluation",
+      "InRepair": "En réparation",
+      "Repaired": "Réparé",
+      "Closed": "Clôturé"
+    }
+  },
+  "delivery": {
+    "outcome": {
+      "NotDelivered": "Non livré",
+      "PartiallyDelivered": "Livré partiellement",
+      "RedeliveryPlanned": "Nouvelle livraison prévue",
+      "Redelivered": "Relivré"
+    },
+    "redelivery": "Nouvelle livraison :",
+    "redeliveryOf": "Nouvelle livraison de",
+    "incident": "incident"
   }
 }

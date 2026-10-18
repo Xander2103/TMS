@@ -33,6 +33,7 @@ import {
   type DamageStatus,
   type UpdateDamageInput,
 } from '../types'
+import { getVehicleSafetyIssues, type VehicleSafetyIssue } from '../../incidents/api/incidentsApi'
 import './damage.css'
 import { formatDate } from '../../../utils/dates'
 
@@ -96,6 +97,9 @@ export function DamagePanel({ ownerType, ownerId }: DamagePanelProps) {
   const { t } = useLocale()
 
   const [reports, setReports] = useState<DamageReport[] | null>(null)
+  // EX-03: open problems reported on this vehicle (incidents/afwijkingen), safe fields only.
+  const [safetyIssues, setSafetyIssues] = useState<VehicleSafetyIssue[]>([])
+  const canSeeIncidents = hasPermission('incidents.view') || hasPermission('incidents.manage')
   const [loadError, setLoadError] = useState<string | null>(null)
   const [reloadToken, setReloadToken] = useState(0)
 
@@ -286,6 +290,7 @@ export function DamagePanel({ ownerType, ownerId }: DamagePanelProps) {
 
   return (
     <section className="dmg">
+      <VehicleSafetyIssues ownerType={ownerType} ownerId={ownerId} reloadToken={reloadToken} onLoaded={setSafetyIssues} />
       <div className="dmg-header">
         <h2>{t('damage.panel.title')}</h2>
         {hasPermission('damage_reports.create') && (
@@ -296,6 +301,32 @@ export function DamagePanel({ ownerType, ownerId }: DamagePanelProps) {
       </div>
 
       {loadError && <p className="placeholder-text">{loadError}</p>}
+      {safetyIssues.length > 0 && (
+        <div className="dmg-safety" role="status">
+          <h3>{t('damage.panel.safetyTitle')}</h3>
+          <ul>
+            {safetyIssues.map((issue) => (
+              <li key={`${issue.kind}-${issue.id}`}>
+                <strong>{issue.typeLabel}</strong>
+                {issue.title !== issue.typeLabel && <> — {issue.title}</>}
+                {' · '}{t(`damage.panel.issueSeverity.${issue.severity}`)}
+                {issue.tripNumber && <> · {t('damage.panel.issueTrip', { trip: issue.tripNumber })}</>}
+                {issue.orderNumber && <> · {issue.orderNumber}</>}
+                {issue.route && <> ({issue.route})</>}
+                {issue.driverName && <> · {issue.driverName}</>}
+                {' · '}
+                {issue.damageReportId ? t('damage.panel.issueHasDamage') : <em>{t('damage.panel.issueNoDamage')}</em>}
+                {canSeeIncidents && (
+                  <>
+                    {' · '}
+                    <Link to={issue.kind === 'Incident' ? `/incidents/${issue.id}` : `/exceptions/${issue.id}`}>{t('damage.panel.issueOpen')}</Link>
+                  </>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       {!loadError && reports === null && <p className="placeholder-text">{t('damage.panel.loading')}</p>}
       {!loadError && reports !== null && reports.length === 0 && (
         <p className="placeholder-text">{t('damage.panel.empty')}</p>
@@ -322,6 +353,18 @@ export function DamagePanel({ ownerType, ownerId }: DamagePanelProps) {
                 <td>{formatDate(report.incidentDate)}</td>
                 <td className="dmg-description" title={report.location ?? undefined}>
                   {report.description}
+                  {report.sourceLabel && (
+                    <div className="dmg-source">
+                      {t('damage.panel.source')}{' '}
+                      {canSeeIncidents && (report.sourceIncidentId || report.sourceExceptionId) ? (
+                        <Link to={report.sourceIncidentId ? `/incidents/${report.sourceIncidentId}` : `/exceptions/${report.sourceExceptionId}`}>
+                          {report.sourceLabel}
+                        </Link>
+                      ) : (
+                        report.sourceLabel
+                      )}
+                    </div>
+                  )}
                 </td>
                 <td>
                   <Badge tone={SEVERITY_TONE[report.severity]}>{t(DAMAGE_SEVERITY_LABELS[report.severity])}</Badge>
@@ -552,4 +595,19 @@ export function DamagePanel({ ownerType, ownerId }: DamagePanelProps) {
       )}
     </section>
   )
+}
+
+/** Loads the open problems of a vehicle once per reload (trailers have none here). */
+function VehicleSafetyIssues({ ownerType, ownerId, reloadToken, onLoaded }: {
+  ownerType: DamageOwnerType; ownerId: string; reloadToken: number; onLoaded: (issues: VehicleSafetyIssue[]) => void
+}) {
+  useEffect(() => {
+    if (ownerType !== 'vehicle') return
+    let active = true
+    getVehicleSafetyIssues(ownerId)
+      .then((issues) => { if (active) onLoaded(issues) })
+      .catch(() => { if (active) onLoaded([]) })
+    return () => { active = false }
+  }, [ownerType, ownerId, reloadToken, onLoaded])
+  return null
 }

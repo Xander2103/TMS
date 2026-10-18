@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { PageHeader } from '../../../components/layout/PageHeader'
 import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { LoadingState } from '../../../components/feedback/LoadingState'
@@ -14,6 +14,10 @@ import { FactList } from '../../../components/ui/FactList'
 import { UnsavedChangesGuard } from '../../../components/ui/UnsavedChangesGuard'
 import { FormField } from '../../../components/ui/FormField'
 import { Modal } from '../../../components/ui/Modal'
+import { SearchableSelect, type SearchableSelectOption } from '../../../components/ui/SearchableSelect'
+import { localizeApiError } from '../../../api/problemDetails'
+import { getAssignableUsers } from '../../incidents/api/incidentsApi'
+import { DAMAGE_SEVERITIES, suggestedDamageSeverity, type LinkedDamageSeverity } from '../../incidents/types'
 import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
 import { useLocale } from '../../../i18n/localeContext'
@@ -25,10 +29,13 @@ import { PACKAGE_INCIDENT_ACTION_LABELS, PACKAGE_STATUS_LABELS, type PackageInci
 import {
   assignException,
   changeExceptionStatus,
+  createExceptionDamageReport,
   deleteExceptionPhoto,
+  escalateException,
   fetchExceptionPhotoUrl,
   getException,
   updateException,
+  updateExceptionCustomerMessage,
 } from '../api/exceptionsApi'
 import {
   EXCEPTION_SEVERITIES,
@@ -118,6 +125,17 @@ export function ExceptionDetailPage() {
 
   const canResolve = hasPermission('exceptions.resolve')
   const canDisposition = hasPermission('package_exceptions.manage')
+  const canEscalate = hasPermission('incidents.manage')
+  const canCreateDamage = canResolve
+  const navigate = useNavigate()
+
+  const [assignDialog, setAssignDialog] = useState(false)
+  const [assignOptions, setAssignOptions] = useState<SearchableSelectOption[]>([])
+  const [assignee, setAssignee] = useState<string | null>(null)
+  const [messageEditing, setMessageEditing] = useState(false)
+  const [customerMessage, setCustomerMessage] = useState('')
+  const [damageDialog, setDamageDialog] = useState(false)
+  const [damageSeverity, setDamageSeverity] = useState<LinkedDamageSeverity>('Moderate')
 
   useEffect(() => {
     let mounted = true
@@ -200,6 +218,67 @@ export function ExceptionDetailPage() {
     }
   }
 
+  function openAssign() {
+    setAssignee(detail?.assignedToUserId ?? null)
+    setAssignDialog(true)
+    // EX-07: the dedicated, safe picker endpoint — no general users.view needed.
+    getAssignableUsers()
+      .then((users) => setAssignOptions(users.map((u) => ({ value: u.id, label: u.displayName, description: u.roleName ?? undefined }))))
+      .catch(() => setAssignOptions([]))
+  }
+
+  async function submitAssign() {
+    setBusy(true)
+    try {
+      setDetail(await assignException(id, assignee))
+      setAssignDialog(false)
+      showSuccess(assignee ? t('exceptions.detail.assigned') : t('exceptions.detail.unassigned'))
+    } catch (err) {
+      showError(localizeApiError(t, err, t('exceptions.detail.assignFailed')))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function escalate() {
+    setBusy(true)
+    try {
+      const incident = await escalateException(id)
+      showSuccess(t('exceptions.detail.escalated'))
+      navigate(`/incidents/${incident.id}`)
+    } catch (err) {
+      showError(localizeApiError(t, err, t('exceptions.detail.escalateFailed')))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function saveCustomerMessage() {
+    setBusy(true)
+    try {
+      setDetail(await updateExceptionCustomerMessage(id, customerMessage.trim() || null))
+      setMessageEditing(false)
+      showSuccess(t('exceptions.detail.customerMessageSaved'))
+    } catch (err) {
+      showError(localizeApiError(t, err, t('exceptions.detail.updateFailed')))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function submitDamage() {
+    setBusy(true)
+    try {
+      setDetail(await createExceptionDamageReport(id, { severity: damageSeverity }))
+      setDamageDialog(false)
+      showSuccess(t('exceptions.detail.damageCreated'))
+    } catch (err) {
+      showError(localizeApiError(t, err, t('exceptions.detail.damageFailed')))
+    } finally {
+      setBusy(false)
+    }
+  }
+
   async function submitDisposition() {
     if (!detail?.packageId || !dispositionAction) return
     setBusy(true)
@@ -239,8 +318,8 @@ export function ExceptionDetailPage() {
     try {
       setDetail(await deleteExceptionPhoto(id, photoId))
       showSuccess(t('exceptions.detail.photoDeleted'))
-    } catch {
-      showError(t('exceptions.detail.photoDeleteFailed'))
+    } catch (err) {
+      showError(localizeApiError(t, err, t('exceptions.detail.photoDeleteFailed')))
     } finally {
       setBusy(false)
     }
@@ -275,7 +354,21 @@ export function ExceptionDetailPage() {
         label: t(TRANSITION_LABELS[target]),
         onSelect: () => openStatusDialog(target),
       })),
+    ...(canResolve ? [{ key: 'assign', label: t('exceptions.detail.chooseResponsible'), onSelect: openAssign }] : []),
     ...(canResolve && isMine ? [{ key: 'unassign', label: t('exceptions.detail.unassign'), onSelect: () => void toggleAssignment() }] : []),
+    ...(canEscalate && !detail.escalatedIncidentId && detail.status !== 'Rejected'
+      ? [{ key: 'escalate', label: t('exceptions.detail.escalate'), onSelect: () => void escalate() }]
+      : []),
+    ...(canCreateDamage && detail.canCreateDamageReport
+      ? [{
+          key: 'damage',
+          label: t('exceptions.detail.createDamage'),
+          onSelect: () => {
+            setDamageSeverity(suggestedDamageSeverity(detail.severity))
+            setDamageDialog(true)
+          },
+        }]
+      : []),
     ...(allowed.includes('Rejected')
       ? [{ key: 'Rejected', label: t(TRANSITION_LABELS.Rejected), danger: true, onSelect: () => openStatusDialog('Rejected') }]
       : []),
@@ -330,6 +423,9 @@ export function ExceptionDetailPage() {
       />
 
       <UnsavedChangesGuard when={editDirty && !busy} />
+      {detail.vehicleSafetyIssue && !detail.damageReportId && (
+        <p className="exc-safety-banner" role="status">{t('exceptions.detail.vehicleSafety', { vehicle: detail.vehicleLabel ?? '—' })}</p>
+      )}
 
       {terminal && detail.resolutionNote && (
         <DetailCard title={t(detail.status === 'Resolved' ? 'exceptions.detail.outcomeResolved' : 'exceptions.detail.outcomeRejected')} id="exception-outcome" className="exc-outcome-card">
@@ -367,6 +463,21 @@ export function ExceptionDetailPage() {
                 value: detail.customerId ? <Link to={`/customers/${detail.customerId}`}>{detail.customerName}</Link> : null,
               },
               { key: 'driver', label: t('exceptions.detail.driver'), value: detail.driverName },
+              !!detail.vehicleLabel && {
+                key: 'vehicle',
+                label: t('exceptions.detail.vehicle'),
+                value: detail.vehicleId ? <Link className="ui-id-link" to={`/vehicles/${detail.vehicleId}`}>{detail.vehicleLabel}</Link> : detail.vehicleLabel,
+              },
+              !!detail.escalatedIncidentId && {
+                key: 'incident',
+                label: t('exceptions.detail.escalatedIncident'),
+                value: <Link to={`/incidents/${detail.escalatedIncidentId}`}>{detail.escalatedIncidentTitle ?? t('exceptions.detail.openIncident')}</Link>,
+              },
+              !!detail.damageReportId && {
+                key: 'damage',
+                label: t('exceptions.detail.damageReport'),
+                value: detail.vehicleId ? <Link to={`/vehicles/${detail.vehicleId}?tab=schade`}>{t('exceptions.detail.openDamage')}</Link> : t('exceptions.detail.damageRegistered'),
+              },
               !!detail.stopLabel && { key: 'stop', label: t('exceptions.detail.stop'), value: detail.stopLabel },
               !!detail.cargoDescription && { key: 'cargo', label: t('exceptions.detail.cargoLine'), value: detail.cargoDescription },
               !!detail.packageNumber && {
@@ -464,6 +575,42 @@ export function ExceptionDetailPage() {
           )}
         </DetailCard>
 
+        <DetailCard
+          title={t('exceptions.detail.customerMessageTitle')}
+          id="exception-customer-message"
+          action={
+            canResolve && !messageEditing ? (
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  setCustomerMessage(detail.customerMessage ?? '')
+                  setMessageEditing(true)
+                }}
+                disabled={busy}
+              >
+                {t('exceptions.detail.edit')}
+              </Button>
+            ) : undefined
+          }
+        >
+          {messageEditing ? (
+            <div className="exc-edit">
+              <FormField label={t('exceptions.detail.customerMessageLabel')} htmlFor="exc-customer-message" hint={t('exceptions.detail.customerMessageHint')}>
+                <textarea id="exc-customer-message" rows={3} value={customerMessage} onChange={(e) => setCustomerMessage(e.target.value)} maxLength={2000} disabled={busy} />
+              </FormField>
+              <div className="exc-edit-actions">
+                <Button variant="secondary" onClick={() => setMessageEditing(false)} disabled={busy}>{t('exceptions.detail.cancel')}</Button>
+                <Button onClick={() => void saveCustomerMessage()} disabled={busy}>{t('exceptions.detail.save')}</Button>
+              </div>
+            </div>
+          ) : detail.customerMessage ? (
+            <p className="exc-description">{detail.customerMessage}</p>
+          ) : (
+            <p className="ui-detail-empty">{t('exceptions.detail.noCustomerMessage')}</p>
+          )}
+          {!detail.customerVisible && <p className="ui-detail-empty">{t('exceptions.detail.notCustomerVisible')}</p>}
+        </DetailCard>
+
         {detail.photos.length > 0 && (
           <DetailCard title={t('exceptions.detail.photosTitle', { count: detail.photos.length })} id="exception-photos">
             <div className="exc-photos">
@@ -478,7 +625,7 @@ export function ExceptionDetailPage() {
                   )}
                   <figcaption>
                     <span className="exc-photo-name" title={photo.fileName}>{photo.fileName}</span>
-                    {canResolve && (
+                    {canResolve && !detail.photosLocked && (
                       <button type="button" className="exc-photo-delete" onClick={() => setPhotoToDelete(photo.id)} disabled={busy}>
                         {t('exceptions.detail.deletePhoto')}
                       </button>
@@ -487,6 +634,7 @@ export function ExceptionDetailPage() {
                 </figure>
               ))}
             </div>
+            {detail.photosLocked && <p className="ui-detail-empty">{t('exceptions.detail.photosLocked')}</p>}
           </DetailCard>
         )}
       </DetailGrid>
@@ -498,8 +646,50 @@ export function ExceptionDetailPage() {
           entityType="ExecutionException"
           entityId={detail.id}
           valueLabels={exceptionAuditLabels}
+          historyPath={`/api/exceptions/${detail.id}/history`}
         />
       </DetailCard>
+
+      {assignDialog && (
+        <Modal
+          title={t('exceptions.detail.chooseResponsible')}
+          onClose={() => setAssignDialog(false)}
+          busy={busy}
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setAssignDialog(false)} disabled={busy}>{t('exceptions.detail.cancel')}</Button>
+              <Button onClick={() => void submitAssign()} disabled={busy}>{t('exceptions.detail.save')}</Button>
+            </>
+          }
+        >
+          <FormField label={t('exceptions.detail.assignee')} htmlFor="exc-assignee">
+            <SearchableSelect id="exc-assignee" value={assignee} onChange={setAssignee} options={assignOptions} />
+          </FormField>
+        </Modal>
+      )}
+
+      {damageDialog && (
+        <Modal
+          title={t('exceptions.detail.createDamage')}
+          onClose={() => setDamageDialog(false)}
+          busy={busy}
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setDamageDialog(false)} disabled={busy}>{t('exceptions.detail.cancel')}</Button>
+              <Button onClick={() => void submitDamage()} disabled={busy}>{t('exceptions.detail.createDamage')}</Button>
+            </>
+          }
+        >
+          <p>{t('exceptions.detail.damageIntro', { vehicle: detail.vehicleLabel ?? '—', trip: detail.tripNumber })}</p>
+          <FormField label={t('exceptions.detail.damageSeverity')} htmlFor="exc-damage-severity" required>
+            <select id="exc-damage-severity" value={damageSeverity} onChange={(e) => setDamageSeverity(e.target.value as LinkedDamageSeverity)}>
+              {DAMAGE_SEVERITIES.map((value) => (
+                <option key={value} value={value}>{t(`incidents.fleet.damageSeverity.${value}`)}</option>
+              ))}
+            </select>
+          </FormField>
+        </Modal>
+      )}
 
       {photoToDelete && (
         <ConfirmDialog

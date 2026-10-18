@@ -29,6 +29,10 @@ export interface IncidentListItem {
   dueDate: string | null
   isOverdue: boolean
   createdAt: string
+  orderNumber?: string | null
+  tripNumber?: string | null
+  driverName?: string | null
+  vehicleLabel?: string | null
 }
 
 export interface IncidentDetail {
@@ -78,6 +82,77 @@ export interface IncidentDetail {
   linkedRedeliveryOrderNumber: string | null
   /** Herlevering aanbevolen na een mislukte levering (RedeliveryMode Propose/Automatic). */
   redeliverySuggested: boolean
+  /** Office | Driver | FailedDelivery | Exception. */
+  source?: IncidentSource
+  sourceExceptionId?: string | null
+  sourceExceptionLabel?: string | null
+  resolvedByUserId?: string | null
+  resolvedByName?: string | null
+  /** Klantgerichte tekst — de omschrijving blijft intern. */
+  customerMessage?: string | null
+  damageReportId?: string | null
+  damageReportSeverity?: string | null
+  damageReportStatus?: string | null
+  canCreateDamageReport?: boolean
+  vehicleSafetyIssue?: boolean
+  /** Rit/chauffeur/oplegger liggen vast (gemeld door de chauffeur, de automatisering of een afwijking). */
+  executionLinksLocked?: boolean
+  /** Dossiers die al bevestigd waren toen dit incident gemeld werd. */
+  confirmedDossierNumbers?: string[]
+}
+
+export type IncidentSource = 'Office' | 'Driver' | 'FailedDelivery' | 'Exception'
+
+/**
+ * EX-01: het kantoor werkt per kaart bij. Enkel de meegestuurde secties worden toegepast — een
+ * kaart die de ernst wijzigt kan nooit de rit, chauffeur of andere koppelingen wissen.
+ */
+export interface IncidentUpdate {
+  report?: {
+    title: string
+    description: string
+    incidentType: IncidentType
+    severity: IncidentSeverity
+    customTypeName: string | null
+    cause: string | null
+    responsibleUserId: string | null
+    dueDate: string | null
+  }
+  links?: {
+    customerId: string | null
+    dossierId: string | null
+    transportOrderId: string | null
+    vehicleId: string | null
+    /** Uitvoeringskoppelingen: enkel invullen wanneer ze nog leeg zijn. */
+    trailerId?: string | null
+    tripId?: string | null
+    driverId?: string | null
+  }
+  impact?: {
+    customerImpact: string | null
+    operationalImpact: string | null
+    financialImpact: string | null
+    estimatedCost: number | null
+    actualCost: number | null
+  }
+  responsibility?: { responsibleParty: string; responsibilityNotes: string | null }
+  communication?: { customerMessage: string | null }
+}
+
+export interface AssignableUser {
+  id: string
+  displayName: string
+  roleName: string | null
+}
+
+export const DAMAGE_SEVERITIES = ['Minor', 'Moderate', 'Severe', 'TotalLoss'] as const
+export type LinkedDamageSeverity = (typeof DAMAGE_SEVERITIES)[number]
+
+/** Voorstel voor de ernst van de schademelding (zelfde regel als de server). */
+export function suggestedDamageSeverity(severity: string): LinkedDamageSeverity {
+  if (severity === 'Critical') return 'Severe'
+  if (severity === 'Low') return 'Minor'
+  return 'Moderate'
 }
 
 export interface IncidentInput {
@@ -101,6 +176,9 @@ export interface IncidentInput {
   /** Wave 6 §1. */
   responsibleParty?: string
   responsibilityNotes?: string | null
+  /** Context bij registratie vanuit een rit (bv. /incidents/new?tripId=). */
+  tripId?: string | null
+  customerMessage?: string | null
 }
 
 /** Vertaalsleutels (i18n-wave): render via t(...LABELS[code] ?? code). */

@@ -10,7 +10,14 @@
     "AccessDenied": "Geen toegang",
     "VehicleIssue": "Voertuigprobleem",
     "Delay": "Vertraging",
-    "Other": "Andere"
+    "Other": "Andere",
+    "UnknownPackage": "Onbekend collo",
+    "WrongRoutePackage": "Collo voor een andere rit",
+    "WrongStopPackage": "Collo voor een andere stop",
+    "IncompleteQuantity": "Onvolledige hoeveelheid",
+    "UnreadableBarcode": "Onleesbare barcode",
+    "LabelMissing": "Etiket ontbreekt",
+    "RejectedBeforeLoading": "Geweigerd voor het laden"
   },
   "severity": {
     "Low": "Laag",
@@ -119,7 +126,31 @@
     "customer": "Klant",
     "assignee": "Toegewezen aan",
     "outcomeResolved": "Opgelost",
-    "outcomeRejected": "Afgewezen"
+    "outcomeRejected": "Afgewezen",
+    "assigned": "Verantwoordelijke ingesteld.",
+    "chooseResponsible": "Verantwoordelijke kiezen…",
+    "escalate": "Escaleren naar incident",
+    "escalated": "Incident aangemaakt vanuit de afwijking.",
+    "escalateFailed": "De afwijking kon niet worden geëscaleerd.",
+    "customerMessageSaved": "Bericht voor de klant opgeslagen.",
+    "damageCreated": "Schademelding aangemaakt en gekoppeld.",
+    "damageFailed": "De schademelding kon niet worden aangemaakt.",
+    "createDamage": "Schademelding aanmaken",
+    "vehicle": "Voertuig",
+    "escalatedIncident": "Incident",
+    "openIncident": "Incident openen",
+    "damageReport": "Schademelding",
+    "openDamage": "Schademelding openen",
+    "damageRegistered": "Geregistreerd",
+    "customerMessageTitle": "Bericht voor de klant",
+    "customerMessageLabel": "Bericht voor de klant",
+    "customerMessageHint": "Wat de klant in het klantportaal leest. De melding van de chauffeur blijft intern.",
+    "noCustomerMessage": "Nog geen bericht; de klant ziet enkel het soort probleem.",
+    "notCustomerVisible": "Deze afwijking is niet zichtbaar voor de klant.",
+    "photosLocked": "Bewijsmateriaal van een afgehandelde of geëscaleerde afwijking kan niet meer verwijderd worden.",
+    "damageIntro": "Voertuig {vehicle}, rit {trip}. De schademelding wordt aan deze afwijking gekoppeld.",
+    "damageSeverity": "Ernst van de schade",
+    "vehicleSafety": "Ernstig voertuigprobleem op {vehicle} — nog geen schademelding voor het wagenpark."
   },
   "report": {
     "descriptionRequired": "Een omschrijving van het probleem is verplicht.",
@@ -142,5 +173,10 @@
     "photosHint": "Maak een foto of kies uit de galerij (max 10 MB per foto).",
     "photosSelected_one": "1 foto geselecteerd",
     "photosSelected_other": "{count} foto's geselecteerd"
+  },
+  "history": {
+    "EscalatedToIncident": "Geëscaleerd naar incident",
+    "DamageReportCreated": "Schademelding aangemaakt",
+    "CustomerMessageChanged": "Bericht voor de klant gewijzigd"
   }
 }

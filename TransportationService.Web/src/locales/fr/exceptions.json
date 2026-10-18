@@ -10,7 +10,14 @@
     "AccessDenied": "Pas d'accès",
     "VehicleIssue": "Problème de véhicule",
     "Delay": "Retard",
-    "Other": "Autre"
+    "Other": "Autre",
+    "UnknownPackage": "Colis inconnu",
+    "WrongRoutePackage": "Colis pour un autre trajet",
+    "WrongStopPackage": "Colis pour un autre arrêt",
+    "IncompleteQuantity": "Quantité incomplète",
+    "UnreadableBarcode": "Code-barres illisible",
+    "LabelMissing": "Étiquette manquante",
+    "RejectedBeforeLoading": "Refusé avant chargement"
   },
   "severity": {
     "Low": "Faible",
@@ -119,7 +126,31 @@
     "customer": "Client",
     "assignee": "Attribué à",
     "outcomeResolved": "Résolu",
-    "outcomeRejected": "Rejeté"
+    "outcomeRejected": "Rejeté",
+    "assigned": "Responsable défini.",
+    "chooseResponsible": "Choisir le responsable…",
+    "escalate": "Escalader en incident",
+    "escalated": "Incident créé depuis l'écart.",
+    "escalateFailed": "L'écart n'a pas pu être escaladé.",
+    "customerMessageSaved": "Message pour le client enregistré.",
+    "damageCreated": "Déclaration de dommage créée et liée.",
+    "damageFailed": "La déclaration de dommage n'a pas pu être créée.",
+    "createDamage": "Créer une déclaration de dommage",
+    "vehicle": "Véhicule",
+    "escalatedIncident": "Incident",
+    "openIncident": "Ouvrir l'incident",
+    "damageReport": "Déclaration de dommage",
+    "openDamage": "Ouvrir la déclaration",
+    "damageRegistered": "Enregistrée",
+    "customerMessageTitle": "Message pour le client",
+    "customerMessageLabel": "Message pour le client",
+    "customerMessageHint": "Ce que lit le client dans le portail. Le signalement du chauffeur reste interne.",
+    "noCustomerMessage": "Pas encore de message ; le client ne voit que le type de problème.",
+    "notCustomerVisible": "Cet écart n'est pas visible pour le client.",
+    "photosLocked": "Les preuves d'un écart traité ou escaladé ne peuvent plus être supprimées.",
+    "damageIntro": "Véhicule {vehicle}, trajet {trip}. La déclaration est liée à cet écart.",
+    "damageSeverity": "Gravité du dommage",
+    "vehicleSafety": "Problème grave sur le véhicule {vehicle} — pas encore de déclaration de dommage."
   },
   "report": {
     "descriptionRequired": "Une description du problème est obligatoire.",
@@ -142,5 +173,10 @@
     "photosHint": "Prenez une photo ou choisissez dans la galerie (max 10 Mo par photo).",
     "photosSelected_one": "1 photo sélectionnée",
     "photosSelected_other": "{count} photos sélectionnées"
+  },
+  "history": {
+    "EscalatedToIncident": "Escaladé en incident",
+    "DamageReportCreated": "Déclaration de dommage créée",
+    "CustomerMessageChanged": "Message pour le client modifié"
   }
 }

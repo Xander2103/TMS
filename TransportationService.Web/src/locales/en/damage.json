@@ -65,6 +65,18 @@
     "removeAttachment": "Remove file",
     "attachmentRemoved": "File removed.",
     "attachmentRemoveFailed": "The file could not be removed.",
-    "negativeNotAllowed": "Repair cost and downtime cannot be negative."
+    "negativeNotAllowed": "Repair cost and downtime cannot be negative.",
+    "safetyTitle": "Reported vehicle problems",
+    "issueSeverity": {
+      "Low": "low",
+      "Medium": "medium",
+      "High": "high",
+      "Critical": "critical"
+    },
+    "issueTrip": "trip {trip}",
+    "issueHasDamage": "damage report created",
+    "issueNoDamage": "no damage report yet",
+    "issueOpen": "open",
+    "source": "Source:"
   }
 }

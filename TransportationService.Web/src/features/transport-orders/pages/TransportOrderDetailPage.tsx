@@ -52,6 +52,7 @@ import { OrderMessagesSection } from '../detail/OrderMessagesSection'
 import { OrderPricingDialogs } from '../pricing/OrderPricingDialogs'
 import { useOrderPricingEditor } from '../pricing/useOrderPricingEditor'
 import { RelatedIncidentsNotice } from '../../incidents/components/RelatedIncidentsNotice'
+import { DeliveryContextNotice } from '../../incidents/components/DeliveryContextNotice'
 
 
 
@@ -274,6 +275,7 @@ export function TransportOrderDetailPage() {
         onTransition={(target) => void applyTransition(target)}
       />
       <RelatedIncidentsNotice transportOrderId={order.id} />
+      <DeliveryContextNotice transportOrderId={order.id} />
 
       {customerChangeOpen && (
         <OrderCustomerChangeDialog

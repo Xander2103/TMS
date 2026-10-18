@@ -8,7 +8,7 @@ import { useAuth } from '../../auth/authContextValue'
 import { useLocale } from '../../../i18n/localeContext'
 import { ORDER_STATUS_TONE } from '../../transport-orders/types'
 import { getPortalContext, listPortalOrders, type PortalOrderListItem } from '../api/customerPortalApi'
-import { orderStatusLabel } from './portalStatusLabels'
+import { portalOrderStatus } from './portalStatusLabels'
 
 /** Customer-portal order overview: only the authenticated user's own customer's orders. */
 export function CustomerPortalOrdersPage() {
@@ -62,7 +62,10 @@ export function CustomerPortalOrdersPage() {
     {
       key: 'status',
       header: t('orders.list.columns.status'),
-      render: (row) => <Badge tone={ORDER_STATUS_TONE[row.status]}>{orderStatusLabel(t, row.status)}</Badge>,
+      render: (row) => {
+        const shown = portalOrderStatus(t, row.status, row.deliveryOutcome)
+        return <Badge tone={shown.tone ?? ORDER_STATUS_TONE[row.status]}>{shown.label}</Badge>
+      },
     },
   ]
 

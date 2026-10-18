@@ -303,10 +303,13 @@ export interface DossierDetail {
 /** One finding of GET /api/dossiers/{id}/confirmation. */
 export interface DossierConfirmationCheck {
   code: string
-  severity: 'Blocking' | 'Warning' | 'Info'
+  /** Hold = an open (High/Critical) afwijking: holds automatic confirmation; manual needs a reason (EX-05). */
+  severity: 'Blocking' | 'Warning' | 'Info' | 'Hold'
   message: string
   transportOrderId: string | null
   activityId: string | null
+  /** The afwijking behind an exception.open.* check. */
+  problemId?: string | null
 }
 
 export interface DossierConfirmationSummary {
@@ -323,6 +326,9 @@ export interface DossierConfirmationSummary {
   documents: number
   hasCmr: boolean
   openIncidents: number
+  /** EX-05: open afwijkingen in the dossier's scope, and how many hold automatic confirmation. */
+  openExceptions?: number
+  openExceptionsHolding?: number
 }
 
 export interface DossierConfirmationEvaluation {

@@ -21,6 +21,15 @@ export interface PortalOrderListItem {
   goodsDescription: string | null
   firstLoadingCity: string | null
   lastUnloadingCity: string | null
+  /** EX-08: wat de geadresseerde echt ontving (null = geen uitvoeringsgegevens). */
+  deliveryOutcome?: PortalDeliveryOutcome | null
+}
+
+export type PortalDeliveryOutcome = 'Delivered' | 'PartiallyDelivered' | 'NotDelivered' | 'RedeliveryPlanned' | 'Redelivered'
+
+export interface PortalNotice {
+  message: string
+  at: string
 }
 
 export interface PortalStop {
@@ -83,6 +92,12 @@ export interface PortalOrderDetail {
   expectedDeliveryEta?: string | null
   /** Wave 11: leveringsbewijs zodra er een actueel, klantzichtbaar POD bestaat. */
   pod?: PortalPodSummary | null
+  /** EX-08: zie PortalOrderListItem.deliveryOutcome. */
+  deliveryOutcome?: PortalDeliveryOutcome | null
+  redeliveryOrderId?: string | null
+  redeliveryOrderNumber?: string | null
+  /** Klantgerichte berichten van kantoor over deze opdracht. */
+  notices?: PortalNotice[]
 }
 
 export interface PortalStopInput {

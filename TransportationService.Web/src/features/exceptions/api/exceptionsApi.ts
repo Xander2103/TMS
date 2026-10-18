@@ -102,3 +102,20 @@ export async function deleteExceptionPhoto(id: string, photoId: string): Promise
   await apiClient.deleteRequest(`/api/exceptions/${id}/photos/${photoId}`)
   return getException(id)
 }
+
+/** The customer-facing message (the driver's report stays internal). */
+export function updateExceptionCustomerMessage(id: string, customerMessage: string | null): Promise<ExceptionDetail> {
+  return apiClient.putJson<ExceptionDetail, { customerMessage: string | null }>(`/api/exceptions/${id}/customer-message`, { customerMessage })
+}
+
+/** Afwijking → Incident: returns the incident (idempotent). */
+export function escalateException(id: string): Promise<{ id: string }> {
+  return apiClient.postJson<{ id: string }, Record<string, never>>(`/api/exceptions/${id}/escalate`, {})
+}
+
+/** EX-03: the linked fleet damage report (vehicle/trip/driver from the afwijking's trip). */
+export function createExceptionDamageReport(
+  id: string, input: { severity: string; description?: string | null; location?: string | null },
+): Promise<ExceptionDetail> {
+  return apiClient.postJson<ExceptionDetail, typeof input>(`/api/exceptions/${id}/damage-report`, input)
+}

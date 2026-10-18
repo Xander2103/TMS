@@ -17,7 +17,14 @@ import {
   type PortalDocument,
   type PortalOrderDetail,
 } from '../api/customerPortalApi'
-import { exceptionStatusLabel, orderStatusLabel, stopTypeLabel, unitTypeLabel } from './portalStatusLabels'
+import {
+  exceptionStatusLabel,
+  orderStatusLabel,
+  portalExceptionTypeLabel,
+  portalOrderStatus,
+  stopTypeLabel,
+  unitTypeLabel,
+} from './portalStatusLabels'
 import './customer-portal-pages.css'
 
 /**
@@ -77,6 +84,8 @@ export function CustomerPortalOrderDetailPage() {
     order.customerReference ? ` · ${t('orders.detail.yourRef', { reference: order.customerReference })}` : ''
   }`
 
+  const shownStatus = portalOrderStatus(t, order.status, order.deliveryOutcome)
+
   return (
     <div>
       <Breadcrumbs items={[{ label: t('navigation.portalName'), to: '/klantportaal' }, { label: order.orderNumber }]} />
@@ -86,7 +95,7 @@ export function CustomerPortalOrderDetailPage() {
         subtitle={subtitle}
         action={
           <>
-            <Badge tone={ORDER_STATUS_TONE[order.status]}>{orderStatusLabel(t, order.status)}</Badge>{' '}
+            <Badge tone={shownStatus.tone ?? ORDER_STATUS_TONE[order.status]}>{shownStatus.label}</Badge>{' '}
             {hasPermission('customer_portal.messages') && (
               <Link to={`/klantportaal/berichten?orderId=${order.id}`}>
                 <Button variant="secondary">{t('orders.detail.messagesButton')}</Button>
@@ -95,6 +104,33 @@ export function CustomerPortalOrderDetailPage() {
           </>
         }
       />
+
+      {shownStatus.tone && (
+        // EX-08: the truthful outcome, and the redelivery once the customer may see that order.
+        <p className="cpp-eta" role="status">
+          {t(`orders.detail.deliveryOutcome.${order.deliveryOutcome}`)}
+          {order.redeliveryOrderId && order.redeliveryOrderNumber && (
+            <>
+              {' '}
+              <Link to={`/klantportaal/orders/${order.redeliveryOrderId}`}>{t('orders.detail.redeliveryLink', { order: order.redeliveryOrderNumber })}</Link>
+            </>
+          )}
+        </p>
+      )}
+
+      {(order.notices ?? []).length > 0 && (
+        <section className="cpp-panel">
+          <h2>{t('orders.detail.noticesTitle')}</h2>
+          <ul className="cpp-list">
+            {(order.notices ?? []).map((notice, index) => (
+              <li key={index} className="cpp-row">
+                <span>{notice.message}</span>
+                <span>{formatDateTime(notice.at)}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {order.expectedDeliveryEta && (
         <p className="cpp-eta" role="status">
@@ -129,7 +165,10 @@ export function CustomerPortalOrderDetailPage() {
             {order.timeline.map((event, index) => (
               <li key={index} className="cpp-row">
                 <span>
-                  <Badge tone={ORDER_STATUS_TONE[event.status]}>{orderStatusLabel(t, event.status)}</Badge>
+                  {/* EX-08: the operational close of a not (fully) delivered order is never shown as a plain "Afgerond". */}
+                  <Badge tone={shownStatus.tone && event.status === 'Completed' ? shownStatus.tone : ORDER_STATUS_TONE[event.status]}>
+                    {shownStatus.tone && event.status === 'Completed' ? t('orders.detail.completedShortfall') : orderStatusLabel(t, event.status)}
+                  </Badge>
                 </span>
                 <span>{formatDateTime(event.changedAt)}</span>
               </li>
@@ -144,7 +183,8 @@ export function CustomerPortalOrderDetailPage() {
           <ul className="cpp-list">
             {order.exceptions.map((exception, index) => (
               <li key={index} className="cpp-row">
-                <span>{exception.description}</span>
+                {/* Customer-safe: the office's message, else only the kind of problem — never the driver's report. */}
+                <span>{exception.description || portalExceptionTypeLabel(t, exception.type)}</span>
                 <Badge tone="warning">{exceptionStatusLabel(t, exception.status)}</Badge>
               </li>
             ))}

@@ -5,8 +5,10 @@ import { MemoryRouter } from 'react-router-dom'
 import { IncidentChargePanel } from '../IncidentChargePanel'
 import type { IncidentDetail } from '../../types'
 
+// null = every permission (the default); a set = exactly those codes.
+let permissions: Set<string> | null = null
 vi.mock('../../../auth/authContextValue', () => ({
-  useAuth: () => ({ hasPermission: () => true }),
+  useAuth: () => ({ hasPermission: (code: string) => permissions === null || permissions.has(code) }),
 }))
 vi.mock('../../../../components/ui/toastContext', () => ({
   useToast: () => ({ showToast: vi.fn(), showSuccess: vi.fn(), showError: vi.fn() }),
@@ -88,8 +90,36 @@ describe('IncidentChargePanel', () => {
     const dialog = screen.getByRole('dialog')
     expect(dialog).toHaveTextContent('ORD-0049')
     expect(dialog).toHaveTextContent('DOS-0048')
+    // Unpriced by default — billing is never duplicated silently.
+    expect(dialog).toHaveTextContent('start zonder prijs')
     await user.click(within(dialog).getByRole('button', { name: 'Herlevering aanmaken' }))
-    expect(create).toHaveBeenCalledWith('inc-1')
+    expect(create).toHaveBeenCalledWith('inc-1', { quantity: null, free: false, freeReason: null })
+  })
+
+  it('a free redelivery needs a reason and uses the confirmed-free mechanism', async () => {
+    const { default: userEvent } = await import('@testing-library/user-event')
+    const api = await import('../../api/incidentsApi')
+    const create = vi.spyOn(api, 'createIncidentRedelivery').mockResolvedValue(incident({ linkedRedeliveryOrderId: 'o-2', linkedRedeliveryOrderNumber: 'ORD-0002' }))
+    const user = userEvent.setup()
+    render(<IncidentChargePanel incident={incident()} onUpdated={vi.fn()} />)
+    await user.click(screen.getByRole('button', { name: 'Herlevering aanmaken' }))
+    const dialog = screen.getByRole('dialog')
+    await user.type(within(dialog).getByLabelText(/Te herleveren hoeveelheid/), '2')
+    await user.click(within(dialog).getByLabelText(/Gratis herlevering/))
+    expect(within(dialog).getByRole('button', { name: 'Herlevering aanmaken' })).toBeDisabled()
+    await user.type(within(dialog).getByLabelText(/Reden gratis/), 'Eigen fout')
+    await user.click(within(dialog).getByRole('button', { name: 'Herlevering aanmaken' }))
+    expect(create).toHaveBeenCalledWith('inc-1', { quantity: 2, free: true, freeReason: 'Eigen fout' })
+  })
+
+  it('the dispatcher may redeliver through problems.create_redelivery', () => {
+    permissions = new Set(['incidents.view', 'problems.create_redelivery'])
+    try {
+      render(<IncidentChargePanel incident={incident()} onUpdated={vi.fn()} />)
+      expect(screen.getByRole('button', { name: 'Herlevering aanmaken' })).toBeInTheDocument()
+    } finally {
+      permissions = null
+    }
   })
 
   it('hides the recommendation once a redelivery order is linked', () => {

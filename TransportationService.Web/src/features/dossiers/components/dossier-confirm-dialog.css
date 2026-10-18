@@ -11,6 +11,7 @@
 .dossier-confirm-checks-blocking { border-color: var(--color-danger); background: var(--color-danger-soft); }
 .dossier-confirm-checks-warning { border-color: var(--color-warning); background: var(--color-warning-soft); }
 .dossier-confirm-checks-info { border-color: var(--color-info); }
+.dossier-confirm-hint { margin: 0 0 0.25rem; font-size: 0.875rem; }
 .dossier-confirm-ok { color: var(--color-success); }
 .dossier-confirm-ack { display: block; margin: 0.5rem 0 0.75rem; font-weight: 500; }
 .dossier-confirm-error { color: var(--color-danger); margin: 0.5rem 0 0; }

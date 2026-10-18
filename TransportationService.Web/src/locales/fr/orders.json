@@ -83,7 +83,16 @@
     },
     "documentsTitle": "Documents",
     "loading": "Chargement de la commande...",
-    "loadError": "La commande n'a pas pu être chargée."
+    "loadError": "La commande n'a pas pu être chargée.",
+    "deliveryOutcome": {
+      "NotDelivered": "La livraison n'a pas pu être effectuée. Nous vous contacterons pour une nouvelle livraison.",
+      "PartiallyDelivered": "Toutes les marchandises n'ont pas été livrées. Nous vous contacterons pour le solde.",
+      "RedeliveryPlanned": "La livraison n'a pas été complète ; une nouvelle livraison est prévue.",
+      "Redelivered": "La livraison n'a d'abord pas été complète et a depuis été relivrée."
+    },
+    "redeliveryLink": "Nouvelle livraison {order}",
+    "noticesTitle": "Communications",
+    "completedShortfall": "Exécution clôturée — livraison incomplète"
   },
   "new": {
     "title": "Soumettre une nouvelle commande de transport",
@@ -141,5 +150,31 @@
     "create": "Créer le lieu",
     "creating": "Création en cours…",
     "createFailed": "Le lieu n'a pas pu être créé."
+  },
+  "deliveryOutcome": {
+    "NotDelivered": "Non livré",
+    "PartiallyDelivered": "Livré partiellement",
+    "RedeliveryPlanned": "Nouvelle livraison prévue",
+    "Redelivered": "Relivré"
+  },
+  "exceptionType": {
+    "MissingPackage": "Colis manquant",
+    "WrongPackage": "Mauvais colis",
+    "DamagedPackage": "Colis endommagé",
+    "UnknownPackage": "Colis inconnu",
+    "WrongRoutePackage": "Colis pour un autre trajet",
+    "WrongStopPackage": "Colis pour un autre arrêt",
+    "IncompleteQuantity": "Quantité incomplète",
+    "UnreadableBarcode": "Code-barres illisible",
+    "LabelMissing": "Étiquette manquante",
+    "RejectedBeforeLoading": "Refusé avant chargement",
+    "RejectedDelivery": "Livraison refusée",
+    "PartialDelivery": "Livraison partielle",
+    "AddressIssue": "Problème d'adresse",
+    "CustomerUnavailable": "Destinataire absent",
+    "AccessDenied": "Accès refusé",
+    "VehicleIssue": "Problème de véhicule",
+    "Delay": "Retard",
+    "Other": "Autre écart"
   }
 }

@@ -4,12 +4,12 @@ import './incidents.css'
 import { formatCurrency } from '../../../utils/numbers'
 import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
-import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { FormField } from '../../../components/ui/FormField'
+import { Modal } from '../../../components/ui/Modal'
 import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
 import { useLocale } from '../../../i18n/localeContext'
-import { describeApiError } from '../../../api/problemDetails'
+import { localizeApiError } from '../../../api/problemDetails'
 import {
   createIncidentRedelivery,
   decideIncidentCharge,
@@ -38,12 +38,16 @@ export function IncidentChargePanel({ incident, onUpdated, part = 'all' }: Incid
   const { t } = useLocale()
   const canManage = hasPermission('incidents.manage')
   const canDecide = hasPermission('problems.approve_charge')
-  const canRedeliver = hasPermission('orders.create') || hasPermission('orders.manage')
+  // The dispatcher redelivers through the controlled command (problems.create_redelivery).
+  const canRedeliver = hasPermission('orders.create') || hasPermission('orders.manage') || hasPermission('problems.create_redelivery')
 
   const [amount, setAmount] = useState(incident.chargeAmount?.toString() ?? '')
   const [description, setDescription] = useState(incident.chargeDescription ?? '')
   const [busy, setBusy] = useState(false)
   const [confirmRedelivery, setConfirmRedelivery] = useState(false)
+  const [redeliveryQuantity, setRedeliveryQuantity] = useState('')
+  const [redeliveryFree, setRedeliveryFree] = useState(false)
+  const [redeliveryFreeReason, setRedeliveryFreeReason] = useState('')
   // B24: while a proposal awaits its decision the form to change it stays folded away.
   const [reproposing, setReproposing] = useState(false)
 
@@ -53,7 +57,8 @@ export function IncidentChargePanel({ incident, onUpdated, part = 'all' }: Incid
       onUpdated(await action())
       showSuccess(message)
     } catch (err) {
-      showError(describeApiError(err, t('incidents.charge.actionFailed')).message)
+      // Never a raw permission/technical message: the stable code is translated first.
+      showError(localizeApiError(t, err, t('incidents.charge.actionFailed')))
     } finally {
       setBusy(false)
     }
@@ -170,7 +175,12 @@ export function IncidentChargePanel({ incident, onUpdated, part = 'all' }: Incid
           <Button
             variant="secondary"
             disabled={busy}
-            onClick={() => setConfirmRedelivery(true)}
+            onClick={() => {
+              setRedeliveryQuantity('')
+              setRedeliveryFree(false)
+              setRedeliveryFreeReason('')
+              setConfirmRedelivery(true)
+            }}
           >
             {t('incidents.charge.createRedelivery')}
           </Button>
@@ -181,20 +191,68 @@ export function IncidentChargePanel({ incident, onUpdated, part = 'all' }: Incid
         <p className="customer-form-muted">{t('incidents.charge.linkOrderFirst')}</p>
       )}
       {confirmRedelivery && (
-        // M13: a redelivery creates new operational work in the dossier — confirm it first.
-        <ConfirmDialog
+        // M13: a redelivery creates new operational work in the dossier — confirm it first. It re-delivers
+        // what was NOT delivered and starts unpriced (review) unless it is explicitly confirmed free.
+        <Modal
           title={t('incidents.charge.redeliveryConfirmTitle')}
-          message={t('incidents.charge.redeliveryConfirmMessage', {
-            order: incident.transportOrderNumber ?? '—',
-            dossier: incident.dossierNumber ?? '—',
-          })}
-          confirmLabel={t('incidents.charge.createRedelivery')}
-          onConfirm={() => {
-            setConfirmRedelivery(false)
-            void run(() => createIncidentRedelivery(incident.id), t('incidents.charge.redeliveryCreated'))
-          }}
-          onCancel={() => setConfirmRedelivery(false)}
-        />
+          onClose={() => setConfirmRedelivery(false)}
+          busy={busy}
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setConfirmRedelivery(false)} disabled={busy}>
+                {t('ui.actions.cancel')}
+              </Button>
+              <Button
+                disabled={busy || (redeliveryFree && !redeliveryFreeReason.trim()) || (redeliveryQuantity !== '' && Number(redeliveryQuantity) <= 0)}
+                onClick={() => {
+                  setConfirmRedelivery(false)
+                  void run(
+                    () => createIncidentRedelivery(incident.id, {
+                      quantity: redeliveryQuantity === '' ? null : Number(redeliveryQuantity),
+                      free: redeliveryFree,
+                      freeReason: redeliveryFree ? redeliveryFreeReason.trim() : null,
+                    }),
+                    t('incidents.charge.redeliveryCreated'),
+                  )
+                }}
+              >
+                {t('incidents.charge.createRedelivery')}
+              </Button>
+            </>
+          }
+        >
+          <p>
+            {t('incidents.charge.redeliveryConfirmMessage', {
+              order: incident.transportOrderNumber ?? '—',
+              dossier: incident.dossierNumber ?? '—',
+            })}
+          </p>
+          <FormField label={t('incidents.charge.redeliveryQuantity')} htmlFor="inc-redelivery-qty" hint={t('incidents.charge.redeliveryQuantityHint')}>
+            <input
+              id="inc-redelivery-qty"
+              type="number"
+              min={0.01}
+              step="0.01"
+              value={redeliveryQuantity}
+              onChange={(e) => setRedeliveryQuantity(e.target.value)}
+            />
+          </FormField>
+          <label className="tof-checkbox">
+            <input type="checkbox" checked={redeliveryFree} onChange={(e) => setRedeliveryFree(e.target.checked)} />
+            {' '}{t('incidents.charge.redeliveryFree')}
+          </label>
+          {redeliveryFree && (
+            <FormField label={t('incidents.charge.redeliveryFreeReason')} htmlFor="inc-redelivery-free-reason" required>
+              <input
+                id="inc-redelivery-free-reason"
+                value={redeliveryFreeReason}
+                onChange={(e) => setRedeliveryFreeReason(e.target.value)}
+                maxLength={300}
+              />
+            </FormField>
+          )}
+          {!redeliveryFree && <p className="customer-form-muted">{t('incidents.charge.redeliveryUnpriced')}</p>}
+        </Modal>
       )}
     </>
   )

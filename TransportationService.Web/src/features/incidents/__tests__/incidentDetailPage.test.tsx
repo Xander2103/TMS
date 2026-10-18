@@ -23,9 +23,10 @@ const api = vi.hoisted(() => ({
   createIncidentRedelivery: vi.fn(),
   decideIncidentCharge: vi.fn(),
   proposeIncidentCharge: vi.fn(),
+  createIncidentDamageReport: vi.fn(),
+  getAssignableUsers: vi.fn().mockResolvedValue([{ id: 'u2', displayName: 'Dina Dispatch', roleName: 'Dispatcher' }]),
 }))
 vi.mock('../api/incidentsApi', () => api)
-vi.mock('../../users/api/usersApi', () => ({ getUsers: vi.fn().mockResolvedValue([]) }))
 vi.mock('../../customers/api/customersApi', () => ({ searchCustomers: vi.fn().mockResolvedValue({ items: [] }) }))
 vi.mock('../../dossiers/api/dossiersApi', () => ({ listDossiers: vi.fn().mockResolvedValue([]) }))
 vi.mock('../../transport-orders/api/transportOrdersApi', () => ({ searchTransportOrders: vi.fn().mockResolvedValue({ items: [] }) }))
@@ -76,9 +77,10 @@ describe('IncidentDetailPage (B24)', () => {
     expect(screen.getByTestId('history')).toHaveTextContent('Incident')
   })
 
-  it('edits one card at a time via Bewerken and saves the whole incident', async () => {
-    api.getIncident.mockResolvedValue(incident())
-    api.updateIncident.mockImplementation(async (_id: string, input: { title: string }) => incident({ title: input.title }))
+  it('edits one card at a time via Bewerken and saves ONLY that card (EX-01)', async () => {
+    api.getIncident.mockResolvedValue(incident({ driverId: 'dr1', driverName: 'Jan Chauffeur' }))
+    api.updateIncident.mockImplementation(async (_id: string, input: { report: { title: string } }) =>
+      incident({ title: input.report.title, driverId: 'dr1', driverName: 'Jan Chauffeur' }))
     renderPage()
     const report = await screen.findByRole('region', { name: 'Melding' })
     await userEvent.click(within(report).getByRole('button', { name: 'Bewerken' }))
@@ -88,9 +90,47 @@ describe('IncidentDetailPage (B24)', () => {
     // Other cards cannot start a second edit meanwhile.
     expect(within(screen.getByRole('region', { name: 'Koppelingen' })).getByRole('button', { name: 'Bewerken' })).toBeDisabled()
     await userEvent.click(within(report).getByRole('button', { name: 'Wijzigingen opslaan' }))
-    expect(api.updateIncident).toHaveBeenCalledWith('inc-1', expect.objectContaining({ title: 'Nieuwe titel', customerId: 'c1', vehicleId: 'v1' }))
+    // The report card sends the report section only — never the relations it does not edit.
+    const [, payload] = api.updateIncident.mock.calls[0]
+    expect(payload).toEqual({ report: expect.objectContaining({ title: 'Nieuwe titel', severity: 'High', responsibleUserId: 'u1' }) })
+    expect(payload).not.toHaveProperty('links')
     expect(await screen.findByRole('heading', { name: 'Nieuwe titel' })).toBeInTheDocument()
     expect(screen.queryByLabelText(/Titel/)).not.toBeInTheDocument()
+  })
+
+  it('the links card keeps the driver-reported trip and driver (EX-01)', async () => {
+    api.getIncident.mockResolvedValue(incident({ driverId: 'dr1', driverName: 'Jan Chauffeur', source: 'Driver', executionLinksLocked: true }))
+    api.updateIncident.mockResolvedValue(incident({ driverId: 'dr1', driverName: 'Jan Chauffeur' }))
+    renderPage()
+    const links = await screen.findByRole('region', { name: 'Koppelingen' })
+    await userEvent.click(within(links).getByRole('button', { name: 'Bewerken' }))
+    expect(within(links).getByText(/Rit RIT-0007 en chauffeur Jan Chauffeur komen uit de melding/)).toBeInTheDocument()
+    // Dirty the form so the save is enabled: pick no vehicle.
+    await userEvent.click(within(links).getByRole('button', { name: 'Wijzigingen opslaan' }))
+    expect(api.updateIncident).not.toHaveBeenCalled() // nothing changed, nothing sent
+  })
+
+  it('the responsible picker uses the assignable-users endpoint (EX-07)', async () => {
+    api.getIncident.mockResolvedValue(incident())
+    renderPage()
+    const report = await screen.findByRole('region', { name: 'Melding' })
+    await userEvent.click(within(report).getByRole('button', { name: 'Bewerken' }))
+    expect(api.getAssignableUsers).toHaveBeenCalled()
+  })
+
+  it('a serious vehicle problem prompts the fleet damage report (EX-03)', async () => {
+    permissions.add('damage_reports.create')
+    api.getIncident.mockResolvedValue(incident({ incidentType: 'VehicleBreakdown', severity: 'Critical', vehicleSafetyIssue: true, canCreateDamageReport: true }))
+    api.createIncidentDamageReport.mockResolvedValue(incident({ damageReportId: 'dmg-1', damageReportSeverity: 'Severe', damageReportStatus: 'Reported' }))
+    renderPage()
+    const attention = await screen.findByRole('region', { name: 'Aandacht' })
+    expect(attention).toHaveTextContent('nog geen schademelding')
+    await userEvent.click(within(attention).getByRole('button', { name: 'Schademelding aanmaken' }))
+    const dialog = screen.getByRole('dialog')
+    expect(within(dialog).getByLabelText(/Ernst van de schade/)).toHaveValue('Severe')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Schademelding aanmaken' }))
+    expect(api.createIncidentDamageReport).toHaveBeenCalledWith('inc-1', { severity: 'Severe', location: null })
+    expect(await screen.findByRole('link', { name: 'Schademelding openen' })).toHaveAttribute('href', '/vehicles/v1?tab=schade')
   })
 
   it('offers one next step and keeps cancelling behind Meer with a confirmation', async () => {

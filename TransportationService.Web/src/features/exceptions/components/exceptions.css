@@ -166,3 +166,6 @@
 .exc-outcome-card {
   margin-bottom: var(--space-4);
 }
+
+/* EX-03: a serious vehicle issue without a damage report yet. */
+.exc-safety-banner { margin: 0 0 0.75rem; padding: 0.5rem 0.75rem; border-left: 3px solid var(--color-danger); background: var(--color-danger-soft); }

@@ -55,11 +55,23 @@
     "colDue": "Deadline",
     "overdueSuffix": "te laat",
     "colStatus": "Status",
-    "empty": "Geen incidenten gevonden."
+    "empty": "Geen incidenten gevonden.",
+    "colTransport": "Opdracht · rit · voertuig",
+    "responsibleFilter": "Verantwoordelijke",
+    "everyone": "Iedereen",
+    "mine": "Mijn incidenten",
+    "allCustomers": "Alle klanten",
+    "customerFilter": "Klant",
+    "allDrivers": "Alle chauffeurs",
+    "driverFilter": "Chauffeur",
+    "allVehicles": "Alle voertuigen",
+    "vehicleFilter": "Voertuig",
+    "from": "Van",
+    "to": "Tot"
   },
   "problems": {
     "toggleHide": "Alle open problemen verbergen",
-    "toggleShow": "Alle open problemen (incidenten + uitvoeringsuitzonderingen)",
+    "toggleShow": "Alle open problemen (incidenten + afwijkingen)",
     "empty": "Geen open problemen.",
     "colKind": "Soort",
     "colDescription": "Omschrijving",
@@ -69,7 +81,9 @@
     "colTrip": "Rit",
     "colCharge": "Doorrekening",
     "kindIncident": "Incident",
-    "kindException": "Uitzondering"
+    "kindException": "Afwijking",
+    "colType": "Type",
+    "colResponsible": "Verantwoordelijke"
   },
   "detail": {
     "loadError": "Het incident kon niet worden geladen.",
@@ -141,8 +155,25 @@
       "assign": "Toewijzen",
       "chargeProposed": "Doorrekening van {amount} wacht op beslissing",
       "redelivery": "Herlevering aanbevolen na mislukte levering",
-      "view": "Bekijken"
-    }
+      "view": "Bekijken",
+      "vehicleSafety": "Ernstig voertuigprobleem op {vehicle} — nog geen schademelding voor het wagenpark",
+      "afterConfirmation": "Gemeld na de bevestiging van dossier {dossiers}; het dossier blijft bevestigd."
+    },
+    "derivedFromOrder": "Dossier en klant worden automatisch afgeleid van de opdracht.",
+    "executionLinksLocked": "Rit {trip} en chauffeur {driver} komen uit de melding en blijven vast.",
+    "sectionCommunication": "Bericht voor de klant",
+    "customerMessageLabel": "Bericht voor de klant",
+    "customerMessageHint": "Wat de klant te zien krijgt (klantportaal). De interne omschrijving blijft intern.",
+    "noCustomerMessage": "Nog geen bericht voor de klant. De interne omschrijving wordt nooit aan de klant getoond.",
+    "source": {
+      "Driver": "Gemeld door de chauffeur",
+      "FailedDelivery": "Automatisch na mislukte levering",
+      "Exception": "Geëscaleerd vanuit een afwijking"
+    },
+    "resolvedBy": "Afgehandeld door {name} op {date}",
+    "unknownActor": "onbekend",
+    "sourceExceptionLabel": "Bron-afwijking",
+    "sourceExceptionFallback": "Afwijking openen"
   },
   "charge": {
     "actionFailed": "De actie kon niet worden uitgevoerd.",
@@ -163,11 +194,16 @@
     "redeliveryOrder": "Herleveringsorder:",
     "redeliveryCreated": "Herleveringsorder aangemaakt in hetzelfde dossier.",
     "createRedelivery": "Herlevering aanmaken",
-    "noOrderRights": "Je hebt geen rechten om orders aan te maken.",
+    "noOrderRights": "Je hebt geen rechten om een herlevering aan te maken.",
     "linkOrderFirst": "Koppel eerst de originele order om een herlevering aan te maken.",
     "changeProposal": "Voorstel wijzigen",
     "redeliveryConfirmTitle": "Herlevering aanmaken?",
-    "redeliveryConfirmMessage": "Er wordt een nieuwe transportopdracht (concept) aangemaakt voor opdracht {order}, met dezelfde stops, als activiteit 'Herlevering' in dossier {dossier}. Prijs en planning stel je daarna in."
+    "redeliveryConfirmMessage": "Er wordt een nieuwe transportopdracht (concept) aangemaakt voor opdracht {order}, met dezelfde stops, als activiteit 'Herlevering' in dossier {dossier}. Prijs en planning stel je daarna in.",
+    "redeliveryQuantity": "Te herleveren hoeveelheid",
+    "redeliveryQuantityHint": "Leeg = de niet-geleverde hoeveelheid die het systeem afleidt (afwijking of mislukte levering).",
+    "redeliveryFree": "Gratis herlevering (bevestigd gratis)",
+    "redeliveryFreeReason": "Reden gratis",
+    "redeliveryUnpriced": "De herlevering start zonder prijs (nakijken); er wordt niets automatisch gefactureerd."
   },
   "history": {
     "ChargeProposed": "Doorrekening voorgesteld",
@@ -178,12 +214,54 @@
     "RedeliveryCreated": "Herlevering aangemaakt",
     "AutoCreatedFromFailedStop": "Automatisch aangemaakt na mislukte levering",
     "modeAuto": "Automatisch",
-    "modePropose": "Voorstellen"
+    "modePropose": "Voorstellen",
+    "EscalatedFromException": "Aangemaakt vanuit een afwijking",
+    "DamageReportCreated": "Schademelding aangemaakt"
   },
   "related": {
     "open_one": "1 open incident:",
     "open_other": "{count} open incidenten:",
     "dossierAttention_one": "1 open incident — bevestigen kan pas na afhandeling:",
     "dossierAttention_other": "{count} open incidenten — bevestigen kan pas na afhandeling:"
+  },
+  "fleet": {
+    "title": "Wagenpark",
+    "damageReport": "Schademelding",
+    "openDamage": "Schademelding openen",
+    "registered": "Geregistreerd",
+    "severity": "Ernst van de schade",
+    "status": "Status",
+    "noDamage": "Nog geen schademelding. Een schademelding bepaalt de inzetbaarheid van het voertuig.",
+    "create": "Schademelding aanmaken",
+    "created": "Schademelding aangemaakt en gekoppeld.",
+    "createFailed": "De schademelding kon niet worden aangemaakt.",
+    "dialogTitle": "Schademelding aanmaken",
+    "dialogIntro": "Voertuig {vehicle}, rit {trip}. De schademelding wordt aan dit incident gekoppeld; het wagenpark ziet ze bij het voertuig.",
+    "severityHint": "Zware schade of totaal verlies maakt het voertuig niet inzetbaar; matige schade geeft een waarschuwing.",
+    "location": "Locatie",
+    "damageSeverity": {
+      "Minor": "Lichte schade",
+      "Moderate": "Matige schade",
+      "Severe": "Zware schade",
+      "TotalLoss": "Totaal verlies"
+    },
+    "damageStatus": {
+      "Reported": "Gemeld",
+      "UnderAssessment": "In beoordeling",
+      "InRepair": "In herstelling",
+      "Repaired": "Hersteld",
+      "Closed": "Afgesloten"
+    }
+  },
+  "delivery": {
+    "outcome": {
+      "NotDelivered": "Niet geleverd",
+      "PartiallyDelivered": "Gedeeltelijk geleverd",
+      "RedeliveryPlanned": "Herlevering gepland",
+      "Redelivered": "Herleverd"
+    },
+    "redelivery": "Herlevering:",
+    "redeliveryOf": "Herlevering van",
+    "incident": "incident"
   }
 }

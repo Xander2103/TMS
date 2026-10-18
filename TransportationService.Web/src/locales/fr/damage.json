@@ -65,6 +65,18 @@
     "removeAttachment": "Supprimer le fichier",
     "attachmentRemoved": "Fichier supprimé.",
     "attachmentRemoveFailed": "Le fichier n'a pas pu être supprimé.",
-    "negativeNotAllowed": "Le coût de réparation et l'immobilisation ne peuvent pas être négatifs."
+    "negativeNotAllowed": "Le coût de réparation et l'immobilisation ne peuvent pas être négatifs.",
+    "safetyTitle": "Problèmes de véhicule signalés",
+    "issueSeverity": {
+      "Low": "faible",
+      "Medium": "moyen",
+      "High": "élevé",
+      "Critical": "critique"
+    },
+    "issueTrip": "trajet {trip}",
+    "issueHasDamage": "déclaration de dommage créée",
+    "issueNoDamage": "pas encore de déclaration",
+    "issueOpen": "ouvrir",
+    "source": "Source :"
   }
 }

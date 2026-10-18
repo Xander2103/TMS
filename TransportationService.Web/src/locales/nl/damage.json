@@ -65,6 +65,18 @@
     "removeAttachment": "Bestand wissen",
     "attachmentRemoved": "Bestand gewist.",
     "attachmentRemoveFailed": "Het bestand kon niet worden gewist.",
-    "negativeNotAllowed": "Herstelkost en stilstand kunnen niet negatief zijn."
+    "negativeNotAllowed": "Herstelkost en stilstand kunnen niet negatief zijn.",
+    "safetyTitle": "Gemelde voertuigproblemen",
+    "issueSeverity": {
+      "Low": "laag",
+      "Medium": "gemiddeld",
+      "High": "hoog",
+      "Critical": "kritiek"
+    },
+    "issueTrip": "rit {trip}",
+    "issueHasDamage": "schademelding aangemaakt",
+    "issueNoDamage": "nog geen schademelding",
+    "issueOpen": "openen",
+    "source": "Bron:"
   }
 }

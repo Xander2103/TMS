@@ -36,6 +36,10 @@ export interface DamageReport {
   /** FL-M7: the trip during which the damage occurred, when known. */
   tripId?: string | null
   tripNumber?: string | null
+  /** EX-03: the incident/afwijking this report was created from, described for the fleet. */
+  sourceIncidentId?: string | null
+  sourceExceptionId?: string | null
+  sourceLabel?: string | null
 }
 
 export interface CreateDamageInput {

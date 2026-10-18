@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
+import { localizeApiError } from '../../../api/problemDetails'
 import { Button } from '../../../components/ui/Button'
 import { FormField } from '../../../components/ui/FormField'
 import { Modal } from '../../../components/ui/Modal'
@@ -39,11 +41,15 @@ export function DossierConfirmDialog({ dossierId, dossierNumber, version, onConf
     return () => { active = false }
   }, [dossierId])
 
+  // EX-05: every open afwijking is listed — Blokkerend (holds auto-confirmation), Waarschuwing, Ter info.
+  const holds = evaluation?.warnings.filter((w) => w.severity === 'Hold') ?? []
   const warnings = evaluation?.warnings.filter((w) => w.severity === 'Warning') ?? []
   const infos = evaluation?.warnings.filter((w) => w.severity === 'Info') ?? []
   const blocked = !!evaluation && !evaluation.canConfirmManually
-  const needsAcknowledgement = warnings.length > 0
-  const canSubmit = !!evaluation && !blocked && (!needsAcknowledgement || acknowledged) && !busy
+  const needsAcknowledgement = warnings.length > 0 || holds.length > 0
+  const needsReason = holds.length > 0
+  const canSubmit = !!evaluation && !blocked && (!needsAcknowledgement || acknowledged)
+    && (!needsReason || reason.trim().length > 0) && !busy
 
   async function submit() {
     if (!canSubmit) return
@@ -57,8 +63,8 @@ export function DossierConfirmDialog({ dossierId, dossierNumber, version, onConf
         version,
       })
       onConfirmed(dossier)
-    } catch {
-      setError(t('dossiers.lifecycle.confirmFailed'))
+    } catch (err) {
+      setError(localizeApiError(t, err, t('dossiers.lifecycle.confirmFailed')))
     } finally {
       setBusy(false)
     }
@@ -90,9 +96,12 @@ export function DossierConfirmDialog({ dossierId, dossierNumber, version, onConf
           {evaluation.blockers.length > 0 && (
             <CheckList tone="blocking" title={t('dossiers.lifecycle.blockersTitle')} checks={evaluation.blockers} />
           )}
+          {holds.length > 0 && (
+            <CheckList tone="blocking" title={t('dossiers.lifecycle.holdTitle')} hint={t('dossiers.lifecycle.holdHint')} checks={holds} />
+          )}
           {warnings.length > 0 && <CheckList tone="warning" title={t('dossiers.lifecycle.warningsTitle')} checks={warnings} />}
           {infos.length > 0 && <CheckList tone="info" title={t('dossiers.lifecycle.infoTitle')} checks={infos} />}
-          {evaluation.blockers.length === 0 && warnings.length === 0 && infos.length === 0 && (
+          {evaluation.blockers.length === 0 && holds.length === 0 && warnings.length === 0 && infos.length === 0 && (
             <p className="dossier-confirm-ok">{t('dossiers.lifecycle.noIssues')}</p>
           )}
 
@@ -104,7 +113,12 @@ export function DossierConfirmDialog({ dossierId, dossierNumber, version, onConf
           )}
 
           {!blocked && (
-            <FormField label={t('dossiers.lifecycle.reasonLabel')} htmlFor="dossier-confirm-reason" hint={t('dossiers.lifecycle.reasonHint')}>
+            <FormField
+              label={needsReason ? t('dossiers.lifecycle.reasonRequiredLabel') : t('dossiers.lifecycle.reasonLabel')}
+              htmlFor="dossier-confirm-reason"
+              required={needsReason}
+              hint={needsReason ? t('dossiers.lifecycle.reasonRequiredHint') : t('dossiers.lifecycle.reasonHint')}
+            >
               <textarea id="dossier-confirm-reason" rows={2} value={reason} onChange={(e) => setReason(e.target.value)} maxLength={1000} />
             </FormField>
           )}
@@ -158,17 +172,38 @@ function ConfirmationSummary({ evaluation }: { evaluation: DossierConfirmationEv
           <dd>{s.openIncidents}</dd>
         </div>
       )}
+      {(s.openExceptions ?? 0) > 0 && (
+        <div>
+          <dt>{t(`${k}exceptions`)}</dt>
+          <dd>
+            {s.openExceptions}
+            {(s.openExceptionsHolding ?? 0) > 0 && ` · ${t(`${k}exceptionsHolding`, { count: s.openExceptionsHolding ?? 0 })}`}
+          </dd>
+        </div>
+      )}
     </dl>
   )
 }
 
-function CheckList({ tone, title, checks }: { tone: 'blocking' | 'warning' | 'info'; title: string; checks: DossierConfirmationCheck[] }) {
+function CheckList({ tone, title, hint, checks }: {
+  tone: 'blocking' | 'warning' | 'info'; title: string; hint?: string; checks: DossierConfirmationCheck[]
+}) {
+  const { t } = useLocale()
   return (
     <section className={`dossier-confirm-checks dossier-confirm-checks-${tone}`}>
       <h4>{title}</h4>
+      {hint && <p className="dossier-confirm-hint">{hint}</p>}
       <ul>
         {checks.map((check, index) => (
-          <li key={`${check.code}-${check.transportOrderId ?? ''}-${check.activityId ?? ''}-${index}`}>{check.message}</li>
+          <li key={`${check.code}-${check.transportOrderId ?? ''}-${check.activityId ?? ''}-${index}`}>
+            {check.message}
+            {check.problemId && (
+              <>
+                {' '}
+                <Link to={`/exceptions/${check.problemId}`}>{t('dossiers.lifecycle.openException')}</Link>
+              </>
+            )}
+          </li>
         ))}
       </ul>
     </section>

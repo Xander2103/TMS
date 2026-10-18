@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
 import { DossierConfirmDialog } from '../components/DossierConfirmDialog'
 import type { DossierConfirmationEvaluation } from '../types'
 import { dossierDetail } from './fixtures'
@@ -35,7 +36,11 @@ describe('DossierConfirmDialog', () => {
   })
 
   function renderDialog(onConfirmed = vi.fn(), onClose = vi.fn()) {
-    render(<DossierConfirmDialog dossierId="d-1" dossierNumber="DOS-0001" version="v1" onConfirmed={onConfirmed} onClose={onClose} />)
+    render(
+      <MemoryRouter>
+        <DossierConfirmDialog dossierId="d-1" dossierNumber="DOS-0001" version="v1" onConfirmed={onConfirmed} onClose={onClose} />
+      </MemoryRouter>,
+    )
     return { onConfirmed, onClose }
   }
 
@@ -94,7 +99,7 @@ describe('DossierConfirmDialog', () => {
 
   it('reports a failed confirmation and stays open', async () => {
     api.getDossierConfirmation.mockResolvedValue(evaluation())
-    api.confirmDossier.mockRejectedValue(new Error('boom'))
+    api.confirmDossier.mockRejectedValue(new Error('Request to /api/dossiers/d1/confirm failed with status 500'))
     const user = userEvent.setup()
     const { onConfirmed, onClose } = renderDialog()
 
@@ -104,5 +109,33 @@ describe('DossierConfirmDialog', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Het dossier kon niet worden bevestigd.')
     expect(onConfirmed).not.toHaveBeenCalled()
     expect(onClose).not.toHaveBeenCalled()
+  })
+
+  it('EX-05: a blocking afwijking is listed as Blokkerend and needs an acknowledgement AND a reason', async () => {
+    api.getDossierConfirmation.mockResolvedValue(evaluation({
+      canAutoConfirm: false,
+      warnings: [
+        { code: 'exception.open.hold', severity: 'Hold', message: 'Open afwijking (beschadigd collo, ernst hoog) op rit RIT-1: houdt automatische bevestiging tegen.', transportOrderId: 'o-1', activityId: null, problemId: 'x-1' },
+        { code: 'exception.open.info', severity: 'Info', message: 'Open afwijking (vertraging, ernst laag): ter info.', transportOrderId: 'o-1', activityId: null, problemId: 'x-2' },
+      ],
+      summary: { ...evaluation().summary, openExceptions: 2, openExceptionsHolding: 1 },
+    }))
+    api.confirmDossier.mockResolvedValue(dossierDetail({ status: 'Closed' }))
+    const user = userEvent.setup()
+    renderDialog()
+
+    expect(await screen.findByText('Blokkerend')).toBeInTheDocument()
+    expect(screen.getByText('Ter info')).toBeInTheDocument()
+    expect(screen.getByText('2 · 1 blokkerend')).toBeInTheDocument()
+    expect(screen.getAllByRole('link', { name: 'Afwijking openen' })[0]).toHaveAttribute('href', '/exceptions/x-1')
+    const confirm = screen.getByRole('button', { name: 'Bevestigen' })
+    await user.click(screen.getByLabelText(/bevestig bewust/i))
+    expect(confirm).toBeDisabled() // the reason is still missing
+    await user.type(screen.getByLabelText(/Reden/), 'Schade apart opgevolgd met de klant')
+    expect(confirm).toBeEnabled()
+    await user.click(confirm)
+    await waitFor(() => expect(api.confirmDossier).toHaveBeenCalledWith('d-1', {
+      reason: 'Schade apart opgevolgd met de klant', acknowledgeWarnings: true, version: 'v1',
+    }))
   })
 })

@@ -55,11 +55,23 @@
     "colDue": "Deadline",
     "overdueSuffix": "overdue",
     "colStatus": "Status",
-    "empty": "No incidents found."
+    "empty": "No incidents found.",
+    "colTransport": "Order · trip · vehicle",
+    "responsibleFilter": "Responsible",
+    "everyone": "Everyone",
+    "mine": "My incidents",
+    "allCustomers": "All customers",
+    "customerFilter": "Customer",
+    "allDrivers": "All drivers",
+    "driverFilter": "Driver",
+    "allVehicles": "All vehicles",
+    "vehicleFilter": "Vehicle",
+    "from": "From",
+    "to": "To"
   },
   "problems": {
     "toggleHide": "Hide all open problems",
-    "toggleShow": "All open problems (incidents + execution exceptions)",
+    "toggleShow": "All open problems (incidents + deviations)",
     "empty": "No open problems.",
     "colKind": "Kind",
     "colDescription": "Description",
@@ -69,7 +81,9 @@
     "colTrip": "Trip",
     "colCharge": "Recharge",
     "kindIncident": "Incident",
-    "kindException": "Exception"
+    "kindException": "Deviation",
+    "colType": "Type",
+    "colResponsible": "Responsible"
   },
   "detail": {
     "loadError": "The incident could not be loaded.",
@@ -141,8 +155,25 @@
       "assign": "Assign",
       "chargeProposed": "Charge of {amount} awaits a decision",
       "redelivery": "Redelivery recommended after failed delivery",
-      "view": "View"
-    }
+      "view": "View",
+      "vehicleSafety": "Serious vehicle problem on {vehicle} — no damage report for the fleet yet",
+      "afterConfirmation": "Reported after file {dossiers} was confirmed; the file stays confirmed."
+    },
+    "derivedFromOrder": "File and customer are derived from the order automatically.",
+    "executionLinksLocked": "Trip {trip} and driver {driver} come from the report and stay fixed.",
+    "sectionCommunication": "Message for the customer",
+    "customerMessageLabel": "Message for the customer",
+    "customerMessageHint": "What the customer sees (customer portal). The internal description stays internal.",
+    "noCustomerMessage": "No message for the customer yet. The internal description is never shown to the customer.",
+    "source": {
+      "Driver": "Reported by the driver",
+      "FailedDelivery": "Automatic after a failed delivery",
+      "Exception": "Escalated from a deviation"
+    },
+    "resolvedBy": "Resolved by {name} on {date}",
+    "unknownActor": "unknown",
+    "sourceExceptionLabel": "Source deviation",
+    "sourceExceptionFallback": "Open deviation"
   },
   "charge": {
     "actionFailed": "The action could not be executed.",
@@ -163,11 +194,16 @@
     "redeliveryOrder": "Redelivery order:",
     "redeliveryCreated": "Redelivery order created in the same file.",
     "createRedelivery": "Create redelivery",
-    "noOrderRights": "You do not have permission to create orders.",
+    "noOrderRights": "You are not allowed to create a redelivery.",
     "linkOrderFirst": "Link the original order first to create a redelivery.",
     "changeProposal": "Change proposal",
     "redeliveryConfirmTitle": "Create redelivery?",
-    "redeliveryConfirmMessage": "A new draft transport order is created for order {order}, with the same stops, as a 'Redelivery' activity in dossier {dossier}. You set price and planning afterwards."
+    "redeliveryConfirmMessage": "A new draft transport order is created for order {order}, with the same stops, as a 'Redelivery' activity in dossier {dossier}. You set price and planning afterwards.",
+    "redeliveryQuantity": "Quantity to redeliver",
+    "redeliveryQuantityHint": "Empty = the not-delivered quantity the system derives (deviation or failed delivery).",
+    "redeliveryFree": "Free redelivery (confirmed free)",
+    "redeliveryFreeReason": "Reason it is free",
+    "redeliveryUnpriced": "The redelivery starts without a price (to review); nothing is invoiced automatically."
   },
   "history": {
     "ChargeProposed": "Charge proposed",
@@ -178,12 +214,54 @@
     "RedeliveryCreated": "Redelivery created",
     "AutoCreatedFromFailedStop": "Created automatically after failed delivery",
     "modeAuto": "Automatic",
-    "modePropose": "Propose"
+    "modePropose": "Propose",
+    "EscalatedFromException": "Created from a deviation",
+    "DamageReportCreated": "Damage report created"
   },
   "related": {
     "open_one": "1 open incident:",
     "open_other": "{count} open incidents:",
     "dossierAttention_one": "1 open incident — confirmation waits until it is handled:",
     "dossierAttention_other": "{count} open incidents — confirmation waits until they are handled:"
+  },
+  "fleet": {
+    "title": "Fleet",
+    "damageReport": "Damage report",
+    "openDamage": "Open damage report",
+    "registered": "Registered",
+    "severity": "Damage severity",
+    "status": "Status",
+    "noDamage": "No damage report yet. A damage report decides whether the vehicle can be deployed.",
+    "create": "Create damage report",
+    "created": "Damage report created and linked.",
+    "createFailed": "The damage report could not be created.",
+    "dialogTitle": "Create damage report",
+    "dialogIntro": "Vehicle {vehicle}, trip {trip}. The damage report is linked to this incident; the fleet sees it on the vehicle.",
+    "severityHint": "Severe damage or total loss makes the vehicle unavailable; moderate damage gives a warning.",
+    "location": "Location",
+    "damageSeverity": {
+      "Minor": "Minor damage",
+      "Moderate": "Moderate damage",
+      "Severe": "Severe damage",
+      "TotalLoss": "Total loss"
+    },
+    "damageStatus": {
+      "Reported": "Reported",
+      "UnderAssessment": "Under assessment",
+      "InRepair": "In repair",
+      "Repaired": "Repaired",
+      "Closed": "Closed"
+    }
+  },
+  "delivery": {
+    "outcome": {
+      "NotDelivered": "Not delivered",
+      "PartiallyDelivered": "Partially delivered",
+      "RedeliveryPlanned": "Redelivery planned",
+      "Redelivered": "Redelivered"
+    },
+    "redelivery": "Redelivery:",
+    "redeliveryOf": "Redelivery of",
+    "incident": "incident"
   }
 }

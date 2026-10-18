@@ -83,7 +83,16 @@
     },
     "documentsTitle": "Documenten",
     "loading": "Opdracht laden...",
-    "loadError": "De opdracht kon niet worden geladen."
+    "loadError": "De opdracht kon niet worden geladen.",
+    "deliveryOutcome": {
+      "NotDelivered": "De levering kon niet worden uitgevoerd. Wij nemen contact met u op voor een nieuwe levering.",
+      "PartiallyDelivered": "Niet alle goederen werden geleverd. Wij nemen contact met u op over het resterende deel.",
+      "RedeliveryPlanned": "De levering lukte niet volledig; een herlevering is gepland.",
+      "Redelivered": "De levering lukte eerst niet volledig en werd intussen opnieuw geleverd."
+    },
+    "redeliveryLink": "Herlevering {order}",
+    "noticesTitle": "Mededelingen",
+    "completedShortfall": "Uitvoering afgesloten — niet volledig geleverd"
   },
   "new": {
     "title": "Nieuwe transportopdracht indienen",
@@ -141,5 +150,31 @@
     "create": "Locatie aanmaken",
     "creating": "Aanmaken…",
     "createFailed": "De locatie kon niet worden aangemaakt."
+  },
+  "deliveryOutcome": {
+    "NotDelivered": "Niet geleverd",
+    "PartiallyDelivered": "Gedeeltelijk geleverd",
+    "RedeliveryPlanned": "Herlevering gepland",
+    "Redelivered": "Herleverd"
+  },
+  "exceptionType": {
+    "MissingPackage": "Ontbrekend collo",
+    "WrongPackage": "Verkeerd collo",
+    "DamagedPackage": "Beschadigd collo",
+    "UnknownPackage": "Onbekend collo",
+    "WrongRoutePackage": "Collo voor een andere rit",
+    "WrongStopPackage": "Collo voor een andere stop",
+    "IncompleteQuantity": "Onvolledige hoeveelheid",
+    "UnreadableBarcode": "Onleesbare barcode",
+    "LabelMissing": "Etiket ontbreekt",
+    "RejectedBeforeLoading": "Geweigerd voor het laden",
+    "RejectedDelivery": "Levering geweigerd",
+    "PartialDelivery": "Gedeeltelijke levering",
+    "AddressIssue": "Probleem met het adres",
+    "CustomerUnavailable": "Ontvanger niet aanwezig",
+    "AccessDenied": "Geen toegang",
+    "VehicleIssue": "Probleem met het voertuig",
+    "Delay": "Vertraging",
+    "Other": "Andere afwijking"
   }
 }

@@ -19,7 +19,7 @@ import {
   EXCEPTION_STATUS_ICONS,
   EXCEPTION_STATUS_LABELS,
   EXCEPTION_STATUS_TONE,
-  EXCEPTION_TYPES,
+  EXCEPTION_ALL_TYPES,
   EXCEPTION_TYPE_LABELS,
   type ExceptionListItem,
   type ExceptionSeverity,
@@ -40,7 +40,7 @@ const LIST_STATE = {
   defaults: { status: 'Open', type: '', severity: '', packages: '', mine: '', sort: '', dir: '' },
   allowed: {
     status: [...EXCEPTION_STATUSES, 'all'],
-    type: EXCEPTION_TYPES,
+    type: EXCEPTION_ALL_TYPES,
     severity: EXCEPTION_SEVERITIES,
     packages: ['1'],
     mine: ['1'],
@@ -210,7 +210,7 @@ export function ExceptionsPage() {
           onChange={(e) => apply({ type: e.target.value })}
         >
           <option value="">{t('exceptions.list.allTypes')}</option>
-          {EXCEPTION_TYPES.map((type) => (
+          {EXCEPTION_ALL_TYPES.map((type) => (
             <option key={type} value={type}>
               {t(EXCEPTION_TYPE_LABELS[type])}
             </option>
