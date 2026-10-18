@@ -92,6 +92,12 @@ public class MasterConfigurationIntegrityTests
             new SetSalesCategoryLedgerRequest(h.Ledger709200, created.Version), CancellationToken.None))!;
 
         Assert.Equal(h.Ledger709200, updated.LedgerAccountId);
+        // The LIST is what the inline control edits from: it must carry the current version, or the
+        // next inline change is refused as stale (found in the browser regression).
+        var listed = (await h.Accounting.ListSalesCategoriesAsync(false, CancellationToken.None)).Single(c => c.Id == created.Id);
+        Assert.Equal(updated.Version, listed.Version);
+        Assert.NotNull(await h.Accounting.SetSalesCategoryLedgerAsync(created.Id,
+            new SetSalesCategoryLedgerRequest(h.Ledger709100, listed.Version), CancellationToken.None));
         Assert.Equal(("Transport NL", "Transport FR", "Transport EN", "Transport DE"),
             (updated.InvoiceDescriptionNl, updated.InvoiceDescriptionFr, updated.InvoiceDescriptionEn, updated.InvoiceDescriptionDe));
         Assert.True(updated.IncludeInDieselBase);
@@ -101,7 +107,7 @@ public class MasterConfigurationIntegrityTests
         Assert.Equal((h.EntityB, h.Ledger709200, "KP-B"), (mapping.LegalEntityId, mapping.LedgerAccountId, mapping.CostCentre));
 
         // The audit names the one field that changed, old → new.
-        var audit = await h.Db.Context.AuditLogs.Where(a => a.EntityType == "SalesCategory" && a.Action == "Updated").SingleAsync();
+        var audit = await h.Db.Context.AuditLogs.Where(a => a.EntityType == "SalesCategory" && a.Action == "Updated").OrderBy(a => a.Timestamp).FirstAsync();
         Assert.Contains("709100", audit.OldValuesJson);
         Assert.Contains("709200", audit.NewValuesJson);
         Assert.DoesNotContain("InvoiceDescriptionFr", audit.NewValuesJson);

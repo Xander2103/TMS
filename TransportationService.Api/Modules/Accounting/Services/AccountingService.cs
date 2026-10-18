@@ -175,7 +175,9 @@ public class AccountingService : IAccountingService
                 c.IncludeInDieselBase, c.VatTreatmentOverride,
                 c.CostCentre, c.DefaultUnitPrice, c.DefaultPricingBasis, c.Notes,
                 c.LedgerMappings.Select(m => new SalesCategoryLedgerMappingDto(
-                    m.LegalEntityId, m.LedgerAccountId, m.CostCentre)).ToList()))
+                    m.LegalEntityId, m.LedgerAccountId, m.CostCentre)).ToList(),
+                // MD-M2: the list is what the inline control edits from — it must carry the version.
+                c.Version))
             .ToListAsync(cancellationToken);
     }
 
