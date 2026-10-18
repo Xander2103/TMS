@@ -121,6 +121,7 @@
     "jobFunctions": "Functies",
     "note": "Klopt er iets niet? Meld het aan HR — profielwijzigingen lopen via hen.",
     "passwordSection": "Wachtwoord wijzigen",
+    "passwordSignOutNote": "Na het wijzigen word je op al je toestellen afgemeld en meld je je opnieuw aan met je nieuwe wachtwoord.",
     "currentPassword": "Huidig wachtwoord",
     "newPassword": "Nieuw wachtwoord",
     "newPasswordHint": "Minstens 8 tekens.",

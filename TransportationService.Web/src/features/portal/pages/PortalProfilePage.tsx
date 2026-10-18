@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { PageHeader } from '../../../components/layout/PageHeader'
 import { LoadingState } from '../../../components/feedback/LoadingState'
 import { ErrorState } from '../../../components/feedback/ErrorState'
@@ -8,6 +9,7 @@ import { FormField } from '../../../components/ui/FormField'
 import { useToast } from '../../../components/ui/toastContext'
 import { ApiError } from '../../../api/apiClient'
 import { useLocale } from '../../../i18n/localeContext'
+import { useAuth } from '../../auth/authContextValue'
 import { changeMyPassword, getMyProfile } from '../api/portalApi'
 import { AppearanceSettings } from '../../../theme/AppearanceSettings'
 import { MyLeaveBalanceCard } from '../../leave-balance/components/MyLeaveBalanceCard'
@@ -19,6 +21,8 @@ import { formatDate } from '../../../utils/dates'
 export function PortalProfilePage() {
   const { showSuccess, showError } = useToast()
   const { t } = useLocale()
+  const { logout } = useAuth()
+  const navigate = useNavigate()
 
   const [profile, setProfile] = useState<MyProfile | null>(null)
   const [loadError, setLoadError] = useState(false)
@@ -58,12 +62,12 @@ export function PortalProfilePage() {
     try {
       await changeMyPassword(currentPassword, newPassword)
       showSuccess(t('portalHome.profile.passwordChanged'))
-      setCurrentPassword('')
-      setNewPassword('')
-      setConfirmPassword('')
+      // Every session is revoked server-side — this one included — so the user signs in again
+      // with the new password (same flow as the forced change in PasswordFlowPages).
+      await logout()
+      navigate('/login', { replace: true })
     } catch (err) {
       showError(err instanceof ApiError ? err.message : t('portalHome.profile.passwordChangeFailed'))
-    } finally {
       setBusy(false)
     }
   }
@@ -127,6 +131,7 @@ export function PortalProfilePage() {
 
       <section className="to-section">
         <h2>{t('portalHome.profile.passwordSection')}</h2>
+        <p className="portal-profile-note">{t('portalHome.profile.passwordSignOutNote')}</p>
         <form className="portal-form portal-password-form" onSubmit={handlePasswordChange} noValidate>
           <FormField label={t('portalHome.profile.currentPassword')} htmlFor="pw-current" required>
             <input id="pw-current" type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} disabled={busy} autoComplete="current-password" />

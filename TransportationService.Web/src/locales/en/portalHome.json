@@ -121,6 +121,7 @@
     "jobFunctions": "Job functions",
     "note": "Something incorrect? Report it to HR — profile changes go through them.",
     "passwordSection": "Change password",
+    "passwordSignOutNote": "After the change you are signed out on all your devices and sign in again with your new password.",
     "currentPassword": "Current password",
     "newPassword": "New password",
     "newPasswordHint": "At least 8 characters.",

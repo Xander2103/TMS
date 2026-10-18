@@ -121,6 +121,7 @@
     "jobFunctions": "Fonctions",
     "note": "Quelque chose ne correspond pas ? Signalez-le aux RH — les modifications de profil passent par eux.",
     "passwordSection": "Modifier le mot de passe",
+    "passwordSignOutNote": "Après la modification, vous êtes déconnecté sur tous vos appareils et vous vous reconnectez avec votre nouveau mot de passe.",
     "currentPassword": "Mot de passe actuel",
     "newPassword": "Nouveau mot de passe",
     "newPasswordHint": "Au moins 8 caractères.",
