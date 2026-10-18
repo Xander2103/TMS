@@ -221,6 +221,21 @@ public class EmployeeOffboardingPathsTests
     }
 
     [Fact]
+    public async Task PlanningPicker_MarksTheDriverUnavailable_ForTripDatesAfterTheLastWorkingDay()
+    {
+        using var h = await SeedAsync();
+        await h.Employees.UpdateAsync(h.EmployeeId, Edit(EmploymentStatus.Active, h.Today.AddDays(30)), false, CancellationToken.None);
+
+        async Task<DriverAvailabilityStatus> On(DateOnly date) =>
+            (await h.Drivers.SearchAsync(null, true, null, null, null, null, null, false, false,
+                TransportationService.Api.Common.Models.PageRequest.Of(1, 50), CancellationToken.None, availabilityOn: date))
+            .Items.Single(d => d.Id == h.DriverId).AvailabilityStatus;
+
+        Assert.Equal(DriverAvailabilityStatus.Available, await On(h.Today.AddDays(30)));   // the last working day
+        Assert.Equal(DriverAvailabilityStatus.Unavailable, await On(h.Today.AddDays(31))); // the day after
+    }
+
+    [Fact]
     public async Task Sweep_HealsALegacyEndedEmploymentThatStillHadAnActiveAccount()
     {
         using var h = await SeedAsync();

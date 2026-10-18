@@ -150,6 +150,8 @@ public class DriverService : IDriverService
                     && a.StartDate <= availabilityDate && a.EndDate >= availabilityDate)
                     ? DriverAvailabilityStatus.OnLeave
                     : x.e.EmploymentStatus != EmploymentStatus.Active ? DriverAvailabilityStatus.Unavailable
+                    // MD-H6 follow-up: no longer employed on the trip date (end date = last working day).
+                    : x.e.EmploymentEndDate != null && x.e.EmploymentEndDate < availabilityDate ? DriverAvailabilityStatus.Unavailable
                     : x.d.AvailabilityStatus,
                 x.d.IsActive, x.d.IsBlocked,
                 // D1: fixed vehicle (vehicle side is the source), same tenant, active only.
