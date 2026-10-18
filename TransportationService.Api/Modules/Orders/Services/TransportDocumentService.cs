@@ -29,6 +29,7 @@ public record OrderDocumentStrategyDto(
 public interface ITransportDocumentService
 {
     /// <summary>Null when the order does not exist in the tenant.</summary>
+    /// <summary>MD-B1 follow-up: a CONCEPT (stamped, number-less preview) from the live order data.</summary>
     Task<(byte[] Content, string FileName)?> RenderAsync(Guid orderId, string kind, CancellationToken cancellationToken);
 
     /// <summary>
@@ -88,7 +89,9 @@ public class TransportDocumentService : ITransportDocumentService
             DocumentStrategyResolver.KindWorkOrder => "werkbon",
             _ => "leveringsbon",
         };
-        return (TransportDocumentRenderer.Render(snapshot), $"{prefix}-{snapshot.OrderNumber}.pdf");
+        // MD-B1 follow-up: a per-order render from the live data is a CONCEPT (stamped, "concept-"
+        // file name) — the official document is the issued, numbered one.
+        return (TransportDocumentRenderer.RenderConcept(snapshot), $"concept-{prefix}-{snapshot.OrderNumber}.pdf");
     }
 
     public Task<TransportDocumentSnapshot?> BuildCurrentSnapshotAsync(

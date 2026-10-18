@@ -194,6 +194,39 @@ public class IssuedTransportDocumentImmutabilityTests
         Assert.Contains("CMR-2026-00001", text);
     }
 
+    /// <summary>
+    /// MD-B1 follow-up: the order header's CMR / LB action. Without an issued document it is a
+    /// stamped CONCEPT (number-less, live); once issued, the action resolves to that immutable,
+    /// numbered document — after a replacement, to the successor.
+    /// </summary>
+    [Fact]
+    public async Task OrderDocumentAction_IsAStampedConcept_UntilIssued_ThenTheActiveIssuedDocument()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var documents = new TransportDocumentService(h.Db.Context, new DevTenantContext(h.TenantId));
+
+        Assert.Null(await h.Sut().FindActiveAsync(h.OrderId, "cmr", CancellationToken.None));
+        var concept = (await documents.RenderAsync(h.OrderId, "cmr", CancellationToken.None))!.Value;
+        Assert.StartsWith("concept-", concept.FileName);
+        var conceptText = PdfText(concept.Content);
+        Assert.Contains("CONCEPT", conceptText);
+        Assert.Contains("geen officieel document", conceptText);
+        Assert.DoesNotContain("CMR-2026", conceptText);
+
+        var first = (await h.Sut().IssueAsync(h.OrderId, new IssueTransportDocumentRequest("Cmr", Guid.NewGuid()), CancellationToken.None))!;
+        Assert.Equal(first.Id, await h.Sut().FindActiveAsync(h.OrderId, "cmr", CancellationToken.None));
+        Assert.Null(await h.Sut().FindActiveAsync(h.OrderId, "delivery-note", CancellationToken.None));
+        var official = (await h.Sut().RenderPdfAsync(first.Id, CancellationToken.None))!.Value;
+        var officialText = PdfText(official.Content);
+        Assert.Contains("CMR-2026-00001", officialText);
+        Assert.DoesNotContain("CONCEPT", officialText);
+
+        var second = (await h.Sut().IssueAsync(h.OrderId, new IssueTransportDocumentRequest("Cmr", Guid.NewGuid(),
+            ReplacesDocumentId: first.Id, ReplacementReason: "Correctie"), CancellationToken.None))!;
+        Assert.Equal(second.Id, await h.Sut().FindActiveAsync(h.OrderId, "cmr", CancellationToken.None));
+    }
+
     [Fact]
     public async Task LegacyDocument_WithoutSnapshot_IsFrozenOnce_ThenNeverChanges()
     {

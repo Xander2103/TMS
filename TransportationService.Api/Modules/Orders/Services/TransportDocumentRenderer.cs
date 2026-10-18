@@ -135,6 +135,49 @@ public static class TransportDocumentRenderer
     }
 
     /// <summary>
+    /// MD-B1 follow-up: a document rendered from the LIVE order data, without a number, is a
+    /// preview — never the official CMR / delivery note. Every page carries an unmistakable
+    /// "CONCEPT" stamp and a banner that says how to get the official document (issue it).
+    /// </summary>
+    public static byte[] RenderConcept(TransportDocumentSnapshot snapshot)
+    {
+        // Second pass: the page builders keep their own XGraphics open, so the stamp is drawn on
+        // the saved document reopened for modification.
+        using var stamped = PdfSharp.Pdf.IO.PdfReader.Open(new MemoryStream(Render(snapshot)), PdfSharp.Pdf.IO.PdfDocumentOpenMode.Modify);
+        foreach (var page in stamped.Pages.Cast<PdfPage>())
+        {
+            StampConcept(page);
+        }
+
+        using var stream = new MemoryStream();
+        stamped.Save(stream);
+        return stream.ToArray();
+    }
+
+    public const string ConceptBanner = "CONCEPT / VOORBEELD — geen officieel document, geen documentnummer. Officieel: uitgeven via Documenten.";
+
+    private static readonly XFont ConceptStamp = new("Arial", 96, XFontStyleEx.Bold);
+
+    private static void StampConcept(PdfPage page)
+    {
+        using var gfx = XGraphics.FromPdfPage(page, XGraphicsPdfPageOptions.Append);
+        var width = page.Width.Point;
+        var height = page.Height.Point;
+
+        // Banner across the very top (above the document's own header).
+        gfx.DrawRectangle(new XSolidBrush(XColor.FromArgb(235, 255, 236, 179)), 0, 0, width, 22);
+        gfx.DrawString(ConceptBanner, Heading, new XSolidBrush(XColor.FromArgb(255, 153, 27, 27)),
+            new XRect(0, 0, width, 22), XStringFormats.Center);
+
+        // Diagonal stamp through the middle of the page.
+        var state = gfx.Save();
+        gfx.RotateAtTransform(-35, new XPoint(width / 2, height / 2));
+        gfx.DrawString("CONCEPT", ConceptStamp, new XSolidBrush(XColor.FromArgb(70, 200, 30, 30)),
+            new XRect(0, height / 2 - 60, width, 120), XStringFormats.Center);
+        gfx.Restore(state);
+    }
+
+    /// <summary>
     /// MD-B1: an ISSUED document renders byte-identically on every download (dates, ids and font
     /// tags pinned to the issued document — see <c>Modules.Pdf.DeterministicPdf</c>).
     /// </summary>

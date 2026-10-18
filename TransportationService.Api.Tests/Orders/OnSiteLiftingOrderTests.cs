@@ -372,7 +372,7 @@ public class OnSiteLiftingOrderTests
 
         var rendered = await h.Documents().RenderAsync(created.Order.Id, "work-order", CancellationToken.None);
         Assert.NotNull(rendered);
-        Assert.Equal($"werkbon-{created.Order.OrderNumber}.pdf", rendered.Value.FileName);
+        Assert.Equal($"concept-werkbon-{created.Order.OrderNumber}.pdf", rendered.Value.FileName);
         Assert.Equal("%PDF", System.Text.Encoding.ASCII.GetString(rendered.Value.Content, 0, 4));
     }
 

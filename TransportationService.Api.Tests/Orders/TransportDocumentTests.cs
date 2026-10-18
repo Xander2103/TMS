@@ -63,8 +63,8 @@ public class TransportDocumentTests
     }
 
     [Theory]
-    [InlineData("delivery-note", "leveringsbon-ORD-1.pdf")]
-    [InlineData("cmr", "cmr-ORD-1.pdf")]
+    [InlineData("delivery-note", "concept-leveringsbon-ORD-1.pdf")]
+    [InlineData("cmr", "concept-cmr-ORD-1.pdf")]
     public async Task Render_ProducesAOnePagePdf_WithTheRightFileName(string kind, string expectedFileName)
     {
         var h = await SeedAsync();

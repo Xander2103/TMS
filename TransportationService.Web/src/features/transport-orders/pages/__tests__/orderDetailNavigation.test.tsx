@@ -63,6 +63,18 @@ const api = vi.hoisted(() => ({
   listOrderDocuments: vi.fn(),
   listOrderPackages: vi.fn(),
   listCustomerMessages: vi.fn(),
+  listIssuedTransportDocuments: vi.fn(),
+  downloadIssuedTransportDocumentPdf: vi.fn(),
+  downloadOrderDocument: vi.fn(),
+}))
+vi.mock('../../api/issuedDocumentsApi', async (orig) => ({
+  ...(await orig<typeof import('../../api/issuedDocumentsApi')>()),
+  listIssuedTransportDocuments: api.listIssuedTransportDocuments,
+  downloadIssuedTransportDocumentPdf: api.downloadIssuedTransportDocumentPdf,
+}))
+vi.mock('../../api/transportDocumentsApi', async (orig) => ({
+  ...(await orig<typeof import('../../api/transportDocumentsApi')>()),
+  downloadOrderDocument: api.downloadOrderDocument,
 }))
 vi.mock('../../api/transportOrdersApi', async (orig) => ({
   ...(await orig<typeof import('../../api/transportOrdersApi')>()),
@@ -174,6 +186,9 @@ function attention() {
 
 beforeEach(() => {
   auth.permissions = new Set(FULL_RIGHTS)
+  api.listIssuedTransportDocuments.mockReset().mockResolvedValue([])
+  api.downloadIssuedTransportDocumentPdf.mockReset().mockResolvedValue(undefined)
+  api.downloadOrderDocument.mockReset().mockResolvedValue(undefined)
   api.getTransportOrder.mockReset().mockResolvedValue(order())
   api.getTransportOrderTimeline.mockReset().mockResolvedValue([])
   api.listOrderDocuments.mockReset().mockResolvedValue([])
@@ -476,7 +491,7 @@ describe('order detail — header actions', () => {
     await screen.findByText('ORD-0001 — Nexans NV')
 
     const head = header()
-    for (const name of ['Bewerken', 'CMR', 'Leveringsbon']) {
+    for (const name of ['Bewerken', 'CMR (concept)', 'Leveringsbon (concept)']) {
       expect(within(head).getByRole('button', { name })).toBeInTheDocument()
     }
     // B04: template and delete live in the "Meer" menu, delete styled as destructive.
@@ -499,8 +514,39 @@ describe('order detail — header actions', () => {
     expect(screen.queryByRole('button', { name: 'Meer' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Klant van deze opdracht wijzigen' })).not.toBeInTheDocument()
     // Document downloads are not permission-gated (unchanged from before the redesign).
-    expect(within(header()).getByRole('button', { name: 'CMR' })).toBeInTheDocument()
-    expect(within(header()).getByRole('button', { name: 'Leveringsbon' })).toBeInTheDocument()
+    expect(within(header()).getByRole('button', { name: 'CMR (concept)' })).toBeInTheDocument()
+    expect(within(header()).getByRole('button', { name: 'Leveringsbon (concept)' })).toBeInTheDocument()
+  })
+
+  it('MD-B1: without an issued document the CMR action is an explicit concept from the live data', async () => {
+    api.getTransportOrder.mockResolvedValue(order({ status: 'Completed' }))
+    renderPage()
+    await screen.findByText('ORD-0001 — Nexans NV')
+
+    const cmr = within(header()).getByRole('button', { name: 'CMR (concept)' })
+    expect(cmr).toHaveAttribute('title', expect.stringContaining('geen officieel document'))
+    await userEvent.click(cmr)
+    expect(api.downloadOrderDocument).toHaveBeenCalledWith('order-1', 'cmr', 'ORD-0001')
+    expect(api.downloadIssuedTransportDocumentPdf).not.toHaveBeenCalled()
+  })
+
+  it('MD-B1: an issued CMR opens the immutable, numbered document — a replaced one is ignored', async () => {
+    api.listIssuedTransportDocuments.mockResolvedValue([
+      { id: 'doc-old', transportOrderId: 'order-1', kind: 'Cmr', documentNumber: 'CMR-2026-00006', externalNumber: null,
+        issuedAt: '2026-10-17T09:00:00Z', issuedByName: null, isActive: false },
+      { id: 'doc-new', transportOrderId: 'order-1', kind: 'Cmr', documentNumber: 'CMR-2026-00007', externalNumber: null,
+        issuedAt: '2026-10-18T09:00:00Z', issuedByName: null, isActive: true },
+    ])
+    api.getTransportOrder.mockResolvedValue(order({ status: 'Completed' }))
+    renderPage()
+    await screen.findByText('ORD-0001 — Nexans NV')
+
+    const cmr = await within(header()).findByRole('button', { name: 'CMR CMR-2026-00007' })
+    await userEvent.click(cmr)
+    expect(api.downloadIssuedTransportDocumentPdf).toHaveBeenCalledWith(expect.objectContaining({ id: 'doc-new' }))
+    expect(api.downloadOrderDocument).not.toHaveBeenCalled()
+    // The delivery note has no issued document: still a concept.
+    expect(within(header()).getByRole('button', { name: 'Leveringsbon (concept)' })).toBeInTheDocument()
   })
 })
 

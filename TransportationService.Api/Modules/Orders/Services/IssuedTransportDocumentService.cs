@@ -44,6 +44,9 @@ public interface IIssuedTransportDocumentService
     /// <summary>Null = unknown order.</summary>
     Task<IssuedTransportDocumentDto?> IssueAsync(Guid orderId, IssueTransportDocumentRequest request, CancellationToken cancellationToken);
 
+    /// <summary>MD-B1 follow-up: the order's ACTIVE (not replaced) issued document of a kind ("cmr", "delivery-note", "work-order"), if any.</summary>
+    Task<Guid?> FindActiveAsync(Guid orderId, string kind, CancellationToken cancellationToken);
+
     /// <summary>The issued document through the existing renderer, with its reference block. Null = unknown document.</summary>
     Task<(byte[] Content, string FileName, TransportDocumentSnapshot Snapshot)?> RenderPdfAsync(Guid id, CancellationToken cancellationToken);
 }
@@ -375,6 +378,22 @@ public class IssuedTransportDocumentService : IIssuedTransportDocumentService
         }
 
         return null;
+    }
+
+    public async Task<Guid?> FindActiveAsync(Guid orderId, string kind, CancellationToken cancellationToken)
+    {
+        var issuedKind = kind.ToLowerInvariant() switch
+        {
+            "cmr" => IssuedTransportDocumentKind.Cmr,
+            "work-order" or "workorder" => IssuedTransportDocumentKind.WorkOrder,
+            _ => IssuedTransportDocumentKind.DeliveryNote,
+        };
+        var tenantId = _tenantContext.TenantId;
+        return await _dbContext.IssuedTransportDocuments.AsNoTracking()
+            .Where(d => d.TenantId == tenantId && d.TransportOrderId == orderId && d.Kind == issuedKind && d.ReplacedByDocumentId == null)
+            .OrderByDescending(d => d.IssuedAt)
+            .Select(d => (Guid?)d.Id)
+            .FirstOrDefaultAsync(cancellationToken);
     }
 
     public async Task<(byte[] Content, string FileName, TransportDocumentSnapshot Snapshot)?> RenderPdfAsync(

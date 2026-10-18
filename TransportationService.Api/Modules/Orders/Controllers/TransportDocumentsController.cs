@@ -21,15 +21,17 @@ namespace TransportationService.Api.Modules.Orders.Controllers;
 public class TransportDocumentsController : ControllerBase
 {
     private readonly ITransportDocumentService _service;
+    private readonly IIssuedTransportDocumentService _issued;
     private readonly TransportationDbContext _dbContext;
     private readonly ITenantContext _tenantContext;
     private readonly IAuditService _auditService;
 
     public TransportDocumentsController(
-        ITransportDocumentService service, TransportationDbContext dbContext,
+        ITransportDocumentService service, IIssuedTransportDocumentService issued, TransportationDbContext dbContext,
         ITenantContext tenantContext, IAuditService auditService)
     {
         _service = service;
+        _issued = issued;
         _dbContext = dbContext;
         _tenantContext = tenantContext;
         _auditService = auditService;
@@ -44,9 +46,28 @@ public class TransportDocumentsController : ControllerBase
             return BadRequest();
         }
 
+        // MD-B1 follow-up: ONE official document. When the order has an active issued document of
+        // this kind, the order's CMR / LB action opens exactly that immutable, numbered PDF. Only
+        // without one is a preview rendered from the live data — stamped CONCEPT, never official.
+        if (await _issued.FindActiveAsync(id, kind, cancellationToken) is { } issuedId
+            && await _issued.RenderPdfAsync(issuedId, cancellationToken) is { } issued)
+        {
+            Response.Headers[DocumentStatusHeader] = "issued";
+            return File(issued.Content, "application/pdf", issued.FileName);
+        }
+
         var result = await _service.RenderAsync(id, kind, cancellationToken);
-        return result is null ? NotFound() : File(result.Value.Content, "application/pdf", result.Value.FileName);
+        if (result is null)
+        {
+            return NotFound();
+        }
+
+        Response.Headers[DocumentStatusHeader] = "concept";
+        return File(result.Value.Content, "application/pdf", result.Value.FileName);
     }
+
+    /// <summary>"issued" (the official, numbered document) or "concept" (a stamped live preview).</summary>
+    public const string DocumentStatusHeader = "X-Document-Status";
 
     [HttpGet("api/trips/{id:guid}/documents/{kind}")]
     [RequirePermission(PermissionCodes.PlanningView)]
