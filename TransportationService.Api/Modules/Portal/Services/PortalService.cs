@@ -349,13 +349,19 @@ public class PortalService : IPortalService
             return PortalOperationResult.Invalid("Het huidige wachtwoord is niet correct.");
         }
 
+        var now = _timeProvider.GetUtcNow().UtcDateTime;
         user.PasswordHash = _passwordHasher.Hash(request.NewPassword);
         user.MustChangePassword = false; // the user now owns their credential
-        user.UpdatedAt = _timeProvider.GetUtcNow().UtcDateTime;
+        user.UpdatedAt = now;
+
+        // Security M2: every session dies with the old credential — other devices, a possibly
+        // stolen one and this one (the client signs in again with the new password). Same
+        // revocation as deactivation/offboarding: refresh tokens revoked + stamp rotated.
+        await Identity.Services.AccountSessionRevocation.RevokeAllAsync(_dbContext, user, now, cancellationToken);
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         await _auditService.RecordAsync("User", user.Id.ToString(), "PasswordChanged", null,
-            new { Self = true }, cancellationToken);
+            new { Self = true, SessionsRevoked = true }, cancellationToken);
 
         return PortalOperationResult.Success;
     }

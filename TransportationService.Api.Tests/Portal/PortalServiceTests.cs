@@ -267,4 +267,33 @@ public class PortalServiceTests
         var hash = h.Db.Context.Users.Single(u => u.Id == h.MeUserId).PasswordHash;
         Assert.Equal(PasswordVerificationResult.Success, new PasswordHasher().Verify(hash, "NieuwWachtwoord1!"));
     }
+
+    [Fact]
+    public async Task ChangePassword_EndsEverySession_RefreshTokensRevokedAndStampRotated()
+    {
+        // Security M2: a self password change used to leave every other session signed in.
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var stampBefore = h.Db.Context.Users.Single(u => u.Id == h.MeUserId).SecurityStamp;
+        foreach (var device in new[] { "laptop", "phone" })
+        {
+            h.Db.Context.Set<TransportationService.Api.Modules.Authentication.Entities.RefreshToken>().Add(new()
+            {
+                Id = Guid.NewGuid(), UserId = h.MeUserId, TenantId = h.TenantId, TokenHash = device,
+                CreatedAt = Now.UtcDateTime, ExpiresAt = Now.UtcDateTime.AddDays(14), FamilyId = Guid.NewGuid(),
+            });
+        }
+
+        await h.Db.Context.SaveChangesAsync();
+
+        var changed = await h.Sut.ChangeMyPasswordAsync(
+            new ChangeMyPasswordRequest("OudWachtwoord1!", "NieuwWachtwoord1!"), CancellationToken.None);
+
+        Assert.Equal(PortalOutcome.Success, changed.Outcome);
+        h.Db.Context.ChangeTracker.Clear();
+        Assert.NotEqual(stampBefore, h.Db.Context.Users.Single(u => u.Id == h.MeUserId).SecurityStamp);
+        Assert.All(h.Db.Context.Set<TransportationService.Api.Modules.Authentication.Entities.RefreshToken>()
+                .Where(t => t.UserId == h.MeUserId).ToList(),
+            t => Assert.NotNull(t.RevokedAt));
+    }
 }

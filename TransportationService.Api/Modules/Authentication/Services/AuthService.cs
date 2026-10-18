@@ -259,23 +259,52 @@ public sealed class AuthService : IAuthService
         await _db.SaveChangesAsync(cancellationToken);
     }
 
-    public async Task LogoutAsync(string? refreshToken, CancellationToken cancellationToken)
+    public async Task LogoutAsync(string? refreshToken, Guid? userId, Guid? sessionId, CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(refreshToken))
+        var hash = string.IsNullOrWhiteSpace(refreshToken) ? null : _tokenService.HashRefreshToken(refreshToken);
+        var stored = hash is null
+            ? null
+            : await _db.Set<RefreshToken>().FirstOrDefaultAsync(t => t.TokenHash == hash, cancellationToken);
+
+        // Security M3: revoking the whole family (not only the presented row) is what ends the
+        // session — the access tokens bound to it fail AccountStateAuthorizationFilter at once.
+        var sessions = new List<(Guid UserId, Guid FamilyId)>();
+        if (stored is not null)
+        {
+            sessions.Add((stored.UserId, stored.FamilyId));
+        }
+
+        if (userId is { } uid && sessionId is { } sid && sid != Guid.Empty)
+        {
+            sessions.Add((uid, sid));
+        }
+
+        var nowUtc = _timeProvider.GetUtcNow().UtcDateTime;
+        var revoked = new List<RefreshToken>();
+        foreach (var (sessionUserId, familyId) in sessions.Distinct())
+        {
+            revoked.AddRange(await _db.Set<RefreshToken>()
+                .Where(t => t.UserId == sessionUserId && t.FamilyId == familyId && t.RevokedAt == null)
+                .ToListAsync(cancellationToken));
+        }
+
+        if (stored is not null && stored.RevokedAt is null && !revoked.Contains(stored))
+        {
+            revoked.Add(stored);
+        }
+
+        if (revoked.Count == 0)
         {
             return;
         }
 
-        var hash = _tokenService.HashRefreshToken(refreshToken);
-        var stored = await _db.Set<RefreshToken>()
-            .FirstOrDefaultAsync(t => t.TokenHash == hash, cancellationToken);
-
-        if (stored is not null && stored.RevokedAt is null)
+        foreach (var token in revoked)
         {
-            stored.RevokedAt = _timeProvider.GetUtcNow().UtcDateTime;
-            await _db.SaveChangesAsync(cancellationToken);
-            await RecordAsync(stored.TenantId, stored.UserId, SecurityAuditEvents.Logout, null, cancellationToken);
+            token.RevokedAt = nowUtc;
         }
+
+        await _db.SaveChangesAsync(cancellationToken);
+        await RecordAsync(revoked[0].TenantId, revoked[0].UserId, SecurityAuditEvents.Logout, null, cancellationToken);
     }
 
     public async Task<CurrentUserDto?> GetCurrentUserAsync(Guid userId, CancellationToken cancellationToken)
@@ -317,9 +346,12 @@ public sealed class AuthService : IAuthService
     {
         var (roles, permissions) = await LoadRolesAndPermissionsAsync(user, cancellationToken);
 
+        // A rotation keeps its predecessor's family; a fresh login starts a new one. The access
+        // token is bound to that family, so ending the session (logout) also ends the token.
+        var familyId = revoking?.FamilyId is { } family && family != Guid.Empty ? family : Guid.NewGuid();
         var access = _tokenService.CreateAccessToken(
             user.Id, user.TenantId, user.Email, user.FirstName, user.LastName, roles, permissions,
-            user.SecurityStamp, user.MustChangePassword);
+            user.SecurityStamp, user.MustChangePassword, familyId);
 
         var refresh = _tokenService.CreateRefreshToken();
         var nowUtc = _timeProvider.GetUtcNow().UtcDateTime;
@@ -332,8 +364,7 @@ public sealed class AuthService : IAuthService
             TokenHash = refresh.Hash,
             CreatedAt = nowUtc,
             ExpiresAt = refresh.ExpiresAtUtc,
-            // A rotation keeps its predecessor's family; a fresh login starts a new one.
-            FamilyId = revoking?.FamilyId is { } family && family != Guid.Empty ? family : Guid.NewGuid(),
+            FamilyId = familyId,
         };
         _db.Add(stored);
 

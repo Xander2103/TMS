@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
@@ -116,7 +117,8 @@ public class AuthController : ControllerBase
     public async Task<IActionResult> Logout(LogoutRequest request, CancellationToken cancellationToken)
     {
         var refreshToken = request.RefreshToken ?? Request.Cookies[RefreshCookieName];
-        await _authService.LogoutAsync(refreshToken, cancellationToken);
+        _ = Guid.TryParse(User.FindFirstValue(AppClaimTypes.SessionId), out var sessionId);
+        await _authService.LogoutAsync(refreshToken, User.GetUserId(), sessionId, cancellationToken);
         Response.Cookies.Delete(RefreshCookieName, RefreshCookieOptions(null));
         return NoContent();
     }

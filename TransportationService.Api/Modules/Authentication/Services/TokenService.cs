@@ -32,7 +32,8 @@ public sealed class TokenService : ITokenService
         IEnumerable<string> roles,
         IEnumerable<string> permissions,
         Guid securityStamp = default,
-        bool mustChangePassword = false)
+        bool mustChangePassword = false,
+        Guid sessionId = default)
     {
         var nowUtc = _timeProvider.GetUtcNow().UtcDateTime;
         var expiresUtc = nowUtc.AddMinutes(_options.AccessTokenMinutes);
@@ -47,6 +48,11 @@ public sealed class TokenService : ITokenService
             new(AppClaimTypes.TenantId, tenantId.ToString()),
             new(AppClaimTypes.SecurityStamp, securityStamp.ToString()),
         };
+
+        if (sessionId != Guid.Empty)
+        {
+            claims.Add(new Claim(AppClaimTypes.SessionId, sessionId.ToString()));
+        }
 
         if (mustChangePassword)
         {

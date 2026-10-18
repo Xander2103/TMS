@@ -291,12 +291,22 @@ public class EmployeeOffboardingPathsTests
 
     private static async Task<ObjectResult?> RunFilterAsync(TransportationDbContext db, Guid userId, Guid stamp)
     {
+        // A live sign-in session (Security M3: the access token is bound to its refresh family).
+        var sessionId = Guid.NewGuid();
+        db.Set<TransportationService.Api.Modules.Authentication.Entities.RefreshToken>().Add(new()
+        {
+            Id = Guid.NewGuid(), UserId = userId, TenantId = Guid.Empty, TokenHash = sessionId.ToString(),
+            CreatedAt = DateTime.UtcNow, ExpiresAt = DateTime.UtcNow.AddDays(1), FamilyId = sessionId,
+        });
+        await db.SaveChangesAsync();
+
         var services = new ServiceCollection().AddSingleton(db).AddSingleton(TimeProvider.System).BuildServiceProvider();
         var http = new DefaultHttpContext
         {
             RequestServices = services,
             User = new ClaimsPrincipal(new ClaimsIdentity(
-                [new Claim(ClaimTypes.NameIdentifier, userId.ToString()), new Claim(AppClaimTypes.SecurityStamp, stamp.ToString())], "test")),
+                [new Claim(ClaimTypes.NameIdentifier, userId.ToString()), new Claim(AppClaimTypes.SecurityStamp, stamp.ToString()),
+                    new Claim(AppClaimTypes.SessionId, sessionId.ToString())], "test")),
         };
         var context = new AuthorizationFilterContext(
             new ActionContext(http, new RouteData(), new ActionDescriptor { EndpointMetadata = [] }), []);

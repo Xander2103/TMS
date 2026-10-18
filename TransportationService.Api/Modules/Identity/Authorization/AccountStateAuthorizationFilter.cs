@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.EntityFrameworkCore;
 using TransportationService.Api.Data;
 using TransportationService.Api.Modules.Authentication;
+using TransportationService.Api.Modules.Authentication.Entities;
 
 namespace TransportationService.Api.Modules.Identity.Authorization;
 
@@ -21,6 +22,9 @@ public sealed class PermitWhenPasswordChangeRequiredAttribute : Attribute;
 /// <item>Session revocation — the token's security stamp must equal the user's current stamp;
 /// rotating the stamp (on an administrative password reset) invalidates all outstanding access
 /// tokens immediately.</item>
+/// <item>Session binding — the token's session (refresh-token rotation family) must still hold a
+/// live refresh token, so a logout ends that session's access token at once (Security M3)
+/// while the user's other sessions stay signed in.</item>
 /// <item>Account state — a disabled or blocked account, or a linked employee whose employment has
 /// ended (MD-H6), is refused even while its access token is still valid.</item>
 /// <item>Mandatory password change — while <c>MustChangePassword</c> is set, only a small
@@ -46,9 +50,17 @@ public sealed class AccountStateAuthorizationFilter : IAsyncAuthorizationFilter
         }
 
         var db = context.HttpContext.RequestServices.GetRequiredService<TransportationDbContext>();
+        var timeProvider = context.HttpContext.RequestServices.GetService<TimeProvider>() ?? TimeProvider.System;
+        var nowUtc = timeProvider.GetUtcNow().UtcDateTime;
+        _ = Guid.TryParse(principal.FindFirstValue(AppClaimTypes.SessionId), out var sessionId);
         var state = await db.Users.AsNoTracking()
             .Where(u => u.Id == userId)
-            .Select(u => new { u.SecurityStamp, u.MustChangePassword, u.IsActive, u.IsBlocked, u.TenantId, u.EmployeeId })
+            .Select(u => new
+            {
+                u.SecurityStamp, u.MustChangePassword, u.IsActive, u.IsBlocked, u.TenantId, u.EmployeeId,
+                SessionLive = db.Set<RefreshToken>().Any(t =>
+                    t.UserId == u.Id && t.FamilyId == sessionId && t.RevokedAt == null && t.ExpiresAt > nowUtc),
+            })
             .FirstOrDefaultAsync(context.HttpContext.RequestAborted);
 
         if (state is null)
@@ -58,7 +70,8 @@ public sealed class AccountStateAuthorizationFilter : IAsyncAuthorizationFilter
         }
 
         var stampClaim = principal.FindFirstValue(AppClaimTypes.SecurityStamp);
-        if (!Guid.TryParse(stampClaim, out var tokenStamp) || tokenStamp != state.SecurityStamp)
+        if (!Guid.TryParse(stampClaim, out var tokenStamp) || tokenStamp != state.SecurityStamp
+            || sessionId == Guid.Empty || !state.SessionLive)
         {
             Deny(context, StatusCodes.Status401Unauthorized, "Unauthorized",
                 "Your session has been revoked. Please sign in again.");
@@ -70,7 +83,7 @@ public sealed class AccountStateAuthorizationFilter : IAsyncAuthorizationFilter
         // of the offboarding sweep having run.
         if (!state.IsActive || state.IsBlocked
             || await Modules.Employees.Services.EmploymentAccess.HasEndedAsync(db, state.TenantId, state.EmployeeId,
-                context.HttpContext.RequestServices.GetService<TimeProvider>() ?? TimeProvider.System, context.HttpContext.RequestAborted))
+                timeProvider, context.HttpContext.RequestAborted))
         {
             Deny(context, StatusCodes.Status401Unauthorized, "Unauthorized",
                 "This account no longer has access. Please contact your administrator.");

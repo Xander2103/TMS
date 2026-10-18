@@ -164,7 +164,7 @@ public class AuthServiceTests
         using var _ = h.Db;
         var login = await h.Sut.LoginAsync("user@acme.com", Password, CancellationToken.None);
 
-        await h.Sut.LogoutAsync(login.Tokens!.RefreshToken, CancellationToken.None);
+        await h.Sut.LogoutAsync(login.Tokens!.RefreshToken, null, null, CancellationToken.None);
 
         var refreshed = await h.Sut.RefreshAsync(login.Tokens.RefreshToken, CancellationToken.None);
         Assert.Equal(AuthOutcome.InvalidCredentials, refreshed.Outcome);

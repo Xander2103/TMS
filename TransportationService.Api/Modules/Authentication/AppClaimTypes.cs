@@ -11,4 +11,10 @@ public static class AppClaimTypes
 
     /// <summary>Server-side session-revocation stamp; compared to the user's current stamp per request.</summary>
     public const string SecurityStamp = "security_stamp";
+
+    /// <summary>
+    /// The refresh-token rotation family (sign-in session) the access token was issued for; the
+    /// token is only honoured while that session still has a live refresh token (logout ends it).
+    /// </summary>
+    public const string SessionId = "session_id";
 }
