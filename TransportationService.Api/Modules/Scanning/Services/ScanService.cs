@@ -54,6 +54,30 @@ public class ScanService : IScanService
     public async Task<ScanOperationResult> SubmitAsync(
         Guid tripId, Guid stopId, SubmitScanRequest request, bool restrictToOwnDriver, CancellationToken cancellationToken)
     {
+        // Scope first (Security H1): a driver learns nothing — not even validation rules or a
+        // replayed outcome — about another driver's trip.
+        var guard = await GuardAsync(tripId, stopId, restrictToOwnDriver, requireInProgress: false, cancellationToken);
+        if (guard.Error is not null)
+        {
+            return guard.Error;
+        }
+
+        // Idempotent replay: the same client key returns the original outcome instead of a
+        // second ledger row — offline queues can retry safely without double custody moves.
+        // Only within the same trip: a key recorded on another trip never echoes its feedback.
+        if (request.ClientEventId is { } clientEventId)
+        {
+            var existing = await _dbContext.ScanEvents.AsNoTracking()
+                .FirstOrDefaultAsync(e => e.TenantId == _tenantContext.TenantId && e.ClientEventId == clientEventId,
+                    cancellationToken);
+            if (existing is not null)
+            {
+                return existing.TripId == tripId
+                    ? await BuildReplayFeedbackAsync(existing, cancellationToken)
+                    : ScanOperationResult.NotFound;
+            }
+        }
+
         if (string.IsNullOrWhiteSpace(request.Barcode))
         {
             return ScanOperationResult.Invalid("Een barcode is verplicht.");
@@ -64,28 +88,9 @@ public class ScanService : IScanService
             return ScanOperationResult.Invalid("De hoeveelheid moet groter dan nul zijn.");
         }
 
-        // Idempotent replay: the same client key returns the original outcome instead of a
-        // second ledger row — offline queues can retry safely without double custody moves.
-        if (request.ClientEventId is { } clientEventId)
-        {
-            var existing = await _dbContext.ScanEvents.AsNoTracking()
-                .FirstOrDefaultAsync(e => e.TenantId == _tenantContext.TenantId && e.ClientEventId == clientEventId,
-                    cancellationToken);
-            if (existing is not null)
-            {
-                return await BuildReplayFeedbackAsync(existing, cancellationToken);
-            }
-        }
-
         // Trip-status window per scan type: the warehouse LOADS while the trip is still
         // Planned; delivery happens InProgress; the return leg runs until after completion.
         var isReturnLeg = request.ScanType is ScanType.Return or ScanType.Depot;
-
-        var guard = await GuardAsync(tripId, stopId, restrictToOwnDriver, requireInProgress: false, cancellationToken);
-        if (guard.Error is not null)
-        {
-            return guard.Error;
-        }
 
         var tripStatus = guard.Trip!.Status;
         var statusError = request.ScanType switch
@@ -503,15 +508,8 @@ public class ScanService : IScanService
             return new GuardResult(null, null, null, null, ScanOperationResult.NotFound);
         }
 
-        Guid? driverId = null;
-        if (_currentUserContext.CurrentUserId is { } userId)
-        {
-            driverId = await _dbContext.Users.AsNoTracking()
-                .Where(u => u.Id == userId && u.TenantId == _tenantContext.TenantId && u.EmployeeId != null)
-                .Join(_dbContext.Drivers.AsNoTracking().Where(d => d.TenantId == _tenantContext.TenantId),
-                    u => u.EmployeeId, d => d.EmployeeId, (u, d) => (Guid?)d.Id)
-                .FirstOrDefaultAsync(cancellationToken);
-        }
+        var driverId = await Planning.Services.DriverIdentity.ResolveAsync(
+            _dbContext, _tenantContext.TenantId, _currentUserContext.CurrentUserId, cancellationToken);
 
         if (restrictToOwnDriver && (driverId is null || trip.DriverId != driverId))
         {

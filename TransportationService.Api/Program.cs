@@ -532,6 +532,8 @@ builder.Services.AddScoped<TransportationService.Api.Modules.Invoicing.Services.
     TransportationService.Api.Modules.Invoicing.Services.InvoiceControlService>();
 builder.Services.AddScoped<TransportationService.Api.Modules.Planning.Services.ITripExecutionService,
     TransportationService.Api.Modules.Planning.Services.TripExecutionService>();
+builder.Services.AddScoped<TransportationService.Api.Modules.Planning.Services.IDriverTripScope,
+    TransportationService.Api.Modules.Planning.Services.DriverTripScope>();
 
 // Scanning
 builder.Services.AddScoped<TransportationService.Api.Modules.Scanning.Services.IScanService,

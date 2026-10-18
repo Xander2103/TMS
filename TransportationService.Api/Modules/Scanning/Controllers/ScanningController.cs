@@ -67,7 +67,8 @@ public class ScanningController : ControllerBase
         return result.Outcome switch
         {
             ScanOutcome.Success => Ok(result.Events),
-            ScanOutcome.NotYourTrip => StatusCode(StatusCodes.Status403Forbidden, new { message = result.Error }),
+            // Security H1: another driver's trip answers exactly like an unknown one.
+            ScanOutcome.NotYourTrip => NotFound(),
             _ => NotFound(),
         };
     }
@@ -82,7 +83,8 @@ public class ScanningController : ControllerBase
         return result.Outcome switch
         {
             ScanOutcome.Success => Ok(result.Summary),
-            ScanOutcome.NotYourTrip => StatusCode(StatusCodes.Status403Forbidden, new { message = result.Error }),
+            // Security H1: another driver's trip answers exactly like an unknown one.
+            ScanOutcome.NotYourTrip => NotFound(),
             _ => NotFound(),
         };
     }
@@ -91,7 +93,8 @@ public class ScanningController : ControllerBase
     {
         ScanOutcome.Success => Ok(result.Feedback),
         ScanOutcome.NotFound => NotFound(),
-        ScanOutcome.NotYourTrip => StatusCode(StatusCodes.Status403Forbidden, new { message = result.Error }),
+        // Security H1: another driver's trip answers exactly like an unknown one.
+        ScanOutcome.NotYourTrip => NotFound(),
         ScanOutcome.InvalidState => BadRequest(new { message = result.Error }),
         ScanOutcome.ValidationFailed => BadRequest(new { message = result.Error }),
         _ => Conflict(),

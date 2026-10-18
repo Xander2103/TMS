@@ -2,27 +2,37 @@ using Microsoft.AspNetCore.Mvc;
 using TransportationService.Api.Modules.Eta.Services;
 using TransportationService.Api.Modules.Identity;
 using TransportationService.Api.Modules.Identity.Authorization;
+using TransportationService.Api.Modules.Planning.Services;
 
 namespace TransportationService.Api.Modules.Eta.Controllers;
 
 /// <summary>
 /// Internal ETA foundation. Reads recalculate on the fly (idempotent); drivers may report a
 /// delay, dispatchers override per stop. Explicitly a sequential raming, not route optimisation.
+/// Drivers reach only their own trips (Security H1): another driver's trip id answers 404, checked
+/// before the request body is looked at.
 /// </summary>
 [ApiController]
 public class EtaController : ControllerBase
 {
     private readonly IEtaService _service;
+    private readonly IDriverTripScope _tripScope;
 
-    public EtaController(IEtaService service)
+    public EtaController(IEtaService service, IDriverTripScope tripScope)
     {
         _service = service;
+        _tripScope = tripScope;
     }
 
     [HttpGet("api/trips/{tripId:guid}/eta")]
     [RequirePermission(PermissionCodes.PlanningView, PermissionCodes.DriverWorkflowView)]
     public async Task<ActionResult<TripEtaDto>> Get(Guid tripId, CancellationToken cancellationToken)
     {
+        if (!await _tripScope.CanAccessTripAsync(tripId, PermissionCodes.PlanningView, cancellationToken))
+        {
+            return NotFound();
+        }
+
         var result = await _service.RecalculateTripAsync(tripId, cancellationToken);
         return result is null ? NotFound() : Ok(result);
     }
@@ -34,6 +44,11 @@ public class EtaController : ControllerBase
     public async Task<ActionResult<TripEtaDto>> SetDelay(
         Guid tripId, SetDelayRequest request, CancellationToken cancellationToken)
     {
+        if (!await _tripScope.CanAccessTripAsync(tripId, PermissionCodes.PlanningEdit, cancellationToken))
+        {
+            return NotFound();
+        }
+
         if (request.Minutes is < 0 or > 24 * 60)
         {
             return BadRequest(new { message = "De vertraging moet tussen 0 en 1440 minuten liggen." });

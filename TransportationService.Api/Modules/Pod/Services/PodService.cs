@@ -65,11 +65,6 @@ public class PodService : IPodService
     public async Task<PodOperationResult> FinalizeAsync(
         Guid tripId, Guid stopId, FinalizePodRequest request, bool restrictToOwnDriver, CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(request.RecipientName))
-        {
-            return PodOperationResult.Invalid("De naam van de ontvanger is verplicht.");
-        }
-
         var trip = await _dbContext.Trips.AsNoTracking()
             .Include(t => t.Orders)
             .FirstOrDefaultAsync(t => t.Id == tripId && t.TenantId == _tenantContext.TenantId, cancellationToken);
@@ -78,10 +73,16 @@ public class PodService : IPodService
             return PodOperationResult.NotFound;
         }
 
+        // Scope before body validation (Security H1): another driver's trip learns nothing.
         var driverId = await CurrentDriverIdAsync(cancellationToken);
         if (restrictToOwnDriver && (driverId is null || trip.DriverId != driverId))
         {
             return PodOperationResult.NotYourTrip;
+        }
+
+        if (string.IsNullOrWhiteSpace(request.RecipientName))
+        {
+            return PodOperationResult.Invalid("De naam van de ontvanger is verplicht.");
         }
 
         var orderIds = trip.Orders.Where(o => !o.IsDeleted).Select(o => o.TransportOrderId).ToList();
@@ -336,11 +337,6 @@ public class PodService : IPodService
             return PodOperationResult.NotFound;
         }
 
-        if (!pod.IsCurrent)
-        {
-            return PodOperationResult.InvalidState("Foto's kunnen alleen aan de actuele POD-versie worden toegevoegd.");
-        }
-
         if (restrictToOwnDriver)
         {
             var driverId = await CurrentDriverIdAsync(cancellationToken);
@@ -352,6 +348,12 @@ public class PodService : IPodService
             {
                 return PodOperationResult.NotYourTrip;
             }
+        }
+
+        // State is checked only after scope: another driver's POD must not reveal its version.
+        if (!pod.IsCurrent)
+        {
+            return PodOperationResult.InvalidState("Foto's kunnen alleen aan de actuele POD-versie worden toegevoegd.");
         }
 
         var extension = Path.GetExtension(fileName).ToLowerInvariant();
@@ -477,19 +479,8 @@ public class PodService : IPodService
         return new SignatureStoreResult(path, null);
     }
 
-    private async Task<Guid?> CurrentDriverIdAsync(CancellationToken cancellationToken)
-    {
-        if (_currentUserContext.CurrentUserId is not { } userId)
-        {
-            return null;
-        }
-
-        return await _dbContext.Users.AsNoTracking()
-            .Where(u => u.Id == userId && u.TenantId == _tenantContext.TenantId && u.EmployeeId != null)
-            .Join(_dbContext.Drivers.AsNoTracking().Where(d => d.TenantId == _tenantContext.TenantId),
-                u => u.EmployeeId, d => d.EmployeeId, (u, d) => (Guid?)d.Id)
-            .FirstOrDefaultAsync(cancellationToken);
-    }
+    private Task<Guid?> CurrentDriverIdAsync(CancellationToken cancellationToken) =>
+        Planning.Services.DriverIdentity.ResolveAsync(_dbContext, _tenantContext.TenantId, _currentUserContext.CurrentUserId, cancellationToken);
 
     private async Task<PodDetailDto?> MapDetailAsync(Guid podId, CancellationToken cancellationToken)
     {

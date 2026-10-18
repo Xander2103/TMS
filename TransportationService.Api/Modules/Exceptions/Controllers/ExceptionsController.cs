@@ -103,7 +103,8 @@ public class ExceptionsController : ControllerBase
         return result.Outcome switch
         {
             ExceptionOutcome.Success => Ok(result.Exceptions),
-            ExceptionOutcome.NotYourTrip => StatusCode(StatusCodes.Status403Forbidden, new { message = result.Error }),
+            // Security H1: another driver's trip answers exactly like an unknown one.
+            ExceptionOutcome.NotYourTrip => NotFound(),
             _ => NotFound(),
         };
     }
@@ -209,7 +210,8 @@ public class ExceptionsController : ControllerBase
     {
         ExceptionOutcome.Success => Ok(result.Exception),
         ExceptionOutcome.NotFound => NotFound(),
-        ExceptionOutcome.NotYourTrip => StatusCode(StatusCodes.Status403Forbidden, new { message = result.Error }),
+        // Security H1: another driver's trip answers exactly like an unknown one.
+        ExceptionOutcome.NotYourTrip => NotFound(),
         ExceptionOutcome.InvalidState => BadRequest(new { message = result.Error }),
         ExceptionOutcome.ValidationFailed => BadRequest(new { message = result.Error }),
         _ => Conflict(),

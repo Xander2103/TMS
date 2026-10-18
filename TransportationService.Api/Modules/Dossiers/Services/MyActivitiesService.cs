@@ -47,19 +47,8 @@ public class MyActivitiesService : IMyActivitiesService
 
     private Guid TenantId => _tenantContext.TenantId;
 
-    private async Task<Guid?> CurrentDriverIdAsync(CancellationToken cancellationToken)
-    {
-        if (_currentUser.CurrentUserId is not { } userId)
-        {
-            return null;
-        }
-
-        return await _dbContext.Users.AsNoTracking()
-            .Where(u => u.Id == userId && u.TenantId == TenantId && u.EmployeeId != null)
-            .Join(_dbContext.Drivers.AsNoTracking().Where(d => d.TenantId == TenantId),
-                u => u.EmployeeId, d => d.EmployeeId, (u, d) => (Guid?)d.Id)
-            .FirstOrDefaultAsync(cancellationToken);
-    }
+    private Task<Guid?> CurrentDriverIdAsync(CancellationToken cancellationToken) =>
+        Planning.Services.DriverIdentity.ResolveAsync(_dbContext, TenantId, _currentUser.CurrentUserId, cancellationToken);
 
     public async Task<IReadOnlyList<MyActivityDto>> ListMineAsync(DateOnly? from, DateOnly? to, CancellationToken cancellationToken)
     {

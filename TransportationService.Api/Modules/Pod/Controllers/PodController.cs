@@ -117,7 +117,8 @@ public class PodController : ControllerBase
     {
         PodOutcomeResult.Success => Ok(result.Pod),
         PodOutcomeResult.NotFound => NotFound(),
-        PodOutcomeResult.NotYourTrip => StatusCode(StatusCodes.Status403Forbidden, new { message = result.Error }),
+        // Security H1: another driver's trip answers exactly like an unknown one.
+        PodOutcomeResult.NotYourTrip => NotFound(),
         PodOutcomeResult.InvalidState => BadRequest(new { message = result.Error }),
         PodOutcomeResult.ValidationFailed => BadRequest(new { message = result.Error }),
         _ => Conflict(),

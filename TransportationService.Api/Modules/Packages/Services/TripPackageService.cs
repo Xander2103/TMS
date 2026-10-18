@@ -534,15 +534,8 @@ public class TripPackageService : ITripPackageService
             return new GuardResult(null, null, TripPackageOperationResult.NotFound);
         }
 
-        Guid? driverId = null;
-        if (_currentUserContext.CurrentUserId is { } userId)
-        {
-            driverId = await _dbContext.Users.AsNoTracking()
-                .Where(u => u.Id == userId && u.TenantId == _tenantContext.TenantId && u.EmployeeId != null)
-                .Join(_dbContext.Drivers.AsNoTracking().Where(d => d.TenantId == _tenantContext.TenantId),
-                    u => u.EmployeeId, d => d.EmployeeId, (u, d) => (Guid?)d.Id)
-                .FirstOrDefaultAsync(cancellationToken);
-        }
+        var driverId = await Planning.Services.DriverIdentity.ResolveAsync(
+            _dbContext, _tenantContext.TenantId, _currentUserContext.CurrentUserId, cancellationToken);
 
         if (restrictToOwnDriver && (driverId is null || trip.DriverId != driverId))
         {

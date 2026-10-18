@@ -46,19 +46,8 @@ public class DriverIncidentService : IDriverIncidentService
         _notificationService = notificationService;
     }
 
-    private async Task<Guid?> CurrentDriverIdAsync(CancellationToken cancellationToken)
-    {
-        if (_currentUserContext.CurrentUserId is not { } userId)
-        {
-            return null;
-        }
-
-        return await _dbContext.Users.AsNoTracking()
-            .Where(u => u.Id == userId && u.TenantId == _tenantContext.TenantId && u.EmployeeId != null)
-            .Join(_dbContext.Drivers.AsNoTracking().Where(d => d.TenantId == _tenantContext.TenantId),
-                u => u.EmployeeId, d => d.EmployeeId, (u, d) => (Guid?)d.Id)
-            .FirstOrDefaultAsync(cancellationToken);
-    }
+    private Task<Guid?> CurrentDriverIdAsync(CancellationToken cancellationToken) =>
+        Planning.Services.DriverIdentity.ResolveAsync(_dbContext, _tenantContext.TenantId, _currentUserContext.CurrentUserId, cancellationToken);
 
     public async Task<IncidentDetailDto?> CreateMineAsync(
         CreateDriverIncidentRequest request, CancellationToken cancellationToken)
@@ -70,6 +59,23 @@ public class DriverIncidentService : IDriverIncidentService
         }
 
         var tenantId = _tenantContext.TenantId;
+
+        // Offline replay: the same key returns the driver's OWN stored incident (and dispatch is
+        // not notified twice). A key that belongs to someone else's incident reads as
+        // non-existent — the replay must never echo another report (Security H1 class).
+        if (request.ClientRequestId is { } clientRequestId)
+        {
+            var replayed = await _dbContext.Incidents.AsNoTracking()
+                .Where(i => i.TenantId == tenantId && i.ClientRequestId == clientRequestId)
+                .Select(i => new { i.Id, i.DriverId })
+                .FirstOrDefaultAsync(cancellationToken);
+            if (replayed is not null)
+            {
+                return replayed.DriverId == driverId
+                    ? await _incidentService.GetAsync(replayed.Id, cancellationToken)
+                    : null;
+            }
+        }
 
         // Every link must point at the driver's own work; a foreign id reads as non-existent.
         if (request.TripId is { } tripId)

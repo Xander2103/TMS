@@ -6,6 +6,7 @@ using TransportationService.Api.Modules.Packages.Dtos;
 using TransportationService.Api.Modules.Packages.Entities;
 using TransportationService.Api.Modules.Packages.Labels;
 using TransportationService.Api.Modules.Packages.Services;
+using TransportationService.Api.Modules.Planning.Services;
 
 namespace TransportationService.Api.Modules.Packages.Controllers;
 
@@ -81,8 +82,15 @@ public class PackagesController : ControllerBase
     [HttpGet("api/packages/{id:guid}/events")]
     [RequirePermission(PermissionCodes.PackagesView, PermissionCodes.DriverWorkflowView, PermissionCodes.WarehouseView)]
     public async Task<ActionResult<IReadOnlyList<TransportationService.Api.Modules.Packages.Dtos.PackageTimelineEventDto>>> Timeline(
-        Guid id, CancellationToken cancellationToken)
+        Guid id, [FromServices] IDriverTripScope tripScope, CancellationToken cancellationToken)
     {
+        // A driver (driver_workflow.view only) sees the history of packages on their own trips.
+        if (!await tripScope.CanAccessPackageAsync(
+                id, [PermissionCodes.PackagesView, PermissionCodes.WarehouseView], cancellationToken))
+        {
+            return NotFound();
+        }
+
         var timeline = await _service.GetTimelineAsync(id, cancellationToken);
         return timeline is null ? NotFound() : Ok(timeline);
     }

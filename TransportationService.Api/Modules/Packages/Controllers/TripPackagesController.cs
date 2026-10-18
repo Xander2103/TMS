@@ -78,7 +78,8 @@ public class TripPackagesController : ControllerBase
     {
         TripPackageOutcome.Success => Ok(result.Payload ?? new { }),
         TripPackageOutcome.NotFound => NotFound(new { }),
-        TripPackageOutcome.NotYourTrip => StatusCode(StatusCodes.Status403Forbidden, new { message = result.Error }),
+        // Security H1: another driver's trip answers exactly like an unknown one.
+        TripPackageOutcome.NotYourTrip => NotFound(new { }),
         TripPackageOutcome.InvalidState => BadRequest(new { message = result.Error }),
         TripPackageOutcome.ValidationFailed => BadRequest(new { message = result.Error }),
         _ => Conflict(new { }),

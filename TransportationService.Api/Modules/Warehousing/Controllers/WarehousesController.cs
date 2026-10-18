@@ -111,10 +111,11 @@ public class WarehousesController : ControllerBase
         return await _service.DeleteLocationAsync(id, locationId, cancellationToken) ? NoContent() : NotFound();
     }
 
-    // --- Wave 4 §4: trace + overview (read-only) ---
+    // --- Wave 4 §4: trace + overview (read-only). Warehouse permissions only: they reveal the
+    // order and customer of any package, beyond a driver's own trips (Security H1 class). ---
 
     [HttpGet("/api/warehouse/trace")]
-    [RequirePermission(PermissionCodes.WarehouseView, PermissionCodes.WarehouseManage, PermissionCodes.ScanningView, PermissionCodes.ScanningExecute)]
+    [RequirePermission(PermissionCodes.WarehouseView, PermissionCodes.WarehouseManage)]
     public async Task<ActionResult<WarehouseTraceDto>> Trace(
         [FromQuery] string barcode, [FromServices] IWarehouseTraceService trace, CancellationToken cancellationToken)
     {
@@ -128,7 +129,7 @@ public class WarehousesController : ControllerBase
     }
 
     [HttpGet("{id:guid}/overview")]
-    [RequirePermission(PermissionCodes.WarehouseView, PermissionCodes.WarehouseManage, PermissionCodes.ScanningView, PermissionCodes.ScanningExecute)]
+    [RequirePermission(PermissionCodes.WarehouseView, PermissionCodes.WarehouseManage)]
     public async Task<ActionResult<WarehouseOverviewDto>> Overview(
         Guid id, [FromServices] IWarehouseTraceService trace, CancellationToken cancellationToken)
     {

@@ -54,20 +54,8 @@ public class TripExecutionService : ITripExecutionService
     private readonly Modules.Incidents.Services.IFailedDeliveryHandler? _failedDeliveryHandler;
 
     /// <summary>Driver id of the logged-in user, resolved via the user's employee link; null when not a driver.</summary>
-    private async Task<Guid?> CurrentDriverIdAsync(CancellationToken cancellationToken)
-    {
-        if (_currentUserContext.CurrentUserId is not { } userId)
-        {
-            return null;
-        }
-
-        return await _dbContext.Users.AsNoTracking()
-            .Where(u => u.Id == userId && u.TenantId == _tenantContext.TenantId && u.EmployeeId != null)
-            .Join(_dbContext.Drivers.AsNoTracking().Where(d => d.TenantId == _tenantContext.TenantId),
-                u => u.EmployeeId, d => d.EmployeeId,
-                (u, d) => (Guid?)d.Id)
-            .FirstOrDefaultAsync(cancellationToken);
-    }
+    private Task<Guid?> CurrentDriverIdAsync(CancellationToken cancellationToken) =>
+        Planning.Services.DriverIdentity.ResolveAsync(_dbContext, _tenantContext.TenantId, _currentUserContext.CurrentUserId, cancellationToken);
 
     public async Task<IReadOnlyList<MyTripDto>> ListMyTripsAsync(
         DateOnly? from, DateOnly? to, CancellationToken cancellationToken)

@@ -61,16 +61,6 @@ public class ExecutionExceptionService : IExecutionExceptionService
     public async Task<ExceptionOperationResult> ReportAsync(
         Guid tripId, ReportExceptionRequest request, bool restrictToOwnDriver, CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(request.Description))
-        {
-            return ExceptionOperationResult.Invalid("Een omschrijving van het probleem is verplicht.");
-        }
-
-        if (request.Quantity is < 0)
-        {
-            return ExceptionOperationResult.Invalid("De hoeveelheid kan niet negatief zijn.");
-        }
-
         var trip = await _dbContext.Trips.AsNoTracking()
             .Include(t => t.Orders)
             .FirstOrDefaultAsync(t => t.Id == tripId && t.TenantId == _tenantContext.TenantId, cancellationToken);
@@ -79,10 +69,21 @@ public class ExecutionExceptionService : IExecutionExceptionService
             return ExceptionOperationResult.NotFound;
         }
 
+        // Scope before body validation (Security H1): another driver's trip learns nothing.
         var driverId = await CurrentDriverIdAsync(cancellationToken);
         if (restrictToOwnDriver && (driverId is null || trip.DriverId != driverId))
         {
             return ExceptionOperationResult.NotYourTrip;
+        }
+
+        if (string.IsNullOrWhiteSpace(request.Description))
+        {
+            return ExceptionOperationResult.Invalid("Een omschrijving van het probleem is verplicht.");
+        }
+
+        if (request.Quantity is < 0)
+        {
+            return ExceptionOperationResult.Invalid("De hoeveelheid kan niet negatief zijn.");
         }
 
         var orderIds = trip.Orders.Where(o => !o.IsDeleted).Select(o => o.TransportOrderId).ToList();
@@ -499,19 +500,8 @@ public class ExecutionExceptionService : IExecutionExceptionService
     private IQueryable<ExecutionException> Scoped() =>
         _dbContext.ExecutionExceptions.Where(e => e.TenantId == _tenantContext.TenantId);
 
-    private async Task<Guid?> CurrentDriverIdAsync(CancellationToken cancellationToken)
-    {
-        if (_currentUserContext.CurrentUserId is not { } userId)
-        {
-            return null;
-        }
-
-        return await _dbContext.Users.AsNoTracking()
-            .Where(u => u.Id == userId && u.TenantId == _tenantContext.TenantId && u.EmployeeId != null)
-            .Join(_dbContext.Drivers.AsNoTracking().Where(d => d.TenantId == _tenantContext.TenantId),
-                u => u.EmployeeId, d => d.EmployeeId, (u, d) => (Guid?)d.Id)
-            .FirstOrDefaultAsync(cancellationToken);
-    }
+    private Task<Guid?> CurrentDriverIdAsync(CancellationToken cancellationToken) =>
+        Planning.Services.DriverIdentity.ResolveAsync(_dbContext, _tenantContext.TenantId, _currentUserContext.CurrentUserId, cancellationToken);
 
     private async Task<ExceptionListItemDto> MapListItemAsync(ExecutionException row, CancellationToken cancellationToken)
     {

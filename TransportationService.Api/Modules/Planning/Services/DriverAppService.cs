@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using TransportationService.Api.Data;
 using TransportationService.Api.Modules.Exceptions.Entities;
+using TransportationService.Api.Modules.Fleet.Entities;
 using TransportationService.Api.Modules.Identity.Services;
 using TransportationService.Api.Modules.Incidents.Entities;
 using TransportationService.Api.Modules.Planning.Dtos;
@@ -53,19 +54,8 @@ public class DriverAppService : IDriverAppService
         _timeProvider = timeProvider;
     }
 
-    private async Task<Guid?> CurrentDriverIdAsync(CancellationToken cancellationToken)
-    {
-        if (_currentUserContext.CurrentUserId is not { } userId)
-        {
-            return null;
-        }
-
-        return await _dbContext.Users.AsNoTracking()
-            .Where(u => u.Id == userId && u.TenantId == _tenantContext.TenantId && u.EmployeeId != null)
-            .Join(_dbContext.Drivers.AsNoTracking().Where(d => d.TenantId == _tenantContext.TenantId),
-                u => u.EmployeeId, d => d.EmployeeId, (u, d) => (Guid?)d.Id)
-            .FirstOrDefaultAsync(cancellationToken);
-    }
+    private Task<Guid?> CurrentDriverIdAsync(CancellationToken cancellationToken) =>
+        Planning.Services.DriverIdentity.ResolveAsync(_dbContext, _tenantContext.TenantId, _currentUserContext.CurrentUserId, cancellationToken);
 
     public async Task<MyDashboardDto?> GetMyDashboardAsync(CancellationToken cancellationToken)
     {
@@ -174,8 +164,9 @@ public class DriverAppService : IDriverAppService
                 .Where(t => t.TenantId == tenantId && trailerIds.Contains(t.Id))
                 .ToDictionaryAsync(t => t.Id, t => t.InternalNumber, cancellationToken);
 
+        // Leasing contracts are fleet finance (fleet_finance.view), not something to show at a roadside check.
         var documents = await _dbContext.FleetDocuments.AsNoTracking()
-            .Where(d => d.TenantId == tenantId
+            .Where(d => d.TenantId == tenantId && d.DocumentType != FleetDocumentType.LeasingContract
                         && ((d.VehicleId != null && vehicleIds.Contains(d.VehicleId.Value))
                             || (d.TrailerId != null && trailerIds.Contains(d.TrailerId.Value))))
             .OrderBy(d => d.DocumentType)
@@ -202,6 +193,7 @@ public class DriverAppService : IDriverAppService
         var (vehicleIds, trailerIds) = await MyActiveAssetsAsync(driverId.Value, cancellationToken);
         var document = await _dbContext.FleetDocuments.AsNoTracking()
             .FirstOrDefaultAsync(d => d.Id == documentId && d.TenantId == _tenantContext.TenantId
+                                      && d.DocumentType != FleetDocumentType.LeasingContract
                                       && ((d.VehicleId != null && vehicleIds.Contains(d.VehicleId.Value))
                                           || (d.TrailerId != null && trailerIds.Contains(d.TrailerId.Value))),
                 cancellationToken);
