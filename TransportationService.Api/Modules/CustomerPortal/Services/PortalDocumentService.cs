@@ -28,11 +28,13 @@ public class PortalDocumentService : IPortalDocumentService
     private readonly ITenantContext _tenantContext;
     private readonly ICurrentUserContext _currentUserContext;
     private readonly IFileStorageService _fileStorage;
+    private readonly Modules.Orders.Services.IIssuedTransportDocumentService? _issuedDocuments;
 
     public PortalDocumentService(
         TransportationDbContext dbContext, ITenantContext tenantContext, ICurrentUserContext currentUserContext,
-        IFileStorageService fileStorage)
+        IFileStorageService fileStorage, Modules.Orders.Services.IIssuedTransportDocumentService? issuedDocuments = null)
     {
+        _issuedDocuments = issuedDocuments;
         _dbContext = dbContext;
         _tenantContext = tenantContext;
         _currentUserContext = currentUserContext;
@@ -112,13 +114,35 @@ public class PortalDocumentService : IPortalDocumentService
             from a in _dbContext.InvoiceAttachments.AsNoTracking()
             join i in _dbContext.Invoices.AsNoTracking() on a.InvoiceId equals i.Id
             where a.TenantId == tenantId && i.TenantId == tenantId && i.CustomerId == customerId
-                && i.Status != InvoiceStatus.Draft && a.IncludeWhenSending
+                // ACC-H2: the invoice pages' allow-list (issued only) — a Cancelled draft's
+                // attachment is not a customer document.
+                && (i.Status == InvoiceStatus.Sent || i.Status == InvoiceStatus.Paid) && a.IncludeWhenSending
             select new PortalDocumentDto(
                 a.Id, PortalDocumentSource.InvoiceAttachment, a.FileName, a.FileName, a.CreatedAt,
                 null, null, i.Id, i.InvoiceNumber))
             .ToListAsync(cancellationToken);
 
-        var all = orderDocs.Concat(dossierDocs).Concat(pods).Concat(invoiceAttachments)
+        // KP-06: the ACTIVE issued CMR / delivery note / work order a planner published.
+        var issued = await (
+            from d in _dbContext.IssuedTransportDocuments.AsNoTracking()
+            join o in _dbContext.TransportOrders.AsNoTracking() on d.TransportOrderId equals o.Id
+            where d.TenantId == tenantId && o.TenantId == tenantId && o.CustomerId == customerId
+                && d.CustomerVisible && d.ReplacedByDocumentId == null
+            select new PortalDocumentDto(
+                d.Id, PortalDocumentSource.IssuedTransportDocument, d.DocumentNumber, d.DocumentNumber + ".pdf",
+                d.IssuedAt, o.Id, o.OrderNumber, null, null))
+            .ToListAsync(cancellationToken);
+
+        // THE customer visibility rule: documents of an order the customer may not see (an internal
+        // draft) stay hidden even when published — the same rule as the order list and detail.
+        var visibleOrders = await PortalOrderStatusRules.VisibleOrderIdsAsync(_dbContext, tenantId, customerId.Value,
+            orderDocs.Concat(pods).Concat(issued).Select(d => d.OrderId!.Value).Distinct().ToList(),
+            cancellationToken);
+        issued = issued.Where(d => visibleOrders.Contains(d.OrderId!.Value)).ToList();
+        orderDocs = orderDocs.Where(d => visibleOrders.Contains(d.OrderId!.Value)).ToList();
+        pods = pods.Where(p => visibleOrders.Contains(p.OrderId!.Value)).ToList();
+
+        var all = orderDocs.Concat(dossierDocs).Concat(pods).Concat(issued).Concat(invoiceAttachments)
             .OrderByDescending(d => d.CreatedAt)
             .ToList();
         return PortalResult<IReadOnlyList<PortalDocumentDto>>.Success(all);
@@ -144,16 +168,18 @@ public class PortalDocumentService : IPortalDocumentService
                     join o in _dbContext.TransportOrders.AsNoTracking() on d.TransportOrderId equals (Guid?)o.Id
                     where d.TenantId == tenantId && o.TenantId == tenantId
                         && d.Id == id && o.CustomerId == customerId && d.CustomerVisible
-                    select new { d.DocumentPath, d.FileName, d.ContentType })
+                    select new { d.DocumentPath, d.FileName, d.ContentType, OrderId = (Guid?)o.Id })
                     .FirstOrDefaultAsync(cancellationToken)
                     // D6: not an order document of this customer → maybe a published document of one
                     // of this customer's dossiers. The SAME predicate as the list is re-checked here;
                     // the id alone is never trusted.
                     ?? await VisibleDossierDocuments(tenantId, customerId.Value)
                         .Where(x => x.Document.Id == id)
-                        .Select(x => new { x.Document.DocumentPath, x.Document.FileName, x.Document.ContentType })
+                        .Select(x => new { x.Document.DocumentPath, x.Document.FileName, x.Document.ContentType, OrderId = (Guid?)null })
                         .FirstOrDefaultAsync(cancellationToken);
-                if (doc?.DocumentPath is not { } path)
+                if (doc?.DocumentPath is not { } path
+                    || (doc.OrderId is { } docOrderId
+                        && !await PortalOrderStatusRules.IsVisibleToCustomerAsync(_dbContext, tenantId, customerId.Value, docOrderId, cancellationToken)))
                 {
                     return PortalResult<PortalFileDto>.NotFound();
                 }
@@ -172,9 +198,10 @@ public class PortalDocumentService : IPortalDocumentService
                     join o in _dbContext.TransportOrders.AsNoTracking() on p.TransportOrderId equals o.Id
                     where p.TenantId == tenantId && o.TenantId == tenantId && p.Id == id
                         && o.CustomerId == customerId && p.CustomerVisible && p.IsCurrent
-                    select p.SignaturePath)
+                    select new { p.SignaturePath, OrderId = o.Id })
                     .FirstOrDefaultAsync(cancellationToken);
-                if (pod is not { } signaturePath)
+                if (pod?.SignaturePath is not { } signaturePath
+                    || !await PortalOrderStatusRules.IsVisibleToCustomerAsync(_dbContext, tenantId, customerId.Value, pod.OrderId, cancellationToken))
                 {
                     return PortalResult<PortalFileDto>.NotFound();
                 }
@@ -191,7 +218,8 @@ public class PortalDocumentService : IPortalDocumentService
                     from a in _dbContext.InvoiceAttachments.AsNoTracking()
                     join i in _dbContext.Invoices.AsNoTracking() on a.InvoiceId equals i.Id
                     where a.TenantId == tenantId && i.TenantId == tenantId && a.Id == id
-                        && i.CustomerId == customerId && i.Status != InvoiceStatus.Draft && a.IncludeWhenSending
+                        && i.CustomerId == customerId && (i.Status == InvoiceStatus.Sent || i.Status == InvoiceStatus.Paid)
+                        && a.IncludeWhenSending
                     select new { a.StorageKey, a.FileName, a.ContentType })
                     .FirstOrDefaultAsync(cancellationToken);
                 if (attachment is null)
@@ -203,6 +231,28 @@ public class PortalDocumentService : IPortalDocumentService
                 using var buffer = new MemoryStream();
                 await stream.CopyToAsync(buffer, cancellationToken);
                 return PortalResult<PortalFileDto>.Success(new PortalFileDto(buffer.ToArray(), attachment.FileName, attachment.ContentType));
+            }
+
+            case PortalDocumentSource.IssuedTransportDocument:
+            {
+                // The SAME predicate as the list, re-checked: published, still the active document,
+                // the order is this customer's and visible to them. The bytes are the frozen snapshot
+                // the office downloads too (MD-B1) — never a re-render of live master data.
+                var issuedDoc = await (
+                    from d in _dbContext.IssuedTransportDocuments.AsNoTracking()
+                    join o in _dbContext.TransportOrders.AsNoTracking() on d.TransportOrderId equals o.Id
+                    where d.TenantId == tenantId && o.TenantId == tenantId && d.Id == id
+                        && o.CustomerId == customerId && d.CustomerVisible && d.ReplacedByDocumentId == null
+                    select new { d.Id, OrderId = o.Id })
+                    .FirstOrDefaultAsync(cancellationToken);
+                if (issuedDoc is null || _issuedDocuments is null
+                    || !await PortalOrderStatusRules.IsVisibleToCustomerAsync(_dbContext, tenantId, customerId.Value, issuedDoc.OrderId, cancellationToken)
+                    || await _issuedDocuments.RenderPdfAsync(issuedDoc.Id, cancellationToken) is not { } rendered)
+                {
+                    return PortalResult<PortalFileDto>.NotFound();
+                }
+
+                return PortalResult<PortalFileDto>.Success(new PortalFileDto(rendered.Content, rendered.FileName, "application/pdf"));
             }
 
             default:

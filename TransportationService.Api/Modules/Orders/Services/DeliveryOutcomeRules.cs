@@ -17,7 +17,13 @@ public static class DeliveryOutcomes
     public const string Redelivered = "Redelivered";
 }
 
-public sealed record DeliveryOutcomeDto(string Outcome, Guid? RedeliveryOrderId = null, string? RedeliveryOrderNumber = null);
+public sealed record DeliveryOutcomeDto(string Outcome, Guid? RedeliveryOrderId = null, string? RedeliveryOrderNumber = null)
+{
+    /// <summary>With a redelivery: what the ORIGINAL delivery achieved (NotDelivered | PartiallyDelivered),
+    /// so a reader that may not see the redelivery yet (the customer portal, while it is an internal
+    /// draft) can still tell the truth about the first attempt.</summary>
+    public string? ShortfallOutcome { get; init; }
+}
 
 /// <summary>
 /// EX-08: the order's lifecycle may legitimately end "Completed" (the trip is done, the order is
@@ -115,7 +121,10 @@ public static class DeliveryOutcomeRules
                     redelivery.Status is TransportOrderStatus.Completed or TransportOrderStatus.Invoiced
                         ? DeliveryOutcomes.Redelivered
                         : DeliveryOutcomes.RedeliveryPlanned,
-                    redelivery.Id, redelivery.OrderNumber);
+                    redelivery.Id, redelivery.OrderNumber)
+                {
+                    ShortfallOutcome = outcome,
+                };
                 continue;
             }
 

@@ -21,6 +21,15 @@ public enum PortalReviewAction
 
 public record PortalReviewRequest(PortalReviewAction Action, string? Reason);
 
+/// <summary>The customer's answers posted on the order thread after the question.</summary>
+public record PortalReviewAnswerDto(string Body, DateTime At);
+
+/// <summary>The latest "Info opvragen" question on a portal request and what the customer answered.</summary>
+public record PortalReviewInfoRequestDto(string Question, DateTime AskedAt, IReadOnlyList<PortalReviewAnswerDto> Answers);
+
+/// <summary>What the reviewing planner needs next to Accept/Info opvragen/Afwijzen.</summary>
+public record PortalReviewStateDto(PortalReviewInfoRequestDto? InfoRequest);
+
 public interface IOrderPortalReviewService
 {
     /// <summary>
@@ -30,6 +39,12 @@ public interface IOrderPortalReviewService
     /// audited (via the underlying order/message operations) and notify the customer.
     /// </summary>
     Task<TransportOrderOperationResult> ReviewAsync(Guid orderId, PortalReviewRequest request, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// The open/answered info request of an order (null = unknown order) — so the planner sees the
+    /// customer's answer where they review, without needing the customer-messages module.
+    /// </summary>
+    Task<PortalReviewStateDto?> GetStateAsync(Guid orderId, CancellationToken cancellationToken);
 }
 
 public class OrderPortalReviewService : IOrderPortalReviewService
@@ -113,6 +128,32 @@ public class OrderPortalReviewService : IOrderPortalReviewService
         }
     }
 
+    public async Task<PortalReviewStateDto?> GetStateAsync(Guid orderId, CancellationToken cancellationToken)
+    {
+        var tenantId = _tenantContext.TenantId;
+        var order = await _dbContext.TransportOrders.AsNoTracking()
+            .Where(o => o.TenantId == tenantId && o.Id == orderId)
+            .Select(o => new { o.Id, o.CustomerId })
+            .FirstOrDefaultAsync(cancellationToken);
+        if (order is null)
+        {
+            return null;
+        }
+
+        var thread = await _dbContext.CustomerMessages.AsNoTracking()
+            .Where(m => m.TenantId == tenantId && m.CustomerId == order.CustomerId && m.TransportOrderId == orderId
+                        && (m.IsInfoRequest || !m.AuthorIsStaff))
+            .OrderBy(m => m.CreatedAt)
+            .Select(m => new { m.IsInfoRequest, m.Body, m.CreatedAt })
+            .ToListAsync(cancellationToken);
+        var question = thread.LastOrDefault(m => m.IsInfoRequest);
+        return new PortalReviewStateDto(question is null
+            ? null
+            : new PortalReviewInfoRequestDto(question.Body, question.CreatedAt,
+                thread.Where(m => !m.IsInfoRequest && m.CreatedAt > question.CreatedAt)
+                    .Select(m => new PortalReviewAnswerDto(m.Body, m.CreatedAt)).ToList()));
+    }
+
     /// <summary>
     /// Rejects a customer-submitted order AND tells the customer why. `CancellationReason` is a
     /// staff field (planners also type internal motivations into it on the ordinary cancel action)
@@ -162,8 +203,11 @@ public class OrderPortalReviewService : IOrderPortalReviewService
         // no separate info-request entity. The generic customer_message_reply notification is
         // suppressed here (publishNotification: false) so the customer gets exactly one e-mail,
         // built from the richer order_info_requested template below.
+        // The message is marked as the open question: the portal shows "Informatie gevraagd" with
+        // this text and an answer box until the customer replies on the thread.
         var sent = await _messageService.SendToCustomerAsync(
-            order.CustomerId, new SendCustomerMessageRequest(order.Id, reason), cancellationToken, publishNotification: false);
+            order.CustomerId, new SendCustomerMessageRequest(order.Id, reason), cancellationToken, publishNotification: false,
+            isInfoRequest: true);
         if (sent is null)
         {
             return TransportOrderOperationResult.NotFound;
@@ -190,7 +234,7 @@ public class OrderPortalReviewService : IOrderPortalReviewService
                     })
                 {
                     CustomerId = order.CustomerId,
-                    LinkPath = $"/portal/orders/{order.Id}",
+                    LinkPath = $"/klantportaal/orders/{order.Id}",
                 }, cancellationToken);
             }
             catch (Exception exception) when (exception is not OperationCanceledException)

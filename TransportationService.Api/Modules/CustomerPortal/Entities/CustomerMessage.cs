@@ -21,6 +21,13 @@ public class CustomerMessage : AuditableTenantEntity
     public bool AuthorIsStaff { get; set; }
 
     public string Body { get; set; } = string.Empty;
+
+    /// <summary>
+    /// A planner's "Info opvragen" question on a portal request. The question IS this staff message
+    /// (no separate entity): it stays open until the customer writes on the same order thread, and
+    /// the customer-facing status reads "Informatie gevraagd" meanwhile (PortalOrderStatusRules).
+    /// </summary>
+    public bool IsInfoRequest { get; set; }
 }
 
 /// <summary>

@@ -37,4 +37,15 @@ public record PortalInvoiceDetailDto(
     /// <summary>See <see cref="PortalInvoiceListItemDto.PeppolStatus"/>.</summary>
     string? PeppolStatus = null,
     /// <summary>See <see cref="PortalInvoiceListItemDto.Kind"/>.</summary>
-    string Kind = "Invoice");
+    string Kind = "Invoice")
+{
+    /// <summary>KP-09: for a credit note, the invoice it credits (number as issued).</summary>
+    public string? CreditedInvoiceNumber { get; init; }
+    public Guid? CreditedInvoiceId { get; init; }
+
+    /// <summary>KP-09: for an invoice, the ISSUED credit notes against it — so the customer does not pay
+    /// what was credited. Draft credit notes are internal and never listed.</summary>
+    public IReadOnlyList<PortalInvoiceReferenceDto> CreditedBy { get; init; } = [];
+}
+
+public record PortalInvoiceReferenceDto(Guid Id, string InvoiceNumber);

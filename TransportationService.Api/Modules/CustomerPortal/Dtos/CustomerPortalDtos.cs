@@ -9,18 +9,21 @@ public record PortalOrderListItemDto(
     Guid Id,
     string OrderNumber,
     DateOnly OrderDate,
-    /// <summary>M5: the CUSTOMER-FACING status (PortalOrderStatusRules), not the internal one —
-    /// e.g. "Completed" while the invoice is still a draft internally.</summary>
-    TransportOrderStatus Status,
+    /// <summary>The CUSTOMER-FACING status code (<see cref="Services.PortalCustomerStatuses"/>) — never an
+    /// internal lifecycle key such as Draft, Completed or Invoiced.</summary>
+    string Status,
     string? CustomerReference,
     string? GoodsDescription,
     string? FirstLoadingCity,
     string? LastUnloadingCity)
 {
     /// <summary>EX-08: what reached the consignee (Delivered | PartiallyDelivered | NotDelivered |
-    /// RedeliveryPlanned | Redelivered); null = no execution facts. A finished order that was not
-    /// delivered never reads "Afgerond".</summary>
+    /// RedeliveryPlanned | Redelivered); null = no execution facts. Already folded into <c>Status</c>.</summary>
     public string? DeliveryOutcome { get; init; }
+
+    /// <summary>"Factuur beschikbaar": an issued invoice contains this order. Only filled for a portal
+    /// user who may see invoices; never replaces the delivery status.</summary>
+    public bool InvoiceAvailable { get; init; }
 }
 
 public record PortalStopDto(
@@ -46,7 +49,10 @@ public record PortalCargoDto(
 /// carries planner-typed cancel/correction motivations ("dispatch boekte verkeerd", "klant
 /// betaalt niet") and is internal by classification.
 /// </summary>
-public record PortalTimelineEventDto(TransportOrderStatus Status, DateTime ChangedAt);
+public record PortalTimelineEventDto(string Status, DateTime ChangedAt);
+
+/// <summary>A planner's open or answered "Info opvragen" question on a portal request.</summary>
+public record PortalInfoRequestDto(string Question, DateTime AskedAt, DateTime? AnsweredAt);
 
 /// <summary>A customer-visible afwijking. <c>Description</c> is the OFFICE's customer-facing message —
 /// never the driver's raw report (empty when the office wrote none: the portal shows the type only).</summary>
@@ -67,9 +73,8 @@ public record PortalOrderDetailDto(
     Guid Id,
     string OrderNumber,
     DateOnly OrderDate,
-    /// <summary>M5: the CUSTOMER-FACING status (PortalOrderStatusRules), not the internal one —
-    /// e.g. "Completed" while the invoice is still a draft internally.</summary>
-    TransportOrderStatus Status,
+    /// <summary>The CUSTOMER-FACING status code (<see cref="Services.PortalCustomerStatuses"/>).</summary>
+    string Status,
     string? CustomerReference,
     string? GoodsDescription,
     IReadOnlyList<PortalStopDto> Stops,
@@ -90,6 +95,13 @@ public record PortalOrderDetailDto(
 
     /// <summary>Customer-facing messages written by the office on incidents of this order.</summary>
     public IReadOnlyList<PortalNoticeDto> Notices { get; init; } = [];
+
+    /// <summary>See <see cref="PortalOrderListItemDto.InvoiceAvailable"/>.</summary>
+    public bool InvoiceAvailable { get; init; }
+
+    /// <summary>The latest "Info opvragen" question while the request is still under review; the
+    /// customer answers it on the order's message thread.</summary>
+    public PortalInfoRequestDto? InfoRequest { get; init; }
 }
 
 /// <summary>Wave 11: what the customer may see of the proof of delivery (data, not files).</summary>

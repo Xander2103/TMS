@@ -7,6 +7,8 @@ public enum PortalDocumentSource
     OrderDocument,
     Pod,
     InvoiceAttachment,
+    /// <summary>KP-06: an issued CMR / delivery note / work order a planner published, rendered from its frozen snapshot.</summary>
+    IssuedTransportDocument,
 }
 
 public record PortalDocumentDto(

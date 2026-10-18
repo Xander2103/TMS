@@ -45,4 +45,15 @@ public class IssuedTransportDocumentsController : ControllerBase
         var result = await _service.RenderPdfAsync(id, cancellationToken);
         return result is null ? NotFound() : File(result.Value.Content, "application/pdf", result.Value.FileName);
     }
+
+    /// <summary>KP-06: publish the active issued document to the customer portal, or withdraw it.
+    /// Publishing is an order edit; the customer downloads the frozen snapshot, never live data.</summary>
+    [HttpPut("api/issued-transport-documents/{id:guid}/customer-visibility")]
+    [RequirePermission(PermissionCodes.OrdersEdit, PermissionCodes.OrdersManage)]
+    public async Task<ActionResult<IssuedTransportDocumentDto>> SetCustomerVisibility(
+        Guid id, SetIssuedDocumentCustomerVisibilityRequest request, CancellationToken cancellationToken)
+    {
+        var document = await _service.SetCustomerVisibleAsync(id, request.CustomerVisible, cancellationToken);
+        return document is null ? NotFound() : Ok(document);
+    }
 }

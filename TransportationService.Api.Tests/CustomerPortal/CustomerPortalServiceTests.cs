@@ -94,7 +94,7 @@ public class CustomerPortalServiceTests
         var result = await h.For(h.PortalUserId).SubmitOrderAsync(Request(h), CancellationToken.None);
 
         Assert.Equal(PortalOutcomeKind.Success, result.Outcome);
-        Assert.Equal(TransportOrderStatus.Submitted, result.Value!.Status);
+        Assert.Equal(PortalCustomerStatuses.Received, result.Value!.Status);
 
         var stored = h.Db.Context.TransportOrders.Single();
         Assert.Equal(h.CustomerId, stored.CustomerId);
@@ -150,8 +150,8 @@ public class CustomerPortalServiceTests
 
         // Draft->Submitted->Confirmed: both customer-visible transitions on the timeline.
         Assert.Equal(2, detail.Value!.Timeline.Count);
-        Assert.Contains(detail.Value.Timeline, e => e.Status == TransportOrderStatus.Submitted);
-        Assert.Contains(detail.Value.Timeline, e => e.Status == TransportOrderStatus.Confirmed);
+        Assert.Contains(detail.Value.Timeline, e => e.Status == PortalCustomerStatuses.Received);
+        Assert.Contains(detail.Value.Timeline, e => e.Status == PortalCustomerStatuses.Confirmed);
 
         // Customer-safe text: the office's customer message, never the driver's raw report.
         var exception = Assert.Single(detail.Value.Exceptions);

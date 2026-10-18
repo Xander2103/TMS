@@ -264,22 +264,23 @@ public class PortalIntakeAndStatusTests
         var list = (await h.Portal().ListMyOrdersAsync(CancellationToken.None)).Value!;
         var byId = list.ToDictionary(o => o.Id, o => o.Status);
 
-        Assert.Equal(TransportOrderStatus.Submitted, byId[submitted]);
-        Assert.Equal(TransportOrderStatus.Planned, byId[planned]);
-        Assert.Equal(TransportOrderStatus.InProgress, byId[inProgress]);
-        Assert.Equal(TransportOrderStatus.Completed, byId[completed]);
-        Assert.Equal(TransportOrderStatus.Completed, byId[onDraftInvoice]); // "Afgerond", not "Gefactureerd"
-        Assert.Equal(TransportOrderStatus.Invoiced, byId[onSentInvoice]);
-        Assert.Equal(TransportOrderStatus.Cancelled, byId[cancelledAfterConfirm]);
-        Assert.Equal(TransportOrderStatus.Cancelled, byId[rejected]);
+        // Customer language, never an internal lifecycle key; invoicing never replaces the delivery truth.
+        Assert.Equal(PortalCustomerStatuses.Received, byId[submitted]);
+        Assert.Equal(PortalCustomerStatuses.Planned, byId[planned]);
+        Assert.Equal(PortalCustomerStatuses.InTransit, byId[inProgress]);
+        Assert.Equal(PortalCustomerStatuses.Delivered, byId[completed]);
+        Assert.Equal(PortalCustomerStatuses.Delivered, byId[onDraftInvoice]);
+        Assert.Equal(PortalCustomerStatuses.Delivered, byId[onSentInvoice]); // not "Gefactureerd"
+        Assert.Equal(PortalCustomerStatuses.Cancelled, byId[cancelledAfterConfirm]);
+        Assert.Equal(PortalCustomerStatuses.Rejected, byId[rejected]);
         Assert.DoesNotContain(internalDraft, byId.Keys);
         Assert.DoesNotContain(cancelledDraft, byId.Keys);
         Assert.Equal(8, list.Count);
 
         // The detail tells the same story and hides internal drafts like foreign orders.
         var portal = h.Portal();
-        Assert.Equal(TransportOrderStatus.Completed, (await portal.GetMyOrderAsync(onDraftInvoice, CancellationToken.None)).Value!.Status);
-        Assert.Equal(TransportOrderStatus.Invoiced, (await portal.GetMyOrderAsync(onSentInvoice, CancellationToken.None)).Value!.Status);
+        Assert.Equal(PortalCustomerStatuses.Delivered, (await portal.GetMyOrderAsync(onDraftInvoice, CancellationToken.None)).Value!.Status);
+        Assert.Equal(PortalCustomerStatuses.Delivered, (await portal.GetMyOrderAsync(onSentInvoice, CancellationToken.None)).Value!.Status);
         Assert.Equal(PortalOutcomeKind.NotFound, (await portal.GetMyOrderAsync(internalDraft, CancellationToken.None)).Outcome);
         Assert.Equal(PortalOutcomeKind.NotFound, (await portal.GetMyOrderAsync(cancelledDraft, CancellationToken.None)).Outcome);
 
@@ -317,15 +318,22 @@ public class PortalIntakeAndStatusTests
         });
         await h.Db.Context.SaveChangesAsync();
 
-        var active = await h.Portal().GetMyOrderAsync(orderId, CancellationToken.None);
-        Assert.Equal(UnloadFrom, active.Value!.ExpectedDeliveryEta);
+        // An unaccepted request promises nothing yet: no ETA.
+        var requested = await h.Portal().GetMyOrderAsync(orderId, CancellationToken.None);
+        Assert.Null(requested.Value!.ExpectedDeliveryEta);
 
         var order = h.Db.Context.TransportOrders.Single(o => o.Id == orderId);
+        order.Status = TransportOrderStatus.InProgress;
+        await h.Db.Context.SaveChangesAsync();
+        var active = await h.Portal().GetMyOrderAsync(orderId, CancellationToken.None);
+        Assert.Equal(PortalCustomerStatuses.InTransit, active.Value!.Status);
+        Assert.Equal(UnloadFrom, active.Value.ExpectedDeliveryEta);
+
         order.Status = TransportOrderStatus.Completed;
         await h.Db.Context.SaveChangesAsync();
 
         var delivered = await h.Portal().GetMyOrderAsync(orderId, CancellationToken.None);
-        Assert.Equal(TransportOrderStatus.Completed, delivered.Value!.Status);
+        Assert.Equal(PortalCustomerStatuses.Delivered, delivered.Value!.Status);
         Assert.Null(delivered.Value.ExpectedDeliveryEta);
     }
 

@@ -1254,13 +1254,13 @@ public class TransportOrderService : ITransportOrderService
             await _dossierLifecycle.TryAutoConfirmForOrdersAsync([order.Id], $"order:{order.OrderNumber}", cancellationToken);
         }
 
-        // Portal review outcome: a Submitted order the planner confirms or sends back to Draft.
-        // Only these two ORIGINATE from a portal submission — Confirmed<->Draft transitions
-        // elsewhere in the workflow (e.g. un-confirming an internally created order) are not
-        // customer-facing decisions and stay silent.
-        if (wasSubmitted && target is TransportOrderStatus.Confirmed or TransportOrderStatus.Draft)
+        // Portal review outcome: a Submitted order the planner confirms. Sending it back to Draft
+        // is NOT a decision (KP-01): the planner corrects the request internally and the customer
+        // keeps seeing "Wordt beoordeeld" — it used to mail "geweigerd" while the order lived on.
+        // A real refusal goes through the review's Reject (CancelAsync below).
+        if (wasSubmitted && target == TransportOrderStatus.Confirmed)
         {
-            var eventKey = target == TransportOrderStatus.Confirmed ? MessageKinds.OrderAccepted : MessageKinds.OrderRejected;
+            var eventKey = MessageKinds.OrderAccepted;
             var customerName = await _dbContext.Customers.AsNoTracking()
                 .Where(c => c.Id == order.CustomerId && c.TenantId == _tenantContext.TenantId)
                 .Select(c => c.Name).FirstOrDefaultAsync(cancellationToken) ?? string.Empty;
@@ -1274,7 +1274,7 @@ public class TransportOrderService : ITransportOrderService
                 })
             {
                 CustomerId = order.CustomerId,
-                LinkPath = $"/portal/orders/{order.Id}",
+                LinkPath = $"/klantportaal/orders/{order.Id}",
             }, cancellationToken);
         }
 
@@ -1363,9 +1363,8 @@ public class TransportOrderService : ITransportOrderService
         await _auditService.RecordAsync(EntityType, order.Id.ToString(), "Cancelled", before,
             new { order.Status, order.CancellationReason }, cancellationToken);
 
-        // Portal review outcome: a Submitted order rejected outright (Cancelled, not sent back
-        // to Draft) still tells the customer their order was rejected, same event as the
-        // Submitted->Draft "send back for corrections" path in ChangeStatusAsync.
+        // Portal review outcome: a Submitted order rejected outright tells the customer it was
+        // rejected (sending it back to Draft for corrections stays silent, see ChangeStatusAsync).
         if (wasSubmitted)
         {
             var customerName = await _dbContext.Customers.AsNoTracking()
@@ -1381,7 +1380,7 @@ public class TransportOrderService : ITransportOrderService
                 })
             {
                 CustomerId = order.CustomerId,
-                LinkPath = $"/portal/orders/{order.Id}",
+                LinkPath = $"/klantportaal/orders/{order.Id}",
             }, cancellationToken);
         }
 
@@ -1447,10 +1446,10 @@ public class TransportOrderService : ITransportOrderService
             stop.AppointmentRequired, stop.AppointmentReference,
         };
 
-        stop.ConfirmedFrom = request.ConfirmedFrom;
-        stop.ConfirmedTo = request.ConfirmedTo;
-        stop.EarliestAllowed = request.EarliestAllowed;
-        stop.LatestAllowed = request.LatestAllowed;
+        stop.ConfirmedFrom = AsUtc(request.ConfirmedFrom);
+        stop.ConfirmedTo = AsUtc(request.ConfirmedTo);
+        stop.EarliestAllowed = AsUtc(request.EarliestAllowed);
+        stop.LatestAllowed = AsUtc(request.LatestAllowed);
         stop.AppointmentRequired = request.AppointmentRequired;
         stop.AppointmentReference = Trim(request.AppointmentReference);
         stop.AccessInstructions = Trim(request.AccessInstructions);
@@ -2333,6 +2332,11 @@ public class TransportOrderService : ITransportOrderService
     private static bool LacksTimeZone(params DateTime?[] moments) =>
         moments.Any(m => m is { Kind: DateTimeKind.Unspecified });
 
+    /// <summary>KP-12: a moment sent WITH an offset ("…T08:00:00+02:00") binds as Kind=Local; it is a
+    /// valid instant, so it is stored as its UTC equivalent instead of failing at SaveChanges.</summary>
+    private static DateTime? AsUtc(DateTime? moment) =>
+        moment is { Kind: DateTimeKind.Local } local ? local.ToUniversalTime() : moment;
+
     private static string? WindowError(DateTime? from, DateTime? to) =>
         from is { } f && to is { } t && t < f
             ? "Het einde van een tijdvenster moet na het begin liggen."
@@ -2378,16 +2382,16 @@ public class TransportOrderService : ITransportOrderService
         stop.CountryCode = Trim(input.CountryCode)?.ToUpperInvariant();
         // D3: the flag is exactly what the client states (a refresh or a missing location clears it).
         stop.AddressOverridden = IsAddressOverride(input);
-        stop.PlannedFrom = input.PlannedFrom;
-        stop.PlannedTo = input.PlannedTo;
+        stop.PlannedFrom = AsUtc(input.PlannedFrom);
+        stop.PlannedTo = AsUtc(input.PlannedTo);
         // D2: only a site stop has a derived end (SiteWorkTime); the flag is meaningless elsewhere.
         stop.PlannedToIsManual = input.StopType == StopType.Site && input.PlannedToIsManual;
-        stop.RequestedFrom = input.RequestedFrom;
-        stop.RequestedTo = input.RequestedTo;
-        stop.ConfirmedFrom = input.ConfirmedFrom;
-        stop.ConfirmedTo = input.ConfirmedTo;
-        stop.EarliestAllowed = input.EarliestAllowed;
-        stop.LatestAllowed = input.LatestAllowed;
+        stop.RequestedFrom = AsUtc(input.RequestedFrom);
+        stop.RequestedTo = AsUtc(input.RequestedTo);
+        stop.ConfirmedFrom = AsUtc(input.ConfirmedFrom);
+        stop.ConfirmedTo = AsUtc(input.ConfirmedTo);
+        stop.EarliestAllowed = AsUtc(input.EarliestAllowed);
+        stop.LatestAllowed = AsUtc(input.LatestAllowed);
         stop.AppointmentRequired = input.AppointmentRequired;
         stop.AppointmentReference = Trim(input.AppointmentReference);
         // §15: only the fields the chosen kind actually uses are stored — a leftover time

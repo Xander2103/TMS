@@ -134,8 +134,23 @@ public class PortalInvoiceService : IPortalInvoiceService
             invoice.Lines.Select(l => new PortalInvoiceLineDto(l.Description, l.Quantity, l.UnitPrice, l.VatRatePercent, l.LineTotal)).ToList(),
             invoice.Subtotal, invoice.VatAmount, invoice.Total, visibleAttachments,
             (await LatestPeppolStatusesAsync([invoice.Id], cancellationToken)).GetValueOrDefault(invoice.Id),
-            invoice.Kind.ToString()));
+            invoice.Kind.ToString())
+        {
+            CreditedInvoiceNumber = invoice.CreditedInvoiceNumber,
+            CreditedInvoiceId = invoice.CreditedInvoiceId,
+            CreditedBy = await IssuedCreditNotesAsync(invoice.Id, customerId.Value, cancellationToken),
+        });
     }
+
+    private async Task<IReadOnlyList<PortalInvoiceReferenceDto>> IssuedCreditNotesAsync(
+        Guid invoiceId, Guid customerId, CancellationToken cancellationToken) =>
+        await _dbContext.Invoices.AsNoTracking()
+            .Where(i => i.TenantId == _tenantContext.TenantId && i.CustomerId == customerId
+                        && i.CreditedInvoiceId == invoiceId && i.Kind == InvoiceKind.CreditNote
+                        && (i.Status == InvoiceStatus.Sent || i.Status == InvoiceStatus.Paid))
+            .OrderBy(i => i.InvoiceDate)
+            .Select(i => new PortalInvoiceReferenceDto(i.Id, i.InvoiceNumber ?? string.Empty))
+            .ToListAsync(cancellationToken);
 
     public async Task<PortalResult<PortalFileDto>> GetInvoicePdfAsync(Guid invoiceId, CancellationToken cancellationToken)
     {

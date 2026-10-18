@@ -57,6 +57,7 @@ public class CustomerPortalService : ICustomerPortalService
     private readonly IAuditService _auditService;
     private readonly INotificationEventService? _notificationEvents;
     private readonly ILogger<CustomerPortalService>? _logger;
+    private readonly IPermissionAuthorizationService? _authorization;
 
     public CustomerPortalService(
         TransportationDbContext dbContext,
@@ -66,8 +67,10 @@ public class CustomerPortalService : ICustomerPortalService
         ILocationService locationService,
         IAuditService auditService,
         INotificationEventService? notificationEvents = null,
-        ILogger<CustomerPortalService>? logger = null)
+        ILogger<CustomerPortalService>? logger = null,
+        IPermissionAuthorizationService? authorization = null)
     {
+        _authorization = authorization;
         _dbContext = dbContext;
         _tenantContext = tenantContext;
         _currentUserContext = currentUserContext;
@@ -148,25 +151,27 @@ public class CustomerPortalService : ICustomerPortalService
             search: null, status: null, customerId: customer.Value.CustomerId,
             fromDate: null, toDate: null, Common.Models.PageRequest.Of(1, 200), cancellationToken);
 
-        // M5: internal drafts are hidden and Invoiced reads "Afgerond" until the invoice is issued.
-        var facing = await PortalOrderStatusRules.ResolveAsync(
+        // One server-side projection: internal drafts are hidden, every order carries a
+        // customer-facing status code and invoicing is a separate flag.
+        var projection = await PortalOrderStatusRules.ProjectAsync(
             _dbContext, _tenantContext.TenantId, page.Items.Select(o => (o.Id, o.Status)).ToList(), cancellationToken);
-        // EX-08: a finished order tells what actually reached the consignee.
-        var outcomes = await DeliveryOutcomeRules.ResolveAsync(
-            _dbContext, _tenantContext.TenantId,
-            facing.Where(f => PortalOrderStatusRules.IsDelivered(f.Value) && f.Value != TransportOrderStatus.Cancelled)
-                .Select(f => f.Key).ToList(),
-            cancellationToken);
+        var mayViewInvoices = await MayViewInvoicesAsync(cancellationToken);
         return PortalResult<IReadOnlyList<PortalOrderListItemDto>>.Success(page.Items
-            .Where(o => facing.ContainsKey(o.Id))
+            .Where(o => projection.ContainsKey(o.Id))
             .Select(o => new PortalOrderListItemDto(
-                o.Id, o.OrderNumber, o.OrderDate, facing[o.Id], o.CustomerReference, o.GoodsDescription,
+                o.Id, o.OrderNumber, o.OrderDate, projection[o.Id].CustomerStatus, o.CustomerReference, o.GoodsDescription,
                 o.FirstLoadingCity, o.LastUnloadingCity)
             {
-                DeliveryOutcome = outcomes.TryGetValue(o.Id, out var outcome) ? outcome.Outcome : null,
+                DeliveryOutcome = projection[o.Id].DeliveryOutcome,
+                InvoiceAvailable = mayViewInvoices && projection[o.Id].InvoiceIssued,
             })
             .ToList());
     }
+
+    /// <summary>KP-04: invoice facts (even "an invoice exists") only reach a portal user with the invoice right.</summary>
+    private async Task<bool> MayViewInvoicesAsync(CancellationToken cancellationToken) =>
+        _authorization is not null && _currentUserContext.CurrentUserId is { } userId
+        && await _authorization.UserHasPermissionAsync(userId, Modules.Identity.PermissionCodes.CustomerPortalViewInvoices, cancellationToken);
 
     public async Task<PortalResult<PortalOrderDetailDto>> GetMyOrderAsync(Guid orderId, CancellationToken cancellationToken)
     {
@@ -411,31 +416,29 @@ public class CustomerPortalService : ICustomerPortalService
             location.City, location.CountryCode, location.IsDefaultLoadingLocation, location.IsDefaultUnloadingLocation));
     }
 
-    /// <summary>Statuses a customer may ever see on their own order's timeline; "Invoiced" and any
-    /// future internal-only step stay off it (a customer sees "Afgerond", not billing state).</summary>
-    private static readonly TransportOrderStatus[] CustomerVisibleStatuses =
-    [
-        TransportOrderStatus.Submitted, TransportOrderStatus.Confirmed, TransportOrderStatus.Planned,
-        TransportOrderStatus.InProgress, TransportOrderStatus.Completed, TransportOrderStatus.Cancelled,
-    ];
-
     /// <summary>The customer-safe projection, or null when the order is not visible to the customer (M5).</summary>
     private async Task<PortalOrderDetailDto?> TrimAsync(TransportOrderDetailDto order, CancellationToken cancellationToken)
     {
         var tenantId = _tenantContext.TenantId;
-        var facingStatuses = await PortalOrderStatusRules.ResolveAsync(
+        var projections = await PortalOrderStatusRules.ProjectAsync(
             _dbContext, tenantId, [(order.Id, order.Status)], cancellationToken);
-        if (!facingStatuses.TryGetValue(order.Id, out var customerStatus))
+        if (!projections.TryGetValue(order.Id, out var projection))
         {
             return null;
         }
 
-        var timeline = await _dbContext.TransportOrderStatusHistories.AsNoTracking()
-            .Where(h => h.TenantId == tenantId && h.TransportOrderId == order.Id && CustomerVisibleStatuses.Contains(h.ToStatus))
+        // H-14: the history's reason column is planner-typed and stays internal; each step is
+        // relabelled in customer language (Draft and Invoiced are internal steps and drop out).
+        var history = await _dbContext.TransportOrderStatusHistories.AsNoTracking()
+            .Where(h => h.TenantId == tenantId && h.TransportOrderId == order.Id)
             .OrderBy(h => h.ChangedAt)
-            // H-14: the reason column is planner-typed and stays internal.
-            .Select(h => new PortalTimelineEventDto(h.ToStatus, h.ChangedAt))
+            .Select(h => new { h.ToStatus, h.ChangedAt })
             .ToListAsync(cancellationToken);
+        var timeline = history
+            .Select(h => (Status: PortalOrderStatusRules.TimelineStatus(h.ToStatus, projection), h.ChangedAt))
+            .Where(h => h.Status is not null)
+            .Select(h => new PortalTimelineEventDto(h.Status!, h.ChangedAt))
+            .ToList();
 
         // Customer-safe text: the office's customer message, never the driver's raw description.
         var exceptions = await _dbContext.Set<Modules.Exceptions.Entities.ExecutionException>().AsNoTracking()
@@ -457,13 +460,13 @@ public class CustomerPortalService : ICustomerPortalService
             .ToList();
 
         // Wave 8: the live ETA of the LAST unloading stop, straight from the dispatcher's ETA
-        // machinery (overrides included) — the portal's tracking answer.
+        // machinery (overrides included) — the portal's tracking answer, only for planned work still to come.
         var unloadingStopIds = order.Stops
             .Where(s => s.StopType == StopType.Unloading)
             .Select(s => s.Id)
             .ToList();
-        // M5: once delivered (or cancelled) the ETA is history, not a promise — never shown.
-        var expectedDelivery = unloadingStopIds.Count == 0 || PortalOrderStatusRules.IsDelivered(customerStatus)
+        var expectedDelivery = unloadingStopIds.Count == 0
+                               || projection.CustomerStatus is not (PortalCustomerStatuses.Planned or PortalCustomerStatuses.InTransit)
             ? null
             : await _dbContext.StopEtas.AsNoTracking()
                 .Where(e => e.TenantId == tenantId && unloadingStopIds.Contains(e.TransportOrderStopId))
@@ -478,21 +481,6 @@ public class CustomerPortalService : ICustomerPortalService
             .Select(p => new PortalPodSummaryDto(p.DeliveredAt, p.RecipientName, p.Outcome.ToString()))
             .FirstOrDefaultAsync(cancellationToken);
 
-        // EX-08: what reached the consignee once the order is finished.
-        var outcome = PortalOrderStatusRules.IsDelivered(customerStatus) && customerStatus != TransportOrderStatus.Cancelled
-            ? (await DeliveryOutcomeRules.ResolveAsync(_dbContext, tenantId, [order.Id], cancellationToken)).GetValueOrDefault(order.Id)
-            : null;
-        var redeliveryVisible = false;
-        if (outcome?.RedeliveryOrderId is { } redeliveryId)
-        {
-            var redeliveryStatus = await _dbContext.TransportOrders.AsNoTracking()
-                .Where(o => o.TenantId == tenantId && o.Id == redeliveryId)
-                .Select(o => o.Status)
-                .FirstOrDefaultAsync(cancellationToken);
-            redeliveryVisible = (await PortalOrderStatusRules.ResolveAsync(_dbContext, tenantId, [(redeliveryId, redeliveryStatus)], cancellationToken))
-                .ContainsKey(redeliveryId);
-        }
-
         // H-14: order.Notes and order.CancellationReason are staff-only and deliberately dropped
         // here — the classification lives in this projection, never in the frontend.
         if (pod is not null)
@@ -501,7 +489,7 @@ public class CustomerPortalService : ICustomerPortalService
         }
 
         return new PortalOrderDetailDto(
-            order.Id, order.OrderNumber, order.OrderDate, customerStatus, order.CustomerReference,
+            order.Id, order.OrderNumber, order.OrderDate, projection.CustomerStatus, order.CustomerReference,
             order.GoodsDescription,
             order.Stops.Select(s => new PortalStopDto(
                 s.Sequence, s.StopType, s.LocationName, s.City, s.RequestedFrom, s.RequestedTo, s.Reference, s.Instructions)).ToList(),
@@ -514,11 +502,15 @@ public class CustomerPortalService : ICustomerPortalService
             timeline, exceptions,
             expectedDelivery, pod)
         {
-            DeliveryOutcome = outcome?.Outcome,
+            DeliveryOutcome = projection.DeliveryOutcome,
             // The redelivery is named only once the customer may see that order itself (M5).
-            RedeliveryOrderId = redeliveryVisible ? outcome?.RedeliveryOrderId : null,
-            RedeliveryOrderNumber = redeliveryVisible ? outcome?.RedeliveryOrderNumber : null,
+            RedeliveryOrderId = projection.RedeliveryOrderId,
+            RedeliveryOrderNumber = projection.RedeliveryOrderNumber,
             Notices = notices,
+            InvoiceAvailable = projection.InvoiceIssued && await MayViewInvoicesAsync(cancellationToken),
+            InfoRequest = projection.InfoRequest is { } question && projection.Lifecycle == TransportOrderStatus.Submitted
+                ? new PortalInfoRequestDto(question.Question, question.AskedAt, question.AnsweredAt)
+                : null,
         };
     }
 

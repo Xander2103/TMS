@@ -71,6 +71,14 @@ public class IssuedTransportDocument : AuditableTenantEntity
     /// content). From then on it is just as immutable; the flag keeps that limitation visible.
     /// </summary>
     public bool SnapshotIsBackfilled { get; set; }
+
+    /// <summary>
+    /// KP-06 (portal final remediation): published to the ordering customer's portal by an internal
+    /// user. Only the ACTIVE document is ever shown there, rendered from <see cref="SnapshotJson"/>;
+    /// a replacement inherits the publication of the document it replaces, and a customer change
+    /// withdraws it (DocumentPublicationWithdrawal) like any other published document.
+    /// </summary>
+    public bool CustomerVisible { get; set; }
 }
 
 /// <summary>

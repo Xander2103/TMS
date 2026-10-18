@@ -199,6 +199,8 @@ public class OrderCustomerChangeService : IOrderCustomerChangeService
         var withdrawn = await DocumentPublicationWithdrawal.WithdrawAsync(
             DocumentPublicationWithdrawal.PublishedForOrder(_dbContext, TenantId, order.Id),
             _auditService, previousCustomerId, request.NewCustomerId, cancellationToken);
+        withdrawn += await DocumentPublicationWithdrawal.WithdrawIssuedForOrderAsync(
+            _dbContext, TenantId, order.Id, _auditService, previousCustomerId, request.NewCustomerId, cancellationToken);
 
         order.Version = Guid.NewGuid();
         await _dbContext.SaveChangesAsync(cancellationToken);

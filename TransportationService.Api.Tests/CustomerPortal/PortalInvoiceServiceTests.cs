@@ -91,6 +91,42 @@ public class PortalInvoiceServiceTests
     }
 
     [Fact]
+    public async Task CreditNote_AndCreditedInvoice_ReferenceEachOther_DraftCreditNotesStayInternal()
+    {
+        // KP-09: the customer must not pay a credited invoice or think they were charged twice.
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var invoice = h.Db.Context.Invoices.Single(i => i.InvoiceNumber == "2026070002");
+        var issuedCredit = h.Db.Context.Invoices.Single(i => i.InvoiceNumber == "CN2026070005");
+        issuedCredit.CreditedInvoiceId = invoice.Id;
+        // A second issued invoice with only a DRAFT credit note: that one is internal bookkeeping.
+        var other = new Invoice
+        {
+            Id = Guid.NewGuid(), TenantId = h.TenantId, CustomerId = h.CustomerId, InvoiceNumber = "2026070006",
+            InvoicePeriodYear = 2026, InvoicePeriodMonth = 7, InvoiceDate = new DateOnly(2026, 7, 31), DueDate = new DateOnly(2026, 8, 30),
+            Status = InvoiceStatus.Sent, Currency = "EUR",
+        };
+        h.Db.Context.Invoices.Add(other);
+        h.Db.Context.Invoices.Add(new Invoice
+        {
+            Id = Guid.NewGuid(), TenantId = h.TenantId, CustomerId = h.CustomerId, InvoiceNumber = null,
+            InvoicePeriodYear = 2026, InvoicePeriodMonth = 7, InvoiceDate = new DateOnly(2026, 7, 31), DueDate = new DateOnly(2026, 8, 30),
+            Status = InvoiceStatus.Draft, Currency = "EUR", Kind = InvoiceKind.CreditNote, CreditedInvoiceId = other.Id,
+        });
+        await h.Db.Context.SaveChangesAsync();
+        Assert.Empty((await h.Sut.GetMyInvoiceAsync(other.Id, CancellationToken.None)).Value!.CreditedBy);
+
+        var detail = (await h.Sut.GetMyInvoiceAsync(invoice.Id, CancellationToken.None)).Value!;
+        var credit = Assert.Single(detail.CreditedBy);
+        Assert.Equal("CN2026070005", credit.InvoiceNumber);
+
+        var creditDetail = (await h.Sut.GetMyInvoiceAsync(issuedCredit.Id, CancellationToken.None)).Value!;
+        Assert.Equal("CreditNote", creditDetail.Kind);
+        Assert.Equal("2026070002", creditDetail.CreditedInvoiceNumber);
+        Assert.Equal(invoice.Id, creditDetail.CreditedInvoiceId);
+    }
+
+    [Fact]
     public async Task List_ExcludesDraft_AndOtherCustomers()
     {
         var h = await SeedAsync();

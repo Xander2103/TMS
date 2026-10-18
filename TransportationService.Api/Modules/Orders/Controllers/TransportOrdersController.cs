@@ -47,6 +47,16 @@ public class TransportOrdersController : ControllerBase
         return Handle(result, created: false);
     }
 
+    /// <summary>The open/answered "Info opvragen" question of a portal request, for the reviewer.</summary>
+    [HttpGet("{id:guid}/portal-review")]
+    [RequirePermission(PermissionCodes.OrdersView, PermissionCodes.OrdersManage)]
+    public async Task<ActionResult<TransportationService.Api.Modules.CustomerPortal.Services.PortalReviewStateDto>> PortalReviewState(
+        Guid id, CancellationToken cancellationToken)
+    {
+        var state = await _portalReviewService.GetStateAsync(id, cancellationToken);
+        return state is null ? NotFound() : Ok(state);
+    }
+
     [HttpGet]
     [RequirePermission(PermissionCodes.OrdersView, PermissionCodes.OrdersManage)]
     public async Task<ActionResult<PagedResult<TransportOrderListItemDto>>> Search(

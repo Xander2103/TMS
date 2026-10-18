@@ -59,4 +59,35 @@ public static class DocumentPublicationWithdrawal
 
         return documents.Count;
     }
+
+    /// <summary>
+    /// KP-06: issued CMR/LB/WB documents of ONE order published to the customer portal — withdrawn by
+    /// the same customer change (audited per document). Does not save.
+    /// </summary>
+    public static async Task<int> WithdrawIssuedForOrderAsync(
+        TransportationDbContext db, Guid tenantId, Guid orderId, IAuditService auditService,
+        Guid? previousCustomerId, Guid newCustomerId, CancellationToken cancellationToken)
+    {
+        var documents = await db.IssuedTransportDocuments
+            .Where(d => d.TenantId == tenantId && d.TransportOrderId == orderId && d.CustomerVisible)
+            .ToListAsync(cancellationToken);
+        foreach (var document in documents)
+        {
+            document.CustomerVisible = false;
+            await auditService.RecordAsync("IssuedTransportDocument", document.Id.ToString(), AuditAction,
+                new { CustomerVisible = true },
+                new
+                {
+                    CustomerVisible = false,
+                    Reason = "CustomerChanged",
+                    PreviousCustomerId = previousCustomerId,
+                    NewCustomerId = newCustomerId,
+                    document.TransportOrderId,
+                    document.DocumentNumber,
+                },
+                cancellationToken);
+        }
+
+        return documents.Count;
+    }
 }

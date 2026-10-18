@@ -23,7 +23,11 @@ public record IssuedTransportDocumentDto(
     DateTime? ReplacedAt = null,
     string? ReplacementReason = null,
     Guid? ReplacesDocumentId = null,
-    string? ReplacesDocumentNumber = null);
+    string? ReplacesDocumentNumber = null,
+    bool CustomerVisible = false);
+
+/// <summary>KP-06: publish (true) or withdraw (false) an issued document in the customer portal.</summary>
+public record SetIssuedDocumentCustomerVisibilityRequest(bool CustomerVisible);
 
 /// <summary>
 /// <c>RequestId</c> is the client's idempotency key: the same id (double click, retry after a
@@ -49,6 +53,9 @@ public interface IIssuedTransportDocumentService
 
     /// <summary>The issued document through the existing renderer, with its reference block. Null = unknown document.</summary>
     Task<(byte[] Content, string FileName, TransportDocumentSnapshot Snapshot)?> RenderPdfAsync(Guid id, CancellationToken cancellationToken);
+
+    /// <summary>KP-06: publish/withdraw the ACTIVE document in the customer portal (audited). Null = unknown document.</summary>
+    Task<IssuedTransportDocumentDto?> SetCustomerVisibleAsync(Guid id, bool customerVisible, CancellationToken cancellationToken);
 }
 
 /// <summary>
@@ -192,6 +199,9 @@ public class IssuedTransportDocumentService : IIssuedTransportDocumentService
             SnapshotJson = FrozenTransportDocumentJson.Serialize(owner?.DossierNumber, content),
             SnapshotVersion = FrozenTransportDocumentJson.CurrentVersion,
             SnapshotFrozenAt = now,
+            // KP-06: a corrected CMR replaces the published one for the customer too.
+            CustomerVisible = replaced is not null && await _dbContext.IssuedTransportDocuments.AsNoTracking()
+                .AnyAsync(d => d.TenantId == tenantId && d.Id == replaced.DocumentId && d.CustomerVisible, cancellationToken),
         };
 
         try
@@ -525,6 +535,39 @@ public class IssuedTransportDocumentService : IIssuedTransportDocumentService
     }
 
     /// <summary>Issuer names in ONE query for the whole list.</summary>
+    public async Task<IssuedTransportDocumentDto?> SetCustomerVisibleAsync(
+        Guid id, bool customerVisible, CancellationToken cancellationToken)
+    {
+        var tenantId = _tenantContext.TenantId;
+        var document = await _dbContext.IssuedTransportDocuments
+            .FirstOrDefaultAsync(d => d.TenantId == tenantId && d.Id == id, cancellationToken);
+        if (document is null)
+        {
+            return null;
+        }
+
+        // The replacement claim is an ExecuteUpdate: read the persisted state, never a tracked copy.
+        if (customerVisible && await _dbContext.IssuedTransportDocuments.AsNoTracking()
+                .AnyAsync(d => d.TenantId == tenantId && d.Id == id && d.ReplacedByDocumentId != null, cancellationToken))
+        {
+            throw new DomainValidationException("customerVisible",
+                "Een vervangen document kan niet gepubliceerd worden; publiceer het actieve document.");
+        }
+
+        if (document.CustomerVisible != customerVisible)
+        {
+            document.CustomerVisible = customerVisible;
+            await _dbContext.SaveChangesAsync(cancellationToken);
+            await _auditService.RecordAsync(EntityType, document.Id.ToString(),
+                customerVisible ? "PublishedToCustomer" : "WithdrawnFromCustomer",
+                new { CustomerVisible = !customerVisible },
+                new { CustomerVisible = customerVisible, document.DocumentNumber, document.TransportOrderId },
+                cancellationToken);
+        }
+
+        return (await MapAsync([document], cancellationToken)).Single();
+    }
+
     private async Task<List<IssuedTransportDocumentDto>> MapAsync(
         IReadOnlyList<IssuedTransportDocument> documents, CancellationToken cancellationToken)
     {
@@ -562,7 +605,8 @@ public class IssuedTransportDocumentService : IIssuedTransportDocumentService
                     ReplacedAt: d.ReplacedAt,
                     ReplacementReason: d.ReplacementReason,
                     ReplacesDocumentId: predecessor?.Id,
-                    ReplacesDocumentNumber: predecessor?.DocumentNumber);
+                    ReplacesDocumentNumber: predecessor?.DocumentNumber,
+                    CustomerVisible: d.CustomerVisible);
             })
             .ToList();
     }

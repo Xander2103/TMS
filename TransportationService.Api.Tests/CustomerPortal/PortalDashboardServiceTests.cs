@@ -127,7 +127,8 @@ public class PortalDashboardServiceTests
 
         var dashboardMessageService = new CustomerMessageService(db.Context, tenant, new DevCurrentUserContext(portalUserId), audit, clock);
         var sut = new PortalDashboardService(
-            db.Context, tenant, new DevCurrentUserContext(portalUserId), dashboardMessageService, invoiceService, announcementService, clock);
+            db.Context, tenant, new DevCurrentUserContext(portalUserId), dashboardMessageService, invoiceService, announcementService, clock,
+            new InventoryTestFactory.AllowAllPermissionService());
 
         var result = await sut.GetDashboardAsync(CancellationToken.None);
         Assert.Equal(PortalOutcomeKind.Success, result.Outcome);
@@ -140,6 +141,16 @@ public class PortalDashboardServiceTests
         Assert.Equal(2, dto.UnreadMessages); // 2 staff messages, none marked read yet
         Assert.Equal(2, dto.RecentInvoices.Count); // Draft excluded
         Assert.Single(dto.Announcements);
+
+        // KP-04: a portal user WITHOUT the invoice/message rights gets no invoice numbers or totals
+        // (and no unread count) in the payload — hiding them in the browser is not enough.
+        var restricted = await new PortalDashboardService(
+                db.Context, tenant, new DevCurrentUserContext(portalUserId), dashboardMessageService, invoiceService, announcementService, clock,
+                new InventoryTestFactory.DenyAllPermissionService())
+            .GetDashboardAsync(CancellationToken.None);
+        Assert.Empty(restricted.Value!.RecentInvoices);
+        Assert.Equal(0, restricted.Value.UnreadMessages);
+        Assert.Equal(2, restricted.Value.ActiveOrders);
     }
 
     [Fact]

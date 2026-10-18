@@ -7,7 +7,11 @@ public record CustomerMessageDto(
     bool AuthorIsStaff,
     string AuthorName,
     string Body,
-    DateTime CreatedAt);
+    DateTime CreatedAt)
+{
+    /// <summary>True for a planner's "Info opvragen" question (see CustomerMessage.IsInfoRequest).</summary>
+    public bool IsInfoRequest { get; init; }
+}
 
 public record SendCustomerMessageRequest(Guid? OrderId, string Body);
 

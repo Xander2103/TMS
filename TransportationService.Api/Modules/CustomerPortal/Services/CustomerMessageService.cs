@@ -28,7 +28,8 @@ public interface ICustomerMessageService
     /// customer_message_reply — avoids sending the customer two separate e-mails for one action.
     /// </summary>
     Task<CustomerMessageDto?> SendToCustomerAsync(
-        Guid customerId, SendCustomerMessageRequest request, CancellationToken cancellationToken, bool publishNotification = true);
+        Guid customerId, SendCustomerMessageRequest request, CancellationToken cancellationToken, bool publishNotification = true,
+        bool isInfoRequest = false);
     Task<int?> GetCustomerUnreadCountAsync(Guid customerId, CancellationToken cancellationToken);
     Task<bool> MarkCustomerReadAsync(Guid customerId, Guid? orderId, CancellationToken cancellationToken);
 }
@@ -96,7 +97,7 @@ public class CustomerMessageService : ICustomerMessageService
             return PortalResult<IReadOnlyList<CustomerMessageDto>>.NoCustomerLink();
         }
 
-        if (orderId is { } id && !await OrderBelongsToCustomerAsync(id, customer.Value.CustomerId, cancellationToken))
+        if (orderId is { } id && !await PortalOrderStatusRules.IsVisibleToCustomerAsync(_dbContext, _tenantContext.TenantId, customer.Value.CustomerId, id, cancellationToken))
         {
             return PortalResult<IReadOnlyList<CustomerMessageDto>>.NotFound();
         }
@@ -124,7 +125,7 @@ public class CustomerMessageService : ICustomerMessageService
             return PortalResult<CustomerMessageDto>.Invalid($"Een bericht mag maximaal {MaxBodyLength} tekens bevatten.");
         }
 
-        if (request.OrderId is { } id && !await OrderBelongsToCustomerAsync(id, customer.Value.CustomerId, cancellationToken))
+        if (request.OrderId is { } id && !await PortalOrderStatusRules.IsVisibleToCustomerAsync(_dbContext, _tenantContext.TenantId, customer.Value.CustomerId, id, cancellationToken))
         {
             return PortalResult<CustomerMessageDto>.NotFound();
         }
@@ -145,9 +146,15 @@ public class CustomerMessageService : ICustomerMessageService
         await _auditService.RecordAsync(EntityType, message.Id.ToString(), "SentFromPortal", null,
             new { message.CustomerId, message.TransportOrderId }, cancellationToken);
 
+        // An answer to an open "Info opvragen" question tells the planner so explicitly: the request
+        // is back on their desk (the customer-facing status turns "Wordt beoordeeld").
+        var answeredOrderNumber = request.OrderId is { } answeredId
+            ? await OpenInfoRequestOrderNumberAsync(customer.Value.CustomerId, answeredId, message.CreatedAt, cancellationToken)
+            : null;
         await PublishEventAsync(MessageKinds.CustomerMessageReceived, customer.Value.CustomerId, customer.Value.CustomerName,
             message, linkPath: request.OrderId is { } orderId ? $"/orders/{orderId}" : $"/customers/{customer.Value.CustomerId}",
-            cancellationToken);
+            cancellationToken,
+            inAppPrefix: answeredOrderNumber is null ? null : $"antwoordde op de informatievraag voor {answeredOrderNumber}");
 
         return PortalResult<CustomerMessageDto>.Success(await MapAsync(message, cancellationToken));
     }
@@ -161,7 +168,8 @@ public class CustomerMessageService : ICustomerMessageService
         }
 
         var userId = _currentUserContext.CurrentUserId!.Value;
-        var count = await CountUnreadAsync(customer.Value.CustomerId, userId, unreadFromStaff: true, cancellationToken);
+        var count = await CountUnreadAsync(customer.Value.CustomerId, userId, unreadFromStaff: true, cancellationToken,
+            portalVisibleOnly: true);
         return PortalResult<PortalUnreadCountDto>.Success(new PortalUnreadCountDto(count));
     }
 
@@ -174,7 +182,7 @@ public class CustomerMessageService : ICustomerMessageService
             return PortalResult<PortalMessageAckDto>.NoCustomerLink();
         }
 
-        if (orderId is { } id && !await OrderBelongsToCustomerAsync(id, customer.Value.CustomerId, cancellationToken))
+        if (orderId is { } id && !await PortalOrderStatusRules.IsVisibleToCustomerAsync(_dbContext, _tenantContext.TenantId, customer.Value.CustomerId, id, cancellationToken))
         {
             return PortalResult<PortalMessageAckDto>.NotFound();
         }
@@ -202,7 +210,8 @@ public class CustomerMessageService : ICustomerMessageService
     }
 
     public async Task<CustomerMessageDto?> SendToCustomerAsync(
-        Guid customerId, SendCustomerMessageRequest request, CancellationToken cancellationToken, bool publishNotification = true)
+        Guid customerId, SendCustomerMessageRequest request, CancellationToken cancellationToken, bool publishNotification = true,
+        bool isInfoRequest = false)
     {
         if (!await CustomerExistsAsync(customerId, cancellationToken))
         {
@@ -237,6 +246,7 @@ public class CustomerMessageService : ICustomerMessageService
             AuthorUserId = _currentUserContext.CurrentUserId!.Value,
             AuthorIsStaff = true,
             Body = request.Body.Trim(),
+            IsInfoRequest = isInfoRequest && request.OrderId is not null,
         };
         _dbContext.Add(message);
         await _dbContext.SaveChangesAsync(cancellationToken);
@@ -315,7 +325,7 @@ public class CustomerMessageService : ICustomerMessageService
         return rows.Select(m => new CustomerMessageDto(
                 m.Id, m.TransportOrderId, orderNumber, m.AuthorIsStaff,
                 authorNames.TryGetValue(m.AuthorUserId, out var name) && name.Length > 0 ? name : "Onbekend",
-                m.Body, m.CreatedAt))
+                m.Body, m.CreatedAt) { IsInfoRequest = m.IsInfoRequest })
             .ToList();
     }
 
@@ -333,7 +343,10 @@ public class CustomerMessageService : ICustomerMessageService
             : null;
         return new CustomerMessageDto(
             message.Id, message.TransportOrderId, orderNumber, message.AuthorIsStaff,
-            string.IsNullOrWhiteSpace(authorName) ? "Onbekend" : authorName, message.Body, message.CreatedAt);
+            string.IsNullOrWhiteSpace(authorName) ? "Onbekend" : authorName, message.Body, message.CreatedAt)
+        {
+            IsInfoRequest = message.IsInfoRequest,
+        };
     }
 
     /// <summary>
@@ -341,13 +354,24 @@ public class CustomerMessageService : ICustomerMessageService
     /// exact thread (no marker yet = every such message counts). Aggregated across every thread
     /// (general + every order) of the customer, matching the nav badge's "anything new" intent.
     /// </summary>
-    private async Task<int> CountUnreadAsync(Guid customerId, Guid userId, bool unreadFromStaff, CancellationToken cancellationToken)
+    private async Task<int> CountUnreadAsync(
+        Guid customerId, Guid userId, bool unreadFromStaff, CancellationToken cancellationToken, bool portalVisibleOnly = false)
     {
         var tenantId = _tenantContext.TenantId;
         var messages = await _dbContext.CustomerMessages.AsNoTracking()
             .Where(m => m.TenantId == tenantId && m.CustomerId == customerId && m.AuthorIsStaff == unreadFromStaff)
             .Select(m => new { m.TransportOrderId, m.CreatedAt })
             .ToListAsync(cancellationToken);
+        if (portalVisibleOnly && messages.Any(m => m.TransportOrderId is not null))
+        {
+            // The customer cannot open the thread of an order they may not see (an internal draft),
+            // so it must not count towards their badge either.
+            var visible = await PortalOrderStatusRules.VisibleOrderIdsAsync(_dbContext, tenantId, customerId,
+                messages.Where(m => m.TransportOrderId is not null).Select(m => m.TransportOrderId!.Value).Distinct().ToList(),
+                cancellationToken);
+            messages = messages.Where(m => m.TransportOrderId is null || visible.Contains(m.TransportOrderId.Value)).ToList();
+        }
+
         if (messages.Count == 0)
         {
             return 0;
@@ -371,25 +395,61 @@ public class CustomerMessageService : ICustomerMessageService
             .FirstOrDefaultAsync(r => r.TenantId == tenantId && r.UserId == userId && r.CustomerId == customerId
                 && r.TransportOrderId == orderId, cancellationToken);
         var now = _timeProvider.GetUtcNow().UtcDateTime;
-        if (marker is null)
-        {
-            _dbContext.Add(new CustomerMessageRead
-            {
-                Id = Guid.NewGuid(), TenantId = tenantId, UserId = userId, CustomerId = customerId,
-                TransportOrderId = orderId, LastReadAt = now,
-            });
-        }
-        else
+        if (marker is not null)
         {
             marker.LastReadAt = now;
+            await _dbContext.SaveChangesAsync(cancellationToken);
+            return;
         }
 
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        var created = new CustomerMessageRead
+        {
+            Id = Guid.NewGuid(), TenantId = tenantId, UserId = userId, CustomerId = customerId,
+            TransportOrderId = orderId, LastReadAt = now,
+        };
+        _dbContext.Add(created);
+        try
+        {
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException exception) when (Common.Persistence.TenantNumbering.IsUniqueViolation(exception))
+        {
+            // KP-10: two first-time "mark read" calls for the same thread raced (the page fires one
+            // per mount); the other one created the marker. Reading is idempotent: move that marker.
+            _dbContext.Entry(created).State = EntityState.Detached;
+            var existing = await _dbContext.CustomerMessageReads
+                .FirstAsync(r => r.TenantId == tenantId && r.UserId == userId && r.CustomerId == customerId
+                    && r.TransportOrderId == orderId, cancellationToken);
+            existing.LastReadAt = now;
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
+    }
+
+    /// <summary>The order number when this order thread has an info request newer than every
+    /// customer message before <paramref name="before"/> (i.e. the message being sent answers it).</summary>
+    private async Task<string?> OpenInfoRequestOrderNumberAsync(
+        Guid customerId, Guid orderId, DateTime before, CancellationToken cancellationToken)
+    {
+        var tenantId = _tenantContext.TenantId;
+        var thread = await _dbContext.CustomerMessages.AsNoTracking()
+            .Where(m => m.TenantId == tenantId && m.CustomerId == customerId && m.TransportOrderId == orderId && m.CreatedAt < before)
+            .Select(m => new { m.AuthorIsStaff, m.IsInfoRequest, m.CreatedAt })
+            .ToListAsync(cancellationToken);
+        var lastQuestion = thread.Where(m => m.IsInfoRequest).Select(m => (DateTime?)m.CreatedAt).Max();
+        if (lastQuestion is null || thread.Any(m => !m.AuthorIsStaff && m.CreatedAt > lastQuestion))
+        {
+            return null;
+        }
+
+        return await _dbContext.TransportOrders.AsNoTracking()
+            .Where(o => o.TenantId == tenantId && o.Id == orderId)
+            .Select(o => o.OrderNumber)
+            .FirstOrDefaultAsync(cancellationToken);
     }
 
     private async Task PublishEventAsync(
         string eventKey, Guid customerId, string customerName, CustomerMessage message, string? linkPath,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, string? inAppPrefix = null)
     {
         if (_notificationEvents is null)
         {
@@ -405,7 +465,7 @@ public class CustomerMessageService : ICustomerMessageService
             {
                 CustomerId = customerId,
                 LinkPath = linkPath,
-                InAppMessage = $"{customerName}: {preview}",
+                InAppMessage = inAppPrefix is null ? $"{customerName}: {preview}" : $"{customerName} {inAppPrefix}: {preview}",
             }, cancellationToken);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)

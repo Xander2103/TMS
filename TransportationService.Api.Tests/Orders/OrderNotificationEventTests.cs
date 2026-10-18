@@ -168,8 +168,10 @@ public class OrderNotificationEventTests
     }
 
     [Fact]
-    public async Task PlannerSendsSubmittedOrderBackToDraft_Publishes_OrderRejected_NotOrderCreated()
+    public async Task PlannerSendsSubmittedOrderBackToDraft_SendsNoCustomerMail()
     {
+        // KP-01: "Terug naar concept" is an internal correction, not a decision — it used to mail
+        // "Uw opdracht is geweigerd" while the order lived on (risk of a double booking elsewhere).
         var h = await SeedAsync();
         using var _ = h.Db;
         var submitted = await h.Portal.SubmitOrderAsync(PortalRequest(h), CancellationToken.None);
@@ -177,7 +179,10 @@ public class OrderNotificationEventTests
 
         await h.Orders.ChangeStatusAsync(orderId, TransportOrderStatus.Draft, CancellationToken.None);
 
-        Assert.Contains(h.Db.Context.OutboxMessages, m => m.Kind == MessageKinds.OrderRejected);
+        Assert.DoesNotContain(h.Db.Context.OutboxMessages, m => m.Kind == MessageKinds.OrderRejected);
         Assert.DoesNotContain(h.Db.Context.OutboxMessages, m => m.Kind == MessageKinds.OrderAccepted);
+        // The customer still sees their request as being reviewed.
+        var portalView = await h.Portal.GetMyOrderAsync(orderId, CancellationToken.None);
+        Assert.Equal(PortalCustomerStatuses.InReview, portalView.Value!.Status);
     }
 }
