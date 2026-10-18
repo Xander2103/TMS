@@ -4,7 +4,8 @@
     "Issued": "Issued",
     "Returned": "Returned",
     "Missing": "Missing",
-    "Damaged": "Damaged"
+    "Damaged": "Damaged",
+    "Consumed": "Consumed"
   },
   "disposition": {
     "good": "Good condition",
@@ -70,7 +71,8 @@
     "Damaged": "Damaged",
     "Lost": "Lost",
     "Disposed": "Disposed",
-    "Transfer": "Transfer"
+    "Transfer": "Transfer",
+    "Consumption": "Consumption"
   },
   "inventoryStatus": {
     "Normal": "Normal",
@@ -246,7 +248,13 @@
     "deleteRefusedTitle": "Company asset cannot be deleted",
     "editToDeactivate": "Edit item",
     "variantsPartiallyFailed": "The asset was created, but these variants could not be added: {labels}. Add them on the Variants tab.",
-    "rowActions": "Actions {name}"
+    "rowActions": "Actions {name}",
+    "colCode": "Code",
+    "searchPlaceholder": "Search by code or name…",
+    "badgeConsumable": "Consumable",
+    "deactivate": "Deactivate",
+    "deactivated": "{name} is deactivated: its history is kept.",
+    "deactivateFailed": "The item could not be deactivated."
   },
   "form": {
     "editTitle": "Edit company asset",
@@ -339,7 +347,12 @@
     "sortOrderHint": "Alphabetical by default; a lower number comes first.",
     "notes": "Internal notes",
     "active": "Active (can be issued)",
-    "inactiveNotice": "This asset is deactivated and can no longer be issued."
+    "inactiveNotice": "This asset is deactivated and can no longer be issued.",
+    "code": "Item code",
+    "codeHint": "Unique and shown in every picker. Empty = automatic (BM-0001, …).",
+    "codePlaceholder": "Automatic",
+    "consumable": "Consumable",
+    "consumableHint": "Handed out for good (e.g. gloves, batteries): stock drops and the issue is recorded, but there is no holder and nothing to return."
   },
   "mode": {
     "individual": "Individual item",
@@ -485,6 +498,30 @@
     "generateNoValues": "First add values to the attribute.",
     "generated": "Variants generated.",
     "variantDeleteTitle": "Delete variant",
-    "variantDeleteMessage": "Are you sure you want to delete variant \"{label}\"? Only possible at stock 0; issued items keep their label."
+    "variantDeleteMessage": "Delete variant \"{label}\"? A variant with history (stock movements, issues or reorder proposals) is never deleted — deactivate it instead.",
+    "forbidden": "No access: you are not allowed to view this company item.",
+    "notFound": "Company item not found.",
+    "back": "Back to company items",
+    "variantDeactivated": "Variant deactivated: its history is kept.",
+    "deactivateVariant": "Deactivate",
+    "colFromTo": "To / from",
+    "colBy": "By",
+    "toEmployee": "to {name}",
+    "fromEmployee": "from {name}",
+    "holdersSearch": "Search by employee, number or serial…",
+    "holdersNoMatch": "No holders match this search.",
+    "colExpectedReturn": "Return due",
+    "inactiveEmployee": "Inactive"
+  },
+  "outcome": {
+    "returnedDamaged": "Returned — damaged",
+    "lost": "Lost",
+    "disposed": "Disposed"
+  },
+  "quantity": {
+    "required": "Enter a quantity.",
+    "whole": "Enter a whole number (no decimals).",
+    "min": "The quantity must be at least {min}.",
+    "max": "The quantity is too large: at most {max}."
   }
 }

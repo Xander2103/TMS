@@ -77,6 +77,7 @@ function makeTemplate(overrides: Partial<IssuedItemTemplate>): IssuedItemTemplat
 
 const templates = vi.hoisted(() => ({ value: [] as IssuedItemTemplate[] }))
 const deleteTemplate = vi.hoisted(() => vi.fn())
+const updateTemplate = vi.hoisted(() => vi.fn())
 
 vi.mock('../issuedItemsApi', async () => {
   const actual = await vi.importActual<typeof import('../issuedItemsApi')>('../issuedItemsApi')
@@ -84,6 +85,7 @@ vi.mock('../issuedItemsApi', async () => {
     ...actual,
     listIssuedItemTemplates: () => Promise.resolve(templates.value),
     deleteIssuedItemTemplate: (...args: unknown[]) => deleteTemplate(...args),
+    updateIssuedItemTemplate: (...args: unknown[]) => updateTemplate(...args),
   }
 })
 
@@ -257,8 +259,10 @@ describe('IssuedItemTemplatesPanel — the Bedrijfsmiddelen overview', () => {
     expect(within(dialog).getByRole('listitem')).toHaveTextContent('4 uitgiftes')
     expect(toast.showError).not.toHaveBeenCalled()
 
-    // The way out: open the item's edit form (where "Actief" lives).
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Artikel bewerken' }))
-    expect(screen.getByTestId('form-stub')).toHaveAttribute('data-editing', 't-4')
+    // WH-B1: the way out is one click — deactivate, history stays readable; the stock is not touched.
+    updateTemplate.mockResolvedValue(makeTemplate({ id: 't-4', name: 'Fluohesje', isActive: false }))
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Deactiveren' }))
+    expect(updateTemplate).toHaveBeenCalledWith('t-4', expect.objectContaining({ isActive: false, stock: null, name: 'Fluohesje' }))
+    expect(toast.showSuccess).toHaveBeenCalledWith('Fluohesje is gedeactiveerd: de historiek blijft bewaard.')
   })
 })

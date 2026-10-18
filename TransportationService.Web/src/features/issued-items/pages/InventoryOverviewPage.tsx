@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { CircleMinus, OctagonAlert, PackageX, TriangleAlert, type LucideIcon } from 'lucide-react'
 import { PageHeader } from '../../../components/layout/PageHeader'
 import { Badge } from '../../../components/ui/Badge'
@@ -15,6 +15,7 @@ import {
 } from '../inventoryStatus'
 import { formatQuantityWithUnit } from '../issuedItemUnits'
 import { formatDate } from '../../../utils/dates'
+import { useUrlListState } from '../../../hooks/useUrlListState'
 import './InventoryOverviewPage.css'
 
 /** Statussen waarvoor bovenaan een teltegel staat (klik = filter). */
@@ -29,19 +30,22 @@ function formatLevel(value: number | null): string {
   return value != null ? String(value) : '—'
 }
 
+const OVERVIEW_DEFAULTS: Record<'status' | 'q', string> = { status: '', q: '' }
+const OVERVIEW_ALLOWED = { status: ['', ...INVENTORY_STATUSES] }
+
 /** Voorraadoverzicht over alle sjablonen/varianten met statusfilters en drempelkolommen.
- * `?status=` (bijv. vanaf de dashboardtegels) activeert het statusfilter vooraf. */
+ * `?status=` (bijv. vanaf de dashboardtegels) activeert het statusfilter vooraf; zoekterm en filter
+ * staan in de URL (WH-M9), zodat herladen en Terug het overzicht bewaren. */
 export function InventoryOverviewPage() {
   const { t } = useLocale()
-  const [searchParams] = useSearchParams()
+  const { state, apply } = useUrlListState({ defaults: OVERVIEW_DEFAULTS, allowed: OVERVIEW_ALLOWED })
   const [rows, setRows] = useState<InventoryOverviewRow[] | null>(null)
   // Vertaalsleutel in state; vertaling gebeurt pas bij render.
   const [loadErrorKey, setLoadErrorKey] = useState<string | null>(null)
-  const [statusFilter, setStatusFilter] = useState<InventoryStatus | ''>(() => {
-    const requested = searchParams.get('status')
-    return INVENTORY_STATUSES.includes(requested as InventoryStatus) ? (requested as InventoryStatus) : ''
-  })
-  const [search, setSearch] = useState('')
+  const statusFilter = state.status as InventoryStatus | ''
+  const search = state.q
+  const setStatusFilter = (status: InventoryStatus | '') => apply({ status })
+  const setSearch = (q: string) => apply({ q }, { replace: true })
 
   useEffect(() => {
     let mounted = true
@@ -72,7 +76,7 @@ export function InventoryOverviewPage() {
     return (rows ?? []).filter((row) => {
       if (statusFilter && row.status !== statusFilter) return false
       if (query) {
-        const haystack = `${row.name} ${row.variantLabel ?? ''}`.toLowerCase()
+        const haystack = `${row.code ?? ''} ${row.name} ${row.variantLabel ?? ''}`.toLowerCase()
         if (!haystack.includes(query)) return false
       }
       return true
@@ -85,7 +89,7 @@ export function InventoryOverviewPage() {
       header: t('issuedItems.overview.colItem'),
       render: (row) => (
         <span>
-          {row.name}
+          {row.code && <code className="inventory-overview-code">{row.code}</code>} {row.name}
           {row.variantLabel && <span className="inventory-overview-variant"> — {row.variantLabel}</span>}
         </span>
       ),

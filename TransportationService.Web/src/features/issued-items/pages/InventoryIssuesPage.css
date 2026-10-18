@@ -1,0 +1,55 @@
+/* Warehouse desk (Uitgiftes): compact two-line cells so the table fits a 1152px viewport. */
+.inventory-desk-employee,
+.inventory-desk-item,
+.inventory-desk-serial,
+.inventory-desk-due,
+.inventory-desk-by {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
+}
+
+.inventory-desk-muted {
+  color: var(--color-text-muted);
+}
+
+.inventory-desk-code {
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+}
+
+.inventory-desk-serial code {
+  /* Long legacy serials wrap instead of pushing the action column out of view (1152px too). */
+  display: inline-block;
+  max-width: 14rem;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.inventory-desk-employee,
+.inventory-desk-item {
+  max-width: 14rem;
+  white-space: normal;
+}
+
+.inventory-desk-filter {
+  white-space: nowrap;
+}
+
+.inventory-desk-due-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.inventory-desk-table {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.inventory-desk-by .ui-badge,
+.inventory-desk-by small {
+  white-space: normal;
+}

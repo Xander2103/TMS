@@ -139,6 +139,7 @@ const LegalEntitiesPage = lazyPage(() => import('../features/legal-entities/page
 const IssuedItemsAdminPage = lazyPage(() => import('../features/issued-items/pages/IssuedItemsAdminPage'), 'IssuedItemsAdminPage')
 const IssuedItemTemplateDetailPage = lazyPage(() => import('../features/issued-items/pages/IssuedItemTemplateDetailPage'), 'IssuedItemTemplateDetailPage')
 const InventoryOverviewPage = lazyPage(() => import('../features/issued-items/pages/InventoryOverviewPage'), 'InventoryOverviewPage')
+const InventoryIssuesPage = lazyPage(() => import('../features/issued-items/pages/InventoryIssuesPage'), 'InventoryIssuesPage')
 const LeaveSettingsPage = lazyPage(() => import('../features/leave-balance/pages/LeaveSettingsPage'), 'LeaveSettingsPage')
 const AccountingSettingsPage = lazyPage(() => import('../features/accounting/pages/AccountingSettingsPage'), 'AccountingSettingsPage')
 const NotificationAdminPage = lazyPage(() => import('../features/notification-admin/pages/NotificationAdminPage'), 'NotificationAdminPage')
@@ -374,6 +375,7 @@ const router = createBrowserRouter(
           <Route path="/settings/issued-item-templates" element={<Navigate to="/issued-items/templates" replace />} />
           <Route path="/settings/issued-item-templates/:id" element={<LegacyIssuedItemTemplateRedirect />} />
           <Route path="/inventory" element={<RequirePermission permissions={navPermissions('/inventory')}><InventoryOverviewPage /></RequirePermission>} />
+          <Route path="/inventory/issues" element={<RequirePermission permissions={navPermissions('/inventory/issues')}><InventoryIssuesPage /></RequirePermission>} />
           <Route path="/settings/leave" element={<LeaveSettingsPage />} />
           <Route path="/settings/attendance" element={<AttendanceSettingsPage />} />
           <Route path="/settings/activity-types" element={<ActivityTypesPage />} />

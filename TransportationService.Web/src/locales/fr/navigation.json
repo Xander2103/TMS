@@ -65,6 +65,7 @@
     "absences": "Absences",
     "qualifications": "Qualifications",
     "inventory": "Stock",
+    "inventoryIssues": "Remises & retours",
     "issuedItemsAdmin": "Matériel d'entreprise (gestion)",
     "fleetOverview": "Aperçu de la flotte",
     "vehicles": "Véhicules",

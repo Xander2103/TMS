@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
+import { FilterBar } from '../../../components/ui/FilterBar'
+import { useUrlListState } from '../../../hooks/useUrlListState'
 import { Link, useNavigate } from 'react-router-dom'
 import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
@@ -14,6 +16,8 @@ import { ReferenceConflictDialog } from '../../../components/ui/ReferenceConflic
 import {
   deleteIssuedItemTemplate,
   listIssuedItemTemplates,
+  templateToInput,
+  updateIssuedItemTemplate,
   type IssuedItemTemplate,
 } from '../issuedItemsApi'
 import { formatQuantityWithUnit } from '../issuedItemUnits'
@@ -28,6 +32,9 @@ type ModeFilter = 'all' | ManagementMode | 'low'
  * Beheerwijze (how it is tracked) instead of technical yes/no columns. Embedded without its
  * own page header so the surrounding page owns title, breadcrumbs and tabs.
  */
+const PANEL_DEFAULTS: Record<'q' | 'category' | 'active' | 'mode', string> = { q: '', category: '', active: 'active', mode: 'all' }
+const PANEL_ALLOWED = { active: ['active', 'inactive', 'all'], mode: ['all', 'individual', 'stock', 'variants', 'low'] }
+
 export function IssuedItemTemplatesPanel() {
   const { t } = useLocale()
   const { showSuccess, showError } = useToast()
@@ -37,9 +44,13 @@ export function IssuedItemTemplatesPanel() {
   const [loadErrorKey, setLoadErrorKey] = useState<string | null>(null)
   const [reloadToken, setReloadToken] = useState(0)
 
-  const [categoryFilter, setCategoryFilter] = useState('')
-  const [activeFilter, setActiveFilter] = useState<'all' | 'active' | 'inactive'>('active')
-  const [modeFilter, setModeFilter] = useState<ModeFilter>('all')
+  // WH-M9: search and filters live in the URL — reload and Back keep the view.
+  const { state: listState, apply } = useUrlListState({ defaults: PANEL_DEFAULTS, allowed: PANEL_ALLOWED })
+  const categoryFilter = listState.category
+  const activeFilter = listState.active as 'all' | 'active' | 'inactive'
+  const modeFilter = listState.mode as ModeFilter
+  const search = listState.q
+  const [deactivating, setDeactivating] = useState(false)
 
   const [editorOpen, setEditorOpen] = useState(false)
   const [editing, setEditing] = useState<IssuedItemTemplate | null>(null)
@@ -70,6 +81,8 @@ export function IssuedItemTemplatesPanel() {
   const visible = useMemo(
     () =>
       (templates ?? []).filter((tpl) => {
+        const query = search.trim().toLowerCase()
+        if (query && !`${tpl.code ?? ''} ${tpl.name} ${tpl.description ?? ''}`.toLowerCase().includes(query)) return false
         if (categoryFilter && tpl.category !== categoryFilter) return false
         if (activeFilter === 'active' && !tpl.isActive) return false
         if (activeFilter === 'inactive' && tpl.isActive) return false
@@ -77,8 +90,23 @@ export function IssuedItemTemplatesPanel() {
         if (modeFilter !== 'all' && modeFromFlags(tpl) !== modeFilter) return false
         return true
       }),
-    [templates, categoryFilter, activeFilter, modeFilter],
+    [templates, categoryFilter, activeFilter, modeFilter, search],
   )
+
+  /** WH-B1: the way out of a refused delete — deactivate in one click, history stays readable. */
+  async function deactivate(template: IssuedItemTemplate) {
+    setDeactivating(true)
+    try {
+      await updateIssuedItemTemplate(template.id, { ...templateToInput(template), isActive: false, stock: null })
+      showSuccess(t('issuedItems.templates.deactivated', { name: template.name }))
+      setDeleteConflict(null)
+      setReloadToken((token) => token + 1)
+    } catch (err) {
+      showError(describeApiError(err, t('issuedItems.templates.deactivateFailed')).message)
+    } finally {
+      setDeactivating(false)
+    }
+  }
 
   async function handleDelete() {
     if (!deleteTarget) return
@@ -111,9 +139,15 @@ export function IssuedItemTemplatesPanel() {
         </Button>
       </div>
 
+      <FilterBar
+        search={search}
+        onSearchChange={(value) => apply({ q: value }, { replace: true })}
+        searchPlaceholder={t('issuedItems.templates.searchPlaceholder')}
+      />
+
       <div className="issued-items-filters">
         <FormField label={t('issuedItems.templates.filterCategory')} htmlFor="tpl-filter-cat">
-          <select id="tpl-filter-cat" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
+          <select id="tpl-filter-cat" value={categoryFilter} onChange={(e) => apply({ category: e.target.value })}>
             <option value="">{t('issuedItems.templates.allCategories')}</option>
             {categories.map((category) => (
               <option key={category} value={category}>
@@ -123,7 +157,7 @@ export function IssuedItemTemplatesPanel() {
           </select>
         </FormField>
         <FormField label={t('issuedItems.templates.filterMode')} htmlFor="tpl-filter-mode">
-          <select id="tpl-filter-mode" value={modeFilter} onChange={(e) => setModeFilter(e.target.value as ModeFilter)}>
+          <select id="tpl-filter-mode" value={modeFilter} onChange={(e) => apply({ mode: e.target.value })}>
             <option value="all">{t('issuedItems.templates.optModeAll')}</option>
             {MANAGEMENT_MODES.map((mode) => (
               <option key={mode} value={mode}>
@@ -134,7 +168,7 @@ export function IssuedItemTemplatesPanel() {
           </select>
         </FormField>
         <FormField label={t('issuedItems.templates.filterStatus')} htmlFor="tpl-filter-active">
-          <select id="tpl-filter-active" value={activeFilter} onChange={(e) => setActiveFilter(e.target.value as typeof activeFilter)}>
+          <select id="tpl-filter-active" value={activeFilter} onChange={(e) => apply({ active: e.target.value })}>
             <option value="active">{t('issuedItems.templates.optActive')}</option>
             <option value="inactive">{t('issuedItems.templates.optInactive')}</option>
             <option value="all">{t('issuedItems.templates.optAll')}</option>
@@ -154,6 +188,7 @@ export function IssuedItemTemplatesPanel() {
         <table className="issued-items-table issued-items-table-dense">
           <thead>
             <tr>
+              <th>{t('issuedItems.templates.colCode')}</th>
               <th>{t('issuedItems.templates.colName')}</th>
               <th>{t('issuedItems.templates.colCategory')}</th>
               <th>{t('issuedItems.templates.colMode')}</th>
@@ -168,6 +203,7 @@ export function IssuedItemTemplatesPanel() {
               const mode = modeFromFlags(tpl)
               return (
                 <tr key={tpl.id}>
+                  <td>{tpl.code ? <code>{tpl.code}</code> : '—'}</td>
                   <td>
                     <Link className="issued-items-link issued-items-name-link" to={`/issued-items/templates/${tpl.id}`}>
                       <TruncatedText tooltip={tpl.name} className="issued-items-cell-name">{tpl.name}</TruncatedText>
@@ -193,10 +229,11 @@ export function IssuedItemTemplatesPanel() {
                     )}
                   </td>
                   <td>
-                    {tpl.requiresSerialNumber || tpl.returnRequired ? (
+                    {tpl.requiresSerialNumber || tpl.returnRequired || tpl.isConsumable ? (
                       <span className="issued-items-badges">
                         {tpl.requiresSerialNumber && <Badge tone="neutral">{t('issuedItems.templates.badgeSerial')}</Badge>}
                         {tpl.returnRequired && <Badge tone="neutral">{t('issuedItems.templates.badgeReturn')}</Badge>}
+                        {tpl.isConsumable && <Badge tone="neutral">{t('issuedItems.templates.badgeConsumable')}</Badge>}
                       </span>
                     ) : (
                       '—'
@@ -271,16 +308,12 @@ export function IssuedItemTemplatesPanel() {
           title={t('issuedItems.templates.deleteRefusedTitle')}
           conflict={deleteConflict.conflict}
           onClose={() => setDeleteConflict(null)}
-          // Deactivating lives in the edit form ("Actief"); open it straight away.
           action={
             deleteConflict.conflict.canDeactivate && deleteConflict.template.isActive
               ? {
-                  label: t('issuedItems.templates.editToDeactivate'),
-                  onSelect: () => {
-                    setEditing(deleteConflict.template)
-                    setEditorOpen(true)
-                    setDeleteConflict(null)
-                  },
+                  label: t('issuedItems.templates.deactivate'),
+                  busy: deactivating,
+                  onSelect: () => void deactivate(deleteConflict.template),
                 }
               : undefined
           }

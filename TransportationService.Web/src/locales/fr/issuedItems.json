@@ -4,7 +4,8 @@
     "Issued": "Remis",
     "Returned": "Restitué",
     "Missing": "Manquant",
-    "Damaged": "Endommagé"
+    "Damaged": "Endommagé",
+    "Consumed": "Consommé"
   },
   "disposition": {
     "good": "Bon état",
@@ -70,7 +71,8 @@
     "Damaged": "Endommagé",
     "Lost": "Perdu",
     "Disposed": "Mis au rebut",
-    "Transfer": "Transfert"
+    "Transfer": "Transfert",
+    "Consumption": "Consommation"
   },
   "inventoryStatus": {
     "Normal": "Normal",
@@ -246,7 +248,13 @@
     "deleteRefusedTitle": "L'équipement ne peut pas être supprimé",
     "editToDeactivate": "Modifier l'article",
     "variantsPartiallyFailed": "Le matériel a été créé, mais ces variantes n'ont pas pu être ajoutées : {labels}. Ajoutez-les dans l'onglet Variantes.",
-    "rowActions": "Actions {name}"
+    "rowActions": "Actions {name}",
+    "colCode": "Code",
+    "searchPlaceholder": "Rechercher par code ou nom…",
+    "badgeConsumable": "Consommable",
+    "deactivate": "Désactiver",
+    "deactivated": "{name} est désactivé : l'historique est conservé.",
+    "deactivateFailed": "L'article n'a pas pu être désactivé."
   },
   "form": {
     "editTitle": "Modifier le matériel",
@@ -339,7 +347,12 @@
     "sortOrderHint": "Alphabétique par défaut ; un nombre plus bas vient en premier.",
     "notes": "Notes internes",
     "active": "Actif (peut être remis)",
-    "inactiveNotice": "Ce matériel est désactivé et ne peut plus être remis."
+    "inactiveNotice": "Ce matériel est désactivé et ne peut plus être remis.",
+    "code": "Code article",
+    "codeHint": "Unique et visible dans chaque liste. Vide = automatique (BM-0001, …).",
+    "codePlaceholder": "Automatique",
+    "consumable": "Article consommable",
+    "consumableHint": "Remis définitivement (p. ex. gants, piles) : le stock diminue et la remise est enregistrée, sans détenteur ni retour."
   },
   "mode": {
     "individual": "Article individuel",
@@ -485,6 +498,30 @@
     "generateNoValues": "Ajoutez d'abord des valeurs à l'attribut.",
     "generated": "Variantes générées.",
     "variantDeleteTitle": "Supprimer la variante",
-    "variantDeleteMessage": "Voulez-vous vraiment supprimer la variante « {label} » ? Uniquement possible avec un stock de 0 ; les équipements remis conservent leur libellé."
+    "variantDeleteMessage": "Voulez-vous vraiment supprimer la variante « {label} » ? Une variante avec un historique (mouvements, remises ou propositions de commande) n'est jamais supprimée — désactivez-la.",
+    "forbidden": "Accès refusé : vous n'avez pas le droit de consulter ce matériel.",
+    "notFound": "Matériel introuvable.",
+    "back": "Retour au matériel",
+    "variantDeactivated": "Variante désactivée : l'historique est conservé.",
+    "deactivateVariant": "Désactiver",
+    "colFromTo": "À / de",
+    "colBy": "Par",
+    "toEmployee": "à {name}",
+    "fromEmployee": "de {name}",
+    "holdersSearch": "Rechercher par employé, numéro ou numéro de série…",
+    "holdersNoMatch": "Aucun détenteur pour cette recherche.",
+    "colExpectedReturn": "Retour prévu",
+    "inactiveEmployee": "Inactif"
+  },
+  "outcome": {
+    "returnedDamaged": "Rendu — endommagé",
+    "lost": "Perdu",
+    "disposed": "Mis au rebut"
+  },
+  "quantity": {
+    "required": "Indiquez une quantité.",
+    "whole": "Indiquez un nombre entier (sans décimales).",
+    "min": "La quantité doit être d'au moins {min}.",
+    "max": "Quantité trop élevée : maximum {max}."
   }
 }

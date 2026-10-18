@@ -12,6 +12,11 @@ import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
 import { useLocale } from '../../../i18n/localeContext'
 import { describeApiError } from '../../../api/problemDetails'
+import { ApiError } from '../../../api/apiClient'
+import { getReferenceConflict, isConcurrencyConflict, type ReferenceConflict } from '../../../api/conflicts'
+import { ErrorState } from '../../../components/feedback/ErrorState'
+import { ReferenceConflictDialog } from '../../../components/ui/ReferenceConflictDialog'
+import { FilterBar } from '../../../components/ui/FilterBar'
 import {
   addAttributeOption,
   correctStock,
@@ -39,6 +44,7 @@ import {
 } from '../inventoryApi'
 import { formatDateTime, formatDate } from '../../../utils/dates'
 import { formatQuantityWithUnit } from '../issuedItemUnits'
+import { parseMovementQuantity, parseStockLevel } from '../quantities'
 import { MANAGEMENT_MODE_LABELS, modeFromFlags } from '../managementMode'
 import { TemplateFormModal } from '../TemplateFormModal'
 import { NegativeStockConfirmModal } from '../components/NegativeStockConfirmModal'
@@ -62,7 +68,12 @@ interface StockDialogState {
   quantity: string
   reason: string
   notes: string
+  /** WH-M3: the stock shown when the dialog opened — sent along; a moved stock answers 409. */
+  baseStock: number
 }
+
+/** Movements that hand goods TO an employee vs. take them back FROM one (history "from/to"). */
+const OUTGOING_MOVEMENTS = new Set(['Issue', 'Consumption'])
 
 type DetailTab = 'algemeen' | 'voorraad' | 'varianten' | 'houders' | 'bewegingen'
 
@@ -100,6 +111,8 @@ export function IssuedItemTemplateDetailPage() {
   const [variantEditor, setVariantEditor] = useState<VariantEditorState | null>(null)
   const [variantError, setVariantError] = useState<string | null>(null)
   const [variantDeleteTarget, setVariantDeleteTarget] = useState<IssuedItemVariant | null>(null)
+  const [variantConflict, setVariantConflict] = useState<{ variant: IssuedItemVariant; conflict: ReferenceConflict } | null>(null)
+  const [holderSearch, setHolderSearch] = useState('')
   const [stockDialog, setStockDialog] = useState<StockDialogState | null>(null)
   const [stockError, setStockError] = useState<string | null>(null)
   // 409-bevestigingsflow bij correcties die onder nul gaan.
@@ -123,8 +136,13 @@ export function IssuedItemTemplateDetailPage() {
         setAllDefinitions(definitions)
         setLoadErrorKey(null)
       })
-      .catch(() => {
-        if (mounted) setLoadErrorKey('issuedItems.detail.loadFailed')
+      .catch((err: unknown) => {
+        // WH-M10: "Geen toegang" and "niet gevonden" are different answers, not one generic error.
+        if (!mounted) return
+        const status = err instanceof ApiError ? err.status : 0
+        setLoadErrorKey(
+          status === 403 ? 'issuedItems.detail.forbidden' : status === 404 ? 'issuedItems.detail.notFound' : 'issuedItems.detail.loadFailed',
+        )
       })
     return () => {
       mounted = false
@@ -133,6 +151,9 @@ export function IssuedItemTemplateDetailPage() {
 
   const stockTracked = detail?.template.stockTrackingEnabled ?? false
 
+  // Holders exist for EVERY item (also individually followed ones without stock); the ledger
+  // only for stock-tracked items.
+  const detailLoaded = detail !== null
   useEffect(() => {
     if (!stockTracked) return
     let mounted = true
@@ -141,6 +162,14 @@ export function IssuedItemTemplateDetailPage() {
         if (mounted) setMovements(data)
       })
       .catch(() => {})
+    return () => {
+      mounted = false
+    }
+  }, [id, reloadToken, stockTracked])
+
+  useEffect(() => {
+    if (!detailLoaded) return
+    let mounted = true
     listCurrentHolders(id)
       .then((data) => {
         if (!mounted) return
@@ -154,11 +183,17 @@ export function IssuedItemTemplateDetailPage() {
     return () => {
       mounted = false
     }
-  }, [id, reloadToken, stockTracked])
+  }, [id, reloadToken, detailLoaded])
 
   // Stale data from a previous stock-enabled state is never shown once the toggle is off.
   const visibleMovements = stockTracked ? movements : null
-  const visibleHolders = stockTracked ? holders : null
+  const visibleHolders = useMemo(() => {
+    const query = holderSearch.trim().toLowerCase()
+    if (!holders || !query) return holders
+    return holders.filter((holder) =>
+      `${holder.employeeName} ${holder.employeeNumber} ${holder.serialNumber ?? ''} ${holder.variantLabel ?? ''}`.toLowerCase().includes(query),
+    )
+  }, [holders, holderSearch])
 
   const linkableDefinitions = useMemo(
     () => allDefinitions.filter((d) => d.isActive && !detail?.attributes.some((a) => a.id === d.id)),
@@ -277,21 +312,55 @@ export function IssuedItemTemplateDetailPage() {
     if (ok) setVariantEditor(null)
   }
 
+  /** WH-B1: a variant with history answers 409 record.referenced — offer "Deactiveren" instead. */
   async function handleVariantDelete() {
     if (!variantDeleteTarget) return
     const target = variantDeleteTarget
     setVariantDeleteTarget(null)
-    await run(() => deleteVariant(id, target.id), t('issuedItems.detail.variantDeleted'))
+    setBusy(true)
+    try {
+      await deleteVariant(id, target.id)
+      showSuccess(t('issuedItems.detail.variantDeleted'))
+      reload()
+    } catch (err) {
+      const conflict = getReferenceConflict(err)
+      if (conflict) setVariantConflict({ variant: target, conflict })
+      else showError(describeApiError(err, t('issuedItems.detail.operationFailed')).message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function deactivateVariant(variant: IssuedItemVariant) {
+    const ok = await run(
+      () =>
+        updateVariant(id, variant.id, {
+          values: variant.values.map((value) => ({
+            attributeDefinitionId: value.attributeDefinitionId,
+            attributeOptionId: value.attributeOptionId,
+            customValue: value.attributeOptionId ? null : value.value,
+          })),
+          isActive: false,
+          sortOrder: variant.sortOrder,
+          initialStock: null,
+          label: variant.label,
+          lowStockThreshold: variant.lowStockThreshold,
+        }),
+      t('issuedItems.detail.variantDeactivated'),
+    )
+    if (ok) setVariantConflict(null)
   }
 
   async function handleStockSubmit(event: FormEvent) {
     event.preventDefault()
     if (!stockDialog) return
-    const quantity = Number(stockDialog.quantity)
-    if (!Number.isFinite(quantity)) {
-      setStockError(t('issuedItems.detail.invalidQty'))
+    // WH-H1/M8: whole units within bounds, a clear Dutch message — never a raw conversion error.
+    const parsed = stockDialog.kind === 'receipt' ? parseMovementQuantity(stockDialog.quantity) : parseStockLevel(stockDialog.quantity)
+    if (!parsed.ok) {
+      setStockError(t(parsed.key, parsed.params))
       return
     }
+    const quantity = parsed.value
     if (stockDialog.kind === 'receipt') {
       const ok = await run(
         () => receiveStock(id, { variantId: stockDialog.variantId, quantity, notes: stockDialog.notes.trim() || null }),
@@ -301,7 +370,12 @@ export function IssuedItemTemplateDetailPage() {
       if (ok) setStockDialog(null)
       return
     }
-    await submitCorrection({ variantId: stockDialog.variantId, newQuantity: quantity, reason: stockDialog.reason.trim() })
+    await submitCorrection({
+      variantId: stockDialog.variantId,
+      newQuantity: quantity,
+      reason: stockDialog.reason.trim(),
+      expectedCurrentStock: stockDialog.baseStock,
+    })
   }
 
   /** Correcties lopen buiten run(): een 409 opent de bevestigingsmodal in plaats van een foutmelding. */
@@ -322,8 +396,23 @@ export function IssuedItemTemplateDetailPage() {
       }
       setStockNegative(null)
       setStockError(describeApiError(err, t('issuedItems.detail.operationFailed')).message)
+      if (isConcurrencyConflict(err)) {
+        // WH-M3: someone moved the stock meanwhile — show the fresh figure and let the user recount.
+        await refreshStockDialogBase(input.variantId)
+      }
     } finally {
       setBusy(false)
+    }
+  }
+
+  async function refreshStockDialogBase(variantId: string | null) {
+    try {
+      const fresh = await getTemplateDetail(id)
+      setDetail(fresh)
+      const stock = variantId ? (fresh.variants.find((v) => v.id === variantId)?.currentStock ?? 0) : fresh.template.currentStock
+      setStockDialog((dialog) => (dialog ? { ...dialog, baseStock: stock, quantity: String(stock) } : dialog))
+    } catch {
+      reload()
     }
   }
 
@@ -343,7 +432,14 @@ export function IssuedItemTemplateDetailPage() {
   }
 
   if (loadErrorKey) {
-    return <p className="placeholder-text">{t(loadErrorKey)}</p>
+    return (
+      <ErrorState
+        message={t(loadErrorKey)}
+        onRetry={loadErrorKey === 'issuedItems.detail.loadFailed' ? reload : undefined}
+        backTo="/issued-items/templates"
+        backLabel={t('issuedItems.detail.back')}
+      />
+    )
   }
 
   if (!detail) {
@@ -358,7 +454,7 @@ export function IssuedItemTemplateDetailPage() {
     ...(template.stockTrackingEnabled && template.variantsEnabled
       ? [{ id: 'varianten', label: t('issuedItems.detail.tabVariants'), badge: detail.variants.length || undefined }]
       : []),
-    { id: 'houders', label: t('issuedItems.detail.tabHolders'), badge: visibleHolders?.length || undefined },
+    { id: 'houders', label: t('issuedItems.detail.tabHolders'), badge: holders?.length || undefined },
     ...(template.stockTrackingEnabled ? [{ id: 'bewegingen', label: t('issuedItems.detail.tabMovements') }] : []),
   ]
   const rawTab = searchParams.get('tab') ?? 'algemeen'
@@ -386,7 +482,7 @@ export function IssuedItemTemplateDetailPage() {
       />
       <PageHeader
         title={template.name}
-        subtitle={template.description ?? template.category}
+        subtitle={[template.code, template.description ?? template.category].filter(Boolean).join(' · ')}
         action={
           canManageInventory ? <Button onClick={() => setTemplateEditorOpen(true)}>{t('issuedItems.detail.editTemplate')}</Button> : undefined
         }
@@ -579,7 +675,7 @@ export function IssuedItemTemplateDetailPage() {
                           className="issued-items-link"
                           onClick={() => {
                             setStockError(null)
-                            setStockDialog({ kind: 'receipt', variantId: variant.id, quantity: '', reason: '', notes: '' })
+                            setStockDialog({ kind: 'receipt', variantId: variant.id, quantity: '', reason: '', notes: '', baseStock: variant.currentStock })
                           }}
                         >
                           {t('issuedItems.detail.receiptAction')}
@@ -597,6 +693,7 @@ export function IssuedItemTemplateDetailPage() {
                               quantity: String(variant.currentStock),
                               reason: '',
                               notes: '',
+                              baseStock: variant.currentStock,
                             })
                           }}
                         >
@@ -638,7 +735,7 @@ export function IssuedItemTemplateDetailPage() {
                 <Button
                   onClick={() => {
                     setStockError(null)
-                    setStockDialog({ kind: 'receipt', variantId: null, quantity: '', reason: '', notes: '' })
+                    setStockDialog({ kind: 'receipt', variantId: null, quantity: '', reason: '', notes: '', baseStock: template.currentStock })
                   }}
                   disabled={busy}
                 >
@@ -648,7 +745,10 @@ export function IssuedItemTemplateDetailPage() {
                   variant="secondary"
                   onClick={() => {
                     setStockError(null)
-                    setStockDialog({ kind: 'correction', variantId: null, quantity: String(template.currentStock), reason: '', notes: '' })
+                    setStockDialog({
+                      kind: 'correction', variantId: null, quantity: String(template.currentStock), reason: '', notes: '',
+                      baseStock: template.currentStock,
+                    })
                   }}
                   disabled={busy}
                 >
@@ -684,8 +784,10 @@ export function IssuedItemTemplateDetailPage() {
                   <th>{t('issuedItems.detail.colVariant')}</th>
                   <th>{t('issuedItems.detail.colQty')}</th>
                   <th>{t('issuedItems.detail.colResult')}</th>
+                  <th>{t('issuedItems.detail.colSerial')}</th>
                   <th>{t('issuedItems.detail.colReason')}</th>
-                  <th>{t('issuedItems.detail.colEmployee')}</th>
+                  <th>{t('issuedItems.detail.colFromTo')}</th>
+                  <th>{t('issuedItems.detail.colBy')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -696,8 +798,16 @@ export function IssuedItemTemplateDetailPage() {
                     <td>{movement.variantLabel ?? '—'}</td>
                     <td>{movement.quantity > 0 ? `+${movement.quantity}` : movement.quantity}</td>
                     <td>{movement.resultingStock}</td>
+                    <td>{movement.serialNumber ? <code>{movement.serialNumber}</code> : '—'}</td>
                     <td>{movement.reason ?? movement.notes ?? '—'}</td>
-                    <td>{movement.employeeName ?? '—'}</td>
+                    <td>
+                      {movement.employeeName
+                        ? t(OUTGOING_MOVEMENTS.has(movement.movementType) ? 'issuedItems.detail.toEmployee' : 'issuedItems.detail.fromEmployee', {
+                            name: movement.employeeNumber ? `${movement.employeeName} (${movement.employeeNumber})` : movement.employeeName,
+                          })
+                        : '—'}
+                    </td>
+                    <td>{movement.performedByName ?? '—'}</td>
                   </tr>
                 ))}
               </tbody>
@@ -711,14 +821,16 @@ export function IssuedItemTemplateDetailPage() {
       <TabPanel tabId="houders">
       <section className="issued-items-card">
         <h2>{t('issuedItems.detail.holdersTitle')}</h2>
-        {!stockTracked && (
-          <p className="placeholder-text">{t('issuedItems.detail.holdersUnavailable')}</p>
+        {holders !== null && holders.length > 0 && (
+          <FilterBar search={holderSearch} onSearchChange={setHolderSearch} searchPlaceholder={t('issuedItems.detail.holdersSearch')} />
         )}
-        {stockTracked && visibleHolders === null && holdersFailed && (
+        {visibleHolders === null && holdersFailed && (
           <p className="placeholder-text" role="alert">{t('issuedItems.detail.holdersFailed')}</p>
         )}
-        {stockTracked && visibleHolders === null && !holdersFailed && <p className="placeholder-text">{t('issuedItems.detail.loading')}</p>}
-        {visibleHolders !== null && visibleHolders.length === 0 && <p className="placeholder-text">{t('issuedItems.detail.holdersEmpty')}</p>}
+        {visibleHolders === null && !holdersFailed && <p className="placeholder-text">{t('issuedItems.detail.loading')}</p>}
+        {visibleHolders !== null && visibleHolders.length === 0 && (
+          <p className="placeholder-text">{holderSearch.trim() ? t('issuedItems.detail.holdersNoMatch') : t('issuedItems.detail.holdersEmpty')}</p>
+        )}
         {visibleHolders !== null && visibleHolders.length > 0 && (
           <table className="issued-items-table">
             <thead>
@@ -728,18 +840,23 @@ export function IssuedItemTemplateDetailPage() {
                 <th>{t('issuedItems.detail.colVariant')}</th>
                 <th>{t('issuedItems.detail.colQty')}</th>
                 <th>{t('issuedItems.detail.colIssued')}</th>
+                <th>{t('issuedItems.detail.colExpectedReturn')}</th>
                 <th>{t('issuedItems.detail.colSerial')}</th>
               </tr>
             </thead>
             <tbody>
               {visibleHolders.map((holder) => (
                 <tr key={holder.itemId}>
-                  <td>{holder.employeeName}</td>
+                  <td>
+                    {holder.employeeName}{' '}
+                    {holder.employeeActive === false && <Badge tone="warning">{t('issuedItems.detail.inactiveEmployee')}</Badge>}
+                  </td>
                   <td>{holder.employeeNumber}</td>
                   <td>{holder.variantLabel ?? '—'}</td>
                   <td>{holder.quantity}</td>
                   <td>{holder.issuedDate ? formatDate(holder.issuedDate) : '—'}</td>
-                  <td>{holder.serialNumber ?? '—'}</td>
+                  <td>{holder.expectedReturnDate ? formatDate(holder.expectedReturnDate) : '—'}</td>
+                  <td>{holder.serialNumber ? <code>{holder.serialNumber}</code> : '—'}</td>
                 </tr>
               ))}
             </tbody>
@@ -1051,6 +1168,19 @@ export function IssuedItemTemplateDetailPage() {
             })
           }
           onCancel={() => setStockNegative(null)}
+        />
+      )}
+
+      {variantConflict && (
+        <ReferenceConflictDialog
+          title={t('issuedItems.detail.variantDeleteTitle')}
+          conflict={variantConflict.conflict}
+          onClose={() => setVariantConflict(null)}
+          action={
+            variantConflict.conflict.canDeactivate && variantConflict.variant.isActive && canManageInventory
+              ? { label: t('issuedItems.detail.deactivateVariant'), busy, onSelect: () => void deactivateVariant(variantConflict.variant) }
+              : undefined
+          }
         />
       )}
 

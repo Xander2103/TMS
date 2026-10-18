@@ -170,8 +170,11 @@ describe('getNavModules — §14 target tree', () => {
     expect(nl(admin.label)).toBe('Bedrijfsmiddelen (beheer)')
     expect(admin.permissions).toEqual(['issued_items.manage_templates', 'inventory.manage'])
     expect(admin.end).toBeFalsy()
-    // Voorraad stays as it was, right before the admin entry.
-    expect(personeel.items!.map((i) => i.to).slice(-2)).toEqual(['/inventory', '/issued-items'])
+    // Voorraad and the warehouse desk (WH-H3/H4) sit right before the admin entry; Voorraad is
+    // exact-match so it does not light up on /inventory/issues.
+    expect(personeel.items!.map((i) => i.to).slice(-3)).toEqual(['/inventory', '/inventory/issues', '/issued-items'])
+    expect(personeel.items!.find((i) => i.to === '/inventory')!.end).toBe(true)
+    expect(personeel.items!.find((i) => i.to === '/inventory/issues')!.permissions).toEqual(['inventory.issue', 'inventory.return', 'inventory.loans_view'])
 
     const parameters = modules.find((m) => m.id === 'parameters')!
     const parameterRoutes = parameters.subgroups!.flatMap((sg) => sg.items.map((i) => i.to))

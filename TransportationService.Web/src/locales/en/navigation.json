@@ -65,6 +65,7 @@
     "absences": "Absences",
     "qualifications": "Qualifications",
     "inventory": "Inventory",
+    "inventoryIssues": "Issues & returns",
     "issuedItemsAdmin": "Company assets (admin)",
     "fleetOverview": "Fleet overview",
     "vehicles": "Vehicles",

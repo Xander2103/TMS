@@ -10,6 +10,7 @@ import { useLocale } from '../../i18n/localeContext'
 import { LookupSelect } from '../master-data/components/LookupSelect'
 import {
   createIssuedItemTemplate,
+  templateToInput,
   updateIssuedItemTemplate,
   type IssuedItemTemplate,
   type IssuedItemTemplateInput,
@@ -19,7 +20,6 @@ import {
   ISSUED_ITEM_UNIT_DESCRIPTIONS,
   ISSUED_ITEM_UNIT_LABELS,
   ISSUED_ITEM_UNITS,
-  issuedItemUnitForForm,
   normalizeIssuedItemUnit,
 } from './issuedItemUnits'
 import { createVariant } from './inventoryApi'
@@ -43,6 +43,7 @@ import { ManagementModeCards } from './components/ManagementModeCards'
 import { VariantRowsEditor } from './components/VariantRowsEditor'
 import { EligibilitySelect } from './components/EligibilitySelect'
 import { TemplateVariantsEditor } from './TemplateVariantsEditor'
+import { MAX_MOVEMENT_QUANTITY, parseStockLevel, parseWholeQuantity } from './quantities'
 import './issued-items.css'
 
 /** Outcome details the host needs beyond the saved item (inline variants are separate calls). */
@@ -53,6 +54,8 @@ export interface TemplateSaveResult {
 
 function emptyTemplateForm(): IssuedItemTemplateInput {
   return {
+    code: null,
+    isConsumable: false,
     name: '',
     // No implicit "Algemeen": a new item gets a real category (inline-creatable from the dropdown).
     category: '',
@@ -78,33 +81,8 @@ function emptyTemplateForm(): IssuedItemTemplateInput {
   }
 }
 
-function templateToForm(template: IssuedItemTemplate): IssuedItemTemplateInput {
-  return {
-    name: template.name,
-    category: template.category,
-    categoryId: template.categoryId,
-    applicableJobFunctionCodes: template.applicableJobFunctionCodes,
-    defaultQuantity: template.defaultQuantity,
-    requiresSerialNumber: template.requiresSerialNumber,
-    requiresReceivedDate: template.requiresReceivedDate,
-    returnRequired: template.returnRequired,
-    isActive: template.isActive,
-    sortOrder: template.sortOrder,
-    description: template.description,
-    // Legacy free-text units (pre-catalogue) land on "other" so the user re-picks consciously.
-    unit: issuedItemUnitForForm(template.unit),
-    notes: template.notes,
-    stockTrackingEnabled: template.stockTrackingEnabled,
-    variantsEnabled: template.variantsEnabled,
-    allowNegativeStock: template.allowNegativeStock,
-    lowStockThreshold: template.lowStockThreshold,
-    // Round-tripped untouched: the detail page's "Voorraadregels" card owns this level.
-    minimumStock: template.minimumStock,
-    storageLocation: template.storageLocation,
-    stock: template.stockTrackingEnabled && !template.variantsEnabled ? template.currentStock : null,
-    stockCorrectionReason: null,
-  }
-}
+/** The edit form starts from the item exactly as stored (shared mapping, see issuedItemsApi). */
+const templateToForm = templateToInput
 
 interface TemplateFormModalProps {
   editing: IssuedItemTemplate | null
@@ -215,6 +193,19 @@ export function TemplateFormModal({ editing, onSaved, onClose, existingItems }: 
       setFormError(t('issuedItems.form.categoryRequired'))
       return
     }
+    // WH-M2/M8: whole numbers, never silently coerced.
+    const defaultQuantity = parseWholeQuantity(String(form.defaultQuantity), { min: 1, max: MAX_MOVEMENT_QUANTITY })
+    if (!defaultQuantity.ok) {
+      setFormError(`${t('issuedItems.form.defaultQty')}: ${t(defaultQuantity.key, defaultQuantity.params)}`)
+      return
+    }
+    if (mode === 'stock' && form.stock != null) {
+      const stock = parseStockLevel(String(form.stock))
+      if (!stock.ok) {
+        setFormError(`${t('issuedItems.form.currentStock')}: ${t(stock.key, stock.params)}`)
+        return
+      }
+    }
     if (trackedBefore && stockChanged && !form.stockCorrectionReason?.trim()) {
       setFormError(t('issuedItems.form.correctionReasonRequired'))
       return
@@ -234,9 +225,15 @@ export function TemplateFormModal({ editing, onSaved, onClose, existingItems }: 
         ...flagsFromMode(mode),
         // Legacy CSVs ("CHAUF, PLAN") go out normalised; the set of codes never changes here.
         applicableJobFunctionCodes: serializeJobFunctionCodes(codes),
-        // Template-level stock only exists for plain stock items; variants carry their own.
-        stock: mode === 'stock' ? form.stock : null,
+        // Template-level stock only exists for plain stock items; variants carry their own. On an
+        // edit it is only sent when the user CHANGED it, together with the stock the form was
+        // opened on (WH-M3): renaming an item never rewrites a stock that moved meanwhile.
+        stock: mode === 'stock' && (!isEdit || stockChanged || !editing.stockTrackingEnabled) ? form.stock : null,
         stockCorrectionReason: mode === 'stock' ? form.stockCorrectionReason : null,
+        expectedCurrentStock: isEdit ? editing.currentStock : null,
+        code: form.code?.trim() || null,
+        // A consumable is a stock item without return or serial (the backend enforces the same).
+        isConsumable: mode !== 'individual' && (form.isConsumable ?? false),
       }
       const saved = editing ? await updateIssuedItemTemplate(editing.id, payload) : await createIssuedItemTemplate(payload)
 
@@ -273,7 +270,7 @@ export function TemplateFormModal({ editing, onSaved, onClose, existingItems }: 
           type="checkbox"
           checked={form.requiresSerialNumber}
           onChange={(e) => setIssueFlag('requiresSerialNumber', e.target.checked)}
-          disabled={saving}
+          disabled={saving || (mode !== 'individual' && (form.isConsumable ?? false))}
         />
         <span>{t('issuedItems.form.requiresSerial')}</span>
       </label>
@@ -352,6 +349,17 @@ export function TemplateFormModal({ editing, onSaved, onClose, existingItems }: 
               </Link>
             )}
           </FormField>
+          <FormField label={t('issuedItems.form.code')} htmlFor="tpl-code" hint={t('issuedItems.form.codeHint')}>
+            <input
+              id="tpl-code"
+              value={form.code ?? ''}
+              placeholder={t('issuedItems.form.codePlaceholder')}
+              onChange={(e) => set('code', e.target.value || null)}
+              disabled={saving}
+              maxLength={30}
+              autoComplete="off"
+            />
+          </FormField>
           <FormField label={t('issuedItems.form.description')} htmlFor="tpl-desc" className="form-span-all">
             <input id="tpl-desc" value={form.description ?? ''} onChange={(e) => set('description', e.target.value || null)} disabled={saving} maxLength={500} />
           </FormField>
@@ -380,7 +388,8 @@ export function TemplateFormModal({ editing, onSaved, onClose, existingItems }: 
                     type="number"
                     inputMode="numeric"
                     value={form.stock ?? ''}
-                    onChange={(e) => set('stock', e.target.value === '' ? null : Number(e.target.value) || 0)}
+                    step={1}
+                    onChange={(e) => set('stock', e.target.value === '' ? null : Number(e.target.value))}
                     disabled={saving}
                   />
                 </FormField>
@@ -439,12 +448,35 @@ export function TemplateFormModal({ editing, onSaved, onClose, existingItems }: 
           <div className="issued-items-checkbox-list">
             {/* Individually tracked items lead with the identifier; it is what sets them apart. */}
             {mode === 'individual' && serialCheckbox}
+            {mode !== 'individual' && (
+              <>
+                <label className="issued-items-checkbox">
+                  <input
+                    type="checkbox"
+                    checked={form.isConsumable ?? false}
+                    onChange={(e) => {
+                      const consumable = e.target.checked
+                      // WH-M5: a consumable is never returned and has no serial number.
+                      setForm((f) => ({ ...f, isConsumable: consumable, ...(consumable ? { returnRequired: false, requiresSerialNumber: false } : {}) }))
+                    }}
+                    disabled={saving}
+                  />
+                  <span>{t('issuedItems.form.consumable')}</span>
+                </label>
+                <p className="issued-items-checkbox-hint">{t('issuedItems.form.consumableHint')}</p>
+              </>
+            )}
             <label className="issued-items-checkbox">
               <input type="checkbox" checked={form.requiresReceivedDate} onChange={(e) => setIssueFlag('requiresReceivedDate', e.target.checked)} disabled={saving} />
               <span>{t('issuedItems.form.requiresReceivedDate')}</span>
             </label>
             <label className="issued-items-checkbox">
-              <input type="checkbox" checked={form.returnRequired} onChange={(e) => setIssueFlag('returnRequired', e.target.checked)} disabled={saving} />
+              <input
+                type="checkbox"
+                checked={form.returnRequired}
+                onChange={(e) => setIssueFlag('returnRequired', e.target.checked)}
+                disabled={saving || (mode !== 'individual' && (form.isConsumable ?? false))}
+              />
               <span>{t('issuedItems.form.returnRequired')}</span>
             </label>
             {mode === 'stock' && serialCheckbox}
@@ -472,7 +504,7 @@ export function TemplateFormModal({ editing, onSaved, onClose, existingItems }: 
             </select>
           </FormField>
           <FormField label={t('issuedItems.form.defaultQty')} htmlFor="tpl-qty">
-            <input id="tpl-qty" type="number" min={1} inputMode="numeric" value={form.defaultQuantity} onChange={(e) => set('defaultQuantity', Number(e.target.value) || 1)} disabled={saving} />
+            <input id="tpl-qty" type="number" min={1} step={1} inputMode="numeric" value={form.defaultQuantity} onChange={(e) => set('defaultQuantity', e.target.value === '' ? 0 : Number(e.target.value))} disabled={saving} />
           </FormField>
           {mode === 'variants' && (
             <FormField label={t('issuedItems.form.defaultVariantThreshold')} htmlFor="tpl-low" hint={t('issuedItems.form.defaultVariantThresholdHint')}>

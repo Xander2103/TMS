@@ -53,3 +53,8 @@
 .inventory-overview-variant {
   color: var(--muted);
 }
+
+.inventory-overview-code {
+  font-size: 0.8125rem;
+  color: var(--muted);
+}

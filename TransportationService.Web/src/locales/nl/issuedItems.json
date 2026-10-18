@@ -4,7 +4,8 @@
     "Issued": "Uitgereikt",
     "Returned": "Teruggebracht",
     "Missing": "Ontbreekt",
-    "Damaged": "Beschadigd"
+    "Damaged": "Beschadigd",
+    "Consumed": "Verbruikt"
   },
   "disposition": {
     "good": "Goede staat",
@@ -70,7 +71,8 @@
     "Damaged": "Beschadigd",
     "Lost": "Verloren",
     "Disposed": "Afgevoerd",
-    "Transfer": "Overdracht"
+    "Transfer": "Overdracht",
+    "Consumption": "Verbruik"
   },
   "inventoryStatus": {
     "Normal": "Normaal",
@@ -246,7 +248,13 @@
     "deleteRefusedTitle": "Bedrijfsmiddel kan niet worden verwijderd",
     "editToDeactivate": "Artikel bewerken",
     "variantsPartiallyFailed": "Het bedrijfsmiddel is aangemaakt, maar deze varianten konden niet worden toegevoegd: {labels}. Voeg ze toe op het tabblad Varianten.",
-    "rowActions": "Acties {name}"
+    "rowActions": "Acties {name}",
+    "colCode": "Code",
+    "searchPlaceholder": "Zoek op code of naam…",
+    "badgeConsumable": "Verbruik",
+    "deactivate": "Deactiveren",
+    "deactivated": "{name} is gedeactiveerd: de historiek blijft bewaard.",
+    "deactivateFailed": "Het artikel kon niet gedeactiveerd worden."
   },
   "form": {
     "editTitle": "Bedrijfsmiddel bewerken",
@@ -339,7 +347,12 @@
     "sortOrderHint": "Standaard alfabetisch; een lager getal komt eerder.",
     "notes": "Interne notities",
     "active": "Actief (kan uitgereikt worden)",
-    "inactiveNotice": "Dit bedrijfsmiddel is gedeactiveerd en kan niet meer uitgereikt worden."
+    "inactiveNotice": "Dit bedrijfsmiddel is gedeactiveerd en kan niet meer uitgereikt worden.",
+    "code": "Artikelcode",
+    "codeHint": "Uniek en zichtbaar in elke keuzelijst. Leeg = automatisch (BM-0001, …).",
+    "codePlaceholder": "Automatisch",
+    "consumable": "Verbruiksartikel",
+    "consumableHint": "Wordt definitief uitgegeven (bv. handschoenen, batterijen): de voorraad daalt en de uitgifte wordt geregistreerd, maar er is geen houder en niets om terug te brengen."
   },
   "mode": {
     "individual": "Individueel item",
@@ -485,6 +498,30 @@
     "generateNoValues": "Voeg eerst waarden toe bij het attribuut.",
     "generated": "Varianten gegenereerd.",
     "variantDeleteTitle": "Variant verwijderen",
-    "variantDeleteMessage": "Weet je zeker dat je variant \"{label}\" wilt verwijderen? Dit kan alleen bij voorraad 0; uitgereikte items behouden hun label."
+    "variantDeleteMessage": "Weet je zeker dat je variant \"{label}\" wilt verwijderen? Een variant met historiek (voorraadbewegingen, uitgiftes of bestelvoorstellen) wordt nooit verwijderd — die zet je inactief.",
+    "forbidden": "Geen toegang: je hebt geen rechten om dit bedrijfsmiddel te bekijken.",
+    "notFound": "Bedrijfsmiddel niet gevonden.",
+    "back": "Terug naar bedrijfsmiddelen",
+    "variantDeactivated": "Variant gedeactiveerd: de historiek blijft bewaard.",
+    "deactivateVariant": "Deactiveren",
+    "colFromTo": "Aan / van",
+    "colBy": "Door",
+    "toEmployee": "aan {name}",
+    "fromEmployee": "van {name}",
+    "holdersSearch": "Zoek op medewerker, nummer of serienummer…",
+    "holdersNoMatch": "Geen houders gevonden voor deze zoekterm.",
+    "colExpectedReturn": "Terug verwacht",
+    "inactiveEmployee": "Niet actief"
+  },
+  "outcome": {
+    "returnedDamaged": "Teruggebracht — beschadigd",
+    "lost": "Verloren",
+    "disposed": "Afgevoerd"
+  },
+  "quantity": {
+    "required": "Vul een aantal in.",
+    "whole": "Geef een geheel aantal in (geen decimalen).",
+    "min": "Het aantal moet minstens {min} zijn.",
+    "max": "Het aantal is te groot: maximaal {max}."
   }
 }

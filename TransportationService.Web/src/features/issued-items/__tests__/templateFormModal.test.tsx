@@ -489,7 +489,10 @@ describe('TemplateFormModal — edit flow (existing records keep working)', () =
         unit: 'other',
         stockTrackingEnabled: true,
         variantsEnabled: false,
-        stock: 7,
+        // WH-M3: an unchanged stock is not re-sent (a stock that moved meanwhile is never rewritten);
+        // the stock the form was opened on travels along.
+        stock: null,
+        expectedCurrentStock: 7,
         stockCorrectionReason: null,
         minimumStock: null,
       }),

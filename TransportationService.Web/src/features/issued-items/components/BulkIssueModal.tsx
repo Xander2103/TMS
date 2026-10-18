@@ -5,6 +5,7 @@ import { Modal } from '../../../components/ui/Modal'
 import { useLocale } from '../../../i18n/localeContext'
 import { describeApiError } from '../../../api/problemDetails'
 import { todayLocalIsoDate } from '../../../utils/dates'
+import { parseMovementQuantity } from '../quantities'
 import {
   saveEmployeeIssuedItem,
   type EmployeeIssuedItemInput,
@@ -201,6 +202,12 @@ export function BulkIssueModal({
         setError(t('issuedItems.tab.serialRequired'))
         return
       }
+      // WH-M2/M8: 0, −1 and 1.5 are refused with a message — never silently sent as 1.
+      const quantity = parseMovementQuantity(String(row.quantity))
+      if (!quantity.ok) {
+        setError(`${template.name}: ${t(quantity.key, quantity.params)}`)
+        return
+      }
     }
 
     setBusy(true)
@@ -325,8 +332,10 @@ export function BulkIssueModal({
                             id={`bulk-qty-${template.id}`}
                             type="number"
                             min={1}
+                            step={1}
+                            inputMode="numeric"
                             value={row.quantity}
-                            onChange={(e) => updateRow(template.id, { quantity: Number(e.target.value) || 1 })}
+                            onChange={(e) => updateRow(template.id, { quantity: e.target.value === '' ? 0 : Number(e.target.value) })}
                             disabled={busy}
                           />
                         </FormField>

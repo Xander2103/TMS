@@ -16,6 +16,8 @@ import {
   downloadIssuedItemsAcknowledgement,
   ISSUED_ITEM_STATUS_LABELS,
   ISSUED_ITEM_STATUSES,
+  issuanceOutcomeKey,
+  itemDisplayName,
   listEmployeeIssuedItems,
   listIssuedItemTemplates,
   reactivateEmployeeIssuedItem,
@@ -27,6 +29,7 @@ import {
   type IssuedItemStatus,
   type IssuedItemTemplate,
   type ReturnDisposition,
+  type ReturnIssuedItemInput,
 } from './issuedItemsApi'
 import { formatQuantityWithUnit } from './issuedItemUnits'
 import {
@@ -37,6 +40,8 @@ import {
 } from './inventoryApi'
 import { NegativeStockConfirmModal } from './components/NegativeStockConfirmModal'
 import { BulkIssueModal } from './components/BulkIssueModal'
+import { ReturnIssuedItemDialog } from './components/ReturnIssuedItemDialog'
+import { parseMovementQuantity } from './quantities'
 import './issued-items.css'
 
 const STATUS_TONE: Record<IssuedItemStatus, BadgeTone> = {
@@ -45,22 +50,11 @@ const STATUS_TONE: Record<IssuedItemStatus, BadgeTone> = {
   Returned: 'info',
   Missing: 'danger',
   Damaged: 'warning',
-}
-
-/** Local state of the "Teruggebracht" dialog; becomes a ReturnIssuedItemInput on confirm. */
-interface ReturnDraft {
-  returnedDate: string
-  returnCondition: string
-  returnDisposition: ReturnDisposition
-  restoreStock: boolean
+  Consumed: 'neutral',
 }
 
 function today(): string {
   return todayLocalIsoDate()
-}
-
-function emptyReturnDraft(): ReturnDraft {
-  return { returnedDate: today(), returnCondition: '', returnDisposition: 'good', restoreStock: true }
 }
 
 function emptyForm(): EmployeeIssuedItemInput {
@@ -100,6 +94,8 @@ export function IssuedItemsTab({ employeeId, employeeName }: { employeeId: strin
   const [editorOpen, setEditorOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [form, setForm] = useState<EmployeeIssuedItemInput>(emptyForm())
+  // The typed quantity: validated on submit (WH-M2/M8), never coerced into 1.
+  const [quantityText, setQuantityText] = useState('1')
   const [variants, setVariants] = useState<IssuedItemVariant[]>([])
   const [formError, setFormError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -108,8 +104,6 @@ export function IssuedItemsTab({ employeeId, employeeName }: { employeeId: strin
   const [negativeStock, setNegativeStock] = useState<{ payload: NegativeStockPayload; input: EmployeeIssuedItemInput } | null>(null)
   // "Teruggebracht" (Issued → Returned) en "Heractiveren" (Returned → Issued) lopen via eigen endpoints.
   const [returnTarget, setReturnTarget] = useState<EmployeeIssuedItem | null>(null)
-  const [returnDraft, setReturnDraft] = useState<ReturnDraft>(emptyReturnDraft())
-  const [returnError, setReturnError] = useState<string | null>(null)
   const [reactivateTarget, setReactivateTarget] = useState<EmployeeIssuedItem | null>(null)
   const [reactivateReason, setReactivateReason] = useState('')
   const [reactivateError, setReactivateError] = useState<string | null>(null)
@@ -186,6 +180,7 @@ export function IssuedItemsTab({ employeeId, employeeName }: { employeeId: strin
       quantity: template.defaultQuantity,
       variantId: null,
     }))
+    setQuantityText(String(template.requiresSerialNumber ? 1 : template.defaultQuantity))
     if (template.variantsEnabled) {
       try {
         const detail = await getTemplateDetail(template.id)
@@ -199,6 +194,7 @@ export function IssuedItemsTab({ employeeId, employeeName }: { employeeId: strin
   function openCreate() {
     setEditingId(null)
     setForm(emptyForm())
+    setQuantityText('1')
     setVariants([])
     setFormError(null)
     setEditorOpen(true)
@@ -222,6 +218,7 @@ export function IssuedItemsTab({ employeeId, employeeName }: { employeeId: strin
       restoreStock: null,
       overrideReason: null,
     })
+    setQuantityText(String(item.quantity))
     setVariants([])
     setFormError(null)
     setEditorOpen(true)
@@ -242,8 +239,14 @@ export function IssuedItemsTab({ employeeId, employeeName }: { employeeId: strin
       setFormError(t('issuedItems.tab.serialRequired'))
       return
     }
+    const quantity = parseMovementQuantity(quantityText)
+    if (!quantity.ok) {
+      setFormError(t(quantity.key, quantity.params))
+      return
+    }
     const payload: EmployeeIssuedItemInput = {
       ...form,
+      quantity: quantity.value,
       returnDisposition: form.status === 'Returned' ? (form.returnDisposition ?? 'good') : null,
       restoreStock: form.status === 'Returned' && form.returnDisposition === 'good' ? (form.restoreStock ?? true) : null,
     }
@@ -318,36 +321,20 @@ export function IssuedItemsTab({ employeeId, employeeName }: { employeeId: strin
 
   function openReturn(item: EmployeeIssuedItem) {
     setReturnTarget(item)
-    setReturnDraft(emptyReturnDraft())
-    setReturnError(null)
   }
 
   // Alleen een sjabloon met voorraadbeheer kan iets terugboeken; een vrij ("aangepast") middel niet.
   // Een sjabloon dat niet (meer) in de actieve lijst zit, laten we de server beslissen (checkbox tonen).
   const returnTemplate = returnTarget?.templateId ? templates.find((tpl) => tpl.id === returnTarget.templateId) ?? null : null
   const returnStockTracked = returnTarget?.templateId != null && (returnTemplate?.stockTrackingEnabled ?? true)
-  const showRestoreStock = returnDraft.returnDisposition === 'good' && returnStockTracked
 
-  async function handleReturnSubmit(event: FormEvent) {
-    event.preventDefault()
+  /** Errors surface inside the shared dialog (it catches and shows the server's message). */
+  async function handleReturnSubmit(input: ReturnIssuedItemInput) {
     if (!returnTarget) return
-    setReturnError(null)
-    setTransitionBusy(true)
-    try {
-      await returnEmployeeIssuedItem(employeeId, returnTarget.id, {
-        returnedDate: returnDraft.returnedDate || null,
-        returnCondition: returnDraft.returnCondition.trim() || null,
-        returnDisposition: returnDraft.returnDisposition,
-        restoreStock: showRestoreStock ? returnDraft.restoreStock : false,
-      })
-      showSuccess(t('issuedItems.return.success'))
-      setReturnTarget(null)
-      setReloadToken((token) => token + 1)
-    } catch (err) {
-      setReturnError(describeApiError(err, t('issuedItems.return.failed')).message)
-    } finally {
-      setTransitionBusy(false)
-    }
+    await returnEmployeeIssuedItem(employeeId, returnTarget.id, input)
+    showSuccess(t('issuedItems.return.success'))
+    setReturnTarget(null)
+    setReloadToken((token) => token + 1)
   }
 
   function openReactivate(item: EmployeeIssuedItem) {
@@ -422,11 +409,14 @@ export function IssuedItemsTab({ employeeId, employeeName }: { employeeId: strin
             <tbody>
               {items.map((item) => {
                 const isReturned = item.status === 'Returned'
+                // A consumed row is final history too: no edit, no delete, no "Terugbrengen".
+                const isClosed = isReturned || item.status === 'Consumed'
                 return (
                   // Een teruggebrachte uitgifte blijft als historiek staan (server weigert verwijderen), maar treedt visueel terug.
-                  <tr key={item.id} className={isReturned ? 'is-returned' : undefined}>
+                  <tr key={item.id} className={isClosed ? 'is-returned' : undefined}>
                     <td>
                       <TruncatedText tooltip={item.name} className="issued-items-cell-name">{item.name}</TruncatedText>
+                      {item.itemCode && <small className="issued-items-returned-by">{item.itemCode}</small>}
                     </td>
                     <td>{item.variantLabel ?? '—'}</td>
                     <td>
@@ -458,7 +448,7 @@ export function IssuedItemsTab({ employeeId, employeeName }: { employeeId: strin
                       )}
                     </td>
                     <td>
-                      <Badge tone={STATUS_TONE[item.status]}>{t(ISSUED_ITEM_STATUS_LABELS[item.status])}</Badge>
+                      <Badge tone={STATUS_TONE[item.status]}>{t(issuanceOutcomeKey(item.status, item.returnDisposition))}</Badge>
                     </td>
                     {/* B14: the one transition that fits the status stays visible; edit/delete live in "⋯". */}
                     <td className="issued-items-row-actions">
@@ -472,7 +462,7 @@ export function IssuedItemsTab({ employeeId, employeeName }: { employeeId: strin
                           {t('issuedItems.tab.markReturned')}
                         </button>
                       )}
-                      {canManage && !isReturned && (
+                      {canManage && !isClosed && (
                         <RowActionMenu
                           label={t('issuedItems.tab.rowActions', { name: item.name })}
                           items={[
@@ -518,7 +508,7 @@ export function IssuedItemsTab({ employeeId, employeeName }: { employeeId: strin
                   <option value="">{t('issuedItems.tab.customOption')}</option>
                   {templates.map((tpl) => (
                     <option key={tpl.id} value={tpl.id}>
-                      {tpl.name} ({tpl.category})
+                      {itemDisplayName(tpl)} ({tpl.category})
                     </option>
                   ))}
                 </select>
@@ -568,7 +558,7 @@ export function IssuedItemsTab({ employeeId, employeeName }: { employeeId: strin
                 </select>
               </FormField>
               <FormField label={t('issuedItems.tab.quantity')} htmlFor="ii-qty">
-                <input id="ii-qty" type="number" min={1} value={form.quantity} onChange={(e) => set('quantity', Number(e.target.value) || 1)} disabled={saving} />
+                <input id="ii-qty" type="number" min={1} step={1} inputMode="numeric" value={quantityText} onChange={(e) => setQuantityText(e.target.value)} disabled={saving} />
               </FormField>
             </div>
             <div className="issued-items-form-row">
@@ -626,77 +616,12 @@ export function IssuedItemsTab({ employeeId, employeeName }: { employeeId: strin
       )}
 
       {returnTarget && (
-        <Modal
-          title={t('issuedItems.return.title')}
+        <ReturnIssuedItemDialog
+          itemName={returnTarget.name}
+          stockTracked={returnStockTracked}
           onClose={() => setReturnTarget(null)}
-          busy={transitionBusy}
-          footer={
-            <>
-              <Button variant="secondary" onClick={() => setReturnTarget(null)} disabled={transitionBusy}>
-                {t('ui.actions.cancel')}
-              </Button>
-              <Button type="submit" form="issued-item-return-form" disabled={transitionBusy}>
-                {transitionBusy ? t('issuedItems.return.saving') : t('issuedItems.return.confirm')}
-              </Button>
-            </>
-          }
-        >
-          <form id="issued-item-return-form" className="issued-items-form" onSubmit={handleReturnSubmit} noValidate>
-            {returnError && (
-              <div className="issued-items-form-error" role="alert">
-                {returnError}
-              </div>
-            )}
-            <p className="customer-form-muted">{t('issuedItems.return.intro', { name: returnTarget.name })}</p>
-            <div className="issued-items-form-row">
-              <FormField label={t('issuedItems.return.returnedDate')} htmlFor="ii-return-date">
-                <input
-                  id="ii-return-date"
-                  type="date"
-                  value={returnDraft.returnedDate}
-                  onChange={(e) => setReturnDraft((d) => ({ ...d, returnedDate: e.target.value }))}
-                  disabled={transitionBusy}
-                />
-              </FormField>
-              <FormField label={t('issuedItems.return.condition')} htmlFor="ii-return-condition">
-                <input
-                  id="ii-return-condition"
-                  value={returnDraft.returnCondition}
-                  onChange={(e) => setReturnDraft((d) => ({ ...d, returnCondition: e.target.value }))}
-                  disabled={transitionBusy}
-                  maxLength={150}
-                />
-              </FormField>
-            </div>
-            <div className="issued-items-form-row">
-              <FormField label={t('issuedItems.return.disposition')} htmlFor="ii-return-disposition" hint={t('issuedItems.tab.dispositionHint')}>
-                <select
-                  id="ii-return-disposition"
-                  value={returnDraft.returnDisposition}
-                  onChange={(e) => setReturnDraft((d) => ({ ...d, returnDisposition: e.target.value as ReturnDisposition }))}
-                  disabled={transitionBusy}
-                >
-                  {(Object.keys(RETURN_DISPOSITION_LABELS) as ReturnDisposition[]).map((disposition) => (
-                    <option key={disposition} value={disposition}>
-                      {t(RETURN_DISPOSITION_LABELS[disposition])}
-                    </option>
-                  ))}
-                </select>
-              </FormField>
-              {showRestoreStock && (
-                <label className="issued-items-checkbox">
-                  <input
-                    type="checkbox"
-                    checked={returnDraft.restoreStock}
-                    onChange={(e) => setReturnDraft((d) => ({ ...d, restoreStock: e.target.checked }))}
-                    disabled={transitionBusy}
-                  />
-                  <span>{t('issuedItems.return.restoreStock')}</span>
-                </label>
-              )}
-            </div>
-          </form>
-        </Modal>
+          onSubmit={handleReturnSubmit}
+        />
       )}
 
       {reactivateTarget && (

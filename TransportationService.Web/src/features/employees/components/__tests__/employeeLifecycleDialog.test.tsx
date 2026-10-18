@@ -14,10 +14,45 @@ vi.mock('../../api/employeesApi', () => ({
   reactivateEmployee: (...args: unknown[]) => api.reactivateEmployee(...args),
 }))
 
+// WH-H5: outstanding company items are listed as a warning — never a block, never auto-returned.
+const outstanding = vi.hoisted(() => vi.fn())
+vi.mock('../../../issued-items/inventoryApi', () => ({
+  getOutstandingEquipment: (...args: unknown[]) => outstanding(...args),
+}))
+
 describe('EmployeeLifecycleDialog', () => {
   beforeEach(() => {
     api.deactivateEmployee.mockReset()
     api.reactivateEmployee.mockReset()
+    outstanding.mockReset()
+    outstanding.mockResolvedValue({ count: 0, items: [] })
+  })
+
+  it('warns about company items still held, and deactivating can still go ahead', async () => {
+    outstanding.mockResolvedValue({
+      count: 1,
+      items: [{
+        itemId: 'i-1', itemCode: 'BM-0001', itemName: 'TEST WH Golden Scanner', variantLabel: null,
+        serialNumber: 'SER-GOLD-001', issuedDate: '2026-10-18', expectedReturnDate: '2026-11-01',
+      }],
+    })
+    api.deactivateEmployee.mockResolvedValue(undefined)
+    const onDone = vi.fn()
+    render(<EmployeeLifecycleDialog mode="deactivate" employeeId="emp-1" employeeName="Bert Bosmans" onDone={onDone} onCancel={vi.fn()} />)
+
+    const warning = await screen.findByTestId('offboarding-outstanding')
+    expect(warning).toHaveTextContent('Deze medewerker heeft nog 1 bedrijfsmiddel in bezit.')
+    expect(warning).toHaveTextContent('BM-0001 · TEST WH Golden Scanner')
+    expect(warning).toHaveTextContent('serienummer SER-GOLD-001')
+    expect(outstanding).toHaveBeenCalledWith('emp-1')
+
+    await userEvent.click(screen.getByRole('button', { name: 'Inactief zetten' }))
+    await waitFor(() => expect(onDone).toHaveBeenCalledTimes(1))
+  })
+
+  it('does not look up equipment when reactivating', () => {
+    render(<EmployeeLifecycleDialog mode="reactivate" employeeId="emp-1" employeeName="Bert Bosmans" onDone={vi.fn()} onCancel={vi.fn()} />)
+    expect(outstanding).not.toHaveBeenCalled()
   })
 
   it('explains the offboarding consequences before deactivating', () => {

@@ -222,7 +222,9 @@ export function getNavModules(): NavModule[] {
         { label: 'navigation.menu.absences', to: '/absences', permissions: ['absences.view'] },
         { label: 'navigation.menu.qualifications', to: '/qualifications', permissions: ['employee_documents.view'] },
         // Voorraad van bedrijfsmiddelen hoort bij het personeelsdomein (uitgifte aan medewerkers).
-        { label: 'navigation.menu.inventory', to: '/inventory', permissions: ['inventory.view', 'inventory.manage'] },
+        { label: 'navigation.menu.inventory', to: '/inventory', end: true, permissions: ['inventory.view', 'inventory.manage'] },
+        // WH-H3/H4: de magazijnbalie — uitgeven, retour verwerken, openstaande uitgiftes en historiek.
+        { label: 'navigation.menu.inventoryIssues', to: '/inventory/issues', permissions: ['inventory.issue', 'inventory.return', 'inventory.loans_view'] },
         // Beheer van bedrijfsmiddelen (categorieën + sjablonen) staat naast de voorraad, niet meer
         // verspreid over Parameters → Personeel en Parameters → Basisgegevens. Het item wijst naar de
         // sectiewortel (niet naar één tabblad): de prefix-match houdt het dan actief op zowel

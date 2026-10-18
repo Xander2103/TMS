@@ -11,6 +11,7 @@ import {
   type IssuedItemVariant,
 } from './inventoryApi'
 import { formatQuantityWithUnit } from './issuedItemUnits'
+import { MAX_MOVEMENT_QUANTITY, MAX_STOCK_LEVEL, parseStockLevel, parseWholeQuantity } from './quantities'
 
 interface TemplateVariantsEditorProps {
   templateId: string
@@ -82,6 +83,16 @@ export function TemplateVariantsEditor({ templateId, unit }: TemplateVariantsEdi
       setError(t('issuedItems.form.variantNameRequired'))
       return
     }
+    const initial = draft.stock.trim() === '' ? null : parseWholeQuantity(draft.stock, { min: 0, max: MAX_MOVEMENT_QUANTITY })
+    const threshold = draft.threshold.trim() === '' ? null : parseWholeQuantity(draft.threshold, { min: 0, max: MAX_STOCK_LEVEL })
+    if (initial && !initial.ok) {
+      setError(t(initial.key, initial.params))
+      return
+    }
+    if (threshold && !threshold.ok) {
+      setError(t(threshold.key, threshold.params))
+      return
+    }
 
     void run(
       () =>
@@ -89,9 +100,9 @@ export function TemplateVariantsEditor({ templateId, unit }: TemplateVariantsEdi
           values: [],
           isActive: true,
           sortOrder: variants?.length ?? 0,
-          initialStock: draft.stock.trim() === '' ? null : Math.max(0, Number(draft.stock) || 0),
+          initialStock: initial?.ok ? initial.value : null,
           label,
-          lowStockThreshold: draft.threshold.trim() === '' ? null : Math.max(0, Number(draft.threshold) || 0),
+          lowStockThreshold: threshold?.ok ? threshold.value : null,
         }).then(() => setDraft(emptyDraft)),
       t('issuedItems.variantsEditor.addFailed'),
     )
@@ -119,11 +130,18 @@ export function TemplateVariantsEditor({ templateId, unit }: TemplateVariantsEdi
   function adjustStock(variant: IssuedItemVariant) {
     const raw = stockEdits[variant.id]
     if (raw === undefined || raw.trim() === '' || Number(raw) === variant.currentStock) return
+    const parsed = parseStockLevel(raw)
+    if (!parsed.ok) {
+      setError(t(parsed.key, parsed.params))
+      return
+    }
     void run(
       () =>
         correctStock(templateId, {
           variantId: variant.id,
-          newQuantity: Math.trunc(Number(raw) || 0),
+          newQuantity: parsed.value,
+          // WH-M3: the stock this row was loaded with; a stock that moved meanwhile answers 409.
+          expectedCurrentStock: variant.currentStock,
           // Vaste (Nederlandse) grootboekreden — dit is opgeslagen data, geen UI-tekst.
           reason: 'Voorraadaanpassing via bedrijfsmiddelformulier',
         }),
