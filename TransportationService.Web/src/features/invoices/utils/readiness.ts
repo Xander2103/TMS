@@ -8,4 +8,7 @@ export const READINESS_REASON_KEYS: Record<string, string> = {
   'pricing.coverage.none': 'invoices.readiness.reasons.pricingCoverageNone',
   'pricing.stale': 'invoices.readiness.reasons.pricingStale',
   'pod.missing': 'invoices.readiness.reasons.podMissing',
+  // MD-H10: never show the raw code "po.missing" to a user.
+  'po.missing': 'invoices.readiness.reasons.poMissing',
+  'pricing.zero_unconfirmed': 'invoices.readiness.reasons.pricingZeroUnconfirmed',
 }

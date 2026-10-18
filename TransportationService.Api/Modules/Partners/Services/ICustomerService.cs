@@ -27,6 +27,13 @@ public interface ICustomerService
     /// <summary>MD-B2: throws <c>ReferencedRecordException</c> when history still references the customer.</summary>
     Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// MD-M1: other customers with the same VAT or company number (normalized). A warning, not a
+    /// block: two billing customers of one legal person (departments, sites) are legitimate.
+    /// </summary>
+    Task<IReadOnlyList<CustomerIdentityMatchDto>> FindIdentityMatchesAsync(
+        string? vatNumber, string? companyNumber, Guid? excludeId, CancellationToken cancellationToken);
+
     /// <summary>MD-B2: what still references the customer (delete pre-check). Null = unknown customer.</summary>
     Task<IReadOnlyList<Common.Integrity.ReferenceCountDto>?> GetReferencesAsync(Guid id, CancellationToken cancellationToken);
 

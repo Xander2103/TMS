@@ -472,7 +472,8 @@ public class InvoiceService : IInvoiceService
         var vatRate = Modules.Accounting.Services.InvoiceLineFiscalResolver
             .Resolve(null, null, customerRow.VatTreatment, customerRow.DefaultVatRatePercent, tenantDefaultRate)
             .RatePercent;
-        var invoiceDate = request.InvoiceDate ?? DateOnly.FromDateTime(_timeProvider.GetUtcNow().UtcDateTime);
+        // MD-M3: "today" is the tenant's calendar day (UTC is still yesterday after local midnight).
+        var invoiceDate = request.InvoiceDate ?? await Common.TenantTimeZone.TodayAsync(_dbContext, _tenantContext.TenantId, _timeProvider, cancellationToken);
 
         // Issuing entity: explicit choice → customer default → tenant default.
         LegalEntity? legalEntity;
@@ -1386,7 +1387,7 @@ public class InvoiceService : IInvoiceService
             return null;
         }
 
-        var today = DateOnly.FromDateTime(_timeProvider.GetUtcNow().UtcDateTime);
+        var today = await Common.TenantTimeZone.TodayAsync(_dbContext, _tenantContext.TenantId, _timeProvider, cancellationToken);
         var previewYear = year ?? today.Year;
         var previewMonth = Math.Clamp(month ?? today.Month, 1, 12);
         var number = await _numberService.PreviewAsync(legalEntity, InvoiceKind.Invoice, previewYear, previewMonth, cancellationToken);
@@ -1926,7 +1927,7 @@ public class InvoiceService : IInvoiceService
         var tenantId = _tenantContext.TenantId;
         var settings = await _dbContext.TenantSettings.AsNoTracking()
             .FirstOrDefaultAsync(s => s.TenantId == tenantId, cancellationToken);
-        var today = DateOnly.FromDateTime(_timeProvider.GetUtcNow().UtcDateTime);
+        var today = await Common.TenantTimeZone.TodayAsync(_dbContext, _tenantContext.TenantId, _timeProvider, cancellationToken);
 
         var creditNote = new Invoice
         {

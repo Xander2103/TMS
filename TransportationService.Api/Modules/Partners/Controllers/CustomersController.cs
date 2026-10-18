@@ -154,6 +154,13 @@ public class CustomersController : ControllerBase
         return await _customerService.DeleteAsync(id, cancellationToken) ? NoContent() : NotFound();
     }
 
+    /// <summary>MD-M1: existing customers with the same VAT / company number (form warning).</summary>
+    [HttpGet("identity-matches")]
+    [RequirePermission(PermissionCodes.CustomersView)]
+    public async Task<ActionResult<IReadOnlyList<CustomerIdentityMatchDto>>> IdentityMatches(
+        [FromQuery] string? vatNumber, [FromQuery] string? companyNumber, [FromQuery] Guid? excludeId, CancellationToken cancellationToken) =>
+        Ok(await _customerService.FindIdentityMatchesAsync(vatNumber, companyNumber, excludeId, cancellationToken));
+
     /// <summary>MD-B2: what still references the customer — the delete pre-check of the UI.</summary>
     [HttpGet("{id:guid}/references")]
     [RequirePermission(PermissionCodes.CustomersView)]

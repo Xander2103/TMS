@@ -225,7 +225,9 @@
       "pricingCoveragePartial": "tous les éléments ne sont pas tarifés",
       "pricingCoverageNone": "aucun élément entièrement tarifé",
       "pricingStale": "prix obsolète — recalculez",
-      "podMissing": "preuve de livraison manquante"
+      "podMissing": "preuve de livraison manquante",
+      "poMissing": "numéro de bon de commande manquant — enregistrez le PO du client ou saisissez-le sur la facture",
+      "pricingZeroUnconfirmed": "prix de 0 € non confirmé comme gratuit"
     }
   },
   "control": {

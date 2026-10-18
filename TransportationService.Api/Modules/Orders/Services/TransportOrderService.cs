@@ -380,7 +380,8 @@ public class TransportOrderService : ITransportOrderService
             TenantId = _tenantContext.TenantId,
             CustomerId = request.CustomerId,
             CustomerReference = Trim(request.CustomerReference),
-            OrderDate = request.OrderDate ?? DateOnly.FromDateTime(_timeProvider.GetUtcNow().UtcDateTime),
+            // MD-M3: the tenant's calendar day, not the UTC date.
+            OrderDate = request.OrderDate ?? await Common.TenantTimeZone.TodayAsync(_dbContext, _tenantContext.TenantId, _timeProvider, cancellationToken),
             Status = TransportOrderStatus.Draft,
             GoodsDescription = Trim(request.GoodsDescription),
             Quantity = NonNegative(request.Quantity),

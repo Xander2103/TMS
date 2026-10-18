@@ -225,7 +225,9 @@
       "pricingCoveragePartial": "niet alle onderdelen geprijsd",
       "pricingCoverageNone": "geen onderdeel volledig geprijsd",
       "pricingStale": "prijs verouderd — herbereken",
-      "podMissing": "afleverbewijs ontbreekt"
+      "podMissing": "afleverbewijs ontbreekt",
+      "poMissing": "PO-nummer ontbreekt — registreer het PO van de klant of vul het in op de factuur",
+      "pricingZeroUnconfirmed": "prijs € 0 niet bevestigd als gratis"
     }
   },
   "control": {

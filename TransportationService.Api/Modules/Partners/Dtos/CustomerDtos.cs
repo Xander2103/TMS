@@ -249,3 +249,6 @@ public record UpdateCustomerContactRequest(
     string? PreferredLanguageCode = null,
     bool IsActive = true,
     string? ContactType = null);
+
+/// <summary>MD-M1: an existing customer that shares the VAT ("Vat") or company number ("CompanyNumber").</summary>
+public record CustomerIdentityMatchDto(Guid Id, string CustomerNumber, string Name, bool IsActive, string MatchedOn);

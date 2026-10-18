@@ -492,6 +492,39 @@ public class CustomerService : ICustomerService
             await LoadAllowedLegalEntityIdsAsync(customer.Id, cancellationToken));
     }
 
+    public async Task<IReadOnlyList<CustomerIdentityMatchDto>> FindIdentityMatchesAsync(
+        string? vatNumber, string? companyNumber, Guid? excludeId, CancellationToken cancellationToken)
+    {
+        string? vat;
+        try
+        {
+            vat = VatNumberValidator.NormalizeAndValidate(vatNumber);
+        }
+        catch (DomainValidationException)
+        {
+            vat = null; // an invalid VAT is reported by the form's own validation
+        }
+
+        static string Digits(string? value) => new((value ?? string.Empty).Where(char.IsAsciiDigit).ToArray());
+        var company = Digits(companyNumber);
+        if (vat is null && company.Length < 6)
+        {
+            return [];
+        }
+
+        var candidates = await TenantScoped().AsNoTracking()
+            .Where(c => c.Id != excludeId && ((vat != null && c.VatNumber == vat) || c.CompanyNumber != null))
+            .Select(c => new { c.Id, c.CustomerNumber, c.Name, c.IsActive, c.VatNumber, c.CompanyNumber })
+            .ToListAsync(cancellationToken);
+        return candidates
+            .Select(c => vat is not null && c.VatNumber == vat ? new CustomerIdentityMatchDto(c.Id, c.CustomerNumber, c.Name, c.IsActive, "Vat")
+                : company.Length >= 6 && Digits(c.CompanyNumber) == company ? new CustomerIdentityMatchDto(c.Id, c.CustomerNumber, c.Name, c.IsActive, "CompanyNumber")
+                : null)
+            .OfType<CustomerIdentityMatchDto>()
+            .Take(10)
+            .ToList();
+    }
+
     public async Task<IReadOnlyList<ReferenceCountDto>?> GetReferencesAsync(Guid id, CancellationToken cancellationToken)
     {
         if (!await TenantScoped().AnyAsync(c => c.Id == id, cancellationToken))

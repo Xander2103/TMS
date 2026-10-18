@@ -115,6 +115,20 @@ export function resetTimeZonePreference(): void {
   activeTimeZone = DEFAULT_TIME_ZONE
 }
 
+/**
+ * MD-M3 (master-data acceptance 2026-10-18): "today" as an ISO calendar date (yyyy-MM-dd) in the
+ * TENANT's time zone. `new Date().toISOString().slice(0, 10)` is the UTC date — after local
+ * midnight it is still yesterday, so invoice dates, PO validity and end dates defaulted to the
+ * previous day. Every form default for "today" uses this.
+ */
+export function todayLocalIsoDate(now: Date = new Date()): string {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: activeTimeZone, year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(now)
+  const part = (type: string) => parts.find((p) => p.type === type)?.value ?? ''
+  return `${part('year')}-${part('month')}-${part('day')}`
+}
+
 const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/
 
 /**

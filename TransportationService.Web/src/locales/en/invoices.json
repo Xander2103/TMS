@@ -225,7 +225,9 @@
       "pricingCoveragePartial": "not all parts priced",
       "pricingCoverageNone": "no part fully priced",
       "pricingStale": "price out of date — recalculate",
-      "podMissing": "proof of delivery missing"
+      "podMissing": "proof of delivery missing",
+      "poMissing": "PO number missing — register the customer PO or enter it on the invoice",
+      "pricingZeroUnconfirmed": "€ 0 price not confirmed as free"
     }
   },
   "control": {
