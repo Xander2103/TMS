@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { NewDossierPage } from '../pages/NewDossierPage'
 import { dossierDetail } from './fixtures'
+import { todayLocalIsoDate } from '../../../utils/dates'
 
 const navigateSpy = vi.hoisted(() => vi.fn())
 vi.mock('react-router-dom', async (importOriginal) => ({
@@ -151,7 +152,7 @@ describe('NewDossierPage — one-page intake', () => {
 
     expect(screen.getByRole('combobox', { name: 'Klant' })).toBeInTheDocument()
     expect(screen.getByLabelText('Klantreferentie')).toBeInTheDocument()
-    expect(screen.getByLabelText('Datum')).toHaveValue(new Date().toISOString().slice(0, 10))
+    expect(screen.getByLabelText('Datum')).toHaveValue(todayLocalIsoDate()) // tenant-local today (the UTC date is yesterday just after midnight)
 
     // Real radios: quick-start tiles sorted, blanco as a quiet option below (not a tile).
     expect(await screen.findByRole('radio', { name: /Distributie/ })).toBeInTheDocument()

@@ -129,7 +129,9 @@ public class IssuedItemReturnTests
         var issued = await IssueAsync(h);
 
         var returned = await h.Sut.ReturnAsync(h.EmployeeId, issued!.Id, new ReturnIssuedItemRequest(), CancellationToken.None);
-        Assert.Equal(DateOnly.FromDateTime(DateTime.UtcNow), returned!.ReturnedDate);
+        // The tenant's calendar day (MD-M3) — just after local midnight the UTC date is still yesterday.
+        Assert.Equal(await TransportationService.Api.Common.TenantTimeZone.TodayAsync(h.Db.Context, h.TenantId, TimeProvider.System, CancellationToken.None),
+            returned!.ReturnedDate);
 
         await Assert.ThrowsAsync<DomainValidationException>(() =>
             h.Sut.ReturnAsync(h.EmployeeId, issued.Id, new ReturnIssuedItemRequest(), CancellationToken.None));

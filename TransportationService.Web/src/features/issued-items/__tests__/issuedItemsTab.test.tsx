@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { IssuedItemsTab } from '../IssuedItemsTab'
 import { ApiError } from '../../../api/apiClient'
 import type { EmployeeIssuedItem, EmployeeIssuedItemInput, IssuedItemTemplate } from '../issuedItemsApi'
+import { todayLocalIsoDate } from '../../../utils/dates'
 
 const auth = vi.hoisted(() => ({ permissions: ['issued_items.view'] }))
 
@@ -224,7 +225,7 @@ describe('IssuedItemsTab', () => {
 
     // Dialog: today's date prefilled, disposition "good", restore-stock on for a stock-tracked template.
     const dateInput = screen.getByLabelText('Retourdatum')
-    expect(dateInput).toHaveValue(new Date().toISOString().slice(0, 10))
+    expect(dateInput).toHaveValue(todayLocalIsoDate()) // tenant-local today (the UTC date is yesterday just after midnight)
     expect(screen.getByLabelText(/Retourconditie/)).toHaveValue('good')
     expect(screen.getByLabelText('Voorraad terugboeken')).toBeChecked()
 
