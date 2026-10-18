@@ -3219,7 +3219,7 @@ public class TransportOrderService : ITransportOrderService
                 i.InvoiceNumber ?? "CONCEPT-" + i.Id.ToString("N")[..8].ToUpperInvariant(), i.Status.ToString(), i.Kind.ToString()))
             .ToList();
 
-        return new TransportOrderDetailDto(
+        var detail = new TransportOrderDetailDto(
             order.Id, order.OrderNumber, order.OrderDate, order.CustomerId, customerName,
             order.CustomerReference, order.Status, order.GoodsDescription,
             order.Quantity, order.QuantityUnit, order.WeightKg, order.VolumeM3, order.PalletCount,
@@ -3247,7 +3247,41 @@ public class TransportOrderService : ITransportOrderService
             order.LiftConditions, order.LiftEquipment,
             linkedActivity?.Id, linkedActivity?.ActivityTypeId, linkedActivity?.DurationHours, activitySupportsOnSiteWork,
             Invoices: invoices);
+
+        // Security M1: an operational viewer (Dispatcher) gets the order without its money —
+        // the projection, not the UI, is what keeps prices away from a role without a price right.
+        return await CanViewPricesAsync(cancellationToken) ? detail : WithoutPrices(detail);
     }
+
+    /// <summary>
+    /// Fail-closed (L7) for every request: a missing user or authorization service means no
+    /// prices. Only a composition with NO request context at all (neither a user context nor an
+    /// authorization service — direct internal construction) keeps the full projection; the API
+    /// host always injects both.
+    /// </summary>
+    private async Task<bool> CanViewPricesAsync(CancellationToken cancellationToken) =>
+        (_permissionService is null && _currentUser is null)
+        || (_permissionService is not null
+            && await CommercialVisibility.CanViewPricesAsync(_permissionService, _currentUser?.CurrentUserId, cancellationToken));
+
+    private static TransportOrderDetailDto WithoutPrices(TransportOrderDetailDto detail) => detail with
+    {
+        AgreedPrice = null,
+        DieselSurchargePercentOverride = null,
+        DieselSurchargeOverrideReason = null,
+        CalculatedPrice = null,
+        PriceOverrideReason = null,
+        PricingLines = [],
+        // Which services the order needs is operational; what they cost is not.
+        ServiceLines = detail.ServiceLines?.Select(l => l with { Value = 0, Amount = 0 }).ToList(),
+        PricingSnapshot = null,
+        OneOffFixedAmount = null,
+        OneOffExtraHourlyRate = null,
+        OneOffNotes = null,
+        TotalWithProposed = null,
+        ExtraTimeHourlyRateOverride = null,
+        Invoices = [],
+    };
 
     /// <summary>
     /// The tenant's default transport activity type for auto-wrapped orders; seeds the
@@ -4996,15 +5030,7 @@ public class TransportOrderService : ITransportOrderService
             return false;
         }
 
-        foreach (var code in codes)
-        {
-            if (await _permissionService.UserHasPermissionAsync(userId, code, cancellationToken))
-            {
-                return true;
-            }
-        }
-
-        return false;
+        return await _permissionService.UserHasAnyPermissionAsync(userId, codes, cancellationToken);
     }
 
     /// <summary>

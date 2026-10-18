@@ -29,7 +29,8 @@ public class OneOffPricingTests
     /// <summary>Grants only the permission codes explicitly added by a test (fail-closed default, matching production).</summary>
     private sealed class PermissionSet : IPermissionAuthorizationService
     {
-        public HashSet<string> Codes { get; } = new();
+        // The harness user works the pricing desk, so the order detail carries prices (Security M1).
+        public HashSet<string> Codes { get; } = [TransportationService.Api.Modules.Identity.PermissionCodes.TariffsView];
         public Task<bool> UserHasPermissionAsync(Guid userId, string permissionCode, CancellationToken cancellationToken) =>
             Task.FromResult(Codes.Contains(permissionCode));
     }

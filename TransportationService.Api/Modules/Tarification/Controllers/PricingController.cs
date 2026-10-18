@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using TransportationService.Api.Modules.Identity;
 using TransportationService.Api.Modules.Identity.Authorization;
+using TransportationService.Api.Modules.Identity.Services;
 using TransportationService.Api.Modules.Tarification.Dtos;
 using TransportationService.Api.Modules.Tarification.Services;
 
@@ -243,10 +244,22 @@ public class PricingController : ControllerBase
 
     [HttpGet("api/customers/{customerId:guid}/pricing-config")]
     [RequirePermission(PermissionCodes.CustomersView, PermissionCodes.TariffsView, PermissionCodes.OrdersCreate, PermissionCodes.OrdersEdit, PermissionCodes.OrdersManage)]
-    public async Task<ActionResult<CustomerPricingConfigDto>> GetCustomerConfig(Guid customerId, CancellationToken cancellationToken)
+    public async Task<ActionResult<CustomerPricingConfigDto>> GetCustomerConfig(
+        Guid customerId,
+        [FromServices] IPermissionAuthorizationService permissions,
+        [FromServices] ICurrentUserContext currentUser,
+        CancellationToken cancellationToken)
     {
         var config = await _admin.GetCustomerConfigAsync(customerId, cancellationToken);
-        return config is null ? NotFound() : Ok(config);
+        if (config is null)
+        {
+            return NotFound();
+        }
+
+        // customers.view alone (Dispatcher) reads the customer's units, never its tariffs (Security M1).
+        return await CommercialVisibility.CanViewPricesAsync(permissions, currentUser.CurrentUserId, cancellationToken)
+            ? Ok(config)
+            : Ok(config with { ServiceOptions = [] });
     }
 
     [HttpPut("api/customers/{customerId:guid}/pricing-config")]

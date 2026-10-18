@@ -28,8 +28,9 @@ public class PricingCoverageReconciliationTests
 
     private sealed class PermissionSet : IPermissionAuthorizationService
     {
+        // Only the read-only price right: the order detail carries prices (Security M1), nothing else is granted.
         public Task<bool> UserHasPermissionAsync(Guid userId, string permissionCode, CancellationToken cancellationToken) =>
-            Task.FromResult(false);
+            Task.FromResult(permissionCode == TransportationService.Api.Modules.Identity.PermissionCodes.TariffsView);
     }
 
     private sealed record Harness(SqliteTestDbContext Db, TransportOrderService Sut, Guid TenantId, Guid CustomerId);

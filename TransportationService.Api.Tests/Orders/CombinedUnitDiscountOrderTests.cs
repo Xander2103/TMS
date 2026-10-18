@@ -59,7 +59,8 @@ public class CombinedUnitDiscountOrderTests
         var audit = new AuditService(db.Context, tenant, currentUser);
         var admin = new PricingAdminService(db.Context, tenant, audit);
         var engine = new PricingEngine(db.Context, tenant);
-        var sut = new TransportOrderService(db.Context, tenant, audit, new TestClock(Now), engine, currentUser, permissionService: null);
+        // Internal composition (no request context): the projection keeps its prices (Security M1).
+        var sut = new TransportOrderService(db.Context, tenant, audit, new TestClock(Now), engine);
         return new Harness(db, sut, admin, tenantId, customerId, customerId2, euroId);
     }
 

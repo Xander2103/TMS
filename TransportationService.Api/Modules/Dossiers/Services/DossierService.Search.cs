@@ -197,6 +197,12 @@ public partial class DossierService
 
         if (!string.IsNullOrWhiteSpace(query.InvoiceStatus))
         {
+            // Security M1: the invoice status is invoice data; filtering on it would reveal it.
+            if (!await CanViewPricesAsync(cancellationToken))
+            {
+                throw new DomainValidationException("invoiceStatus", "Je hebt geen recht om op factuurstatus te filteren.");
+            }
+
             dossiers = query.InvoiceStatus.Trim().ToLowerInvariant() switch
             {
                 // M16: "Te factureren" — work that CAN be invoiced and is not on an invoice yet: a
@@ -244,7 +250,7 @@ public partial class DossierService
         var totalCount = await dossiers.CountAsync(cancellationToken);
         var ordered = ApplySort(dossiers, query.Sort, query.Dir);
         var items = await ProjectListAsync(ordered.Skip(page.Skip).Take(page.PageSize), cancellationToken);
-        items = await HydratePageAsync(items, cancellationToken);
+        items = await WithoutPricesUnlessPermittedAsync(await HydratePageAsync(items, cancellationToken), cancellationToken);
         return new PagedResult<DossierListItemDto>(items, totalCount, page.Page, page.PageSize);
     }
 

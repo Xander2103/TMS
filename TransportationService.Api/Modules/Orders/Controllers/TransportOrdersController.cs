@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using TransportationService.Api.Common.Models;
 using TransportationService.Api.Modules.Identity;
 using TransportationService.Api.Modules.Identity.Authorization;
+using TransportationService.Api.Modules.Identity.Services;
 using TransportationService.Api.Modules.Orders.Dtos;
 using TransportationService.Api.Modules.Orders.Entities;
 using TransportationService.Api.Modules.Orders.Services;
@@ -265,10 +266,22 @@ public class TransportOrdersController : ControllerBase
 
     [HttpGet("{id:guid}/timeline")]
     [RequirePermission(PermissionCodes.OrdersView, PermissionCodes.OrdersManage)]
-    public async Task<ActionResult<IReadOnlyList<OrderTimelineEventDto>>> Timeline(Guid id, CancellationToken cancellationToken)
+    public async Task<ActionResult<IReadOnlyList<OrderTimelineEventDto>>> Timeline(
+        Guid id,
+        [FromServices] IPermissionAuthorizationService permissions,
+        [FromServices] ICurrentUserContext currentUser,
+        CancellationToken cancellationToken)
     {
         var timeline = await _timelineService.GetTimelineAsync(id, cancellationToken);
-        return timeline is null ? NotFound() : Ok(timeline);
+        if (timeline is null)
+        {
+            return NotFound();
+        }
+
+        // Security M1: invoice events are invoice data, like the order detail's invoice links.
+        return await CommercialVisibility.CanViewPricesAsync(permissions, currentUser.CurrentUserId, cancellationToken)
+            ? Ok(timeline)
+            : Ok(timeline.Where(e => e.Category != "invoice").ToList());
     }
 
     [HttpPost("{id:guid}/correct-status")]

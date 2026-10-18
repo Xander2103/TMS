@@ -109,8 +109,42 @@ public partial class DossierService : IDossierService
                     && (c.Name.ToLower().Contains(term) || c.CustomerNumber.ToLower().Contains(term))));
         }
 
-        return await ProjectListAsync(query.OrderByDescending(d => d.CreatedAt).Take(500), cancellationToken);
+        return await WithoutPricesUnlessPermittedAsync(
+            await ProjectListAsync(query.OrderByDescending(d => d.CreatedAt).Take(500), cancellationToken), cancellationToken);
     }
+
+    /// <summary>
+    /// Security M1: commercial money (prices, invoice data, incident costs) only reaches a caller
+    /// with a price right (<see cref="Modules.Identity.Services.CommercialVisibility"/>). Fail-closed (L7) for every
+    /// request; only a composition with NO request context at all (no user context and no
+    /// authorization service — direct internal construction) keeps the full projection.
+    /// </summary>
+    private async Task<bool> CanViewPricesAsync(CancellationToken cancellationToken) =>
+        (_permissionService is null && _currentUser is null)
+        || (_permissionService is not null
+            && await Modules.Identity.Services.CommercialVisibility.CanViewPricesAsync(_permissionService, _currentUser?.CurrentUserId, cancellationToken));
+
+    private async Task<List<DossierListItemDto>> WithoutPricesUnlessPermittedAsync(
+        List<DossierListItemDto> items, CancellationToken cancellationToken) =>
+        await CanViewPricesAsync(cancellationToken)
+            ? items
+            : items.Select(i => i with { AgreedPriceTotal = null, InvoiceStatus = null }).ToList();
+
+    private static DossierDetailDto WithoutPrices(DossierDetailDto detail) => detail with
+    {
+        Orders = detail.Orders.Select(o => o with { AgreedPrice = null }).ToList(),
+        Financials = detail.Financials with
+        {
+            AgreedOrderTotal = 0, InvoicedTotal = 0, EstimatedIncidentCost = 0, ActualIncidentCost = 0,
+        },
+        Activities = detail.Activities?.Select(a => a with
+        {
+            AgreedPrice = null,
+            PriceLines = [],
+            InvoiceId = null, InvoiceNumber = null, InvoiceDisplayNumber = null, InvoiceStatus = null,
+        }).ToList(),
+        Invoices = [],
+    };
 
     /// <summary>
     /// The list projection shared by <see cref="ListAsync"/> (compat) and <see cref="SearchAsync"/>:
@@ -650,7 +684,7 @@ public partial class DossierService : IDossierService
             .Concat(orderRows.Select(o => o.UpdatedAt))
             .Max();
 
-        return new DossierDetailDto(
+        var detail = new DossierDetailDto(
             dossier.Id, dossier.DossierNumber, dossier.Title, dossier.Description, dossier.Status.ToString(),
             dossier.CustomerId, customerName, dossier.ResponsibleUserId, responsibleName,
             dossier.ClosedAt, dossier.Notes, dossier.CreatedAt,
@@ -671,6 +705,7 @@ public partial class DossierService : IDossierService
             IssuedDocumentCount: issuedDocumentCount,
             PodCount: podCount,
             Invoices: dossierInvoices);
+        return await CanViewPricesAsync(cancellationToken) ? detail : WithoutPrices(detail);
     }
 
     /// <summary>

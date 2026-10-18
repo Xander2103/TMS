@@ -91,7 +91,8 @@ public class DashboardServiceTests
             new InvoiceLine { Id = Guid.NewGuid(), TenantId = h.TenantId, InvoiceId = sent.Id, Sequence = 1, Description = "b", Quantity = 1, UnitPrice = 500m, VatRatePercent = 21m });
         await h.Db.Context.SaveChangesAsync();
 
-        var dashboard = await h.Sut.GetAsync(CancellationToken.None);
+        var accountant = await SeedUserWithPermissionAsync(h, PermissionCodes.DashboardView, PermissionCodes.InvoicesView);
+        var dashboard = await BuildWithUser(h, accountant).GetAsync(CancellationToken.None);
 
         Assert.Equal(2, dashboard.OrdersOpenCount);
         Assert.Equal(1, dashboard.OrdersInExecutionCount);
@@ -101,6 +102,15 @@ public class DashboardServiceTests
         Assert.Equal(1, dashboard.OverdueInvoiceCount); // vervaldag 1 juli < vandaag 18 juli
         Assert.Equal(4, dashboard.RecentOrders.Count);
         Assert.Equal("ORD-4", dashboard.RecentOrders[0].OrderNumber);
+
+        // Security: revenue and receivables are invoice data — a viewer without invoices.view
+        // (Dispatcher, HR, fleet) gets zeros from the API, not merely a hidden tile.
+        var dispatcher = await SeedUserWithPermissionAsync(h, PermissionCodes.DashboardView, PermissionCodes.OrdersView);
+        var operational = await BuildWithUser(h, dispatcher).GetAsync(CancellationToken.None);
+        Assert.Equal(0m, operational.RevenueInvoicedThisMonth);
+        Assert.Equal(0m, operational.OutstandingAmount);
+        Assert.Equal(0, operational.OverdueInvoiceCount);
+        Assert.Equal(2, operational.OrdersOpenCount);
     }
 
     private async Task<Guid> SeedUserWithPermissionAsync(Harness h, params string[] permissionCodes)
@@ -112,7 +122,7 @@ public class DashboardServiceTests
         });
         var role = new Role
         {
-            Id = Guid.NewGuid(), TenantId = h.TenantId, Name = "Testrol", IsActive = true,
+            Id = Guid.NewGuid(), TenantId = h.TenantId, Name = $"Testrol {userId:N}", IsActive = true,
             CreatedAt = Now.UtcDateTime, UpdatedAt = Now.UtcDateTime,
         };
         h.Db.Context.Roles.Add(role);

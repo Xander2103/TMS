@@ -39,8 +39,8 @@ public interface IDossierTimelineService
 ///   <item>Every code is translated (<see cref="DossierTimelineLabels"/>); ids become numbers/names.</item>
 /// </list>
 /// Visibility: the timeline is part of the dossier (<c>dossiers.view</c>), so it shows exactly what
-/// the dossier page shows — prices included (the dossier detail exposes them to every viewer) —
-/// and nothing from HR: driver names come from the trip, never employee records beyond the name.
+/// the dossier page shows — prices in the "pricing" category, which the controller drops for a
+/// caller without a price right exactly like the dossier detail does (Security M1) — and nothing from HR: driver names come from the trip, never employee records beyond the name.
 /// </summary>
 public class DossierTimelineService : IDossierTimelineService
 {

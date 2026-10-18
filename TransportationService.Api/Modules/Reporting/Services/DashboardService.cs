@@ -74,14 +74,18 @@ public class DashboardService : IDashboardService
                              && (o.Status == TransportOrderStatus.Completed || o.Status == TransportOrderStatus.Invoiced)
                              && o.OrderDate >= monthStart && o.OrderDate <= today, cancellationToken);
 
-        // Invoices: bounded in-memory sums over the relevant lines.
+        // Invoices: bounded in-memory sums over the relevant lines. Revenue and receivables are
+        // invoice data: only an invoices.view holder gets them — every other dashboard viewer
+        // reads zeros, not merely a hidden tile (Security sensitive-data review).
+        var seesInvoices = _currentUser.CurrentUserId is { } viewerId
+            && await _authorization.UserHasPermissionAsync(viewerId, PermissionCodes.InvoicesView, cancellationToken);
         var monthInvoices = await _dbContext.Invoices.AsNoTracking()
-            .Where(i => i.TenantId == tenantId && i.Status != InvoiceStatus.Cancelled
+            .Where(i => seesInvoices && i.TenantId == tenantId && i.Status != InvoiceStatus.Cancelled
                         && i.InvoiceDate >= monthStart && i.InvoiceDate <= today)
             .Select(i => new { i.Id, i.Kind })
             .ToListAsync(cancellationToken);
         var outstandingInvoices = await _dbContext.Invoices.AsNoTracking()
-            .Where(i => i.TenantId == tenantId && i.Status == InvoiceStatus.Sent)
+            .Where(i => seesInvoices && i.TenantId == tenantId && i.Status == InvoiceStatus.Sent)
             .Select(i => new { i.Id, i.DueDate, i.Kind })
             .ToListAsync(cancellationToken);
 
