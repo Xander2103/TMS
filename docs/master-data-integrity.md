@@ -114,8 +114,15 @@ administrator is never locked out this way.
 
 ## 4. Numbering
 
-`TenantNumbering.SaveWithClaimedNumberAsync` retries both a counter conflict and a unique-number collision
-(skip forward), so parallel creates never surface a 500. A counter can only be lowered / re-prefixed when
+`TenantNumbering.SaveWithClaimedNumberAsync` is the one allocator for every TenantSettings counter. On
+PostgreSQL it claims under a row lock: `SELECT … FOR UPDATE` on the tenant's settings row inside a
+transaction, counters refreshed from the locked row, number assigned, saved, committed — claims of one tenant
+are serialized, so an order create (order + wrapper-dossier number) racing standalone dossier creates can no
+longer invalidate each other's optimistic UPDATE (every counter of the row is a concurrency token). A unique
+collision with data that is ahead of the counter still skips forward. Without the lock (SQLite tests) the
+optimistic retry remains. Proven on PostgreSQL 2026-10-18: 20 parallel customer / order / dossier / trip
+creates and 40 mixed order+dossier creates — all 2xx, unique, gapless, zero 5xx (before the lock the mixed
+round gave 7×409 and 4×500). A counter can only be lowered / re-prefixed when
 none of the numbers it would hand out exists (Dutch refusal naming the highest number in use). Two legal
 entities may not print the same invoice series. Invoices keep their gap-free per-entity sequence.
 

@@ -23,6 +23,7 @@ namespace TransportationService.Api.Common.Persistence;
 public static class TenantNumbering
 {
     private const int MaxAttempts = 30;
+    private const string PostgresProvider = "Npgsql.EntityFrameworkCore.PostgreSQL";
 
     public static async Task SaveWithClaimedNumberAsync(
         DbContext dbContext,
@@ -30,6 +31,23 @@ public static class TenantNumbering
         Action assignNumber,
         CancellationToken cancellationToken)
     {
+        // MD-H5 final (parallel PostgreSQL proof 2026-10-18): every counter of the settings row is a
+        // concurrency token, so an order create (order + dossier number) racing standalone dossier
+        // creates kept invalidating each other's optimistic UPDATE — 40 mixed parallel creates gave
+        // 409s and 500s once the retries ran out. On PostgreSQL the claim is now SERIALIZED per
+        // tenant: the settings row is locked (SELECT … FOR UPDATE) inside a transaction and the
+        // counters are refreshed from the locked row before the number is assigned. Holding the
+        // lock, nobody else can move a counter until this save commits; the unique-violation
+        // retry below only has to skip numbers that existing data already uses.
+        var lockRow = settings is not null && dbContext.Database.ProviderName == PostgresProvider;
+        await using var ownTransaction = lockRow && dbContext.Database.CurrentTransaction is null
+            ? await dbContext.Database.BeginTransactionAsync(cancellationToken)
+            : null;
+        if (lockRow)
+        {
+            await LockAndRefreshCountersAsync(dbContext, settings!, cancellationToken);
+        }
+
         for (var attempt = 0; ; attempt++)
         {
             assignNumber();
@@ -37,21 +55,65 @@ public static class TenantNumbering
             try
             {
                 await dbContext.SaveChangesAsync(cancellationToken);
+                if (ownTransaction is not null)
+                {
+                    await ownTransaction.CommitAsync(cancellationToken);
+                }
+
                 return;
             }
             catch (DbUpdateConcurrencyException) when (settings is not null && attempt < MaxAttempts)
             {
-                // Another request claimed the counter value first. Discard our stale increment,
-                // reload the current counter, and let assignNumber() claim the next value.
-                await dbContext.Entry(settings).ReloadAsync(cancellationToken);
+                // Another request claimed the counter value first (only possible without the row
+                // lock, e.g. SQLite). Take the current counters and let assignNumber() claim the next.
+                await RefreshCountersAsync(dbContext, settings, cancellationToken);
             }
             catch (DbUpdateException exception) when (settings is not null && attempt < MaxAttempts && IsUniqueViolation(exception))
             {
-                // The number is taken (a parallel winner, or data ahead of the counter): keep the
-                // in-memory counter, so the next assignNumber() moves past it.
+                // The number is taken (data ahead of the counter, or — without the lock — a parallel
+                // winner): keep the in-memory counter, so the next assignNumber() moves past it.
             }
 
-            await Task.Delay(Random.Shared.Next(2, 15 + attempt * 5), cancellationToken);
+            if (!lockRow)
+            {
+                await Task.Delay(Random.Shared.Next(2, 15 + attempt * 5), cancellationToken);
+            }
+        }
+    }
+
+    private static async Task LockAndRefreshCountersAsync(DbContext dbContext, object settings, CancellationToken cancellationToken)
+    {
+        var entry = dbContext.Entry(settings);
+        var key = entry.Metadata.FindPrimaryKey()!.Properties.Single();
+        var table = entry.Metadata.GetTableName();
+        var keyColumn = key.GetColumnName();
+        // Identifiers come from the EF model (never from input); the key value is a parameter.
+        await dbContext.Database.ExecuteSqlRawAsync(
+            $"SELECT 1 FROM \"{table}\" WHERE \"{keyColumn}\" = {{0}} FOR UPDATE",
+            [entry.Property(key.Name).CurrentValue!], cancellationToken);
+        await RefreshCountersAsync(dbContext, settings, cancellationToken);
+    }
+
+    /// <summary>
+    /// Takes the stored counters as the concurrency baseline and never moves an in-memory counter
+    /// BACK (it may already be past numbers that existing data uses). Other pending changes of the
+    /// caller on the settings entity are kept (unlike a reload).
+    /// </summary>
+    private static async Task RefreshCountersAsync(DbContext dbContext, object settings, CancellationToken cancellationToken)
+    {
+        var entry = dbContext.Entry(settings);
+        var stored = await entry.GetDatabaseValuesAsync(cancellationToken);
+        if (stored is null)
+        {
+            return;
+        }
+
+        foreach (var property in entry.Properties.Where(p => p.Metadata.IsConcurrencyToken && p.Metadata.ClrType == typeof(int)))
+        {
+            var storedValue = (int)stored[property.Metadata]!;
+            var current = (int)property.CurrentValue!;
+            property.OriginalValue = storedValue;
+            property.CurrentValue = Math.Max(current, storedValue);
         }
     }
 
