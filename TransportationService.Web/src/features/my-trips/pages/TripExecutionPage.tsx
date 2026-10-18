@@ -77,6 +77,8 @@ export function TripExecutionPage() {
 
   const [execution, setExecution] = useState<TripExecution | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
+  // SEC-M5: another driver's (or an unknown) trip is a 404 — "Niet gevonden", not a load failure.
+  const [loadErrorCause, setLoadErrorCause] = useState<unknown>(undefined)
   const [busy, setBusy] = useState(false)
 
   const [completeTarget, setCompleteTarget] = useState<ExecutionStop | null>(null)
@@ -110,8 +112,10 @@ export function TripExecutionPage() {
         setExecution(data)
         setLoadError(null)
       })
-      .catch(() => {
-        if (mounted) setLoadError(t('myTrips.execution.loadError'))
+      .catch((err: unknown) => {
+        if (!mounted) return
+        setLoadError(t('myTrips.execution.loadError'))
+        setLoadErrorCause(err)
       })
     return () => {
       mounted = false
@@ -252,7 +256,7 @@ export function TripExecutionPage() {
     }
   }
 
-  if (loadError) return <ErrorState message={loadError} />
+  if (loadError) return <ErrorState message={loadError} error={loadErrorCause} backTo="/my-trips" />
   if (!execution) return <LoadingState message={t('myTrips.execution.loading')} />
 
   const executable = execution.tripStatus === 'InProgress' && canExecute

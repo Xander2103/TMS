@@ -51,7 +51,8 @@ export function CustomerPortalOrderDetailPage() {
   const { t, formatDate, formatDateTime } = useLocale()
   const [order, setOrder] = useState<PortalOrderDetail | null>(null)
   const [documents, setDocuments] = useState<PortalDocument[]>([])
-  const [error, setError] = useState(false)
+  // SEC-M5: keep the cause, so another customer's (or an unknown) order reads "Niet gevonden".
+  const [error, setError] = useState<{ cause: unknown } | null>(null)
   const [downloadError, setDownloadError] = useState(false)
   const [answer, setAnswer] = useState('')
   const [answering, setAnswering] = useState(false)
@@ -83,8 +84,8 @@ export function CustomerPortalOrderDetailPage() {
       .then((data) => {
         if (mounted) setOrder(data)
       })
-      .catch(() => {
-        if (mounted) setError(true)
+      .catch((err: unknown) => {
+        if (mounted) setError({ cause: err })
       })
     if (hasPermission('customer_portal.view_documents')) {
       listPortalDocuments()
@@ -101,7 +102,7 @@ export function CustomerPortalOrderDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 
-  if (error) return <ErrorState message={t('orders.detail.loadError')} />
+  if (error) return <ErrorState message={t('orders.detail.loadError')} error={error.cause} backTo="/klantportaal" />
   if (!order) return <LoadingState message={t('orders.detail.loading')} />
 
   const subtitle = `${t('orders.detail.submittedFor', { date: formatDate(order.orderDate) })}${
