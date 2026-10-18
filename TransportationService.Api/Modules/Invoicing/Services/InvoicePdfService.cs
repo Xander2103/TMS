@@ -161,7 +161,9 @@ public class InvoicePdfService : IInvoicePdfService
             CustomerCompanyNumber: invoice.CustomerCompanyNumberSnapshot ?? liveCustomer?.CompanyNumber,
             PaymentTermsText: invoice.Kind == InvoiceKind.CreditNote ? null : strings.PaymentTermsText(invoice.PaymentTermDays, invoice.DueDate),
             PaymentReference: invoice.PaymentReference ?? invoice.InvoiceNumber,
-            CreditReason: invoice.CreditReason);
+            CreditReason: invoice.CreditReason,
+            PinnedDocumentId: final ? invoice.Id : null,
+            PinnedAt: final ? invoice.PartySnapshotFrozenAt : null);
 
         var bytes = InvoicePdfRenderer.Render(snapshot);
         var prefix = invoice.Kind == InvoiceKind.CreditNote ? "creditnota" : "factuur";

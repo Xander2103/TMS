@@ -140,6 +140,7 @@ public class IssuedInvoicePartySnapshotTests : IDisposable
 
         // PDF: identical content, still no logo.
         var pdfAfter = (await h.Pdf.RenderAsync(issuedId, CancellationToken.None))!.Value.Bytes;
+        Assert.Equal(pdfBefore, pdfAfter); // byte-identical: metadata pinned to the issue
         Assert.Equal(0, ImageCount(pdfAfter));
         Assert.DoesNotContain("Laterstraat", PdfText(pdfAfter));
         Assert.DoesNotContain("BE0888777148", PdfText(pdfAfter));

@@ -221,12 +221,13 @@ public class PeppolInvoiceService : IPeppolInvoiceService
         }
         else if (graph.Customer.PeppolValidationStatus == CustomerPeppolValidationStatus.NotFound)
         {
-            Add("customer.not_found", $"Klant '{graph.Customer.Name}' werd bij de laatste controle niet gevonden in het Peppol-netwerk.");
+            Add("customer.not_found", $"Klant '{buyer.Name}' werd bij de laatste controle niet gevonden in het Peppol-netwerk.");
         }
 
         if (!graph.Customer.PeppolEnabled)
         {
-            Add("customer.peppol_disabled", $"Peppol is niet ingeschakeld voor klant '{graph.Customer.Name}' (fiscale gegevens).");
+            // The delivery CHANNEL is live configuration (can we send it now?); the name is the issued one.
+            Add("customer.peppol_disabled", $"Peppol is niet ingeschakeld voor klant '{buyer.Name}' (fiscale gegevens).");
         }
 
         if (VatTreatmentCatalog.Resolve(treatment).RequiresVatNumber && string.IsNullOrWhiteSpace(buyer.VatNumber))

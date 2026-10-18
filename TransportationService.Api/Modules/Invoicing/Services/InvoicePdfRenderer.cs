@@ -48,7 +48,10 @@ public sealed record InvoicePdfSnapshot(
     /// <summary>Structured payment reference (OGM) or the invoice number.</summary>
     string? PaymentReference = null,
     /// <summary>ACC-M11: why the credit note was made.</summary>
-    string? CreditReason = null);
+    string? CreditReason = null,
+    /// <summary>MD-H3: set for an issued document — the PDF is then byte-identical on every download.</summary>
+    Guid? PinnedDocumentId = null,
+    DateTime? PinnedAt = null);
 
 /// <summary>
 /// Renders a one-page-per-overflow invoice PDF: header (seller + optional logo), invoice meta,
@@ -356,6 +359,12 @@ public static class InvoicePdfRenderer
         if (invoice.InvoiceFooter is { Length: > 0 })
         {
             gfx.DrawString(Fit(gfx, invoice.InvoiceFooter, Small, width), Small, XBrushes.Gray, new XPoint(margin, footerY));
+        }
+
+        // MD-H3: an issued invoice downloads byte-identically (metadata pinned to its issue).
+        if (invoice.PinnedDocumentId is { } pinnedId && invoice.PinnedAt is { } pinnedAt)
+        {
+            return Modules.Pdf.DeterministicPdf.Save(document, pinnedId, pinnedAt);
         }
 
         using var stream = new MemoryStream();

@@ -215,7 +215,8 @@ public class CustomerPortalService : ICustomerPortalService
         // order reads "6 × Europallet" instead of "6 × stuks". Only an existing, active code is
         // used; anything else keeps the legacy free-text unit.
         var activeUnitCodes = (await _dbContext.UnitTypes.AsNoTracking()
-                .Where(t => t.TenantId == _tenantContext.TenantId && t.IsActive && !t.IsDeleted)
+                // MD-H8/M13: and allowed for order entry, the same rule the order service enforces.
+                .Where(t => t.TenantId == _tenantContext.TenantId && t.IsActive && !t.IsDeleted && t.AllowForOrderEntry)
                 .Select(t => t.Code)
                 .ToListAsync(cancellationToken))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
