@@ -143,6 +143,56 @@ routes. Navigatie per permissie: Dashboard, Opdrachten (`/klantportaal`), Docume
 (`/berichten`, met unread-badge), Gebruikers (`/gebruikers`); nieuw indienen via
 `/klantportaal/new`.
 
+## Klantstatus, zichtbaarheid en aanvraagopvolging (final remediation 2026-10-18)
+
+**Eén klantstatus, server-side.** `PortalOrderStatusRules.ProjectAsync` is de enige plek die
+bepaalt wat de klant ziet. Het portaal ontvangt nooit een interne levenscyclus-sleutel (Draft,
+Submitted, Completed, Invoiced) maar een klantcode (`PortalCustomerStatuses`):
+
+| Feiten | Klantstatus |
+|---|---|
+| Ingediend, nog niemand gereageerd | Aanvraag ontvangen (`Received`) |
+| Open "Info opvragen"-vraag | Informatie gevraagd (`InfoRequested`) |
+| Klant antwoordde, of planner zette de aanvraag terug naar concept | Wordt beoordeeld (`InReview`) |
+| Confirmed / Planned / InProgress | Bevestigd / Gepland / Onderweg |
+| Completed of Invoiced, volgens de EX-08-leveringsuitkomst | Geleverd / Gedeeltelijk geleverd / Niet geleverd / Herlevering gepland / Herleverd |
+| Geannuleerd zonder ooit bevestigd te zijn | Afgewezen (`Rejected`) |
+| Geannuleerd na bevestiging | Geannuleerd |
+
+Facturatie vervangt nooit de leveringswaarheid: "Factuur beschikbaar" is een apart veld
+(`invoiceAvailable`), en enkel gevuld voor een gebruiker met `customer_portal.view_invoices`.
+Een herlevering telt pas mee zodra de klant die order zelf mag zien (Bevestigd of later); zolang ze
+een intern concept is, blijft het origineel "Niet geleverd". Een herlevering die zelf mislukt, toont
+dat ook.
+
+**Eén zichtbaarheidsregel.** Interne concepten (ook concept-herleveringen) bestaan voor het portaal
+niet: lijst, detail, dashboard, berichtenthreads, ongelezen-teller en documenten (orderdocumenten,
+POD, uitgegeven documenten) gebruiken allemaal `PortalOrderStatusRules.IsVisibleToCustomerAsync` /
+`VisibleOrderIdsAsync` en antwoorden 404 zoals voor een andere klant.
+
+**Aankomende leveringen** bevat enkel aanvaard werk (Bevestigd/Gepland/Onderweg) waarvan de losstop
+nog niet gebeurd is (geen actuele POD, geen afgeronde/mislukte/overgeslagen uitvoering), één rij per
+order, binnen 7 dagen. Een openstaande losstop van een lopende rit blijft staan, ook als het venster al
+begonnen is.
+
+**Info opvragen — volledige rondgang.** De vraag van de planner IS een bericht op de orderthread met
+`IsInfoRequest = true` (geen tweede entiteit). De klant ziet "Informatie gevraagd", de vraag en een
+antwoordveld op de orderpagina (en "Wacht op uw antwoord" op het dashboard); het antwoord is een
+gewoon bericht op dezelfde thread. De planner ziet vraag en antwoord in het beoordelingspaneel
+(dossier én klassieke orderpagina, `GET /api/transport-orders/{id}/portal-review`) en krijgt een
+melding "… antwoordde op de informatievraag voor ORD-…". "Terug naar concept" op een portaalaanvraag
+vraagt eerst bevestiging en stuurt geen mail meer (vroeger "geweigerd"); weigeren gebeurt via Afwijzen.
+
+**Uitgegeven CMR/LB/WB.** Een planner publiceert het ACTIEVE uitgegeven document vanuit de
+dossier-documenten ("Publiceren voor klant", `PUT /api/issued-transport-documents/{id}/customer-visibility`).
+De klant downloadt exact de bevroren snapshot (MD-B1), byte-identiek aan de interne PDF. Een
+vervangend document erft de publicatie; een vervangen document is nooit zichtbaar; een klantwissel
+trekt de publicatie in (geaudit).
+
+**POD na afronding.** Rondt de chauffeur de laatste stop af zonder POD, dan blijft "POD opnemen"
+beschikbaar op de afgeronde rit; kantoorgebruikers met `pod.finalize` + `pod.correct` registreren
+ze op de ritdetailpagina ("POD registreren").
+
 ## Bekende beperkingen
 
 - POD-**foto's** zitten bewust niet in het documentenoverzicht — enkel de handtekening
