@@ -11,6 +11,19 @@ public class IssuedItemTemplate : AuditableTenantEntity
 {
     public string Name { get; set; } = string.Empty;
 
+    /// <summary>
+    /// WH-M1: short visible warehouse code ("BM-0007"), unique per tenant over all rows (deleted
+    /// included) so two items with the same name are never confused in a picker.
+    /// </summary>
+    public string? Code { get; set; }
+
+    /// <summary>
+    /// WH-M5: consumable (verbruiksartikel). Issuing it takes stock and records who received it,
+    /// but the issuance is final (status Consumed): no loan, no holder, nothing to return.
+    /// Requires stock tracking; incompatible with ReturnRequired and RequiresSerialNumber.
+    /// </summary>
+    public bool IsConsumable { get; set; }
+
     /// <summary>Grouping label (Algemeen, Chauffeur, Magazijn, Klasse 7, Optioneel, ...). Kept as
     /// snapshot of the master-data category name so historical rows keep their label.</summary>
     public string Category { get; set; } = "Algemeen";

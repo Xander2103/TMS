@@ -41,11 +41,12 @@ public class TemplateStockFieldTests
 
     private static SaveIssuedItemTemplateRequest StockTemplate(
         string name = "Handschoenen", int? stock = null, string? reason = null, bool variants = false, bool allowNegative = false,
-        Guid? expectedVersion = null, bool confirmNegative = false) =>
+        Guid? expectedVersion = null, bool confirmNegative = false, int? expectedStock = null) =>
         new(name, "Algemeen", null, 1, false, true, true, true, 0,
             StockTrackingEnabled: true, VariantsEnabled: variants, AllowNegativeStock: allowNegative,
             Stock: stock, StockCorrectionReason: reason,
-            ExpectedVersion: expectedVersion, ConfirmNegativeStock: confirmNegative);
+            ExpectedVersion: expectedVersion, ConfirmNegativeStock: confirmNegative,
+            ExpectedCurrentStock: expectedStock);
 
     [Fact]
     public async Task Create_WithStock_WritesInitialStockMovement()
@@ -71,7 +72,7 @@ public class TemplateStockFieldTests
         var created = await h.Sut.CreateTemplateAsync(StockTemplate(stock: 25), CancellationToken.None);
 
         var updated = await h.Sut.UpdateTemplateAsync(created.Id,
-            StockTemplate(stock: 30, reason: "Telling magazijn"), CancellationToken.None);
+            StockTemplate(stock: 30, reason: "Telling magazijn", expectedStock: 25), CancellationToken.None);
 
         Assert.Equal(30, updated!.CurrentStock);
         var movements = await h.Db.Context.StockMovements
@@ -93,7 +94,7 @@ public class TemplateStockFieldTests
         var created = await h.Sut.CreateTemplateAsync(StockTemplate(stock: 25), CancellationToken.None);
 
         var ex = await Assert.ThrowsAsync<DomainValidationException>(() =>
-            h.Sut.UpdateTemplateAsync(created.Id, StockTemplate(stock: 30), CancellationToken.None));
+            h.Sut.UpdateTemplateAsync(created.Id, StockTemplate(stock: 30, expectedStock: 25), CancellationToken.None));
         Assert.Contains("reden", ex.Message, StringComparison.OrdinalIgnoreCase);
 
         // Unchanged stock needs no reason.
@@ -110,16 +111,16 @@ public class TemplateStockFieldTests
         var created = await h.Sut.CreateTemplateAsync(StockTemplate(stock: 5), CancellationToken.None);
 
         await Assert.ThrowsAsync<DomainValidationException>(() =>
-            h.Sut.UpdateTemplateAsync(created.Id, StockTemplate(stock: -2, reason: "Correctie"), CancellationToken.None));
+            h.Sut.UpdateTemplateAsync(created.Id, StockTemplate(stock: -2, reason: "Correctie", expectedStock: 5), CancellationToken.None));
 
         // Allowed but unconfirmed → the guard demands the confirmation flow (sprint fase 1).
         await Assert.ThrowsAsync<NegativeStockConfirmationRequiredException>(() =>
             h.Sut.UpdateTemplateAsync(created.Id,
-                StockTemplate(stock: -2, reason: "Correctie", allowNegative: true), CancellationToken.None));
+                StockTemplate(stock: -2, reason: "Correctie", allowNegative: true, expectedStock: 5), CancellationToken.None));
 
         var version = (await h.Db.Context.IssuedItemTemplates.AsNoTracking().SingleAsync(t => t.Id == created.Id)).Version;
         var allowed = await h.Sut.UpdateTemplateAsync(created.Id,
-            StockTemplate(stock: -2, reason: "Correctie", allowNegative: true, expectedVersion: version, confirmNegative: true),
+            StockTemplate(stock: -2, reason: "Correctie", allowNegative: true, expectedVersion: version, confirmNegative: true, expectedStock: 5),
             CancellationToken.None);
         Assert.Equal(-2, allowed!.CurrentStock);
     }

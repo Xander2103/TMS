@@ -113,6 +113,7 @@ public static class IssuedItemTemplateSeeder
                 {
                     Id = Guid.NewGuid(),
                     TenantId = tenantId,
+                    Code = Modules.Employees.Services.IssuedItemCodes.Format(order + 1),
                     Name = seed.Name,
                     Category = seed.Category,
                     RequiresSerialNumber = seed.Serial,

@@ -53,6 +53,16 @@ public class InventoryAlertService : IInventoryAlertService
         var status = template.StockTrackingEnabled
             ? InventoryStatusCalculator.ComputeFor(template, variant)
             : InventoryStatus.Normal;
+
+        // WH (low): a brand-new item (or variant) has stock 0 before anything was ever received —
+        // that is not "Niet op voorraad", it is "nog niet ontvangen". No alert until the first movement.
+        if (status == InventoryStatus.OutOfStock
+            && !await _dbContext.StockMovements.AnyAsync(
+                m => m.TenantId == _tenantContext.TenantId && m.TemplateId == template.Id && m.VariantId == variantId,
+                cancellationToken))
+        {
+            status = InventoryStatus.Normal;
+        }
         var now = _timeProvider.GetUtcNow().UtcDateTime;
         var dedupeKey = DedupeKeyFor(template.Id, variant?.Id);
 

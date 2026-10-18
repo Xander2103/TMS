@@ -12,6 +12,7 @@ public class IssuedItemTemplateConfiguration : IEntityTypeConfiguration<IssuedIt
         builder.HasKey(t => t.Id);
 
         builder.Property(t => t.Name).IsRequired().HasMaxLength(150);
+        builder.Property(t => t.Code).HasMaxLength(30);
         builder.Property(t => t.Category).IsRequired().HasMaxLength(80);
         builder.Property(t => t.ApplicableJobFunctionCodes).HasMaxLength(500);
         builder.Property(t => t.Description).HasMaxLength(500);
@@ -21,6 +22,8 @@ public class IssuedItemTemplateConfiguration : IEntityTypeConfiguration<IssuedIt
         builder.Property(t => t.Version).IsConcurrencyToken();
 
         builder.HasIndex(t => new { t.TenantId, t.IsActive });
+        // WH-M1: unique over ALL rows (no IsDeleted filter) — a code history printed is never reused.
+        builder.HasIndex(t => new { t.TenantId, t.Code }).IsUnique().HasFilter("\"Code\" IS NOT NULL");
         builder.HasIndex(t => new { t.TenantId, t.CategoryId });
         builder.HasOne<IssuedItemCategory>().WithMany()
             .HasForeignKey(t => t.CategoryId).OnDelete(DeleteBehavior.Restrict);
@@ -114,6 +117,7 @@ public class StockMovementConfiguration : IEntityTypeConfiguration<StockMovement
         builder.Property(m => m.Notes).HasMaxLength(1000);
         builder.HasIndex(m => new { m.TenantId, m.TemplateId, m.Timestamp });
         builder.HasIndex(m => new { m.TenantId, m.VariantId });
+        builder.HasIndex(m => new { m.TenantId, m.IssuedItemId });
         builder.HasOne<IssuedItemTemplate>().WithMany()
             .HasForeignKey(m => m.TemplateId).OnDelete(DeleteBehavior.Cascade);
         builder.HasOne<IssuedItemVariant>().WithMany()
@@ -185,6 +189,7 @@ public class EmployeeIssuedItemConfiguration : IEntityTypeConfiguration<Employee
         builder.Property(i => i.CategorySnapshot).IsRequired().HasMaxLength(80);
         builder.Property(i => i.Status).HasConversion<string>().HasMaxLength(20);
         builder.Property(i => i.SerialNumber).HasMaxLength(100);
+        builder.Property(i => i.NormalizedSerialNumber).HasMaxLength(100);
         builder.Property(i => i.Notes).HasMaxLength(1000);
         builder.Property(i => i.ReturnCondition).HasMaxLength(200);
         builder.Property(i => i.ConditionAtIssue).HasMaxLength(200);
@@ -194,6 +199,14 @@ public class EmployeeIssuedItemConfiguration : IEntityTypeConfiguration<Employee
 
         builder.HasIndex(i => new { i.TenantId, i.EmployeeId });
         builder.HasIndex(i => new { i.TenantId, i.Status, i.ExpectedReturnDate });
+        // WH-H2: one serial identity → at most ONE open holder per item (the race-proof half of
+        // the rule; the service gives the Dutch refusal). Returned/consumed rows keep the serial
+        // as history, so the same serial can be issued again after a return.
+        builder.HasIndex(i => new { i.TenantId, i.TemplateId, i.NormalizedSerialNumber })
+            .IsUnique()
+            .HasFilter("\"NormalizedSerialNumber\" IS NOT NULL AND \"Status\" = 'Issued' AND \"IsDeleted\" = false")
+            .HasDatabaseName("UX_employee_issued_items_open_serial");
+        builder.HasIndex(i => new { i.TenantId, i.NormalizedSerialNumber });
 
         builder.HasOne<Employee>().WithMany()
             .HasForeignKey(i => i.EmployeeId).OnDelete(DeleteBehavior.Cascade);

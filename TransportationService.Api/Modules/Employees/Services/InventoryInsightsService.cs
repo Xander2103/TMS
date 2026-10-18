@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using TransportationService.Api.Common;
 using TransportationService.Api.Data;
 using TransportationService.Api.Modules.Employees.Entities;
 using TransportationService.Api.Modules.Tenancy.Services;
@@ -9,7 +10,8 @@ public record InventoryOverviewRowDto(
     Guid TemplateId, Guid? VariantId, string Name, string? VariantLabel, string Category,
     string? StorageLocation, string? Unit, int CurrentStock,
     int? WarningLevel, int? MinimumLevel, int? TargetLevel, int? ReorderQuantity,
-    InventoryStatus Status, DateTime? LastMovementAt, bool AllowNegativeStock, bool ReturnRequired);
+    InventoryStatus Status, DateTime? LastMovementAt, bool AllowNegativeStock, bool ReturnRequired,
+    string? Code = null, bool IsConsumable = false);
 
 public record InventoryAlertDto(
     Guid Id, Guid TemplateId, Guid? VariantId, string Name, string? VariantLabel,
@@ -79,7 +81,7 @@ public class InventoryInsightsService : IInventoryInsightsService
                         warning, template.MinimumStock, template.TargetStockLevel, template.ReorderQuantity,
                         InventoryStatusCalculator.Compute(variant.CurrentStock, warning, template.MinimumStock),
                         lastByTarget.TryGetValue((template.Id, (Guid?)variant.Id), out var lastVariant) ? lastVariant : null,
-                        template.AllowNegativeStock, template.ReturnRequired));
+                        template.AllowNegativeStock, template.ReturnRequired, template.Code, template.IsConsumable));
                 }
             }
             else
@@ -90,7 +92,7 @@ public class InventoryInsightsService : IInventoryInsightsService
                     template.LowStockThreshold, template.MinimumStock, template.TargetStockLevel, template.ReorderQuantity,
                     InventoryStatusCalculator.Compute(template.CurrentStock, template.LowStockThreshold, template.MinimumStock),
                     lastByTarget.TryGetValue((template.Id, (Guid?)null), out var last) ? last : null,
-                    template.AllowNegativeStock, template.ReturnRequired));
+                    template.AllowNegativeStock, template.ReturnRequired, template.Code, template.IsConsumable));
             }
         }
 
@@ -100,9 +102,9 @@ public class InventoryInsightsService : IInventoryInsightsService
     public async Task<IReadOnlyList<InventoryLoanDto>> GetLoansAsync(bool overdueOnly, CancellationToken cancellationToken)
     {
         var tenantId = _tenantContext.TenantId;
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = await TenantTimeZone.TodayAsync(_dbContext, tenantId, TimeProvider.System, cancellationToken);
         var templateReturnRequired = _dbContext.IssuedItemTemplates.AsNoTracking()
-            .Where(t => t.TenantId == tenantId && t.ReturnRequired)
+            .Where(t => t.TenantId == tenantId && (t.ReturnRequired || t.RequiresSerialNumber))
             .Select(t => t.Id);
         var rows = await _dbContext.EmployeeIssuedItems.AsNoTracking()
             .Where(i => i.TenantId == tenantId && i.Status == IssuedItemStatus.Issued

@@ -50,7 +50,7 @@ public class NegativeStockConfirmationTests
     }
 
     private static SaveIssuedItemTemplateRequest Template(bool allowNegative, int stock = 2) =>
-        new("Tape", "Algemeen", null, 1, false, true, true, false, 0,
+        new("Tape", "Algemeen", null, 1, false, true, true, true, 0,
             StockTrackingEnabled: true, AllowNegativeStock: allowNegative, Stock: stock);
 
     private static SaveEmployeeIssuedItemRequest Issue(
@@ -165,10 +165,10 @@ public class NegativeStockConfirmationTests
         var version = await CurrentVersionAsync(h, template.Id);
 
         await Assert.ThrowsAsync<NegativeStockConfirmationRequiredException>(() =>
-            h.Inventory.CorrectStockAsync(template.Id, new StockCorrectionRequest(null, -2, "Telling"), CancellationToken.None));
+            h.Inventory.CorrectStockAsync(template.Id, new StockCorrectionRequest(null, -2, "Telling", ExpectedCurrentStock: 2), CancellationToken.None));
 
         var movement = await h.Inventory.CorrectStockAsync(template.Id,
-            new StockCorrectionRequest(null, -2, "Telling", ExpectedVersion: version, ConfirmNegativeStock: true), CancellationToken.None);
+            new StockCorrectionRequest(null, -2, "Telling", ExpectedVersion: version, ConfirmNegativeStock: true, ExpectedCurrentStock: 2), CancellationToken.None);
         Assert.Equal(-2, movement!.ResultingStock);
     }
 

@@ -10,6 +10,12 @@ public enum IssuedItemStatus
     Returned,
     Missing,
     Damaged,
+
+    /// <summary>
+    /// WH-M5: a consumable (gloves, batteries) handed out for good — stock left, the issuance is
+    /// recorded for traceability, but it is never an open loan or a current holder.
+    /// </summary>
+    Consumed,
 }
 
 /// <summary>
@@ -36,6 +42,12 @@ public class EmployeeIssuedItem : AuditableTenantEntity
     public DateOnly? IssuedDate { get; set; }
     public int Quantity { get; set; } = 1;
     public string? SerialNumber { get; set; }
+
+    /// <summary>
+    /// WH-H2: <see cref="SerialNumber"/> upper-cased without whitespace — the serial identity. A
+    /// filtered unique index allows at most ONE open (Issued) row per tenant + template + serial.
+    /// </summary>
+    public string? NormalizedSerialNumber { get; set; }
     public string? Notes { get; set; }
     public Guid? IssuedByUserId { get; set; }
 

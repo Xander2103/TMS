@@ -62,6 +62,15 @@ public static class PermissionCodes
     public const string InventoryReorderManage = "inventory.reorder_manage";
     public const string InventoryLoansView = "inventory.loans_view";
 
+    /// <summary>
+    /// WH-H4: issue company items to an employee from the warehouse (Uitgeven) — picks the employee
+    /// through the safe identity picker (number, name, active), never the HR employee record.
+    /// </summary>
+    public const string InventoryIssue = "inventory.issue";
+
+    /// <summary>WH-H4: process a return (Retour verwerken) from the warehouse.</summary>
+    public const string InventoryReturn = "inventory.return";
+
     /// <summary>Configure the bounded escalation rules (delay/target/active per condition).</summary>
     public const string EscalationsManage = "escalations.manage";
 
@@ -484,6 +493,8 @@ public static class PermissionCodes
         (InventoryReorderView, "inventory", "reorder_view", "Bestelvoorstellen bekijken"),
         (InventoryReorderManage, "inventory", "reorder_manage", "Bestelvoorstellen aanmaken en behandelen"),
         (InventoryLoansView, "inventory", "loans_view", "Uitgeleend materiaal en retourtermijnen bekijken"),
+        (InventoryIssue, "inventory", "issue", "Bedrijfsmiddelen uitgeven vanuit het magazijn"),
+        (InventoryReturn, "inventory", "return", "Retours van bedrijfsmiddelen verwerken in het magazijn"),
         (EscalationsManage, "escalations", "manage", "Escalatieregels beheren"),
         (TasksViewOwn, "tasks", "view_own", "Eigen taken bekijken"),
         (TasksManageOwn, "tasks", "manage_own", "Eigen taken aanmaken, starten, blokkeren en voltooien"),

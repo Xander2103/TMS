@@ -321,10 +321,10 @@ public class InventoryStockTests
         await h.Inventory.ReceiveStockAsync(template.Id, new StockReceiptRequest(null, 10, null), CancellationToken.None);
 
         await Assert.ThrowsAsync<DomainValidationException>(() =>
-            h.Inventory.CorrectStockAsync(template.Id, new StockCorrectionRequest(null, 7, " "), CancellationToken.None));
+            h.Inventory.CorrectStockAsync(template.Id, new StockCorrectionRequest(null, 7, " ", ExpectedCurrentStock: 10), CancellationToken.None));
 
         var movement = await h.Inventory.CorrectStockAsync(template.Id,
-            new StockCorrectionRequest(null, 7, "Telverschil na inventaris"), CancellationToken.None);
+            new StockCorrectionRequest(null, 7, "Telverschil na inventaris", ExpectedCurrentStock: 10), CancellationToken.None);
 
         Assert.Equal(-3, movement!.Quantity);
         Assert.Equal(7, movement.ResultingStock);

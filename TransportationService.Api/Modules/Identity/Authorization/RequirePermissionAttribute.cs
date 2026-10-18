@@ -10,8 +10,18 @@ namespace TransportationService.Api.Modules.Identity.Authorization;
 /// alternative next to the specific code: [RequirePermission(OrdersEdit, OrdersManage)].
 /// </summary>
 [AttributeUsage(AttributeTargets.Method | AttributeTargets.Class)]
-public class RequirePermissionAttribute : Attribute, IAsyncActionFilter
+public class RequirePermissionAttribute : Attribute, IAsyncActionFilter, IOrderedFilter
 {
+    /// <summary>
+    /// WH-M10 (warehouse + security acceptance 2026-10-18): request bodies were model-validated
+    /// BEFORE the permission check, so a user without the right got a 400 about the body instead of
+    /// a 403 (and could probe validation rules). [ApiController]'s ModelStateInvalidFilter runs at
+    /// order −2000; the permission check now runs first.
+    /// </summary>
+    public const int FilterOrder = -3000;
+
+    public int Order => FilterOrder;
+
     private readonly string[] _permissionCodes;
 
     public RequirePermissionAttribute(params string[] permissionCodes)

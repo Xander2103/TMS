@@ -13,6 +13,9 @@ public enum StockMovementType
     Lost,
     Disposed,
     Transfer,
+
+    /// <summary>WH-M5: a consumable handed out for good (stock leaves, nothing comes back).</summary>
+    Consumption,
 }
 
 /// <summary>
@@ -40,6 +43,13 @@ public class StockMovement : AuditableTenantEntity
 
     /// <summary>Employee involved for issue/return movements.</summary>
     public Guid? EmployeeId { get; set; }
+
+    /// <summary>
+    /// WH-M4: the issuance (employee_issued_items row) an issue/return/consumption belongs to, so
+    /// the movement history can show the serial and the issuance it closed. Soft reference;
+    /// null on receipts, corrections and legacy rows.
+    /// </summary>
+    public Guid? IssuedItemId { get; set; }
 
     public Guid? PerformedByUserId { get; set; }
     public DateTime Timestamp { get; set; }

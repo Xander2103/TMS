@@ -13,7 +13,8 @@ namespace TransportationService.Api.Modules.Employees.Services;
 
 /// <summary>What one offboarding switched off — audited and returned to the UI.</summary>
 public sealed record EmployeeOffboardingSummary(
-    int UsersDeactivated, int DriversDeactivated, int VehicleSlotsReleased, int UpcomingTrips, int TrailersReleased = 0);
+    int UsersDeactivated, int DriversDeactivated, int VehicleSlotsReleased, int UpcomingTrips, int TrailersReleased = 0,
+    int OutstandingEquipment = 0);
 
 /// <summary>Which business path ended the employment (audited as the reason).</summary>
 public enum OffboardingTrigger
@@ -146,15 +147,19 @@ public sealed class EmployeeOffboardingService
 
         await _db.SaveChangesAsync(cancellationToken);
 
+        // WH-H5: company items still to be returned are counted (and shown in the dialog before
+        // confirming), never returned automatically — and they never block ending the access.
+        var outstanding = await WarehouseIssueService.CountOutstandingAsync(_db, tenantId, employee.Id, cancellationToken);
+
         var summary = new EmployeeOffboardingSummary(
-            usersDeactivated, drivers.Count, released.VehicleSlotsReleased, upcoming, released.TrailersReleased);
+            usersDeactivated, drivers.Count, released.VehicleSlotsReleased, upcoming, released.TrailersReleased, outstanding);
         await _auditService.RecordAsync(EmployeeEntityType, employee.Id.ToString(), "Deactivated", new { IsActive = wasActive },
             new
             {
                 employee.IsActive, employee.EmploymentEndDate, employee.EmploymentStatus, Trigger = trigger,
                 AccountsDeactivated = summary.UsersDeactivated, DriversDeactivated = summary.DriversDeactivated,
                 VehicleSlotsReleased = summary.VehicleSlotsReleased, TrailersReleased = summary.TrailersReleased,
-                UpcomingTrips = summary.UpcomingTrips,
+                UpcomingTrips = summary.UpcomingTrips, OutstandingEquipment = summary.OutstandingEquipment,
             }, cancellationToken);
         foreach (var user in users)
         {

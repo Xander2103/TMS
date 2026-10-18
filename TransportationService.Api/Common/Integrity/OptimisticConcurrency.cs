@@ -37,7 +37,12 @@ public static class OptimisticConcurrency
     }
 }
 
-public sealed class ConcurrencyConflictException() : Exception(OptimisticConcurrency.ConflictMessage);
+/// <summary>
+/// A stale edit. The message defaults to the generic master-data reload text; a domain may pass a
+/// more specific Dutch sentence (WH-M3: "De voorraad is intussen gewijzigd. Controleer opnieuw.").
+/// </summary>
+public sealed class ConcurrencyConflictException(string? message = null)
+    : Exception(message ?? OptimisticConcurrency.ConflictMessage);
 
 /// <summary>Stale edit (explicit or caught by the token at save) → 409 with the Dutch reload message.</summary>
 public sealed class ConcurrencyConflictExceptionFilter : IExceptionFilter
@@ -51,7 +56,9 @@ public sealed class ConcurrencyConflictExceptionFilter : IExceptionFilter
 
         context.Result = new ConflictObjectResult(new
         {
-            message = OptimisticConcurrency.ConflictMessage,
+            message = context.Exception is ConcurrencyConflictException conflict
+                ? conflict.Message
+                : OptimisticConcurrency.ConflictMessage,
             code = ErrorCodes.ConcurrencyConflict,
         });
         context.ExceptionHandled = true;

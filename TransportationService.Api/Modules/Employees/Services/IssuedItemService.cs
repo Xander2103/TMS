@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using TransportationService.Api.Common;
+using TransportationService.Api.Common.Integrity;
+using TransportationService.Api.Common.Persistence;
 using TransportationService.Api.Data;
 using TransportationService.Api.Modules.Auditing.Services;
 using TransportationService.Api.Modules.Employees.Entities;
@@ -20,7 +22,9 @@ public record IssuedItemTemplateDto(
     Guid? CategoryId = null,
     int? TargetStockLevel = null, int? ReorderQuantity = null,
     bool NegativeStockRequiresReason = true,
-    InventoryStatus StockStatus = InventoryStatus.Normal);
+    InventoryStatus StockStatus = InventoryStatus.Normal,
+    string? Code = null,
+    bool IsConsumable = false);
 
 public record SaveIssuedItemTemplateRequest(
     string Name, string Category, string? ApplicableJobFunctionCodes,
@@ -31,7 +35,9 @@ public record SaveIssuedItemTemplateRequest(
     int? LowStockThreshold = null, int? MinimumStock = null, string? StorageLocation = null,
     Guid? CategoryId = null,
     int? Stock = null, string? StockCorrectionReason = null,
-    Guid? ExpectedVersion = null, bool ConfirmNegativeStock = false);
+    Guid? ExpectedVersion = null, bool ConfirmNegativeStock = false,
+    string? Code = null, bool IsConsumable = false,
+    int? ExpectedCurrentStock = null);
 
 public record EmployeeIssuedItemDto(
     Guid Id, Guid? TemplateId, string Name, string Category, IssuedItemStatus Status,
@@ -41,7 +47,8 @@ public record EmployeeIssuedItemDto(
     DateOnly? ExpectedReturnDate = null, string? ConditionAtIssue = null,
     string? ReturnDisposition = null, bool IsReturnOverdue = false,
     string? IssuedByName = null,
-    string? ReceivedBackByName = null);
+    string? ReceivedBackByName = null,
+    string? ItemCode = null);
 
 /// <summary>"Teruggebracht": closes an active issuance. Date defaults to today; disposition to "good".</summary>
 public record ReturnIssuedItemRequest(
@@ -97,12 +104,15 @@ public class IssuedItemService : IIssuedItemService
     private readonly IPermissionAuthorizationService _permissionService;
     private readonly INegativeStockGuard _negativeStockGuard;
     private readonly IInventoryAlertService? _alertService;
+    private readonly TimeProvider _clock;
 
     public IssuedItemService(TransportationDbContext dbContext, ITenantContext tenantContext,
         ICurrentUserContext currentUser, IAuditService auditService,
         IInventoryService inventoryService, IPermissionAuthorizationService permissionService,
-        INegativeStockGuard negativeStockGuard, IInventoryAlertService? alertService = null)
+        INegativeStockGuard negativeStockGuard, IInventoryAlertService? alertService = null,
+        TimeProvider? clock = null)
     {
+        _clock = clock ?? TimeProvider.System;
         _dbContext = dbContext;
         _tenantContext = tenantContext;
         _currentUser = currentUser;
@@ -142,11 +152,33 @@ public class IssuedItemService : IIssuedItemService
         var template = new IssuedItemTemplate { Id = Guid.NewGuid(), TenantId = _tenantContext.TenantId };
         Apply(template, request);
         await ApplyCategoryAsync(template, request, cancellationToken);
+        var explicitCode = IssuedItemCodes.Normalize(request.Code);
+        if (explicitCode is not null)
+        {
+            await EnsureCodeFreeAsync(explicitCode, null, cancellationToken);
+        }
+
+        template.Code = explicitCode ?? await IssuedItemCodes.NextAsync(_dbContext, _tenantContext.TenantId, cancellationToken);
         _dbContext.IssuedItemTemplates.Add(template);
         await ApplyStockTargetAsync(template, request, cancellationToken);
-        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        // WH-M1: two simultaneous creates may compute the same next code; the unique index decides
+        // and the loser simply takes the following number (an explicit code is never rewritten).
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                await _dbContext.SaveChangesAsync(cancellationToken);
+                break;
+            }
+            catch (DbUpdateException exception) when (explicitCode is null && attempt < 5 && TenantNumbering.IsUniqueViolation(exception))
+            {
+                template.Code = await IssuedItemCodes.NextAsync(_dbContext, _tenantContext.TenantId, cancellationToken);
+            }
+        }
+
         await _auditService.RecordAsync(TemplateEntity, template.Id.ToString(), "Created", null,
-            new { template.Name, template.Category, template.StockTrackingEnabled, template.VariantsEnabled }, cancellationToken);
+            new { template.Name, template.Code, template.Category, template.StockTrackingEnabled, template.VariantsEnabled, template.IsConsumable }, cancellationToken);
         return MapTemplate(template, 0, 0);
     }
 
@@ -163,6 +195,15 @@ public class IssuedItemService : IIssuedItemService
         var oldVariants = template.VariantsEnabled;
         Apply(template, request);
         await ApplyCategoryAsync(template, request, cancellationToken);
+
+        // A request without a code keeps the existing one (older clients never send it).
+        if (IssuedItemCodes.Normalize(request.Code) is { } code && code != template.Code)
+        {
+            await EnsureCodeFreeAsync(code, template.Id, cancellationToken);
+            template.Code = code;
+        }
+
+        template.Code ??= await IssuedItemCodes.NextAsync(_dbContext, _tenantContext.TenantId, cancellationToken);
 
         if (oldVariants && !template.VariantsEnabled)
         {
@@ -183,7 +224,7 @@ public class IssuedItemService : IIssuedItemService
         }
 
         await _auditService.RecordAsync(TemplateEntity, template.Id.ToString(), "Updated", null,
-            new { template.Name, template.IsActive }, cancellationToken);
+            new { template.Name, template.Code, template.IsActive, template.IsConsumable }, cancellationToken);
         if (oldStockTracking != template.StockTrackingEnabled)
         {
             await _auditService.RecordAsync(TemplateEntity, template.Id.ToString(),
@@ -237,10 +278,13 @@ public class IssuedItemService : IIssuedItemService
             items.Where(i => i.IssuedByUserId.HasValue).Select(i => i.IssuedByUserId!.Value)
                 .Concat(items.Where(i => i.ReceivedBackByUserId.HasValue).Select(i => i.ReceivedBackByUserId!.Value)),
             cancellationToken);
+        var today = await TodayAsync(cancellationToken);
+        var codes = await TemplateCodesAsync(items.Where(i => i.TemplateId.HasValue).Select(i => i.TemplateId!.Value), cancellationToken);
         return items
-            .Select(i => Map(i,
+            .Select(i => Map(i, today,
                 i.IssuedByUserId is { } issuerId ? userNames.GetValueOrDefault(issuerId) : null,
-                i.ReceivedBackByUserId is { } receiverId ? userNames.GetValueOrDefault(receiverId) : null))
+                i.ReceivedBackByUserId is { } receiverId ? userNames.GetValueOrDefault(receiverId) : null,
+                i.TemplateId is { } templateId ? codes.GetValueOrDefault(templateId) : null))
             .ToList();
     }
 
@@ -266,6 +310,12 @@ public class IssuedItemService : IIssuedItemService
                 ?? throw new DomainValidationException("Het item bestaat niet.");
             oldStatus = item.Status;
             oldQuantity = item.Quantity;
+            if (oldStatus == IssuedItemStatus.Consumed)
+            {
+                throw new DomainValidationException("status",
+                    "Een verbruikt artikel is definitief uitgereikt en kan niet meer gewijzigd worden. Corrigeer zo nodig de voorraad.");
+            }
+
             if (item.TemplateId is { } existingTemplateId)
             {
                 template = await FindTemplateAsync(existingTemplateId, cancellationToken);
@@ -298,16 +348,52 @@ public class IssuedItemService : IIssuedItemService
             _dbContext.EmployeeIssuedItems.Add(item);
         }
 
+        // WH-M2: 0 or −1 used to become 1 silently. A quantity is a whole number ≥ 1, refused otherwise.
+        StockQuantities.EnsureMovementQuantity("quantity", request.Quantity);
+
         var variant = await ResolveVariantAsync(item, template, request, oldStatus, cancellationToken);
         var stockBefore = template is { StockTrackingEnabled: true }
             ? variant?.CurrentStock ?? template.CurrentStock
             : (int?)null;
-        ApplyItemState(item, request, oldStatus);
-        await ApplyStockTransitionAsync(item, template, variant, oldStatus, oldQuantity, request, cancellationToken);
+
+        // WH-M5: a consumable is handed out for good — the issuance is recorded as Consumed, never
+        // as an open loan with a "Terugbrengen" action.
+        // A row that was already open before the item became a consumable stays as it was.
+        var effectiveStatus = request.Status == IssuedItemStatus.Issued && template is { IsConsumable: true }
+                              && oldStatus != IssuedItemStatus.Issued
+            ? IssuedItemStatus.Consumed
+            : request.Status;
+        if (effectiveStatus == IssuedItemStatus.Consumed && template is not { IsConsumable: true })
+        {
+            throw new DomainValidationException("status", "Alleen een verbruiksartikel kan als verbruikt geregistreerd worden.");
+        }
+
+        var request2 = request with { Status = effectiveStatus };
+        var goesOut = effectiveStatus is IssuedItemStatus.Issued or IssuedItemStatus.Consumed
+                      && oldStatus is not (IssuedItemStatus.Issued or IssuedItemStatus.Consumed);
+        if (goesOut && template is not null)
+        {
+            // WH-M6: an archived item (or variant) is never issued again through the API.
+            InventoryService.EnsureActiveForNewStock(template, variant);
+        }
+
+        ValidateDates(request2);
+        ApplyItemState(item, request2, oldStatus);
+        await EnsureSerialAsync(item, template, oldStatus, cancellationToken);
+        await ApplyStockTransitionAsync(item, template, variant, oldStatus, oldQuantity, request2, cancellationToken);
 
         // Item + movement + cached stock commit in ONE SaveChanges/transaction: a failed
         // employee-item write can never consume stock.
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException exception) when (item.NormalizedSerialNumber is not null && TenantNumbering.IsUniqueViolation(exception))
+        {
+            // WH-H2: the race half — a concurrent issue of the same serial won between our check and save.
+            throw new DomainValidationException("serialNumber",
+                $"Serienummer {item.SerialNumber} is intussen aan iemand anders uitgereikt. Verwerk eerst de retour.");
+        }
 
         if (_alertService is not null && template is not null && stockBefore is not null)
         {
@@ -332,9 +418,10 @@ public class IssuedItemService : IIssuedItemService
 
         var stampIds = new[] { item.IssuedByUserId, item.ReceivedBackByUserId }.Where(id => id.HasValue).Select(id => id!.Value).ToList();
         var stampNames = stampIds.Count == 0 ? new Dictionary<Guid, string>() : await UserNamesAsync(stampIds, cancellationToken);
-        return Map(item,
+        return Map(item, await TodayAsync(cancellationToken),
             item.IssuedByUserId is { } issuedByUserId ? stampNames.GetValueOrDefault(issuedByUserId) : null,
-            item.ReceivedBackByUserId is { } receivedBackByUserId ? stampNames.GetValueOrDefault(receivedBackByUserId) : null);
+            item.ReceivedBackByUserId is { } receivedBackByUserId ? stampNames.GetValueOrDefault(receivedBackByUserId) : null,
+            template?.Code);
     }
 
     public async Task<EmployeeIssuedItemDto?> ReturnAsync(Guid employeeId, Guid itemId, ReturnIssuedItemRequest request, CancellationToken cancellationToken)
@@ -345,12 +432,18 @@ public class IssuedItemService : IIssuedItemService
             return null;
         }
 
+        if (item.Status == IssuedItemStatus.Consumed)
+        {
+            throw new DomainValidationException("status", "Een verbruiksartikel is definitief uitgereikt en wordt niet teruggebracht.");
+        }
+
         if (item.Status != IssuedItemStatus.Issued)
         {
             throw new DomainValidationException("status", "Alleen een uitgereikt middel kan als teruggebracht gemarkeerd worden.");
         }
 
-        var returnedDate = request.ReturnedDate ?? Today();
+        ValidateDisposition(request.ReturnDisposition);
+        var returnedDate = request.ReturnedDate ?? await TodayAsync(cancellationToken);
         if (item.IssuedDate is { } issued && returnedDate < issued)
         {
             throw new DomainValidationException("returnedDate", "De retourdatum kan niet vóór de uitreikingsdatum liggen.");
@@ -384,7 +477,7 @@ public class IssuedItemService : IIssuedItemService
         var save = SnapshotRequest(item) with
         {
             Status = IssuedItemStatus.Issued,
-            IssuedDate = request.IssuedDate ?? Today(),
+            IssuedDate = request.IssuedDate ?? await TodayAsync(cancellationToken),
             ReturnedDate = null,
             ReturnCondition = null,
             ReturnDisposition = null,
@@ -417,7 +510,9 @@ public class IssuedItemService : IIssuedItemService
         _dbContext.EmployeeIssuedItems.FirstOrDefaultAsync(
             i => i.TenantId == _tenantContext.TenantId && i.EmployeeId == employeeId && i.Id == itemId, cancellationToken);
 
-    private static DateOnly Today() => DateOnly.FromDateTime(DateTime.UtcNow);
+    /// <summary>WH-M7 / MD-M3: the TENANT's calendar day — after local midnight UTC is still yesterday.</summary>
+    private Task<DateOnly> TodayAsync(CancellationToken cancellationToken) =>
+        TenantTimeZone.TodayAsync(_dbContext, _tenantContext.TenantId, _clock, cancellationToken);
 
     public async Task<bool> DeleteItemAsync(Guid employeeId, Guid itemId, CancellationToken cancellationToken)
     {
@@ -435,6 +530,11 @@ public class IssuedItemService : IIssuedItemService
             throw new DomainValidationException("status", "Een teruggebrachte uitgifte blijft bewaard als historiek en kan niet verwijderd worden.");
         }
 
+        if (item.Status == IssuedItemStatus.Consumed)
+        {
+            throw new DomainValidationException("status", "Een verbruikte uitgifte blijft bewaard als historiek en kan niet verwijderd worden. Corrigeer zo nodig de voorraad.");
+        }
+
         // Deleting a still-issued, stock-tracked row gives the consumed quantity back so
         // the ledger never leaks stock into a removed record.
         if (item.Status == IssuedItemStatus.Issued && item.TemplateId is { } templateId)
@@ -446,7 +546,7 @@ public class IssuedItemService : IIssuedItemService
                 if (!template.VariantsEnabled || variant is not null)
                 {
                     _inventoryService.ApplyMovement(template, variant, StockMovementType.Return,
-                        item.Quantity, null, "Registratie verwijderd", item.EmployeeId);
+                        item.Quantity, null, "Registratie verwijderd", item.EmployeeId, item.Id);
                 }
             }
         }
@@ -543,20 +643,21 @@ public class IssuedItemService : IIssuedItemService
 
         var newStatus = item.Status;
         var consumedBefore = oldStatus == IssuedItemStatus.Issued ? oldQuantity : 0;
-        var consumedAfter = newStatus == IssuedItemStatus.Issued ? item.Quantity : 0;
+        var consumedAfter = newStatus is IssuedItemStatus.Issued or IssuedItemStatus.Consumed ? item.Quantity : 0;
         var delta = consumedAfter - consumedBefore; // > 0 → additional stock leaves
 
         if (delta > 0)
         {
             await EnsureAvailableAsync(template, variant, delta, request, cancellationToken);
-            _inventoryService.ApplyMovement(template, variant, StockMovementType.Issue, -delta,
-                Trim(request.OverrideReason), null, item.EmployeeId);
+            _inventoryService.ApplyMovement(template, variant,
+                newStatus == IssuedItemStatus.Consumed ? StockMovementType.Consumption : StockMovementType.Issue, -delta,
+                Trim(request.OverrideReason), null, item.EmployeeId, item.Id);
         }
         else if (delta < 0 && newStatus == IssuedItemStatus.Issued)
         {
             // Quantity lowered while issued: the surplus returns to stock.
             _inventoryService.ApplyMovement(template, variant, StockMovementType.Return, -delta,
-                null, "Hoeveelheid verlaagd", item.EmployeeId);
+                null, "Hoeveelheid verlaagd", item.EmployeeId, item.Id);
         }
 
         if (consumedBefore > 0 && newStatus != IssuedItemStatus.Issued)
@@ -571,7 +672,7 @@ public class IssuedItemService : IIssuedItemService
                         if (request.RestoreStock ?? true)
                         {
                             _inventoryService.ApplyMovement(template, variant, StockMovementType.Return,
-                                consumedBefore, null, Trim(request.ReturnCondition), item.EmployeeId);
+                                consumedBefore, null, Trim(request.ReturnCondition), item.EmployeeId, item.Id);
                         }
                     }
                     else
@@ -579,20 +680,20 @@ public class IssuedItemService : IIssuedItemService
                         // Damaged/lost/disposed goods never re-enter usable stock; the
                         // zero-quantity line documents what happened to them.
                         _inventoryService.ApplyMovement(template, variant, DispositionMovement(disposition), 0,
-                            null, Trim(request.ReturnCondition), item.EmployeeId);
+                            null, Trim(request.ReturnCondition), item.EmployeeId, item.Id);
                     }
 
                     break;
                 case IssuedItemStatus.Missing:
-                    _inventoryService.ApplyMovement(template, variant, StockMovementType.Lost, 0, null, Trim(request.Notes), item.EmployeeId);
+                    _inventoryService.ApplyMovement(template, variant, StockMovementType.Lost, 0, null, Trim(request.Notes), item.EmployeeId, item.Id);
                     break;
                 case IssuedItemStatus.Damaged:
-                    _inventoryService.ApplyMovement(template, variant, StockMovementType.Damaged, 0, null, Trim(request.Notes), item.EmployeeId);
+                    _inventoryService.ApplyMovement(template, variant, StockMovementType.Damaged, 0, null, Trim(request.Notes), item.EmployeeId, item.Id);
                     break;
                 case IssuedItemStatus.NotIssued:
                     // Issuance undone (registration error): the goods never left.
                     _inventoryService.ApplyMovement(template, variant, StockMovementType.Return,
-                        consumedBefore, null, "Uitgifte ongedaan gemaakt", item.EmployeeId);
+                        consumedBefore, null, "Uitgifte ongedaan gemaakt", item.EmployeeId, item.Id);
                     break;
             }
         }
@@ -634,6 +735,7 @@ public class IssuedItemService : IIssuedItemService
         IssuedItemStatus.Returned => "Returned",
         IssuedItemStatus.Damaged => "MarkedDamaged",
         IssuedItemStatus.Missing => "MarkedMissing",
+        IssuedItemStatus.Consumed => "Consumed",
         _ => "Recorded",
     };
 
@@ -651,15 +753,16 @@ public class IssuedItemService : IIssuedItemService
     {
         item.Status = request.Status;
         item.IssuedDate = request.IssuedDate;
-        item.Quantity = Math.Max(1, request.Quantity);
+        item.Quantity = request.Quantity;
         item.SerialNumber = Trim(request.SerialNumber);
+        item.NormalizedSerialNumber = SerialNumbers.Normalize(request.SerialNumber);
         item.Notes = Trim(request.Notes);
         item.ExpectedReturnDate = request.ExpectedReturnDate;
         item.ConditionAtIssue = Trim(request.ConditionAtIssue) ?? item.ConditionAtIssue;
         item.ReturnedDate = request.ReturnedDate;
         item.ReturnCondition = Trim(request.ReturnCondition);
 
-        if (request.Status == IssuedItemStatus.Issued && oldStatus != IssuedItemStatus.Issued)
+        if (request.Status is IssuedItemStatus.Issued or IssuedItemStatus.Consumed && oldStatus != request.Status)
         {
             item.IssuedByUserId = _currentUser.CurrentUserId;
             item.ReturnDisposition = null;
@@ -691,10 +794,28 @@ public class IssuedItemService : IIssuedItemService
             throw new DomainValidationException("variantsEnabled", "Varianten vereisen dat voorraadbeheer aan staat.");
         }
 
+        if (request.IsConsumable)
+        {
+            if (!request.StockTrackingEnabled)
+            {
+                throw new DomainValidationException("isConsumable", "Een verbruiksartikel vereist voorraadbeheer.");
+            }
+
+            if (request.ReturnRequired || request.RequiresSerialNumber)
+            {
+                throw new DomainValidationException("isConsumable",
+                    "Een verbruiksartikel wordt niet teruggebracht en heeft geen serienummer. Schakel 'Terugbrengen verplicht' en 'Serienummer verplicht' uit.");
+            }
+        }
+
+        StockQuantities.EnsureMovementQuantity("defaultQuantity", request.DefaultQuantity, "De standaardhoeveelheid");
+        StockQuantities.EnsureThreshold("lowStockThreshold", request.LowStockThreshold);
+        StockQuantities.EnsureThreshold("minimumStock", request.MinimumStock);
+
         template.Name = request.Name.Trim();
         template.Category = string.IsNullOrWhiteSpace(request.Category) ? "Algemeen" : request.Category.Trim();
         template.ApplicableJobFunctionCodes = Trim(request.ApplicableJobFunctionCodes);
-        template.DefaultQuantity = Math.Max(1, request.DefaultQuantity);
+        template.DefaultQuantity = request.DefaultQuantity;
         template.RequiresSerialNumber = request.RequiresSerialNumber;
         template.RequiresReceivedDate = request.RequiresReceivedDate;
         template.ReturnRequired = request.ReturnRequired;
@@ -708,6 +829,7 @@ public class IssuedItemService : IIssuedItemService
         template.StockTrackingEnabled = request.StockTrackingEnabled;
         template.VariantsEnabled = request.VariantsEnabled;
         template.AllowNegativeStock = request.AllowNegativeStock;
+        template.IsConsumable = request.IsConsumable;
         template.LowStockThreshold = request.LowStockThreshold;
         template.MinimumStock = request.MinimumStock;
         template.StorageLocation = Trim(request.StorageLocation);
@@ -726,9 +848,23 @@ public class IssuedItemService : IIssuedItemService
             return;
         }
 
+        StockQuantities.EnsureStockLevel("stock", target);
         if (target == template.CurrentStock)
         {
             return;
+        }
+
+        var hasLedger = await _dbContext.StockMovements.AnyAsync(
+            m => m.TenantId == _tenantContext.TenantId && m.TemplateId == template.Id && m.VariantId == null,
+            cancellationToken);
+        if (hasLedger)
+        {
+            // WH-M3: the form's "Voorraad" is a correction of existing stock — it must name the
+            // stock it was based on, and a stock that moved meanwhile is never overwritten.
+            if (request.ExpectedCurrentStock is not { } expected || expected != template.CurrentStock)
+            {
+                throw new ConcurrencyConflictException(InventoryService.StockChangedMessage);
+            }
         }
 
         await _negativeStockGuard.EnsureAllowedAsync(template, null, target - template.CurrentStock,
@@ -816,19 +952,116 @@ public class IssuedItemService : IIssuedItemService
             t.LowStockThreshold, t.MinimumStock, t.StorageLocation,
             t.CurrentStock, total, low, variantCount,
             t.CategoryId,
-            t.TargetStockLevel, t.ReorderQuantity, t.NegativeStockRequiresReason, status);
+            t.TargetStockLevel, t.ReorderQuantity, t.NegativeStockRequiresReason, status,
+            t.Code, t.IsConsumable);
     }
 
-    private static EmployeeIssuedItemDto Map(EmployeeIssuedItem i, string? issuedByName = null, string? receivedBackByName = null) => new(
+    private static EmployeeIssuedItemDto Map(
+        EmployeeIssuedItem i, DateOnly today, string? issuedByName = null, string? receivedBackByName = null, string? itemCode = null) => new(
         i.Id, i.TemplateId, i.NameSnapshot, i.CategorySnapshot, i.Status,
         i.IssuedDate, i.Quantity, i.SerialNumber, i.Notes, i.IssuedByUserId,
         i.ReturnedDate, i.ReturnCondition, i.ReceivedBackByUserId,
         i.VariantId, i.VariantSnapshot,
         i.ExpectedReturnDate, i.ConditionAtIssue, i.ReturnDisposition,
         IsReturnOverdue: i.Status == IssuedItemStatus.Issued
-            && i.ExpectedReturnDate is { } due && due < DateOnly.FromDateTime(DateTime.UtcNow),
+            && i.ExpectedReturnDate is { } due && due < today,
         IssuedByName: issuedByName,
-        ReceivedBackByName: receivedBackByName);
+        ReceivedBackByName: receivedBackByName,
+        ItemCode: itemCode);
 
     private static string? Trim(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    /// <summary>Return before issue, expected return before issue: refused instead of stored.</summary>
+    private static void ValidateDates(SaveEmployeeIssuedItemRequest request)
+    {
+        if (request.IssuedDate is { } issued)
+        {
+            if (request.ReturnedDate is { } returned && returned < issued)
+            {
+                throw new DomainValidationException("returnedDate", "De retourdatum kan niet vóór de uitreikingsdatum liggen.");
+            }
+
+            if (request.ExpectedReturnDate is { } due && due < issued)
+            {
+                throw new DomainValidationException("expectedReturnDate", "De verwachte retourdatum kan niet vóór de uitreikingsdatum liggen.");
+            }
+        }
+    }
+
+    /// <summary>
+    /// WH-H2: one serial identity → at most ONE open holder per item. Also: a serial-required item
+    /// is never issued without a serial (the backend accepted it), and a serial names exactly one
+    /// physical item (quantity 1). Only checked when the row (re)enters the Issued state or its
+    /// serial changes, so editing a legacy row's notes never trips over old data.
+    /// </summary>
+    private async Task EnsureSerialAsync(
+        EmployeeIssuedItem item, IssuedItemTemplate? template, IssuedItemStatus oldStatus, CancellationToken cancellationToken)
+    {
+        var entersIssued = item.Status == IssuedItemStatus.Issued && oldStatus != IssuedItemStatus.Issued;
+        if (entersIssued && template is { RequiresSerialNumber: true } && item.NormalizedSerialNumber is null)
+        {
+            throw new DomainValidationException("serialNumber", $"Een serienummer is verplicht voor {template.Name}.");
+        }
+
+        if (item.SerialNumber is { Length: > SerialNumbers.MaxLength })
+        {
+            throw new DomainValidationException("serialNumber", $"Een serienummer is maximaal {SerialNumbers.MaxLength} tekens lang.");
+        }
+
+        if (item.NormalizedSerialNumber is null || item.Status != IssuedItemStatus.Issued)
+        {
+            return;
+        }
+
+        if (item.Quantity != 1)
+        {
+            throw new DomainValidationException("quantity",
+                "Een serienummer hoort bij één fysiek stuk: de hoeveelheid moet 1 zijn. Registreer elk serienummer apart.");
+        }
+
+        if (item.TemplateId is not { } templateId)
+        {
+            return; // a free-text row has no item identity to scope the serial to
+        }
+
+        var holder = await (
+                from other in _dbContext.EmployeeIssuedItems.AsNoTracking()
+                where other.TenantId == _tenantContext.TenantId && other.TemplateId == templateId
+                      && (other.NormalizedSerialNumber == item.NormalizedSerialNumber
+                          // a legacy open duplicate released its normalized identity in the migration
+                          || (other.NormalizedSerialNumber == null && other.SerialNumber != null
+                              && other.SerialNumber.ToUpper().Replace(" ", "") == item.NormalizedSerialNumber))
+                      && other.Status == IssuedItemStatus.Issued && other.Id != item.Id
+                join employee in _dbContext.Employees.AsNoTracking() on other.EmployeeId equals employee.Id
+                select new { employee.FirstName, employee.LastName, employee.EmployeeNumber, other.IssuedDate, other.SerialNumber })
+            .FirstOrDefaultAsync(cancellationToken);
+        if (holder is not null)
+        {
+            var since = holder.IssuedDate is { } date ? $" sinds {date:dd/MM/yyyy}" : string.Empty;
+            throw new DomainValidationException("serialNumber",
+                $"Serienummer {holder.SerialNumber ?? item.SerialNumber} is al uitgereikt aan {holder.FirstName} {holder.LastName} ({holder.EmployeeNumber}){since}. "
+                + "Eén serienummer kan maar één houder hebben: verwerk eerst de retour.");
+        }
+    }
+
+    private async Task EnsureCodeFreeAsync(string code, Guid? exceptTemplateId, CancellationToken cancellationToken)
+    {
+        if (await IssuedItemCodes.IsTakenAsync(_dbContext, _tenantContext.TenantId, code, exceptTemplateId, cancellationToken))
+        {
+            throw new DomainValidationException("code", $"De artikelcode {code} is al in gebruik (ook verwijderde artikels houden hun code).");
+        }
+    }
+
+    private async Task<Dictionary<Guid, string?>> TemplateCodesAsync(IEnumerable<Guid> templateIds, CancellationToken cancellationToken)
+    {
+        var ids = templateIds.Distinct().ToList();
+        if (ids.Count == 0)
+        {
+            return [];
+        }
+
+        return await _dbContext.IssuedItemTemplates.AsNoTracking().IgnoreQueryFilters()
+            .Where(t => t.TenantId == _tenantContext.TenantId && ids.Contains(t.Id))
+            .ToDictionaryAsync(t => t.Id, t => t.Code, cancellationToken);
+    }
 }

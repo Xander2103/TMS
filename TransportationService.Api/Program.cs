@@ -41,7 +41,11 @@ builder.Services
         options.JsonSerializerOptions.Converters.Add(
             new JsonStringEnumConverter()
         )
-    );
+    )
+    // WH-M8: JSON conversion errors (a decimal for an integer quantity) answer in Dutch, keyed on the field.
+    .ConfigureApiBehaviorOptions(options =>
+        options.InvalidModelStateResponseFactory =
+            TransportationService.Api.Common.DutchModelStateMessages.Wrap(options.InvalidModelStateResponseFactory));
 
 // OpenAPI
 builder.Services.AddOpenApi();
@@ -185,6 +189,9 @@ builder.Services.AddScoped<TransportationService.Api.Modules.Employees.Services.
     TransportationService.Api.Modules.Employees.Services.NegativeStockGuard>();
 builder.Services.AddScoped<TransportationService.Api.Modules.Employees.Services.IInventoryInsightsService,
     TransportationService.Api.Modules.Employees.Services.InventoryInsightsService>();
+// WH-H3/H4/H5: warehouse issue/return desk over the same issuance rows as the HR tab.
+builder.Services.AddScoped<TransportationService.Api.Modules.Employees.Services.IWarehouseIssueService,
+    TransportationService.Api.Modules.Employees.Services.WarehouseIssueService>();
 builder.Services.AddScoped<TransportationService.Api.Modules.Employees.Services.IReorderProposalService,
     TransportationService.Api.Modules.Employees.Services.ReorderProposalService>();
 builder.Services.AddScoped<TransportationService.Api.Modules.Tasks.Services.IEmployeeTaskService,

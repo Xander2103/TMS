@@ -21,7 +21,7 @@ public static class DefaultRoleUpgrades
         IReadOnlyDictionary<string, IReadOnlyList<string>>? RevocationsByTemplateCode = null);
 
     /// <summary>Version 1 = the original role creation; steps start at 2.</summary>
-    public const int CurrentVersion = 38;
+    public const int CurrentVersion = 39;
 
     public static IReadOnlyList<UpgradeStep> Steps { get; } =
     [
@@ -676,6 +676,18 @@ public static class DefaultRoleUpgrades
             new Dictionary<string, IReadOnlyList<string>>
             {
                 ["planner"] = [PermissionCodes.CustomersManageFiscal],
+            }),
+
+        new(39,
+            "Magazijnremediëring 2026-10-18 (WH-H4): uitgeven en terugnemen van bedrijfsmiddelen kon enkel via de "
+            + "HR-medewerkerfiche — HR was de magazijnier. Het Magazijn krijgt de uitgifte- en retourbalie "
+            + "(inventory.issue / inventory.return) — zonder enige HR-toegang tot medewerkers (enkel de veilige "
+            + "medewerkerkiezer: nummer, naam, actief). De artikelcatalogus blijft bij HR (beslissing HR-wave); "
+            + "drempels bij management. HR behoudt uitgifte en retour.",
+            new Dictionary<string, IReadOnlyList<string>>
+            {
+                ["magazijn"] = [PermissionCodes.InventoryIssue, PermissionCodes.InventoryReturn],
+                ["hr"] = [PermissionCodes.InventoryIssue, PermissionCodes.InventoryReturn],
             }),
     ];
 }

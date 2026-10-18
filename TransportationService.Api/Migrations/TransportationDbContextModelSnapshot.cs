@@ -2804,6 +2804,10 @@ namespace TransportationService.Api.Migrations
                         .HasMaxLength(150)
                         .HasColumnType("character varying(150)");
 
+                    b.Property<string>("NormalizedSerialNumber")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
                     b.Property<string>("Notes")
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)");
@@ -2866,7 +2870,14 @@ namespace TransportationService.Api.Migrations
 
                     b.HasIndex("TenantId", "EmployeeId");
 
+                    b.HasIndex("TenantId", "NormalizedSerialNumber");
+
                     b.HasIndex("TenantId", "Status", "ExpectedReturnDate");
+
+                    b.HasIndex("TenantId", "TemplateId", "NormalizedSerialNumber")
+                        .IsUnique()
+                        .HasDatabaseName("UX_employee_issued_items_open_serial")
+                        .HasFilter("\"NormalizedSerialNumber\" IS NOT NULL AND \"Status\" = 'Issued' AND \"IsDeleted\" = false");
 
                     b.ToTable("employee_issued_items", (string)null);
                 });
@@ -3219,6 +3230,10 @@ namespace TransportationService.Api.Migrations
                     b.Property<Guid?>("CategoryId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("Code")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -3242,6 +3257,9 @@ namespace TransportationService.Api.Migrations
                         .HasColumnType("character varying(500)");
 
                     b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsConsumable")
                         .HasColumnType("boolean");
 
                     b.Property<bool>("IsDeleted")
@@ -3315,6 +3333,10 @@ namespace TransportationService.Api.Migrations
                     b.HasIndex("CategoryId");
 
                     b.HasIndex("TenantId", "CategoryId");
+
+                    b.HasIndex("TenantId", "Code")
+                        .IsUnique()
+                        .HasFilter("\"Code\" IS NOT NULL");
 
                     b.HasIndex("TenantId", "IsActive");
 
@@ -3603,6 +3625,9 @@ namespace TransportationService.Api.Migrations
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
 
+                    b.Property<Guid?>("IssuedItemId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("MovementType")
                         .IsRequired()
                         .HasMaxLength(20)
@@ -3648,6 +3673,8 @@ namespace TransportationService.Api.Migrations
                     b.HasIndex("TemplateId");
 
                     b.HasIndex("VariantId");
+
+                    b.HasIndex("TenantId", "IssuedItemId");
 
                     b.HasIndex("TenantId", "VariantId");
 

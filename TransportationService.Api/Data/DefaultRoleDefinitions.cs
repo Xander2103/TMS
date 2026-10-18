@@ -241,6 +241,7 @@ public static class DefaultRoleDefinitions
                 PermissionCodes.IssuedItemsView, PermissionCodes.IssuedItemsManage, PermissionCodes.IssuedItemsManageTemplates,
                 PermissionCodes.InventoryView, PermissionCodes.InventoryManage, PermissionCodes.InventoryAdjust,
                 PermissionCodes.InventoryOverrideNegativeStock,
+                PermissionCodes.InventoryIssue, PermissionCodes.InventoryReturn, PermissionCodes.InventoryLoansView,
                 PermissionCodes.LeaveBalancesView, PermissionCodes.LeaveBalancesManage, PermissionCodes.LeaveBalancesAdjust,
                 PermissionCodes.LeaveBalancesViewOwn, PermissionCodes.LeaveTypesManage,
                 PermissionCodes.AttendanceSelf, PermissionCodes.AttendanceView, PermissionCodes.AttendanceCorrect,
@@ -305,7 +306,7 @@ public static class DefaultRoleDefinitions
         // Warehouse: scans, packages, releases and incident reporting — deliberately no
         // HR, cost or profitability permissions.
         new("magazijn", "Magazijn",
-            "Laadt en scant colli, geeft ritten vrij en meldt afwijkingen in het magazijn.",
+            "Laadt en scant colli, geeft ritten vrij en meldt afwijkingen in het magazijn; ontvangt en corrigeert voorraad en geeft bedrijfsmiddelen uit en neemt ze terug.",
             [
                 PermissionCodes.WarehouseView, PermissionCodes.WarehouseReleaseTrip,
                 PermissionCodes.PackagesView,
@@ -318,6 +319,9 @@ public static class DefaultRoleDefinitions
                 PermissionCodes.WarehouseConflictOverride,
                 PermissionCodes.IssuedItemsView,
                 PermissionCodes.InventoryView, PermissionCodes.InventoryAdjust,
+                // WH-H4: the warehouse clerk runs the issue/return desk without any HR employee access
+                // (the safe employee picker only). The item catalogue stays with HR (HR-wave decision).
+                PermissionCodes.InventoryIssue, PermissionCodes.InventoryReturn,
                 PermissionCodes.AttendanceSelf,
             ]),
     ];

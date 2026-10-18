@@ -101,6 +101,24 @@ public class LowStockNotificationTests
     }
 
     [Fact]
+    public async Task BrandNewItem_WithZeroStock_IsNotAnOutOfStockAlarm_UntilSomethingMoved()
+    {
+        // Warehouse remediation (low): saving a new item with thresholds raised "Niet op voorraad".
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var template = await h.Items.CreateTemplateAsync(StockTemplate(stock: 0, warning: 3) with { Stock = null }, CancellationToken.None);
+        await h.Items.UpdateTemplateAsync(template.Id, StockTemplate(stock: 0, warning: 3) with { Stock = null, Name = "Handschoenen XL" }, CancellationToken.None);
+
+        Assert.Empty(await h.Db.Context.InventoryAlerts.Where(a => a.TemplateId == template.Id).ToListAsync());
+        Assert.Empty(await NotificationsOfType(h, "inventory_status_out"));
+
+        // Once stock moved, running out IS an alarm.
+        await h.Inventory.ReceiveStockAsync(template.Id, new StockReceiptRequest(null, 2, null), CancellationToken.None);
+        await h.Items.UpsertAsync(h.EmployeeId, null, Issue(template.Id, 2), CancellationToken.None);
+        Assert.Single(await NotificationsOfType(h, "inventory_status_out"));
+    }
+
+    [Fact]
     public async Task StayingLow_DoesNotNotifyAgain()
     {
         var h = await SeedAsync();
@@ -158,7 +176,7 @@ public class LowStockNotificationTests
         using var _ = h.Db;
         var template = await h.Items.CreateTemplateAsync(StockTemplate(stock: 10, warning: 3), CancellationToken.None);
 
-        await h.Inventory.CorrectStockAsync(template.Id, new StockCorrectionRequest(null, 2, "Telling"), CancellationToken.None);
+        await h.Inventory.CorrectStockAsync(template.Id, new StockCorrectionRequest(null, 2, "Telling", ExpectedCurrentStock: 10), CancellationToken.None);
 
         Assert.Single(await NotificationsOfType(h, "inventory_status_low"));
     }

@@ -92,7 +92,7 @@ public class LabelVariantTests
 
         // 10 → 14 must be a +4 correction in the ledger, never a replaced number.
         var movement = await h.Inventory.CorrectStockAsync(templateId,
-            new StockCorrectionRequest(small!.Id, 14, "Telverschil"), CancellationToken.None);
+            new StockCorrectionRequest(small!.Id, 14, "Telverschil", ExpectedCurrentStock: 10), CancellationToken.None);
 
         Assert.Equal(StockMovementType.Correction, movement!.MovementType);
         Assert.Equal(4, movement.Quantity);
@@ -171,7 +171,7 @@ public class LabelVariantTests
         var variant = await inventory.CreateVariantAsync(template.Id, LabelVariant("Small", 10, threshold: 5), CancellationToken.None);
 
         // 10 → 4 crosses the VARIANT threshold (5) even though the template threshold is 1.
-        await inventory.CorrectStockAsync(template.Id, new StockCorrectionRequest(variant!.Id, 4, "Test"), CancellationToken.None);
+        await inventory.CorrectStockAsync(template.Id, new StockCorrectionRequest(variant!.Id, 4, "Test", ExpectedCurrentStock: 10), CancellationToken.None);
 
         var notification = await h.Db.Context.Notifications
             .Where(n => n.TenantId == h.TenantId && n.Type == "inventory_status_low")

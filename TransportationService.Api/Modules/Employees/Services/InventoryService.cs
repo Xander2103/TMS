@@ -38,16 +38,29 @@ public record GenerateVariantsDimension(Guid AttributeDefinitionId, IReadOnlyLis
 
 public record GenerateVariantsRequest(IReadOnlyList<GenerateVariantsDimension> Dimensions);
 
+/// <summary>
+/// One ledger line as the history shows it (WH-M4): when, who (PerformedByName), what (type +
+/// variant), how much, to/from whom (EmployeeName), which serial and why (reason/notes). The
+/// disposition of a return is in the movement type (Return = good, Damaged/Lost/Disposed).
+/// </summary>
 public record StockMovementDto(
     Guid Id, Guid TemplateId, Guid? VariantId, string? VariantLabel, StockMovementType MovementType,
     int Quantity, int ResultingStock, string? Reason, string? Notes,
-    Guid? EmployeeId, string? EmployeeName, Guid? PerformedByUserId, DateTime Timestamp);
+    Guid? EmployeeId, string? EmployeeName, Guid? PerformedByUserId, DateTime Timestamp,
+    string? PerformedByName = null, string? SerialNumber = null, Guid? IssuedItemId = null,
+    string? EmployeeNumber = null);
 
 public record StockReceiptRequest(Guid? VariantId, int Quantity, string? Notes);
 
+/// <summary>
+/// WH-M3: <paramref name="ExpectedCurrentStock"/> is the stock the user saw when opening the
+/// correction dialog. It is mandatory: when the stock moved in the meantime the correction is
+/// refused with 409 instead of silently undoing the other movement.
+/// </summary>
 public record StockCorrectionRequest(
     Guid? VariantId, int NewQuantity, string Reason,
-    Guid? ExpectedVersion = null, bool ConfirmNegativeStock = false);
+    Guid? ExpectedVersion = null, bool ConfirmNegativeStock = false,
+    int? ExpectedCurrentStock = null);
 
 public record StockPreflightRequest(Guid? VariantId, int QuantityDelta);
 
@@ -68,7 +81,8 @@ public record UpdateThresholdsRequest(
 
 public record CurrentHolderDto(
     Guid EmployeeId, string EmployeeName, string EmployeeNumber, Guid ItemId,
-    string? VariantLabel, int Quantity, DateOnly? IssuedDate, string? SerialNumber);
+    string? VariantLabel, int Quantity, DateOnly? IssuedDate, string? SerialNumber,
+    DateOnly? ExpectedReturnDate = null, bool EmployeeActive = true);
 
 public record IssuedItemTemplateDetailDto(
     IssuedItemTemplateDto Template,
@@ -108,7 +122,7 @@ public interface IInventoryService
     /// </summary>
     StockMovement ApplyMovement(
         IssuedItemTemplate template, IssuedItemVariant? variant, StockMovementType type,
-        int quantity, string? reason, string? notes, Guid? employeeId);
+        int quantity, string? reason, string? notes, Guid? employeeId, Guid? issuedItemId = null);
 }
 
 public class InventoryService : IInventoryService
@@ -117,6 +131,9 @@ public class InventoryService : IInventoryService
     private const string VariantEntity = "IssuedItemVariant";
     private const string MovementEntity = "StockMovement";
     private const string TemplateEntity = "IssuedItemTemplate";
+
+    /// <summary>WH-M3: the sentence a stale stock correction answers with (409).</summary>
+    public const string StockChangedMessage = "De voorraad is intussen gewijzigd. Controleer opnieuw.";
 
     private readonly TransportationDbContext _dbContext;
     private readonly ITenantContext _tenantContext;
@@ -268,6 +285,13 @@ public class InventoryService : IInventoryService
             return false;
         }
 
+        // WH-B1: a value that variants use is part of their identity — deactivate it instead.
+        var references = await IssuedItemTemplateReferences.ForAttributeOptionAsync(_dbContext, _tenantContext.TenantId, optionId, cancellationToken);
+        if (references.HasReferences)
+        {
+            throw Common.Integrity.ReferencedRecordException.For("Deze waarde", references, IssuedItemTemplateReferences.OptionDeactivateHint);
+        }
+
         _dbContext.Remove(option); // soft delete; variant values carry the literal value
         await _dbContext.SaveChangesAsync(cancellationToken);
         return true;
@@ -364,8 +388,10 @@ public class InventoryService : IInventoryService
 
         var (label, values) = await ResolveLabelAndValuesAsync(templateId, request, cancellationToken);
 
+        // Case-insensitive: "M / Zwart" and "m / zwart" are the same variant on the shelf.
+        var labelKey = label.ToLower();
         var duplicate = await _dbContext.IssuedItemVariants.AnyAsync(
-            v => v.TenantId == _tenantContext.TenantId && v.TemplateId == templateId && v.Label == label, cancellationToken);
+            v => v.TenantId == _tenantContext.TenantId && v.TemplateId == templateId && v.Label.ToLower() == labelKey, cancellationToken);
         if (duplicate)
         {
             throw new DomainValidationException("values", $"De variant \"{label}\" bestaat al.");
@@ -381,6 +407,7 @@ public class InventoryService : IInventoryService
             SortOrder = request.SortOrder,
             LowStockThreshold = NonNegativeOrNull(request.LowStockThreshold),
         };
+        StockQuantities.EnsureThreshold("lowStockThreshold", variant.LowStockThreshold);
         _dbContext.IssuedItemVariants.Add(variant);
         foreach (var value in values)
         {
@@ -394,6 +421,8 @@ public class InventoryService : IInventoryService
             {
                 throw new DomainValidationException("initialStock", "Beginvoorraad kan niet negatief zijn.");
             }
+
+            StockQuantities.EnsureMovementQuantity("initialStock", initial, "De beginvoorraad");
 
             ApplyMovement(template, variant, StockMovementType.InitialStock, initial, null, "Beginvoorraad bij aanmaak variant", null);
         }
@@ -534,8 +563,9 @@ public class InventoryService : IInventoryService
         }
 
         var (label, values) = await ResolveLabelAndValuesAsync(templateId, request, cancellationToken);
+        var labelKey = label.ToLower();
         var duplicate = await _dbContext.IssuedItemVariants.AnyAsync(
-            v => v.TenantId == _tenantContext.TenantId && v.TemplateId == templateId && v.Label == label && v.Id != variantId,
+            v => v.TenantId == _tenantContext.TenantId && v.TemplateId == templateId && v.Label.ToLower() == labelKey && v.Id != variantId,
             cancellationToken);
         if (duplicate)
         {
@@ -602,9 +632,12 @@ public class InventoryService : IInventoryService
             return false;
         }
 
-        if (variant.CurrentStock != 0)
+        // WH-B1: not only current stock — movements, issuances and reorder proposals are history
+        // too. A variant with history is deactivated (archived), never deleted.
+        var references = await IssuedItemTemplateReferences.ForVariantAsync(_dbContext, _tenantContext.TenantId, variantId, cancellationToken);
+        if (references.HasReferences)
         {
-            throw new DomainValidationException("Deze variant heeft nog voorraad. Corrigeer de voorraad naar 0 of archiveer de variant.");
+            throw Common.Integrity.ReferencedRecordException.For("Deze variant", references, IssuedItemTemplateReferences.VariantDeactivateHint);
         }
 
         _dbContext.Remove(variant); // soft delete; issued items keep their VariantSnapshot
@@ -623,10 +656,8 @@ public class InventoryService : IInventoryService
             return null;
         }
 
-        if (request.Quantity <= 0)
-        {
-            throw new DomainValidationException("quantity", "De ontvangen hoeveelheid moet groter dan 0 zijn.");
-        }
+        StockQuantities.EnsureMovementQuantity("quantity", request.Quantity, "De ontvangen hoeveelheid");
+        EnsureActiveForNewStock(template, variant);
 
         var hasMovements = await _dbContext.StockMovements.AnyAsync(
             m => m.TenantId == _tenantContext.TenantId && m.TemplateId == templateId && m.VariantId == request.VariantId,
@@ -654,7 +685,23 @@ public class InventoryService : IInventoryService
             throw new DomainValidationException("reason", "Een reden is verplicht bij een voorraadcorrectie.");
         }
 
+        StockQuantities.EnsureStockLevel("newQuantity", request.NewQuantity);
+
+        // WH-M3: the dialog opened at 16, an issue took it to 15, and the stale "16" silently
+        // undid the issue. The correction names the stock it was based on; a different current
+        // stock means someone moved it in the meantime → refuse, never overwrite.
         var current = variant?.CurrentStock ?? template.CurrentStock;
+        if (request.ExpectedCurrentStock is not { } expected)
+        {
+            throw new DomainValidationException("expectedCurrentStock",
+                "De voorraadstand waarop de correctie gebaseerd is ontbreekt. Herlaad de pagina en probeer opnieuw.");
+        }
+
+        if (expected != current)
+        {
+            throw new Common.Integrity.ConcurrencyConflictException(StockChangedMessage);
+        }
+
         var delta = request.NewQuantity - current;
         if (delta == 0)
         {
@@ -717,6 +764,11 @@ public class InventoryService : IInventoryService
         {
             throw new DomainValidationException("Drempels kunnen niet negatief zijn.");
         }
+
+        StockQuantities.EnsureThreshold("lowStockThreshold", request.LowStockThreshold);
+        StockQuantities.EnsureThreshold("minimumStock", request.MinimumStock);
+        StockQuantities.EnsureThreshold("targetStockLevel", request.TargetStockLevel);
+        StockQuantities.EnsureThreshold("reorderQuantity", request.ReorderQuantity);
 
         if (request.ReorderQuantity is < 1)
         {
@@ -798,11 +850,27 @@ public class InventoryService : IInventoryService
             .ToListAsync(cancellationToken);
 
         var variantLabels = await VariantLabelsAsync(templateId, cancellationToken);
-        var employeeNames = await EmployeeNamesAsync(movements.Where(m => m.EmployeeId.HasValue).Select(m => m.EmployeeId!.Value), cancellationToken);
+        var employees = await EmployeeIdentitiesAsync(movements.Where(m => m.EmployeeId.HasValue).Select(m => m.EmployeeId!.Value), cancellationToken);
+        var performers = await UserNamesAsync(movements.Where(m => m.PerformedByUserId.HasValue).Select(m => m.PerformedByUserId!.Value), cancellationToken);
+        var itemIds = movements.Where(m => m.IssuedItemId.HasValue).Select(m => m.IssuedItemId!.Value).Distinct().ToList();
+        var serials = itemIds.Count == 0
+            ? new Dictionary<Guid, string?>()
+            : await _dbContext.EmployeeIssuedItems.AsNoTracking().IgnoreQueryFilters()
+                .Where(i => i.TenantId == _tenantContext.TenantId && itemIds.Contains(i.Id))
+                .ToDictionaryAsync(i => i.Id, i => i.SerialNumber, cancellationToken);
         return movements
-            .Select(m => Map(m,
-                m.VariantId is { } variantId ? variantLabels.GetValueOrDefault(variantId) : null,
-                m.EmployeeId is { } employeeId ? employeeNames.GetValueOrDefault(employeeId) : null))
+            .Select(m =>
+            {
+                var employee = m.EmployeeId is { } employeeId ? employees.GetValueOrDefault(employeeId) : null;
+                return Map(m,
+                    m.VariantId is { } variantId ? variantLabels.GetValueOrDefault(variantId) : null,
+                    employee?.Name) with
+                {
+                    EmployeeNumber = employee?.Number,
+                    PerformedByName = m.PerformedByUserId is { } userId ? performers.GetValueOrDefault(userId) : null,
+                    SerialNumber = m.IssuedItemId is { } itemId ? serials.GetValueOrDefault(itemId) : null,
+                };
+            })
             .ToList();
     }
 
@@ -825,26 +893,29 @@ public class InventoryService : IInventoryService
                 orderby employee.FirstName, employee.LastName, item.IssuedDate
                 select new CurrentHolderDto(
                     employee.Id, employee.FirstName + " " + employee.LastName, employee.EmployeeNumber,
-                    item.Id, item.VariantSnapshot, item.Quantity, item.IssuedDate, item.SerialNumber))
+                    item.Id, item.VariantSnapshot, item.Quantity, item.IssuedDate, item.SerialNumber,
+                    item.ExpectedReturnDate, employee.IsActive))
             .ToListAsync(cancellationToken);
     }
 
     public StockMovement ApplyMovement(
         IssuedItemTemplate template, IssuedItemVariant? variant, StockMovementType type,
-        int quantity, string? reason, string? notes, Guid? employeeId)
+        int quantity, string? reason, string? notes, Guid? employeeId, Guid? issuedItemId = null)
     {
+        // WH-H1: the ONE arithmetic point of the ledger — checked and bounded, never wrapping.
+        // Callers validated their quantity already; this is the last line of defence.
         int resulting;
         if (variant is not null)
         {
-            variant.CurrentStock += quantity;
+            resulting = StockQuantities.Apply(variant.CurrentStock, quantity);
+            variant.CurrentStock = resulting;
             variant.Version = Guid.NewGuid(); // concurrency guard: conflicting writers fail on save
-            resulting = variant.CurrentStock;
         }
         else
         {
-            template.CurrentStock += quantity;
+            resulting = StockQuantities.Apply(template.CurrentStock, quantity);
+            template.CurrentStock = resulting;
             template.Version = Guid.NewGuid();
-            resulting = template.CurrentStock;
         }
 
         var movement = new StockMovement
@@ -859,6 +930,7 @@ public class InventoryService : IInventoryService
             Reason = reason,
             Notes = notes,
             EmployeeId = employeeId,
+            IssuedItemId = issuedItemId,
             PerformedByUserId = _currentUser.CurrentUserId,
             Timestamp = DateTime.UtcNow,
         };
@@ -908,6 +980,26 @@ public class InventoryService : IInventoryService
     }
 
     private static int? NonNegativeOrNull(int? value) => value is { } v ? Math.Max(0, v) : null;
+
+    /// <summary>
+    /// WH-M6: an archived (inactive) item or variant accepts no NEW stock — the UI hid the buttons
+    /// but the API still booked receipts and issues. Returns and corrections stay possible: goods
+    /// issued before the archive must still come back, and a count may still be fixed.
+    /// </summary>
+    public static void EnsureActiveForNewStock(IssuedItemTemplate template, IssuedItemVariant? variant)
+    {
+        if (!template.IsActive)
+        {
+            throw new DomainValidationException(
+                "Dit artikel is inactief: er kan geen nieuwe voorraad ontvangen of uitgereikt worden. Activeer het artikel eerst.");
+        }
+
+        if (variant is { IsActive: false })
+        {
+            throw new DomainValidationException("variantId",
+                $"De variant \"{variant.Label}\" is inactief: er kan geen nieuwe voorraad ontvangen of uitgereikt worden.");
+        }
+    }
 
     /// <summary>
     /// Templates without linked attributes use free variant labels ("Small", "maat 43",
@@ -1057,7 +1149,9 @@ public class InventoryService : IInventoryService
             .ToDictionaryAsync(v => v.Id, v => v.Label, cancellationToken);
     }
 
-    private async Task<Dictionary<Guid, string>> EmployeeNamesAsync(IEnumerable<Guid> employeeIds, CancellationToken cancellationToken)
+    private sealed record EmployeeIdentity(string Name, string Number);
+
+    private async Task<Dictionary<Guid, EmployeeIdentity>> EmployeeIdentitiesAsync(IEnumerable<Guid> employeeIds, CancellationToken cancellationToken)
     {
         var ids = employeeIds.Distinct().ToList();
         if (ids.Count == 0)
@@ -1067,7 +1161,22 @@ public class InventoryService : IInventoryService
 
         return await _dbContext.Employees.AsNoTracking()
             .Where(e => e.TenantId == _tenantContext.TenantId && ids.Contains(e.Id))
-            .ToDictionaryAsync(e => e.Id, e => e.FirstName + " " + e.LastName, cancellationToken);
+            .ToDictionaryAsync(e => e.Id, e => new EmployeeIdentity(e.FirstName + " " + e.LastName, e.EmployeeNumber), cancellationToken);
+    }
+
+    private async Task<Dictionary<Guid, string>> UserNamesAsync(IEnumerable<Guid> userIds, CancellationToken cancellationToken)
+    {
+        var ids = userIds.Distinct().ToList();
+        if (ids.Count == 0)
+        {
+            return [];
+        }
+
+        var users = await _dbContext.Users.AsNoTracking()
+            .Where(u => u.TenantId == _tenantContext.TenantId && ids.Contains(u.Id))
+            .Select(u => new { u.Id, u.FirstName, u.LastName, u.Email })
+            .ToListAsync(cancellationToken);
+        return users.ToDictionary(u => u.Id, u => $"{u.FirstName} {u.LastName}".Trim() is { Length: > 0 } name ? name : u.Email);
     }
 
     private async Task<StockMovementDto> MapMovementAsync(StockMovement movement, CancellationToken cancellationToken)
@@ -1121,7 +1230,8 @@ public class InventoryService : IInventoryService
 
     private static StockMovementDto Map(StockMovement m, string? variantLabel, string? employeeName) => new(
         m.Id, m.TemplateId, m.VariantId, variantLabel, m.MovementType, m.Quantity, m.ResultingStock,
-        m.Reason, m.Notes, m.EmployeeId, employeeName, m.PerformedByUserId, m.Timestamp);
+        m.Reason, m.Notes, m.EmployeeId, employeeName, m.PerformedByUserId, m.Timestamp,
+        IssuedItemId: m.IssuedItemId);
 
     private static string? Trim(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }
