@@ -188,7 +188,7 @@
     "driverDeactivateFailed": "Le profil chauffeur n'a pas pu être désactivé.",
     "deactivateTitle": "Désactiver le collaborateur",
     "deactivateMessage": "Êtes-vous sûr de vouloir désactiver {name} ? Le collaborateur reste visible dans les archives et peut être réactivé plus tard.",
-    "deactivateConsequences": "Le compte utilisateur lié est bloqué et toutes les sessions et liens d'activation en attente sont révoqués. Le chauffeur ne peut plus être planifié et l'attribution fixe de véhicule est supprimée. L'historique (trajets, preuves de livraison) est conservé ; rien n'est supprimé.",
+    "deactivateConsequences": "Le compte utilisateur lié est bloqué et toutes les sessions et liens d'activation en attente sont révoqués. Le chauffeur ne peut plus être planifié et l'attribution fixe/actuelle de véhicule et la remorque fixe sont libérées. L'historique (trajets, preuves de livraison) est conservé ; rien n'est supprimé.",
     "deactivateConfirm": "Désactiver",
     "deactivated": "Collaborateur désactivé.",
     "reactivateTitle": "Réactiver le collaborateur",
@@ -262,7 +262,8 @@
     "saveAndNew": "Enregistrer et nouveau collaborateur",
     "saveAndNewHelp": "Enregistre ce collaborateur puis ouvre immédiatement un formulaire vide pour ajouter le collaborateur suivant.",
     "save": "Enregistrer",
-    "saving": "Enregistrement…"
+    "saving": "Enregistrement…",
+    "employmentStatusOffboardHint": "« Sorti » ou une date de fin déjà passée met fin à l'accès à l'enregistrement (comme « Désactiver l'employé ») : compte, sessions, chauffeur, véhicule et remorque. Une date de fin future ne change rien maintenant ; l'accès s'arrête automatiquement après ce dernier jour de travail."
   },
   "create": {
     "breadcrumb": "Nouveau collaborateur",

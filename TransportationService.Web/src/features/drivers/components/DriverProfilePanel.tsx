@@ -145,8 +145,8 @@ export function DriverProfilePanel({ driverId, onChanged, onDeleted }: DriverPro
       setEditing(false)
       showSuccess(t('driversAdmin.panel.updated'))
       onChanged?.()
-    } catch {
-      showError(t('fleet.common.saveChangesFailed'))
+    } catch (err) {
+      showError(describeApiError(err, t('fleet.common.saveChangesFailed')).message)
     } finally {
       setSaving(false)
     }
@@ -323,7 +323,7 @@ export function DriverProfilePanel({ driverId, onChanged, onDeleted }: DriverPro
           )}
         </FormField>
 
-        <FormField label={t('driversAdmin.panel.active')}>
+        <FormField label={t('driversAdmin.panel.active')} hint={editing ? t('driversAdmin.panel.activeHint') : undefined}>
           {editing ? (
             <label className="driver-checkbox">
               <input type="checkbox" checked={form.isActive ?? driver.isActive} onChange={(e) => setForm((f) => ({ ...f, isActive: e.target.checked }))} />

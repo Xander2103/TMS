@@ -60,13 +60,36 @@ are allowed for order entry; existing lines keep their (possibly now inactive) u
 
 ## 3. Employee offboarding ends access
 
-`POST /api/employees/{id}/deactivate` (permission `employees.deactivate`, no user-admin right needed):
-employee inactive (end date = tenant-local today) → linked users inactive with refresh tokens, pending
-activation/reset links and the security stamp revoked (existing access tokens die on their next request) →
-linked drivers inactive (not plannable) → fixed/current vehicle slots released → upcoming trips counted in
-the audit (not silently unassigned). History is untouched; nothing is deleted. The tenant's last active
-administrator is never locked out this way. **Reactivating the employee does not re-enable the login or the
-driver** — an administrator re-enables the account explicitly.
+ONE orchestrator, `EmployeeOffboardingService.OffboardAsync`, is reached by every path that ends an
+employment (the audit names the trigger):
+
+| Path | Trigger |
+|---|---|
+| `POST /api/employees/{id}/deactivate` ("Medewerker inactief zetten", permission `employees.deactivate`) | `ExplicitDeactivation` |
+| `PUT /api/employees/{id}` that sets status Terminated, or an end date already behind the last working day | `TerminatedByEdit` (same save as the edit) |
+| `EmploymentEndSweepHostedService` (15 min, state-driven, restart-safe) once a future end date has passed | `EmploymentEndDatePassed` |
+| the same sweep for legacy rows: employment ended but a user / driver still active | `ResidualAccess` |
+
+In one save: employee inactive + Terminated (end date = tenant-local today when none was set) → linked
+users inactive with refresh tokens, pending activation/reset links and the security stamp revoked →
+linked drivers switched off through `DriverDeactivation` (fixed/current vehicle slots **and the driver's
+fixed trailer** released) → clock-in code revoked, open attendance session closed → upcoming trips counted
+in the audit (not silently unassigned). History is untouched; nothing is deleted. The tenant's last active
+administrator is never locked out this way.
+
+* **End date semantics:** `EmploymentEndDate` is the LAST working day. A future end date changes nothing
+  today; access ends from the next tenant-local day. "Terminated" together with a future end date is
+  refused as contradictory.
+* **Defense in depth:** login, refresh and every authenticated request (`AccountStateAuthorizationFilter`)
+  refuse a disabled/blocked account and a user whose LINKED employment has ended (`EmploymentAccess`),
+  even before the sweep ran. Users without an employee link (administrators, portal users) are unaffected.
+* **Driver-role deactivation is not offboarding:** a driver edit with `isActive=false` takes the person out
+  of the driver pickers and releases the fixed/current vehicle slot and fixed trailer, but leaves the user
+  account and its other roles alone. An inactive driver cannot be put back into a vehicle slot, and a
+  driver of a departed employee cannot be reactivated.
+* **Reactivating the employee does not re-enable the login or the driver** — an administrator re-enables
+  the account explicitly, and only after the employee is active again (`users/{id}/active` refuses an
+  account of a departed employee).
 
 ## 4. Numbering
 

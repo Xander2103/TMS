@@ -36,6 +36,11 @@ public class FleetAssignmentService : IFleetAssignmentService
             return AssignmentResult.InvalidReference;
         }
 
+        if (driverId is { } assignedDriver)
+        {
+            await EnsureActiveDriverAsync(assignedDriver, cancellationToken);
+        }
+
         return await ApplyAsync(vehicle, kind, driverId, replaceExisting, cancellationToken);
     }
 
@@ -50,6 +55,7 @@ public class FleetAssignmentService : IFleetAssignmentService
 
         if (vehicleId is { } requestedVehicle)
         {
+            await EnsureActiveDriverAsync(driverId, cancellationToken);
             var vehicle = await _dbContext.Vehicles
                 .FirstOrDefaultAsync(v => v.Id == requestedVehicle && v.TenantId == tenantId, cancellationToken);
             if (vehicle is null)
@@ -75,6 +81,19 @@ public class FleetAssignmentService : IFleetAssignmentService
         }
 
         return await ApplyAsync(holder, kind, null, replaceExisting: true, cancellationToken);
+    }
+
+    /// <summary>
+    /// MD-H6 follow-up: an inactive driver (role switched off, or the employee offboarded) holds no
+    /// standing vehicle slot — deactivation released it, and it cannot be handed back.
+    /// </summary>
+    private async Task EnsureActiveDriverAsync(Guid driverId, CancellationToken cancellationToken)
+    {
+        if (!await _dbContext.Drivers.AnyAsync(d => d.Id == driverId && d.TenantId == _tenantContext.TenantId && d.IsActive, cancellationToken))
+        {
+            throw new Common.DomainValidationException("driverId",
+                "Deze chauffeur is inactief en kan niet als vaste of huidige chauffeur aan een voertuig gekoppeld worden.");
+        }
     }
 
     /// <summary>The vehicle (if any) holding this driver in the given slot; EF-translatable per kind.</summary>

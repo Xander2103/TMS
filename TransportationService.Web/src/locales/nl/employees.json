@@ -188,7 +188,7 @@
     "driverDeactivateFailed": "Chauffeursprofiel kon niet worden gedeactiveerd.",
     "deactivateTitle": "Medewerker inactief zetten",
     "deactivateMessage": "Weet je zeker dat je {name} inactief wilt zetten? De medewerker blijft zichtbaar in het archief en kan later geheractiveerd worden.",
-    "deactivateConsequences": "Het gekoppelde gebruikersaccount wordt geblokkeerd en alle sessies en openstaande activatielinks worden beëindigd. De chauffeur kan niet meer ingepland worden en de vaste voertuigtoewijzing vervalt. Historiek (ritten, afleverbewijzen) blijft bewaard; er wordt niets verwijderd.",
+    "deactivateConsequences": "Het gekoppelde gebruikersaccount wordt geblokkeerd en alle sessies en openstaande activatielinks worden beëindigd. De chauffeur kan niet meer ingepland worden en de vaste/huidige voertuigtoewijzing en de vaste aanhangwagen vervallen. Historiek (ritten, afleverbewijzen) blijft bewaard; er wordt niets verwijderd.",
     "deactivateConfirm": "Inactief zetten",
     "deactivated": "Medewerker inactief gezet.",
     "reactivateTitle": "Medewerker heractiveren",
@@ -262,7 +262,8 @@
     "saveAndNew": "Opslaan en nieuwe medewerker",
     "saveAndNewHelp": "Slaat deze medewerker op en opent daarna onmiddellijk een leeg formulier om een volgende medewerker toe te voegen.",
     "save": "Opslaan",
-    "saving": "Opslaan…"
+    "saving": "Opslaan…",
+    "employmentStatusOffboardHint": "'Uit dienst' of een einddatum die al voorbij is, sluit bij opslaan de toegang af (zoals 'Medewerker inactief zetten'): account, sessies, chauffeur, voertuig en aanhangwagen. Een einddatum in de toekomst verandert nu niets; de toegang stopt automatisch na die laatste werkdag."
   },
   "create": {
     "breadcrumb": "Nieuwe medewerker",

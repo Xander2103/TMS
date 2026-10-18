@@ -203,6 +203,9 @@ builder.Services.AddScoped<TransportationService.Api.Modules.Notifications.Servi
 builder.Services.AddHostedService<TransportationService.Api.Modules.Employees.Services.InventorySweepHostedService>();
 builder.Services.AddHostedService<TransportationService.Api.Modules.Tasks.Services.TaskSweepHostedService>();
 builder.Services.AddHostedService<TransportationService.Api.Modules.Notifications.Services.NotificationMaintenanceHostedService>();
+// MD-H6 follow-up: a passed employment end date offboards (state-driven, restart-safe).
+builder.Services.AddScoped<TransportationService.Api.Modules.Employees.Services.EmploymentEndSweepWorker>();
+builder.Services.AddHostedService<TransportationService.Api.Modules.Employees.Services.EmploymentEndSweepHostedService>();
 
 // GDPR (H13): configurable retention + daily purge sweep, and data-subject export/anonymisation.
 builder.Services.Configure<TransportationService.Api.Modules.Gdpr.RetentionOptions>(

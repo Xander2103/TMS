@@ -66,7 +66,8 @@
     "deleteRefusedTitle": "Driver cannot be deleted",
     "deactivateInstead": "Deactivate driver",
     "deactivated": "Driver deactivated. The history is kept.",
-    "deactivateFailed": "The driver could not be deactivated."
+    "deactivateFailed": "The driver could not be deactivated.",
+    "activeHint": "Inactive = no longer available as a driver. The user account and other roles stay; fixed/current vehicle and fixed trailer are released. Is the employee leaving? Deactivate the employee instead."
   },
   "newPage": {
     "breadcrumb": "Drivers",

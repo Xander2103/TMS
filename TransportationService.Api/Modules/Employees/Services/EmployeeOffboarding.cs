@@ -1,47 +1,112 @@
 using Microsoft.EntityFrameworkCore;
 using TransportationService.Api.Common;
 using TransportationService.Api.Data;
+using TransportationService.Api.Modules.Attendance.Entities;
+using TransportationService.Api.Modules.Auditing.Services;
+using TransportationService.Api.Modules.Drivers.Services;
 using TransportationService.Api.Modules.Employees.Entities;
 using TransportationService.Api.Modules.Identity.Services;
 using TransportationService.Api.Modules.Planning.Entities;
+using TransportationService.Api.Modules.Tenancy.Services;
 
 namespace TransportationService.Api.Modules.Employees.Services;
 
 /// <summary>What one offboarding switched off — audited and returned to the UI.</summary>
 public sealed record EmployeeOffboardingSummary(
-    int UsersDeactivated, int DriversDeactivated, int VehicleSlotsReleased, int UpcomingTrips);
+    int UsersDeactivated, int DriversDeactivated, int VehicleSlotsReleased, int UpcomingTrips, int TrailersReleased = 0);
+
+/// <summary>Which business path ended the employment (audited as the reason).</summary>
+public enum OffboardingTrigger
+{
+    /// <summary>HR's explicit "Medewerker inactief zetten" (<c>POST /api/employees/{id}/deactivate</c>).</summary>
+    ExplicitDeactivation,
+
+    /// <summary>An employee edit that sets the status to Terminated or an end date already in the past.</summary>
+    TerminatedByEdit,
+
+    /// <summary>The background lifecycle sweep: the last working day has passed.</summary>
+    EmploymentEndDatePassed,
+
+    /// <summary>The sweep found an ended employment whose user / driver was still active (legacy data).</summary>
+    ResidualAccess,
+}
 
 /// <summary>
-/// MD-H6 / Security H2 (master-data + security acceptance 2026-10-18): HR deactivated an employee
-/// but the linked user kept its session, a fresh login still worked, the driver stayed plannable
-/// and the vehicle still named them as fixed driver. Deactivating an employee now ends the whole
-/// working relationship in the SAME save:
+/// MD-H6 / Security H2 — the ONE authoritative offboarding flow. Every business path that ends an
+/// employment reaches this orchestrator, so they all produce the same invariant: an ended
+/// employment never leaves an active login or a plannable driver behind.
+/// <list type="bullet">
+/// <item>explicit deactivation (<see cref="OffboardingTrigger.ExplicitDeactivation"/>);</item>
+/// <item>an employee edit that sets Terminated or a past end date (<see cref="OffboardingTrigger.TerminatedByEdit"/>);</item>
+/// <item>the restart-safe <see cref="EmploymentEndSweepWorker"/> once a future end date has passed;</item>
+/// <item>defense in depth: login, refresh and every authenticated request also refuse a user whose
+/// linked employment has ended (<see cref="EmploymentAccess"/>), even before the sweep ran.</item>
+/// </list>
+/// In ONE save:
 /// <list type="number">
-/// <item>every linked user is deactivated and its sessions, refresh tokens and pending
-/// activation / reset links are revoked (the shared <see cref="AccountSessionRevocation"/>);</item>
-/// <item>every linked driver is deactivated, so planning no longer offers them;</item>
-/// <item>fixed / current vehicle slots naming such a driver are released;</item>
+/// <item>the employee is inactive / Terminated (end date = tenant-local today when none was set);</item>
+/// <item>every linked user is deactivated; sessions, refresh tokens and pending activation / reset
+/// links are revoked (the shared <see cref="AccountSessionRevocation"/>);</item>
+/// <item>every linked driver is switched off through <see cref="DriverDeactivation"/> — vehicle
+/// fixed / current slots and the driver's fixed trailer are released;</item>
+/// <item>the clock-in code is revoked and an open attendance session is closed;</item>
 /// <item>history is untouched — trips, POD and audit keep the driver; nothing is deleted.</item>
 /// </list>
-/// HR needs only <c>employees.deactivate</c>: this is part of the employee operation, not a hidden
-/// user-administration right. A user that is the tenant's LAST active administrator is never
-/// switched off this way (the tenant would lock itself out) — HR gets a clear refusal.
-/// Reactivating the employee deliberately does NOT re-enable the login or the driver: an
-/// administrator re-enables the account explicitly (users.edit) when the person returns.
+/// Driver-only deactivation (the driver edit) is NOT offboarding: it takes the driver role out of
+/// service and leaves the person's account alone.
+/// HR needs only <c>employees.deactivate</c>. The tenant's LAST active administrator is never
+/// switched off this way. Reactivating the employee deliberately does NOT re-enable the login or
+/// the driver: an administrator re-enables the account explicitly.
 /// </summary>
-public static class EmployeeOffboarding
+public sealed class EmployeeOffboardingService
 {
+    private const string EmployeeEntityType = "Employee";
     private const string AdministratorRoleName = "Administrator";
 
-    public static async Task<EmployeeOffboardingSummary> ApplyAsync(
-        TransportationDbContext db, Guid tenantId, Employee employee, DateTime nowUtc, DateOnly today, CancellationToken cancellationToken)
+    private readonly TransportationDbContext _db;
+    private readonly ITenantContext _tenantContext;
+    private readonly IAuditService _auditService;
+    private readonly TimeProvider _clock;
+
+    public EmployeeOffboardingService(TransportationDbContext db, ITenantContext tenantContext, IAuditService auditService, TimeProvider clock)
     {
-        var users = await db.Users
+        _db = db;
+        _tenantContext = tenantContext;
+        _auditService = auditService;
+        _clock = clock;
+    }
+
+    /// <summary>
+    /// Ends the employment of a tracked <paramref name="employee"/> and saves it together with every
+    /// other pending change of the caller's unit of work (an edit is committed in the same save).
+    /// Throws <see cref="DomainValidationException"/> before anything is saved when the employee is
+    /// linked to the tenant's last active administrator.
+    /// </summary>
+    public async Task<EmployeeOffboardingSummary> OffboardAsync(
+        Employee employee, OffboardingTrigger trigger, CancellationToken cancellationToken)
+    {
+        var tenantId = _tenantContext.TenantId;
+        var nowUtc = _clock.GetUtcNow().UtcDateTime;
+        var today = await TenantTimeZone.TodayAsync(_db, tenantId, _clock, cancellationToken);
+
+        var wasActive = employee.IsActive;
+        employee.IsActive = false;
+        if (trigger != OffboardingTrigger.ResidualAccess)
+        {
+            employee.EmploymentEndDate ??= today;
+        }
+
+        if (employee.EmploymentStatus != EmploymentStatus.Terminated)
+        {
+            employee.EmploymentStatus = EmploymentStatus.Terminated;
+        }
+
+        var users = await _db.Users
             .Where(u => u.TenantId == tenantId && u.EmployeeId == employee.Id)
             .ToListAsync(cancellationToken);
         foreach (var user in users.Where(u => u.IsActive))
         {
-            if (await IsLastActiveAdministratorAsync(db, tenantId, user.Id, cancellationToken))
+            if (await IsLastActiveAdministratorAsync(tenantId, user.Id, cancellationToken))
             {
                 throw new DomainValidationException(
                     $"Deze medewerker is gekoppeld aan het laatste actieve beheerdersaccount ({user.Email}). Wijs eerst een andere beheerder aan voor je de medewerker inactief zet.");
@@ -59,63 +124,115 @@ public static class EmployeeOffboarding
             user.IsActive = false;
             user.UpdatedAt = nowUtc;
             // Also for an already-inactive account: a pending activation link must die with it.
-            await AccountSessionRevocation.RevokeAllAsync(db, user, nowUtc, cancellationToken);
+            await AccountSessionRevocation.RevokeAllAsync(_db, user, nowUtc, cancellationToken);
         }
 
-        var drivers = await db.Drivers
+        var drivers = await _db.Drivers
             .Where(d => d.TenantId == tenantId && d.EmployeeId == employee.Id && d.IsActive)
             .ToListAsync(cancellationToken);
+        var released = await DriverDeactivation.DeactivateAsync(_db, tenantId, drivers, cancellationToken);
         var driverIds = drivers.Select(d => d.Id).ToList();
-        foreach (var driver in drivers)
-        {
-            driver.IsActive = false;
-        }
-
-        var slotsReleased = 0;
-        if (driverIds.Count > 0)
-        {
-            foreach (var vehicle in await db.Vehicles
-                         .Where(v => v.TenantId == tenantId
-                                     && ((v.FixedDriverId != null && driverIds.Contains(v.FixedDriverId.Value))
-                                         || (v.CurrentDriverId != null && driverIds.Contains(v.CurrentDriverId.Value))))
-                         .ToListAsync(cancellationToken))
-            {
-                if (vehicle.FixedDriverId is { } fixedId && driverIds.Contains(fixedId))
-                {
-                    vehicle.FixedDriverId = null;
-                    slotsReleased++;
-                }
-
-                if (vehicle.CurrentDriverId is { } currentId && driverIds.Contains(currentId))
-                {
-                    vehicle.CurrentDriverId = null;
-                    slotsReleased++;
-                }
-            }
-        }
 
         // Upcoming work is NOT silently unassigned (a planner decides); it is counted so the UI
         // and the audit say how many trips still need another driver.
         var upcoming = driverIds.Count == 0
             ? 0
-            : await db.Trips.CountAsync(t => t.TenantId == tenantId && t.DriverId != null && driverIds.Contains(t.DriverId.Value)
-                                             && t.TripDate >= today
-                                             && (t.Status == TripStatus.Draft || t.Status == TripStatus.Planned || t.Status == TripStatus.InProgress),
+            : await _db.Trips.CountAsync(t => t.TenantId == tenantId && t.DriverId != null && driverIds.Contains(t.DriverId.Value)
+                                              && t.TripDate >= today
+                                              && (t.Status == TripStatus.Draft || t.Status == TripStatus.Planned || t.Status == TripStatus.InProgress),
                 cancellationToken);
 
-        return new EmployeeOffboardingSummary(usersDeactivated, drivers.Count, slotsReleased, upcoming);
+        await EndAttendanceAsync(tenantId, employee.Id, nowUtc, cancellationToken);
+
+        await _db.SaveChangesAsync(cancellationToken);
+
+        var summary = new EmployeeOffboardingSummary(
+            usersDeactivated, drivers.Count, released.VehicleSlotsReleased, upcoming, released.TrailersReleased);
+        await _auditService.RecordAsync(EmployeeEntityType, employee.Id.ToString(), "Deactivated", new { IsActive = wasActive },
+            new
+            {
+                employee.IsActive, employee.EmploymentEndDate, employee.EmploymentStatus, Trigger = trigger,
+                AccountsDeactivated = summary.UsersDeactivated, DriversDeactivated = summary.DriversDeactivated,
+                VehicleSlotsReleased = summary.VehicleSlotsReleased, TrailersReleased = summary.TrailersReleased,
+                UpcomingTrips = summary.UpcomingTrips,
+            }, cancellationToken);
+        foreach (var user in users)
+        {
+            // Visible in the user's own security history too (who / when / why).
+            await _auditService.RecordAsync("User", user.Id.ToString(), SecurityAuditEvents.UserDeactivated,
+                null, new { IsActive = false, SessionsRevoked = true, Reason = ReasonFor(trigger) }, cancellationToken);
+        }
+
+        return summary;
     }
 
-    private static async Task<bool> IsLastActiveAdministratorAsync(TransportationDbContext db, Guid tenantId, Guid userId, CancellationToken cancellationToken)
+    private static string ReasonFor(OffboardingTrigger trigger) => trigger switch
     {
-        var adminUserIds = db.UserRoles
-            .Join(db.Roles.Where(r => r.Name == AdministratorRoleName && r.IsSystemRole), ur => ur.RoleId, r => r.Id, (ur, r) => ur.UserId);
+        OffboardingTrigger.TerminatedByEdit => "Medewerker uit dienst gezet (status/einddatum gewijzigd)",
+        OffboardingTrigger.EmploymentEndDatePassed => "Einddatum tewerkstelling verstreken",
+        OffboardingTrigger.ResidualAccess => "Medewerker uit dienst — achtergebleven toegang afgesloten",
+        _ => "Medewerker inactief gezet (uitdiensttreding)",
+    };
+
+    /// <summary>
+    /// Urenregistratie: the clock-in code is revoked so a departed employee can no longer punch;
+    /// an open session is closed (the employee can no longer clock out themselves) with a
+    /// traceable ClockOut event. Attendance history itself is untouched.
+    /// </summary>
+    private async Task EndAttendanceAsync(Guid tenantId, Guid employeeId, DateTime closeAt, CancellationToken cancellationToken)
+    {
+        foreach (var credential in await _db.AttendanceCredentials
+                     .Where(c => c.TenantId == tenantId && c.EmployeeId == employeeId && c.IsActive)
+                     .ToListAsync(cancellationToken))
+        {
+            credential.IsActive = false;
+        }
+
+        var openSessions = await _db.AttendanceSessions
+            .Where(s => s.TenantId == tenantId && s.EmployeeId == employeeId && s.ClockOutAt == null)
+            .ToListAsync(cancellationToken);
+        if (openSessions.Count == 0)
+        {
+            return;
+        }
+
+        var sessionIds = openSessions.Select(s => s.Id).ToList();
+        foreach (var openBreak in await _db.AttendanceBreaks
+                     .Where(b => b.TenantId == tenantId && sessionIds.Contains(b.SessionId) && b.EndedAt == null)
+                     .ToListAsync(cancellationToken))
+        {
+            openBreak.EndedAt = closeAt;
+        }
+
+        foreach (var session in openSessions)
+        {
+            session.ClockOutAt = closeAt;
+            session.ClockOutSource = AttendanceSource.Api;
+            session.Status = AttendanceSessionStatus.Completed;
+            _db.AttendanceEvents.Add(new AttendanceEvent
+            {
+                Id = Guid.NewGuid(),
+                TenantId = tenantId,
+                SessionId = session.Id,
+                EmployeeId = employeeId,
+                EventType = AttendanceEventType.ClockOut,
+                OccurredAt = closeAt,
+                Source = AttendanceSource.Api,
+                Note = "Afgesloten bij deactivering van de medewerker.",
+            });
+        }
+    }
+
+    private async Task<bool> IsLastActiveAdministratorAsync(Guid tenantId, Guid userId, CancellationToken cancellationToken)
+    {
+        var adminUserIds = _db.UserRoles
+            .Join(_db.Roles.Where(r => r.Name == AdministratorRoleName && r.IsSystemRole), ur => ur.RoleId, r => r.Id, (ur, r) => ur.UserId);
         if (!await adminUserIds.AnyAsync(id => id == userId, cancellationToken))
         {
             return false;
         }
 
-        return !await db.Users.AnyAsync(u => u.TenantId == tenantId && u.Id != userId && u.IsActive && !u.IsBlocked
+        return !await _db.Users.AnyAsync(u => u.TenantId == tenantId && u.Id != userId && u.IsActive && !u.IsBlocked
                                               && adminUserIds.Contains(u.Id), cancellationToken);
     }
 }

@@ -103,7 +103,9 @@ public class DriverService : IDriverService
             // expired CORE qualification without a live replacement.
             query = query.Where(d => d.IsActive && !d.IsBlocked
                 && _dbContext.Employees.Any(e => e.Id == d.EmployeeId && e.TenantId == tenantId
-                                                 && e.IsActive && e.EmploymentStatus == EmploymentStatus.Active)
+                                                 && e.IsActive && e.EmploymentStatus == EmploymentStatus.Active
+                                                 // MD-H6 follow-up: still employed ON the trip date (end date = last working day).
+                                                 && (e.EmploymentEndDate == null || e.EmploymentEndDate >= availabilityDate))
                 && !_dbContext.Absences.Any(a => a.TenantId == tenantId && a.EmployeeId == d.EmployeeId
                                                  && a.Status == AbsenceStatus.Approved && a.StartDate <= today && a.EndDate >= today)
                 && live.Any(q => q.EmployeeId == d.EmployeeId && licenceTypeIds.Contains(q.QualificationTypeId)
@@ -276,10 +278,37 @@ public class DriverService : IDriverService
             await SyncCategoriesAsync(driver, categoryIds, cancellationToken);
         }
 
+        if (request.IsActive && !oldIsActive
+            && await Employees.Services.EmploymentAccess.HasEndedAsync(_dbContext, _tenantContext.TenantId, driver.EmployeeId, _timeProvider, cancellationToken))
+        {
+            // MD-H6 follow-up: a departed employee is not plannable — reactivating the driver role
+            // would put them back in every driver picker.
+            throw new Common.DomainValidationException("isActive",
+                "Deze chauffeur hoort bij een medewerker die uit dienst is en kan niet opnieuw actief gezet worden. Heractiveer eerst de medewerker.");
+        }
+
         driver.AvailabilityStatus = request.AvailabilityStatus;
-        driver.IsActive = request.IsActive;
         driver.FixedTrailerId = request.FixedTrailerId;
         driver.Notes = Trim(request.Notes);
+
+        // MD-H6 follow-up: isActive=false here is DRIVER-ROLE deactivation ("niet meer inzetbaar
+        // als chauffeur"), NOT employee offboarding — the person's user account and other roles
+        // stay as they are. The driver leaves planning and releases the standing slots that would
+        // still present them as "the" driver: fixed / current vehicle and the fixed trailer.
+        DriverSlotRelease? released = null;
+        if (!request.IsActive && oldIsActive)
+        {
+            released = await DriverDeactivation.DeactivateAsync(_dbContext, _tenantContext.TenantId, [driver], cancellationToken);
+        }
+        else if (!request.IsActive)
+        {
+            // An inactive driver holds no fixed trailer (also heals a pre-remediation row).
+            driver.FixedTrailerId = null;
+        }
+        else
+        {
+            driver.IsActive = true;
+        }
 
         await _dbContext.SaveChangesAsync(cancellationToken);
 
@@ -293,7 +322,11 @@ public class DriverService : IDriverService
 
         await _auditService.RecordAsync(EntityType, driver.Id.ToString(), "Updated",
             new { DriverCategoryId = oldPrimaryId, PrimaryCategory = PrimaryName(oldPrimaryId), Categories = Names(oldCategoryIds), AvailabilityStatus = oldAvailability, IsActive = oldIsActive },
-            new { driver.DriverCategoryId, PrimaryCategory = PrimaryName(driver.DriverCategoryId), Categories = Names(newCategoryIds), driver.AvailabilityStatus, driver.IsActive }, cancellationToken);
+            new
+            {
+                driver.DriverCategoryId, PrimaryCategory = PrimaryName(driver.DriverCategoryId), Categories = Names(newCategoryIds), driver.AvailabilityStatus, driver.IsActive,
+                VehicleSlotsReleased = released?.VehicleSlotsReleased, TrailersReleased = released?.TrailersReleased,
+            }, cancellationToken);
 
         return DriverOperationResult.Success(await MapToDetailAsync(driver, cancellationToken));
     }

@@ -188,7 +188,7 @@
     "driverDeactivateFailed": "The driver profile could not be deactivated.",
     "deactivateTitle": "Deactivate employee",
     "deactivateMessage": "Are you sure you want to deactivate {name}? The employee remains visible in the archive and can be reactivated later.",
-    "deactivateConsequences": "The linked user account is blocked and all sessions and pending activation links are revoked. The driver can no longer be planned and the fixed vehicle assignment is released. History (trips, proofs of delivery) is kept; nothing is deleted.",
+    "deactivateConsequences": "The linked user account is blocked and all sessions and pending activation links are revoked. The driver can no longer be planned and the fixed/current vehicle assignment and the fixed trailer are released. History (trips, proofs of delivery) is kept; nothing is deleted.",
     "deactivateConfirm": "Deactivate",
     "deactivated": "Employee deactivated.",
     "reactivateTitle": "Reactivate employee",
@@ -262,7 +262,8 @@
     "saveAndNew": "Save and new employee",
     "saveAndNewHelp": "Saves this employee and then immediately opens an empty form to add the next employee.",
     "save": "Save",
-    "saving": "Saving…"
+    "saving": "Saving…",
+    "employmentStatusOffboardHint": "'Terminated' or an end date already passed ends access on save (like 'Deactivate employee'): account, sessions, driver, vehicle and trailer. A future end date changes nothing now; access ends automatically after that last working day."
   },
   "create": {
     "breadcrumb": "New employee",

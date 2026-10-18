@@ -19,6 +19,7 @@ bestaat; oplossen herwapent) en via one-shot-stempels op de entiteit.
 | **`InventorySweepHostedService`** | 1 u | zie hieronder |
 | **`TaskSweepHostedService`** | 15 min | zie hieronder |
 | **`NotificationMaintenanceHostedService`** | 6 u | zie hieronder |
+| **`EmploymentEndSweepHostedService`** | 15 min | einddatum tewerkstelling verstreken (of uit dienst met nog actief account/chauffeur) → `EmployeeOffboardingService` (MD-H6, zie docs/master-data-integrity.md §3) |
 
 ## InventorySweep (per tenant)
 

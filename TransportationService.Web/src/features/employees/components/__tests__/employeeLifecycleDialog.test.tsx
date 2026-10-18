@@ -24,7 +24,7 @@ describe('EmployeeLifecycleDialog', () => {
     render(<EmployeeLifecycleDialog mode="deactivate" employeeId="emp-1" employeeName="Jan Peeters" onDone={vi.fn()} onCancel={vi.fn()} />)
 
     expect(screen.getByText(/gekoppelde gebruikersaccount wordt geblokkeerd/)).toBeInTheDocument()
-    expect(screen.getByText(/kan niet meer ingepland worden en de vaste voertuigtoewijzing vervalt/)).toBeInTheDocument()
+    expect(screen.getByText(/kan niet meer ingepland worden en de vaste\/huidige voertuigtoewijzing en de vaste aanhangwagen vervallen/)).toBeInTheDocument()
     expect(screen.getByText(/Historiek \(ritten, afleverbewijzen\) blijft bewaard/)).toBeInTheDocument()
   })
 

@@ -66,7 +66,8 @@
     "deleteRefusedTitle": "Le chauffeur ne peut pas être supprimé",
     "deactivateInstead": "Désactiver le chauffeur",
     "deactivated": "Chauffeur désactivé. L'historique est conservé.",
-    "deactivateFailed": "Le chauffeur n'a pas pu être désactivé."
+    "deactivateFailed": "Le chauffeur n'a pas pu être désactivé.",
+    "activeHint": "Inactif = n'est plus disponible comme chauffeur. Le compte utilisateur et les autres rôles restent ; le véhicule fixe/actuel et la remorque fixe sont libérés. L'employé quitte l'entreprise ? Désactivez plutôt l'employé."
   },
   "newPage": {
     "breadcrumb": "Chauffeurs",

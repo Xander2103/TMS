@@ -121,7 +121,10 @@ public sealed class AuthService : IAuthService
         var tenant = await _db.Tenants.AsNoTracking()
             .FirstOrDefaultAsync(t => t.Id == user.TenantId, cancellationToken);
 
-        if (!user.IsActive || user.IsBlocked || tenant is null || !tenant.IsActive)
+        // MD-H6 follow-up: an ended employment (terminated, or past its last working day) signs in
+        // nowhere — even before the offboarding sweep switched the account off.
+        if (!user.IsActive || user.IsBlocked || tenant is null || !tenant.IsActive
+            || await Modules.Employees.Services.EmploymentAccess.HasEndedAsync(_db, user.TenantId, user.EmployeeId, _timeProvider, cancellationToken))
         {
             // Do not disclose which condition failed.
             return AuthResult.Disabled;
@@ -203,7 +206,8 @@ public sealed class AuthService : IAuthService
             ? null
             : await _db.Tenants.AsNoTracking().FirstOrDefaultAsync(t => t.Id == user.TenantId, cancellationToken);
 
-        if (user is null || !user.IsActive || user.IsBlocked || tenant is null || !tenant.IsActive)
+        if (user is null || !user.IsActive || user.IsBlocked || tenant is null || !tenant.IsActive
+            || await Modules.Employees.Services.EmploymentAccess.HasEndedAsync(_db, user.TenantId, user.EmployeeId, _timeProvider, cancellationToken))
         {
             stored.RevokedAt = nowUtc;
             await _db.SaveChangesAsync(cancellationToken);

@@ -21,6 +21,8 @@ public sealed class PermitWhenPasswordChangeRequiredAttribute : Attribute;
 /// <item>Session revocation — the token's security stamp must equal the user's current stamp;
 /// rotating the stamp (on an administrative password reset) invalidates all outstanding access
 /// tokens immediately.</item>
+/// <item>Account state — a disabled or blocked account, or a linked employee whose employment has
+/// ended (MD-H6), is refused even while its access token is still valid.</item>
 /// <item>Mandatory password change — while <c>MustChangePassword</c> is set, only a small
 /// allowlist of endpoints is reachable.</item>
 /// </list>
@@ -46,7 +48,7 @@ public sealed class AccountStateAuthorizationFilter : IAsyncAuthorizationFilter
         var db = context.HttpContext.RequestServices.GetRequiredService<TransportationDbContext>();
         var state = await db.Users.AsNoTracking()
             .Where(u => u.Id == userId)
-            .Select(u => new { u.SecurityStamp, u.MustChangePassword })
+            .Select(u => new { u.SecurityStamp, u.MustChangePassword, u.IsActive, u.IsBlocked, u.TenantId, u.EmployeeId })
             .FirstOrDefaultAsync(context.HttpContext.RequestAborted);
 
         if (state is null)
@@ -60,6 +62,18 @@ public sealed class AccountStateAuthorizationFilter : IAsyncAuthorizationFilter
         {
             Deny(context, StatusCodes.Status401Unauthorized, "Unauthorized",
                 "Your session has been revoked. Please sign in again.");
+            return;
+        }
+
+        // MD-H6 follow-up, defense in depth: a disabled / blocked account or an ended linked
+        // employment loses access on its next request, independent of the stamp rotation and
+        // of the offboarding sweep having run.
+        if (!state.IsActive || state.IsBlocked
+            || await Modules.Employees.Services.EmploymentAccess.HasEndedAsync(db, state.TenantId, state.EmployeeId,
+                context.HttpContext.RequestServices.GetService<TimeProvider>() ?? TimeProvider.System, context.HttpContext.RequestAborted))
+        {
+            Deny(context, StatusCodes.Status401Unauthorized, "Unauthorized",
+                "This account no longer has access. Please contact your administrator.");
             return;
         }
 

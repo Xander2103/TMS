@@ -458,7 +458,12 @@ export function EmployeeForm({
             </div>
           </div>
         </FormField>
-        <FormField label={t('employees.form.employmentStatus')} htmlFor="e-status">
+        <FormField
+          label={t('employees.form.employmentStatus')}
+          htmlFor="e-status"
+          hint={mode === 'edit' ? t('employees.form.employmentStatusOffboardHint') : undefined}
+          error={getFieldError(serverFieldErrors, 'employmentStatus')}
+        >
           <select id="e-status" value={employmentStatus} onChange={(e) => setEmploymentStatus(e.target.value as EmploymentStatus)}>
             {Object.entries(EMPLOYMENT_STATUS_LABELS).map(([value, labelKey]) => (
               <option key={value} value={value}>

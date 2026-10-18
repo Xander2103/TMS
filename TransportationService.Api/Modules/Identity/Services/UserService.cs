@@ -187,6 +187,15 @@ public class UserService : IUserService
             return new UserOperationResult(UserOperationOutcome.LastActiveAdministrator, await MapAsync(user, cancellationToken));
         }
 
+        if (isActive && !user.IsActive
+            && await Modules.Employees.Services.EmploymentAccess.HasEndedAsync(_dbContext, user.TenantId, user.EmployeeId, TimeProvider.System, cancellationToken))
+        {
+            // MD-H6 follow-up: "employee uit dienst, account actief" is exactly the state offboarding
+            // exists to prevent. HR reactivates the employee first (or the account is unlinked).
+            throw new Common.DomainValidationException(
+                "Dit account hoort bij een medewerker die uit dienst is. Heractiveer eerst de medewerker (of ontkoppel het account) voor je het account opnieuw activeert.");
+        }
+
         var oldValues = new { user.IsActive };
         user.IsActive = isActive;
         user.UpdatedAt = DateTime.UtcNow;

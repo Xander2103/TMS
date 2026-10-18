@@ -423,8 +423,9 @@ public class VehicleService : IVehicleService
 
         foreach (var driverId in new[] { fixedDriverId, currentDriverId })
         {
+            // MD-H6 follow-up: an inactive driver cannot be put in a standing vehicle slot.
             if (driverId is { } d && !await _dbContext.Drivers
-                    .AnyAsync(x => x.Id == d && x.TenantId == tenantId, cancellationToken))
+                    .AnyAsync(x => x.Id == d && x.TenantId == tenantId && x.IsActive, cancellationToken))
             {
                 return false;
             }

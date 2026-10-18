@@ -389,6 +389,17 @@ public class EmployeeService : IEmployeeService
         var oldSnapshot = await BuildAuditSnapshotAsync(
             employee, employee.JobFunctions.Select(j => j.JobFunctionId).ToList(), cancellationToken);
 
+        var today = await Common.TenantTimeZone.TodayAsync(_dbContext, _tenantContext.TenantId, TimeProvider.System, cancellationToken);
+        var endsEmployment = !EmploymentState.HasEnded(employee, today)
+                             && EmploymentState.HasEnded(employee.IsActive, request.EmploymentStatus, request.EmploymentEndDate, today);
+        if (request.EmploymentStatus == EmploymentStatus.Terminated && request.EmploymentEndDate is { } plannedEnd && plannedEnd > today)
+        {
+            // "Uit dienst" now while the contract still runs: contradictory. A future departure is
+            // entered as an end date with the status still active; access ends after that day.
+            throw new DomainValidationException("employmentStatus",
+                $"Een medewerker met een einddatum in de toekomst ({plannedEnd:dd-MM-yyyy}) is nog niet uit dienst. Laat de status op Actief: de toegang stopt automatisch na de laatste werkdag, of zet de einddatum op vandaag.");
+        }
+
         employee.FirstName = request.FirstName.Trim();
         employee.LastName = request.LastName.Trim();
         employee.DateOfBirth = request.DateOfBirth;
@@ -444,7 +455,18 @@ public class EmployeeService : IEmployeeService
             _dbContext.Set<EmployeeJobFunction>().Add(new EmployeeJobFunction { EmployeeId = employee.Id, JobFunctionId = functionId });
         }
 
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        // MD-H6 follow-up: an edit that ENDS the employment (status Terminated, or an end date that
+        // already lies behind the last working day) is offboarding — the same flow as the explicit
+        // action, committed in the same save as the edit. A generic PUT can no longer leave
+        // "employee terminated, user active" behind.
+        if (endsEmployment)
+        {
+            await Offboarding().OffboardAsync(employee, OffboardingTrigger.TerminatedByEdit, cancellationToken);
+        }
+        else
+        {
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
 
         var newSnapshot = await BuildAuditSnapshotAsync(employee, requestedFunctionIds.ToList(), cancellationToken);
         await _auditService.RecordAsync(EntityType, employee.Id.ToString(), "Updated", oldSnapshot, newSnapshot, cancellationToken);
@@ -460,86 +482,15 @@ public class EmployeeService : IEmployeeService
             return false;
         }
 
-        // MD-M3: the end date is the TENANT's today (UTC "today" is still yesterday after midnight).
-        var today = await Common.TenantTimeZone.TodayAsync(_dbContext, _tenantContext.TenantId, TimeProvider.System, cancellationToken);
-        employee.IsActive = false;
-        employee.EmploymentEndDate ??= today;
-        if (employee.EmploymentStatus is EmploymentStatus.Active or EmploymentStatus.OnLeave)
-        {
-            employee.EmploymentStatus = EmploymentStatus.Terminated;
-        }
-
-        // MD-H6 / Security H2: offboarding ends system access and operational availability in
-        // the same save — login, sessions, refresh tokens, activation links, driver, vehicle slot.
-        var offboarding = await EmployeeOffboarding.ApplyAsync(
-            _dbContext, _tenantContext.TenantId, employee, DateTime.UtcNow, today, cancellationToken);
-
-        // Urenregistratie: prikklokcode intrekken zodat een vertrokken medewerker niet
-        // meer kan punchen; de attendance-historie zelf blijft onaangeroerd bestaan.
-        var attendanceCredentials = await _dbContext.AttendanceCredentials
-            .Where(c => c.TenantId == _tenantContext.TenantId && c.EmployeeId == employee.Id && c.IsActive)
-            .ToListAsync(cancellationToken);
-        foreach (var credential in attendanceCredentials)
-        {
-            credential.IsActive = false;
-        }
-
-        // Een nog openstaande sessie wordt afgesloten (een inactieve medewerker kan zelf
-        // niet meer uitpunten) — traceerbaar via een ClockOut-event met toelichting.
-        var openSessions = await _dbContext.AttendanceSessions
-            .Where(s => s.TenantId == _tenantContext.TenantId && s.EmployeeId == employee.Id && s.ClockOutAt == null)
-            .ToListAsync(cancellationToken);
-        if (openSessions.Count > 0)
-        {
-            var closeAt = DateTime.UtcNow;
-            var sessionIds = openSessions.Select(s => s.Id).ToList();
-            var openBreaks = await _dbContext.AttendanceBreaks
-                .Where(b => b.TenantId == _tenantContext.TenantId && sessionIds.Contains(b.SessionId) && b.EndedAt == null)
-                .ToListAsync(cancellationToken);
-            foreach (var openBreak in openBreaks)
-            {
-                openBreak.EndedAt = closeAt;
-            }
-
-            foreach (var session in openSessions)
-            {
-                session.ClockOutAt = closeAt;
-                session.ClockOutSource = Modules.Attendance.Entities.AttendanceSource.Api;
-                session.Status = Modules.Attendance.Entities.AttendanceSessionStatus.Completed;
-                _dbContext.AttendanceEvents.Add(new Modules.Attendance.Entities.AttendanceEvent
-                {
-                    Id = Guid.NewGuid(),
-                    TenantId = _tenantContext.TenantId,
-                    SessionId = session.Id,
-                    EmployeeId = employee.Id,
-                    EventType = Modules.Attendance.Entities.AttendanceEventType.ClockOut,
-                    OccurredAt = closeAt,
-                    Source = Modules.Attendance.Entities.AttendanceSource.Api,
-                    Note = "Afgesloten bij deactivering van de medewerker.",
-                });
-            }
-        }
-
-        await _dbContext.SaveChangesAsync(cancellationToken);
-
-        await _auditService.RecordAsync(EntityType, employee.Id.ToString(), "Deactivated", new { IsActive = true },
-            new
-            {
-                employee.IsActive, employee.EmploymentEndDate, employee.EmploymentStatus,
-                AccountsDeactivated = offboarding.UsersDeactivated, DriversDeactivated = offboarding.DriversDeactivated,
-                VehicleSlotsReleased = offboarding.VehicleSlotsReleased, UpcomingTrips = offboarding.UpcomingTrips,
-            }, cancellationToken);
-        foreach (var userId in await _dbContext.Users.AsNoTracking()
-                     .Where(u => u.TenantId == _tenantContext.TenantId && u.EmployeeId == employee.Id)
-                     .Select(u => u.Id).ToListAsync(cancellationToken))
-        {
-            // Visible in the user's own security history too (who / when / why).
-            await _auditService.RecordAsync("User", userId.ToString(), Modules.Auditing.Services.SecurityAuditEvents.UserDeactivated,
-                null, new { IsActive = false, SessionsRevoked = true, Reason = "Medewerker inactief gezet (uitdiensttreding)" }, cancellationToken);
-        }
-
+        // MD-H6 / Security H2: the one offboarding flow ends system access and operational
+        // availability in the same save — login, sessions, refresh tokens, activation links,
+        // driver, vehicle slots, fixed trailer, clock-in code.
+        await Offboarding().OffboardAsync(employee, OffboardingTrigger.ExplicitDeactivation, cancellationToken);
         return true;
     }
+
+    private EmployeeOffboardingService Offboarding() =>
+        new(_dbContext, _tenantContext, _auditService, TimeProvider.System);
 
     public async Task<bool> ReactivateAsync(Guid id, CancellationToken cancellationToken)
     {
