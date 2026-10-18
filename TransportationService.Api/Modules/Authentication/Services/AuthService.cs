@@ -57,8 +57,10 @@ public sealed class AuthService : IAuthService
             return AuthResult.InvalidCredentials;
         }
 
+        // MD-H11: the account identity is the normalized address — "TEST.User@x" logs in as "test.user@x".
+        var identity = Modules.Identity.Entities.User.NormalizeEmail(normalized);
         var candidates = await _db.Users
-            .Where(u => u.Email == normalized)
+            .Where(u => u.NormalizedEmail == identity)
             .OrderBy(u => u.TenantId).ThenBy(u => u.Id) // deterministic; never "first row wins"
             .ToListAsync(cancellationToken);
 

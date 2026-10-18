@@ -145,20 +145,9 @@ public sealed class AccountSecurityService : IAccountSecurityService
         return requested.All(code => actorPermissions.Contains(code));
     }
 
-    public async Task RevokeAllSessionsAsync(User user, CancellationToken cancellationToken)
-    {
-        var nowUtc = _timeProvider.GetUtcNow().UtcDateTime;
-        var activeTokens = await _db.Set<RefreshToken>()
-            .Where(t => t.UserId == user.Id && t.RevokedAt == null)
-            .ToListAsync(cancellationToken);
-        foreach (var token in activeTokens)
-        {
-            token.RevokedAt = nowUtc;
-        }
-
+    public Task RevokeAllSessionsAsync(User user, CancellationToken cancellationToken) =>
         // Rotating the stamp invalidates every already-issued access token on its next request.
-        user.SecurityStamp = Guid.NewGuid();
-    }
+        AccountSessionRevocation.RevokeAllAsync(_db, user, _timeProvider.GetUtcNow().UtcDateTime, cancellationToken);
 
     public bool IsPortalTemplateRole(Role role) =>
         role.TemplateCode is { } code && code.StartsWith(PortalTemplatePrefix, StringComparison.OrdinalIgnoreCase);

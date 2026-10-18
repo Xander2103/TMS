@@ -77,7 +77,7 @@ public class MaintenancePolicyService : IMaintenancePolicyService
 
     public async Task<MaintenancePolicyDto> CreateAsync(SaveMaintenancePolicyRequest request, CancellationToken cancellationToken)
     {
-        await ValidateAsync(request, cancellationToken);
+        await ValidateAsync(request, null, cancellationToken);
 
         var policy = new MaintenancePolicy
         {
@@ -103,7 +103,7 @@ public class MaintenancePolicyService : IMaintenancePolicyService
             return null;
         }
 
-        await ValidateAsync(request, cancellationToken);
+        await ValidateAsync(request, id, cancellationToken);
 
         var before = new { policy.Kind, policy.AssetKind, policy.IntervalMonths, policy.IntervalKm, policy.WarningDays, policy.IsActive };
         Apply(policy, request);
@@ -136,8 +136,11 @@ public class MaintenancePolicyService : IMaintenancePolicyService
         MaintenancePolicyKind kind, FleetAssetKind assetKind, Guid assetId, Guid? categoryId,
         CancellationToken cancellationToken)
     {
+        // MD-M11: deterministic — legacy duplicates at one level resolve to the oldest rule (new
+        // duplicates are refused), and a rule is only ever an asset rule of ITS asset.
         var candidates = await TenantScoped().AsNoTracking()
             .Where(p => p.IsActive && p.Kind == kind && p.AssetKind == assetKind)
+            .OrderBy(p => p.CreatedAt).ThenBy(p => p.Id)
             .ToListAsync(cancellationToken);
 
         var assetMatch = candidates.FirstOrDefault(p =>
@@ -317,7 +320,7 @@ public class MaintenancePolicyService : IMaintenancePolicyService
         policy.IsActive = request.IsActive;
     }
 
-    private async Task ValidateAsync(SaveMaintenancePolicyRequest request, CancellationToken cancellationToken)
+    private async Task ValidateAsync(SaveMaintenancePolicyRequest request, Guid? existingId, CancellationToken cancellationToken)
     {
         if (request.IntervalMonths is null && request.IntervalKm is null)
         {
@@ -373,6 +376,19 @@ public class MaintenancePolicyService : IMaintenancePolicyService
             throw new InvalidTenantReferenceException("oplegger");
         }
 
+        // MD-M11: one ACTIVE rule per kind, asset type and level — a second "Bakwagen" rule was
+        // accepted and the resolver then picked either. Deactivated rules may coexist.
+        if (request.IsActive && await TenantScoped().AnyAsync(p => p.Id != existingId && p.IsActive
+                && p.Kind == request.Kind && p.AssetKind == request.AssetKind
+                && p.CategoryId == request.CategoryId && p.VehicleId == request.VehicleId && p.TrailerId == request.TrailerId,
+                cancellationToken))
+        {
+            var level = request.VehicleId is not null ? "dit voertuig" : request.TrailerId is not null ? "deze oplegger"
+                : request.CategoryId is not null ? "deze categorie" : "de bedrijfsstandaard";
+            throw new DomainValidationException(
+                $"Er bestaat al een actieve {(request.Kind == MaintenancePolicyKind.Inspection ? "keuringsregel" : "onderhoudsregel")} voor {level}. Pas die regel aan of zet ze eerst inactief.");
+        }
+
         if (request.CategoryId is { } categoryId)
         {
             var known = request.AssetKind == FleetAssetKind.Vehicle
@@ -396,12 +412,22 @@ public class MaintenancePolicyService : IMaintenancePolicyService
                 : await _dbContext.TrailerCategories.Where(c => c.Id == categoryId && c.TenantId == tenantId).Select(c => c.Name).FirstOrDefaultAsync(cancellationToken);
         }
 
-        var vehicleNumber = policy.VehicleId is { } vehicleId
-            ? await _dbContext.Vehicles.Where(v => v.Id == vehicleId && v.TenantId == tenantId).Select(v => v.InternalNumber).FirstOrDefaultAsync(cancellationToken)
+        // MD-M11: the asset is looked up INCLUDING deleted ones — a rule of a deleted vehicle used to
+        // come back without a vehicle and was shown as "Bedrijfsstandaard".
+        var vehicle = policy.VehicleId is { } vehicleId
+            ? await _dbContext.Vehicles.IgnoreQueryFilters().Where(v => v.Id == vehicleId && v.TenantId == tenantId)
+                .Select(v => new { v.InternalNumber, v.IsDeleted }).FirstOrDefaultAsync(cancellationToken)
             : null;
-        var trailerNumber = policy.TrailerId is { } trailerId
-            ? await _dbContext.Trailers.Where(t => t.Id == trailerId && t.TenantId == tenantId).Select(t => t.InternalNumber).FirstOrDefaultAsync(cancellationToken)
+        var trailer = policy.TrailerId is { } trailerId
+            ? await _dbContext.Trailers.IgnoreQueryFilters().Where(t => t.Id == trailerId && t.TenantId == tenantId)
+                .Select(t => new { t.InternalNumber, t.IsDeleted }).FirstOrDefaultAsync(cancellationToken)
             : null;
+        var vehicleNumber = vehicle?.InternalNumber;
+        var trailerNumber = trailer?.InternalNumber;
+        var scope = policy.VehicleId is not null ? "Vehicle" : policy.TrailerId is not null ? "Trailer"
+            : policy.CategoryId is not null ? "Category" : "CompanyDefault";
+        var assetDeleted = (policy.VehicleId is not null && vehicle is not { IsDeleted: false })
+                           || (policy.TrailerId is not null && trailer is not { IsDeleted: false });
 
         return new MaintenancePolicyDto(
             policy.Id, policy.Kind, policy.AssetKind,
@@ -409,6 +435,6 @@ public class MaintenancePolicyService : IMaintenancePolicyService
             policy.VehicleId, vehicleNumber,
             policy.TrailerId, trailerNumber,
             policy.IntervalMonths, policy.IntervalKm, policy.WarningDays,
-            policy.Description, policy.IsActive);
+            policy.Description, policy.IsActive, scope, assetDeleted);
     }
 }

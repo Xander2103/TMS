@@ -21,7 +21,7 @@ public static class DefaultRoleUpgrades
         IReadOnlyDictionary<string, IReadOnlyList<string>>? RevocationsByTemplateCode = null);
 
     /// <summary>Version 1 = the original role creation; steps start at 2.</summary>
-    public const int CurrentVersion = 37;
+    public const int CurrentVersion = 38;
 
     public static IReadOnlyList<UpgradeStep> Steps { get; } =
     [
@@ -661,6 +661,21 @@ public static class DefaultRoleUpgrades
                     PermissionCodes.MaintenanceView, PermissionCodes.DamageReportsView, PermissionCodes.FuelView,
                     PermissionCodes.FleetFinanceView, PermissionCodes.TachographView,
                 ],
+            }),
+
+        new(38,
+            "Stamgegevensremediëring 2026-10-18 (MD-M8): de planner beheerde fiscale, bank- en Peppol-gegevens van "
+            + "klanten (customers.manage_fiscal) — dat is boekhouding; het PO-register (customers.manage_po) blijft bij de "
+            + "planner omdat PO-nummers met de operationele orderintake binnenkomen. De boekhouding kon de adreskiezer niet "
+            + "openen (locations.view ontbrak) bij klant- en factuurgegevens. Eenheden aanmaken/wijzigen vereist voortaan "
+            + "unit_types.manage; tariffs.manage regelt enkel nog het gebruik van een eenheid in prijzen en orders.",
+            new Dictionary<string, IReadOnlyList<string>>
+            {
+                ["boekhouding"] = [PermissionCodes.LocationsView],
+            },
+            new Dictionary<string, IReadOnlyList<string>>
+            {
+                ["planner"] = [PermissionCodes.CustomersManageFiscal],
             }),
     ];
 }

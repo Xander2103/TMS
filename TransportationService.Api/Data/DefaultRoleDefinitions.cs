@@ -55,7 +55,8 @@ public static class DefaultRoleDefinitions
                 PermissionCodes.TripCostsView,
                 PermissionCodes.MessagingManage, PermissionCodes.MessageTemplatesManage, PermissionCodes.MessagesSend,
                 PermissionCodes.CustomersCreate, PermissionCodes.CustomersEdit, PermissionCodes.CustomersDeactivate,
-                PermissionCodes.CustomersManageFiscal, PermissionCodes.CustomersManageCommunication,
+                // MD-M8 (v38): no customers.manage_fiscal — fiscal / bank / Peppol data is accounting's.
+                PermissionCodes.CustomersManageCommunication,
                 PermissionCodes.CustomersManageSurcharge, PermissionCodes.CustomersManagePo,
                 PermissionCodes.LocationsCreate, PermissionCodes.LocationsEdit,
                 PermissionCodes.EmployeeDocumentsView,
@@ -167,6 +168,7 @@ public static class DefaultRoleDefinitions
                 PermissionCodes.OrdersView, PermissionCodes.OrdersExport,
                 PermissionCodes.PodView,
                 PermissionCodes.CustomersView, PermissionCodes.CustomersEdit,
+                PermissionCodes.LocationsView, // MD-M8 (v38): the address picker of customer / invoice data
                 PermissionCodes.CustomerCategoriesView, PermissionCodes.ContactDepartmentsView,
                 PermissionCodes.ContactDepartmentsManage, PermissionCodes.ReferenceDataView,
                 PermissionCodes.CompanySettingsView,

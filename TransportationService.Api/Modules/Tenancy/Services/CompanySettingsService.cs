@@ -39,12 +39,14 @@ public class CompanySettingsService : ICompanySettingsService
 
         var settings = await GetOrCreateAsync(cancellationToken);
 
-        var before = new { settings.CompanyLegalName, settings.VatNumber, settings.DefaultCurrency, settings.Timezone };
+        var before = AuditShape(settings);
 
         // Retry once/twice if a concurrent create claimed a numbering counter between our read
         // and save (the counters are concurrency tokens): reload and re-apply the request.
         for (var attempt = 0; ; attempt++)
         {
+            // MD-H5: judged against the CURRENT counters on every attempt.
+            await EnsureCountersSafeAsync(settings, request, cancellationToken);
             ApplyRequest(settings, request);
 
             try
@@ -58,11 +60,105 @@ public class CompanySettingsService : ICompanySettingsService
             }
         }
 
-        await _auditService.RecordAsync(EntityType, settings.TenantId.ToString(), "Updated", before,
-            new { settings.CompanyLegalName, settings.VatNumber, settings.DefaultCurrency, settings.Timezone }, cancellationToken);
+        // MD-M10: every changed setting, numbering counters and prefixes included.
+        if (Common.Integrity.AuditDiff.Changes(before, AuditShape(settings)) is { } diff)
+        {
+            await _auditService.RecordAsync(EntityType, settings.TenantId.ToString(), "Updated", diff.Old, diff.New, cancellationToken);
+        }
 
         return Map(settings);
     }
+
+    private static object AuditShape(TenantSettings s) => new
+    {
+        s.CompanyLegalName, s.TradingName, s.CompanyNumber, s.VatNumber,
+        s.Street, s.HouseNumber, s.PostalCode, s.City, s.CountryCode,
+        s.OperationalStreet, s.OperationalHouseNumber, s.OperationalPostalCode, s.OperationalCity, s.OperationalCountryCode,
+        s.Email, s.PhoneNumber, s.Website, s.DefaultLanguage, s.Timezone, s.DefaultCurrency, s.DateFormat, s.DecimalSeparator,
+        s.DefaultWeightUnit, s.DefaultDistanceUnit, s.InvoiceEmail, s.PaymentTermDays, s.DefaultVatRatePercent,
+        s.DefaultLoadingMinutes, s.DefaultUnloadingMinutes, s.TrainingConflictSeverity, s.ShiftOverlapConflictSeverity,
+        s.CapacityConflictSeverity, s.RedeliveryMode, s.EtaShiftNotifyMinutes, s.QualificationExpiryWarningDays,
+        s.EmployeeNumberPrefix, s.EmployeeNumberNextValue, s.CustomerNumberPrefix, s.CustomerNumberNextValue,
+        s.DriverNumberPrefix, s.DriverNumberNextValue, s.OrderNumberPrefix, s.OrderNumberNextValue,
+        s.TripNumberPrefix, s.TripNumberNextValue, s.VehicleNumberPrefix, s.VehicleNumberNextValue,
+        s.TrailerNumberPrefix, s.TrailerNumberNextValue, s.DefaultPageSize,
+    };
+
+    private const int CounterLookahead = 500;
+
+    /// <summary>
+    /// MD-H5 (master-data acceptance 2026-10-18): the order counter could be lowered from 104 to
+    /// 100 ("✓ Opgeslagen") and the next order failed with a 500 on the unique index. A counter
+    /// that is LOWERED, or whose prefix changes, may not point at numbers that already exist: the
+    /// change is refused in Dutch, naming the highest number in use. Raising a counter is always
+    /// safe. (A stale settings form that still carries an old, lower value is refused the same way.)
+    /// </summary>
+    private async Task EnsureCountersSafeAsync(TenantSettings current, UpdateCompanySettingsRequest request, CancellationToken cancellationToken)
+    {
+        var tenantId = _tenantContext.TenantId;
+        async Task CheckAsync(string label, string? oldPrefix, int oldNext, string? newPrefixRaw, int newNextRaw, string defaultPrefix,
+            string format, Func<IReadOnlyList<string>, Task<List<string>>> taken)
+        {
+            var newPrefix = Trim(newPrefixRaw) ?? defaultPrefix;
+            var newNext = AtLeast(newNextRaw, 1);
+            var prefixChanged = !string.Equals(newPrefix, oldPrefix ?? defaultPrefix, StringComparison.Ordinal);
+            if (!prefixChanged && newNext >= oldNext)
+            {
+                return;
+            }
+
+            var upper = prefixChanged ? newNext + CounterLookahead : Math.Min(oldNext, newNext + CounterLookahead);
+            var candidates = Enumerable.Range(newNext, Math.Max(upper - newNext, 1))
+                .Select(v => newPrefix + v.ToString(format, System.Globalization.CultureInfo.InvariantCulture))
+                .ToList();
+            var existing = await taken(candidates);
+            if (existing.Count > 0)
+            {
+                var highest = existing.OrderBy(n => n.Length).ThenBy(n => n, StringComparer.Ordinal).Last();
+                throw new Common.DomainValidationException(label,
+                    $"Het volgnummer voor {LabelOf(label)} kan niet op {newPrefix}{newNext.ToString(format, System.Globalization.CultureInfo.InvariantCulture)} gezet worden: "
+                    + $"dat nummer of een volgend nummer is al in gebruik (hoogste in gebruik: {highest}). "
+                    + "Kies een hoger volgnummer of een andere prefix. Herlaad de instellingen als iemand intussen nieuwe records aanmaakte.");
+            }
+        }
+
+        await CheckAsync("orderNumberNextValue", current.OrderNumberPrefix, current.OrderNumberNextValue, request.OrderNumberPrefix,
+            request.OrderNumberNextValue, string.Empty, "0000",
+            c => _dbContext.TransportOrders.IgnoreQueryFilters().Where(o => o.TenantId == tenantId && c.Contains(o.OrderNumber)).Select(o => o.OrderNumber).ToListAsync(cancellationToken));
+        await CheckAsync("customerNumberNextValue", current.CustomerNumberPrefix, current.CustomerNumberNextValue, request.CustomerNumberPrefix,
+            request.CustomerNumberNextValue, string.Empty, "D4",
+            c =>
+            {
+                var normalized = c.Select(Modules.Partners.Entities.Customer.NormalizeNumber).ToList();
+                return _dbContext.Customers.IgnoreQueryFilters().Where(x => x.TenantId == tenantId && normalized.Contains(x.NormalizedCustomerNumber)).Select(x => x.CustomerNumber).ToListAsync(cancellationToken);
+            });
+        await CheckAsync("tripNumberNextValue", current.TripNumberPrefix, current.TripNumberNextValue, request.TripNumberPrefix,
+            request.TripNumberNextValue, string.Empty, "0000",
+            c => _dbContext.Trips.IgnoreQueryFilters().Where(t => t.TenantId == tenantId && c.Contains(t.TripNumber)).Select(t => t.TripNumber).ToListAsync(cancellationToken));
+        await CheckAsync("employeeNumberNextValue", current.EmployeeNumberPrefix, current.EmployeeNumberNextValue, request.EmployeeNumberPrefix,
+            request.EmployeeNumberNextValue, string.Empty, "D4",
+            c => _dbContext.Employees.IgnoreQueryFilters().Where(e => e.TenantId == tenantId && c.Contains(e.EmployeeNumber)).Select(e => e.EmployeeNumber).ToListAsync(cancellationToken));
+        await CheckAsync("driverNumberNextValue", current.DriverNumberPrefix, current.DriverNumberNextValue, request.DriverNumberPrefix,
+            request.DriverNumberNextValue, "CH-", "D4",
+            c => _dbContext.Drivers.IgnoreQueryFilters().Where(d => d.TenantId == tenantId && c.Contains(d.DriverNumber)).Select(d => d.DriverNumber).ToListAsync(cancellationToken));
+        await CheckAsync("vehicleNumberNextValue", current.VehicleNumberPrefix, current.VehicleNumberNextValue, request.VehicleNumberPrefix,
+            request.VehicleNumberNextValue, "VRT-", "D4",
+            c => _dbContext.Vehicles.IgnoreQueryFilters().Where(v => v.TenantId == tenantId && c.Contains(v.InternalNumber)).Select(v => v.InternalNumber).ToListAsync(cancellationToken));
+        await CheckAsync("trailerNumberNextValue", current.TrailerNumberPrefix, current.TrailerNumberNextValue, request.TrailerNumberPrefix,
+            request.TrailerNumberNextValue, "OPL-", "D4",
+            c => _dbContext.Trailers.IgnoreQueryFilters().Where(t => t.TenantId == tenantId && c.Contains(t.InternalNumber)).Select(t => t.InternalNumber).ToListAsync(cancellationToken));
+    }
+
+    private static string LabelOf(string field) => field switch
+    {
+        "orderNumberNextValue" => "opdrachten",
+        "customerNumberNextValue" => "klanten",
+        "tripNumberNextValue" => "ritten",
+        "employeeNumberNextValue" => "medewerkers",
+        "driverNumberNextValue" => "chauffeurs",
+        "vehicleNumberNextValue" => "voertuigen",
+        _ => "opleggers",
+    };
 
     private static void ApplyRequest(TenantSettings settings, UpdateCompanySettingsRequest request)
     {

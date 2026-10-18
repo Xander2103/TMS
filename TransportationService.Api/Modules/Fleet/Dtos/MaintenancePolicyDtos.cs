@@ -16,7 +16,14 @@ public record MaintenancePolicyDto(
     int? IntervalKm,
     int WarningDays,
     string? Description,
-    bool IsActive);
+    bool IsActive,
+    /// <summary>
+    /// MD-M11: the rule's level, explicit — CompanyDefault | Category | Vehicle | Trailer. A rule of
+    /// a vehicle/trailer that was deleted is still "Vehicle"/"Trailer" (never shown as the company default).
+    /// </summary>
+    string Scope = "CompanyDefault",
+    /// <summary>MD-M11: the asset of an asset-level rule no longer exists; the rule applies to nothing.</summary>
+    bool AssetDeleted = false);
 
 public record SaveMaintenancePolicyRequest(
     MaintenancePolicyKind Kind,

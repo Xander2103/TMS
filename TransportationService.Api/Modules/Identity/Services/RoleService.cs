@@ -46,8 +46,26 @@ public class RoleService : IRoleService
         return role is null ? null : await MapAsync(role, cancellationToken);
     }
 
+    public const string DuplicateNameMessage = "Er bestaat al een rol met deze naam (hoofdletters maken geen verschil). Kies een andere naam.";
+
+    /// <summary>
+    /// MD-M7 (master-data acceptance 2026-10-18): renaming a role to an existing name was a 500 and
+    /// "planner" could coexist with "Planner". Role names are compared case-insensitively.
+    /// </summary>
+    private Task<bool> NameTakenAsync(string name, Guid? exceptRoleId, CancellationToken cancellationToken)
+    {
+        var lowered = name.Trim().ToLower();
+        return _dbContext.Roles.AnyAsync(
+            r => r.TenantId == _tenantContext.TenantId && r.Name.ToLower() == lowered && r.Id != exceptRoleId, cancellationToken);
+    }
+
     public async Task<RoleDto> CreateAsync(CreateRoleRequest request, CancellationToken cancellationToken)
     {
+        if (await NameTakenAsync(request.Name, null, cancellationToken))
+        {
+            throw new Common.DomainValidationException("name", DuplicateNameMessage);
+        }
+
         var role = new Role
         {
             Id = Guid.NewGuid(),
@@ -80,11 +98,24 @@ public class RoleService : IRoleService
             return new RoleOperationResult(RoleOperationOutcome.SystemRoleProtected, await MapAsync(role, cancellationToken));
         }
 
+        if (await NameTakenAsync(newName, role.Id, cancellationToken))
+        {
+            return new RoleOperationResult(RoleOperationOutcome.ValidationFailed, null, DuplicateNameMessage);
+        }
+
         var oldValues = new { role.Name, role.Description, role.IsActive };
         role.Name = newName;
         role.Description = request.Description?.Trim();
         role.UpdatedAt = DateTime.UtcNow;
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException)
+        {
+            // A concurrent create/rename took the name between the check and the save.
+            return new RoleOperationResult(RoleOperationOutcome.ValidationFailed, null, DuplicateNameMessage);
+        }
 
         await _auditService.RecordAsync("Role", role.Id.ToString(), "Updated", oldValues,
             new { role.Name, role.Description, role.IsActive }, cancellationToken);

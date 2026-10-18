@@ -767,7 +767,7 @@ public class DefaultRoleSeederTests
 
         var state = await db.Context.RoleTemplateStates.SingleAsync(s => s.TenantId == tenantId);
         Assert.Equal(DefaultRoleUpgrades.CurrentVersion, state.AppliedVersion);
-        Assert.Equal(37, DefaultRoleUpgrades.CurrentVersion);
+        Assert.Equal(38, DefaultRoleUpgrades.CurrentVersion);
 
 
         var roles = await db.Context.Roles.Where(r => r.TenantId == tenantId).ToListAsync();
@@ -1019,6 +1019,6 @@ public class DefaultRoleSeederTests
         Assert.DoesNotContain(PermissionCodes.LegalEntitiesView, await CodesOfAsync(db, planner.Id));
         Assert.DoesNotContain(PermissionCodes.LegalEntitiesView, await CodesOfAsync(db, dispatcher.Id));
         Assert.Contains(PermissionCodes.LegalEntitiesView, await CodesOfAsync(db, custom.Id));
-        Assert.Equal(37, (await db.Context.RoleTemplateStates.SingleAsync(s => s.TenantId == tenantId)).AppliedVersion);
+        Assert.Equal(38, (await db.Context.RoleTemplateStates.SingleAsync(s => s.TenantId == tenantId)).AppliedVersion);
     }
 }

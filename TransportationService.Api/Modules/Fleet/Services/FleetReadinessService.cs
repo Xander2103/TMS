@@ -259,6 +259,17 @@ public class FleetReadinessService : IFleetReadinessService
                 ReadinessSeverity.Blocking, Until: craneUntil, Conditional: "crane"));
         }
 
+        // MD-M16 (master-data acceptance 2026-10-18): a crane-equipped vehicle WITHOUT any crane
+        // inspection read "Inzetbaar" while its own page warned "Geen Kraankeuring". No evidence at
+        // all is the same conditional block as an expired one: not deployable for crane work.
+        if (asset.HasCrane
+            && !sources.Inspections.Any(x => x.Type == InspectionType.CraneInspection)
+            && !sources.Documents.Any(x => x.Type == FleetDocumentType.CraneInspection))
+        {
+            issues.Add(new("crane_inspection.missing", "Geen kraankeuring geregistreerd — niet inzetbaar voor kraanwerk.",
+                ReadinessSeverity.Blocking, Conditional: "crane"));
+        }
+
         var adrDocs = sources.Documents.Where(x => x.Type == FleetDocumentType.AdrCertificate && x.ExpiryDate is not null).ToList();
         if (asset.AdrSuitable && adrDocs.Count > 0 && adrDocs.Max(x => x.ExpiryDate) is { } adrUntil && adrUntil < date)
         {

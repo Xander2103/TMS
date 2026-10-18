@@ -6153,6 +6153,11 @@ namespace TransportationService.Api.Migrations
                     b.Property<bool>("MustChangePassword")
                         .HasColumnType("boolean");
 
+                    b.Property<string>("NormalizedEmail")
+                        .IsRequired()
+                        .HasMaxLength(250)
+                        .HasColumnType("character varying(250)");
+
                     b.Property<string>("PasswordHash")
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
@@ -6176,9 +6181,11 @@ namespace TransportationService.Api.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("NormalizedEmail");
+
                     b.HasIndex("TenantId");
 
-                    b.HasIndex("TenantId", "Email")
+                    b.HasIndex("TenantId", "NormalizedEmail")
                         .IsUnique();
 
                     b.ToTable("users", (string)null);
@@ -8924,6 +8931,9 @@ namespace TransportationService.Api.Migrations
 
                     b.Property<Guid>("CustomerId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("CustomerNameAtCompletion")
+                        .HasColumnType("text");
 
                     b.Property<string>("CustomerReference")
                         .HasMaxLength(100)
@@ -11914,6 +11924,24 @@ namespace TransportationService.Api.Migrations
 
                     b.Property<Guid?>("DriverId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("ExecutedDriverName")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ExecutedTrailerNumber")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ExecutedTrailerPlate")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ExecutedVehicleNumber")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ExecutedVehiclePlate")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("ExecutionSnapshotAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");

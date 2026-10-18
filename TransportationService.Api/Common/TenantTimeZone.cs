@@ -88,6 +88,15 @@ public static class TenantTimeZone
         DateOnly.FromDateTime(ToWallClock(instant, zone));
 
     /// <summary>
+    /// MD-M3 (master-data acceptance 2026-10-18): "today" as the TENANT's calendar day. After local
+    /// midnight <c>DateTime.UtcNow.Date</c> is still yesterday in UTC — an invoice date, an
+    /// employee end date or an order date defaulted to the previous day. Use this, not UTC.
+    /// </summary>
+    public static async Task<DateOnly> TodayAsync(
+        TransportationDbContext dbContext, Guid tenantId, TimeProvider clock, CancellationToken cancellationToken) =>
+        ToLocalDate(clock.GetUtcNow().UtcDateTime, await ForTenantAsync(dbContext, tenantId, cancellationToken));
+
+    /// <summary>
     /// Tenant wall clock → UTC instant: the inverse of <see cref="ToWallClock(DateTime, TimeZoneInfo)"/>,
     /// for everything a human types as a local date and time. DST-safe: a time inside the
     /// spring-forward gap shifts past it, an ambiguous autumn time takes its first occurrence.

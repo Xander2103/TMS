@@ -153,10 +153,12 @@ public class TransportOrderService : ITransportOrderService
         if (fromDate is { } from) query = query.Where(o => o.OrderDate >= from);
         if (toDate is { } to) query = query.Where(o => o.OrderDate <= to);
 
+        // MD-M6: a completed order lists the customer it was executed for; a (legacy) deleted
+        // customer never makes its orders disappear from the list.
         var joined = from o in query
-                     join cu in _dbContext.Customers.AsNoTracking().Where(x => x.TenantId == _tenantContext.TenantId)
+                     join cu in _dbContext.Customers.IgnoreQueryFilters().AsNoTracking().Where(x => x.TenantId == _tenantContext.TenantId)
                          on o.CustomerId equals cu.Id
-                     select new { o, CustomerName = cu.Name };
+                     select new { o, CustomerName = o.CustomerNameAtCompletion ?? cu.Name };
 
         if (!string.IsNullOrWhiteSpace(search))
         {
@@ -1232,6 +1234,11 @@ public class TransportOrderService : ITransportOrderService
         var wasSubmitted = order.Status == TransportOrderStatus.Submitted;
         var before = new { order.Status };
         order.Status = target;
+        if (target == TransportOrderStatus.Completed)
+        {
+            await OrderCompletionSnapshot.ApplyAsync(_dbContext, order, cancellationToken); // MD-M6
+        }
+
         // Wave 2 §6: readiness is a projection of the current state — recompute on every
         // status change (Completed evaluates the rules; anything else resets to NotReady).
         await InvoiceReadinessEvaluator.EvaluateAsync(_dbContext, order, cancellationToken);
@@ -3043,10 +3050,12 @@ public class TransportOrderService : ITransportOrderService
         TransportOrder order, CancellationToken cancellationToken,
         IReadOnlyDictionary<Guid, AddressBookOutcome>? addressBookOutcomes = null)
     {
-        var customerName = await _dbContext.Customers.AsNoTracking()
-            .Where(c => c.Id == order.CustomerId && c.TenantId == _tenantContext.TenantId)
-            .Select(c => c.Name)
-            .FirstOrDefaultAsync(cancellationToken) ?? string.Empty;
+        // MD-M6: executed history keeps the customer name it was completed for.
+        var customerName = order.CustomerNameAtCompletion
+            ?? await _dbContext.Customers.IgnoreQueryFilters().AsNoTracking()
+                .Where(c => c.Id == order.CustomerId && c.TenantId == _tenantContext.TenantId)
+                .Select(c => c.Name)
+                .FirstOrDefaultAsync(cancellationToken) ?? string.Empty;
 
         // Live locations serve two remaining purposes: the code (identifier, not snapshot data)
         // + opening-hours warnings, and a LEGACY fallback for stop rows created before the

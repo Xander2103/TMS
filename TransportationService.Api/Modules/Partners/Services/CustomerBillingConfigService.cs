@@ -145,6 +145,7 @@ public class CustomerBillingConfigService : ICustomerBillingConfigService
         // Legacy flag stays in sync (older order-intake validation reads it).
         customer.PurchaseOrderRequired = request.Policy == PurchaseOrderPolicy.Required;
         await _dbContext.SaveChangesAsync(cancellationToken);
+        await RefreshInvoiceReadinessAsync(customerId, cancellationToken);
 
         await _auditService.RecordAsync(EntityType, customerId.ToString(), "PoPolicyChanged", before,
             new { Policy = customer.PurchaseOrderPolicy }, cancellationToken);
@@ -174,6 +175,7 @@ public class CustomerBillingConfigService : ICustomerBillingConfigService
             Notes = string.IsNullOrWhiteSpace(request.Notes) ? null : request.Notes.Trim(),
         });
         await _dbContext.SaveChangesAsync(cancellationToken);
+        await RefreshInvoiceReadinessAsync(customerId, cancellationToken);
 
         await _auditService.RecordAsync(EntityType, customerId.ToString(), "PoNumberAdded", null,
             new { request.PoNumber, request.ValidFrom, request.ValidUntil }, cancellationToken);
@@ -200,6 +202,7 @@ public class CustomerBillingConfigService : ICustomerBillingConfigService
         po.ValidUntil = request.ValidUntil;
         po.Notes = string.IsNullOrWhiteSpace(request.Notes) ? null : request.Notes.Trim();
         await _dbContext.SaveChangesAsync(cancellationToken);
+        await RefreshInvoiceReadinessAsync(customerId, cancellationToken);
 
         await _auditService.RecordAsync(EntityType, customerId.ToString(), "PoNumberChanged", before,
             new { po.PoNumber, po.ValidFrom, po.ValidUntil }, cancellationToken);
@@ -218,9 +221,36 @@ public class CustomerBillingConfigService : ICustomerBillingConfigService
 
         _dbContext.Remove(po); // soft delete: history is preserved
         await _dbContext.SaveChangesAsync(cancellationToken);
+        await RefreshInvoiceReadinessAsync(customerId, cancellationToken);
         await _auditService.RecordAsync(EntityType, customerId.ToString(), "PoNumberRemoved",
             new { po.PoNumber, po.ValidFrom }, null, cancellationToken);
         return true;
+    }
+
+    /// <summary>
+    /// MD-H10 (master-data acceptance 2026-10-18): registering the missing PO left completed orders
+    /// on "Nakijken: po.missing" — the persisted readiness was only recomputed on pricing / POD /
+    /// completion events, so the accountant had to unlock and relock the price. Every change to
+    /// the PO policy or the PO registry now re-evaluates the customer's completed, not yet invoiced
+    /// orders (the evaluator is the single source of the readiness rules).
+    /// </summary>
+    private async Task RefreshInvoiceReadinessAsync(Guid customerId, CancellationToken cancellationToken)
+    {
+        var orders = await _dbContext.TransportOrders
+            .Where(o => o.TenantId == _tenantContext.TenantId && o.CustomerId == customerId
+                        && o.Status == Modules.Orders.Entities.TransportOrderStatus.Completed)
+            .ToListAsync(cancellationToken);
+        if (orders.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var order in orders)
+        {
+            await Modules.Orders.Services.InvoiceReadinessEvaluator.EvaluateAsync(_dbContext, order, cancellationToken);
+        }
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
     }
 
     public async Task<string?> ResolveEffectivePoNumberAsync(Guid customerId, DateOnly date, CancellationToken cancellationToken)

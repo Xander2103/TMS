@@ -118,6 +118,7 @@ public class UserService : IUserService
         await EnsureLinksInTenantAsync(request.EmployeeId, request.CustomerId, cancellationToken);
         await EnsureRolesInTenantAsync(request.RoleIds, cancellationToken);
         await EnsureIdentityClassConsistentAsync(request.CustomerId, request.RoleIds, cancellationToken);
+        await EnsureEmailFreeAsync(_dbContext, _tenantContext.TenantId, request.Email, cancellationToken);
 
         var user = new User
         {
@@ -425,6 +426,22 @@ public class UserService : IUserService
         return await _dbContext.Roles
             .Where(r => roleIds.Contains(r.Id) && r.Name == AdministratorRoleName && r.IsSystemRole)
             .AnyAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// MD-H11: refuses a second account for the same (case-insensitive) address in the tenant,
+    /// in Dutch, before the unique index has to (the index stays the race backstop).
+    /// </summary>
+    public static async Task EnsureEmailFreeAsync(
+        TransportationDbContext db, Guid tenantId, string? email, CancellationToken cancellationToken, Guid? exceptUserId = null)
+    {
+        var normalized = User.NormalizeEmail(email);
+        if (normalized.Length > 0 && await db.Users.AnyAsync(
+                u => u.TenantId == tenantId && u.NormalizedEmail == normalized && u.Id != exceptUserId, cancellationToken))
+        {
+            throw new Common.DomainValidationException("email",
+                "Er bestaat al een gebruiker met dit e-mailadres (hoofdletters maken geen verschil).");
+        }
     }
 
     private async Task<bool> IsLastActiveAdministratorAsync(User user, CancellationToken cancellationToken)

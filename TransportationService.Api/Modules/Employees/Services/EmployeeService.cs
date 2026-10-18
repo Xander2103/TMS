@@ -460,12 +460,19 @@ public class EmployeeService : IEmployeeService
             return false;
         }
 
+        // MD-M3: the end date is the TENANT's today (UTC "today" is still yesterday after midnight).
+        var today = await Common.TenantTimeZone.TodayAsync(_dbContext, _tenantContext.TenantId, TimeProvider.System, cancellationToken);
         employee.IsActive = false;
-        employee.EmploymentEndDate ??= DateOnly.FromDateTime(DateTime.UtcNow);
+        employee.EmploymentEndDate ??= today;
         if (employee.EmploymentStatus is EmploymentStatus.Active or EmploymentStatus.OnLeave)
         {
             employee.EmploymentStatus = EmploymentStatus.Terminated;
         }
+
+        // MD-H6 / Security H2: offboarding ends system access and operational availability in
+        // the same save — login, sessions, refresh tokens, activation links, driver, vehicle slot.
+        var offboarding = await EmployeeOffboarding.ApplyAsync(
+            _dbContext, _tenantContext.TenantId, employee, DateTime.UtcNow, today, cancellationToken);
 
         // Urenregistratie: prikklokcode intrekken zodat een vertrokken medewerker niet
         // meer kan punchen; de attendance-historie zelf blijft onaangeroerd bestaan.
@@ -516,7 +523,20 @@ public class EmployeeService : IEmployeeService
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         await _auditService.RecordAsync(EntityType, employee.Id.ToString(), "Deactivated", new { IsActive = true },
-            new { employee.IsActive, employee.EmploymentEndDate, employee.EmploymentStatus }, cancellationToken);
+            new
+            {
+                employee.IsActive, employee.EmploymentEndDate, employee.EmploymentStatus,
+                AccountsDeactivated = offboarding.UsersDeactivated, DriversDeactivated = offboarding.DriversDeactivated,
+                VehicleSlotsReleased = offboarding.VehicleSlotsReleased, UpcomingTrips = offboarding.UpcomingTrips,
+            }, cancellationToken);
+        foreach (var userId in await _dbContext.Users.AsNoTracking()
+                     .Where(u => u.TenantId == _tenantContext.TenantId && u.EmployeeId == employee.Id)
+                     .Select(u => u.Id).ToListAsync(cancellationToken))
+        {
+            // Visible in the user's own security history too (who / when / why).
+            await _auditService.RecordAsync("User", userId.ToString(), Modules.Auditing.Services.SecurityAuditEvents.UserDeactivated,
+                null, new { IsActive = false, SessionsRevoked = true, Reason = "Medewerker inactief gezet (uitdiensttreding)" }, cancellationToken);
+        }
 
         return true;
     }

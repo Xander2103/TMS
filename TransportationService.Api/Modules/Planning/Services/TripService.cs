@@ -115,10 +115,11 @@ public class TripService : ITripService
             var conflicts = await _conflictService.EvaluateAsync(trip, cancellationToken);
             items.Add(new TripListItemDto(
                 trip.Id, trip.TripNumber, trip.TripDate, trip.Status,
-                trip.DriverId, trip.DriverId is { } dr ? names.Drivers.GetValueOrDefault(dr) : null,
-                trip.VehicleId, trip.VehicleId is { } v ? names.Vehicles.GetValueOrDefault(v).Number : null,
-                trip.VehicleId is { } v2 ? names.Vehicles.GetValueOrDefault(v2).Plate : null,
-                trip.TrailerId, trip.TrailerId is { } tr ? names.Trailers.GetValueOrDefault(tr) : null,
+                // MD-M6: a completed trip shows the identity it was executed with.
+                trip.DriverId, trip.ExecutedDriverName ?? (trip.DriverId is { } dr ? names.Drivers.GetValueOrDefault(dr) : null),
+                trip.VehicleId, trip.ExecutedVehicleNumber ?? (trip.VehicleId is { } v ? names.Vehicles.GetValueOrDefault(v).Number : null),
+                trip.ExecutedVehiclePlate ?? (trip.VehicleId is { } v2 ? names.Vehicles.GetValueOrDefault(v2).Plate : null),
+                trip.TrailerId, trip.ExecutedTrailerNumber ?? (trip.TrailerId is { } tr ? names.Trailers.GetValueOrDefault(tr) : null),
                 trip.Orders.Count(o => !o.IsDeleted),
                 conflicts.Count(c => c.Blocking),
                 trip.VehicleSelectionSource));
@@ -891,6 +892,10 @@ public class TripService : ITripService
         var before = new { trip.Status };
         trip.Status = target;
         trip.Version = Guid.NewGuid();
+        if (target == TripStatus.Completed)
+        {
+            await FreezeExecutionIdentityAsync(trip, cancellationToken);
+        }
 
         await PropagateOrderStatusAsync(trip, target, cancellationToken);
         var sync = await _planningSyncService.ApplyAsync(trip, cancellationToken);
@@ -1017,6 +1022,11 @@ public class TripService : ITripService
                     TransportOrderStatus.Confirmed,
                 _ => order.Status,
             };
+            if (order.Status == TransportOrderStatus.Completed)
+            {
+                await Modules.Orders.Services.OrderCompletionSnapshot.ApplyAsync(_dbContext, order, cancellationToken);
+            }
+
             // Wave 2 §6: trip completion is one of the readiness transition points. The trip's
             // own Completed status is unsaved here — assert the execution fact explicitly.
             await Modules.Orders.Services.InvoiceReadinessEvaluator.EvaluateAsync(
@@ -1107,6 +1117,35 @@ public class TripService : ITripService
             Sequence = index + 1,
         }).ToList();
 
+    /// <summary>MD-M6: freezes driver / vehicle / trailer identity at completion (never overwritten).</summary>
+    private async Task FreezeExecutionIdentityAsync(Trip trip, CancellationToken cancellationToken)
+    {
+        if (trip.ExecutionSnapshotAt is not null)
+        {
+            return;
+        }
+
+        var tenantId = _tenantContext.TenantId;
+        var names = await ResolveResourceNamesAsync([trip], cancellationToken);
+        trip.ExecutedDriverName = trip.DriverId is { } driverId ? names.Drivers.GetValueOrDefault(driverId) : null;
+        if (trip.VehicleId is { } vehicleId && names.Vehicles.TryGetValue(vehicleId, out var vehicle))
+        {
+            (trip.ExecutedVehicleNumber, trip.ExecutedVehiclePlate) = vehicle;
+        }
+
+        if (trip.TrailerId is { } trailerId)
+        {
+            var trailer = await _dbContext.Trailers.AsNoTracking().IgnoreQueryFilters()
+                .Where(t => t.TenantId == tenantId && t.Id == trailerId)
+                .Select(t => new { t.InternalNumber, t.LicensePlate })
+                .FirstOrDefaultAsync(cancellationToken);
+            trip.ExecutedTrailerNumber = trailer?.InternalNumber;
+            trip.ExecutedTrailerPlate = trailer?.LicensePlate;
+        }
+
+        trip.ExecutionSnapshotAt = DateTime.UtcNow;
+    }
+
     private sealed record ResourceNames(
         Dictionary<Guid, string> Drivers,
         Dictionary<Guid, (string Number, string Plate)> Vehicles,
@@ -1122,9 +1161,9 @@ public class TripService : ITripService
 
         var drivers = driverIds.Count == 0
             ? []
-            : await _dbContext.Drivers.AsNoTracking()
+            : await _dbContext.Drivers.AsNoTracking().IgnoreQueryFilters()
                 .Where(d => d.TenantId == tenantId && driverIds.Contains(d.Id))
-                .Join(_dbContext.Employees.AsNoTracking(), d => d.EmployeeId, e => e.Id,
+                .Join(_dbContext.Employees.AsNoTracking().IgnoreQueryFilters(), d => d.EmployeeId, e => e.Id,
                     (d, e) => new { d.Id, Name = e.FirstName + " " + e.LastName })
                 .ToDictionaryAsync(x => x.Id, x => x.Name, cancellationToken);
 
@@ -1237,10 +1276,11 @@ public class TripService : ITripService
 
         return new TripDetailDto(
             trip.Id, trip.TripNumber, trip.TripDate, trip.Status,
-            trip.DriverId, trip.DriverId is { } d ? names.Drivers.GetValueOrDefault(d) : null,
-            trip.VehicleId, trip.VehicleId is { } v ? names.Vehicles.GetValueOrDefault(v).Number : null,
-            trip.VehicleId is { } v2 ? names.Vehicles.GetValueOrDefault(v2).Plate : null,
-            trip.TrailerId, trip.TrailerId is { } tr ? names.Trailers.GetValueOrDefault(tr) : null,
+            // MD-M6: a completed trip shows the identity it was executed with.
+            trip.DriverId, trip.ExecutedDriverName ?? (trip.DriverId is { } d ? names.Drivers.GetValueOrDefault(d) : null),
+            trip.VehicleId, trip.ExecutedVehicleNumber ?? (trip.VehicleId is { } v ? names.Vehicles.GetValueOrDefault(v).Number : null),
+            trip.ExecutedVehiclePlate ?? (trip.VehicleId is { } v2 ? names.Vehicles.GetValueOrDefault(v2).Plate : null),
+            trip.TrailerId, trip.ExecutedTrailerNumber ?? (trip.TrailerId is { } tr ? names.Trailers.GetValueOrDefault(tr) : null),
             trip.PlannedStart, trip.PlannedEnd,
             trip.PlannedDistanceKm, trip.PlannedEmptyKm, trip.ActualDistanceKm, trip.ActualEmptyKm,
             trip.Notes,

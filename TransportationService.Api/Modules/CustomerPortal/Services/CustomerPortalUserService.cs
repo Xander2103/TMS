@@ -157,6 +157,12 @@ public class CustomerPortalUserService : ICustomerPortalUserService
                 "De klantportaalrol ontbreekt voor deze omgeving; neem contact op met de systeembeheerder.");
         }
 
+        if (await _dbContext.Users.AnyAsync(u => u.TenantId == _tenantContext.TenantId && u.NormalizedEmail == User.NormalizeEmail(email), cancellationToken))
+        {
+            return PortalUserOperationResult<PortalUserInviteResultDto>.Invalid(
+                "Er bestaat al een gebruiker met dit e-mailadres (hoofdletters maken geen verschil).");
+        }
+
         var now = _timeProvider.GetUtcNow().UtcDateTime;
         var user = new User
         {

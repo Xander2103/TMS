@@ -123,7 +123,7 @@ public class UserAccountFlowService : IUserAccountFlowService
 
         // Cross-tenant lookup mirrors the login flow; the response never differs.
         var users = await _dbContext.Users
-            .Where(u => u.Email == normalized && u.IsActive && !u.IsBlocked)
+            .Where(u => u.NormalizedEmail == Entities.User.NormalizeEmail(normalized) && u.IsActive && !u.IsBlocked)
             .ToListAsync(cancellationToken);
 
         var now = _timeProvider.GetUtcNow().UtcDateTime;

@@ -70,6 +70,16 @@ public class Trip : AuditableTenantEntity
     /// </summary>
     public Guid Version { get; set; } = Guid.NewGuid();
 
+    // MD-M6 (master-data acceptance 2026-10-18): the identity the trip was EXECUTED with, frozen
+    // when it completes. A completed trip showed the vehicle's new plate after a re-plating and an
+    // empty driver after a driver change; history now reads these. Null = not completed (live).
+    public string? ExecutedDriverName { get; set; }
+    public string? ExecutedVehicleNumber { get; set; }
+    public string? ExecutedVehiclePlate { get; set; }
+    public string? ExecutedTrailerNumber { get; set; }
+    public string? ExecutedTrailerPlate { get; set; }
+    public DateTime? ExecutionSnapshotAt { get; set; }
+
     public List<TripOrder> Orders { get; set; } = [];
 }
 

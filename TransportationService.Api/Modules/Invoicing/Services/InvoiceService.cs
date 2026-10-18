@@ -294,10 +294,9 @@ public class InvoiceService : IInvoiceService
                 // order whose readiness projection was never evaluated (still "NotReady" — the
                 // evaluator always yields Ready/ReviewRequired for a completed order) is judged by
                 // its pricing provenance instead, so it is never silently billed at € 0,00 either.
-                o.InvoiceReadiness == Modules.Orders.Services.InvoiceReadinessEvaluator.ReadyForInvoice
-                || o.IsFree
-                || (o.InvoiceReadiness == Modules.Orders.Services.InvoiceReadinessEvaluator.NotReady
-                    && Modules.Orders.Services.OrderPricingState.IsPriced(o.PriceIsManual, o.PricingSource, o.OneOffFixedAmount, o.AgreedPrice)));
+                Modules.Orders.Services.InvoiceReadinessEvaluator.IsBillable(
+                    o.InvoiceReadiness, o.InvoiceReadinessReasons, o.IsFree,
+                    Modules.Orders.Services.OrderPricingState.IsPriced(o.PriceIsManual, o.PricingSource, o.OneOffFixedAmount, o.AgreedPrice)));
         }).ToList();
     }
 
@@ -866,7 +865,7 @@ public class InvoiceService : IInvoiceService
             ?? await _billingConfig.ResolveEffectivePoNumberAsync(request.CustomerId, invoiceDate, cancellationToken)
             ?? SingleDistinctReference(orders);
 
-        ApplySnapshots(invoice, legalEntity, customerRow);
+        await ApplySnapshotsAsync(invoice, legalEntity, customerRow, cancellationToken);
 
         // ACC-H3: a draft has NO legal number — it is claimed atomically at issue, so deleting or
         // cancelling this draft never leaves a gap in the series.
@@ -990,7 +989,7 @@ public class InvoiceService : IInvoiceService
                 .FirstOrDefaultAsync(c => c.TenantId == _tenantContext.TenantId && c.Id == invoice.CustomerId, cancellationToken);
             if (snapshotCustomer is not null)
             {
-                ApplySnapshots(invoice, snapshotEntity, snapshotCustomer);
+                await ApplySnapshotsAsync(invoice, snapshotEntity, snapshotCustomer, cancellationToken);
             }
         }
 
@@ -1148,7 +1147,7 @@ public class InvoiceService : IInvoiceService
                     .FirstOrDefaultAsync(c => c.TenantId == _tenantContext.TenantId && c.Id == invoice.CustomerId, cancellationToken);
                 if (issueCustomer is not null)
                 {
-                    ApplySnapshots(invoice, issueEntity, issueCustomer);
+                    await ApplySnapshotsAsync(invoice, issueEntity, issueCustomer, cancellationToken);
                 }
             }
 
@@ -1395,6 +1394,30 @@ public class InvoiceService : IInvoiceService
     }
 
     /// <summary>
+    /// MD-M4 (master-data acceptance 2026-10-18): the invoice address was always the customer's
+    /// registered address, even when an address was explicitly marked "Standaard facturatie". The
+    /// active default billing address of the customer — when there is one — is the invoice address;
+    /// otherwise the registered address, as before.
+    /// </summary>
+    private async Task ApplySnapshotsAsync(Invoice invoice, LegalEntity? entity, Customer customer, CancellationToken cancellationToken)
+    {
+        ApplySnapshots(invoice, entity, customer);
+        var billing = await _dbContext.CustomerLocationLinks.AsNoTracking()
+            .Where(l => l.TenantId == _tenantContext.TenantId && l.CustomerId == customer.Id && l.IsDefaultBilling && l.IsActive)
+            .Join(_dbContext.Locations.AsNoTracking().Where(x => x.IsActive), l => l.LocationId, x => x.Id,
+                (l, x) => new { x.Street, x.HouseNumber, x.PostalCode, x.City, x.CountryCode })
+            .FirstOrDefaultAsync(cancellationToken);
+        if (billing is not null && (billing.Street is not null || billing.City is not null))
+        {
+            invoice.CustomerStreetSnapshot = billing.Street;
+            invoice.CustomerHouseNumberSnapshot = billing.HouseNumber;
+            invoice.CustomerPostalCodeSnapshot = billing.PostalCode;
+            invoice.CustomerCitySnapshot = billing.City;
+            invoice.CustomerCountryCodeSnapshot = Trim(billing.CountryCode)?.ToUpperInvariant() ?? invoice.CustomerCountryCodeSnapshot;
+        }
+    }
+
+    /// <summary>
     /// Freezes seller + customer presentation and fiscal facts on the invoice (refreshed while
     /// Draft, final refresh at issue, never afterwards — ACC-H4/P1/P5/P6). Structured address
     /// fields feed the UBL party blocks; the joined address line feeds the PDF.
@@ -1529,7 +1552,7 @@ public class InvoiceService : IInvoiceService
                 .FirstOrDefaultAsync(c => c.TenantId == _tenantContext.TenantId && c.Id == invoice.CustomerId, cancellationToken);
             if (customer is not null)
             {
-                ApplySnapshots(invoice, entity, customer);
+                await ApplySnapshotsAsync(invoice, entity, customer, cancellationToken);
             }
         }
 

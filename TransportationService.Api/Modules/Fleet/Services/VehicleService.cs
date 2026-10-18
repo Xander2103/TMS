@@ -330,6 +330,17 @@ public class VehicleService : IVehicleService
                 $"Er bestaat al een voertuig met dit kenteken ({plateOwner.LicensePlate}, {plateOwner.InternalNumber}).");
         }
 
+        // MD-M16: a registration identifies ONE registered asset — a trailer may not carry it either.
+        var trailerOwner = await _dbContext.Trailers.AsNoTracking()
+            .Where(t => t.TenantId == _tenantContext.TenantId && t.NormalizedLicensePlate == normalizedPlate)
+            .Select(t => new { t.InternalNumber, t.LicensePlate })
+            .FirstOrDefaultAsync(cancellationToken);
+        if (trailerOwner is not null)
+        {
+            return new VehicleOperationResult(VehicleOperationOutcome.DuplicateLicensePlate, null,
+                $"Dit kenteken is al geregistreerd voor oplegger {trailerOwner.InternalNumber} ({trailerOwner.LicensePlate}).");
+        }
+
         if (FleetIdentifiers.NormalizeVin(vin) is { } normalizedVin)
         {
             var vinOwner = await TenantScoped().AsNoTracking()

@@ -16,7 +16,10 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(u => u.PasswordHash).HasMaxLength(500);
         builder.Property(u => u.PreferredLanguageCode).HasMaxLength(5);
         builder.Property(u => u.ThemePreference).HasMaxLength(10);
-        builder.HasIndex(u => new { u.TenantId, u.Email }).IsUnique();
+        // MD-H11: one account per normalized e-mail per tenant (the typed form stays for display).
+        builder.Property(u => u.NormalizedEmail).IsRequired().HasMaxLength(250);
+        builder.HasIndex(u => new { u.TenantId, u.NormalizedEmail }).IsUnique();
+        builder.HasIndex(u => u.NormalizedEmail);
         builder.HasIndex(u => u.TenantId);
     }
 }

@@ -4,7 +4,27 @@ public class User
 {
     public Guid Id { get; set; }
     public Guid TenantId { get; set; }
-    public string Email { get; set; } = string.Empty;
+    /// <summary>The address as typed (display / mail delivery).</summary>
+    public string Email
+    {
+        get => _email;
+        set
+        {
+            _email = value;
+            NormalizedEmail = NormalizeEmail(value);
+        }
+    }
+
+    private string _email = string.Empty;
+
+    /// <summary>
+    /// MD-H11 (master-data acceptance 2026-10-18): the account identity — trimmed and lower-cased,
+    /// so "Test.User@Example.test" and "test.user@example.test" are ONE account. Uniqueness, login
+    /// and password reset all use this; e-mail addresses are case-insensitive in practice.
+    /// </summary>
+    public string NormalizedEmail { get; private set; } = string.Empty;
+
+    public static string NormalizeEmail(string? email) => (email ?? string.Empty).Trim().ToLowerInvariant();
     public string FirstName { get; set; } = string.Empty;
     public string LastName { get; set; } = string.Empty;
     public string? PasswordHash { get; set; }

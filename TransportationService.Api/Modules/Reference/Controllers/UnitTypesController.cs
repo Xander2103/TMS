@@ -100,13 +100,14 @@ public class UnitTypesController : LookupControllerBase<UnitType>
     public async Task<ActionResult<IReadOnlyList<UnitTypeMasterDto>>> Master(CancellationToken cancellationToken) =>
         Ok(await _masterService.ListAsync(cancellationToken));
 
+    /// <summary>MD-M8: the unit master itself is master data — unit_types.manage only.</summary>
     [HttpPost("master")]
-    [RequirePermission(PermissionCodes.UnitTypesManage, PermissionCodes.TariffsManage)]
+    [RequirePermission(PermissionCodes.UnitTypesManage)]
     public async Task<ActionResult<UnitTypeMasterDto>> CreateMaster(SaveUnitTypeMasterRequest request, CancellationToken cancellationToken) =>
         Ok(await _masterService.CreateAsync(request, cancellationToken));
 
     [HttpPut("{id:guid}/master")]
-    [RequirePermission(PermissionCodes.UnitTypesManage, PermissionCodes.TariffsManage)]
+    [RequirePermission(PermissionCodes.UnitTypesManage)]
     public async Task<ActionResult<UnitTypeMasterDto>> UpdateMaster(Guid id, SaveUnitTypeMasterRequest request, CancellationToken cancellationToken)
     {
         var updated = await _masterService.UpdateAsync(id, request, cancellationToken);

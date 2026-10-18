@@ -51,7 +51,7 @@ public class RolesController : ControllerBase
         }
         catch (DbUpdateException)
         {
-            return Conflict("A role with this name already exists.");
+            return Conflict(new { message = TransportationService.Api.Modules.Identity.Services.RoleService.DuplicateNameMessage });
         }
     }
 

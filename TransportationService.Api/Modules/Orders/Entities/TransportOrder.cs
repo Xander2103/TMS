@@ -101,6 +101,12 @@ public class TransportOrder : AuditableTenantEntity, IVersionedEntity
     /// </summary>
     public string InvoiceReadiness { get; set; } = "NotReady";
 
+    /// <summary>
+    /// MD-M6: the customer's display name when the order was COMPLETED (executed history). Open
+    /// work follows the live customer; a completed order keeps the name it was executed for.
+    /// </summary>
+    public string? CustomerNameAtCompletion { get; set; }
+
     /// <summary>Semicolon-separated reason codes when ReviewRequired (e.g. "pricing.incomplete;pod.missing").</summary>
     public string? InvoiceReadinessReasons { get; set; }
 

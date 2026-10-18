@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using TransportationService.Api.Common.Scheduling;
 using TransportationService.Api.Modules.Auditing.Services;
 using TransportationService.Api.Modules.Drivers.Entities;
@@ -248,6 +249,37 @@ public class TripServiceTests
         Assert.Equal(TripStatus.Completed, completed.Trip!.Status);
         Assert.Equal(TransportOrderStatus.Completed, (await h.Db.Context.TransportOrders.FindAsync(h.OrderId))!.Status);
         Assert.Empty(completed.Trip.AllowedTransitions);
+    }
+
+    [Fact]
+    public async Task CompletedTrip_KeepsTheIdentityItWasExecutedWith_AfterRePlatingAndRenaming()
+    {
+        // MD-M6 (master-data acceptance 2026-10-18): a completed trip showed the vehicle's new plate.
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var trip = await h.Sut.CreateAsync(Request(h, h.OrderId), CancellationToken.None);
+        var id = trip.Trip!.Id;
+        await h.Sut.ChangeStatusAsync(id, TripStatus.Planned, false, false, null, CancellationToken.None);
+        await h.Sut.ChangeStatusAsync(id, TripStatus.InProgress, false, false, null, CancellationToken.None);
+        var completed = (await h.Sut.ChangeStatusAsync(id, TripStatus.Completed, false, false, null, CancellationToken.None)).Trip!;
+        var order = (await h.Db.Context.TransportOrders.FindAsync(h.OrderId))!;
+        var customerAtCompletion = order.CustomerNameAtCompletion;
+        Assert.NotNull(customerAtCompletion);
+
+        var vehicle = (await h.Db.Context.Vehicles.FindAsync(h.VehicleId))!;
+        vehicle.LicensePlate = "1-NEW-999";
+        var employee = (await h.Db.Context.Employees.FindAsync(h.EmployeeId))!;
+        employee.FirstName = "Hernoemd";
+        var customer = await h.Db.Context.Customers.SingleAsync(c => c.Id == order.CustomerId);
+        customer.Name = "Klant HERNOEMD";
+        await h.Db.Context.SaveChangesAsync();
+        h.Db.Context.ChangeTracker.Clear();
+
+        var after = (await h.Sut.GetByIdAsync(id, CancellationToken.None))!;
+        Assert.Equal(completed.VehicleLicensePlate, after.VehicleLicensePlate);
+        Assert.NotEqual("1-NEW-999", after.VehicleLicensePlate);
+        Assert.Equal(completed.DriverName, after.DriverName);
+        Assert.Equal(customerAtCompletion, (await h.Db.Context.TransportOrders.AsNoTracking().SingleAsync(o => o.Id == h.OrderId)).CustomerNameAtCompletion);
     }
 
     [Fact]

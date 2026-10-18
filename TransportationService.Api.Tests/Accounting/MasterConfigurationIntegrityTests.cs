@@ -230,6 +230,69 @@ public class MasterConfigurationIntegrityTests
         Assert.Equal(created.Version + 1, updated.Version);
     }
 
+    // ---- MD-M8: permission anomalies (role templates v38) ----------------------------------
+
+    [Fact]
+    public void RoleTemplates_V38_PlannerLosesFiscal_BoekhoudingGetsTheAddressPicker()
+    {
+        var planner = Data.DefaultRoleDefinitions.All.Single(t => t.Code == "planner");
+        var boekhouding = Data.DefaultRoleDefinitions.All.Single(t => t.Code == "boekhouding");
+        Assert.DoesNotContain(Modules.Identity.PermissionCodes.CustomersManageFiscal, planner.PermissionCodes);
+        Assert.Contains(Modules.Identity.PermissionCodes.CustomersManagePo, planner.PermissionCodes); // intentional (intake)
+        Assert.Contains(Modules.Identity.PermissionCodes.LocationsView, boekhouding.PermissionCodes);
+
+        var step = Data.DefaultRoleUpgrades.Steps.Single(s => s.Version == 38);
+        Assert.Contains(Modules.Identity.PermissionCodes.LocationsView, step.GrantsByTemplateCode["boekhouding"]);
+        Assert.Contains(Modules.Identity.PermissionCodes.CustomersManageFiscal, step.RevocationsByTemplateCode!["planner"]);
+
+        // Unit master edits need unit_types.manage; tariffs.manage only reaches the usage flags.
+        static IReadOnlyList<string> Codes(string action) =>
+            typeof(Modules.Reference.Controllers.UnitTypesController).GetMethod(action)!
+                .GetCustomAttributes(typeof(Modules.Identity.Authorization.RequirePermissionAttribute), false)
+                .Cast<Modules.Identity.Authorization.RequirePermissionAttribute>().Single().PermissionCodes;
+        Assert.Equal(new[] { Modules.Identity.PermissionCodes.UnitTypesManage }, Codes("CreateMaster"));
+        Assert.Equal(new[] { Modules.Identity.PermissionCodes.UnitTypesManage }, Codes("UpdateMaster"));
+        Assert.Contains(Modules.Identity.PermissionCodes.TariffsManage, Codes("SaveSettings"));
+    }
+
+    // ---- MD-M4: default billing address -----------------------------------------------------
+
+    [Fact]
+    public async Task Issue_UsesTheCustomersDefaultBillingAddress_WhenOneIsMarked()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var category = await h.Accounting.CreateSalesCategoryAsync(new SaveSalesCategoryRequest("TMK", "TEST", LedgerAccountId: h.Ledger709100), CancellationToken.None);
+        var line = await IssueLineAsync(h, h.EntityA, category.Id);
+        var invoiceId = line.InvoiceId;
+        var customerId = (await h.Db.Context.Invoices.AsNoTracking().SingleAsync(i => i.Id == invoiceId)).CustomerId;
+        var locationId = Guid.NewGuid();
+        h.Db.Context.Locations.Add(new Modules.Locations.Entities.Location
+        {
+            Id = locationId, TenantId = h.TenantId, Name = "Facturatie", Street = "Factuurlaan", HouseNumber = "30", PostalCode = "2000", City = "Antwerpen", CountryCode = "BE", IsActive = true,
+        });
+        h.Db.Context.CustomerLocationLinks.Add(new Modules.Locations.Entities.CustomerLocationLink
+        {
+            Id = Guid.NewGuid(), TenantId = h.TenantId, CustomerId = customerId, LocationId = locationId, IsDefaultBilling = true, IsActive = true,
+        });
+        await h.Db.Context.SaveChangesAsync();
+        // The already-issued invoice is final; a NEW one picks up the billing address.
+        Assert.NotEqual("Factuurlaan", (await h.Db.Context.Invoices.AsNoTracking().SingleAsync(i => i.Id == invoiceId)).CustomerStreetSnapshot);
+
+        var invoice = new Invoice
+        {
+            Id = Guid.NewGuid(), TenantId = h.TenantId, CustomerId = customerId, LegalEntityId = h.EntityA,
+            InvoicePeriodYear = 2026, InvoicePeriodMonth = 10, InvoiceDate = new DateOnly(2026, 10, 18), DueDate = new DateOnly(2026, 11, 17),
+            Status = InvoiceStatus.Draft, CustomerVatTreatment = "DomesticVat",
+            Lines = [new InvoiceLine { Id = Guid.NewGuid(), TenantId = h.TenantId, Sequence = 1, Description = "X", Quantity = 1, UnitPrice = 10, VatRatePercent = 21, SalesCategoryId = category.Id }],
+        };
+        h.Db.Context.Invoices.Add(invoice);
+        await h.Db.Context.SaveChangesAsync();
+        await h.Invoices.ChangeStatusAsync(invoice.Id, InvoiceStatus.Sent, CancellationToken.None);
+        var issued = await h.Db.Context.Invoices.AsNoTracking().SingleAsync(i => i.Id == invoice.Id);
+        Assert.Equal(("Factuurlaan", "30", "Antwerpen"), (issued.CustomerStreetSnapshot, issued.CustomerHouseNumberSnapshot, issued.CustomerCitySnapshot));
+    }
+
     // ---- MD-M2 / MD-M5: customer ----------------------------------------------------------
 
     private static UpdateCustomerRequest CustomerUpdate(CustomerDetailDto c, string? phone, string? website, int? term, int? expectedVersion) => new(

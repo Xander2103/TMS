@@ -93,7 +93,8 @@ public class UsersController : ControllerBase
         }
         catch (DbUpdateException)
         {
-            return Conflict("A user with this email already exists.");
+            // The unique (normalized) index lost a race with an identical create.
+            return Conflict(new { message = "Er bestaat al een gebruiker met dit e-mailadres (hoofdletters maken geen verschil)." });
         }
     }
 

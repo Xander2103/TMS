@@ -21,6 +21,20 @@ public static class InvoiceReadinessEvaluator
     public const string ReadyForInvoice = "ReadyForInvoice";
     public const string ReviewRequired = "ReviewRequired";
 
+    /// <summary>The PO reason: the only one the INVOICE itself can resolve (a PO typed on the draft).</summary>
+    public const string PoMissing = "po.missing";
+
+    /// <summary>
+    /// ACC-B1 + MD-H10: may this order be put on an invoice? Ready, explicitly free, a never-evaluated
+    /// but priced order — or an order whose ONLY open point is the missing PO: that one is resolved
+    /// on the invoice (registry PO or a PO typed on the draft) and enforced again at issue.
+    /// </summary>
+    public static bool IsBillable(string readiness, string? reasons, bool free, bool priced) =>
+        readiness == ReadyForInvoice
+        || free
+        || (readiness == NotReady && priced)
+        || (readiness == ReviewRequired && reasons == PoMissing);
+
     /// <summary>
     /// Mutates the tracked order; the caller's SaveChanges persists it. <paramref name="tripExecutedOverride"/>
     /// lets the trip-completion flow assert the execution fact while its own trip status is
@@ -95,7 +109,7 @@ public static class InvoiceReadinessEvaluator
                       && po.ValidFrom <= order.OrderDate
                       && (po.ValidUntil == null || po.ValidUntil >= order.OrderDate), cancellationToken))
         {
-            reasons.Add("po.missing");
+            reasons.Add(PoMissing);
         }
 
         // POD requirement only when the order actually ran on a completed trip; a directly

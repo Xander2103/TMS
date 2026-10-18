@@ -71,7 +71,7 @@ public static class InvoiceIssuePreflight
                 .Where(o => o.TenantId == tenantId && lineOrderIds.Contains(o.Id))
                 .Select(o => new
                 {
-                    o.Id, o.OrderNumber, o.LegalEntityId, o.AgreedPrice, o.InvoiceReadiness, o.Status,
+                    o.Id, o.OrderNumber, o.LegalEntityId, o.AgreedPrice, o.InvoiceReadiness, o.InvoiceReadinessReasons, o.Status,
                     // ACC-M1: explicitly free = the flag, or the pre-existing intentional-zero shapes (one-off 0 / override 0).
                     Free = o.FreeConfirmed || (o.PricingSource == OrderPricingSource.OneOff && o.OneOffFixedAmount == 0m) || (o.PriceIsManual && o.AgreedPrice == 0m),
                     o.PriceIsManual, o.PricingSource, o.OneOffFixedAmount,
@@ -81,9 +81,9 @@ public static class InvoiceIssuePreflight
                     // Resolved = ready for invoicing, or explicitly free. A completed order whose readiness
                     // projection was never evaluated ("NotReady" never describes a completed order) is
                     // judged by its pricing provenance instead — the same rule the invoice builder applies.
-                    Resolved: o.InvoiceReadiness == InvoiceReadinessEvaluator.ReadyForInvoice || o.Free
-                              || (o.InvoiceReadiness == InvoiceReadinessEvaluator.NotReady
-                                  && OrderPricingState.IsPriced(o.PriceIsManual, o.PricingSource, o.OneOffFixedAmount, o.AgreedPrice))));
+                    // (MD-H10: a PO-only gap is checked on the invoice's own PO just below.)
+                    Resolved: InvoiceReadinessEvaluator.IsBillable(o.InvoiceReadiness, o.InvoiceReadinessReasons, o.Free,
+                        OrderPricingState.IsPriced(o.PriceIsManual, o.PricingSource, o.OneOffFixedAmount, o.AgreedPrice))));
 
         var mismatched = orders.Values
             .Where(o => o.LegalEntityId != null && o.LegalEntityId != invoice.LegalEntityId)
