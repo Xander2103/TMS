@@ -234,24 +234,8 @@ public class CustomerBillingConfigService : ICustomerBillingConfigService
     /// the PO policy or the PO registry now re-evaluates the customer's completed, not yet invoiced
     /// orders (the evaluator is the single source of the readiness rules).
     /// </summary>
-    private async Task RefreshInvoiceReadinessAsync(Guid customerId, CancellationToken cancellationToken)
-    {
-        var orders = await _dbContext.TransportOrders
-            .Where(o => o.TenantId == _tenantContext.TenantId && o.CustomerId == customerId
-                        && o.Status == Modules.Orders.Entities.TransportOrderStatus.Completed)
-            .ToListAsync(cancellationToken);
-        if (orders.Count == 0)
-        {
-            return;
-        }
-
-        foreach (var order in orders)
-        {
-            await Modules.Orders.Services.InvoiceReadinessEvaluator.EvaluateAsync(_dbContext, order, cancellationToken);
-        }
-
-        await _dbContext.SaveChangesAsync(cancellationToken);
-    }
+    private Task RefreshInvoiceReadinessAsync(Guid customerId, CancellationToken cancellationToken) =>
+        Modules.Orders.Services.InvoiceReadinessEvaluator.RefreshCustomerAsync(_dbContext, _tenantContext.TenantId, customerId, cancellationToken);
 
     public async Task<string?> ResolveEffectivePoNumberAsync(Guid customerId, DateOnly date, CancellationToken cancellationToken)
     {

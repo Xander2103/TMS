@@ -36,6 +36,31 @@ public static class InvoiceReadinessEvaluator
         || (readiness == ReviewRequired && reasons == PoMissing);
 
     /// <summary>
+    /// MD-H10: re-evaluates every completed (not yet invoiced) order of a customer and saves. The ONE
+    /// refresh behind every change of the customer's PO situation — the PO registry (add / edit /
+    /// delete), the billing panel's PO policy and the customer form's "PO verplicht" toggle — so
+    /// "Nakijken: PO ontbreekt" appears / disappears without a manual price unlock / relock.
+    /// </summary>
+    public static async Task RefreshCustomerAsync(
+        TransportationDbContext db, Guid tenantId, Guid customerId, CancellationToken cancellationToken)
+    {
+        var orders = await db.TransportOrders
+            .Where(o => o.TenantId == tenantId && o.CustomerId == customerId && o.Status == TransportOrderStatus.Completed)
+            .ToListAsync(cancellationToken);
+        if (orders.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var order in orders)
+        {
+            await EvaluateAsync(db, order, cancellationToken);
+        }
+
+        await db.SaveChangesAsync(cancellationToken);
+    }
+
+    /// <summary>
     /// Mutates the tracked order; the caller's SaveChanges persists it. <paramref name="tripExecutedOverride"/>
     /// lets the trip-completion flow assert the execution fact while its own trip status is
     /// still unsaved (the query here would read the pre-save status).

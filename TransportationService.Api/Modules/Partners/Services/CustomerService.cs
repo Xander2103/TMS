@@ -360,6 +360,7 @@ public class CustomerService : ICustomerService
         await ApplyAllowedLegalEntitiesAsync(customer, request.AllowedLegalEntityIds, cancellationToken);
         ApplyInvoiceGrouping(customer, request.InvoiceGrouping);
         ApplyDocumentStrategy(customer, request.DocumentStrategy);
+        var poPolicyBefore = customer.PurchaseOrderPolicy;
         await ApplyVatAndPeppolProfileAsync(customer,
             request.VatTreatment, request.DefaultVatRatePercent, request.VatCountryCode, request.VatNotes,
             request.PeppolId, request.PeppolScheme, request.InvoiceLanguageCode,
@@ -368,6 +369,14 @@ public class CustomerService : ICustomerService
             cancellationToken);
 
         await _dbContext.SaveChangesAsync(cancellationToken);
+
+        // MD-H10 follow-up: the form's "PO verplicht" toggle changes the PO policy too — the
+        // completed, unbilled orders are re-evaluated exactly like a billing-panel policy change.
+        if (customer.PurchaseOrderPolicy != poPolicyBefore)
+        {
+            await Modules.Orders.Services.InvoiceReadinessEvaluator.RefreshCustomerAsync(
+                _dbContext, _tenantContext.TenantId, customer.Id, cancellationToken);
+        }
 
         await _auditService.RecordAsync(EntityType, customer.Id.ToString(), "Updated", oldValues,
             await BuildCustomerSnapshotAsync(customer, cancellationToken), cancellationToken);
