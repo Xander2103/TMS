@@ -254,6 +254,12 @@ public class TransportOrder : AuditableTenantEntity, IVersionedEntity
     /// <summary>Mandatory when the order was cancelled; set only through the cancel action.</summary>
     public string? CancellationReason { get; set; }
 
+    /// <summary>Redelivery: the original order this one re-delivers (backlink; the incident links forward).</summary>
+    public Guid? RedeliveryOfOrderId { get; set; }
+
+    /// <summary>Redelivery: the incident that caused this redelivery.</summary>
+    public Guid? RedeliverySourceIncidentId { get; set; }
+
     public List<TransportOrderStop> Stops { get; set; } = [];
 }
 

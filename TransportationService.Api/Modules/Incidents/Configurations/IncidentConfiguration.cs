@@ -30,11 +30,19 @@ public class IncidentConfiguration : IEntityTypeConfiguration<Incident>
         builder.Property(i => i.EstimatedCost).HasPrecision(12, 2);
         builder.Property(i => i.ActualCost).HasPrecision(12, 2);
         builder.Property(i => i.Resolution).HasMaxLength(4000);
+        builder.Property(i => i.CustomerMessage).HasMaxLength(2000);
 
         builder.HasIndex(i => new { i.TenantId, i.Status });
         builder.HasIndex(i => new { i.TenantId, i.DossierId });
         builder.HasIndex(i => new { i.TenantId, i.CustomerId });
         builder.HasIndex(i => new { i.TenantId, i.TransportOrderId });
+        builder.HasIndex(i => new { i.TenantId, i.TripId });
+        builder.HasIndex(i => new { i.TenantId, i.VehicleId });
+
+        // Afwijking → Incident escalation: one incident per afwijking.
+        builder.HasIndex(i => new { i.TenantId, i.SourceExceptionId })
+            .IsUnique()
+            .HasFilter("\"SourceExceptionId\" IS NOT NULL AND \"IsDeleted\" = false");
         // Offline-replay idempotency: one incident per client key per tenant.
         builder.HasIndex(i => new { i.TenantId, i.ClientRequestId })
             .IsUnique()

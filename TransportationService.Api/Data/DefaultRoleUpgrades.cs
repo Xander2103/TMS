@@ -21,7 +21,7 @@ public static class DefaultRoleUpgrades
         IReadOnlyDictionary<string, IReadOnlyList<string>>? RevocationsByTemplateCode = null);
 
     /// <summary>Version 1 = the original role creation; steps start at 2.</summary>
-    public const int CurrentVersion = 39;
+    public const int CurrentVersion = 40;
 
     public static IReadOnlyList<UpgradeStep> Steps { get; } =
     [
@@ -688,6 +688,20 @@ public static class DefaultRoleUpgrades
             {
                 ["magazijn"] = [PermissionCodes.InventoryIssue, PermissionCodes.InventoryReturn],
                 ["hr"] = [PermissionCodes.InventoryIssue, PermissionCodes.InventoryReturn],
+            }),
+
+        // Integration 2026-10-18: Warehouse and Exceptions were built in parallel and both used 39;
+        // Warehouse keeps 39, Exceptions runs as 40.
+        new(40,
+            "Uitzonderingsbeheer-remediëring 2026-10-18 (EX): de dispatcher volgt mislukte leveringen op maar kon geen "
+            + "herlevering aanmaken (orders.create ontbrak). Een herlevering verloopt voortaan via het gecontroleerde commando "
+            + "problems.create_redelivery (niet-geleverde hoeveelheid, zelfde dossier, zonder prijs of bevestigd gratis) — "
+            + "geen algemeen recht om orders aan te maken. EX-06: de boekhouding beslist over doorrekeningen met "
+            + "problems.approve_charge (sinds v28); het beslissingseindpunt vraagt niet langer incidents.manage.",
+            new Dictionary<string, IReadOnlyList<string>>
+            {
+                ["planner"] = [PermissionCodes.ProblemsCreateRedelivery],
+                ["dispatcher"] = [PermissionCodes.ProblemsCreateRedelivery],
             }),
     ];
 }

@@ -3,15 +3,36 @@ using TransportationService.Api.Modules.Messaging.Entities;
 
 namespace TransportationService.Api.Modules.Messaging.Services;
 
-/// <summary>Simple, dependency-free {{token}} rendering; unknown tokens stay visible for debugging.</summary>
+/// <summary>
+/// Simple, dependency-free {{token}} rendering. Unknown tokens stay visible in the rendered text so
+/// <see cref="Unresolved"/> can catch them: a message that still contains a {{placeholder}} is never
+/// queued for sending (EX-02, see MessageOutboxService) — it is suppressed with the missing names.
+/// </summary>
 public static partial class MessageTemplateRenderer
 {
     [GeneratedRegex(@"\{\{(\w+)\}\}")]
     private static partial Regex TokenPattern();
 
+    [GeneratedRegex(@"\{\{\s*[^{}]*?\s*\}\}")]
+    private static partial Regex AnyPlaceholderPattern();
+
+    [GeneratedRegex(@"\n{3,}")]
+    private static partial Regex BlankLines();
+
     public static string Render(string template, IReadOnlyDictionary<string, string> tokens) =>
-        TokenPattern().Replace(template, match =>
-            tokens.TryGetValue(match.Groups[1].Value, out var value) ? value : match.Value);
+        // An optional token rendered empty must not leave a hole of blank lines behind.
+        BlankLines().Replace(
+            TokenPattern().Replace(template, match =>
+                tokens.TryGetValue(match.Groups[1].Value, out var value) ? value : match.Value),
+            "\n\n");
+
+    /// <summary>Every {{…}} left in rendered text (also malformed ones like "{{ details }}"), in first-seen order.</summary>
+    public static IReadOnlyList<string> Unresolved(params string?[] rendered) =>
+        rendered
+            .Where(text => !string.IsNullOrEmpty(text))
+            .SelectMany(text => AnyPlaceholderPattern().Matches(text!).Select(m => m.Value))
+            .Distinct()
+            .ToList();
 
     /// <summary>Distinct {{token}} names referenced by a template, in first-seen order.</summary>
     public static IReadOnlyList<string> ExtractTokens(string? template) =>
@@ -85,6 +106,17 @@ public static class BuiltInMessageTemplates
         [MessageKinds.OrderPodAvailable] = new(
             "Afleverbewijs beschikbaar voor {{orderNumber}}",
             "Beste {{customerName}},\n\nHet afleverbewijs voor opdracht {{orderNumber}} is beschikbaar.\n\n{{companyName}}"),
+        // EX-02: the sensitive kinds had no template and fell back to the generic {{details}} body.
+        // {{details}} carries the internal report for staff and the customer-facing wording (or
+        // nothing) for the customer — see NotificationEventContext.CustomerTokens.
+        [MessageKinds.OrderFailedDelivery] = new(
+            "Levering van opdracht {{orderNumber}} niet uitgevoerd",
+            "Beste {{customerName}},\n\nDe levering van opdracht {{orderNumber}} ({{goodsDescription}}) kon helaas niet worden uitgevoerd.\n\n"
+            + "{{details}}\n\nWij nemen contact met u op om een nieuwe levering af te spreken.\n\nMet vriendelijke groeten,\n{{companyName}}"),
+        [MessageKinds.OrderDamageRegistered] = new(
+            "Schade vastgesteld bij opdracht {{orderNumber}}",
+            "Beste {{customerName}},\n\nBij opdracht {{orderNumber}} ({{goodsDescription}}) werd schade vastgesteld.\n\n"
+            + "{{details}}\n\nWij nemen contact met u op over de verdere afhandeling.\n\nMet vriendelijke groeten,\n{{companyName}}"),
         [MessageKinds.InvoiceSent] = new(
             "Factuur {{invoiceNumber}}",
             "Beste {{customerName}},\n\nIn bijlage vindt u factuur {{invoiceNumber}}.\n\nMet vriendelijke groeten,\n{{companyName}}"),
@@ -171,6 +203,14 @@ public static class BuiltInMessageTemplates
             "Informations complémentaires demandées pour {{orderNumber}}",
             "Bonjour {{customerName}},\n\nPour l'ordre {{orderNumber}} ({{goodsDescription}}), nous avons besoin d'informations complémentaires :\n\n"
             + "\"{{reason}}\"\n\nVeuillez répondre via le portail client.\n\nCordialement,\n{{companyName}}"),
+        [MessageKinds.OrderFailedDelivery] = new(
+            "Livraison de l'ordre {{orderNumber}} non effectuée",
+            "Bonjour {{customerName}},\n\nLa livraison de l'ordre {{orderNumber}} ({{goodsDescription}}) n'a malheureusement pas pu être effectuée.\n\n"
+            + "{{details}}\n\nNous vous contacterons pour convenir d'une nouvelle livraison.\n\nCordialement,\n{{companyName}}"),
+        [MessageKinds.OrderDamageRegistered] = new(
+            "Dommage constaté pour l'ordre {{orderNumber}}",
+            "Bonjour {{customerName}},\n\nUn dommage a été constaté pour l'ordre {{orderNumber}} ({{goodsDescription}}).\n\n"
+            + "{{details}}\n\nNous vous contacterons pour la suite du traitement.\n\nCordialement,\n{{companyName}}"),
     };
 
     private static readonly IReadOnlyDictionary<string, Template> EmailEn = new Dictionary<string, Template>
@@ -213,6 +253,14 @@ public static class BuiltInMessageTemplates
             "Additional information requested for {{orderNumber}}",
             "Dear {{customerName}},\n\nFor order {{orderNumber}} ({{goodsDescription}}) we need additional information:\n\n"
             + "\"{{reason}}\"\n\nPlease respond via the customer portal.\n\nKind regards,\n{{companyName}}"),
+        [MessageKinds.OrderFailedDelivery] = new(
+            "Delivery of order {{orderNumber}} could not be completed",
+            "Dear {{customerName}},\n\nUnfortunately the delivery of order {{orderNumber}} ({{goodsDescription}}) could not be completed.\n\n"
+            + "{{details}}\n\nWe will contact you to arrange a new delivery.\n\nKind regards,\n{{companyName}}"),
+        [MessageKinds.OrderDamageRegistered] = new(
+            "Damage recorded for order {{orderNumber}}",
+            "Dear {{customerName}},\n\nDamage was recorded for order {{orderNumber}} ({{goodsDescription}}).\n\n"
+            + "{{details}}\n\nWe will contact you about the further handling.\n\nKind regards,\n{{companyName}}"),
     };
 
     private static readonly IReadOnlyDictionary<string, Template> SmsFr = new Dictionary<string, Template>

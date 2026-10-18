@@ -13,7 +13,8 @@ public interface IExecutionExceptionService
     Task<PagedResult<ExceptionListItemDto>> SearchAsync(
         ExecutionExceptionStatus? status, ExecutionExceptionType? type, ExceptionSeverity? severity,
         Guid? tripId, bool? packagesOnly, Guid? assignedToUserId,
-        int? page, int? pageSize, CancellationToken cancellationToken, string? sort = null, string? dir = null);
+        int? page, int? pageSize, CancellationToken cancellationToken, string? sort = null, string? dir = null,
+        Guid? transportOrderId = null, bool openOnly = false);
 
     Task<ExceptionDetailDto?> GetByIdAsync(Guid id, CancellationToken cancellationToken);
 
@@ -26,6 +27,9 @@ public interface IExecutionExceptionService
     Task<ExceptionOperationResult> ChangeStatusAsync(Guid id, ChangeExceptionStatusRequest request, CancellationToken cancellationToken);
 
     Task<ExceptionOperationResult> UpdateAsync(Guid id, UpdateExceptionRequest request, CancellationToken cancellationToken);
+
+    /// <summary>Sets (or clears) the customer-facing message; never touches the driver's report.</summary>
+    Task<ExceptionOperationResult> UpdateCustomerMessageAsync(Guid id, string? customerMessage, CancellationToken cancellationToken);
 
     Task<ExceptionOperationResult> AttachPhotoAsync(
         Guid id, string fileName, string contentType, Stream content, bool restrictToOwnDriver, CancellationToken cancellationToken);

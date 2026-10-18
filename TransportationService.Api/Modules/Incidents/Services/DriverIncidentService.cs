@@ -113,7 +113,8 @@ public class DriverIncidentService : IDriverIncidentService
             TrailerId: request.TrailerId,
             TransportOrderId: request.TransportOrderId,
             TripId: request.TripId,
-            ClientRequestId: request.ClientRequestId), cancellationToken);
+            // Always keyed: the key also marks the incident as driver-reported (its trip/driver are locked).
+            ClientRequestId: request.ClientRequestId ?? Guid.NewGuid()), cancellationToken);
 
         // Dispatch hears about driver-reported incidents immediately.
         await _notificationService.NotifyPermissionHoldersAsync(

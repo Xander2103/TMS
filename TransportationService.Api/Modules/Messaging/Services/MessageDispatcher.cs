@@ -82,6 +82,15 @@ public class MessageDispatcher
         var sent = 0;
         foreach (var message in due)
         {
+            // EX-02, last line of defence: a body edited/queued around the outbox guard with a literal
+            // {{placeholder}} still never leaves the building.
+            if (MessageTemplateRenderer.Unresolved(message.Subject, message.Body) is { Count: > 0 } unresolved)
+            {
+                message.Status = OutboxStatus.Suppressed;
+                message.FailureReason = MessageOutboxService.UnresolvedReason(unresolved);
+                continue;
+            }
+
             message.AttemptCount += 1;
             message.LastAttemptAt = now;
             try

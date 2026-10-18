@@ -146,13 +146,19 @@ public class ExecutionExceptionService : IExecutionExceptionService
             $"/exceptions/{exception.Id}",
             cancellationToken);
 
+        // EX-03 fleet signal for a serious vehicle issue; EX-05 attention on an already confirmed dossier.
+        await Incidents.Services.ProblemSignals.AfterExceptionReportedAsync(
+            _dbContext, _tenantContext.TenantId, exception, ExceptionTypeLabel(exception.Type),
+            _notificationService, _auditService, cancellationToken);
+
         return ExceptionOperationResult.Success((await MapDetailAsync(exception.Id, cancellationToken))!);
     }
 
     public async Task<PagedResult<ExceptionListItemDto>> SearchAsync(
         ExecutionExceptionStatus? status, ExecutionExceptionType? type, ExceptionSeverity? severity,
         Guid? tripId, bool? packagesOnly, Guid? assignedToUserId,
-        int? page, int? pageSize, CancellationToken cancellationToken, string? sort = null, string? dir = null)
+        int? page, int? pageSize, CancellationToken cancellationToken, string? sort = null, string? dir = null,
+        Guid? transportOrderId = null, bool openOnly = false)
     {
         var pageRequest = PageRequest.Of(page, pageSize);
 
@@ -164,6 +170,12 @@ public class ExecutionExceptionService : IExecutionExceptionService
         if (tripId is { } trip) query = query.Where(e => e.TripId == trip);
         if (packagesOnly == true) query = query.Where(e => e.PackageId != null);
         if (assignedToUserId is { } assignee) query = query.Where(e => e.AssignedToUserId == assignee);
+        if (transportOrderId is { } order) query = query.Where(e => e.TransportOrderId == order);
+        if (openOnly)
+        {
+            var open = Incidents.Services.ProblemScope.OpenExceptionStatuses;
+            query = query.Where(e => open.Contains(e.Status));
+        }
 
         var totalCount = await query.CountAsync(cancellationToken);
         var listSort = ListSort.Parse(sort, dir, "occurred", ["occurred", "severity"], ["occurred", "severity"]);
@@ -202,7 +214,9 @@ public class ExecutionExceptionService : IExecutionExceptionService
 
         if (userId is { } assignee)
         {
+            // A customer-portal identity is never an internal follow-up owner.
             var exists = await _dbContext.Users.AsNoTracking()
+                .Where(PortalPermissionScope.InternalIdentityOnly)
                 .AnyAsync(u => u.Id == assignee && u.TenantId == _tenantContext.TenantId && u.IsActive, cancellationToken);
             if (!exists)
             {
@@ -325,7 +339,32 @@ public class ExecutionExceptionService : IExecutionExceptionService
 
         await _auditService.RecordAsync(EntityType, exception.Id.ToString(), "Updated", before,
             new { exception.Severity, exception.DispatcherNotes, exception.CustomerVisible }, cancellationToken);
+        await Incidents.Services.ProblemSignals.AfterExceptionChangedAsync(
+            _dbContext, _tenantContext.TenantId, exception, ExceptionTypeLabel(exception.Type), _notificationService, cancellationToken);
 
+        return ExceptionOperationResult.Success((await MapDetailAsync(exception.Id, cancellationToken))!);
+    }
+
+    public async Task<ExceptionOperationResult> UpdateCustomerMessageAsync(
+        Guid id, string? customerMessage, CancellationToken cancellationToken)
+    {
+        var exception = await Scoped().FirstOrDefaultAsync(e => e.Id == id, cancellationToken);
+        if (exception is null)
+        {
+            return ExceptionOperationResult.NotFound;
+        }
+
+        var message = Trim(customerMessage);
+        if (message is { Length: > 2000 })
+        {
+            return ExceptionOperationResult.Invalid("Het bericht voor de klant mag maximaal 2000 tekens tellen.");
+        }
+
+        var before = new { exception.CustomerMessage };
+        exception.CustomerMessage = message;
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        await _auditService.RecordAsync(EntityType, exception.Id.ToString(), "CustomerMessageChanged", before,
+            new { exception.CustomerMessage }, cancellationToken);
         return ExceptionOperationResult.Success((await MapDetailAsync(exception.Id, cancellationToken))!);
     }
 
@@ -436,6 +475,14 @@ public class ExecutionExceptionService : IExecutionExceptionService
             return ExceptionOperationResult.NotFound;
         }
 
+        // Evidence retention: once an afwijking is closed or escalated to an incident, its photos are
+        // part of the historical record and can no longer be removed.
+        if (PhotosLocked(exception))
+        {
+            return ExceptionOperationResult.InvalidState(
+                "Foto's van een afgehandelde of geëscaleerde afwijking zijn bewijsmateriaal en kunnen niet meer verwijderd worden.");
+        }
+
         await _fileStorageService.DeleteAsync(photo.StoragePath, cancellationToken);
         _dbContext.Remove(photo); // soft delete via interceptor
         await _dbContext.SaveChangesAsync(cancellationToken);
@@ -444,6 +491,10 @@ public class ExecutionExceptionService : IExecutionExceptionService
 
         return ExceptionOperationResult.Success((await MapDetailAsync(exception.Id, cancellationToken))!);
     }
+
+    private static bool PhotosLocked(ExecutionException exception) =>
+        exception.Status is ExecutionExceptionStatus.Resolved or ExecutionExceptionStatus.Rejected
+        || exception.EscalatedIncidentId is not null;
 
     private IQueryable<ExecutionException> Scoped() =>
         _dbContext.ExecutionExceptions.Where(e => e.TenantId == _tenantContext.TenantId);
@@ -561,6 +612,23 @@ public class ExecutionExceptionService : IExecutionExceptionService
 
         var context = await LoadContextAsync(row, cancellationToken);
         var orderContext = await LoadOrderContextAsync(row.TransportOrderId, cancellationToken);
+        var tenantId = _tenantContext.TenantId;
+        var tripAssets = await _dbContext.Trips.AsNoTracking()
+            .Where(t => t.TenantId == tenantId && t.Id == row.TripId)
+            .Select(t => new { t.VehicleId, t.TrailerId })
+            .FirstOrDefaultAsync(cancellationToken);
+        var vehicle = tripAssets?.VehicleId is { } vehicleId
+            ? await _dbContext.Vehicles.AsNoTracking().Where(v => v.TenantId == tenantId && v.Id == vehicleId)
+                .Select(v => new { v.Id, v.LicensePlate }).FirstOrDefaultAsync(cancellationToken)
+            : null;
+        var damageId = await _dbContext.DamageReports.AsNoTracking()
+            .Where(d => d.TenantId == tenantId && d.SourceExceptionId == row.Id)
+            .Select(d => (Guid?)d.Id)
+            .FirstOrDefaultAsync(cancellationToken);
+        var escalatedTitle = row.EscalatedIncidentId is { } incidentId
+            ? await _dbContext.Incidents.AsNoTracking().Where(i => i.TenantId == tenantId && i.Id == incidentId)
+                .Select(i => i.Title).FirstOrDefaultAsync(cancellationToken)
+            : null;
         var photos = await _dbContext.ExceptionPhotos.AsNoTracking()
             .Where(p => p.ExecutionExceptionId == row.Id && p.TenantId == _tenantContext.TenantId)
             .OrderBy(p => p.CreatedAt)
@@ -580,7 +648,18 @@ public class ExecutionExceptionService : IExecutionExceptionService
             row.DispatcherNotes, row.CustomerVisible,
             row.ResolutionNote, context.ResolvedByName, row.ResolvedAt,
             photos, Transitions[row.Status],
-            orderContext?.DossierId, orderContext?.DossierNumber, orderContext?.CustomerId, orderContext?.CustomerName);
+            orderContext?.DossierId, orderContext?.DossierNumber, orderContext?.CustomerId, orderContext?.CustomerName)
+        {
+            CustomerMessage = row.CustomerMessage,
+            EscalatedIncidentId = row.EscalatedIncidentId,
+            EscalatedIncidentTitle = escalatedTitle,
+            VehicleId = vehicle?.Id,
+            VehicleLabel = vehicle?.LicensePlate,
+            DamageReportId = damageId,
+            CanCreateDamageReport = damageId is null && (vehicle is not null || tripAssets?.TrailerId is not null),
+            VehicleSafetyIssue = Incidents.Services.VehicleSafetyRules.IsSafetyIssue(row),
+            PhotosLocked = PhotosLocked(row),
+        };
     }
 
     private sealed record OrderContext(Guid? DossierId, string? DossierNumber, Guid? CustomerId, string? CustomerName);
@@ -599,28 +678,20 @@ public class ExecutionExceptionService : IExecutionExceptionService
             .Join(_dbContext.Customers.AsNoTracking().IgnoreQueryFilters(), o => o.CustomerId, c => c.Id,
                 (o, c) => new { c.Id, c.Name })
             .FirstOrDefaultAsync(cancellationToken);
-        var dossier = await _dbContext.DossierActivities.AsNoTracking().IgnoreQueryFilters()
-            .Where(a => a.LinkedTransportOrderId == orderId && a.TenantId == tenantId)
-            .Join(_dbContext.TransportDossiers.AsNoTracking().IgnoreQueryFilters(), a => a.DossierId, d => d.Id,
-                (a, d) => new { d.Id, d.DossierNumber })
-            .FirstOrDefaultAsync(cancellationToken);
+        // EX-04: the one order → dossier resolution (wrapper/origin, links, activities).
+        var dossierIds = await Incidents.Services.ProblemScope.DossiersOfOrderAsync(_dbContext, tenantId, orderId, cancellationToken);
+        var dossier = dossierIds.Count == 0
+            ? null
+            : await _dbContext.TransportDossiers.AsNoTracking().IgnoreQueryFilters()
+                .Where(d => d.TenantId == tenantId && d.Id == dossierIds[0])
+                .Select(d => new { d.Id, d.DossierNumber })
+                .FirstOrDefaultAsync(cancellationToken);
         return new OrderContext(dossier?.Id, dossier?.DossierNumber, customer?.Id, customer?.Name);
     }
 
-    private static string ExceptionTypeLabel(ExecutionExceptionType type) => type switch
-    {
-        ExecutionExceptionType.MissingPackage => "Ontbrekend collo",
-        ExecutionExceptionType.WrongPackage => "Verkeerd collo",
-        ExecutionExceptionType.DamagedPackage => "Beschadigd collo",
-        ExecutionExceptionType.RejectedDelivery => "Levering geweigerd",
-        ExecutionExceptionType.PartialDelivery => "Gedeeltelijke levering",
-        ExecutionExceptionType.AddressIssue => "Adresprobleem",
-        ExecutionExceptionType.CustomerUnavailable => "Klant niet aanwezig",
-        ExecutionExceptionType.AccessDenied => "Geen toegang",
-        ExecutionExceptionType.VehicleIssue => "Voertuigprobleem",
-        ExecutionExceptionType.Delay => "Vertraging",
-        _ => "Andere afwijking",
-    };
+    /// <summary>Every afwijking type has its Dutch label — one catalogue (DossierTimelineLabels).</summary>
+    private static string ExceptionTypeLabel(ExecutionExceptionType type) =>
+        Dossiers.Services.DossierTimelineLabels.ExceptionType(type);
 
     private static string StatusLabel(ExecutionExceptionStatus status) => status switch
     {

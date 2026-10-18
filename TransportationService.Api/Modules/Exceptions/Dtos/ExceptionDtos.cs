@@ -76,7 +76,28 @@ public record ExceptionDetailDto(
     Guid? DossierId = null,
     string? DossierNumber = null,
     Guid? CustomerId = null,
-    string? CustomerName = null);
+    string? CustomerName = null)
+{
+    /// <summary>Customer-facing wording; the driver's description stays internal.</summary>
+    public string? CustomerMessage { get; init; }
+
+    /// <summary>Afwijking → Incident: the incident this afwijking was escalated to.</summary>
+    public Guid? EscalatedIncidentId { get; init; }
+    public string? EscalatedIncidentTitle { get; init; }
+
+    /// <summary>EX-03: the vehicle of the trip, and the fleet damage report created from this afwijking.</summary>
+    public Guid? VehicleId { get; init; }
+    public string? VehicleLabel { get; init; }
+    public Guid? DamageReportId { get; init; }
+    public bool CanCreateDamageReport { get; init; }
+    public bool VehicleSafetyIssue { get; init; }
+
+    /// <summary>Photo evidence of a closed or escalated afwijking is retained (no deletion).</summary>
+    public bool PhotosLocked { get; init; }
+}
+
+/// <summary>The customer-facing message of an afwijking (shown in the portal when customer-visible).</summary>
+public record UpdateExceptionCustomerMessageRequest(string? CustomerMessage);
 
 public enum ExceptionOutcome
 {

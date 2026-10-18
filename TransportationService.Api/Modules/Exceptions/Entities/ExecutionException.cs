@@ -84,6 +84,18 @@ public class ExecutionException : AuditableTenantEntity
     public DateTime? ResolvedAt { get; set; }
 
     public List<ExceptionPhoto> Photos { get; set; } = [];
+
+    // --- Exception-management remediation (2026-10-18) ---
+
+    /// <summary>The incident this afwijking was escalated to (Afwijking → Incident); null while not escalated.</summary>
+    public Guid? EscalatedIncidentId { get; set; }
+
+    /// <summary>Customer-facing wording written by the office. The driver's <see cref="Description"/> is the
+    /// internal raw report and never reaches the portal.</summary>
+    public string? CustomerMessage { get; set; }
+
+    /// <summary>When the fleet was told about this vehicle safety issue — at most once.</summary>
+    public DateTime? FleetNotifiedAt { get; set; }
 }
 
 /// <summary>Photo evidence stored through the shared file-storage abstraction (opaque key).</summary>

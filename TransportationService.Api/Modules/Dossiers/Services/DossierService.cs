@@ -358,8 +358,9 @@ public partial class DossierService : IDossierService
             })
             .ToList();
 
-        var incidents = (await _dbContext.Incidents.AsNoTracking()
-                .Where(i => i.TenantId == tenantId && i.DossierId == id)
+        // EX-04: the dossier's incidents include those linked only through its orders/trips.
+        var problemScope = await Incidents.Services.ProblemScope.ForDossierAsync(_dbContext, tenantId, id, cancellationToken);
+        var incidents = (await Incidents.Services.ProblemScope.Incidents(_dbContext, tenantId, problemScope).AsNoTracking()
                 .OrderByDescending(i => i.CreatedAt)
                 .Select(i => new { i.Id, i.Title, i.IncidentType, i.Status, i.Severity, i.DueDate })
                 .ToListAsync(cancellationToken))

@@ -911,6 +911,8 @@ public class DossierTimelineService : IDossierTimelineService
                 if (Int(after, "CompletedOrders") is { } completed and > 0) ev.Field("Voltooide opdrachten", completed.ToString(CultureInfo.InvariantCulture));
                 if (Int(after, "ExecutedActivities") is { } executed and > 0) ev.Field("Uitgevoerde activiteiten", executed.ToString(CultureInfo.InvariantCulture));
                 if (row.UserId is { } cause) ev.Field("Aanleiding", $"Laatste handeling door {{user:{cause}}}");
+                var openExceptions = StrList(after, "OpenExceptions");
+                if (openExceptions.Count > 0) ev.Field("Open afwijkingen bij bevestiging", string.Join("; ", openExceptions));
                 return ev;
             }
             case DossierLifecycleService.ActionReopened:
@@ -945,6 +947,22 @@ public class DossierTimelineService : IDossierTimelineService
                 var cascaded = StrList(after, "DraftOrdersCancelled");
                 if (cascaded.Count > 0) ev.Field("Mee geannuleerde conceptopdrachten", string.Join(", ", cascaded));
                 ev.Detail = Reason() is { } reason ? $"Reden: {reason}" : null;
+                return ev;
+            }
+            case Incidents.Services.ProblemSignals.AuditProblemAfterConfirmation:
+            {
+                // EX-05: a problem reported on an already confirmed dossier — the dossier stays confirmed.
+                var kind = Str(after, "Kind") == "Afwijking" ? "Afwijking" : "Incident";
+                var ev = Make("dossier.problem_after_confirmation", $"{kind} gemeld na de bevestiging: {Str(after, "Title")}", "incidents", rank: 3);
+                ev.Field("Ernst", Str(after, "Severity") switch
+                {
+                    "Critical" => "Kritiek",
+                    "High" => "Hoog",
+                    "Medium" => "Gemiddeld",
+                    "Low" => "Laag",
+                    _ => null,
+                });
+                ev.Detail = "Het dossier blijft bevestigd; bekijk of opvolging nodig is.";
                 return ev;
             }
             case "Closed":

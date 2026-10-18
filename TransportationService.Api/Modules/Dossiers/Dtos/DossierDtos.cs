@@ -458,8 +458,14 @@ public record ReopenDossierRequest(string Reason, Guid? Version = null);
 public record CancelDossierRequest(string Reason, Guid? Version = null);
 
 /// <summary>One finding of the confirmation evaluation. Severity: Blocking | Warning | Info.</summary>
+/// <summary>Severity: Blocking | Warning | Info, and Hold for an open afwijking that holds automatic
+/// confirmation (EX-05: manual confirmation then needs an acknowledgement AND a reason).</summary>
 public record DossierConfirmationCheckDto(
-    string Code, string Severity, string Message, Guid? TransportOrderId = null, Guid? ActivityId = null);
+    string Code, string Severity, string Message, Guid? TransportOrderId = null, Guid? ActivityId = null)
+{
+    /// <summary>The afwijking behind an exception.open.* check, so the dialog can link it.</summary>
+    public Guid? ProblemId { get; init; }
+}
 
 /// <summary>
 /// What confirming the dossier would mean right now. Blockers refuse BOTH flows; Warnings are
@@ -485,7 +491,12 @@ public record DossierConfirmationSummaryDto(
     int ActivitiesExecutable, int ActivitiesExecuted,
     int BillableUnits, int PricedUnits,
     int Documents, bool HasCmr,
-    int OpenIncidents);
+    int OpenIncidents)
+{
+    /// <summary>EX-05: open afwijkingen in the dossier's scope, and how many of them hold auto-confirmation.</summary>
+    public int OpenExceptions { get; init; }
+    public int OpenExceptionsHolding { get; init; }
+}
 
 /// <summary>
 /// D7: one dossier note. <c>DossierActivityId</c> null = dossier-level. <c>CanEdit</c>/<c>CanDelete</c> = the caller holds dossiers.manage.

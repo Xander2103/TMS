@@ -89,6 +89,22 @@ public class DamageReportService : IDamageReportService
         Guid trailerId, CreateDamageReportRequest request, CancellationToken cancellationToken) =>
         CreateAsync(vehicleId: null, trailerId, request, cancellationToken);
 
+    public async Task<DamageOperationResult> CreateLinkedAsync(
+        Guid? vehicleId, Guid? trailerId, CreateDamageReportRequest request,
+        Guid? sourceIncidentId, Guid? sourceExceptionId, CancellationToken cancellationToken)
+    {
+        // Idempotent: one report per source — a second click returns the existing one.
+        var existing = await TenantScoped().AsNoTracking()
+            .FirstOrDefaultAsync(d => (sourceIncidentId != null && d.SourceIncidentId == sourceIncidentId)
+                                      || (sourceExceptionId != null && d.SourceExceptionId == sourceExceptionId), cancellationToken);
+        if (existing is not null)
+        {
+            return DamageOperationResult.Success(await MapAsync(existing, cancellationToken));
+        }
+
+        return await CreateAsync(vehicleId, trailerId, request, cancellationToken, sourceIncidentId, sourceExceptionId);
+    }
+
     public async Task<DamageOperationResult> UpdateAsync(
         Guid id, UpdateDamageReportRequest request, CancellationToken cancellationToken)
     {
@@ -158,7 +174,8 @@ public class DamageReportService : IDamageReportService
     }
 
     private async Task<DamageOperationResult> CreateAsync(
-        Guid? vehicleId, Guid? trailerId, CreateDamageReportRequest request, CancellationToken cancellationToken)
+        Guid? vehicleId, Guid? trailerId, CreateDamageReportRequest request, CancellationToken cancellationToken,
+        Guid? sourceIncidentId = null, Guid? sourceExceptionId = null)
     {
         if (string.IsNullOrWhiteSpace(request.Description))
         {
@@ -206,13 +223,16 @@ public class DamageReportService : IDamageReportService
             TripId = request.TripId,
             RepairCost = request.RepairCost,
             DowntimeDays = request.DowntimeDays,
+            SourceIncidentId = sourceIncidentId,
+            SourceExceptionId = sourceExceptionId,
         };
 
         _dbContext.Add(report);
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         await _auditService.RecordAsync(EntityType, report.Id.ToString(), "Created", null,
-            new { report.IncidentDate, report.Severity, report.VehicleId, report.TrailerId, report.DriverId, report.TripId, report.RepairCost }, cancellationToken);
+            new { report.IncidentDate, report.Severity, report.VehicleId, report.TrailerId, report.DriverId, report.TripId, report.RepairCost,
+                report.SourceIncidentId, report.SourceExceptionId }, cancellationToken);
 
         if (_notificationEvents is not null)
         {
@@ -264,7 +284,81 @@ public class DamageReportService : IDamageReportService
                 })
             .ToListAsync(cancellationToken);
 
-        return rows.Select(r => Map(r.Report, r.DriverName, r.TripNumber)).ToList();
+        var labels = await SourceLabelsAsync(rows.Select(r => r.Report).ToList(), cancellationToken);
+        return rows.Select(r => WithSource(Map(r.Report, r.DriverName, r.TripNumber), r.Report, labels)).ToList();
+    }
+
+    private static DamageReportDto WithSource(DamageReportDto dto, DamageReport report, IReadOnlyDictionary<Guid, string> labels) =>
+        dto with
+        {
+            SourceIncidentId = report.SourceIncidentId,
+            SourceExceptionId = report.SourceExceptionId,
+            SourceLabel = labels.GetValueOrDefault(report.Id),
+        };
+
+    /// <summary>EX-03: "Incident 'Motorpech' (kritiek) · rit RIT-0063 · ORD-0120 Antwerpen → Hasselt".</summary>
+    private async Task<IReadOnlyDictionary<Guid, string>> SourceLabelsAsync(
+        IReadOnlyList<DamageReport> reports, CancellationToken cancellationToken)
+    {
+        var result = new Dictionary<Guid, string>();
+        var tenantId = _tenantContext.TenantId;
+        foreach (var report in reports.Where(r => r.SourceIncidentId is not null || r.SourceExceptionId is not null))
+        {
+            string head;
+            Guid? orderId;
+            Guid? tripId;
+            if (report.SourceIncidentId is { } incidentId)
+            {
+                var incident = await _dbContext.Incidents.AsNoTracking().IgnoreQueryFilters()
+                    .Where(i => i.TenantId == tenantId && i.Id == incidentId)
+                    .Select(i => new { i.Title, i.Severity, i.TransportOrderId, i.TripId })
+                    .FirstOrDefaultAsync(cancellationToken);
+                if (incident is null) continue;
+                head = $"Incident '{incident.Title}' ({Dossiers.Services.DossierTimelineLabels.IncidentSeverity(incident.Severity).ToLowerInvariant()})";
+                orderId = incident.TransportOrderId;
+                tripId = incident.TripId;
+            }
+            else
+            {
+                var exception = await _dbContext.ExecutionExceptions.AsNoTracking().IgnoreQueryFilters()
+                    .Where(e => e.TenantId == tenantId && e.Id == report.SourceExceptionId)
+                    .Select(e => new { e.Type, e.Severity, e.TransportOrderId, e.TripId })
+                    .FirstOrDefaultAsync(cancellationToken);
+                if (exception is null) continue;
+                head = $"Afwijking '{Dossiers.Services.DossierTimelineLabels.ExceptionType(exception.Type)}' ({Dossiers.Services.DossierTimelineLabels.ExceptionSeverity(exception.Severity).ToLowerInvariant()})";
+                orderId = exception.TransportOrderId;
+                tripId = exception.TripId;
+            }
+
+            var parts = new List<string> { head };
+            if (tripId is { } t)
+            {
+                var trip = await _dbContext.Trips.AsNoTracking().IgnoreQueryFilters()
+                    .Where(x => x.TenantId == tenantId && x.Id == t).Select(x => x.TripNumber).FirstOrDefaultAsync(cancellationToken);
+                if (trip is not null) parts.Add($"rit {trip}");
+            }
+
+            if (orderId is { } o)
+            {
+                var order = await _dbContext.TransportOrders.AsNoTracking().IgnoreQueryFilters()
+                    .Where(x => x.TenantId == tenantId && x.Id == o)
+                    .Select(x => new
+                    {
+                        x.OrderNumber,
+                        From = x.Stops.Where(s => s.StopType == Orders.Entities.StopType.Loading).OrderBy(s => s.Sequence).Select(s => s.City).FirstOrDefault(),
+                        To = x.Stops.Where(s => s.StopType == Orders.Entities.StopType.Unloading).OrderByDescending(s => s.Sequence).Select(s => s.City).FirstOrDefault(),
+                    })
+                    .FirstOrDefaultAsync(cancellationToken);
+                if (order is not null)
+                {
+                    parts.Add(order.From is not null && order.To is not null ? $"{order.OrderNumber} {order.From} → {order.To}" : order.OrderNumber);
+                }
+            }
+
+            result[report.Id] = string.Join(" · ", parts);
+        }
+
+        return result;
     }
 
     private async Task<bool> DriverInTenantAsync(Guid? driverId, CancellationToken cancellationToken) =>
@@ -288,7 +382,7 @@ public class DamageReportService : IDamageReportService
                 .FirstOrDefaultAsync(cancellationToken)
             : null;
 
-        return Map(report, driverName, tripNumber);
+        return WithSource(Map(report, driverName, tripNumber), report, await SourceLabelsAsync([report], cancellationToken));
     }
 
     private static DamageReportDto Map(DamageReport d, string? driverName, string? tripNumber) => new(

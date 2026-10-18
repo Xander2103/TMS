@@ -51,9 +51,10 @@ public class WarehousePermissionTests
     }
 
     [Fact]
-    public void Version39_IsTheCurrentRoleTemplateVersion_AndGrantsTheDesk()
+    public void Version39_GrantsTheDesk()
     {
-        Assert.Equal(39, DefaultRoleUpgrades.CurrentVersion);
+        // Integration 2026-10-18: Warehouse is step 39; Exceptions followed as 40.
+        Assert.Equal(40, DefaultRoleUpgrades.CurrentVersion);
         var step = DefaultRoleUpgrades.Steps.Single(s => s.Version == 39);
         Assert.Contains(PermissionCodes.InventoryIssue, step.GrantsByTemplateCode["magazijn"]);
         Assert.Contains(PermissionCodes.InventoryReturn, step.GrantsByTemplateCode["hr"]);

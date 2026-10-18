@@ -4,8 +4,10 @@ using TransportationService.Api.Data;
 using TransportationService.Api.Modules.Auditing.Services;
 using TransportationService.Api.Modules.Dossiers.Dtos;
 using TransportationService.Api.Modules.Dossiers.Entities;
+using TransportationService.Api.Modules.Exceptions.Services;
 using TransportationService.Api.Modules.Identity.Services;
 using TransportationService.Api.Modules.Incidents.Entities;
+using TransportationService.Api.Modules.Incidents.Services;
 using TransportationService.Api.Modules.Orders.Entities;
 using TransportationService.Api.Modules.Orders.Services;
 using TransportationService.Api.Modules.Planning.Entities;
@@ -101,7 +103,10 @@ public class DossierLifecycleService : IDossierLifecycleService
         return dossier is null ? null : await EvaluateAsync(dossier, cancellationToken);
     }
 
-    private sealed record Check(string Code, string Message, Guid? OrderId = null, Guid? ActivityId = null, bool BlocksAuto = true, bool BlocksManual = false);
+    /// <param name="DisplaySeverity">Overrides the derived dialog severity (afwijkingen: Info/Warning/Hold per
+    /// <see cref="Exceptions.Services.ExceptionConfirmationPolicy"/>).</param>
+    private sealed record Check(string Code, string Message, Guid? OrderId = null, Guid? ActivityId = null, bool BlocksAuto = true, bool BlocksManual = false,
+        string? DisplaySeverity = null, Guid? ProblemId = null);
 
     private async Task<DossierConfirmationEvaluationDto> EvaluateAsync(TransportDossier dossier, CancellationToken cancellationToken)
     {
@@ -115,12 +120,52 @@ public class DossierLifecycleService : IDossierLifecycleService
                 BlocksManual: true));
         }
 
-        var openIncidents = await _dbContext.Incidents.AsNoTracking()
-            .CountAsync(i => i.TenantId == tenantId && i.DossierId == dossier.Id
-                             && (i.Status == IncidentStatus.New || i.Status == IncidentStatus.InProgress), cancellationToken);
+        // EX-04: ONE scope — an incident linked only to an order (or trip) of this dossier counts too.
+        var scope = await ProblemScope.ForDossierAsync(_dbContext, tenantId, dossier.Id, cancellationToken);
+        var openIncidentStatuses = ProblemScope.OpenIncidentStatuses;
+        var openIncidents = await ProblemScope.Incidents(_dbContext, tenantId, scope).AsNoTracking()
+            .CountAsync(i => openIncidentStatuses.Contains(i.Status), cancellationToken);
         if (openIncidents > 0)
         {
             checks.Add(new Check("incident.open", $"Dit dossier heeft nog {openIncidents} open incident(en). Handel die eerst af.", BlocksManual: true));
+        }
+
+        // EX-05: open afwijkingen per the central severity policy — Ter info / Waarschuwing / Blokkerend.
+        // Never invisible: every open afwijking appears in the dialog; serious ones hold auto-confirmation.
+        var openExceptionStatuses = ProblemScope.OpenExceptionStatuses;
+        var openExceptions = await ProblemScope.Exceptions(_dbContext, tenantId, scope).AsNoTracking()
+            .Where(e => openExceptionStatuses.Contains(e.Status))
+            .OrderBy(e => e.OccurredAt)
+            .Select(e => new { e.Id, e.Type, e.Severity, e.TransportOrderId, e.TripId })
+            .ToListAsync(cancellationToken);
+        if (openExceptions.Count > 0)
+        {
+            var tripNumbers = await _dbContext.Trips.AsNoTracking()
+                .Where(t => t.TenantId == tenantId && scope.TripIds.Contains(t.Id))
+                .ToDictionaryAsync(t => t.Id, t => t.TripNumber, cancellationToken);
+            foreach (var open in openExceptions)
+            {
+                var impact = ExceptionConfirmationPolicy.For(open.Severity);
+                var where = tripNumbers.TryGetValue(open.TripId, out var tripNumber) ? $" op rit {tripNumber}" : string.Empty;
+                var label = $"Open afwijking ({DossierTimelineLabels.ExceptionType(open.Type).ToLowerInvariant()}, ernst {DossierTimelineLabels.ExceptionSeverity(open.Severity).ToLowerInvariant()}){where}";
+                checks.Add(new Check(
+                    impact switch
+                    {
+                        ExceptionConfirmationImpact.Hold => "exception.open.hold",
+                        ExceptionConfirmationImpact.Warning => "exception.open.warning",
+                        _ => "exception.open.info",
+                    },
+                    impact switch
+                    {
+                        ExceptionConfirmationImpact.Hold => $"{label}: houdt automatische bevestiging tegen. Handmatig bevestigen kan enkel met een reden.",
+                        ExceptionConfirmationImpact.Warning => $"{label}: bekijk ze voor je bevestigt.",
+                        _ => $"{label}: ter info.",
+                    },
+                    OrderId: open.TransportOrderId,
+                    BlocksAuto: ExceptionConfirmationPolicy.HoldsAutoConfirmation(open.Severity),
+                    DisplaySeverity: ExceptionConfirmationPolicy.CheckSeverity(open.Severity),
+                    ProblemId: open.Id));
+            }
         }
 
         var activities = await _dbContext.DossierActivities.AsNoTracking()
@@ -278,7 +323,7 @@ public class DossierLifecycleService : IDossierLifecycleService
             CanConfirmManually: blockers.Count == 0,
             CanAutoConfirm: autoBlockers.Count == 0,
             blockers.Select(c => ToDto(c, "Blocking")).ToList(),
-            warnings.Select(c => ToDto(c, c.BlocksAuto ? "Warning" : "Info")).ToList(),
+            warnings.Select(c => ToDto(c, c.DisplaySeverity ?? (c.BlocksAuto ? "Warning" : "Info"))).ToList(),
             autoBlockers.Select(c => ToDto(c, "Blocking")).ToList(),
             orderIds,
             activities.Select(a => a.Id).ToList(),
@@ -295,12 +340,16 @@ public class DossierLifecycleService : IDossierLifecycleService
                 PricedUnits: Math.Max(0, pricedUnits),
                 Documents: documents.Count,
                 HasCmr: hasCmr,
-                OpenIncidents: openIncidents));
+                OpenIncidents: openIncidents)
+            {
+                OpenExceptions = openExceptions.Count,
+                OpenExceptionsHolding = openExceptions.Count(e => ExceptionConfirmationPolicy.HoldsAutoConfirmation(e.Severity)),
+            });
     }
 
     private static string Ref(string typeName, string? label) => string.IsNullOrWhiteSpace(label) ? typeName : $"{typeName} '{label.Trim()}'";
 
-    private static DossierConfirmationCheckDto ToDto(Check c, string severity) => new(c.Code, severity, c.Message, c.OrderId, c.ActivityId);
+    private static DossierConfirmationCheckDto ToDto(Check c, string severity) => new(c.Code, severity, c.Message, c.OrderId, c.ActivityId) { ProblemId = c.ProblemId };
 
     // ------------------------------------------------------------ transitions
 
@@ -323,10 +372,17 @@ public class DossierLifecycleService : IDossierLifecycleService
             throw new DomainValidationException("status", evaluation.Blockers[0].Message);
         }
 
-        if (evaluation.Warnings.Any(w => w.Severity == "Warning") && !request.AcknowledgeWarnings)
+        if (evaluation.Warnings.Any(w => w.Severity is "Warning" or "Hold") && !request.AcknowledgeWarnings)
         {
             throw new DomainValidationException("acknowledgeWarnings",
                 "Er zijn aandachtspunten voor dit dossier. Bekijk ze en bevestig bewust.");
+        }
+
+        // EX-05: confirming over a blocking (High/Critical) open afwijking is a deliberate, motivated decision.
+        if (evaluation.Warnings.Any(w => w.Severity == "Hold") && string.IsNullOrWhiteSpace(request.Reason))
+        {
+            throw new DomainValidationException("reason",
+                "Er staan blokkerende afwijkingen open. Geef een reden op om het dossier toch te bevestigen.");
         }
 
         var now = _timeProvider.GetUtcNow().UtcDateTime;
@@ -380,6 +436,9 @@ public class DossierLifecycleService : IDossierLifecycleService
                 Trigger = trigger,
                 CompletedOrders = evaluation.Summary.OrdersCompleted,
                 ExecutedActivities = evaluation.Summary.ActivitiesExecuted,
+                // EX-05: confirmed WITH open (non-blocking) afwijkingen — the attention stays on record.
+                OpenExceptions = evaluation.Warnings.Where(w => w.Code.StartsWith("exception.open.", StringComparison.Ordinal))
+                    .Select(w => w.Message).ToList(),
             },
             cancellationToken);
         return true;

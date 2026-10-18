@@ -21,15 +21,59 @@ public class ExceptionsController : ControllerBase
     private readonly IExecutionExceptionService _service;
     private readonly IPermissionAuthorizationService _permissionService;
     private readonly ICurrentUserContext _currentUserContext;
+    private readonly Incidents.Services.IProblemFollowUpService _followUp;
 
     public ExceptionsController(
         IExecutionExceptionService service,
         IPermissionAuthorizationService permissionService,
-        ICurrentUserContext currentUserContext)
+        ICurrentUserContext currentUserContext,
+        Incidents.Services.IProblemFollowUpService followUp)
     {
         _service = service;
         _permissionService = permissionService;
         _currentUserContext = currentUserContext;
+        _followUp = followUp;
+    }
+
+    /// <summary>The customer-facing message (the driver's report stays internal).</summary>
+    [HttpPut("api/exceptions/{id:guid}/customer-message")]
+    [RequirePermission(PermissionCodes.ExceptionsResolve)]
+    public async Task<ActionResult<ExceptionDetailDto>> UpdateCustomerMessage(
+        Guid id, UpdateExceptionCustomerMessageRequest request, CancellationToken cancellationToken) =>
+        Handle(await _service.UpdateCustomerMessageAsync(id, request.CustomerMessage, cancellationToken));
+
+    /// <summary>Afwijking → Incident: the new incident carries every relation; both stay traceable.</summary>
+    [HttpPost("api/exceptions/{id:guid}/escalate")]
+    [RequirePermission(PermissionCodes.IncidentsManage)]
+    public async Task<ActionResult<Incidents.Dtos.IncidentDetailDto>> Escalate(Guid id, CancellationToken cancellationToken)
+    {
+        var incident = await _followUp.EscalateExceptionAsync(id, cancellationToken);
+        return incident is null ? NotFound() : Ok(incident);
+    }
+
+    /// <summary>EX-03: the linked fleet damage report (vehicle, trip and driver from the afwijking's trip).</summary>
+    [HttpPost("api/exceptions/{id:guid}/damage-report")]
+    [RequirePermission(PermissionCodes.ExceptionsResolve)]
+    public async Task<ActionResult<ExceptionDetailDto>> CreateDamageReport(
+        Guid id, Incidents.Dtos.CreateLinkedDamageReportRequest request, CancellationToken cancellationToken)
+    {
+        if (await _followUp.CreateDamageReportForExceptionAsync(id, request, cancellationToken) is null)
+        {
+            return NotFound();
+        }
+
+        var detail = await _service.GetByIdAsync(id, cancellationToken);
+        return detail is null ? NotFound() : Ok(detail);
+    }
+
+    /// <summary>Domain history (when / who / what) of the afwijking.</summary>
+    [HttpGet("api/exceptions/{id:guid}/history")]
+    [RequirePermission(PermissionCodes.ExceptionsView)]
+    public async Task<ActionResult<Modules.Auditing.Dtos.AuditLogPagedResult>> History(
+        Guid id, [FromQuery] int page = 1, [FromQuery] int pageSize = 25, CancellationToken cancellationToken = default)
+    {
+        var history = await _followUp.HistoryAsync("ExecutionException", id, page, pageSize, cancellationToken);
+        return history is null ? NotFound() : Ok(history);
     }
 
     private async Task<bool> IsStaffAsync(CancellationToken cancellationToken) =>
@@ -73,14 +117,19 @@ public class ExceptionsController : ControllerBase
         [FromQuery] Guid? tripId,
         [FromQuery] bool? packagesOnly,
         [FromQuery] Guid? assignedToUserId,
+        [FromQuery] bool? mine,
+        [FromQuery] Guid? transportOrderId,
+        [FromQuery] bool? openOnly,
         [FromQuery] int? page,
         [FromQuery] int? pageSize,
         [FromQuery] string? sort,
         [FromQuery] string? dir,
         CancellationToken cancellationToken)
     {
+        var assignee = mine == true ? _currentUserContext.CurrentUserId : assignedToUserId;
         return Ok(await _service.SearchAsync(
-            status, type, severity, tripId, packagesOnly, assignedToUserId, page, pageSize, cancellationToken, sort, dir));
+            status, type, severity, tripId, packagesOnly, assignee, page, pageSize, cancellationToken, sort, dir,
+            transportOrderId, openOnly == true));
     }
 
     /// <summary>Assign (or with null: unassign) the follow-up owner.</summary>

@@ -112,9 +112,8 @@ public class IncidentChargeAndRedeliveryTests
         var detail = await h.Sut.GetAsync(id, CancellationToken.None);
         Assert.Equal("Customer", detail!.ResponsibleParty);
 
-        var updated = await h.Sut.UpdateAsync(id, new SaveIncidentRequest(
-            "Pallet beschadigd", "Omgevallen.", "Damage", "High",
-            ResponsibleParty: "Alien"), CancellationToken.None);
+        var updated = await h.Sut.UpdateAsync(id, new UpdateIncidentRequest(
+            Responsibility: new IncidentResponsibilitySection("Alien")), CancellationToken.None);
         Assert.Equal("Unknown", updated!.ResponsibleParty);
     }
 

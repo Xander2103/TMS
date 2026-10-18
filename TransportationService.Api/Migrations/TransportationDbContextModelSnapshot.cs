@@ -3882,6 +3882,10 @@ namespace TransportationService.Api.Migrations
                     b.Property<Guid?>("CreatedByUserId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("CustomerMessage")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
                     b.Property<bool>("CustomerVisible")
                         .HasColumnType("boolean");
 
@@ -3902,6 +3906,12 @@ namespace TransportationService.Api.Migrations
 
                     b.Property<Guid?>("DriverId")
                         .HasColumnType("uuid");
+
+                    b.Property<Guid?>("EscalatedIncidentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("FleetNotifiedAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
@@ -3988,6 +3998,8 @@ namespace TransportationService.Api.Migrations
 
                     b.HasIndex("TenantId", "Status");
 
+                    b.HasIndex("TenantId", "TransportOrderId");
+
                     b.HasIndex("TenantId", "TripId");
 
                     b.ToTable("execution_exceptions", (string)null);
@@ -4061,6 +4073,12 @@ namespace TransportationService.Api.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
 
+                    b.Property<Guid?>("SourceExceptionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("SourceIncidentId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(30)
@@ -4093,6 +4111,14 @@ namespace TransportationService.Api.Migrations
                     b.HasIndex("VehicleId");
 
                     b.HasIndex("TenantId", "IncidentDate");
+
+                    b.HasIndex("TenantId", "SourceExceptionId")
+                        .IsUnique()
+                        .HasFilter("\"SourceExceptionId\" IS NOT NULL AND \"IsDeleted\" = false");
+
+                    b.HasIndex("TenantId", "SourceIncidentId")
+                        .IsUnique()
+                        .HasFilter("\"SourceIncidentId\" IS NOT NULL AND \"IsDeleted\" = false");
 
                     b.HasIndex("TenantId", "TrailerId");
 
@@ -6329,6 +6355,10 @@ namespace TransportationService.Api.Migrations
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)");
 
+                    b.Property<string>("CustomerMessage")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
                     b.Property<DateTime?>("DeletedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -6357,6 +6387,9 @@ namespace TransportationService.Api.Migrations
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)");
 
+                    b.Property<DateTime?>("FleetNotifiedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("IncidentType")
                         .IsRequired()
                         .HasMaxLength(30)
@@ -6382,6 +6415,9 @@ namespace TransportationService.Api.Migrations
                     b.Property<DateTime?>("ResolvedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<Guid?>("ResolvedByUserId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("ResponsibilityNotes")
                         .HasMaxLength(2000)
                         .HasColumnType("character varying(2000)");
@@ -6398,6 +6434,9 @@ namespace TransportationService.Api.Migrations
                         .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
+
+                    b.Property<Guid?>("SourceExceptionId")
+                        .HasColumnType("uuid");
 
                     b.Property<Guid?>("SourceStopId")
                         .HasColumnType("uuid");
@@ -6443,6 +6482,10 @@ namespace TransportationService.Api.Migrations
 
                     b.HasIndex("TenantId", "DossierId");
 
+                    b.HasIndex("TenantId", "SourceExceptionId")
+                        .IsUnique()
+                        .HasFilter("\"SourceExceptionId\" IS NOT NULL AND \"IsDeleted\" = false");
+
                     b.HasIndex("TenantId", "SourceStopId")
                         .IsUnique()
                         .HasFilter("\"SourceStopId\" IS NOT NULL AND \"IsDeleted\" = false");
@@ -6450,6 +6493,10 @@ namespace TransportationService.Api.Migrations
                     b.HasIndex("TenantId", "Status");
 
                     b.HasIndex("TenantId", "TransportOrderId");
+
+                    b.HasIndex("TenantId", "TripId");
+
+                    b.HasIndex("TenantId", "VehicleId");
 
                     b.ToTable("incidents", (string)null);
                 });
@@ -9139,6 +9186,12 @@ namespace TransportationService.Api.Migrations
                         .HasMaxLength(30)
                         .HasColumnType("character varying(30)");
 
+                    b.Property<Guid?>("RedeliveryOfOrderId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("RedeliverySourceIncidentId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(20)
@@ -9181,6 +9234,8 @@ namespace TransportationService.Api.Migrations
                     b.HasIndex("TenantId", "OrderNumber")
                         .IsUnique()
                         .HasFilter("\"IsDeleted\" = false");
+
+                    b.HasIndex("TenantId", "RedeliveryOfOrderId");
 
                     b.HasIndex("TenantId", "Status");
 

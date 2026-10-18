@@ -389,6 +389,10 @@ builder.Services.AddScoped<TransportationService.Api.Modules.Incidents.Services.
     TransportationService.Api.Modules.Incidents.Services.IncidentService>();
 builder.Services.AddScoped<TransportationService.Api.Modules.Incidents.Services.IFailedDeliveryHandler,
     TransportationService.Api.Modules.Incidents.Services.FailedDeliveryService>();
+builder.Services.AddScoped<TransportationService.Api.Modules.Incidents.Services.IProblemFollowUpService,
+    TransportationService.Api.Modules.Incidents.Services.ProblemFollowUpService>();
+builder.Services.AddScoped<TransportationService.Api.Modules.Auditing.Services.IAuditHistoryReader,
+    TransportationService.Api.Modules.Auditing.Services.AuditHistoryReader>();
 builder.Services.AddScoped<TransportationService.Api.Modules.OrderImport.Services.IOrderImportService,
     TransportationService.Api.Modules.OrderImport.Services.OrderImportService>();
 

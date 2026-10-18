@@ -47,6 +47,9 @@ public class IncidentServiceTests
     private static SaveIncidentRequest ValidRequest() => new(
         "Pallet beschadigd", "Bij het lossen is een pallet omgevallen.", "Damage", "High");
 
+    private static UpdateIncidentRequest Report(string title) => new(
+        Report: new IncidentReportSection(title, "Bij het lossen is een pallet omgevallen.", "Damage", "High"));
+
     [Fact]
     public async Task Create_ValidatesRequiredFieldsAndEnums()
     {
@@ -176,11 +179,11 @@ public class IncidentServiceTests
         await sut.ChangeStatusAsync(incident.Id, new ChangeIncidentStatusRequest("Cancelled"), CancellationToken.None);
 
         await Assert.ThrowsAsync<DomainValidationException>(
-            () => sut.UpdateAsync(incident.Id, ValidRequest() with { Title = "Aangepast" }, CancellationToken.None));
+            () => sut.UpdateAsync(incident.Id, Report("Aangepast"), CancellationToken.None));
 
         // Reactivating makes it editable again.
         await sut.ChangeStatusAsync(incident.Id, new ChangeIncidentStatusRequest("New"), CancellationToken.None);
-        var updated = await sut.UpdateAsync(incident.Id, ValidRequest() with { Title = "Aangepast" }, CancellationToken.None);
+        var updated = await sut.UpdateAsync(incident.Id, Report("Aangepast"), CancellationToken.None);
         Assert.Equal("Aangepast", updated!.Title);
     }
 

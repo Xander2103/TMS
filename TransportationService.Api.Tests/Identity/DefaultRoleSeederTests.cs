@@ -767,7 +767,7 @@ public class DefaultRoleSeederTests
 
         var state = await db.Context.RoleTemplateStates.SingleAsync(s => s.TenantId == tenantId);
         Assert.Equal(DefaultRoleUpgrades.CurrentVersion, state.AppliedVersion);
-        Assert.Equal(39, DefaultRoleUpgrades.CurrentVersion);
+        Assert.Equal(40, DefaultRoleUpgrades.CurrentVersion);
 
 
         var roles = await db.Context.Roles.Where(r => r.TenantId == tenantId).ToListAsync();
@@ -1020,5 +1020,98 @@ public class DefaultRoleSeederTests
         Assert.DoesNotContain(PermissionCodes.LegalEntitiesView, await CodesOfAsync(db, dispatcher.Id));
         Assert.Contains(PermissionCodes.LegalEntitiesView, await CodesOfAsync(db, custom.Id));
         Assert.Equal(DefaultRoleUpgrades.CurrentVersion, (await db.Context.RoleTemplateStates.SingleAsync(s => s.TenantId == tenantId)).AppliedVersion);
+    }
+
+    /// <summary>
+    /// Integration 2026-10-18: Warehouse (v39) and Exceptions were built in parallel and both claimed
+    /// step 39. The final ladder is 38 Core master data → 39 Warehouse → 40 Exceptions — never two
+    /// steps with one version, and each step carries only its own domain's grants.
+    /// </summary>
+    [Fact]
+    public void UpgradeLadder_HasUniqueContiguousVersions_WarehouseIs39_ExceptionsIs40()
+    {
+        var versions = DefaultRoleUpgrades.Steps.Select(s => s.Version).ToList();
+        Assert.Equal(versions.Distinct().Count(), versions.Count);
+        Assert.Equal(Enumerable.Range(2, DefaultRoleUpgrades.CurrentVersion - 1), versions);
+        Assert.Equal(40, DefaultRoleUpgrades.CurrentVersion);
+
+        var warehouse = DefaultRoleUpgrades.Steps.Single(s => s.Version == 39);
+        Assert.Equal(new[] { "hr", "magazijn" }, warehouse.GrantsByTemplateCode.Keys.Order());
+        Assert.DoesNotContain(warehouse.GrantsByTemplateCode.Values.SelectMany(g => g), c => c.StartsWith("problems.", StringComparison.Ordinal));
+
+        var exceptions = DefaultRoleUpgrades.Steps.Single(s => s.Version == 40);
+        Assert.Equal(new[] { "dispatcher", "planner" }, exceptions.GrantsByTemplateCode.Keys.Order());
+        Assert.All(exceptions.GrantsByTemplateCode.Values, g => Assert.Equal([PermissionCodes.ProblemsCreateRedelivery], g));
+    }
+
+    /// <summary>
+    /// Integration 2026-10-18: a tenant on the Core v38 role templates upgrades through Warehouse
+    /// (v39) and Exceptions (v40) in one sync, and a second sync changes nothing.
+    /// </summary>
+    [Fact]
+    public async Task Version38Tenant_UpgradesThroughWarehouse39_AndExceptions40_Idempotently()
+    {
+        var (db, tenantId) = await SeedTenantWithCatalogAsync();
+        using var _ = db;
+
+        var approveCharge = await db.Context.Permissions.SingleAsync(p => p.Code == PermissionCodes.ProblemsApproveCharge);
+        var inventoryView = await db.Context.Permissions.SingleAsync(p => p.Code == PermissionCodes.InventoryView);
+        Role Stamped(string code, string name) => new()
+        {
+            Id = Guid.NewGuid(), TenantId = tenantId, Name = name, Description = "x",
+            IsSystemRole = false, IsActive = true, TemplateCode = code,
+            CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow,
+        };
+        var magazijn = Stamped("magazijn", "Magazijn");
+        var hr = Stamped("hr", "HR");
+        var planner = Stamped("planner", "Planner");
+        var dispatcher = Stamped("dispatcher", "Dispatcher");
+        var boekhouding = Stamped("boekhouding", "Boekhouding");
+        db.Context.Roles.AddRange(magazijn, hr, planner, dispatcher, boekhouding);
+        db.Context.RolePermissions.AddRange(
+            new RolePermission { RoleId = magazijn.Id, PermissionId = inventoryView.Id },
+            new RolePermission { RoleId = boekhouding.Id, PermissionId = approveCharge.Id });
+        db.Context.RoleTemplateStates.Add(new RoleTemplateState
+        {
+            Id = Guid.NewGuid(), TenantId = tenantId, AppliedVersion = 38, UpdatedAt = DateTime.UtcNow,
+        });
+        await db.Context.SaveChangesAsync();
+
+        await DefaultRoleSeeder.SyncAsync(db.Context);
+
+        var warehouse = await CodesOfAsync(db, magazijn.Id);
+        Assert.Contains(PermissionCodes.InventoryIssue, warehouse);
+        Assert.Contains(PermissionCodes.InventoryReturn, warehouse);
+        foreach (var forbidden in new[]
+                 {
+                     PermissionCodes.EmployeesView, PermissionCodes.EmployeesViewConfidential, PermissionCodes.AbsencesViewMedical,
+                     PermissionCodes.UsersView, PermissionCodes.IssuedItemsManageTemplates, PermissionCodes.InventoryManage,
+                 })
+        {
+            Assert.DoesNotContain(forbidden, warehouse);
+        }
+
+        Assert.Contains(PermissionCodes.InventoryIssue, await CodesOfAsync(db, hr.Id));
+        Assert.Contains(PermissionCodes.InventoryReturn, await CodesOfAsync(db, hr.Id));
+        Assert.Contains(PermissionCodes.ProblemsCreateRedelivery, await CodesOfAsync(db, planner.Id));
+        Assert.Contains(PermissionCodes.ProblemsCreateRedelivery, await CodesOfAsync(db, dispatcher.Id));
+        Assert.DoesNotContain(PermissionCodes.ProblemsCreateRedelivery, warehouse);
+
+        var accounting = await CodesOfAsync(db, boekhouding.Id);
+        Assert.Contains(PermissionCodes.ProblemsApproveCharge, accounting);
+        Assert.DoesNotContain(PermissionCodes.IncidentsManage, accounting);
+        Assert.DoesNotContain(PermissionCodes.UsersView, accounting);
+        Assert.DoesNotContain(PermissionCodes.EmployeesView, accounting);
+        Assert.DoesNotContain(PermissionCodes.ProblemsCreateRedelivery, accounting);
+
+        var state = await db.Context.RoleTemplateStates.SingleAsync(s => s.TenantId == tenantId);
+        Assert.Equal(40, state.AppliedVersion);
+
+        // Idempotent: a second sync adds no permission rows and keeps the version at 40.
+        var rows = await db.Context.RolePermissions.CountAsync();
+        await DefaultRoleSeeder.SyncAsync(db.Context);
+        Assert.Equal(rows, await db.Context.RolePermissions.CountAsync());
+        Assert.Equal(40, (await db.Context.RoleTemplateStates.AsNoTracking().SingleAsync(s => s.TenantId == tenantId)).AppliedVersion);
+        Assert.Equal(1, await db.Context.RoleTemplateStates.CountAsync(s => s.TenantId == tenantId));
     }
 }

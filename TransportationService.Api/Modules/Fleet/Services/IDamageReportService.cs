@@ -15,6 +15,11 @@ public interface IDamageReportService
 
     Task<DamageOperationResult> CreateForTrailerAsync(Guid trailerId, CreateDamageReportRequest request, CancellationToken cancellationToken);
 
+    /// <summary>EX-03: the report created from an incident/afwijking (one per source; links back to it).</summary>
+    Task<DamageOperationResult> CreateLinkedAsync(
+        Guid? vehicleId, Guid? trailerId, CreateDamageReportRequest request,
+        Guid? sourceIncidentId, Guid? sourceExceptionId, CancellationToken cancellationToken);
+
     Task<DamageOperationResult> UpdateAsync(Guid id, UpdateDamageReportRequest request, CancellationToken cancellationToken);
 
     Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken);

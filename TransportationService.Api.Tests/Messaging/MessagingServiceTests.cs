@@ -63,7 +63,8 @@ public class MessagingServiceTests
 
     private static MessageRequest Request(Guid customerId, string kind = MessageKinds.PodAvailable) =>
         new(kind, MessageOwnerType.Customer, customerId,
-            new Dictionary<string, string> { ["orderNumber"] = "ORD-0042", ["customerName"] = "Haven BV" },
+            // Every token the customer-facing templates use (EX-02: an unresolved one suppresses the mail).
+            new Dictionary<string, string> { ["orderNumber"] = "ORD-0042", ["customerName"] = "Haven BV", ["goodsDescription"] = "Paletten", ["eta"] = "14:30" },
             "ProofOfDelivery", Guid.NewGuid().ToString(), $"{kind}:{Guid.NewGuid()}");
 
     [Fact]
@@ -131,7 +132,11 @@ public class MessagingServiceTests
 
         var request = new MessageRequest(
             MessageKinds.OrderDamageRegistered, MessageOwnerType.Customer, h.CustomerId,
-            new Dictionary<string, string> { ["orderNumber"] = "ORD-1", ["customerName"] = "Haven BV" },
+            new Dictionary<string, string>
+            {
+                ["orderNumber"] = "ORD-1", ["customerName"] = "Haven BV", ["goodsDescription"] = "Paletten",
+                ["details"] = "Wij nemen contact met u op.",
+            },
             "Incident", Guid.NewGuid().ToString(), $"review:{Guid.NewGuid()}",
             RequiresReview: true);
         var result = await h.Sut.QueueAsync(request, CancellationToken.None);

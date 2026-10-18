@@ -20,15 +20,20 @@ public class IncidentsController : ControllerBase
     private readonly TransportationDbContext _dbContext;
     private readonly ITenantContext _tenantContext;
     private readonly IAuditService _auditService;
+    private readonly IProblemFollowUpService _followUp;
+    private readonly Modules.Identity.Services.ICurrentUserContext _currentUser;
 
     public IncidentsController(
         IIncidentService service, TransportationDbContext dbContext,
-        ITenantContext tenantContext, IAuditService auditService)
+        ITenantContext tenantContext, IAuditService auditService,
+        IProblemFollowUpService followUp, Modules.Identity.Services.ICurrentUserContext currentUser)
     {
         _service = service;
         _dbContext = dbContext;
         _tenantContext = tenantContext;
         _auditService = auditService;
+        _followUp = followUp;
+        _currentUser = currentUser;
     }
 
     [HttpGet]
@@ -37,10 +42,48 @@ public class IncidentsController : ControllerBase
         [FromQuery] string? search, [FromQuery] string? status, [FromQuery] string? severity,
         [FromQuery] Guid? dossierId, [FromQuery] Guid? customerId,
         [FromQuery] Guid? transportOrderId, [FromQuery] Guid? tripId,
+        [FromQuery] Guid? responsibleUserId, [FromQuery] bool? mine, [FromQuery] Guid? driverId, [FromQuery] Guid? vehicleId,
+        [FromQuery] DateOnly? from, [FromQuery] DateOnly? to, [FromQuery] bool? openOnly,
         CancellationToken cancellationToken)
     {
-        return Ok(await _service.ListAsync(search, status, severity, dossierId, customerId, cancellationToken, transportOrderId, tripId));
+        var responsible = mine == true ? _currentUser.CurrentUserId : responsibleUserId;
+        var filter = new IncidentListFilter(responsible, driverId, vehicleId, from, to, openOnly == true);
+        return Ok(await _service.ListAsync(search, status, severity, dossierId, customerId, cancellationToken, transportOrderId, tripId, filter));
     }
+
+    /// <summary>EX-07: the responsible picker — safe fields only, no general users.view needed.</summary>
+    [HttpGet("assignable-users")]
+    [RequirePermission(PermissionCodes.IncidentsManage, PermissionCodes.ExceptionsResolve)]
+    public async Task<ActionResult<IReadOnlyList<AssignableUserDto>>> AssignableUsers(CancellationToken cancellationToken) =>
+        Ok(await _followUp.AssignableUsersAsync(cancellationToken));
+
+    /// <summary>Domain history (when / who / what) for everyone who may see the incident.</summary>
+    [HttpGet("{id:guid}/history")]
+    [RequirePermission(PermissionCodes.IncidentsView, PermissionCodes.IncidentsManage)]
+    public async Task<ActionResult<Modules.Auditing.Dtos.AuditLogPagedResult>> History(
+        Guid id, [FromQuery] int page = 1, [FromQuery] int pageSize = 25, CancellationToken cancellationToken = default)
+    {
+        var history = await _followUp.HistoryAsync("Incident", id, page, pageSize, cancellationToken);
+        return history is null ? NotFound() : Ok(history);
+    }
+
+    /// <summary>EX-03: create the linked fleet damage report (controlled: vehicle, trip and driver come from the
+    /// incident). Problem handlers only — the response is the full incident, which the fleet may not read;
+    /// the fleet creates its own reports on the vehicle and sees the linked ones there.</summary>
+    [HttpPost("{id:guid}/damage-report")]
+    [RequirePermission(PermissionCodes.IncidentsManage)]
+    public async Task<ActionResult<IncidentDetailDto>> CreateDamageReport(
+        Guid id, CreateLinkedDamageReportRequest request, CancellationToken cancellationToken)
+    {
+        var incident = await _followUp.CreateDamageReportForIncidentAsync(id, request, cancellationToken);
+        return incident is null ? NotFound() : Ok(incident);
+    }
+
+    /// <summary>EX-03: the open problems of a vehicle, for the fleet (no customer, cost or HR data).</summary>
+    [HttpGet("/api/vehicles/{vehicleId:guid}/safety-issues")]
+    [RequirePermission(PermissionCodes.DamageReportsView, PermissionCodes.IncidentsView)]
+    public async Task<ActionResult<IReadOnlyList<VehicleSafetyIssueDto>>> VehicleSafetyIssues(Guid vehicleId, CancellationToken cancellationToken) =>
+        Ok(await _followUp.VehicleSafetyIssuesAsync(vehicleId, cancellationToken));
 
     [HttpPost]
     [RequirePermission(PermissionCodes.IncidentsManage)]
@@ -59,7 +102,7 @@ public class IncidentsController : ControllerBase
 
     [HttpPut("{id:guid}")]
     [RequirePermission(PermissionCodes.IncidentsManage)]
-    public async Task<ActionResult<IncidentDetailDto>> Update(Guid id, SaveIncidentRequest request, CancellationToken cancellationToken)
+    public async Task<ActionResult<IncidentDetailDto>> Update(Guid id, UpdateIncidentRequest request, CancellationToken cancellationToken)
     {
         var incident = await _service.UpdateAsync(id, request, cancellationToken);
         return incident is null ? NotFound() : Ok(incident);
@@ -71,6 +114,50 @@ public class IncidentsController : ControllerBase
     {
         var incident = await _service.ChangeStatusAsync(id, request, cancellationToken);
         return incident is null ? NotFound() : Ok(incident);
+    }
+
+    public record OrderDeliveryContextDto(
+        string? DeliveryOutcome,
+        Guid? RedeliveryOrderId, string? RedeliveryOrderNumber,
+        Guid? RedeliveryOfOrderId, string? RedeliveryOfOrderNumber,
+        Guid? SourceIncidentId, string? SourceIncidentTitle);
+
+    /// <summary>EX-08 + redelivery links for the order page: what reached the consignee, and the
+    /// redelivery relation in both directions (forward to the new order, back to the original).</summary>
+    [HttpGet("/api/transport-orders/{orderId:guid}/delivery-context")]
+    [RequirePermission(PermissionCodes.OrdersView)]
+    public async Task<ActionResult<OrderDeliveryContextDto>> DeliveryContext(Guid orderId, CancellationToken cancellationToken)
+    {
+        var tenantId = _tenantContext.TenantId;
+        var order = await _dbContext.TransportOrders.AsNoTracking()
+            .Where(o => o.TenantId == tenantId && o.Id == orderId)
+            .Select(o => new { o.Id, o.RedeliveryOfOrderId, o.RedeliverySourceIncidentId })
+            .FirstOrDefaultAsync(cancellationToken);
+        if (order is null)
+        {
+            return NotFound();
+        }
+
+        var outcome = (await Modules.Orders.Services.DeliveryOutcomeRules.ResolveAsync(_dbContext, tenantId, [orderId], cancellationToken))
+            .GetValueOrDefault(orderId);
+        var forward = outcome?.RedeliveryOrderId is null
+            ? await _dbContext.TransportOrders.AsNoTracking()
+                .Where(o => o.TenantId == tenantId && o.RedeliveryOfOrderId == orderId && o.Status != Modules.Orders.Entities.TransportOrderStatus.Cancelled)
+                .OrderByDescending(o => o.CreatedAt)
+                .Select(o => new { o.Id, o.OrderNumber })
+                .FirstOrDefaultAsync(cancellationToken)
+            : new { Id = outcome.RedeliveryOrderId.Value, OrderNumber = outcome.RedeliveryOrderNumber! };
+        var backNumber = order.RedeliveryOfOrderId is { } back
+            ? await _dbContext.TransportOrders.AsNoTracking().Where(o => o.TenantId == tenantId && o.Id == back)
+                .Select(o => o.OrderNumber).FirstOrDefaultAsync(cancellationToken)
+            : null;
+        var incidentTitle = order.RedeliverySourceIncidentId is { } incidentId
+            ? await _dbContext.Incidents.AsNoTracking().Where(i => i.TenantId == tenantId && i.Id == incidentId)
+                .Select(i => i.Title).FirstOrDefaultAsync(cancellationToken)
+            : null;
+        return Ok(new OrderDeliveryContextDto(
+            outcome?.Outcome, forward?.Id, forward?.OrderNumber,
+            order.RedeliveryOfOrderId, backNumber, order.RedeliverySourceIncidentId, incidentTitle));
     }
 
     // --- Wave 6 §4: unified problem view ---
@@ -91,10 +178,11 @@ public class IncidentsController : ControllerBase
         return incident is null ? NotFound() : Ok(incident);
     }
 
-    // The attribute gate stays IncidentsManage: the SERVICE enforces problems.approve_charge
+    // EX-06: the decision is gated by the decision right itself — Boekhouding approves charges
+    // without holding incidents.manage. The SERVICE still enforces problems.approve_charge
     // fail-closed (registered in Phase8SupplyChainTests), mirroring the L7 override pattern.
     [HttpPost("{id:guid}/charge/decide")]
-    [RequirePermission(PermissionCodes.IncidentsManage)]
+    [RequirePermission(PermissionCodes.ProblemsApproveCharge)]
     public async Task<ActionResult<IncidentDetailDto>> DecideCharge(
         Guid id, DecideIncidentChargeRequest request, CancellationToken cancellationToken)
     {
@@ -102,11 +190,15 @@ public class IncidentsController : ControllerBase
         return incident is null ? NotFound() : Ok(incident);
     }
 
+    // The dispatcher creates redeliveries through this controlled command (problems.create_redelivery)
+    // without general order-creation rights.
     [HttpPost("{id:guid}/redelivery")]
-    [RequirePermission(PermissionCodes.OrdersCreate, PermissionCodes.OrdersManage)]
-    public async Task<ActionResult<IncidentDetailDto>> CreateRedelivery(Guid id, CancellationToken cancellationToken)
+    [RequirePermission(PermissionCodes.OrdersCreate, PermissionCodes.OrdersManage, PermissionCodes.ProblemsCreateRedelivery)]
+    public async Task<ActionResult<IncidentDetailDto>> CreateRedelivery(
+        Guid id, [FromBody(EmptyBodyBehavior = Microsoft.AspNetCore.Mvc.ModelBinding.EmptyBodyBehavior.Allow)] CreateRedeliveryRequest? request,
+        CancellationToken cancellationToken)
     {
-        var incident = await _service.CreateRedeliveryAsync(id, cancellationToken);
+        var incident = await _service.CreateRedeliveryAsync(id, cancellationToken, request);
         return incident is null ? NotFound() : Ok(incident);
     }
 

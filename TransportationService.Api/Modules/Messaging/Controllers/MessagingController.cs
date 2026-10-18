@@ -126,6 +126,12 @@ public class MessagingController : ControllerBase
             return BadRequest(new { message = "Alleen berichten in controle kunnen worden vrijgegeven." });
         }
 
+        // EX-02: a reviewer can never release a broken message to the customer.
+        if (MessageTemplateRenderer.Unresolved(message.Subject, message.Body) is { Count: > 0 } unresolved)
+        {
+            return BadRequest(new { message = $"Dit bericht bevat onopgeloste sjabloonvelden ({string.Join(", ", unresolved)}) en kan niet worden vrijgegeven. Wijs het af en pas het sjabloon aan." });
+        }
+
         message.Status = OutboxStatus.Pending;
         message.NextAttemptAt = null;
         await _dbContext.SaveChangesAsync(cancellationToken);

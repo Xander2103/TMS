@@ -151,11 +151,20 @@ public class CustomerPortalService : ICustomerPortalService
         // M5: internal drafts are hidden and Invoiced reads "Afgerond" until the invoice is issued.
         var facing = await PortalOrderStatusRules.ResolveAsync(
             _dbContext, _tenantContext.TenantId, page.Items.Select(o => (o.Id, o.Status)).ToList(), cancellationToken);
+        // EX-08: a finished order tells what actually reached the consignee.
+        var outcomes = await DeliveryOutcomeRules.ResolveAsync(
+            _dbContext, _tenantContext.TenantId,
+            facing.Where(f => PortalOrderStatusRules.IsDelivered(f.Value) && f.Value != TransportOrderStatus.Cancelled)
+                .Select(f => f.Key).ToList(),
+            cancellationToken);
         return PortalResult<IReadOnlyList<PortalOrderListItemDto>>.Success(page.Items
             .Where(o => facing.ContainsKey(o.Id))
             .Select(o => new PortalOrderListItemDto(
                 o.Id, o.OrderNumber, o.OrderDate, facing[o.Id], o.CustomerReference, o.GoodsDescription,
-                o.FirstLoadingCity, o.LastUnloadingCity))
+                o.FirstLoadingCity, o.LastUnloadingCity)
+            {
+                DeliveryOutcome = outcomes.TryGetValue(o.Id, out var outcome) ? outcome.Outcome : null,
+            })
             .ToList());
     }
 
@@ -428,11 +437,24 @@ public class CustomerPortalService : ICustomerPortalService
             .Select(h => new PortalTimelineEventDto(h.ToStatus, h.ChangedAt))
             .ToListAsync(cancellationToken);
 
+        // Customer-safe text: the office's customer message, never the driver's raw description.
         var exceptions = await _dbContext.Set<Modules.Exceptions.Entities.ExecutionException>().AsNoTracking()
             .Where(e => e.TenantId == tenantId && e.TransportOrderId == order.Id && e.CustomerVisible)
             .OrderBy(e => e.OccurredAt)
-            .Select(e => new PortalExceptionDto(e.Type.ToString(), e.Description, e.Status.ToString(), e.OccurredAt))
+            .Select(e => new PortalExceptionDto(e.Type.ToString(), e.CustomerMessage ?? string.Empty, e.Status.ToString(), e.OccurredAt))
             .ToListAsync(cancellationToken);
+        var notices = await _dbContext.Incidents.AsNoTracking()
+            .Where(i => i.TenantId == tenantId && i.TransportOrderId == order.Id && i.CustomerMessage != null
+                        && i.Status != Modules.Incidents.Entities.IncidentStatus.Cancelled)
+            .OrderBy(i => i.CreatedAt)
+            .Select(i => new PortalNoticeDto(i.CustomerMessage!, i.UpdatedAt))
+            .ToListAsync(cancellationToken);
+        // An escalated afwijking carries its message onto the incident: say it once.
+        notices = notices
+            .Where(n => exceptions.All(e => !string.Equals(e.Description, n.Message, StringComparison.Ordinal)))
+            .GroupBy(n => n.Message, StringComparer.Ordinal)
+            .Select(g => g.First())
+            .ToList();
 
         // Wave 8: the live ETA of the LAST unloading stop, straight from the dispatcher's ETA
         // machinery (overrides included) — the portal's tracking answer.
@@ -456,6 +478,21 @@ public class CustomerPortalService : ICustomerPortalService
             .Select(p => new PortalPodSummaryDto(p.DeliveredAt, p.RecipientName, p.Outcome.ToString()))
             .FirstOrDefaultAsync(cancellationToken);
 
+        // EX-08: what reached the consignee once the order is finished.
+        var outcome = PortalOrderStatusRules.IsDelivered(customerStatus) && customerStatus != TransportOrderStatus.Cancelled
+            ? (await DeliveryOutcomeRules.ResolveAsync(_dbContext, tenantId, [order.Id], cancellationToken)).GetValueOrDefault(order.Id)
+            : null;
+        var redeliveryVisible = false;
+        if (outcome?.RedeliveryOrderId is { } redeliveryId)
+        {
+            var redeliveryStatus = await _dbContext.TransportOrders.AsNoTracking()
+                .Where(o => o.TenantId == tenantId && o.Id == redeliveryId)
+                .Select(o => o.Status)
+                .FirstOrDefaultAsync(cancellationToken);
+            redeliveryVisible = (await PortalOrderStatusRules.ResolveAsync(_dbContext, tenantId, [(redeliveryId, redeliveryStatus)], cancellationToken))
+                .ContainsKey(redeliveryId);
+        }
+
         // H-14: order.Notes and order.CancellationReason are staff-only and deliberately dropped
         // here — the classification lives in this projection, never in the frontend.
         if (pod is not null)
@@ -475,7 +512,14 @@ public class CustomerPortalService : ICustomerPortalService
                     : c.Description,
                 c.ExpectedQuantity, c.QuantityUnit, c.UnitType, c.AdrRequired)).ToList(),
             timeline, exceptions,
-            expectedDelivery, pod);
+            expectedDelivery, pod)
+        {
+            DeliveryOutcome = outcome?.Outcome,
+            // The redelivery is named only once the customer may see that order itself (M5).
+            RedeliveryOrderId = redeliveryVisible ? outcome?.RedeliveryOrderId : null,
+            RedeliveryOrderNumber = redeliveryVisible ? outcome?.RedeliveryOrderNumber : null,
+            Notices = notices,
+        };
     }
 
     /// <summary>Customer-facing message kinds a portal user may toggle (Wave 11). Single source

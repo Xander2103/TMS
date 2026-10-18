@@ -280,6 +280,10 @@ public static class PermissionCodes
     /// <summary>Wave 6: approve/reject charging a problem to the customer (creates the sales line, audited).</summary>
     public const string ProblemsApproveCharge = "problems.approve_charge";
 
+    /// <summary>Exception remediation: create the controlled redelivery order of a problem (not-delivered
+    /// quantity, same dossier, unpriced or confirmed free) without general order-creation rights.</summary>
+    public const string ProblemsCreateRedelivery = "problems.create_redelivery";
+
     // Systeeminformatie & back-ups (settings/system wave 2026-08): system-level surfaces.
     // Backups are HIGH-RISK — view is the only code granted to a default template; create/
     // download/delete/restore are deliberate per-admin grants, never template defaults.
@@ -624,6 +628,7 @@ public static class PermissionCodes
         (IncidentsView, "incidents", "view", "Incidenten bekijken"),
         (IncidentsManage, "incidents", "manage", "Incidenten registreren en afhandelen"),
         (ProblemsApproveCharge, "problems", "approve_charge", "Doorrekening van een probleem aan de klant goed- of afkeuren (maakt de verkooplijn aan, geauditeerd)"),
+        (ProblemsCreateRedelivery, "problems", "create_redelivery", "Herlevering aanmaken vanuit een incident (niet-geleverde hoeveelheid, zelfde dossier, zonder prijs of bevestigd gratis)"),
         (SystemInfoView, "system_info", "view", "Systeeminformatie bekijken (versie, omgeving, databankstatus)"),
         (BackupsView, "backups", "view", "Databaseback-ups en retentiebeleid bekijken"),
         (BackupsCreate, "backups", "create", "Handmatige databaseback-up maken"),

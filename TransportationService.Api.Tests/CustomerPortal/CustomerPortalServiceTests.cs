@@ -133,7 +133,8 @@ public class CustomerPortalServiceTests
                 Id = Guid.NewGuid(), TenantId = h.TenantId, TripId = tripId, TransportOrderId = orderId,
                 Type = TransportationService.Api.Modules.Exceptions.Entities.ExecutionExceptionType.Delay,
                 Status = TransportationService.Api.Modules.Exceptions.Entities.ExecutionExceptionStatus.Open,
-                CustomerVisible = true, Description = "Vertraging door verkeer", OccurredAt = Now.UtcDateTime,
+                CustomerVisible = true, Description = "Chauffeur: file E40, klant belde boos", OccurredAt = Now.UtcDateTime,
+                CustomerMessage = "Vertraging door verkeer",
             },
             new TransportationService.Api.Modules.Exceptions.Entities.ExecutionException
             {
@@ -152,8 +153,10 @@ public class CustomerPortalServiceTests
         Assert.Contains(detail.Value.Timeline, e => e.Status == TransportOrderStatus.Submitted);
         Assert.Contains(detail.Value.Timeline, e => e.Status == TransportOrderStatus.Confirmed);
 
+        // Customer-safe text: the office's customer message, never the driver's raw report.
         var exception = Assert.Single(detail.Value.Exceptions);
         Assert.Equal("Vertraging door verkeer", exception.Description);
+        Assert.DoesNotContain(detail.Value.Exceptions, e => e.Description.Contains("klant belde boos"));
     }
 
     [Fact]

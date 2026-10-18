@@ -26,6 +26,9 @@ public static class DossierTimelineLabels
     {
         "dossier.not_open" => "Dossier was niet open",
         "incident.open" => "Open incidenten",
+        "exception.open.info" => "Open afwijking (ter info)",
+        "exception.open.warning" => "Open afwijking (waarschuwing)",
+        "exception.open.hold" => "Open blokkerende afwijking",
         "activity.none" => "Geen activiteiten",
         "activity.not_executed" => "Activiteit nog niet uitgevoerd",
         "route.order_missing" => "Transportactiviteit zonder transportopdracht",

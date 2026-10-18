@@ -56,6 +56,7 @@ public class TransportOrderConfiguration : IEntityTypeConfiguration<TransportOrd
             .HasFilter("\"IsDeleted\" = false");
         builder.HasIndex(o => new { o.TenantId, o.Status });
         builder.HasIndex(o => new { o.TenantId, o.CustomerId });
+        builder.HasIndex(o => new { o.TenantId, o.RedeliveryOfOrderId });
         builder.HasIndex(o => new { o.TenantId, o.OrderDate });
 
         builder.HasOne<Customer>().WithMany().HasForeignKey(o => o.CustomerId).OnDelete(DeleteBehavior.Restrict);

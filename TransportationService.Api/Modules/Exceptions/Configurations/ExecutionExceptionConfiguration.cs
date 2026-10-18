@@ -23,6 +23,8 @@ public class ExecutionExceptionConfiguration : IEntityTypeConfiguration<Executio
         builder.Property(e => e.Longitude).HasPrecision(9, 6);
         builder.Property(e => e.DispatcherNotes).HasMaxLength(4000);
         builder.Property(e => e.ResolutionNote).HasMaxLength(2000);
+        builder.Property(e => e.CustomerMessage).HasMaxLength(2000);
+        builder.HasIndex(e => new { e.TenantId, e.TransportOrderId });
 
         builder.HasIndex(e => new { e.TenantId, e.Status });
         builder.HasIndex(e => new { e.TenantId, e.AssignedToUserId });

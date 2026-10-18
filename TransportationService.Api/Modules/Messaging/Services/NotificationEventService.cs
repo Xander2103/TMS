@@ -38,6 +38,30 @@ public sealed record NotificationEventContext(
 
     /// <summary>Overrides the catalog label as the in-app notification title.</summary>
     public string? InAppTitle { get; init; }
+
+    /// <summary>
+    /// Customer-safe token values. For a CUSTOMER recipient these override <see cref="Tokens"/>
+    /// (e.g. the internal driver report becomes the office's customer-facing wording); internal
+    /// staff copies keep the full <see cref="Tokens"/>.
+    /// </summary>
+    public IReadOnlyDictionary<string, string>? CustomerTokens { get; init; }
+
+    /// <summary>The token set a recipient of this owner type is rendered with.</summary>
+    public IReadOnlyDictionary<string, string> TokensFor(MessageOwnerType ownerType)
+    {
+        if (ownerType != MessageOwnerType.Customer || CustomerTokens is null || CustomerTokens.Count == 0)
+        {
+            return Tokens;
+        }
+
+        var merged = new Dictionary<string, string>(Tokens);
+        foreach (var (key, value) in CustomerTokens)
+        {
+            merged[key] = value;
+        }
+
+        return merged;
+    }
 }
 
 public interface INotificationEventService
@@ -154,7 +178,7 @@ public class NotificationEventService : INotificationEventService
                     var language = await ResolveLanguageAsync(target.PreferredLanguage, target.CustomerIdForTemplate, tenantId, cancellationToken);
                     var idempotencyKey = $"{eventKey}:{context.EntityType}:{context.EntityId}:{target.Address}";
                     await _messageOutbox.QueueAsync(new MessageRequest(
-                        info.MessageKind, target.OwnerType, target.OwnerId, context.Tokens,
+                        info.MessageKind, target.OwnerType, target.OwnerId, context.TokensFor(target.OwnerType),
                         context.EntityType, context.EntityId, idempotencyKey,
                         OverrideAddress: target.Address, OverrideName: target.Name, OverrideLanguage: language,
                         CustomerIdForTemplate: target.CustomerIdForTemplate,

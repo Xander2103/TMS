@@ -106,10 +106,12 @@ public class FailedDeliveryService : IFailedDeliveryHandler
             return;
         }
 
-        var dossierId = await _dbContext.DossierOrders.AsNoTracking()
-            .Where(l => l.TenantId == tenantId && l.TransportOrderId == order.Id)
-            .OrderBy(l => l.CreatedAt)
-            .Select(l => (Guid?)l.DossierId)
+        // EX-04: the same order → dossier resolution as everywhere else (wrapper/origin, links, activities).
+        var dossierIds = await ProblemScope.DossiersOfOrderAsync(_dbContext, tenantId, order.Id, cancellationToken);
+        var dossierId = dossierIds.Count > 0 ? dossierIds[0] : (Guid?)null;
+        var trip = await _dbContext.Trips.AsNoTracking()
+            .Where(t => t.TenantId == tenantId && t.Id == tripId)
+            .Select(t => new { t.DriverId, t.VehicleId, t.TrailerId })
             .FirstOrDefaultAsync(cancellationToken);
 
         var mode = await _dbContext.TenantSettings.AsNoTracking()
@@ -127,6 +129,7 @@ public class FailedDeliveryService : IFailedDeliveryHandler
                 : $"Levering aan stop {stop.LocationName ?? stop.City ?? "?"} is mislukt: {reason}",
             Severity = IncidentSeverity.Medium,
             CustomerId = order.CustomerId, TransportOrderId = order.Id, TripId = tripId,
+            DriverId = trip?.DriverId, VehicleId = trip?.VehicleId, TrailerId = trip?.TrailerId,
             DossierId = dossierId, SourceStopId = stopId,
             RedeliverySuggested = mode is "Propose" or "Automatic",
         };
@@ -162,10 +165,21 @@ public class FailedDeliveryService : IFailedDeliveryHandler
                         {
                             ["orderNumber"] = order.OrderNumber,
                             ["customerName"] = customerName ?? "",
-                            ["goodsDescription"] = order.GoodsDescription ?? "",
+                            ["goodsDescription"] = string.IsNullOrWhiteSpace(order.GoodsDescription) ? "uw zending" : order.GoodsDescription,
                             ["reason"] = reason ?? "onbekend",
+                            // EX-02: staff copy — the driver's own words, labelled as such.
+                            ["details"] = $"Reden opgegeven door de chauffeur: {(string.IsNullOrWhiteSpace(reason) ? "niet opgegeven" : reason.Trim())}.",
                         })
-                    { CustomerId = order.CustomerId },
+                    {
+                        CustomerId = order.CustomerId,
+                        LinkPath = $"/incidents/{incident.Id}",
+                        // The customer copy never carries the raw driver report.
+                        CustomerTokens = new Dictionary<string, string>
+                        {
+                            ["reason"] = Modules.Messaging.Services.CustomerSafeText.FailedDelivery,
+                            ["details"] = Modules.Messaging.Services.CustomerSafeText.FailedDelivery,
+                        },
+                    },
                     cancellationToken);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)

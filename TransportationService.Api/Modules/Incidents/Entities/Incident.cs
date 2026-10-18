@@ -105,6 +105,21 @@ public class Incident : AuditableTenantEntity
 
     /// <summary>P4 "Propose" mode: dispatch sees an explicit redelivery recommendation.</summary>
     public bool RedeliverySuggested { get; set; }
+
+    // --- Exception-management remediation (EX-01/EX-03/EX-05, 2026-10-18) ---
+
+    /// <summary>The afwijking this incident was escalated from; both records stay separately traceable.</summary>
+    public Guid? SourceExceptionId { get; set; }
+
+    /// <summary>Who resolved the incident (with <see cref="ResolvedAt"/> and <see cref="Resolution"/>).</summary>
+    public Guid? ResolvedByUserId { get; set; }
+
+    /// <summary>Customer-facing wording, written by the office. The raw report (<see cref="Description"/>)
+    /// is internal; only this text ever reaches the customer portal.</summary>
+    public string? CustomerMessage { get; set; }
+
+    /// <summary>When the fleet was told about this vehicle safety issue — at most once per incident.</summary>
+    public DateTime? FleetNotifiedAt { get; set; }
 }
 
 /// <summary>

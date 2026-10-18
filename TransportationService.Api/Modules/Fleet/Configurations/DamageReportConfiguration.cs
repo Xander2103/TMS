@@ -31,6 +31,14 @@ public class DamageReportConfiguration : IEntityTypeConfiguration<DamageReport>
         builder.HasIndex(d => new { d.TenantId, d.TrailerId });
         builder.HasIndex(d => new { d.TenantId, d.IncidentDate });
 
+        // EX-03: at most one damage report per source incident / afwijking (the create action is idempotent).
+        builder.HasIndex(d => new { d.TenantId, d.SourceIncidentId })
+            .IsUnique()
+            .HasFilter("\"SourceIncidentId\" IS NOT NULL AND \"IsDeleted\" = false");
+        builder.HasIndex(d => new { d.TenantId, d.SourceExceptionId })
+            .IsUnique()
+            .HasFilter("\"SourceExceptionId\" IS NOT NULL AND \"IsDeleted\" = false");
+
         builder.HasOne<Vehicle>().WithMany().HasForeignKey(d => d.VehicleId).OnDelete(DeleteBehavior.Cascade);
         builder.HasOne<Trailer>().WithMany().HasForeignKey(d => d.TrailerId).OnDelete(DeleteBehavior.Cascade);
         builder.HasOne<Driver>().WithMany().HasForeignKey(d => d.DriverId).OnDelete(DeleteBehavior.SetNull);

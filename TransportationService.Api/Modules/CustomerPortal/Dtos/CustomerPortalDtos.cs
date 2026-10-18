@@ -15,7 +15,13 @@ public record PortalOrderListItemDto(
     string? CustomerReference,
     string? GoodsDescription,
     string? FirstLoadingCity,
-    string? LastUnloadingCity);
+    string? LastUnloadingCity)
+{
+    /// <summary>EX-08: what reached the consignee (Delivered | PartiallyDelivered | NotDelivered |
+    /// RedeliveryPlanned | Redelivered); null = no execution facts. A finished order that was not
+    /// delivered never reads "Afgerond".</summary>
+    public string? DeliveryOutcome { get; init; }
+}
 
 public record PortalStopDto(
     int Sequence,
@@ -42,7 +48,12 @@ public record PortalCargoDto(
 /// </summary>
 public record PortalTimelineEventDto(TransportOrderStatus Status, DateTime ChangedAt);
 
+/// <summary>A customer-visible afwijking. <c>Description</c> is the OFFICE's customer-facing message —
+/// never the driver's raw report (empty when the office wrote none: the portal shows the type only).</summary>
 public record PortalExceptionDto(string Type, string Description, string Status, DateTime OccurredAt);
+
+/// <summary>A customer-facing message the office wrote on an incident about this order.</summary>
+public record PortalNoticeDto(string Message, DateTime At);
 
 /// <summary>
 /// Customer-facing order view: deliberately NO prices or internal planning data.
@@ -68,7 +79,18 @@ public record PortalOrderDetailDto(
     /// <summary>Wave 8: expected arrival at the (last) delivery stop — the tracking answer.</summary>
     DateTime? ExpectedDeliveryEta = null,
     /// <summary>Wave 11: delivery proof summary once a current POD exists.</summary>
-    PortalPodSummaryDto? Pod = null);
+    PortalPodSummaryDto? Pod = null)
+{
+    /// <summary>EX-08: see <see cref="PortalOrderListItemDto.DeliveryOutcome"/>.</summary>
+    public string? DeliveryOutcome { get; init; }
+
+    /// <summary>The redelivery order, once it is visible to the customer (confirmed or later).</summary>
+    public string? RedeliveryOrderNumber { get; init; }
+    public Guid? RedeliveryOrderId { get; init; }
+
+    /// <summary>Customer-facing messages written by the office on incidents of this order.</summary>
+    public IReadOnlyList<PortalNoticeDto> Notices { get; init; } = [];
+}
 
 /// <summary>Wave 11: what the customer may see of the proof of delivery (data, not files).</summary>
 public record PortalPodSummaryDto(DateTime DeliveredAt, string RecipientName, string? Outcome);

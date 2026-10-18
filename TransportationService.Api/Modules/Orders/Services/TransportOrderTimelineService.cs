@@ -48,11 +48,11 @@ public class TransportOrderTimelineService : ITransportOrderTimelineService
         var auditRows = await _dbContext.AuditLogs.AsNoTracking()
             .Where(a => a.TenantId == tenantId && a.EntityType == "TransportOrder" && a.EntityId == orderKey
                 && !StatusAuditActions.Contains(a.Action))
-            .Select(a => new { a.Action, a.Timestamp, a.UserId })
+            .Select(a => new { a.Action, a.Timestamp, a.UserId, a.NewValuesJson })
             .ToListAsync(cancellationToken);
         foreach (var row in auditRows)
         {
-            events.Add((row.Timestamp, "order", AuditTitle(row.Action), null, row.UserId));
+            events.Add((row.Timestamp, "order", AuditTitle(row.Action), AuditSummary(row.NewValuesJson), row.UserId));
         }
 
         // 2. Immutable status history (incl. reasons and corrections).
@@ -154,6 +154,27 @@ public class TransportOrderTimelineService : ITransportOrderTimelineService
 
     // B25: every action written for an order reads as a Dutch sentence; an unknown future action
     // reads neutrally instead of as a raw code.
+    /// <summary>A producer-written, human "Summary" in the audit values (redelivery links) becomes the detail line.</summary>
+    private static string? AuditSummary(string? newValuesJson)
+    {
+        if (string.IsNullOrWhiteSpace(newValuesJson) || !newValuesJson.Contains("\"Summary\"", StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        try
+        {
+            using var document = System.Text.Json.JsonDocument.Parse(newValuesJson);
+            return document.RootElement.TryGetProperty("Summary", out var summary) && summary.ValueKind == System.Text.Json.JsonValueKind.String
+                ? summary.GetString()
+                : null;
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return null;
+        }
+    }
+
     private static string AuditTitle(string action) => action switch
     {
         "Created" => "Opdracht aangemaakt",
@@ -176,6 +197,9 @@ public class TransportOrderTimelineService : ITransportOrderTimelineService
         "FileRemoved" => "Bestand verwijderd",
         "Issued" => "Document uitgegeven",
         "Moved" => "Verplaatst",
+        "RedeliveryCreated" => "Herleveringsorder aangemaakt",
+        "RedeliveryRequested" => "Herlevering aangemaakt voor deze opdracht",
+        "RedeliveryConfirmedFree" => "Herlevering gratis bevestigd",
         _ => "Opdracht gewijzigd",
     };
 

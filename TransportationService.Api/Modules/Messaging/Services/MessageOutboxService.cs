@@ -107,6 +107,13 @@ public class MessageOutboxService : IMessageOutboxService
         var (subject, body) = await RenderAsync(
             request.Kind, channel ?? MessageChannel.Email, language, request.Tokens, request.CustomerIdForTemplate, cancellationToken);
 
+        // EX-02: a message that still contains a {{placeholder}} is broken — it is never queued
+        // for sending (nor for review), but kept as Suppressed with the missing names.
+        if (suppressReason is null && MessageTemplateRenderer.Unresolved(subject, body) is { Count: > 0 } unresolved)
+        {
+            suppressReason = UnresolvedReason(unresolved);
+        }
+
         var message = new OutboxMessage
         {
             Id = Guid.NewGuid(),
@@ -138,6 +145,10 @@ public class MessageOutboxService : IMessageOutboxService
             ? new QueueResult(QueueOutcome.Queued, message.Id)
             : new QueueResult(QueueOutcome.Suppressed, message.Id, suppressReason);
     }
+
+    /// <summary>The suppression reason recorded for a message with unresolved placeholders.</summary>
+    public static string UnresolvedReason(IReadOnlyList<string> unresolved) =>
+        $"Niet verzonden: onopgeloste sjabloonvelden {string.Join(", ", unresolved)}.";
 
     private static bool KindEnabled(MessagingProfile? profile, string kind)
     {
@@ -202,6 +213,18 @@ public class MessageOutboxService : IMessageOutboxService
         }
 
         var (subjectTemplate, bodyTemplate) = await ResolveTemplateAsync(kind, channel, language, customerIdForTemplate, cancellationToken);
+
+        // The generic fallback body ("{{details}}") summarises the event's own tokens when the
+        // producer supplied no details — it must never reach a recipient as a literal placeholder.
+        if (!tokensWithDefaults.ContainsKey("details"))
+        {
+            var summary = tokensWithDefaults
+                .Where(t => t.Key != "companyName" && !string.IsNullOrWhiteSpace(t.Value))
+                .Select(t => t.Value.Trim())
+                .Take(4)
+                .ToList();
+            tokensWithDefaults["details"] = summary.Count == 0 ? string.Empty : string.Join(" — ", summary);
+        }
 
         return (
             subjectTemplate is null ? null : MessageTemplateRenderer.Render(subjectTemplate, tokensWithDefaults),

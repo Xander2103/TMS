@@ -53,4 +53,10 @@ public class DamageReport : AuditableTenantEntity
     public string? AttachmentContentType { get; set; }
 
     public string? Notes { get; set; }
+
+    /// <summary>EX-03: the incident this damage report was created from (one report per incident).</summary>
+    public Guid? SourceIncidentId { get; set; }
+
+    /// <summary>EX-03: the afwijking this damage report was created from (one report per afwijking).</summary>
+    public Guid? SourceExceptionId { get; set; }
 }

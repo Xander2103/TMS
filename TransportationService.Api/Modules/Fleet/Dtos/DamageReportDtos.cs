@@ -20,7 +20,14 @@ public record DamageReportDto(
     string? Notes,
     /// <summary>FL-M7: the trip during which the damage occurred, when known.</summary>
     Guid? TripId = null,
-    string? TripNumber = null);
+    string? TripNumber = null)
+{
+    /// <summary>EX-03: the incident/afwijking this report came from, described for the fleet
+    /// (type, severity, trip, order, route) — no customer, cost or HR data.</summary>
+    public Guid? SourceIncidentId { get; init; }
+    public Guid? SourceExceptionId { get; init; }
+    public string? SourceLabel { get; init; }
+}
 
 /// <summary>Row for the recent-damage overview (fleet dashboard).</summary>
 public record RecentDamageDto(
