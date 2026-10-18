@@ -549,6 +549,52 @@ public class ExceptionManagementRemediationTests
         Assert.Equal(["Trip-only", "Order-only"], listed.Select(i => i.Title).ToArray());
     }
 
+    /// <summary>
+    /// Integration 2026-10-18: DossierService was changed by Core (MD-M3, tenant-local default date) and
+    /// by Exceptions (EX-04, ProblemScope) from the same base. The merged service must keep BOTH: a dossier
+    /// created just after local midnight carries the tenant's date, and its detail lists incidents linked
+    /// only through its order or only through its trip.
+    /// </summary>
+    [Fact]
+    public async Task Integration_MergedDossierService_TenantLocalDate_AndFullProblemScope()
+    {
+        using var h = await SeedAsync();
+        var settings = await h.Db.Context.TenantSettings.SingleAsync(s => s.TenantId == h.TenantId);
+        settings.Timezone = "Europe/Brussels";
+        h.Db.Context.Incidents.AddRange(
+            new Modules.Incidents.Entities.Incident
+            {
+                Id = Guid.NewGuid(), TenantId = h.TenantId, Title = "Order-only", Description = "x",
+                IncidentType = Modules.Incidents.Entities.IncidentType.Delay, TransportOrderId = h.OrderId,
+            },
+            new Modules.Incidents.Entities.Incident
+            {
+                Id = Guid.NewGuid(), TenantId = h.TenantId, Title = "Trip-only", Description = "x",
+                IncidentType = Modules.Incidents.Entities.IncidentType.Delay, TripId = h.TripId,
+            },
+            new Modules.Incidents.Entities.Incident
+            {
+                Id = Guid.NewGuid(), TenantId = h.TenantId, Title = "Other dossier", Description = "x",
+                IncidentType = Modules.Incidents.Entities.IncidentType.Delay, TransportOrderId = h.OtherOrderId,
+            });
+        await h.Db.Context.SaveChangesAsync();
+
+        // 22:30 UTC on 18/10 is 00:30 on 19/10 in Brussels (CEST).
+        var tenant = new DevTenantContext(h.TenantId);
+        var audit = new AuditService(h.Db.Context, tenant, new DevCurrentUserContext(h.DispatcherId));
+        var dossiers = new DossierService(h.Db.Context, tenant, audit, new TestClock(new DateTimeOffset(2026, 10, 18, 22, 30, 0, TimeSpan.Zero)));
+
+        var created = await dossiers.CreateAsync(new SaveDossierRequest(CustomerId: h.CustomerId), CancellationToken.None);
+        Assert.Equal(new DateOnly(2026, 10, 19), created.DossierDate);
+
+        var detail = (await dossiers.GetAsync(h.DossierId, CancellationToken.None))!;
+        Assert.Equal(["Order-only", "Trip-only"], detail.Incidents.Select(i => i.Title).Order().ToArray());
+
+        var evaluation = (await h.Lifecycle().EvaluateAsync(h.DossierId, CancellationToken.None))!;
+        Assert.False(evaluation.CanConfirmManually);
+        Assert.Equal(2, evaluation.Summary.OpenIncidents);
+    }
+
     [Theory]
     [InlineData(ExceptionSeverity.Low, "Info", true)]
     [InlineData(ExceptionSeverity.Medium, "Warning", true)]

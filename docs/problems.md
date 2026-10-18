@@ -28,7 +28,7 @@ die kosten blijven intern (EstimatedCost/ActualCost).
 ## Herlevering
 
 `POST /api/incidents/{id}/redelivery` (`orders.create`, `orders.manage` of het gecontroleerde
-commando `problems.create_redelivery` — dispatcher/planner, v39) maakt een CONCEPT-order voor wat
+commando `problems.create_redelivery` — dispatcher/planner, v40) maakt een CONCEPT-order voor wat
 **niet** geleverd werd:
 
 - **Hoeveelheid**: opgegeven, anders de hoeveelheid van de bron-afwijking, anders de gemelde
