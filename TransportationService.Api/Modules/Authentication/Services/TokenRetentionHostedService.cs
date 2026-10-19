@@ -1,3 +1,4 @@
+using TransportationService.Api.Common.Jobs;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using TransportationService.Api.Data;
@@ -32,16 +33,19 @@ public sealed class TokenRetentionHostedService : BackgroundService
         {
             try
             {
-                using var scope = _scopeFactory.CreateScope();
-                var db = scope.ServiceProvider.GetRequiredService<TransportationDbContext>();
-                var clock = scope.ServiceProvider.GetRequiredService<TimeProvider>();
-                var options = scope.ServiceProvider.GetRequiredService<IOptions<AuthenticationSecurityOptions>>().Value;
-
-                var removed = await PurgeAsync(db, clock, options.RefreshTokenRetentionDays, stoppingToken);
-                if (removed > 0)
+                // H7: one instance per run (advisory lock); heartbeat in /health/details.
+                await _scopeFactory.RunJobAsync(JobNames.TokenRetention, async (services, token) =>
                 {
-                    _logger.LogInformation("Refresh-token retention sweep removed {Count} rows.", removed);
-                }
+                    var db = services.GetRequiredService<TransportationDbContext>();
+                    var clock = services.GetRequiredService<TimeProvider>();
+                    var options = services.GetRequiredService<IOptions<AuthenticationSecurityOptions>>().Value;
+
+                    var removed = await PurgeAsync(db, clock, options.RefreshTokenRetentionDays, token);
+                    if (removed > 0)
+                    {
+                        _logger.LogInformation("Refresh-token retention sweep removed {Count} rows.", removed);
+                    }
+                }, stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {

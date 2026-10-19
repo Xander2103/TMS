@@ -1,3 +1,4 @@
+using TransportationService.Api.Common.Jobs;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using TransportationService.Api.Common.Storage;
@@ -100,24 +101,27 @@ public sealed class GdprRetentionHostedService : BackgroundService
         {
             try
             {
-                using var scope = _scopeFactory.CreateScope();
-                var db = scope.ServiceProvider.GetRequiredService<TransportationDbContext>();
-                var clock = scope.ServiceProvider.GetRequiredService<TimeProvider>();
-                var options = scope.ServiceProvider.GetRequiredService<IOptions<RetentionOptions>>().Value;
-                // BG-09: the SAME directory the Development sink writes to (the storage root).
-                var sinkDirectory = scope.ServiceProvider.GetRequiredService<StorageRoot>().MessageSinkDirectory;
+                // H7: one instance per run (advisory lock); heartbeat in /health/details.
+                await _scopeFactory.RunJobAsync(JobNames.GdprRetention, async (services, token) =>
+                {
+                    var db = services.GetRequiredService<TransportationDbContext>();
+                    var clock = services.GetRequiredService<TimeProvider>();
+                    var options = services.GetRequiredService<IOptions<RetentionOptions>>().Value;
+                    // BG-09: the SAME directory the Development sink writes to (the storage root).
+                    var sinkDirectory = services.GetRequiredService<StorageRoot>().MessageSinkDirectory;
 
-                var result = await GdprRetentionService.SweepAsync(db, clock, options, sinkDirectory, stoppingToken);
-                if (options.LegalHold)
-                {
-                    _logger.LogWarning("Retention sweep skipped: legal hold is active.");
-                }
-                else if (result != RetentionSweepResult.Skipped)
-                {
-                    _logger.LogInformation(
-                        "Retention sweep: {Outbox} outbox rows, {Tokens} security-token rows, {Sink} sink files removed.",
-                        result.OutboxRowsDeleted, result.SecurityTokenRowsDeleted, result.SinkFilesDeleted);
-                }
+                    var result = await GdprRetentionService.SweepAsync(db, clock, options, sinkDirectory, token);
+                    if (options.LegalHold)
+                    {
+                        _logger.LogWarning("Retention sweep skipped: legal hold is active.");
+                    }
+                    else if (result != RetentionSweepResult.Skipped)
+                    {
+                        _logger.LogInformation(
+                            "Retention sweep: {Outbox} outbox rows, {Tokens} security-token rows, {Sink} sink files removed.",
+                            result.OutboxRowsDeleted, result.SecurityTokenRowsDeleted, result.SinkFilesDeleted);
+                    }
+                }, stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {

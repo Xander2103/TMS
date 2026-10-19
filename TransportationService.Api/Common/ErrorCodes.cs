@@ -21,6 +21,8 @@ public static class ErrorCodes
     public const string RateLimited = "common.rate_limited";
     public const string UnsupportedLanguage = "common.unsupported_language";
     public const string InvalidReference = "common.invalid_reference";
+    /// <summary>De database (of een andere kernafhankelijkheid) is tijdelijk onbereikbaar: 503.</summary>
+    public const string ServiceUnavailable = "common.service_unavailable";
 
     // Master-data integriteit (remediation 2026-10-18)
     /// <summary>Verwijderen geweigerd: historiek of operationele gegevens verwijzen nog naar het record.</summary>

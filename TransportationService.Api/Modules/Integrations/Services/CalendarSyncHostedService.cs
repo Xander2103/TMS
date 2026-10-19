@@ -1,3 +1,5 @@
+using TransportationService.Api.Common.Jobs;
+
 namespace TransportationService.Api.Modules.Integrations.Services;
 
 /// <summary>Sweeps the calendar sync queue every 60 seconds; the processor owns retry timing.</summary>
@@ -24,9 +26,9 @@ public sealed class CalendarSyncHostedService : BackgroundService
         {
             try
             {
-                using var scope = _scopeFactory.CreateScope();
-                var processor = scope.ServiceProvider.GetRequiredService<CalendarSyncProcessor>();
-                await processor.ProcessPendingAsync(50, stoppingToken);
+                // H7: one instance per run (advisory lock); heartbeat in /health/details.
+                await _scopeFactory.RunJobAsync(JobNames.CalendarSync, (services, token) =>
+                    services.GetRequiredService<CalendarSyncProcessor>().ProcessPendingAsync(50, token), stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {

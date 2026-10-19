@@ -1,3 +1,4 @@
+using TransportationService.Api.Common.Jobs;
 using Microsoft.EntityFrameworkCore;
 using TransportationService.Api.Data;
 using TransportationService.Api.Modules.Notifications.Entities;
@@ -31,9 +32,9 @@ public sealed class NotificationMaintenanceHostedService : BackgroundService
         {
             try
             {
-                using var scope = _scopeFactory.CreateScope();
-                var worker = scope.ServiceProvider.GetRequiredService<NotificationMaintenanceWorker>();
-                await worker.RunAsync(stoppingToken);
+                // H7: one instance per run (advisory lock); heartbeat in /health/details.
+                await _scopeFactory.RunJobAsync(JobNames.NotificationMaintenance, (services, token) =>
+                    services.GetRequiredService<NotificationMaintenanceWorker>().RunAsync(token), stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {

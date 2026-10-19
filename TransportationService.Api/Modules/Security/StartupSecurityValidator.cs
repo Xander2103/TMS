@@ -57,5 +57,10 @@ public static class StartupSecurityValidator
                 "Attendance:PinPepper is configured but invalid (expected base64, at least 32 bytes). "
                 + "Fix or remove the value; refusing to start with a silently broken kiosk configuration.");
         }
+
+        // CFG-06: public URLs (Frontend:BaseUrl, Cors:AllowedOrigins) and the proxy list must be
+        // this installation's real, valid values; no localhost/demo defaults, no silently
+        // skipped proxy entries.
+        DeploymentConfigurationValidator.Validate(configuration);
     }
 }

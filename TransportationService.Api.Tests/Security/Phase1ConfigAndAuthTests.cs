@@ -260,6 +260,10 @@ public class Phase1ConfigAndAuthTests
         {
             // Fase 9: a non-Development host also needs the column-encryption key.
             ["ColumnEncryption:Key"] = Convert.ToBase64String(new byte[32]),
+            // CFG-06: and its real public URLs.
+            ["Frontend:BaseUrl"] = "https://tms.example.be",
+            ["Cors:AllowedOrigins:0"] = "https://tms.example.be",
+            ["Network:KnownProxies:0"] = "127.0.0.1",
         }).Build();
 
         // Should not throw.

@@ -35,7 +35,24 @@ public interface ICalendarProvider
     Task CancelEventAsync(string externalEventId, CancellationToken cancellationToken);
 }
 
-/// <summary>Development fake: an in-memory calendar handing out stable fake event ids.</summary>
+/// <summary>
+/// CFG-04: the honest calendar provider outside Development while no real (Microsoft Graph)
+/// provider exists. It never claims success: the processor leaves every queue item Pending
+/// (nothing is marked Synced, no fake event ids), and a direct call throws.
+/// </summary>
+public sealed class NotConfiguredCalendarProvider : ICalendarProvider
+{
+    public const string Reason = "Agenda-synchronisatie is niet geconfigureerd (geen agendaprovider).";
+
+    public Task<string> UpsertEventAsync(CalendarSyncItem item, CancellationToken cancellationToken) =>
+        throw new InvalidOperationException(Reason);
+
+    public Task CancelEventAsync(string externalEventId, CancellationToken cancellationToken) =>
+        throw new InvalidOperationException(Reason);
+}
+
+/// <summary>Development fake: an in-memory calendar handing out stable fake event ids. Never
+/// registered outside Development (it would report "Synced" for events that exist nowhere).</summary>
 public sealed class FakeCalendarProvider : ICalendarProvider
 {
     private int _counter;
@@ -210,6 +227,13 @@ public class CalendarSyncProcessor
 
     public async Task<int> ProcessPendingAsync(int max, CancellationToken cancellationToken)
     {
+        if (_provider is NotConfiguredCalendarProvider)
+        {
+            // No provider: items stay Pending (truthfully "not synced") instead of burning their
+            // attempt budget into Failed or pretending success.
+            return 0;
+        }
+
         var now = _timeProvider.GetUtcNow().UtcDateTime;
         var due = await _dbContext.CalendarSyncItems
             .Where(i => i.Status == CalendarSyncStatus.Pending && (i.NextAttemptAt == null || i.NextAttemptAt <= now))

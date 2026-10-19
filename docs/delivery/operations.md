@@ -591,16 +591,18 @@ Alle secrets via omgevingsvariabelen (`Sectie__Sleutel`) of een vault; in Develo
 ## 5. Achtergrondjobs & hosted services
 
 Alle jobs zijn `BackgroundService`-implementaties met `PeriodicTimer`, één DI-scope per
-tick, fouten gelogd zonder de lus te breken. Ze draaien **in-process** in de API — één
-draaiende API-instantie volstaat; bij meerdere instanties draaien de sweeps dubbel
-(idempotent, maar houd er rekening mee). Volledige lijst, geverifieerd in code
+tick, fouten gelogd zonder de lus te breken. Ze draaien **in-process** in de API. De pilot
+draait **exact één** API-instantie. De sweeps, de automatische back-up en de opstartsync
+lopen onder een PostgreSQL-advisory-lock (een tweede instantie slaat de run over) en de
+outbox claimt elke rij afzonderlijk; wat (nog) niet multi-instance-veilig is, staat in
+`docs/operations/single-instance.md`. Volledige lijst, geverifieerd in code
 (intervallen uit de bronbestanden; zie ook `docs/background-jobs.md`):
 
 | Hosted service | Interval | Functie |
 |---|---|---|
 | `OutboxDispatcherHostedService` | 30 s | E-mail-/sms-outbox afleveren (backoff 5·2ⁿ min, max 5 pogingen, quiet hours, fallbackkanaal) |
 | `PeppolDispatcherHostedService` | 30 s | Peppol-transmissies indienen en providerstatus pollen |
-| `CalendarSyncHostedService` | 60 s | Agenda-syncqueue (goedgekeurd verlof, bevestigde shifts) naar `ICalendarProvider` (nu: fake provider) |
+| `CalendarSyncHostedService` | 60 s | Agenda-syncqueue (goedgekeurd verlof, bevestigde shifts) naar `ICalendarProvider` (fake provider alleen in Development; elders "niet geconfigureerd": items blijven Pending, nooit Synced) |
 | `ExpiryNotificationHostedService` | 6 u | Vervaldata kwalificaties, wagenparkdocumenten, tankkaarten → notificaties |
 | `TokenRetentionHostedService` | 6 u | Opruimen verlopen/ingetrokken refresh tokens |
 | `GdprRetentionHostedService` | 24 u | GDPR-retentiepurge volgens `Retention:*` (volledig bevroren bij `LegalHold`) |
@@ -620,10 +622,13 @@ opgepikt nadat iemand ze vrijgeeft.
 
 ## 6. Productieverificatie-checklist
 
-Er is momenteel **geen** dedicated health-endpoint (`MapHealthChecks` is niet
-geconfigureerd) en OpenAPI/Scalar is alleen in Development gemapt. Basale liveness:
-een ongeauthenticeerde `GET /api/...` moet een `401 application/problem+json` teruggeven —
-dat bewijst dat Kestrel, de middleware-pipeline en de securityheaders staan.
+Health-endpoints (anoniem, niet rate-limited, geen HTTPS-redirect):
+`GET /health/live` (proces leeft, raakt geen afhankelijkheden: altijd 200) en
+`GET /health/ready` (database `SELECT 1`, 0 openstaande migraties, kolomversleutelingssleutel
+past bij de database, plus de opslagcheck: 200 = alles Healthy, anders 503). Monitoring en
+het deployscript horen `/health/ready` te pollen. `GET /health/details` (aangemeld +
+`system_info.view`) toont daarnaast outbox, Peppol, back-up, optionele integraties en de
+heartbeat per achtergrondjob. Zie `docs/operations/single-instance.md`.
 
 Na elke deploy:
 

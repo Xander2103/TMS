@@ -1,3 +1,4 @@
+using TransportationService.Api.Common.Jobs;
 using Microsoft.EntityFrameworkCore;
 using TransportationService.Api.Data;
 using TransportationService.Api.Modules.Employees.Entities;
@@ -36,9 +37,9 @@ public sealed class InventorySweepHostedService : BackgroundService
         {
             try
             {
-                using var scope = _scopeFactory.CreateScope();
-                var worker = scope.ServiceProvider.GetRequiredService<InventorySweepWorker>();
-                await worker.SweepAllTenantsAsync(stoppingToken);
+                // H7: one instance per run (advisory lock); heartbeat in /health/details.
+                await _scopeFactory.RunJobAsync(JobNames.InventorySweep, (services, token) =>
+                    services.GetRequiredService<InventorySweepWorker>().SweepAllTenantsAsync(token), stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {

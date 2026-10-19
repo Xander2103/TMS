@@ -1,3 +1,4 @@
+using TransportationService.Api.Common.Jobs;
 using Microsoft.Extensions.Options;
 using TransportationService.Api.Modules.SystemAdmin.Services;
 
@@ -44,9 +45,10 @@ public class AutomaticBackupHostedService : BackgroundService
             try
             {
                 await Task.Delay(next - now, stoppingToken);
-                using var scope = _scopeFactory.CreateScope();
-                var backups = scope.ServiceProvider.GetRequiredService<IBackupService>();
-                await backups.CreateAsync("Automatic", "Dagelijkse automatische back-up", stoppingToken);
+                // H7: a second instance skips the 02:00 dump instead of running pg_dump twice.
+                await _scopeFactory.RunJobAsync(JobNames.AutomaticBackup, (services, token) =>
+                    services.GetRequiredService<IBackupService>().CreateAsync("Automatic", "Dagelijkse automatische back-up", token),
+                    stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {

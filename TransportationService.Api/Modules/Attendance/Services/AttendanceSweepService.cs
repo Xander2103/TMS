@@ -1,3 +1,4 @@
+using TransportationService.Api.Common.Jobs;
 using Microsoft.EntityFrameworkCore;
 using TransportationService.Api.Data;
 using TransportationService.Api.Modules.Attendance.Entities;
@@ -35,9 +36,9 @@ public sealed class AttendanceSweepHostedService : BackgroundService
         {
             try
             {
-                using var scope = _scopeFactory.CreateScope();
-                var worker = scope.ServiceProvider.GetRequiredService<AttendanceSweepWorker>();
-                await worker.SweepAllTenantsAsync(stoppingToken);
+                // H7: one instance per run (advisory lock); heartbeat in /health/details.
+                await _scopeFactory.RunJobAsync(JobNames.AttendanceSweep, (services, token) =>
+                    services.GetRequiredService<AttendanceSweepWorker>().SweepAllTenantsAsync(token), stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {

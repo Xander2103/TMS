@@ -1,6 +1,9 @@
 using System.Text.Json.Serialization;
 using Microsoft.EntityFrameworkCore;
 using Scalar.AspNetCore;
+using TransportationService.Api.Common.Diagnostics;
+using TransportationService.Api.Common.Health;
+using TransportationService.Api.Common.Jobs;
 using TransportationService.Api.Common.Persistence;
 using TransportationService.Api.Data;
 using TransportationService.Api.Modules.Auditing.Services;
@@ -50,23 +53,21 @@ builder.Services
 // OpenAPI
 builder.Services.AddOpenApi();
 
-// Consistent RFC7807 error responses. Unhandled exceptions never expose stack traces, exception
-// types or SQL/table details; the correlation id is the bridge to the server-side log.
-builder.Services.AddProblemDetails(options =>
-{
-    options.CustomizeProblemDetails = context =>
-    {
-        context.ProblemDetails.Extensions["correlationId"] = context.HttpContext.TraceIdentifier;
-        context.ProblemDetails.Extensions.Remove("exception");
+// LOG-01: console logging with scopes, so every log line of a request carries its TraceId — the
+// same id the error body returns as correlationId (single-line outside Development).
+builder.Logging.AddOperationalConsoleLogging(builder.Environment);
 
-        if (context.ProblemDetails.Status is StatusCodes.Status500InternalServerError)
-        {
-            context.ProblemDetails.Title = "Er is een onverwachte fout opgetreden.";
-            context.ProblemDetails.Detail =
-                "De aanvraag kon niet worden verwerkt. Vermeld de correlatie-id bij een melding.";
-        }
-    };
-});
+// Consistent RFC7807 error responses. Unhandled exceptions never expose stack traces, exception
+// types or SQL/table details; the correlation id is the bridge to the server-side log. A lost
+// database connection answers 503 "Service unavailable" instead of a generic 500.
+builder.Services.AddApiProblemDetails();
+
+// H1: /health/live, /health/ready (checks tagged "ready") and /health/details (system_info.view).
+// Other modules add their own checks with AddHealthChecks().AddCheck<T>(name, tags: [...]).
+builder.Services.AddOperationalHealthChecks();
+
+// H7: cross-process advisory locks + per-job heartbeats for the hosted services and the startup sync.
+builder.Services.AddBackgroundJobCoordination();
 
 // JWT authentication + authorization (password hashing, token + auth services)
 builder.Services.AddJwtAuthentication(builder.Configuration);
@@ -634,13 +635,23 @@ builder.Services.AddScoped<TransportationService.Api.Modules.Packages.Services.I
 builder.Services.AddScoped<TransportationService.Api.Modules.Packages.Services.IPackageReportService,
     TransportationService.Api.Modules.Packages.Services.PackageReportService>();
 
-// Outlook/Exchange foundation: queued calendar sync behind a provider seam. The fake provider
-// stands in until Microsoft Graph credentials exist; swap ICalendarProvider then.
+// Outlook/Exchange foundation: queued calendar sync behind a provider seam. The in-memory fake
+// provider is a Development affordance only (it would mark items "Synced" that exist nowhere);
+// every other environment gets the honest NotConfigured provider until a real (Microsoft Graph)
+// provider is registered here.
 builder.Services.AddScoped<TransportationService.Api.Modules.Integrations.Services.QueueingCalendarSyncService>();
 builder.Services.AddScoped<TransportationService.Api.Modules.Integrations.Services.ICalendarSyncService>(sp =>
     sp.GetRequiredService<TransportationService.Api.Modules.Integrations.Services.QueueingCalendarSyncService>());
-builder.Services.AddSingleton<TransportationService.Api.Modules.Integrations.Services.ICalendarProvider,
-    TransportationService.Api.Modules.Integrations.Services.FakeCalendarProvider>();
+if (builder.Environment.IsDevelopment())
+{
+    builder.Services.AddSingleton<TransportationService.Api.Modules.Integrations.Services.ICalendarProvider,
+        TransportationService.Api.Modules.Integrations.Services.FakeCalendarProvider>();
+}
+else
+{
+    builder.Services.AddSingleton<TransportationService.Api.Modules.Integrations.Services.ICalendarProvider,
+        TransportationService.Api.Modules.Integrations.Services.NotConfiguredCalendarProvider>();
+}
 builder.Services.AddScoped(sp => new TransportationService.Api.Modules.Integrations.Services.CalendarSyncProcessor(
     sp.GetRequiredService<TransportationService.Api.Data.TransportationDbContext>(),
     sp.GetRequiredService<TransportationService.Api.Modules.Integrations.Services.ICalendarProvider>(),
@@ -698,7 +709,8 @@ builder.Services.AddScoped(sp => new TransportationService.Api.Modules.Messaging
     sp.GetRequiredService<TransportationService.Api.Data.TransportationDbContext>(),
     sp.GetRequiredService<TransportationService.Api.Modules.Messaging.Services.IEmailProvider>(),
     sp.GetRequiredService<TransportationService.Api.Modules.Messaging.Services.ISmsProvider>(),
-    sp.GetRequiredService<TimeProvider>()));
+    sp.GetRequiredService<TimeProvider>(),
+    sp.GetRequiredService<ILogger<TransportationService.Api.Modules.Messaging.Services.MessageDispatcher>>()));
 builder.Services.AddHostedService<TransportationService.Api.Modules.Messaging.Services.OutboxDispatcherHostedService>();
 builder.Services.AddScoped<TransportationService.Api.Modules.Messaging.Services.INotificationEventService,
     TransportationService.Api.Modules.Messaging.Services.NotificationEventService>();
@@ -787,11 +799,48 @@ if (args.Contains(TransportationService.Api.Modules.SystemAdmin.Services.Storage
     return;
 }
 
+if (!app.Environment.IsDevelopment())
+{
+    foreach (var warning in TransportationService.Api.Modules.Security.DeploymentConfigurationValidator.Warnings(app.Configuration))
+    {
+        app.Logger.LogWarning("Configuration: {Warning}", warning);
+    }
+}
+
+// CFG-04/05: one startup warning per optional integration that is deliberately disabled.
+if (app.Services.GetRequiredService<TransportationService.Api.Modules.Integrations.Services.ICalendarProvider>()
+    is TransportationService.Api.Modules.Integrations.Services.NotConfiguredCalendarProvider)
+{
+    app.Logger.LogWarning(
+        "Optional integration disabled: calendar sync (no calendar provider configured). Queue items stay Pending and are never marked Synced.");
+}
+
+if (app.Services.GetRequiredService<ISmsProvider>() is IDisabledChannelProvider)
+{
+    app.Logger.LogWarning(
+        "Optional integration disabled: SMS (no SMS provider configured). SMS messages are suppressed with a reason, not sent.");
+}
+
+// H7 / MIG-07: the startup sync (canary, backfills, permission/role catalogue) runs under a
+// cross-process advisory lock, so two instances starting together never race on unique indexes.
+// A second instance waits for the first to finish, then re-runs the (idempotent, now cheap) sync.
+await using (await app.Services.GetRequiredService<IJobLock>()
+                 .AcquireAsync(JobNames.StartupSync, TimeSpan.FromMinutes(5), CancellationToken.None)
+             ?? throw new InvalidOperationException(
+                 "Another API instance has held the startup-sync lock for more than 5 minutes. Only ONE API instance "
+                 + "may run (docs/operations/single-instance.md); stop the other instance and start again."))
 // Global reference data runs in every environment: the ISO country list must exist for
 // country validation and comboboxes regardless of how tenants are onboarded.
 using (var referenceScope = app.Services.CreateScope())
 {
     var referenceDbContext = referenceScope.ServiceProvider.GetRequiredService<TransportationDbContext>();
+
+    // H5: refuse to start when the configured column-encryption key cannot decrypt the data that
+    // is already in this database (wrong key after a restore, lost previous key after a rotation).
+    // Writes the canary once on a fresh database. Never logs key material.
+    await TransportationService.Api.Modules.Security.ColumnEncryptionVerifier.EnsureKeyMatchesDatabaseAsync(
+        referenceDbContext, app.Services.GetRequiredService<TimeProvider>(), CancellationToken.None);
+
     await CountrySeeder.SyncAsync(referenceDbContext);
 
     // Dossier foundation: idempotently wrap pre-wave orders in their own dossier so the
@@ -870,7 +919,9 @@ if (app.Environment.IsDevelopment())
 
 // Security pipeline order (documented deliberately):
 //  1. forwarded headers  -> the real client IP/scheme must be known before anything keys off it
+//     request logging    -> correlation-id header + status/duration line (sees the handler's status)
 //  2. exception handler  -> catches everything downstream, emits ProblemDetails without internals
+//                           (database connection loss -> 503 Service unavailable)
 //  3. security headers   -> stamped on every response, including error responses
 //  4. HTTPS/HSTS         -> transport hardening in real environments
 //  5. CORS               -> before auth so preflights are answered correctly
@@ -881,17 +932,26 @@ if (app.Environment.IsDevelopment())
 // 10. endpoints
 app.UseForwardedHeaders();
 
+// LOG-01: correlation-id response header + one request log line for 5xx/401/403/429, written
+// inside the request scope (same TraceId as the error body). Before the exception handler so it
+// sees the final status the handler produced.
+app.UseMiddleware<RequestLoggingMiddleware>();
+
 app.UseExceptionHandler();
 
 app.UseMiddleware<TransportationService.Api.Modules.Security.SecurityHeadersMiddleware>();
 
 // Enforce HTTPS in real environments. In Development the SPA talks to the API over http
 // (http://localhost:5019); redirecting to https there would drop the Authorization header on the
-// cross-scheme 307, so redirection is intentionally skipped for local development only.
+// cross-scheme 307, so redirection is intentionally skipped for local development only. The
+// anonymous health probes are exempt: a loopback monitor (deploy script, systemd/watchdog) must
+// get the real 200/503, never a redirect.
 if (!app.Environment.IsDevelopment())
 {
     app.UseHsts();
-    app.UseHttpsRedirection();
+    app.UseWhen(
+        context => !OperationalHealth.IsProbePath(context.Request.Path),
+        branch => branch.UseHttpsRedirection());
 }
 
 app.UseCors("Frontend");
@@ -903,6 +963,8 @@ app.UseRateLimiter();
 app.UseMiddleware<TenantContextMiddleware>();
 
 app.UseAuthorization();
+
+app.MapOperationalHealthEndpoints();
 
 app.MapControllers();
 

@@ -1,3 +1,4 @@
+using TransportationService.Api.Common.Jobs;
 using Microsoft.EntityFrameworkCore;
 using TransportationService.Api.Data;
 
@@ -31,7 +32,9 @@ public sealed class ExpiryNotificationHostedService : BackgroundService
         {
             try
             {
-                await SweepAsync(stoppingToken);
+                // H7: one instance per run (advisory lock); heartbeat in /health/details.
+                await _scopeFactory.RunJobAsync(JobNames.ExpirySweep,
+                    (services, token) => SweepAsync(services, token), stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
@@ -45,11 +48,10 @@ public sealed class ExpiryNotificationHostedService : BackgroundService
         while (await timer.WaitForNextTickAsync(stoppingToken));
     }
 
-    private async Task SweepAsync(CancellationToken cancellationToken)
+    private async Task SweepAsync(IServiceProvider services, CancellationToken cancellationToken)
     {
-        using var scope = _scopeFactory.CreateScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<TransportationDbContext>();
-        var timeProvider = scope.ServiceProvider.GetRequiredService<TimeProvider>();
+        var dbContext = services.GetRequiredService<TransportationDbContext>();
+        var timeProvider = services.GetRequiredService<TimeProvider>();
         var producer = new ExpiryNotificationProducer(dbContext, timeProvider, _logger);
         var hrProducer = new Modules.Hr.Services.HrReminderProducer(dbContext, timeProvider);
 

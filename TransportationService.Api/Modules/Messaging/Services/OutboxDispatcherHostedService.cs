@@ -1,3 +1,5 @@
+using TransportationService.Api.Common.Jobs;
+
 namespace TransportationService.Api.Modules.Messaging.Services;
 
 /// <summary>Drains the message outbox every 30 seconds; the dispatcher owns retry timing.</summary>
@@ -24,9 +26,10 @@ public sealed class OutboxDispatcherHostedService : BackgroundService
         {
             try
             {
-                using var scope = _scopeFactory.CreateScope();
-                var dispatcher = scope.ServiceProvider.GetRequiredService<MessageDispatcher>();
-                await dispatcher.DispatchPendingAsync(50, stoppingToken);
+                // H2: rows are claimed one by one (multi-instance safe without a global lock);
+                // the run is only tracked for the /health/details heartbeat.
+                await _scopeFactory.RunTrackedJobAsync(JobNames.OutboxDispatch, (services, token) =>
+                    services.GetRequiredService<MessageDispatcher>().DispatchPendingAsync(50, token), stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
