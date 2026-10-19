@@ -145,6 +145,20 @@ public static class BuiltInMessageTemplates
             "Beste {{firstName}},\n\nU bent uitgenodigd voor het klantportaal van {{companyName}}. "
             + "Stel via onderstaande link uw wachtwoord in om te starten:\n\n{{activationLink}}\n\n"
             + "Deze link is 72 uur geldig.\n\nMet vriendelijke groeten,\n{{companyName}}"),
+        // H9: account-security mails (built-in only; not tenant-overridable, see MessageKinds).
+        [MessageKinds.UserActivation] = new(
+            "Activeer uw account bij {{companyName}}",
+            "Beste {{firstName}},\n\nEr is een account voor u aangemaakt in het TMS van {{companyName}}. "
+            + "Stel via onderstaande link uw wachtwoord in om het account te activeren:\n\n{{link}}\n\n"
+            + "Deze link is eenmalig bruikbaar en {{validity}} geldig. Hebt u dit niet verwacht? Negeer dan dit bericht.\n\n"
+            + "Met vriendelijke groeten,\n{{companyName}}"),
+        [MessageKinds.PasswordReset] = new(
+            "Wachtwoord opnieuw instellen bij {{companyName}}",
+            "Beste {{firstName}},\n\nWe ontvingen een aanvraag om uw wachtwoord opnieuw in te stellen. "
+            + "Kies via onderstaande link een nieuw wachtwoord:\n\n{{link}}\n\n"
+            + "Deze link is eenmalig bruikbaar en {{validity}} geldig. Hebt u dit niet aangevraagd? "
+            + "Negeer dan dit bericht; uw huidige wachtwoord blijft geldig.\n\n"
+            + "Met vriendelijke groeten,\n{{companyName}}"),
     };
 
     private static readonly IReadOnlyDictionary<string, Template> Sms = new Dictionary<string, Template>
@@ -211,6 +225,19 @@ public static class BuiltInMessageTemplates
             "Dommage constaté pour l'ordre {{orderNumber}}",
             "Bonjour {{customerName}},\n\nUn dommage a été constaté pour l'ordre {{orderNumber}} ({{goodsDescription}}).\n\n"
             + "{{details}}\n\nNous vous contacterons pour la suite du traitement.\n\nCordialement,\n{{companyName}}"),
+        [MessageKinds.UserActivation] = new(
+            "Activez votre compte chez {{companyName}}",
+            "Bonjour {{firstName}},\n\nUn compte a été créé pour vous dans le TMS de {{companyName}}. "
+            + "Définissez votre mot de passe via le lien ci-dessous pour activer le compte :\n\n{{link}}\n\n"
+            + "Ce lien est à usage unique et valable {{validity}}. Vous ne vous y attendiez pas ? Ignorez ce message.\n\n"
+            + "Cordialement,\n{{companyName}}"),
+        [MessageKinds.PasswordReset] = new(
+            "Réinitialisation de votre mot de passe chez {{companyName}}",
+            "Bonjour {{firstName}},\n\nNous avons reçu une demande de réinitialisation de votre mot de passe. "
+            + "Choisissez un nouveau mot de passe via le lien ci-dessous :\n\n{{link}}\n\n"
+            + "Ce lien est à usage unique et valable {{validity}}. Vous n'avez rien demandé ? "
+            + "Ignorez ce message ; votre mot de passe actuel reste valable.\n\n"
+            + "Cordialement,\n{{companyName}}"),
     };
 
     private static readonly IReadOnlyDictionary<string, Template> EmailEn = new Dictionary<string, Template>
@@ -261,6 +288,19 @@ public static class BuiltInMessageTemplates
             "Damage recorded for order {{orderNumber}}",
             "Dear {{customerName}},\n\nDamage was recorded for order {{orderNumber}} ({{goodsDescription}}).\n\n"
             + "{{details}}\n\nWe will contact you about the further handling.\n\nKind regards,\n{{companyName}}"),
+        [MessageKinds.UserActivation] = new(
+            "Activate your account at {{companyName}}",
+            "Dear {{firstName}},\n\nAn account has been created for you in the TMS of {{companyName}}. "
+            + "Set your password via the link below to activate the account:\n\n{{link}}\n\n"
+            + "This link can be used once and is valid for {{validity}}. Not expecting this? Please ignore this message.\n\n"
+            + "Kind regards,\n{{companyName}}"),
+        [MessageKinds.PasswordReset] = new(
+            "Reset your password at {{companyName}}",
+            "Dear {{firstName}},\n\nWe received a request to reset your password. "
+            + "Choose a new password via the link below:\n\n{{link}}\n\n"
+            + "This link can be used once and is valid for {{validity}}. Did not request this? "
+            + "Please ignore this message; your current password stays valid.\n\n"
+            + "Kind regards,\n{{companyName}}"),
     };
 
     private static readonly IReadOnlyDictionary<string, Template> SmsFr = new Dictionary<string, Template>

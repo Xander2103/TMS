@@ -112,6 +112,16 @@ public static class MessageKinds
     public const string EmployeeDossierIncomplete = "employee_dossier_incomplete";
     public const string EmployeeDossierIncompleteEscalated = "employee_dossier_incomplete_escalated";
 
+    // Production hardening (H9): account-security mails. Delivered by direct queue calls from
+    // UserAccountFlowService (the recipient is the account itself), they bypass recipient
+    // preferences (an opt-out must never block a password reset) and are deliberately NOT in
+    // All: tenants cannot override their templates, so a template edit can never drop or
+    // rewrite the one-time link.
+    /// <summary>Activation link for a new (or re-activated) internal account, incl. the first administrator.</summary>
+    public const string UserActivation = "user_activation";
+    /// <summary>"Wachtwoord vergeten" reset link.</summary>
+    public const string PasswordReset = "password_reset";
+
     public static readonly IReadOnlyList<string> All =
     [
         OrderConfirmation, TimeWindowConfirmation, DriverEnRoute, EtaUpdate, Delay, DeliveryCompleted,
@@ -135,7 +145,8 @@ public static class MessageKinds
     /// permanently failed), so the raw token never outlives its one send attempt window in
     /// durable storage (C3).
     /// </summary>
-    public static bool CarriesOneTimeCredential(string kind) => kind == PortalUserInvited;
+    public static bool CarriesOneTimeCredential(string kind) =>
+        kind is PortalUserInvited or UserActivation or PasswordReset;
 
     /// <summary>
     /// The ONLY kinds a customer may toggle through the portal preference screen. A customer

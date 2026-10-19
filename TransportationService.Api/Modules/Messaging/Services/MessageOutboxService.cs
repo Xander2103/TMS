@@ -28,7 +28,11 @@ public record MessageRequest(
     Guid? CustomerIdForTemplate = null,
     /// <summary>P9: the message is held (AwaitingReview) until a dispatcher releases it —
     /// used for sensitive kinds (damage, failed delivery, liability).</summary>
-    bool RequiresReview = false);
+    bool RequiresReview = false,
+    /// <summary>Account-security mail (activation / password reset): the owner's messaging
+    /// profile (opt-outs, kind filters, quiet hours, address overrides) is NOT consulted — the
+    /// link always goes to OverrideAddress, immediately.</summary>
+    bool IgnoreRecipientPreferences = false);
 
 public enum QueueOutcome
 {
@@ -71,9 +75,11 @@ public class MessageOutboxService : IMessageOutboxService
             return new QueueResult(QueueOutcome.Duplicate);
         }
 
-        var profile = await _dbContext.MessagingProfiles.AsNoTracking()
-            .FirstOrDefaultAsync(p => p.TenantId == tenantId && p.OwnerType == request.OwnerType
-                                      && p.OwnerId == request.OwnerId, cancellationToken);
+        var profile = request.IgnoreRecipientPreferences
+            ? null
+            : await _dbContext.MessagingProfiles.AsNoTracking()
+                .FirstOrDefaultAsync(p => p.TenantId == tenantId && p.OwnerType == request.OwnerType
+                                          && p.OwnerId == request.OwnerId, cancellationToken);
 
         var owner = await ResolveOwnerAsync(request.OwnerType, request.OwnerId, cancellationToken);
         if (owner is null && string.IsNullOrWhiteSpace(request.OverrideAddress))

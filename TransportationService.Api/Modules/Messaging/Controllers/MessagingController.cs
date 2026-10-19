@@ -33,6 +33,9 @@ public class MessagingController : ControllerBase
         _auditService = auditService;
     }
 
+    /// <summary>Shown instead of the body of a mail that carries a one-time credential link.</summary>
+    public const string CredentialBodyHidden = "[Verborgen: dit bericht bevat een eenmalige activatie- of resetlink.]";
+
     public record OutboxRowDto(
         Guid Id, MessageChannel Channel, string Kind, string RecipientAddress, string? RecipientName,
         string? Subject, OutboxStatus Status, int AttemptCount, DateTime? NextAttemptAt, DateTime? SentAt,
@@ -81,6 +84,13 @@ public class MessagingController : ControllerBase
     {
         var message = await _dbContext.OutboxMessages.AsNoTracking()
             .FirstOrDefaultAsync(m => m.Id == id && m.TenantId == _tenantContext.TenantId, cancellationToken);
+        if (message is not null && MessageKinds.CarriesOneTimeCredential(message.Kind))
+        {
+            // H9: a pending activation/reset mail holds a live one-time link. Holding
+            // messaging.manage must never be enough to read (and use) another user's link.
+            message.Body = CredentialBodyHidden;
+        }
+
         return message is null ? NotFound() : Ok(message);
     }
 
