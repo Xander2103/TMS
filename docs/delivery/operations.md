@@ -701,9 +701,9 @@ release zonder migraties waarvan het plaatsen van de binaries faalde vóór de e
 poging om een **oudere ref** te deployen op een database die al nieuwere migraties heeft, weigert
 het script ook (stap 4) — dat is code-only terugrollen.
 
-Let op: na een forward-only stop is de unit nog `enabled`; een reboot start hem opnieuw (met de
-binaries die er dan staan). Overweeg `systemctl disable transportationservice-api` tot het herstel
-rond is, en `enable` daarna.
+Na een forward-only stop schakelt het script de unit ook **uit** (`systemctl disable`), zodat een
+reboot niets start op het (deels) nieuwe schema. Zet hem pas na het herstel weer aan:
+`systemctl enable transportationservice-api && systemctl start transportationservice-api`.
 
 **Beslissen.** Na een mislukte deploy, met de service gestopt en de onderhoudspagina aan:
 

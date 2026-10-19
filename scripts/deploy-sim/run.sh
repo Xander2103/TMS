@@ -367,6 +367,7 @@ forward_only_outcome() {
     check "service stays stopped" svc_inactive
     check "previous binaries NOT started after the stop" no_previous_start
     check "maintenance page stays on" maint_on
+    check "unit disabled so a reboot cannot start old binaries" ev_has $'systemctl\tdisable'
     check "storage untouched" storage_unchanged
     check "final dump taken with service stopped" ev_has $'pg_dump\tservice=inactive'
 }

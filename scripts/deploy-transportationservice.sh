@@ -148,6 +148,7 @@ MAINTENANCE_ON=0
 SERVICE_WAS_ACTIVE=0
 SERVICE_STOPPED=0
 MIGRATION_STARTED=0
+UNIT_DISABLED=0
 BINARIES_INSTALL_STARTED=0
 NEW_BINARIES_STARTED=0
 BACKUP_PATH="(geen back-up gemaakt)"
@@ -301,11 +302,16 @@ print_rollback_runbook() {
     fi
     emsg "     4. Bestanden: Storage__RootPath NIET terugzetten (snapshot $STORAGE_SNAPSHOT_PATH is enkel"
     emsg "        voor rampherstel); noteer uploads van na $BACKUP_TIME als wees."
-    emsg "     5. systemctl start $SERVICE_NAME; wacht op $LOCAL_API_URL$READY_PATH = 200;"
+    emsg "     5. systemctl enable $SERVICE_NAME && systemctl start $SERVICE_NAME; wacht op $LOCAL_API_URL$READY_PATH = 200;"
     emsg "        controleer Systeeminformatie; daarna onderhoud uit: rm -f $MAINTENANCE_FLAG"
     emsg "  NOOIT: de vorige binaries starten op dit schema, of dotnet ef database update <oudere migratie>."
-    emsg "  Let op: de unit is nog 'enabled' — een reboot start hem opnieuw. Overweeg"
-    emsg "  'systemctl disable $SERVICE_NAME' tot het herstel rond is (en daarna weer enable)."
+    if (( UNIT_DISABLED == 1 )); then
+        emsg "  De unit is UITGESCHAKELD (systemctl disable): een reboot start niets. Zet hem pas na het"
+        emsg "  herstel weer aan met 'systemctl enable $SERVICE_NAME' (stap 5 hierboven)."
+    else
+        emsg "  LET OP: 'systemctl disable $SERVICE_NAME' is mislukt — de unit is nog 'enabled' en een"
+        emsg "  reboot zou de geïnstalleerde binaries starten. Schakel hem nu manueel uit."
+    fi
 }
 
 on_exit() {
@@ -366,6 +372,10 @@ on_exit() {
     else
         # FORWARD-ONLY: a migration ran (or was attempted) or the new code already ran.
         "$SYSTEMCTL" stop "$SERVICE_NAME" >/dev/null 2>&1
+        # A reboot must not start whatever binaries are in place on the (partly) new schema
+        # either: disable the unit until the operator has finished the recovery.
+        "$SYSTEMCTL" disable "$SERVICE_NAME" >/dev/null 2>&1 \
+            && UNIT_DISABLED=1
         emsg "=== FORWARD-ONLY: de vorige binaries worden NIET gestart ==="
         if service_active; then
             emsg "WAARSCHUWING: $SERVICE_NAME is nog actief na stop — controleer onmiddellijk."
