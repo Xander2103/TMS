@@ -128,6 +128,7 @@ export function InvoicePeppolPanel({ invoiceId, invoiceNumber, invoiceStatus }: 
         {latest ? (
           <>
             <Badge tone={peppolStatusTone(latest.status)}>{peppolStatusLabel(t, latest.status)}</Badge>
+            <PeppolEnvironmentNote liveProviderMissing={latest.liveProviderMissing} environment={latest.environment} />
             {latest.providerMessageId && (
               <span>
                 {t('invoices.peppolPanel.providerRef')} <code>{latest.providerMessageId}</code>
@@ -187,6 +188,10 @@ export function InvoicePeppolPanel({ invoiceId, invoiceNumber, invoiceStatus }: 
               <div className="peppol-history-head">
                 <strong>v{transmission.payloadVersion}</strong>
                 <Badge tone={peppolStatusTone(transmission.status)}>{peppolStatusLabel(t, transmission.status)}</Badge>
+                <PeppolEnvironmentNote
+                  liveProviderMissing={transmission.liveProviderMissing}
+                  environment={transmission.environment}
+                />
                 <span>
                   {PEPPOL_KIND_LABEL_KEYS[transmission.documentKind as PeppolDocumentKind]
                     ? t(PEPPOL_KIND_LABEL_KEYS[transmission.documentKind as PeppolDocumentKind])
@@ -324,4 +329,21 @@ export function InvoicePeppolPanel({ invoiceId, invoiceNumber, invoiceStatus }: 
       )}
     </section>
   )
+}
+
+/**
+ * B4: say honestly where a transmission went. Sandbox never reaches the Peppol network; a Live
+ * transmission without a live-capable provider is blocked (nothing sent), never "delivered".
+ */
+function PeppolEnvironmentNote({
+  liveProviderMissing,
+  environment,
+}: {
+  liveProviderMissing?: boolean
+  environment: string
+}) {
+  const { t } = useLocale()
+  if (liveProviderMissing) return <Badge tone="danger">{t('peppol.live.notConfigured')}</Badge>
+  if (environment === 'Sandbox') return <Badge tone="info">{t('peppol.live.sandboxNotice')}</Badge>
+  return null
 }

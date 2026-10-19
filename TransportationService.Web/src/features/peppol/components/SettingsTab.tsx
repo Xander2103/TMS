@@ -93,6 +93,8 @@ export function SettingsTab({ canConfigure, canValidate }: SettingsTabProps) {
   }, [entityId])
 
   const entity = entities.find((row) => row.id === entityId) ?? null
+  // B4: Live is only selectable when a real (non-sandbox) Access Point provider is registered.
+  const liveAvailable = settings?.liveProviderAvailable === true
 
   async function handleSave() {
     if (!entityId) return
@@ -163,6 +165,12 @@ export function SettingsTab({ canConfigure, canValidate }: SettingsTabProps) {
 
       {settings === null && entityId && <p className="placeholder-text">{t('peppol.settings.loading')}</p>}
 
+      {settings?.liveBlocked && (
+        <p className="peppol-warning" role="alert">
+          <strong>{t('peppol.live.notConfigured')}</strong> — {t('peppol.live.notConfiguredDetail')}
+        </p>
+      )}
+
       {settings !== null && (
         <div className="peppol-settings-form">
           <label className="peppol-enabled-toggle">
@@ -178,6 +186,7 @@ export function SettingsTab({ canConfigure, canValidate }: SettingsTabProps) {
           <FormField
             label={t('peppol.settings.environmentLabel')}
             htmlFor="peppol-environment"
+            hint={liveAvailable ? undefined : t('peppol.live.onlySandboxHint')}
             error={getFieldError(fieldErrors, 'environment')}
           >
             <select
@@ -187,7 +196,9 @@ export function SettingsTab({ canConfigure, canValidate }: SettingsTabProps) {
               disabled={!canConfigure || busy}
             >
               <option value="Sandbox">{t('peppol.environment.Sandbox')}</option>
-              <option value="Live">{t('peppol.environment.Live')}</option>
+              <option value="Live" disabled={!liveAvailable}>
+                {liveAvailable ? t('peppol.environment.Live') : t('peppol.live.optionUnavailable')}
+              </option>
             </select>
           </FormField>
 

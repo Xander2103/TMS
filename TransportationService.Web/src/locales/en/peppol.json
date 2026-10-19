@@ -145,5 +145,12 @@
   },
   "xml": {
     "downloadFailed": "The Peppol XML could not be downloaded."
+  },
+  "live": {
+    "notConfigured": "Live provider not configured",
+    "notConfiguredDetail": "No real Access Point provider is registered. Live sending is disabled and nothing is sent to the Peppol network. Set the environment to Sandbox to test.",
+    "optionUnavailable": "Live — Live provider not configured",
+    "onlySandboxHint": "Only Sandbox is available: the sandbox sends nothing to the Peppol network. Live becomes possible once an Access Point provider is configured.",
+    "sandboxNotice": "Sandbox — nothing sent to the Peppol network"
   }
 }

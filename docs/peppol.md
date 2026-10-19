@@ -3,7 +3,73 @@
 Provider-neutrale Peppol-verzending van facturen en creditnota's (UBL 2.1, Peppol BIS
 Billing 3.0), met een deterministische **sandbox-provider** als enige geregistreerde
 adapter. Er bestaat en er wordt **geen** echte netwerkverbinding geclaimd; een echt
-Access Point sluit later aan via de stappen onderaan.
+Access Point sluit later aan via de stappen onderaan. Zolang dat niet gebeurd is, is
+**Live uitgeschakeld (fail-closed)** — zie [Live-beleid](#live-beleid-fail-closed).
+
+## Live-beleid (fail-closed)
+
+Productiehardening B4 (2026-10-19). De sandbox **simuleert** aflevering (Delivered na de
+derde poll) en verstuurt niets. Belgische B2B-e-facturatie via Peppol is sinds 2026-01-01
+verplicht, dus een "Afgeleverd via Peppol" dat niet echt gebeurde is een fout bewijs van
+aflevering. Daarom:
+
+- `IPeppolProvider.SupportsLiveNetwork` (default `false`) — alleen een echte, gecertificeerde
+  Access-Point-adapter zet dit op `true`. De sandbox nooit. `PeppolLivePolicy` is de enige
+  beslisser; zonder zo'n provider antwoordt elk pad met **"Peppol Live-provider niet
+  geconfigureerd"**:
+  - **Instellingen-API** weigert `Environment = Live` (400 op veld `environment`), ook als
+    Peppol uit staat, en ook voor de sandbox-key wanneer er wél een live-provider bestaat.
+  - **Versturen/opnieuw proberen** weigert een factuur waarvan de juridische entiteit op Live
+    staat (vóór er iets gerenderd/opgeslagen wordt); de validatiechecklist toont issue
+    `company.peppol_live_unavailable`.
+  - **Dispatcher** biedt een Live-transmissie nooit aan, polt haar nooit en zet haar nooit op
+    Delivered: zo'n rij (bv. van vóór dit beleid) wordt `Failed` met die reden en er gaat
+    een interne melding uit. **Webhook**-statusupdates voor zo'n rij worden genegeerd.
+  - **Startup** (elke omgeving): elke `peppol_settings`-rij op Live zonder live-provider wordt
+    als **CRITICAL** gelogd; de app start gewoon (Peppol is optioneel) en verzending blijft
+    voor die entiteit uitgeschakeld. Historische Live-rijen die de sandbox op Delivered zette,
+    worden ook als CRITICAL gemeld (ze zijn niet via Peppol afgeleverd; niets wordt herschreven).
+- **Health check** `peppol` (tag `peppol`, bewust **niet** `ready`): Unhealthy = Live
+  geconfigureerd zonder provider; Degraded = onderbroken verzendingen in afwachting van
+  reconciliatie, transmissies > 7 dagen onderweg, of historische Live-"leveringen" door de
+  sandbox; Healthy = "alleen Sandbox beschikbaar" (data: `liveProviderConfigured`,
+  `providers`, tellers).
+- **UI**: Live staat in Configuratie uitgeschakeld als "Live — Live-provider niet
+  geconfigureerd"; een Live-rij toont een waarschuwing; transmissies tonen "Sandbox — niets
+  verzonden naar het Peppol-netwerk" of "Live-provider niet geconfigureerd". Sandbox blijft
+  volledig bruikbaar.
+- **Go-live-controle**: `SELECT * FROM peppol_settings WHERE "Environment"='Live' AND NOT
+  "IsDeleted";` moet 0 rijen geven zolang er geen echte provider is (anders: health
+  Unhealthy + CRITICAL in de log).
+
+## Verzendgarantie: claim, idempotentiesleutel, herstel (H3)
+
+- **Claim vóór verzending**: de dispatcher zet een rij met één voorwaardelijke `UPDATE`
+  (`Queued` + vervallen backoff → `Submitting` + `IdempotencyKey` + `SubmissionClaimedAt`).
+  Alleen wie die ene rij raakt, verstuurt — ook met meerdere dispatchers of API-instanties.
+  `Submitting` is niet-terminaal (bezet de "één actieve transmissie per factuur"-plaats) en
+  kan niet geannuleerd worden.
+- **Sleutel naar de provider**: `PeppolOutboundRequest.IdempotencyKey`
+  (`tms-peppol-{transmissionId}`), stabiel per transmissie. Een provider **moet** een herhaalde
+  inzending met dezelfde sleutel als hetzelfde document behandelen en
+  `FindSubmissionAsync(key)` ondersteunen. Een retry na Failed/Rejected is een nieuwe
+  transmissie en dus een nieuwe sleutel (bewuste nieuwe verzending).
+- **Onzekere uitkomst** (time-out/verbinding weg tijdens de call, of crash na de call): de rij
+  blijft `Submitting`. Na `PeppolDispatcher.SubmittingReconcileAfter` (10 min, ruim boven elke
+  provider-time-out) vraagt de dispatcher de provider op sleutel: **gevonden** →
+  SubmittedToProvider met het provider-id (niet opnieuw verzonden); **niet gevonden** → terug
+  naar Queued (telt als poging) en opnieuw aangeboden met dezelfde sleutel; **onbekend**
+  (lookup faalt) → blijft Submitting (health Degraded). Nooit blind opnieuw versturen.
+- Het resultaat van een geslaagde call wordt bewaard ook als de service net stopt; meldingen
+  (`invoice_peppol_*`) gaan pas uit ná de bewaakte save van de overgang die ze aankondigen.
+- **Polling (EXT-03)**: `NextPollAt` per rij, minst recent gepolde eerst, met backoff op
+  leeftijd (< 1 u: 1 min, < 1 dag: 15 min, daarna 1 u) — een achterstand van nooit-finale
+  rijen hongert nieuwere niet meer uit.
+- **Webhook (EXT-04)**: faalt het opslaan aan onze kant (database/opslag), dan antwoordt de
+  webhook **503 + `Retry-After: 60`** zodat de provider opnieuw aflevert (dedupe maakt dat
+  veilig); 200 blijft voor verwerkt/dubbel/genegeerd.
+- Migratie `ProductionHardeningPeppolSubmission` (additief: `IdempotencyKey`,
+  `SubmissionClaimedAt`, `NextPollAt` + index `IX_peppol_transmissions_status_next_poll`).
 
 ## Architectuur
 
@@ -15,8 +81,9 @@ InvoicePeppolController          PeppolTransmissionService ──► PeppolTrans
   validate / preview / xml / send          │ payload in IFileStorageService ("peppol")
                                             ▼
                      PeppolDispatcherHostedService (30s, alle tenants)
-                       submit:  Queued ──► IPeppolProvider.SendDocumentAsync
-                       poll:    SubmittedToProvider/AcceptedByProvider ──► GetTransmissionStatusAsync
+                       reconcile: Submitting > 10 min ──► FindSubmissionAsync(sleutel)
+                       submit:  Queued ──claim──► Submitting ──► IPeppolProvider.SendDocumentAsync(sleutel)
+                       poll:    SubmittedToProvider/AcceptedByProvider (NextPollAt) ──► GetTransmissionStatusAsync
                                             ▼
                      Delivered / Rejected / Failed (alleen via providerantwoorden)
 ```
@@ -69,8 +136,8 @@ InvoicePeppolController          PeppolTransmissionService ──► PeppolTrans
   Requestlimiet 10 MB. Statusupdates zijn providerKey-gescoped, idempotent, en
   regresseren nooit een terminale/afgeleverde status; elke webhook-mutatie wordt
   geauditeerd (`WebhookStatusChanged`). Uniform "Genegeerd." bij onbekende referenties
-  (geen existence-oracle). Altijd 200 na persist zodat de provider niet blijft
-  herafleveren.
+  (geen existence-oracle). 200 na persist/dedupe/negeren zodat de provider niet blijft
+  herafleveren; **503 + Retry-After** als het opslaan aan onze kant mislukt (EXT-04).
 - Inkomende documenten resolven hun tenant via de ontvanger-participant (juridische
   entiteit met dat Peppol-ID). Dubbele dedupe: `ProviderMessageId` (uniek per tenant)
   én inhoudshash+leverancier+documentnummer. Review-wachtrij: Received/NeedsReview →
@@ -103,6 +170,10 @@ InvoicePeppolController          PeppolTransmissionService ──► PeppolTrans
 1. **Adapter implementeren**: nieuwe klasse `XyzPeppolProvider : IPeppolProvider` in
    `Modules/Peppol/Services/` met een unieke `Key` (bv. `"xyz"`). Alle netwerk-I/O en
    authenticatie blijven binnen de adapter; retour-DTO's bevatten nooit credentials.
+   Verplicht voor Live: `SupportsLiveNetwork => true` (alleen voor een echt, gecertificeerd
+   Access Point), de `IdempotencyKey` van `PeppolOutboundRequest` als idempotentiesleutel aan
+   het Access Point doorgeven, en `FindSubmissionAsync(key)` implementeren (gooi een
+   exception als het antwoord onbekend is — dan blijft de rij `Submitting`).
 2. **Configuratie + secrets**: options-sectie `Peppol:Providers:xyz` (API-endpoint,
    key/certificaatreferentie) volgens het `JwtOptions`-patroon; secrets via user-secrets
    of omgevingsvariabelen, nooit in entiteiten, DTO's, audits of frontend.
@@ -110,8 +181,9 @@ InvoicePeppolController          PeppolTransmissionService ──► PeppolTrans
    `builder.Services.AddSingleton<IPeppolProvider, XyzPeppolProvider>();` — de factory
    pikt hem automatisch op via zijn `Key`. Geen andere codewijzigingen.
 4. **Instellingen omzetten**: per juridische entiteit in `/peppol` → Configuratie de
-   provider op `xyz` en de omgeving op `Live` zetten (`peppol.configure`). Bestaande
-   transmissierijen behouden hun oude provider/omgeving-stempel.
+   provider op `xyz` en de omgeving op `Live` zetten (`peppol.configure`) — pas nu staat de
+   API dat toe. Bestaande transmissierijen behouden hun oude provider/omgeving-stempel.
+   Controleer daarna de health check `peppol` (Healthy, `liveProviderConfigured=true`).
 5. **Webhook registreren** bij de provider: URL
    `https://<host>/api/peppol/webhook/xyz` met header `X-Peppol-Webhook-Secret` gelijk
    aan `Peppol:Webhook:Secret`. Overweeg per-provider secrets
@@ -127,6 +199,5 @@ InvoicePeppolController          PeppolTransmissionService ──► PeppolTrans
   toekomstige UI-select maar wordt nog nergens getoond). De inkomende status
   `NeedsReview` is gereserveerd (de webhook slaat alles als `Received` op); de statussen
   `Draft`/`Validated` op transmissies zijn eveneens gereserveerd — rijen ontstaan direct
-  als `Queued`. De dispatcher polt zonder per-rij throttle (prima voor sandbox; bij een
-  echte provider `NextAttemptAt` hergebruiken voor pollpacing). Leveranciersfacturen
+  als `Queued`. Leveranciersfacturen
   kennen nog geen eigen module — de inkomende wachtrij is een beoordelingslijst.

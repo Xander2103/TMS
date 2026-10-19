@@ -70,6 +70,12 @@ export function OverviewTab() {
         </p>
       )}
 
+      {overview.legalEntities.some((entity) => entity.liveBlocked) && (
+        <p className="peppol-warning" role="alert">
+          <strong>{t('peppol.live.notConfigured')}</strong> — {t('peppol.live.notConfiguredDetail')}
+        </p>
+      )}
+
       <section className="edi-section">
         <h3>{t('peppol.overview.checklistTitle')}</h3>
         <ul className="peppol-checklist">
@@ -87,9 +93,13 @@ export function OverviewTab() {
               <Badge tone={entity.enabled ? 'success' : 'neutral'}>
                 {entity.enabled ? t('ui.statusBadges.active') : t('ui.statusBadges.inactive')}
               </Badge>
-              <Badge tone={entity.environment === 'Live' ? 'success' : 'info'}>
-                {entity.environment === 'Live' ? t('peppol.environment.Live') : t('peppol.environment.Sandbox')}
-              </Badge>
+              {entity.liveBlocked ? (
+                <Badge tone="danger">{t('peppol.live.notConfigured')}</Badge>
+              ) : (
+                <Badge tone={entity.environment === 'Live' ? 'success' : 'info'}>
+                  {entity.environment === 'Live' ? t('peppol.environment.Live') : t('peppol.environment.Sandbox')}
+                </Badge>
+              )}
             </li>
           ))}
           {overview.legalEntities.length === 0 && <li>{t('peppol.overview.noEntities')}</li>}

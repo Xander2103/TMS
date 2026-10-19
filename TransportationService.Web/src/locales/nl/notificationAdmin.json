@@ -66,7 +66,9 @@
     "qualification_expiry": "Kwalificatie vervalt (legacy)",
     "hr_birthday": "Verjaardag",
     "hr_seniority": "Jubileum",
-    "hr_employment_end": "Einde dienstverband"
+    "hr_employment_end": "Einde dienstverband",
+    "user_activation": "Accountactivatie",
+    "password_reset": "Wachtwoord opnieuw instellen"
   },
   "events": {
     "loadFailed": "De meldingsregels konden niet worden geladen.",

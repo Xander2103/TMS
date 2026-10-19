@@ -9,6 +9,7 @@
     "Draft": "Brouillon",
     "Validated": "Validée",
     "Queued": "En file d'attente",
+    "Submitting": "En cours de soumission",
     "SubmittedToProvider": "Transmise au prestataire",
     "AcceptedByProvider": "Acceptée par le prestataire",
     "Delivered": "Remise",

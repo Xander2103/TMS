@@ -165,6 +165,9 @@ export const KNOWN_KINDS: readonly string[] = [
   'hr_birthday',
   'hr_seniority',
   'hr_employment_end',
+  // Account-security mails (H9): outbox-only, not template-editable.
+  'user_activation',
+  'password_reset',
 ]
 
 export function kindLabel(t: (key: string) => string, kind: string): string {

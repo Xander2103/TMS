@@ -145,5 +145,12 @@
   },
   "xml": {
     "downloadFailed": "De Peppol-XML kon niet worden gedownload."
+  },
+  "live": {
+    "notConfigured": "Live-provider niet geconfigureerd",
+    "notConfiguredDetail": "Er is geen echte Access-Point-provider geregistreerd. Live-verzending is uitgeschakeld en er wordt niets naar het Peppol-netwerk verzonden. Zet de omgeving op Sandbox om te testen.",
+    "optionUnavailable": "Live — Live-provider niet geconfigureerd",
+    "onlySandboxHint": "Alleen Sandbox is beschikbaar: de sandbox verzendt niets naar het Peppol-netwerk. Live wordt pas mogelijk met een geconfigureerde Access-Point-provider.",
+    "sandboxNotice": "Sandbox — niets verzonden naar het Peppol-netwerk"
   }
 }

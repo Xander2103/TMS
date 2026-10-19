@@ -13,6 +13,7 @@ export type PeppolTransmissionStatus =
   | 'Draft'
   | 'Validated'
   | 'Queued'
+  | 'Submitting'
   | 'SubmittedToProvider'
   | 'AcceptedByProvider'
   | 'Delivered'
@@ -25,6 +26,7 @@ export const PEPPOL_STATUS_LABEL_KEYS: Record<PeppolTransmissionStatus, string> 
   Draft: 'invoices.peppolStatus.Draft',
   Validated: 'invoices.peppolStatus.Validated',
   Queued: 'invoices.peppolStatus.Queued',
+  Submitting: 'invoices.peppolStatus.Submitting',
   SubmittedToProvider: 'invoices.peppolStatus.SubmittedToProvider',
   AcceptedByProvider: 'invoices.peppolStatus.AcceptedByProvider',
   Delivered: 'invoices.peppolStatus.Delivered',
@@ -37,6 +39,7 @@ export const PEPPOL_STATUS_TONE: Record<PeppolTransmissionStatus, BadgeTone> = {
   Draft: 'neutral',
   Validated: 'info',
   Queued: 'info',
+  Submitting: 'info',
   SubmittedToProvider: 'info',
   AcceptedByProvider: 'info',
   Delivered: 'success',
@@ -93,6 +96,8 @@ export interface PeppolChecklistItem {
   environment: string
   providerKey: string
   isComplete: boolean
+  /** B4: set to Live without a live-capable provider — nothing is sent. */
+  liveBlocked?: boolean
 }
 
 export interface PeppolCounts {
@@ -108,6 +113,8 @@ export interface PeppolOverview {
   counts: PeppolCounts
   customersEnabledWithoutPeppolId: number
   activeCustomersMissingPeppolData: number
+  /** B4: a real live-network Access Point provider is registered (false while only the sandbox exists). */
+  liveProviderAvailable?: boolean
 }
 
 export type PeppolEnvironment = 'Sandbox' | 'Live'
@@ -121,6 +128,10 @@ export interface PeppolSettings {
   providerKey: string
   invoiceEmailFallback: string | null
   defaultInvoiceNote: string | null
+  /** B4: a real live-network Access Point provider is registered (false while only the sandbox exists). */
+  liveProviderAvailable?: boolean
+  /** B4: this row is set to Live but cannot transmit — Peppol sending is disabled for it. */
+  liveBlocked?: boolean
 }
 
 export interface SavePeppolSettingsInput {
@@ -177,6 +188,8 @@ export interface PeppolTransmissionRow {
   retryCount: number
   payloadVersion: number
   createdAt: string
+  /** B4: Live transmission whose provider cannot reach the live network. */
+  liveProviderMissing?: boolean
 }
 
 export interface ListTransmissionsParams {
@@ -317,6 +330,8 @@ export interface PeppolTransmission {
   retryCount: number
   createdAt: string
   events: PeppolTransmissionEvent[]
+  /** B4: Live transmission whose provider cannot reach the live network. */
+  liveProviderMissing?: boolean
 }
 
 export function validateInvoicePeppol(invoiceId: string): Promise<PeppolInvoiceValidationResult> {

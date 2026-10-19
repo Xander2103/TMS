@@ -116,7 +116,13 @@ export function OutgoingTab({ canRetry, canCancel }: OutgoingTabProps) {
     { key: 'customer', header: t('peppol.outgoing.colCustomer'), render: (r) => r.customerName },
     { key: 'total', header: t('peppol.outgoing.colAmount'), align: 'right', render: (r) => euro(r.total, r.currency) },
     { key: 'date', header: t('peppol.outgoing.colDate'), render: (r) => r.invoiceDate },
-    { key: 'environment', header: t('peppol.outgoing.colEnvironment'), render: (r) => r.environment },
+    {
+      key: 'environment',
+      header: t('peppol.outgoing.colEnvironment'),
+      // B4: never present a Live row the sandbox handled as a Live delivery.
+      render: (r) =>
+        r.liveProviderMissing ? <Badge tone="danger">{t('peppol.live.notConfigured')}</Badge> : r.environment,
+    },
     {
       key: 'status',
       header: t('peppol.outgoing.colStatus'),

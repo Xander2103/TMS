@@ -66,7 +66,9 @@
     "qualification_expiry": "Qualification expirée (legacy)",
     "hr_birthday": "Anniversaire",
     "hr_seniority": "Jubilé",
-    "hr_employment_end": "Fin de contrat"
+    "hr_employment_end": "Fin de contrat",
+    "user_activation": "Activation du compte",
+    "password_reset": "Réinitialisation du mot de passe"
   },
   "events": {
     "loadFailed": "Les règles de notification n'ont pas pu être chargées.",

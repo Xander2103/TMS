@@ -66,7 +66,9 @@
     "qualification_expiry": "Qualification expiring (legacy)",
     "hr_birthday": "Birthday",
     "hr_seniority": "Work anniversary",
-    "hr_employment_end": "End of employment"
+    "hr_employment_end": "End of employment",
+    "user_activation": "Account activation",
+    "password_reset": "Password reset"
   },
   "events": {
     "loadFailed": "The notification rules could not be loaded.",

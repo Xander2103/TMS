@@ -66,6 +66,23 @@ describe('InvoicePeppolPanel', () => {
     expect(screen.getAllByText('prov-1').length).toBeGreaterThan(0)
   })
 
+  it('labels a sandbox transmission honestly as not sent to the Peppol network', async () => {
+    api.listInvoicePeppolTransmissions.mockResolvedValue([transmission()])
+    render(<InvoicePeppolPanel invoiceId="inv-1" invoiceNumber="F2026-0001" invoiceStatus="Sent" />)
+
+    expect((await screen.findAllByText('Sandbox — niets verzonden naar het Peppol-netwerk')).length).toBeGreaterThan(0)
+  })
+
+  it('shows "Live-provider niet geconfigureerd" for a Live transmission without a live provider', async () => {
+    api.listInvoicePeppolTransmissions.mockResolvedValue([
+      transmission({ status: 'Failed', environment: 'Live', liveProviderMissing: true, providerMessageId: null }),
+    ])
+    render(<InvoicePeppolPanel invoiceId="inv-1" invoiceNumber="F2026-0001" invoiceStatus="Sent" />)
+
+    expect((await screen.findAllByText('Live-provider niet geconfigureerd')).length).toBeGreaterThan(0)
+    expect(screen.queryByText('Afgeleverd')).not.toBeInTheDocument()
+  })
+
   it('validate shows the issue list', async () => {
     const user = userEvent.setup()
     api.validateInvoicePeppol.mockResolvedValue({

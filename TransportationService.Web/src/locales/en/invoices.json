@@ -9,6 +9,7 @@
     "Draft": "Draft",
     "Validated": "Validated",
     "Queued": "Queued",
+    "Submitting": "Being submitted",
     "SubmittedToProvider": "Submitted to provider",
     "AcceptedByProvider": "Accepted by provider",
     "Delivered": "Delivered",

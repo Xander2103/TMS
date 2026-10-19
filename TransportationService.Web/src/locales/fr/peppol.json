@@ -145,5 +145,12 @@
   },
   "xml": {
     "downloadFailed": "Le fichier XML Peppol n'a pas pu être téléchargé."
+  },
+  "live": {
+    "notConfigured": "Fournisseur Live non configuré",
+    "notConfiguredDetail": "Aucun véritable fournisseur Access Point n'est enregistré. L'envoi Live est désactivé et rien n'est envoyé au réseau Peppol. Passez l'environnement en Sandbox pour tester.",
+    "optionUnavailable": "Live — Fournisseur Live non configuré",
+    "onlySandboxHint": "Seul le Sandbox est disponible : le sandbox n'envoie rien au réseau Peppol. Le mode Live sera possible dès qu'un fournisseur Access Point est configuré.",
+    "sandboxNotice": "Sandbox — rien n'a été envoyé au réseau Peppol"
   }
 }

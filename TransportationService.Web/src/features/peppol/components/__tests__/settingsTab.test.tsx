@@ -92,6 +92,8 @@ describe('SettingsTab', () => {
 
   it('saves the settings with the edited values in the PUT payload', async () => {
     const user = userEvent.setup()
+    // Live is only selectable when the backend reports a live-capable provider (B4).
+    api.getPeppolSettings.mockResolvedValue(settings({ liveProviderAvailable: true }))
     renderTab()
 
     await user.click(await screen.findByLabelText('Actief'))
@@ -109,6 +111,24 @@ describe('SettingsTab', () => {
         defaultInvoiceNote: 'Bedankt voor uw vertrouwen',
       }),
     )
+  })
+
+  it('offers Live only as "Live-provider niet geconfigureerd" while only the sandbox exists', async () => {
+    renderTab()
+
+    const live = await screen.findByRole('option', { name: 'Live — Live-provider niet geconfigureerd' })
+    expect(live).toBeDisabled()
+    expect(screen.getByRole('option', { name: 'Sandbox' })).not.toBeDisabled()
+    expect(screen.getByText(/Alleen Sandbox is beschikbaar/)).toBeInTheDocument()
+  })
+
+  it('warns that nothing is sent when a legacy row is still set to Live', async () => {
+    api.getPeppolSettings.mockResolvedValue(settings({ enabled: true, environment: 'Live', liveBlocked: true }))
+    renderTab()
+
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent('Live-provider niet geconfigureerd')
+    expect(alert).toHaveTextContent('er wordt niets naar het Peppol-netwerk verzonden')
   })
 
   it('disables the inputs without peppol.configure', async () => {
