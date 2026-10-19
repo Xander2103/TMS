@@ -11,20 +11,36 @@ namespace TransportationService.Api.Data;
 /// <summary>
 /// Seeds a sensible starter set of tenant-scoped lookups (Belgian/BeNeLux transport context)
 /// for every tenant that has none yet. Idempotent per lookup type per tenant.
+///
+/// Production hardening (B3): this runs in EVERY environment — at startup for existing tenants
+/// (<see cref="TenantReferenceDataSync"/>) and from the tenant provisioning command — so it may
+/// only ever create code lists, never people, customers, orders or other demo records. Existence
+/// checks deliberately include soft-deleted rows: a list the tenant curated away (deleted every
+/// department, removed a language) is never re-created on the next start.
 /// </summary>
 public static class ReferenceDataSeeder
 {
     public static async Task SeedAsync(TransportationDbContext dbContext, CancellationToken cancellationToken = default)
+        => await SeedAsync(dbContext, includeStarterCatalogs: true, cancellationToken);
+
+    /// <param name="includeStarterCatalogs">False skips the seed-once starter catalogues that carry
+    /// placeholder commercial values (delivery services/supplements with example prices). The
+    /// startup sync for EXISTING tenants passes false — a live tenant must never wake up with
+    /// priced options it did not create; new tenants (provisioning, Development) get them.</param>
+    public static async Task SeedAsync(
+        TransportationDbContext dbContext, bool includeStarterCatalogs, CancellationToken cancellationToken = default)
     {
         var tenantIds = await dbContext.Tenants.Select(t => t.Id).ToListAsync(cancellationToken);
 
         foreach (var tenantId in tenantIds)
         {
-            await SeedForTenantAsync(dbContext, tenantId, cancellationToken);
+            await SeedTenantAsync(dbContext, tenantId, includeStarterCatalogs, cancellationToken);
         }
     }
 
-    private static async Task SeedForTenantAsync(TransportationDbContext dbContext, Guid tenantId, CancellationToken cancellationToken)
+    /// <summary>Seeds one tenant (provisioning). Same add-if-missing / seed-if-empty rules.</summary>
+    public static async Task SeedTenantAsync(
+        TransportationDbContext dbContext, Guid tenantId, bool includeStarterCatalogs, CancellationToken cancellationToken = default)
     {
         await SeedIfEmptyAsync<Department>(dbContext, tenantId,
             [("PLAN", "Planning"), ("MAG", "Magazijn"), ("WERK", "Werkplaats"), ("ADMIN", "Administratie"), ("DIR", "Directie")],
@@ -92,7 +108,11 @@ public static class ReferenceDataSeeder
 
         await SeedContractTypesAsync(dbContext, tenantId, cancellationToken);
 
-        await SeedServiceOptionsAsync(dbContext, tenantId, cancellationToken);
+        if (includeStarterCatalogs)
+        {
+            await SeedServiceOptionsAsync(dbContext, tenantId, cancellationToken);
+        }
+
         await SeedUnitTypePhysicalDefaultsAsync(dbContext, tenantId, cancellationToken);
         await SeedInventoryUnitsAsync(dbContext, tenantId, cancellationToken);
     }
@@ -118,6 +138,7 @@ public static class ReferenceDataSeeder
             ("FLEXI", "Flexi-job", false),
         ];
         var existing = (await dbContext.Set<ContractType>()
+                .IgnoreQueryFilters()
                 .Where(c => c.TenantId == tenantId)
                 .Select(c => c.Code)
                 .ToListAsync(cancellationToken))
@@ -163,6 +184,7 @@ public static class ReferenceDataSeeder
             ("PAAR", "Paar"), ("SET", "Set"), ("ROL", "Rol"), ("LITER", "Liter"), ("METER", "Meter"),
         ];
         var existing = (await dbContext.UnitTypes
+                .IgnoreQueryFilters()
                 .Where(u => u.TenantId == tenantId)
                 .Select(u => u.Code)
                 .ToListAsync(cancellationToken))
@@ -275,7 +297,7 @@ public static class ReferenceDataSeeder
     private static async Task SeedServiceOptionsAsync(
         TransportationDbContext dbContext, Guid tenantId, CancellationToken cancellationToken)
     {
-        if (await dbContext.ServiceOptions.AnyAsync(o => o.TenantId == tenantId, cancellationToken))
+        if (await dbContext.ServiceOptions.IgnoreQueryFilters().AnyAsync(o => o.TenantId == tenantId, cancellationToken))
         {
             return;
         }
@@ -319,6 +341,7 @@ public static class ReferenceDataSeeder
     {
         var set = dbContext.Set<TEntity>();
         var existing = (await set
+                .IgnoreQueryFilters()
                 .Where(e => e.TenantId == tenantId)
                 .Select(e => e.Code)
                 .ToListAsync(cancellationToken))
@@ -358,7 +381,7 @@ public static class ReferenceDataSeeder
         where TEntity : LookupEntity, new()
     {
         var set = dbContext.Set<TEntity>();
-        if (await set.AnyAsync(e => e.TenantId == tenantId, cancellationToken))
+        if (await set.IgnoreQueryFilters().AnyAsync(e => e.TenantId == tenantId, cancellationToken))
         {
             return;
         }

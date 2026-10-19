@@ -309,6 +309,18 @@ redesign-migraties in aflopende volgorde. Alternatief vanaf de buildmachine:
    handmatige databasestap meer nodig voor nieuwe permissiecodes of rol-upgrades. De sync logt
    op Information wanneer er iets veranderde (aantal permissies vóór/na, laagste sjabloonversie).
 
+5. **`TenantReferenceDataSync.SyncAsync`** (productiehardening B3, 2026-10-19) — de
+   add-if-missing **referentie**-seeders voor bestaande tenants: `QualificationTypeSeeder`
+   (globale kwalificatiecatalogus), `ReferenceDataSeeder` zonder geprijsde startlijsten,
+   `ExpiryPolicySeeder` en — alleen voor een tenant zonder — `LegalEntitySeeder` uit de eigen
+   bedrijfsinstellingen. Soft-verwijderde rijen tellen als aanwezig (tenantbeheer wordt nooit
+   ongedaan gemaakt); nooit gebruikers, rollen of demodata; een fout wordt gelogd en blokkeert
+   de start niet.
+
+**Nieuw bedrijf / eerste beheerder:** niet via een seeder maar via het expliciete commando
+`dotnet TransportationService.Api.dll --provision-tenant …` — zie
+[`docs/operations/provisioning.md`](../operations/provisioning.md).
+
 `ActivityTypeSeeder` wordt daarnaast lazy aangeroepen op runtime-paden
 (`ActivityTypeService`, snelle orderaanmaak in `TransportOrderService`), dus ook een tenant
 die ná de deploy wordt aangemaakt krijgt zijn catalogus automatisch.

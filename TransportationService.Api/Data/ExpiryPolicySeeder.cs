@@ -26,40 +26,59 @@ public static class ExpiryPolicySeeder
         new(ExpiryReminderTargetKind.TachographCalibration, "*", 60, false, true, true),
     ];
 
-    public static async Task SeedAsync(TransportationDbContext dbContext)
+    public static async Task SeedAsync(TransportationDbContext dbContext, CancellationToken cancellationToken = default)
     {
-        var tenantIds = await dbContext.Tenants.Select(t => t.Id).ToListAsync();
+        var tenantIds = await dbContext.Tenants.Select(t => t.Id).ToListAsync(cancellationToken);
         foreach (var tenantId in tenantIds)
         {
-            var existing = await dbContext.ExpiryReminderPolicies
-                .Where(p => p.TenantId == tenantId)
-                .Select(p => new { p.TargetKind, p.TargetCode })
-                .ToListAsync();
-            var existingKeys = existing.Select(e => (e.TargetKind, e.TargetCode)).ToHashSet();
+            await SeedTenantAsync(dbContext, tenantId, cancellationToken);
+        }
+    }
 
-            foreach (var seed in Defaults)
+    /// <summary>
+    /// One tenant (provisioning / startup sync). A policy the tenant deleted counts as present
+    /// (soft-deleted rows are included), so a deliberate removal survives every restart.
+    /// </summary>
+    /// <returns>The number of policies added.</returns>
+    public static async Task<int> SeedTenantAsync(
+        TransportationDbContext dbContext, Guid tenantId, CancellationToken cancellationToken = default)
+    {
+        var existing = await dbContext.ExpiryReminderPolicies
+            .IgnoreQueryFilters()
+            .Where(p => p.TenantId == tenantId)
+            .Select(p => new { p.TargetKind, p.TargetCode })
+            .ToListAsync(cancellationToken);
+        var existingKeys = existing.Select(e => (e.TargetKind, e.TargetCode)).ToHashSet();
+
+        var added = 0;
+        foreach (var seed in Defaults)
+        {
+            if (existingKeys.Contains((seed.Kind, seed.Code)))
             {
-                if (existingKeys.Contains((seed.Kind, seed.Code)))
-                {
-                    continue;
-                }
-
-                dbContext.ExpiryReminderPolicies.Add(new ExpiryReminderPolicy
-                {
-                    Id = Guid.NewGuid(),
-                    TenantId = tenantId,
-                    TargetKind = seed.Kind,
-                    TargetCode = seed.Code,
-                    LeadTimeDays = seed.LeadDays,
-                    NotifyEmployee = seed.NotifyEmployee,
-                    NotifyHr = seed.NotifyHr,
-                    NotifyFleetManager = seed.NotifyFleetManager,
-                    IsActive = true,
-                });
+                continue;
             }
+
+            dbContext.ExpiryReminderPolicies.Add(new ExpiryReminderPolicy
+            {
+                Id = Guid.NewGuid(),
+                TenantId = tenantId,
+                TargetKind = seed.Kind,
+                TargetCode = seed.Code,
+                LeadTimeDays = seed.LeadDays,
+                NotifyEmployee = seed.NotifyEmployee,
+                NotifyHr = seed.NotifyHr,
+                NotifyFleetManager = seed.NotifyFleetManager,
+                IsActive = true,
+            });
+            added++;
         }
 
-        await dbContext.SaveChangesAsync();
+        if (added > 0)
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+
+        return added;
     }
 }
 
@@ -95,35 +114,45 @@ public static class IssuedItemTemplateSeeder
         new("Simkaart", "Optioneel", true, true),
     ];
 
-    public static async Task SeedAsync(TransportationDbContext dbContext)
+    public static async Task SeedAsync(TransportationDbContext dbContext, CancellationToken cancellationToken = default)
     {
-        var tenantIds = await dbContext.Tenants.Select(t => t.Id).ToListAsync();
+        var tenantIds = await dbContext.Tenants.Select(t => t.Id).ToListAsync(cancellationToken);
         foreach (var tenantId in tenantIds)
         {
-            var hasAny = await dbContext.IssuedItemTemplates.IgnoreQueryFilters().AnyAsync(t => t.TenantId == tenantId);
-            if (hasAny)
-            {
-                continue; // seed once; never re-add after tenant curation
-            }
+            await SeedTenantAsync(dbContext, tenantId, cancellationToken);
+        }
+    }
 
-            var order = 0;
-            foreach (var seed in Defaults)
-            {
-                dbContext.IssuedItemTemplates.Add(new Modules.Employees.Entities.IssuedItemTemplate
-                {
-                    Id = Guid.NewGuid(),
-                    TenantId = tenantId,
-                    Code = Modules.Employees.Services.IssuedItemCodes.Format(order + 1),
-                    Name = seed.Name,
-                    Category = seed.Category,
-                    RequiresSerialNumber = seed.Serial,
-                    ReturnRequired = seed.ReturnRequired,
-                    IsActive = true,
-                    SortOrder = order++,
-                });
-            }
+    /// <summary>Seed-once starter catalogue for one tenant (provisioning). Never re-adds after curation.</summary>
+    /// <returns>The number of templates added (0 when the tenant ever had one).</returns>
+    public static async Task<int> SeedTenantAsync(
+        TransportationDbContext dbContext, Guid tenantId, CancellationToken cancellationToken = default)
+    {
+        var hasAny = await dbContext.IssuedItemTemplates.IgnoreQueryFilters()
+            .AnyAsync(t => t.TenantId == tenantId, cancellationToken);
+        if (hasAny)
+        {
+            return 0; // seed once; never re-add after tenant curation
         }
 
-        await dbContext.SaveChangesAsync();
+        var order = 0;
+        foreach (var seed in Defaults)
+        {
+            dbContext.IssuedItemTemplates.Add(new Modules.Employees.Entities.IssuedItemTemplate
+            {
+                Id = Guid.NewGuid(),
+                TenantId = tenantId,
+                Code = Modules.Employees.Services.IssuedItemCodes.Format(order + 1),
+                Name = seed.Name,
+                Category = seed.Category,
+                RequiresSerialNumber = seed.Serial,
+                ReturnRequired = seed.ReturnRequired,
+                IsActive = true,
+                SortOrder = order++,
+            });
+        }
+
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return order;
     }
 }

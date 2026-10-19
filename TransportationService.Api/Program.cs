@@ -16,7 +16,10 @@ using TransportationService.Api.Modules.Tenancy;
 using TransportationService.Api.Modules.Messaging.Configurations;
 using TransportationService.Api.Modules.Messaging.Services;
 
-var builder = WebApplication.CreateBuilder(args);
+// B3: "--provision-tenant ..." sets up a company + first administrator and exits without serving.
+// Its options are kept out of the host's configuration (see TenantProvisioningCommand).
+var builder = WebApplication.CreateBuilder(
+    TransportationService.Api.Modules.Tenancy.Provisioning.TenantProvisioningCommand.HostArguments(args));
 
 // Global request-body ceiling (L10): the server-wide default caps every endpoint; upload
 // endpoints then narrow further with their own [RequestSizeLimit]. 32 MB comfortably covers the
@@ -799,6 +802,17 @@ if (args.Contains(TransportationService.Api.Modules.SystemAdmin.Services.Storage
     return;
 }
 
+// B3: explicit, idempotent tenant provisioning (any environment, Production included). Runs on
+// the fully built host — same configuration, database, mail provider and validation as the
+// service — but never starts the web server or the background services; the process exits.
+// See docs/operations/provisioning.md.
+if (TransportationService.Api.Modules.Tenancy.Provisioning.TenantProvisioningCommand.IsRequested(args))
+{
+    Environment.ExitCode = await TransportationService.Api.Modules.Tenancy.Provisioning.TenantProvisioningCommand.RunAsync(
+        app.Services, args, Console.Out, Console.Error);
+    return;
+}
+
 if (!app.Environment.IsDevelopment())
 {
     foreach (var warning in TransportationService.Api.Modules.Security.DeploymentConfigurationValidator.Warnings(app.Configuration))
@@ -872,6 +886,11 @@ using (var referenceScope = app.Services.CreateScope())
     // templates follow the code — new permission codes and role upgrades reach existing
     // databases at startup, idempotently, without a manual step. Catalogue BEFORE roles.
     await AuthorizationCatalogSync.SyncAsync(referenceDbContext, app.Logger);
+
+    // B3 (every environment): add-if-missing reference data for EXISTING tenants — code lists,
+    // the qualification catalogue, expiry policies, a default legal entity from the tenant's own
+    // settings. Never demo data, never users; see TenantReferenceDataSync for the exact list.
+    await TenantReferenceDataSync.SyncAsync(referenceDbContext, app.Logger);
 }
 
 // Development-only setup

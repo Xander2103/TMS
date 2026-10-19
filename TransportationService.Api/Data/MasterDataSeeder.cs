@@ -1,7 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using TransportationService.Api.Modules.Identity;
 using TransportationService.Api.Modules.Identity.Entities;
-using TransportationService.Api.Modules.Qualifications.Entities;
 using TransportationService.Api.Modules.Tenancy.Entities;
 
 namespace TransportationService.Api.Data;
@@ -77,29 +76,10 @@ public static class MasterDataSeeder
         dbContext.Users.Add(adminUser);
         dbContext.UserRoles.Add(new UserRole { UserId = adminUser.Id, RoleId = adminRole.Id });
 
-        dbContext.QualificationTypes.AddRange(
-            QualificationTypeRow(QualificationTypeCodes.DrivingLicenceB, "Rijbewijs B", "Rijbewijs", true),
-            QualificationTypeRow(QualificationTypeCodes.DrivingLicenceC, "Rijbewijs C", "Rijbewijs", true),
-            QualificationTypeRow(QualificationTypeCodes.DrivingLicenceCE, "Rijbewijs CE", "Rijbewijs", true),
-            QualificationTypeRow(QualificationTypeCodes.Code95, "Code 95", "Certificaat", true),
-            QualificationTypeRow(QualificationTypeCodes.Adr, "ADR", "Certificaat", true),
-            QualificationTypeRow(QualificationTypeCodes.MedicalFitness, "Medische keuring", "Keuring", true),
-            QualificationTypeRow(QualificationTypeCodes.DriverCard, "Bestuurderskaart", "Certificaat", true),
-            QualificationTypeRow(QualificationTypeCodes.CraneCertificate, "Kraancertificaat", "Certificaat", true),
-            QualificationTypeRow(QualificationTypeCodes.ForkliftCertificate, "Vorkheftruckcertificaat", "Certificaat", true),
-            QualificationTypeRow(QualificationTypeCodes.Alfapass, "Alfapass", "Certificaat", true),
-            QualificationTypeRow(QualificationTypeCodes.Other, "Overig", "Overig", false));
-
         await dbContext.SaveChangesAsync();
-    }
 
-    private static QualificationType QualificationTypeRow(string code, string name, string category, bool requiresExpiryDate) => new()
-    {
-        Id = Guid.NewGuid(),
-        Code = code,
-        Name = name,
-        Category = category,
-        RequiresExpiryDate = requiresExpiryDate,
-        IsActive = true,
-    };
+        // The global qualification-type catalogue is reference data for every environment (the
+        // startup sync normally created it already); add-if-missing keeps this seeder idempotent.
+        await QualificationTypeSeeder.SyncAsync(dbContext);
+    }
 }
