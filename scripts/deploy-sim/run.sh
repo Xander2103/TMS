@@ -58,7 +58,7 @@ for a in "$@"; do
     esac
 done
 CORE="no-ref storage-unset storage-relative storage-missing storage-unwritable storage-inside-release legacy-app-data restore-previous-pending success startup-never-ready startup-crash lock-timeout migration-failure db-ahead-of-code"
-APP="app-real-success app-missing-encryption-key app-db-down-at-start"
+APP="app-real-success app-missing-encryption-key app-db-down-at-start app-bad-frontend-url app-peppol-live"
 if [[ ${#SCENARIOS[@]} -eq 0 ]]; then SCENARIOS=(core); fi
 EXPANDED=""
 for s in "${SCENARIOS[@]}"; do
@@ -229,8 +229,10 @@ write_env() {
         echo "Email__Smtp__FromAddress=noreply@sim.invalid"
         echo "Email__Smtp__FromName=\"TMS sim\""
         echo "Email__Smtp__UseTls=true"
-        echo "Cors__AllowedOrigins__0=http://127.0.0.1:$SIM_WEB_PORT"
-        echo "Frontend__BaseUrl=http://127.0.0.1:$SIM_WEB_PORT"
+        # Production-valid public URLs (the API refuses http/localhost outside Development); the
+        # simulation never calls them — the deploy's public check uses the local web port.
+        echo "Cors__AllowedOrigins__0=https://tms.sim.example.test"
+        echo "Frontend__BaseUrl=https://tms.sim.example.test"
         echo "Network__KnownProxies__0=127.0.0.1"
         echo "VITE_API_BASE_URL=http://127.0.0.1:$SIM_WEB_PORT/api"
         echo "Storage__RootPath=$STORAGE"
@@ -584,6 +586,41 @@ scn_app-real-success() {
         test "$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$SIM_API_PORT/health/ready")" = 200
     check "maintenance page off" maint_off
     check "final dump taken with service stopped" ev_has $'pg_dump\tservice=inactive'
+    # SMTP is unreachable in every simulated deploy (nothing listens on 127.0.0.1:2525): mail is not a
+    # readiness dependency, the release goes live and the outbox retries.
+    check "ready although SMTP is unreachable" svc_active
+    finish
+}
+scn_app-bad-frontend-url() {
+    begin app-bad-frontend-url "APP-LEVEL: Frontend__BaseUrl http/localhost -> app refuses to start, forward-only"
+    SIM_ENV_OMIT="Frontend__BaseUrl" SIM_ENV_EXTRA="Frontend__BaseUrl=http://127.0.0.1:$SIM_WEB_PORT" reset_fixture
+    SIM_SERVICE_MODE=real run_deploy app-bad-frontend-url "$SIM_REF" STARTUP_WAIT_SECONDS=60
+    forward_only_outcome
+    check "service log names Frontend:BaseUrl" grep -q 'Frontend:BaseUrl' "$STATE/service.log"
+    finish
+}
+scn_app-peppol-live() {
+    begin app-peppol-live "APP-LEVEL: a Peppol settings row on Live without a real provider -> app runs, Peppol off, critical log"
+    local sql="$SIM_ROOT/peppol-live.sql"
+    cat > "$sql" <<'SQL'
+-- The schema-only fixture has no tenant: one sim tenant + legal entity carry the Live row.
+INSERT INTO tenants ("Id","Name","Slug","IsActive","CreatedAt")
+VALUES ('5150a000-0000-4000-8000-000000000001','Sim Peppol','sim-peppol',true,now()) ON CONFLICT DO NOTHING;
+INSERT INTO legal_entities ("Id","LegalName","DefaultCurrency","PaymentTermDays","InvoiceNumberFormat","InvoiceSequencePadding","IsActive","IsDefault","TenantId","CreatedAt","UpdatedAt","IsDeleted")
+VALUES ('5150a000-0000-4000-8000-000000000002','Sim Peppol BV','EUR',30,'FAC-{year}{seq}',6,true,true,'5150a000-0000-4000-8000-000000000001',now(),now(),false)
+ON CONFLICT DO NOTHING;
+INSERT INTO peppol_settings ("Id","LegalEntityId","Enabled","Environment","ProviderKey","TenantId","CreatedAt","UpdatedAt","IsDeleted")
+SELECT gen_random_uuid(), le."Id", true, 'Live', 'sandbox', le."TenantId", now(), now(), false
+FROM legal_entities le
+WHERE NOT EXISTS (SELECT 1 FROM peppol_settings ps WHERE ps."LegalEntityId" = le."Id")
+LIMIT 1;
+UPDATE peppol_settings SET "Environment" = 'Live', "Enabled" = true;
+SQL
+    SIM_PRE_DEPLOY_SQL="$sql" reset_fixture
+    SIM_SERVICE_MODE=real run_deploy app-peppol-live "$SIM_REF" STARTUP_WAIT_SECONDS=180
+    check "exit code 0 (Peppol is optional)" rc_is 0
+    check "service active" svc_active
+    check "critical log: Peppol LIVE without a live-capable provider" grep -q 'no live-capable Peppol provider is registered' "$STATE/service.log"
     finish
 }
 scn_app-missing-encryption-key() {
