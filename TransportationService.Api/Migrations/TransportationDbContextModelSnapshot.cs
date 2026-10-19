@@ -7875,6 +7875,12 @@ namespace TransportationService.Api.Migrations
                         .HasMaxLength(10)
                         .HasColumnType("character varying(10)");
 
+                    b.Property<Guid?>("ClaimToken")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("ClaimedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -13071,6 +13077,27 @@ namespace TransportationService.Api.Migrations
                     b.HasIndex("TenantId", "TripId", "OccurredAt");
 
                     b.ToTable("scan_events", (string)null);
+                });
+
+            modelBuilder.Entity("TransportationService.Api.Modules.Security.ColumnEncryptionCanary", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Value")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("column_encryption_canaries", (string)null);
                 });
 
             modelBuilder.Entity("TransportationService.Api.Modules.SystemAdmin.Entities.DatabaseBackup", b =>

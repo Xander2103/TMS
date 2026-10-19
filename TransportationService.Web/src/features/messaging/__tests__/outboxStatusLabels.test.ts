@@ -6,7 +6,7 @@ import { translate } from '../../../i18n/translations'
  * "AwaitingReview"). Every backend OutboxStatus must have a label in every language, and a
  * missing key must never throw.
  */
-const BACKEND_OUTBOX_STATUSES = ['Pending', 'Sent', 'Failed', 'Suppressed', 'AwaitingReview'] as const
+const BACKEND_OUTBOX_STATUSES = ['Pending', 'Sent', 'Failed', 'Suppressed', 'AwaitingReview', 'Sending'] as const
 
 describe('outbox status labels', () => {
   it('has a human label for every backend status in nl, fr and en', () => {

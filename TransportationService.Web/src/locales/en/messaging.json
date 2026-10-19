@@ -4,7 +4,8 @@
     "Sent": "Sent",
     "Failed": "Failed",
     "Suppressed": "Suppressed",
-    "AwaitingReview": "Awaiting review"
+    "AwaitingReview": "Awaiting review",
+    "Sending": "Sending"
   },
   "page": {
     "title": "Messages",

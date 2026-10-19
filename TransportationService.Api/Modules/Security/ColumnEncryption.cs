@@ -106,10 +106,54 @@ public static class ColumnEncryption
             return stored;
         }
 
-        var payload = Convert.FromBase64String(stored[Prefix.Length..]);
+        if (!TryDecrypt(stored, out var plaintext, out _, out var malformed))
+        {
+            throw new InvalidOperationException(malformed
+                ? "Encrypted column value is malformed."
+                : "Encrypted column value could not be decrypted with any configured key. "
+                  + "Check ColumnEncryption:Key / ColumnEncryption:PreviousKeys.");
+        }
+
+        return plaintext!;
+    }
+
+    /// <summary>
+    /// H5 canary support: decrypts an <c>enc:v1:</c> value without throwing. Reports whether the
+    /// ACTIVE key (rather than a previous key) opened it. Never exposes key material.
+    /// </summary>
+    public static bool TryUnprotect(string stored, out string? plaintext, out bool usedActiveKey)
+    {
+        if (!stored.StartsWith(Prefix, StringComparison.Ordinal))
+        {
+            plaintext = stored;
+            usedActiveKey = false;
+            return true;
+        }
+
+        return TryDecrypt(stored, out plaintext, out usedActiveKey, out _);
+    }
+
+    private static bool TryDecrypt(string stored, out string? plaintext, out bool usedActiveKey, out bool malformed)
+    {
+        plaintext = null;
+        usedActiveKey = false;
+        malformed = false;
+
+        byte[] payload;
+        try
+        {
+            payload = Convert.FromBase64String(stored[Prefix.Length..]);
+        }
+        catch (FormatException)
+        {
+            malformed = true;
+            return false;
+        }
+
         if (payload.Length < NonceSize + TagSize)
         {
-            throw new InvalidOperationException("Encrypted column value is malformed.");
+            malformed = true;
+            return false;
         }
 
         var nonce = payload.AsSpan(0, NonceSize);
@@ -117,13 +161,15 @@ public static class ColumnEncryption
         var cipher = payload.AsSpan(NonceSize + TagSize);
         var plain = new byte[cipher.Length];
 
-        foreach (var key in _decryptKeys)
+        for (var index = 0; index < _decryptKeys.Length; index++)
         {
             try
             {
-                using var aes = new AesGcm(key, TagSize);
+                using var aes = new AesGcm(_decryptKeys[index], TagSize);
                 aes.Decrypt(nonce, cipher, tag, plain);
-                return Encoding.UTF8.GetString(plain);
+                plaintext = Encoding.UTF8.GetString(plain);
+                usedActiveKey = index == 0 && _activeKey is not null;
+                return true;
             }
             catch (AuthenticationTagMismatchException)
             {
@@ -131,8 +177,6 @@ public static class ColumnEncryption
             }
         }
 
-        throw new InvalidOperationException(
-            "Encrypted column value could not be decrypted with any configured key. "
-            + "Check ColumnEncryption:Key / ColumnEncryption:PreviousKeys.");
+        return false;
     }
 }

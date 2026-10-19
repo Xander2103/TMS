@@ -4,7 +4,8 @@
     "Sent": "Verzonden",
     "Failed": "Mislukt",
     "Suppressed": "Onderdrukt",
-    "AwaitingReview": "Wacht op controle"
+    "AwaitingReview": "Wacht op controle",
+    "Sending": "Wordt verzonden"
   },
   "page": {
     "title": "Berichten",

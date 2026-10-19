@@ -63,7 +63,7 @@ export interface CustomerNotificationOverride {
 }
 
 export type MessageChannel = 'Email' | 'Sms'
-export type OutboxStatus = 'Pending' | 'Sent' | 'Failed' | 'Suppressed' | 'AwaitingReview'
+export type OutboxStatus = 'Pending' | 'Sent' | 'Failed' | 'Suppressed' | 'AwaitingReview' | 'Sending'
 
 export interface OutboxRow {
   id: string

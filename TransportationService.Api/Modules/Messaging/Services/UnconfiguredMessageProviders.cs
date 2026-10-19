@@ -16,8 +16,19 @@ public sealed class UnconfiguredEmailProvider : IEmailProvider
             "No production e-mail provider is configured. Refusing to send. Configure a real IEmailProvider.");
 }
 
-/// <summary>Fail-closed placeholder SMS provider — see <see cref="UnconfiguredEmailProvider"/>.</summary>
-public sealed class UnconfiguredSmsProvider : ISmsProvider
+/// <summary>
+/// Marks a channel provider that stands for "this channel is not configured". The dispatcher
+/// suppresses rows for such a channel with an explicit reason instead of retrying them into a
+/// permanent failure (CFG-05); the health details report the channel as disabled.
+/// </summary>
+public interface IDisabledChannelProvider;
+
+/// <summary>
+/// Disabled SMS channel: registered outside Development while no real SMS provider exists. SMS
+/// rows are suppressed by the dispatcher ("sms niet geconfigureerd"), never sent and never
+/// retried; a direct call still throws, so nothing can be dropped silently.
+/// </summary>
+public sealed class UnconfiguredSmsProvider : ISmsProvider, IDisabledChannelProvider
 {
     public Task SendAsync(OutboxMessage message, CancellationToken cancellationToken) =>
         throw new InvalidOperationException(

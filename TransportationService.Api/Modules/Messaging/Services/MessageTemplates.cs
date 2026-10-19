@@ -119,7 +119,7 @@ public static class BuiltInMessageTemplates
             + "{{details}}\n\nWij nemen contact met u op over de verdere afhandeling.\n\nMet vriendelijke groeten,\n{{companyName}}"),
         [MessageKinds.InvoiceSent] = new(
             "Factuur {{invoiceNumber}}",
-            "Beste {{customerName}},\n\nIn bijlage vindt u factuur {{invoiceNumber}}.\n\nMet vriendelijke groeten,\n{{companyName}}"),
+            "Beste {{customerName}},\n\nFactuur {{invoiceNumber}} is opgemaakt. U vindt de factuur in het klantportaal; heeft u daar geen toegang, dan bezorgen wij ze u afzonderlijk.\n\nMet vriendelijke groeten,\n{{companyName}}"),
         [MessageKinds.InvoiceCreditNote] = new(
             "Creditnota bij factuur {{invoiceNumber}}",
             "Beste {{customerName}},\n\nEr is een creditnota aangemaakt bij factuur {{invoiceNumber}}.\n\n{{companyName}}"),
@@ -188,10 +188,10 @@ public static class BuiltInMessageTemplates
             "Bonjour {{customerName}},\n\nLa preuve de livraison de l'ordre {{orderNumber}} est disponible.\n\n{{companyName}}"),
         [MessageKinds.InvoiceSent] = new(
             "Facture {{invoiceNumber}} de {{companyName}}",
-            "Bonjour {{customerName}},\n\nVeuillez trouver ci-joint la facture {{invoiceNumber}}.\n\nCordialement,\n{{companyName}}"),
+            "Bonjour {{customerName}},\n\nLa facture {{invoiceNumber}} a été émise. Vous la trouverez dans le portail client ; si vous n'y avez pas accès, nous vous la transmettrons séparément.\n\nCordialement,\n{{companyName}}"),
         [MessageKinds.InvoiceCreditNote] = new(
             "Note de crédit {{invoiceNumber}} de {{companyName}}",
-            "Bonjour {{customerName}},\n\nVeuillez trouver ci-joint la note de crédit {{invoiceNumber}}.\n\nCordialement,\n{{companyName}}"),
+            "Bonjour {{customerName}},\n\nLa note de crédit {{invoiceNumber}} a été émise. Vous la trouverez dans le portail client ; si vous n'y avez pas accès, nous vous la transmettrons séparément.\n\nCordialement,\n{{companyName}}"),
         // P8: the event-catalog order kinds a French-speaking customer actually receives.
         [MessageKinds.OrderAccepted] = new(
             "Votre ordre {{orderNumber}} est accepté",
@@ -238,10 +238,10 @@ public static class BuiltInMessageTemplates
             "Dear {{customerName}},\n\nThe proof of delivery for order {{orderNumber}} is available.\n\n{{companyName}}"),
         [MessageKinds.InvoiceSent] = new(
             "Invoice {{invoiceNumber}} from {{companyName}}",
-            "Dear {{customerName}},\n\nPlease find attached invoice {{invoiceNumber}}.\n\nKind regards,\n{{companyName}}"),
+            "Dear {{customerName}},\n\nInvoice {{invoiceNumber}} has been issued. You can find it in the customer portal; if you do not have access, we will send it to you separately.\n\nKind regards,\n{{companyName}}"),
         [MessageKinds.InvoiceCreditNote] = new(
             "Credit note {{invoiceNumber}} from {{companyName}}",
-            "Dear {{customerName}},\n\nPlease find attached credit note {{invoiceNumber}}.\n\nKind regards,\n{{companyName}}"),
+            "Dear {{customerName}},\n\nCredit note {{invoiceNumber}} has been issued. You can find it in the customer portal; if you do not have access, we will send it to you separately.\n\nKind regards,\n{{companyName}}"),
         // P8: the event-catalog order kinds an English-speaking customer actually receives.
         [MessageKinds.OrderAccepted] = new(
             "Your order {{orderNumber}} has been accepted",

@@ -4,7 +4,8 @@
     "Sent": "Envoyé",
     "Failed": "En échec",
     "Suppressed": "Supprimé",
-    "AwaitingReview": "En attente de contrôle"
+    "AwaitingReview": "En attente de contrôle",
+    "Sending": "Envoi en cours"
   },
   "page": {
     "title": "Messages",

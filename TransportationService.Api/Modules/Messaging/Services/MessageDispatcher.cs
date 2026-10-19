@@ -47,86 +47,291 @@ public sealed class DevelopmentSinkProvider : IEmailProvider, ISmsProvider
 /// <summary>
 /// Owns delivery of pending outbox rows: backoff retries, permanent failure alerting and the
 /// one-shot channel fallback. Runs tenant-agnostic (rows carry their tenant).
+///
+/// <para><b>Delivery semantics (H2): at-most-once per claim.</b> Every row is first CLAIMED with a
+/// conditional update (<c>Pending → Sending WHERE Status = 'Pending'</c>), so two dispatchers (a
+/// second API instance, an overlapping run) can never both own, and therefore never both send,
+/// the same row: the loser's update touches 0 rows and it moves on. The outcome is persisted
+/// immediately after EACH send, so a crash, SIGTERM or DB blip mid-batch affects at most the one
+/// message that was in flight, never the ones before it.</para>
+///
+/// <para>A row still <see cref="OutboxStatus.Sending"/> after <see cref="StaleClaimAfter"/> was
+/// interrupted between "handed to the provider" and "outcome saved": the SMTP server may well
+/// have accepted it. Customer mail must not be duplicated silently, so such a row is NOT resent
+/// but moved to <see cref="OutboxStatus.AwaitingReview"/> with an explanatory reason; a dispatcher
+/// releases it (send again) or rejects it in the existing review queue. The trade-off is
+/// deliberate: a rare interrupted send costs a human decision instead of a possible duplicate
+/// invoice/POD mail (at-least-once would resend automatically). <see cref="OutboxMessage.AttemptCount"/>
+/// counts every claim, so repeated interruptions stay visible, and the SMTP provider stamps a
+/// stable Message-ID per row so a released duplicate can be recognised downstream.</para>
+///
+/// <para>Rows are materialised ONE BY ONE after their claim. A row that cannot be read (e.g. an
+/// unknown OwnerType/Channel value written by hand or by an older release) is quarantined as
+/// <see cref="OutboxStatus.Failed"/> with a reason and the batch continues: a single poison row
+/// can no longer stop all mail.</para>
 /// </summary>
 public class MessageDispatcher
 {
     private const int MaxAttempts = 5;
+    private const int FailureReasonMaxLength = 1000;
     private static readonly TimeSpan BaseBackoff = TimeSpan.FromMinutes(5);
+
+    /// <summary>A claim older than this is considered interrupted. SMTP itself times out after
+    /// 30 s per operation, so a live send never gets near it.</summary>
+    public static readonly TimeSpan StaleClaimAfter = TimeSpan.FromMinutes(10);
+
+    public const string StaleClaimReason =
+        "Verzending onderbroken: het bericht is mogelijk al verzonden. Controleer (bv. in het "
+        + "SMTP-logboek of bij de ontvanger) en geef het vrij om opnieuw te verzenden, of wijs het af.";
+
+    public const string ChannelNotConfiguredReason =
+        "Sms-verzending is niet geconfigureerd (geen sms-provider); het bericht is niet verzonden.";
 
     private readonly TransportationDbContext _dbContext;
     private readonly IMessageChannelProvider _emailProvider;
     private readonly IMessageChannelProvider _smsProvider;
     private readonly TimeProvider _timeProvider;
+    private readonly ILogger _logger;
 
     public MessageDispatcher(
         TransportationDbContext dbContext,
         IMessageChannelProvider emailProvider,
         IMessageChannelProvider smsProvider,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        ILogger<MessageDispatcher>? logger = null)
     {
         _dbContext = dbContext;
         _emailProvider = emailProvider;
         _smsProvider = smsProvider;
         _timeProvider = timeProvider;
+        _logger = (ILogger?)logger ?? Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance;
     }
 
     public async Task<int> DispatchPendingAsync(int max, CancellationToken cancellationToken)
     {
         var now = _timeProvider.GetUtcNow().UtcDateTime;
-        var due = await _dbContext.OutboxMessages
+        await ReviewStaleClaimsAsync(now, cancellationToken);
+
+        // Ids only: a projection never materialises OwnerType/Channel, so one unreadable row
+        // cannot fail the selection of the whole batch.
+        var dueIds = await _dbContext.OutboxMessages
             .Where(m => m.Status == OutboxStatus.Pending && (m.NextAttemptAt == null || m.NextAttemptAt <= now))
             .OrderBy(m => m.CreatedAt)
+            .Select(m => m.Id)
             .Take(Math.Clamp(max, 1, 100))
             .ToListAsync(cancellationToken);
 
         var sent = 0;
-        foreach (var message in due)
+        foreach (var id in dueIds)
         {
-            // EX-02, last line of defence: a body edited/queued around the outbox guard with a literal
-            // {{placeholder}} still never leaves the building.
-            if (MessageTemplateRenderer.Unresolved(message.Subject, message.Body) is { Count: > 0 } unresolved)
+            cancellationToken.ThrowIfCancellationRequested();
+            var claimToken = Guid.NewGuid();
+            if (!await TryClaimAsync(id, claimToken, now, cancellationToken))
             {
-                message.Status = OutboxStatus.Suppressed;
-                message.FailureReason = MessageOutboxService.UnresolvedReason(unresolved);
-                continue;
+                continue; // another dispatcher owns (or already finished) this row
             }
 
-            message.AttemptCount += 1;
-            message.LastAttemptAt = now;
+            // The claim was written with a set-based update; an instance this context already
+            // tracks would shadow the claimed values (identity resolution), so read it fresh.
+            foreach (var stale in _dbContext.ChangeTracker.Entries<OutboxMessage>()
+                         .Where(e => e.Entity.Id == id).ToList())
+            {
+                stale.State = EntityState.Detached;
+            }
+
+            OutboxMessage? message;
             try
             {
-                var provider = message.Channel == MessageChannel.Email ? _emailProvider : _smsProvider;
-                await provider.SendAsync(message, cancellationToken);
-                message.Status = OutboxStatus.Sent;
-                message.SentAt = now;
-                message.FailureReason = null;
-                ScrubCredentialBody(message);
-                sent += 1;
+                message = await _dbContext.OutboxMessages
+                    .FirstOrDefaultAsync(m => m.Id == id && m.ClaimToken == claimToken, cancellationToken);
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
-                message.FailureReason = exception.Message;
-                if (message.AttemptCount >= MaxAttempts)
+                await QuarantineUnreadableAsync(id, claimToken, exception, now, cancellationToken);
+                continue;
+            }
+
+            if (message is null)
+            {
+                continue;
+            }
+
+            try
+            {
+                if (await ProcessClaimedAsync(message, now, cancellationToken))
                 {
-                    message.Status = OutboxStatus.Failed;
-                    ScrubCredentialBody(message);
-                    await HandlePermanentFailureAsync(message, cancellationToken);
-                }
-                else
-                {
-                    // 5, 10, 20, 40 minutes.
-                    message.NextAttemptAt = now + BaseBackoff * Math.Pow(2, message.AttemptCount - 1);
+                    sent += 1;
                 }
             }
-        }
-
-        if (due.Count > 0)
-        {
-            await _dbContext.SaveChangesAsync(cancellationToken);
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                // Persisting the outcome failed (DB blip, constraint). The row keeps its Sending
+                // claim and is routed to review once stale, never blindly resent. Detach so the
+                // next message's save does not retry this broken state.
+                _logger.LogError(exception,
+                    "Outbox message {MessageId} could not be finalised; it stays claimed and will be held for review.",
+                    message.Id);
+                DetachPendingChanges();
+            }
         }
 
         return sent;
     }
+
+    /// <summary>Atomic claim: exactly one caller turns a Pending row into Sending.</summary>
+    private async Task<bool> TryClaimAsync(Guid id, Guid claimToken, DateTime now, CancellationToken cancellationToken)
+    {
+        var claimed = await _dbContext.OutboxMessages
+            .Where(m => m.Id == id && m.Status == OutboxStatus.Pending)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(m => m.Status, OutboxStatus.Sending)
+                .SetProperty(m => m.ClaimToken, claimToken)
+                .SetProperty(m => m.ClaimedAt, now)
+                .SetProperty(m => m.AttemptCount, m => m.AttemptCount + 1)
+                .SetProperty(m => m.LastAttemptAt, now)
+                .SetProperty(m => m.UpdatedAt, now), cancellationToken);
+        return claimed == 1;
+    }
+
+    /// <summary>Sends one claimed message and persists its outcome before returning.</summary>
+    private async Task<bool> ProcessClaimedAsync(OutboxMessage message, DateTime now, CancellationToken cancellationToken)
+    {
+        // EX-02, last line of defence: a body edited/queued around the outbox guard with a literal
+        // {{placeholder}} still never leaves the building.
+        if (MessageTemplateRenderer.Unresolved(message.Subject, message.Body) is { Count: > 0 } unresolved)
+        {
+            message.Status = OutboxStatus.Suppressed;
+            message.FailureReason = MessageOutboxService.UnresolvedReason(unresolved);
+            message.ClaimToken = null;
+            await _dbContext.SaveChangesAsync(cancellationToken);
+            return false;
+        }
+
+        var provider = message.Channel == MessageChannel.Email ? _emailProvider : _smsProvider;
+        if (provider is IDisabledChannelProvider)
+        {
+            // CFG-05: no provider for this channel. An honest, final "not sent" instead of five
+            // doomed retries and a Critical alert per message.
+            message.Status = OutboxStatus.Suppressed;
+            message.FailureReason = ChannelNotConfiguredReason;
+            message.ClaimToken = null;
+            ScrubCredentialBody(message);
+            await _dbContext.SaveChangesAsync(cancellationToken);
+            return false;
+        }
+
+        try
+        {
+            await provider.SendAsync(message, cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            message.FailureReason = Truncate(exception.Message, FailureReasonMaxLength);
+            message.ClaimToken = null;
+            _logger.LogWarning(
+                "Outbox message {MessageId} ({Channel}, {Kind}) attempt {Attempt} failed: {Reason}",
+                message.Id, message.Channel, message.Kind, message.AttemptCount, message.FailureReason);
+            if (message.AttemptCount >= MaxAttempts)
+            {
+                message.Status = OutboxStatus.Failed;
+                ScrubCredentialBody(message);
+                await _dbContext.SaveChangesAsync(cancellationToken);
+                await AlertPermanentFailureAsync(message, cancellationToken);
+            }
+            else
+            {
+                // 5, 10, 20, 40 minutes.
+                message.Status = OutboxStatus.Pending;
+                message.NextAttemptAt = now + BaseBackoff * Math.Pow(2, message.AttemptCount - 1);
+                await _dbContext.SaveChangesAsync(cancellationToken);
+            }
+
+            return false;
+        }
+
+        message.Status = OutboxStatus.Sent;
+        message.SentAt = now;
+        message.FailureReason = null;
+        message.ClaimToken = null;
+        ScrubCredentialBody(message);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        return true;
+    }
+
+    /// <summary>
+    /// The alert and fallback of a permanent failure are written in their own unit of work: if
+    /// they cannot be saved, the (already persisted) Failed state stands and the batch goes on.
+    /// </summary>
+    private async Task AlertPermanentFailureAsync(OutboxMessage message, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await HandlePermanentFailureAsync(message, cancellationToken);
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            _logger.LogError(exception,
+                "Permanent-failure alert/fallback for outbox message {MessageId} could not be saved.", message.Id);
+            DetachPendingChanges();
+        }
+    }
+
+    /// <summary>Interrupted sends (see the class remarks) go to human review, never resent blindly.</summary>
+    private async Task ReviewStaleClaimsAsync(DateTime now, CancellationToken cancellationToken)
+    {
+        var cutoff = now - StaleClaimAfter;
+        var held = await _dbContext.OutboxMessages
+            .Where(m => m.Status == OutboxStatus.Sending && (m.ClaimedAt == null || m.ClaimedAt < cutoff))
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(m => m.Status, OutboxStatus.AwaitingReview)
+                .SetProperty(m => m.FailureReason, StaleClaimReason)
+                .SetProperty(m => m.ClaimToken, (Guid?)null)
+                .SetProperty(m => m.UpdatedAt, now), cancellationToken);
+        if (held > 0)
+        {
+            _logger.LogWarning(
+                "{Count} outbox message(s) were interrupted mid-send and are held for review (possibly already delivered).",
+                held);
+        }
+    }
+
+    /// <summary>A claimed row that cannot even be materialised is failed individually.</summary>
+    private async Task QuarantineUnreadableAsync(
+        Guid id, Guid claimToken, Exception exception, DateTime now, CancellationToken cancellationToken)
+    {
+        _logger.LogError(exception,
+            "Outbox message {MessageId} cannot be read and is quarantined as Failed; the batch continues.", id);
+        var reason = $"Ongeldige outboxrij, niet verzonden ({exception.GetType().Name}). Corrigeer of verwijder de rij.";
+        try
+        {
+            await _dbContext.OutboxMessages
+                .Where(m => m.Id == id && m.ClaimToken == claimToken)
+                .ExecuteUpdateAsync(setters => setters
+                    .SetProperty(m => m.Status, OutboxStatus.Failed)
+                    .SetProperty(m => m.FailureReason, reason)
+                    .SetProperty(m => m.ClaimToken, (Guid?)null)
+                    .SetProperty(m => m.UpdatedAt, now), cancellationToken);
+        }
+        catch (Exception quarantineFailure) when (quarantineFailure is not OperationCanceledException)
+        {
+            // Left as Sending: the stale-claim rule parks it for review; it is never resent.
+            _logger.LogError(quarantineFailure, "Outbox message {MessageId} could not be quarantined.", id);
+        }
+    }
+
+    private void DetachPendingChanges()
+    {
+        foreach (var entry in _dbContext.ChangeTracker.Entries()
+                     .Where(e => e.State is EntityState.Added or EntityState.Modified or EntityState.Deleted)
+                     .ToList())
+        {
+            entry.State = EntityState.Detached;
+        }
+    }
+
+    private static string Truncate(string value, int maxLength) =>
+        value.Length <= maxLength ? value : value[..maxLength];
 
     /// <summary>Marker left in place of a scrubbed one-time-credential body.</summary>
     public const string ScrubbedBodyMarker = "[inhoud met eenmalige link verwijderd na afhandeling]";

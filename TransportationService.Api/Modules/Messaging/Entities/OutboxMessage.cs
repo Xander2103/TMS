@@ -18,6 +18,13 @@ public enum OutboxStatus
     /// <summary>P9: held for human review (sensitive kinds); a dispatcher releases or rejects.
     /// The background dispatcher only ever sends Pending rows, so held mail cannot leak.</summary>
     AwaitingReview,
+
+    /// <summary>H2: claimed by exactly one dispatcher (conditional Pending → Sending update) and
+    /// being handed to the provider right now. A row that stays here past
+    /// <see cref="Services.MessageDispatcher.StaleClaimAfter"/> was interrupted mid-send (crash,
+    /// shutdown, DB loss after the provider accepted it): it may already have been delivered, so it
+    /// is NEVER resent automatically but moved to <see cref="AwaitingReview"/> (at-most-once).</summary>
+    Sending,
 }
 
 public enum MessageOwnerType
@@ -173,6 +180,13 @@ public class OutboxMessage : AuditableTenantEntity
     public DateTime? LastAttemptAt { get; set; }
     public DateTime? SentAt { get; set; }
     public string? FailureReason { get; set; }
+
+    /// <summary>H2: token of the dispatcher run that claimed this row (Pending → Sending). Only the
+    /// claimant processes the row; cleared once the outcome is persisted.</summary>
+    public Guid? ClaimToken { get; set; }
+
+    /// <summary>H2: when the current/last claim was taken — drives the stale-claim review rule.</summary>
+    public DateTime? ClaimedAt { get; set; }
 
     /// <summary>Natural key preventing duplicate sends (unique per tenant).</summary>
     public string IdempotencyKey { get; set; } = string.Empty;

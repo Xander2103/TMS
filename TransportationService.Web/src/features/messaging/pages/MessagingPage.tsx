@@ -15,7 +15,7 @@ import { formatDateTime } from '../../../utils/dates'
 import './messaging.css'
 
 type MessageChannel = 'Email' | 'Sms'
-type OutboxStatus = 'Pending' | 'Sent' | 'Failed' | 'Suppressed' | 'AwaitingReview'
+type OutboxStatus = 'Pending' | 'Sent' | 'Failed' | 'Suppressed' | 'AwaitingReview' | 'Sending'
 
 interface OutboxRow {
   id: string
@@ -49,6 +49,7 @@ const STATUS_TONE: Record<OutboxStatus, 'neutral' | 'success' | 'warning' | 'dan
   Failed: 'danger',
   Suppressed: 'neutral',
   AwaitingReview: 'warning',
+  Sending: 'info',
 }
 
 /** Translation keys per outbox status; render via t(STATUS_LABELS[status]). */
@@ -58,6 +59,7 @@ const STATUS_LABELS: Record<OutboxStatus, string> = {
   Failed: 'messaging.status.Failed',
   Suppressed: 'messaging.status.Suppressed',
   AwaitingReview: 'messaging.status.AwaitingReview',
+  Sending: 'messaging.status.Sending',
 }
 
 const PAGE_SIZE = 25
