@@ -487,6 +487,36 @@ public class ExceptionManagementRemediationTests
     }
 
     [Fact]
+    public async Task EX03_DamageReportFromAProblem_IsDatedTheTenantsLocalDayOfTheProblem()
+    {
+        using var h = await SeedAsync();
+        await h.Db.Context.TenantSettings.Where(s => s.TenantId == h.TenantId)
+            .ExecuteUpdateAsync(s => s.SetProperty(x => x.Timezone, "Europe/Brussels"));
+        var incident = await DriverIncidentAsync(h, type: "VehicleBreakdown", severity: "High");
+        var reported = await h.Exceptions(h.DriverUserId).ReportAsync(h.TripId,
+            new ReportExceptionRequest(ExecutionExceptionType.VehicleIssue, ExceptionSeverity.High, "Spiegel afgebroken"),
+            restrictToOwnDriver: true, CancellationToken.None);
+        // 22:30 UTC on 13/10 is 00:30 on 14/10 in Brussels: the problem happened on the 14th.
+        var justAfterLocalMidnight = new DateTime(2026, 10, 13, 22, 30, 0, DateTimeKind.Utc);
+        await h.Db.Context.Incidents.Where(i => i.Id == incident.Id)
+            .ExecuteUpdateAsync(s => s.SetProperty(i => i.CreatedAt, justAfterLocalMidnight));
+        await h.Db.Context.ExecutionExceptions.Where(e => e.Id == reported.Exception!.Id)
+            .ExecuteUpdateAsync(s => s.SetProperty(e => e.OccurredAt, justAfterLocalMidnight));
+        h.Db.Context.ChangeTracker.Clear();
+
+        var fromIncident = await h.FollowUp().CreateDamageReportForIncidentAsync(incident.Id,
+            new CreateLinkedDamageReportRequest("Moderate"), CancellationToken.None);
+        var fromException = await h.FollowUp().CreateDamageReportForExceptionAsync(reported.Exception!.Id,
+            new CreateLinkedDamageReportRequest("Moderate"), CancellationToken.None);
+
+        var dates = await h.Db.Context.DamageReports.AsNoTracking()
+            .Where(d => d.Id == fromIncident!.DamageReportId || d.Id == fromException)
+            .Select(d => d.IncidentDate).ToListAsync();
+        Assert.Equal(2, dates.Count);
+        Assert.All(dates, d => Assert.Equal(new DateOnly(2026, 10, 14), d));
+    }
+
+    [Fact]
     public async Task EX03_VehicleIssueAfwijking_TellsTheFleet_AndCreatesItsLinkedDamageReport()
     {
         using var h = await SeedAsync();

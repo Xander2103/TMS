@@ -1161,8 +1161,9 @@ public class IncidentService : IIncidentService
         var settings = await _dbContext.TenantSettings.FirstOrDefaultAsync(
             s => s.TenantId == tenantId, cancellationToken);
 
-        // P4: the redelivery targets the next WORKING day (skipping weekends + tenant holidays).
-        var today = DateOnly.FromDateTime(_timeProvider.GetUtcNow().UtcDateTime);
+        // P4: the redelivery targets the next WORKING day (skipping weekends + tenant holidays) after
+        // the TENANT's today — just after local midnight the UTC date is still yesterday.
+        var today = await Common.TenantTimeZone.TodayAsync(_dbContext, tenantId, _timeProvider, cancellationToken);
         var holidays = (await _dbContext.TenantHolidays.AsNoTracking()
                 .Where(h => h.TenantId == tenantId && h.Date > today && h.Date <= today.AddDays(60))
                 .Select(h => h.Date)

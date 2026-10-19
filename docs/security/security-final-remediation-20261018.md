@@ -133,7 +133,7 @@ updating a foreign customer is refused; tenant B's audit log has no tenant-A ent
 
 ## Known residuals (not security findings, unchanged)
 
-- Redelivery date and damage report from an incident still use UTC "today" (integration residual).
+- ~~Redelivery date and damage report from an incident still use UTC "today"~~ — fixed in `integration/portal-security-final` (tenant-local day via `TenantTimeZone`).
 - Replaying a logged-out refresh token is treated as theft and ends every session (pre-existing H4).
 - The planning picker lists ended/absent drivers as `Unavailable` rather than hiding them.
 - Dossier "Meer (financieel · relaties · incidenten)" heading keeps "financieel" for non-price viewers.

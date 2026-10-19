@@ -48,7 +48,7 @@ public class IncidentChargeAndRedeliveryTests
         }
     }
 
-    private static async Task<Harness> SeedAsync()
+    private static async Task<Harness> SeedAsync(DateTimeOffset? now = null)
     {
         var db = new SqliteTestDbContext();
         var tenantId = Guid.NewGuid();
@@ -61,6 +61,7 @@ public class IncidentChargeAndRedeliveryTests
         db.Context.TenantSettings.Add(new TenantSettings
         {
             Id = Guid.NewGuid(), TenantId = tenantId, OrderNumberPrefix = "ORD-", OrderNumberNextValue = 2,
+            Timezone = "Europe/Brussels",
         });
         db.Context.Users.Add(new User { Id = userId, TenantId = tenantId, Email = "b@acme.be", FirstName = "Bea", LastName = "Boekhouding", IsActive = true });
         db.Context.Customers.Add(new Customer { Id = customerId, TenantId = tenantId, CustomerNumber = "KL-1", Name = "Klant BV", IsActive = true });
@@ -93,7 +94,7 @@ public class IncidentChargeAndRedeliveryTests
 
         var tenant = new DevTenantContext(tenantId);
         var user = new DevCurrentUserContext(userId);
-        var clock = new TestClock(Now);
+        var clock = new TestClock(now ?? Now);
         var permissions = new PermissionSet();
         var sut = new IncidentService(db.Context, tenant,
             new AuditService(db.Context, tenant, user),
@@ -192,6 +193,25 @@ public class IncidentChargeAndRedeliveryTests
         // A second redelivery for the same incident refuses.
         await Assert.ThrowsAsync<DomainValidationException>(
             () => h.Sut.CreateRedeliveryAsync(id, CancellationToken.None));
+    }
+
+    [Theory]
+    // 22:30 UTC on a Thursday is already Friday 00:30 in Brussels (summer +2 and winter +1): the
+    // next working day after the TENANT's today is Monday, after the UTC date it would be Friday.
+    [InlineData("2026-08-13T22:30:00Z", "2026-08-17")]
+    [InlineData("2026-01-15T23:30:00Z", "2026-01-19")]
+    // Before local midnight both agree: Thursday → Friday.
+    [InlineData("2026-08-13T21:30:00Z", "2026-08-14")]
+    public async Task Redelivery_TargetsTheNextWorkingDayAfterTheTenantsLocalToday(string utcNow, string expected)
+    {
+        var h = await SeedAsync(DateTimeOffset.Parse(utcNow, System.Globalization.CultureInfo.InvariantCulture));
+        using var _ = h.Db;
+        var id = await h.IncidentAsync();
+
+        var detail = await h.Sut.CreateRedeliveryAsync(id, CancellationToken.None);
+
+        var redelivery = await h.Db.Context.TransportOrders.SingleAsync(o => o.Id == detail!.LinkedRedeliveryOrderId);
+        Assert.Equal(DateOnly.Parse(expected, System.Globalization.CultureInfo.InvariantCulture), redelivery.OrderDate);
     }
 
     [Fact]

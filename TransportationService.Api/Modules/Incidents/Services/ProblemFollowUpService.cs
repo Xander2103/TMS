@@ -189,7 +189,8 @@ public class ProblemFollowUpService : IProblemFollowUpService
             incident.VehicleId, incident.VehicleId is null ? incident.TrailerId : null,
             new CreateDamageReportRequest(
                 incident.DriverId,
-                DateOnly.FromDateTime(incident.CreatedAt),
+                // The tenant-local day the problem was reported on, not the UTC date of the instant.
+                Common.TenantTimeZone.ToLocalDate(incident.CreatedAt, await Common.TenantTimeZone.ForTenantAsync(_dbContext, TenantId, cancellationToken)),
                 string.IsNullOrWhiteSpace(request.Location) ? null : request.Location.Trim(),
                 Describe(request.Description, $"{incident.Title}: {incident.Description}"),
                 severity,
@@ -236,7 +237,7 @@ public class ProblemFollowUpService : IProblemFollowUpService
             trip.VehicleId, trip.VehicleId is null ? trip.TrailerId : null,
             new CreateDamageReportRequest(
                 exception.DriverId ?? trip.DriverId,
-                DateOnly.FromDateTime(exception.OccurredAt),
+                Common.TenantTimeZone.ToLocalDate(exception.OccurredAt, await Common.TenantTimeZone.ForTenantAsync(_dbContext, TenantId, cancellationToken)),
                 string.IsNullOrWhiteSpace(request.Location) ? null : request.Location.Trim(),
                 Describe(request.Description, $"{label}: {exception.Description}"),
                 severity,
