@@ -6,8 +6,9 @@ namespace TransportationService.Api.Modules.SystemAdmin.Services;
 /// <summary>
 /// Daily automatic database backup + retention sweep (settings/system wave 2026-08).
 /// Fires once per day at the configured UTC hour; disabled via Backups:AutomaticEnabled.
-/// Failures are logged and retried the next day — an unattended backup problem must
-/// surface in the Systeeminformatie screen, never crash the host.
+/// Failures are logged (failing part + tool stderr), recorded as a Failed row and retried the
+/// next day — an unattended backup problem must surface in the Systeeminformatie screen and the
+/// "backup" health check, never crash the host. Only a real shutdown ends the loop (BG-03).
 /// </summary>
 public class AutomaticBackupHostedService : BackgroundService
 {
@@ -47,7 +48,7 @@ public class AutomaticBackupHostedService : BackgroundService
                 var backups = scope.ServiceProvider.GetRequiredService<IBackupService>();
                 await backups.CreateAsync("Automatic", "Dagelijkse automatische back-up", stoppingToken);
             }
-            catch (OperationCanceledException)
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
                 return;
             }

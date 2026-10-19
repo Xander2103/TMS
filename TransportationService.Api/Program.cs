@@ -243,7 +243,8 @@ builder.Services.AddSingleton<IFileStorageService>(serviceProvider =>
 // Health checks owned by storage/backups. Endpoints are mapped elsewhere: /health/ready filters on
 // tag "ready"; "backup" is separate on purpose — a stale backup must alert, not take the app out of rotation.
 builder.Services.AddHealthChecks()
-    .AddCheck<TransportationService.Api.Common.Storage.StorageWritableHealthCheck>("storage", tags: ["ready"]);
+    .AddCheck<TransportationService.Api.Common.Storage.StorageWritableHealthCheck>("storage", tags: ["ready"])
+    .AddCheck<TransportationService.Api.Modules.SystemAdmin.Services.BackupFreshnessHealthCheck>("backup", tags: ["backup"]);
 
 // Qualifications
 builder.Services.AddSingleton<

@@ -40,10 +40,21 @@ public class SystemAdminController : ControllerBase
     public async Task<ActionResult<BackupDto>> Create(CreateBackupRequest request, CancellationToken cancellationToken) =>
         Ok(await _backups.CreateAsync("Manual", request.Note, cancellationToken));
 
+    /// <summary>H8/SEC-03: a dump contains EVERY tenant's data — on top of backups.download the
+    /// caller must be in the system Administrator role. Only the .dump is served; the storage
+    /// archive and manifest stay on the server (off-host copies are an operator task).</summary>
     [HttpGet("api/system-info/backups/{id:guid}/download")]
     [RequirePermission(PermissionCodes.BackupsDownload)]
     public async Task<IActionResult> Download(Guid id, CancellationToken cancellationToken)
     {
+        if (!await _backups.CanDownloadAsync(cancellationToken))
+        {
+            return Problem(
+                statusCode: StatusCodes.Status403Forbidden,
+                title: "Download niet toegestaan",
+                detail: "Alleen de systeemrol Administrator kan een volledige databaseback-up downloaden.");
+        }
+
         var result = await _backups.OpenDownloadAsync(id, cancellationToken);
         return result is null
             ? NotFound()
@@ -63,10 +74,22 @@ public class SystemAdminController : ControllerBase
         string Confirmation);
 
     /// <summary>TERUGZETTEN — destructive: replaces the current data with the backup's
-    /// contents after an automatic safety backup. Never called "activeren".</summary>
+    /// contents after an automatic safety backup. Never called "activeren".
+    /// H8: Development only. Elsewhere 409 pointing at the offline runbook — pg_restore --clean on
+    /// the live database must never run from an HTTP request in production.</summary>
     [HttpPost("api/system-info/backups/{id:guid}/restore")]
     [RequirePermission(PermissionCodes.BackupsRestore)]
     public async Task<ActionResult<RestoreResultDto>> Restore(
-        Guid id, RestoreBackupRequest request, CancellationToken cancellationToken) =>
-        Ok(await _backups.RestoreAsync(id, request.Confirmation, cancellationToken));
+        Guid id, RestoreBackupRequest request, CancellationToken cancellationToken)
+    {
+        if (!_backups.InAppRestoreEnabled)
+        {
+            return Problem(
+                statusCode: StatusCodes.Status409Conflict,
+                title: "Terugzetten uitgeschakeld",
+                detail: BackupService.RestoreDisabledMessage);
+        }
+
+        return Ok(await _backups.RestoreAsync(id, request.Confirmation, cancellationToken));
+    }
 }

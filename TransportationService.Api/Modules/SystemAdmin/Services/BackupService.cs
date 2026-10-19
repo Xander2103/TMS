@@ -2,6 +2,7 @@ using System.Diagnostics;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using TransportationService.Api.Common;
+using TransportationService.Api.Common.Storage;
 using TransportationService.Api.Data;
 using TransportationService.Api.Modules.Auditing.Services;
 using TransportationService.Api.Modules.Identity.Services;
@@ -15,7 +16,8 @@ public class BackupOptions
 {
     public const string SectionName = "Backups";
 
-    /// <summary>Storage directory; default resolves under the content root's App_Data.</summary>
+    /// <summary>Backup directory; default <c>&lt;Storage:RootPath&gt;/backups</c>. Must be absolute and
+    /// outside the release directory (StorageRootValidator).</summary>
     public string? Directory { get; set; }
 
     public string PgDumpPath { get; set; } = "pg_dump";
@@ -30,6 +32,10 @@ public class BackupOptions
 
     public bool AutomaticEnabled { get; set; } = true;
     public int AutomaticHourUtc { get; set; } = 2;
+
+    /// <summary>Freshness limit for monitoring: the "backup" health check and the overview flag a
+    /// newest successful backup older than this (default 26 h = daily run plus slack).</summary>
+    public int MaxAgeHours { get; set; } = 26;
 }
 
 /// <summary>Process seam so tests never spawn real pg_dump/pg_restore.</summary>
@@ -67,10 +73,27 @@ public class ProcessBackupRunner : IBackupProcessRunner
 
         using var process = Process.Start(info)
             ?? throw new DomainValidationException($"Kon {Path.GetFileName(fileName)} niet starten.");
-        var stderr = await process.StandardError.ReadToEndAsync(cancellationToken);
-        _ = await process.StandardOutput.ReadToEndAsync(cancellationToken);
+        // BG-02: a cancelled request/shutdown must stop the child too, never leave it running.
+        await using var killOnCancel = cancellationToken.Register(() =>
+        {
+            try
+            {
+                process.Kill(entireProcessTree: true);
+            }
+            catch
+            {
+                // already exited
+            }
+        });
+
+        // Drain both pipes concurrently: reading them one after the other deadlocks as soon as the
+        // child fills the other pipe's buffer (pg_restore --list writes the whole TOC to stdout).
+        var stderrTask = process.StandardError.ReadToEndAsync(cancellationToken);
+        var stdoutTask = process.StandardOutput.BaseStream.CopyToAsync(Stream.Null, cancellationToken);
+        await Task.WhenAll(stderrTask, stdoutTask);
         await process.WaitForExitAsync(cancellationToken);
-        var tail = stderr.Length > 800 ? stderr[^800..] : stderr;
+        var stderr = stderrTask.Result;
+        var tail = stderr.Length > 4000 ? stderr[^4000..] : stderr;
         return (process.ExitCode, tail);
     }
 }
@@ -91,13 +114,26 @@ public record BackupOverviewDto(
     /// <summary>LEGACY Nederlandse weergavetekst; logica hoort op StorageAvailable (i18n-wave).</summary>
     string StorageStatus,
     /// <summary>Stabiele machineleesbare status van de back-upopslagmap.</summary>
-    bool StorageAvailable = true);
+    bool StorageAvailable = true,
+    /// <summary>H4: newest successful (Completed/Restored) in-app backup — the freshness signal.</summary>
+    DateTime? LastSuccessfulBackupAtUtc = null,
+    /// <summary>True when there is no successful backup within Backups:MaxAgeHours.</summary>
+    bool BackupStale = false,
+    int MaxBackupAgeHours = 26,
+    /// <summary>H8: in-app restore only exists in Development; elsewhere the offline runbook.</summary>
+    bool RestoreEnabled = false,
+    /// <summary>H8: whole-database downloads are limited to the system Administrator role.</summary>
+    bool DownloadAllowed = false);
 
 public record RestoreResultDto(
     Guid SafetyBackupId, string SafetyBackupFileName, string DatabaseStatus, string Advice);
 
 public interface IBackupService
 {
+    /// <summary>H8: false outside Development — restore is an offline operator procedure there
+    /// (docs/operations/backup-restore.md).</summary>
+    bool InAppRestoreEnabled { get; }
+    Task<bool> CanDownloadAsync(CancellationToken cancellationToken);
     Task<BackupOverviewDto> ListAsync(CancellationToken cancellationToken);
     Task<BackupDto> CreateAsync(string source, string? note, CancellationToken cancellationToken);
     Task<(Stream Content, string FileName)?> OpenDownloadAsync(Guid id, CancellationToken cancellationToken);
@@ -112,6 +148,11 @@ public interface IBackupService
 ///  * ids are server-generated and the only client handle (no paths from the frontend);
 ///  * pg_dump/pg_restore run via ArgumentList with credentials only in the child process
 ///    environment — nothing secret is stored or returned;
+///  * H4 (2026-10-18): a backup is a SET — DB dump + durable-storage archive + sha256 manifest —
+///    and is only "Completed" after both parts are verified (pg_restore --list, archive read back,
+///    checksums); any failing part records a Failed row with the reason and logs tool stderr;
+///  * H8: restore is Development-only (offline runbook elsewhere) and whole-database downloads
+///    are limited to the system Administrator role;
 ///  * delete/restore are fail-closed double-checked in the service (L7 house rule), on top
 ///    of the controller permission gates;
 ///  * restore demands a typed confirmation (the exact file name), takes a fresh safety
@@ -122,6 +163,12 @@ public interface IBackupService
 /// </summary>
 public class BackupService : IBackupService
 {
+    private const string AdministratorRoleName = "Administrator";
+
+    public const string RestoreDisabledMessage =
+        "Terugzetten vanuit de applicatie is uitgeschakeld buiten Development. Een herstel is een offline "
+        + "beheerdersprocedure: zie docs/operations/backup-restore.md.";
+
     private readonly TransportationDbContext _dbContext;
     private readonly IConfiguration _configuration;
     private readonly IHostEnvironment _environment;
@@ -131,13 +178,17 @@ public class BackupService : IBackupService
     private readonly BackupOptions _options;
     private readonly IPermissionAuthorizationService? _permissionService;
     private readonly ICurrentUserContext? _currentUser;
+    private readonly StorageRoot _storageRoot;
+    private readonly ILogger<BackupService> _logger;
 
     public BackupService(
         TransportationDbContext dbContext, IConfiguration configuration, IHostEnvironment environment,
         IBackupProcessRunner runner, IAuditService auditService, TimeProvider timeProvider,
         IOptions<BackupOptions>? options = null,
         IPermissionAuthorizationService? permissionService = null,
-        ICurrentUserContext? currentUser = null)
+        ICurrentUserContext? currentUser = null,
+        StorageRoot? storageRoot = null,
+        ILogger<BackupService>? logger = null)
     {
         _dbContext = dbContext;
         _configuration = configuration;
@@ -148,20 +199,23 @@ public class BackupService : IBackupService
         _options = options?.Value ?? new BackupOptions();
         _permissionService = permissionService;
         _currentUser = currentUser;
+        _storageRoot = storageRoot ?? StorageRoot.DevelopmentDefault(environment);
+        _logger = logger ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<BackupService>.Instance;
     }
 
-    private string BackupDirectory =>
-        _options.Directory ?? Path.Combine(_environment.ContentRootPath, "App_Data", "backups");
+    private string BackupDirectory => _options.Directory ?? _storageRoot.BackupsDirectory;
+
+    public bool InAppRestoreEnabled => _environment.IsDevelopment();
 
     public async Task<BackupOverviewDto> ListAsync(CancellationToken cancellationToken)
     {
         var rows = await _dbContext.DatabaseBackups.AsNoTracking()
             .OrderByDescending(b => b.CreatedAtUtc)
             .ToListAsync(cancellationToken);
-        var newestCompletedId = rows.Where(b => b.Status is "Completed" or "Restored")
+        var newestCompleted = rows.Where(b => b.Status is "Completed" or "Restored")
             .OrderByDescending(b => b.CreatedAtUtc)
-            .Select(b => (Guid?)b.Id)
             .FirstOrDefault();
+        var newestCompletedId = newestCompleted?.Id;
 
         var backups = rows.Select(b => new BackupDto(
                 b.Id, b.FileName, b.CreatedAtUtc, b.SizeBytes, b.Source, b.Status,
@@ -195,12 +249,18 @@ public class BackupService : IBackupService
             storageAvailable = false;
         }
 
+        var lastSuccess = newestCompleted?.CreatedAtUtc;
         return new BackupOverviewDto(
             backups.OrderByDescending(b => b.CreatedAtUtc).ToList(),
             _options.AutomaticRetentionDays, _options.PreRestoreRetentionDays,
             _options.AutomaticEnabled,
             storageAvailable ? "Beschikbaar" : "Opslagmap niet beschikbaar",
-            storageAvailable);
+            storageAvailable,
+            LastSuccessfulBackupAtUtc: lastSuccess,
+            BackupStale: BackupFreshnessHealthCheck.IsStale(lastSuccess, _timeProvider.GetUtcNow().UtcDateTime, _options),
+            MaxBackupAgeHours: _options.MaxAgeHours,
+            RestoreEnabled: InAppRestoreEnabled,
+            DownloadAllowed: await CanDownloadAsync(cancellationToken));
     }
 
     public async Task<BackupDto> CreateAsync(string source, string? note, CancellationToken cancellationToken)
@@ -218,19 +278,23 @@ public class BackupService : IBackupService
         // Server-generated, immutable, and free of user input — the id is in the name so a
         // file on disk can always be traced back to its metadata row.
         var fileName = $"backup-{conn.Database}-{now:yyyyMMdd-HHmmss}-{source.ToLowerInvariant()}-{id.ToString("N")[..8]}.dump";
-        var fullPath = Path.Combine(BackupDirectory, fileName);
+        var trimmedNote = string.IsNullOrWhiteSpace(note) ? null : note.Trim();
 
-        var (exitCode, stderr) = await _runner.RunAsync(
-            _options.PgDumpPath,
-            ["-h", conn.Host, "-p", conn.Port, "-U", conn.Username, "-d", conn.Database, "-Fc", "-f", fullPath],
-            PasswordEnvironment(conn), cancellationToken);
-        if (exitCode != 0)
+        long sizeBytes;
+        try
         {
-            TryDelete(fullPath);
-            await _auditService.RecordAsync("DatabaseBackup", id.ToString(), "BackupFailed",
-                null, new { Source = source, ExitCode = exitCode }, cancellationToken);
-            throw new DomainValidationException(
-                $"Back-up mislukt (pg_dump exitcode {exitCode}). Controleer de serverlogs.");
+            sizeBytes = await ProduceVerifiedBackupSetAsync(conn, fileName, cancellationToken);
+        }
+        catch (BackupStepException failure)
+        {
+            await RecordFailureAsync(id, fileName, source, trimmedNote, now, failure.Reason, failure.InnerException);
+            throw new DomainValidationException($"Back-up mislukt: {failure.Reason}. Controleer de serverlogs.");
+        }
+        catch (OperationCanceledException)
+        {
+            // Never leave a half-written set behind, and never let it look like a success.
+            await RecordFailureAsync(id, fileName, source, trimmedNote, now, "afgebroken (annulering of afsluiten)", null);
+            throw;
         }
 
         var backup = new DatabaseBackup
@@ -238,25 +302,201 @@ public class BackupService : IBackupService
             Id = id,
             FileName = fileName,
             CreatedAtUtc = now,
-            SizeBytes = new FileInfo(fullPath).Length,
+            SizeBytes = sizeBytes,
             Source = source,
             Status = "Completed",
             SchemaVersion = await LastAppliedMigrationAsync(cancellationToken),
-            Note = string.IsNullOrWhiteSpace(note) ? null : note.Trim(),
+            Note = trimmedNote,
             CreatedByUserId = _currentUser?.CurrentUserId,
         };
         _dbContext.DatabaseBackups.Add(backup);
         await _dbContext.SaveChangesAsync(cancellationToken);
         await _auditService.RecordAsync("DatabaseBackup", backup.Id.ToString(), "BackupCreated",
             null, new { backup.FileName, backup.Source, backup.SizeBytes }, cancellationToken);
+        _logger.LogInformation(
+            "Back-up {FileName} ({Source}) voltooid en geverifieerd: {SizeBytes} bytes (dump + bestandsarchief).",
+            backup.FileName, backup.Source, backup.SizeBytes);
 
         await CleanupExpiredAsync(cancellationToken);
         return new BackupDto(backup.Id, backup.FileName, backup.CreatedAtUtc, backup.SizeBytes,
             backup.Source, backup.Status, backup.SchemaVersion, backup.Note, null, Protected: true);
     }
 
+    /// <summary>
+    /// H4: dump → storage archive → manifest → verify both. Each step that fails throws a
+    /// <see cref="BackupStepException"/> naming the step; the partial set is removed first.
+    /// Returns the total size of dump + archive.
+    /// </summary>
+    private async Task<long> ProduceVerifiedBackupSetAsync(
+        ConnectionParts conn, string fileName, CancellationToken cancellationToken)
+    {
+        var dumpPath = Path.Combine(BackupDirectory, fileName);
+        var archiveFileName = BackupArtifacts.ArchiveFileName(fileName);
+        var archivePath = Path.Combine(BackupDirectory, archiveFileName);
+        var manifestPath = Path.Combine(BackupDirectory, BackupArtifacts.ManifestFileName(fileName));
+        var step = "databankdump (pg_dump)";
+        try
+        {
+            // 1. Database dump.
+            var (exitCode, stderr) = await _runner.RunAsync(
+                _options.PgDumpPath,
+                ["-h", conn.Host, "-p", conn.Port, "-U", conn.Username, "-d", conn.Database, "-Fc", "-f", dumpPath],
+                PasswordEnvironment(conn), cancellationToken);
+            LogToolOutput("pg_dump", fileName, exitCode, stderr);
+            if (exitCode != 0)
+            {
+                throw new BackupStepException($"pg_dump exitcode {exitCode}");
+            }
+
+            if (!File.Exists(dumpPath) || new FileInfo(dumpPath).Length == 0)
+            {
+                throw new BackupStepException("pg_dump leverde een leeg of ontbrekend bestand op");
+            }
+
+            // 2. Durable-storage archive. The backup directory and the dev sink are never part of
+            // it (no dumps-inside-dumps, no raw tokens).
+            step = "bestandsarchief (opslagmap)";
+            var entries = await BackupArtifacts.CreateArchiveAsync(
+                _storageRoot.RootPath, archivePath,
+                [BackupDirectory, _storageRoot.BackupsDirectory, _storageRoot.MessageSinkDirectory],
+                cancellationToken);
+
+            // 3. Manifest (sha256sum format).
+            step = "checksummanifest";
+            var dumpHash = await BackupArtifacts.Sha256Async(dumpPath, cancellationToken);
+            var archiveHash = await BackupArtifacts.Sha256Async(archivePath, cancellationToken);
+            await BackupArtifacts.WriteManifestAsync(
+                manifestPath, [(fileName, dumpHash), (archiveFileName, archiveHash)], cancellationToken);
+
+            // 4. Verification BEFORE anything is reported as a success.
+            step = "verificatie databankdump (pg_restore --list)";
+            var (listExit, listStderr) = await _runner.RunAsync(
+                _options.PgRestorePath, ["--list", dumpPath], new Dictionary<string, string>(), cancellationToken);
+            LogToolOutput("pg_restore --list", fileName, listExit, listStderr);
+            if (listExit != 0)
+            {
+                throw new BackupStepException($"de dump is niet leesbaar (pg_restore --list exitcode {listExit})");
+            }
+
+            step = "verificatie bestandsarchief";
+            var readBack = await BackupArtifacts.CountArchiveEntriesAsync(archivePath, cancellationToken);
+            if (readBack != entries)
+            {
+                throw new BackupStepException(
+                    $"het bestandsarchief bevat {readBack} van de {entries} verwachte bestanden");
+            }
+
+            step = "verificatie checksums";
+            var manifest = await BackupArtifacts.ReadManifestAsync(manifestPath, cancellationToken);
+            if (!manifest.TryGetValue(fileName, out var expectedDump)
+                || expectedDump != await BackupArtifacts.Sha256Async(dumpPath, cancellationToken)
+                || !manifest.TryGetValue(archiveFileName, out var expectedArchive)
+                || expectedArchive != await BackupArtifacts.Sha256Async(archivePath, cancellationToken))
+            {
+                throw new BackupStepException("de checksums komen niet overeen met het manifest");
+            }
+
+            return new FileInfo(dumpPath).Length + new FileInfo(archivePath).Length;
+        }
+        catch (BackupStepException)
+        {
+            DeleteBackupSet(fileName);
+            throw;
+        }
+        catch (OperationCanceledException)
+        {
+            DeleteBackupSet(fileName);
+            throw;
+        }
+        catch (Exception ex)
+        {
+            DeleteBackupSet(fileName);
+            throw new BackupStepException($"{step} mislukt ({ex.GetType().Name})", ex);
+        }
+    }
+
+    /// <summary>A failed run leaves a Failed row (visible in the listing, ignored by the
+    /// freshness signal), an audit entry and an error log with the reason — never a success.</summary>
+    private async Task RecordFailureAsync(
+        Guid id, string fileName, string source, string? note, DateTime createdAtUtc, string reason, Exception? cause)
+    {
+        _logger.LogError(cause, "Back-up {FileName} ({Source}) MISLUKT: {Reason}.", fileName, source, reason);
+        try
+        {
+            var text = $"{(note is null ? string.Empty : note + " · ")}Mislukt: {reason}";
+            _dbContext.DatabaseBackups.Add(new DatabaseBackup
+            {
+                Id = id,
+                FileName = fileName,
+                CreatedAtUtc = createdAtUtc,
+                SizeBytes = 0,
+                Source = source,
+                Status = "Failed",
+                Note = text.Length > 500 ? text[..500] : text,
+                CreatedByUserId = _currentUser?.CurrentUserId,
+            });
+            await _dbContext.SaveChangesAsync(CancellationToken.None);
+            await _auditService.RecordAsync("DatabaseBackup", id.ToString(), "BackupFailed",
+                null, new { Source = source, Reason = reason }, CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            // The DB may be the very thing that is down; the error log above already carries the reason.
+            _logger.LogError(ex, "Kon de mislukte back-up {FileName} niet registreren.", fileName);
+        }
+    }
+
+    private void LogToolOutput(string tool, string fileName, int exitCode, string stderr)
+    {
+        // LOG-04: tool stderr reaches the server log (it never contains the password, which only
+        // travels in the child environment).
+        if (exitCode != 0)
+        {
+            _logger.LogError("{Tool} voor {FileName} eindigde met exitcode {ExitCode}. stderr: {StdErr}",
+                tool, fileName, exitCode, string.IsNullOrWhiteSpace(stderr) ? "(leeg)" : stderr.Trim());
+        }
+        else if (!string.IsNullOrWhiteSpace(stderr))
+        {
+            _logger.LogWarning("{Tool} voor {FileName} meldde op stderr: {StdErr}", tool, fileName, stderr.Trim());
+        }
+    }
+
+    public async Task<bool> CanDownloadAsync(CancellationToken cancellationToken)
+    {
+        if (_currentUser?.CurrentUserId is not { } userId)
+        {
+            return false;
+        }
+
+        if (_permissionService is null
+            || !await _permissionService.UserHasPermissionAsync(
+                userId, Modules.Identity.PermissionCodes.BackupsDownload, cancellationToken))
+        {
+            return false;
+        }
+
+        // H8/SEC-03: a dump holds EVERY tenant's data, so a tenant-assignable permission alone is not
+        // enough — only members of the protected system Administrator role may take it off the server.
+        return await (
+                from ur in _dbContext.UserRoles.AsNoTracking()
+                join u in _dbContext.Users.AsNoTracking() on ur.UserId equals u.Id
+                join r in _dbContext.Roles.AsNoTracking() on ur.RoleId equals r.Id
+                where ur.UserId == userId
+                      && u.IsActive && !u.IsBlocked && u.CustomerId == null
+                      && r.IsSystemRole && r.IsActive && r.Name == AdministratorRoleName
+                      && r.TenantId == u.TenantId
+                select 1)
+            .AnyAsync(cancellationToken);
+    }
+
     public async Task<(Stream Content, string FileName)?> OpenDownloadAsync(Guid id, CancellationToken cancellationToken)
     {
+        if (!await CanDownloadAsync(cancellationToken))
+        {
+            throw new DomainValidationException(
+                "Alleen de systeemrol Administrator kan een volledige databaseback-up downloaden.");
+        }
+
         var backup = await _dbContext.DatabaseBackups.AsNoTracking()
             .FirstOrDefaultAsync(b => b.Id == id, cancellationToken);
         if (backup is null)
@@ -300,7 +540,7 @@ public class BackupService : IBackupService
                 "De nieuwste back-up is beschermd en kan niet worden verwijderd. Maak eerst een nieuwe back-up.");
         }
 
-        TryDelete(Path.Combine(BackupDirectory, backup.FileName));
+        DeleteBackupSet(backup.FileName);
         _dbContext.DatabaseBackups.Remove(backup);
         await _dbContext.SaveChangesAsync(cancellationToken);
         await _auditService.RecordAsync("DatabaseBackup", backup.Id.ToString(), "BackupDeleted",
@@ -310,6 +550,13 @@ public class BackupService : IBackupService
     public async Task<RestoreResultDto> RestoreAsync(
         Guid id, string typedConfirmation, CancellationToken cancellationToken)
     {
+        // H8: pg_restore --clean on the live database from an HTTP request is a Development
+        // convenience only. Fail-closed here as well as in the controller.
+        if (!InAppRestoreEnabled)
+        {
+            throw new DomainValidationException(RestoreDisabledMessage);
+        }
+
         await RequirePermissionAsync(Modules.Identity.PermissionCodes.BackupsRestore, cancellationToken);
         var backup = await _dbContext.DatabaseBackups
             .FirstOrDefaultAsync(b => b.Id == id, cancellationToken)
@@ -362,6 +609,7 @@ public class BackupService : IBackupService
                     "--exit-on-error", fullPath,
                 ],
                 PasswordEnvironment(conn), cancellationToken);
+            LogToolOutput("pg_restore", backup.FileName, exitCode, stderr);
             if (exitCode != 0)
             {
                 throw new DomainValidationException(
@@ -410,7 +658,7 @@ public class BackupService : IBackupService
             .ToListAsync(cancellationToken);
         foreach (var backup in expired)
         {
-            TryDelete(Path.Combine(BackupDirectory, backup.FileName));
+            DeleteBackupSet(backup.FileName);
             _dbContext.DatabaseBackups.Remove(backup);
         }
 
@@ -425,6 +673,14 @@ public class BackupService : IBackupService
     }
 
     // --- helpers -------------------------------------------------------------------------
+
+    /// <summary>A failed backup step; <see cref="Reason"/> is short, Dutch and secret-free.</summary>
+    private sealed class BackupStepException : Exception
+    {
+        public BackupStepException(string reason, Exception? inner = null) : base(reason, inner) => Reason = reason;
+
+        public string Reason { get; }
+    }
 
     /// <summary>Fail-closed (L7): no wired authorization = no destructive backup rights.</summary>
     private async Task RequirePermissionAsync(string code, CancellationToken cancellationToken)
@@ -488,6 +744,15 @@ public class BackupService : IBackupService
         {
             return null;
         }
+    }
+
+    /// <summary>Removes the dump and its companions (archive + manifest); older DB-only backups
+    /// simply have no companions.</summary>
+    private void DeleteBackupSet(string dumpFileName)
+    {
+        TryDelete(Path.Combine(BackupDirectory, dumpFileName));
+        TryDelete(Path.Combine(BackupDirectory, BackupArtifacts.ArchiveFileName(dumpFileName)));
+        TryDelete(Path.Combine(BackupDirectory, BackupArtifacts.ManifestFileName(dumpFileName)));
     }
 
     private static void TryDelete(string path)
