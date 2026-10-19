@@ -1,0 +1,57 @@
+# /etc/systemd/system/transportationservice-api.service
+#
+# EXAMPLE unit for the TransportationService API (docs/delivery/operations.md §3).
+# Install:   sudo install -m 0644 deploy/systemd/transportationservice-api.service /etc/systemd/system/
+#            sudo systemctl daemon-reload && sudo systemctl enable transportationservice-api
+# Adjust the paths below if your layout differs; scripts/deploy-transportationservice.sh checks
+# that ExecStart points at <API_BIN_DIR>/TransportationService.Api.dll.
+#
+# EXACTLY ONE INSTANCE. The API runs its background jobs (mail outbox, Peppol dispatch, sweeps,
+# retention, automatic backup) and its startup seeders in-process. Scale-out (a second unit, a
+# template unit transportationservice-api@N, blue/green with two live processes, or a second
+# host on the same database) is NOT supported for the pilot: mail and Peppol could be sent twice
+# and startup seeders race on unique indexes. This is a plain (non-template) unit on purpose.
+
+[Unit]
+Description=TransportationService API (single instance)
+Documentation=file:///var/www/transportationservice/TMS/docs/delivery/operations.md
+After=network-online.target postgresql.service
+Wants=network-online.target
+# Crash-loop guard: at most 5 starts per 10 minutes, then the unit stays 'failed' (alert on it).
+StartLimitIntervalSec=600
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=deploy
+Group=deploy
+# Release dir = the directory the deploy script installs the binaries into. It is also the
+# content root, so appsettings*.json are found. Durable files do NOT live here: they live in
+# Storage__RootPath (tms.env), e.g. /var/lib/transportationservice/storage (docs/storage.md).
+WorkingDirectory=/var/www/transportationservice/TMS/TransportationService.Api/bin/Release/net10.0
+ExecStart=/usr/bin/dotnet /var/www/transportationservice/TMS/TransportationService.Api/bin/Release/net10.0/TransportationService.Api.dll
+# Secrets and per-environment settings (root:deploy 0640). Never put secrets in this unit.
+EnvironmentFile=/etc/transportationservice/tms.env
+Environment=ASPNETCORE_URLS=http://127.0.0.1:5019
+Environment=DOTNET_PRINT_TELEMETRY_MESSAGE=false
+
+# Restart only after a crash, not after a clean stop by the deploy script.
+Restart=on-failure
+RestartSec=10
+# Startup seeders/backfills run before Kestrel listens; with Type=simple systemd does not wait for
+# them. The deploy script waits for GET /health/ready instead (STARTUP_WAIT_SECONDS).
+TimeoutStopSec=30
+KillSignal=SIGTERM
+SyslogIdentifier=transportationservice-api
+
+# Moderate hardening that does not break the app (DataProtection keys live in ~deploy/.aspnet).
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+UMask=0027
+
+[Install]
+WantedBy=multi-user.target
