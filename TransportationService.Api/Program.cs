@@ -226,16 +226,24 @@ builder.Services.AddScoped<TransportationService.Api.Modules.Gdpr.IDataSubjectSe
 builder.Services.AddSingleton<TransportationService.Api.Modules.Security.IUploadScanner,
     TransportationService.Api.Modules.Security.PassThroughUploadScanner>();
 
+// B1: ONE durable storage root (Storage:RootPath) for every file the app persists — uploads,
+// backups, the dev message sink. Resolved once and injected everywhere; outside Development an
+// unset or relative path refuses to start (docs/storage.md, "Bestandsopslag").
+var storageRoot = TransportationService.Api.Common.Storage.StorageRoot.Resolve(builder.Configuration, builder.Environment);
+builder.Services.AddSingleton(storageRoot);
+
 // File storage (all uploaded documents funnel through this chokepoint)
 builder.Services.AddSingleton<IFileStorageService>(serviceProvider =>
     new LocalFileStorageService(
-        Path.Combine(
-            builder.Environment.ContentRootPath,
-            "App_Data"
-        ),
+        storageRoot.RootPath,
         serviceProvider.GetRequiredService<TransportationService.Api.Modules.Security.IUploadScanner>()
     )
 );
+
+// Health checks owned by storage/backups. Endpoints are mapped elsewhere: /health/ready filters on
+// tag "ready"; "backup" is separate on purpose — a stale backup must alert, not take the app out of rotation.
+builder.Services.AddHealthChecks()
+    .AddCheck<TransportationService.Api.Common.Storage.StorageWritableHealthCheck>("storage", tags: ["ready"]);
 
 // Qualifications
 builder.Services.AddSingleton<
@@ -643,14 +651,13 @@ builder.Services.AddHostedService<TransportationService.Api.Modules.Notification
 
 // Messaging (provider-neutral email/SMS): outbox, dispatcher.
 // The DevelopmentSinkProvider writes rendered messages (including invite/activation links with
-// raw tokens) to App_Data/message-sink, so it is registered ONLY in Development. Outside
+// raw tokens) to <storage root>/message-sink, so it is registered ONLY in Development. Outside
 // Development a fail-closed placeholder is registered and StartupSecurityValidator refuses to
 // boot until a real provider exists — raw tokens can never leak via a production sink.
 if (builder.Environment.IsDevelopment())
 {
     builder.Services.AddSingleton<DevelopmentSinkProvider>(_ =>
-        new DevelopmentSinkProvider(
-            Path.Combine(builder.Environment.ContentRootPath, "App_Data", "message-sink")));
+        new DevelopmentSinkProvider(storageRoot.MessageSinkDirectory));
 
     builder.Services.AddSingleton<IEmailProvider>(sp =>
         sp.GetRequiredService<DevelopmentSinkProvider>());
@@ -761,6 +768,11 @@ TransportationService.Api.Modules.Security.ColumnEncryption.Initialize(
 // provider, etc.) before the host starts serving.
 TransportationService.Api.Modules.Security.StartupSecurityValidator.Validate(
     app.Environment, app.Configuration, app.Services);
+
+// B1: the storage root must be durable (outside the release dir the deploy rsyncs with --delete)
+// and writable before the host serves a single upload.
+TransportationService.Api.Common.Storage.StorageRootValidator.Validate(
+    storageRoot, app.Environment, app.Configuration, app.Logger);
 
 // Global reference data runs in every environment: the ISO country list must exist for
 // country validation and comboboxes regardless of how tenants are onboarded.

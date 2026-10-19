@@ -107,6 +107,9 @@ documents/
 # ...but source code is never an upload directory: without this exception the feature folder
 # src/features/dossiers/documents/ stays out of git and a clean checkout does not build.
 !TransportationService.Web/src/**/documents/
+# Same for the durable-storage code (core.ignorecase makes storage/ match Storage/).
+!TransportationService.Api/Common/Storage/
+!TransportationService.Api.Tests/Storage/
 temp/
 tmp/
 

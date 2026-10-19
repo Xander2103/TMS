@@ -1,3 +1,4 @@
+using TransportationService.Api.Common.Storage;
 using TransportationService.Api.Modules.Security;
 
 namespace TransportationService.Api.Modules.Qualifications.Services;
@@ -57,23 +58,8 @@ public class LocalFileStorageService : IFileStorageService
         return Task.CompletedTask;
     }
 
-    private string ResolveFullPath(string storageKey)
-    {
-        var normalized = storageKey.Replace('\\', '/');
-        if (normalized.Contains("..")) throw new ArgumentException("Invalid storage key.", nameof(storageKey));
-
-        var fullPath = Path.GetFullPath(Path.Combine(_rootPath, normalized));
-        // Compare with a trailing separator (L4): a bare StartsWith would accept a SIBLING
-        // directory whose name merely starts with the root ("C:\data" matching "C:\database").
-        var rootWithSeparator = Path.GetFullPath(_rootPath)
-            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
-        if (!fullPath.StartsWith(rootWithSeparator, StringComparison.OrdinalIgnoreCase))
-        {
-            throw new ArgumentException("Storage key escapes the storage root.", nameof(storageKey));
-        }
-
-        return fullPath;
-    }
+    // Traversal/escape guard shared with the integrity verifier (Common/Storage/StorageRoot).
+    private string ResolveFullPath(string storageKey) => StorageRoot.ResolveKeyPath(_rootPath, storageKey);
 
     private static string SanitizeSegment(string segment)
     {

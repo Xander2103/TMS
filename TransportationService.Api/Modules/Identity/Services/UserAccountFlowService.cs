@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
+using TransportationService.Api.Common.Storage;
 using TransportationService.Api.Data;
 using TransportationService.Api.Modules.Auditing.Services;
 using TransportationService.Api.Modules.Authentication.Entities;
@@ -46,6 +47,7 @@ public class UserAccountFlowService : IUserAccountFlowService
     private readonly IAuditService _auditService;
     private readonly TimeProvider _timeProvider;
     private readonly IHostEnvironment _environment;
+    private readonly StorageRoot _storageRoot;
 
     // Deliberately the OPTIONAL tenant accessor, not ITenantContext: forgot-password and
     // reset-password are anonymous and tenant-neutral by design (they scope by the token/email's
@@ -56,7 +58,8 @@ public class UserAccountFlowService : IUserAccountFlowService
         IPasswordHasher passwordHasher,
         IAuditService auditService,
         TimeProvider timeProvider,
-        IHostEnvironment environment)
+        IHostEnvironment environment,
+        StorageRoot? storageRoot = null)
     {
         _dbContext = dbContext;
         _tenantAccessor = tenantAccessor;
@@ -64,6 +67,7 @@ public class UserAccountFlowService : IUserAccountFlowService
         _auditService = auditService;
         _timeProvider = timeProvider;
         _environment = environment;
+        _storageRoot = storageRoot ?? StorageRoot.DevelopmentDefault(environment);
     }
 
     private static string NewRawToken() =>
@@ -167,7 +171,7 @@ public class UserAccountFlowService : IUserAccountFlowService
             // Mail delivery plugs in here later; Development drops the link in the message sink.
             if (_environment.IsDevelopment())
             {
-                var sinkDirectory = Path.Combine(AppContext.BaseDirectory, "App_Data", "message-sink");
+                var sinkDirectory = _storageRoot.MessageSinkDirectory;
                 Directory.CreateDirectory(sinkDirectory);
                 await File.AppendAllTextAsync(
                     Path.Combine(sinkDirectory, "password-resets.txt"),

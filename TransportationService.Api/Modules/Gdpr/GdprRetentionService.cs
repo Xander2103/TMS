@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using TransportationService.Api.Common.Storage;
 using TransportationService.Api.Data;
 using TransportationService.Api.Modules.Identity.Entities;
 using TransportationService.Api.Modules.Messaging.Entities;
@@ -103,7 +104,8 @@ public sealed class GdprRetentionHostedService : BackgroundService
                 var db = scope.ServiceProvider.GetRequiredService<TransportationDbContext>();
                 var clock = scope.ServiceProvider.GetRequiredService<TimeProvider>();
                 var options = scope.ServiceProvider.GetRequiredService<IOptions<RetentionOptions>>().Value;
-                var sinkDirectory = Path.Combine(AppContext.BaseDirectory, "App_Data", "message-sink");
+                // BG-09: the SAME directory the Development sink writes to (the storage root).
+                var sinkDirectory = scope.ServiceProvider.GetRequiredService<StorageRoot>().MessageSinkDirectory;
 
                 var result = await GdprRetentionService.SweepAsync(db, clock, options, sinkDirectory, stoppingToken);
                 if (options.LegalHold)
