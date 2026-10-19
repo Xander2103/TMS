@@ -36,8 +36,9 @@ reden (bv. `bestandsarchief (opslagmap) mislukt (UnauthorizedAccessException)` o
 - `ColumnEncryption:Key` en `ColumnEncryption:PreviousKeys`. Die staan in
   `/etc/transportationservice/tms.env`, niet in de storage root. Bewaar ze in een **vault**,
   apart van de back-ups. Zonder dezelfde sleutels zijn rijksregister- en
-  identiteitskaartnummers in een herstelde databank onleesbaar: de app start "gezond", maar het
-  personeelsdetail geeft een 500 (audit H5).
+  identiteitskaartnummers in een herstelde databank onleesbaar. De API controleert dat bij de
+  start en weigert dan te starten (audit H5; vroeger startte ze "gezond" en gaf het
+  personeelsdetail een 500). Rotatie, vorige sleutels en escrow: `docs/operations/encryption-keys.md`.
 - De rest van `tms.env` (databankwachtwoord, JWT-sleutel, SMTP), de systemd-unit en de
   nginx-config. Die bewaar je apart (vault of configuratiebeheer).
 - De dev-mailsink (ruwe tokens) en de back-upmap zelf (geen dumps in dumps).
