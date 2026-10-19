@@ -47,6 +47,11 @@ public sealed class SqliteTestDbContext : IDisposable
     public TransportationDbContext CreateContextForTenant(Guid tenantId) =>
         new(_options, new FixedTenantQueryFilterAccessor(tenantId));
 
+    /// <summary>Second context over the SAME database in system/background scope (filter open) —
+    /// e.g. a second dispatcher instance racing the first. Caller disposes.</summary>
+    public TransportationDbContext CreateSystemContext() =>
+        new(_options, new FixedTenantQueryFilterAccessor(null));
+
     public void Dispose()
     {
         Context.Dispose();

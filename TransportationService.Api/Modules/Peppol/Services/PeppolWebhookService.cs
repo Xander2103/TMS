@@ -12,9 +12,10 @@ public interface IPeppolWebhookService
 {
     /// <summary>
     /// Applies one provider callback. Idempotent: replays of the same message id / status are
-    /// acknowledged without effect. Never throws for bad payloads — the caller always answers
-    /// 200 after persist so the provider stops re-delivering; problems land in the log and the
-    /// review queue, never as a 500.
+    /// acknowledged without effect. Never throws for bad payloads — those are answered 200 so the
+    /// provider stops re-delivering; problems land in the log and the review queue. EXT-04: a
+    /// failure on OUR side (database/storage) returns <c>RetryLater</c> instead, which the
+    /// controller turns into a 503 so the provider redelivers (replays are deduplicated).
     /// </summary>
     Task<PeppolWebhookOutcomeDto> ProcessAsync(string providerKey, PeppolWebhookRequest request, CancellationToken cancellationToken);
 }
@@ -30,15 +31,19 @@ public class PeppolWebhookService : IPeppolWebhookService
     private readonly TimeProvider _timeProvider;
     private readonly IFileStorageService _fileStorage;
     private readonly ILogger<PeppolWebhookService>? _logger;
+    private readonly IPeppolProviderFactory? _providerFactory;
 
+    /// <param name="providerFactory">B4: status updates for Live transmissions are only accepted
+    /// from a live-capable provider; absent = never (fail closed).</param>
     public PeppolWebhookService(
         TransportationDbContext db, TimeProvider timeProvider, IFileStorageService fileStorage,
-        ILogger<PeppolWebhookService>? logger = null)
+        ILogger<PeppolWebhookService>? logger = null, IPeppolProviderFactory? providerFactory = null)
     {
         _db = db;
         _timeProvider = timeProvider;
         _fileStorage = fileStorage;
         _logger = logger;
+        _providerFactory = providerFactory;
     }
 
     public async Task<PeppolWebhookOutcomeDto> ProcessAsync(
@@ -64,11 +69,12 @@ public class PeppolWebhookService : IPeppolWebhookService
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            // Persist-side failures must not bounce the webhook into an endless redelivery
-            // loop; the log carries the evidence for manual follow-up.
+            // EXT-04: a persist-side failure must not be acknowledged — the provider would never
+            // redeliver and an incoming invoice would exist only in this log line. RetryLater →
+            // 503; the idempotency checks make the redelivery safe.
             _logger?.LogError(exception, "Peppol webhook processing failed for provider message {ProviderMessageId}.",
                 request.ProviderMessageId);
-            return new PeppolWebhookOutcomeDto(false, "Verwerking mislukt; gelogd voor opvolging.");
+            return new PeppolWebhookOutcomeDto(false, "Verwerking mislukt; probeer later opnieuw.", RetryLater: true);
         }
     }
 
@@ -84,6 +90,16 @@ public class PeppolWebhookService : IPeppolWebhookService
         if (transmission is null)
         {
             // Uniform wording — no existence oracle for message ids.
+            return new PeppolWebhookOutcomeDto(false, "Genegeerd.");
+        }
+
+        // B4: a Live transmission's status can only come from a provider that really transmits
+        // to the live network; anything else (the sandbox) could fake "Delivered".
+        if (PeppolLivePolicy.IsBlocked(_providerFactory, transmission.Environment, transmission.ProviderKey))
+        {
+            _logger?.LogCritical(
+                "Peppol webhook status for Live transmission {TransmissionId} via provider '{ProviderKey}' ignored: "
+                + "the provider cannot transmit to the live network.", transmission.Id, providerKey);
             return new PeppolWebhookOutcomeDto(false, "Genegeerd.");
         }
 

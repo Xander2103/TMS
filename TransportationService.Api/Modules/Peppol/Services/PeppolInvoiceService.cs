@@ -32,11 +32,14 @@ public class PeppolInvoiceService : IPeppolInvoiceService
 {
     private readonly TransportationDbContext _db;
     private readonly ITenantContext _tenant;
+    private readonly IPeppolProviderFactory? _providerFactory;
 
-    public PeppolInvoiceService(TransportationDbContext db, ITenantContext tenant)
+    /// <param name="providerFactory">B4: absent = Live counts as unavailable (fail closed).</param>
+    public PeppolInvoiceService(TransportationDbContext db, ITenantContext tenant, IPeppolProviderFactory? providerFactory = null)
     {
         _db = db;
         _tenant = tenant;
+        _providerFactory = providerFactory;
     }
 
     private sealed record InvoiceGraph(
@@ -173,7 +176,7 @@ public class PeppolInvoiceService : IPeppolInvoiceService
             ? graph.Invoice.CustomerBuyerReferenceSnapshot
             : graph.Invoice.CustomerBuyerReferenceSnapshot ?? graph.Customer.BuyerReference;
 
-    private static PeppolInvoiceValidationResultDto Validate(InvoiceGraph graph)
+    private PeppolInvoiceValidationResultDto Validate(InvoiceGraph graph)
     {
         var issues = new List<PeppolValidationIssueDto>();
         void Add(string code, string message) => issues.Add(new PeppolValidationIssueDto(code, message));
@@ -214,6 +217,10 @@ public class PeppolInvoiceService : IPeppolInvoiceService
             if (graph.Settings is not { Enabled: true })
             {
                 Add("company.peppol_disabled", $"Peppol is niet ingeschakeld voor '{seller.LegalName}' (Instellingen → Peppol).");
+            }
+            else if (PeppolLivePolicy.IsBlocked(_providerFactory, graph.Settings.Environment, graph.Settings.ProviderKey))
+            {
+                Add(PeppolLivePolicy.IssueCode, PeppolLivePolicy.NotConfiguredMessage);
             }
         }
 

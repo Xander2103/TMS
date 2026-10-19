@@ -117,7 +117,7 @@ public class PeppolFoundationTests
     public async Task Sandbox_FailureMarker_RefusesSubmissionAndValidation()
     {
         var sut = new SandboxPeppolProvider();
-        var request = new PeppolOutboundRequest("0208", "1", "0208", "2", "<xml>SANDBOX-FAIL</xml>", "hash", Guid.NewGuid());
+        var request = new PeppolOutboundRequest("0208", "1", "0208", "2", "<xml>SANDBOX-FAIL</xml>", "hash", Guid.NewGuid(), "key-1");
 
         var submission = await sut.SendDocumentAsync(request, CancellationToken.None);
         var validation = await sut.ValidateDocumentAsync("<xml>SANDBOX-FAIL</xml>", CancellationToken.None);
@@ -132,7 +132,7 @@ public class PeppolFoundationTests
     public async Task Sandbox_StatusPolling_AdvancesToDelivered()
     {
         var sut = new SandboxPeppolProvider();
-        var request = new PeppolOutboundRequest("0208", "1", "0208", "2", "<xml/>", "hash", Guid.NewGuid());
+        var request = new PeppolOutboundRequest("0208", "1", "0208", "2", "<xml/>", "hash", Guid.NewGuid(), "key-1");
         var submission = await sut.SendDocumentAsync(request, CancellationToken.None);
         Assert.True(submission.Accepted);
         var messageId = submission.ProviderMessageId!;

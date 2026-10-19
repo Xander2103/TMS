@@ -28,6 +28,16 @@ public enum PeppolTransmissionStatus
     /// <summary>Reserved; transmissions are created directly as Queued today.</summary>
     Validated = 1,
     Queued = 2,
+
+    /// <summary>
+    /// H3: claimed by exactly one dispatcher (atomic conditional UPDATE from Queued) and persisted
+    /// with its idempotency key BEFORE the provider is contacted. A row that stays here past the
+    /// reconcile window (crash/timeout around the network call) is resolved by looking the key up
+    /// at the provider — never by blindly resubmitting. Non-terminal: it occupies the invoice's
+    /// one-active-transmission slot and cannot be cancelled (the document may be out).
+    /// </summary>
+    Submitting = 9,
+
     SubmittedToProvider = 3,
     AcceptedByProvider = 4,
     Delivered = 5,

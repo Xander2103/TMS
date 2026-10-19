@@ -72,8 +72,15 @@ public class PeppolWebhookController : ControllerBase
         }
 
         var outcome = await _webhookService.ProcessAsync(providerKey, request, cancellationToken);
-        // Always 200 once authenticated and persisted/deduped — a non-2xx would make the
-        // provider redeliver forever; the outcome body says what happened.
+        if (outcome.RetryLater)
+        {
+            // EXT-04: storing failed on our side — ask the provider to redeliver (deduplicated).
+            Response.Headers.RetryAfter = "60";
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, outcome);
+        }
+
+        // 200 once authenticated and persisted/deduped/ignored — a non-2xx for a payload we will
+        // never accept would make the provider redeliver forever; the outcome body says what happened.
         return Ok(outcome);
     }
 }

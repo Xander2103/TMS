@@ -41,6 +41,20 @@ public class PeppolTransmission : AuditableTenantEntity
     /// <summary>Stable id correlating this transmission's provider calls end-to-end.</summary>
     public Guid CorrelationId { get; set; } = Guid.NewGuid();
 
+    /// <summary>
+    /// H3: the key passed to the provider with every submission of THIS transmission, persisted
+    /// together with the Submitting claim before the network call. A retry after Failed/Rejected
+    /// is a new transmission and therefore a new key (a deliberate new submission).
+    /// </summary>
+    public string? IdempotencyKey { get; set; }
+
+    /// <summary>H3: when the current/last Submitting claim was taken (reconcile window anchor).</summary>
+    public DateTime? SubmissionClaimedAt { get; set; }
+
+    /// <summary>EXT-03: status polling picks rows by this moment (least recently polled first, with
+    /// backoff by age) so a backlog of never-final transmissions can no longer starve newer ones.</summary>
+    public DateTime? NextPollAt { get; set; }
+
     public List<PeppolTransmissionEvent> Events { get; set; } = [];
 }
 

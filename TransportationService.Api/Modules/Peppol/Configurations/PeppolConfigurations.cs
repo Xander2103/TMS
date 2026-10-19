@@ -45,12 +45,15 @@ public class PeppolTransmissionConfiguration : IEntityTypeConfiguration<PeppolTr
         builder.Property(t => t.PayloadHash).HasMaxLength(64);
         builder.Property(t => t.ErrorDetail).HasMaxLength(2000);
         builder.Property(t => t.ResponseCode).HasMaxLength(50);
+        builder.Property(t => t.IdempotencyKey).HasMaxLength(100);
 
         // Named explicitly so this plain lookup index stays DISTINCT from the filtered unique
         // index below — a second HasIndex over the same properties without its own name would
         // silently reconfigure the first instead of adding one.
         builder.HasIndex(t => new { t.TenantId, t.InvoiceId }, "IX_peppol_transmissions_tenant_invoice");
         builder.HasIndex(t => new { t.TenantId, t.Status }).HasDatabaseName("IX_peppol_transmissions_tenant_status");
+        // EXT-03: the dispatcher's poll pass is tenant-agnostic and ordered by NextPollAt.
+        builder.HasIndex(t => new { t.Status, t.NextPollAt }).HasDatabaseName("IX_peppol_transmissions_status_next_poll");
 
         // At most one NON-TERMINAL transmission per invoice. Partial unique index — the filter
         // syntax is valid on both PostgreSQL and the SQLite test harness, so tests exercise the

@@ -203,10 +203,17 @@ public class PeppolTransmissionTests
         Assert.NotNull(transmission.ProviderMessageId);
 
         // Run 2: poll → AcceptedByProvider. Run 3: poll → Delivered. Only provider polls deliver.
+        // EXT-03: a polled row waits for its NextPollAt — not polled again within the same minute.
+        await h.Dispatcher.ProcessPendingAsync(10, CancellationToken.None);
+        await h.Db.Context.Entry(transmission).ReloadAsync();
+        Assert.Equal(PeppolTransmissionStatus.SubmittedToProvider, transmission.Status);
+        h.Clock.Advance(TimeSpan.FromMinutes(1));
+
         await h.Dispatcher.ProcessPendingAsync(10, CancellationToken.None);
         await h.Db.Context.Entry(transmission).ReloadAsync();
         Assert.Equal(PeppolTransmissionStatus.AcceptedByProvider, transmission.Status);
 
+        h.Clock.Advance(TimeSpan.FromMinutes(1));
         await h.Dispatcher.ProcessPendingAsync(10, CancellationToken.None);
         await h.Db.Context.Entry(transmission).ReloadAsync();
         Assert.Equal(PeppolTransmissionStatus.Delivered, transmission.Status);

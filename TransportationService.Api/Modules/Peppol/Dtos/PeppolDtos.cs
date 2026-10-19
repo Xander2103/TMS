@@ -7,7 +7,11 @@ public record PeppolSettingsDto(
     string Environment,
     string ProviderKey,
     string? InvoiceEmailFallback,
-    string? DefaultInvoiceNote);
+    string? DefaultInvoiceNote,
+    /// <summary>B4: a real live-network Access Point provider is registered (false today).</summary>
+    bool LiveProviderAvailable = false,
+    /// <summary>B4: this row is set to Live but its provider cannot transmit — nothing is sent.</summary>
+    bool LiveBlocked = false);
 
 public record SavePeppolSettingsRequest(
     bool Enabled,
@@ -26,7 +30,9 @@ public record PeppolChecklistItemDto(
     bool Enabled,
     string Environment,
     string ProviderKey,
-    bool IsComplete);
+    bool IsComplete,
+    /// <summary>B4: set to Live without a live-capable provider — sending is disabled.</summary>
+    bool LiveBlocked = false);
 
 public record PeppolCountsDto(int Queued, int Delivered, int Failed, int ReceivedIncoming);
 
@@ -36,7 +42,9 @@ public record PeppolOverviewDto(
     /// <summary>Customers with Peppol enabled but missing a Peppol id/scheme.</summary>
     int CustomersEnabledWithoutPeppolId,
     /// <summary>Active customers with no Peppol id/scheme at all (informational, Peppol not necessarily wanted).</summary>
-    int ActiveCustomersMissingPeppolData);
+    int ActiveCustomersMissingPeppolData,
+    /// <summary>B4: a real live-network Access Point provider is registered (false today).</summary>
+    bool LiveProviderAvailable = false);
 
 public record PeppolTestConnectionResultDto(
     bool Found,
@@ -78,7 +86,9 @@ public record PeppolTransmissionDto(
     string? ErrorDetail,
     int RetryCount,
     DateTime CreatedAt,
-    IReadOnlyList<PeppolTransmissionEventDto> Events);
+    IReadOnlyList<PeppolTransmissionEventDto> Events,
+    /// <summary>B4: a Live transmission whose provider cannot transmit to the live network.</summary>
+    bool LiveProviderMissing = false);
 
 public record PeppolTransmissionListItemDto(
     Guid Id,
@@ -95,7 +105,9 @@ public record PeppolTransmissionListItemDto(
     string? ErrorDetail,
     int RetryCount,
     int PayloadVersion,
-    DateTime CreatedAt);
+    DateTime CreatedAt,
+    /// <summary>B4: a Live transmission whose provider cannot transmit to the live network.</summary>
+    bool LiveProviderMissing = false);
 
 public record PeppolIncomingDocumentDto(
     Guid Id,
@@ -131,7 +143,9 @@ public record PeppolWebhookIncomingDocument(
     string? Currency = null,
     string? PayloadXml = null);
 
-public record PeppolWebhookOutcomeDto(bool Accepted, string? Reason);
+/// <param name="RetryLater">EXT-04: processing failed on OUR side (database/storage); the
+/// controller answers 503 so the provider redelivers instead of the document being lost.</param>
+public record PeppolWebhookOutcomeDto(bool Accepted, string? Reason, bool RetryLater = false);
 
 /// <summary>Structured summary of what the UBL document will contain (no XML parsing in the UI).</summary>
 public record PeppolInvoicePreviewDto(

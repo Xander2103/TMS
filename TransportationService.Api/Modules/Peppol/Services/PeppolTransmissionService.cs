@@ -55,12 +55,17 @@ public class PeppolTransmissionService : IPeppolTransmissionService
     private readonly TimeProvider _timeProvider;
     private readonly INotificationEventService? _notificationEvents;
     private readonly ILogger<PeppolTransmissionService>? _logger;
+    private readonly IPeppolProviderFactory? _providerFactory;
 
+    /// <param name="providerFactory">B4: decides whether Live may transmit. Absent = Live is
+    /// treated as unavailable (fail closed); Sandbox is unaffected.</param>
     public PeppolTransmissionService(
         TransportationDbContext db, ITenantContext tenant, IAuditService audit,
         IPeppolInvoiceService invoiceDocuments, IFileStorageService fileStorage, TimeProvider timeProvider,
-        INotificationEventService? notificationEvents = null, ILogger<PeppolTransmissionService>? logger = null)
+        INotificationEventService? notificationEvents = null, ILogger<PeppolTransmissionService>? logger = null,
+        IPeppolProviderFactory? providerFactory = null)
     {
+        _providerFactory = providerFactory;
         _db = db;
         _tenant = tenant;
         _audit = audit;
@@ -99,6 +104,18 @@ public class PeppolTransmissionService : IPeppolTransmissionService
         {
             throw new DomainValidationException(
                 "Er is al een actieve Peppol-verzending voor deze factuur. Wacht tot die is afgerond of annuleer haar eerst.");
+        }
+
+        // B4: refuse BEFORE anything is rendered/stored — a Live configuration without a live
+        // provider would otherwise be "delivered" by the sandbox while nothing left the building.
+        if (invoice.LegalEntityId is { } liveCheckEntityId
+            && await _db.PeppolSettings.AsNoTracking()
+                .Where(s => s.TenantId == TenantId && s.LegalEntityId == liveCheckEntityId)
+                .Select(s => new { s.Environment, s.ProviderKey })
+                .FirstOrDefaultAsync(cancellationToken) is { } liveCheck
+            && PeppolLivePolicy.IsBlocked(_providerFactory, liveCheck.Environment, liveCheck.ProviderKey))
+        {
+            throw new DomainValidationException(PeppolLivePolicy.NotConfiguredMessage);
         }
 
         var rendered = await _invoiceDocuments.GetXmlAsync(invoiceId, cancellationToken)
@@ -176,6 +193,12 @@ public class PeppolTransmissionService : IPeppolTransmissionService
         {
             throw new DomainValidationException(
                 "Alleen mislukte of geweigerde verzendingen kunnen opnieuw geprobeerd worden.");
+        }
+
+        // B4: a retry keeps the stamped environment/provider, so a Live retry needs a live provider.
+        if (PeppolLivePolicy.IsBlocked(_providerFactory, failed.Environment, failed.ProviderKey))
+        {
+            throw new DomainValidationException(PeppolLivePolicy.NotConfiguredMessage);
         }
 
         // The invoice may have been cancelled since the original attempt.
@@ -328,7 +351,8 @@ public class PeppolTransmissionService : IPeppolTransmissionService
             r.t.Id, r.i.Id, r.i.InvoiceNumber, r.t.DocumentKind.ToString(), r.CustomerName,
             totals.GetValueOrDefault(r.i.Id), r.i.Currency, r.i.InvoiceDate,
             r.t.Status.ToString(), r.t.Environment.ToString(), r.t.ProviderMessageId,
-            r.t.ErrorDetail, r.t.RetryCount, r.t.PayloadVersion, r.t.CreatedAt)).ToList();
+            r.t.ErrorDetail, r.t.RetryCount, r.t.PayloadVersion, r.t.CreatedAt,
+            PeppolLivePolicy.IsBlocked(_providerFactory, r.t.Environment, r.t.ProviderKey))).ToList();
         return new PagedResult<PeppolTransmissionListItemDto>(items, total, page.Page, page.PageSize);
     }
 
@@ -346,7 +370,8 @@ public class PeppolTransmissionService : IPeppolTransmissionService
             transmission.ErrorDetail, transmission.RetryCount, transmission.CreatedAt,
             events.OrderBy(e => e.Timestamp).ThenBy(e => e.CreatedAt)
                 .Select(e => new PeppolTransmissionEventDto(e.Status.ToString(), e.Timestamp, e.Detail))
-                .ToList());
+                .ToList(),
+            PeppolLivePolicy.IsBlocked(_providerFactory, transmission.Environment, transmission.ProviderKey));
     }
 
     private sealed record ParticipantGraph(

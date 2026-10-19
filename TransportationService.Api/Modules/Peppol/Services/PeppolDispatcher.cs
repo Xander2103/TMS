@@ -15,17 +15,31 @@ namespace TransportationService.Api.Modules.Peppol.Services;
 /// <summary>
 /// Outbox-style background worker for Peppol transmissions, across ALL tenants (rows carry
 /// their TenantId; per-tenant services are constructed explicitly, the hosted-service
-/// pattern used by the expiry sweep). Two passes per run:
-/// 1. submit: Queued rows whose NextAttemptAt has passed → provider SendDocument →
-///    SubmittedToProvider / retry with exponential backoff (5m × 2^n, max 5) → Failed;
-/// 2. poll: SubmittedToProvider/AcceptedByProvider rows → provider GetTransmissionStatus →
-///    AcceptedByProvider / Delivered / Rejected.
-/// Delivered is ONLY ever set from a provider status response — never on local success.
+/// pattern used by the expiry sweep). Three passes per run:
+/// 0. reconcile: Submitting rows older than <see cref="SubmittingReconcileAfter"/> (a crash or
+///    timeout around the network call) → provider lookup BY IDEMPOTENCY KEY → SubmittedToProvider
+///    when the provider has it, back to Queued (same key) only when the provider confirms it
+///    does not; an unknown answer leaves the row Submitting. Never a blind resubmit (H3).
+/// 1. submit: Queued rows whose NextAttemptAt has passed → atomic claim (conditional UPDATE
+///    Queued → Submitting + idempotency key, so two dispatchers/instances can never both send)
+///    → provider SendDocument with the key → SubmittedToProvider / retry with exponential
+///    backoff (5m × 2^n, max 5) → Failed;
+/// 2. poll: SubmittedToProvider/AcceptedByProvider rows, least recently polled first with an
+///    age-based backoff (EXT-03) → provider GetTransmissionStatus → AcceptedByProvider /
+///    Delivered / Rejected.
+/// Delivered is ONLY ever set from a provider status response — never on local success — and a
+/// Live transmission is never submitted, polled or delivered through a provider that cannot
+/// transmit to the live network (B4, <see cref="PeppolLivePolicy"/>). Notifications are
+/// published only AFTER the guarded save of the transition they announce.
 /// </summary>
 public class PeppolDispatcher
 {
     public const int MaxAttempts = 5;
     private static readonly TimeSpan BaseBackoff = TimeSpan.FromMinutes(5);
+
+    /// <summary>A claim older than this is considered interrupted and reconciled via lookup.
+    /// Far above any provider call timeout, so a slow but live send is never second-guessed.</summary>
+    public static readonly TimeSpan SubmittingReconcileAfter = TimeSpan.FromMinutes(10);
 
     private readonly TransportationDbContext _db;
     private readonly IPeppolProviderFactory _providerFactory;
@@ -46,35 +60,99 @@ public class PeppolDispatcher
         _logger = loggerFactory?.CreateLogger<PeppolDispatcher>();
     }
 
+    /// <summary>The provider-facing idempotency key of a transmission (stable, no secrets).</summary>
+    public static string BuildIdempotencyKey(PeppolTransmission transmission) =>
+        $"tms-peppol-{transmission.Id:N}";
+
+    /// <summary>EXT-03: poll young transmissions often, old never-final ones rarely.</summary>
+    public static TimeSpan PollDelay(TimeSpan age) =>
+        age < TimeSpan.FromHours(1) ? TimeSpan.FromMinutes(1)
+        : age < TimeSpan.FromDays(1) ? TimeSpan.FromMinutes(15)
+        : TimeSpan.FromHours(1);
+
     public async Task ProcessPendingAsync(int batchSize, CancellationToken cancellationToken)
     {
         var now = _timeProvider.GetUtcNow().UtcDateTime;
 
-        var toSubmit = await _db.PeppolTransmissions
+        await ReconcileInterruptedSubmissionsAsync(now, batchSize, cancellationToken);
+
+        var toSubmit = await _db.PeppolTransmissions.AsNoTracking()
             .Where(t => t.Status == PeppolTransmissionStatus.Queued
                         && (t.NextAttemptAt == null || t.NextAttemptAt <= now))
             .OrderBy(t => t.CreatedAt)
+            .Select(t => t.Id)
             .Take(batchSize)
             .ToListAsync(cancellationToken);
-        foreach (var transmission in toSubmit)
+        foreach (var transmissionId in toSubmit)
         {
-            await SubmitAsync(transmission, cancellationToken);
+            await SubmitAsync(transmissionId, cancellationToken);
         }
 
-        var toPoll = await _db.PeppolTransmissions
-            .Where(t => t.Status == PeppolTransmissionStatus.SubmittedToProvider
-                        || t.Status == PeppolTransmissionStatus.AcceptedByProvider)
-            .OrderBy(t => t.CreatedAt)
+        var pollNow = _timeProvider.GetUtcNow().UtcDateTime;
+        var toPoll = await _db.PeppolTransmissions.AsNoTracking()
+            .Where(t => (t.Status == PeppolTransmissionStatus.SubmittedToProvider
+                         || t.Status == PeppolTransmissionStatus.AcceptedByProvider)
+                        && (t.NextPollAt == null || t.NextPollAt <= pollNow))
+            .OrderBy(t => t.NextPollAt == null ? 0 : 1)
+            .ThenBy(t => t.NextPollAt)
+            .ThenBy(t => t.CreatedAt)
+            .Select(t => t.Id)
             .Take(batchSize)
             .ToListAsync(cancellationToken);
-        foreach (var transmission in toPoll)
+        foreach (var transmissionId in toPoll)
         {
-            await PollAsync(transmission, cancellationToken);
+            if (await LoadFreshAsync(transmissionId, cancellationToken) is { Status: PeppolTransmissionStatus.SubmittedToProvider or PeppolTransmissionStatus.AcceptedByProvider } transmission)
+            {
+                await PollAsync(transmission, cancellationToken);
+            }
         }
     }
 
-    private async Task SubmitAsync(PeppolTransmission transmission, CancellationToken cancellationToken)
+    /// <summary>
+    /// Current database state of one transmission. A row this context already tracks is RELOADED
+    /// (a plain query would hand back the tracked, possibly stale instance) — every decision of the
+    /// dispatcher is taken on fresh state, and the status concurrency token carries that state.
+    /// </summary>
+    private async Task<PeppolTransmission?> LoadFreshAsync(Guid transmissionId, CancellationToken cancellationToken)
     {
+        var tracked = _db.ChangeTracker.Entries<PeppolTransmission>().FirstOrDefault(e => e.Entity.Id == transmissionId);
+        if (tracked is null)
+        {
+            return await _db.PeppolTransmissions.FirstOrDefaultAsync(t => t.Id == transmissionId, cancellationToken);
+        }
+
+        await tracked.ReloadAsync(cancellationToken);
+        return tracked.State == EntityState.Detached ? null : tracked.Entity;
+    }
+
+    /// <summary>
+    /// H3: the atomic claim. One conditional UPDATE (Queued and due → Submitting + key + claim
+    /// time); exactly one caller — across dispatchers, scopes and API instances — sees one
+    /// affected row. Everyone else must leave the transmission alone.
+    /// </summary>
+    public async Task<bool> TryClaimAsync(Guid transmissionId, string idempotencyKey, CancellationToken cancellationToken)
+    {
+        var now = _timeProvider.GetUtcNow().UtcDateTime;
+        var affected = await _db.PeppolTransmissions
+            .Where(t => t.Id == transmissionId
+                        && t.Status == PeppolTransmissionStatus.Queued
+                        && (t.NextAttemptAt == null || t.NextAttemptAt <= now))
+            .ExecuteUpdateAsync(set => set
+                .SetProperty(t => t.Status, PeppolTransmissionStatus.Submitting)
+                .SetProperty(t => t.IdempotencyKey, idempotencyKey)
+                .SetProperty(t => t.SubmissionClaimedAt, now)
+                .SetProperty(t => t.UpdatedAt, now), cancellationToken);
+        return affected == 1;
+    }
+
+    private async Task SubmitAsync(Guid transmissionId, CancellationToken cancellationToken)
+    {
+        var transmission = await LoadFreshAsync(transmissionId, cancellationToken);
+        if (transmission is null || transmission.Status != PeppolTransmissionStatus.Queued)
+        {
+            return;
+        }
+
         var now = _timeProvider.GetUtcNow().UtcDateTime;
 
         // Second belt behind the invoice-cancel hook: a transmission whose invoice is no longer
@@ -88,59 +166,198 @@ public class PeppolDispatcher
             transmission.Status = PeppolTransmissionStatus.Cancelled;
             AddEvent(transmission, PeppolTransmissionStatus.Cancelled, now,
                 "Factuur is niet langer verzonden/betaald; verzending vervallen.");
-            await SaveGuardedAsync(transmission, cancellationToken);
+            await SaveGuardedAsync(transmission, CancellationToken.None);
             return;
         }
 
+        // B4: a Live transmission never goes through a provider that cannot reach the live
+        // network (today: the sandbox, which only simulates). Nothing is sent; the row fails
+        // terminally with the reason, so nobody believes the invoice left the building.
+        if (PeppolLivePolicy.IsBlocked(_providerFactory, transmission.Environment, transmission.ProviderKey))
+        {
+            await FailLiveWithoutProviderAsync(transmission, now, cancellationToken);
+            return;
+        }
+
+        // H3: claim + key persisted BEFORE the provider is contacted.
+        var key = transmission.IdempotencyKey ?? BuildIdempotencyKey(transmission);
+        if (!await TryClaimAsync(transmission.Id, key, cancellationToken))
+        {
+            // Another dispatcher/instance owns it (or a cancel won); never send it here.
+            await _db.Entry(transmission).ReloadAsync(cancellationToken);
+            return;
+        }
+
+        await _db.Entry(transmission).ReloadAsync(cancellationToken); // Status = Submitting (token original value)
+
+        IPeppolProvider provider;
+        string xml;
         try
         {
-            var provider = _providerFactory.Resolve(transmission.ProviderKey);
-            var xml = await ReadPayloadAsync(transmission, cancellationToken);
-            var (sellerScheme, sellerId) = SplitParticipant(transmission.SellerParticipant);
-            var (buyerScheme, buyerId) = SplitParticipant(transmission.BuyerParticipant);
-
-            var result = await provider.SendDocumentAsync(new PeppolOutboundRequest(
-                sellerScheme, sellerId, buyerScheme, buyerId, xml,
-                transmission.PayloadHash ?? string.Empty, transmission.CorrelationId), cancellationToken);
-
-            if (result.Accepted)
-            {
-                transmission.Status = PeppolTransmissionStatus.SubmittedToProvider;
-                transmission.ProviderMessageId = result.ProviderMessageId;
-                AddEvent(transmission, PeppolTransmissionStatus.SubmittedToProvider, now,
-                    $"Aangeboden aan provider ({transmission.ProviderKey}).");
-            }
-            else
-            {
-                await HandleSubmitFailureAsync(transmission, Sanitize(result.Error) ?? "Provider weigerde het document.", now, cancellationToken);
-            }
+            provider = _providerFactory.Resolve(transmission.ProviderKey);
+            xml = await ReadPayloadAsync(transmission, cancellationToken);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            _logger?.LogError(exception, "Peppol submit failed for transmission {TransmissionId}.", transmission.Id);
-            await HandleSubmitFailureAsync(transmission, "Technische fout bij het aanbieden aan de provider.", now, cancellationToken);
+            // Definitely nothing sent yet: an ordinary failed attempt.
+            _logger?.LogError(exception, "Peppol submit preparation failed for transmission {TransmissionId}.", transmission.Id);
+            var notify = HandleSubmitFailure(transmission, "Technische fout bij het voorbereiden van de verzending.", now);
+            await SaveAndNotifyAsync(transmission, notify, cancellationToken);
+            return;
         }
 
-        await SaveGuardedAsync(transmission, cancellationToken);
+        PeppolSubmissionResult result;
+        try
+        {
+            var (sellerScheme, sellerId) = SplitParticipant(transmission.SellerParticipant);
+            var (buyerScheme, buyerId) = SplitParticipant(transmission.BuyerParticipant);
+            result = await provider.SendDocumentAsync(new PeppolOutboundRequest(
+                sellerScheme, sellerId, buyerScheme, buyerId, xml,
+                transmission.PayloadHash ?? string.Empty, transmission.CorrelationId, key), cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            // Outcome UNKNOWN (timeout, connection reset after the request went out, …): the row
+            // stays Submitting and is reconciled by key lookup — a resend could double-submit.
+            _logger?.LogError(exception,
+                "Peppol submit outcome unknown for transmission {TransmissionId}; left Submitting for reconciliation.",
+                transmission.Id);
+            AddEvent(transmission, PeppolTransmissionStatus.Submitting, now,
+                "Uitkomst van het aanbieden onbekend (technische fout); wordt nagekeken bij de provider, niet opnieuw verzonden.");
+            await SaveGuardedAsync(transmission, CancellationToken.None);
+            return;
+        }
+
+        PendingNotification? notification = null;
+        if (result.Accepted)
+        {
+            transmission.Status = PeppolTransmissionStatus.SubmittedToProvider;
+            transmission.ProviderMessageId = result.ProviderMessageId;
+            transmission.NextPollAt = now; // first status poll right away
+            AddEvent(transmission, PeppolTransmissionStatus.SubmittedToProvider, now,
+                $"Aangeboden aan provider ({transmission.ProviderKey}).");
+        }
+        else
+        {
+            notification = HandleSubmitFailure(transmission, Sanitize(result.Error) ?? "Provider weigerde het document.", now);
+        }
+
+        // The document may be out: persist the outcome even when shutdown was requested.
+        await SaveAndNotifyAsync(transmission, notification, CancellationToken.None);
     }
 
     /// <summary>
-    /// Saves a transmission transition; when a concurrent actor (cancel, webhook) changed the
-    /// status first, OUR transition is discarded — the other side's decision wins and the next
-    /// run re-evaluates from fresh state.
+    /// H3 crash recovery for claims older than <see cref="SubmittingReconcileAfter"/>: ask the
+    /// provider whether it has the key. Found → SubmittedToProvider with the provider's id. Not
+    /// found → the document never arrived: Queued again (same key, counts as an attempt). Unknown
+    /// (lookup throws) → untouched, asked again next run. Never resubmits on its own.
     /// </summary>
-    private async Task SaveGuardedAsync(PeppolTransmission transmission, CancellationToken cancellationToken)
+    private async Task ReconcileInterruptedSubmissionsAsync(DateTime now, int batchSize, CancellationToken cancellationToken)
+    {
+        var cutoff = now - SubmittingReconcileAfter;
+        var stuck = await _db.PeppolTransmissions.AsNoTracking()
+            .Where(t => t.Status == PeppolTransmissionStatus.Submitting
+                        && (t.SubmissionClaimedAt == null || t.SubmissionClaimedAt <= cutoff))
+            .OrderBy(t => t.SubmissionClaimedAt)
+            .Select(t => t.Id)
+            .Take(batchSize)
+            .ToListAsync(cancellationToken);
+
+        foreach (var transmissionId in stuck)
+        {
+            if (await LoadFreshAsync(transmissionId, cancellationToken) is not { Status: PeppolTransmissionStatus.Submitting } transmission)
+            {
+                continue;
+            }
+
+            if (PeppolLivePolicy.IsBlocked(_providerFactory, transmission.Environment, transmission.ProviderKey))
+            {
+                await FailLiveWithoutProviderAsync(transmission, now, cancellationToken);
+                continue;
+            }
+
+            var key = transmission.IdempotencyKey ?? BuildIdempotencyKey(transmission);
+            PeppolSubmissionLookupResult lookup;
+            try
+            {
+                lookup = await _providerFactory.Resolve(transmission.ProviderKey).FindSubmissionAsync(key, cancellationToken);
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                _logger?.LogWarning(exception,
+                    "Peppol submission lookup failed for interrupted transmission {TransmissionId}; it stays Submitting.",
+                    transmission.Id);
+                continue;
+            }
+
+            PendingNotification? notification = null;
+            if (lookup.Found)
+            {
+                transmission.Status = PeppolTransmissionStatus.SubmittedToProvider;
+                transmission.ProviderMessageId = lookup.ProviderMessageId;
+                transmission.NextPollAt = now;
+                AddEvent(transmission, PeppolTransmissionStatus.SubmittedToProvider, now,
+                    "Hersteld na onderbreking: de provider bevestigt ontvangst van deze zending (niet opnieuw verzonden).");
+                _logger?.LogWarning("Interrupted Peppol transmission {TransmissionId} reconciled: provider has it.", transmission.Id);
+            }
+            else
+            {
+                notification = HandleSubmitFailure(transmission,
+                    "Onderbroken verzending; de provider kent haar niet en ze wordt opnieuw aangeboden met dezelfde sleutel.", now);
+                if (transmission.Status == PeppolTransmissionStatus.Queued)
+                {
+                    transmission.NextAttemptAt = now; // the provider confirmed it never arrived
+                }
+
+                _logger?.LogWarning("Interrupted Peppol transmission {TransmissionId} reconciled: provider does not have it.",
+                    transmission.Id);
+            }
+
+            await SaveAndNotifyAsync(transmission, notification, cancellationToken);
+        }
+    }
+
+    private async Task FailLiveWithoutProviderAsync(PeppolTransmission transmission, DateTime now, CancellationToken cancellationToken)
+    {
+        _logger?.LogCritical(
+            "Peppol transmission {TransmissionId} (tenant {TenantId}) is set to Live but provider '{ProviderKey}' cannot "
+            + "transmit to the live Peppol network. Nothing was sent; the transmission is failed.",
+            transmission.Id, transmission.TenantId, transmission.ProviderKey);
+        transmission.Status = PeppolTransmissionStatus.Failed;
+        transmission.ErrorDetail = PeppolLivePolicy.NotConfiguredMessage;
+        AddEvent(transmission, PeppolTransmissionStatus.Failed, now, PeppolLivePolicy.NotConfiguredMessage);
+        await SaveAndNotifyAsync(transmission,
+            new PendingNotification(MessageKinds.InvoicePeppolFailed, PeppolLivePolicy.NotConfiguredLabel), cancellationToken);
+    }
+
+    /// <summary>Saves the transition; the notification goes out only when OUR transition won.</summary>
+    private async Task SaveAndNotifyAsync(
+        PeppolTransmission transmission, PendingNotification? notification, CancellationToken cancellationToken)
+    {
+        if (await SaveGuardedAsync(transmission, cancellationToken) && notification is { } pending)
+        {
+            await NotifyAsync(transmission, pending.EventKey, pending.Reason, CancellationToken.None);
+        }
+    }
+
+    /// <summary>
+    /// Saves a transmission transition; when a concurrent actor (cancel, webhook, another
+    /// instance) changed the status first, OUR transition is discarded — the other side's
+    /// decision wins and the next run re-evaluates from fresh state. False when discarded.
+    /// </summary>
+    private async Task<bool> SaveGuardedAsync(PeppolTransmission transmission, CancellationToken cancellationToken)
     {
         try
         {
             await _db.SaveChangesAsync(cancellationToken);
+            return true;
         }
         catch (DbUpdateConcurrencyException)
         {
             _logger?.LogWarning("Concurrent status change on Peppol transmission {TransmissionId}; local transition discarded.",
                 transmission.Id);
             var entry = _db.Entry(transmission);
-            await entry.ReloadAsync(cancellationToken);
+            await entry.ReloadAsync(CancellationToken.None);
             // Drop any event rows staged for the discarded transition.
             foreach (var staged in _db.ChangeTracker.Entries<PeppolTransmissionEvent>()
                          .Where(e => e.State == EntityState.Added && e.Entity.TransmissionId == transmission.Id)
@@ -148,11 +365,15 @@ public class PeppolDispatcher
             {
                 staged.State = EntityState.Detached;
             }
+
+            return false;
         }
     }
 
-    private async Task HandleSubmitFailureAsync(
-        PeppolTransmission transmission, string reason, DateTime now, CancellationToken cancellationToken)
+    private sealed record PendingNotification(string EventKey, string? Reason);
+
+    /// <summary>Applies a failed attempt in memory; returns the notification to publish after the save.</summary>
+    private PendingNotification? HandleSubmitFailure(PeppolTransmission transmission, string reason, DateTime now)
     {
         transmission.RetryCount++;
         transmission.ErrorDetail = reason;
@@ -161,63 +382,75 @@ public class PeppolDispatcher
             transmission.Status = PeppolTransmissionStatus.Failed;
             AddEvent(transmission, PeppolTransmissionStatus.Failed, now,
                 $"Definitief mislukt na {transmission.RetryCount} pogingen: {reason}");
-            await NotifyAsync(transmission, MessageKinds.InvoicePeppolFailed, reason, cancellationToken);
+            return new PendingNotification(MessageKinds.InvoicePeppolFailed, reason);
         }
-        else
-        {
-            // Stays Queued; the backoff moment gates the next attempt.
-            transmission.NextAttemptAt = now + BaseBackoff * Math.Pow(2, transmission.RetryCount - 1);
-            AddEvent(transmission, PeppolTransmissionStatus.Queued, now,
-                $"Poging {transmission.RetryCount} mislukt: {reason} Volgende poging gepland.");
-        }
+
+        // Back to Queued; the backoff moment gates the next attempt (same idempotency key).
+        transmission.Status = PeppolTransmissionStatus.Queued;
+        transmission.NextAttemptAt = now + BaseBackoff * Math.Pow(2, transmission.RetryCount - 1);
+        AddEvent(transmission, PeppolTransmissionStatus.Queued, now,
+            $"Poging {transmission.RetryCount} mislukt: {reason} Volgende poging gepland.");
+        return null;
     }
 
     private async Task PollAsync(PeppolTransmission transmission, CancellationToken cancellationToken)
     {
-        if (transmission.ProviderMessageId is null)
+        var now = _timeProvider.GetUtcNow().UtcDateTime;
+
+        // B4: a Live transmission is never polled through a provider that cannot reach the live
+        // network — that is exactly how the sandbox used to fake "Delivered" for Live invoices.
+        if (PeppolLivePolicy.IsBlocked(_providerFactory, transmission.Environment, transmission.ProviderKey))
         {
+            await FailLiveWithoutProviderAsync(transmission, now, cancellationToken);
             return;
         }
 
-        var now = _timeProvider.GetUtcNow().UtcDateTime;
+        var age = now - (transmission.SubmissionClaimedAt ?? transmission.CreatedAt);
+        transmission.NextPollAt = now + PollDelay(age);
+
+        if (transmission.ProviderMessageId is null)
+        {
+            await SaveGuardedAsync(transmission, cancellationToken);
+            return;
+        }
+
+        PendingNotification? notification = null;
         try
         {
             var provider = _providerFactory.Resolve(transmission.ProviderKey);
             var status = await provider.GetTransmissionStatusAsync(transmission.ProviderMessageId, cancellationToken);
-            if (!Enum.TryParse<PeppolTransmissionStatus>(status.Status, ignoreCase: true, out var mapped)
-                || mapped == transmission.Status)
+            if (Enum.TryParse<PeppolTransmissionStatus>(status.Status, ignoreCase: true, out var mapped)
+                && mapped != transmission.Status)
             {
-                return;
+                switch (mapped)
+                {
+                    case PeppolTransmissionStatus.AcceptedByProvider:
+                        transmission.Status = mapped;
+                        AddEvent(transmission, mapped, now, Sanitize(status.Detail));
+                        break;
+                    case PeppolTransmissionStatus.Delivered:
+                        transmission.Status = mapped;
+                        AddEvent(transmission, mapped, now, Sanitize(status.Detail));
+                        notification = new PendingNotification(MessageKinds.InvoicePeppolDelivered, null);
+                        break;
+                    case PeppolTransmissionStatus.Rejected:
+                        transmission.Status = mapped;
+                        transmission.ErrorDetail = Sanitize(status.Detail) ?? "Geweigerd door het Peppol-netwerk.";
+                        AddEvent(transmission, mapped, now, transmission.ErrorDetail);
+                        notification = new PendingNotification(MessageKinds.InvoicePeppolFailed, transmission.ErrorDetail);
+                        break;
+                    default:
+                        break; // never regress or jump to unexpected states from a poll
+                }
             }
-
-            switch (mapped)
-            {
-                case PeppolTransmissionStatus.AcceptedByProvider:
-                    transmission.Status = mapped;
-                    AddEvent(transmission, mapped, now, Sanitize(status.Detail));
-                    break;
-                case PeppolTransmissionStatus.Delivered:
-                    transmission.Status = mapped;
-                    AddEvent(transmission, mapped, now, Sanitize(status.Detail));
-                    await NotifyAsync(transmission, MessageKinds.InvoicePeppolDelivered, null, cancellationToken);
-                    break;
-                case PeppolTransmissionStatus.Rejected:
-                    transmission.Status = mapped;
-                    transmission.ErrorDetail = Sanitize(status.Detail) ?? "Geweigerd door het Peppol-netwerk.";
-                    AddEvent(transmission, mapped, now, transmission.ErrorDetail);
-                    await NotifyAsync(transmission, MessageKinds.InvoicePeppolFailed, transmission.ErrorDetail, cancellationToken);
-                    break;
-                default:
-                    return; // never regress or jump to unexpected states from a poll
-            }
-
-            await SaveGuardedAsync(transmission, cancellationToken);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            // Polling is repeated forever by the next run; a transient failure changes nothing.
+            // Polling is repeated by a later run (NextPollAt); a transient failure changes nothing else.
             _logger?.LogError(exception, "Peppol status poll failed for transmission {TransmissionId}.", transmission.Id);
         }
+
+        await SaveAndNotifyAsync(transmission, notification, cancellationToken);
     }
 
     private async Task<string> ReadPayloadAsync(PeppolTransmission transmission, CancellationToken cancellationToken)

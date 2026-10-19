@@ -741,6 +741,12 @@ builder.Services.AddScoped<TransportationService.Api.Modules.Peppol.Services.IPe
 builder.Services.AddScoped<TransportationService.Api.Modules.Peppol.Services.IPeppolWebhookService,
     TransportationService.Api.Modules.Peppol.Services.PeppolWebhookService>();
 builder.Services.AddHostedService<TransportationService.Api.Modules.Peppol.Services.PeppolDispatcherHostedService>();
+// B4: honest Peppol state for monitoring. Tagged "peppol" — deliberately NOT "ready": Peppol is
+// optional and its state must never take the API out of rotation (endpoints are mapped elsewhere).
+builder.Services.AddHealthChecks()
+    .AddCheck<TransportationService.Api.Modules.Peppol.Services.PeppolHealthCheck>(
+        TransportationService.Api.Modules.Peppol.Services.PeppolHealthCheck.Name,
+        tags: [TransportationService.Api.Modules.Peppol.Services.PeppolHealthCheck.Tag]);
 
 // ETA foundation (sequential raming; IRouteEstimationProvider is the future PTV seam)
 builder.Services.AddSingleton<TransportationService.Api.Modules.Eta.Services.IRouteEstimationProvider,
@@ -891,6 +897,14 @@ using (var referenceScope = app.Services.CreateScope())
     // the qualification catalogue, expiry policies, a default legal entity from the tenant's own
     // settings. Never demo data, never users; see TenantReferenceDataSync for the exact list.
     await TenantReferenceDataSync.SyncAsync(referenceDbContext, app.Logger);
+
+    // B4 (every environment): a Live Peppol configuration without a live-capable provider is
+    // logged as CRITICAL; the runtime guards keep sending disabled for it. Never stops startup.
+    await TransportationService.Api.Modules.Peppol.Services.PeppolLiveGuard.CheckAtStartupAsync(
+        referenceDbContext,
+        referenceScope.ServiceProvider.GetRequiredService<TransportationService.Api.Modules.Peppol.Services.IPeppolProviderFactory>(),
+        referenceScope.ServiceProvider.GetRequiredService<TimeProvider>(),
+        app.Logger);
 }
 
 // Development-only setup

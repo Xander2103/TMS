@@ -11659,6 +11659,10 @@ namespace TransportationService.Api.Migrations
                         .HasMaxLength(2000)
                         .HasColumnType("character varying(2000)");
 
+                    b.Property<string>("IdempotencyKey")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
                     b.Property<Guid>("InvoiceId")
                         .HasColumnType("uuid");
 
@@ -11666,6 +11670,9 @@ namespace TransportationService.Api.Migrations
                         .HasColumnType("boolean");
 
                     b.Property<DateTime?>("NextAttemptAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("NextPollAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("PayloadHash")
@@ -11706,6 +11713,9 @@ namespace TransportationService.Api.Migrations
                         .HasMaxLength(30)
                         .HasColumnType("character varying(30)");
 
+                    b.Property<DateTime?>("SubmissionClaimedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<Guid>("TenantId")
                         .HasColumnType("uuid");
 
@@ -11718,6 +11728,9 @@ namespace TransportationService.Api.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("InvoiceId");
+
+                    b.HasIndex("Status", "NextPollAt")
+                        .HasDatabaseName("IX_peppol_transmissions_status_next_poll");
 
                     b.HasIndex("TenantId", "Status")
                         .HasDatabaseName("IX_peppol_transmissions_tenant_status");

@@ -64,6 +64,13 @@ public class PeppolSettingsService : IPeppolSettingsService
         // Fails fast with a clear Dutch message when the provider key is unknown.
         _providerFactory.Resolve(request.ProviderKey);
 
+        // B4: Live only with a provider that really transmits to the live network. Refused even
+        // when Peppol stays disabled, so a later "enable" can never silently go Live via the sandbox.
+        if (environment == PeppolEnvironment.Live && !PeppolLivePolicy.CanUseLive(_providerFactory, request.ProviderKey.Trim()))
+        {
+            throw new DomainValidationException("environment", PeppolLivePolicy.NotConfiguredMessage);
+        }
+
         var settings = await FindSettingsAsync(legalEntityId, cancellationToken);
         var isNew = settings is null;
         if (settings is null)
@@ -130,7 +137,8 @@ public class PeppolSettingsService : IPeppolSettingsService
                 settings?.Enabled ?? false,
                 (settings?.Environment ?? PeppolEnvironment.Sandbox).ToString(),
                 settings?.ProviderKey ?? "sandbox",
-                hasIdentity && hasVat && hasIban);
+                hasIdentity && hasVat && hasIban,
+                settings is not null && PeppolLivePolicy.IsBlocked(_providerFactory, settings.Environment, settings.ProviderKey));
         }).ToList();
 
         var queued = await _db.PeppolTransmissions
@@ -156,7 +164,8 @@ public class PeppolSettingsService : IPeppolSettingsService
             checklist,
             new PeppolCountsDto(queued, delivered, failed, incoming),
             customersEnabledWithoutId,
-            activeCustomersMissingData);
+            activeCustomersMissingData,
+            _providerFactory.HasLiveProvider);
     }
 
     public async Task<PeppolTestConnectionResultDto> TestConnectionAsync(Guid legalEntityId, CancellationToken cancellationToken)
@@ -198,13 +207,15 @@ public class PeppolSettingsService : IPeppolSettingsService
         settings.DefaultInvoiceNote = Trim(request.DefaultInvoiceNote);
     }
 
-    private static PeppolSettingsDto Map(LegalEntity legalEntity, PeppolSettings? settings) => new(
+    private PeppolSettingsDto Map(LegalEntity legalEntity, PeppolSettings? settings) => new(
         legalEntity.Id, legalEntity.LegalName,
         settings?.Enabled ?? false,
         (settings?.Environment ?? PeppolEnvironment.Sandbox).ToString(),
         settings?.ProviderKey ?? "sandbox",
         settings?.InvoiceEmailFallback,
-        settings?.DefaultInvoiceNote);
+        settings?.DefaultInvoiceNote,
+        _providerFactory.HasLiveProvider,
+        settings is not null && PeppolLivePolicy.IsBlocked(_providerFactory, settings.Environment, settings.ProviderKey));
 
     private static string? Trim(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }
