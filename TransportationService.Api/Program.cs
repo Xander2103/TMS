@@ -774,6 +774,18 @@ TransportationService.Api.Modules.Security.StartupSecurityValidator.Validate(
 TransportationService.Api.Common.Storage.StorageRootValidator.Validate(
     storageRoot, app.Environment, app.Configuration, app.Logger);
 
+// Operator tool (offline, read-only): compare every DB file reference with the storage root and
+// exit — never starts the web host or the seeders. Usage in docs/storage.md:
+//   dotnet TransportationService.Api.dll --verify-storage [--list-missing]
+if (args.Contains(TransportationService.Api.Modules.SystemAdmin.Services.StorageIntegrityVerifier.CommandLineFlag))
+{
+    Environment.ExitCode = await TransportationService.Api.Modules.SystemAdmin.Services.StorageIntegrityVerifier.RunAsync(
+        app.Services, Console.Out,
+        args.Contains(TransportationService.Api.Modules.SystemAdmin.Services.StorageIntegrityVerifier.ListMissingFlag),
+        CancellationToken.None);
+    return;
+}
+
 // Global reference data runs in every environment: the ISO country list must exist for
 // country validation and comboboxes regardless of how tenants are onboarded.
 using (var referenceScope = app.Services.CreateScope())
