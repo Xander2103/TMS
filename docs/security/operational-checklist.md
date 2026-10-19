@@ -29,7 +29,7 @@ Legenda eigenaar: **Ops** = platform/infra · **Sec** = security officer · **De
 | 18 | Antivirus/malwarescanner op uploads | Interface gepland (Fase 4) | Externe dienst | Koppel scanner + quarantaine | Ops/Sec | Ja |
 | 19 | SMTP/SMS/Peppol-provider | Geen echte provider; prod faalt nu fail-closed te booten | Externe vendor | Implementeer provider; secrets via vault | Dev/Ops | **Ja** (prod start anders niet) |
 | 20 | DPA's & subprocessors | Geen | Juridisch | Sluit DPA's met vendors; ROPA bijwerken | Legal | Ja |
-| 21 | `App_Data` niet publiek bereikbaar | Lokale schijf | Deploytopologie | Bevestig App_Data buiten webroot + uit back-upscope of versleuteld | Ops | **Ja** |
+| 21 | Bestandsopslag (`Storage:RootPath`) niet publiek bereikbaar en duurzaam | Lokale schijf; buiten Development verplicht, absoluut, buiten de releasemap en schrijfbaar (validatie bij opstarten, healthcheck `storage`) | Deploytopologie | Bevestig de root buiten de webroot en de releasemap. Ze zit **in** de back-upscope, off-host en **versleuteld** (`docs/storage.md`, `docs/operations/backup-restore.md`) | Ops | **Ja** |
 | 22 | Production object storage-scheiding per tenant | Storage-keys tenant-prefixed in code | Prod-backend | Bevestig scheiding/ACL's op prod-backend | Ops | Ja |
 | 23 | Incident response-procedure | Geen | Organisatorisch | Stel IR-runbook op | Sec | Ja |
 | 24 | Externe pentest | N.v.t. | Extern | Plan pentest na Fase 1–5 | Sec | Ja |

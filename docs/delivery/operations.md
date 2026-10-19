@@ -391,9 +391,13 @@ wanneer:
 Overige runtimekenmerken:
 
 - Kestrel request-body-plafond 32 MB (uploads begrensd per endpoint).
-- `App_Data/` onder de content root is de bestandsopslag (`LocalFileStorageService`) voor
-  álle documenten, POD-handtekeningen, Peppol-payloads enz. Deze map moet persistent zijn,
-  buiten de webroot liggen en in de back-upscope zitten (checklistpunten 16/21).
+- `Storage:RootPath` is de bestandsopslag (`LocalFileStorageService`) voor álle documenten,
+  POD-handtekeningen, Peppol-payloads, logo's en de in-app back-ups. Buiten Development is
+  die sleutel verplicht: een absoluut pad **buiten** de releasemap, schrijfbaar, en in de
+  back-upscope (checklistpunten 16/21). Anders weigert de API te starten. Het oude
+  `<ContentRoot>/App_Data` mag alleen nog via `Storage:AllowContentRootStorage=true`.
+  Configuratie, de `--verify-storage`-integriteitscontrole en de migratieprocedure staan in
+  `docs/storage.md` (sectie *Bestandsopslag*).
 - Buiten Development staan HSTS en HTTPS-redirect aan in de app zelf.
 
 ### 3.2 Frontend
@@ -675,7 +679,14 @@ nooit; een onbereikbare databank toont enkel "Unavailable".
 
 ### Back-upbeheer
 
-- Opslag: `Backups:Directory` (default `App_Data/backups`, altijd buiten de webroot);
+- Volledig runbook (inhoud van een back-upset, bewaking, off-host kopie, offline herstel):
+  `docs/operations/backup-restore.md`.
+- Een back-up is een set: `pg_dump -Fc` + een `.files.tar.gz` van de storage root + een
+  `.sha256`-manifest. De set is pas *Voltooid* nadat beide delen geverifieerd zijn. Anders
+  komt er een rij *Mislukt* met de reden, en de stderr van `pg_dump`/`pg_restore` staat in het
+  log. Encryptiesleutels zitten er bewust niet in: die horen in de vault.
+- Opslag: `Backups:Directory` (default `<Storage:RootPath>/backups`, absoluut en buiten de
+  releasemap);
   `Backups:ExternalDirectories` kan de dumpmap van het deployscript alleen-lezen tonen
   (type Pre-deployment). `Backups:PgDumpPath`/`PgRestorePath` wijzen naar de binaries.
 - Permissies: `backups.view` (rollen v29: management) en de bewuste per-beheerder-rechten
@@ -685,12 +696,16 @@ nooit; een onbereikbare databank toont enkel "Unavailable".
   de nieuwste voltooide back-up en een lopende restore zijn beschermd; handmatige
   back-ups worden nooit automatisch verwijderd. Dagelijkse automatische back-up via
   `Backups:AutomaticEnabled` (default aan) op `Backups:AutomaticHourUtc` (default 02:00).
-- **Terugzetten** (nooit "activeren"): vereist het exact getypte bestandsnaam als
-  bevestiging, maakt éérst een veiligheidsback-up (bron PreRestore), sluit andere
-  databankverbindingen, draait `pg_restore --clean --if-exists --exit-on-error` en doet
-  een healthcheck. Herstart daarna de API-service gecontroleerd (seeders/caches) en werk
-  verificatiechecklist §6 af. Alles is geauditeerd (create/download/delete/restore/
-  retentie-opruiming).
+- Versheid: de healthcheck `backup` (tag `backup`, niet `ready`) en Systeeminformatie
+  melden het als de laatste geslaagde back-up ouder is dan `Backups:MaxAgeHours`
+  (default 26).
+- **Downloaden** vraagt `backups.download` én de systeemrol Administrator: een dump bevat
+  alle tenants.
+- **Terugzetten** gebeurt buiten Development **niet** vanuit de app: het endpoint geeft 409
+  en de knop is verborgen. Herstel is een offline procedure (runbook hierboven). In
+  Development blijft de oude flow: getypte bestandsnaam, eerst een veiligheidsback-up, dan
+  `pg_restore --clean --if-exists --exit-on-error` en een healthcheck. Alles is
+  geauditeerd (create/download/delete/restore/retentie-opruiming).
 
 ## 7. Rollback-overwegingen
 
