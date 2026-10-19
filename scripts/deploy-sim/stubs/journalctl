@@ -1,0 +1,4 @@
+#!/bin/bash
+SIM_ROOT="${SIM_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
+# deploy-sim stub for journalctl: shows the tail of the simulated service log.
+tail -n 60 "$SIM_ROOT/state/service.log" 2>/dev/null || true

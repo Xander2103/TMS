@@ -1,0 +1,16 @@
+#!/bin/bash
+# deploy-sim wrapper for pg_dump: records the API service state AT DUMP TIME (H11: the final
+# dump must be taken with the service stopped), runs the real pg_dump, then an optional hook
+# ($SIM_AFTER_PG_DUMP_HOOK, e.g. start a lock holder for the lock_timeout scenario).
+SIM_ROOT="${SIM_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
+SIM_EVENTS="${SIM_EVENTS:-$SIM_ROOT/state/events.log}"
+# shellcheck source=/dev/null
+. "$SIM_ROOT/bin/sim.conf"
+if [[ "${1:-}" == "--version" ]]; then exec "$PGBIN/pg_dump" --version; fi
+svc="$(cat "$SIM_ROOT/state/service.state" 2>/dev/null || echo inactive)"
+if [[ "$svc" == "active" ]] && ! kill -0 "$(cat "$SIM_ROOT/state/service.pid" 2>/dev/null)" 2>/dev/null; then svc=failed; fi
+printf '%s\tpg_dump\tservice=%s\n' "$(date +%s)" "$svc" >> "$SIM_EVENTS"
+"$PGBIN/pg_dump" "$@"
+rc=$?
+if [[ $rc -eq 0 && -n "${SIM_AFTER_PG_DUMP_HOOK:-}" ]]; then bash -c "$SIM_AFTER_PG_DUMP_HOOK" >&2; fi
+exit $rc

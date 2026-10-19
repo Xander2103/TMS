@@ -1,0 +1,19 @@
+#!/bin/bash
+# deploy-sim wrapper for dotnet-ef: records env variable NAMES, whether the migration connection
+# string carries 'Command Timeout' / 'lock_timeout' (values of those two only — never the
+# password), the build it loads (BaseOutputPath), then runs the real tool.
+SIM_ROOT="${SIM_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
+SIM_EVENTS="${SIM_EVENTS:-$SIM_ROOT/state/events.log}"
+# shellcheck source=/dev/null
+. "$SIM_ROOT/bin/sim.conf"
+sub="${1:-}"; [[ "$sub" == "database" || "$sub" == "migrations" ]] && sub="$1 ${2:-}"
+if [[ "${1:-}" != "--version" ]]; then
+    env | cut -d= -f1 | sort > "$SIM_ROOT/state/env-dotnet-ef-${sub// /-}.keys"
+    conn="${ConnectionStrings__DefaultConnection:-}"
+    ct="$(printf '%s' "$conn" | tr ';' '\n' | grep -i '^command timeout=' | tail -n 1)"
+    lt="$(printf '%s' "$conn" | tr ';' '\n' | grep -io 'lock_timeout=[^ ;]*' | tail -n 1)"
+    printf '%s\tdotnet-ef\t%s base=%s ct=[%s] lt=[%s]\n' "$(date +%s)" "$sub" "${BaseOutputPath:-unset}" "$ct" "$lt" >> "$SIM_EVENTS"
+fi
+export DOTNET_ROOT="${DOTNET_ROOT:-$REAL_DOTNET_ROOT}"
+export PATH="$REAL_DOTNET_ROOT:$PATH"
+exec "$REAL_DOTNET_EF" "$@"

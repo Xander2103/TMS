@@ -1,0 +1,27 @@
+// TEST-ONLY migration used by scripts/deploy-sim/run.sh (scenario "migration-failure").
+// It is committed ONLY inside the throw-away clone the simulation creates, on a local branch
+// 'sim/forced-failure'. It must never be added to the real repository.
+// It sorts after every real migration, so the real pending migrations are applied (and committed,
+// one transaction each) before this one fails — exactly the partial-schema state of B2/MIG-02.
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
+using TransportationService.Api.Data;
+
+#nullable disable
+
+namespace TransportationService.Api.Migrations
+{
+    [DbContext(typeof(TransportationDbContext))]
+    [Migration("29990101000000_SimForcedFailure")]
+    public partial class SimForcedFailure : Migration
+    {
+        protected override void Up(MigrationBuilder migrationBuilder)
+        {
+            migrationBuilder.Sql("DO $$ BEGIN RAISE EXCEPTION 'deploy-sim: forced migration failure'; END $$;");
+        }
+
+        protected override void Down(MigrationBuilder migrationBuilder)
+        {
+        }
+    }
+}

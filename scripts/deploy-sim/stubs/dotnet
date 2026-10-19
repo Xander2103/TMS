@@ -1,0 +1,14 @@
+#!/bin/bash
+# deploy-sim wrapper for dotnet: logs the env variable NAMES of restore/build (H10) and runs the
+# real SDK ($REAL_DOTNET from sim.conf next to this file).
+SIM_ROOT="${SIM_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
+SIM_EVENTS="${SIM_EVENTS:-$SIM_ROOT/state/events.log}"
+# shellcheck source=/dev/null
+. "$SIM_ROOT/bin/sim.conf"
+case "${1:-}" in
+    restore|build)
+        env | cut -d= -f1 | sort > "$SIM_ROOT/state/env-dotnet-$1.keys"
+        printf '%s\tdotnet\t%s\n' "$(date +%s)" "$1" >> "$SIM_EVENTS" ;;
+esac
+export DOTNET_ROOT="${DOTNET_ROOT:-$REAL_DOTNET_ROOT}"
+exec "$REAL_DOTNET" "$@"

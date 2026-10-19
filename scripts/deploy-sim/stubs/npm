@@ -1,0 +1,21 @@
+#!/bin/bash
+# deploy-sim stub for npm. Records the NAMES of the environment variables it received (H10:
+# no tms.env secret may reach the frontend build) and fakes `npm run build -- --outDir X`.
+# The deploy script wipes the build environment, so the sim root is derived from this file's
+# location (the runner copies the stubs to $SIM_ROOT/bin).
+SIM_ROOT="${SIM_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
+SIM_EVENTS="${SIM_EVENTS:-$SIM_ROOT/state/events.log}"
+case "${1:-}" in
+    --version) echo "10.0.0-sim"; exit 0 ;;
+esac
+env | cut -d= -f1 | sort > "$SIM_ROOT/state/env-npm-${1:-x}.keys"
+printf '%s\tnpm\t%s\n' "$(date +%s)" "$*" >> "$SIM_EVENTS"
+if [[ "${1:-}" == "run" && "${2:-}" == "build" ]]; then
+    out=""
+    while [[ $# -gt 0 ]]; do [[ "$1" == "--outDir" ]] && out="$2"; shift; done
+    [[ -n "$out" ]] || { echo "npm stub: --outDir missing" >&2; exit 1; }
+    mkdir -p "$out"
+    printf '<!doctype html><title>TMS sim build</title><!-- api=%s commit=%s -->\n' \
+        "${VITE_API_BASE_URL:-unset}" "${VITE_BUILD_COMMIT:-unset}" > "$out/index.html"
+fi
+exit 0

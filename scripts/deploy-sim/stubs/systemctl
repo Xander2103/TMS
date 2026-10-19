@@ -1,0 +1,127 @@
+#!/bin/bash
+# deploy-sim stub for systemctl — emulates ONE unit (the API) plus 'reload nginx'.
+# State lives in $SIM_ROOT/state; every call is appended to $SIM_EVENTS.
+# Modes ($SIM_SERVICE_MODE): ready | never-ready | crash | real
+#   ready/never-ready : python fake API (fake_api.py) on $SIM_API_PORT
+#   crash             : process exits after 1 s (unit becomes 'failed')
+#   real              : the real built API ($API_BIN_DIR/TransportationService.Api.dll), started with
+#                       the EnvironmentFile ($ENV_FILE) like systemd would, ASPNETCORE_ENVIRONMENT from it.
+set -u
+SIM_ROOT="${SIM_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
+SIM_EVENTS="${SIM_EVENTS:-$SIM_ROOT/state/events.log}"
+# shellcheck source=/dev/null
+. "$SIM_ROOT/bin/sim.conf"
+S="$SIM_ROOT/state"
+mkdir -p "$S"
+PIDF="$S/service.pid"
+STATEF="$S/service.state"
+LOGF="$S/service.log"
+HERE="$(cd "$(dirname "$0")" && pwd)"
+
+ev() { printf '%s\tsystemctl\t%s\n' "$(date +%s)" "$*" >> "$SIM_EVENTS"; }
+alive() { [[ -f "$PIDF" ]] && kill -0 "$(cat "$PIDF")" 2>/dev/null; }
+state() { cat "$STATEF" 2>/dev/null || echo inactive; }
+refresh() {
+    if [[ "$(state)" == "active" ]] && ! alive; then
+        echo failed > "$STATEF"
+        echo "$(date +%s) process exited -> failed" >> "$LOGF"
+    fi
+}
+bin_id() {
+    local dll="$API_BIN_DIR/TransportationService.Api.dll" commit="none"
+    [[ -f "$API_BIN_DIR/deployment.json" ]] && commit="$(sed -n 's/.*"commit": *"\([^"]*\)".*/\1/p' "$API_BIN_DIR/deployment.json")"
+    if [[ -f "$dll" ]]; then printf 'sha=%s commit=%s' "$(shasum -a 256 "$dll" | cut -c1-12)" "$commit"
+    else printf 'sha=missing commit=%s' "$commit"; fi
+}
+
+do_start() {
+    refresh
+    if alive; then ev "start $SERVICE (already active)"; return 0; fi
+    ev "start $SERVICE $(bin_id) mode=${SIM_SERVICE_MODE:-ready}"
+    if [[ -n "${SIM_BEFORE_START_HOOK:-}" ]]; then bash -c "$SIM_BEFORE_START_HOOK" >> "$LOGF" 2>&1; fi
+    case "${SIM_SERVICE_MODE:-ready}" in
+        ready|never-ready)
+            nohup python3 "$HERE/fake_api.py" --port "$SIM_API_PORT" --mode "${SIM_SERVICE_MODE:-ready}" >> "$LOGF" 2>&1 &
+            ;;
+        crash)
+            nohup sh -c 'echo "fake api: crashing on startup"; sleep 1; exit 1' >> "$LOGF" 2>&1 &
+            ;;
+        real)
+            (
+                cd "$API_BIN_DIR" || exit 1
+                # EnvironmentFile semantics (KEY=VALUE, optional quotes, # comments).
+                while IFS= read -r line || [[ -n "$line" ]]; do
+                    [[ -z "$line" || "$line" =~ ^[[:space:]]*# || "$line" != *=* ]] && continue
+                    k="${line%%=*}"; v="${line#*=}"
+                    [[ "$k" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || continue
+                    v="${v#\"}"; v="${v%\"}"
+                    export "$k=$v"
+                done < "$ENV_FILE"
+                export ASPNETCORE_URLS="http://127.0.0.1:$SIM_API_PORT" HOME="$SIM_ROOT/home" DOTNET_NOLOGO=1
+                mkdir -p "$HOME"
+                export DOTNET_ROOT="$REAL_DOTNET_ROOT"
+                exec nohup "$REAL_DOTNET" "$API_BIN_DIR/TransportationService.Api.dll" >> "$LOGF" 2>&1
+            ) &
+            ;;
+    esac
+    echo $! > "$PIDF"
+    echo active > "$STATEF"
+}
+
+do_stop() {
+    ev "stop $SERVICE"
+    if alive; then
+        local pid; pid="$(cat "$PIDF")"
+        kill -TERM "$pid" 2>/dev/null
+        for _ in 1 2 3 4 5 6 7 8 9 10; do kill -0 "$pid" 2>/dev/null || break; sleep 0.5; done
+        kill -KILL "$pid" 2>/dev/null
+    fi
+    rm -f "$PIDF"
+    echo inactive > "$STATEF"
+}
+
+QUIET=0; PROP=""; VALUE=0; args=()
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --quiet|-q) QUIET=1 ;;
+        --value) VALUE=1 ;;
+        --no-pager|-l) ;;
+        -p) PROP="$2"; shift ;;
+        *) args+=("$1") ;;
+    esac
+    shift
+done
+CMD="${args[0]:-}"
+SERVICE="${args[1]:-}"
+
+case "$CMD" in
+    cat)
+        [[ -f "$S/unit-installed" && "$SERVICE" == "${SERVICE_NAME:-transportationservice-api}" ]] || exit 1
+        echo "# stub unit $SERVICE" ;;
+    show)
+        refresh
+        case "$PROP" in
+            ExecStart) echo "{ path=/usr/bin/dotnet ; argv[]=/usr/bin/dotnet $API_BIN_DIR/TransportationService.Api.dll ; }" ;;
+            User) echo "${SIM_SERVICE_USER:-$(id -un)}" ;;
+            WorkingDirectory) echo "$API_BIN_DIR" ;;
+            Environment) echo "${SIM_UNIT_ENVIRONMENT:-}" ;;
+            MainPID) if alive; then cat "$PIDF"; else echo 0; fi ;;
+            NRestarts) echo 0 ;;
+            *) echo "" ;;
+        esac ;;
+    is-active)
+        refresh
+        [[ $QUIET -eq 1 ]] || state
+        [[ "$(state)" == "active" ]] ;;
+    is-failed)
+        refresh
+        [[ $QUIET -eq 1 ]] || state
+        [[ "$(state)" == "failed" ]] ;;
+    start) do_start ;;
+    stop) do_stop ;;
+    restart) do_stop; do_start ;;
+    reload) ev "reload $SERVICE" ;;
+    status) refresh; echo "$SERVICE: $(state) $(bin_id)"; [[ "$(state)" == "active" ]] ;;
+    enable|disable) ev "$CMD $SERVICE" ;;
+    *) echo "systemctl stub: unsupported '$CMD'" >&2; exit 1 ;;
+esac
