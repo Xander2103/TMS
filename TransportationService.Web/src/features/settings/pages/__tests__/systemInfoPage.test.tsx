@@ -156,6 +156,7 @@ describe('SystemInfoPage', () => {
       databaseStatus: 'Healthy',
       advice: 'Controleer na het terugzetten de recentste dossiers.',
     })
+    api.backupList = backupList({ restoreEnabled: true })
     renderPage()
 
     const user = userEvent.setup()
@@ -193,6 +194,8 @@ describe('SystemInfoPage', () => {
         }),
         backup({ id: 'bak-3', fileName: 'safety.dump', source: 'PreRestore', protected: true }),
       ],
+      restoreEnabled: true,
+      downloadAllowed: true,
     })
     renderPage()
 
@@ -210,5 +213,31 @@ describe('SystemInfoPage', () => {
     expect(protectedRow.getByRole('button', { name: 'Downloaden' })).toBeEnabled()
     expect(protectedRow.getByRole('button', { name: 'Terugzetten' })).toBeEnabled()
     expect(protectedRow.getByRole('button', { name: 'Verwijderen' })).toBeDisabled()
+  })
+
+  it('H8: zonder restoreEnabled van de server is er geen terugzetknop maar een verwijzing naar het runbook', async () => {
+    auth.permissions = new Set(['backups.view', 'backups.restore', 'backups.download'])
+    api.backupList = backupList({ restoreEnabled: false, downloadAllowed: false })
+    renderPage()
+
+    expect(await screen.findByText(/offline beheerdersprocedure/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Terugzetten' })).not.toBeInTheDocument()
+    // Downloaden: zichtbaar maar uitgeschakeld voor wie niet de systeemrol Administrator heeft.
+    const download = screen.getByRole('button', { name: 'Downloaden' })
+    expect(download).toBeDisabled()
+    expect(download).toHaveAttribute('title', 'Alleen de systeemrol Administrator kan een volledige back-up downloaden.')
+  })
+
+  it('H4: toont de laatste geslaagde back-up en waarschuwt wanneer die te oud is', async () => {
+    auth.permissions = new Set(['backups.view'])
+    api.backupList = backupList({
+      lastSuccessfulBackupAtUtc: '2026-08-10T02:00:00Z',
+      backupStale: true,
+      maxBackupAgeHours: 26,
+    })
+    renderPage()
+
+    const alert = await screen.findByText(/ouder dan 26 uur/)
+    expect(alert).toHaveTextContent(`Laatste geslaagde back-up: ${formatDateTime('2026-08-10T02:00:00Z')}`)
   })
 })

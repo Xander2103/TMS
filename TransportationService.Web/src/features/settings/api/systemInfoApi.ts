@@ -44,6 +44,15 @@ export interface BackupListResult {
   storageStatus: string
   /** Stabiele storage-healthcheck (i18n-wave): het label komt uit de vertaalbundel. */
   storageAvailable: boolean
+  /** Nieuwste geslaagde (geverifieerde) back-up; null = nog geen. */
+  lastSuccessfulBackupAtUtc?: string | null
+  /** Geen geslaagde back-up binnen maxBackupAgeHours. */
+  backupStale?: boolean
+  maxBackupAgeHours?: number
+  /** H8: terugzetten vanuit de app bestaat alleen in Development; ontbreekt = uit (fail-closed). */
+  restoreEnabled?: boolean
+  /** H8: volledige dump downloaden mag alleen de systeemrol Administrator. */
+  downloadAllowed?: boolean
 }
 
 /** Resultaat van POST .../restore: de vooraf gemaakte veiligheidsback-up + advies. */

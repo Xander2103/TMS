@@ -148,7 +148,7 @@
     "create": "Créer une nouvelle sauvegarde",
     "createBusy": "Création de la sauvegarde…",
     "createTitle": "Créer une nouvelle sauvegarde",
-    "createIntro": "Une sauvegarde complète de la base de données est créée immédiatement.",
+    "createIntro": "Une sauvegarde complète de la base de données et du stockage de fichiers (documents, signatures, photos) est créée immédiatement. Les deux parties sont vérifiées avant que la sauvegarde soit considérée comme terminée.",
     "noteLabel": "Note (facultatif)",
     "noteHint": "Par exemple la raison de cette sauvegarde.",
     "createConfirm": "Créer la sauvegarde",
@@ -192,7 +192,12 @@
     "databaseStatus": "Statut de la base de données",
     "fileName": "Nom de fichier",
     "restoreWarning": "Cette action REMPLACE la base de données actuelle par le contenu de cette sauvegarde. Une sauvegarde de sécurité est d'abord créée automatiquement.",
-    "confirmationLabel": "Saisissez le nom de fichier exact pour confirmer"
+    "confirmationLabel": "Saisissez le nom de fichier exact pour confirmer",
+    "lastSuccessful": "Dernière sauvegarde réussie : {dateTime}",
+    "lastSuccessfulNone": "Il n'y a pas encore de sauvegarde réussie.",
+    "staleWarning": "La dernière sauvegarde réussie date de plus de {hours} heures. Vérifiez la sauvegarde automatique et les journaux du serveur.",
+    "restoreOffline": "La restauration n'est pas possible depuis l'application. Une restauration est une procédure administrateur hors ligne suivant le runbook (docs/operations/backup-restore.md).",
+    "downloadAdminOnly": "Seul le rôle système Administrator peut télécharger une sauvegarde complète."
   },
   "chargePolicies": {
     "title": "Politique de refacturation",

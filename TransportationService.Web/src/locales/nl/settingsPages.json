@@ -148,7 +148,7 @@
     "create": "Nieuwe back-up maken",
     "createBusy": "Back-up maken…",
     "createTitle": "Nieuwe back-up maken",
-    "createIntro": "Er wordt onmiddellijk een volledige back-up van de databank gemaakt.",
+    "createIntro": "Er wordt onmiddellijk een volledige back-up gemaakt van de databank én de bestandsopslag (documenten, handtekeningen, foto's). Beide delen worden gecontroleerd voordat de back-up als voltooid geldt.",
     "noteLabel": "Notitie (optioneel)",
     "noteHint": "Bijvoorbeeld de reden van deze back-up.",
     "createConfirm": "Back-up maken",
@@ -192,7 +192,12 @@
     "databaseStatus": "Databasestatus",
     "fileName": "Bestandsnaam",
     "restoreWarning": "Deze actie VERVANGT de huidige databank met de inhoud van deze back-up. Er wordt eerst automatisch een veiligheidsback-up gemaakt.",
-    "confirmationLabel": "Typ de exacte bestandsnaam om te bevestigen"
+    "confirmationLabel": "Typ de exacte bestandsnaam om te bevestigen",
+    "lastSuccessful": "Laatste geslaagde back-up: {dateTime}",
+    "lastSuccessfulNone": "Er is nog geen geslaagde back-up.",
+    "staleWarning": "De laatste geslaagde back-up is ouder dan {hours} uur. Controleer de automatische back-up en de serverlogs.",
+    "restoreOffline": "Terugzetten kan niet vanuit de applicatie. Een herstel is een offline beheerdersprocedure volgens het runbook (docs/operations/backup-restore.md).",
+    "downloadAdminOnly": "Alleen de systeemrol Administrator kan een volledige back-up downloaden."
   },
   "chargePolicies": {
     "title": "Doorrekenbeleid",

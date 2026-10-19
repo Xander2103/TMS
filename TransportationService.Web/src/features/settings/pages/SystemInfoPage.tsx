@@ -329,12 +329,19 @@ function BackupsTab() {
   const { t } = useLocale()
   const { hasPermission } = useAuth()
   const { showSuccess, showError } = useToast()
+  const [data, setData] = useState<BackupListResult | null>(null)
+
   const canCreate = hasPermission('backups.create')
   const canDownload = hasPermission('backups.download')
+  // H8: een volledige dump bevat elke tenant — de server staat het alleen de systeemrol
+  // Administrator toe; zonder dat signaal blijft de knop zichtbaar maar uitgeschakeld.
+  const downloadAllowed = data?.downloadAllowed === true
   const canDelete = hasPermission('backups.delete')
-  const canRestore = hasPermission('backups.restore')
+  const hasRestorePermission = hasPermission('backups.restore')
+  // H8: terugzetten vanuit de app bestaat alleen wanneer de server het expliciet toelaat
+  // (Development); anders verbergen we de knop en verwijzen we naar het offline runbook.
+  const canRestore = hasRestorePermission && data?.restoreEnabled === true
 
-  const [data, setData] = useState<BackupListResult | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
   const [creating, setCreating] = useState(false)
@@ -469,8 +476,8 @@ function BackupsTab() {
             <button
               type="button"
               className="sysbackups-link"
-              disabled={b.readOnly}
-              title={b.readOnly ? readOnlyTitle : undefined}
+              disabled={b.readOnly || !downloadAllowed}
+              title={b.readOnly ? readOnlyTitle : !downloadAllowed ? t('settingsPages.backups.downloadAdminOnly') : undefined}
               onClick={() => void handleDownload(b)}
             >
               {t('settingsPages.backups.download')}
@@ -525,6 +532,24 @@ function BackupsTab() {
       </div>
       {!data.automaticEnabled && (
         <p className="sysbackups-note">{t('settingsPages.backups.automaticDisabled')}</p>
+      )}
+      {/* H4: back-upversheid — een verouderde of ontbrekende back-up is nooit alleen kleur. */}
+      {data.backupStale ? (
+        <div className="sysbackups-storage-warning" role="alert">
+          {data.lastSuccessfulBackupAtUtc
+            ? t('settingsPages.backups.lastSuccessful', { dateTime: formatDateTime(data.lastSuccessfulBackupAtUtc) })
+            : t('settingsPages.backups.lastSuccessfulNone')}{' '}
+          {t('settingsPages.backups.staleWarning', { hours: data.maxBackupAgeHours ?? 26 })}
+        </div>
+      ) : (
+        data.lastSuccessfulBackupAtUtc && (
+          <p className="sysbackups-note">
+            {t('settingsPages.backups.lastSuccessful', { dateTime: formatDateTime(data.lastSuccessfulBackupAtUtc) })}
+          </p>
+        )
+      )}
+      {hasRestorePermission && data.restoreEnabled !== true && (
+        <p className="sysbackups-note">{t('settingsPages.backups.restoreOffline')}</p>
       )}
       {/* Storage-healthcheck brancht op het stabiele boolveld; het label komt uit de
           vertaalbundel en nooit uit de (Nederlandstalige) servertekst. */}

@@ -148,7 +148,7 @@
     "create": "Create new backup",
     "createBusy": "Creating backup…",
     "createTitle": "Create new backup",
-    "createIntro": "A full backup of the database is created immediately.",
+    "createIntro": "A full backup of the database and the file storage (documents, signatures, photos) is created immediately. Both parts are verified before the backup counts as completed.",
     "noteLabel": "Note (optional)",
     "noteHint": "For example the reason for this backup.",
     "createConfirm": "Create backup",
@@ -192,7 +192,12 @@
     "databaseStatus": "Database status",
     "fileName": "File name",
     "restoreWarning": "This action REPLACES the current database with the contents of this backup. A safety backup is created automatically first.",
-    "confirmationLabel": "Type the exact file name to confirm"
+    "confirmationLabel": "Type the exact file name to confirm",
+    "lastSuccessful": "Last successful backup: {dateTime}",
+    "lastSuccessfulNone": "There is no successful backup yet.",
+    "staleWarning": "The last successful backup is older than {hours} hours. Check the automatic backup and the server logs.",
+    "restoreOffline": "Restoring is not possible from the application. A restore is an offline administrator procedure following the runbook (docs/operations/backup-restore.md).",
+    "downloadAdminOnly": "Only the system Administrator role can download a full backup."
   },
   "chargePolicies": {
     "title": "Charge policy",
