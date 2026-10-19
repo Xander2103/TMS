@@ -1,8 +1,14 @@
--- Master-data identity preflight (core/master-data remediation 2026-10-18).
+-- Master-data identity preflight (core/master-data remediation 2026-10-18; fleet + template checks
+-- added by the production-hardening remediation, production-readiness MIG-05).
 --
 -- READ-ONLY. Run against the production database BEFORE applying the migrations
+--   20261017210920_FleetReadinessIdentityAndDamageLinks       (unique plate / VIN per tenant)
 --   20261018120257_ReferenceIntegrityAndFinalInvoiceSnapshot  (case-insensitive customer numbers)
 --   20261018123011_IdentityNormalization                       (normalized e-mail, case-insensitive role names)
+--   20261018143508_WarehouseInventoryIntegrity                 (BM-nnnn template codes, < 10 000 per tenant)
+-- Not covered here (the migrations guard them themselves): sales_categories text lengths
+-- (CommercialWaveAuditFixes; its columns do not exist on every older baseline). The PostgreSQL >= 13
+-- requirement is checked by scripts/deploy-transportationservice.sh.
 -- Those migrations deliberately ABORT (RAISE EXCEPTION) when they meet duplicates; they never merge or
 -- rename anything themselves. This query lists every conflict up front, with the row ids, so they can
 -- be resolved by a human first (docs/delivery/operations.md §3.6).
@@ -50,5 +56,71 @@ SELECT 'role_name',
   FROM roles r
  GROUP BY r."TenantId", lower(r."Name")
 HAVING count(*) > 1
+
+UNION ALL
+
+-- 4. Fleet identity (20261017210920_FleetReadinessIdentityAndDamageLinks, production-readiness MIG-05a):
+--    the migration RAISEs on live (not soft-deleted) vehicles/trailers of one tenant that share a plate
+--    after normalisation (letters + digits, upper case) or a VIN (trimmed, upper case, empty = unknown).
+--    Same expressions as the migration; reads only the original columns.
+SELECT 'vehicle_plate',
+       v."TenantId"::text,
+       upper(regexp_replace(v."LicensePlate", '[^A-Za-z0-9]', '', 'g')),
+       count(*),
+       string_agg(format('%s "%s" %s', v."Id", v."LicensePlate", v."InternalNumber"), ' | ' ORDER BY v."CreatedAt")
+  FROM vehicles v
+ WHERE NOT v."IsDeleted"
+ GROUP BY v."TenantId", upper(regexp_replace(v."LicensePlate", '[^A-Za-z0-9]', '', 'g'))
+HAVING count(*) > 1
+
+UNION ALL
+
+SELECT 'vehicle_vin',
+       v."TenantId"::text,
+       NULLIF(upper(btrim(v."Vin")), ''),
+       count(*),
+       string_agg(format('%s "%s" %s', v."Id", v."Vin", v."InternalNumber"), ' | ' ORDER BY v."CreatedAt")
+  FROM vehicles v
+ WHERE NOT v."IsDeleted" AND NULLIF(upper(btrim(v."Vin")), '') IS NOT NULL
+ GROUP BY v."TenantId", NULLIF(upper(btrim(v."Vin")), '')
+HAVING count(*) > 1
+
+UNION ALL
+
+SELECT 'trailer_plate',
+       t."TenantId"::text,
+       upper(regexp_replace(t."LicensePlate", '[^A-Za-z0-9]', '', 'g')),
+       count(*),
+       string_agg(format('%s "%s" %s', t."Id", t."LicensePlate", t."InternalNumber"), ' | ' ORDER BY t."CreatedAt")
+  FROM trailers t
+ WHERE NOT t."IsDeleted"
+ GROUP BY t."TenantId", upper(regexp_replace(t."LicensePlate", '[^A-Za-z0-9]', '', 'g'))
+HAVING count(*) > 1
+
+UNION ALL
+
+SELECT 'trailer_vin',
+       t."TenantId"::text,
+       NULLIF(upper(btrim(t."Vin")), ''),
+       count(*),
+       string_agg(format('%s "%s" %s', t."Id", t."Vin", t."InternalNumber"), ' | ' ORDER BY t."CreatedAt")
+  FROM trailers t
+ WHERE NOT t."IsDeleted" AND NULLIF(upper(btrim(t."Vin")), '') IS NOT NULL
+ GROUP BY t."TenantId", NULLIF(upper(btrim(t."Vin")), '')
+HAVING count(*) > 1
+
+UNION ALL
+
+-- 5. Issued-item template codes (20261018143508_WarehouseInventoryIntegrity, MIG-05d): codes are
+--    'BM-' || lpad(n, 4, '0'), which truncates from 10 000 templates per tenant on and then collides
+--    on the unique index. Deleted rows count (they keep their number).
+SELECT 'issued_item_template_count',
+       i."TenantId"::text,
+       '>= 10000 sjablonen',
+       count(*),
+       'te veel sjablonen voor de BM-nnnn-codering; neem contact op met ontwikkeling'
+  FROM issued_item_templates i
+ GROUP BY i."TenantId"
+HAVING count(*) >= 10000
 
 ORDER BY 1, 2, 3;
