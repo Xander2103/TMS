@@ -1,10 +1,18 @@
 # Operations & Deployment — TransportationService
 
 Doelgroep: platform-/applicatiebeheer. Stack: .NET 10 (ASP.NET Core API), EF Core 10,
-PostgreSQL 16, React + Vite (SPA, PWA-shell). Alle beweringen in dit document zijn
-geverifieerd tegen de code op branch `nav-redesign` (stand 2026-08-12).
+PostgreSQL 16, React + Vite (SPA, PWA-shell). Oorspronkelijk geverifieerd tegen de code van
+2026-08-12; §1.1, §1.3, §2.1, §2.3, §3, §4, §5, §6, §6b en §7 zijn op 2026-10-19 herschreven
+voor de production-hardening (deployscript, forward-only releases, duurzame opslag).
 
 Verwante documenten:
+
+- `scripts/deploy-transportationservice.sh` — het deployscript (§3.4); lokale simulatie:
+  `scripts/deploy-sim/run.sh`
+- `deploy/systemd/`, `deploy/nginx/` — voorbeeldunit, nginx-site en onderhoudspagina (§3.3)
+- `docs/storage.md` — duurzame bestandsopslag (`Storage:RootPath`) en migratie van `App_Data/`
+- `docs/operations/backup-restore.md` — off-host back-up en offline restore-runbook
+- `docs/operations/provisioning.md` — nieuw bedrijf / eerste beheerder (`--provision-tenant`)
 
 - `docs/security/operational-checklist.md` — operationele securitychecklist (29 punten,
   release-blocking gemarkeerd)
@@ -35,6 +43,20 @@ ook een idempotent SQL-script gegenereerd en door een DBA beoordeeld worden:
 ```bash
 dotnet ef migrations script --idempotent --project TransportationService.Api -o migrate.sql
 ```
+
+Twee eigenschappen die elke productie-upgrade bepalen (geverifieerd, production-readiness
+MIG-02/MIG-03):
+
+- **EF commit per migratie.** Elke migratie loopt in haar eigen transactie. Faalt migratie *k*,
+  dan rolt alleen *k* terug; 1..*k*-1 blijven toegepast. Een herstart van `database update`
+  hervat bij *k*. Er is dus géén "alles of niets".
+- **Standaard command timeout = 30 s per commando.** Grote `UPDATE`s en tabelherschrijvingen
+  overschrijden dat op een productiegrote database. Het deployscript voegt daarom **alleen voor de
+  migratiestap** `Command Timeout=0` (`MIGRATION_COMMAND_TIMEOUT`) en
+  `Options=-c lock_timeout=60s` (`MIGRATION_LOCK_TIMEOUT`) toe aan de connectionstring: geen
+  tijdslimiet op het werk zelf, wel snel falen als een andere sessie een lock vasthoudt. Handmatig
+  migreren: doe hetzelfde, bv.
+  `ConnectionStrings__DefaultConnection="<conn>;Command Timeout=0;Options=-c lock_timeout=60s"`.
 
 ### 1.2 Redesign-migraties (dossier-centric redesign, Waves 0–6 + afrondingsgolf P0–P13)
 
@@ -278,10 +300,13 @@ ORDER BY "MigrationId" DESC
 LIMIT 10;
 ```
 
-Verwacht: `20260812175816_InvoiceSnooze` bovenaan, met daaronder de dertien overige
-redesign-migraties in aflopende volgorde. Alternatief vanaf de buildmachine:
-`dotnet ef migrations list --project TransportationService.Api` (toegepaste migraties zonder
-`(Pending)`-markering).
+Verwacht: bovenaan de **nieuwste migratie in `TransportationService.Api/Migrations/` van de
+gedeployde commit** (stand 2026-10-19: `20261018213037_CustomerPortalFinalRemediation`, 191
+migraties), en `count(*)` gelijk aan het aantal migratiebestanden (zonder `.Designer.cs`). Het
+deployscript controleert precies dat in stap 12 (0 openstaand volgens EF, nieuwste toegepast ==
+nieuwste in de broncode, aantallen gelijk). Alternatief: `dotnet ef migrations list` (geen
+`(Pending)`-markering), of Instellingen → Systeeminformatie (`schemaVersion`,
+`pendingMigrations = 0`).
 
 ---
 
@@ -289,7 +314,17 @@ redesign-migraties in aflopende volgorde. Alternatief vanaf de buildmachine:
 
 ### 2.1 Startup-seeders in **elke** omgeving
 
-`Program.cs` draait bij elke start, ook in productie, vier idempotente seeders/syncs:
+`Program.cs` draait bij elke start, ook in productie, **zeven** idempotente seeders/backfills, na
+elkaar en **vóór** Kestrel luistert (de API is dus pas "ready" als ze klaar zijn; de eerste start
+na een release met nieuwe backfills kan minuten duren — het deployscript wacht daarom op
+`GET /health/ready`, max. `STARTUP_WAIT_SECONDS`, default 300 s). Een exception in een seeder
+stopt het proces; systemd herstart (`Restart=on-failure`, max. 5 starts / 10 min).
+
+Naast de vier hieronder beschreven draaien ook `AddressMasterBackfillSeeder` (adressleutels van
+`locations`), `IssuedTransportDocumentSnapshotBackfill` (bevriest uitgegeven CMR/leverbon/
+werkbon) en `InvoicePartySnapshotBackfill` (bevriest partijgegevens en UBL-notitie van
+uitgegeven facturen); die laatste twee doen hun echte werk eenmalig bij de eerste start na de
+release (N+1-queries per document/factuur, production-readiness MIG-06). De vier oudere:
 
 1. **`CountrySeeder.SyncAsync`** — synchroniseert de globale ISO-landenlijst (vereist voor
    landvalidatie en comboboxen, tenant-onafhankelijk).
@@ -358,10 +393,18 @@ Binnen het `IsDevelopment()`-blok in `Program.cs` draaien bij elke start:
 2. **Create** — ontbrekende sjabloonrollen worden per tenant aangemaakt met de volledige
    actuele permissieset; een gelijknamige tenant-eigen rol wordt met rust gelaten.
 3. **Upgrade** — versiestappen uit `DefaultRoleUpgrades` (huidige
-   `CurrentVersion = 33`) voegen nieuw geïntroduceerde standaardpermissies exact één keer
+   `CurrentVersion = 40`) voegen nieuw geïntroduceerde standaardpermissies exact één keer
    per tenant toe aan gestempelde rollen; de toegepaste versie staat in
-   `role_template_states`. Er wordt nooit iets verwijderd — tenant-maatwerk (inclusief het
-   naderhand weghalen van een geüpgradede permissie) overleeft elke re-run.
+   `role_template_states`. Toevoegingen zijn add-if-missing: tenant-maatwerk (een naderhand
+   weggehaalde permissie) overleeft elke re-run. **Uitzondering — bewuste intrekkingen:** v35
+   haalt `absences.view/create` weg bij `chauffeur`, v36 `legal_entities.view` bij
+   `planner`/`dispatcher` (securitycorrecties; vermeld ze in de releasenotes).
+
+Let op bij elke codeversie: `PermissionCatalogSeeder` **verwijdert permissiecodes die de
+draaiende code niet kent, met al hun toekenningen**. Daarom mag een oudere release nooit starten
+op een database die al door een nieuwere release is gesynchroniseerd: na terug-vooruitrollen
+krijgen sjabloonrollen die permissies niet terug (`AppliedVersion` staat al op 40). Dit is één
+van de redenen waarom de release forward-only is (§3.7).
 
 ### 2.4 Demodata
 
@@ -403,13 +446,16 @@ wanneer:
 Overige runtimekenmerken:
 
 - Kestrel request-body-plafond 32 MB (uploads begrensd per endpoint).
-- `Storage:RootPath` is de bestandsopslag (`LocalFileStorageService`) voor álle documenten,
-  POD-handtekeningen, Peppol-payloads, logo's en de in-app back-ups. Buiten Development is
-  die sleutel verplicht: een absoluut pad **buiten** de releasemap, schrijfbaar, en in de
-  back-upscope (checklistpunten 16/21). Anders weigert de API te starten. Het oude
-  `<ContentRoot>/App_Data` mag alleen nog via `Storage:AllowContentRootStorage=true`.
-  Configuratie, de `--verify-storage`-integriteitscontrole en de migratieprocedure staan in
-  `docs/storage.md` (sectie *Bestandsopslag*).
+- **Bestandsopslag** (alle documenten, POD-handtekeningen/-foto's, personeelsdocumenten,
+  Peppol-payloads, logo's, in-app back-ups) staat onder **`Storage:RootPath`**
+  (`Storage__RootPath` in `tms.env`): een absoluut pad **buiten** elke release-/bin-map, bv.
+  `/var/lib/transportationservice/storage`, eigenaar de service-gebruiker, `0750`, en in de
+  back-upscope (checklistpunten 16/21). Buiten Development weigert de API te starten zonder
+  geldige waarde; het oude `<ContentRoot>/App_Data` mag alleen nog via
+  `Storage:AllowContentRootStorage=true`. Layout, aanmaak, de `--verify-storage`-integriteitscontrole
+  en het migreren van een oude `App_Data/`-map: **`docs/storage.md`** (sectie *Bestandsopslag*).
+  Het deployscript wijzigt deze map nooit en weigert te deployen als ze ontbreekt, relatief is,
+  binnen een release-map ligt of niet schrijfbaar is (§3.4 stap 2).
 - Buiten Development staan HSTS en HTTPS-redirect aan in de app zelf.
 
 ### 3.2 Frontend
@@ -443,57 +489,110 @@ Uit `appsettings.Production.json` blijkt de aangenomen topologie:
 - CORS staat nooit op wildcard; buiten Development betekent een lege originlijst
   "fail closed".
 
-Het deploymentscript staat sinds het migratie-incident van 2026-08 **in de repo**
-(`scripts/deploy-transportationservice.sh`) en wordt op de server geïnstalleerd met:
+Voorbeeldconfiguratie in de repo (paden aanpassen aan de server):
+
+| Bestand | Doel |
+|---|---|
+| `deploy/systemd/transportationservice-api.service` | systemd-unit: `WorkingDirectory` = release-map, `EnvironmentFile=/etc/transportationservice/tms.env`, `ASPNETCORE_URLS=http://127.0.0.1:5019`, `After=postgresql.service`, `Restart=on-failure` met `StartLimitBurst=5`/`StartLimitIntervalSec=600`. |
+| `deploy/nginx/transportationservice.conf` | nginx-site: TLS, SPA-fallback, `/api/` → 127.0.0.1:5019 met `X-Forwarded-For`/`X-Forwarded-Proto`, 32 MB body, onderhoudsmodus (§3.8), alleen `/health/live` publiek. |
+| `deploy/nginx/maintenance.html` | onderhoudspagina (503) tijdens een deploy. |
+
+> **EXACT ÉÉN API-INSTANTIE.** De API draait zijn achtergrondjobs (mail-outbox, Peppol,
+> sweeps, retentie, automatische back-up) en zijn startup-seeders in-process. Een tweede
+> instantie — een tweede unit, een template-unit `@N`, blue/green met twee levende processen, of
+> een tweede host op dezelfde database — wordt voor de pilot **niet ondersteund**: mails en
+> Peppol-verzendingen kunnen dubbel vertrekken en de seeders racen op unieke indexen. Ook niet
+> "even" tijdens een deploy: het script stopt de oude instantie vóór de nieuwe start.
+
+#### Serverlayout (wat het script verwacht)
+
+| Pad | Inhoud |
+|---|---|
+| `/var/www/transportationservice/TMS` | git-checkout (eigenaar `deploy`), `REPO_DIR` |
+| `…/TMS/TransportationService.Api/bin/Release/net10.0` | **release-map** (`API_BIN_DIR`): hier start systemd de API; wordt bij elke deploy met `rsync --delete` vervangen (altijd met `--exclude=/App_Data/`) |
+| `…/TMS/TransportationService.Web/dist` | live frontend (nginx-root) |
+| `/var/lib/transportationservice/storage` (voorbeeld) | **duurzame bestandsopslag** (`Storage__RootPath`), nooit binnen een release-map — `docs/storage.md` |
+| `/var/www/transportationservice/backups` | `BACKUP_DIR`: finale deploydumps (`<db>-<ts>.dump` + `.toc`/`.log`), opslag-snapshots (`storage-<db>-<ts>.tar.gz`) en `<db>-<ts>.sha256`; retentie 10 dumps / 3 snapshots |
+| `/var/www/transportationservice/releases/stage-<ts>-<sha>` | `STAGE_ROOT`: staging-build (`build/Release/net10.0`), frontend (`web/`), `previous-api/`, `previous-web/`, `migration.log`, `migration-timings.tsv`; de nieuwste 3 blijven staan |
+| `/var/www/transportationservice/maintenance/maintenance.on` | onderhoudsvlag (`MAINTENANCE_FLAG`) |
+| `/etc/transportationservice/tms.env` | EnvironmentFile (root:deploy 0640), §4 |
+| `/home/deploy/.dotnet/tools/dotnet-ef` | EF-tool van `deploy` (buiten een deploy installeren) |
+
+#### Installeren en uitvoeren
 
 ```bash
-sudo install -m 0755 scripts/deploy-transportationservice.sh /usr/local/bin/deploy-transportationservice.sh
+sudo install -m 0750 -o root -g root \
+    /var/www/transportationservice/TMS/scripts/deploy-transportationservice.sh \
+    /usr/local/bin/deploy-transportationservice.sh
+sudo /usr/local/bin/deploy-transportationservice.sh <exacte-commit-sha>
 ```
 
-Uitvoeren: `ssh deploy@<server>` gevolgd door
-`sudo /usr/local/bin/deploy-transportationservice.sh [git-ref]` (default `nav-redesign`).
+De **git-ref is verplicht** (er is geen default-branch meer; zonder argument weigert het script,
+exitcode 2). Gebruik bij voorkeur een exacte commit-sha. Bewaar de volledige uitvoer van elke
+deploy (bv. `… 2>&1 | tee ~/deploy-<sha>.log`).
+
+Belangrijkste knoppen (omgevingsvariabelen van het script, nooit secrets):
+
+| Variabele | Default | Betekenis |
+|---|---|---|
+| `RESTORE_PREVIOUS_ON_FAILURE` | `0` | Forward-only. `1` heeft enkel effect bij een release **zonder** migraties waarvan het plaatsen van de binaries faalde vóór de eerste start; met openstaande migraties weigert het script (§3.7). |
+| `STARTUP_WAIT_SECONDS` | `300` | Max. wachttijd op `GET /health/ready` = 200 na de start (eerste start draait backfills). |
+| `MIGRATION_LOCK_TIMEOUT` | `60s` | `lock_timeout` voor de migratiestap. |
+| `MIGRATION_COMMAND_TIMEOUT` | `0` | Npgsql `Command Timeout` voor de migratiestap (0 = geen limiet). |
+| `MIGRATION_VERBOSE` | `0` | `1` = `dotnet ef database update --verbose` (SQL in `migration.log`). |
+| `STORAGE_SNAPSHOT` | `1` | tar-snapshot van `Storage__RootPath` direct na de dump. `0` alleen als er een gelijktijdige off-host bestandsback-up is. |
+| `MAINTENANCE_MODE` / `MAINTENANCE_FLAG` | `1` / zie layout | Onderhoudspagina tijdens de downtime (§3.8). |
+| `READY_PATH` / `LOCAL_API_URL` | `/health/ready` / `http://127.0.0.1:5019` | Readiness-check. |
+| `PUBLIC_URL` | `Frontend__BaseUrl` uit tms.env | Publieke eindcontrole. |
+| `REPO_DIR`, `API_BIN_DIR`, `WEB_DIST_DIR`, `BACKUP_DIR`, `STAGE_ROOT`, `ENV_FILE`, `SERVICE_NAME` | zie layout | Paden. |
+
+De externe commando's (`SYSTEMCTL`, `NGINX`, `PG_DUMP`, `PG_RESTORE`, `PSQL`, `DOTNET`,
+`DOTNET_EF`, `NPM`, …) zijn overschrijfbaar; met `DEPLOY_SIMULATE=1` draait het script zonder root
+tegen sandboxpaden. Daarop steunt de lokale simulatie `scripts/deploy-sim/run.sh` (echte
+PostgreSQL 16 en dotnet-ef, gestubde systemctl/nginx; scenario's: geslaagde release,
+migratiefout, opstartfout, lock-timeout, onveilige opslag, ontbrekende ref, …). Simulatiemodus
+weigert de productiepaden.
 
 ### 3.4 Releasevolgorde (afgedwongen door het script)
 
-Het script (`set -Eeuo pipefail`, ERR-trap met stap + exitcode + back-uplocatie,
-getimestampte stappen, exitcodes nooit gemaskeerd door pipes/`tail`) dwingt deze
-volgorde af — de kern is dat **migraties ALTIJD vóór de herstart lopen**:
+Alles vóór stap 9 is read-only voor het live systeem: een fout daar laat de draaiende release
+ongemoeid.
 
-1. Git-werkboom moet schoon zijn (anders stopt de deploy).
-2. `pg_dump -Fc` back-up naar `/var/backups/transportationservice/` (chmod 600).
-3. Gevraagde branch/commit ophalen (`fetch` + `--ff-only`).
-4. `dotnet restore`.
-5. `dotnet build -c Release` — de ENIGE compilatie; EF hergebruikt ze.
-6. `npm ci`.
-7. `npm run build` (faalt hard als `VITE_API_BASE_URL` ontbreekt in de env).
-8. `nginx -t`.
-9. De omgeving komt uit **hetzelfde** bestand als systemd
-   (`/etc/transportationservice/tms.env`, EnvironmentFile-formaat) en wordt geladen
-   zonder ooit waarden te tonen — EF ziet dus exact de productieconnectionstring.
-10. Connectiviteitscheck (`SELECT 1`).
-11. **Preflight eigenaarschap** (§3.5) + openstaande migraties tonen
-    (`dotnet ef migrations list --no-build --configuration Release`).
-12. `dotnet ef database update --project TransportationService.Api
-    --startup-project TransportationService.Api --no-build --configuration Release`
-    — additieve migraties in EF-volgorde; **nooit** handgeschreven `ALTER TABLE`,
-    **nooit** migraties handmatig als toegepast markeren. Geen openstaande = gewoon door.
-13. Faalt de migratie → het script stopt onmiddellijk vóór elke herstart: de vorige
-    release blijft draaien (symlink onaangeroerd), de foutmelding noemt de stap én de
-    back-uplocatie.
-14. Publiceren naar een NIEUWE release-map + symlink-switch
-    (`/opt/transportationservice/current`), frontend-`dist/` naar de webroot,
-    `systemctl restart transportationservice-api`. De vorige release-map blijft staan
-    voor handmatige terugrol (het script print het terugrolcommando bij falen).
-15. Wachten op opstart (startup-seeders §2.1 draaien automatisch en idempotent).
-16. `systemctl is-active` moet slagen.
-17. Lokale healthcheck: de API heeft bewust geen `/health`; het script accepteert elke
-    HTTP-status < 500 op `/api/auth/me` (401 zonder token = levend proces).
-18. Pas na ál die checks: samenvatting met commit, release-map, back-uppad,
-    migratieresultaat, servicestatus en healthcheckresultaat.
+| # | Stap | Faalt → |
+|---|---|---|
+| 1 | Preflight: root, tools, deploy-gebruiker, repo, `tms.env` leesbaar, `dotnet-ef`, unit bestaat en `ExecStart` wijst naar `API_BIN_DIR`, lock. **Git-ref verplicht.** | weigering, niets aangeraakt |
+| 2 | **Opslag-preflight**: `Storage__RootPath` (uit `tms.env`, anders uit de unit) gezet, absoluut, zonder `.`/`..`, niet binnen (en niet rond) `API_BIN_DIR`/`REPO_DIR`/`STAGE_ROOT`/`dist`/`WorkingDirectory`, bestaat, is een map, schrijfbaar voor de service-gebruiker (schrijfproef). Legacy `App_Data/` met bestanden in de release-map of `WorkingDirectory` → stop met verwijzing naar `docs/storage.md` (het script verplaatst nooit bestanden). | weigering, niets aangeraakt |
+| 3 | Databaseverbinding via 0600-`PGPASSFILE`; PostgreSQL ≥ 13 verplicht (16 ondersteund), `pg_dump` niet ouder dan de server. | stop, niets aangeraakt |
+| 4 | Git-werkboom schoon, `fetch`, checkout van de ref. **Schema vs. code**: staat er in `__EFMigrationsHistory` een migratie die deze code niet kent → weigering (dat zou oude code op een nieuwer schema zetten). Exacte set openstaande migraties = broncode − historiek; met `RESTORE_PREVIOUS_ON_FAILURE=1` en openstaande migraties → weigering. | weigering, niets aangeraakt |
+| 5 | `dotnet restore` + `dotnet build -c Release` naar `stage-…/build/` (MSBuild `BaseOutputPath`), in een **schone omgeving zonder `tms.env`** (geen DB-wachtwoord, JWT-, kolom- of SMTP-sleutel). `deployment.json` (versie, commit, ref, tijd) in de build. | stop, niets aangeraakt |
+| 6 | `npm ci` + `npm run build` naar `stage-…/web/`, schone omgeving met enkel `VITE_API_BASE_URL` (+ `VITE_BUILD_COMMIT`). | stop, niets aangeraakt |
+| 7 | `nginx -t`. | stop, niets aangeraakt |
+| 8 | DB-preflight: eigenaarschap (§3.5), `CREATE` op `public`, **master-data/wagenpark-preflight** (§3.6), en `dotnet ef migrations list` tegen de **gestagede** build: moet dezelfde openstaande set melden als stap 4. | stop, niets aangeraakt |
+| 9 | **Downtime start**: onderhoudsvlag aan, `systemctl stop`, controle dat de service niet meer actief is. | vorige release (ongewijzigd) wordt herstart als hij draaide |
+| 10 | **Finale** `pg_dump -Fc` (service gestopt = geen writes meer) → `pg_restore --list` moet de dump lezen en `__EFMigrationsHistory`-data bevatten; **opslag-snapshot** (`tar` van `Storage__RootPath`, zonder `backups/` en `message-sink/`) + `sha256`-bestand. | vorige release (ongewijzigd) wordt herstart als hij draaide |
+| 11 | `dotnet ef database update --no-build -c Release` tegen de gestagede build, met `Command Timeout=0` en `lock_timeout=60s` (alleen deze stap); uitvoer met tijdstempels in `stage-…/migration.log`, **duur per migratie** in `migration-timings.tsv` en in de uitvoer. | **forward-only**: service blijft gestopt, onderhoud aan (§3.7) |
+| 12 | Validatie: EF meldt 0 openstaand, nieuwste toegepaste = nieuwste in broncode, aantallen gelijk. | forward-only |
+| 13 | Vorige binaries naar `stage-…/previous-api/` (zonder `App_Data/`), nieuwe binaries met `rsync --delete --exclude=/App_Data/` naar `API_BIN_DIR` (service is gestopt). | forward-only (zonder migraties: zie `RESTORE_PREVIOUS_ON_FAILURE`) |
+| 14 | `systemctl start`, wachten tot `GET http://127.0.0.1:5019/health/ready` = 200 (max. `STARTUP_WAIT_SECONDS`). Unit `failed` of ≥ 3 herstarts → meteen falen. | forward-only: nieuwe service wordt **gestopt**, vorige wordt **niet** gestart |
+| 15 | Huidige `dist/` naar `stage-…/previous-web/`, nieuwe frontend naar `dist/`, `nginx -t`, `systemctl reload nginx`, onderhoudsvlag weg. | forward-only |
+| 16 | Publieke check `PUBLIC_URL/` = 200. | release is live; alleen gemeld, niets teruggedraaid |
+| 17 | Retentie: 10 dumps, 3 opslag-snapshots, 3 staging-mappen. Samenvatting (commit, dump + tijdstip, snapshot, checksums, migraties, schema, vorige binaries/frontend). | — |
 
-Daarna handmatig: rol-/permissiesync (waarschuwing §2.2) en verificatiechecklist §6.
-Secrets worden nooit geëcho'd of gelogd; het env-bestand wordt nooit ge-`cat` naar de
-uitvoer; er staan geen credentials in het script (alles komt uit het env-bestand).
+Waarom zo: de dump is pas de echte eindtoestand als niets meer schrijft (H11); migraties lopen
+terwijl géén applicatie draait; nieuwe code start nooit tegen een ongemigreerd schema (incident
+2026-08, §3.5); oude code start nooit tegen een (deels) gemigreerd schema (§3.7). Secrets worden
+nooit getoond: `tms.env` wordt niet geëxporteerd; alleen `dotnet-ef` krijgt de connectionstring
+(via de omgeving, nooit via argv); `psql`/`pg_dump` krijgen het wachtwoord via een tijdelijk
+0600-`PGPASSFILE`.
+
+**Downtime** = stap 9 t.e.m. 15: dump + snapshot + migraties + eerste start (backfills). Meet ze op
+een teruggezette productiekopie (de samenvatting en `migration-timings.tsv` geven de cijfers) en
+publiceer het onderhoudsvenster op basis daarvan.
+
+Na de deploy: AFTER DEPLOY-checks (§6), `VACUUM (ANALYZE)` op de grote tabellen na zware
+migraties (`transport_order_stops, transport_orders, trips, invoices, invoice_lines,
+order_documents`), en dump + snapshot + `.sha256` off-host kopiëren
+(`docs/operations/backup-restore.md`).
 
 ### 3.5 Incident 2026-08: tabel-eigenaarschap en migratievolgorde
 
@@ -501,8 +600,9 @@ Twee productielessen, allebei structureel afgedekt:
 
 1. **Code vóór migraties.** Een deploy herstartte de API vóór `dotnet ef database
    update`; de nieuwe code verwachtte kolommen die nog niet bestonden en de service
-   crashte bij opstart. Het script dwingt sindsdien de volgorde back-up → build →
-   migraties → pas dán herstart af, en stopt bij een migratiefout vóór elke herstart.
+   crashte bij opstart. Het script dwingt sindsdien de volgorde build (staging) → stop →
+   finale back-up → migraties → validatie → binaries → pas dán start af, en start bij een
+   migratiefout niets (§3.4, §3.7).
 2. **Eigenaarschap.** Migraties draaien als databankgebruiker `tms`, maar de public-
    applicatietabellen bleken eigendom van `postgres` — `ALTER TABLE` door migraties
    faalt dan. Dit is destijds eenmalig handmatig gecorrigeerd (alle 171 public-tabellen
@@ -520,14 +620,20 @@ Twee productielessen, allebei structureel afgedekt:
 
 ### 3.6 Master-data-preflight vóór de migraties van 2026-10-18
 
-Twee migraties van de core/master-data-remediatie maken identiteiten hoofdletterongevoelig en
-**breken af** (`RAISE EXCEPTION`, niets half toegepast) zodra ze dubbels tegenkomen — ze voegen
-bewust nooit zelf samen of hernoemen niets:
+Enkele migraties maken identiteiten uniek of hoofdletterongevoelig en **breken af**
+(`RAISE EXCEPTION` of een unieke index) zodra ze dubbels tegenkomen — ze voegen bewust nooit zelf
+samen of hernoemen niets. Alleen de falende migratie rolt terug; eerder in dezelfde run toegepaste
+migraties blijven staan (§1.1). Daarom draait deze controle vóór de downtime:
 
-| Migratie | Controle |
+| Migratie | Controle (soort in de uitvoer) |
 |---|---|
-| `20261018120257_ReferenceIntegrityAndFinalInvoiceSnapshot` | klantnummers uniek per tenant op `upper(btrim(nummer))`, **verwijderde klanten tellen mee** |
-| `20261018123011_IdentityNormalization` | e-mailadressen uniek per tenant op `lower(btrim(email))`; rolnamen uniek per tenant op `lower(naam)` |
+| `20261017210920_FleetReadinessIdentityAndDamageLinks` | kentekens per tenant op letters+cijfers in hoofdletters, VIN getrimd in hoofdletters, enkel niet-verwijderde voertuigen/opleggers (`vehicle_plate`, `vehicle_vin`, `trailer_plate`, `trailer_vin`) |
+| `20261018120257_ReferenceIntegrityAndFinalInvoiceSnapshot` | klantnummers uniek per tenant op `upper(btrim(nummer))`, **verwijderde klanten tellen mee** (`customer_number`) |
+| `20261018123011_IdentityNormalization` | e-mailadressen uniek per tenant op `lower(btrim(email))`; rolnamen uniek per tenant op `lower(naam)` (`user_email`, `role_name`) |
+| `20261018143508_WarehouseInventoryIntegrity` | minder dan 10 000 uitgiftesjablonen per tenant (BM-nnnn-codering) (`issued_item_template_count`) |
+
+Niet in de preflight (de migraties bewaken het zelf): tekstlengtes van `sales_categories`
+(`CommercialWaveAuditFixes`). PostgreSQL ≥ 13 controleert het deployscript in stap 3.
 
 **Controle (read-only, ook los te draaien vóór het onderhoudsvenster):**
 
@@ -555,12 +661,109 @@ aantal  rijen` (per rij: id, de waarde zoals opgeslagen, naam, `[verwijderd]` / 
 3. **Dubbele rolnaam** (`role_name`): hernoem de niet-systeemrol (bv. `Planner (2)`) via Rollen →
    Bewerken. Hernoem nooit een `[systeemrol]`. Wil je ze samenvoegen, wijs eerst de gebruikers van de
    ene rol aan de andere toe en deactiveer daarna de overbodige rol.
-4. Draai de preflight opnieuw tot ze **niets** meer toont; daarna pas de deploy (of
+4. **Dubbel kenteken/VIN** (`vehicle_plate`, `vehicle_vin`, `trailer_plate`, `trailer_vin`): beslis
+   welk voertuig echt bestaat; corrigeer het kenteken/VIN van het andere in Wagenpark → Bewerken of
+   archiveer het (verwijderde voertuigen tellen niet mee).
+5. **Te veel uitgiftesjablonen** (`issued_item_template_count`): niet zelf oplossen — contacteer
+   ontwikkeling (de codering moet eerst verbreed worden).
+6. Draai de preflight opnieuw tot ze **niets** meer toont; daarna pas de deploy (of
    `dotnet ef database update`).
 
 Breekt een migratie toch af (bv. een conflict dat ná de preflight ontstond), dan staat de melding
-met de botsende waarden in de deploylog; de vorige release blijft draaien (§3.4 stap 13). Los op
-zoals hierboven en deploy opnieuw.
+met de botsende waarden in de deploylog en in `stage-…/migration.log`. De service is dan al
+gestopt en **blijft gestopt** met de onderhoudspagina aan; de migraties vóór de falende zijn
+toegepast. Los de data op zoals hierboven en draai de deploy opnieuw met **dezelfde** ref (EF
+hervat bij de falende migratie), of rol terug via restore (§3.7). Start nooit de vorige release.
+
+### 3.7 Rollback: forward-only, terugrollen = restore
+
+**Beleid.** Elke release met migraties is **forward-only**. Code-only terugrollen (de vorige
+binaries starten op het nieuwe schema) is bewezen schadelijk (production-readiness B2/MIG-01): de
+oude code kan geen tweede klant, gebruiker of voertuig meer aanmaken (unieke indexen op
+genormaliseerde kolommen), leest NULL-factuurnummers van concepten niet, nummert facturen zonder
+`Kind` en zijn `PermissionCatalogSeeder` verwijdert de nieuwe permissiecodes met hun toekenningen.
+`dotnet ef database update <oudere-migratie>` (`Down()`) is evenmin een optie: meerdere Downs
+falen of verliezen data (MIG-09).
+
+**Wat het script doet bij een fout** (zie ook de tabel in §3.4):
+
+| Fout in | Service | Onderhoud | Automatisch |
+|---|---|---|---|
+| stap 1–8 (preflight, build, DB-preflight) | vorige release blijft draaien | uit | niets aangeraakt |
+| stap 9–10 (stop, dump, snapshot, verificatie) — **nog geen migratie** | vorige, **ongewijzigde** release wordt herstart als hij draaide | uit na geslaagde herstart | geen rollback nodig: binaries en schema zijn onaangeroerd |
+| stap 11–15 (migratie gestart, validatie, binaries, start, readiness, frontend) | **blijft gestopt** (een gestarte nieuwe service wordt gestopt) | **blijft aan** | niets; het script print wat faalde, het dumppad (met tijdstip), de snapshot, het aantal in deze run toegepaste migraties, en deze procedure |
+| stap 16 (publieke check) | nieuwe release draait | uit | niets (release is live) |
+
+`RESTORE_PREVIOUS_ON_FAILURE=1` wordt **geweigerd** zodra er openstaande migraties zijn (al in
+stap 4, vóór de downtime) en wordt in de foutafhandeling genegeerd met een expliciete melding
+zodra een migratie gestart is of de nieuwe code al draaide. Het heeft enkel effect bij een
+release zonder migraties waarvan het plaatsen van de binaries faalde vóór de eerste start. Een
+poging om een **oudere ref** te deployen op een database die al nieuwere migraties heeft, weigert
+het script ook (stap 4) — dat is code-only terugrollen.
+
+Let op: na een forward-only stop is de unit nog `enabled`; een reboot start hem opnieuw (met de
+binaries die er dan staan). Overweeg `systemctl disable transportationservice-api` tot het herstel
+rond is, en `enable` daarna.
+
+**Beslissen.** Na een mislukte deploy, met de service gestopt en de onderhoudspagina aan:
+
+1. **Vooruit herstellen** (voorkeur bij een data- of configuratieprobleem, bv. een dubbel dat na
+   de preflight ontstond, een ontbrekende `tms.env`-sleutel, een te kort `lock_timeout`): los de
+   oorzaak op (deploylog, `stage-…/migration.log`, `journalctl -u transportationservice-api`) en
+   draai de deploy opnieuw met **dezelfde** sha. EF hervat bij de eerste niet-toegepaste
+   migratie; de nieuwe dump is dan de deels gemigreerde toestand — bewaar de dump van de eerste
+   poging.
+2. **Terugrollen via restore** (als de nieuwe release zelf onbruikbaar is):
+   1. Service gestopt laten, onderhoud aan. Maak voor forensisch onderzoek een `pg_dump -Fc` van
+      de huidige (kapotte) database. **Drop die database nooit tijdens het incident.**
+   2. Zet de **finale deploydump** (pad en tijdstip in de deployuitvoer:
+      `BACKUP_DIR/<db>-<ts>.dump`, controleer eerst `sha256sum -c BACKUP_DIR/<db>-<ts>.sha256`)
+      terug in een **nieuwe** database, `createdb -O <eigenaar> <db>_rb_<ts>` +
+      `pg_restore --no-owner --role=<eigenaar> --exit-on-error -d <db>_rb_<ts> <dump>`, en zet
+      `Database=` in `ConnectionStrings__DefaultConnection` (`tms.env`) daarop. Volledige
+      procedure, rechten en verificatie: **`docs/operations/backup-restore.md`**.
+   3. Binaries: als stap 13 al liep,
+      `rsync -a --delete --exclude=/App_Data/ <stage>/previous-api/ <API_BIN_DIR>/`; anders staan
+      de vorige binaries nog in `API_BIN_DIR`.
+   4. Frontend: als stap 15 al liep, `rsync -a --delete <stage>/previous-web/ <dist>/` en
+      `nginx -s reload`; anders is de vorige frontend nog live.
+   5. Bestanden: zet `Storage__RootPath` **niet** terug (de snapshot dient voor rampherstel, niet
+      voor een rollback). Bestanden die na het dumptijdstip werden geüpload hebben geen DB-rij
+      meer; noteer ze als wees.
+   6. `systemctl start transportationservice-api`, wacht op `GET /health/ready` = 200, controleer
+      Systeeminformatie (vorige `buildCommit`, vorige `schemaVersion`, 0 openstaand) en de smoke
+      (§6). Daarna pas `rm -f /var/www/transportationservice/maintenance/maintenance.on`.
+   7. Meld gebruikers welk tijdvenster opnieuw moet worden ingevoerd (normaal geen: de dump werd
+      genomen nadat de service gestopt was).
+
+Een rollback **na** een geslaagde, al gebruikte release (uren later) verliest alles wat sindsdien
+werd ingevoerd; weeg dat af tegen vooruit herstellen.
+
+### 3.8 Onderhoudsmodus
+
+nginx toont `deploy/nginx/maintenance.html` met HTTP 503 (SPA én `/api/`) zolang
+`/var/www/transportationservice/maintenance/maintenance.on` bestaat (per request geëvalueerd, geen
+reload nodig). Het script zet de vlag vóór de stop en verwijdert ze pas als de nieuwe API ready is
+en de nieuwe frontend live staat; bij een forward-only fout blijft ze staan. Handmatig:
+
+```bash
+sudo touch /var/www/transportationservice/maintenance/maintenance.on   # aan
+sudo rm -f /var/www/transportationservice/maintenance/maintenance.on   # uit
+```
+
+De vlag stopt alleen gebruikersverkeer; achtergrondjobs stoppen pas met `systemctl stop`. Zonder
+de nginx-configuratie uit `deploy/nginx/` heeft de vlag geen effect (dan geeft nginx 502 op
+`/api/` zolang de service gestopt is).
+
+### 3.9 Nieuw bedrijf (eerste tenant en beheerder)
+
+Een productiedatabase start leeg: de dev-seeders (§2.2) draaien niet buiten Development. Een
+nieuw bedrijf wordt aangemaakt met het provisioning-commando van de API
+(`--provision-tenant …`, eenmalig, als de service-gebruiker met dezelfde `tms.env`), dat tenant,
+instellingen, juridische entiteit, systeemrollen en referentiedata aanmaakt en een eenmalige
+activatielink voor de beheerder verstuurt. Procedure en parameters:
+**`docs/operations/provisioning.md`**. Gebruik nooit een Development-start op een
+productiedatabase (die maakt `admin@dev.local` aan).
 
 ## 4. Omgeving & configuratie
 
@@ -569,7 +772,10 @@ Alle secrets via omgevingsvariabelen (`Sectie__Sleutel`) of een vault; in Develo
 
 | Sleutel | Betekenis |
 |---|---|
-| `ConnectionStrings:DefaultConnection` | Npgsql-connectionstring naar PostgreSQL 16. Leeg in alle getrackte configs. |
+| `ASPNETCORE_ENVIRONMENT` | `Production` op de server (in `tms.env`). |
+| `ASPNETCORE_URLS` | `http://127.0.0.1:5019` (in de systemd-unit; alleen nginx spreekt de API aan). |
+| `ConnectionStrings:DefaultConnection` | Npgsql-connectionstring naar PostgreSQL 16 (`Host=…;Port=…;Database=…;Username=…;Password=…`). Leeg in alle getrackte configs. Geen `Command Timeout` nodig: het deployscript voegt die alleen voor de migratiestap toe. |
+| `Storage:RootPath` | **Verplicht buiten Development.** Absoluut pad van de duurzame bestandsopslag, **buiten** elke release-/bin-map (bv. `/var/lib/transportationservice/storage`), eigenaar de service-gebruiker. De API weigert te starten zonder geldige waarde; het deployscript weigert te deployen bij een ontbrekend, relatief, niet-schrijfbaar pad of een pad binnen een release-map. Zie `docs/storage.md`. |
 | `Jwt:Issuer` / `Jwt:Audience` | Token-issuer/-audience; staan per omgeving in appsettings. |
 | `Jwt:SigningKey` | **Secret.** Symmetrische HMAC-SHA256-key, ≥ 32 bytes. Startup faalt bij ontbreken, te kort of deny-listed (oude gelekte dev-key). |
 | `Jwt:PreviousSigningKey` | Optioneel, alleen tijdens een rotatievenster: oude key blijft geldig voor **validatie**, nieuwe tokens gebruiken de nieuwe key. Verwijderen na het venster. |
@@ -596,18 +802,49 @@ Alle secrets via omgevingsvariabelen (`Sectie__Sleutel`) of een vault; in Develo
 | `Dev:AllowImpersonationHeaders` | Alleen Development; elke andere omgeving weigert te starten met deze vlag aan. |
 | `AllowedHosts` | Standaard ASP.NET-hostfilter (`*` in basisconfig; op de edge beperken). |
 | `POSTGRES_PASSWORD` (docker-compose) | Wachtwoord van de lokale dev-database. |
-| `VITE_API_BASE_URL` (frontend, buildtime) | Publieke API-basis-URL, ingebakken in de SPA-build. |
+| `VITE_API_BASE_URL` (frontend, buildtime) | Publieke API-basis-URL, ingebakken in de SPA-build. Het deployscript leest **alleen deze sleutel** uit `tms.env` (of uit zijn eigen omgeving) en geeft hem expliciet aan `npm run build`; de rest van `tms.env` bereikt de builds nooit. |
+
+**Minimale `tms.env` op de server** (root:deploy `0640`, EnvironmentFile-formaat `KEY=VALUE`,
+sleutels alleen `[A-Za-z0-9_]` — punten zijn niet toegestaan, zet logniveaus in
+`appsettings.Production.json`):
+
+```ini
+ASPNETCORE_ENVIRONMENT=Production
+ConnectionStrings__DefaultConnection=Host=127.0.0.1;Port=5432;Database=<db>;Username=tms;Password=<secret>
+Storage__RootPath=/var/lib/transportationservice/storage
+Jwt__SigningKey=<secret, >= 32 bytes>
+ColumnEncryption__Key=<secret, base64 32 bytes>
+# ColumnEncryption__PreviousKeys__0=<na een rotatie>
+Email__Smtp__Host=<smtp-host>
+Email__Smtp__Port=587
+Email__Smtp__Username=<user>
+Email__Smtp__Password=<secret>
+Email__Smtp__FromAddress=<noreply@domein>
+Email__Smtp__FromName=<naam>
+Email__Smtp__UseTls=true
+Cors__AllowedOrigins__0=https://<echt-domein>
+Frontend__BaseUrl=https://<echt-domein>
+Network__KnownProxies__0=127.0.0.1
+VITE_API_BASE_URL=https://<echt-domein>
+```
+
+`Cors__AllowedOrigins__0` en `Frontend__BaseUrl` moeten het **echte** domein zijn
+(`appsettings.Production.json` bevat het demodomein). Het deployscript gebruikt
+`Frontend__BaseUrl` ook voor de publieke eindcontrole. Bewaar `ColumnEncryption__Key` (+ vorige
+keys) en `Jwt__SigningKey` in een vault, gescheiden van de back-ups.
 
 ---
 
 ## 5. Achtergrondjobs & hosted services
 
 Alle jobs zijn `BackgroundService`-implementaties met `PeriodicTimer`, één DI-scope per
-tick, fouten gelogd zonder de lus te breken. Ze draaien **in-process** in de API. De pilot
-draait **exact één** API-instantie. De sweeps, de automatische back-up en de opstartsync
-lopen onder een PostgreSQL-advisory-lock (een tweede instantie slaat de run over) en de
-outbox claimt elke rij afzonderlijk; wat (nog) niet multi-instance-veilig is, staat in
-`docs/operations/single-instance.md`. Volledige lijst, geverifieerd in code
+tick, fouten gelogd zonder de lus te breken. Ze draaien **in-process** in de API. **Draai exact
+één API-instantie** (§3.3): meerdere instanties zijn voor de pilot niet ondersteund. De sweeps,
+de automatische back-up en de opstartsync lopen wel onder een PostgreSQL-advisory-lock (een
+tweede instantie slaat de run over), de outbox claimt elke rij afzonderlijk en bewaart het
+resultaat per bericht (een herstart verstuurt een batch dus niet opnieuw), en Peppol claimt elke
+transmissie vóór het indienen. Wat (nog) niet multi-instance-veilig is (o.a. de in-memory
+rate-limiter): `docs/operations/single-instance.md`. Volledige lijst, geverifieerd in code
 (intervallen uit de bronbestanden; zie ook `docs/background-jobs.md`):
 
 | Hosted service | Interval | Functie |
@@ -637,18 +874,23 @@ opgepikt nadat iemand ze vrijgeeft.
 Health-endpoints (anoniem, niet rate-limited, geen HTTPS-redirect):
 `GET /health/live` (proces leeft, raakt geen afhankelijkheden: altijd 200) en
 `GET /health/ready` (database `SELECT 1`, 0 openstaande migraties, kolomversleutelingssleutel
-past bij de database, plus de opslagcheck: 200 = alles Healthy, anders 503). Monitoring en
-het deployscript horen `/health/ready` te pollen. `GET /health/details` (aangemeld +
+past bij de database, plus de opslagcheck: 200 = alles Healthy, anders 503). Het deployscript
+en de interne monitoring pollen `http://127.0.0.1:5019/health/ready`; publiek is via nginx
+alleen `/health/live` bereikbaar (§3.3). `GET /health/details` (aangemeld +
 `system_info.view`) toont daarnaast outbox, Peppol, back-up, optionele integraties en de
-heartbeat per achtergrondjob. Zie `docs/operations/single-instance.md`.
+heartbeat per achtergrondjob. Zie `docs/operations/single-instance.md`. OpenAPI/Scalar is
+alleen in Development gemapt.
 
 Na elke deploy:
 
 1. **Opstartlog controleren** — geen exceptions van `StartupSecurityValidator`; regels van
-   `DossierBackfillSeeder` ("created N wrapper dossiers" of stil bij 0) en geen
-   seeder-fouten.
-2. **Migratiestand** — `__EFMigrationsHistory` eindigt op `20260812175816_InvoiceSnooze`
-   (§1.3).
+   `DossierBackfillSeeder` ("created N wrapper dossiers" of stil bij 0), de
+   `Authorization catalogue synced … v40`-regel en geen `fail:`/`crit:` of seeder-fouten
+   (`journalctl -u transportationservice-api`).
+2. **Migratiestand** — `__EFMigrationsHistory` eindigt op de nieuwste migratie van de
+   gedeployde commit en telt evenveel rijen als er migratiebestanden zijn (§1.3); de
+   deploysamenvatting toont `Schema`. `SELECT min("AppliedVersion"), max("AppliedVersion") FROM
+   role_template_states` → 40/40.
 3. **Login** — `POST /api/auth/login` met een geldig account: 200, access token + HttpOnly
    refresh-cookie; fout wachtwoord: 401 en (na herhaling) rate limiting/lockout.
 4. **Dossier aanmaken** — via de UI (dossierlijst is de landingspagina) een dossier snel
@@ -701,11 +943,13 @@ nooit; een onbereikbare databank toont enkel "Unavailable".
 - Een back-up is een set: `pg_dump -Fc` + een `.files.tar.gz` van de storage root + een
   `.sha256`-manifest. De set is pas *Voltooid* nadat beide delen geverifieerd zijn. Anders
   komt er een rij *Mislukt* met de reden, en de stderr van `pg_dump`/`pg_restore` staat in het
-  log. Encryptiesleutels zitten er bewust niet in: die horen in de vault.
+  log. Encryptiesleutels zitten er bewust niet in: die horen in de vault. Een in-app back-up
+  staat wel op dezelfde host: kopieer de sets versleuteld off-host (runbook).
 - Opslag: `Backups:Directory` (default `<Storage:RootPath>/backups`, absoluut en buiten de
-  releasemap);
-  `Backups:ExternalDirectories` kan de dumpmap van het deployscript alleen-lezen tonen
-  (type Pre-deployment). `Backups:PgDumpPath`/`PgRestorePath` wijzen naar de binaries.
+  releasemap; de deploy-opslag-snapshot sluit die map uit, want de dumps zijn al back-ups).
+  `Backups:ExternalDirectories` kan de dumpmap van het deployscript
+  (`/var/www/transportationservice/backups`) alleen-lezen tonen (type Pre-deployment).
+  `Backups:PgDumpPath`/`PgRestorePath` wijzen naar de binaries (zelfde hoofdversie als de server).
 - Permissies: `backups.view` (rollen v29: management) en de bewuste per-beheerder-rechten
   `backups.create/download/delete/restore`. Delete en restore zijn bovendien fail-closed
   in de service zelf.
@@ -726,13 +970,26 @@ nooit; een onbereikbare databank toont enkel "Unavailable".
 
 ## 7. Rollback-overwegingen
 
-**Uitgangspunt: code eerst terugrollen, database laten staan.** Alle redesign-migraties
-zijn additief (§1.2): de vorige applicatieversie draait probleemloos tegen het nieuwe
-schema, want zij kent de nieuwe tabellen/kolommen simpelweg niet. Dat is de veilige en
-aanbevolen rollbackroute.
+**Uitgangspunt (sinds de release van 2026-10-18): forward-only; terugrollen = restore van de
+finale deploydump + vorige binaries + vorige frontend** — procedure in §3.7, offline
+restore-runbook in `docs/operations/backup-restore.md`.
 
-Een **database-rollback** (`dotnet ef database update <vorige-migratie>`) is destructief en
-alleen te overwegen met een verse back-up en een expliciet besluit:
+De vroegere regel "code eerst terugrollen, database laten staan" geldt **niet meer**: vanaf de
+migraties van 2026-08-27 zijn er niet-additieve wijzigingen waar de vorige code niet tegen kan
+(production-readiness MIG-01): `NormalizedCustomerNumber`/`NormalizedEmail`/
+`NormalizedLicensePlate` met unieke indexen (oude code faalt bij de tweede klant, gebruiker of
+voertuig), nullable `InvoiceNumber` op concepten, dossier-only documenten
+(`TransportOrderId` nullable), factuurnummering per `Kind`, her-encodeerde tijdvensters
+(`StopWindowTenantZoneReencoding`), en de permissiecatalogus (§2.3). Het deployscript start de
+vorige binaries daarom nooit meer na een migratie (§3.4/§3.7) en weigert een oudere ref op een
+nieuwer schema.
+
+Een **schema-rollback** (`dotnet ef database update <vorige-migratie>`) is géén optie: elke
+`Down()` commit apart, `AccountingIssueSnapshotAndNumbering.Down` faalt aantoonbaar (unieke index
+op `invoice_sequences`), `DossierDocumentScopeAndIssuedTransportDocuments.Down` faalt zodra er
+dossier-only documenten zijn, `numeric(14,4)→(12,2)` rondt bedragen af, en Downs van
+`ImmutableIssuedTransportDocuments`/`IssuedInvoiceUblNoteSnapshot` vernietigen bevroren juridische
+snapshots (MIG-09). Ter historische referentie, de oudere Downs (allemaal destructief):
 
 - `Down()` van `DossierActivityFoundation` verwijdert `activity_types` en
   `dossier_activities` — en daarmee álle dossieractiviteiten, inclusief de wrappers die de
@@ -751,9 +1008,10 @@ alleen te overwegen met een verse back-up en een expliciet besluit:
   inhoud, plus de documentkeuze-, uitrusting- en uitstelkolommen op orders en de
   koppeling mislukte stop → incident.
 
-Let op: seeder-effecten (wrapper-dossiers, activiteitstypes, geclaimde dossiernummers) staan
-buiten het migratiemechanisme en worden door een schema-rollback deels vernietigd, deels
-achtergelaten. Ook daarom: bij problemen binaries terugzetten, niet het schema.
+Let op: seeder-effecten (wrapper-dossiers, activiteitstypes, geclaimde dossiernummers, bevroren
+snapshots, permissiesync) staan buiten het migratiemechanisme en worden door een schema-rollback
+deels vernietigd, deels achtergelaten. Ook daarom: herstel = restore van de dump van vóór de
+migratie, nooit `Down()` en nooit code-only.
 
 ---
 
