@@ -45,7 +45,8 @@
     "collapseRight": "Middelen inklappen",
     "expandRight": "Middelen uitklappen",
     "previousPeriod": "Vorige periode",
-    "nextPeriod": "Volgende periode"
+    "nextPeriod": "Volgende periode",
+    "truncated": "Het planbord toont maximaal {limit} ritten — verfijn de periode of filters."
   },
   "board": {
     "label": "Planbord",

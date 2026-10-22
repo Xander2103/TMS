@@ -56,7 +56,8 @@
     "driverOptional": "Optional — can be chosen on the trip later.",
     "driverPlaceholder": "Search driver…",
     "colDate": "Date",
-    "noDriver": "No driver"
+    "noDriver": "No driver",
+    "truncated": "The list shows at most {limit} trips — narrow the period or filters."
   },
   "proposals": {
     "title": "Trip proposals",

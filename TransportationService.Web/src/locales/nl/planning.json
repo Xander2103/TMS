@@ -56,7 +56,8 @@
     "driverOptional": "Optioneel — kan later op de rit gekozen worden.",
     "driverPlaceholder": "Zoek chauffeur…",
     "colDate": "Datum",
-    "noDriver": "Geen chauffeur"
+    "noDriver": "Geen chauffeur",
+    "truncated": "De lijst toont maximaal {limit} ritten — verfijn de periode of filters."
   },
   "proposals": {
     "title": "Ritvoorstellen",

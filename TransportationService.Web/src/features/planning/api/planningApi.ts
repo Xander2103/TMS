@@ -1,4 +1,5 @@
 import { apiClient } from '../../../api/apiClient'
+import { truncationFromHeaders, type TruncationInfo } from '../../../api/truncation'
 import type { PlanningConflict, TripDetail, TripInput, TripListItem, TripStatus } from '../types'
 
 export interface ListTripsParams {
@@ -8,14 +9,20 @@ export interface ListTripsParams {
   driverId?: string
 }
 
-export function listTrips(params: ListTripsParams = {}): Promise<TripListItem[]> {
+/** The trips plus whether the server cut the list at its cap (PERF-H3: `X-Result-Truncated`/`X-Result-Limit`). */
+export interface TripListPage extends TruncationInfo {
+  items: TripListItem[]
+}
+
+export async function listTrips(params: ListTripsParams = {}, signal?: AbortSignal): Promise<TripListPage> {
   const query = new URLSearchParams()
   if (params.from) query.set('from', params.from)
   if (params.to) query.set('to', params.to)
   if (params.status) query.set('status', params.status)
   if (params.driverId) query.set('driverId', params.driverId)
   const suffix = query.toString()
-  return apiClient.getJson<TripListItem[]>(`/api/trips${suffix ? `?${suffix}` : ''}`)
+  const { data, headers } = await apiClient.getJsonWithMeta<TripListItem[]>(`/api/trips${suffix ? `?${suffix}` : ''}`, { signal })
+  return { items: data, ...truncationFromHeaders(headers) }
 }
 
 export function getTrip(id: string): Promise<TripDetail> {

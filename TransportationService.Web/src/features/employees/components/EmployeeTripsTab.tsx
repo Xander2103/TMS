@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Badge } from '../../../components/ui/Badge'
 import { useLocale } from '../../../i18n/localeContext'
-import { listTrips } from '../../planning/api/planningApi'
+import { listTrips, type TripListPage } from '../../planning/api/planningApi'
+import { TruncationNotice } from '../../../components/ui/TruncationNotice'
 import { TRIP_STATUS_LABELS, TRIP_STATUS_TONE, type TripListItem } from '../../planning/types'
 import { toIsoDate } from '../../employee-planning/types'
 import '../../planning/pages/planning.css'
@@ -15,7 +16,8 @@ import { formatDate } from '../../../utils/dates'
 export function EmployeeTripsTab({ driverId }: { driverId: string }) {
   const navigate = useNavigate()
   const { t } = useLocale()
-  const [trips, setTrips] = useState<TripListItem[] | null>(null)
+  const [page, setPage] = useState<TripListPage | null>(null)
+  const trips: TripListItem[] | null = page?.items ?? null
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -24,8 +26,8 @@ export function EmployeeTripsTab({ driverId }: { driverId: string }) {
     const from = toIsoDate(new Date(today.getTime() - 90 * 86_400_000))
     const to = toIsoDate(new Date(today.getTime() + 30 * 86_400_000))
     listTrips({ from, to, driverId })
-      .then((rows) => {
-        if (mounted) setTrips(rows)
+      .then((result) => {
+        if (mounted) setPage(result)
       })
       .catch(() => {
         if (mounted) setError('employees.tripsTab.loadFailed')
@@ -40,7 +42,11 @@ export function EmployeeTripsTab({ driverId }: { driverId: string }) {
   if (trips.length === 0) return <p className="placeholder-text">{t('employees.tripsTab.empty')}</p>
 
   return (
-    <table className="pl-table">
+    <>
+      {page?.truncated && (
+        <TruncationNotice shown={trips.length} limit={page.limit} truncated message={t('planning.list.truncated', { limit: page.limit ?? trips.length })} />
+      )}
+      <table className="pl-table">
       <thead>
         <tr>
           <th>{t('employees.tripsTab.columnTrip')}</th>
@@ -63,6 +69,7 @@ export function EmployeeTripsTab({ driverId }: { driverId: string }) {
           </tr>
         ))}
       </tbody>
-    </table>
+      </table>
+    </>
   )
 }

@@ -9,11 +9,11 @@ import { SearchableSelect } from '../../../components/ui/SearchableSelect'
 import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
 import { useLocale } from '../../../i18n/localeContext'
-import { createTrip, getPlanningProposals, listTrips, type PlanningProposals, type TourProposal } from '../api/planningApi'
+import { createTrip, getPlanningProposals, listTrips, type PlanningProposals, type TourProposal, type TripListPage } from '../api/planningApi'
+import { TruncationNotice } from '../../../components/ui/TruncationNotice'
 import { describeApiError } from '../../../api/problemDetails'
 import { TRIP_STATUS_LABELS, TRIP_STATUS_TONE, TRIP_STATUSES, type TripListItem, type TripStatus } from '../types'
-import { buildDriverOptions } from '../resourceOptions'
-import { usePlanningResources } from '../usePlanningResources'
+import { driverOptionSearch } from '../resourceOptions'
 import { addDaysIso, groupTrips, localIsoDate, OVERDUE_LOOKBACK_DAYS } from '../tripGroups'
 import { formatDate } from '../../../utils/dates'
 import { formatInteger } from '../../../utils/numbers'
@@ -28,6 +28,8 @@ function shiftDate(iso: string, days: number): string {
 }
 
 /** Day-based planning board: all trips of the selected date with live conflict counts. */
+const EMPTY_TRIP_PAGE: TripListPage = { items: [], truncated: false, limit: null }
+
 export function PlanningPage() {
   const navigate = useNavigate()
   const { hasPermission } = useAuth()
@@ -41,10 +43,16 @@ export function PlanningPage() {
     return requested && /^\d{4}-\d{2}-\d{2}$/.test(requested) ? requested : todayIso()
   })
   const [statusFilter, setStatusFilter] = useState<TripStatus | ''>('')
-  const [trips, setTrips] = useState<TripListItem[] | null>(null)
+  const [tripsPage, setTripsPage] = useState<TripListPage | null>(null)
+  const trips: TripListItem[] | null = tripsPage?.items ?? null
   // B20: the operational groups load independently of the chosen day.
-  const [running, setRunning] = useState<TripListItem[]>([])
-  const [past, setPast] = useState<TripListItem[]>([])
+  const [runningPage, setRunningPage] = useState<TripListPage>(EMPTY_TRIP_PAGE)
+  const [pastPage, setPastPage] = useState<TripListPage>(EMPTY_TRIP_PAGE)
+  const running = runningPage.items
+  const past = pastPage.items
+  // PERF-H3: the server caps each list (500); say so instead of showing a silently partial day.
+  const truncatedLimit = [tripsPage, runningPage, pastPage].find((page) => page?.truncated)?.limit ?? null
+  const anyTruncated = [tripsPage, runningPage, pastPage].some((page) => page?.truncated)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
   const today = todayIso()
@@ -54,7 +62,7 @@ export function PlanningPage() {
     listTrips({ from: date, to: date, status: statusFilter || undefined })
       .then((data) => {
         if (!mounted) return
-        setTrips(data)
+        setTripsPage(data)
         setLoadError(null)
       })
       .catch(() => {
@@ -68,12 +76,12 @@ export function PlanningPage() {
   useEffect(() => {
     let mounted = true
     Promise.all([
-      listTrips({ status: 'InProgress' }).catch(() => [] as TripListItem[]),
-      listTrips({ from: addDaysIso(today, -OVERDUE_LOOKBACK_DAYS), to: addDaysIso(today, -1) }).catch(() => [] as TripListItem[]),
+      listTrips({ status: 'InProgress' }).catch(() => EMPTY_TRIP_PAGE),
+      listTrips({ from: addDaysIso(today, -OVERDUE_LOOKBACK_DAYS), to: addDaysIso(today, -1) }).catch(() => EMPTY_TRIP_PAGE),
     ]).then(([runningTrips, pastTrips]) => {
       if (!mounted) return
-      setRunning(runningTrips)
-      setPast(pastTrips)
+      setRunningPage(runningTrips)
+      setPastPage(pastTrips)
     })
     return () => {
       mounted = false
@@ -88,8 +96,8 @@ export function PlanningPage() {
   const [newTripOpen, setNewTripOpen] = useState(false)
   const [newTripDate, setNewTripDate] = useState(date)
   const [newTripDriverId, setNewTripDriverId] = useState<string | null>(null)
-  const { drivers, status: resourceStatus } = usePlanningResources(newTripOpen, newTripDate)
-  const driverOptions = useMemo(() => buildDriverOptions(drivers, t), [drivers, t])
+  // PERF-H3: drivers are searched server-side per keystroke, availability judged on the new trip's day.
+  const searchDriversForNewTrip = useMemo(() => driverOptionSearch(newTripDate || null, t), [newTripDate, t])
 
   function openNewTrip() {
     setNewTripDate(date)
@@ -159,9 +167,8 @@ export function PlanningPage() {
               id="new-trip-driver"
               value={newTripDriverId}
               onChange={setNewTripDriverId}
-              options={driverOptions}
-              isLoading={resourceStatus.drivers === 'loading'}
-              errorMessage={resourceStatus.drivers === 'error' ? t('planning.detail.driversLoadError') : null}
+              options={[]}
+              onSearch={searchDriversForNewTrip}
               placeholder={t('planning.list.driverPlaceholder')}
               disabled={creating}
             />
@@ -198,6 +205,14 @@ export function PlanningPage() {
 
       {loadError && <p className="placeholder-text">{loadError}</p>}
       {!loadError && trips === null && <p className="placeholder-text">{t('planning.list.loading')}</p>}
+      {!loadError && anyTruncated && (
+        <TruncationNotice
+          shown={(trips ?? []).length}
+          limit={truncatedLimit}
+          truncated
+          message={t('planning.list.truncated', { limit: truncatedLimit ?? (trips ?? []).length })}
+        />
+      )}
 
       {!loadError && trips !== null && (
         <table className="pl-table pl-grouped">

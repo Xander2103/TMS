@@ -45,7 +45,8 @@
     "collapseRight": "Collapse resources",
     "expandRight": "Expand resources",
     "previousPeriod": "Previous period",
-    "nextPeriod": "Next period"
+    "nextPeriod": "Next period",
+    "truncated": "The planning board shows at most {limit} trips — narrow the period or filters."
   },
   "board": {
     "label": "Planning board",

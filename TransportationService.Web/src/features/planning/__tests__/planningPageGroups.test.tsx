@@ -37,10 +37,11 @@ describe('Ritlijst — operational groups (B20)', () => {
     const runningToday = trip('0025', TODAY, 'InProgress')
     const overdue = trip('0019', addDaysIso(TODAY, -1), 'Planned')
     const plannedToday = trip('0026', TODAY, 'Planned')
+    const page = (items: unknown[]) => Promise.resolve({ items, truncated: false, limit: null })
     planningApi.listTrips.mockImplementation((params: { from?: string; status?: string }) => {
-      if (params.status === 'InProgress') return Promise.resolve([runningOld, runningToday])
-      if (params.from === TODAY) return Promise.resolve([runningToday, plannedToday])
-      return Promise.resolve([runningOld, overdue])
+      if (params.status === 'InProgress') return page([runningOld, runningToday])
+      if (params.from === TODAY) return page([runningToday, plannedToday])
+      return page([runningOld, overdue])
     })
     planningApi.getPlanningProposals.mockResolvedValue({
       date: TODAY,

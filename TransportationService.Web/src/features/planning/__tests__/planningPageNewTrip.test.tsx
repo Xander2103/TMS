@@ -36,7 +36,7 @@ function renderPage() {
 describe('PlanningPage — safe new-trip flow (B06)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    planningApi.listTrips.mockResolvedValue([])
+    planningApi.listTrips.mockResolvedValue({ items: [], truncated: false, limit: null })
     planningApi.getPlanningProposals.mockResolvedValue({ date: '2026-10-14', proposals: [], excluded: [] })
     driversApi.searchDrivers.mockResolvedValue({ items: [], totalCount: 0, page: 1, pageSize: 200 })
     planningApi.createTrip.mockImplementation(

@@ -32,6 +32,9 @@ export interface PlanningBoard {
   from: string
   to: string
   trips: PlanningBoardTrip[]
+  /** PERF-H3: true when the server cut the trips at `limit` (500); absent on older payloads. */
+  truncated?: boolean
+  limit?: number | null
 }
 
 export interface UnplannedOrder {

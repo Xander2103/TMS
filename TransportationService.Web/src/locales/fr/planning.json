@@ -56,7 +56,8 @@
     "driverOptional": "Facultatif — peut être choisi plus tard sur le trajet.",
     "driverPlaceholder": "Rechercher un chauffeur…",
     "colDate": "Date",
-    "noDriver": "Pas de chauffeur"
+    "noDriver": "Pas de chauffeur",
+    "truncated": "La liste affiche au maximum {limit} trajets — affinez la période ou les filtres."
   },
   "proposals": {
     "title": "Propositions de tournées",

@@ -45,7 +45,8 @@
     "collapseRight": "Réduire Ressources",
     "expandRight": "Développer Ressources",
     "previousPeriod": "Période précédente",
-    "nextPeriod": "Période suivante"
+    "nextPeriod": "Période suivante",
+    "truncated": "Le tableau de planification affiche au maximum {limit} trajets — affinez la période ou les filtres."
   },
   "board": {
     "label": "Tableau de planification",

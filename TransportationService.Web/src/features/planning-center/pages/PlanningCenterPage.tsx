@@ -7,6 +7,7 @@ import {
 } from '../../../api/resourceLinksApi'
 import { useToast } from '../../../components/ui/toastContext'
 import { useLocale } from '../../../i18n/localeContext'
+import { TruncationNotice } from '../../../components/ui/TruncationNotice'
 import { Button } from '../../../components/ui/Button'
 import { Modal } from '../../../components/ui/Modal'
 import { getTrip } from '../../planning/api/planningApi'
@@ -406,6 +407,16 @@ export function PlanningCenterPage() {
           </div>
         </div>
       </header>
+
+      {/* PERF-H3: the server caps the board at `limit` trips; say so instead of showing a silently partial period. */}
+      {board?.truncated && (
+        <TruncationNotice
+          shown={board.trips.length}
+          limit={board.limit}
+          truncated
+          message={t('planningCenter.page.truncated', { limit: board.limit ?? board.trips.length })}
+        />
+      )}
 
       <div className="pc-layout" data-left={leftCollapsed ? 'collapsed' : 'open'} data-right={rightCollapsed && !selectedTripId ? 'collapsed' : 'open'}>
         {leftCollapsed ? (

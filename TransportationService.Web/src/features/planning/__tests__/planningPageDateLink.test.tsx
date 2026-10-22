@@ -8,7 +8,7 @@ import { PlanningPage } from '../pages/PlanningPage'
 vi.mock('../../auth/authContextValue', () => ({ useAuth: () => ({ hasPermission: () => true, hasAnyPermission: () => true }) }))
 vi.mock('../../../components/ui/toastContext', () => ({ useToast: () => ({ showSuccess: vi.fn(), showError: vi.fn(), showToast: vi.fn() }) }))
 const planningApi = vi.hoisted(() => ({
-  listTrips: vi.fn().mockResolvedValue([]),
+  listTrips: vi.fn().mockResolvedValue({ items: [], truncated: false, limit: null }),
   getPlanningProposals: vi.fn().mockResolvedValue({ date: '2026-10-29', proposals: [], excluded: [] }),
   createTrip: vi.fn(),
 }))
