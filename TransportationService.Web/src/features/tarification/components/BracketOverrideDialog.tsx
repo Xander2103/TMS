@@ -1,13 +1,13 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { formatCurrency } from '../../../utils/numbers'
 import { Button } from '../../../components/ui/Button'
 import { FormField } from '../../../components/ui/FormField'
 import { Modal } from '../../../components/ui/Modal'
-import { SearchableSelect, type SearchableSelectOption } from '../../../components/ui/SearchableSelect'
+import { SearchableSelect } from '../../../components/ui/SearchableSelect'
 import { useToast } from '../../../components/ui/toastContext'
 import { localizeApiError } from '../../../api/problemDetails'
 import { useLocale } from '../../../i18n/localeContext'
-import { searchCustomers } from '../../customers/api/customersApi'
+import { searchActiveCustomerOptions } from '../../customers/api/customerOptions'
 import { createBracketOverride, type PriceRule, type PriceRuleBracket } from '../api/pricingApi'
 
 interface BracketOverrideDialogProps {
@@ -28,8 +28,6 @@ function bracketLabel(bracket: PriceRuleBracket): string {
 export function BracketOverrideDialog({ rule, bracket, onSaved, onClose }: BracketOverrideDialogProps) {
   const { t } = useLocale()
   const { showSuccess, showError } = useToast()
-  const [customers, setCustomers] = useState<SearchableSelectOption[]>([])
-  const [customersLoading, setCustomersLoading] = useState(true)
   const [customerId, setCustomerId] = useState<string | null>(null)
   const [price, setPrice] = useState('')
   const [pricePerExtraUnit, setPricePerExtraUnit] = useState('')
@@ -37,34 +35,6 @@ export function BracketOverrideDialog({ rule, bracket, onSaved, onClose }: Brack
   const [effectiveUntil, setEffectiveUntil] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    let mounted = true
-    // The backend caps pages at 200 rows; keep fetching so tenants with more active
-    // customers can still pick any of them (hard stop at 5 pages = 1000 as a safety net).
-    async function loadAllCustomers() {
-      const options: SearchableSelectOption[] = []
-      for (let page = 1; page <= 5; page++) {
-        const result = await searchCustomers({ page, pageSize: 200, isActive: true })
-        options.push(...result.items.map((c) => ({ value: c.id, label: c.name })))
-        if (options.length >= result.totalCount) break
-      }
-      return options
-    }
-    loadAllCustomers()
-      .then((options) => {
-        if (mounted) setCustomers(options)
-      })
-      .catch(() => {
-        if (mounted) setCustomers([])
-      })
-      .finally(() => {
-        if (mounted) setCustomersLoading(false)
-      })
-    return () => {
-      mounted = false
-    }
-  }, [])
 
   async function submit() {
     if (!customerId) {
@@ -124,11 +94,12 @@ export function BracketOverrideDialog({ rule, bracket, onSaved, onClose }: Brack
     >
       <p className="placeholder-text">{t('tarification.override.intro', { price: formatCurrency(bracket.price) })}</p>
       <FormField label={t('tarification.common.customer')} required error={!customerId && error ? error : undefined}>
+        {/* PERF-H3: searched server-side (name, number, VAT) instead of paging through every customer. */}
         <SearchableSelect
           value={customerId}
           onChange={setCustomerId}
-          options={customers}
-          isLoading={customersLoading}
+          options={[]}
+          onSearch={searchActiveCustomerOptions}
           ariaLabel={t('tarification.override.customerAria')}
           placeholder={t('tarification.override.customerPlaceholder')}
         />

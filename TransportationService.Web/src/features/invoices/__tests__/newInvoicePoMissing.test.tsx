@@ -69,7 +69,7 @@ describe('NewInvoicePage — order waiting only for its PO', () => {
       </MemoryRouter>,
     )
     await user.click(await screen.findByRole('combobox', { name: /Klant/ }))
-    await user.click(await screen.findByRole('option', { name: 'Haven BV (K-0001)' }))
+    await user.click(await screen.findByRole('option', { name: /Haven BV/ }))
 
     const checkbox = await screen.findByLabelText('Selecteer ORD-0104')
     expect(checkbox).toBeEnabled()

@@ -1,7 +1,8 @@
 import { SearchableSelect } from '../../../../components/ui/SearchableSelect'
 import { FormField } from '../../../../components/ui/FormField'
 import { useLocale } from '../../../../i18n/localeContext'
-import type { CustomerDetail, CustomerListItem } from '../../../customers/types'
+import { searchActiveCustomerOptions } from '../../../customers/api/customerOptions'
+import type { CustomerDetail } from '../../../customers/types'
 import type { LegalEntityOption } from '../../../legal-entities/types'
 import type { TransportOrderDetail } from '../../types'
 
@@ -14,7 +15,6 @@ interface GeneralSectionProps {
   mode: 'create' | 'edit'
   /** The order being edited, or the order this new one is based on (create-from-template). */
   order?: TransportOrderDetail
-  customers: CustomerListItem[]
   legalEntities: LegalEntityOption[]
   /** Selected customer's detail (intake requirements + block status); null while unknown. */
   customerRequirements: CustomerDetail | null
@@ -42,7 +42,6 @@ interface GeneralSectionProps {
 export function GeneralSection({
   mode,
   order,
-  customers,
   legalEntities,
   customerRequirements,
   requirementHints,
@@ -81,22 +80,24 @@ export function GeneralSection({
           hint={editingExisting ? t('transportOrders.general.customerLockedHint') : undefined}
           error={errors.customerId}
         >
-          {/* B19: a searchable picker — a native select is unusable with thousands of customers.
-              The list offers only active customers; an existing order keeps its (possibly
-              deactivated) customer shown by name so editing never silently switches customers. */}
+          {/* B19 / PERF-H3: a searchable picker — the server answers what the planner types (name,
+              customer number, VAT) among the ACTIVE customers; a 200-row preload made customer #201
+              unpickable. An existing order keeps its (possibly deactivated) customer shown by name
+              so editing never silently switches customers. */}
           <SearchableSelect
             id="to-customer"
             value={customerId || null}
             onChange={(next) => setCustomerId(next ?? '')}
-            options={customers.map((customer) => ({
-              value: customer.id,
-              label: `${customer.name} (${customer.customerNumber})`,
-              keywords: customer.customerNumber,
-            }))}
+            options={[]}
+            onSearch={searchActiveCustomerOptions}
             selectedLabel={
-              order && order.customerId === customerId && !customers.some((customer) => customer.id === order.customerId)
-                ? `${order.customerName} ${t('transportOrders.general.deactivatedSuffix')}`
-                : undefined
+              customerRequirements && customerRequirements.id === customerId && customerRequirements.name
+                ? customerRequirements.isActive === false
+                  ? `${customerRequirements.name} ${t('transportOrders.general.deactivatedSuffix')}`
+                  : customerRequirements.name
+                : order && order.customerId === customerId
+                  ? order.customerName
+                  : undefined
             }
             placeholder={t('transportOrders.general.selectCustomer')}
             disabled={saving || editingExisting}

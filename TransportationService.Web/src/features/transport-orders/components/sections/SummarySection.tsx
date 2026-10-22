@@ -1,6 +1,5 @@
 import { FormField } from '../../../../components/ui/FormField'
 import { formatCurrency } from '../../../../utils/numbers'
-import type { CustomerListItem } from '../../../customers/types'
 import type { PriceCalculationResult, ServiceOption } from '../../../tarification/api/pricingApi'
 import type { UnitOptionItem } from '../UnitSelect'
 import type { StopInput, TransportOrderDetail } from '../../types'
@@ -8,7 +7,8 @@ import type { CargoFormRow, StopFormRow } from './orderFormState'
 
 interface SummarySectionProps {
   order?: TransportOrderDetail
-  customers: CustomerListItem[]
+  /** Name of the selected customer (from its loaded detail), for the recap. */
+  customerName: string | null
   customerId: string
   stops: StopFormRow[]
   cargoItems: CargoFormRow[]
@@ -30,7 +30,7 @@ interface SummarySectionProps {
 /** Samenvatting section: read-only recap + the order notes (unchanged behavior, Wave 1 phase 6). */
 export function SummarySection({
   order,
-  customers,
+  customerName,
   customerId,
   stops,
   cargoItems,
@@ -58,7 +58,7 @@ export function SummarySection({
       <dl className="tof-summary">
         <div>
           <dt>Klant</dt>
-          <dd>{customers.find((c) => c.id === customerId)?.name ?? order?.customerName ?? '—'}</dd>
+          <dd>{customerName ?? (order?.customerId === customerId ? order?.customerName : null) ?? '—'}</dd>
         </div>
         <div>
           <dt>Laden</dt>

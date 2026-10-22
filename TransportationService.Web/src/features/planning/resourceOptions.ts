@@ -1,6 +1,7 @@
-import type { SearchableSelectOption } from '../../components/ui/SearchableSelect'
+import type { SearchableSelectOption, SearchableSelectSearchFn } from '../../components/ui/SearchableSelect'
 import type { TranslateFn } from '../../i18n/localeContext'
 import { getDriver } from '../drivers/api/driversApi'
+import { searchDriverItems } from '../drivers/api/driverOptions'
 import type { DriverListItem } from '../drivers/types'
 import type { TrailerOption } from '../trailers/types'
 import type { VehicleOption } from '../vehicles/types'
@@ -52,6 +53,15 @@ export function buildDriverOptions(drivers: DriverListItem[], t: TranslateFn): S
     ),
     keywords: joinParts([driver.employeeNumber, driver.categoryName], ' '),
   }))
+}
+
+/**
+ * PERF-H3: the driver picker's server-side search — active drivers matching what the planner
+ * types, each with the availability note for `availabilityOn` (the trip day). Replaces the
+ * preloaded first-200 list, which silently hid every driver after it.
+ */
+export function driverOptionSearch(availabilityOn: string | null | undefined, t: TranslateFn): SearchableSelectSearchFn {
+  return async (query, signal) => buildDriverOptions(await searchDriverItems(query, signal, { isActive: true, availabilityOn }), t)
 }
 
 /**
@@ -127,25 +137,16 @@ export function buildTrailerOptions(trailers: TrailerOption[], t?: TranslateFn):
 }
 
 /**
- * The fixed vehicle of a driver. `GET /api/drivers` carries `fixedVehicleId` — then no extra call
- * is made; an older payload without the field falls back to the driver detail. Only a vehicle the
- * planner could also pick from the list is proposed; a failed lookup simply means no suggestion.
+ * The fixed vehicle of a driver, read from the driver detail (the picker no longer holds a
+ * preloaded list to take it from). Only a vehicle the planner could also pick from the list is
+ * proposed; a failed lookup simply means no suggestion.
  */
-export async function lookupFixedVehicleId(
-  drivers: DriverListItem[],
-  vehicles: VehicleOption[],
-  driverId: string,
-): Promise<string | null> {
-  const listed = drivers.find((driver) => driver.id === driverId)
+export async function lookupFixedVehicleId(vehicles: VehicleOption[], driverId: string): Promise<string | null> {
   let fixedId: string | null
-  if (listed && listed.fixedVehicleId !== undefined) {
-    fixedId = listed.fixedVehicleId
-  } else {
-    try {
-      fixedId = (await getDriver(driverId)).fixedVehicle?.id ?? null
-    } catch {
-      return null
-    }
+  try {
+    fixedId = (await getDriver(driverId)).fixedVehicle?.id ?? null
+  } catch {
+    return null
   }
   return fixedId !== null && vehicles.some((vehicle) => vehicle.id === fixedId) ? fixedId : null
 }

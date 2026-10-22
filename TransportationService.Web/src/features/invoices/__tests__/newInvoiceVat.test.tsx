@@ -45,7 +45,7 @@ async function chooseCustomer() {
   )
   const picker = await screen.findByRole('combobox', { name: /Klant/ })
   await user.click(picker)
-  await user.click(await screen.findByRole('option', { name: 'TEST ACCOUNTING Klant (KL-0006)' }))
+  await user.click(await screen.findByRole('option', { name: /TEST ACCOUNTING Klant/ }))
   return user
 }
 

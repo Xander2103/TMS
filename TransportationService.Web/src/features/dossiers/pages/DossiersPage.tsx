@@ -17,8 +17,9 @@ import { useLocale } from '../../../i18n/localeContext'
 import { formatDate } from '../../../utils/dates'
 import { useAuth } from '../../auth/authContextValue'
 import { useCanViewPrices } from '../../auth/commercialVisibility'
-import { searchCustomers } from '../../customers/api/customersApi'
-import { searchDrivers } from '../../drivers/api/driversApi'
+import { resolveCustomerLabel } from '../../customers/api/customerOptions'
+import { resolveDriverLabel } from '../../drivers/api/driverOptions'
+import { useResolvedLabel } from '../../../hooks/useResolvedLabel'
 import { euro } from '../../invoices/types'
 import { getTrailerOptions } from '../../trailers/api/trailersApi'
 import { getVehicleOptions } from '../../vehicles/api/vehiclesApi'
@@ -203,17 +204,16 @@ export function DossiersPage() {
     if (!needsLookups || lookupsRequested.current) return
     lookupsRequested.current = true
     const settle = <T,>(promise: Promise<T>, fallback: T) => promise.catch(() => fallback)
+    // PERF-H3: customers and drivers are searched server-side in the panel (no 200-row preload).
     Promise.all([
-      settle(searchCustomers({ isActive: true, page: 1, pageSize: 200 }).then((r) => r.items), []),
-      settle(searchDrivers({ isActive: true, page: 1, pageSize: 200 }).then((r) => r.items), []),
       settle(getVehicleOptions(), []),
       settle(getTrailerOptions(), []),
       settle(listActivityTypes(), []),
-    ]).then(([customers, drivers, vehicles, trailers, activityTypes]) => {
+    ]).then(([vehicles, trailers, activityTypes]) => {
       const typeOption = (a: { id: string; name: string }): SearchableSelectOption => ({ value: a.id, label: a.name })
       setLookups({
-        customers: customers.map((c) => ({ value: c.id, label: c.name })),
-        drivers: drivers.map((d) => ({ value: d.id, label: d.fullName })),
+        customers: [],
+        drivers: [],
         vehicles: vehicles.map((v) => ({ value: v.id, label: `${v.internalNumber} · ${v.licensePlate}` })),
         trailers: trailers.map((tr) => ({ value: tr.id, label: `${tr.internalNumber} · ${tr.licensePlate}` })),
         transportTypes: activityTypes.filter((a) => a.hasStops).map(typeOption),
@@ -221,6 +221,19 @@ export function DossiersPage() {
       })
     })
   }, [needsLookups])
+
+  // The chosen customer/driver (picked, or restored from the URL) is named once from its detail:
+  // the chip and the picker label read it from here, exactly like the preloaded lists before.
+  const customerLabel = useResolvedLabel(filters.customerId || null, resolveCustomerLabel)
+  const driverLabel = useResolvedLabel(filters.driverId || null, resolveDriverLabel)
+  const namedLookups = useMemo<DossierFilterLookups>(
+    () => ({
+      ...lookups,
+      customers: filters.customerId && customerLabel ? [{ value: filters.customerId, label: customerLabel }] : [],
+      drivers: filters.driverId && driverLabel ? [{ value: filters.driverId, label: driverLabel }] : [],
+    }),
+    [lookups, filters.customerId, customerLabel, filters.driverId, driverLabel],
+  )
 
   // --- data ------------------------------------------------------------------------------------
   const { search, page, ...extra } = filters
@@ -307,7 +320,7 @@ export function DossiersPage() {
     if (key === 'responsibleUserId') return value === userId ? t('dossiers.filters.onlyMine') : fieldLabel(key)
     if (isLookupKey(key)) {
       // Until the lookup has loaded the chip names the filter, never a raw id.
-      return lookups[LOOKUP_SOURCE[key]].find((o) => o.value === value)?.label ?? fieldLabel(key)
+      return namedLookups[LOOKUP_SOURCE[key]].find((o) => o.value === value)?.label ?? fieldLabel(key)
     }
     const shown = key === 'countryCode' ? value.toUpperCase() : (enumLabels[key]?.[value] ?? value)
     return `${fieldLabel(key)}: ${shown}`
@@ -456,7 +469,7 @@ export function DossiersPage() {
           </button>
         </FilterBar>
 
-        {panelOpen && <DossierFilterPanel id={panelId} filters={filters} lookups={lookups} currentUserId={userId} onChange={apply} canViewPrices={canViewPrices} />}
+        {panelOpen && <DossierFilterPanel id={panelId} filters={filters} lookups={namedLookups} currentUserId={userId} onChange={apply} canViewPrices={canViewPrices} />}
 
         {hasActiveFilters && (
           <div className="dossier-active-filters">

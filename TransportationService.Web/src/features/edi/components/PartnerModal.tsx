@@ -1,11 +1,11 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useState, type FormEvent } from 'react'
 import { Button } from '../../../components/ui/Button'
 import { FormField } from '../../../components/ui/FormField'
 import { Modal } from '../../../components/ui/Modal'
 import { SearchableSelect, type SearchableSelectOption } from '../../../components/ui/SearchableSelect'
 import { localizeApiError } from '../../../api/problemDetails'
 import { useLocale } from '../../../i18n/localeContext'
-import { searchCustomers } from '../../customers/api/customersApi'
+import { searchActiveCustomerOptions } from '../../customers/api/customerOptions'
 import { createPartner, updatePartner, type EdiPartner } from '../api/ediApi'
 
 interface PartnerModalProps {
@@ -26,21 +26,12 @@ export function PartnerModal({ partner, onClose, onSaved }: PartnerModalProps) {
   const [mappingProfile] = useState(partner?.mappingProfile ?? 'generic-json-v1')
   const [notes, setNotes] = useState(partner?.notes ?? '')
   const [isActive, setIsActive] = useState(partner?.isActive ?? true)
-  const [customers, setCustomers] = useState<SearchableSelectOption[]>([])
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
-  useEffect(() => {
-    let mounted = true
-    searchCustomers({ isActive: true, page: 1, pageSize: 200 })
-      .then((data) => {
-        if (mounted) setCustomers(data.items.map((c) => ({ value: c.id, label: `${c.name} (${c.customerNumber})` })))
-      })
-      .catch(() => {})
-    return () => {
-      mounted = false
-    }
-  }, [])
+  // PERF-H3: searched server-side; the partner's current customer keeps its name meanwhile.
+  const linkedCustomer: SearchableSelectOption[] =
+    partner?.customerId && partner.customerName ? [{ value: partner.customerId, label: partner.customerName }] : []
 
   async function submit(event: FormEvent) {
     event.preventDefault()
@@ -112,7 +103,8 @@ export function PartnerModal({ partner, onClose, onSaved }: PartnerModalProps) {
             id="edi-partner-customer"
             value={customerId}
             onChange={setCustomerId}
-            options={customers}
+            options={linkedCustomer}
+            onSearch={searchActiveCustomerOptions}
             placeholder={t('edi.partnerModal.customerPlaceholder')}
             disabled={busy}
             ariaLabel={t('edi.partnerModal.customerAria')}

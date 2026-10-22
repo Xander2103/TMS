@@ -212,5 +212,9 @@
       "warning": "Avertissement",
       "info": "Pour information"
     }
+  },
+  "truncation": {
+    "partial": "{shown} premiers résultats sur {total} affichés — affinez la recherche.",
+    "limit": "La liste affiche au maximum {limit} résultats — affinez la période ou les filtres."
   }
 }

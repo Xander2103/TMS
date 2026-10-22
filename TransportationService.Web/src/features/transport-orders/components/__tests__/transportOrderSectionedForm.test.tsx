@@ -12,7 +12,7 @@ vi.mock('../../../auth/authContextValue', () => ({
 vi.mock('../../../customers/api/customersApi', () => ({
   searchCustomers: () =>
     Promise.resolve({ items: [{ id: 'cust-1', name: 'Klant X', customerNumber: 'KL-1' }], total: 1 }),
-  getCustomer: () => Promise.resolve({ id: 'cust-1', isBlocked: false }),
+  getCustomer: () => Promise.resolve({ id: 'cust-1', name: 'Klant X', customerNumber: 'KL-1', isActive: true, isBlocked: false }),
 }))
 vi.mock('../../../legal-entities/api/legalEntitiesApi', () => ({
   getLegalEntityOptions: () => Promise.resolve([]),
@@ -138,12 +138,13 @@ async function fillMinimalRouteAndCustomer() {
 
 
 /** The customer mocked by this file, as the picker labels it. */
-const customerLabel = (id: string) => (id === 'cust-1' ? 'Klant X (KL-1)' : id)
+// PERF-H3: the picker is server-searched; an option reads "name" + "number" on two lines and the field commits the name.
+const customerLabel = (id: string) => (id === 'cust-1' ? 'Klant X' : id)
 
 /** B19: the customer is a searchable picker — open it, then pick the option. */
 async function pickCustomer(id: string) {
   await userEvent.click(screen.getByLabelText('Klant *'))
-  await userEvent.click(await screen.findByRole('option', { name: customerLabel(id) }))
+  await userEvent.click(await screen.findByRole('option', { name: new RegExp(customerLabel(id)) }))
 }
 
 describe('TransportOrderForm sections + pricing', () => {

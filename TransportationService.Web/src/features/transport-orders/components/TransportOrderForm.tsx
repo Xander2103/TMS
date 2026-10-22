@@ -219,7 +219,7 @@ export function TransportOrderForm({ mode, order, onSubmit, onCancel, submitLabe
 
   // Reference data (customers, entities, services, unit master, warehouses, customer config +
   // requirements, structured location hours) — fetched by the extracted hook.
-  const { customers, legalEntities, serviceOptions, unitMaster, warehouses, locationHours, customerConfig, customerRequirements } =
+  const { legalEntities, serviceOptions, unitMaster, warehouses, locationHours, customerConfig, customerRequirements } =
     useOrderFormData(customerId, stops)
   const preferredUnits = customerConfig?.preferredUnits ?? []
   const customerServiceById = new Map(
@@ -384,7 +384,7 @@ export function TransportOrderForm({ mode, order, onSubmit, onCancel, submitLabe
       render: () => (
         <GeneralSection
           {...{
-            mode, order, customers, legalEntities, customerRequirements, requirementHints,
+            mode, order, legalEntities, customerRequirements, requirementHints,
             customerId, setCustomerId, customerReference, setCustomerReference, orderDate, setOrderDate,
             legalEntityId, setLegalEntityId, dieselSurchargeOverride, setDieselSurchargeOverride,
             dieselSurchargePercentOverride, setDieselSurchargePercentOverride,
@@ -504,7 +504,7 @@ export function TransportOrderForm({ mode, order, onSubmit, onCancel, submitLabe
       render: () => (
         <SummarySection
           {...{
-            order, customers, customerId, stops, cargoItems, quantity, quantityUnit, quantityUnitCode,
+            order, customerName: customerRequirements?.name ?? null, customerId, stops, cargoItems, quantity, quantityUnit, quantityUnitCode,
             weightKg, unitOptions: units.displayUnits, serviceOptions, selectedServiceOptionIds, preview,
             priceIsManual, agreedPrice, notes, setNotes, saving,
           }}

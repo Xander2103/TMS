@@ -2,11 +2,11 @@ import { useEffect, useState } from 'react'
 import { Button } from '../../../components/ui/Button'
 import { FormField } from '../../../components/ui/FormField'
 import { Modal } from '../../../components/ui/Modal'
-import { SearchableSelect, type SearchableSelectOption } from '../../../components/ui/SearchableSelect'
+import { SearchableSelect } from '../../../components/ui/SearchableSelect'
 import { useToast } from '../../../components/ui/toastContext'
 import { localizeApiError } from '../../../api/problemDetails'
 import { useLocale, type TranslateFn } from '../../../i18n/localeContext'
-import { searchCustomers } from '../../customers/api/customersApi'
+import { searchActiveCustomerOptions } from '../../customers/api/customerOptions'
 import {
   createPriceRule,
   createPricingAgreement,
@@ -192,16 +192,12 @@ export function PricingTableWizard({ onClose, onCreated }: PricingTableWizardPro
   const [effectiveFrom, setEffectiveFrom] = useState(today())
   const [isShared, setIsShared] = useState(false)
   const [customerId, setCustomerId] = useState<string | null>(null)
-  const [customerOptions, setCustomerOptions] = useState<SearchableSelectOption[]>([])
   const [units, setUnits] = useState<UnitTypeMaster[]>([])
   const [zones, setZones] = useState<PricingZone[]>([])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    searchCustomers({ isActive: true, page: 1, pageSize: 200 })
-      .then((result) => setCustomerOptions(result.items.map((c) => ({ value: c.id, label: c.name }))))
-      .catch(() => setCustomerOptions([]))
     listUnitTypeMaster().then(setUnits).catch(() => setUnits([]))
     listPricingZones().then(setZones).catch(() => setZones([]))
   }, [])
@@ -333,7 +329,9 @@ export function PricingTableWizard({ onClose, onCreated }: PricingTableWizardPro
                 id="wizard-customer"
                 value={customerId}
                 onChange={setCustomerId}
-                options={customerOptions}
+                // PERF-H3: searched server-side (name, number, VAT) instead of the first 200 customers.
+                options={[]}
+                onSearch={searchActiveCustomerOptions}
                 placeholder={t('tarification.wizard.customerPlaceholder')}
               />
             </FormField>

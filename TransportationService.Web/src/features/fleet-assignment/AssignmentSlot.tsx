@@ -5,7 +5,7 @@ import { Button } from '../../components/ui/Button'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { FormField } from '../../components/ui/FormField'
 import { Modal } from '../../components/ui/Modal'
-import { SearchableSelect, type SearchableSelectOption } from '../../components/ui/SearchableSelect'
+import { SearchableSelect, type SearchableSelectOption, type SearchableSelectSearchFn } from '../../components/ui/SearchableSelect'
 import { useToast } from '../../components/ui/toastContext'
 import { useLocale } from '../../i18n/localeContext'
 import './assignment-slot.css'
@@ -17,8 +17,10 @@ interface AssignmentSlotProps {
   description: string
   assigned: { label: string; linkTo?: string } | null
   canEdit: boolean
-  /** Options for the picker (loaded lazily when the dialog opens). */
-  loadOptions: () => Promise<SearchableSelectOption[]>
+  /** Options for the picker (loaded lazily when the dialog opens). Ignored when `searchOptions` is given. */
+  loadOptions?: () => Promise<SearchableSelectOption[]>
+  /** PERF-H3: server-side search instead of one preloaded (and capped) list. */
+  searchOptions?: SearchableSelectSearchFn
   /**
    * Performs the assignment; throw an ApiError with status 409 to trigger the
    * confirm-replace flow (the error message is shown to the user).
@@ -34,7 +36,7 @@ interface AssignmentSlotProps {
  * detail pages. Handles the pick dialog, unassign confirmation and the 409 replace flow —
  * "this asset already has a holder, replace it?" — retrying with replaceExisting.
  */
-export function AssignmentSlot({ title, description, assigned, canEdit, loadOptions, assign, onChanged, pickerLabel }: AssignmentSlotProps) {
+export function AssignmentSlot({ title, description, assigned, canEdit, loadOptions, searchOptions, assign, onChanged, pickerLabel }: AssignmentSlotProps) {
   const toast = useToast()
   const { t } = useLocale()
   const [pickerOpen, setPickerOpen] = useState(false)
@@ -45,7 +47,7 @@ export function AssignmentSlot({ title, description, assigned, canEdit, loadOpti
   const [confirmUnassign, setConfirmUnassign] = useState(false)
 
   useEffect(() => {
-    if (!pickerOpen || options !== null) return
+    if (!pickerOpen || options !== null || !loadOptions || searchOptions) return
     let mounted = true
     loadOptions()
       .then((data) => {
@@ -57,7 +59,7 @@ export function AssignmentSlot({ title, description, assigned, canEdit, loadOpti
     return () => {
       mounted = false
     }
-  }, [pickerOpen, options, loadOptions, toast, t])
+  }, [pickerOpen, options, loadOptions, searchOptions, toast, t])
 
   async function run(id: string | null, replaceExisting: boolean) {
     setBusy(true)
@@ -134,7 +136,8 @@ export function AssignmentSlot({ title, description, assigned, canEdit, loadOpti
               value={selection}
               onChange={setSelection}
               options={options ?? []}
-              isLoading={options === null}
+              onSearch={searchOptions}
+              isLoading={!searchOptions && options === null}
               placeholder={t('ui.select.placeholder')}
             />
           </FormField>

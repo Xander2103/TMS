@@ -14,7 +14,7 @@ import { assignDriver, assignTrailer, assignVehicle } from '../../planning-cente
 import { ConflictDialog } from '../../planning-center/components/ConflictDialog'
 import type { PlanningRejection } from '../../planning-center/types'
 import { getTrip } from '../../planning/api/planningApi'
-import { buildDriverOptions, buildTrailerOptions, buildVehicleOptions, joinParts, lookupFixedVehicleId } from '../../planning/resourceOptions'
+import { buildTrailerOptions, buildVehicleOptions, driverOptionSearch, joinParts, lookupFixedVehicleId } from '../../planning/resourceOptions'
 import {
   CONFLICT_SEVERITY_META,
   TRIP_STATUS_LABELS,
@@ -119,11 +119,10 @@ function PlanningForm({ dossier, activity, isOpen, onApply, onConflict, onDirtyC
   // M1: the pickers judge availability (absence, employment, blocked) on the day being planned —
   // the trip's date, else the date typed here, else the order's own date (what "leeg" means).
   const orderDate = dossier.orders.find((order) => order.orderId === activity.linkedTransportOrderId)?.orderDate ?? null
-  const { drivers, vehicles, trailers, status: listStatus } = usePlanningResources(
-    canWrite,
-    assignment?.tripDate ?? (tripDate || activity.plannedDate || orderDate),
-  )
-  const driverOptions = useMemo(() => buildDriverOptions(drivers, t), [drivers, t])
+  const availabilityOn = assignment?.tripDate ?? (tripDate || activity.plannedDate || orderDate)
+  const { vehicles, trailers, status: listStatus } = usePlanningResources(canWrite, availabilityOn)
+  // PERF-H3: drivers are searched server-side per keystroke, availability judged on that day.
+  const searchDriversForDay = useMemo(() => driverOptionSearch(availabilityOn, t), [availabilityOn, t])
   const vehicleOptions = useMemo(() => buildVehicleOptions(vehicles, t), [vehicles, t])
   const trailerOptions = useMemo(() => buildTrailerOptions(trailers, t), [trailers, t])
 
@@ -164,7 +163,7 @@ function PlanningForm({ dossier, activity, isOpen, onApply, onConflict, onDirtyC
       setVehicleDraft((current) => vehicleDraftAfterDriverChange(current, null))
       return
     }
-    void lookupFixedVehicleId(drivers, vehicles, nextDriverId).then((fixedId) => {
+    void lookupFixedVehicleId(vehicles, nextDriverId).then((fixedId) => {
       if (seq !== driverLookupSeq.current) return
       setVehicleDraft((current) => vehicleDraftAfterDriverChange(current, fixedId))
     })
@@ -336,12 +335,11 @@ function PlanningForm({ dossier, activity, isOpen, onApply, onConflict, onDirtyC
                 id="ap-driver"
                 value={driverId || null}
                 onChange={handleDriverChange}
-                options={driverOptions}
-                // A driver that left the active list (or a list that failed) still shows by name.
+                options={[]}
+                onSearch={searchDriversForDay}
+                // A driver that left the active list (or a search that failed) still shows by name.
                 selectedLabel={driverId === assignment?.driverId ? (assignment?.driverName ?? undefined) : undefined}
                 placeholder={t('planning.detail.driverSearchPlaceholder')}
-                isLoading={listStatus.drivers === 'loading'}
-                errorMessage={listStatus.drivers === 'error' ? t('planning.detail.driversLoadError') : null}
                 disabled={busy}
               />
             </FormField>

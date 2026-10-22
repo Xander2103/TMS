@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import type { SearchableSelectOption } from '../../../components/ui/SearchableSelect'
-import { searchEmployees } from '../../employees/api/employeesApi'
+import type { SearchableSelectOption, SearchableSelectSearchFn } from '../../../components/ui/SearchableSelect'
+import { searchActiveEmployeeOptions } from '../../employees/api/employeeOptions'
 import { listAssignableEmployees } from '../api/tasksApi'
 import type { AssignLimitation, AssignScope } from '../api/types'
 
@@ -9,6 +9,11 @@ export type EmployeeOptionsSource = 'all' | 'assignable'
 interface EmployeeOptionsState {
   options: SearchableSelectOption[]
   isLoading: boolean
+  /**
+   * PERF-H3: source "all" searches the server as the user types (the first 500 employees used to
+   * be loaded and filtered client-side); `options` is then only the labels already known.
+   */
+  onSearch?: SearchableSelectSearchFn
   /** Only for source "assignable": the caller's assign scope and why it is narrowed. */
   scope?: AssignScope
   limitation?: AssignLimitation | null
@@ -32,31 +37,27 @@ function toOption(employee: EmployeeLike): SearchableSelectOption {
 }
 
 /**
- * Loads the employees once as combobox options (name + employee number). Source "all" lists the
- * active employees; "assignable" (task assignee pickers, HR acceptance #4) lists only those the
- * signed-in user may assign a task to, so the picker never offers a choice the server refuses.
+ * Combobox options for the employee pickers (name + employee number). Source "all" searches the
+ * active employees server-side as the user types; "assignable" (task assignee pickers, HR
+ * acceptance #4) loads only those the signed-in user may assign a task to, so the picker never
+ * offers a choice the server refuses.
  */
 export function useEmployeeOptions(source: EmployeeOptionsSource = 'all'): EmployeeOptionsState {
-  const [state, setState] = useState<EmployeeOptionsState>({ options: [], isLoading: true })
+  const [state, setState] = useState<EmployeeOptionsState>({ options: [], isLoading: source === 'assignable' })
 
   useEffect(() => {
+    if (source !== 'assignable') return
     let mounted = true
-    const load: Promise<EmployeeOptionsState> =
-      source === 'assignable'
-        ? listAssignableEmployees().then((result) => ({
-            options: result.items.map(toOption),
-            isLoading: false,
-            scope: result.scope,
-            limitation: result.limitation,
-            departmentName: result.departmentName,
-          }))
-        : searchEmployees({ isActive: true, page: 1, pageSize: 500 }).then((result) => ({
-            options: result.items.map(toOption),
-            isLoading: false,
-          }))
-    load
-      .then((next) => {
-        if (mounted) setState(next)
+    listAssignableEmployees()
+      .then((result) => {
+        if (!mounted) return
+        setState({
+          options: result.items.map(toOption),
+          isLoading: false,
+          scope: result.scope,
+          limitation: result.limitation,
+          departmentName: result.departmentName,
+        })
       })
       .catch(() => {
         if (mounted) setState({ options: [], isLoading: false })
@@ -66,5 +67,6 @@ export function useEmployeeOptions(source: EmployeeOptionsSource = 'all'): Emplo
     }
   }, [source])
 
-  return state
+  if (source === 'assignable') return state
+  return { options: [], isLoading: false, onSearch: searchActiveEmployeeOptions }
 }

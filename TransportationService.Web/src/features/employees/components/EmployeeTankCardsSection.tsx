@@ -3,6 +3,7 @@ import { Badge, type BadgeTone } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { FormField } from '../../../components/ui/FormField'
+import { TruncationNotice } from '../../../components/ui/TruncationNotice'
 import { Modal } from '../../../components/ui/Modal'
 import { useToast } from '../../../components/ui/toastContext'
 import { useLocale, type TranslateFn } from '../../../i18n/localeContext'
@@ -65,6 +66,8 @@ export function EmployeeTankCardsSection({ employeeId }: { employeeId: string })
   const [linkOpen, setLinkOpen] = useState(false)
   const [availableCards, setAvailableCards] = useState<TankCard[]>([])
   const [availableLoading, setAvailableLoading] = useState(false)
+  // PERF-H3: the server pages at 200; the dialog says so instead of silently hiding card #201.
+  const [availableTotal, setAvailableTotal] = useState(0)
   const [selectedCardId, setSelectedCardId] = useState('')
   const [linkError, setLinkError] = useState<string | null>(null)
 
@@ -105,8 +108,14 @@ export function EmployeeTankCardsSection({ employeeId }: { employeeId: string })
     setLinkOpen(true)
     setAvailableLoading(true)
     searchTankCards({ available: true, page: 1, pageSize: 200 })
-      .then((result) => setAvailableCards(result.items))
-      .catch(() => setAvailableCards([]))
+      .then((result) => {
+        setAvailableCards(result.items)
+        setAvailableTotal(result.totalCount)
+      })
+      .catch(() => {
+        setAvailableCards([])
+        setAvailableTotal(0)
+      })
       .finally(() => setAvailableLoading(false))
   }
 
@@ -295,6 +304,7 @@ export function EmployeeTankCardsSection({ employeeId }: { employeeId: string })
                 ))}
               </select>
             </FormField>
+            <TruncationNotice shown={availableCards.length} total={availableTotal} />
           </form>
         </Modal>
       )}

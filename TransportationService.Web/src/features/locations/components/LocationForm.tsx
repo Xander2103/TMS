@@ -12,8 +12,9 @@ import { useSectionNavigation, firstSectionWithError } from '../../../components
 import type { FieldErrors } from '../../../api/problemDetails'
 import { useLocale } from '../../../i18n/localeContext'
 import { useAuth } from '../../auth/authContextValue'
-import { searchCustomers, getCustomer } from '../../customers/api/customersApi'
-import type { CustomerContact, CustomerListItem } from '../../customers/types'
+import { getCustomer } from '../../customers/api/customersApi'
+import { searchActiveCustomerOptions } from '../../customers/api/customerOptions'
+import type { CustomerContact } from '../../customers/types'
 import { CountryCombobox } from '../../reference/components/CountryCombobox'
 import { checkAddressDuplicates, type AddressDuplicateCandidate } from '../api/customerAddressesApi'
 import { extractAddressDuplicateConflict } from '../api/addressDuplicates'
@@ -97,25 +98,10 @@ export function LocationForm({ mode, initial, submitting, error, submitError, on
   const linkedCustomerCount = initial.linkedCustomerCount ?? 0
   const sharedAddress = mode === 'edit' && linkedCustomerCount > 1
 
-  const [customers, setCustomers] = useState<CustomerListItem[]>([])
-  // Contacts (and the customer name, for when the linked customer falls outside the first
-  // options page) are kept together with the customer they were fetched for, so switching
-  // customers "clears" the list by derivation instead of a synchronous setState in an effect.
+  // Contacts (and the customer name, shown as the picker's label) are kept together with the
+  // customer they were fetched for, so switching customers "clears" the list by derivation
+  // instead of a synchronous setState in an effect.
   const [contactsFor, setContactsFor] = useState<{ customerId: string; customerName: string; contacts: CustomerContact[] } | null>(null)
-
-  useEffect(() => {
-    let mounted = true
-    searchCustomers({ isActive: true, page: 1, pageSize: 200 })
-      .then((result) => {
-        if (mounted) setCustomers(result.items)
-      })
-      .catch(() => {
-        /* customer link stays usable via the already-selected value */
-      })
-    return () => {
-      mounted = false
-    }
-  }, [])
 
   // The on-site contact can be linked to one of the customer's contact persons; the list
   // follows the selected customer.
@@ -139,15 +125,10 @@ export function LocationForm({ mode, initial, submitting, error, submitError, on
 
   const contacts = customerId && contactsFor?.customerId === customerId ? contactsFor.contacts : []
 
-  const customerOptions = useMemo(() => {
-    const options = customers.map((c) => ({ value: c.id, label: c.name }))
-    // Keep an already-linked customer selectable/visible even when it is not in the first page.
-    if (customerId && !options.some((o) => o.value === customerId)) {
-      const known = contactsFor?.customerId === customerId ? contactsFor.customerName : ''
-      options.push({ value: customerId, label: known || t('locations.form.linkedCustomer') })
-    }
-    return options
-  }, [customers, customerId, contactsFor, t])
+  // PERF-H3: customers are searched server-side as the user types; the linked customer's name
+  // comes from its detail (fetched for the contacts anyway), never from a 200-row preload.
+  const linkedCustomerLabel =
+    customerId && contactsFor?.customerId === customerId ? contactsFor.customerName || t('locations.form.linkedCustomer') : undefined
 
   function set<K extends keyof LocationInput>(key: K, value: LocationInput[K]) {
     setForm((f) => ({ ...f, [key]: value }))
@@ -367,7 +348,9 @@ export function LocationForm({ mode, initial, submitting, error, submitError, on
           id="loc-customer"
           value={form.customerId}
           onChange={selectCustomer}
-          options={customerOptions}
+          options={[]}
+          selectedLabel={linkedCustomerLabel}
+          onSearch={searchActiveCustomerOptions}
           placeholder={t('locations.form.noCustomer')}
           disabled={submitting || sharedAddress}
           ariaLabel={t('locations.form.fields.customer')}

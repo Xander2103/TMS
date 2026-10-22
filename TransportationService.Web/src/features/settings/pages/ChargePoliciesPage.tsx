@@ -8,8 +8,8 @@ import { useSaveStatus } from '../../../components/ui/useSaveStatus'
 import { useAuth } from '../../auth/authContextValue'
 import { describeApiError } from '../../../api/problemDetails'
 import { useLocale } from '../../../i18n/localeContext'
-import { searchCustomers } from '../../customers/api/customersApi'
-import type { CustomerListItem } from '../../customers/types'
+import { SearchableSelect } from '../../../components/ui/SearchableSelect'
+import { searchCustomerOptions } from '../../customers/api/customerOptions'
 import {
   CHARGE_POLICY_MODE_KEYS,
   listChargePolicies,
@@ -79,7 +79,6 @@ export function ChargePoliciesPage() {
   const canView = canManage || hasPermission('incidents.manage')
 
   const [rows, setRows] = useState<PolicyRow[] | null>(null)
-  const [customers, setCustomers] = useState<CustomerListItem[]>([])
   const [loadError, setLoadError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
@@ -94,13 +93,6 @@ export function ChargePoliciesPage() {
       })
       .catch(() => {
         if (mounted) setLoadError(t('settingsPages.chargePolicies.loadFailed'))
-      })
-    searchCustomers({ page: 1, pageSize: 200 })
-      .then((result) => {
-        if (mounted) setCustomers(result.items)
-      })
-      .catch(() => {
-        /* zonder klantenlijst blijft alleen de optie "Alle klanten" beschikbaar */
       })
     return () => {
       mounted = false
@@ -201,24 +193,17 @@ export function ChargePoliciesPage() {
             {rows.map((row, index) => (
               <tr key={row.key}>
                 <td>
-                  <select
-                    aria-label={t('settingsPages.chargePolicies.customerAria', { index: index + 1 })}
-                    value={row.customerId}
-                    onChange={(e) => patchRow(row.key, { customerId: e.target.value })}
+                  {/* PERF-H3: searched server-side; empty = "Alle klanten". A stored customer keeps its name. */}
+                  <SearchableSelect
+                    ariaLabel={t('settingsPages.chargePolicies.customerAria', { index: index + 1 })}
+                    value={row.customerId || null}
+                    onChange={(value) => patchRow(row.key, { customerId: value ?? '', customerName: null })}
+                    options={[]}
+                    selectedLabel={row.customerName ?? t('settingsPages.chargePolicies.unknownCustomer')}
+                    onSearch={searchCustomerOptions}
+                    placeholder={t('settingsPages.chargePolicies.allCustomers')}
                     disabled={!canManage}
-                  >
-                    <option value="">{t('settingsPages.chargePolicies.allCustomers')}</option>
-                    {customers.map((customer) => (
-                      <option key={customer.id} value={customer.id}>
-                        {customer.name}
-                      </option>
-                    ))}
-                    {row.customerId && !customers.some((customer) => customer.id === row.customerId) && (
-                      <option value={row.customerId}>
-                        {row.customerName ?? t('settingsPages.chargePolicies.unknownCustomer')}
-                      </option>
-                    )}
-                  </select>
+                  />
                 </td>
                 <td>
                   <select

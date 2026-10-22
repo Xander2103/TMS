@@ -48,7 +48,7 @@ import {
   type VehicleDraft,
 } from '../vehicleSelection'
 import {
-  buildDriverOptions,
+  driverOptionSearch,
   buildTrailerOptions,
   buildVehicleOptions,
   joinParts,
@@ -79,7 +79,9 @@ export function TripDetailPage() {
   const [busy, setBusy] = useState(false)
 
   // Driver/vehicle/trailer lists + their per-picker status (shared with the dossier planning block).
-  const { drivers, vehicles, trailers, status: resourceStatus } = usePlanningResources(true, trip?.tripDate)
+  const { vehicles, trailers, status: resourceStatus } = usePlanningResources(true, trip?.tripDate)
+  // PERF-H3: drivers are searched server-side per keystroke, availability judged on the trip day.
+  const searchDriversForTrip = useMemo(() => driverOptionSearch(trip?.tripDate, t), [trip?.tripDate, t])
   const [availableOrders, setAvailableOrders] = useState<TransportOrderListItem[]>([])
   const [ordersStatus, setOrdersStatus] = useState<ResourceListStatus>('loading')
   const listStatus = { ...resourceStatus, orders: ordersStatus }
@@ -284,7 +286,7 @@ export function TripDetailPage() {
     }
     // The fixed vehicle comes from the driver list (`fixedVehicleId`); an older payload without
     // it costs one driver-detail call. A failed lookup simply means no suggestion.
-    void lookupFixedVehicleId(drivers, vehicles, nextDriverId).then((fixedId) => {
+    void lookupFixedVehicleId(vehicles, nextDriverId).then((fixedId) => {
       if (seq !== driverLookupSeq.current) return
       setVehicleDraft((current) => vehicleDraftAfterDriverChange(current, fixedId))
     })
@@ -430,7 +432,6 @@ export function TripDetailPage() {
 
   // Picker options: built by the shared builders (planning/resourceOptions.ts), so the dossier
   // planning block searches exactly like this page.
-  const driverOptions = useMemo(() => buildDriverOptions(drivers, t), [drivers, t])
   const vehicleOptions = useMemo(() => buildVehicleOptions(vehicles, t), [vehicles, t])
   const trailerOptions = useMemo(() => buildTrailerOptions(trailers, t), [trailers, t])
 
@@ -616,12 +617,11 @@ export function TripDetailPage() {
               onChange={handleDriverChange}
               // MD-M6: a completed trip shows the identity it was EXECUTED with (the DTO's snapshot),
               // never today's option label of a re-plated vehicle or renamed driver.
-              options={executed ? [] : driverOptions}
-              // A driver that left the active list (or a list that failed) still shows by name.
+              options={[]}
+              onSearch={executed ? undefined : searchDriversForTrip}
+              // A driver that left the active list (or a search that failed) still shows by name.
               selectedLabel={driverId === trip.driverId ? (trip.driverName ?? undefined) : undefined}
               placeholder={editable ? t('planning.detail.driverSearchPlaceholder') : t('planning.detail.none')}
-              isLoading={listStatus.drivers === 'loading'}
-              errorMessage={listStatus.drivers === 'error' ? t('planning.detail.driversLoadError') : null}
               disabled={!editable || busy}
             />
           </FormField>

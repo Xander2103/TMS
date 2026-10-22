@@ -60,8 +60,9 @@ describe('ChargePoliciesPage', () => {
       </MemoryRouter>,
     )
 
+    // PERF-H3: the customer is a server-searched picker; the stored policy shows its customer's name.
     const customerSelect = await screen.findByLabelText('Klant beleid 1')
-    expect(customerSelect).toHaveValue('cust-1')
+    expect(customerSelect).toHaveValue('Transport Janssens')
     expect(screen.getByLabelText('Incidenttype beleid 1')).toHaveValue('Damage')
     expect(screen.getByLabelText('Modus beleid 1')).toHaveValue('Auto')
     expect(screen.getByLabelText('Standaardbedrag beleid 1')).toHaveValue(125.5)

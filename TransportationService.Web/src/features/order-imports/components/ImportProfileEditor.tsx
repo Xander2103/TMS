@@ -6,7 +6,7 @@ import { SearchableSelect, type SearchableSelectOption } from '../../../componen
 import { useToast } from '../../../components/ui/toastContext'
 import { describeApiError } from '../../../api/problemDetails'
 import { useLocale } from '../../../i18n/localeContext'
-import { searchCustomers } from '../../customers/api/customersApi'
+import { searchActiveCustomerOptions } from '../../customers/api/customerOptions'
 import {
   analyzeOrderImportFile,
   createOrderImportProfile,
@@ -71,7 +71,6 @@ export function ImportProfileEditor({ profile, onClose }: ImportProfileEditorPro
   const [description, setDescription] = useState(profile?.description ?? '')
   const [customerId, setCustomerId] = useState<string | null>(profile?.customerId ?? null)
   const [isActive, setIsActive] = useState(profile?.isActive ?? true)
-  const [customerOptions, setCustomerOptions] = useState<SearchableSelectOption[]>([])
   const [fields, setFields] = useState<OrderImportField[]>([])
   const [rows, setRows] = useState<MappingRow[]>(() => rowsFromProfile(profile))
   const [analyzing, setAnalyzing] = useState(false)
@@ -83,11 +82,6 @@ export function ImportProfileEditor({ profile, onClose }: ImportProfileEditorPro
     listOrderImportFields()
       .then((data) => {
         if (mounted) setFields(data)
-      })
-      .catch(() => {})
-    searchCustomers({ isActive: true, page: 1, pageSize: 200 })
-      .then((result) => {
-        if (mounted) setCustomerOptions(result.items.map((c) => ({ value: c.id, label: c.name })))
       })
       .catch(() => {})
     return () => {
@@ -228,7 +222,9 @@ export function ImportProfileEditor({ profile, onClose }: ImportProfileEditorPro
               id="pe-customer"
               value={customerId}
               onChange={setCustomerId}
-              options={customerOptions}
+              // PERF-H3: searched server-side; the profile's current customer keeps its name.
+              options={profile?.customerId && profile.customerName ? [{ value: profile.customerId, label: profile.customerName }] : []}
+              onSearch={searchActiveCustomerOptions}
               placeholder={t('orderImports.profileEditor.customerPlaceholder')}
               disabled={saving}
             />

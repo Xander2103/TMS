@@ -31,15 +31,17 @@ vi.mock('../api/dossiersApi', () => api)
 
 const lookups = vi.hoisted(() => ({
   searchCustomers: vi.fn(),
+  getCustomer: vi.fn(),
   listActivityTypes: vi.fn(),
   searchDrivers: vi.fn(),
+  getDriver: vi.fn(),
   getVehicleOptions: vi.fn(),
   getTrailerOptions: vi.fn(),
   getCountryOptions: vi.fn(),
 }))
-vi.mock('../../customers/api/customersApi', () => ({ searchCustomers: lookups.searchCustomers }))
+vi.mock('../../customers/api/customersApi', () => ({ searchCustomers: lookups.searchCustomers, getCustomer: lookups.getCustomer }))
 vi.mock('../api/activityTypesApi', () => ({ listActivityTypes: lookups.listActivityTypes }))
-vi.mock('../../drivers/api/driversApi', () => ({ searchDrivers: lookups.searchDrivers }))
+vi.mock('../../drivers/api/driversApi', () => ({ searchDrivers: lookups.searchDrivers, getDriver: lookups.getDriver }))
 vi.mock('../../vehicles/api/vehiclesApi', () => ({ getVehicleOptions: lookups.getVehicleOptions }))
 vi.mock('../../trailers/api/trailersApi', () => ({ getTrailerOptions: lookups.getTrailerOptions }))
 vi.mock('../../reference/api/countriesApi', () => ({ getCountryOptions: lookups.getCountryOptions }))
@@ -163,7 +165,11 @@ describe('DossiersPage (lijst)', () => {
       { id: 'at-1', code: 'KRAANTRANSPORT', name: 'Kraantransport', isActive: true, hasStops: true },
       { id: 'at-2', code: 'KRAANWERK', name: 'Kraanwerk', isActive: true, hasStops: false },
     ])
-    lookups.searchDrivers.mockResolvedValue({ items: [{ id: 'dr-1', fullName: 'Jan Peeters' }], totalCount: 1, page: 1, pageSize: 200 })
+    lookups.searchDrivers.mockResolvedValue({ items: [{ id: 'dr-1', fullName: 'Jan Peeters' }], totalCount: 1, page: 1, pageSize: 25 })
+    // PERF-H3: the customer/driver filters search server-side; a chosen or URL-restored id is named from its detail.
+    const CUSTOMER_NAMES: Record<string, string> = { 'c-1': 'Nexans NV', 'c-2': 'Bekaert', 'c-3': 'Van Caudenberg BV' }
+    lookups.getCustomer.mockReset().mockImplementation(async (id: string) => ({ id, name: CUSTOMER_NAMES[id] ?? id }))
+    lookups.getDriver.mockReset().mockImplementation(async (id: string) => ({ id, fullName: id === 'dr-1' ? 'Jan Peeters' : id }))
     lookups.getVehicleOptions.mockResolvedValue([{ id: 'v-1', internalNumber: 'V01', licensePlate: '1-ABC-123', brand: null, model: null }])
     lookups.getTrailerOptions.mockResolvedValue([{ id: 'tr-1', internalNumber: 'OPL-3', licensePlate: 'Q-XYZ-987' }])
     lookups.getCountryOptions.mockResolvedValue([

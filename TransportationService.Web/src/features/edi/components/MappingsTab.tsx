@@ -8,7 +8,7 @@ import { useToast } from '../../../components/ui/toastContext'
 import { localizeApiError } from '../../../api/problemDetails'
 import { useLocale } from '../../../i18n/localeContext'
 import { getLocationOptions } from '../../locations/api/locationsApi'
-import { searchCustomers } from '../../customers/api/customersApi'
+import { searchActiveCustomerOptions } from '../../customers/api/customerOptions'
 import {
   addLocationMapping,
   deleteLocationMapping,
@@ -28,7 +28,6 @@ export function MappingsTab() {
   const { showSuccess, showError } = useToast()
   const [partners, setPartners] = useState<EdiPartner[]>([])
   const [selectedId, setSelectedId] = useState<string>('')
-  const [customers, setCustomers] = useState<SearchableSelectOption[]>([])
   const [locationOptions, setLocationOptions] = useState<SearchableSelectOption[]>([])
   const [reloadToken, setReloadToken] = useState(0)
   const [deleteTarget, setDeleteTarget] = useState<EdiPartnerLocationMapping | null>(null)
@@ -47,9 +46,6 @@ export function MappingsTab() {
   }, [reloadToken])
 
   useEffect(() => {
-    searchCustomers({ isActive: true, page: 1, pageSize: 200 })
-      .then((data) => setCustomers(data.items.map((c) => ({ value: c.id, label: `${c.name} (${c.customerNumber})` }))))
-      .catch(() => {})
     getLocationOptions()
       .then((data) => setLocationOptions(data.map((l) => ({ value: l.id, label: `${l.name} (${l.code})` }))))
       .catch(() => {})
@@ -153,7 +149,9 @@ export function MappingsTab() {
               id="edi-mappings-customer"
               value={selected.customerId}
               onChange={(value) => void changeCustomer(value)}
-              options={customers}
+              // PERF-H3: searched server-side; the partner's current customer keeps its name.
+              options={selected.customerId && selected.customerName ? [{ value: selected.customerId, label: selected.customerName }] : []}
+              onSearch={searchActiveCustomerOptions}
               placeholder={t('edi.mappings.customerPlaceholder')}
               disabled={busy}
               ariaLabel={t('edi.mappings.customerLabel')}

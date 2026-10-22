@@ -18,7 +18,7 @@ export interface SearchEmployeesParams {
   pageSize: number
 }
 
-export function searchEmployees(params: SearchEmployeesParams): Promise<EmployeePagedResult> {
+export function searchEmployees(params: SearchEmployeesParams, signal?: AbortSignal): Promise<EmployeePagedResult> {
   const query = new URLSearchParams()
   if (params.search) query.set('search', params.search)
   if (params.isActive !== undefined) query.set('isActive', String(params.isActive))
@@ -32,7 +32,7 @@ export function searchEmployees(params: SearchEmployeesParams): Promise<Employee
   query.set('page', String(params.page))
   query.set('pageSize', String(params.pageSize))
 
-  return apiClient.getJson<EmployeePagedResult>(`/api/employees?${query.toString()}`)
+  return apiClient.getJson<EmployeePagedResult>(`/api/employees?${query.toString()}`, { signal })
 }
 
 export function getEmployee(id: string): Promise<EmployeeDetail> {

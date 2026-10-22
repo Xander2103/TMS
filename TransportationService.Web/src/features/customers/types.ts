@@ -7,6 +7,8 @@ export interface CustomerListItem {
   categoryName: string | null
   isActive: boolean
   isBlocked: boolean
+  /** PERF-H3: shown in the picker's second line; absent on older payloads. */
+  vatNumber?: string | null
 }
 
 /** Contact-person type; `isPrimary` means "primary within this type" (one per type). */

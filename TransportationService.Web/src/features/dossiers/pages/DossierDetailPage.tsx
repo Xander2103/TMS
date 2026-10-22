@@ -15,7 +15,7 @@ import { useLocale } from '../../../i18n/localeContext'
 import { addRecentItem } from '../../../hooks/recentItems'
 import { useAuth } from '../../auth/authContextValue'
 import { useCanViewPrices } from '../../auth/commercialVisibility'
-import { searchCustomers } from '../../customers/api/customersApi'
+import { searchActiveCustomerOptions } from '../../customers/api/customerOptions'
 import { getTransportOrder } from '../../transport-orders/api/transportOrdersApi'
 import type { TransportOrderDetail } from '../../transport-orders/types'
 import { getUsers } from '../../users/api/usersApi'
@@ -148,7 +148,6 @@ function DossierDetailContent() {
   const [dossierDate, setDossierDate] = useState('')
   const [customerId, setCustomerId] = useState<string | null>(null)
   const [responsibleUserId, setResponsibleUserId] = useState<string | null>(null)
-  const [customerOptions, setCustomerOptions] = useState<SearchableSelectOption[]>([])
   // Sprint 6: once a dossier has a customer or orders, the customer only changes via the
   // previewed flow (pricing, entity and linked orders are re-evaluated together).
   const [customerChangeOpen, setCustomerChangeOpen] = useState(false)
@@ -293,9 +292,6 @@ function DossierDetailContent() {
 
   useEffect(() => {
     if (!editing) return
-    searchCustomers({ isActive: true, page: 1, pageSize: 200 })
-      .then((result) => setCustomerOptions(result.items.map((c) => ({ value: c.id, label: c.name }))))
-      .catch(() => setCustomerOptions([]))
     getUsers()
       .then((users) =>
         setUserOptions(
@@ -694,7 +690,15 @@ function DossierDetailContent() {
                 </FormField>
               ) : (
                 <FormField label={t('dossiers.detail.customerField')} htmlFor="edit-customer" error={getFieldError(fieldErrors, 'customerId')}>
-                  <SearchableSelect id="edit-customer" value={customerId} onChange={setCustomerId} options={customerOptions} />
+                  <SearchableSelect
+                    id="edit-customer"
+                    value={customerId}
+                    onChange={setCustomerId}
+                    // PERF-H3: searched server-side (name, number, VAT); the dossier's own customer keeps its name.
+                    options={[]}
+                    selectedLabel={customerId === dossier.customerId ? (dossier.customerName ?? undefined) : undefined}
+                    onSearch={searchActiveCustomerOptions}
+                  />
                 </FormField>
               )}
               <FormField label={t('dossiers.detail.responsibleField')} htmlFor="edit-responsible" error={getFieldError(fieldErrors, 'responsibleUserId')}>

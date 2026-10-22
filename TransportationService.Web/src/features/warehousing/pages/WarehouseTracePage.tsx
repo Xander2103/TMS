@@ -22,8 +22,8 @@ import {
   type WarehouseScanType,
   type WarehouseTrace,
 } from '../api/warehousingApi'
-import { searchCustomers } from '../../customers/api/customersApi'
-import type { CustomerListItem } from '../../customers/types'
+import { SearchableSelect } from '../../../components/ui/SearchableSelect'
+import { searchActiveCustomerOptions } from '../../customers/api/customerOptions'
 import type { Warehouse } from '../types'
 import { formatDateTime } from '../../../utils/dates'
 import { labelFor } from '../../../utils/labels'
@@ -62,7 +62,6 @@ export function WarehouseTracePage() {
   const [busy, setBusy] = useState(false)
 
   // Wave 5 §2: opslag per klant en periode (pallet-dagen uit de bewegingsklok).
-  const [customers, setCustomers] = useState<CustomerListItem[]>([])
   const [storageCustomerId, setStorageCustomerId] = useState('')
   const [storageFrom, setStorageFrom] = useState(() => new Date().toISOString().slice(0, 8) + '01')
   const [storageTo, setStorageTo] = useState(() => new Date().toISOString().slice(0, 10))
@@ -74,9 +73,6 @@ export function WarehouseTracePage() {
         setWarehouses(data)
         if (data.length > 0) setWarehouseId((current) => current || data[0].id)
       })
-      .catch(() => {})
-    searchCustomers({ isActive: true, page: 1, pageSize: 200 })
-      .then((result) => setCustomers(result.items))
       .catch(() => {})
   }, [])
 
@@ -268,12 +264,17 @@ export function WarehouseTracePage() {
         <h2>{t('warehousing.trace.storageTitle')}</h2>
         <p className="wh-muted">{t('warehousing.trace.storageHint')}</p>
         <div className="ui-filter-bar wh-trace-bar" role="group" aria-label={t('warehousing.trace.storageBarAria')}>
-          <select className="ui-filter-select" value={storageCustomerId} onChange={(e) => setStorageCustomerId(e.target.value)} aria-label={t('warehousing.trace.customerAria')}>
-            <option value="">{t('warehousing.trace.selectCustomer')}</option>
-            {customers.map((customer) => (
-              <option key={customer.id} value={customer.id}>{customer.name}</option>
-            ))}
-          </select>
+          <div className="wh-trace-customer">
+            {/* PERF-H3: searched server-side (name, number, VAT) instead of the first 200 customers. */}
+            <SearchableSelect
+              value={storageCustomerId || null}
+              onChange={(value) => setStorageCustomerId(value ?? '')}
+              options={[]}
+              onSearch={searchActiveCustomerOptions}
+              ariaLabel={t('warehousing.trace.customerAria')}
+              placeholder={t('warehousing.trace.selectCustomer')}
+            />
+          </div>
           <input className="ui-filter-select" type="date" value={storageFrom} onChange={(e) => setStorageFrom(e.target.value)} aria-label={t('warehousing.trace.fromAria')} />
           <input className="ui-filter-select" type="date" value={storageTo} onChange={(e) => setStorageTo(e.target.value)} aria-label={t('warehousing.trace.toAria')} />
           <Button type="button" variant="secondary" onClick={() => void lookupStorage()} disabled={!storageCustomerId}>

@@ -7,10 +7,10 @@ import { Modal } from '../../../components/ui/Modal'
 import { useToast } from '../../../components/ui/toastContext'
 import { useLocale } from '../../../i18n/localeContext'
 import { useAuth } from '../../auth/authContextValue'
-import { searchDrivers } from '../../drivers/api/driversApi'
-import type { DriverListItem } from '../../drivers/types'
-import { searchTankCards } from '../../tank-cards/api/tankCardsApi'
-import { maskCardNumber, type TankCard } from '../../tank-cards/types'
+import { SearchableSelect } from '../../../components/ui/SearchableSelect'
+import { searchActiveDriverOptions } from '../../drivers/api/driverOptions'
+import { searchTankCardOptions } from '../../tank-cards/api/tankCardOptions'
+import { maskCardNumber } from '../../tank-cards/types'
 import { formatDate } from '../../../utils/dates'
 import { formatCurrency, formatDecimal, formatInteger } from '../../../utils/numbers'
 import {
@@ -65,9 +65,6 @@ export function FuelPanel({ vehicleId }: FuelPanelProps) {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [reloadToken, setReloadToken] = useState(0)
 
-  const [drivers, setDrivers] = useState<DriverListItem[]>([])
-  const [cards, setCards] = useState<TankCard[]>([])
-
   const [editorOpen, setEditorOpen] = useState(false)
   const [editing, setEditing] = useState<FuelTransaction | null>(null)
   const [form, setForm] = useState<FuelForm>(EMPTY_FORM)
@@ -91,24 +88,6 @@ export function FuelPanel({ vehicleId }: FuelPanelProps) {
       mounted = false
     }
   }, [vehicleId, reloadToken, t])
-
-  // Selector data for the editor; failures keep the selects usable as "Geen".
-  useEffect(() => {
-    let mounted = true
-    searchDrivers({ isActive: true, page: 1, pageSize: 200 })
-      .then((data) => {
-        if (mounted) setDrivers(data.items)
-      })
-      .catch(() => {})
-    searchTankCards({ page: 1, pageSize: 200 })
-      .then((data) => {
-        if (mounted) setCards(data.items)
-      })
-      .catch(() => {})
-    return () => {
-      mounted = false
-    }
-  }, [])
 
   function set<K extends keyof FuelForm>(key: K, value: FuelForm[K]) {
     setForm((f) => ({ ...f, [key]: value }))
@@ -365,25 +344,32 @@ export function FuelPanel({ vehicleId }: FuelPanelProps) {
               {t('fuel.panel.fullTank')}
             </label>
             <div className="fuel-form-row">
+              {/* PERF-H3: drivers and cards are searched server-side; the transaction's own keep their label. */}
               <FormField label={t('fuel.panel.driver')} htmlFor="fu-driver">
-                <select id="fu-driver" value={form.driverId} onChange={(e) => set('driverId', e.target.value)} disabled={saving}>
-                  <option value="">{t('fuel.panel.none')}</option>
-                  {drivers.map((driver) => (
-                    <option key={driver.id} value={driver.id}>
-                      {driver.fullName} ({driver.driverNumber})
-                    </option>
-                  ))}
-                </select>
+                <SearchableSelect
+                  id="fu-driver"
+                  value={form.driverId || null}
+                  onChange={(value) => set('driverId', value ?? '')}
+                  options={[]}
+                  selectedLabel={editing && editing.driverId === form.driverId ? (editing.driverName ?? undefined) : undefined}
+                  onSearch={searchActiveDriverOptions}
+                  placeholder={t('fuel.panel.none')}
+                  disabled={saving}
+                />
               </FormField>
               <FormField label={t('fuel.panel.tankCard')} htmlFor="fu-card">
-                <select id="fu-card" value={form.tankCardId} onChange={(e) => set('tankCardId', e.target.value)} disabled={saving}>
-                  <option value="">{t('fuel.panel.none')}</option>
-                  {cards.map((card) => (
-                    <option key={card.id} value={card.id}>
-                      {maskCardNumber(card.cardNumber)} ({card.provider})
-                    </option>
-                  ))}
-                </select>
+                <SearchableSelect
+                  id="fu-card"
+                  value={form.tankCardId || null}
+                  onChange={(value) => set('tankCardId', value ?? '')}
+                  options={[]}
+                  selectedLabel={
+                    editing && editing.tankCardId === form.tankCardId && editing.tankCardNumber ? maskCardNumber(editing.tankCardNumber) : undefined
+                  }
+                  onSearch={searchTankCardOptions}
+                  placeholder={t('fuel.panel.none')}
+                  disabled={saving}
+                />
               </FormField>
             </div>
             <FormField label={t('fuel.panel.station')} htmlFor="fu-station">

@@ -212,5 +212,9 @@
       "warning": "Waarschuwing",
       "info": "Ter info"
     }
+  },
+  "truncation": {
+    "partial": "Eerste {shown} van {total} weergegeven — verfijn de zoekopdracht.",
+    "limit": "De lijst toont maximaal {limit} resultaten — verfijn de periode of filters."
   }
 }

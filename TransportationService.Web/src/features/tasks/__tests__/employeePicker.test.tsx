@@ -53,18 +53,23 @@ describe('EmployeePicker (assignable source)', () => {
     )
   })
 
-  it('keeps the full active-employee list for non-task callers (default source)', async () => {
+  it('searches the active employees server-side for non-task callers (default source)', async () => {
+    // PERF-H3: no 500-row preload — the server is asked per keystroke, one short page at a time.
     const assignableSpy = vi.spyOn(api, 'listAssignableEmployees')
     const allSpy = vi.spyOn(employeesApi, 'searchEmployees').mockResolvedValue({
       items: [],
       totalCount: 0,
       page: 1,
-      pageSize: 500,
+      pageSize: 25,
     } as unknown as Awaited<ReturnType<typeof employeesApi.searchEmployees>>)
+    const user = userEvent.setup()
 
     render(<EmployeeSelect value={null} onChange={vi.fn()} />)
+    expect(allSpy).not.toHaveBeenCalled()
 
+    await user.click(screen.getByRole('combobox', { name: 'Medewerker' }))
     await waitFor(() => expect(allSpy).toHaveBeenCalled())
+    expect(allSpy).toHaveBeenLastCalledWith(expect.objectContaining({ isActive: true, page: 1, pageSize: 25 }), expect.any(AbortSignal))
     expect(assignableSpy).not.toHaveBeenCalled()
     expect(screen.queryByRole('note')).not.toBeInTheDocument()
   })

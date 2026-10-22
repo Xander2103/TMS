@@ -53,7 +53,7 @@ function renderForm(onSubmit = vi.fn()) {
       {
         path: '/vehicles/new',
         element: (
-          <VehicleForm mode="create" initial={EMPTY} isSubmitting={false} onSubmit={onSubmit} onCancel={vi.fn()} drivers={[]} />
+          <VehicleForm mode="create" initial={EMPTY} isSubmitting={false} onSubmit={onSubmit} onCancel={vi.fn()} />
         ),
       },
     ],

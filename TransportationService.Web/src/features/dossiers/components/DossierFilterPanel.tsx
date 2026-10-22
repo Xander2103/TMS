@@ -1,6 +1,6 @@
 import { useId, type ReactNode } from 'react'
 import { FormField } from '../../../components/ui/FormField'
-import { SearchableSelect, type SearchableSelectOption } from '../../../components/ui/SearchableSelect'
+import { SearchableSelect, type SearchableSelectOption, type SearchableSelectSearchFn } from '../../../components/ui/SearchableSelect'
 import { useLocale } from '../../../i18n/localeContext'
 import { CountryCombobox } from '../../reference/components/CountryCombobox'
 import {
@@ -15,6 +15,8 @@ import {
 } from '../pages/dossierSearchParams'
 import { DOSSIER_STATUS_LABELS } from '../types'
 import type { DossierFilterLookups } from './dossierFilterLookups'
+import { searchActiveCustomerOptions } from '../../customers/api/customerOptions'
+import { searchActiveDriverOptions } from '../../drivers/api/driverOptions'
 
 interface DossierFilterPanelProps {
   id: string
@@ -64,13 +66,16 @@ export function DossierFilterPanel({ id, filters, lookups, currentUserId = null,
     </FormField>
   )
 
-  const lookupField = (key: DossierFilterKey, options: SearchableSelectOption[]) => (
+  // PERF-H3: with `onSearch` the picker asks the server per keystroke and `options` only names
+  // the current value (the first-200 preload made every later customer/driver unfilterable).
+  const lookupField = (key: DossierFilterKey, options: SearchableSelectOption[], onSearch?: SearchableSelectSearchFn) => (
     <FormField key={key} label={label(key)} htmlFor={fieldId(key)}>
       <SearchableSelect
         id={fieldId(key)}
         value={filters[key] || null}
         onChange={(value) => onChange({ [key]: value ?? '' })}
         options={options}
+        onSearch={onSearch}
         placeholder={t('dossiers.filters.any')}
       />
     </FormField>
@@ -119,7 +124,7 @@ export function DossierFilterPanel({ id, filters, lookups, currentUserId = null,
   return (
     <section id={id} className="dossier-advanced" aria-label={t('dossiers.filters.panelLabel')}>
       {group('identification', [textField('dossierNumber'), textField('orderNumber'), textField('customerReference')])}
-      {group('customer', [lookupField('customerId', lookups.customers), textField('customerNumber')])}
+      {group('customer', [lookupField('customerId', lookups.customers, searchActiveCustomerOptions), textField('customerNumber')])}
       {group('lifecycle', [
         selectField(
           'status',
@@ -172,7 +177,7 @@ export function DossierFilterPanel({ id, filters, lookups, currentUserId = null,
           { value: 'planned', label: t('dossiers.filters.options.planned') },
           { value: 'unplanned', label: t('dossiers.filters.options.unplanned') },
         ]),
-        lookupField('driverId', lookups.drivers),
+        lookupField('driverId', lookups.drivers, searchActiveDriverOptions),
         lookupField('vehicleId', lookups.vehicles),
         textField('licensePlate'),
         lookupField('trailerId', lookups.trailers),

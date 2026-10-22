@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { PageHeader } from '../../../components/layout/PageHeader'
 import { ErrorState } from '../../../components/feedback/ErrorState'
@@ -12,7 +12,8 @@ import { usePagedQuery } from '../../../hooks/usePagedQuery'
 import { useLocale } from '../../../i18n/localeContext'
 import type { TranslateFn } from '../../../i18n/localeContext'
 import { useAuth } from '../../auth/authContextValue'
-import { searchCustomers } from '../../customers/api/customersApi'
+import { resolveCustomerLabel, searchActiveCustomerOptions } from '../../customers/api/customerOptions'
+import { useResolvedLabel } from '../../../hooks/useResolvedLabel'
 import { CountryCombobox } from '../../reference/components/CountryCombobox'
 import { searchLocations, searchLocationsGrouped } from '../api/locationsApi'
 import {
@@ -72,20 +73,8 @@ export function LocationsPage() {
   const [postalCodeFilter, setPostalCodeFilter] = useState('')
   const [viewMode, setViewMode] = useState<ViewMode>(readStoredViewMode)
 
-  const [customerOptions, setCustomerOptions] = useState<{ value: string; label: string }[]>([])
-  useEffect(() => {
-    let mounted = true
-    searchCustomers({ isActive: true, page: 1, pageSize: 200 })
-      .then((result) => {
-        if (mounted) setCustomerOptions(result.items.map((c) => ({ value: c.id, label: c.name })))
-      })
-      .catch(() => {
-        /* filter stays usable without options */
-      })
-    return () => {
-      mounted = false
-    }
-  }, [])
+  // PERF-H3: the customer filter searches server-side as the user types (no 200-row preload).
+  const customerFilterLabel = useResolvedLabel(customerFilter, resolveCustomerLabel)
 
   function switchView(mode: ViewMode) {
     setViewMode(mode)
@@ -142,7 +131,9 @@ export function LocationsPage() {
             placeholder={t('locations.list.allCustomers')}
             value={customerFilter}
             onChange={setCustomerFilter}
-            options={customerOptions}
+            options={[]}
+            selectedLabel={customerFilterLabel}
+            onSearch={searchActiveCustomerOptions}
           />
         </div>
         <div className="locations-country-filter">

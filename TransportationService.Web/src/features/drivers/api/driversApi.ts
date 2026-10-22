@@ -18,7 +18,7 @@ export interface SearchDriversParams {
   pageSize: number
 }
 
-export function searchDrivers(params: SearchDriversParams): Promise<PagedResult<DriverListItem>> {
+export function searchDrivers(params: SearchDriversParams, signal?: AbortSignal): Promise<PagedResult<DriverListItem>> {
   const query = new URLSearchParams()
   if (params.search) query.set('search', params.search)
   if (params.isActive !== undefined) query.set('isActive', String(params.isActive))
@@ -32,7 +32,7 @@ export function searchDrivers(params: SearchDriversParams): Promise<PagedResult<
   if (params.availabilityOn) query.set('availabilityOn', params.availabilityOn)
   query.set('page', String(params.page))
   query.set('pageSize', String(params.pageSize))
-  return apiClient.getJson<PagedResult<DriverListItem>>(`/api/drivers?${query.toString()}`)
+  return apiClient.getJson<PagedResult<DriverListItem>>(`/api/drivers?${query.toString()}`, { signal })
 }
 
 export function getDriver(id: string): Promise<DriverDetail> {

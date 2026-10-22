@@ -92,6 +92,16 @@ const ORDERS = [
   { id: 'o-2', orderNumber: 'ORD-0002', orderDate: '2026-09-20', customerId: 'c2', customerName: 'Bekaert', customerReference: null, status: 'Confirmed', goodsDescription: null, firstLoadingCity: 'Zwevegem', lastUnloadingCity: 'Antwerpen', stopCount: 2, adrRequired: false, craneRequired: false, priority: 'Normal' },
 ]
 
+/** PERF-H3: the driver picker searches server-side; the mock answers like the API (name in any order, numbers). */
+function driverSearch(search: string | undefined) {
+  const words = (search ?? '').toLowerCase().split(/\s+/).filter(Boolean)
+  const items = DRIVERS.filter((driver) => {
+    const haystack = `${driver.fullName} ${driver.driverNumber} ${driver.employeeNumber}`.toLowerCase()
+    return words.every((word) => haystack.includes(word))
+  })
+  return { items, totalCount: items.length, page: 1, pageSize: 25 }
+}
+
 /** Fixed vehicle per driver, as `GET /api/drivers/{id}` exposes it. */
 const FIXED_VEHICLE: Record<string, { id: string; label: string } | null> = {
   'd-jan': { id: 'v-1', label: 'V-101 (1-ABC-123)' },
@@ -129,7 +139,7 @@ describe('TripDetailPage — searchable pickers', () => {
     vi.clearAllMocks()
     planningApi.getTrip.mockResolvedValue(trip())
     planningApi.updateTrip.mockImplementation(async (_id: string, input: Partial<TripDetail>) => trip({ ...input }))
-    driversApi.searchDrivers.mockResolvedValue({ items: DRIVERS, totalCount: DRIVERS.length, page: 1, pageSize: 200 })
+    driversApi.searchDrivers.mockImplementation(async (params: { search?: string }) => driverSearch(params.search))
     driversApi.getDriver.mockImplementation(async (id: string) => ({ id, fixedVehicle: FIXED_VEHICLE[id] ?? null }))
     vehiclesApi.getVehicleOptions.mockResolvedValue(VEHICLES)
     trailersApi.getTrailerOptions.mockResolvedValue(TRAILERS)
@@ -154,17 +164,22 @@ describe('TripDetailPage — searchable pickers', () => {
     expect(await screen.findAllByRole('option')).toHaveLength(3)
 
     await user.type(driverInput(), 'peeters jan')
-    expect(screen.getAllByRole('option')).toHaveLength(1)
+    await waitFor(() => expect(screen.getAllByRole('option')).toHaveLength(1))
     expect(screen.getByRole('option', { name: /Jan Peeters/ })).toHaveTextContent('Personeelsnr. P-4711')
+    expect(driversApi.searchDrivers).toHaveBeenLastCalledWith(
+      expect.objectContaining({ search: 'peeters jan', isActive: true, page: 1, pageSize: 25 }),
+      expect.any(AbortSignal),
+    )
 
     await user.clear(driverInput())
     await user.type(driverInput(), '0815')
+    // The previous hit stays on screen until the server answers; wait for the new one.
+    expect(await screen.findByRole('option', { name: /Els Janssens/ })).toBeInTheDocument()
     expect(screen.getAllByRole('option')).toHaveLength(1)
-    expect(screen.getByRole('option', { name: /Els Janssens/ })).toBeInTheDocument()
 
     await user.clear(driverInput())
     await user.type(driverInput(), 'zzz')
-    expect(screen.getByText('Geen resultaten')).toBeInTheDocument()
+    expect(await screen.findByText('Geen resultaten')).toBeInTheDocument()
   })
 
   it('selects with the keyboard, reverts on Escape and clears with the clear button', async () => {
@@ -357,26 +372,18 @@ describe('TripDetailPage — searchable pickers', () => {
       await waitFor(() => expect(vehicleInput().value).toBe('V-101 (1-ABC-123)'))
     })
 
-    it('uses fixedVehicleId from the driver list and skips the driver-detail call', async () => {
+    it('reads the fixed vehicle from the driver detail (the picker no longer preloads a driver list)', async () => {
       const user = userEvent.setup()
-      driversApi.searchDrivers.mockResolvedValue({
-        items: DRIVERS.map((driver) => ({
-          ...driver,
-          fixedVehicleId: FIXED_VEHICLE[driver.id]?.id ?? null,
-          fixedVehicleNumber: null,
-          fixedVehiclePlate: null,
-        })),
-        totalCount: DRIVERS.length, page: 1, pageSize: 200,
-      })
       await renderPage()
 
       await pick(user, driverInput(), 'jan p', /Jan Peeters/)
       await waitFor(() => expect(vehicleInput().value).toBe('V-101 (1-ABC-123)'))
       expect(screen.getByText(SUGGESTED_HINT)).toBeInTheDocument()
-      // A driver without a fixed vehicle (null in the list) drops the suggestion — still no lookup.
+      expect(driversApi.getDriver).toHaveBeenCalledWith('d-jan')
+      // A driver without a fixed vehicle drops the suggestion.
       await pick(user, driverInput(), 'tom', /Tom Maes/)
       await waitFor(() => expect(vehicleInput().value).toBe(''))
-      expect(driversApi.getDriver).not.toHaveBeenCalled()
+      expect(driversApi.getDriver).toHaveBeenCalledWith('d-tom')
 
       await pick(user, driverInput(), 'els', /Els Janssens/)
       await waitFor(() => expect(vehicleInput().value).toBe('V-202 (2-XYZ-987)'))

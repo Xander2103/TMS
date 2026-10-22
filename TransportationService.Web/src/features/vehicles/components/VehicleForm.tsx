@@ -10,7 +10,8 @@ import { useLocale } from '../../../i18n/localeContext'
 import { negativeFieldErrors } from '../../../utils/nonNegative'
 import { computeVolumeM3 } from '../../../utils/volume'
 import { LookupSelect } from '../../master-data/components/LookupSelect'
-import type { DriverListItem } from '../../drivers/types'
+import { SearchableSelect } from '../../../components/ui/SearchableSelect'
+import { searchActiveDriverOptions } from '../../drivers/api/driverOptions'
 import {
   EMISSION_CLASS_LABELS,
   REQUIRED_LICENCE_CODES,
@@ -32,8 +33,6 @@ export interface VehicleFormProps {
   submitError?: string | null
   onSubmit: (values: CreateVehicleInput) => void | Promise<void>
   onCancel: () => void
-  /** Create-only: pickers for the initial driver assignment (Toewijzing section). */
-  drivers?: DriverListItem[]
   /** Documenten section body: create → PreparedFleetDocumentsEditor, edit → FleetDocumentsPanel. */
   documentsSection?: ReactNode
   /** True when the documents section saves itself (edit-mode panel): hides the shared actions there. */
@@ -62,7 +61,6 @@ export function VehicleForm({
   submitError,
   onSubmit,
   onCancel,
-  drivers,
   documentsSection,
   documentsSectionIsPanel,
   maintenanceSection,
@@ -421,25 +419,28 @@ export function VehicleForm({
             optional: true,
             render: () => (
               <FormSection title={t('fleet.sections.assignment')} columns={2} description={t('vehicles.form.assignmentDescription')}>
+                {/* PERF-H3: drivers are searched server-side (name, driver number) as the user types. */}
                 <FormField label={t('vehicles.form.fixedDriver')} htmlFor="vf-fixed-driver">
-                  <select id="vf-fixed-driver" value={form.fixedDriverId ?? ''} onChange={(e) => set('fixedDriverId', e.target.value || null)} disabled={isSubmitting}>
-                    <option value="">{t('fleet.form.none')}</option>
-                    {(drivers ?? []).map((d) => (
-                      <option key={d.id} value={d.id}>
-                        {d.fullName} ({d.driverNumber})
-                      </option>
-                    ))}
-                  </select>
+                  <SearchableSelect
+                    id="vf-fixed-driver"
+                    value={form.fixedDriverId}
+                    onChange={(value) => set('fixedDriverId', value)}
+                    options={[]}
+                    onSearch={searchActiveDriverOptions}
+                    placeholder={t('fleet.form.none')}
+                    disabled={isSubmitting}
+                  />
                 </FormField>
                 <FormField label={t('vehicles.form.currentDriver')} htmlFor="vf-current-driver">
-                  <select id="vf-current-driver" value={form.currentDriverId ?? ''} onChange={(e) => set('currentDriverId', e.target.value || null)} disabled={isSubmitting}>
-                    <option value="">{t('fleet.form.none')}</option>
-                    {(drivers ?? []).map((d) => (
-                      <option key={d.id} value={d.id}>
-                        {d.fullName} ({d.driverNumber})
-                      </option>
-                    ))}
-                  </select>
+                  <SearchableSelect
+                    id="vf-current-driver"
+                    value={form.currentDriverId}
+                    onChange={(value) => set('currentDriverId', value)}
+                    options={[]}
+                    onSearch={searchActiveDriverOptions}
+                    placeholder={t('fleet.form.none')}
+                    disabled={isSubmitting}
+                  />
                 </FormField>
               </FormSection>
             ),

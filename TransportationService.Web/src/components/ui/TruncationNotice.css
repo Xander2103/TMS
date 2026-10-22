@@ -1,0 +1,12 @@
+/* "Eerste 200 van 2.173 weergegeven" — a quiet, always-visible hint above or under a capped list. */
+.ui-truncation-notice {
+  margin: 8px 0;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--color-warning-strong, #b45309);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.4;
+}

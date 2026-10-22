@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
 import { Badge } from '../../../components/ui/Badge'
 import { DataTable, type Column } from '../../../components/ui/DataTable'
-import { SearchableSelect, type SearchableSelectOption } from '../../../components/ui/SearchableSelect'
+import { SearchableSelect } from '../../../components/ui/SearchableSelect'
 import { useToast } from '../../../components/ui/toastContext'
 import { localizeApiError } from '../../../api/problemDetails'
 import { useLocale } from '../../../i18n/localeContext'
-import { searchCustomers } from '../../customers/api/customersApi'
+import { searchCustomerOptions } from '../../customers/api/customerOptions'
 import { listCustomerNotificationOverrides, setCustomerNotificationOverride } from '../api/notificationAdminApi'
 import type { CustomerNotificationOverride } from '../types'
 
@@ -25,17 +25,10 @@ interface CustomerOverridesTabProps {
 export function CustomerOverridesTab({ canManage }: CustomerOverridesTabProps) {
   const { t } = useLocale()
   const { showSuccess, showError } = useToast()
-  const [customerOptions, setCustomerOptions] = useState<SearchableSelectOption[]>([])
   const [customerId, setCustomerId] = useState<string | null>(null)
   const [rows, setRows] = useState<CustomerNotificationOverride[] | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [reloadToken, setReloadToken] = useState(0)
-
-  useEffect(() => {
-    searchCustomers({ page: 1, pageSize: 500 })
-      .then((result) => setCustomerOptions(result.items.map((c) => ({ value: c.id, label: `${c.customerNumber} — ${c.name}` }))))
-      .catch(() => setCustomerOptions([]))
-  }, [])
 
   useEffect(() => {
     if (!customerId) return
@@ -122,7 +115,9 @@ export function CustomerOverridesTab({ canManage }: CustomerOverridesTabProps) {
           ariaLabel={t('notificationAdmin.overrides.customerAria')}
           value={customerId}
           onChange={setCustomerId}
-          options={customerOptions}
+          // PERF-H3: searched server-side (name, number, VAT) instead of a 500-row preload.
+          options={[]}
+          onSearch={searchCustomerOptions}
           placeholder={t('notificationAdmin.overrides.customerPlaceholder')}
         />
       </div>

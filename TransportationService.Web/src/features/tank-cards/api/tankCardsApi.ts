@@ -11,14 +11,14 @@ export interface SearchTankCardsParams {
   pageSize: number
 }
 
-export function searchTankCards(params: SearchTankCardsParams): Promise<PagedResult<TankCard>> {
+export function searchTankCards(params: SearchTankCardsParams, signal?: AbortSignal): Promise<PagedResult<TankCard>> {
   const query = new URLSearchParams()
   if (params.search) query.set('search', params.search)
   if (params.status) query.set('status', params.status)
   if (params.available) query.set('available', 'true')
   query.set('page', String(params.page))
   query.set('pageSize', String(params.pageSize))
-  return apiClient.getJson<PagedResult<TankCard>>(`/api/tank-cards?${query.toString()}`)
+  return apiClient.getJson<PagedResult<TankCard>>(`/api/tank-cards?${query.toString()}`, { signal })
 }
 
 export function listEmployeeTankCards(employeeId: string): Promise<TankCard[]> {

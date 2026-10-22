@@ -79,7 +79,7 @@ function renderAt(element: React.ReactElement) {
 }
 
 function renderVehicle(mode: 'create' | 'edit', onSubmit = vi.fn(), submitError: string | null = null) {
-  renderAt(<VehicleForm mode={mode} initial={VEHICLE} isSubmitting={false} submitError={submitError} onSubmit={onSubmit} onCancel={vi.fn()} drivers={[]} />)
+  renderAt(<VehicleForm mode={mode} initial={VEHICLE} isSubmitting={false} submitError={submitError} onSubmit={onSubmit} onCancel={vi.fn()} />)
   return onSubmit
 }
 

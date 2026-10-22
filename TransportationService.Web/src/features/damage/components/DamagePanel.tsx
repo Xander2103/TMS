@@ -10,8 +10,8 @@ import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
 import { useLocale } from '../../../i18n/localeContext'
 import { formatCurrency } from '../../../utils/numbers'
-import { searchDrivers } from '../../drivers/api/driversApi'
-import type { DriverListItem } from '../../drivers/types'
+import { SearchableSelect } from '../../../components/ui/SearchableSelect'
+import { searchActiveDriverOptions } from '../../drivers/api/driverOptions'
 import {
   createDamageReport,
   DAMAGE_ATTACHMENT_ACCEPT,
@@ -103,8 +103,6 @@ export function DamagePanel({ ownerType, ownerId }: DamagePanelProps) {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [reloadToken, setReloadToken] = useState(0)
 
-  const [drivers, setDrivers] = useState<DriverListItem[]>([])
-
   const [editorOpen, setEditorOpen] = useState(false)
   const [editing, setEditing] = useState<DamageReport | null>(null)
   const [form, setForm] = useState<DamageForm>(EMPTY_FORM)
@@ -132,19 +130,6 @@ export function DamagePanel({ ownerType, ownerId }: DamagePanelProps) {
       mounted = false
     }
   }, [ownerType, ownerId, reloadToken, t])
-
-  // Active drivers for the "betrokken chauffeur" selector; failure keeps the field usable as "Geen".
-  useEffect(() => {
-    let mounted = true
-    searchDrivers({ isActive: true, page: 1, pageSize: 200 })
-      .then((page) => {
-        if (mounted) setDrivers(page.items)
-      })
-      .catch(() => {})
-    return () => {
-      mounted = false
-    }
-  }, [])
 
   // FL-M7: the asset's recent trips for the optional "Rit" link; a failure keeps "Geen rit".
   useEffect(() => {
@@ -487,19 +472,17 @@ export function DamagePanel({ ownerType, ownerId }: DamagePanelProps) {
                 />
               </FormField>
               <FormField label={t('damage.panel.driverLabel')} htmlFor="dm-driver">
-                <select
+                {/* PERF-H3: searched server-side (name, driver number); the report's driver keeps its name. */}
+                <SearchableSelect
                   id="dm-driver"
-                  value={form.driverId}
-                  onChange={(e) => set('driverId', e.target.value)}
+                  value={form.driverId || null}
+                  onChange={(value) => set('driverId', value ?? '')}
+                  options={[]}
+                  selectedLabel={editing && editing.driverId === form.driverId ? (editing.driverName ?? undefined) : undefined}
+                  onSearch={searchActiveDriverOptions}
+                  placeholder={t('damage.panel.noDriver')}
                   disabled={saving}
-                >
-                  <option value="">{t('damage.panel.noDriver')}</option>
-                  {drivers.map((driver) => (
-                    <option key={driver.id} value={driver.id}>
-                      {driver.fullName} ({driver.driverNumber})
-                    </option>
-                  ))}
-                </select>
+                />
               </FormField>
             </div>
             <FormField label={t('damage.panel.tripLabel')} htmlFor="dm-trip" hint={t('damage.panel.tripHint')}>

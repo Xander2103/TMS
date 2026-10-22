@@ -12,10 +12,6 @@ import type { TransportOrderDetail } from '../../types'
 const noop = () => {}
 
 const baseProps = {
-  customers: [
-    { id: 'cust-1', name: 'Haven BV', customerNumber: 'KL-1' },
-    { id: 'cust-2', name: 'Dok NV', customerNumber: 'KL-2' },
-  ] as never,
   legalEntities: [{ id: 'ent-1', displayName: 'Acme Transport BV', isDefault: true, isActive: true }] as never,
   customerRequirements: null,
   requirementHints: [],
@@ -89,8 +85,8 @@ describe('GeneralSection commercial lock', () => {
     const { container } = render(<GeneralSection {...baseProps} mode="edit" order={existingOrder} />)
     const { customer, entity } = selects(container)
 
-    // B19: the searchable picker shows the chosen customer by name.
-    expect(customer.value).toBe('Haven BV (KL-1)')
+    // B19 / PERF-H3: the (server-searched) picker shows the order's customer by name.
+    expect(customer.value).toBe('Haven BV')
     expect(entity.value).toBe('ent-1')
   })
 })

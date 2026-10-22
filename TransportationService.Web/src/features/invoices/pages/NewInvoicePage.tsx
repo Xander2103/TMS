@@ -10,8 +10,8 @@ import { FormField } from '../../../components/ui/FormField'
 import { useToast } from '../../../components/ui/toastContext'
 import { useLocale } from '../../../i18n/localeContext'
 import type { TranslateFn } from '../../../i18n/localeContext'
-import { getCustomer, searchCustomers } from '../../customers/api/customersApi'
-import type { CustomerListItem } from '../../customers/types'
+import { getCustomer } from '../../customers/api/customersApi'
+import { searchActiveCustomerOptions } from '../../customers/api/customerOptions'
 import { getPoPolicy } from '../../customers/api/customerBillingConfigApi'
 import { getActiveLegalEntity, getLegalEntityOptions } from '../../legal-entities/api/legalEntitiesApi'
 import type { LegalEntityOption } from '../../legal-entities/types'
@@ -46,7 +46,6 @@ export function NewInvoicePage() {
   const { t } = useLocale()
   const { showSuccess, showError } = useToast()
 
-  const [customers, setCustomers] = useState<CustomerListItem[]>([])
   const [customerId, setCustomerId] = useState('')
   const [orders, setOrders] = useState<UninvoicedOrder[] | null>(null)
   const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([])
@@ -82,11 +81,6 @@ export function NewInvoicePage() {
 
   useEffect(() => {
     let mounted = true
-    searchCustomers({ isActive: true, page: 1, pageSize: 200 })
-      .then((data) => {
-        if (mounted) setCustomers(data.items)
-      })
-      .catch(() => {})
     // Entity picker: preselect the user's own active entity, else the configured default.
     Promise.all([
       getLegalEntityOptions().catch(() => [] as LegalEntityOption[]),
@@ -296,11 +290,9 @@ export function NewInvoicePage() {
             id="inv-customer"
             value={customerId || null}
             onChange={(next) => handleCustomerChange(next ?? '')}
-            options={customers.map((customer) => ({
-              value: customer.id,
-              label: `${customer.name} (${customer.customerNumber})`,
-              keywords: customer.customerNumber,
-            }))}
+            // PERF-H3: searched server-side (name, number, VAT) instead of the first 200 customers.
+            options={[]}
+            onSearch={searchActiveCustomerOptions}
             placeholder={t('invoices.new.customerPlaceholder')}
             disabled={busy}
           />

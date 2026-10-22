@@ -74,7 +74,8 @@
     "visibleFrom": "Zichtbaar vanaf",
     "visibleFromHint": "Leeg = direct zichtbaar",
     "expiresAt": "Verloopt op",
-    "expiresAtHint": "Leeg = geen einddatum"
+    "expiresAtHint": "Leeg = geen einddatum",
+    "customersSearchPlaceholder": "Zoek klant op naam, nummer of btw-nummer…"
   },
   "delivery": {
     "title": "Bezorgstatus",

@@ -1,4 +1,5 @@
-import { SearchableSelect } from '../../../components/ui/SearchableSelect'
+import { useState } from 'react'
+import { SearchableSelect, type SearchableSelectOption } from '../../../components/ui/SearchableSelect'
 import { useLocale } from '../../../i18n/localeContext'
 import { useEmployeeOptions, type EmployeeOptionsSource } from './useEmployeeOptions'
 
@@ -43,7 +44,7 @@ interface EmployeeSelectProps {
 export function EmployeeSelect({ id, value, onChange, disabled, ariaLabel, source = 'all' }: EmployeeSelectProps) {
   const { t } = useLocale()
   const employees = useEmployeeOptions(source)
-  const { options, isLoading } = employees
+  const { options, isLoading, onSearch } = employees
   return (
     <>
       <SearchableSelect
@@ -51,6 +52,7 @@ export function EmployeeSelect({ id, value, onChange, disabled, ariaLabel, sourc
         value={value}
         onChange={onChange}
         options={options}
+        onSearch={onSearch}
         isLoading={isLoading}
         disabled={disabled}
         ariaLabel={ariaLabel ?? t('tasks.picker.employee')}
@@ -75,9 +77,24 @@ interface EmployeeMultiSelectProps {
 export function EmployeeMultiSelect({ id, value, onChange, disabled, source = 'all' }: EmployeeMultiSelectProps) {
   const { t } = useLocale()
   const employees = useEmployeeOptions(source)
-  const { options, isLoading } = employees
+  const { options, isLoading, onSearch } = employees
+  // Async mode: remember the label of every hit the search returned, so a chip keeps its name
+  // after the results change (the sync list has them all along).
+  const [seenLabels, setSeenLabels] = useState<Record<string, string>>({})
+  const search = onSearch
+    ? async (query: string, signal: AbortSignal): Promise<SearchableSelectOption[]> => {
+        const hits = await onSearch(query, signal)
+        setSeenLabels((current) => {
+          const next = { ...current }
+          for (const hit of hits) next[hit.value] = hit.label
+          return next
+        })
+        return hits.filter((hit) => !value.includes(hit.value))
+      }
+    : undefined
   const selectable = options.filter((option) => !value.includes(option.value))
-  const labelFor = (employeeId: string) => options.find((option) => option.value === employeeId)?.label ?? employeeId
+  const labelFor = (employeeId: string) =>
+    options.find((option) => option.value === employeeId)?.label ?? seenLabels[employeeId] ?? employeeId
 
   return (
     <div>
@@ -88,6 +105,7 @@ export function EmployeeMultiSelect({ id, value, onChange, disabled, source = 'a
           if (next && !value.includes(next)) onChange([...value, next])
         }}
         options={selectable}
+        onSearch={search}
         isLoading={isLoading}
         disabled={disabled}
         clearable={false}

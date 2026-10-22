@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useState, type FormEvent } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { PageHeader } from '../../../components/layout/PageHeader'
 import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
@@ -9,8 +9,12 @@ import { useToast } from '../../../components/ui/toastContext'
 import { ApiError } from '../../../api/apiClient'
 import { useLocale } from '../../../i18n/localeContext'
 import { LookupSelect } from '../../master-data/components/LookupSelect'
-import { searchEmployees } from '../../employees/api/employeesApi'
-import type { EmployeeListItem } from '../../employees/types/employee'
+import { resolveEmployeeLabel, searchEmployeeOptions } from '../../employees/api/employeeOptions'
+import { useResolvedLabel } from '../../../hooks/useResolvedLabel'
+
+/** Only employees without an existing driver profile can be linked. */
+const searchLinkableEmployeeOptions = (query: string, signal: AbortSignal) =>
+  searchEmployeeOptions(query, signal, { isActive: true, excludeDrivers: true })
 import { createDriver } from '../api/driversApi'
 import { AVAILABILITY_LABELS, type DriverAvailabilityStatus } from '../types'
 import './driver-detail.css'
@@ -19,9 +23,8 @@ export function NewDriverPage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const { t } = useLocale()
-  const { showSuccess, showError } = useToast()
+  const { showSuccess } = useToast()
 
-  const [employees, setEmployees] = useState<EmployeeListItem[]>([])
   const [employeeId, setEmployeeId] = useState(searchParams.get('employeeId') ?? '')
   const [categoryId, setCategoryId] = useState<string | null>(null)
   const [availability, setAvailability] = useState<DriverAvailabilityStatus>('Available')
@@ -29,20 +32,8 @@ export function NewDriverPage() {
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
-  useEffect(() => {
-    let mounted = true
-    // Only employees without an existing driver profile can be linked.
-    searchEmployees({ isActive: true, excludeDrivers: true, page: 1, pageSize: 200 })
-      .then((result) => {
-        if (mounted) setEmployees(result.items)
-      })
-      .catch(() => {
-        if (mounted) showError(t('driversAdmin.newPage.employeesLoadFailed'))
-      })
-    return () => {
-      mounted = false
-    }
-  }, [showError, t])
+  // PERF-H3: searched server-side as the user types; a `?employeeId=` link resolves its name once.
+  const employeeLabel = useResolvedLabel(employeeId || null, resolveEmployeeLabel)
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault()
@@ -92,12 +83,9 @@ export function NewDriverPage() {
             id="driver-employee"
             value={employeeId || null}
             onChange={(v) => setEmployeeId(v ?? '')}
-            options={employees.map((e) => ({
-              value: e.id,
-              label: `${e.firstName} ${e.lastName}`,
-              description: e.employeeNumber,
-              keywords: e.employeeNumber,
-            }))}
+            options={[]}
+            selectedLabel={employeeLabel}
+            onSearch={searchLinkableEmployeeOptions}
             placeholder={t('driversAdmin.newPage.employeePlaceholder')}
             disabled={submitting}
           />

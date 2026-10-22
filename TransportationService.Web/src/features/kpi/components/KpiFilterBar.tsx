@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
 import { SearchableSelect, type SearchableSelectOption } from '../../../components/ui/SearchableSelect'
 import { useLocale } from '../../../i18n/localeContext'
-import { searchCustomers } from '../../customers/api/customersApi'
-import { searchDrivers } from '../../drivers/api/driversApi'
+import { useResolvedLabel } from '../../../hooks/useResolvedLabel'
+import { resolveCustomerLabel, searchActiveCustomerOptions } from '../../customers/api/customerOptions'
+import { resolveDriverLabel, searchActiveDriverOptions } from '../../drivers/api/driverOptions'
 import { getVehicleOptions } from '../../vehicles/api/vehiclesApi'
 import { presetRange, type KpiFilterState } from '../types'
 import './kpi.css'
@@ -32,19 +33,15 @@ const PRESETS: ReadonlyArray<readonly ['today' | 'week' | 'month', string]> = [
 /** One filter row above the KPI views: period presets + custom range + dimension selects. */
 export function KpiFilterBar({ filter, onChange }: KpiFilterBarProps) {
   const { t } = useLocale()
-  const [customers, setCustomers] = useState<SearchableSelectOption[]>([])
-  const [drivers, setDrivers] = useState<SearchableSelectOption[]>([])
+  // PERF-H3: customers and drivers are searched server-side as the user types; a selection that
+  // arrives with the filter (restored view) resolves its name once.
+  const customerLabel = useResolvedLabel(filter.customerId, resolveCustomerLabel)
+  const driverLabel = useResolvedLabel(filter.driverId, resolveDriverLabel)
   const [vehicles, setVehicles] = useState<SearchableSelectOption[]>([])
   const preset = activePreset(filter)
 
   useEffect(() => {
     let mounted = true
-    void searchCustomers({ isActive: true, page: 1, pageSize: 200 }).then((page) => {
-      if (mounted) setCustomers(page.items.map((c) => ({ value: c.id, label: c.name, description: c.customerNumber })))
-    }).catch(() => {})
-    void searchDrivers({ isActive: true, page: 1, pageSize: 200 }).then((page) => {
-      if (mounted) setDrivers(page.items.map((d) => ({ value: d.id, label: d.fullName, description: d.driverNumber })))
-    }).catch(() => {})
     void getVehicleOptions().then((options) => {
       if (mounted) setVehicles(options.map((v) => ({ value: v.id, label: v.internalNumber, description: v.licensePlate })))
     }).catch(() => {})
@@ -81,7 +78,9 @@ export function KpiFilterBar({ filter, onChange }: KpiFilterBarProps) {
           placeholder={t('kpiReports.filter.allCustomers')}
           value={filter.customerId}
           onChange={(value) => onChange({ ...filter, customerId: value })}
-          options={customers}
+          options={[]}
+          selectedLabel={customerLabel}
+          onSearch={searchActiveCustomerOptions}
         />
       </div>
       <div className="kpi-filter-select">
@@ -90,7 +89,9 @@ export function KpiFilterBar({ filter, onChange }: KpiFilterBarProps) {
           placeholder={t('kpiReports.filter.allDrivers')}
           value={filter.driverId}
           onChange={(value) => onChange({ ...filter, driverId: value })}
-          options={drivers}
+          options={[]}
+          selectedLabel={driverLabel}
+          onSearch={searchActiveDriverOptions}
         />
       </div>
       <div className="kpi-filter-select">

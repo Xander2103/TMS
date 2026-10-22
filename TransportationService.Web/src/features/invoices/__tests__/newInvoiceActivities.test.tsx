@@ -67,7 +67,7 @@ async function chooseCustomer() {
   // B19: the customer is a searchable picker — open it, then pick the option.
   const picker = await screen.findByRole('combobox', { name: /Klant/ })
   await user.click(picker)
-  await user.click(await screen.findByRole('option', { name: 'Haven BV (K-0001)' }))
+  await user.click(await screen.findByRole('option', { name: /Haven BV/ }))
   return user
 }
 

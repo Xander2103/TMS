@@ -13,8 +13,10 @@ const customersState = vi.hoisted(() => ({
 }))
 vi.mock('../../customers/api/customersApi', () => ({
   searchCustomers: vi.fn(() =>
-    Promise.resolve({ items: customersState.items, totalCount: customersState.items.length, page: 1, pageSize: 500 }),
+    Promise.resolve({ items: customersState.items, totalCount: customersState.items.length, page: 1, pageSize: 25 }),
   ),
+  // PERF-H3: the scope customer's name is resolved once from its detail (the picker is server-searched).
+  getCustomer: vi.fn((id: string) => Promise.resolve({ id, name: customersState.items.find((c) => c.id === id)?.name ?? '' })),
 }))
 
 const api = vi.hoisted(() => ({
@@ -46,7 +48,7 @@ function customerRow(overrides: Partial<CustomerMessageTemplate> = {}): Customer
 async function selectCustomerScope(user: ReturnType<typeof userEvent.setup>) {
   const combobox = await screen.findByRole('combobox', { name: 'Klantweergave' })
   await user.click(combobox)
-  await user.click(await screen.findByRole('option', { name: 'KL-1 — Haven BV' }))
+  await user.click(await screen.findByRole('option', { name: /Haven BV/ }))
 }
 
 class FakeApiError extends Error {

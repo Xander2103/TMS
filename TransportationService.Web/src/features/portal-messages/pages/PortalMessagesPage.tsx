@@ -12,8 +12,8 @@ import { useToast } from '../../../components/ui/toastContext'
 import { localizeApiError } from '../../../api/problemDetails'
 import { useAuth } from '../../auth/authContextValue'
 import { useLocale, type TranslateFn } from '../../../i18n/localeContext'
-import { searchCustomers } from '../../customers/api/customersApi'
-import type { CustomerListItem } from '../../customers/types'
+import { MultiSelect, type MultiSelectOption } from '../../../components/ui/MultiSelect'
+import { searchActiveCustomerOptions } from '../../customers/api/customerOptions'
 import {
   cancelPortalMessage,
   getPortalMessageDeliveryStatus,
@@ -196,7 +196,10 @@ export function PortalMessagesPage() {
 
 function ComposeMessageDialog({ onClose }: { onClose: (sent: boolean) => void }) {
   const { t } = useLocale()
-  const [customers, setCustomers] = useState<CustomerListItem[]>([])
+  // PERF-H3: recipients are searched server-side (name, number, VAT); the first 500 customers
+  // used to be listed as checkboxes and every later one was unreachable. Labels of every hit are
+  // kept so a chosen chip keeps its name after the results change.
+  const [customerLabels, setCustomerLabels] = useState<Record<string, string>>({})
   const [selectedCustomers, setSelectedCustomers] = useState<Set<string>>(new Set())
   const [titleNl, setTitleNl] = useState('')
   const [bodyNl, setBodyNl] = useState('')
@@ -213,20 +216,14 @@ function ComposeMessageDialog({ onClose }: { onClose: (sent: boolean) => void })
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
-  useEffect(() => {
-    searchCustomers({ page: 1, pageSize: 500, isActive: true })
-      .then((result) => setCustomers(result.items))
-      .catch(() => setError(t('portalMessages.compose.customersLoadFailed')))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  function toggleCustomer(id: string) {
-    setSelectedCustomers((current) => {
-      const next = new Set(current)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
+  async function searchRecipients(query: string, signal: AbortSignal): Promise<MultiSelectOption[]> {
+    const hits = await searchActiveCustomerOptions(query, signal)
+    setCustomerLabels((current) => {
+      const next = { ...current }
+      for (const hit of hits) next[hit.value] = hit.label
       return next
     })
+    return hits.map((hit) => ({ value: hit.value, label: hit.label, description: hit.subtitle }))
   }
 
   async function handleSubmit(event: FormEvent) {
@@ -310,19 +307,16 @@ function ComposeMessageDialog({ onClose }: { onClose: (sent: boolean) => void })
           htmlFor="pm-customers"
           hint={t('portalMessages.compose.customersHint')}
         >
-          <div id="pm-customers" className="pm-customer-list">
-            {customers.map((customer) => (
-              <label key={customer.id} className="customer-form-checkbox">
-                <input
-                  type="checkbox"
-                  checked={selectedCustomers.has(customer.id)}
-                  onChange={() => toggleCustomer(customer.id)}
-                  disabled={saving}
-                />
-                {customer.name}
-              </label>
-            ))}
-          </div>
+          <MultiSelect
+            id="pm-customers"
+            label={t('portalMessages.compose.customers')}
+            values={[...selectedCustomers]}
+            onChange={(ids) => setSelectedCustomers(new Set(ids))}
+            onSearch={searchRecipients}
+            selectedLabels={customerLabels}
+            placeholder={t('portalMessages.compose.customersSearchPlaceholder')}
+            disabled={saving}
+          />
         </FormField>
         {selectedCustomers.size > 1 && (
           <p className="pm-bulk-warning" role="note">

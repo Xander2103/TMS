@@ -30,7 +30,7 @@ function row(overrides: Partial<CustomerNotificationOverride> = {}): CustomerNot
 async function selectCustomer(user: ReturnType<typeof userEvent.setup>) {
   const combobox = await screen.findByRole('combobox', { name: 'Klant' })
   await user.click(combobox)
-  await user.click(await screen.findByRole('option', { name: 'KL-1 — Haven BV' }))
+  await user.click(await screen.findByRole('option', { name: /Haven BV/ }))
 }
 
 describe('CustomerOverridesTab', () => {

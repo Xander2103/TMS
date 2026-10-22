@@ -196,7 +196,12 @@ describe('Dossier activity planning', () => {
     auth.permissions = new Set(['dossiers.view', 'dossiers.manage', 'orders.edit', 'planning.view', 'planning.create', 'planning.edit'])
     window.HTMLElement.prototype.scrollIntoView = vi.fn()
     orders.get.mockResolvedValue(orderDetail({ id: 'o-6', orderNumber: '0006' }))
-    driversApi.searchDrivers.mockResolvedValue({ items: DRIVERS, totalCount: DRIVERS.length, page: 1, pageSize: 200 })
+    driversApi.searchDrivers.mockResolvedValue({ items: DRIVERS, totalCount: DRIVERS.length, page: 1, pageSize: 25 })
+    // PERF-H3: the picker searches server-side and reads the fixed vehicle from the driver detail.
+    driversApi.getDriver.mockImplementation(async (id: string) => {
+      const driver = DRIVERS.find((d) => d.id === id)
+      return { id, fixedVehicle: driver?.fixedVehicleId ? { id: driver.fixedVehicleId, label: `${driver.fixedVehicleNumber} (${driver.fixedVehiclePlate})` } : null }
+    })
     vehiclesApi.getVehicleOptions.mockResolvedValue(VEHICLES)
     vehiclesApi.getVehicle.mockRejectedValue(new Error('not used'))
     trailersApi.getTrailerOptions.mockResolvedValue(TRAILERS)
@@ -214,11 +219,11 @@ describe('Dossier activity planning', () => {
     const planning = await openPlanning(user, '0006')
     expect(planning.getByText(/Nog niet op een rit/)).toBeInTheDocument()
 
-    // Picking a driver proposes the fixed vehicle from the driver list — and says it is a proposal.
+    // Picking a driver proposes the fixed vehicle from the driver detail — and says it is a proposal.
     await pick(user, combobox('Chauffeur'), 'peeters', /Jan Peeters/)
     await waitFor(() => expect(combobox('Voertuig').value).toBe('V-101 (1-ABC-123)'))
     expect(planning.getByText('Voorgesteld op basis van de vaste chauffeur-voertuigkoppeling')).toBeInTheDocument()
-    expect(driversApi.getDriver).not.toHaveBeenCalled()
+    expect(driversApi.getDriver).toHaveBeenCalledWith('d-jan')
 
     await user.click(planning.getByRole('button', { name: 'Rit aanmaken en toewijzen' }))
     await waitFor(() => expect(api.planDossierActivity).toHaveBeenCalledTimes(1))

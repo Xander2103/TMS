@@ -96,13 +96,14 @@ describe('PortalMessagesPage', () => {
     render(<PortalMessagesPage />)
 
     await user.click(await screen.findByRole('button', { name: 'Nieuw bericht' }))
-    await screen.findByText('Haven BV')
 
     await user.type(screen.getByLabelText(/^Titel \(NL\)/), 'Nieuwe openingsuren')
     await user.type(screen.getByLabelText(/^Inhoud \(NL\)/), 'Vanaf maandag om 7u.')
     await user.type(screen.getByLabelText(/^Titel \(FR\)/), 'Nouveaux horaires')
     await user.type(screen.getByLabelText(/^Inhoud \(FR\)/), 'A partir de lundi.')
-    await user.click(screen.getByLabelText('Haven BV'))
+    // PERF-H3: recipients are searched server-side in a multi-select (no 500-row checkbox list).
+    await user.click(screen.getByRole('combobox', { name: /Klanten/ }))
+    await user.click(await screen.findByRole('option', { name: /Haven BV/ }))
     await user.selectOptions(screen.getByLabelText(/^Weergavemodus/), 'DashboardBanner')
     await user.click(screen.getByRole('button', { name: 'Verzenden' }))
 
@@ -131,8 +132,9 @@ describe('PortalMessagesPage', () => {
     render(<PortalMessagesPage />)
 
     await user.click(await screen.findByRole('button', { name: 'Nieuw bericht' }))
-    await user.click(await screen.findByLabelText('Haven BV'))
-    await user.click(screen.getByLabelText('Trans NV'))
+    await user.click(screen.getByRole('combobox', { name: /Klanten/ }))
+    await user.click(await screen.findByRole('option', { name: /Haven BV/ }))
+    await user.click(screen.getByRole('option', { name: /Trans NV/ }))
 
     expect(screen.getByText(/Let op: u verstuurt naar meerdere klanten/)).toBeInTheDocument()
   })

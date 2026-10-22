@@ -10,7 +10,7 @@ import { useLocale } from '../../../i18n/localeContext'
 import { useAuth } from '../../auth/authContextValue'
 import { ConflictDialog } from '../../planning-center/components/ConflictDialog'
 import type { PlanningRejection } from '../../planning-center/types'
-import { buildDriverOptions, buildVehicleOptions, joinParts } from '../../planning/resourceOptions'
+import { buildVehicleOptions, driverOptionSearch, joinParts } from '../../planning/resourceOptions'
 import { CONFLICT_SEVERITY_META, type PlanningConflict } from '../../planning/types'
 import { usePlanningResources } from '../../planning/usePlanningResources'
 import {
@@ -69,8 +69,9 @@ export function StandaloneExecutionBlock({
   const [driverId, setDriverId] = useState(activity.driverId ?? '')
   const [vehicleId, setVehicleId] = useState(activity.vehicleId ?? '')
   const assignEditable = canAssign && !resolved
-  const { drivers, vehicles, status: listStatus } = usePlanningResources(assignEditable, activity.plannedDate)
-  const driverOptions = useMemo(() => buildDriverOptions(drivers, t), [drivers, t])
+  const { vehicles, status: listStatus } = usePlanningResources(assignEditable, activity.plannedDate)
+  // PERF-H3: drivers are searched server-side per keystroke, availability judged on the planned day.
+  const searchDriversForDay = useMemo(() => driverOptionSearch(activity.plannedDate, t), [activity.plannedDate, t])
   const vehicleOptions = useMemo(() => buildVehicleOptions(vehicles, t), [vehicles, t])
   const assignDirty = driverId !== (activity.driverId ?? '') || vehicleId !== (activity.vehicleId ?? '')
 
@@ -172,11 +173,10 @@ export function StandaloneExecutionBlock({
                 id="ae-driver"
                 value={driverId || null}
                 onChange={(next) => setDriverId(next ?? '')}
-                options={driverOptions}
+                options={[]}
+                onSearch={searchDriversForDay}
                 selectedLabel={driverId === activity.driverId ? (activity.driverName ?? undefined) : undefined}
                 placeholder={t('planning.detail.driverSearchPlaceholder')}
-                isLoading={listStatus.drivers === 'loading'}
-                errorMessage={listStatus.drivers === 'error' ? t('planning.detail.driversLoadError') : null}
                 disabled={busy}
               />
             ) : (

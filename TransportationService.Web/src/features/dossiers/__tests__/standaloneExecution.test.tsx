@@ -32,11 +32,21 @@ vi.mock('../api/dossiersApi', () => api)
 
 vi.mock('../../planning/usePlanningResources', () => ({
   usePlanningResources: () => ({
-    drivers: [{ id: 'd-jan', driverNumber: 'CH-001', fullName: 'Jan Peeters', isActive: true, isBlocked: false }],
     vehicles: [{ id: 'v-kr', internalNumber: 'KR-1', licensePlate: '1-KRA-001' }],
     trailers: [],
-    status: { drivers: 'ready', vehicles: 'ready', trailers: 'ready' },
+    status: { vehicles: 'ready', trailers: 'ready' },
   }),
+}))
+// PERF-H3: the driver picker searches the server per keystroke instead of a preloaded list.
+vi.mock('../../drivers/api/driversApi', () => ({
+  searchDrivers: () =>
+    Promise.resolve({
+      items: [{ id: 'd-jan', driverNumber: 'CH-001', fullName: 'Jan Peeters', employeeNumber: 'P-1', categoryName: null, availabilityStatus: 'Available', isActive: true, isBlocked: false }],
+      totalCount: 1,
+      page: 1,
+      pageSize: 25,
+    }),
+  getDriver: () => Promise.resolve({ id: 'd-jan', fixedVehicle: null }),
 }))
 
 function crane(overrides: Partial<DossierActivity> = {}): DossierActivity {

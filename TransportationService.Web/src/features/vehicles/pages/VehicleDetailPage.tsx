@@ -28,7 +28,7 @@ import { FleetKpiPanel } from '../../fleet-kpi/FleetKpiPanel'
 import { TachographPanel } from '../../fleet-compliance/TachographPanel'
 import { LeasingPanel } from '../../fleet-compliance/LeasingPanel'
 import { InspectionsPanel } from '../../inspections/components/InspectionsPanel'
-import { searchDrivers } from '../../drivers/api/driversApi'
+import { searchActiveDriverOptions } from '../../drivers/api/driverOptions'
 import { deleteVehicle, getVehicle, setVehicleActive, setVehicleDriver, updateVehicle } from '../api/vehiclesApi'
 import { VehicleForm } from '../components/VehicleForm'
 import {
@@ -229,16 +229,6 @@ export function VehicleDetailPage() {
     }
   }
 
-  async function loadDriverOptions() {
-    const drivers = await searchDrivers({ isActive: true, page: 1, pageSize: 200 })
-    return drivers.items.map((d) => ({
-      value: d.id,
-      label: d.fullName,
-      description: d.driverNumber,
-      keywords: `${d.driverNumber} ${d.employeeNumber}`,
-    }))
-  }
-
   if (loading) return <p className="placeholder-text">{t('vehicles.detail.loading')}</p>
   if (loadError || !vehicle) {
     return (
@@ -402,7 +392,7 @@ export function VehicleDetailPage() {
                       assigned={vehicle.fixedDriverId && vehicle.fixedDriverName ? { label: vehicle.fixedDriverName, linkTo: `/drivers/${vehicle.fixedDriverId}` } : null}
                       canEdit={canEdit}
                       pickerLabel={t('vehicles.detail.pickerDriver')}
-                      loadOptions={loadDriverOptions}
+                      searchOptions={searchActiveDriverOptions}
                       assign={async (driverId, replaceExisting) => {
                         await setVehicleDriver(vehicle.id, 'fixed-driver', driverId, replaceExisting)
                       }}
@@ -414,7 +404,7 @@ export function VehicleDetailPage() {
                       assigned={vehicle.currentDriverId && vehicle.currentDriverName ? { label: vehicle.currentDriverName, linkTo: `/drivers/${vehicle.currentDriverId}` } : null}
                       canEdit={canEdit}
                       pickerLabel={t('vehicles.detail.pickerDriver')}
-                      loadOptions={loadDriverOptions}
+                      searchOptions={searchActiveDriverOptions}
                       assign={async (driverId, replaceExisting) => {
                         await setVehicleDriver(vehicle.id, 'current-driver', driverId, replaceExisting)
                       }}

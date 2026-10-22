@@ -13,7 +13,7 @@ import { ApiError } from '../../../api/apiClient'
 import { usePagedQuery } from '../../../hooks/usePagedQuery'
 import { useLocale } from '../../../i18n/localeContext'
 import { useAuth } from '../../auth/authContextValue'
-import { searchCustomers } from '../../customers/api/customersApi'
+import { searchActiveCustomerOptions } from '../../customers/api/customerOptions'
 import {
   analyzeOrderImportFile,
   getOrderImportBatch,
@@ -104,7 +104,6 @@ export function OrderImportsPage() {
 
   const [profiles, setProfiles] = useState<OrderImportProfile[]>([])
   const [profileId, setProfileId] = useState('')
-  const [customerOptions, setCustomerOptions] = useState<{ value: string; label: string }[]>([])
   const [customerId, setCustomerId] = useState<string | null>(null)
   const [file, setFile] = useState<File | null>(null)
   const [fileInputKey, setFileInputKey] = useState(0)
@@ -122,13 +121,6 @@ export function OrderImportsPage() {
         if (!mounted) return
         setProfiles(data)
         if (data.length > 0) setProfileId((current) => current || data[0].id)
-      })
-      .catch(() => {})
-    searchCustomers({ isActive: true, page: 1, pageSize: 200 })
-      .then((result) => {
-        if (mounted) {
-          setCustomerOptions(result.items.map((c) => ({ value: c.id, label: c.name, keywords: c.customerNumber })))
-        }
       })
       .catch(() => {})
     return () => {
@@ -335,7 +327,9 @@ export function OrderImportsPage() {
                         setCustomerId(value)
                         setProfileMatch(null)
                       }}
-                      options={customerOptions}
+                      // PERF-H3: searched server-side (name, number, VAT) instead of the first 200 customers.
+                      options={[]}
+                      onSearch={searchActiveCustomerOptions}
                       placeholder={t('orderImports.form.customerSearchPlaceholder')}
                       disabled={uploading}
                     />

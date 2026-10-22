@@ -32,6 +32,7 @@ import { useUnitTypes } from '../../master-data/hooks/useUnitTypes'
 import { LocationQuickCreateDialog } from '../../locations/components/LocationQuickCreateDialog'
 import { CustomerQuickCreateDialog } from '../../customers/components/CustomerQuickCreateDialog'
 import type { CustomerDetail } from '../../customers/types'
+import { searchActiveCustomerOptions } from '../../customers/api/customerOptions'
 import type { LocationOption } from '../../locations/types'
 import {
   applyUnitToCargoRow,
@@ -126,17 +127,30 @@ export function NewDossierPage() {
   const [customerQuickCreate, setCustomerQuickCreate] = useState<{ name: string; resolve: (created: CustomerDetail | null) => void } | null>(null)
   const [createdCustomers, setCreatedCustomers] = useState<CustomerDetail[]>([])
 
-  const { customers, serviceOptions, unitMaster, locationHours, customerConfig } = useOrderFormData(customerId ?? '', stops)
+  const { serviceOptions, unitMaster, locationHours, customerConfig, customerRequirements } = useOrderFormData(customerId ?? '', stops)
   const units = useUnitTypes()
   const preferredUnits = customerConfig?.preferredUnits ?? []
-  // Customers created from this page come first (the one-shot list of 200 never re-fetches).
+  // PERF-H3: the picker searches the server per keystroke (name, customer number, VAT); the
+  // one-shot list of 200 made every later customer unpickable. Customers created from this page
+  // are the only locally known options (so a brand-new one is named before any search).
   const customerOptions = useMemo<SearchableSelectOption[]>(
-    () => [
-      // M2: the customer number is shown and searchable ("KL-0005" finds the customer).
-      ...createdCustomers.filter((created) => !customers.some((c) => c.id === created.id)).map((c) => ({ value: c.id, label: c.name, meta: c.customerNumber, keywords: c.customerNumber ?? undefined })),
-      ...customers.map((c) => ({ value: c.id, label: c.name, meta: c.customerNumber ?? undefined, keywords: c.customerNumber ?? undefined })),
-    ],
-    [customers, createdCustomers],
+    () => createdCustomers.map((c) => ({ value: c.id, label: c.name, meta: c.customerNumber, keywords: c.customerNumber ?? undefined })),
+    [createdCustomers],
+  )
+  // A customer created a moment ago is listed with the server's hits even before the search index
+  // knows it (and never twice).
+  const searchCustomersWithCreated = useMemo(
+    () => async (query: string, signal: AbortSignal): Promise<SearchableSelectOption[]> => {
+      const hits = await searchActiveCustomerOptions(query, signal)
+      const needle = query.trim().toLowerCase()
+      const created = customerOptions.filter(
+        (option) =>
+          !hits.some((hit) => hit.value === option.value) &&
+          (!needle || `${option.label} ${option.keywords ?? ''}`.toLowerCase().includes(needle)),
+      )
+      return [...created, ...hits]
+    },
+    [customerOptions],
   )
   const canCreateCustomers = hasPermission('customers.create')
   const selectedCustomerIsNew = customerId !== null && createdCustomers.some((c) => c.id === customerId)
@@ -576,7 +590,9 @@ export function NewDossierPage() {
   const activeIndex = sectionIds.indexOf(activeSection)
   const prevSection = activeIndex > 0 ? sectionIds[activeIndex - 1] : null
   const nextSection = activeIndex < sectionIds.length - 1 ? sectionIds[activeIndex + 1] : null
-  const selectedCustomerName = customerOptions.find((option) => option.value === customerId)?.label ?? null
+  const selectedCustomerName =
+    customerOptions.find((option) => option.value === customerId)?.label
+    ?? (customerRequirements && customerRequirements.id === customerId ? customerRequirements.name : null)
   const submittedStopsForReview = onSite ? siteStops.filter((stop) => !isEmptyStopRow(stop)) : stops.filter((stop) => !isEmptyStopRow(stop))
   const weightTotals = cargoWeightTotalsFromRows(cargoItems)
   const reviewWarnings: string[] = []
@@ -655,6 +671,8 @@ export function NewDossierPage() {
                 value={customerId}
                 onChange={setCustomerId}
                 options={customerOptions}
+                onSearch={searchCustomersWithCreated}
+                selectedLabel={selectedCustomerName ?? undefined}
                 placeholder={t('dossiers.new.customerPlaceholder')}
                 emptyMessage={t('dossiers.new.noCustomerFound')}
                 disabled={busy}

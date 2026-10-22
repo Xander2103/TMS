@@ -24,7 +24,7 @@ import { getFieldError, localizeApiError, describeApiError, type FieldErrors } f
 import { useAuth } from '../../auth/authContextValue'
 import { useLocale } from '../../../i18n/localeContext'
 import { AuditHistoryPanel } from '../../auditing/components/AuditHistoryPanel'
-import { searchCustomers } from '../../customers/api/customersApi'
+import { searchCustomerOptions } from '../../customers/api/customerOptions'
 import { searchTransportOrders } from '../../transport-orders/api/transportOrdersApi'
 import { getVehicleOptions } from '../../vehicles/api/vehiclesApi'
 import { listDossiers } from '../../dossiers/api/dossiersApi'
@@ -244,7 +244,6 @@ export function IncidentDetailPage() {
   const [editing, setEditing] = useState<EditSection | null>(null)
 
   const [userOptions, setUserOptions] = useState<SearchableSelectOption[]>([])
-  const [customerOptions, setCustomerOptions] = useState<SearchableSelectOption[]>([])
   const [dossierOptions, setDossierOptions] = useState<SearchableSelectOption[]>([])
   const [orderOptions, setOrderOptions] = useState<SearchableSelectOption[]>([])
   const [vehicleOptions, setVehicleOptions] = useState<SearchableSelectOption[]>([])
@@ -302,9 +301,6 @@ export function IncidentDetailPage() {
 
   useEffect(() => {
     if (!linksRequested) return
-    searchCustomers({ page: 1, pageSize: 200 })
-      .then((result) => setCustomerOptions(result.items.map((c) => ({ value: c.id, label: c.name }))))
-      .catch(() => setCustomerOptions([]))
     listDossiers()
       .then((all) => setDossierOptions(all.map((d) => ({ value: d.id, label: d.dossierNumber, description: d.title }))))
       .catch(() => setDossierOptions([]))
@@ -546,7 +542,9 @@ export function IncidentDetailPage() {
           id="inc-customer"
           value={form.customerId}
           onChange={(value) => set('customerId', value)}
-          options={withLinked(customerOptions, linkedOptions.customer)}
+          // PERF-H3: searched server-side (name, number, VAT); the linked customer keeps its name.
+          options={linkedOptions.customer}
+          onSearch={searchCustomerOptions}
           disabled={busy}
         />
       </FormField>

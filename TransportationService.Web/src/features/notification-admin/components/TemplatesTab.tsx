@@ -4,12 +4,12 @@ import { Button } from '../../../components/ui/Button'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { FormField } from '../../../components/ui/FormField'
 import { Modal } from '../../../components/ui/Modal'
-import { SearchableSelect, type SearchableSelectOption } from '../../../components/ui/SearchableSelect'
+import { SearchableSelect } from '../../../components/ui/SearchableSelect'
 import { useToast } from '../../../components/ui/toastContext'
 import { describeApiError, getFieldError, localizeApiError, type FieldErrors } from '../../../api/problemDetails'
 import { useLocale } from '../../../i18n/localeContext'
-import { searchCustomers } from '../../customers/api/customersApi'
-import type { CustomerListItem } from '../../customers/types'
+import { resolveCustomerLabel, searchCustomerOptions } from '../../customers/api/customerOptions'
+import { useResolvedLabel } from '../../../hooks/useResolvedLabel'
 import {
   deleteMessageTemplate,
   getMessageTemplateKinds,
@@ -98,7 +98,6 @@ export function TemplatesTab({ canManage }: TemplatesTabProps) {
   const [templates, setTemplates] = useState<MessageTemplate[] | null>(null)
   const [customerTemplates, setCustomerTemplates] = useState<CustomerMessageTemplate[] | null>(null)
   const [scopeCustomerId, setScopeCustomerId] = useState<string | null>(null)
-  const [customers, setCustomers] = useState<CustomerListItem[]>([])
   const [kinds, setKinds] = useState<string[]>([])
   const [loadError, setLoadError] = useState<string | null>(null)
 
@@ -141,9 +140,6 @@ export function TemplatesTab({ canManage }: TemplatesTabProps) {
   useEffect(() => {
     if (!canManage) return
     getMessageTemplateKinds().then(setKinds).catch(() => setKinds([]))
-    searchCustomers({ page: 1, pageSize: 500 })
-      .then((result) => setCustomers(result.items))
-      .catch(() => setCustomers([]))
   }, [canManage])
 
   useEffect(() => {
@@ -154,8 +150,8 @@ export function TemplatesTab({ canManage }: TemplatesTabProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draft?.kind])
 
-  const customerOptions: SearchableSelectOption[] = customers.map((c) => ({ value: c.id, label: `${c.customerNumber} — ${c.name}` }))
-  const scopeCustomerName = customers.find((c) => c.id === scopeCustomerId)?.name ?? ''
+  // PERF-H3: the scope customer is searched server-side; its name is resolved once for the badges.
+  const scopeCustomerName = useResolvedLabel(scopeCustomerId, resolveCustomerLabel) ?? ''
 
   function resetDraftState() {
     setPreview(null)
@@ -291,7 +287,9 @@ export function TemplatesTab({ canManage }: TemplatesTabProps) {
             ariaLabel={t('notificationAdmin.templates.scopeAria')}
             value={scopeCustomerId}
             onChange={setScopeCustomerId}
-            options={customerOptions}
+            options={[]}
+            selectedLabel={scopeCustomerName || undefined}
+            onSearch={searchCustomerOptions}
             placeholder={t('notificationAdmin.templates.scopePlaceholder')}
           />
         </div>
@@ -488,7 +486,9 @@ export function TemplatesTab({ canManage }: TemplatesTabProps) {
                 id="nat-customer"
                 value={draft.customerId}
                 onChange={(value) => setDraft({ ...draft, customerId: value })}
-                options={customerOptions}
+                options={[]}
+                selectedLabel={draft.customerId && draft.customerId === scopeCustomerId ? scopeCustomerName || undefined : undefined}
+                onSearch={searchCustomerOptions}
                 placeholder={t('notificationAdmin.templates.form.customerPlaceholder')}
               />
             </FormField>

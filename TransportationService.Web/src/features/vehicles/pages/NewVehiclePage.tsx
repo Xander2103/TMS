@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { PageHeader } from '../../../components/layout/PageHeader'
 import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
@@ -6,8 +6,6 @@ import { useToast } from '../../../components/ui/toastContext'
 import { ApiError } from '../../../api/apiClient'
 import { localizeApiError } from '../../../api/problemDetails'
 import { useLocale } from '../../../i18n/localeContext'
-import { searchDrivers } from '../../drivers/api/driversApi'
-import type { DriverListItem } from '../../drivers/types'
 import { PreparedFleetDocumentsEditor } from '../../fleet-documents/components/PreparedFleetDocumentsEditor'
 import { FleetCreateFollowUpDialog } from '../../fleet-documents/components/FleetCreateFollowUpDialog'
 import {
@@ -58,27 +56,12 @@ const EMPTY: CreateVehicleInput = {
 export function NewVehiclePage() {
   const navigate = useNavigate()
   const { t } = useLocale()
-  const { showSuccess, showError } = useToast()
-  const [drivers, setDrivers] = useState<DriverListItem[]>([])
+  const { showSuccess } = useToast()
   const [preparedDocs, setPreparedDocs] = useState<PreparedFleetDocument[]>([])
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [followUp, setFollowUp] = useState<{ vehicleId: string; label: string; results: FleetFollowUpResult[] } | null>(null)
   const [retrying, setRetrying] = useState(false)
-
-  useEffect(() => {
-    let mounted = true
-    searchDrivers({ isActive: true, page: 1, pageSize: 200 })
-      .then((result) => {
-        if (mounted) setDrivers(result.items)
-      })
-      .catch(() => {
-        if (mounted) showError(t('vehicles.new.driversLoadFailed'))
-      })
-    return () => {
-      mounted = false
-    }
-  }, [showError, t])
 
   async function handleSubmit(values: CreateVehicleInput) {
     setError(null)
@@ -148,7 +131,6 @@ export function NewVehiclePage() {
         submitError={error}
         onSubmit={handleSubmit}
         onCancel={() => navigate('/vehicles')}
-        drivers={drivers}
         documentsSection={<PreparedFleetDocumentsEditor value={preparedDocs} onChange={setPreparedDocs} />}
       />
       {followUp && (

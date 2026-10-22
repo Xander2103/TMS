@@ -28,8 +28,13 @@ vi.mock('../../../components/ui/toastContext', () => ({
 
 const createCustomer = vi.hoisted(() => vi.fn())
 vi.mock('../../customers/api/customersApi', () => ({
-  searchCustomers: () => Promise.resolve({ items: [{ id: 'c-1', name: 'Van Caudenberg BV' }], totalCount: 1 }),
-  getCustomer: () => Promise.resolve({ id: 'c-1', isBlocked: false }),
+  // PERF-H3: the picker searches server-side; the mock answers like the API (filtered on the query).
+  searchCustomers: ({ search }: { search?: string }) => {
+    const all = [{ id: 'c-1', name: 'Van Caudenberg BV', customerNumber: 'KL-0001' }]
+    const items = all.filter((c) => !search || c.name.toLowerCase().includes(search.toLowerCase()))
+    return Promise.resolve({ items, totalCount: items.length, page: 1, pageSize: 25 })
+  },
+  getCustomer: () => Promise.resolve({ id: 'c-1', name: 'Van Caudenberg BV', customerNumber: 'KL-0001', isActive: true, isBlocked: false }),
   createCustomer,
   updateCustomer: vi.fn(),
   deleteCustomer: vi.fn(),
@@ -618,9 +623,10 @@ describe('NewDossierPage — + Nieuwe klant', () => {
     renderPage()
     await user.type(await screen.findByRole('combobox', { name: 'Klant' }), 'Quick Test')
 
-    // With nothing matching, the create row IS the empty state (the only row offered).
+    // With nothing matching, the create row IS the empty state (the only row offered) — once the
+    // server-side search for the typed text has answered (the previous hits stay until then).
     const createRow = await screen.findByRole('option', { name: '+ "Quick Test" als nieuwe klant toevoegen' })
-    expect(within(screen.getByRole('listbox')).getAllByRole('option')).toHaveLength(1)
+    await waitFor(() => expect(within(screen.getByRole('listbox')).getAllByRole('option')).toHaveLength(1))
     await user.click(createRow)
     const dialog = await screen.findByRole('dialog', { name: 'Nieuwe klant' })
     // The typed search becomes the name; nothing else is required.

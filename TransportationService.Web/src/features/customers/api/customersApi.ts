@@ -29,7 +29,7 @@ export interface SearchCustomersParams {
   dir?: 'asc' | 'desc' | ''
 }
 
-export function searchCustomers(params: SearchCustomersParams): Promise<PagedResult<CustomerListItem>> {
+export function searchCustomers(params: SearchCustomersParams, signal?: AbortSignal): Promise<PagedResult<CustomerListItem>> {
   const query = new URLSearchParams()
   if (params.search) query.set('search', params.search)
   if (params.isActive !== undefined) query.set('isActive', String(params.isActive))
@@ -38,7 +38,7 @@ export function searchCustomers(params: SearchCustomersParams): Promise<PagedRes
   if (params.dir) query.set('dir', params.dir)
   query.set('page', String(params.page))
   query.set('pageSize', String(params.pageSize))
-  return apiClient.getJson<PagedResult<CustomerListItem>>(`/api/customers?${query.toString()}`)
+  return apiClient.getJson<PagedResult<CustomerListItem>>(`/api/customers?${query.toString()}`, { signal })
 }
 
 /** The coherent VAT-treatment catalog (labels, rates, legal texts); backend is authoritative. */

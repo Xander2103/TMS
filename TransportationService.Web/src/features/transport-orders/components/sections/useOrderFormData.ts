@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { UnitOptionItem } from '../UnitSelect'
-import { getCustomer, searchCustomers } from '../../../customers/api/customersApi'
-import type { CustomerDetail, CustomerListItem } from '../../../customers/types'
+import { getCustomer } from '../../../customers/api/customersApi'
+import type { CustomerDetail } from '../../../customers/types'
 import { getLegalEntityOptions } from '../../../legal-entities/api/legalEntitiesApi'
 import type { LegalEntityOption } from '../../../legal-entities/types'
 import { getLocation } from '../../../locations/api/locationsApi'
@@ -28,7 +28,6 @@ import type { OrderFormValues, StopFormRow } from './orderFormState'
  * Extracted from `TransportOrderForm.tsx` (Wave 1 phase 6) — pure data loading, no form state.
  */
 export function useOrderFormData(customerId: string, stops: StopFormRow[]) {
-  const [customers, setCustomers] = useState<CustomerListItem[]>([])
   const [legalEntities, setLegalEntities] = useState<LegalEntityOption[]>([])
   const [serviceOptions, setServiceOptions] = useState<ServiceOption[]>([])
   const [unitMaster, setUnitMaster] = useState<UnitTypeMaster[]>([])
@@ -43,11 +42,6 @@ export function useOrderFormData(customerId: string, stops: StopFormRow[]) {
 
   useEffect(() => {
     let mounted = true
-    searchCustomers({ isActive: true, page: 1, pageSize: 200 })
-      .then((data) => {
-        if (mounted) setCustomers(data.items)
-      })
-      .catch(() => {})
     // Facturerende entiteit is optioneel; bij laadfout of ontbrekende rechten blijft alleen "klantstandaard".
     getLegalEntityOptions()
       .then((data) => {
@@ -114,7 +108,6 @@ export function useOrderFormData(customerId: string, stops: StopFormRow[]) {
   }, [stops])
 
   return {
-    customers,
     legalEntities,
     serviceOptions,
     unitMaster,

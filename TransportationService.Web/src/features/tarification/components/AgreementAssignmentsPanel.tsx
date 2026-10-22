@@ -6,11 +6,11 @@ import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { EmptyState } from '../../../components/ui/EmptyState'
 import { FormField } from '../../../components/ui/FormField'
 import { Modal } from '../../../components/ui/Modal'
-import { SearchableSelect, type SearchableSelectOption } from '../../../components/ui/SearchableSelect'
+import { SearchableSelect } from '../../../components/ui/SearchableSelect'
 import { useToast } from '../../../components/ui/toastContext'
 import { localizeApiError } from '../../../api/problemDetails'
 import { useLocale } from '../../../i18n/localeContext'
-import { searchCustomers } from '../../customers/api/customersApi'
+import { searchActiveCustomerOptions } from '../../customers/api/customerOptions'
 import {
   getAgreementAssignments,
   saveAgreementAssignments,
@@ -49,7 +49,6 @@ export function AgreementAssignmentsPanel({ agreementId, isShared, canManage }: 
   const { t } = useLocale()
   const { showSuccess, showError } = useToast()
   const [assignments, setAssignments] = useState<PricingAssignment[] | null>(null)
-  const [customerOptions, setCustomerOptions] = useState<SearchableSelectOption[]>([])
   const [draft, setDraft] = useState<AssignmentDraft | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<PricingAssignment | null>(null)
   const [busy, setBusy] = useState(false)
@@ -65,13 +64,6 @@ export function AgreementAssignmentsPanel({ agreementId, isShared, canManage }: 
   useEffect(() => {
     reload()
   }, [reload])
-
-  useEffect(() => {
-    if (!isShared) return
-    searchCustomers({ isActive: true, page: 1, pageSize: 200 })
-      .then((result) => setCustomerOptions(result.items.map((c) => ({ value: c.id, label: c.name }))))
-      .catch(() => setCustomerOptions([]))
-  }, [isShared])
 
   if (!isShared) {
     return <EmptyState message={t('tarification.assignments.notShared')} />
@@ -220,7 +212,9 @@ export function AgreementAssignmentsPanel({ agreementId, isShared, canManage }: 
                 id="assignment-customer"
                 value={draft.customerId || null}
                 onChange={(v) => setDraft((d) => (d ? { ...d, customerId: v ?? '' } : d))}
-                options={customerOptions}
+                // PERF-H3: searched server-side (name, number, VAT) instead of the first 200 customers.
+                options={[]}
+                onSearch={searchActiveCustomerOptions}
               />
             </FormField>
             <FormField label={t('tarification.common.adjustment')} htmlFor="assignment-mode">

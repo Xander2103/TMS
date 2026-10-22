@@ -74,7 +74,8 @@
     "visibleFrom": "Visible à partir de",
     "visibleFromHint": "Vide = visible immédiatement",
     "expiresAt": "Expire le",
-    "expiresAtHint": "Vide = pas de date de fin"
+    "expiresAtHint": "Vide = pas de date de fin",
+    "customersSearchPlaceholder": "Rechercher un client par nom, numéro ou numéro de TVA…"
   },
   "delivery": {
     "title": "Statut de remise",
