@@ -6,6 +6,12 @@ export interface PagedQueryArgs {
   isActive?: boolean
   page: number
   pageSize: number
+  /**
+   * PERF-H7: aborted as soon as this request is superseded (filter/page changed) or the screen
+   * unmounts. Fetchers pass it to the API call so a stale request stops at the network instead
+   * of merely being ignored on arrival.
+   */
+  signal: AbortSignal
 }
 
 interface UsePagedQueryOptions {
@@ -44,6 +50,8 @@ const DEFAULT_DEBOUNCE_MS = 300
 /**
  * Generic debounced paged-list fetcher. Handles mount-safety, loading/error state and manual
  * reloads so list screens stay declarative. The fetcher must return a {@link PagedResult}.
+ * A request that times out (apiClient's 30 s policy) ends the loading state with its retryable
+ * error, so the table shows "Opnieuw proberen" instead of "Laden…" forever.
  */
 export function usePagedQuery<T>(
   fetcher: (args: PagedQueryArgs) => Promise<PagedResult<T>>,
@@ -81,22 +89,24 @@ export function usePagedQuery<T>(
   const requestKey = JSON.stringify({ search, isActive, page, pageSize, reloadToken, extra })
 
   useEffect(() => {
-    let isMounted = true
+    // One controller per request: the cleanup aborts it, which both cancels the network call of a
+    // superseded/unmounted request and tells the callbacks below to drop whatever still arrives.
+    const controller = new AbortController()
 
     const timeoutId = window.setTimeout(() => {
-      fetcher({ search, isActive, page, pageSize })
+      fetcher({ search, isActive, page, pageSize, signal: controller.signal })
         .then((data) => {
-          if (!isMounted) return
+          if (controller.signal.aborted) return
           setState({ items: data.items, totalCount: data.totalCount, error: null, errorCause: null, loadedKey: requestKey })
         })
         .catch((cause: unknown) => {
-          if (!isMounted) return
+          if (controller.signal.aborted) return
           setState((current) => ({ ...current, error: errorMessage, errorCause: cause, loadedKey: requestKey }))
         })
     }, debounceMs)
 
     return () => {
-      isMounted = false
+      controller.abort()
       window.clearTimeout(timeoutId)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

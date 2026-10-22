@@ -1,4 +1,4 @@
-import { apiClient } from '../../../api/apiClient'
+import { apiClient, LONG_RUNNING_TIMEOUT_MS } from '../../../api/apiClient'
 import { apiBaseUrl } from '../../../config/env'
 import { getAccessToken } from '../../auth/authStorage'
 import type { PricingAgreement } from './pricingApi'
@@ -118,12 +118,9 @@ export interface PricingImportCommitResult {
 
 /** Downloads the rate table as "tarieventabel-{naam}.xlsx" — export doubles as the import template. */
 export async function downloadAgreementExport(agreementId: string, agreementName: string): Promise<void> {
-  const response = await fetch(`${apiBaseUrl}/api/pricing/agreements/${agreementId}/export`, {
-    headers: { Authorization: `Bearer ${getAccessToken() ?? ''}` },
-  })
-  // Geen hardgecodeerde NL-boodschap: een lege message laat de vertaalde fallback van de caller winnen.
-  if (!response.ok) throw new Error()
-  const blob = await response.blob()
+  // PERF-H7: through apiClient (bearer + refresh, ProblemDetails message) with the long-running
+  // deadline; a technical failure message still yields to the caller's translated fallback.
+  const { blob } = await apiClient.fetchBlob(`/api/pricing/agreements/${agreementId}/export`, { timeoutMs: LONG_RUNNING_TIMEOUT_MS })
   const url = URL.createObjectURL(blob)
   const anchor = document.createElement('a')
   anchor.href = url

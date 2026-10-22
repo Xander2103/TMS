@@ -27,6 +27,7 @@
     "trips": {
       "reason_required": "A reason is required here.",
       "packages_unresolved": "Mandatory packages still have no outcome; scan or register them, or complete with an override and a reason."
-    }
+    },
+    "timeout": "The server is not responding. Try again."
   }
 }

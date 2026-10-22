@@ -1,8 +1,7 @@
-import { apiBaseUrl } from '../../../config/env'
-import { apiClient } from '../../../api/apiClient'
+import { apiClient, LONG_RUNNING_TIMEOUT_MS } from '../../../api/apiClient'
+import { describeApiError } from '../../../api/problemDetails'
 import { getActiveLocale } from '../../../i18n/activeLocale'
 import { translate } from '../../../i18n/translations'
-import { getAccessToken } from '../../auth/authStorage'
 
 export type TransportDocumentKind = 'delivery-note' | 'cmr'
 
@@ -37,13 +36,16 @@ export function setOrderDocumentPreference(
 }
 
 async function downloadPdf(url: string, fallbackName: string): Promise<void> {
-  const response = await fetch(`${apiBaseUrl}${url}`, {
-    headers: { Authorization: `Bearer ${getAccessToken() ?? ''}` },
-  })
-  if (!response.ok) throw new Error(translate(getActiveLocale(), 'transportOrders.documents.generateFailed'))
-  const blob = await response.blob()
-  const disposition = response.headers.get('content-disposition')
-  const fileName = disposition?.match(/filename="?([^";]+)"?/)?.[1] ?? fallbackName
+  // PERF-H7: through apiClient (bearer + refresh) with the long-running deadline; the message
+  // stays the server's detail or the translated "kon niet worden gegenereerd".
+  let blob: Blob
+  let serverFileName: string | null
+  try {
+    ;({ blob, fileName: serverFileName } = await apiClient.fetchBlob(url, { timeoutMs: LONG_RUNNING_TIMEOUT_MS }))
+  } catch (err) {
+    throw new Error(describeApiError(err, translate(getActiveLocale(), 'transportOrders.documents.generateFailed')).message, { cause: err })
+  }
+  const fileName = serverFileName ?? fallbackName
   const objectUrl = URL.createObjectURL(blob)
   const anchor = document.createElement('a')
   anchor.href = objectUrl

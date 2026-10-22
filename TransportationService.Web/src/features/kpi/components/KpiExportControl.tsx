@@ -3,8 +3,7 @@ import { Button } from '../../../components/ui/Button'
 import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
 import { useLocale } from '../../../i18n/localeContext'
-import { apiBaseUrl } from '../../../config/env'
-import { getAccessToken } from '../../auth/authStorage'
+import { apiClient, LONG_RUNNING_TIMEOUT_MS } from '../../../api/apiClient'
 import { kpiExportUrl } from '../api/kpiApi'
 import type { KpiFilterState } from '../types'
 
@@ -34,19 +33,8 @@ export function KpiExportControl({ filter }: { filter: KpiFilterState }) {
   async function download() {
     setBusy(true)
     try {
-      const response = await fetch(`${apiBaseUrl}${kpiExportUrl(report, filter)}`, {
-        headers: { Authorization: `Bearer ${getAccessToken() ?? ''}` },
-      })
-      if (!response.ok) throw new Error()
-      const disposition = response.headers.get('Content-Disposition') ?? ''
-      const match = /filename="?([^";]+)"?/.exec(disposition)
-      const blob = await response.blob()
-      const url = URL.createObjectURL(blob)
-      const anchor = document.createElement('a')
-      anchor.href = url
-      anchor.download = match?.[1] ?? `kpi-${report}.xlsx`
-      anchor.click()
-      URL.revokeObjectURL(url)
+      // PERF-H7: through apiClient (bearer + refresh, server file name) with the long-running deadline.
+      await apiClient.downloadFile(kpiExportUrl(report, filter), `kpi-${report}.xlsx`, { timeoutMs: LONG_RUNNING_TIMEOUT_MS })
     } catch {
       showError(t('kpiReports.export.failed'))
     } finally {

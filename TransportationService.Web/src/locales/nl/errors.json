@@ -27,6 +27,7 @@
     "trips": {
       "reason_required": "Een reden is hier verplicht.",
       "packages_unresolved": "Er zijn nog verplichte colli zonder uitkomst; scan of registreer ze, of rond af met een vrijgave en reden."
-    }
+    },
+    "timeout": "De server reageert niet. Probeer het opnieuw."
   }
 }

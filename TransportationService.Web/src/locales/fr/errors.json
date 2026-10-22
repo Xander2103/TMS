@@ -27,6 +27,7 @@
     "trips": {
       "reason_required": "Un motif est obligatoire ici.",
       "packages_unresolved": "Des colis obligatoires restent sans résultat ; scannez-les ou enregistrez-les, ou clôturez avec une dérogation et un motif."
-    }
+    },
+    "timeout": "Le serveur ne répond pas. Réessayez."
   }
 }
