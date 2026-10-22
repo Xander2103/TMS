@@ -27,15 +27,29 @@ public class OperationsController : ControllerBase
     }
 
     /// <summary>
-    /// The overview refresh doubles as the alert sync trigger: the sync is a dedupe-key
-    /// upsert, so polling every 30s never duplicates and recovery is simply this same call.
+    /// Read-only projection (PERF-HIGH 4). It used to run the alert sync inline, which turned every
+    /// 30-second poll of every open tab into ~1,000 UPDATEs; reconciliation now belongs to
+    /// <see cref="OperationalAlertSyncHostedService"/>, with <see cref="SyncAlerts"/> as the explicit
+    /// manual trigger. A GET never writes.
     /// </summary>
     [HttpGet("overview")]
     [RequirePermission(PermissionCodes.OperationsView)]
     public async Task<ActionResult<OperationsOverviewDto>> Overview(CancellationToken cancellationToken)
     {
-        await _alertSyncService.SyncAsync(cancellationToken);
         return Ok(await _overviewService.GetOverviewAsync(cancellationToken));
+    }
+
+    /// <summary>
+    /// Manual refresh / recovery: reconciles the current tenant's alerts now instead of waiting for
+    /// the next background tick. Same right as the overview — it changes no business data, only the
+    /// derived alert projection — and it is idempotent and bounded (one write per changed row).
+    /// </summary>
+    [HttpPost("alerts/sync")]
+    [RequirePermission(PermissionCodes.OperationsView)]
+    public async Task<IActionResult> SyncAlerts(CancellationToken cancellationToken)
+    {
+        await _alertSyncService.SyncAsync(cancellationToken);
+        return NoContent();
     }
 
     [HttpGet("alerts")]
