@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using TransportationService.Api.Common.Persistence;
 using TransportationService.Api.Data;
 using TransportationService.Api.Modules.Invoicing.Entities;
 using TransportationService.Api.Modules.Organization.Entities;
@@ -21,7 +22,9 @@ public interface IInvoiceNumberService
 
 public class InvoiceNumberService : IInvoiceNumberService
 {
-    private const int MaxAttempts = 5;
+    // PERF-B2: without the PostgreSQL series lock (SQLite) a burst of parallel issues retries from
+    // the reloaded counter; enough attempts for such a burst.
+    private const int MaxAttempts = 10;
 
     private readonly TransportationDbContext _dbContext;
     private readonly ITenantContext _tenantContext;
@@ -74,16 +77,20 @@ public class InvoiceNumberService : IInvoiceNumberService
                 await _dbContext.SaveChangesAsync(cancellationToken);
                 return;
             }
-            catch (DbUpdateConcurrencyException) when (attempt < MaxAttempts)
+            catch (DbUpdateConcurrencyException exception)
+                when (attempt < MaxAttempts && exception.Entries.Any(e => ReferenceEquals(e.Entity, sequence)))
             {
-                // Another request claimed this value first: reload the counter and retry.
+                // Another request claimed this value first: reload the counter and retry. PERF-B2:
+                // only a conflict on the SEQUENCE row is ours to retry — a conflict on the invoice
+                // itself (its Status token: it was issued meanwhile) propagates and answers 409;
+                // retrying it used to hand out N+1 and overwrite the winner's number.
                 await _dbContext.Entry(sequence).ReloadAsync(cancellationToken);
             }
-            catch (DbUpdateException) when (attempt < MaxAttempts)
+            catch (DbUpdateException exception) when (attempt < MaxAttempts && UniqueViolations.IsUniqueViolation(exception))
             {
                 // Either two requests created the same (entity, period) sequence row, or the
-                // composed number collided with an existing invoice (e.g. after a format
-                // change). Detach our new row when present and retry against the winner.
+                // composed number collided with an existing invoice. Detach our new row when
+                // present and retry against the winner.
                 var entry = _dbContext.Entry(sequence);
                 if (entry.State == EntityState.Added)
                 {
@@ -94,10 +101,13 @@ public class InvoiceNumberService : IInvoiceNumberService
                     await entry.ReloadAsync(cancellationToken);
                 }
 
-                // MD-H5: a number that already exists (another series printing the same numbers)
-                // is a configuration conflict — never retried into a 500, never skipped (a legal
-                // series has no gaps).
-                if (await NumberTakenAsync(number, cancellationToken))
+                // MD-H5: a number that already exists in ANOTHER series (another entity, kind or
+                // period printing the same numbers, e.g. after a format change) is a configuration
+                // conflict — never retried into a 500, never skipped (a legal series has no gaps).
+                // PERF-B2: the same number taken by THIS series is an ordinary parallel claim (the
+                // winner advanced the counter under us) and is simply retried from the reloaded
+                // counter — eight parallel drafts used to get seven of these 400s.
+                if (await NumberTakenByAnotherSeriesAsync(number, entity.Id, kind, year, month, cancellationToken))
                 {
                     throw new Common.DomainValidationException("invoiceNumber",
                         $"Factuurnummer {number} bestaat al in een andere nummerreeks. Pas het factuurnummerformaat of de prefix van de facturerende entiteit aan.");
@@ -106,9 +116,13 @@ public class InvoiceNumberService : IInvoiceNumberService
         }
     }
 
-    private Task<bool> NumberTakenAsync(string number, CancellationToken cancellationToken) =>
+    private Task<bool> NumberTakenByAnotherSeriesAsync(
+        string number, Guid legalEntityId, InvoiceKind kind, int year, int month, CancellationToken cancellationToken) =>
         _dbContext.Invoices.IgnoreQueryFilters().AsNoTracking()
-            .AnyAsync(i => i.TenantId == _tenantContext.TenantId && i.InvoiceNumber == number, cancellationToken);
+            .AnyAsync(i => i.TenantId == _tenantContext.TenantId && i.InvoiceNumber == number
+                           && (i.LegalEntityId != legalEntityId || i.Kind != kind
+                               || i.InvoicePeriodYear != year || i.InvoicePeriodMonth != month),
+                cancellationToken);
 
     public async Task<string> PreviewAsync(LegalEntity entity, InvoiceKind kind, int year, int month, CancellationToken cancellationToken)
     {

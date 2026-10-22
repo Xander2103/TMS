@@ -2,6 +2,7 @@ using TransportationService.Api.Common.Money;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using TransportationService.Api.Common.Models;
+using TransportationService.Api.Common.Integrity;
 using TransportationService.Api.Common.Persistence;
 using TransportationService.Api.Data;
 using TransportationService.Api.Modules.Auditing.Services;
@@ -114,6 +115,23 @@ public class InvoiceService : IInvoiceService
 
     private IQueryable<Invoice> TenantScoped() =>
         _dbContext.Invoices.Where(i => i.TenantId == _tenantContext.TenantId);
+
+    /// <summary>
+    /// PERF-B2: the STORED status, read fresh (under the series lock on PostgreSQL, so nobody can
+    /// issue in between), must still be Draft before a number is claimed. The tracked instance is
+    /// not consulted — it was loaded before the lock and may be stale.
+    /// </summary>
+    private async Task RequireStillDraftAsync(Invoice invoice, CancellationToken cancellationToken)
+    {
+        var stored = await _dbContext.Entry(invoice).GetDatabaseValuesAsync(cancellationToken);
+        if (stored is null || stored.GetValue<InvoiceStatus>(nameof(Invoice.Status)) != InvoiceStatus.Draft)
+        {
+            throw AlreadyIssuedConflict();
+        }
+    }
+
+    private static ConcurrencyConflictException AlreadyIssuedConflict() =>
+        new("Deze factuur is intussen al uitgereikt door een andere gebruiker. Herlaad de factuur.");
 
     public async Task<PagedResult<InvoiceListItemDto>> SearchAsync(
         string? search, InvoiceStatus? status, Guid? customerId, PageRequest page, CancellationToken cancellationToken, string? sort = null, string? dir = null,
@@ -1240,32 +1258,56 @@ public class InvoiceService : IInvoiceService
             // MD-H3: from here on PDF, UBL and Peppol validation read this snapshot only.
             invoice.PartySnapshotFrozenAt = invoice.IssuedAt;
             await InvoicePartySnapshotBackfill.FreezeUblNoteAsync(_dbContext, invoice, cancellationToken);
-            if (invoice.NumberIsManual && !string.IsNullOrWhiteSpace(invoice.InvoiceNumber))
+
+            // PERF-B2 (performance/concurrency final remediation 2026-10-21): two "Uitreiken" clicks on
+            // the same draft both passed the transition check above and both claimed a number — the
+            // loser's retry took N+1 and overwrote the invoice (no token), N was burned and "Issued"
+            // was audited twice. Now: on PostgreSQL the series is serialized (advisory lock, one
+            // transaction around re-check + claim), the stored status is re-read UNDER that lock,
+            // and Invoice.Status is a concurrency token so the UPDATE itself is the conditional
+            // Draft → Sent transition on every provider. The loser answers 409 before any number is
+            // claimed and its transaction rolls back: no gap, no second audit row, no notification.
+            await using var series = await SeriesLock.AcquireAsync(_dbContext,
+                $"invoice-series:{_tenantContext.TenantId}:{invoice.LegalEntityId}:{invoice.Kind}", cancellationToken);
+            await RequireStillDraftAsync(invoice, cancellationToken);
+            try
             {
-                await _dbContext.SaveChangesAsync(cancellationToken);
-            }
-            else
-            {
-                var issuingEntity = invoice.LegalEntityId is { } numberingEntityId
-                    ? await _dbContext.LegalEntities.FirstOrDefaultAsync(
-                        e => e.TenantId == _tenantContext.TenantId && e.Id == numberingEntityId, cancellationToken)
-                    : null;
-                if (issuingEntity is not null)
+                if (invoice.NumberIsManual && !string.IsNullOrWhiteSpace(invoice.InvoiceNumber))
                 {
-                    await _numberService.ClaimAsync(issuingEntity, invoice.Kind, invoice.InvoicePeriodYear, invoice.InvoicePeriodMonth,
-                        number => invoice.InvoiceNumber = number, cancellationToken);
+                    await _dbContext.SaveChangesAsync(cancellationToken);
                 }
                 else
                 {
-                    // No legal entity configured (pre-seed edge case): legacy tenant counter.
-                    var legacySettings = await _dbContext.TenantSettings
-                        .FirstOrDefaultAsync(s => s.TenantId == _tenantContext.TenantId, cancellationToken);
-                    await TenantNumbering.SaveWithClaimedNumberAsync(
-                        _dbContext, legacySettings,
-                        () => invoice.InvoiceNumber = (invoice.Kind == InvoiceKind.CreditNote ? "CN" : string.Empty) + GenerateInvoiceNumber(legacySettings),
-                        cancellationToken);
+                    var issuingEntity = invoice.LegalEntityId is { } numberingEntityId
+                        ? await _dbContext.LegalEntities.FirstOrDefaultAsync(
+                            e => e.TenantId == _tenantContext.TenantId && e.Id == numberingEntityId, cancellationToken)
+                        : null;
+                    if (issuingEntity is not null)
+                    {
+                        await _numberService.ClaimAsync(issuingEntity, invoice.Kind, invoice.InvoicePeriodYear, invoice.InvoicePeriodMonth,
+                            number => invoice.InvoiceNumber = number, cancellationToken);
+                    }
+                    else
+                    {
+                        // No legal entity configured (pre-seed edge case): legacy tenant counter
+                        // (TenantNumbering locks the settings row inside the series transaction).
+                        var legacySettings = await _dbContext.TenantSettings
+                            .FirstOrDefaultAsync(s => s.TenantId == _tenantContext.TenantId, cancellationToken);
+                        await TenantNumbering.SaveWithClaimedNumberAsync(
+                            _dbContext, legacySettings,
+                            () => invoice.InvoiceNumber = (invoice.Kind == InvoiceKind.CreditNote ? "CN" : string.Empty) + GenerateInvoiceNumber(legacySettings),
+                            cancellationToken);
+                    }
                 }
             }
+            catch (DbUpdateConcurrencyException exception) when (exception.Entries.Any(e => ReferenceEquals(e.Entity, invoice)))
+            {
+                // The status token refused the UPDATE: issued meanwhile by a writer the re-read could
+                // not see yet (a provider without the series lock). Nothing of ours was saved.
+                throw AlreadyIssuedConflict();
+            }
+
+            await series.CommitAsync(cancellationToken);
 
             await _auditService.RecordAsync(EntityType, invoice.Id.ToString(), "Issued",
                 new { invoice.DraftReference }, new { invoice.InvoiceNumber, invoice.IssuedAt }, cancellationToken);

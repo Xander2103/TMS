@@ -25,11 +25,13 @@ public static class InvoicePartySnapshotBackfill
     public static async Task<int> SyncAsync(TransportationDbContext db, ILogger? logger = null, CancellationToken cancellationToken = default)
     {
         var total = 0;
+        var skipped = new HashSet<Guid>();
         while (true)
         {
             var batch = await db.Invoices.IgnoreQueryFilters()
                 .Include(i => i.Lines)
-                .Where(i => i.Status != InvoiceStatus.Draft && (i.PartySnapshotFrozenAt == null || i.UblNoteSnapshot == null))
+                .Where(i => i.Status != InvoiceStatus.Draft && (i.PartySnapshotFrozenAt == null || i.UblNoteSnapshot == null)
+                            && !skipped.Contains(i.Id))
                 .OrderBy(i => i.Id)
                 .Take(BatchSize)
                 .ToListAsync(cancellationToken);
@@ -52,7 +54,28 @@ public static class InvoicePartySnapshotBackfill
                 }
             }
 
-            await db.SaveChangesAsync(cancellationToken);
+            try
+            {
+                await db.SaveChangesAsync(cancellationToken);
+            }
+            catch (DbUpdateConcurrencyException exception)
+            {
+                // PERF-B2: Invoice.Status is a concurrency token; a user changing one of these
+                // invoices on another instance while this start-up backfill runs must neither take
+                // the start-up down nor be retried in a loop. The batch is put aside (never
+                // re-selected in this run) and frozen lazily on first use (EnsureFrozenAsync).
+                foreach (var invoice in batch)
+                {
+                    skipped.Add(invoice.Id);
+                }
+
+                db.ChangeTracker.Clear();
+                logger?.LogWarning(exception,
+                    "MD-H3: {Count} issued invoice(s) changed concurrently during the snapshot backfill; skipped in this run.",
+                    batch.Count);
+                continue;
+            }
+
             total += batch.Count;
         }
 

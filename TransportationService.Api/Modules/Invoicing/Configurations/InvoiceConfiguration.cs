@@ -48,7 +48,12 @@ public class InvoiceConfiguration : IEntityTypeConfiguration<Invoice>
         builder.Property(i => i.CreditReason).HasMaxLength(500);
         builder.Ignore(i => i.DraftReference);
         builder.Ignore(i => i.DisplayNumber);
-        builder.Property(i => i.Status).HasConversion<string>().HasMaxLength(20);
+        // PERF-B2 (performance/concurrency final remediation 2026-10-21): the status is a concurrency
+        // token (Peppol transmission precedent), so every invoice UPDATE carries
+        // WHERE "Status" = @originalStatus — the issue (Draft → Sent) is an atomic conditional
+        // transition at the database and the second of two parallel issues can no longer overwrite
+        // the first one's number.
+        builder.Property(i => i.Status).HasConversion<string>().HasMaxLength(20).IsConcurrencyToken();
         builder.Property(i => i.Currency).IsRequired().HasMaxLength(3);
         builder.Property(i => i.Notes).HasMaxLength(4000);
         builder.Property(i => i.UblNoteSnapshot).HasMaxLength(4000);
