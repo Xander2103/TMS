@@ -1,3 +1,4 @@
+using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore;
 using TransportationService.Api.Common;
 using TransportationService.Api.Common.Models;
@@ -15,12 +16,22 @@ namespace TransportationService.Api.Modules.Dossiers.Services;
 /// Dossier search sprint 2026-09-23 — the server-side search behind the dossier list.
 ///
 /// Shape: narrow tenant-scoped <c>IQueryable</c> → structural filters (direct columns) →
-/// relational filters as correlated EXISTS on indexed join columns (dossier_orders,
-/// dossier_activities, trips/trip_orders, transport_order_stops, invoice_lines) →
-/// <c>CountAsync</c> → whitelisted ORDER BY + stable secondary key → Skip/Take → the shared list
-/// projection → page-scoped hydration (stops, trips, invoices, CMR) keyed by the page's ids.
-/// Never a client-side pass over the table. Text search is <c>LOWER(col) LIKE %term%</c>
+/// relational filters as <c>d.Id IN (uncorrelated id subquery)</c> → <c>CountAsync</c> →
+/// whitelisted ORDER BY + stable secondary key → Skip/Take → the shared list projection →
+/// page-scoped hydration (stops, trips, invoices, CMR) keyed by the page's ids. Never a
+/// client-side pass over the table. Text search is <c>LOWER(col) LIKE %term%</c>
 /// (case-insensitive on PostgreSQL and SQLite alike; a trigram index is a later option).
+///
+/// Performance final 2026-10-21 (PERF-BLOCKER 1): every relational predicate used to re-derive
+/// "the orders of this dossier" as a correlated OR-of-EXISTS inside a derived subquery, which
+/// PostgreSQL cannot decorrelate — it rescanned orders, stops and trips PER DOSSIER ROW (cost
+/// 3.7e9 for a text search, 2e10 for the planning sort; both past the 30 s command timeout on a
+/// 32k-dossier tenant). The predicates are now built the other way round: predicate → matching
+/// order / trip / stop / invoice ids → dossier ids through BOTH link paths (dossier_orders and
+/// activity-linked orders), each an uncorrelated subquery that the planner evaluates once
+/// (semi-join at the top level, hashed SubPlan inside an OR). The planning date is ONE grouped
+/// derived set LEFT JOINed for the sort, so the key is a plain column and the sort is a top-N
+/// heapsort after the filters. Every subquery carries the tenant on tables that have it.
 /// </summary>
 public partial class DossierService
 {
@@ -30,6 +41,18 @@ public partial class DossierService
     {
         var tenantId = _tenantContext.TenantId;
         var page = PageRequest.Of(query.Page, query.PageSize);
+        var dossiers = await ComposeFilterAsync(query, tenantId, cancellationToken);
+
+        var totalCount = await dossiers.CountAsync(cancellationToken);
+        var ordered = ApplySort(dossiers, query.Sort, query.Dir, tenantId);
+        var items = await ProjectListAsync(ordered.Skip(page.Skip).Take(page.PageSize), cancellationToken);
+        items = await WithoutPricesUnlessPermittedAsync(await HydratePageAsync(items, cancellationToken), cancellationToken);
+        return new PagedResult<DossierListItemDto>(items, totalCount, page.Page, page.PageSize);
+    }
+
+    /// <summary>The tenant-scoped dossier query with every filter of the search AND-ed on — unsorted, unexecuted.</summary>
+    private async Task<IQueryable<TransportDossier>> ComposeFilterAsync(DossierSearchQuery query, Guid tenantId, CancellationToken cancellationToken)
+    {
         ValidateRange(query.DateFrom, query.DateTo, "dateFrom");
         ValidateRange(query.ConfirmedFrom, query.ConfirmedTo, "confirmedFrom");
         ValidateRange(query.CreatedFrom, query.CreatedTo, "createdFrom");
@@ -87,6 +110,7 @@ public partial class DossierService
         if (query.HasOpenIncident is { } hasOpenIncident)
         {
             // The same definition as the list row's OpenIncidentCount, so the filter and the badge agree.
+            // A plain correlated EXISTS on incidents(dossier_id) at the top level: the planner turns it into a (anti) semi-join.
             dossiers = hasOpenIncident
                 ? dossiers.Where(d => _dbContext.Incidents.Any(i => i.DossierId == d.Id && (i.Status == IncidentStatus.New || i.Status == IncidentStatus.InProgress)))
                 : dossiers.Where(d => !_dbContext.Incidents.Any(i => i.DossierId == d.Id && (i.Status == IncidentStatus.New || i.Status == IncidentStatus.InProgress)));
@@ -96,14 +120,11 @@ public partial class DossierService
         {
             // Planned = any of the dossier's orders sits on a non-cancelled trip, or a standalone
             // activity carries a planned date — the same facts behind the Planning column.
+            var planned = PlanningRows(tenantId).Select(r => r.DossierId);
             dossiers = query.Planning.Trim().ToLowerInvariant() switch
             {
-                "planned" => dossiers.Where(d =>
-                    _dbContext.Trips.Any(t => t.Status != TripStatus.Cancelled && _dbContext.TripOrders.Any(to => to.TripId == t.Id && _dbContext.TransportOrders.Where(o => _dbContext.DossierOrders.Any(l => l.DossierId == d.Id && l.TransportOrderId == o.Id) || _dbContext.DossierActivities.Any(a => a.DossierId == d.Id && a.LinkedTransportOrderId == o.Id)).Any(o2 => o2.Id == to.TransportOrderId)))
-                    || _dbContext.DossierActivities.Any(a => a.DossierId == d.Id && a.LinkedTransportOrderId == null && a.PlannedDate != null)),
-                "unplanned" => dossiers.Where(d =>
-                    !_dbContext.Trips.Any(t => t.Status != TripStatus.Cancelled && _dbContext.TripOrders.Any(to => to.TripId == t.Id && _dbContext.TransportOrders.Where(o => _dbContext.DossierOrders.Any(l => l.DossierId == d.Id && l.TransportOrderId == o.Id) || _dbContext.DossierActivities.Any(a => a.DossierId == d.Id && a.LinkedTransportOrderId == o.Id)).Any(o2 => o2.Id == to.TransportOrderId)))
-                    && !_dbContext.DossierActivities.Any(a => a.DossierId == d.Id && a.LinkedTransportOrderId == null && a.PlannedDate != null)),
+                "planned" => dossiers.Where(d => planned.Contains(d.Id)),
+                "unplanned" => dossiers.Where(d => !planned.Contains(d.Id)),
                 _ => throw new DomainValidationException("planning", "Onbekende planningsstatus."),
             };
         }
@@ -115,10 +136,17 @@ public partial class DossierService
         if (Term(query.DossierNumber) is { } number) dossiers = dossiers.Where(d => d.DossierNumber.ToLower().Contains(number));
         if (Term(query.CustomerReference) is { } reference)
         {
+            // The dossier's own reference, or the reference of an order linked through dossier_orders
+            // (as before: the activity link path does not take part in this filter).
+            var referencedOrderIds = _dbContext.TransportOrders
+                .Where(o => o.TenantId == tenantId && o.CustomerReference != null && o.CustomerReference.ToLower().Contains(reference))
+                .Select(o => o.Id);
+            var viaOrders = _dbContext.DossierOrders
+                .Where(l => l.TenantId == tenantId && referencedOrderIds.Contains(l.TransportOrderId))
+                .Select(l => l.DossierId);
             dossiers = dossiers.Where(d =>
                 (d.CustomerReference != null && d.CustomerReference.ToLower().Contains(reference))
-                || _dbContext.DossierOrders.Any(l => l.DossierId == d.Id
-                    && _dbContext.TransportOrders.Any(o => o.Id == l.TransportOrderId && o.CustomerReference != null && o.CustomerReference.ToLower().Contains(reference))));
+                || viaOrders.Contains(d.Id));
         }
 
         if (Term(query.CustomerNumber) is { } customerNumber)
@@ -128,30 +156,27 @@ public partial class DossierService
 
         if (Term(query.OrderNumber) is { } orderNumber)
         {
-            dossiers = dossiers.Where(d => _dbContext.TransportOrders.Where(o => _dbContext.DossierOrders.Any(l => l.DossierId == d.Id && l.TransportOrderId == o.Id) || _dbContext.DossierActivities.Any(a => a.DossierId == d.Id && a.LinkedTransportOrderId == o.Id)).Any(o => o.OrderNumber.ToLower().Contains(orderNumber)));
+            dossiers = WhereDossierIn(dossiers, DossierIdsWithOrder(tenantId, o => o.OrderNumber.ToLower().Contains(orderNumber)));
         }
 
         // ---- planning (trips of the dossier's orders; cancelled trips never count)
-        if (query.DriverId is { } driverId) dossiers = dossiers.Where(d => _dbContext.Trips.Where(t => t.Status != TripStatus.Cancelled && _dbContext.TripOrders.Any(to => to.TripId == t.Id && _dbContext.TransportOrders.Where(o => _dbContext.DossierOrders.Any(l => l.DossierId == d.Id && l.TransportOrderId == o.Id) || _dbContext.DossierActivities.Any(a => a.DossierId == d.Id && a.LinkedTransportOrderId == o.Id)).Any(o2 => o2.Id == to.TransportOrderId))).Any(t => t.DriverId == driverId));
-        if (query.VehicleId is { } vehicleId) dossiers = dossiers.Where(d => _dbContext.Trips.Where(t => t.Status != TripStatus.Cancelled && _dbContext.TripOrders.Any(to => to.TripId == t.Id && _dbContext.TransportOrders.Where(o => _dbContext.DossierOrders.Any(l => l.DossierId == d.Id && l.TransportOrderId == o.Id) || _dbContext.DossierActivities.Any(a => a.DossierId == d.Id && a.LinkedTransportOrderId == o.Id)).Any(o2 => o2.Id == to.TransportOrderId))).Any(t => t.VehicleId == vehicleId));
-        if (query.TrailerId is { } trailerId) dossiers = dossiers.Where(d => _dbContext.Trips.Where(t => t.Status != TripStatus.Cancelled && _dbContext.TripOrders.Any(to => to.TripId == t.Id && _dbContext.TransportOrders.Where(o => _dbContext.DossierOrders.Any(l => l.DossierId == d.Id && l.TransportOrderId == o.Id) || _dbContext.DossierActivities.Any(a => a.DossierId == d.Id && a.LinkedTransportOrderId == o.Id)).Any(o2 => o2.Id == to.TransportOrderId))).Any(t => t.TrailerId == trailerId));
+        if (query.DriverId is { } driverId) dossiers = WhereDossierIn(dossiers, DossierIdsWithTrip(tenantId, t => t.DriverId == driverId));
+        if (query.VehicleId is { } vehicleId) dossiers = WhereDossierIn(dossiers, DossierIdsWithTrip(tenantId, t => t.VehicleId == vehicleId));
+        if (query.TrailerId is { } trailerId) dossiers = WhereDossierIn(dossiers, DossierIdsWithTrip(tenantId, t => t.TrailerId == trailerId));
         if (Term(query.LicensePlate) is { } plate)
         {
-            dossiers = dossiers.Where(d => _dbContext.Trips.Where(t => t.Status != TripStatus.Cancelled && _dbContext.TripOrders.Any(to => to.TripId == t.Id && _dbContext.TransportOrders.Where(o => _dbContext.DossierOrders.Any(l => l.DossierId == d.Id && l.TransportOrderId == o.Id) || _dbContext.DossierActivities.Any(a => a.DossierId == d.Id && a.LinkedTransportOrderId == o.Id)).Any(o2 => o2.Id == to.TransportOrderId))).Any(t =>
+            dossiers = WhereDossierIn(dossiers, DossierIdsWithTrip(tenantId, t =>
                 _dbContext.Vehicles.Any(v => v.Id == t.VehicleId && v.LicensePlate.ToLower().Contains(plate))
                 || _dbContext.Trailers.Any(tr => tr.Id == t.TrailerId && tr.LicensePlate != null && tr.LicensePlate.ToLower().Contains(plate))));
         }
 
-        if (query.PlanningFrom is { } pf)
+        if (query.PlanningFrom is not null || query.PlanningTo is not null)
         {
-            dossiers = dossiers.Where(d => _dbContext.Trips.Where(t => t.Status != TripStatus.Cancelled && _dbContext.TripOrders.Any(to => to.TripId == t.Id && _dbContext.TransportOrders.Where(o => _dbContext.DossierOrders.Any(l => l.DossierId == d.Id && l.TransportOrderId == o.Id) || _dbContext.DossierActivities.Any(a => a.DossierId == d.Id && a.LinkedTransportOrderId == o.Id)).Any(o2 => o2.Id == to.TransportOrderId))).Any(t => t.TripDate >= pf && (query.PlanningTo == null || t.TripDate <= query.PlanningTo))
-                || _dbContext.DossierActivities.Any(a => a.DossierId == d.Id && a.LinkedTransportOrderId == null
-                    && a.PlannedDate >= pf && (query.PlanningTo == null || a.PlannedDate <= query.PlanningTo)));
-        }
-        else if (query.PlanningTo is { } pt)
-        {
-            dossiers = dossiers.Where(d => _dbContext.Trips.Where(t => t.Status != TripStatus.Cancelled && _dbContext.TripOrders.Any(to => to.TripId == t.Id && _dbContext.TransportOrders.Where(o => _dbContext.DossierOrders.Any(l => l.DossierId == d.Id && l.TransportOrderId == o.Id) || _dbContext.DossierActivities.Any(a => a.DossierId == d.Id && a.LinkedTransportOrderId == o.Id)).Any(o2 => o2.Id == to.TransportOrderId))).Any(t => t.TripDate <= pt)
-                || _dbContext.DossierActivities.Any(a => a.DossierId == d.Id && a.LinkedTransportOrderId == null && a.PlannedDate <= pt));
+            // Any non-cancelled trip date OR any standalone activity's planned date inside the window.
+            var rows = PlanningRows(tenantId);
+            if (query.PlanningFrom is { } pf) rows = rows.Where(r => r.PlannedOn >= pf);
+            if (query.PlanningTo is { } pt) rows = rows.Where(r => r.PlannedOn <= pt);
+            dossiers = WhereDossierIn(dossiers, rows.Select(r => r.DossierId));
         }
 
         // ---- transport
@@ -169,22 +194,22 @@ public partial class DossierService
 
         if (Term(query.LoadingCity) is { } loading)
         {
-            dossiers = dossiers.Where(d => _dbContext.TransportOrderStops.Where(s => _dbContext.TransportOrders.Where(o => _dbContext.DossierOrders.Any(l => l.DossierId == d.Id && l.TransportOrderId == o.Id) || _dbContext.DossierActivities.Any(a => a.DossierId == d.Id && a.LinkedTransportOrderId == o.Id)).Any(o2 => o2.Id == s.TransportOrderId)).Any(s => s.StopType == StopType.Loading && s.City != null && s.City.ToLower().Contains(loading)));
+            dossiers = WhereDossierIn(dossiers, DossierIdsWithStop(tenantId, s => s.StopType == StopType.Loading && s.City != null && s.City.ToLower().Contains(loading)));
         }
 
         if (Term(query.UnloadingCity) is { } unloading)
         {
-            dossiers = dossiers.Where(d => _dbContext.TransportOrderStops.Where(s => _dbContext.TransportOrders.Where(o => _dbContext.DossierOrders.Any(l => l.DossierId == d.Id && l.TransportOrderId == o.Id) || _dbContext.DossierActivities.Any(a => a.DossierId == d.Id && a.LinkedTransportOrderId == o.Id)).Any(o2 => o2.Id == s.TransportOrderId)).Any(s => (s.StopType == StopType.Unloading || s.StopType == StopType.Site) && s.City != null && s.City.ToLower().Contains(unloading)));
+            dossiers = WhereDossierIn(dossiers, DossierIdsWithStop(tenantId, s => (s.StopType == StopType.Unloading || s.StopType == StopType.Site) && s.City != null && s.City.ToLower().Contains(unloading)));
         }
 
         if (Term(query.PostalCode) is { } postal)
         {
-            dossiers = dossiers.Where(d => _dbContext.TransportOrderStops.Where(s => _dbContext.TransportOrders.Where(o => _dbContext.DossierOrders.Any(l => l.DossierId == d.Id && l.TransportOrderId == o.Id) || _dbContext.DossierActivities.Any(a => a.DossierId == d.Id && a.LinkedTransportOrderId == o.Id)).Any(o2 => o2.Id == s.TransportOrderId)).Any(s => s.PostalCode != null && s.PostalCode.ToLower().StartsWith(postal)));
+            dossiers = WhereDossierIn(dossiers, DossierIdsWithStop(tenantId, s => s.PostalCode != null && s.PostalCode.ToLower().StartsWith(postal)));
         }
 
         if (Term(query.CountryCode) is { } country)
         {
-            dossiers = dossiers.Where(d => _dbContext.TransportOrderStops.Where(s => _dbContext.TransportOrders.Where(o => _dbContext.DossierOrders.Any(l => l.DossierId == d.Id && l.TransportOrderId == o.Id) || _dbContext.DossierActivities.Any(a => a.DossierId == d.Id && a.LinkedTransportOrderId == o.Id)).Any(o2 => o2.Id == s.TransportOrderId)).Any(s => s.CountryCode != null && s.CountryCode.ToLower() == country));
+            dossiers = WhereDossierIn(dossiers, DossierIdsWithStop(tenantId, s => s.CountryCode != null && s.CountryCode.ToLower() == country));
         }
 
         // ---- commercial
@@ -209,49 +234,70 @@ public partial class DossierService
                 // completed order of the dossier, or a completed billable standalone activity whose
                 // pricing has not reached an invoice. A confirmed dossier whose orders are still
                 // drafts (e.g. a historically confirmed dossier) is not ready, so it is not listed.
-                "readytoinvoice" => dossiers.Where(d =>
-                    _dbContext.TransportOrders.Any(o => o.Status == TransportOrderStatus.Completed
-                        && (_dbContext.DossierOrders.Any(l => l.DossierId == d.Id && l.TransportOrderId == o.Id)
-                            || _dbContext.DossierActivities.Any(a => a.DossierId == d.Id && a.LinkedTransportOrderId == o.Id)))
-                    || _dbContext.DossierActivities.Any(a => a.DossierId == d.Id && a.LinkedTransportOrderId == null
-                        && a.ExecutionStatus == DossierActivityExecutionStatus.Completed
-                        && _dbContext.ActivityTypes.Any(t => t.Id == a.ActivityTypeId && t.IsBillable)
-                        && !_dbContext.InvoiceLines.Any(l => l.DossierActivityId == a.Id
-                            && _dbContext.Invoices.Any(i => i.Id == l.InvoiceId && i.Status != InvoiceStatus.Cancelled)))),
-                "notinvoiced" => dossiers.Where(d => !_dbContext.Invoices.Where(i => i.Status != InvoiceStatus.Cancelled && _dbContext.InvoiceLines.Any(l2 => l2.InvoiceId == i.Id && ((l2.TransportOrderId != null && _dbContext.TransportOrders.Where(o => _dbContext.DossierOrders.Any(l => l.DossierId == d.Id && l.TransportOrderId == o.Id) || _dbContext.DossierActivities.Any(a => a.DossierId == d.Id && a.LinkedTransportOrderId == o.Id)).Any(o2 => o2.Id == l2.TransportOrderId)) || (l2.DossierActivityId != null && _dbContext.DossierActivities.Any(a2 => a2.DossierId == d.Id && a2.Id == l2.DossierActivityId))))).Any()),
-                "draft" => dossiers.Where(d => _dbContext.Invoices.Where(i => i.Status != InvoiceStatus.Cancelled && _dbContext.InvoiceLines.Any(l2 => l2.InvoiceId == i.Id && ((l2.TransportOrderId != null && _dbContext.TransportOrders.Where(o => _dbContext.DossierOrders.Any(l => l.DossierId == d.Id && l.TransportOrderId == o.Id) || _dbContext.DossierActivities.Any(a => a.DossierId == d.Id && a.LinkedTransportOrderId == o.Id)).Any(o2 => o2.Id == l2.TransportOrderId)) || (l2.DossierActivityId != null && _dbContext.DossierActivities.Any(a2 => a2.DossierId == d.Id && a2.Id == l2.DossierActivityId))))).Any(i => i.Status == InvoiceStatus.Draft) && !_dbContext.Invoices.Where(i => i.Status != InvoiceStatus.Cancelled && _dbContext.InvoiceLines.Any(l2 => l2.InvoiceId == i.Id && ((l2.TransportOrderId != null && _dbContext.TransportOrders.Where(o => _dbContext.DossierOrders.Any(l => l.DossierId == d.Id && l.TransportOrderId == o.Id) || _dbContext.DossierActivities.Any(a => a.DossierId == d.Id && a.LinkedTransportOrderId == o.Id)).Any(o2 => o2.Id == l2.TransportOrderId)) || (l2.DossierActivityId != null && _dbContext.DossierActivities.Any(a2 => a2.DossierId == d.Id && a2.Id == l2.DossierActivityId))))).Any(i => i.Status == InvoiceStatus.Sent || i.Status == InvoiceStatus.Paid)),
-                "sent" => dossiers.Where(d => _dbContext.Invoices.Where(i => i.Status != InvoiceStatus.Cancelled && _dbContext.InvoiceLines.Any(l2 => l2.InvoiceId == i.Id && ((l2.TransportOrderId != null && _dbContext.TransportOrders.Where(o => _dbContext.DossierOrders.Any(l => l.DossierId == d.Id && l.TransportOrderId == o.Id) || _dbContext.DossierActivities.Any(a => a.DossierId == d.Id && a.LinkedTransportOrderId == o.Id)).Any(o2 => o2.Id == l2.TransportOrderId)) || (l2.DossierActivityId != null && _dbContext.DossierActivities.Any(a2 => a2.DossierId == d.Id && a2.Id == l2.DossierActivityId))))).Any(i => i.Status == InvoiceStatus.Sent) && !_dbContext.Invoices.Where(i => i.Status != InvoiceStatus.Cancelled && _dbContext.InvoiceLines.Any(l2 => l2.InvoiceId == i.Id && ((l2.TransportOrderId != null && _dbContext.TransportOrders.Where(o => _dbContext.DossierOrders.Any(l => l.DossierId == d.Id && l.TransportOrderId == o.Id) || _dbContext.DossierActivities.Any(a => a.DossierId == d.Id && a.LinkedTransportOrderId == o.Id)).Any(o2 => o2.Id == l2.TransportOrderId)) || (l2.DossierActivityId != null && _dbContext.DossierActivities.Any(a2 => a2.DossierId == d.Id && a2.Id == l2.DossierActivityId))))).Any(i => i.Status == InvoiceStatus.Paid)),
-                "paid" => dossiers.Where(d => _dbContext.Invoices.Where(i => i.Status != InvoiceStatus.Cancelled && _dbContext.InvoiceLines.Any(l2 => l2.InvoiceId == i.Id && ((l2.TransportOrderId != null && _dbContext.TransportOrders.Where(o => _dbContext.DossierOrders.Any(l => l.DossierId == d.Id && l.TransportOrderId == o.Id) || _dbContext.DossierActivities.Any(a => a.DossierId == d.Id && a.LinkedTransportOrderId == o.Id)).Any(o2 => o2.Id == l2.TransportOrderId)) || (l2.DossierActivityId != null && _dbContext.DossierActivities.Any(a2 => a2.DossierId == d.Id && a2.Id == l2.DossierActivityId))))).Any(i => i.Status == InvoiceStatus.Paid)),
+                "readytoinvoice" => WhereDossierIn(dossiers,
+                    DossierIdsWithOrder(tenantId, o => o.Status == TransportOrderStatus.Completed)
+                        .Concat(_dbContext.DossierActivities
+                            .Where(a => a.TenantId == tenantId && a.LinkedTransportOrderId == null
+                                && a.ExecutionStatus == DossierActivityExecutionStatus.Completed
+                                && _dbContext.ActivityTypes.Any(t => t.Id == a.ActivityTypeId && t.IsBillable)
+                                && !_dbContext.InvoiceLines.Any(l => l.DossierActivityId == a.Id
+                                    && _dbContext.Invoices.Any(i => i.Id == l.InvoiceId && i.Status != InvoiceStatus.Cancelled)))
+                            .Select(a => a.DossierId))),
+                // The rollup of the list row: Paid beats Sent beats Draft; a cancelled invoice never counts.
+                "notinvoiced" => WhereDossierNotIn(dossiers, DossierIdsWithInvoice(tenantId, null)),
+                "draft" => WhereDossierNotIn(
+                    WhereDossierIn(dossiers, DossierIdsWithInvoice(tenantId, i => i.Status == InvoiceStatus.Draft)),
+                    DossierIdsWithInvoice(tenantId, i => i.Status == InvoiceStatus.Sent || i.Status == InvoiceStatus.Paid)),
+                "sent" => WhereDossierNotIn(
+                    WhereDossierIn(dossiers, DossierIdsWithInvoice(tenantId, i => i.Status == InvoiceStatus.Sent)),
+                    DossierIdsWithInvoice(tenantId, i => i.Status == InvoiceStatus.Paid)),
+                "paid" => WhereDossierIn(dossiers, DossierIdsWithInvoice(tenantId, i => i.Status == InvoiceStatus.Paid)),
                 _ => throw new DomainValidationException("invoiceStatus", "Onbekende factuurstatus."),
             };
         }
 
         if (query.HasCmr is { } hasCmr)
         {
-            dossiers = hasCmr ? dossiers.Where(d => (_dbContext.TransportOrderDocuments.Any(doc => doc.DocumentType == TransportOrderDocumentType.Cmr && (doc.DossierId == d.Id || (doc.DossierId == null && doc.TransportOrderId != null && _dbContext.DossierOrders.Any(l3 => l3.DossierId == d.Id && l3.TransportOrderId == doc.TransportOrderId)))) || _dbContext.IssuedTransportDocuments.Any(doc => doc.DossierId == d.Id && doc.Kind == IssuedTransportDocumentKind.Cmr))) : dossiers.Where(d => !(_dbContext.TransportOrderDocuments.Any(doc => doc.DocumentType == TransportOrderDocumentType.Cmr && (doc.DossierId == d.Id || (doc.DossierId == null && doc.TransportOrderId != null && _dbContext.DossierOrders.Any(l3 => l3.DossierId == d.Id && l3.TransportOrderId == doc.TransportOrderId)))) || _dbContext.IssuedTransportDocuments.Any(doc => doc.DossierId == d.Id && doc.Kind == IssuedTransportDocumentKind.Cmr)));
+            // A CMR reaches a dossier as an uploaded order document (on the dossier, or on an order
+            // linked through dossier_orders when the document names no dossier) or as an issued CMR.
+            var cmrOrderIds = _dbContext.TransportOrderDocuments
+                .Where(doc => doc.TenantId == tenantId && doc.DocumentType == TransportOrderDocumentType.Cmr && doc.DossierId == null && doc.TransportOrderId != null)
+                .Select(doc => doc.TransportOrderId!.Value);
+            var cmrDossierIds = _dbContext.TransportOrderDocuments
+                .Where(doc => doc.TenantId == tenantId && doc.DocumentType == TransportOrderDocumentType.Cmr && doc.DossierId != null)
+                .Select(doc => doc.DossierId!.Value)
+                .Concat(_dbContext.DossierOrders
+                    .Where(l => l.TenantId == tenantId && cmrOrderIds.Contains(l.TransportOrderId))
+                    .Select(l => l.DossierId))
+                .Concat(_dbContext.IssuedTransportDocuments
+                    .Where(doc => doc.TenantId == tenantId && doc.Kind == IssuedTransportDocumentKind.Cmr && doc.DossierId != null)
+                    .Select(doc => doc.DossierId!.Value));
+            dossiers = hasCmr ? WhereDossierIn(dossiers, cmrDossierIds) : WhereDossierNotIn(dossiers, cmrDossierIds);
         }
 
-        // ---- global search (one OR-predicate of correlated EXISTS, all on indexed join columns)
+        // ---- global search: direct columns OR the customer OR one unioned id set (orders by
+        // number/reference, stops by city/postal code, live trips by plate or driver name). Each id
+        // subquery is uncorrelated, so inside this OR the planner evaluates it once (hashed SubPlan).
         if (Term(query.Search) is { } term)
         {
+            var customerIds = _dbContext.Customers
+                .Where(c => c.TenantId == tenantId && (c.Name.ToLower().Contains(term) || c.CustomerNumber.ToLower().Contains(term)))
+                .Select(c => c.Id);
+            var relatedDossierIds = DossierIdsWithOrder(tenantId, o => o.OrderNumber.ToLower().Contains(term) || (o.CustomerReference != null && o.CustomerReference.ToLower().Contains(term)))
+                .Concat(DossierIdsWithStop(tenantId, s => (s.City != null && s.City.ToLower().Contains(term)) || (s.PostalCode != null && s.PostalCode.ToLower().StartsWith(term))))
+                .Concat(DossierIdsWithTrip(tenantId, t =>
+                    _dbContext.Vehicles.Any(v => v.Id == t.VehicleId && v.LicensePlate.ToLower().Contains(term))
+                    || _dbContext.Drivers.Any(dr => dr.Id == t.DriverId
+                        && _dbContext.Employees.Any(e => e.Id == dr.EmployeeId && (e.FirstName + " " + e.LastName).ToLower().Contains(term)))));
             dossiers = dossiers.Where(d =>
                 d.DossierNumber.ToLower().Contains(term)
                 || d.Title.ToLower().Contains(term)
                 || (d.CustomerReference != null && d.CustomerReference.ToLower().Contains(term))
-                || _dbContext.Customers.Any(c => c.Id == d.CustomerId && (c.Name.ToLower().Contains(term) || c.CustomerNumber.ToLower().Contains(term)))
-                || _dbContext.TransportOrders.Where(o => _dbContext.DossierOrders.Any(l => l.DossierId == d.Id && l.TransportOrderId == o.Id) || _dbContext.DossierActivities.Any(a => a.DossierId == d.Id && a.LinkedTransportOrderId == o.Id)).Any(o => o.OrderNumber.ToLower().Contains(term) || (o.CustomerReference != null && o.CustomerReference.ToLower().Contains(term)))
-                || _dbContext.TransportOrderStops.Where(s => _dbContext.TransportOrders.Where(o => _dbContext.DossierOrders.Any(l => l.DossierId == d.Id && l.TransportOrderId == o.Id) || _dbContext.DossierActivities.Any(a => a.DossierId == d.Id && a.LinkedTransportOrderId == o.Id)).Any(o2 => o2.Id == s.TransportOrderId)).Any(s => (s.City != null && s.City.ToLower().Contains(term)) || (s.PostalCode != null && s.PostalCode.ToLower().StartsWith(term)))
-                || _dbContext.Trips.Where(t => t.Status != TripStatus.Cancelled && _dbContext.TripOrders.Any(to => to.TripId == t.Id && _dbContext.TransportOrders.Where(o => _dbContext.DossierOrders.Any(l => l.DossierId == d.Id && l.TransportOrderId == o.Id) || _dbContext.DossierActivities.Any(a => a.DossierId == d.Id && a.LinkedTransportOrderId == o.Id)).Any(o2 => o2.Id == to.TransportOrderId))).Any(t =>
-                    _dbContext.Vehicles.Any(v => v.Id == t.VehicleId && v.LicensePlate.ToLower().Contains(term))
-                    || _dbContext.Drivers.Any(dr => dr.Id == t.DriverId
-                        && _dbContext.Employees.Any(e => e.Id == dr.EmployeeId && (e.FirstName + " " + e.LastName).ToLower().Contains(term)))));
+                || (d.CustomerId != null && customerIds.Contains(d.CustomerId.Value))
+                || relatedDossierIds.Contains(d.Id));
         }
 
-        var totalCount = await dossiers.CountAsync(cancellationToken);
-        var ordered = ApplySort(dossiers, query.Sort, query.Dir);
-        var items = await ProjectListAsync(ordered.Skip(page.Skip).Take(page.PageSize), cancellationToken);
-        items = await WithoutPricesUnlessPermittedAsync(await HydratePageAsync(items, cancellationToken), cancellationToken);
-        return new PagedResult<DossierListItemDto>(items, totalCount, page.Page, page.PageSize);
+        return dossiers;
     }
 
     private static string? Term(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim().ToLowerInvariant();
@@ -264,14 +310,124 @@ public partial class DossierService
         }
     }
 
+    // ------------------------------------------------------------ uncorrelated id-set builders
+    //
+    // Every builder yields IQueryable<Guid> of dossier ids and never references the outer dossier
+    // row, so `d.Id IN (…)` is evaluated once per statement instead of once per dossier. The two
+    // link paths (dossier_orders, activity-linked orders) are UNION ALL-ed: duplicates are harmless
+    // inside IN and skipping the dedupe keeps the subquery an append of two index-able scans.
+
+    private static IQueryable<TransportDossier> WhereDossierIn(IQueryable<TransportDossier> dossiers, IQueryable<Guid> dossierIds) =>
+        dossiers.Where(d => dossierIds.Contains(d.Id));
+
+    private static IQueryable<TransportDossier> WhereDossierNotIn(IQueryable<TransportDossier> dossiers, IQueryable<Guid> dossierIds) =>
+        dossiers.Where(d => !dossierIds.Contains(d.Id));
+
+    /// <summary>Dossiers linked (either path) to one of <paramref name="orderIds"/>.</summary>
+    private IQueryable<Guid> DossierIdsOfOrders(Guid tenantId, IQueryable<Guid> orderIds) =>
+        _dbContext.DossierOrders
+            .Where(l => l.TenantId == tenantId && orderIds.Contains(l.TransportOrderId))
+            .Select(l => l.DossierId)
+            .Concat(_dbContext.DossierActivities
+                .Where(a => a.TenantId == tenantId && a.LinkedTransportOrderId != null && orderIds.Contains(a.LinkedTransportOrderId!.Value))
+                .Select(a => a.DossierId));
+
+    /// <summary>Dossiers with a linked order matching <paramref name="predicate"/>.</summary>
+    private IQueryable<Guid> DossierIdsWithOrder(Guid tenantId, Expression<Func<TransportOrder, bool>> predicate) =>
+        DossierIdsOfOrders(tenantId, _dbContext.TransportOrders.Where(o => o.TenantId == tenantId).Where(predicate).Select(o => o.Id));
+
+    /// <summary>Dossiers with a linked order that has a stop matching <paramref name="predicate"/>.</summary>
+    private IQueryable<Guid> DossierIdsWithStop(Guid tenantId, Expression<Func<TransportOrderStop, bool>> predicate) =>
+        DossierIdsOfOrders(tenantId, _dbContext.TransportOrderStops.Where(s => s.TenantId == tenantId).Where(predicate).Select(s => s.TransportOrderId));
+
+    /// <summary>Dossiers with a linked order on a NON-cancelled trip matching <paramref name="predicate"/>.</summary>
+    private IQueryable<Guid> DossierIdsWithTrip(Guid tenantId, Expression<Func<Trip, bool>> predicate)
+    {
+        var tripIds = _dbContext.Trips.Where(t => t.TenantId == tenantId && t.Status != TripStatus.Cancelled).Where(predicate).Select(t => t.Id);
+        var orderIds = _dbContext.TripOrders.Where(to => to.TenantId == tenantId && tripIds.Contains(to.TripId)).Select(to => to.TransportOrderId);
+        return DossierIdsOfOrders(tenantId, orderIds);
+    }
+
+    /// <summary>
+    /// Dossiers with a line on a non-cancelled invoice matching <paramref name="predicate"/> (null =
+    /// any), the line pointing at a linked order (either path) or at one of the dossier's activities.
+    /// </summary>
+    private IQueryable<Guid> DossierIdsWithInvoice(Guid tenantId, Expression<Func<Invoice, bool>>? predicate)
+    {
+        var invoices = _dbContext.Invoices.Where(i => i.TenantId == tenantId && i.Status != InvoiceStatus.Cancelled);
+        if (predicate is not null) invoices = invoices.Where(predicate);
+        var invoiceIds = invoices.Select(i => i.Id);
+        var lines = _dbContext.InvoiceLines.Where(l => l.TenantId == tenantId && invoiceIds.Contains(l.InvoiceId));
+        var orderIds = lines.Where(l => l.TransportOrderId != null).Select(l => l.TransportOrderId!.Value);
+        var activityIds = lines.Where(l => l.DossierActivityId != null).Select(l => l.DossierActivityId!.Value);
+        return DossierIdsOfOrders(tenantId, orderIds)
+            .Concat(_dbContext.DossierActivities
+                .Where(a => a.TenantId == tenantId && activityIds.Contains(a.Id))
+                .Select(a => a.DossierId));
+    }
+
+    // ------------------------------------------------------------ planning date (one derived set)
+
+    private sealed class PlanningRow
+    {
+        public Guid DossierId { get; init; }
+        public DateOnly PlannedOn { get; init; }
+    }
+
+    private sealed class DossierPlanningDate
+    {
+        public Guid DossierId { get; init; }
+        public DateOnly PlanningDate { get; init; }
+    }
+
+    /// <summary>
+    /// Every planning fact of the tenant as (dossier, date): the TripDate of each non-cancelled trip
+    /// reached through dossier_orders or an activity-linked order, plus the PlannedDate of each
+    /// standalone activity. Ungrouped so range filters see every date; grouped by
+    /// <see cref="PlanningDatesByDossier"/> for the sort key (the same MIN the list row shows).
+    /// </summary>
+    private IQueryable<PlanningRow> PlanningRows(Guid tenantId)
+    {
+        var liveTrips = _dbContext.Trips.Where(t => t.TenantId == tenantId && t.Status != TripStatus.Cancelled);
+        var tripOrders = _dbContext.TripOrders.Where(to => to.TenantId == tenantId);
+        var viaOrderLinks = _dbContext.DossierOrders.Where(l => l.TenantId == tenantId)
+            .Join(tripOrders, l => l.TransportOrderId, to => to.TransportOrderId, (l, to) => new { l.DossierId, to.TripId })
+            .Join(liveTrips, x => x.TripId, t => t.Id, (x, t) => new PlanningRow { DossierId = x.DossierId, PlannedOn = t.TripDate });
+        var viaActivityLinks = _dbContext.DossierActivities.Where(a => a.TenantId == tenantId && a.LinkedTransportOrderId != null)
+            .Join(tripOrders, a => a.LinkedTransportOrderId!.Value, to => to.TransportOrderId, (a, to) => new { a.DossierId, to.TripId })
+            .Join(liveTrips, x => x.TripId, t => t.Id, (x, t) => new PlanningRow { DossierId = x.DossierId, PlannedOn = t.TripDate });
+        var standalone = _dbContext.DossierActivities
+            .Where(a => a.TenantId == tenantId && a.LinkedTransportOrderId == null && a.PlannedDate != null)
+            .Select(a => new PlanningRow { DossierId = a.DossierId, PlannedOn = a.PlannedDate!.Value });
+        return viaOrderLinks.Concat(viaActivityLinks).Concat(standalone);
+    }
+
+    private IQueryable<DossierPlanningDate> PlanningDatesByDossier(Guid tenantId) =>
+        PlanningRows(tenantId)
+            .GroupBy(r => r.DossierId)
+            .Select(g => new DossierPlanningDate { DossierId = g.Key, PlanningDate = g.Min(r => r.PlannedOn) });
+
     /// <summary>Whitelisted sort keys; a stable DossierNumber secondary key keeps pagination consistent.</summary>
-    private IOrderedQueryable<TransportDossier> ApplySort(IQueryable<TransportDossier> query, string? sort, string? dir)
+    private IQueryable<TransportDossier> ApplySort(IQueryable<TransportDossier> query, string? sort, string? dir, Guid tenantId)
     {
         var key = (sort ?? "date").Trim().ToLowerInvariant();
         if (!SortKeys.Contains(key)) key = "date";
         var descending = string.IsNullOrWhiteSpace(dir)
             ? key is "date" or "confirmedat" or "planningdate" or "createdat"
             : string.Equals(dir, "desc", StringComparison.OrdinalIgnoreCase);
+
+        if (key == "planningdate")
+        {
+            // LEFT JOIN the grouped planning set: the key is a column, nulls last in both directions,
+            // and the secondary keys are the same as every other sort.
+            var planning = PlanningDatesByDossier(tenantId);
+            var joined = query.LeftJoin(planning, d => d.Id, p => p.DossierId,
+                (d, p) => new { Dossier = d, PlanningDate = (DateOnly?)p!.PlanningDate });
+            var orderedJoined = descending
+                ? joined.OrderBy(x => x.PlanningDate == null).ThenByDescending(x => x.PlanningDate)
+                : joined.OrderBy(x => x.PlanningDate == null).ThenBy(x => x.PlanningDate);
+            return orderedJoined.ThenBy(x => x.Dossier.DossierNumber).ThenBy(x => x.Dossier.Id).Select(x => x.Dossier);
+        }
 
         IOrderedQueryable<TransportDossier> ordered = key switch
         {
@@ -284,9 +440,6 @@ public partial class DossierService
             "confirmedat" => descending
                 ? query.OrderBy(d => d.Status != DossierStatus.Closed || d.ClosedAt == null).ThenByDescending(d => d.ClosedAt)
                 : query.OrderBy(d => d.Status != DossierStatus.Closed || d.ClosedAt == null).ThenBy(d => d.ClosedAt),
-            "planningdate" => descending
-                ? query.OrderBy(d => (_dbContext.Trips.Where(t => t.Status != TripStatus.Cancelled && _dbContext.TripOrders.Any(to => to.TripId == t.Id && _dbContext.TransportOrders.Where(o => _dbContext.DossierOrders.Any(l => l.DossierId == d.Id && l.TransportOrderId == o.Id) || _dbContext.DossierActivities.Any(a => a.DossierId == d.Id && a.LinkedTransportOrderId == o.Id)).Any(o2 => o2.Id == to.TransportOrderId))).Min(t2 => (DateOnly?)t2.TripDate) == null ? _dbContext.DossierActivities.Where(a => a.DossierId == d.Id && a.LinkedTransportOrderId == null && a.PlannedDate != null).Min(a => a.PlannedDate) : _dbContext.DossierActivities.Where(a => a.DossierId == d.Id && a.LinkedTransportOrderId == null && a.PlannedDate != null).Min(a => a.PlannedDate) == null ? _dbContext.Trips.Where(t => t.Status != TripStatus.Cancelled && _dbContext.TripOrders.Any(to => to.TripId == t.Id && _dbContext.TransportOrders.Where(o => _dbContext.DossierOrders.Any(l => l.DossierId == d.Id && l.TransportOrderId == o.Id) || _dbContext.DossierActivities.Any(a => a.DossierId == d.Id && a.LinkedTransportOrderId == o.Id)).Any(o2 => o2.Id == to.TransportOrderId))).Min(t2 => (DateOnly?)t2.TripDate) : _dbContext.Trips.Where(t => t.Status != TripStatus.Cancelled && _dbContext.TripOrders.Any(to => to.TripId == t.Id && _dbContext.TransportOrders.Where(o => _dbContext.DossierOrders.Any(l => l.DossierId == d.Id && l.TransportOrderId == o.Id) || _dbContext.DossierActivities.Any(a => a.DossierId == d.Id && a.LinkedTransportOrderId == o.Id)).Any(o2 => o2.Id == to.TransportOrderId))).Min(t2 => (DateOnly?)t2.TripDate) < _dbContext.DossierActivities.Where(a => a.DossierId == d.Id && a.LinkedTransportOrderId == null && a.PlannedDate != null).Min(a => a.PlannedDate) ? _dbContext.Trips.Where(t => t.Status != TripStatus.Cancelled && _dbContext.TripOrders.Any(to => to.TripId == t.Id && _dbContext.TransportOrders.Where(o => _dbContext.DossierOrders.Any(l => l.DossierId == d.Id && l.TransportOrderId == o.Id) || _dbContext.DossierActivities.Any(a => a.DossierId == d.Id && a.LinkedTransportOrderId == o.Id)).Any(o2 => o2.Id == to.TransportOrderId))).Min(t2 => (DateOnly?)t2.TripDate) : _dbContext.DossierActivities.Where(a => a.DossierId == d.Id && a.LinkedTransportOrderId == null && a.PlannedDate != null).Min(a => a.PlannedDate)) == null).ThenByDescending(d => (_dbContext.Trips.Where(t => t.Status != TripStatus.Cancelled && _dbContext.TripOrders.Any(to => to.TripId == t.Id && _dbContext.TransportOrders.Where(o => _dbContext.DossierOrders.Any(l => l.DossierId == d.Id && l.TransportOrderId == o.Id) || _dbContext.DossierActivities.Any(a => a.DossierId == d.Id && a.LinkedTransportOrderId == o.Id)).Any(o2 => o2.Id == to.TransportOrderId))).Min(t2 => (DateOnly?)t2.TripDate) == null ? _dbContext.DossierActivities.Where(a => a.DossierId == d.Id && a.LinkedTransportOrderId == null && a.PlannedDate != null).Min(a => a.PlannedDate) : _dbContext.DossierActivities.Where(a => a.DossierId == d.Id && a.LinkedTransportOrderId == null && a.PlannedDate != null).Min(a => a.PlannedDate) == null ? _dbContext.Trips.Where(t => t.Status != TripStatus.Cancelled && _dbContext.TripOrders.Any(to => to.TripId == t.Id && _dbContext.TransportOrders.Where(o => _dbContext.DossierOrders.Any(l => l.DossierId == d.Id && l.TransportOrderId == o.Id) || _dbContext.DossierActivities.Any(a => a.DossierId == d.Id && a.LinkedTransportOrderId == o.Id)).Any(o2 => o2.Id == to.TransportOrderId))).Min(t2 => (DateOnly?)t2.TripDate) : _dbContext.Trips.Where(t => t.Status != TripStatus.Cancelled && _dbContext.TripOrders.Any(to => to.TripId == t.Id && _dbContext.TransportOrders.Where(o => _dbContext.DossierOrders.Any(l => l.DossierId == d.Id && l.TransportOrderId == o.Id) || _dbContext.DossierActivities.Any(a => a.DossierId == d.Id && a.LinkedTransportOrderId == o.Id)).Any(o2 => o2.Id == to.TransportOrderId))).Min(t2 => (DateOnly?)t2.TripDate) < _dbContext.DossierActivities.Where(a => a.DossierId == d.Id && a.LinkedTransportOrderId == null && a.PlannedDate != null).Min(a => a.PlannedDate) ? _dbContext.Trips.Where(t => t.Status != TripStatus.Cancelled && _dbContext.TripOrders.Any(to => to.TripId == t.Id && _dbContext.TransportOrders.Where(o => _dbContext.DossierOrders.Any(l => l.DossierId == d.Id && l.TransportOrderId == o.Id) || _dbContext.DossierActivities.Any(a => a.DossierId == d.Id && a.LinkedTransportOrderId == o.Id)).Any(o2 => o2.Id == to.TransportOrderId))).Min(t2 => (DateOnly?)t2.TripDate) : _dbContext.DossierActivities.Where(a => a.DossierId == d.Id && a.LinkedTransportOrderId == null && a.PlannedDate != null).Min(a => a.PlannedDate)))
-                : query.OrderBy(d => (_dbContext.Trips.Where(t => t.Status != TripStatus.Cancelled && _dbContext.TripOrders.Any(to => to.TripId == t.Id && _dbContext.TransportOrders.Where(o => _dbContext.DossierOrders.Any(l => l.DossierId == d.Id && l.TransportOrderId == o.Id) || _dbContext.DossierActivities.Any(a => a.DossierId == d.Id && a.LinkedTransportOrderId == o.Id)).Any(o2 => o2.Id == to.TransportOrderId))).Min(t2 => (DateOnly?)t2.TripDate) == null ? _dbContext.DossierActivities.Where(a => a.DossierId == d.Id && a.LinkedTransportOrderId == null && a.PlannedDate != null).Min(a => a.PlannedDate) : _dbContext.DossierActivities.Where(a => a.DossierId == d.Id && a.LinkedTransportOrderId == null && a.PlannedDate != null).Min(a => a.PlannedDate) == null ? _dbContext.Trips.Where(t => t.Status != TripStatus.Cancelled && _dbContext.TripOrders.Any(to => to.TripId == t.Id && _dbContext.TransportOrders.Where(o => _dbContext.DossierOrders.Any(l => l.DossierId == d.Id && l.TransportOrderId == o.Id) || _dbContext.DossierActivities.Any(a => a.DossierId == d.Id && a.LinkedTransportOrderId == o.Id)).Any(o2 => o2.Id == to.TransportOrderId))).Min(t2 => (DateOnly?)t2.TripDate) : _dbContext.Trips.Where(t => t.Status != TripStatus.Cancelled && _dbContext.TripOrders.Any(to => to.TripId == t.Id && _dbContext.TransportOrders.Where(o => _dbContext.DossierOrders.Any(l => l.DossierId == d.Id && l.TransportOrderId == o.Id) || _dbContext.DossierActivities.Any(a => a.DossierId == d.Id && a.LinkedTransportOrderId == o.Id)).Any(o2 => o2.Id == to.TransportOrderId))).Min(t2 => (DateOnly?)t2.TripDate) < _dbContext.DossierActivities.Where(a => a.DossierId == d.Id && a.LinkedTransportOrderId == null && a.PlannedDate != null).Min(a => a.PlannedDate) ? _dbContext.Trips.Where(t => t.Status != TripStatus.Cancelled && _dbContext.TripOrders.Any(to => to.TripId == t.Id && _dbContext.TransportOrders.Where(o => _dbContext.DossierOrders.Any(l => l.DossierId == d.Id && l.TransportOrderId == o.Id) || _dbContext.DossierActivities.Any(a => a.DossierId == d.Id && a.LinkedTransportOrderId == o.Id)).Any(o2 => o2.Id == to.TransportOrderId))).Min(t2 => (DateOnly?)t2.TripDate) : _dbContext.DossierActivities.Where(a => a.DossierId == d.Id && a.LinkedTransportOrderId == null && a.PlannedDate != null).Min(a => a.PlannedDate)) == null).ThenBy(d => (_dbContext.Trips.Where(t => t.Status != TripStatus.Cancelled && _dbContext.TripOrders.Any(to => to.TripId == t.Id && _dbContext.TransportOrders.Where(o => _dbContext.DossierOrders.Any(l => l.DossierId == d.Id && l.TransportOrderId == o.Id) || _dbContext.DossierActivities.Any(a => a.DossierId == d.Id && a.LinkedTransportOrderId == o.Id)).Any(o2 => o2.Id == to.TransportOrderId))).Min(t2 => (DateOnly?)t2.TripDate) == null ? _dbContext.DossierActivities.Where(a => a.DossierId == d.Id && a.LinkedTransportOrderId == null && a.PlannedDate != null).Min(a => a.PlannedDate) : _dbContext.DossierActivities.Where(a => a.DossierId == d.Id && a.LinkedTransportOrderId == null && a.PlannedDate != null).Min(a => a.PlannedDate) == null ? _dbContext.Trips.Where(t => t.Status != TripStatus.Cancelled && _dbContext.TripOrders.Any(to => to.TripId == t.Id && _dbContext.TransportOrders.Where(o => _dbContext.DossierOrders.Any(l => l.DossierId == d.Id && l.TransportOrderId == o.Id) || _dbContext.DossierActivities.Any(a => a.DossierId == d.Id && a.LinkedTransportOrderId == o.Id)).Any(o2 => o2.Id == to.TransportOrderId))).Min(t2 => (DateOnly?)t2.TripDate) : _dbContext.Trips.Where(t => t.Status != TripStatus.Cancelled && _dbContext.TripOrders.Any(to => to.TripId == t.Id && _dbContext.TransportOrders.Where(o => _dbContext.DossierOrders.Any(l => l.DossierId == d.Id && l.TransportOrderId == o.Id) || _dbContext.DossierActivities.Any(a => a.DossierId == d.Id && a.LinkedTransportOrderId == o.Id)).Any(o2 => o2.Id == to.TransportOrderId))).Min(t2 => (DateOnly?)t2.TripDate) < _dbContext.DossierActivities.Where(a => a.DossierId == d.Id && a.LinkedTransportOrderId == null && a.PlannedDate != null).Min(a => a.PlannedDate) ? _dbContext.Trips.Where(t => t.Status != TripStatus.Cancelled && _dbContext.TripOrders.Any(to => to.TripId == t.Id && _dbContext.TransportOrders.Where(o => _dbContext.DossierOrders.Any(l => l.DossierId == d.Id && l.TransportOrderId == o.Id) || _dbContext.DossierActivities.Any(a => a.DossierId == d.Id && a.LinkedTransportOrderId == o.Id)).Any(o2 => o2.Id == to.TransportOrderId))).Min(t2 => (DateOnly?)t2.TripDate) : _dbContext.DossierActivities.Where(a => a.DossierId == d.Id && a.LinkedTransportOrderId == null && a.PlannedDate != null).Min(a => a.PlannedDate))),
             "createdat" => descending ? query.OrderByDescending(d => d.CreatedAt) : query.OrderBy(d => d.CreatedAt),
             _ => descending
                 ? query.OrderBy(d => d.DossierDate == null).ThenByDescending(d => d.DossierDate)
