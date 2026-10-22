@@ -54,11 +54,29 @@ public class DashboardService : IDashboardService
         _authorization = authorization;
     }
 
+    /// <summary>Every permission a dashboard section is gated on — resolved ONCE per request (PERF-HIGH 6).</summary>
+    private static readonly string[] GatedPermissionCodes =
+    [
+        PermissionCodes.InvoicesView,
+        PermissionCodes.EmployeeNotesView,
+        PermissionCodes.InventoryView,
+        PermissionCodes.InventoryManage,
+        PermissionCodes.TasksViewOwn,
+        PermissionCodes.TasksViewTeam,
+        PermissionCodes.TasksViewAll,
+    ];
+
     public async Task<DashboardDto> GetAsync(CancellationToken cancellationToken)
     {
         var tenantId = _tenantContext.TenantId;
         var today = DateOnly.FromDateTime(_timeProvider.GetUtcNow().UtcDateTime);
         var monthStart = new DateOnly(today.Year, today.Month, 1);
+
+        // The viewer's section permissions in one roundtrip; every gate below reads this set.
+        // No viewer → no permission → every gated section stays hidden, exactly as before.
+        IReadOnlySet<string> permissions = _currentUser.CurrentUserId is { } viewerId
+            ? await _authorization.UserPermissionsAmongAsync(viewerId, GatedPermissionCodes, cancellationToken)
+            : new HashSet<string>(StringComparer.Ordinal);
 
         // Orders
         var orderCounts = await _dbContext.TransportOrders.AsNoTracking()
@@ -77,8 +95,7 @@ public class DashboardService : IDashboardService
         // Invoices: bounded in-memory sums over the relevant lines. Revenue and receivables are
         // invoice data: only an invoices.view holder gets them — every other dashboard viewer
         // reads zeros, not merely a hidden tile (Security sensitive-data review).
-        var seesInvoices = _currentUser.CurrentUserId is { } viewerId
-            && await _authorization.UserHasPermissionAsync(viewerId, PermissionCodes.InvoicesView, cancellationToken);
+        var seesInvoices = permissions.Contains(PermissionCodes.InvoicesView);
         var monthInvoices = await _dbContext.Invoices.AsNoTracking()
             .Where(i => seesInvoices && i.TenantId == tenantId && i.Status != InvoiceStatus.Cancelled
                         && i.InvoiceDate >= monthStart && i.InvoiceDate <= today)
@@ -162,13 +179,14 @@ public class DashboardService : IDashboardService
         var overdueMaintenanceCount = openMaintenanceJobs.Count(j =>
             MaintenanceService.IsOverdue(j.ScheduledDate, j.OdometerTriggerKm, j.CurrentOdometer, today));
 
-        // Today's planning board (conflicts computed live by the trip service).
+        // Today's planning board (conflicts computed live by the trip service — one batched
+        // engine pass for the day, PERF-BLOCKER 3).
         var tripsToday = await _tripService.ListAsync(today, today, null, null, cancellationToken);
 
         // Personnel notes pinned to the dashboard — only ever surfaced to a caller holding
         // employee_notes.view (defence in depth: the endpoint is also gated by dashboard.view,
         // a distinct, broader permission).
-        var pinnedEmployeeNotes = await GetPinnedEmployeeNotesAsync(tenantId, cancellationToken);
+        var pinnedEmployeeNotes = await GetPinnedEmployeeNotesAsync(tenantId, permissions, cancellationToken);
 
         var recentOrders = await (from o in _dbContext.TransportOrders.AsNoTracking()
                                       .Where(o => o.TenantId == tenantId)
@@ -204,18 +222,16 @@ public class DashboardService : IDashboardService
             recentOrders,
             tripsToday,
             pinnedEmployeeNotes,
-            await GetInventorySectionAsync(tenantId, today, cancellationToken),
-            await GetTaskSectionAsync(tenantId, cancellationToken),
+            await GetInventorySectionAsync(tenantId, today, permissions, cancellationToken),
+            await GetTaskSectionAsync(tenantId, permissions, cancellationToken),
             await GetUnreadInternalMessagesAsync(tenantId, cancellationToken));
     }
 
     /// <summary>Inventory tiles, only for holders of inventory.view/manage (frontend also gates).</summary>
     private async Task<InventoryDashboardSectionDto?> GetInventorySectionAsync(
-        Guid tenantId, DateOnly today, CancellationToken cancellationToken)
+        Guid tenantId, DateOnly today, IReadOnlySet<string> permissions, CancellationToken cancellationToken)
     {
-        if (_currentUser.CurrentUserId is not { } userId
-            || (!await _authorization.UserHasPermissionAsync(userId, PermissionCodes.InventoryView, cancellationToken)
-                && !await _authorization.UserHasPermissionAsync(userId, PermissionCodes.InventoryManage, cancellationToken)))
+        if (!permissions.Contains(PermissionCodes.InventoryView) && !permissions.Contains(PermissionCodes.InventoryManage))
         {
             return null;
         }
@@ -273,16 +289,17 @@ public class DashboardService : IDashboardService
     }
 
     /// <summary>Personal task tiles for anyone with a task-view permission; team tiles need view_team/all.</summary>
-    private async Task<TaskDashboardSectionDto?> GetTaskSectionAsync(Guid tenantId, CancellationToken cancellationToken)
+    private async Task<TaskDashboardSectionDto?> GetTaskSectionAsync(
+        Guid tenantId, IReadOnlySet<string> permissions, CancellationToken cancellationToken)
     {
         if (_currentUser.CurrentUserId is not { } userId)
         {
             return null;
         }
 
-        var viewOwn = await _authorization.UserHasPermissionAsync(userId, PermissionCodes.TasksViewOwn, cancellationToken);
-        var viewTeam = await _authorization.UserHasPermissionAsync(userId, PermissionCodes.TasksViewTeam, cancellationToken);
-        var viewAll = await _authorization.UserHasPermissionAsync(userId, PermissionCodes.TasksViewAll, cancellationToken);
+        var viewOwn = permissions.Contains(PermissionCodes.TasksViewOwn);
+        var viewTeam = permissions.Contains(PermissionCodes.TasksViewTeam);
+        var viewAll = permissions.Contains(PermissionCodes.TasksViewAll);
         if (!viewOwn && !viewTeam && !viewAll)
         {
             return null;
@@ -375,10 +392,10 @@ public class DashboardService : IDashboardService
 
     private const int PinnedNoteExcerptLength = 160;
 
-    private async Task<IReadOnlyList<PinnedEmployeeNoteDto>> GetPinnedEmployeeNotesAsync(Guid tenantId, CancellationToken cancellationToken)
+    private async Task<IReadOnlyList<PinnedEmployeeNoteDto>> GetPinnedEmployeeNotesAsync(
+        Guid tenantId, IReadOnlySet<string> permissions, CancellationToken cancellationToken)
     {
-        if (_currentUser.CurrentUserId is not { } userId
-            || !await _authorization.UserHasPermissionAsync(userId, PermissionCodes.EmployeeNotesView, cancellationToken))
+        if (!permissions.Contains(PermissionCodes.EmployeeNotesView))
         {
             return [];
         }
