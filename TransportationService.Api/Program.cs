@@ -95,6 +95,8 @@ builder.Services.AddCors(options =>
             .WithOrigins(corsOrigins)
             .AllowAnyHeader()
             .AllowAnyMethod()
+            // PERF-HIGH 3: a capped list (GET /api/trips) tells the SPA it was cut through these headers.
+            .WithExposedHeaders("X-Result-Truncated", "X-Result-Limit")
             // The HttpOnly refresh cookie (H5) must travel on the auth endpoints; credentials
             // are only ever allowed together with the EXPLICIT origin list above, never "*".
             .AllowCredentials();

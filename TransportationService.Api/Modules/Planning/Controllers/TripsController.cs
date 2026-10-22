@@ -1,4 +1,6 @@
+using System.Globalization;
 using Microsoft.AspNetCore.Mvc;
+using TransportationService.Api.Common.Models;
 using TransportationService.Api.Modules.Identity;
 using TransportationService.Api.Modules.Identity.Authorization;
 using TransportationService.Api.Modules.Identity.Services;
@@ -35,7 +37,16 @@ public class TripsController : ControllerBase
         [FromQuery] Guid? driverId,
         CancellationToken cancellationToken)
     {
-        return Ok(await _service.ListAsync(from, to, status, driverId, cancellationToken));
+        var result = await _service.ListWithLimitAsync(from, to, status, driverId, cancellationToken);
+        if (result.Truncated)
+        {
+            // PERF-HIGH 3: the list hit its cap — say so; the SPA shows the cut instead of a
+            // seemingly complete list. Absent headers mean the list is complete.
+            Response.Headers[ResultLimitHeaders.Truncated] = "true";
+            Response.Headers[ResultLimitHeaders.Limit] = result.Limit.ToString(CultureInfo.InvariantCulture);
+        }
+
+        return Ok(result.Items);
     }
 
     [HttpGet("{id:guid}")]
