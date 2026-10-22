@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using TransportationService.Api.Common;
+using TransportationService.Api.Common.Integrity;
+using TransportationService.Api.Common.Persistence;
 using TransportationService.Api.Data;
 using TransportationService.Api.Modules.Auditing.Services;
 using TransportationService.Api.Modules.Dossiers.Services;
@@ -176,6 +178,15 @@ public class IssuedTransportDocumentService : IIssuedTransportDocumentService
         var content = await _documents.BuildCurrentSnapshotAsync(orderId, kind.ToString(), cancellationToken)
             ?? throw new DomainValidationException("orderId", "De opdracht kon niet worden geladen om het document uit te geven.");
 
+        // PERF-H1 (performance/concurrency final remediation 2026-10-21): two first issues both saw
+        // "nothing active" and both inserted — TWO live CMRs — and parallel issues on different
+        // orders collided on the number index (raw 500). On PostgreSQL the whole issue now runs under
+        // one advisory lock per (tenant, kind, year): the live check, the replacement claim, the
+        // number claim and the insert form one serialized transaction, committed right after the
+        // document lands; a failure rolls the replacement claim back with it. The partial unique
+        // index IX_issued_transport_documents_Live is the final arbiter on every provider.
+        await using var series = await SeriesLock.AcquireAsync(_dbContext, SeriesKey(tenantId, kind, now.Year), cancellationToken);
+
         // M9: one ACTIVE document per order and kind — another one only as an explicit replacement.
         var replaced = await ClaimReplacementAsync(orderId, kind, documentId, request, now, cancellationToken);
         if (replaced is { Winner: { } replayed })
@@ -208,14 +219,25 @@ public class IssuedTransportDocumentService : IIssuedTransportDocumentService
         {
             if (await SaveWithNumberAsync(document, kind, now, request.RequestId, orderId, cancellationToken) is { } winner)
             {
-                await ReleaseReplacementAsync(documentId);
+                if (!series.OwnsTransaction)
+                {
+                    await ReleaseReplacementAsync(documentId);
+                }
+
                 return winner;
             }
+
+            await series.CommitAsync(cancellationToken);
         }
         catch
         {
-            // The new document never landed: the replaced one is active again.
-            await ReleaseReplacementAsync(documentId);
+            // The new document never landed: the replaced one is active again. Under the series
+            // transaction (PostgreSQL) the rollback undoes the claim by itself; elsewhere it is undone here.
+            if (!series.OwnsTransaction)
+            {
+                await ReleaseReplacementAsync(documentId);
+            }
+
             throw;
         }
 
@@ -314,6 +336,27 @@ public class IssuedTransportDocumentService : IIssuedTransportDocumentService
         return new ReplacementClaim(active.Id, active.DocumentNumber);
     }
 
+    /// <summary>The partial unique index behind "one live document per order and kind" (PERF-H1).</summary>
+    public const string LiveDocumentIndex = "IX_issued_transport_documents_Live";
+
+    /// <summary>The series a number is claimed from; also the PostgreSQL advisory-lock key.</summary>
+    private static string SeriesKey(Guid tenantId, IssuedTransportDocumentKind kind, int year) =>
+        $"transport-document-series:{tenantId}:{kind}:{year}";
+
+    private async Task<string> LiveDocumentConflictMessageAsync(
+        Guid orderId, IssuedTransportDocumentKind kind, CancellationToken cancellationToken)
+    {
+        var tenantId = _tenantContext.TenantId;
+        var number = await _dbContext.IssuedTransportDocuments.AsNoTracking()
+            .Where(d => d.TenantId == tenantId && d.TransportOrderId == orderId && d.Kind == kind && d.ReplacedByDocumentId == null)
+            .OrderByDescending(d => d.IssuedAt)
+            .Select(d => d.DocumentNumber)
+            .FirstOrDefaultAsync(cancellationToken);
+        return number is null
+            ? "Er is intussen al een actief document van deze soort uitgegeven voor deze opdracht. Vernieuw de lijst."
+            : $"Er is intussen al een actief document van deze soort uitgegeven voor deze opdracht ({number}). Vernieuw de lijst.";
+    }
+
     /// <summary>Undo a replacement claim whose new document never landed (no-op without a claim).</summary>
     private Task<int> ReleaseReplacementAsync(Guid newDocumentId) =>
         _dbContext.IssuedTransportDocuments
@@ -362,9 +405,9 @@ public class IssuedTransportDocumentService : IIssuedTransportDocumentService
                 // Another request claimed this value first: reload the counter and re-claim.
                 await _dbContext.Entry(sequence).ReloadAsync(cancellationToken);
             }
-            catch (DbUpdateException) when (attempt < MaxAttempts)
+            catch (DbUpdateException exception) when (UniqueViolations.IsUniqueViolation(exception))
             {
-                // A unique index spoke. Put our staged rows aside first, then find out which one.
+                // A unique index spoke. Put our staged rows aside first, then find out WHICH one.
                 _dbContext.Entry(document).State = EntityState.Detached;
                 var sequenceEntry = _dbContext.Entry(sequence);
                 if (sequenceEntry.State == EntityState.Added)
@@ -382,7 +425,20 @@ public class IssuedTransportDocumentService : IIssuedTransportDocumentService
                     return await ReturnExistingAsync(winner, orderId, cancellationToken);
                 }
 
-                // (2) Two first claims created the same sequence row, or (3) the number exists.
+                // (2) PERF-H1: another request issued a live document of this kind for the order
+                // between our "anything active?" check and the insert. Never a second live document,
+                // never a skip-forward: 409 — the refreshed list shows the winner.
+                if (UniqueViolations.ConstraintName(exception) == LiveDocumentIndex)
+                {
+                    throw new ConcurrencyConflictException(await LiveDocumentConflictMessageAsync(orderId, kind, cancellationToken));
+                }
+
+                if (attempt >= MaxAttempts)
+                {
+                    throw;
+                }
+
+                // (3) Two first claims created the same sequence row, or (4) the number exists.
                 skipTakenNumbers = true;
             }
         }

@@ -134,6 +134,13 @@ public class IssuedTransportDocumentConfiguration : IEntityTypeConfiguration<Iss
         // a soft-deleted document never releases its number), and one request issues one document.
         builder.HasIndex(d => new { d.TenantId, d.DocumentNumber }).IsUnique();
         builder.HasIndex(d => new { d.TenantId, d.RequestId }).IsUnique();
+        // PERF-H1 (performance/concurrency final remediation 2026-10-21): one LIVE document per order
+        // and kind, enforced by the database. The M9 service check alone raced: two first issues
+        // both saw "nothing active" and both inserted. A replaced (ReplacedByDocumentId set) or
+        // soft-deleted document leaves the index; the service maps a violation to 409.
+        builder.HasIndex(d => new { d.TenantId, d.TransportOrderId, d.Kind }, "IX_issued_transport_documents_Live")
+            .IsUnique()
+            .HasFilter("\"ReplacedByDocumentId\" IS NULL AND \"IsDeleted\" = false");
         builder.HasIndex(d => new { d.TenantId, d.TransportOrderId });
         builder.HasIndex(d => new { d.TenantId, d.DossierId });
 

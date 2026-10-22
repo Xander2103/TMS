@@ -2,6 +2,7 @@ using System.Reflection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using TransportationService.Api.Common;
+using TransportationService.Api.Common.Integrity;
 using TransportationService.Api.Data;
 using TransportationService.Api.Modules.Auditing.Services;
 using TransportationService.Api.Modules.Dossiers.Entities;
@@ -399,6 +400,71 @@ public class IssuedTransportDocumentTests
         using var document = PdfSharp.Pdf.IO.PdfReader.Open(new MemoryStream(pdf), PdfSharp.Pdf.IO.PdfDocumentOpenMode.Modify);
         Assert.Equal(1, document.PageCount);
         return System.Text.Encoding.Latin1.GetString(document.Pages[0].Contents.CreateSingleContent().Stream.UnfilteredValue);
+    }
+
+    /// <summary>
+    /// PERF-H1 (performance/concurrency final remediation 2026-10-21): two FIRST issues for the same
+    /// order both saw "nothing active" and both inserted — two live CMRs. The partial unique index
+    /// IX_issued_transport_documents_Live is the final arbiter now: the loser answers 409 naming the
+    /// winner's number, leaves no row and burns no number; the series simply continues.
+    /// </summary>
+    [Fact]
+    public async Task TwoFirstIssuesRacing_OnlyOneLiveDocumentSurvives_TheLoserGets409()
+    {
+        var race = new CompetingWriterInterceptor();
+        var h = await SeedAsync(race);
+        using var _ = h.Db;
+        race.Arm(
+            context => context.ChangeTracker.Entries<IssuedTransportDocument>().Any(e => e.State == EntityState.Added && e.Entity.TransportOrderId == h.TransportOrderId),
+            async cancellationToken =>
+            {
+                var (winner, winnerContext) = h.OnOwnContext();
+                await using (winnerContext)
+                {
+                    var issued = await winner.IssueAsync(h.TransportOrderId, Request("Cmr"), cancellationToken);
+                    Assert.Equal("CMR-2026-00001", issued!.DocumentNumber);
+                }
+            });
+
+        var conflict = await Assert.ThrowsAsync<ConcurrencyConflictException>(() =>
+            h.Sut().IssueAsync(h.TransportOrderId, Request("Cmr"), CancellationToken.None));
+
+        Assert.Equal(1, race.Fired);
+        Assert.Contains("CMR-2026-00001", conflict.Message);
+        var documents = await h.Db.Context.IssuedTransportDocuments.IgnoreQueryFilters().AsNoTracking().ToListAsync();
+        var live = Assert.Single(documents); // the loser left no row at all
+        Assert.Equal(("CMR-2026-00001", (Guid?)null), (live.DocumentNumber, live.ReplacedByDocumentId));
+        Assert.Equal(2, (await h.Db.Context.TransportDocumentSequences.AsNoTracking().SingleAsync()).NextValue); // no number burned
+
+        // The series simply continues afterwards, and the M9 replacement workflow still applies.
+        var next = (await h.Sut().IssueAsync(h.SecondTransportOrderId, Request("Cmr"), CancellationToken.None))!;
+        Assert.Equal("CMR-2026-00002", next.DocumentNumber);
+        var replacement = (await h.Sut().IssueAsync(h.TransportOrderId, Replacement("Cmr", live.Id), CancellationToken.None))!;
+        Assert.Equal(("CMR-2026-00003", live.Id), (replacement.DocumentNumber, replacement.ReplacesDocumentId));
+    }
+
+    /// <summary>PERF-H1: twelve parallel issues on twelve orders — one number each, contiguous, no 400/500.</summary>
+    [Fact]
+    public async Task TwelveParallelIssues_OnTwelveOrders_GetTwelveContiguousNumbers()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var workers = Enumerable.Range(0, 12).Select(_ => h.OnOwnContext()).ToList();
+        try
+        {
+            var issued = await Task.WhenAll(workers.Select((w, index) =>
+                w.Sut.IssueAsync(h.ExtraTransportOrderIds[index], Request("Cmr"), CancellationToken.None)));
+
+            var numbers = issued.Select(d => d!.DocumentNumber).ToList();
+            Assert.Equal(12, numbers.Distinct().Count());
+            Assert.Equal(Enumerable.Range(1, 12).Select(i => $"CMR-2026-{i:D5}"), numbers.OrderBy(n => n));
+            Assert.Equal(12, await h.Db.Context.IssuedTransportDocuments.AsNoTracking().CountAsync(d => d.ReplacedByDocumentId == null));
+            Assert.Equal(13, (await h.Db.Context.TransportDocumentSequences.AsNoTracking().SingleAsync()).NextValue);
+        }
+        finally
+        {
+            workers.ForEach(w => w.Context.Dispose());
+        }
     }
 
     /// <summary>Simulates the identical request winning the race: once, right before the first issued
