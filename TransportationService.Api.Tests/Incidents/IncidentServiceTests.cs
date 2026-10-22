@@ -202,13 +202,13 @@ public class IncidentServiceTests
             DueDate = new DateOnly(2026, 8, 1),
         }, CancellationToken.None);
 
-        var all = await sut.ListAsync(null, null, null, null, null, CancellationToken.None);
+        var all = (await sut.ListAsync(null, null, null, null, null, CancellationToken.None)).Items;
         Assert.Equal(2, all.Count);
         Assert.Single(all, i => i.IsOverdue);
 
-        Assert.Single(await sut.ListAsync(null, null, "High", null, null, CancellationToken.None));
-        Assert.Single(await sut.ListAsync("vertraging", null, null, null, null, CancellationToken.None));
-        Assert.Equal(2, (await sut.ListAsync(null, "New", null, null, null, CancellationToken.None)).Count);
+        Assert.Single((await sut.ListAsync(null, null, "High", null, null, CancellationToken.None)).Items);
+        Assert.Single((await sut.ListAsync("vertraging", null, null, null, null, CancellationToken.None)).Items);
+        Assert.Equal(2, (await sut.ListAsync(null, "New", null, null, null, CancellationToken.None)).Items.Count);
         await Assert.ThrowsAsync<DomainValidationException>(
             () => sut.ListAsync(null, null, "Extreme", null, null, CancellationToken.None));
     }

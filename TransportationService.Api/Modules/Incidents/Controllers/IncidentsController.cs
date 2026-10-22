@@ -36,19 +36,28 @@ public class IncidentsController : ControllerBase
         _currentUser = currentUser;
     }
 
+    /// <summary>
+    /// The incident register, paged and sorted server-side (PERF-H3). <c>page</c>/<c>pageSize</c>
+    /// follow <see cref="Common.Models.PageRequest"/> (default 25, max 200); <c>sort</c> is one of
+    /// created | title | severity | customer | due | status, <c>dir</c> asc | desc. Every filter of
+    /// the register (openOnly, mine/responsibleUserId, driver, vehicle, period, customer, order,
+    /// trip, dossier, search) is unchanged.
+    /// </summary>
     [HttpGet]
     [RequirePermission(PermissionCodes.IncidentsView, PermissionCodes.IncidentsManage)]
-    public async Task<ActionResult<IReadOnlyList<IncidentListItemDto>>> List(
+    public async Task<ActionResult<Common.Models.PagedResult<IncidentListItemDto>>> List(
         [FromQuery] string? search, [FromQuery] string? status, [FromQuery] string? severity,
         [FromQuery] Guid? dossierId, [FromQuery] Guid? customerId,
         [FromQuery] Guid? transportOrderId, [FromQuery] Guid? tripId,
         [FromQuery] Guid? responsibleUserId, [FromQuery] bool? mine, [FromQuery] Guid? driverId, [FromQuery] Guid? vehicleId,
         [FromQuery] DateOnly? from, [FromQuery] DateOnly? to, [FromQuery] bool? openOnly,
+        [FromQuery] int? page, [FromQuery] int? pageSize, [FromQuery] string? sort, [FromQuery] string? dir,
         CancellationToken cancellationToken)
     {
         var responsible = mine == true ? _currentUser.CurrentUserId : responsibleUserId;
         var filter = new IncidentListFilter(responsible, driverId, vehicleId, from, to, openOnly == true);
-        return Ok(await _service.ListAsync(search, status, severity, dossierId, customerId, cancellationToken, transportOrderId, tripId, filter));
+        var paging = IncidentListPage.Of(page, pageSize, sort, dir);
+        return Ok(await _service.ListAsync(search, status, severity, dossierId, customerId, cancellationToken, transportOrderId, tripId, filter, paging));
     }
 
     /// <summary>EX-07: the responsible picker — safe fields only, no general users.view needed.</summary>

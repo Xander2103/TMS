@@ -23,9 +23,10 @@ export function RelatedIncidentsNotice({ transportOrderId, tripId }: RelatedInci
   useEffect(() => {
     if (!canSee || (!transportOrderId && !tripId)) return
     let active = true
-    listIncidents({ transportOrderId, tripId })
-      .then((items) => {
-        if (active) setIncidents(items.filter((i) => i.status === 'New' || i.status === 'InProgress'))
+    // One page of the OPEN incidents is all the notice names (the server filters and caps).
+    listIncidents({ transportOrderId, tripId, openOnly: true, pageSize: 50 })
+      .then((result) => {
+        if (active) setIncidents(result.items.filter((i) => i.status === 'New' || i.status === 'InProgress'))
       })
       .catch(() => undefined)
     return () => {

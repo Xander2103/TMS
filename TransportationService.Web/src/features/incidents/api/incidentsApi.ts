@@ -1,14 +1,26 @@
 import { apiClient } from '../../../api/apiClient'
+import type { PagedResult } from '../../../api/types'
 import type { AssignableUser, IncidentDetail, IncidentInput, IncidentListItem, IncidentUpdate, LinkedDamageSeverity } from '../types'
 
-export function listIncidents(
-  params: {
-    search?: string; status?: string; severity?: string; dossierId?: string; customerId?: string
-    transportOrderId?: string; tripId?: string
-    mine?: boolean; driverId?: string; vehicleId?: string; from?: string; to?: string; openOnly?: boolean
-  } = {},
-): Promise<IncidentListItem[]> {
+export type IncidentSortKey = 'created' | 'title' | 'severity' | 'customer' | 'due' | 'status'
+
+export interface ListIncidentsParams {
+  search?: string; status?: string; severity?: string; dossierId?: string; customerId?: string
+  transportOrderId?: string; tripId?: string
+  mine?: boolean; driverId?: string; vehicleId?: string; from?: string; to?: string; openOnly?: boolean
+  /** PERF-H3: server-side page (default 25, max 200) and sort; the server returns the real `totalCount`. */
+  page?: number
+  pageSize?: number
+  sort?: IncidentSortKey | string
+  dir?: 'asc' | 'desc'
+}
+
+export function listIncidents(params: ListIncidentsParams = {}, signal?: AbortSignal): Promise<PagedResult<IncidentListItem>> {
   const query = new URLSearchParams()
+  if (params.page !== undefined) query.set('page', String(params.page))
+  if (params.pageSize !== undefined) query.set('pageSize', String(params.pageSize))
+  if (params.sort) query.set('sort', params.sort)
+  if (params.dir) query.set('dir', params.dir)
   if (params.mine) query.set('mine', 'true')
   if (params.driverId) query.set('driverId', params.driverId)
   if (params.vehicleId) query.set('vehicleId', params.vehicleId)
@@ -23,7 +35,7 @@ export function listIncidents(
   if (params.transportOrderId) query.set('transportOrderId', params.transportOrderId)
   if (params.tripId) query.set('tripId', params.tripId)
   const suffix = query.size > 0 ? `?${query.toString()}` : ''
-  return apiClient.getJson<IncidentListItem[]>(`/api/incidents${suffix}`)
+  return apiClient.getJson<PagedResult<IncidentListItem>>(`/api/incidents${suffix}`, { signal })
 }
 
 export function getIncident(id: string): Promise<IncidentDetail> {

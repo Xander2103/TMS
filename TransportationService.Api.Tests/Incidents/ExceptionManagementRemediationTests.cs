@@ -575,7 +575,7 @@ public class ExceptionManagementRemediationTests
         Assert.Equal(1, (await h.Lifecycle().EvaluateAsync(h.DossierId, CancellationToken.None))!.Summary.OpenIncidents);
 
         // The dossier's incident list shows them as well (one scope everywhere).
-        var listed = await h.Incidents().ListAsync(null, null, null, h.DossierId, null, CancellationToken.None);
+        var listed = (await h.Incidents().ListAsync(null, null, null, h.DossierId, null, CancellationToken.None)).Items;
         Assert.Equal(["Trip-only", "Order-only"], listed.Select(i => i.Title).ToArray());
     }
 

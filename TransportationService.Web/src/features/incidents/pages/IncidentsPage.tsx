@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { PageHeader } from '../../../components/layout/PageHeader'
 import { Badge } from '../../../components/ui/Badge'
@@ -38,15 +38,18 @@ import { Pagination } from '../../../components/ui/Pagination'
 import { DensityToggle } from '../../../components/ui/DensityToggle'
 import { useListDensity } from '../../../components/ui/listDensity'
 import { tableSortOf, useUrlListState } from '../../../hooks/useUrlListState'
+import { useResolvedLabel } from '../../../hooks/useResolvedLabel'
 import { SearchableSelect, type SearchableSelectOption } from '../../../components/ui/SearchableSelect'
-import { searchCustomers } from '../../customers/api/customersApi'
-import { searchDrivers } from '../../drivers/api/driversApi'
+import { resolveCustomerLabel, searchCustomerOptions } from '../../customers/api/customerOptions'
+import { resolveDriverLabel, searchActiveDriverOptions } from '../../drivers/api/driverOptions'
 import { getVehicleOptions } from '../../vehicles/api/vehiclesApi'
 
 const PAGE_SIZE = 25
-const SEVERITY_RANK: Record<string, number> = { Low: 0, Medium: 1, High: 2, Critical: 3 }
 
-/** B26: the register's view in the URL. The API returns the filtered set (≤ 500), sorted and paged here. */
+/**
+ * B26: the register's view in the URL. PERF-H3: the API pages AND sorts server-side (it used to
+ * hand over at most 500 rows, which the browser sorted and paged, reporting "500" as the total).
+ */
 const LIST_STATE = {
   defaults: {
     search: '', status: '', severity: '', sort: '', dir: '',
@@ -56,24 +59,6 @@ const LIST_STATE = {
   allowed: { sort: ['title', 'severity', 'customer', 'due', 'status'], dir: ['asc', 'desc'], mine: ['', '1'] },
 }
 const DESC_BY_DEFAULT = ['severity']
-
-function compareIncidents(a: IncidentListItem, b: IncidentListItem, sort: string): number {
-  switch (sort) {
-    case 'title':
-      return a.title.localeCompare(b.title)
-    case 'severity':
-      return (SEVERITY_RANK[a.severity] ?? 0) - (SEVERITY_RANK[b.severity] ?? 0)
-    case 'customer':
-      return (a.customerName ?? '').localeCompare(b.customerName ?? '')
-    case 'due':
-      // No due date sorts last in both directions is not needed here: it sorts as "latest".
-      return (a.dueDate ?? '9999').localeCompare(b.dueDate ?? '9999')
-    case 'status':
-      return a.status.localeCompare(b.status)
-    default:
-      return 0
-  }
-}
 
 /** Incidentenregister: schade, vertragingen, klachten en andere operationele meldingen. */
 type TranslateFn = (key: string) => string
@@ -118,6 +103,7 @@ export function IncidentsPage() {
   const canManage = hasPermission('incidents.manage')
 
   const [incidents, setIncidents] = useState<IncidentListItem[]>([])
+  const [totalCount, setTotalCount] = useState(0)
   const [loaded, setLoaded] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const { state, apply, reset, isFiltered } = useUrlListState(LIST_STATE)
@@ -126,56 +112,64 @@ export function IncidentsPage() {
   const severityFilter = state.severity as '' | IncidentSeverity
   const [density, setDensity] = useListDensity('incidents')
 
-  const [customerOptions, setCustomerOptions] = useState<SearchableSelectOption[]>([])
-  const [driverOptions, setDriverOptions] = useState<SearchableSelectOption[]>([])
+  // PERF-H3: customer and driver are searched server-side as the user types (the pickers used to
+  // hold the first 200 of each); a filter restored from the URL resolves its name once.
+  const customerLabel = useResolvedLabel(state.customer || null, resolveCustomerLabel)
+  const driverLabel = useResolvedLabel(state.driver || null, resolveDriverLabel)
   const [vehicleOptions, setVehicleOptions] = useState<SearchableSelectOption[]>([])
   useEffect(() => {
-    searchCustomers({ page: 1, pageSize: 200 })
-      .then((result) => setCustomerOptions(result.items.map((c) => ({ value: c.id, label: c.name }))))
-      .catch(() => setCustomerOptions([]))
-    searchDrivers({ page: 1, pageSize: 200, isActive: true })
-      .then((result) => setDriverOptions(result.items.map((d) => ({ value: d.id, label: d.fullName, description: d.driverNumber }))))
-      .catch(() => setDriverOptions([]))
     getVehicleOptions()
       .then((vehicles) => setVehicleOptions(vehicles.map((v) => ({ value: v.id, label: `${v.internalNumber} · ${v.licensePlate}` }))))
       .catch(() => setVehicleOptions([]))
   }, [])
 
-  const reload = useCallback(() => {
-    listIncidents({
-      search: search || undefined,
-      status: statusFilter || undefined,
-      severity: severityFilter || undefined,
-      mine: state.mine === '1',
-      customerId: state.customer || undefined,
-      driverId: state.driver || undefined,
-      vehicleId: state.vehicle || undefined,
-      from: state.from || undefined,
-      to: state.to || undefined,
-    })
-      .then((data) => {
-        setIncidents(data)
-        setError(null)
-        setLoaded(true)
-      })
-      .catch(() => {
-        setError(t('incidents.list.loadError'))
-        setLoaded(true)
-      })
-  }, [search, statusFilter, severityFilter, state.mine, state.customer, state.driver, state.vehicle, state.from, state.to, t])
+  const tableSort = tableSortOf(state.sort, state.dir, DESC_BY_DEFAULT)
+  // One request per distinct view (filters + sort + page); a superseded request is aborted.
+  const requestKey = JSON.stringify({
+    search, status: statusFilter, severity: severityFilter, mine: state.mine, customer: state.customer, driver: state.driver,
+    vehicle: state.vehicle, from: state.from, to: state.to, sort: tableSort?.key ?? '', dir: tableSort?.dir ?? '', page: state.page,
+  })
 
   useEffect(() => {
-    const timer = window.setTimeout(reload, 250)
-    return () => window.clearTimeout(timer)
-  }, [reload])
-
-  // The whole filtered set is in memory, so sorting before paging is correct (never "this page only").
-  const sorted = useMemo(() => {
-    if (!state.sort) return incidents
-    const factor = (tableSortOf(state.sort, state.dir, DESC_BY_DEFAULT)?.dir === 'desc' ? -1 : 1)
-    return [...incidents].sort((a, b) => factor * compareIncidents(a, b, state.sort))
-  }, [incidents, state.sort, state.dir])
-  const pageRows = sorted.slice((state.page - 1) * PAGE_SIZE, state.page * PAGE_SIZE)
+    const controller = new AbortController()
+    const timer = window.setTimeout(() => {
+      listIncidents(
+        {
+          search: search || undefined,
+          status: statusFilter || undefined,
+          severity: severityFilter || undefined,
+          mine: state.mine === '1',
+          customerId: state.customer || undefined,
+          driverId: state.driver || undefined,
+          vehicleId: state.vehicle || undefined,
+          from: state.from || undefined,
+          to: state.to || undefined,
+          page: state.page,
+          pageSize: PAGE_SIZE,
+          sort: tableSort?.key,
+          dir: tableSort?.dir,
+        },
+        controller.signal,
+      )
+        .then((data) => {
+          if (controller.signal.aborted) return
+          setIncidents(data.items)
+          setTotalCount(data.totalCount)
+          setError(null)
+          setLoaded(true)
+        })
+        .catch(() => {
+          if (controller.signal.aborted) return
+          setError(t('incidents.list.loadError'))
+          setLoaded(true)
+        })
+    }, 250)
+    return () => {
+      controller.abort()
+      window.clearTimeout(timer)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [requestKey, t])
 
   const columns: Column<IncidentListItem>[] = [
     { key: 'title', header: t('incidents.list.colTitle'), sortKey: 'title', render: (row) => <TruncatedText tooltip={row.title}>{row.title}</TruncatedText> },
@@ -280,7 +274,9 @@ export function IncidentsPage() {
             id="inc-filter-customer"
             value={state.customer || null}
             onChange={(value) => apply({ customer: value ?? '' })}
-            options={customerOptions}
+            options={[]}
+            selectedLabel={customerLabel}
+            onSearch={searchCustomerOptions}
             placeholder={t('incidents.list.allCustomers')}
             ariaLabel={t('incidents.list.customerFilter')}
           />
@@ -290,7 +286,9 @@ export function IncidentsPage() {
             id="inc-filter-driver"
             value={state.driver || null}
             onChange={(value) => apply({ driver: value ?? '' })}
-            options={driverOptions}
+            options={[]}
+            selectedLabel={driverLabel}
+            onSearch={searchActiveDriverOptions}
             placeholder={t('incidents.list.allDrivers')}
             ariaLabel={t('incidents.list.driverFilter')}
           />
@@ -321,16 +319,16 @@ export function IncidentsPage() {
         <DataTable
           fixedLayout
           density={density}
-          sort={tableSortOf(state.sort, state.dir, DESC_BY_DEFAULT)}
+          sort={tableSort}
           onSortChange={(next) => apply({ sort: next.key, dir: next.dir })}
           columns={columns}
-          rows={pageRows}
+          rows={incidents}
           rowKey={(row) => row.id}
           onRowClick={(row) => navigate(`/incidents/${row.id}`)}
           emptyAction={canManage ? <Button onClick={() => navigate('/incidents/new')}>{t('incidents.list.newIncident')}</Button> : undefined}
         />
       )}
-      {!error && <Pagination page={state.page} pageSize={PAGE_SIZE} totalCount={sorted.length} onPageChange={(next) => apply({ page: next })} />}
+      {!error && <Pagination page={state.page} pageSize={PAGE_SIZE} totalCount={totalCount} onPageChange={(next) => apply({ page: next })} />}
 
       <ProblemsPanel />
     </div>

@@ -1,5 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using TransportationService.Api.Common;
+using TransportationService.Api.Common.Models;
 using TransportationService.Api.Data;
 using TransportationService.Api.Modules.Auditing.Services;
 using TransportationService.Api.Modules.Incidents.Dtos;
@@ -11,10 +12,16 @@ namespace TransportationService.Api.Modules.Incidents.Services;
 
 public interface IIncidentService
 {
-    Task<IReadOnlyList<IncidentListItemDto>> ListAsync(
+    /// <summary>
+    /// One page of the incident register. PERF-H3: the list used to be cut at 500 rows without a
+    /// word; it is now paged server-side (<see cref="PageRequest"/>, max 200 per page) and sorted
+    /// server-side on the keys the register offers (<see cref="IncidentListPage"/>), so
+    /// <c>TotalCount</c> is the real count and every row can be reached.
+    /// </summary>
+    Task<PagedResult<IncidentListItemDto>> ListAsync(
         string? search, string? status, string? severity, Guid? dossierId, Guid? customerId,
         CancellationToken cancellationToken, Guid? transportOrderId = null, Guid? tripId = null,
-        IncidentListFilter? filter = null);
+        IncidentListFilter? filter = null, IncidentListPage? page = null);
 
     Task<IncidentDetailDto> CreateAsync(SaveIncidentRequest request, CancellationToken cancellationToken);
 
@@ -42,6 +49,20 @@ public interface IIncidentService
 public sealed record IncidentListFilter(
     Guid? ResponsibleUserId = null, Guid? DriverId = null, Guid? VehicleId = null,
     DateOnly? From = null, DateOnly? To = null, bool OpenOnly = false);
+
+/// <summary>
+/// Paging and sort of the incident register. <paramref name="Sort"/> is one of
+/// <see cref="SortKeys"/> (anything else = newest first); <paramref name="Dir"/> "asc"/"desc".
+/// </summary>
+public sealed record IncidentListPage(PageRequest Page, string? Sort = null, string? Dir = null)
+{
+    public const string DefaultSort = "created";
+    public static readonly IReadOnlyCollection<string> SortKeys = ["created", "title", "severity", "customer", "due", "status"];
+    public static readonly IReadOnlyCollection<string> DescendingByDefault = ["created", "severity"];
+
+    public static IncidentListPage Of(int? page, int? pageSize, string? sort = null, string? dir = null) =>
+        new(PageRequest.Of(page, pageSize), sort, dir);
+}
 
 public class IncidentService : IIncidentService
 {
@@ -90,12 +111,13 @@ public class IncidentService : IIncidentService
         _currentUser = currentUser;
     }
 
-    public async Task<IReadOnlyList<IncidentListItemDto>> ListAsync(
+    public async Task<PagedResult<IncidentListItemDto>> ListAsync(
         string? search, string? status, string? severity, Guid? dossierId, Guid? customerId,
         CancellationToken cancellationToken, Guid? transportOrderId = null, Guid? tripId = null,
-        IncidentListFilter? filter = null)
+        IncidentListFilter? filter = null, IncidentListPage? page = null)
     {
         var tenantId = _tenantContext.TenantId;
+        page ??= IncidentListPage.Of(null, null);
         var query = _dbContext.Incidents.AsNoTracking().Where(i => i.TenantId == tenantId);
 
         if (!string.IsNullOrWhiteSpace(status))
@@ -172,32 +194,54 @@ public class IncidentService : IIncidentService
             query = query.Where(i => i.Title.ToLower().Contains(term));
         }
 
-        var rows = await query
-            .OrderByDescending(i => i.CreatedAt)
-            .Take(500)
-            .Select(i => new
-            {
-                i.Id, i.Title, i.IncidentType, i.CustomTypeName, i.Status, i.Severity, i.DueDate, i.CreatedAt,
-                CustomerName = _dbContext.Customers
-                    .Where(c => c.Id == i.CustomerId).Select(c => (string?)c.Name).FirstOrDefault(),
-                ResponsibleName = _dbContext.Users
-                    .Where(u => u.Id == i.ResponsibleUserId).Select(u => (string?)(u.FirstName + " " + u.LastName)).FirstOrDefault(),
-                DossierNumber = _dbContext.TransportDossiers
-                    .Where(d => d.Id == i.DossierId).Select(d => (string?)d.DossierNumber).FirstOrDefault(),
-                OrderNumber = _dbContext.TransportOrders
-                    .Where(o => o.Id == i.TransportOrderId).Select(o => (string?)o.OrderNumber).FirstOrDefault(),
-                TripNumber = _dbContext.Trips
-                    .Where(t => t.Id == i.TripId).Select(t => (string?)t.TripNumber).FirstOrDefault(),
-                DriverName = _dbContext.Drivers.Where(d => d.Id == i.DriverId)
-                    .Join(_dbContext.Employees, d => d.EmployeeId, e => e.Id, (d, e) => (string?)(e.FirstName + " " + e.LastName))
-                    .FirstOrDefault(),
-                VehicleLabel = _dbContext.Vehicles
-                    .Where(v => v.Id == i.VehicleId).Select(v => (string?)v.LicensePlate).FirstOrDefault(),
-            })
+        var totalCount = await query.CountAsync(cancellationToken);
+
+        var projected = query.Select(i => new
+        {
+            i.Id, i.Title, i.IncidentType, i.CustomTypeName, i.Status, i.Severity, i.DueDate, i.CreatedAt,
+            CustomerName = _dbContext.Customers
+                .Where(c => c.Id == i.CustomerId).Select(c => (string?)c.Name).FirstOrDefault(),
+            ResponsibleName = _dbContext.Users
+                .Where(u => u.Id == i.ResponsibleUserId).Select(u => (string?)(u.FirstName + " " + u.LastName)).FirstOrDefault(),
+            DossierNumber = _dbContext.TransportDossiers
+                .Where(d => d.Id == i.DossierId).Select(d => (string?)d.DossierNumber).FirstOrDefault(),
+            OrderNumber = _dbContext.TransportOrders
+                .Where(o => o.Id == i.TransportOrderId).Select(o => (string?)o.OrderNumber).FirstOrDefault(),
+            TripNumber = _dbContext.Trips
+                .Where(t => t.Id == i.TripId).Select(t => (string?)t.TripNumber).FirstOrDefault(),
+            DriverName = _dbContext.Drivers.Where(d => d.Id == i.DriverId)
+                .Join(_dbContext.Employees, d => d.EmployeeId, e => e.Id, (d, e) => (string?)(e.FirstName + " " + e.LastName))
+                .FirstOrDefault(),
+            VehicleLabel = _dbContext.Vehicles
+                .Where(v => v.Id == i.VehicleId).Select(v => (string?)v.LicensePlate).FirstOrDefault(),
+        });
+
+        // Server-side sort on the register's columns (the UI used to sort its ≤ 500 rows itself).
+        // Every key ends on CreatedAt + Id so a page boundary is deterministic. Enums are stored as
+        // text: Status sorts alphabetically (as the UI did), Severity by rank Low → Critical.
+        var listSort = ListSort.Parse(page.Sort, page.Dir, IncidentListPage.DefaultSort, IncidentListPage.SortKeys, IncidentListPage.DescendingByDefault);
+        var ordered = listSort.Key switch
+        {
+            "title" => projected.OrderBy(r => r.Title, listSort.Descending),
+            "severity" => projected.OrderBy(
+                r => r.Severity == IncidentSeverity.Low ? 0 : r.Severity == IncidentSeverity.Medium ? 1 : r.Severity == IncidentSeverity.High ? 2 : 3,
+                listSort.Descending),
+            // Rows without a customer / due date sort last in both directions.
+            "customer" => projected.OrderBy(r => r.CustomerName == null).ThenBy(r => r.CustomerName, listSort.Descending),
+            "due" => projected.OrderBy(r => r.DueDate == null).ThenBy(r => r.DueDate, listSort.Descending),
+            "status" => projected.OrderBy(r => r.Status, listSort.Descending),
+            _ => projected.OrderBy(r => r.CreatedAt, listSort.Descending),
+        };
+
+        var rows = await ordered
+            .ThenByDescending(r => r.CreatedAt)
+            .ThenByDescending(r => r.Id)
+            .Skip(page.Page.Skip)
+            .Take(page.Page.PageSize)
             .ToListAsync(cancellationToken);
 
         var today = Today;
-        return rows
+        var items = rows
             .Select(r => new IncidentListItemDto(
                 r.Id, r.Title, r.IncidentType.ToString(), r.CustomTypeName,
                 r.Status.ToString(), r.Severity.ToString(),
@@ -208,6 +252,8 @@ public class IncidentService : IIncidentService
                 OrderNumber = r.OrderNumber, TripNumber = r.TripNumber, DriverName = r.DriverName, VehicleLabel = r.VehicleLabel,
             })
             .ToList();
+
+        return new PagedResult<IncidentListItemDto>(items, totalCount, page.Page.Page, page.Page.PageSize);
     }
 
     public async Task<IReadOnlyList<IncidentListItemDto>> ListForDriverAsync(

@@ -242,9 +242,9 @@ public class IncidentChargeAndRedeliveryTests
         using var _ = h.Db;
         await h.IncidentAsync();
 
-        Assert.Single(await h.Sut.ListAsync(null, null, null, null, null, CancellationToken.None, transportOrderId: h.OrderId));
-        Assert.Empty(await h.Sut.ListAsync(null, null, null, null, null, CancellationToken.None, transportOrderId: Guid.NewGuid()));
-        Assert.Empty(await h.Sut.ListAsync(null, null, null, null, null, CancellationToken.None, tripId: Guid.NewGuid()));
+        Assert.Single((await h.Sut.ListAsync(null, null, null, null, null, CancellationToken.None, transportOrderId: h.OrderId)).Items);
+        Assert.Empty((await h.Sut.ListAsync(null, null, null, null, null, CancellationToken.None, transportOrderId: Guid.NewGuid())).Items);
+        Assert.Empty((await h.Sut.ListAsync(null, null, null, null, null, CancellationToken.None, tripId: Guid.NewGuid())).Items);
     }
 
     [Fact]
