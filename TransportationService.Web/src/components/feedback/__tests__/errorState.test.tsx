@@ -56,6 +56,18 @@ describe('ErrorState', () => {
     expect(retryButton()).toBeInTheDocument()
   })
 
+  // PERF-H7: a request that hit the client deadline names the cause next to the caller's message
+  // and stays retryable — never "Geen toegang", never a validation error.
+  it('says the server is not responding for a timeout and keeps "Opnieuw proberen"', async () => {
+    const onRetry = renderState(new ApiError('De server reageert niet. Probeer het opnieuw.', 408, { code: 'timeout', transient: true }))
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Gegevens konden niet worden geladen. De server reageert niet. Probeer het opnieuw.',
+    )
+    expect(screen.queryByRole('heading', { name: 'Geen toegang' })).not.toBeInTheDocument()
+    await userEvent.click(retryButton()!)
+    expect(onRetry).toHaveBeenCalledOnce()
+  })
+
   it('renders exactly as before without an error object', () => {
     render(
       <MemoryRouter>

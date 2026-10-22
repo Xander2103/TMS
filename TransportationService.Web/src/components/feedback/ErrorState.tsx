@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { Button } from '../ui/Button'
 import { useLocale } from '../../i18n/localeContext'
 import { isForbiddenError, isNotFoundError, isRetryableError } from '../../api/notFound'
+import { isTimeoutError } from '../../api/apiClient'
 import { AccessDeniedState } from './AccessDeniedState'
 import './Feedback.css'
 
@@ -59,10 +60,13 @@ export function ErrorState({ message, error, onRetry, backTo, backLabel, action 
   // Without an error object the caller decides (legacy behaviour); with one, only when it helps.
   const retry = onRetry && (error === undefined || isRetryableError(error)) ? onRetry : undefined
   const hasActions = Boolean(retry || backTo || action)
+  // PERF-H7: a request that hit the 30 s deadline says so — the caller's generic "kon niet worden
+  // geladen" alone reads like a data problem, while the right reaction is simply to retry.
+  const text = isTimeoutError(error) ? `${message} ${t('errors.codes.timeout')}` : message
   return (
     <div className={hasActions ? 'error-state' : undefined}>
       <p className="error-text" role="alert" aria-live="assertive">
-        {message}
+        {text}
       </p>
       {hasActions && (
         <div className="error-state-actions">
