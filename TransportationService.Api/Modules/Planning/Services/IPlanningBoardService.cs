@@ -6,8 +6,9 @@ namespace TransportationService.Api.Modules.Planning.Services;
 /// <summary>
 /// Read models for the dispatcher planning center. Ranges are bounded (max 31 days) and the
 /// projections are batched — trip/order/resource data loads in a fixed number of queries.
-/// Conflict counts are recomputed live per trip through the conflict engine (the same
-/// correctness-first behavior as the existing trip list).
+/// Conflict counts are recomputed live through ONE batched conflict-engine pass per window
+/// (PERF-BLOCKER 3; the same correctness-first behavior as the trip list). Lists that hit
+/// their cap say so through <c>Truncated</c> / <c>Limit</c> (PERF-HIGH 3).
 /// </summary>
 public interface IPlanningBoardService
 {

@@ -18,6 +18,42 @@ public interface IFleetReadinessService
 
     Task<IReadOnlyDictionary<Guid, VehicleReadinessDto>> EvaluateTrailersAsync(
         IReadOnlyCollection<Guid> trailerIds, DateOnly date, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Multi-date batch for trip sets that span several days (planning board, trip list —
+    /// PERF-BLOCKER 3): the sources are loaded ONCE for all assets and every (asset, date) pair is
+    /// judged in memory. Pairs whose asset is unknown to the tenant are absent from the result.
+    /// The default groups by date; the database-backed service loads once.
+    /// </summary>
+    async Task<IReadOnlyDictionary<(Guid AssetId, DateOnly Date), VehicleReadinessDto>> EvaluateVehiclesAsync(
+        IReadOnlyCollection<(Guid VehicleId, DateOnly Date)> requests, CancellationToken cancellationToken)
+    {
+        var result = new Dictionary<(Guid AssetId, DateOnly Date), VehicleReadinessDto>();
+        foreach (var group in requests.GroupBy(r => r.Date))
+        {
+            foreach (var (id, verdict) in await EvaluateVehiclesAsync(group.Select(r => r.VehicleId).Distinct().ToList(), group.Key, cancellationToken))
+            {
+                result[(id, group.Key)] = verdict;
+            }
+        }
+
+        return result;
+    }
+
+    async Task<IReadOnlyDictionary<(Guid AssetId, DateOnly Date), VehicleReadinessDto>> EvaluateTrailersAsync(
+        IReadOnlyCollection<(Guid TrailerId, DateOnly Date)> requests, CancellationToken cancellationToken)
+    {
+        var result = new Dictionary<(Guid AssetId, DateOnly Date), VehicleReadinessDto>();
+        foreach (var group in requests.GroupBy(r => r.Date))
+        {
+            foreach (var (id, verdict) in await EvaluateTrailersAsync(group.Select(r => r.TrailerId).Distinct().ToList(), group.Key, cancellationToken))
+            {
+                result[(id, group.Key)] = verdict;
+            }
+        }
+
+        return result;
+    }
 }
 
 /// <summary>
@@ -67,23 +103,8 @@ public class FleetReadinessService : IFleetReadinessService
             return new Dictionary<Guid, VehicleReadinessDto>();
         }
 
-        var tenantId = _tenantContext.TenantId;
-        var ids = vehicleIds.Distinct().ToList();
-        var assets = await _dbContext.Vehicles.AsNoTracking()
-            .Where(v => v.TenantId == tenantId && ids.Contains(v.Id))
-            .Select(v => new AssetFacts(v.Id, v.InternalNumber, v.LicensePlate, v.IsActive,
-                v.OperationalStatus == VehicleOperationalStatus.OutOfService, v.OperationalStatus == VehicleOperationalStatus.InMaintenance,
-                v.StatusReason, v.HasCrane, v.AdrSuitable))
-            .ToListAsync(cancellationToken);
-        var sources = await LoadSourcesAsync(ids, vehicles: true, cancellationToken);
-        var tacho = await _dbContext.TachographCalibrations.AsNoTracking()
-            .Where(c => c.TenantId == tenantId && ids.Contains(c.VehicleId))
-            .GroupBy(c => c.VehicleId)
-            .Select(g => new { VehicleId = g.Key, Due = g.Max(c => c.NextCalibrationDue) })
-            .ToDictionaryAsync(x => x.VehicleId, x => x.Due, cancellationToken);
-
-        return assets.ToDictionary(a => a.Id, a =>
-            Build("Vehicle", a, date, sources.For(a.Id), tacho.TryGetValue(a.Id, out var due) ? due : null));
+        var verdicts = await EvaluateVehiclesAsync(vehicleIds.Distinct().Select(id => (id, date)).ToList(), cancellationToken);
+        return verdicts.ToDictionary(kv => kv.Key.AssetId, kv => kv.Value);
     }
 
     public async Task<IReadOnlyDictionary<Guid, VehicleReadinessDto>> EvaluateTrailersAsync(
@@ -94,17 +115,76 @@ public class FleetReadinessService : IFleetReadinessService
             return new Dictionary<Guid, VehicleReadinessDto>();
         }
 
+        var verdicts = await EvaluateTrailersAsync(trailerIds.Distinct().Select(id => (id, date)).ToList(), cancellationToken);
+        return verdicts.ToDictionary(kv => kv.Key.AssetId, kv => kv.Value);
+    }
+
+    /// <summary>Sources once for every requested vehicle (assets, 5 source tables, tachograph), then one in-memory verdict per (vehicle, date).</summary>
+    public async Task<IReadOnlyDictionary<(Guid AssetId, DateOnly Date), VehicleReadinessDto>> EvaluateVehiclesAsync(
+        IReadOnlyCollection<(Guid VehicleId, DateOnly Date)> requests, CancellationToken cancellationToken)
+    {
+        var result = new Dictionary<(Guid AssetId, DateOnly Date), VehicleReadinessDto>();
+        if (requests.Count == 0)
+        {
+            return result;
+        }
+
         var tenantId = _tenantContext.TenantId;
-        var ids = trailerIds.Distinct().ToList();
+        var ids = requests.Select(r => r.VehicleId).Distinct().ToList();
+        var assets = await _dbContext.Vehicles.AsNoTracking()
+            .Where(v => v.TenantId == tenantId && ids.Contains(v.Id))
+            .Select(v => new AssetFacts(v.Id, v.InternalNumber, v.LicensePlate, v.IsActive,
+                v.OperationalStatus == VehicleOperationalStatus.OutOfService, v.OperationalStatus == VehicleOperationalStatus.InMaintenance,
+                v.StatusReason, v.HasCrane, v.AdrSuitable))
+            .ToDictionaryAsync(a => a.Id, cancellationToken);
+        var sources = await LoadSourcesAsync(ids, vehicles: true, cancellationToken);
+        var tacho = await _dbContext.TachographCalibrations.AsNoTracking()
+            .Where(c => c.TenantId == tenantId && ids.Contains(c.VehicleId))
+            .GroupBy(c => c.VehicleId)
+            .Select(g => new { VehicleId = g.Key, Due = g.Max(c => c.NextCalibrationDue) })
+            .ToDictionaryAsync(x => x.VehicleId, x => x.Due, cancellationToken);
+
+        foreach (var (vehicleId, date) in requests.Distinct())
+        {
+            if (assets.TryGetValue(vehicleId, out var asset))
+            {
+                result[(vehicleId, date)] = Build("Vehicle", asset, date, sources.For(asset.Id),
+                    tacho.TryGetValue(asset.Id, out var due) ? due : null);
+            }
+        }
+
+        return result;
+    }
+
+    /// <summary>Sources once for every requested trailer (assets, 5 source tables), then one in-memory verdict per (trailer, date).</summary>
+    public async Task<IReadOnlyDictionary<(Guid AssetId, DateOnly Date), VehicleReadinessDto>> EvaluateTrailersAsync(
+        IReadOnlyCollection<(Guid TrailerId, DateOnly Date)> requests, CancellationToken cancellationToken)
+    {
+        var result = new Dictionary<(Guid AssetId, DateOnly Date), VehicleReadinessDto>();
+        if (requests.Count == 0)
+        {
+            return result;
+        }
+
+        var tenantId = _tenantContext.TenantId;
+        var ids = requests.Select(r => r.TrailerId).Distinct().ToList();
         var assets = await _dbContext.Trailers.AsNoTracking()
             .Where(t => t.TenantId == tenantId && ids.Contains(t.Id))
             .Select(t => new AssetFacts(t.Id, t.InternalNumber, t.LicensePlate, t.IsActive,
                 t.OperationalStatus == TrailerOperationalStatus.OutOfService, t.OperationalStatus == TrailerOperationalStatus.InMaintenance,
                 t.StatusReason, false, t.AdrSuitable))
-            .ToListAsync(cancellationToken);
+            .ToDictionaryAsync(a => a.Id, cancellationToken);
         var sources = await LoadSourcesAsync(ids, vehicles: false, cancellationToken);
 
-        return assets.ToDictionary(a => a.Id, a => Build("Trailer", a, date, sources.For(a.Id), null));
+        foreach (var (trailerId, date) in requests.Distinct())
+        {
+            if (assets.TryGetValue(trailerId, out var asset))
+            {
+                result[(trailerId, date)] = Build("Trailer", asset, date, sources.For(asset.Id), null);
+            }
+        }
+
+        return result;
     }
 
     private VehicleReadinessDto Build(string kind, AssetFacts asset, DateOnly date, AssetSources sources, DateOnly? tachographDue)

@@ -92,6 +92,10 @@ public class TripService : ITripService
         _dbContext.Trips.Where(t => t.TenantId == _tenantContext.TenantId);
 
     public async Task<IReadOnlyList<TripListItemDto>> ListAsync(
+        DateOnly? from, DateOnly? to, TripStatus? status, Guid? driverId, CancellationToken cancellationToken) =>
+        (await ListWithLimitAsync(from, to, status, driverId, cancellationToken)).Items;
+
+    public async Task<TripListResult> ListWithLimitAsync(
         DateOnly? from, DateOnly? to, TripStatus? status, Guid? driverId, CancellationToken cancellationToken)
     {
         var query = TenantScoped().AsNoTracking().Include(t => t.Orders).AsQueryable();
@@ -101,19 +105,30 @@ public class TripService : ITripService
         if (status is { } s) query = query.Where(t => t.Status == s);
         if (driverId is { } d) query = query.Where(t => t.DriverId == d);
 
+        // PERF-HIGH 3: one row beyond the cap tells us whether the list was cut, so the response
+        // can say so instead of looking complete.
         var trips = await query
             .OrderBy(t => t.TripDate).ThenBy(t => t.TripNumber)
-            .Take(500)
+            .Take(PlanningListLimits.Trips + 1)
             .ToListAsync(cancellationToken);
+        var truncated = trips.Count > PlanningListLimits.Trips;
+        if (truncated)
+        {
+            trips.RemoveRange(PlanningListLimits.Trips, trips.Count - PlanningListLimits.Trips);
+        }
 
         var names = await ResolveResourceNamesAsync(trips, cancellationToken);
+
+        // Conflicts are recomputed live so the list always reflects the current data — for work
+        // that can still change; executed / cancelled history is never re-judged (MD-M6). ONE
+        // batched engine pass for the whole page (PERF-BLOCKER 3), never one per trip.
+        var conflictsByTrip = await _conflictService.EvaluateManyAsync(
+            trips.Where(IsStillPlannable).ToList(), cancellationToken);
 
         var items = new List<TripListItemDto>(trips.Count);
         foreach (var trip in trips)
         {
-            // Conflicts are recomputed live so the board always reflects the current data — for work
-            // that can still change; executed / cancelled history is never re-judged (MD-M6).
-            var conflicts = await ConflictsForAsync(trip, cancellationToken);
+            var conflicts = conflictsByTrip.GetValueOrDefault(trip.Id) ?? [];
             items.Add(new TripListItemDto(
                 trip.Id, trip.TripNumber, trip.TripDate, trip.Status,
                 // MD-M6: a completed trip shows the identity it was executed with.
@@ -126,7 +141,7 @@ public class TripService : ITripService
                 trip.VehicleSelectionSource));
         }
 
-        return items;
+        return new TripListResult(items, truncated, PlanningListLimits.Trips);
     }
 
     public async Task<TripDetailDto?> GetByIdAsync(Guid id, CancellationToken cancellationToken)
@@ -1123,10 +1138,12 @@ public class TripService : ITripService
     /// BLOCKING conflict after the driver left — planning conflicts describe work that can still be
     /// changed, so executed and cancelled trips are not re-evaluated against today's master data.
     /// </summary>
+    private static bool IsStillPlannable(Trip trip) =>
+        trip.Status is not (TripStatus.Completed or TripStatus.Cancelled);
+
+    /// <summary>Single-trip form of the MD-M6 rule (trip detail); the list batches through <see cref="IsStillPlannable"/>.</summary>
     private async Task<IReadOnlyList<PlanningConflictDto>> ConflictsForAsync(Trip trip, CancellationToken cancellationToken) =>
-        trip.Status is TripStatus.Completed or TripStatus.Cancelled
-            ? []
-            : await _conflictService.EvaluateAsync(trip, cancellationToken);
+        IsStillPlannable(trip) ? await _conflictService.EvaluateAsync(trip, cancellationToken) : [];
 
     /// <summary>MD-M6: freezes driver / vehicle / trailer identity at completion (never overwritten).</summary>
     private async Task FreezeExecutionIdentityAsync(Trip trip, CancellationToken cancellationToken)

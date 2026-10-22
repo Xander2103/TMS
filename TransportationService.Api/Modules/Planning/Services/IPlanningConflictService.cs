@@ -16,4 +16,14 @@ public interface IPlanningConflictService
     /// dossier activity probes with a transient trip and states its own crane requirement here.
     /// </summary>
     Task<IReadOnlyList<PlanningConflictDto>> EvaluateAsync(Trip trip, bool requiresCraneOperator, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Set-based evaluation for boards and lists (PERF-BLOCKER 3): the facts of ALL trips are
+    /// loaded in a fixed number of statements and every trip is judged in memory with the same
+    /// rules as <see cref="EvaluateAsync(Trip, CancellationToken)"/>. The result holds one entry
+    /// per distinct trip id, in the same order and with the same conflicts the single-trip call
+    /// would produce.
+    /// </summary>
+    Task<IReadOnlyDictionary<Guid, IReadOnlyList<PlanningConflictDto>>> EvaluateManyAsync(
+        IReadOnlyList<Trip> trips, CancellationToken cancellationToken);
 }

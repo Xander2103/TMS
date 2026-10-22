@@ -9,6 +9,14 @@ public interface ITripService
     Task<IReadOnlyList<TripListItemDto>> ListAsync(
         DateOnly? from, DateOnly? to, TripStatus? status, Guid? driverId, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Same list, plus whether the <see cref="PlanningListLimits.Trips"/> cap cut it (PERF-HIGH 3).
+    /// The controller turns the flag into the <c>X-Result-Truncated</c> / <c>X-Result-Limit</c> headers.
+    /// </summary>
+    async Task<TripListResult> ListWithLimitAsync(
+        DateOnly? from, DateOnly? to, TripStatus? status, Guid? driverId, CancellationToken cancellationToken) =>
+        new(await ListAsync(from, to, status, driverId, cancellationToken), Truncated: false, PlanningListLimits.Trips);
+
     Task<TripDetailDto?> GetByIdAsync(Guid id, CancellationToken cancellationToken);
 
     Task<TripOperationResult> CreateAsync(CreateTripRequest request, CancellationToken cancellationToken);

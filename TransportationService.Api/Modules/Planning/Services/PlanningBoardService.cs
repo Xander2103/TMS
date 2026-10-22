@@ -65,12 +65,14 @@ public class PlanningBoardService : IPlanningBoardService
         var tenantId = _tenantContext.TenantId;
         var (start, end) = NormalizeRange(from, to);
 
+        // PERF-HIGH 3: one row beyond the cap tells us whether the window was cut (Truncated/Limit).
         var trips = await _dbContext.Trips.AsNoTracking()
             .Include(t => t.Orders)
             .Where(t => t.TenantId == tenantId && t.TripDate >= start && t.TripDate <= end)
             .OrderBy(t => t.TripDate).ThenBy(t => t.PlannedStart).ThenBy(t => t.TripNumber)
-            .Take(500)
+            .Take(PlanningListLimits.BoardTrips + 1)
             .ToListAsync(cancellationToken);
+        var truncated = TrimToLimit(trips, PlanningListLimits.BoardTrips);
 
         var orderIds = trips.SelectMany(t => t.Orders.Where(o => !o.IsDeleted).Select(o => o.TransportOrderId))
             .Distinct().ToList();
@@ -129,6 +131,10 @@ public class PlanningBoardService : IPlanningBoardService
                 .Select(t => new { t.Id, t.InternalNumber, t.CapacityKg, t.VolumeM3 })
                 .ToDictionaryAsync(t => t.Id, cancellationToken);
 
+        // PERF-BLOCKER 3: ONE batched engine pass for the whole window (a fixed number of
+        // statements), never one engine run per trip. The board judges every trip it shows.
+        var conflictsByTrip = await _conflictService.EvaluateManyAsync(trips, cancellationToken);
+
         var items = new List<PlanningBoardTripDto>(trips.Count);
         foreach (var trip in trips)
         {
@@ -178,7 +184,7 @@ public class PlanningBoardService : IPlanningBoardService
                 capacityVolume = vehicle.VolumeM3;
             }
 
-            var conflicts = await _conflictService.EvaluateAsync(trip, cancellationToken);
+            var conflicts = conflictsByTrip[trip.Id];
             // B09: the card explains itself on hover — blocking reasons first, three at most.
             var conflictPreview = conflicts
                 .OrderByDescending(c => c.Severity == Common.Scheduling.ConflictSeverity.Blocking)
@@ -201,7 +207,19 @@ public class PlanningBoardService : IPlanningBoardService
                 conflictPreview));
         }
 
-        return new PlanningBoardDto(start, end, items);
+        return new PlanningBoardDto(start, end, items, truncated, PlanningListLimits.BoardTrips);
+    }
+
+    /// <summary>Cuts a list fetched with <c>Take(limit + 1)</c> back to the cap; true when it was over it.</summary>
+    private static bool TrimToLimit<T>(List<T> rows, int limit)
+    {
+        if (rows.Count <= limit)
+        {
+            return false;
+        }
+
+        rows.RemoveRange(limit, rows.Count - limit);
+        return true;
     }
 
     // -----------------------------------------------------------------------
@@ -381,8 +399,9 @@ public class PlanningBoardService : IPlanningBoardService
                     d.EmployeeId, Name = e.FirstName + " " + e.LastName, e.EmploymentStatus,
                 })
             .OrderBy(d => d.Name)
-            .Take(500)
+            .Take(PlanningListLimits.Resources + 1)
             .ToListAsync(cancellationToken);
+        var driversTruncated = TrimToLimit(driverRows, PlanningListLimits.Resources);
         var employeeIds = driverRows.Select(d => d.EmployeeId).ToList();
 
         var absences = employeeIds.Count == 0
@@ -412,7 +431,7 @@ public class PlanningBoardService : IPlanningBoardService
         var vehicleRows = await _dbContext.Vehicles.AsNoTracking()
             .Where(v => v.TenantId == tenantId)
             .OrderBy(v => v.InternalNumber)
-            .Take(500)
+            .Take(PlanningListLimits.Resources + 1)
             .Select(v => new
             {
                 v.Id, v.InternalNumber, v.LicensePlate, v.OperationalStatus, v.IsActive,
@@ -420,16 +439,18 @@ public class PlanningBoardService : IPlanningBoardService
                 v.FixedDriverId, v.CurrentDriverId,
             })
             .ToListAsync(cancellationToken);
+        var vehiclesTruncated = TrimToLimit(vehicleRows, PlanningListLimits.Resources);
         var trailerRows = await _dbContext.Trailers.AsNoTracking()
             .Where(t => t.TenantId == tenantId)
             .OrderBy(t => t.InternalNumber)
-            .Take(500)
+            .Take(PlanningListLimits.Resources + 1)
             .Select(t => new
             {
                 t.Id, t.InternalNumber, t.LicensePlate, t.OperationalStatus, t.IsActive,
                 t.CapacityKg, t.VolumeM3, t.HasRefrigeration, t.AdrSuitable,
             })
             .ToListAsync(cancellationToken);
+        var trailersTruncated = TrimToLimit(trailerRows, PlanningListLimits.Resources);
 
         var driverNamesById = driverRows.ToDictionary(d => d.Id, d => d.Name);
         var fixedVehicleByDriver = vehicleRows
@@ -503,6 +524,7 @@ public class PlanningBoardService : IPlanningBoardService
             trailerReadiness.GetValueOrDefault(t.Id)?.Level,
             trailerReadiness.GetValueOrDefault(t.Id) is { Level: not Fleet.Dtos.ReadinessLevel.Deployable } tr ? tr.Summary : null)).ToList();
 
-        return new PlanningResourcesDto(start, end, drivers, vehicles, trailers);
+        return new PlanningResourcesDto(start, end, drivers, vehicles, trailers,
+            driversTruncated || vehiclesTruncated || trailersTruncated, PlanningListLimits.Resources);
     }
 }

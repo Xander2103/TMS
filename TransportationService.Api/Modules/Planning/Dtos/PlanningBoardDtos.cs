@@ -36,10 +36,15 @@ public record PlanningBoardTripDto(
     /// <summary>B09: the first conflict descriptions (blocking first, max 3) so a card can explain itself without a selection.</summary>
     IReadOnlyList<string>? ConflictPreview = null);
 
+/// <param name="Truncated">PERF-HIGH 3: true when the window held more trips than <paramref name="Limit"/>
+/// and the list was cut — the client must say so instead of presenting a silently incomplete board.</param>
+/// <param name="Limit">The cap that applied (<see cref="PlanningListLimits.BoardTrips"/>).</param>
 public record PlanningBoardDto(
     DateOnly From,
     DateOnly To,
-    IReadOnlyList<PlanningBoardTripDto> Trips);
+    IReadOnlyList<PlanningBoardTripDto> Trips,
+    bool Truncated = false,
+    int Limit = PlanningListLimits.BoardTrips);
 
 // ---------------------------------------------------------------------------
 // Unplanned work (left zone): orders awaiting planning, paged and filtered.
@@ -158,7 +163,10 @@ public record PlanningResourcesDto(
     DateOnly To,
     IReadOnlyList<PlanningDriverDto> Drivers,
     IReadOnlyList<PlanningVehicleDto> Vehicles,
-    IReadOnlyList<PlanningTrailerDto> Trailers);
+    IReadOnlyList<PlanningTrailerDto> Trailers,
+    /// <summary>PERF-HIGH 3: true when at least one of the three lists was cut at <see cref="Limit"/>.</summary>
+    bool Truncated = false,
+    int Limit = PlanningListLimits.Resources);
 
 // ---------------------------------------------------------------------------
 // Targeted trip commands (drag-and-drop mutations).

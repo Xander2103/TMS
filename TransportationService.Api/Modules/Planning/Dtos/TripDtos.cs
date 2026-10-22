@@ -102,6 +102,13 @@ public record TripListItemDto(
     /// <summary>D1: Suggested | Manual; null = legacy/no vehicle (treat as Manual).</summary>
     VehicleSelectionSource? VehicleSelectionSource = null);
 
+/// <summary>
+/// PERF-HIGH 3: the trip list is capped at <see cref="Limit"/> rows; <see cref="Truncated"/> tells
+/// the caller the cap was hit (the controller surfaces it as the <c>X-Result-Truncated</c> /
+/// <c>X-Result-Limit</c> response headers) so the client never shows a silently incomplete list.
+/// </summary>
+public record TripListResult(IReadOnlyList<TripListItemDto> Items, bool Truncated, int Limit);
+
 public record TripDetailDto(
     Guid Id,
     string TripNumber,
