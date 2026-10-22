@@ -190,6 +190,27 @@ public class CustomerServiceTests
     }
 
     [Fact]
+    public async Task SearchAsync_MatchesName_CustomerNumber_AndVatNumber_CaseInsensitive()
+    {
+        // PERF-H3: the customer pickers search server-side on what the planner knows — the name,
+        // the customer number or the VAT number — instead of filtering a 200-row client list.
+        using var db = new SqliteTestDbContext();
+        var tenantId = await SeedTenantAsync(db, "t", "KL-");
+        var sut = CreateSut(db, tenantId);
+        var acme = await sut.CreateAsync(NewCustomer("Acme Logistics") with { VatNumber = "BE0123456749" }, CancellationToken.None);
+        await sut.CreateAsync(NewCustomer("Beta Transport") with { VatNumber = "BE0987654394" }, CancellationToken.None);
+
+        async Task<List<string>> FindAsync(string term) =>
+            (await sut.SearchAsync(term, null, null, PageRequest.Of(1, 25), CancellationToken.None)).Items.Select(c => c.Name).ToList();
+
+        Assert.Equal(["Acme Logistics"], await FindAsync("acme"));
+        Assert.Equal(["Acme Logistics"], await FindAsync(acme.CustomerNumber.ToLowerInvariant()));
+        Assert.Equal(["Acme Logistics"], await FindAsync("be0123"));
+        Assert.Equal(["Beta Transport"], await FindAsync("0987654394"));
+        Assert.Empty(await FindAsync("gamma"));
+    }
+
+    [Fact]
     public async Task SetActiveAsync_TogglesLifecycle_AndAudits()
     {
         using var db = new SqliteTestDbContext();

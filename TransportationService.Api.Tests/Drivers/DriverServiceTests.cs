@@ -129,6 +129,25 @@ public class DriverServiceTests
     }
 
     [Fact]
+    public async Task Search_MatchesFullNameInEitherOrder_AndDriverNumber()
+    {
+        // PERF-H3: the pickers search server-side; a planner types "jan jansen" or "jansen jan".
+        var tenantId = Guid.NewGuid();
+        var h = await SeedAsync(tenantId);
+        using var _ = h.Db;
+        var created = await h.Sut.CreateAsync(CreateRequest(h.EmployeeId), CancellationToken.None);
+
+        async Task<int> CountAsync(string term) =>
+            (await h.Sut.SearchAsync(term, null, null, null, null, null, null, false, false, PageRequest.Of(1, 25), CancellationToken.None)).TotalCount;
+
+        Assert.Equal(1, await CountAsync("Jan Jansen"));
+        Assert.Equal(1, await CountAsync("jansen jan"));
+        Assert.Equal(1, await CountAsync(created.Driver!.DriverNumber.ToLowerInvariant()));
+        Assert.Equal(1, await CountAsync("MED-0001"));
+        Assert.Equal(0, await CountAsync("Piet Jansen"));
+    }
+
+    [Fact]
     public async Task SetBlocked_MarksReadinessBlockedWithReason()
     {
         var tenantId = Guid.NewGuid();

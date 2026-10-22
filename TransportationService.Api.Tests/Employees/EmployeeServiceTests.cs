@@ -70,6 +70,29 @@ public class EmployeeServiceTests
     }
 
     [Fact]
+    public async Task Search_MatchesFullNameInEitherOrder_AndEmployeeNumber()
+    {
+        // PERF-H3: the employee pickers search server-side; "an peeters" must not need a comma.
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        h.Db.Context.Employees.AddRange(
+            NewEmployee(h.TenantId, "An", "Peeters", "MED-0001"),
+            NewEmployee(h.TenantId, "Peter", "Anselmo", "MED-0002"));
+        await h.Db.Context.SaveChangesAsync();
+
+        async Task<List<string>> FindAsync(string term)
+        {
+            var result = await h.Employees.SearchAsync(term, null, null, null, null, false, null, null, false, PageRequest.Of(1, 25), CancellationToken.None);
+            return result.Items.Select(i => i.EmployeeNumber).ToList();
+        }
+
+        Assert.Equal(["MED-0001"], await FindAsync("An Peeters"));
+        Assert.Equal(["MED-0001"], await FindAsync("peeters an"));
+        Assert.Equal(["MED-0002"], await FindAsync("med-0002"));
+        Assert.Empty(await FindAsync("Jan Peeters"));
+    }
+
+    [Fact]
     public async Task Sort_NameDesc_OrdersByLastNameThenFirstName_Descending()
     {
         var h = await SeedAsync();

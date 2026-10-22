@@ -129,10 +129,14 @@ public class DriverService : IDriverService
         {
             // Case-insensitive on both PostgreSQL and SQLite (plain LIKE is case-sensitive on PostgreSQL).
             var term = search.Trim().ToLowerInvariant();
+            // PERF-H3 picker search: driver number, personnel number, first/last name, and the
+            // full name in either order ("jan peeters", "peeters jan").
             joined = joined.Where(x =>
                 x.d.DriverNumber.ToLower().Contains(term) ||
                 x.e.FirstName.ToLower().Contains(term) ||
                 x.e.LastName.ToLower().Contains(term) ||
+                (x.e.FirstName + " " + x.e.LastName).ToLower().Contains(term) ||
+                (x.e.LastName + " " + x.e.FirstName).ToLower().Contains(term) ||
                 x.e.EmployeeNumber.ToLower().Contains(term));
         }
 

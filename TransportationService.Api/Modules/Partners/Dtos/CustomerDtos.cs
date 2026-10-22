@@ -13,7 +13,12 @@ public record CustomerListItemDto(
     string? CountryCode,
     string? CategoryName,
     bool IsActive,
-    bool IsBlocked);
+    bool IsBlocked)
+{
+    /// <summary>PERF-H3: shown in the picker's second line next to the customer number, so a
+    /// planner who only knows the VAT number recognises the hit.</summary>
+    public string? VatNumber { get; init; }
+}
 
 public record CustomerContactDto(
     Guid Id,

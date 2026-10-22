@@ -165,10 +165,14 @@ public class EmployeeService : IEmployeeService
         {
             // Case-insensitive on both PostgreSQL and SQLite (plain LIKE is case-sensitive on PostgreSQL).
             var term = searchText.Trim().ToLowerInvariant();
+            // PERF-H3 picker search: personnel number, first/last name, the full name in either
+            // order ("jan peeters", "peeters jan"), e-mail and city.
             query = query.Where(e =>
                 e.EmployeeNumber.ToLower().Contains(term) ||
                 e.FirstName.ToLower().Contains(term) ||
                 e.LastName.ToLower().Contains(term) ||
+                (e.FirstName + " " + e.LastName).ToLower().Contains(term) ||
+                (e.LastName + " " + e.FirstName).ToLower().Contains(term) ||
                 (e.Email != null && e.Email.ToLower().Contains(term)) ||
                 (e.City != null && e.City.ToLower().Contains(term)));
         }

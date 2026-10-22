@@ -94,7 +94,10 @@ public class CustomerService : ICustomerService
                         from cat in cats.DefaultIfEmpty()
                         select new CustomerListItemDto(
                             c.Id, c.CustomerNumber, c.Name, c.City, c.CountryCode,
-                            cat != null ? cat.Name : null, c.IsActive, c.IsBlocked);
+                            cat != null ? cat.Name : null, c.IsActive, c.IsBlocked)
+                        {
+                            VatNumber = c.VatNumber,
+                        };
 
         return await projected.ToPagedResultAsync(page, dto => dto, cancellationToken);
     }
