@@ -1794,6 +1794,7 @@ namespace TransportationService.Api.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<Guid>("Version")
+                        .IsConcurrencyToken()
                         .HasColumnType("uuid");
 
                     b.HasKey("Id");
@@ -6869,6 +6870,7 @@ namespace TransportationService.Api.Migrations
                         .HasColumnType("character varying(30)");
 
                     b.Property<string>("Status")
+                        .IsConcurrencyToken()
                         .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
@@ -8845,6 +8847,10 @@ namespace TransportationService.Api.Migrations
 
                     b.HasIndex("TenantId", "TransportOrderId");
 
+                    b.HasIndex(new[] { "TenantId", "TransportOrderId", "Kind" }, "IX_issued_transport_documents_Live")
+                        .IsUnique()
+                        .HasFilter("\"ReplacedByDocumentId\" IS NULL AND \"IsDeleted\" = false");
+
                     b.ToTable("issued_transport_documents", (string)null);
                 });
 
@@ -9219,6 +9225,7 @@ namespace TransportationService.Api.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<Guid>("Version")
+                        .IsConcurrencyToken()
                         .HasColumnType("uuid");
 
                     b.Property<decimal?>("VolumeM3")
