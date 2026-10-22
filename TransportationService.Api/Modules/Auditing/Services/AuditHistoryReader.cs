@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.EntityFrameworkCore;
+using TransportationService.Api.Common.Models;
 using TransportationService.Api.Data;
 using TransportationService.Api.Modules.Auditing.Dtos;
 using TransportationService.Api.Modules.Auditing.Entities;
@@ -23,8 +24,6 @@ public interface IAuditHistoryReader
 /// </summary>
 public class AuditHistoryReader : IAuditHistoryReader
 {
-    private const int DefaultPageSize = 25;
-
     private readonly TransportationDbContext _dbContext;
     private readonly ITenantContext _tenantContext;
     private readonly IAuditReferenceResolver _references;
@@ -39,14 +38,22 @@ public class AuditHistoryReader : IAuditHistoryReader
     public async Task<AuditLogPagedResult> ReadAsync(
         IQueryable<AuditLog> rows, int page, int pageSize, IReadOnlyCollection<string>? redactedKeys, CancellationToken cancellationToken)
     {
-        page = page < 1 ? 1 : page;
-        pageSize = pageSize < 1 ? DefaultPageSize : pageSize;
+        // PERF-H5: the raw audit log of a tenant runs into the hundreds of thousands of rows;
+        // `pageSize=1000000` used to stream the whole table (97 MB). Every page request goes
+        // through the shared normaliser: 1..200 rows, default 25, page >= 1. The returned
+        // `pageSize` tells the caller what was really applied.
+        var pageRequest = PageRequest.Of(page, pageSize);
+        page = pageRequest.Page;
+        pageSize = pageRequest.PageSize;
 
         var query = rows.AsNoTracking().Where(a => a.TenantId == _tenantContext.TenantId);
         var totalCount = await query.CountAsync(cancellationToken);
         var items = await query
+            // Stable order: rows written in the same tick (one SaveChanges) keep a fixed
+            // position across pages, so paging never skips or repeats an entry.
             .OrderByDescending(a => a.Timestamp)
-            .Skip((page - 1) * pageSize)
+            .ThenByDescending(a => a.Id)
+            .Skip(pageRequest.Skip)
             .Take(pageSize)
             .Select(a => new AuditLogDto(a.Id, a.UserId, a.EntityType, a.EntityId, a.Action, a.OldValuesJson, a.NewValuesJson, a.Timestamp))
             .ToListAsync(cancellationToken);
