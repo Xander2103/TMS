@@ -18,6 +18,13 @@ public class TransportOrderConfiguration : IEntityTypeConfiguration<TransportOrd
         builder.Property(o => o.CustomerReference).HasMaxLength(100);
         builder.Property(o => o.Status).HasConversion<string>().HasMaxLength(20);
         builder.Property(o => o.Priority).HasConversion<string>().HasMaxLength(10);
+        // PERF-B4 (performance/concurrency final remediation 2026-10-21): the Guid token was only
+        // compared in code (UpdateAsync & co.), so two saves that both passed the check both UPDATEd —
+        // a silent lost update. As an EF concurrency token every UPDATE carries
+        // WHERE "Version" = @original; the loser matches no row and answers 409 with the current
+        // state. Callers that omit the version (EDI, portal, scripts) skip the code check but are
+        // protected by the token just the same.
+        builder.Property(o => o.Version).IsConcurrencyToken();
         builder.Property(o => o.GoodsDescription).HasMaxLength(1000);
         builder.Property(o => o.Quantity).HasPrecision(12, 2);
         builder.Property(o => o.QuantityUnit).HasMaxLength(50);

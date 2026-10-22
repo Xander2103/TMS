@@ -21,6 +21,13 @@ public class TransportDossierConfiguration : IEntityTypeConfiguration<TransportD
         builder.Property(d => d.ConfirmationSource).HasConversion<string>().HasMaxLength(20);
         builder.Property(d => d.ConfirmationReason).HasMaxLength(1000);
         builder.Property(d => d.CancellationReason).HasMaxLength(1000);
+        // PERF-B4 (performance/concurrency final remediation 2026-10-21): the Guid token was only
+        // compared in code (RequireVersionAsync), so two saves that both passed the check both
+        // UPDATEd — a silent lost update. As an EF concurrency token every UPDATE carries
+        // WHERE "Version" = @original; the loser matches no row and surfaces as 409 with the current
+        // state. Callers that omit the version (EDI, portal, scripts) skip the code check but are
+        // protected by the token just the same.
+        builder.Property(d => d.Version).IsConcurrencyToken();
 
         builder.HasOne<Organization.Entities.LegalEntity>().WithMany().HasForeignKey(d => d.LegalEntityId)
             .OnDelete(DeleteBehavior.Restrict);

@@ -857,7 +857,14 @@ public partial class DossierService : IDossierService
             dossier.Notes = Trim(request.Notes);
         }
 
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            throw await VersionConflictFromStoreAsync(dossier.Id, cancellationToken);
+        }
 
         await _auditService.RecordAsync(EntityType, dossier.Id.ToString(), "Updated", null,
             new { dossier.Title, dossier.CustomerId, dossier.CustomerReference, dossier.DossierDate, dossier.ResponsibleUserId }, cancellationToken);
@@ -953,7 +960,17 @@ public partial class DossierService : IDossierService
 
         dossier.LegalEntityId = request.LegalEntityId;
         dossier.Version = Guid.NewGuid();
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            // The order moves above are part of this transaction: undo them BEFORE the current
+            // state is read for the 409 body, so the client never sees half a change.
+            await transaction.RollbackAsync(cancellationToken);
+            throw await VersionConflictFromStoreAsync(dossier.Id, cancellationToken);
+        }
 
         await _auditService.RecordAsync(EntityType, dossier.Id.ToString(), "LegalEntityChanged",
             new { LegalEntityId = previous },
@@ -1036,6 +1053,22 @@ public partial class DossierService : IDossierService
         {
             throw new DossierVersionConflictException((await GetAsync(dossier.Id, cancellationToken))!);
         }
+    }
+
+    /// <summary>
+    /// PERF-B4: the database token caught a save that had passed <see cref="RequireVersionAsync"/> —
+    /// another request changed the dossier between the check and the UPDATE. Same 409 contract as
+    /// the code-level check: the body carries the current state, read fresh from the store rather
+    /// than from the tracked (now stale, locally modified) instance. Only a genuine race lands here;
+    /// a dossier that vanished meanwhile is reported as the same conflict.
+    /// </summary>
+    private async Task<Exception> VersionConflictFromStoreAsync(Guid dossierId, CancellationToken cancellationToken)
+    {
+        _dbContext.ChangeTracker.Clear();
+        var current = await GetAsync(dossierId, cancellationToken);
+        return current is null
+            ? new DomainValidationException("dossierId", "Dit dossier bestaat niet meer. Herlaad de lijst.")
+            : new DossierVersionConflictException(current);
     }
 
     public async Task<DossierDetailDto?> LinkOrderAsync(Guid id, LinkDossierOrderRequest request, CancellationToken cancellationToken)

@@ -37,6 +37,9 @@ builder.Services
         options.Filters.Add<TransportationService.Api.Common.Integrity.ReferencedRecordExceptionFilter>();
         // MD-M2: a stale master-data edit → 409 "intussen gewijzigd", never a silent overwrite.
         options.Filters.Add<TransportationService.Api.Common.Integrity.ConcurrencyConflictExceptionFilter>();
+        // PERF-H2: an expected race that ends on a KNOWN unique constraint (planning entry, user roles,
+        // document/invoice numbers, live CMR) → 409 with a domain sentence; unknown constraints stay 500.
+        options.Filters.Add<TransportationService.Api.Common.Integrity.KnownUniqueConflictExceptionFilter>();
         // Stale dossier-version mutations → 409 with the current state (rebase contract).
         options.Filters.Add<TransportationService.Api.Modules.Dossiers.DossierVersionConflictExceptionFilter>();
         // Per-request session-revocation (security stamp) + mandatory-password-change enforcement,

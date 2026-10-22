@@ -273,6 +273,18 @@ public class UserService : IUserService
                 await MapAsync(user, cancellationToken), IdentityClassError(offending));
         }
 
+        // PERF-H2 root cause (performance/concurrency final remediation 2026-10-21): six parallel
+        // replacements of one user's roles ended in two raw 500s on PK_user_roles — both requests
+        // read the same old set, both deleted it, both inserted the new rows. On PostgreSQL the user
+        // row is locked for the rest of this transaction BEFORE the existing roles are read, so
+        // replacements serialize and the last complete set wins deterministically (every caller
+        // gets 200). SQLite (tests) keeps the plain path; a collision there maps to 409 via the
+        // known-constraint filter.
+        await using var transaction = Common.Persistence.SeriesLock.IsPostgres(_dbContext) && _dbContext.Database.CurrentTransaction is null
+            ? await _dbContext.Database.BeginTransactionAsync(cancellationToken)
+            : null;
+        await Common.Persistence.RowLock.ForUpdateAsync(_dbContext, "users", "Id", id, cancellationToken);
+
         var existingRoles = await _dbContext.UserRoles.Where(ur => ur.UserId == id).ToListAsync(cancellationToken);
         var oldRoleIds = existingRoles.Select(ur => ur.RoleId).ToHashSet();
 
@@ -334,6 +346,11 @@ public class UserService : IUserService
 
         await _auditService.RecordAsync("User", user.Id.ToString(), "AssignRoles",
             new { RoleIds = oldRoleIds.ToList() }, new { RoleIds = newRoleIds.ToList(), ActorUserId = actorId }, cancellationToken);
+
+        if (transaction is not null)
+        {
+            await transaction.CommitAsync(cancellationToken);
+        }
 
         return new UserOperationResult(UserOperationOutcome.Success, await MapAsync(user, cancellationToken));
     }

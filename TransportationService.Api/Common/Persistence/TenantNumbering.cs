@@ -62,10 +62,14 @@ public static class TenantNumbering
 
                 return;
             }
-            catch (DbUpdateConcurrencyException) when (settings is not null && attempt < MaxAttempts)
+            catch (DbUpdateConcurrencyException exception)
+                when (settings is not null && attempt < MaxAttempts && exception.Entries.Any(e => ReferenceEquals(e.Entity, settings)))
             {
                 // Another request claimed the counter value first (only possible without the row
                 // lock, e.g. SQLite). Take the current counters and let assignNumber() claim the next.
+                // PERF-B4: only a conflict ON THE COUNTER ROW is retried here; a conflict on another
+                // row in the same save (an order or dossier whose Version token was overtaken) is a
+                // genuine race that must surface as 409, not be retried thirty times.
                 await RefreshCountersAsync(dbContext, settings, cancellationToken);
             }
             catch (DbUpdateException exception) when (settings is not null && attempt < MaxAttempts && IsUniqueViolation(exception))

@@ -603,7 +603,14 @@ public class TransportOrderService : ITransportOrderService
         }
         order.LegalEntityId = request.LegalEntityId;
         order.Version = Guid.NewGuid();
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return await VersionConflictFromStoreAsync(order.Id, cancellationToken);
+        }
 
         await _auditService.RecordAsync(EntityType, order.Id.ToString(), "LegalEntityChanged",
             new { LegalEntityId = previousEntityId },
@@ -1007,7 +1014,17 @@ public class TransportOrderService : ITransportOrderService
         await InvoiceReadinessEvaluator.EvaluateAsync(_dbContext, order, cancellationToken);
         // D3: address-book rows ride in the SAME save as the order (all or nothing).
         await StageAddressBookAsync(addressBook, order.CustomerId, cancellationToken);
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            // PERF-B4: the database token caught what the version check above could not — a
+            // colleague saved between the check and the UPDATE. Same 409 contract as a stale token.
+            return await VersionConflictFromStoreAsync(order.Id, cancellationToken);
+        }
+
         await AuditAddressBookAsync(addressBook, order, cancellationToken);
 
         var cargoAfter = replacementCargo
@@ -3049,6 +3066,26 @@ public class TransportOrderService : ITransportOrderService
         return warnings;
     }
 
+    /// <summary>
+    /// PERF-B4 (performance/concurrency final remediation 2026-10-21): <c>TransportOrder.Version</c>
+    /// is an EF concurrency token now, so a save that passed the in-code version check can still be
+    /// refused by the database when a colleague saved in between. The answer is the same 409 as a
+    /// stale token: <see cref="TransportOrderOperationResult.Conflict"/> with the CURRENT state,
+    /// read fresh (the tracked instance holds the losing edit). Callers without a version (EDI,
+    /// portal, scripts) skip the code check but are protected by the token the same way.
+    /// </summary>
+    private async Task<TransportOrderOperationResult> VersionConflictFromStoreAsync(Guid orderId, CancellationToken cancellationToken)
+    {
+        _dbContext.ChangeTracker.Clear();
+        var current = await TenantScoped()
+            .Include(o => o.Stops)
+            .AsNoTracking()
+            .FirstOrDefaultAsync(o => o.Id == orderId, cancellationToken);
+        return current is null
+            ? TransportOrderOperationResult.NotFound
+            : TransportOrderOperationResult.Conflict(await MapDetailAsync(current, cancellationToken));
+    }
+
     /// <param name="addressBookOutcomes">D3: per stop id, what "Opslaan in adresboek" did in the save
     /// that produced this response; null for every plain read.</param>
     private async Task<TransportOrderDetailDto> MapDetailAsync(
@@ -4958,7 +4995,15 @@ public class TransportOrderService : ITransportOrderService
         }
 
         order.Version = Guid.NewGuid();
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return await VersionConflictFromStoreAsync(order.Id, cancellationToken);
+        }
+
         await _auditService.RecordAsync("OrderPricing", orderId.ToString(), order.FreeConfirmed ? "orderConfirmedFree" : "oneOffPriceSet", null,
             new { order.PricingSource, order.OneOffFixedAmount, order.AgreedPrice, order.FreeConfirmed }, cancellationToken);
 
