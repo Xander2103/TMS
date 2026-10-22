@@ -44,15 +44,20 @@ vertraagde actieve ritten (StopEta Late), afgeronde losstops zonder POD (3 dagen
 open kritieke incidenten, open uitvoeringsafwijkingen, onderhoud/keuring over datum en
 verlopende voertuigdocumenten. Herhaald draaien dupliceert nooit (unieke dedupe-sleutel);
 verdwenen condities lossen automatisch op (systeem, zonder gebruiker); terugkerende
-condities heropenen dezelfde rij. De sync draait inline bij elke overview-refresh.
-Onderhoud is hier datum-gebaseerd; de kilometerstand-variant blijft bij het fleetdashboard.
+condities heropenen dezelfde rij. Sinds de performance-remediatie (PERF-H4, 2026-10-21) draait
+de sync NIET meer inline bij de overview-refresh: een GET schreef ~1.000 `LastSeenAt`-updates per
+poll. `OperationalAlertSyncHostedService` reconcilieert per actieve tenant elke 60 s
+(`Operations:AlertSyncIntervalSeconds`) en schrijft alleen wat veranderde (nieuw, heropend,
+ernst/tekst gewijzigd, opgelost; `LastSeenAt` hoogstens één keer per 15 min per melding);
+`POST api/operations/alerts/sync` is de expliciete handmatige sync. Onderhoud is hier
+datum-gebaseerd; de kilometerstand-variant blijft bij het fleetdashboard.
 
 ## Realtime-strategie: gecontroleerde polling
 
 Bewust géén SignalR: er bestond geen push-infrastructuur en de SPA polde al unread-counts.
 `/operations` pollt elke 30 s het overview-endpoint; dat endpoint is een volledige,
-idempotente projectie (incl. alert-sync), dus herstel na verbindingsverlies is gewoon de
-volgende poll — geen event-replay die fout kan gaan. Tenant- en permissiescoping zitten in
+idempotente en sinds PERF-H4 zuiver lezende projectie (de alert-sync draait op de achtergrond),
+dus herstel na verbindingsverlies is gewoon de volgende poll — geen event-replay die fout kan gaan. Tenant- en permissiescoping zitten in
 het endpoint zelf.
 
 ## Locatiemodel — geen nep-GPS

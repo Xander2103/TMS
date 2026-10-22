@@ -23,8 +23,9 @@ const POLL_INTERVAL_MS = 30_000
 
 /**
  * The live control center. Refresh strategy is deliberate controlled polling: the overview
- * endpoint is a full, idempotent projection (it also runs the deduped alert sync), so
- * recovery after connection loss is simply the next poll — no event replay to get wrong.
+ * endpoint is a full, idempotent, read-only projection (PERF-H4: the deduped alert sync runs in
+ * a server-side background job, not per poll), so recovery after connection loss is simply the
+ * next poll — no event replay to get wrong.
  */
 export function OperationsPage() {
   const { showError, showSuccess } = useToast()
@@ -56,9 +57,9 @@ export function OperationsPage() {
 
   useEffect(() => {
     let cancelled = false
-    // ONE refresh cycle: the overview call also syncs the alert table on the server, so the
-    // alert list is read AFTER it — the "Open meldingen" tile and the panel then describe the
-    // same rows (B21). A failed alert read is shown, never silently rendered as "no alerts".
+    // ONE refresh cycle: the alert list is read AFTER the overview, so the "Open meldingen" tile
+    // and the panel describe the same reconciled rows (B21; the reconciliation itself runs in a
+    // server-side job). A failed alert read is shown, never silently rendered as "no alerts".
     // A refusal on either call ends the cycle: no alert read after a 403/4xx overview.
     let refused = false
     const handleRefusal = (error: unknown) => {
