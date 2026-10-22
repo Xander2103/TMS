@@ -32,6 +32,9 @@ public class IncidentConfiguration : IEntityTypeConfiguration<Incident>
         builder.Property(i => i.Resolution).HasMaxLength(4000);
         builder.Property(i => i.CustomerMessage).HasMaxLength(2000);
 
+        // PERF matrix #10: the database refuses the second of two simultaneous saves (see Incident.Version).
+        builder.Property(i => i.Version).IsConcurrencyToken();
+
         builder.HasIndex(i => new { i.TenantId, i.Status });
         builder.HasIndex(i => new { i.TenantId, i.DossierId });
         builder.HasIndex(i => new { i.TenantId, i.CustomerId });

@@ -6476,6 +6476,10 @@ namespace TransportationService.Api.Migrations
                     b.Property<Guid?>("VehicleId")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid");
+
                     b.HasKey("Id");
 
                     b.HasIndex("TenantId", "ClientRequestId")

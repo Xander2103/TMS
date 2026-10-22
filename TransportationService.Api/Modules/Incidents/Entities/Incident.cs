@@ -38,8 +38,17 @@ public enum IncidentSeverity
 /// requires an explicit resolution text. Costs are registered here and roll up into the
 /// dossier's financial summary when the incident is attached to a dossier.
 /// </summary>
-public class Incident : AuditableTenantEntity
+public class Incident : AuditableTenantEntity, IVersionedEntity
 {
+    /// <summary>
+    /// Performance/concurrency final remediation 2026-10-21 (matrix #10): two simultaneous section edits of one
+    /// incident used to be last-write-wins (200/200). The token is bumped by the auditing interceptor on every
+    /// modification and enforced by the database (UPDATE … WHERE "Version" = @original), so the second
+    /// concurrent save is refused with 409 instead of silently overwriting the first. Edits of DIFFERENT
+    /// sections that are not simultaneous still merge section by section (EX-01).
+    /// </summary>
+    public Guid Version { get; set; } = Guid.NewGuid();
+
     public IncidentType IncidentType { get; set; }
     /// <summary>Free-text type name, required when <see cref="IncidentType.Other"/>.</summary>
     public string? CustomTypeName { get; set; }
