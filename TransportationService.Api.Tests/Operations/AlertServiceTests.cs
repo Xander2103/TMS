@@ -72,8 +72,9 @@ public class AlertServiceTests
         var alert = Assert.Single(h.Db.Context.OperationalAlerts.AsNoTracking());
         Assert.Equal(AlertSeverity.Critical, alert.Severity);
         Assert.Equal(AlertStatus.Active, alert.Status);
-        // The second run only bumped the observation time.
-        Assert.Equal(Now.UtcDateTime.AddSeconds(30), alert.LastSeenAt);
+        // The second run saw the same unchanged condition 30 s later: nothing to write (PERF-HIGH 4),
+        // so the observation stamp stays — it is refreshed at most once per LastSeenRefreshInterval.
+        Assert.Equal(Now.UtcDateTime, alert.LastSeenAt);
     }
 
     [Fact]

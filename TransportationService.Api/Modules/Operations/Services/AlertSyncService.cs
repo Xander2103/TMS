@@ -17,6 +17,9 @@ namespace TransportationService.Api.Modules.Operations.Services;
 /// the stored <see cref="OperationalAlert"/> rows. No condition data is ever invented; every
 /// rule reads real records. Maintenance overdue is date-based here — the odometer-based check
 /// stays on the fleet dashboard, which has the vehicle context to explain it.
+/// Tenant-explicit (<see cref="SyncTenantAsync"/>) so <see cref="OperationalAlertSyncHostedService"/>
+/// can run it per tenant outside a request, and it writes only what changed (PERF-HIGH 4): the
+/// counters on <see cref="AlertSyncResult"/> are the exact per-run write bound.
 /// </summary>
 public class AlertSyncService : IAlertSyncService
 {
@@ -45,9 +48,17 @@ public class AlertSyncService : IAlertSyncService
         string DedupeKey, AlertSeverity Severity, string Category, string Source,
         string Title, string Message, string? LinkPath, string? RelatedEntityType, Guid? RelatedEntityId);
 
-    public async Task SyncAsync(CancellationToken cancellationToken)
+    /// <summary>
+    /// A persisting, unchanged condition re-stamps LastSeenAt at most this often, so a live alert
+    /// is still visibly "seen" at a bounded cadence while the steady state issues no writes.
+    /// </summary>
+    public static readonly TimeSpan LastSeenRefreshInterval = TimeSpan.FromMinutes(15);
+
+    public Task<AlertSyncResult> SyncAsync(CancellationToken cancellationToken) =>
+        SyncTenantAsync(_tenantContext.TenantId, cancellationToken);
+
+    public async Task<AlertSyncResult> SyncTenantAsync(Guid tenantId, CancellationToken cancellationToken)
     {
-        var tenantId = _tenantContext.TenantId;
         var now = _timeProvider.GetUtcNow().UtcDateTime;
         var today = DateOnly.FromDateTime(now);
 
@@ -70,24 +81,10 @@ public class AlertSyncService : IAlertSyncService
             .ToListAsync(cancellationToken);
         var existingByKey = existing.ToDictionary(a => a.DedupeKey);
 
+        int created = 0, updated = 0, reopened = 0, refreshed = 0, resolved = 0, unchanged = 0;
         foreach (var candidate in candidates)
         {
-            if (existingByKey.TryGetValue(candidate.DedupeKey, out var alert))
-            {
-                alert.LastSeenAt = now;
-                alert.Severity = candidate.Severity;
-                alert.Message = candidate.Message;
-                if (alert.Status == AlertStatus.Resolved)
-                {
-                    // The condition came back after being resolved: reopen the same row.
-                    alert.Status = AlertStatus.Active;
-                    alert.ResolvedAt = null;
-                    alert.ResolvedByUserId = null;
-                    alert.AcknowledgedAt = null;
-                    alert.AcknowledgedByUserId = null;
-                }
-            }
-            else
+            if (!existingByKey.TryGetValue(candidate.DedupeKey, out var alert))
             {
                 _dbContext.OperationalAlerts.Add(new OperationalAlert
                 {
@@ -105,6 +102,39 @@ public class AlertSyncService : IAlertSyncService
                     Status = AlertStatus.Active,
                     LastSeenAt = now,
                 });
+                created++;
+                continue;
+            }
+
+            // Write only on change (PERF-HIGH 4). An unconditional LastSeenAt stamp here used to
+            // rewrite every open alert row on every overview poll; a row that still describes the
+            // condition exactly is left alone until its refresh window elapses.
+            if (alert.Status == AlertStatus.Resolved)
+            {
+                // The condition came back after being resolved: reopen the same row.
+                alert.Status = AlertStatus.Active;
+                alert.ResolvedAt = null;
+                alert.ResolvedByUserId = null;
+                alert.AcknowledgedAt = null;
+                alert.AcknowledgedByUserId = null;
+                ApplyContent(alert, candidate, now);
+                reopened++;
+            }
+            else if (alert.Severity != candidate.Severity
+                     || alert.Title != candidate.Title
+                     || alert.Message != candidate.Message)
+            {
+                ApplyContent(alert, candidate, now);
+                updated++;
+            }
+            else if (now - alert.LastSeenAt >= LastSeenRefreshInterval)
+            {
+                alert.LastSeenAt = now;
+                refreshed++;
+            }
+            else
+            {
+                unchanged++;
             }
         }
 
@@ -114,9 +144,24 @@ public class AlertSyncService : IAlertSyncService
         {
             alert.Status = AlertStatus.Resolved;
             alert.ResolvedAt = now;
+            resolved++;
         }
 
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        var result = new AlertSyncResult(created, updated, reopened, refreshed, resolved, unchanged);
+        if (result.Writes > 0)
+        {
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
+
+        return result;
+    }
+
+    private static void ApplyContent(OperationalAlert alert, Candidate candidate, DateTime now)
+    {
+        alert.Severity = candidate.Severity;
+        alert.Title = candidate.Title;
+        alert.Message = candidate.Message;
+        alert.LastSeenAt = now;
     }
 
     /// <summary>Active trips with at least one stop whose live ETA is Late.</summary>
