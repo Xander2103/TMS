@@ -77,32 +77,88 @@ public class TripExecutionService : ITripExecutionService
             .OrderBy(t => t.TripDate).ThenBy(t => t.TripNumber)
             .ToListAsync(cancellationToken);
 
+        // PERF (the audit measured 388 statements for one driver's list): asset names and stop
+        // counts are read for the whole list at once instead of ~9 statements per trip.
+        var tenantId = _tenantContext.TenantId;
+        var vehicleIds = trips.Where(t => t.VehicleId != null).Select(t => t.VehicleId!.Value).Distinct().ToList();
+        var trailerIds = trips.Where(t => t.TrailerId != null).Select(t => t.TrailerId!.Value).Distinct().ToList();
+        var vehicles = vehicleIds.Count == 0
+            ? new Dictionary<Guid, (string Number, string Plate)>()
+            : await _dbContext.Vehicles.AsNoTracking().IgnoreQueryFilters()
+                .Where(x => vehicleIds.Contains(x.Id) && x.TenantId == tenantId)
+                .Select(x => new { x.Id, x.InternalNumber, x.LicensePlate })
+                .ToDictionaryAsync(x => x.Id, x => (x.InternalNumber, x.LicensePlate), cancellationToken);
+        var trailers = trailerIds.Count == 0
+            ? new Dictionary<Guid, string>()
+            : await _dbContext.Trailers.AsNoTracking().IgnoreQueryFilters()
+                .Where(x => trailerIds.Contains(x.Id) && x.TenantId == tenantId)
+                .Select(x => new { x.Id, x.InternalNumber })
+                .ToDictionaryAsync(x => x.Id, x => x.InternalNumber, cancellationToken);
+        var stopCounts = await LoadStopCountsAsync(trips, cancellationToken);
+
         var result = new List<MyTripDto>(trips.Count);
         foreach (var trip in trips)
         {
-            var stops = await LoadExecutionStopsAsync(trip, cancellationToken);
-            var vehicle = trip.VehicleId is { } v
-                ? await _dbContext.Vehicles.AsNoTracking().IgnoreQueryFilters()
-                    .Where(x => x.Id == v && x.TenantId == _tenantContext.TenantId)
-                    .Select(x => new { x.InternalNumber, x.LicensePlate })
-                    .FirstOrDefaultAsync(cancellationToken)
-                : null;
-            var trailerNumber = trip.TrailerId is { } tr
-                ? await _dbContext.Trailers.AsNoTracking().IgnoreQueryFilters()
-                    .Where(x => x.Id == tr && x.TenantId == _tenantContext.TenantId)
-                    .Select(x => x.InternalNumber)
-                    .FirstOrDefaultAsync(cancellationToken)
-                : null;
+            (string Number, string Plate)? vehicle = trip.VehicleId is { } v && vehicles.TryGetValue(v, out var found) ? found : null;
+            var trailerNumber = trip.TrailerId is { } tr ? trailers.GetValueOrDefault(tr) : null;
+            var counts = stopCounts.GetValueOrDefault(trip.Id);
 
             result.Add(new MyTripDto(
                 trip.Id, trip.TripNumber, trip.TripDate, trip.Status,
-                vehicle?.InternalNumber, vehicle?.LicensePlate, trailerNumber,
+                vehicle?.Number, vehicle?.Plate, trailerNumber,
                 trip.Orders.Count(o => !o.IsDeleted),
-                stops.Count,
-                stops.Count(s => StopStatusMachine.IsTerminal(s.Status))));
+                counts.Total,
+                counts.Completed));
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// Stop totals for the trip list — the same stop set <see cref="LoadExecutionStopsAsync"/>
+    /// builds (stops of the trip's orders that exist with a customer; a stop is done when its
+    /// execution reached a terminal status), read for ALL trips in three statements.
+    /// </summary>
+    private async Task<Dictionary<Guid, (int Total, int Completed)>> LoadStopCountsAsync(
+        IReadOnlyList<Trip> trips, CancellationToken cancellationToken)
+    {
+        var tenantId = _tenantContext.TenantId;
+        var counts = new Dictionary<Guid, (int Total, int Completed)>(trips.Count);
+        var orderIdsByTrip = trips.ToDictionary(t => t.Id,
+            t => t.Orders.Where(o => !o.IsDeleted).Select(o => o.TransportOrderId).Distinct().ToList());
+        var orderIds = orderIdsByTrip.Values.SelectMany(ids => ids).Distinct().ToList();
+        if (orderIds.Count == 0)
+        {
+            return counts;
+        }
+
+        var existingOrderIds = (await (
+                from o in _dbContext.TransportOrders.AsNoTracking().Where(o => o.TenantId == tenantId && orderIds.Contains(o.Id))
+                join c in _dbContext.Customers.AsNoTracking().Where(c => c.TenantId == tenantId) on o.CustomerId equals c.Id
+                select o.Id)
+            .ToListAsync(cancellationToken)).ToHashSet();
+        var stops = await _dbContext.TransportOrderStops.AsNoTracking()
+            .Where(s => s.TenantId == tenantId && orderIds.Contains(s.TransportOrderId))
+            .Select(s => new { s.Id, s.TransportOrderId })
+            .ToListAsync(cancellationToken);
+        var stopsByOrder = stops.Where(s => existingOrderIds.Contains(s.TransportOrderId)).ToLookup(s => s.TransportOrderId, s => s.Id);
+
+        var tripIds = trips.Select(t => t.Id).ToList();
+        var executions = await _dbContext.StopExecutions.AsNoTracking()
+            .Where(e => e.TenantId == tenantId && tripIds.Contains(e.TripId))
+            .Select(e => new { e.TripId, e.TransportOrderStopId, e.Status })
+            .ToListAsync(cancellationToken);
+        var executionsByTrip = executions.ToLookup(e => e.TripId);
+
+        foreach (var trip in trips)
+        {
+            var stopIds = orderIdsByTrip[trip.Id].SelectMany(id => stopsByOrder[id]).ToHashSet();
+            var completed = executionsByTrip[trip.Id]
+                .Count(e => stopIds.Contains(e.TransportOrderStopId) && StopStatusMachine.IsTerminal(e.Status));
+            counts[trip.Id] = (stopIds.Count, completed);
+        }
+
+        return counts;
     }
 
     public async Task<ExecutionResult> GetExecutionAsync(
