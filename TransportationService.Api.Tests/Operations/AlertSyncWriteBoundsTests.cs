@@ -273,4 +273,39 @@ public class AlertSyncWriteBoundsTests
         h.AssertNoWrites();
         Assert.Equal(Now.UtcDateTime, h.SingleAlert().LastSeenAt);
     }
+
+    [Fact]
+    public async Task Worker_ReconcilesEveryActiveTenant_AndIsSilentOnTheNextTick()
+    {
+        using var h = new Harness();
+        var tenantB = Guid.NewGuid();
+        var dormant = Guid.NewGuid();
+        h.AddTenant(tenantB, "beta", isActive: true);
+        h.AddTenant(dormant, "dormant", isActive: false);
+        h.Db.Context.SaveChanges();
+        h.AddCriticalIncident(h.TenantId);
+        h.AddCriticalIncident(tenantB);
+        h.AddCriticalIncident(dormant);
+        var worker = new OperationalAlertSyncWorker(h.Db.Context, h.Sync, NullLogger<OperationalAlertSyncWorker>.Instance);
+
+        h.StartCounting();
+        var firstTick = await worker.SyncAllTenantsAsync(CancellationToken.None);
+
+        Assert.Equal(2, firstTick.TenantCount);
+        Assert.Equal(0, firstTick.FailedTenantCount);
+        Assert.Equal(2, firstTick.Totals.Created);
+        Assert.Equal(0, h.Counter.Updates);
+        var alerts = h.Alerts();
+        Assert.Equal(2, alerts.Count);
+        Assert.Contains(alerts, a => a.TenantId == h.TenantId);
+        Assert.Contains(alerts, a => a.TenantId == tenantB);
+        Assert.DoesNotContain(alerts, a => a.TenantId == dormant);
+
+        h.StartCounting(TimeSpan.FromMinutes(1));
+        var secondTick = await worker.SyncAllTenantsAsync(CancellationToken.None);
+
+        Assert.Equal(2, secondTick.TenantCount);
+        Assert.Equal(0, secondTick.Totals.Writes);
+        h.AssertNoWrites();
+    }
 }

@@ -450,12 +450,18 @@ builder.Services.AddScoped<TransportationService.Api.Modules.Planning.Services.I
     TransportationService.Api.Modules.Planning.Services.PlanningBoardService>();
 
 // Operation control center (alerts projection + lifecycle)
+builder.Services.Configure<TransportationService.Api.Modules.Operations.OperationsOptions>(
+    builder.Configuration.GetSection(TransportationService.Api.Modules.Operations.OperationsOptions.SectionName));
 builder.Services.AddScoped<TransportationService.Api.Modules.Operations.Services.IAlertService,
     TransportationService.Api.Modules.Operations.Services.AlertService>();
 builder.Services.AddScoped<TransportationService.Api.Modules.Operations.Services.IAlertSyncService,
     TransportationService.Api.Modules.Operations.Services.AlertSyncService>();
 builder.Services.AddScoped<TransportationService.Api.Modules.Operations.Services.IOperationsOverviewService,
     TransportationService.Api.Modules.Operations.Services.OperationsOverviewService>();
+// PERF-HIGH 4: alert reconciliation is a bounded background job (Operations:AlertSyncIntervalSeconds,
+// default 60 s), never a side effect of the overview GET.
+builder.Services.AddScoped<TransportationService.Api.Modules.Operations.Services.OperationalAlertSyncWorker>();
+builder.Services.AddHostedService<TransportationService.Api.Modules.Operations.Services.OperationalAlertSyncHostedService>();
 
 // Warehouse & dock planning
 builder.Services.AddScoped<TransportationService.Api.Modules.Warehousing.Services.IWarehouseAdminService,
