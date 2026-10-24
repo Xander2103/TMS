@@ -27,7 +27,7 @@ import { AuditHistoryPanel } from '../../auditing/components/AuditHistoryPanel'
 import { searchCustomerOptions } from '../../customers/api/customerOptions'
 import { searchTransportOrders } from '../../transport-orders/api/transportOrdersApi'
 import { getVehicleOptions } from '../../vehicles/api/vehiclesApi'
-import { listDossiers } from '../../dossiers/api/dossiersApi'
+import { searchDossiers } from '../../dossiers/api/dossiersApi'
 import {
   changeIncidentStatus,
   createIncident,
@@ -215,6 +215,19 @@ const OPEN_STATUSES: IncidentStatus[] = ['New', 'InProgress']
  * [Bewerken] turns a single card into its form; leaving with unsaved edits asks first. A new
  * incident keeps the full registration form.
  */
+/** PERF-H3: incident link pickers search the server; 25 hits per query, newest first. */
+const LINK_PICKER_PAGE_SIZE = 25
+
+async function searchDossierOptions(query: string): Promise<SearchableSelectOption[]> {
+  const result = await searchDossiers({ search: query.trim() || undefined, page: 1, pageSize: LINK_PICKER_PAGE_SIZE })
+  return result.items.map((d) => ({ value: d.id, label: d.dossierNumber, description: d.title }))
+}
+
+async function searchOrderOptions(query: string): Promise<SearchableSelectOption[]> {
+  const result = await searchTransportOrders({ search: query.trim() || undefined, page: 1, pageSize: LINK_PICKER_PAGE_SIZE })
+  return result.items.map((o) => ({ value: o.id, label: o.orderNumber, description: o.customerName }))
+}
+
 export function IncidentDetailPage() {
   const { id } = useParams<{ id: string }>()
   const [searchParams] = useSearchParams()
@@ -244,8 +257,6 @@ export function IncidentDetailPage() {
   const [editing, setEditing] = useState<EditSection | null>(null)
 
   const [userOptions, setUserOptions] = useState<SearchableSelectOption[]>([])
-  const [dossierOptions, setDossierOptions] = useState<SearchableSelectOption[]>([])
-  const [orderOptions, setOrderOptions] = useState<SearchableSelectOption[]>([])
   const [vehicleOptions, setVehicleOptions] = useState<SearchableSelectOption[]>([])
 
   const [resolveDialog, setResolveDialog] = useState(false)
@@ -301,14 +312,6 @@ export function IncidentDetailPage() {
 
   useEffect(() => {
     if (!linksRequested) return
-    listDossiers()
-      .then((all) => setDossierOptions(all.map((d) => ({ value: d.id, label: d.dossierNumber, description: d.title }))))
-      .catch(() => setDossierOptions([]))
-    searchTransportOrders({ page: 1, pageSize: 100 })
-      .then((result) =>
-        setOrderOptions(result.items.map((o) => ({ value: o.id, label: o.orderNumber, description: o.customerName }))),
-      )
-      .catch(() => setOrderOptions([]))
     getVehicleOptions()
       .then((vehicles) =>
         setVehicleOptions(vehicles.map((v) => ({ value: v.id, label: `${v.internalNumber} · ${v.licensePlate}` }))),
@@ -553,7 +556,9 @@ export function IncidentDetailPage() {
           id="inc-dossier"
           value={form.dossierId}
           onChange={(value) => set('dossierId', value)}
-          options={withLinked(dossierOptions, linkedOptions.dossier)}
+          // PERF-H3: searched server-side over every dossier (it used to preload a capped list).
+          options={linkedOptions.dossier}
+          onSearch={searchDossierOptions}
           disabled={busy}
         />
       </FormField>
@@ -567,7 +572,9 @@ export function IncidentDetailPage() {
           id="inc-order"
           value={form.transportOrderId}
           onChange={(value) => set('transportOrderId', value)}
-          options={withLinked(orderOptions, linkedOptions.order)}
+          // PERF-H3: searched server-side over every order (it used to preload the first 100).
+          options={linkedOptions.order}
+          onSearch={searchOrderOptions}
           disabled={busy}
         />
       </FormField>

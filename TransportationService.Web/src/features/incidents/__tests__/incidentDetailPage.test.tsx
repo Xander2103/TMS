@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { IncidentDetailPage } from '../pages/IncidentDetailPage'
@@ -28,8 +28,12 @@ const api = vi.hoisted(() => ({
 }))
 vi.mock('../api/incidentsApi', () => api)
 vi.mock('../../customers/api/customersApi', () => ({ searchCustomers: vi.fn().mockResolvedValue({ items: [] }) }))
-vi.mock('../../dossiers/api/dossiersApi', () => ({ listDossiers: vi.fn().mockResolvedValue([]) }))
-vi.mock('../../transport-orders/api/transportOrdersApi', () => ({ searchTransportOrders: vi.fn().mockResolvedValue({ items: [] }) }))
+const linkApi = vi.hoisted(() => ({
+  searchDossiers: vi.fn().mockResolvedValue({ items: [], totalCount: 0, page: 1, pageSize: 25 }),
+  searchTransportOrders: vi.fn().mockResolvedValue({ items: [], totalCount: 0, page: 1, pageSize: 25 }),
+}))
+vi.mock('../../dossiers/api/dossiersApi', () => ({ searchDossiers: linkApi.searchDossiers }))
+vi.mock('../../transport-orders/api/transportOrdersApi', () => ({ searchTransportOrders: linkApi.searchTransportOrders }))
 vi.mock('../../vehicles/api/vehiclesApi', () => ({ getVehicleOptions: vi.fn().mockResolvedValue([]) }))
 
 function incident(overrides: Partial<IncidentDetail> = {}): IncidentDetail {
@@ -108,6 +112,24 @@ describe('IncidentDetailPage (B24)', () => {
     // Dirty the form so the save is enabled: pick no vehicle.
     await userEvent.click(within(links).getByRole('button', { name: 'Wijzigingen opslaan' }))
     expect(api.updateIncident).not.toHaveBeenCalled() // nothing changed, nothing sent
+  })
+
+  // PERF-H3: the dossier and order link pickers search the server over every record — they used to
+  // preload a capped list (dossiers 500, orders 100) and silently miss everything beyond it.
+  it('the dossier and order link pickers search the server instead of a preloaded capped list', async () => {
+    linkApi.searchDossiers.mockResolvedValue({
+      items: [{ id: 'd-9000', dossierNumber: 'DOS-9000', title: 'Ver achter in de lijst' }], totalCount: 1, page: 1, pageSize: 25,
+    })
+    api.getIncident.mockResolvedValue(incident())
+    renderPage()
+    const links = await screen.findByRole('region', { name: 'Koppelingen' })
+    await userEvent.click(within(links).getByRole('button', { name: 'Bewerken' }))
+    expect(linkApi.searchDossiers).not.toHaveBeenCalled()
+    expect(linkApi.searchTransportOrders).not.toHaveBeenCalled()
+    await userEvent.click(within(links).getByLabelText('Dossier'))
+    await userEvent.keyboard('9000')
+    expect(await within(links).findByText('DOS-9000')).toBeInTheDocument()
+    await waitFor(() => expect(linkApi.searchDossiers).toHaveBeenLastCalledWith(expect.objectContaining({ search: '9000', pageSize: 25 })))
   })
 
   it('the responsible picker uses the assignable-users endpoint (EX-07)', async () => {
