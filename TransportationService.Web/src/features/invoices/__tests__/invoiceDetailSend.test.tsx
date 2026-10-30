@@ -157,10 +157,10 @@ describe('InvoiceDetailPage — verzenden en voorbeeld', () => {
     renderPage()
     await screen.findByText('Frais administratifs')
 
-    await user.click(screen.getByRole('button', { name: 'Verzenden' }))
+    await user.click(screen.getByRole('button', { name: 'Definitief maken' }))
 
     const dialog = await screen.findByRole('dialog')
-    expect(within(dialog).getByRole('heading', { name: 'Factuur verzenden' })).toBeInTheDocument()
+    expect(within(dialog).getByRole('heading', { name: 'Factuur definitief maken' })).toBeInTheDocument()
     const summary = within(dialog).getByTestId('invoice-send-summary')
     expect(summary).toHaveTextContent('FAC-2026080001')
     expect(summary).toHaveTextContent('Distri-Frais SPRL')
@@ -175,7 +175,7 @@ describe('InvoiceDetailPage — verzenden en voorbeeld', () => {
     await user.click(confirm)
     await user.click(confirm)
     expect(api.changeInvoiceStatus).toHaveBeenCalledTimes(1)
-    expect(api.changeInvoiceStatus).toHaveBeenCalledWith('inv-1', 'Sent')
+    expect(api.changeInvoiceStatus).toHaveBeenCalledWith('inv-1', 'Sent', undefined)
 
     resolveSend(draft({ status: 'Sent', allowedTransitions: ['Paid', 'Cancelled'] }))
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
@@ -185,7 +185,7 @@ describe('InvoiceDetailPage — verzenden en voorbeeld', () => {
     const user = userEvent.setup()
     renderPage()
     await screen.findByText('Frais administratifs')
-    await user.click(screen.getByRole('button', { name: 'Verzenden' }))
+    await user.click(screen.getByRole('button', { name: 'Definitief maken' }))
     const dialog = await screen.findByRole('dialog')
     await user.click(within(dialog).getByRole('button', { name: 'Annuleren' }))
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
@@ -201,7 +201,7 @@ describe('InvoiceDetailPage — verzenden en voorbeeld', () => {
 
     // A sent invoice is never editable again: no Bewerken, and Verzenden is gone.
     expect(screen.queryByRole('button', { name: 'Bewerken' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Verzenden' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Definitief maken' })).not.toBeInTheDocument()
     // H-06: cancelling a sent invoice is not offered at all — even when a stale allowedTransitions
     // still carries it — omdat de server het weigert; de creditnota is de enige correctieweg.
     expect(screen.queryByRole('button', { name: 'Factuur annuleren' })).not.toBeInTheDocument()
@@ -251,5 +251,48 @@ describe('InvoiceDetailPage — verzenden en voorbeeld', () => {
     expect(open).toHaveBeenCalledWith('blob:preview', '_blank', 'noopener')
     expect(api.changeInvoiceStatus).not.toHaveBeenCalled()
     open.mockRestore()
+  })
+
+  it('UX-013: says what finalizing does and does not do', async () => {
+    const user = userEvent.setup()
+    api.getInvoice.mockResolvedValue(draft())
+    renderPage()
+    await user.click(await screen.findByRole('button', { name: 'Definitief maken' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Factuur definitief maken' })
+    expect(within(dialog).getByTestId('invoice-issue-delivery')).toHaveTextContent('niet via Peppol verstuurd')
+  })
+
+  it('UX-013: registering a payment never happens in one click and carries the chosen day', async () => {
+    const user = userEvent.setup()
+    const sent = draft({ status: 'Sent', allowedTransitions: ['Paid'], paymentReference: '+++090/9337/55493+++' })
+    api.getInvoice.mockResolvedValue(sent)
+    api.changeInvoiceStatus.mockResolvedValue({ ...sent, status: 'Paid', allowedTransitions: [], paidAt: '2026-09-01T12:00:00Z' })
+    renderPage()
+
+    await user.click(await screen.findByRole('button', { name: 'Betaling registreren' }))
+    expect(api.changeInvoiceStatus).not.toHaveBeenCalled()
+    const dialog = within(await screen.findByRole('dialog', { name: 'Betaling registreren' }))
+    const facts = dialog.getByTestId('invoice-payment-facts')
+    expect(facts).toHaveTextContent('Distri-Frais SPRL')
+    expect(facts).toHaveTextContent('+++090/9337/55493+++')
+    expect(dialog.getByText(/kan achteraf niet ongedaan/)).toBeInTheDocument()
+
+    const date = dialog.getByLabelText(/Betaald op/)
+    await user.clear(date)
+    await user.type(date, '2026-09-01')
+    await user.click(dialog.getByTestId('invoice-payment-confirm'))
+    await waitFor(() => expect(api.changeInvoiceStatus).toHaveBeenCalledWith('inv-1', 'Paid', '2026-09-01'))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  })
+
+  it('UX-013: Escape closes the payment dialog without registering anything', async () => {
+    const user = userEvent.setup()
+    api.getInvoice.mockResolvedValue(draft({ status: 'Sent', allowedTransitions: ['Paid'] }))
+    renderPage()
+    await user.click(await screen.findByRole('button', { name: 'Betaling registreren' }))
+    await screen.findByRole('dialog', { name: 'Betaling registreren' })
+    await user.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(api.changeInvoiceStatus).not.toHaveBeenCalled()
   })
 })

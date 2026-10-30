@@ -192,8 +192,8 @@ export function updateInvoice(id: string, input: UpdateInvoiceInput): Promise<In
   return apiClient.putJson<InvoiceDetail, UpdateInvoiceInput>(`/api/invoices/${id}`, input)
 }
 
-export function changeInvoiceStatus(id: string, status: InvoiceStatus): Promise<InvoiceDetail> {
-  return apiClient.postJson<InvoiceDetail, { status: InvoiceStatus }>(`/api/invoices/${id}/status`, { status })
+export function changeInvoiceStatus(id: string, status: InvoiceStatus, paidOn?: string): Promise<InvoiceDetail> {
+  return apiClient.postJson<InvoiceDetail, { status: InvoiceStatus; paidOn?: string }>(`/api/invoices/${id}/status`, { status, paidOn })
 }
 
 /** Fills only the MISSING ledger snapshots of a Sent/Paid invoice from the current mapping (accounting.manage). */

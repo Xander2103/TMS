@@ -197,7 +197,7 @@ public class InvoicesController : ControllerBase
     public async Task<ActionResult<InvoiceDetailDto>> ChangeStatus(
         Guid id, ChangeInvoiceStatusRequest request, CancellationToken cancellationToken)
     {
-        var result = await _service.ChangeStatusAsync(id, request.Status, cancellationToken);
+        var result = await _service.ChangeStatusAsync(id, request.Status, cancellationToken, request.PaidOn);
         return Handle(result, created: false);
     }
 

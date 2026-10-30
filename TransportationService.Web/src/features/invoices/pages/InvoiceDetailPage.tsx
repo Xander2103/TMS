@@ -60,7 +60,7 @@ import {
   type UpdateLineInput,
 } from '../types'
 import { formatPeriod, monthInputToPeriod, periodToMonthInput } from '../utils/invoicePeriod'
-import { formatDate, formatDateTime } from '../../../utils/dates'
+import { formatDate, todayLocalIsoDate } from '../../../utils/dates'
 import { InvoiceFiscalSummary, InvoiceLineFiscalBadge } from '../components/InvoiceFiscalSummary'
 import './invoices.css'
 
@@ -118,6 +118,8 @@ export function InvoiceDetailPage() {
   // ACC-M4: the issue preflight shown in the send dialog; null while loading.
   const [preflight, setPreflight] = useState<InvoiceIssuePreflight | null>(null)
   const [preflightError, setPreflightError] = useState<string | null>(null)
+  const [paymentOpen, setPaymentOpen] = useState(false)
+  const [paidOn, setPaidOn] = useState('')
   const [pdfBusy, setPdfBusy] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [creditDialog, setCreditDialog] = useState(false)
@@ -314,14 +316,23 @@ export function InvoiceDetailPage() {
     }
   }
 
-  async function applyTransition(target: InvoiceStatus) {
+  /** UX-013: marking paid is final, so it always goes through this dialog. Today by default, not a blank date. */
+  function openPaymentDialog() {
+    setPaidOn(todayLocalIsoDate())
+    setPaymentOpen(true)
+  }
+
+  async function applyTransition(target: InvoiceStatus, paidOnDate?: string) {
     if (!invoice) return
     setBusy(true)
     try {
-      const updated = await changeInvoiceStatus(invoice.id, target)
+      const updated = await changeInvoiceStatus(invoice.id, target, paidOnDate)
       setInvoice(updated)
       setHistoryToken((n) => n + 1)
-      showSuccess(t('invoices.internalDetail.statusChanged', { status: t(INVOICE_STATUS_LABELS[target]) }))
+      setPaymentOpen(false)
+      showSuccess(target === 'Sent'
+        ? t('invoices.internalDetail.statusFinal')
+        : t('invoices.internalDetail.statusChanged', { status: t(INVOICE_STATUS_LABELS[target]) }))
     } catch (err) {
       // ACC-M4: "Deze klant vereist een PO-nummer …" is the message the user needs, not a generic one.
       showError(localizeApiError(t, err, t('invoices.internalDetail.statusError')))
@@ -454,7 +465,7 @@ export function InvoiceDetailPage() {
                       ? setConfirmTransition(target)
                       : target === 'Sent'
                         ? openSendDialog()
-                        : void applyTransition(target)
+                        : openPaymentDialog()
                   }
                   disabled={busy}
                 >
@@ -474,7 +485,7 @@ export function InvoiceDetailPage() {
       {invoice.status === 'Paid' && !isCredit && (
         <p className="inv-meta inv-paid-info" data-testid="invoice-paid-info">
           {invoice.paidAt
-            ? t('invoices.detail.paidAt', { date: formatDateTime(invoice.paidAt) })
+            ? t('invoices.detail.paidAt', { date: formatDate(invoice.paidAt) })
             : t(INVOICE_STATUS_LABELS.Paid)}
           {invoice.paidByName && <> {t('invoices.detail.paidBy', { name: invoice.paidByName })}</>}
           {' · '}{t('invoices.detail.paymentManual')}
@@ -775,6 +786,58 @@ export function InvoiceDetailPage() {
 
       <InvoiceHistoryPanel invoiceId={invoice.id} refreshToken={historyToken} showPeppolHint={hasAnyPermission(['peppol.view', 'peppol.validate'])} />
 
+      {paymentOpen && (
+        <Modal
+          title={t('invoices.internalDetail.payment.title')}
+          onClose={() => setPaymentOpen(false)}
+          busy={busy}
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setPaymentOpen(false)} disabled={busy}>
+                {t('ui.actions.cancel')}
+              </Button>
+              <Button
+                data-testid="invoice-payment-confirm"
+                onClick={() => void applyTransition('Paid', paidOn)}
+                disabled={busy || !paidOn}
+              >
+                {t('invoices.internalDetail.payment.confirm')}
+              </Button>
+            </>
+          }
+        >
+          <p>{t('invoices.internalDetail.payment.intro', { number })}</p>
+          <dl className="inv-payment-facts" data-testid="invoice-payment-facts">
+            <div><dt>{t('invoices.internalDetail.payment.customer')}</dt><dd>{invoice.customerName}</dd></div>
+            <div><dt>{t('invoices.internalDetail.payment.amount')}</dt><dd>{euro(invoice.total, invoice.currency)}</dd></div>
+            <div><dt>{t('invoices.internalDetail.payment.dueDate')}</dt><dd>{formatDate(invoice.dueDate)}</dd></div>
+            {invoice.paymentReference && (
+              <div><dt>{t('invoices.internalDetail.payment.reference')}</dt><dd>{invoice.paymentReference}</dd></div>
+            )}
+          </dl>
+          {(invoice.creditNotes ?? []).some((note) => note.status !== 'Cancelled') && (
+            <p role="alert">{t('invoices.internalDetail.payment.creditNotes')}</p>
+          )}
+          <FormField
+            label={t('invoices.internalDetail.payment.paidOn')}
+            htmlFor="inv-paid-on"
+            required
+            hint={t('invoices.internalDetail.payment.paidOnHint')}
+          >
+            <input
+              id="inv-paid-on"
+              type="date"
+              value={paidOn}
+              min={invoice.invoiceDate}
+              max={todayLocalIsoDate()}
+              onChange={(event) => setPaidOn(event.target.value)}
+              disabled={busy}
+            />
+          </FormField>
+          <p>{t('invoices.internalDetail.payment.irreversible')}</p>
+        </Modal>
+      )}
+
       {creditDialog && (
         <CreditNoteDialog
           invoiceNumber={number}
@@ -866,6 +929,7 @@ export function InvoiceDetailPage() {
           }
         >
           <p>{t('invoices.internalDetail.sendConfirm.intro')}</p>
+          <p data-testid="invoice-issue-delivery">{t('invoices.internalDetail.sendConfirm.delivery')}</p>
           <dl className="inv-send-summary" data-testid="invoice-send-summary">
             <dt>{t('invoices.internalDetail.sendConfirm.number')}</dt>
             <dd>{invoice.invoiceNumber ?? t('invoices.detail.draftNumberHint')}</dd>

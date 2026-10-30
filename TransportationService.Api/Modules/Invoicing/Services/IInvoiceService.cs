@@ -31,7 +31,7 @@ public interface IInvoiceService
     Task<InvoiceOperationResult> UpdateAsync(Guid id, UpdateInvoiceRequest request, CancellationToken cancellationToken);
 
     /// <summary>Draft→Sent→Paid with Cancelled branches; cancelling releases the orders.</summary>
-    Task<InvoiceOperationResult> ChangeStatusAsync(Guid id, InvoiceStatus target, CancellationToken cancellationToken);
+    Task<InvoiceOperationResult> ChangeStatusAsync(Guid id, InvoiceStatus target, CancellationToken cancellationToken, DateOnly? paidOn = null);
 
     /// <summary>
     /// Creates a Draft credit note for a Sent/Paid invoice: lines copied with POSITIVE

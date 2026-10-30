@@ -369,4 +369,41 @@ public class InvoiceServiceTests
         Assert.Equal(25m, serviceLine.UnitPrice);
         Assert.Equal(1450m, result.Invoice.Subtotal); // grand total unchanged
     }
+
+    /// <summary>UX-013: the payment day is the accountant's, within what can be true; state semantics stay as they are.</summary>
+    [Fact]
+    public async Task Paid_TakesTheDayTheMoneyCameIn_NotInTheFuture_NotBeforeTheInvoice()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var invoice = await h.Sut.CreateAsync(new CreateInvoiceRequest(h.CustomerId, null, [h.OrderId], [], null), CancellationToken.None);
+        var id = invoice.Invoice!.Id;
+        await h.Sut.ChangeStatusAsync(id, InvoiceStatus.Sent, CancellationToken.None);
+        var entity = await h.Db.Context.Invoices.SingleAsync(i => i.Id == id);
+        entity.InvoiceDate = new DateOnly(2026, 7, 10);
+        await h.Db.Context.SaveChangesAsync();
+
+        var future = await h.Sut.ChangeStatusAsync(id, InvoiceStatus.Paid, CancellationToken.None, new DateOnly(2026, 7, 19));
+        Assert.Equal(InvoiceOperationOutcome.InvalidState, future.Outcome);
+        var early = await h.Sut.ChangeStatusAsync(id, InvoiceStatus.Paid, CancellationToken.None, new DateOnly(2026, 7, 9));
+        Assert.Equal(InvoiceOperationOutcome.InvalidState, early.Outcome);
+        Assert.Equal(InvoiceStatus.Sent, (await h.Db.Context.Invoices.AsNoTracking().SingleAsync(i => i.Id == id)).Status);
+
+        var paid = await h.Sut.ChangeStatusAsync(id, InvoiceStatus.Paid, CancellationToken.None, new DateOnly(2026, 7, 15));
+        Assert.Equal(InvoiceStatus.Paid, paid.Invoice!.Status);
+        Assert.Equal(new DateOnly(2026, 7, 15), DateOnly.FromDateTime(paid.Invoice.PaidAt!.Value));
+        Assert.Empty(paid.Invoice.AllowedTransitions);
+    }
+
+    [Fact]
+    public async Task Paid_WithoutADay_StaysTheMomentOfRegistering()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var invoice = await h.Sut.CreateAsync(new CreateInvoiceRequest(h.CustomerId, null, [h.OrderId], [], null), CancellationToken.None);
+        await h.Sut.ChangeStatusAsync(invoice.Invoice!.Id, InvoiceStatus.Sent, CancellationToken.None);
+
+        var paid = await h.Sut.ChangeStatusAsync(invoice.Invoice.Id, InvoiceStatus.Paid, CancellationToken.None);
+        Assert.Equal(Now.UtcDateTime, paid.Invoice!.PaidAt);
+    }
 }

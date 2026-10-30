@@ -1,7 +1,7 @@
 {
   "status": {
     "Draft": "Draft",
-    "Sent": "Sent",
+    "Sent": "Final",
     "Paid": "Paid",
     "Cancelled": "Cancelled"
   },
@@ -20,8 +20,8 @@
   "creditNote": "Credit note",
   "transition": {
     "Draft": "Back to draft",
-    "Sent": "Send",
-    "Paid": "Mark as paid",
+    "Sent": "Finalize",
+    "Paid": "Register payment",
     "Cancelled": "Cancel invoice"
   },
   "common": {
@@ -70,7 +70,7 @@
   },
   "export": {
     "title": "Accounting export",
-    "description": "Exports all sent and paid invoice lines (invoice date within the period) with their recorded ledger account. If an account is missing, the export is blocked and the affected invoices are listed.",
+    "description": "Exports all final and paid invoice lines (invoice date within the period) with their recorded ledger account. If an account is missing, the export is blocked and the affected invoices are listed.",
     "from": "From (invoice date)",
     "to": "Up to and including",
     "action": "Export",
@@ -98,28 +98,43 @@
     "ledgerCompleted": "Missing ledger snapshots completed where a mapping exists.",
     "ledgerError": "The snapshots could not be completed.",
     "creditNoteAction": "Create credit note",
-    "creditNoteHint": "Creates a draft credit note that fully credits this invoice. The sent invoice itself stays unchanged.",
+    "creditNoteHint": "Creates a draft credit note that fully credits this invoice. The final invoice itself stays unchanged.",
     "creditNoteCreated": "Draft credit note {number} created.",
     "creditNoteError": "The credit note could not be created.",
     "creditsInvoice": "Credits invoice",
     "creditNotesTitle": "Credit notes on this invoice",
-    "cancelSentMessage": "Invoice {number} has already been sent. Cancelling makes it invalid without a correction document and releases the orders. Normally use 'Create credit note' to correct a sent invoice.",
+    "cancelSentMessage": "Invoice {number} is already final. Cancelling makes it invalid without a correction document and releases the orders. Normally use 'Create credit note' to correct a final invoice.",
     "pdfPreview": "Preview (pdf)",
     "pdfPreviewHint": "Opens the invoice as the customer will receive it, in the invoice language. Sends nothing.",
     "pdfError": "The pdf preview could not be opened.",
     "customerReads": "Customer reads",
     "sendConfirm": {
-      "title": "Send invoice",
-      "intro": "Check the details. Sending makes this invoice final: number, customer, entity, VAT treatment and descriptions are frozen and can no longer be changed.",
+      "title": "Finalize invoice",
+      "intro": "Check the details. This makes the invoice final: number, customer, entity, VAT treatment and descriptions are frozen and can no longer be changed.",
       "number": "Invoice number",
       "customer": "Customer",
       "entity": "Billing entity",
       "total": "Total amount (incl. VAT)",
       "language": "Invoice language",
       "treatment": "VAT treatment",
-      "confirm": "Send invoice",
-      "busy": "Sending…"
-    }
+      "confirm": "Finalize invoice",
+      "busy": "Finalizing…",
+      "delivery": "This does not transmit the invoice via Peppol; that is a separate step. A customer with an invoicing contact gets an e-mail that the invoice was issued, and portal users see it in the portal."
+    },
+    "payment": {
+      "title": "Register payment",
+      "intro": "Register that invoice {number} is paid in full. There is no bank link: verify the payment yourself first. A partial payment cannot be registered here.",
+      "customer": "Customer",
+      "amount": "Total amount (incl. VAT)",
+      "dueDate": "Due date",
+      "reference": "Structured reference",
+      "paidOn": "Paid on",
+      "paidOnHint": "Not in the future and not before the invoice date.",
+      "creditNotes": "This invoice has a credit note: check the outstanding amount.",
+      "irreversible": "This cannot be undone afterwards.",
+      "confirm": "Register payment"
+    },
+    "statusFinal": "The invoice is final. Transmitting via Peppol is a separate step."
   },
   "internalLines": {
     "addLine": "+ Add line",
@@ -214,7 +229,7 @@
     "invalidManualLine": "Every manual line needs a description and a quantity greater than zero.",
     "vatLabel": "VAT %",
     "vatFollowsCustomer": "follows customer",
-    "numberAtIssue": "The invoice number is assigned when the invoice is sent; the sequence continues at {number}.",
+    "numberAtIssue": "The invoice number is assigned when the invoice is finalized; the sequence continues at {number}.",
     "createdDraft": "Draft invoice created."
   },
   "readiness": {
@@ -286,7 +301,7 @@
     "preview": "Preview",
     "downloadXml": "Download XML",
     "send": "Send via Peppol",
-    "sendableHint": "Only sent or paid invoices can be transmitted via Peppol.",
+    "sendableHint": "Only final or paid invoices can be transmitted via Peppol.",
     "readyToSend": "Ready to send",
     "validateError": "The invoice could not be validated.",
     "previewError": "The Peppol preview could not be loaded.",
@@ -350,16 +365,16 @@
     "ledgerSettingsLink": "Set up ledger →",
     "notFound": "Invoice not found.",
     "draftLabel": "Draft",
-    "draftNumberHint": "The invoice number is assigned when the invoice is sent.",
+    "draftNumberHint": "The invoice number is assigned when the invoice is finalized.",
     "creditTitle": "Credit note",
     "creditSubtitle": "Credit note date {date} · credits {number}",
     "creditReason": "Credit reason",
     "creditTotalLabel": "To be credited (incl. VAT)",
-    "paidAt": "Marked as paid on {date}",
+    "paidAt": "Paid on {date}",
     "paidBy": "by {name}",
     "paymentManual": "Registered manually — no bank link.",
     "historyTitle": "History",
-    "preflightTitle": "To resolve before sending",
+    "preflightTitle": "To resolve before finalizing",
     "preflightOk": "All checks pass; the invoice can be finalised.",
     "preflightLoadError": "The check could not be run; try again.",
     "preflightLines": "line {lines}",
@@ -381,11 +396,11 @@
     "vatDefaultHint": "Default VAT rate of this invoice: {rate}%.",
     "vatDefaultFallback": "No VAT treatment known: check the VAT rate of the new line.",
     "dueDateRecalculated": "Due date recalculated with the {days}-day payment term.",
-    "manualNumberAction": "Manual number at sending",
-    "manualNumberHint": "The number is only assigned when the invoice is sent; this choice uses this number instead of the sequence.",
+    "manualNumberAction": "Manual number at finalizing",
+    "manualNumberHint": "The number is only assigned when the invoice is finalized; this choice uses this number instead of the sequence.",
     "creditDialog": {
       "title": "Create credit note",
-      "intro": "This creates a draft credit note that fully credits invoice {number} ({total}). The sent invoice itself stays unchanged.",
+      "intro": "This creates a draft credit note that fully credits invoice {number} ({total}). The final invoice itself stays unchanged.",
       "reasonLabel": "Credit reason",
       "reasonHint": "Required; shown in the history of both documents.",
       "confirm": "Create credit note"
@@ -394,8 +409,8 @@
     "creditedBy": "This invoice is (partly) credited by:"
   },
   "fiscal": {
-    "draftNote": "Preview — frozen on send.",
-    "frozenNote": "Frozen on send.",
+    "draftNote": "Preview — frozen on finalizing.",
+    "frozenNote": "Frozen on finalizing.",
     "language": "Invoice language",
     "languages": {
       "de": "German",
@@ -419,5 +434,11 @@
     "loadError": "The history could not be loaded.",
     "peppolHint": "Peppol steps are also listed in the Peppol section above.",
     "actorSystem": "System"
+  },
+  "portalStatus": {
+    "Draft": "Draft",
+    "Sent": "Sent",
+    "Paid": "Paid",
+    "Cancelled": "Cancelled"
   }
 }

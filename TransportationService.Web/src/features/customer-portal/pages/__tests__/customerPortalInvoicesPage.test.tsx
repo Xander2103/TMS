@@ -40,6 +40,13 @@ describe('CustomerPortalInvoicesPage', () => {
     vi.clearAllMocks()
   })
 
+  it('keeps the customer wording: an issued invoice reads "Verzonden", never the internal "Definitief"', async () => {
+    api.listPortalInvoices.mockResolvedValue([invoice({ status: 'Sent' })])
+    renderPage()
+    expect(await screen.findByText('Verzonden')).toBeInTheDocument()
+    expect(screen.queryByText('Definitief')).not.toBeInTheDocument()
+  })
+
   it('shows the Creditnota label for a credit note', async () => {
     api.listPortalInvoices.mockResolvedValue([
       invoice(),

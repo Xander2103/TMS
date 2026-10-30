@@ -87,7 +87,7 @@ describe('NewInvoicePage — VAT default, precision, numbering, server reasons',
     expect(screen.getByLabelText('Btw %')).toHaveValue(21)
     expect(screen.getByLabelText('Hoeveelheid')).toHaveAttribute('step', '0.001')
     expect(screen.getByLabelText('Eenheidsprijs')).toHaveAttribute('step', '0.0001')
-    expect(await screen.findByText(/toegekend bij het verzenden; de reeks begint bij FAC-2026100014/)).toBeInTheDocument()
+    expect(await screen.findByText(/toegekend bij het definitief maken; de reeks begint bij FAC-2026100014/)).toBeInTheDocument()
   })
 
   it('without a known default the VAT field says it follows the customer and sends null', async () => {

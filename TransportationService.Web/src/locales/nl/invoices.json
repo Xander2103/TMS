@@ -1,7 +1,7 @@
 {
   "status": {
     "Draft": "Concept",
-    "Sent": "Verzonden",
+    "Sent": "Definitief",
     "Paid": "Betaald",
     "Cancelled": "Geannuleerd"
   },
@@ -20,8 +20,8 @@
   "creditNote": "Creditnota",
   "transition": {
     "Draft": "Terug naar concept",
-    "Sent": "Verzenden",
-    "Paid": "Markeer als betaald",
+    "Sent": "Definitief maken",
+    "Paid": "Betaling registreren",
     "Cancelled": "Factuur annuleren"
   },
   "common": {
@@ -70,7 +70,7 @@
   },
   "export": {
     "title": "Boekhoudexport",
-    "description": "Exporteert alle verzonden en betaalde factuurlijnen (factuurdatum in de periode) met hun vastgelegde grootboekrekening. Ontbreekt er een rekening, dan wordt de export geblokkeerd met de betrokken facturen.",
+    "description": "Exporteert alle definitieve en betaalde factuurlijnen (factuurdatum in de periode) met hun vastgelegde grootboekrekening. Ontbreekt er een rekening, dan wordt de export geblokkeerd met de betrokken facturen.",
     "from": "Van (factuurdatum)",
     "to": "Tot en met",
     "action": "Exporteren",
@@ -98,28 +98,43 @@
     "ledgerCompleted": "Ontbrekende grootboekgegevens aangevuld waar een koppeling bestaat.",
     "ledgerError": "De grootboekgegevens konden niet worden aangevuld.",
     "creditNoteAction": "Creditnota maken",
-    "creditNoteHint": "Maakt een conceptcreditnota die deze factuur volledig crediteert. De verzonden factuur zelf blijft ongewijzigd.",
+    "creditNoteHint": "Maakt een conceptcreditnota die deze factuur volledig crediteert. De definitieve factuur zelf blijft ongewijzigd.",
     "creditNoteCreated": "Conceptcreditnota {number} aangemaakt.",
     "creditNoteError": "De creditnota kon niet worden aangemaakt.",
     "creditsInvoice": "Crediteert factuur",
     "creditNotesTitle": "Creditnota's op deze factuur",
-    "cancelSentMessage": "Factuur {number} is al verzonden. Annuleren maakt ze ongeldig zonder correctiedocument en geeft de opdrachten weer vrij. Gebruik normaal 'Creditnota maken' om een verzonden factuur te corrigeren.",
+    "cancelSentMessage": "Factuur {number} is al definitief. Annuleren maakt ze ongeldig zonder correctiedocument en geeft de opdrachten weer vrij. Gebruik normaal 'Creditnota maken' om een definitieve factuur te corrigeren.",
     "pdfPreview": "Voorbeeld (pdf)",
     "pdfPreviewHint": "Opent de factuur zoals de klant ze ontvangt, in de factuurtaal. Verzendt niets.",
     "pdfError": "Het pdf-voorbeeld kon niet worden geopend.",
     "customerReads": "Klant leest",
     "sendConfirm": {
-      "title": "Factuur verzenden",
-      "intro": "Controleer de gegevens. Verzenden maakt deze factuur definitief: nummer, klant, entiteit, btw-behandeling en omschrijvingen worden vastgelegd en kunnen daarna niet meer gewijzigd worden.",
+      "title": "Factuur definitief maken",
+      "intro": "Controleer de gegevens. Hierdoor wordt deze factuur definitief: nummer, klant, entiteit, btw-behandeling en omschrijvingen worden vastgelegd en kunnen daarna niet meer gewijzigd worden.",
       "number": "Factuurnummer",
       "customer": "Klant",
       "entity": "Facturerende entiteit",
       "total": "Totaalbedrag (incl. btw)",
       "language": "Factuurtaal",
       "treatment": "Btw-behandeling",
-      "confirm": "Factuur verzenden",
-      "busy": "Verzenden…"
-    }
+      "confirm": "Factuur definitief maken",
+      "busy": "Bezig…",
+      "delivery": "De factuur wordt hiermee niet via Peppol verstuurd; dat is een aparte stap. Heeft de klant een facturatiecontact, dan krijgt die een e-mail dat de factuur is opgemaakt, en een klantportaalgebruiker ziet ze in het portaal."
+    },
+    "payment": {
+      "title": "Betaling registreren",
+      "intro": "Registreer dat factuur {number} volledig betaald is. Er is geen bankkoppeling: controleer de betaling eerst zelf. Een gedeeltelijke betaling kan hier niet geregistreerd worden.",
+      "customer": "Klant",
+      "amount": "Totaalbedrag (incl. btw)",
+      "dueDate": "Vervaldatum",
+      "reference": "Gestructureerde mededeling",
+      "paidOn": "Betaald op",
+      "paidOnHint": "Niet in de toekomst en niet vóór de factuurdatum.",
+      "creditNotes": "Op deze factuur staat een creditnota: controleer of het openstaande bedrag klopt.",
+      "irreversible": "Dit kan achteraf niet ongedaan gemaakt worden.",
+      "confirm": "Betaling registreren"
+    },
+    "statusFinal": "Factuur is definitief. Versturen via Peppol is een aparte stap."
   },
   "internalLines": {
     "addLine": "+ Lijn toevoegen",
@@ -214,7 +229,7 @@
     "invalidManualLine": "Elke handmatige lijn heeft een omschrijving en een hoeveelheid groter dan nul nodig.",
     "vatLabel": "Btw %",
     "vatFollowsCustomer": "volgt klant",
-    "numberAtIssue": "Het factuurnummer wordt toegekend bij het verzenden; de reeks begint bij {number}.",
+    "numberAtIssue": "Het factuurnummer wordt toegekend bij het definitief maken; de reeks begint bij {number}.",
     "createdDraft": "Conceptfactuur aangemaakt."
   },
   "readiness": {
@@ -286,7 +301,7 @@
     "preview": "Voorbeeld",
     "downloadXml": "XML downloaden",
     "send": "Versturen via Peppol",
-    "sendableHint": "Alleen verzonden of betaalde facturen kunnen via Peppol verstuurd worden.",
+    "sendableHint": "Alleen definitieve of betaalde facturen kunnen via Peppol verstuurd worden.",
     "readyToSend": "Klaar voor verzending",
     "validateError": "De factuur kon niet worden gevalideerd.",
     "previewError": "Het Peppol-voorbeeld kon niet worden geladen.",
@@ -350,16 +365,16 @@
     "ledgerSettingsLink": "Grootboek instellen →",
     "notFound": "Factuur niet gevonden.",
     "draftLabel": "Concept",
-    "draftNumberHint": "Het factuurnummer wordt toegekend bij het verzenden.",
+    "draftNumberHint": "Het factuurnummer wordt toegekend bij het definitief maken.",
     "creditTitle": "Creditnota",
     "creditSubtitle": "Creditnotadatum {date} · crediteert {number}",
     "creditReason": "Reden van creditering",
     "creditTotalLabel": "Te crediteren (incl. btw)",
-    "paidAt": "Betaald gemarkeerd op {date}",
+    "paidAt": "Betaald op {date}",
     "paidBy": "door {name}",
     "paymentManual": "Handmatig geregistreerd — geen bankkoppeling.",
     "historyTitle": "Historiek",
-    "preflightTitle": "Vóór verzenden nog op te lossen",
+    "preflightTitle": "Vóór definitief maken nog op te lossen",
     "preflightOk": "Alle controles zijn in orde; de factuur kan definitief gemaakt worden.",
     "preflightLoadError": "De controle kon niet worden uitgevoerd; probeer opnieuw.",
     "preflightLines": "lijn {lines}",
@@ -381,11 +396,11 @@
     "vatDefaultHint": "Standaard btw-tarief van deze factuur: {rate}%.",
     "vatDefaultFallback": "Geen btw-behandeling bekend: controleer het btw-tarief van de nieuwe lijn.",
     "dueDateRecalculated": "Vervaldag herberekend met de betaaltermijn van {days} dagen.",
-    "manualNumberAction": "Handmatig nummer bij verzenden",
-    "manualNumberHint": "Het nummer wordt pas definitief toegekend bij het verzenden; met deze keuze gebruik je dan dit nummer in plaats van de reeks.",
+    "manualNumberAction": "Handmatig nummer bij definitief maken",
+    "manualNumberHint": "Het nummer wordt pas definitief toegekend bij het definitief maken; met deze keuze gebruik je dan dit nummer in plaats van de reeks.",
     "creditDialog": {
       "title": "Creditnota maken",
-      "intro": "Dit maakt een conceptcreditnota die factuur {number} volledig crediteert ({total}). De verzonden factuur zelf blijft ongewijzigd.",
+      "intro": "Dit maakt een conceptcreditnota die factuur {number} volledig crediteert ({total}). De definitieve factuur zelf blijft ongewijzigd.",
       "reasonLabel": "Reden van creditering",
       "reasonHint": "Verplicht; verschijnt in de historiek van beide documenten.",
       "confirm": "Creditnota maken"
@@ -394,8 +409,8 @@
     "creditedBy": "Deze factuur is (deels) gecrediteerd door:"
   },
   "fiscal": {
-    "draftNote": "Voorbeeld — wordt vastgelegd bij verzenden.",
-    "frozenNote": "Vastgelegd bij verzenden.",
+    "draftNote": "Voorbeeld — wordt vastgelegd bij definitief maken.",
+    "frozenNote": "Vastgelegd bij definitief maken.",
     "language": "Factuurtaal",
     "languages": {
       "de": "Duits",
@@ -419,5 +434,11 @@
     "loadError": "De historiek kon niet worden geladen.",
     "peppolHint": "Peppol-stappen staan ook in de Peppol-sectie hierboven.",
     "actorSystem": "Systeem"
+  },
+  "portalStatus": {
+    "Draft": "Concept",
+    "Sent": "Verzonden",
+    "Paid": "Betaald",
+    "Cancelled": "Geannuleerd"
   }
 }

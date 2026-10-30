@@ -231,7 +231,8 @@ public record UpdateInvoiceLineInput(
     /// <summary>Human unit label; null keeps the current value.</summary>
     string? UnitLabel = null);
 
-public record ChangeInvoiceStatusRequest(InvoiceStatus Status);
+/// <param name="PaidOn">UX-013: the day the money came in, for <c>Paid</c> only; empty = today.</param>
+public record ChangeInvoiceStatusRequest(InvoiceStatus Status, DateOnly? PaidOn = null);
 
 public enum InvoiceOperationOutcome
 {

@@ -130,6 +130,8 @@ export interface InvoiceDetail {
   /** ACC-H5: true when the accountant set the due date by hand; it then no longer follows the invoice date. */
   dueDateIsManual?: boolean
   paidAt?: string | null
+  /** UX-013: the structured reference the customer pays with. */
+  paymentReference?: string | null
   paidByName?: string | null
   /** ACC-M11: why the credit note was made (credit notes only). */
   creditReason?: string | null

@@ -1,3 +1,4 @@
+using TransportationService.Api.Common;
 using TransportationService.Api.Common.Money;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -1134,7 +1135,7 @@ public class InvoiceService : IInvoiceService
     }
 
     public async Task<InvoiceOperationResult> ChangeStatusAsync(
-        Guid id, InvoiceStatus target, CancellationToken cancellationToken)
+        Guid id, InvoiceStatus target, CancellationToken cancellationToken, DateOnly? paidOn = null)
     {
         var invoice = await TenantScoped().Include(i => i.Lines).FirstOrDefaultAsync(i => i.Id == id, cancellationToken);
         if (invoice is null)
@@ -1148,8 +1149,8 @@ public class InvoiceService : IInvoiceService
         {
             return InvoiceOperationResult.InvalidState(
                 invoice.Kind == InvoiceKind.CreditNote
-                    ? "Deze creditnota is al definitief (verzonden of doorgestuurd) en kan niet meer geannuleerd worden."
-                    : $"Deze factuur is al definitief (verzonden of doorgestuurd) en kan niet meer geannuleerd worden. {CreditNoteHint}");
+                    ? "Deze creditnota is al definitief en kan niet meer geannuleerd worden."
+                    : $"Deze factuur is al definitief en kan niet meer geannuleerd worden. {CreditNoteHint}");
         }
 
         // Final integration 2026-10-24: a second issue is the same conflict however late it arrives.
@@ -1214,7 +1215,22 @@ public class InvoiceService : IInvoiceService
                 }
             }
 
-            invoice.PaidAt = _timeProvider.GetUtcNow().UtcDateTime;
+            // UX-013: the registered day is the accountant's; the moment of registering stays in the audit trail.
+            var now = _timeProvider.GetUtcNow().UtcDateTime;
+            var today = await TenantTimeZone.TodayAsync(_dbContext, _tenantContext.TenantId, _timeProvider, cancellationToken);
+            if (paidOn is { } day && day > today)
+            {
+                return InvoiceOperationResult.InvalidState("De betaaldatum kan niet in de toekomst liggen.");
+            }
+
+            if (paidOn is { } earliest && earliest < invoice.InvoiceDate)
+            {
+                return InvoiceOperationResult.InvalidState("De betaaldatum kan niet vóór de factuurdatum liggen.");
+            }
+
+            invoice.PaidAt = paidOn is { } paidDay && paidDay != today
+                ? paidDay.ToDateTime(new TimeOnly(12, 0), DateTimeKind.Utc)
+                : now;
             invoice.PaidByUserId = _currentUser?.CurrentUserId;
         }
 

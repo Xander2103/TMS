@@ -142,7 +142,7 @@ describe('InvoiceDetailPage — accounting remediation', () => {
       ],
     })
     renderPage()
-    await user.click(await screen.findByRole('button', { name: 'Verzenden' }))
+    await user.click(await screen.findByRole('button', { name: 'Definitief maken' }))
     const dialog = await screen.findByRole('dialog')
     const list = await within(dialog).findByTestId('invoice-issue-preflight')
     expect(list).toHaveTextContent('PO-nummer ontbreekt: deze klant vereist een PO-nummer')
@@ -156,7 +156,7 @@ describe('InvoiceDetailPage — accounting remediation', () => {
     const user = userEvent.setup()
     api.changeInvoiceStatus.mockRejectedValue(new ApiError('Deze klant vereist een PO-nummer. Voeg een geldig PO-nummer toe voor verzending.', 400))
     renderPage()
-    await user.click(await screen.findByRole('button', { name: 'Verzenden' }))
+    await user.click(await screen.findByRole('button', { name: 'Definitief maken' }))
     const dialog = await screen.findByRole('dialog')
     await within(dialog).findByText(/Alle controles zijn in orde/)
     await user.click(within(dialog).getByTestId('invoice-send-confirm'))
@@ -196,7 +196,7 @@ describe('InvoiceDetailPage — accounting remediation', () => {
     api.getInvoice.mockResolvedValue(invoice({ status: 'Sent', allowedTransitions: ['Paid'], lines: [{ ...invoice().lines[0], ledgerAccountNumber: null }] }))
     renderPage()
     await screen.findByText(/Hijswerk airco-unit/)
-    for (const name of ['Markeer als betaald', 'Verzenden', 'Factuur annuleren', 'Creditnota maken', 'Bewerken', 'Verwijderen', 'Grootboekgegevens aanvullen', 'Nummer corrigeren']) {
+    for (const name of ['Betaling registreren', 'Definitief maken', 'Factuur annuleren', 'Creditnota maken', 'Bewerken', 'Verwijderen', 'Grootboekgegevens aanvullen', 'Nummer corrigeren']) {
       expect(screen.queryByRole('button', { name })).not.toBeInTheDocument()
     }
     expect(screen.getByRole('button', { name: 'Voorbeeld (pdf)' })).toBeInTheDocument()
@@ -222,7 +222,7 @@ describe('InvoiceDetailPage — accounting remediation', () => {
     expect(screen.getByTestId('invoice-total')).toHaveTextContent('− € 364,00')
     expect(screen.getByText('Te crediteren (incl. btw)')).toBeInTheDocument()
     expect(screen.getByTestId('invoice-credit-reason')).toHaveTextContent('Dubbel gefactureerd')
-    expect(screen.queryByRole('button', { name: 'Markeer als betaald' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Betaling registreren' })).not.toBeInTheDocument()
   })
 
   it('ACC-M2: unit prices keep their decimals and the unit is shown; inputs accept 4 decimals', async () => {
@@ -285,15 +285,15 @@ describe('InvoiceDetailPage — accounting remediation', () => {
     api.getInvoice.mockResolvedValue(invoice({ invoiceNumber: null, displayNumber: 'CONCEPT-A3FC' }))
     renderPage()
     expect(await screen.findByRole('heading', { name: /CONCEPT-A3FC — TEST ACCOUNTING Klant/ })).toBeInTheDocument()
-    expect(screen.getByText(/Het factuurnummer wordt toegekend bij het verzenden/)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Handmatig nummer bij verzenden' })).toBeInTheDocument()
+    expect(screen.getByText(/Het factuurnummer wordt toegekend bij het definitief maken/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Handmatig nummer bij definitief maken' })).toBeInTheDocument()
   })
 
   it('shows manual payment registration details on a paid invoice', async () => {
     api.getInvoice.mockResolvedValue(invoice({ status: 'Paid', allowedTransitions: [], paidAt: '2026-10-17T15:05:36Z', paidByName: 'Bea Boekhouding' }))
     renderPage()
     const info = await screen.findByTestId('invoice-paid-info')
-    expect(info).toHaveTextContent('Betaald gemarkeerd op')
+    expect(info).toHaveTextContent('Betaald op')
     expect(info).toHaveTextContent('door Bea Boekhouding')
     expect(info).toHaveTextContent('Handmatig geregistreerd')
   })

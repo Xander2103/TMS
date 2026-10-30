@@ -1,7 +1,7 @@
 {
   "status": {
     "Draft": "Brouillon",
-    "Sent": "Envoyée",
+    "Sent": "Définitive",
     "Paid": "Payée",
     "Cancelled": "Annulée"
   },
@@ -20,8 +20,8 @@
   "creditNote": "Note de crédit",
   "transition": {
     "Draft": "Retour au brouillon",
-    "Sent": "Envoyer",
-    "Paid": "Marquer comme payée",
+    "Sent": "Finaliser",
+    "Paid": "Enregistrer le paiement",
     "Cancelled": "Annuler la facture"
   },
   "common": {
@@ -70,7 +70,7 @@
   },
   "export": {
     "title": "Export comptable",
-    "description": "Exporte toutes les lignes de facture envoyées et payées (date de facture dans la période) avec leur compte du grand livre enregistré. Si un compte manque, l'export est bloqué avec la liste des factures concernées.",
+    "description": "Exporte toutes les lignes de facture définitives et payées (date de facture dans la période) avec leur compte du grand livre enregistré. Si un compte manque, l'export est bloqué avec la liste des factures concernées.",
     "from": "Du (date de facture)",
     "to": "Jusqu'au",
     "action": "Exporter",
@@ -98,28 +98,43 @@
     "ledgerCompleted": "Les données comptables manquantes ont été complétées là où un mappage existe.",
     "ledgerError": "Les données comptables n'ont pas pu être complétées.",
     "creditNoteAction": "Créer une note de crédit",
-    "creditNoteHint": "Crée une note de crédit (brouillon) qui crédite entièrement cette facture. La facture envoyée reste inchangée.",
+    "creditNoteHint": "Crée une note de crédit (brouillon) qui crédite entièrement cette facture. La facture définitive reste inchangée.",
     "creditNoteCreated": "Note de crédit (brouillon) {number} créée.",
     "creditNoteError": "La note de crédit n'a pas pu être créée.",
     "creditsInvoice": "Crédite la facture",
     "creditNotesTitle": "Notes de crédit sur cette facture",
-    "cancelSentMessage": "La facture {number} a déjà été envoyée. L'annuler la rend invalide sans document de correction et libère les commandes. Utilisez normalement 'Créer une note de crédit' pour corriger une facture envoyée.",
+    "cancelSentMessage": "La facture {number} est déjà définitive. L'annuler la rend invalide sans document de correction et libère les commandes. Utilisez normalement 'Créer une note de crédit' pour corriger une facture définitive.",
     "pdfPreview": "Aperçu (pdf)",
     "pdfPreviewHint": "Ouvre la facture telle que le client la recevra, dans la langue de facturation. N'envoie rien.",
     "pdfError": "L'aperçu pdf n'a pas pu être ouvert.",
     "customerReads": "Le client lit",
     "sendConfirm": {
-      "title": "Envoyer la facture",
-      "intro": "Vérifiez les données. L'envoi rend cette facture définitive : numéro, client, entité, traitement TVA et descriptions sont figés et ne pourront plus être modifiés.",
+      "title": "Finaliser la facture",
+      "intro": "Vérifiez les données. Cette action rend la facture définitive : numéro, client, entité, traitement TVA et descriptions sont figés et ne pourront plus être modifiés.",
       "number": "Numéro de facture",
       "customer": "Client",
       "entity": "Entité de facturation",
       "total": "Montant total (TVA incl.)",
       "language": "Langue de facturation",
       "treatment": "Traitement TVA",
-      "confirm": "Envoyer la facture",
-      "busy": "Envoi…"
-    }
+      "confirm": "Finaliser la facture",
+      "busy": "Finalisation…",
+      "delivery": "La facture n’est pas transmise via Peppol ; c’est une étape distincte. Un client avec un contact de facturation reçoit un e-mail signalant l’émission, et les utilisateurs du portail la voient dans le portail."
+    },
+    "payment": {
+      "title": "Enregistrer le paiement",
+      "intro": "Enregistrez que la facture {number} est entièrement payée. Il n’y a pas de lien bancaire : vérifiez d’abord le paiement. Un paiement partiel ne peut pas être enregistré ici.",
+      "customer": "Client",
+      "amount": "Montant total (TVA incl.)",
+      "dueDate": "Échéance",
+      "reference": "Communication structurée",
+      "paidOn": "Payée le",
+      "paidOnHint": "Ni dans le futur ni avant la date de facture.",
+      "creditNotes": "Cette facture a une note de crédit : vérifiez le montant restant dû.",
+      "irreversible": "Cette action est irréversible.",
+      "confirm": "Enregistrer le paiement"
+    },
+    "statusFinal": "La facture est définitive. La transmission via Peppol est une étape distincte."
   },
   "internalLines": {
     "addLine": "+ Ajouter une ligne",
@@ -214,7 +229,7 @@
     "invalidManualLine": "Chaque ligne manuelle doit avoir une description et une quantité supérieure à zéro.",
     "vatLabel": "TVA %",
     "vatFollowsCustomer": "suit le client",
-    "numberAtIssue": "Le numéro de facture est attribué à l’envoi ; la séquence continue à {number}.",
+    "numberAtIssue": "Le numéro de facture est attribué à la finalisation ; la séquence continue à {number}.",
     "createdDraft": "Brouillon de facture créé."
   },
   "readiness": {
@@ -286,7 +301,7 @@
     "preview": "Aperçu",
     "downloadXml": "Télécharger le XML",
     "send": "Envoyer via Peppol",
-    "sendableHint": "Seules les factures envoyées ou payées peuvent être transmises via Peppol.",
+    "sendableHint": "Seules les factures définitives ou payées peuvent être transmises via Peppol.",
     "readyToSend": "Prête pour l'envoi",
     "validateError": "La facture n'a pas pu être validée.",
     "previewError": "L'aperçu Peppol n'a pas pu être chargé.",
@@ -350,16 +365,16 @@
     "ledgerSettingsLink": "Configurer le grand livre →",
     "notFound": "Facture introuvable.",
     "draftLabel": "Brouillon",
-    "draftNumberHint": "Le numéro de facture est attribué lors de l’envoi.",
+    "draftNumberHint": "Le numéro de facture est attribué lors de la finalisation.",
     "creditTitle": "Note de crédit",
     "creditSubtitle": "Date de la note de crédit {date} · crédite {number}",
     "creditReason": "Motif du crédit",
     "creditTotalLabel": "À créditer (TVA comprise)",
-    "paidAt": "Marquée payée le {date}",
+    "paidAt": "Payée le {date}",
     "paidBy": "par {name}",
     "paymentManual": "Enregistré manuellement — pas de lien bancaire.",
     "historyTitle": "Historique",
-    "preflightTitle": "À résoudre avant l’envoi",
+    "preflightTitle": "À résoudre avant la finalisation",
     "preflightOk": "Toutes les vérifications sont correctes ; la facture peut être finalisée.",
     "preflightLoadError": "La vérification n’a pas pu être exécutée ; réessayez.",
     "preflightLines": "ligne {lines}",
@@ -381,11 +396,11 @@
     "vatDefaultHint": "Taux de TVA par défaut de cette facture : {rate} %.",
     "vatDefaultFallback": "Aucun régime TVA connu : vérifiez le taux de TVA de la nouvelle ligne.",
     "dueDateRecalculated": "Échéance recalculée avec le délai de paiement de {days} jours.",
-    "manualNumberAction": "Numéro manuel à l’envoi",
-    "manualNumberHint": "Le numéro n’est attribué qu’à l’envoi ; ce choix utilise alors ce numéro au lieu de la séquence.",
+    "manualNumberAction": "Numéro manuel à la finalisation",
+    "manualNumberHint": "Le numéro n’est attribué qu’à la finalisation ; ce choix utilise alors ce numéro au lieu de la séquence.",
     "creditDialog": {
       "title": "Créer une note de crédit",
-      "intro": "Ceci crée un brouillon de note de crédit qui crédite entièrement la facture {number} ({total}). La facture envoyée reste inchangée.",
+      "intro": "Ceci crée un brouillon de note de crédit qui crédite entièrement la facture {number} ({total}). La facture définitive reste inchangée.",
       "reasonLabel": "Motif du crédit",
       "reasonHint": "Obligatoire ; apparaît dans l’historique des deux documents.",
       "confirm": "Créer la note de crédit"
@@ -394,8 +409,8 @@
     "creditedBy": "Cette facture est (partiellement) créditée par :"
   },
   "fiscal": {
-    "draftNote": "Aperçu — figé à l’envoi.",
-    "frozenNote": "Figé à l’envoi.",
+    "draftNote": "Aperçu — figé à la finalisation.",
+    "frozenNote": "Figé à la finalisation.",
     "language": "Langue de facturation",
     "languages": {
       "de": "Allemand",
@@ -419,5 +434,11 @@
     "loadError": "L’historique n’a pas pu être chargé.",
     "peppolHint": "Les étapes Peppol figurent aussi dans la section Peppol ci-dessus.",
     "actorSystem": "Système"
+  },
+  "portalStatus": {
+    "Draft": "Brouillon",
+    "Sent": "Envoyée",
+    "Paid": "Payée",
+    "Cancelled": "Annulée"
   }
 }

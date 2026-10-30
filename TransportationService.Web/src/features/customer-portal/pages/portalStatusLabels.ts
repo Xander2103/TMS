@@ -30,8 +30,9 @@ export function unitTypeLabel(t: TranslateFn, code: string): string {
   return statusLabel(t, 'orders.unitType', code)
 }
 
+/** The customer's words, not the back office's: to them an issued invoice is sent, "Definitief" is internal (UX-013). */
 export function invoiceStatusLabel(t: TranslateFn, code: string): string {
-  return statusLabel(t, 'invoices.status', code)
+  return statusLabel(t, 'invoices.portalStatus', code)
 }
 
 export function peppolStatusLabel(t: TranslateFn, code: string): string {

@@ -33,14 +33,14 @@ describe('invoice fiscal source', () => {
     expect(summary).toHaveTextContent('Btw-behandeling:')
     expect(summary).toHaveTextContent('(bron: klant)')
     expect(summary).toHaveTextContent('Factuurtaal: Frans')
-    expect(summary).toHaveTextContent('Vastgelegd bij verzenden.')
+    expect(summary).toHaveTextContent('Vastgelegd bij definitief maken.')
     expect(summary).toHaveTextContent('1')
   })
 
   it('a draft says it is a preview that freezes on send, and prints the statutory text', () => {
     render(<InvoiceFiscalSummary invoice={invoice({ status: 'Draft', customerVatTreatment: 'ReverseCharge', vatLegalText: 'Btw verlegd.' })} />)
     const summary = screen.getByTestId('invoice-fiscal-summary')
-    expect(summary).toHaveTextContent('Voorbeeld — wordt vastgelegd bij verzenden.')
+    expect(summary).toHaveTextContent('Voorbeeld — wordt vastgelegd bij definitief maken.')
     expect(summary).toHaveTextContent('Wettelijke vermelding: Btw verlegd.')
   })
 
