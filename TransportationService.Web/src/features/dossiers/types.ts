@@ -250,6 +250,15 @@ export interface DossierInvoiceLink {
   kind?: 'Invoice' | 'CreditNote'
 }
 
+export interface DossierOpenException {
+  id: string
+  typeLabel: string
+  severityLabel: string
+  /** Keeps the dossier from closing automatically; closing by hand takes a reason. */
+  holds: boolean
+  tripNumber: string | null
+}
+
 export interface DossierDetail {
   id: string
   dossierNumber: string
@@ -283,6 +292,8 @@ export interface DossierDetail {
   issuedDocumentCount?: number
   /** ACC-M12: invoices / credit notes carrying work of this dossier (reverse link). Absent on older payloads. */
   invoices?: DossierInvoiceLink[] | null
+  /** UX-010: open afwijkingen in the dossier's problem scope, serious first. */
+  openExceptions?: DossierOpenException[] | null
   /** M10: current proofs of delivery of the linked orders — not in `documentCount`. */
   podCount?: number
   /** Latest change over the dossier, its activities and linked orders (ISO); null/absent when unknown. */

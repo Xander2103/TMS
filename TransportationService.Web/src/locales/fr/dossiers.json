@@ -1,7 +1,7 @@
 {
   "status": {
     "Open": "Ouvert",
-    "Closed": "Confirmé",
+    "Closed": "Clôturé",
     "Cancelled": "Annulé"
   },
   "relationType": {
@@ -60,7 +60,7 @@
       "number": "N° dossier",
       "customer": "Client",
       "status": "Statut",
-      "confirmedAt": "Confirmé le",
+      "confirmedAt": "Clôturé le",
       "planningDate": "Date de planification",
       "createdAt": "Date de création"
     },
@@ -103,9 +103,9 @@
       "orderNumber": "N° commande",
       "customerReference": "Référence client",
       "customerNumber": "N° client",
-      "confirmationSource": "Mode de confirmation",
-      "confirmedFrom": "Confirmé le du",
-      "confirmedTo": "Confirmé le au",
+      "confirmationSource": "Mode de clôture",
+      "confirmedFrom": "Clôturé le du",
+      "confirmedTo": "Clôturé le au",
       "createdFrom": "Date de création du",
       "createdTo": "Date de création au",
       "planningFrom": "Date de planification du",
@@ -158,7 +158,7 @@
     "removeSearch": "Effacer la recherche",
     "ranges": {
       "date": "Date du dossier",
-      "confirmed": "Confirmé le",
+      "confirmed": "Clôturé le",
       "planning": "Date de planification",
       "created": "Date de création",
       "since": "à partir du {date}",
@@ -283,7 +283,9 @@
       "route": "itinéraire",
       "goederen": "marchandises",
       "prijs": "prix"
-    }
+    },
+    "openException": "Écart ouvert : {type}, gravité {severity}",
+    "openExceptionTrip": "sur {tripNumber}"
   },
   "header": {
     "addActivity": "+ Activité",
@@ -448,7 +450,7 @@
     "noNotes": "Aucune note.",
     "createdAt": "Créé le {date}",
     "responsible": "Responsable : {name}",
-    "closedAt": "Confirmé le {date}",
+    "closedAt": "Clôturé le {date}",
     "activityAdded": "Activité ajoutée.",
     "activityUpdated": "Activité mise à jour.",
     "routeSaved": "Itinéraire enregistré.",
@@ -624,23 +626,24 @@
     "podCount_one": "{count} preuve de livraison",
     "podCount_other": "{count} preuves de livraison",
     "uploadCount_one": "{count} fichier ajouté",
-    "uploadCount_other": "{count} fichiers ajoutés"
+    "uploadCount_other": "{count} fichiers ajoutés",
+    "plannedOnTrip": "{tripNumber} · {date}"
   },
   "lifecycle": {
-    "confirm": "Confirmer",
-    "confirmTitle": "Confirmer le dossier",
-    "confirmIntro": "Confirmez que ce dossier est opérationnellement terminé. La confirmation n’est pas la facturation : prix et factures restent séparés.",
+    "confirm": "Clôturer le dossier",
+    "confirmTitle": "Clôturer le dossier",
+    "confirmIntro": "Clôturez ce dossier lorsqu’il est opérationnellement terminé. La clôture n’est pas une facturation : les prix et factures restent séparés.",
     "loading": "Chargement de l’état de préparation…",
     "loadFailed": "L’état de préparation n’a pas pu être chargé.",
-    "blockersTitle": "La confirmation est impossible",
+    "blockersTitle": "La clôture est impossible",
     "warningsTitle": "Points d’attention",
     "infoTitle": "Pour information",
     "noIssues": "Toutes les parties opérationnelles sont terminées.",
-    "acknowledge": "J’ai consulté les points d’attention et je confirme délibérément.",
+    "acknowledge": "J’ai consulté les points d’attention et je clôture en connaissance de cause.",
     "reasonLabel": "Remarque (facultatif)",
     "reasonHint": "Par exemple : exécuté le 22/09, encodé après coup.",
-    "confirmed": "Dossier confirmé.",
-    "confirmFailed": "Le dossier n’a pas pu être confirmé.",
+    "confirmed": "Dossier clôturé.",
+    "confirmFailed": "Le dossier n’a pas pu être clôturé.",
     "summary": {
       "orders": "Ordres",
       "ordersValue": "{completed} sur {total} terminés",
@@ -661,8 +664,8 @@
       "exceptions": "Écarts ouverts",
       "exceptionsHolding": "{count} bloquant(s)"
     },
-    "confirmedBadge": "Confirmé",
-    "confirmedAt": "Confirmé le {date}",
+    "confirmedBadge": "Clôturé",
+    "confirmedAt": "Clôturé le {date}",
     "confirmedBy": "par {name}",
     "sourceManual": "manuellement",
     "sourceAutomatic": "automatiquement",
@@ -671,11 +674,11 @@
     "cancelReasonLabel": "Motif",
     "reopen": "Rouvrir le dossier",
     "reopenTitle": "Rouvrir le dossier",
-    "reopenIntro": "La confirmation précédente reste dans l’historique. Factures et documents sont conservés. Les ordres annulés avec le dossier restent annulés ; rétablissez-les par ordre.",
+    "reopenIntro": "La clôture précédente reste dans l’historique. Les factures et documents subsistent. Les ordres annulés lors de l’annulation restent annulés ; rétablissez-les ordre par ordre.",
     "reopenReason": "Motif de réouverture",
     "reopened": "Dossier rouvert.",
     "reopenFailed": "Le dossier n’a pas pu être rouvert.",
-    "cancel": "Annuler le dossier",
+    "cancel": "Annuler le dossier…",
     "cancelTitle": "Annuler le dossier",
     "cancelIntro": "Uniquement pour un travail jamais exécuté. Les ordres en brouillon sont annulés avec ; les ordres planifiés ou exécutés bloquent.",
     "cancelReason": "Motif d’annulation",
@@ -685,22 +688,22 @@
     "reopenShort": "Rouvrir",
     "conflict": "Le dossier a été modifié entre-temps. La liste a été actualisée ; vérifiez le dossier et réessayez.",
     "holdTitle": "Bloquant",
-    "holdHint": "Ces écarts ouverts bloquent la confirmation automatique. Une confirmation manuelle exige une décision consciente et un motif.",
+    "holdHint": "Ces points bloquent la clôture automatique. La clôture manuelle n’est possible que délibérément et avec un motif.",
     "reasonRequiredLabel": "Motif (obligatoire)",
-    "reasonRequiredHint": "Pourquoi confirmez-vous le dossier malgré le(s) écart(s) bloquant(s) ?",
+    "reasonRequiredHint": "Pourquoi clôturez-vous le dossier malgré ces points ?",
     "openException": "Ouvrir l'écart"
   },
   "portalReview": {
     "heading": "{number} · soumis via le portail client",
     "openOrder": "Ouvrir l'ordre {number}",
-    "confirmBlocked": "Évaluez d'abord la demande du portail client ({numbers}) ci-dessous ; ensuite le dossier pourra être confirmé."
+    "confirmBlocked": "Évaluez d'abord la demande du portail client ({numbers}) ci-dessous ; le dossier pourra ensuite être clôturé."
   },
   "history": {
-    "ConfirmedManually": "Confirmé manuellement",
-    "ConfirmedAutomatically": "Confirmé automatiquement",
+    "ConfirmedManually": "Clôturé manuellement",
+    "ConfirmedAutomatically": "Clôturé automatiquement",
     "Reopened": "Rouvert",
     "Cancelled": "Annulé",
-    "Closed": "Confirmé (historique)",
+    "Closed": "Clôturé (historique)",
     "LegalEntityChanged": "Entité de facturation modifiée",
     "CustomerChanged": "Client modifié",
     "OrderLinked": "Ordre lié",

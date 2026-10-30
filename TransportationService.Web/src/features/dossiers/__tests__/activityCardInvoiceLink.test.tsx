@@ -30,7 +30,7 @@ describe('ActivityCard invoice link', () => {
     const card = renderCard({ agreedPrice: 400, isPriced: true, invoiceId: 'inv-6', invoiceNumber: 'FAC-2026100006', invoiceStatus: 'Sent' })
     expect(card.getByText('Factuur')).toBeInTheDocument()
     expect(card.getByRole('link', { name: 'FAC-2026100006' })).toHaveAttribute('href', '/invoices/inv-6')
-    expect(card.getByText(/— Verzonden/)).toBeInTheDocument()
+    expect(card.getByText(/— Definitief/)).toBeInTheDocument()
   })
 
   it('names a draft invoice "Concept" when it has no legal number yet', () => {

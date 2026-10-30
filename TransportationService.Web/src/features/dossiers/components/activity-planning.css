@@ -115,3 +115,21 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* UX-004: the order is not plannable yet; the way forward sits next to the reason. */
+.dossier-planning-gate {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--warning-border);
+  border-radius: var(--radius-sm);
+  background: var(--warning-bg);
+}
+
+.dossier-planning-gate p {
+  margin: 0;
+  flex: 1 1 16rem;
+}

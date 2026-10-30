@@ -4,7 +4,7 @@ import { ArrowRight, Calendar, FileText, History, ListChecks, MapPin, Package, T
 import { Badge, type BadgeTone } from '../../../components/ui/Badge'
 import { useLocale } from '../../../i18n/localeContext'
 import { useCanViewPrices } from '../../auth/commercialVisibility'
-import { formatDateTime } from '../../../utils/dates'
+import { formatDate, formatDateTime } from '../../../utils/dates'
 import { euro, INVOICE_STATUS_LABELS, type InvoiceStatus } from '../../invoices/types'
 import { useUnitTypes } from '../../master-data/hooks/useUnitTypes'
 import { ORDER_DOCUMENT_TYPE_LABELS, type OrderDocumentType } from '../../transport-orders/api/orderDocumentsApi'
@@ -80,6 +80,8 @@ export function DossierOverview() {
   const unloadingStop = stops.find((s) => s.stopType === 'Unloading') ?? null
   const siteStop = stops.find((s) => s.stopType === 'Site') ?? null
   const plannedStop = stops.find((s) => s.plannedFrom || s.plannedTo) ?? null
+  // UX-010: work on a trip IS planned, also when the stops carry no time of their own.
+  const activeTrip = transportActivities.find((activity) => activity.assignment)?.assignment ?? null
   // D2: an on-site lifting job has ONE applicable stop — its work site. No fictitious Laden/Lossen rows.
   const onSite = isOnSiteLiftingOrder(firstOrder) || (siteStop !== null && !loadingStop && !unloadingStop)
   // The readiness projection is the authority: while the DTO still flags a route (an activity
@@ -225,8 +227,12 @@ export function DossierOverview() {
           <p className="dossier-ov-inline">
             <Calendar size={16} aria-hidden />
             <span>{t('dossiers.overview.planning')}</span>
-            <Badge tone={plannedStop ? 'info' : 'neutral'}>
-              {plannedStop ? (stopTiming(t, plannedStop) ?? t('dossiers.overview.notPlanned')) : t('dossiers.overview.notPlanned')}
+            <Badge tone={plannedStop || activeTrip ? 'info' : 'neutral'}>
+              {plannedStop && stopTiming(t, plannedStop)
+                ? stopTiming(t, plannedStop)
+                : activeTrip
+                  ? t('dossiers.overview.plannedOnTrip', { tripNumber: activeTrip.tripNumber, date: formatDate(activeTrip.tripDate) })
+                  : t('dossiers.overview.notPlanned')}
             </Badge>
           </p>
         </OverviewCard>

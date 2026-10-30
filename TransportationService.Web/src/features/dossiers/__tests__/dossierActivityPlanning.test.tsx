@@ -46,9 +46,10 @@ const api = vi.hoisted(() => ({
 vi.mock('../api/dossiersApi', () => api)
 vi.mock('../api/activityTypesApi', () => ({ listActivityTypes: () => Promise.resolve([]) }))
 
-const orders = vi.hoisted(() => ({ get: vi.fn() }))
+const orders = vi.hoisted(() => ({ get: vi.fn(), changeStatus: vi.fn() }))
 vi.mock('../../transport-orders/api/transportOrdersApi', () => ({
   getTransportOrder: orders.get,
+  changeTransportOrderStatus: orders.changeStatus,
   updateTransportOrder: vi.fn(),
   saveOrderPriceLines: vi.fn(),
   setOrderOneOffPrice: vi.fn(),
@@ -246,7 +247,7 @@ describe('Dossier activity planning', () => {
 
   it('may plan with an empty assignment and shows a refusal of the server as is', async () => {
     const user = userEvent.setup()
-    api.getDossier.mockResolvedValue(dossierWith([orderActivity({ linkedOrderStatus: 'Draft' })]))
+    api.getDossier.mockResolvedValue(dossierWith([orderActivity()]))
     api.planDossierActivity.mockRejectedValue(
       new ApiError('Opdracht 0006 is nog een concept en kan niet worden ingepland. Bevestig de opdracht eerst.', 400, null),
     )
@@ -257,6 +258,34 @@ describe('Dossier activity planning', () => {
     await waitFor(() => expect(api.planDossierActivity).toHaveBeenCalled())
     expect(api.planDossierActivity.mock.calls[0][2]).toMatchObject({ driverId: null, vehicleId: null, trailerId: null, vehicleSelectionSource: null })
     expect(await planning.findByRole('alert')).toHaveTextContent('Opdracht 0006 is nog een concept en kan niet worden ingepland. Bevestig de opdracht eerst.')
+  })
+
+  it('UX-004: a Concept order is stopped before the pickers, with the confirm next to the reason', async () => {
+    const user = userEvent.setup()
+    auth.permissions = new Set([...auth.permissions, 'orders.change_status'])
+    api.getDossier.mockResolvedValue(dossierWith([orderActivity({ linkedOrderStatus: 'Draft' })]))
+    orders.changeStatus.mockResolvedValue({})
+    renderPage(ACTIVITIES_TAB)
+    const planning = await openPlanning(user, '0006')
+
+    expect(planning.getByTestId('planning-order-gate')).toHaveTextContent('0006 is nog in concept')
+    expect(planning.getByRole('button', { name: 'Rit aanmaken en toewijzen' })).toBeDisabled()
+
+    api.getDossier.mockResolvedValue(dossierWith([orderActivity()]))
+    await user.click(planning.getByRole('button', { name: 'Opdracht bevestigen' }))
+    await waitFor(() => expect(orders.changeStatus).toHaveBeenCalledWith('o-6', 'Confirmed'))
+    await waitFor(() => expect(planning.queryByTestId('planning-order-gate')).not.toBeInTheDocument())
+    expect(planning.getByRole('button', { name: 'Rit aanmaken en toewijzen' })).toBeEnabled()
+    expect(api.planDossierActivity).not.toHaveBeenCalled()
+  })
+
+  it('UX-004: without the right to confirm, the block says who can and offers no button', async () => {
+    const user = userEvent.setup()
+    api.getDossier.mockResolvedValue(dossierWith([orderActivity({ linkedOrderStatus: 'Draft' })]))
+    renderPage(ACTIVITIES_TAB)
+    const planning = await openPlanning(user, '0006')
+    expect(planning.getByTestId('planning-order-gate')).toHaveTextContent('collega')
+    expect(planning.queryByRole('button', { name: 'Opdracht bevestigen' })).not.toBeInTheDocument()
   })
 
   it('never replaces a hand-picked vehicle on a driver change — also after a reload (the source is stored)', async () => {
@@ -563,7 +592,8 @@ describe('Dossier overview (spec §17)', () => {
     api.updateDossier.mockResolvedValue({ ...dossier, title: 'Nieuwe titel', version: 'v-2' })
     renderPage('/dossiers/d-1')
 
-    await user.click(await screen.findByRole('menuitem', { name: 'Bewerken', hidden: true }))
+    await user.click(await screen.findByRole('button', { name: 'Meer' }))
+    await user.click(await screen.findByRole('menuitem', { name: 'Bewerken' }))
     const dialog = within(await screen.findByRole('dialog', { name: 'Dossier bewerken' }))
     expect(dialog.queryByLabelText('Notities')).not.toBeInTheDocument()
     expect(dialog.queryByDisplayValue('Legacy vrije tekst')).not.toBeInTheDocument()

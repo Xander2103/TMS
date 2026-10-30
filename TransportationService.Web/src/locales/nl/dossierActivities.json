@@ -54,7 +54,14 @@
     "readOnlyStatus": "Deze rit is niet meer in voorbereiding; wijzig de toewijzing op de ritpagina.",
     "tripLoadFailed": "De rit kon niet worden geladen; de toewijzing is alleen-lezen.",
     "tripLoading": "Rit wordt geladen…",
-    "unsavedInDrawer": "De planning heeft niet-opgeslagen wijzigingen. Sla de toewijzing eerst op of maak ze ongedaan."
+    "unsavedInDrawer": "De planning heeft niet-opgeslagen wijzigingen. Sla de toewijzing eerst op of maak ze ongedaan.",
+    "orderNotConfirmed": "{orderNumber} is nog {status}. Alleen bevestigde opdrachten kunnen op een rit: bevestig de opdracht eerst.",
+    "orderNotConfirmedNoRight": "{orderNumber} is nog {status}. Alleen bevestigde opdrachten kunnen op een rit; vraag een collega met dat recht om de opdracht te bevestigen.",
+    "orderSubmitted": "{orderNumber} is een klantaanvraag die nog beoordeeld moet worden; pas daarna kan ze op een rit.",
+    "confirmOrder": "Opdracht bevestigen",
+    "orderConfirmed": "Opdracht {orderNumber} bevestigd. Je kunt ze nu inplannen.",
+    "orderConfirmFailed": "De opdracht kon niet worden bevestigd.",
+    "statusDraft": "in concept"
   },
   "overview": {
     "missingPrices": "Ontbrekende prijzen",

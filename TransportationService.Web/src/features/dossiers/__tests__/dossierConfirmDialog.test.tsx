@@ -52,10 +52,10 @@ describe('DossierConfirmDialog', () => {
 
     expect(await screen.findByText('1 van 1 voltooid')).toBeInTheDocument()
     expect(screen.getByText('Alle operationele onderdelen zijn afgerond.')).toBeInTheDocument()
-    expect(screen.queryByLabelText(/bevestig bewust/i)).toBeNull()
+    expect(screen.queryByLabelText(/sluit bewust af/i)).toBeNull()
 
     await user.type(screen.getByLabelText(/Opmerking/), 'Alles afgehandeld')
-    await user.click(screen.getByRole('button', { name: 'Bevestigen' }))
+    await user.click(screen.getByRole('button', { name: 'Dossier afsluiten' }))
 
     await waitFor(() => expect(api.confirmDossier).toHaveBeenCalledWith('d-1', { reason: 'Alles afgehandeld', acknowledgeWarnings: false, version: 'v1' }))
     expect(onConfirmed).toHaveBeenCalled()
@@ -73,10 +73,10 @@ describe('DossierConfirmDialog', () => {
 
     expect(await screen.findByText('Aandachtspunten')).toBeInTheDocument()
     expect(screen.getByText(/ORD-1 is nog niet uitgevoerd/)).toBeInTheDocument()
-    const confirm = screen.getByRole('button', { name: 'Bevestigen' })
+    const confirm = screen.getByRole('button', { name: 'Dossier afsluiten' })
     expect(confirm).toBeDisabled()
 
-    await user.click(screen.getByLabelText(/bevestig bewust/i))
+    await user.click(screen.getByLabelText(/sluit bewust af/i))
     expect(confirm).toBeEnabled()
     await user.click(confirm)
 
@@ -90,10 +90,10 @@ describe('DossierConfirmDialog', () => {
     }))
     renderDialog()
 
-    expect(await screen.findByText('Bevestigen is niet mogelijk')).toBeInTheDocument()
+    expect(await screen.findByText('Afsluiten is niet mogelijk')).toBeInTheDocument()
     expect(screen.getByText(/1 open incident/)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Bevestigen' })).toBeDisabled()
-    expect(screen.queryByLabelText(/bevestig bewust/i)).toBeNull()
+    expect(screen.getByRole('button', { name: 'Dossier afsluiten' })).toBeDisabled()
+    expect(screen.queryByLabelText(/sluit bewust af/i)).toBeNull()
     expect(api.confirmDossier).not.toHaveBeenCalled()
   })
 
@@ -104,9 +104,9 @@ describe('DossierConfirmDialog', () => {
     const { onConfirmed, onClose } = renderDialog()
 
     await screen.findByText('1 van 1 voltooid')
-    await user.click(screen.getByRole('button', { name: 'Bevestigen' }))
+    await user.click(screen.getByRole('button', { name: 'Dossier afsluiten' }))
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('Het dossier kon niet worden bevestigd.')
+    expect(await screen.findByRole('alert')).toHaveTextContent('Het dossier kon niet worden afgesloten.')
     expect(onConfirmed).not.toHaveBeenCalled()
     expect(onClose).not.toHaveBeenCalled()
   })
@@ -128,8 +128,8 @@ describe('DossierConfirmDialog', () => {
     expect(screen.getByText('Ter info')).toBeInTheDocument()
     expect(screen.getByText('2 · 1 blokkerend')).toBeInTheDocument()
     expect(screen.getAllByRole('link', { name: 'Afwijking openen' })[0]).toHaveAttribute('href', '/exceptions/x-1')
-    const confirm = screen.getByRole('button', { name: 'Bevestigen' })
-    await user.click(screen.getByLabelText(/bevestig bewust/i))
+    const confirm = screen.getByRole('button', { name: 'Dossier afsluiten' })
+    await user.click(screen.getByLabelText(/sluit bewust af/i))
     expect(confirm).toBeDisabled() // the reason is still missing
     await user.type(screen.getByLabelText(/Reden/), 'Schade apart opgevolgd met de klant')
     expect(confirm).toBeEnabled()

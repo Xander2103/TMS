@@ -24,8 +24,33 @@ describe('AttentionPanel', () => {
         <AttentionPanel issues={[]} onNavigate={vi.fn()} openIncidents={[{ id: 'inc-9', title: 'Verkeerde lossplaats' }]} />
       </MemoryRouter>,
     )
-    expect(screen.getByText(/1 open incident — bevestigen kan pas na afhandeling/)).toBeInTheDocument()
+    expect(screen.getByText(/1 open incident: afsluiten kan pas na afhandeling/)).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Verkeerde lossplaats' })).toHaveAttribute('href', '/incidents/inc-9')
+  })
+
+  it('UX-010: an open afwijking is named, serious ones as blocking, and links only for who may open it', () => {
+    const exceptions = [
+      { id: 'e-1', typeLabel: 'Vertraging', severityLabel: 'hoog', holds: true, tripNumber: 'RIT-0240' },
+      { id: 'e-2', typeLabel: 'Beschadigd collo', severityLabel: 'laag', holds: false, tripNumber: null },
+    ]
+    const { unmount } = render(
+      <MemoryRouter>
+        <AttentionPanel issues={[]} onNavigate={vi.fn()} openExceptions={exceptions} canOpenExceptions />
+      </MemoryRouter>,
+    )
+    expect(screen.getByRole('link', { name: 'Open afwijking: Vertraging, ernst hoog' })).toHaveAttribute('href', '/exceptions/e-1')
+    expect(screen.getByText(/op RIT-0240/)).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: 'Blokkerend' })).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: 'Waarschuwing' })).toBeInTheDocument()
+    unmount()
+
+    render(
+      <MemoryRouter>
+        <AttentionPanel issues={[]} onNavigate={vi.fn()} openExceptions={exceptions} />
+      </MemoryRouter>,
+    )
+    expect(screen.queryByRole('link')).not.toBeInTheDocument()
+    expect(screen.getByText(/Open afwijking: Vertraging, ernst hoog/)).toBeInTheDocument()
   })
 
   it('shows icon + message per issue and navigates to the named section', async () => {

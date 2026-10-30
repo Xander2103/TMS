@@ -54,7 +54,14 @@
     "readOnlyStatus": "Cette tournée n’est plus en préparation ; modifiez l’attribution sur la page de la tournée.",
     "tripLoadFailed": "La tournée n’a pas pu être chargée ; l’attribution est en lecture seule.",
     "tripLoading": "Chargement de la tournée…",
-    "unsavedInDrawer": "La planification contient des modifications non enregistrées. Enregistrez d’abord l’attribution ou annulez-les."
+    "unsavedInDrawer": "La planification contient des modifications non enregistrées. Enregistrez d’abord l’attribution ou annulez-les.",
+    "orderNotConfirmed": "{orderNumber} est encore {status}. Seuls les ordres confirmés peuvent aller sur un trajet : confirmez d’abord l’ordre.",
+    "orderNotConfirmedNoRight": "{orderNumber} est encore {status}. Seuls les ordres confirmés peuvent aller sur un trajet ; demandez à un collègue habilité de le confirmer.",
+    "orderSubmitted": "{orderNumber} est une demande client à évaluer ; ensuite seulement elle peut aller sur un trajet.",
+    "confirmOrder": "Confirmer l’ordre",
+    "orderConfirmed": "Ordre {orderNumber} confirmé. Vous pouvez maintenant le planifier.",
+    "orderConfirmFailed": "L’ordre n’a pas pu être confirmé.",
+    "statusDraft": "au stade de concept"
   },
   "overview": {
     "missingPrices": "Prix manquants",

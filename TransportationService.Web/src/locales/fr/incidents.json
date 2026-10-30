@@ -221,8 +221,8 @@
   "related": {
     "open_one": "1 incident ouvert :",
     "open_other": "{count} incidents ouverts :",
-    "dossierAttention_one": "1 incident ouvert — la confirmation attend son traitement :",
-    "dossierAttention_other": "{count} incidents ouverts — la confirmation attend leur traitement :"
+    "dossierAttention_one": "1 incident ouvert : la clôture n’est possible qu’après traitement :",
+    "dossierAttention_other": "{count} incidents ouverts : la clôture n’est possible qu’après traitement :"
   },
   "fleet": {
     "title": "Parc",

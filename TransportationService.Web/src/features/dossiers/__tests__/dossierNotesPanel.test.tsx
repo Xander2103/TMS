@@ -482,7 +482,7 @@ const TIMELINE = [
   {
     id: 'e-4', timestamp: '2026-10-16T15:00:00Z', category: 'dossier', type: 'dossier.reopened',
     title: 'Dossier heropend', detail: 'Reden: Herlevering toevoegen', actorKind: 'User', actorName: 'Piet Planner',
-    fields: [{ label: 'Status', value: 'Open', before: 'Bevestigd' }],
+    fields: [{ label: 'Status', value: 'Open', before: 'Afgesloten' }],
   },
 ]
 
@@ -533,7 +533,7 @@ describe('DossierHistorySection', () => {
     expect(reopened).toHaveTextContent('Reden: Herlevering toevoegen')
     await user.click(within(reopened).getByRole('button', { name: 'Uitklappen' }))
     const row = within(reopened).getByRole('row', { name: /Status/ })
-    expect(row).toHaveTextContent('Bevestigd')
+    expect(row).toHaveTextContent('Afgesloten')
     expect(row).toHaveTextContent('Open')
 
     const titles = screen.getAllByRole('article').map((article) => article.querySelector('.ui-history-summary')?.textContent)

@@ -449,7 +449,12 @@ public record DossierDetailDto(
     /// <summary>M10: current proofs of delivery of the linked orders — not in <see cref="DocumentCount"/>.</summary>
     int PodCount = 0,
     /// <summary>ACC-M12: every invoice/credit note carrying work of this dossier.</summary>
-    IReadOnlyList<Modules.Orders.Dtos.InvoiceLinkDto>? Invoices = null);
+    IReadOnlyList<Modules.Orders.Dtos.InvoiceLinkDto>? Invoices = null,
+    /// <summary>UX-010: open afwijkingen in the dossier's ONE problem scope, serious first, for the attention strip.</summary>
+    IReadOnlyList<DossierOpenExceptionDto>? OpenExceptions = null);
+
+/// <summary>Open afwijking as the attention strip names it. <c>Holds</c> = keeps the dossier from closing automatically.</summary>
+public record DossierOpenExceptionDto(Guid Id, string TypeLabel, string SeverityLabel, bool Holds, string? TripNumber);
 
 // ------------------------------------------------------------ lifecycle (confirmation sprint 2026-09-23)
 

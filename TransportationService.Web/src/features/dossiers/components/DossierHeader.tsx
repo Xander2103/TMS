@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
+import { ActionMenu } from '../../../components/ui/ActionMenu'
 import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { FormField } from '../../../components/ui/FormField'
@@ -12,7 +13,7 @@ import { getLegalEntityOptions } from '../../legal-entities/api/legalEntitiesApi
 import type { LegalEntityOption } from '../../legal-entities/types'
 import { changeDossierLegalEntity, getDossierLegalEntityImpact } from '../api/dossiersApi'
 import type { DossierLegalEntityChangeImpact } from '../api/dossiersApi'
-import { dossierLifecycleFacts, formatDate } from '../dossierDisplay'
+import { dossierHasExecutedWork, dossierLifecycleFacts, formatDate } from '../dossierDisplay'
 import { submittedPortalOrders } from '../portalReview'
 import { DOSSIER_STATUS_LABELS, DOSSIER_STATUS_TONE, type DossierDetail } from '../types'
 
@@ -50,7 +51,6 @@ export function DossierHeader({ dossier, canManage, onAddActivity, onConfirm, me
   const mayOverride = hasPermission('dossiers.override_entity')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const menuRef = useRef<HTMLDetailsElement>(null)
 
   useEffect(() => {
     if (!entityDialog) return
@@ -165,8 +165,8 @@ export function DossierHeader({ dossier, canManage, onAddActivity, onConfirm, me
       </div>
 
       {/* Action hierarchy: the secondary group (+ Activiteit, Meer ▾) on the left, a clear gap,
-          and the ONE primary lifecycle action — Bevestigen — right-most. A confirmed or
-          cancelled dossier has no primary action; "Heropenen" stays an exceptional item in Meer. */}
+          and the lifecycle action right-most. UX-001: it only reads as the primary next step once
+          work was executed. A closed or cancelled dossier has none; "Heropenen" stays in Meer. */}
       <div className="dossier-header-actions">
         {(canManage && isOpen) || menuActions.length > 0 ? (
           <div className="dossier-header-actions-secondary">
@@ -174,32 +174,16 @@ export function DossierHeader({ dossier, canManage, onAddActivity, onConfirm, me
               <Button variant="secondary" onClick={onAddActivity}>{t('dossiers.header.addActivity')}</Button>
             )}
             {menuActions.length > 0 && (
-              <details className="dossier-more" ref={menuRef}>
-                <summary role="button" aria-haspopup="menu">
-                  {t('dossiers.header.more')}
-                </summary>
-                <div className="dossier-more-menu" role="menu">
-                  {menuActions.map((action) => (
-                    <button
-                      key={action.key}
-                      type="button"
-                      role="menuitem"
-                      className={action.danger ? 'dossier-more-danger' : undefined}
-                      onClick={() => {
-                        menuRef.current?.removeAttribute('open')
-                        action.onSelect()
-                      }}
-                    >
-                      {action.label}
-                    </button>
-                  ))}
-                </div>
-              </details>
+              <ActionMenu
+                items={menuActions.map((action) => ({
+                  key: action.key, label: action.label, onSelect: action.onSelect, danger: action.danger,
+                }))}
+              />
             )}
           </div>
         ) : null}
         {canManage && isOpen && pendingReview.length > 0 && (
-          // M4: "Bevestigen" confirms the DOSSIER; with a portal request still unreviewed it would
+          // M4: "Dossier afsluiten" closes the DOSSIER; with a portal request still unreviewed it would
           // be the wrong button, so it is blocked with the reason and the review panel below.
           <span className="dossier-header-confirm-blocked">
             <Button className="dossier-header-primary" disabled aria-describedby="dossier-confirm-blocked-reason">
@@ -211,7 +195,11 @@ export function DossierHeader({ dossier, canManage, onAddActivity, onConfirm, me
           </span>
         )}
         {canManage && isOpen && pendingReview.length === 0 && (
-          <Button className="dossier-header-primary" onClick={onConfirm}>
+          <Button
+            className="dossier-header-primary"
+            variant={dossierHasExecutedWork(dossier) ? 'primary' : 'secondary'}
+            onClick={onConfirm}
+          >
             {t('dossiers.lifecycle.confirm')}
           </Button>
         )}

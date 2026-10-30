@@ -891,7 +891,7 @@ public class DossierTimelineService : IDossierTimelineService
                 return Make("activity.reopened", $"Activiteit {ActivityFromPayload()} heropend", "planning");
             case DossierLifecycleService.ActionConfirmedManually:
             {
-                var ev = Make("dossier.confirmed_manually", "Dossier handmatig bevestigd", rank: 9);
+                var ev = Make("dossier.confirmed_manually", "Dossier handmatig afgesloten", rank: 9);
                 var acknowledged = StrList(after, "WarningsAcknowledged");
                 if (acknowledged.Count > 0)
                 {
@@ -906,7 +906,7 @@ public class DossierTimelineService : IDossierTimelineService
                 // Always the system: the person whose stop/trip completion triggered the evaluation did
                 // not confirm anything (product acceptance T-H6). They remain visible as the cause.
                 var trigger = DossierTimelineLabels.AutoConfirmTrigger(Str(after, "Trigger"));
-                var ev = Make("dossier.confirmed_automatically", trigger is null ? "Dossier automatisch bevestigd" : $"Dossier automatisch bevestigd {trigger}", rank: 9);
+                var ev = Make("dossier.confirmed_automatically", trigger is null ? "Dossier automatisch afgesloten" : $"Dossier automatisch afgesloten {trigger}", rank: 9);
                 ev.System = true;
                 if (Int(after, "CompletedOrders") is { } completed and > 0) ev.Field("Voltooide opdrachten", completed.ToString(CultureInfo.InvariantCulture));
                 if (Int(after, "ExecutedActivities") is { } executed and > 0) ev.Field("Uitgevoerde activiteiten", executed.ToString(CultureInfo.InvariantCulture));
@@ -966,7 +966,7 @@ public class DossierTimelineService : IDossierTimelineService
                 return ev;
             }
             case "Closed":
-                return Make("dossier.confirmed", "Dossier bevestigd", rank: 9);
+                return Make("dossier.confirmed", "Dossier afgesloten", rank: 9);
             default:
                 return Make("dossier.changed", "Dossier gewijzigd");
         }

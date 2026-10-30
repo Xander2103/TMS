@@ -1,6 +1,6 @@
 import { useLocale } from '../../../i18n/localeContext'
 import { activityReference, issueActivity } from '../activityDisplay'
-import type { DossierActivity, ReadinessIssue, ReadinessSection, ReadinessSeverity } from '../types'
+import type { DossierActivity, DossierOpenException, ReadinessIssue, ReadinessSection, ReadinessSeverity } from '../types'
 import './attention-panel.css'
 import { Link } from 'react-router-dom'
 
@@ -56,6 +56,10 @@ interface AttentionPanelProps {
    * each as a link to the incident.
    */
   openIncidents?: { id: string; title: string }[]
+  /** UX-010: open afwijkingen, serious ones (they hold closing) shown as blocking. */
+  openExceptions?: DossierOpenException[]
+  /** Whether the afwijking detail is open to this user; the text is shown either way. */
+  canOpenExceptions?: boolean
 }
 
 /**
@@ -64,11 +68,11 @@ interface AttentionPanelProps {
  * by dividers and wrapping onto a second line when needed. Hidden when there is nothing to say.
  * The warning text itself is clickable too: it performs the same jump (tab + activity + field).
  */
-export function AttentionPanel({ issues, activities = [], onNavigate, openIncidents = [] }: AttentionPanelProps) {
+export function AttentionPanel({ issues, activities = [], onNavigate, openIncidents = [], openExceptions = [], canOpenExceptions = false }: AttentionPanelProps) {
   const { t } = useLocale()
-  if (issues.length === 0 && openIncidents.length === 0) return null
-  const worst = issues.some((i) => i.severity === 'Blocking') ? 'blocking'
-    : issues.some((i) => i.severity === 'Warning') || openIncidents.length > 0 ? 'warning' : 'info'
+  if (issues.length === 0 && openIncidents.length === 0 && openExceptions.length === 0) return null
+  const worst = issues.some((i) => i.severity === 'Blocking') || openExceptions.some((e) => e.holds) ? 'blocking'
+    : issues.some((i) => i.severity === 'Warning') || openIncidents.length > 0 || openExceptions.length > 0 ? 'warning' : 'info'
   return (
     <section className={`dossier-attention dossier-attention-strip is-${worst}`} aria-label={t('dossiers.attention.title')}>
       <h2>{t('dossiers.attention.title')}:</h2>
@@ -89,6 +93,21 @@ export function AttentionPanel({ issues, activities = [], onNavigate, openIncide
             </span>
           </li>
         )}
+        {openExceptions.map((exception) => {
+          const text = t('dossiers.attention.openException', { type: exception.typeLabel, severity: exception.severityLabel })
+          const severity = exception.holds ? 'Blocking' : 'Warning'
+          return (
+            <li key={exception.id} className={`dossier-attention-${severity.toLowerCase()}`}>
+              <span className="dossier-attention-icon" role="img" aria-label={t(SEVERITY_LABEL_KEYS[severity])}>
+                {SEVERITY_ICON[severity]}
+              </span>
+              <span className="dossier-attention-message">
+                {canOpenExceptions ? <Link className="ui-id-link" to={`/exceptions/${exception.id}`}>{text}</Link> : text}
+                {exception.tripNumber && ` ${t('dossiers.attention.openExceptionTrip', { tripNumber: exception.tripNumber })}`}
+              </span>
+            </li>
+          )
+        })}
         {issues.map((issue) => (
           <li key={`${issue.code}-${issue.activityId ?? issue.transportOrderId ?? ''}-${issue.message}`} className={`dossier-attention-${issue.severity.toLowerCase()}`}>
             <span className="dossier-attention-icon" role="img" aria-label={t(SEVERITY_LABEL_KEYS[issue.severity])}>

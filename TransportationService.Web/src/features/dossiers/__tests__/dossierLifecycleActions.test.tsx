@@ -98,11 +98,12 @@ function confirmedDossier(overrides: Parameters<typeof dossierDetail>[0] = {}) {
 
 /** The status badge next to the dossier number in the header. */
 function headerBadge() {
-  return within(screen.getByRole('heading', { level: 1 })).getByText(/^(Open|Bevestigd|Geannuleerd)$/)
+  return within(screen.getByRole('heading', { level: 1 })).getByText(/^(Open|Afgesloten|Bevestigd|Geannuleerd)$/)
 }
 
 async function headerMenuItem(name: string) {
-  return screen.findByRole('menuitem', { name, hidden: true })
+  await userEvent.setup().click(await screen.findByRole('button', { name: 'Meer' }))
+  return screen.findByRole('menuitem', { name })
 }
 
 describe('Dossier lifecycle — confirm', () => {
@@ -119,25 +120,25 @@ describe('Dossier lifecycle — confirm', () => {
     api.confirmDossier.mockResolvedValue(confirmedDossier({ version: 'v-2', confirmationReason: 'Administratief nagemaakt' }))
     renderPage()
 
-    const confirm = await screen.findByRole('button', { name: 'Bevestigen' })
+    const confirm = await screen.findByRole('button', { name: 'Dossier afsluiten' })
     expect(headerBadge()).toHaveTextContent('Open')
-    expect(screen.queryByText(/Bevestigd op/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Afgesloten op/)).not.toBeInTheDocument()
 
     await user.click(confirm)
-    const dialog = within(await screen.findByRole('dialog', { name: /Dossier bevestigen/ }))
+    const dialog = within(await screen.findByRole('dialog', { name: /Dossier afsluiten/ }))
     expect(await dialog.findByText('Alle operationele onderdelen zijn afgerond.')).toBeInTheDocument()
-    await user.click(dialog.getByRole('button', { name: 'Bevestigen' }))
+    await user.click(dialog.getByRole('button', { name: 'Dossier afsluiten' }))
 
     await waitFor(() => expect(api.confirmDossier).toHaveBeenCalledWith('d-1', { reason: null, acknowledgeWarnings: false, version: 'v-1' }))
-    await waitFor(() => expect(headerBadge()).toHaveTextContent('Bevestigd'))
+    await waitFor(() => expect(headerBadge()).toHaveTextContent('Afgesloten'))
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-    expect(toast.showSuccess).toHaveBeenCalledWith('Dossier bevestigd.')
-    expect(screen.getByText(`Bevestigd op ${formatDateTime(CONFIRMED_AT)}`)).toBeInTheDocument()
+    expect(toast.showSuccess).toHaveBeenCalledWith('Dossier afgesloten.')
+    expect(screen.getByText(`Afgesloten op ${formatDateTime(CONFIRMED_AT)}`)).toBeInTheDocument()
     expect(screen.getByText('handmatig')).toBeInTheDocument()
     expect(screen.getByText('door An Peeters')).toBeInTheDocument()
     expect(screen.getByText('Administratief nagemaakt')).toBeInTheDocument()
     // A confirmed dossier is read-only: no primary actions any more.
-    expect(screen.queryByRole('button', { name: 'Bevestigen' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Dossier afsluiten' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '+ Activiteit' })).not.toBeInTheDocument()
   })
 
@@ -146,26 +147,46 @@ describe('Dossier lifecycle — confirm', () => {
     api.getDossier.mockResolvedValue(dossierDetail())
     renderPage()
     await screen.findByRole('heading', { level: 1 })
-    expect(screen.queryByRole('button', { name: 'Bevestigen' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Dossier afsluiten' })).not.toBeInTheDocument()
+  })
+
+  it('UX-001: once an order is executed, closing is the primary action', async () => {
+    const base = dossierDetail()
+    api.getDossier.mockResolvedValue({ ...base, orders: [{ ...base.orders[0], status: 'Completed' }] })
+    renderPage()
+    expect(await screen.findByRole('button', { name: 'Dossier afsluiten' })).toHaveClass('ui-button-primary', 'dossier-header-primary')
+  })
+
+  it('UX-017: Meer is a real menu: Escape closes it and returns focus, cancelling is named as such and last', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    const trigger = await screen.findByRole('button', { name: 'Meer' })
+    await user.click(trigger)
+    const items = screen.getAllByRole('menuitem').map((item) => item.textContent)
+    expect(items.at(-1)).toBe('Dossier annuleren…')
+    await user.keyboard('{Escape}')
+    expect(screen.queryByRole('menuitem')).not.toBeInTheDocument()
+    expect(trigger).toHaveFocus()
   })
 
   it('orders the header actions as [+ Activiteit] [Meer ▾] … [Bevestigen]: the secondary group first, the single primary last', async () => {
     api.getDossier.mockResolvedValue(dossierDetail())
     renderPage()
-    await screen.findByRole('button', { name: 'Bevestigen' })
+    await screen.findByRole('button', { name: 'Dossier afsluiten' })
 
     const actions = document.querySelector('.dossier-header-actions')!
     const names = within(actions as HTMLElement).getAllByRole('button').map((button) => button.textContent?.trim())
-    expect(names).toEqual(['+ Activiteit', 'Meer ▾', 'Bevestigen'])
+    expect(names).toEqual(['+ Activiteit', 'Meer', 'Dossier afsluiten'])
     // The two secondary actions share one group; Bevestigen sits outside it, as the only primary button.
     const secondary = actions.querySelector('.dossier-header-actions-secondary')!
     expect(within(secondary as HTMLElement).getByRole('button', { name: '+ Activiteit' })).toHaveClass('ui-button-secondary')
-    expect(within(secondary as HTMLElement).getByRole('button', { name: 'Meer ▾' })).toBeInTheDocument()
-    expect(secondary.contains(screen.getByRole('button', { name: 'Bevestigen' }))).toBe(false)
-    expect(actions.querySelectorAll('.ui-button-primary')).toHaveLength(1)
-    expect(screen.getByRole('button', { name: 'Bevestigen' })).toHaveClass('ui-button-primary', 'dossier-header-primary')
+    expect(within(secondary as HTMLElement).getByRole('button', { name: 'Meer' })).toBeInTheDocument()
+    expect(secondary.contains(screen.getByRole('button', { name: 'Dossier afsluiten' }))).toBe(false)
+    // UX-001: with nothing executed yet, closing is not presented as the obvious next step.
+    expect(actions.querySelectorAll('.ui-button-primary')).toHaveLength(0)
+    expect(screen.getByRole('button', { name: 'Dossier afsluiten' })).toHaveClass('ui-button-secondary', 'dossier-header-primary')
     // Bevestigen never hides inside Meer while the dossier is open.
-    expect(screen.queryByRole('menuitem', { name: 'Bevestigen', hidden: true })).not.toBeInTheDocument()
+    expect(screen.queryByRole('menuitem', { name: 'Dossier afsluiten', hidden: true })).not.toBeInTheDocument()
   })
 
   it('a confirmed dossier has no primary action: only Meer ▾ remains, with "Dossier heropenen" inside it', async () => {
@@ -175,7 +196,7 @@ describe('Dossier lifecycle — confirm', () => {
     await screen.findByRole('heading', { level: 1 })
 
     const actions = document.querySelector('.dossier-header-actions')!
-    expect(within(actions as HTMLElement).getAllByRole('button').map((button) => button.textContent?.trim())).toEqual(['Meer ▾'])
+    expect(within(actions as HTMLElement).getAllByRole('button').map((button) => button.textContent?.trim())).toEqual(['Meer'])
     expect(actions.querySelectorAll('.ui-button-primary')).toHaveLength(0)
     expect(screen.queryByRole('button', { name: 'Dossier heropenen' })).not.toBeInTheDocument()
     expect(await headerMenuItem('Dossier heropenen')).toBeInTheDocument()
@@ -184,14 +205,14 @@ describe('Dossier lifecycle — confirm', () => {
   it('renders an automatic confirmation as "automatisch" and a legacy closed dossier as source unknown', async () => {
     api.getDossier.mockResolvedValue(confirmedDossier({ confirmationSource: 'Automatic', confirmedByName: null }))
     const automatic = renderPage()
-    await screen.findByText(`Bevestigd op ${formatDateTime(CONFIRMED_AT)}`)
+    await screen.findByText(`Afgesloten op ${formatDateTime(CONFIRMED_AT)}`)
     expect(screen.getByText('automatisch')).toBeInTheDocument()
     expect(screen.queryByText(/^door /)).not.toBeInTheDocument()
     automatic.unmount()
 
     api.getDossier.mockResolvedValue(confirmedDossier({ confirmationSource: null, confirmedByName: null, confirmedByUserId: null }))
     renderPage()
-    await screen.findByText(`Bevestigd op ${formatDateTime(CONFIRMED_AT)}`)
+    await screen.findByText(`Afgesloten op ${formatDateTime(CONFIRMED_AT)}`)
     expect(screen.getByText(/bron onbekend/)).toBeInTheDocument()
     expect(screen.queryByText(/Gesloten/)).not.toBeInTheDocument()
   })
@@ -200,7 +221,7 @@ describe('Dossier lifecycle — confirm', () => {
     api.getDossier.mockResolvedValue(confirmedDossier())
     renderPage('/dossiers/d-1/historiek')
     await screen.findByTestId('notes-panel')
-    expect(screen.getAllByText(new RegExp(`Bevestigd op ${formatDateTime(CONFIRMED_AT)}`)).length).toBeGreaterThanOrEqual(2)
+    expect(screen.getAllByText(new RegExp(`Afgesloten op ${formatDateTime(CONFIRMED_AT)}`)).length).toBeGreaterThanOrEqual(2)
     expect(screen.queryByText(/Gesloten op/)).not.toBeInTheDocument()
   })
 })
@@ -216,8 +237,9 @@ describe('Dossier lifecycle — reopen', () => {
     auth.permissions = new Set(['dossiers.view', 'dossiers.manage'])
     renderPage()
     await screen.findByText('handmatig')
-    expect(screen.queryByRole('menuitem', { name: 'Dossier heropenen', hidden: true })).not.toBeInTheDocument()
-    expect(screen.queryByRole('menuitem', { name: 'Heropenen', hidden: true })).not.toBeInTheDocument()
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Meer' }))
+    expect(screen.queryByRole('menuitem', { name: 'Dossier heropenen' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('menuitem', { name: 'Heropenen' })).not.toBeInTheDocument()
   })
 
   it('asks a reason, refuses an empty one and reopens with the dossier version', async () => {
@@ -228,7 +250,7 @@ describe('Dossier lifecycle — reopen', () => {
 
     await user.click(await headerMenuItem('Dossier heropenen'))
     const dialog = within(await screen.findByRole('dialog', { name: 'Dossier heropenen' }))
-    expect(dialog.getByText(/eerdere bevestiging blijft in de historiek/)).toBeInTheDocument()
+    expect(dialog.getByText(/eerdere afsluiting blijft in de historiek/)).toBeInTheDocument()
 
     await user.click(dialog.getByRole('button', { name: 'Dossier heropenen' }))
     expect(await dialog.findByRole('alert')).toHaveTextContent('Geef een reden op.')
@@ -240,7 +262,7 @@ describe('Dossier lifecycle — reopen', () => {
     await waitFor(() => expect(headerBadge()).toHaveTextContent('Open'))
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     expect(toast.showSuccess).toHaveBeenCalledWith('Dossier heropend.')
-    expect(screen.queryByText(/Bevestigd op/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Afgesloten op/)).not.toBeInTheDocument()
   })
 
   it('reports a failed reopen inside the dialog and keeps it open', async () => {
@@ -273,11 +295,11 @@ describe('Dossier lifecycle — cancel', () => {
       dossierDetail({ status: 'Cancelled', version: 'v-2', cancelledAt: CONFIRMED_AT, cancellationReason: 'Klant heeft afgezegd' }),
     )
     renderPage()
-    await screen.findByRole('button', { name: 'Bevestigen' })
+    await screen.findByRole('button', { name: 'Dossier afsluiten' })
     // No old "Dossier sluiten" item any more; the cancel item is the destructive one.
     expect(screen.queryByRole('menuitem', { name: 'Dossier sluiten', hidden: true })).not.toBeInTheDocument()
-    const cancelItem = await headerMenuItem('Annuleren')
-    expect(cancelItem).toHaveClass('dossier-more-danger')
+    const cancelItem = await headerMenuItem('Dossier annuleren…')
+    expect(cancelItem).toHaveClass('ui-action-menu-item-danger')
 
     await user.click(cancelItem)
     const dialog = within(await screen.findByRole('dialog', { name: 'Dossier annuleren' }))
@@ -293,17 +315,18 @@ describe('Dossier lifecycle — cancel', () => {
     expect(screen.getByText(`Geannuleerd op ${formatDateTime(CONFIRMED_AT)}`)).toBeInTheDocument()
     expect(screen.getByText('Reden: Klant heeft afgezegd')).toBeInTheDocument()
     // Read-only like a confirmed dossier; only reopen remains.
-    expect(screen.queryByRole('button', { name: 'Bevestigen' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Dossier afsluiten' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '+ Activiteit' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('menuitem', { name: 'Bewerken', hidden: true })).not.toBeInTheDocument()
-    expect(screen.queryByRole('menuitem', { name: 'Annuleren', hidden: true })).not.toBeInTheDocument()
-    expect(screen.getByRole('menuitem', { name: 'Dossier heropenen', hidden: true })).toBeInTheDocument()
+    expect(await headerMenuItem('Dossier heropenen')).toBeInTheDocument()
+    expect(screen.queryByRole('menuitem', { name: 'Bewerken' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('menuitem', { name: 'Dossier annuleren…' })).not.toBeInTheDocument()
   })
 
   it('offers no cancel item on a confirmed dossier', async () => {
     api.getDossier.mockResolvedValue(confirmedDossier())
     renderPage()
     await screen.findByText('handmatig')
-    expect(screen.queryByRole('menuitem', { name: 'Annuleren', hidden: true })).not.toBeInTheDocument()
+    await headerMenuItem('Dossier heropenen')
+    expect(screen.queryByRole('menuitem', { name: 'Dossier annuleren…' })).not.toBeInTheDocument()
   })
 })

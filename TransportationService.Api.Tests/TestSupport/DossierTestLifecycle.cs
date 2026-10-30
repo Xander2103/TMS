@@ -25,7 +25,7 @@ public static class DossierTestLifecycle
     /// <summary>Manual confirmation with every warning acknowledged (blockers still refuse).</summary>
     public static Task<DossierDetailDto?> CloseAsync(TransportationDbContext db, Guid tenantId, Guid dossierId, Guid? userId = null, TimeProvider? clock = null) =>
         Create(db, tenantId, userId, clock ?? TimeProvider.System)
-            .ConfirmAsync(dossierId, new ConfirmDossierRequest(null, AcknowledgeWarnings: true), CancellationToken.None);
+            .ConfirmAsync(dossierId, new ConfirmDossierRequest("TEST: afgesloten via de testhelper", AcknowledgeWarnings: true), CancellationToken.None);
 
     public static Task<DossierDetailDto?> ReopenAsync(TransportationDbContext db, Guid tenantId, Guid dossierId, Guid? userId = null, TimeProvider? clock = null) =>
         Create(db, tenantId, userId, clock ?? TimeProvider.System)

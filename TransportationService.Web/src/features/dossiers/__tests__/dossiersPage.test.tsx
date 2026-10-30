@@ -191,7 +191,7 @@ describe('DossiersPage (lijst)', () => {
       // Document order = visual order on desktop.
       expect(search.compareDocumentPosition(status) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
       expect(status.compareDocumentPosition(toggle) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-      expect(within(status).getAllByRole('option').map((o) => o.textContent)).toEqual(['Alle statussen', 'Open', 'Bevestigd', 'Geannuleerd'])
+      expect(within(status).getAllByRole('option').map((o) => o.textContent)).toEqual(['Alle statussen', 'Open', 'Afgesloten', 'Geannuleerd'])
       expect(status).toHaveValue('')
 
       expect(api.searchDossiers).toHaveBeenLastCalledWith(BASE)
@@ -222,7 +222,7 @@ describe('DossiersPage (lijst)', () => {
 
     it.each([
       ['Open', 'Open'],
-      ['Bevestigd', 'Closed'],
+      ['Afgesloten', 'Closed'],
       ['Geannuleerd', 'Cancelled'],
     ])('status "%s" stuurt status=%s mee en schrijft het in de URL', async (label, status) => {
       const user = userEvent.setup()
@@ -311,7 +311,7 @@ describe('DossiersPage (lijst)', () => {
       expect(filtersButton()).toHaveTextContent('Filters (4)')
       expect(filtersButton()).toHaveAttribute('data-active', 'true')
       await within(chipList()).findByText('Van Caudenberg BV')
-      expect(chipTexts()).toEqual(['Bevestigd', 'Van Caudenberg BV', 'September 2026', 'Kraantransport'])
+      expect(chipTexts()).toEqual(['Afgesloten', 'Van Caudenberg BV', 'September 2026', 'Kraantransport'])
       expect(queryPanel()).toBeNull()
     })
 
@@ -431,9 +431,9 @@ describe('DossiersPage (lijst)', () => {
     })
 
     it.each([
-      ['Status', 'Bevestigd', { status: 'Closed' }],
-      ['Bevestigingswijze', 'Handmatig', { confirmationSource: 'Manual' }],
-      ['Bevestigingswijze', 'Automatisch', { confirmationSource: 'Automatic' }],
+      ['Status', 'Afgesloten', { status: 'Closed' }],
+      ['Wijze van afsluiten', 'Handmatig', { confirmationSource: 'Manual' }],
+      ['Wijze van afsluiten', 'Automatisch', { confirmationSource: 'Automatic' }],
       ['Prijsstatus', 'Geprijsd', { priceStatus: 'Priced' }],
       ['Prijsstatus', 'Gedeeltelijk geprijsd', { priceStatus: 'Partial' }],
       ['Prijsstatus', 'Niet geprijsd', { priceStatus: 'Unpriced' }],
@@ -455,7 +455,7 @@ describe('DossiersPage (lijst)', () => {
     it.each([
       ['Dossierdatum', 'dateFrom', 'dateTo'],
       ['Planningdatum', 'planningFrom', 'planningTo'],
-      ['Bevestigd op', 'confirmedFrom', 'confirmedTo'],
+      ['Afgesloten op', 'confirmedFrom', 'confirmedTo'],
       ['Aanmaakdatum', 'createdFrom', 'createdTo'],
     ])('datumbereik %s → %s/%s', async (label, fromParam, toParam) => {
       const user = userEvent.setup()
@@ -570,7 +570,7 @@ describe('DossiersPage (lijst)', () => {
       api.searchDossiers.mockResolvedValue(paged([dossierListItem()], 60))
       const router = renderPage()
       await screen.findByRole('table')
-      await user.selectOptions(screen.getByRole('combobox', { name: 'Status' }), 'Bevestigd')
+      await user.selectOptions(screen.getByRole('combobox', { name: 'Status' }), 'Afgesloten')
       const panel = await openPanel(user)
       await pickOption(user, panel, 'Klant', 'Van Caudenberg BV')
       await pickOption(user, panel, 'Transporttype', 'Kraantransport')
@@ -587,7 +587,7 @@ describe('DossiersPage (lijst)', () => {
       expect(queryPanel()).toBeNull()
       expect(filtersButton()).toHaveTextContent('Filters (3)')
       await within(chipList()).findByText('Van Caudenberg BV')
-      expect(chipTexts()).toEqual(['Bevestigd', 'Van Caudenberg BV', 'Kraantransport'])
+      expect(chipTexts()).toEqual(['Afgesloten', 'Van Caudenberg BV', 'Kraantransport'])
     })
 
     it('browser Terug maakt een filterkeuze ongedaan', async () => {
@@ -618,7 +618,7 @@ describe('DossiersPage (lijst)', () => {
     })
 
     it.each([
-      ['Bevestigd op', 'confirmedAt'],
+      ['Afgesloten op', 'confirmedAt'],
       ['Planningdatum', 'planningDate'],
       ['Klant', 'customer'],
       ['Status', 'status'],
@@ -847,7 +847,7 @@ describe('DossiersPage (lijst)', () => {
   // ---- statusbenaming + bevestigingsinfo --------------------------------------------------------
 
   describe('status en bevestiging', () => {
-    it('een Closed-dossier heet "Bevestigd" — nergens "Gesloten" of "Closed"', async () => {
+    it('een Closed-dossier heet "Afgesloten" — nergens "Gesloten" of "Closed"', async () => {
       const user = userEvent.setup()
       api.searchDossiers.mockResolvedValue(
         paged([dossierListItem({ status: 'Closed', confirmedAt: '2026-09-20T10:00:00Z', confirmationSource: 'Manual' })]),
@@ -856,7 +856,7 @@ describe('DossiersPage (lijst)', () => {
       const row = await findRow()
       await openPanel(user)
 
-      expect(within(row).getByText('Bevestigd')).toBeInTheDocument()
+      expect(within(row).getByText('Afgesloten')).toBeInTheDocument()
       expect(document.body).not.toHaveTextContent(/Gesloten/)
       expect(document.body).not.toHaveTextContent(/Closed/)
     })
@@ -872,13 +872,13 @@ describe('DossiersPage (lijst)', () => {
       const row = await findRow()
 
       const cell = within(row).getAllByRole('cell')[1]
-      expect(within(cell).getByText('Bevestigd')).toBeInTheDocument()
+      expect(within(cell).getByText('Afgesloten')).toBeInTheDocument()
       // Eén regel: badge en datum zitten samen in de nowrap-statuscel; geen gestapelde tweede regel.
       const status = cell.querySelector('.dossier-list-status')!
       expect(within(status as HTMLElement).getByText('20/09/2026')).toHaveClass('dossier-list-sep')
       expect(cell.querySelector('.dossier-list-stack')).toBeNull()
       expect(cell).not.toHaveTextContent(label)
-      expect(status).toHaveAttribute('title', expect.stringMatching(new RegExp(`^Bevestigd op 20\\/09\\/2026 .+ · ${label}$`)))
+      expect(status).toHaveAttribute('title', expect.stringMatching(new RegExp(`^Afgesloten op 20\\/09\\/2026 .+ · ${label}$`)))
     })
 
     it('historisch bevestigd zonder bron: "Bron onbekend (historisch)", geen verzonnen Handmatig/Automatisch', async () => {
@@ -990,7 +990,7 @@ describe('DossiersPage (lijst)', () => {
       renderPage()
       await openRowMenu(user)
 
-      expect(menuItems()).toEqual(['Openen', 'Bevestigen', 'Annuleren'])
+      expect(menuItems()).toEqual(['Openen', 'Dossier afsluiten', 'Dossier annuleren…'])
     })
 
     it.each(['Closed', 'Cancelled'] as const)('%s dossier: Openen, Heropenen', async (status) => {
@@ -1036,17 +1036,17 @@ describe('DossiersPage (lijst)', () => {
       await openRowMenu(user)
       const callsBefore = api.searchDossiers.mock.calls.length
 
-      await user.click(screen.getByRole('menuitem', { name: 'Bevestigen' }))
+      await user.click(screen.getByRole('menuitem', { name: 'Dossier afsluiten' }))
 
-      const dialog = await screen.findByRole('dialog', { name: 'Dossier bevestigen — DOS-0001' })
+      const dialog = await screen.findByRole('dialog', { name: 'Dossier afsluiten — DOS-0001' })
       expect(api.getDossierConfirmation).toHaveBeenCalledWith('d-1')
       await within(dialog).findByText('Alle operationele onderdelen zijn afgerond.')
-      await user.click(within(dialog).getByRole('button', { name: 'Bevestigen' }))
+      await user.click(within(dialog).getByRole('button', { name: 'Dossier afsluiten' }))
 
       await waitFor(() => {
         expect(api.confirmDossier).toHaveBeenCalledWith('d-1', { reason: null, acknowledgeWarnings: false, version: 'v-7' })
       })
-      expect(toast.showSuccess).toHaveBeenCalledWith('Dossier bevestigd.')
+      expect(toast.showSuccess).toHaveBeenCalledWith('Dossier afgesloten.')
       await waitFor(() => {
         expect(api.searchDossiers.mock.calls.length).toBeGreaterThan(callsBefore)
       })
@@ -1063,11 +1063,11 @@ describe('DossiersPage (lijst)', () => {
       api.confirmDossier.mockResolvedValue(dossierDetail({ status: 'Closed' }))
       renderPage()
       await openRowMenu(user)
-      await user.click(screen.getByRole('menuitem', { name: 'Bevestigen' }))
+      await user.click(screen.getByRole('menuitem', { name: 'Dossier afsluiten' }))
 
-      const dialog = await screen.findByRole('dialog', { name: 'Dossier bevestigen — DOS-0001' })
+      const dialog = await screen.findByRole('dialog', { name: 'Dossier afsluiten — DOS-0001' })
       await within(dialog).findByText('Eén stop heeft geen afleverbewijs.')
-      const confirm = within(dialog).getByRole('button', { name: 'Bevestigen' })
+      const confirm = within(dialog).getByRole('button', { name: 'Dossier afsluiten' })
       expect(confirm).toBeDisabled()
 
       await user.click(within(dialog).getByRole('checkbox', { name: /Ik heb de aandachtspunten bekeken/ }))
@@ -1088,12 +1088,12 @@ describe('DossiersPage (lijst)', () => {
       )
       renderPage()
       await openRowMenu(user)
-      await user.click(screen.getByRole('menuitem', { name: 'Bevestigen' }))
+      await user.click(screen.getByRole('menuitem', { name: 'Dossier afsluiten' }))
 
-      const dialog = await screen.findByRole('dialog', { name: 'Dossier bevestigen — DOS-0001' })
+      const dialog = await screen.findByRole('dialog', { name: 'Dossier afsluiten — DOS-0001' })
       await within(dialog).findByText('Opdracht ORD-1 is nog niet voltooid.')
-      expect(within(dialog).getByText('Bevestigen is niet mogelijk')).toBeInTheDocument()
-      expect(within(dialog).getByRole('button', { name: 'Bevestigen' })).toBeDisabled()
+      expect(within(dialog).getByText('Afsluiten is niet mogelijk')).toBeInTheDocument()
+      expect(within(dialog).getByRole('button', { name: 'Dossier afsluiten' })).toBeDisabled()
       expect(api.confirmDossier).not.toHaveBeenCalled()
     })
 
@@ -1105,7 +1105,7 @@ describe('DossiersPage (lijst)', () => {
       await openRowMenu(user)
       const callsBefore = api.searchDossiers.mock.calls.length
 
-      await user.click(screen.getByRole('menuitem', { name: 'Annuleren' }))
+      await user.click(screen.getByRole('menuitem', { name: 'Dossier annuleren…' }))
 
       const dialog = await screen.findByRole('dialog', { name: 'Dossier annuleren — DOS-0001' })
       expect(within(dialog).getByText(/Alleen voor werk dat nooit is uitgevoerd/)).toBeInTheDocument()
@@ -1131,7 +1131,7 @@ describe('DossiersPage (lijst)', () => {
       api.cancelDossier.mockRejectedValue(new ApiError('Opdracht ORD-1 is al gepland; annuleer eerst de rit.', 400))
       renderPage()
       await openRowMenu(user)
-      await user.click(screen.getByRole('menuitem', { name: 'Annuleren' }))
+      await user.click(screen.getByRole('menuitem', { name: 'Dossier annuleren…' }))
       const dialog = await screen.findByRole('dialog', { name: 'Dossier annuleren — DOS-0001' })
       await user.type(within(dialog).getByLabelText(/Reden voor annulering/), 'Klant zegt af')
 
@@ -1148,7 +1148,7 @@ describe('DossiersPage (lijst)', () => {
       api.cancelDossier.mockRejectedValue(new ApiError('Conflict', 409, dossierDetail({ status: 'Closed' })))
       renderPage()
       await openRowMenu(user)
-      await user.click(screen.getByRole('menuitem', { name: 'Annuleren' }))
+      await user.click(screen.getByRole('menuitem', { name: 'Dossier annuleren…' }))
       const dialog = await screen.findByRole('dialog', { name: 'Dossier annuleren — DOS-0001' })
       await user.type(within(dialog).getByLabelText(/Reden voor annulering/), 'Klant zegt af')
       const callsBefore = api.searchDossiers.mock.calls.length
@@ -1178,7 +1178,7 @@ describe('DossiersPage (lijst)', () => {
       await user.click(screen.getByRole('menuitem', { name: 'Heropenen' }))
 
       const dialog = await screen.findByRole('dialog', { name: 'Dossier heropenen — DOS-0001' })
-      expect(within(dialog).getByText(/De eerdere bevestiging blijft in de historiek staan/)).toBeInTheDocument()
+      expect(within(dialog).getByText(/De eerdere afsluiting blijft in de historiek staan/)).toBeInTheDocument()
       await user.click(within(dialog).getByRole('button', { name: 'Dossier heropenen' }))
       expect(within(dialog).getByText('Geef een reden op.')).toBeInTheDocument()
       expect(api.reopenDossier).not.toHaveBeenCalled()
@@ -1227,7 +1227,7 @@ describe('DossiersPage (lijst)', () => {
         api.searchDossiers.mockResolvedValue(paged(rows))
         renderPage()
 
-        expect(await menuOf(user, 'DOS-0001')).toEqual(['Openen', 'Bevestigen', 'Annuleren'])
+        expect(await menuOf(user, 'DOS-0001')).toEqual(['Openen', 'Dossier afsluiten', 'Dossier annuleren…'])
         expect(await menuOf(user, 'DOS-0002')).toEqual(['Openen'])
         expect(await menuOf(user, 'DOS-0003')).toEqual(['Openen'])
       })
@@ -1261,7 +1261,7 @@ describe('DossiersPage (lijst)', () => {
       // M16: "Te factureren" = invoiceable work not yet on an invoice, not merely "no invoice".
       await waitFor(() => expect(router.state.location.search).toBe('?status=Closed&invoiceStatus=ReadyToInvoice'))
       expect(within(views).getByRole('button', { name: 'Te factureren' })).toHaveAttribute('aria-pressed', 'true')
-      expect(chipTexts()).toEqual(['Bevestigd', 'Facturatiestatus: Klaar om te factureren'])
+      expect(chipTexts()).toEqual(['Afgesloten', 'Facturatiestatus: Klaar om te factureren'])
       await expectLastSearch({ ...BASE, status: 'Closed', invoiceStatus: 'ReadyToInvoice' })
 
       await user.click(within(views).getByRole('button', { name: 'Mijn open' }))
@@ -1367,7 +1367,7 @@ describe('DossiersPage (lijst)', () => {
       await screen.findByRole('table')
 
       await expectLastSearch({ status: 'Closed' })
-      expect(chipTexts()).toEqual(['Bevestigd'])
+      expect(chipTexts()).toEqual(['Afgesloten'])
     })
   })
 })

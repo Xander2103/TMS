@@ -204,13 +204,13 @@ public class DossierTimelineTests
                 "Jan Peeters · Stop 2 (lossen, Gent) van opdracht ORD-0050 afgerond",
                 "System · Rit RIT-0023 voltooid na de laatste stop",
                 "System · Transportopdracht ORD-0050 voltooid na voltooiing van de rit",
-                "System · Dossier automatisch bevestigd na voltooiing van rit RIT-0023",
+                "System · Dossier automatisch afgesloten na voltooiing van rit RIT-0023",
                 "Dirk Dispatcher · Incident 'Schade pallet 3' gemeld",
                 "Dirk Dispatcher · Herlevering ORD-0052 aangemaakt voor incident 'Schade pallet 3'",
                 "Dirk Dispatcher · Incident 'Schade pallet 3' opgelost",
                 "Piet Planner · Dossier heropend",
                 "Piet Planner · Transportopdracht ORD-0051 geannuleerd",
-                "Piet Planner · Dossier handmatig bevestigd",
+                "Piet Planner · Dossier handmatig afgesloten",
             },
             rows);
 
@@ -322,7 +322,7 @@ public class DossierTimelineTests
         var number = created.Trip!.TripNumber;
         var confirmation = timeline.Single(e => e.Type == "dossier.confirmed_automatically");
         Assert.Equal("System", confirmation.ActorKind);
-        Assert.Equal($"Dossier automatisch bevestigd na voltooiing van rit {number}", confirmation.Title);
+        Assert.Equal($"Dossier automatisch afgesloten na voltooiing van rit {number}", confirmation.Title);
         Assert.Equal($"Rit {number} gepland met chauffeur Jan Peeters en voertuig VRT-0001 (1-A-1)", timeline.Single(e => e.Type == "trip.planned").Title);
         Assert.Equal($"Rit {number} aangemaakt voor opdracht ORD-A", timeline.Single(e => e.Type == "trip.created").Title);
         // The trip carried the order through planned/started: no separate order rows for those steps.

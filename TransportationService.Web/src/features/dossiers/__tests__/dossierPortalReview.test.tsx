@@ -94,7 +94,7 @@ describe('Dossier workspace — portal review (M4)', () => {
     expect(screen.getByRole('button', { name: 'Info opvragen' })).toBeEnabled()
     expect(screen.getByRole('button', { name: 'Afwijzen' })).toBeEnabled()
 
-    const confirm = screen.getByRole('button', { name: 'Bevestigen' })
+    const confirm = screen.getByRole('button', { name: 'Dossier afsluiten' })
     expect(confirm).toBeDisabled()
     expect(confirm).toHaveAccessibleDescription(/Beoordeel eerst de klantportaal-aanvraag \(ORD-0042\)/)
   })
@@ -112,7 +112,7 @@ describe('Dossier workspace — portal review (M4)', () => {
     expect(orders.reviewPortalOrder).toHaveBeenCalledWith('o-1', 'Accept', null)
     await waitFor(() => expect(screen.queryByRole('region', { name: 'Klantportaal-beoordeling' })).not.toBeInTheDocument())
     expect(api.getDossier).toHaveBeenCalledTimes(2)
-    expect(screen.getByRole('button', { name: 'Bevestigen' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Dossier afsluiten' })).toBeEnabled()
   })
 
   it('shows no review actions to a user who may not change order statuses', async () => {
@@ -128,7 +128,7 @@ describe('Dossier workspace — portal review (M4)', () => {
     api.getDossier.mockResolvedValue(dossierDetail({ orders: [order({ status: 'Confirmed' })] }))
     renderPage()
 
-    expect(await screen.findByRole('button', { name: 'Bevestigen' })).toBeEnabled()
+    expect(await screen.findByRole('button', { name: 'Dossier afsluiten' })).toBeEnabled()
     expect(screen.queryByRole('region', { name: 'Klantportaal-beoordeling' })).not.toBeInTheDocument()
   })
 })

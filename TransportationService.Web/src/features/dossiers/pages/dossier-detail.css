@@ -127,64 +127,6 @@
 
 /* Meer ▾ menu */
 
-.dossier-more {
-  position: relative;
-}
-
-.dossier-more summary {
-  list-style: none;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  min-height: 44px;
-  padding: 0 14px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  font-size: 1rem;
-  user-select: none;
-}
-
-.dossier-more summary::-webkit-details-marker {
-  display: none;
-}
-
-.dossier-more-menu {
-  position: absolute;
-  right: 0;
-  top: calc(100% + 4px);
-  min-width: 220px;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.18);
-  display: flex;
-  flex-direction: column;
-  padding: 4px;
-  z-index: 40;
-}
-
-.dossier-more-menu button {
-  border: none;
-  background: none;
-  text-align: left;
-  padding: 10px 12px;
-  min-height: 44px;
-  font-size: 1rem;
-  color: var(--text);
-  cursor: pointer;
-  border-radius: 6px;
-}
-
-.dossier-more-menu button:hover {
-  background: var(--color-info-bg);
-}
-
-.dossier-more-menu .dossier-more-danger {
-  color: var(--color-danger);
-}
-
-/* --- Conflict (409) banner --- */
-
 .dossier-conflict-banner {
   display: flex;
   align-items: center;
@@ -1102,8 +1044,7 @@
   font-size: 13px;
 }
 
-.dossier-detail .dossier-header-actions .ui-button,
-.dossier-detail .dossier-more summary {
+.dossier-detail .dossier-header-actions .ui-button {
   min-height: 38px;
   padding: 7px 14px;
   font-size: 14px;

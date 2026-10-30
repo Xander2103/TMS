@@ -236,7 +236,7 @@ public class DossierProductAcceptanceTests
             h.Lifecycle().CancelAsync(dossierId, new CancelDossierRequest("Klant zegt af"), CancellationToken.None));
 
         Assert.Equal(1, interceptor.Fired);
-        Assert.Contains("bevestigd", refused.Message);
+        Assert.Contains("afgesloten", refused.Message);
         var entity = await h.Entity(dossierId);
         Assert.Equal((DossierStatus.Closed, DossierConfirmationSource.Manual, (DateTime?)null), (entity.Status, entity.ConfirmationSource, entity.CancelledAt));
         // The draft order was NOT cascaded by the losing cancel.
@@ -280,7 +280,7 @@ public class DossierProductAcceptanceTests
         Assert.False(evaluation.CanAutoConfirm);
         Assert.Empty(evaluation.Blockers);
         Assert.Contains(evaluation.Warnings, c => c.Code == "order.not_completed" && c.Severity == "Warning");
-        Assert.Contains(evaluation.Warnings, c => c.Code == "nothing.completed" && c.Severity == "Warning");
+        Assert.Contains(evaluation.Warnings, c => c.Code == "nothing.completed" && c.Severity == "Hold");
 
         // Deliberate acknowledgement is required…
         var refused = await Assert.ThrowsAsync<DomainValidationException>(() =>

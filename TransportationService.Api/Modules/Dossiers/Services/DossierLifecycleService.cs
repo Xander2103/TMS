@@ -52,7 +52,8 @@ public interface IDossierLifecycleService
 ///   nothing executed at all.</item>
 ///   <item><b>Warnings</b> (manual, acknowledged deliberately): the auto blockers above, POD
 ///   missing, pricing attention, no CMR — so a dossier created AFTER the transport happened can
-///   be confirmed without inventing trip or order statuses.</item>
+///   be confirmed without inventing trip or order statuses. "Nothing executed" (UX-001) and serious
+///   open afwijkingen (EX-05) additionally take a written reason.</item>
 /// </list>
 /// Activity types are data: "executable" is <see cref="ActivityType.PlanningRelevant"/> +
 /// no linked order; a purely commercial activity (storage, supplements) never blocks.
@@ -116,7 +117,7 @@ public class DossierLifecycleService : IDossierLifecycleService
         if (dossier.Status != DossierStatus.Open)
         {
             checks.Add(new Check("dossier.not_open",
-                dossier.Status == DossierStatus.Cancelled ? "Een geannuleerd dossier kan niet bevestigd worden; heropen het eerst." : "Dit dossier is al bevestigd.",
+                dossier.Status == DossierStatus.Cancelled ? "Een geannuleerd dossier kan niet afgesloten worden; heropen het eerst." : "Dit dossier is al afgesloten.",
                 BlocksManual: true));
         }
 
@@ -157,8 +158,8 @@ public class DossierLifecycleService : IDossierLifecycleService
                     },
                     impact switch
                     {
-                        ExceptionConfirmationImpact.Hold => $"{label}: houdt automatische bevestiging tegen. Handmatig bevestigen kan enkel met een reden.",
-                        ExceptionConfirmationImpact.Warning => $"{label}: bekijk ze voor je bevestigt.",
+                        ExceptionConfirmationImpact.Hold => $"{label}: houdt automatische afsluiting tegen. Handmatig afsluiten kan enkel met een reden.",
+                        ExceptionConfirmationImpact.Warning => $"{label}: bekijk ze voor je afsluit.",
                         _ => $"{label}: ter info.",
                     },
                     OrderId: open.TransportOrderId,
@@ -268,7 +269,7 @@ public class DossierLifecycleService : IDossierLifecycleService
                 {
                     failedDeliveries++;
                     var number = orders.Single(o => o.Id == latest.TransportOrderId).OrderNumber;
-                    checks.Add(new Check("delivery.not_completed", $"Opdracht {number}: een stop eindigde als {latest.Status}.", OrderId: latest.TransportOrderId));
+                    checks.Add(new Check("delivery.not_completed", $"Opdracht {number}: een stop eindigde als {DossierTimelineLabels.StopOutcome(latest.Status)}.", OrderId: latest.TransportOrderId));
                 }
             }
         }
@@ -282,7 +283,8 @@ public class DossierLifecycleService : IDossierLifecycleService
         var executedStandalone = activities.Count(a => !a.HasStops && a.PlanningRelevant && a.ExecutionStatus == DossierActivityExecutionStatus.Completed);
         if (doneOrderIds.Count == 0 && executedStandalone == 0)
         {
-            checks.Add(new Check("nothing.completed", "Er is nog niets uitgevoerd: geen voltooide opdracht of uitgevoerde activiteit."));
+            // UX-001: closing work that never happened takes a written reason (a dossier entered after the fact still can).
+            checks.Add(new Check("nothing.completed", "Er is nog niets uitgevoerd: geen voltooide opdracht of uitgevoerde activiteit. Afsluiten kan enkel met een reden.", DisplaySeverity: "Hold"));
         }
 
         // Commercial attention is informational for confirmation (confirmation ≠ invoicing).
@@ -375,14 +377,14 @@ public class DossierLifecycleService : IDossierLifecycleService
         if (evaluation.Warnings.Any(w => w.Severity is "Warning" or "Hold") && !request.AcknowledgeWarnings)
         {
             throw new DomainValidationException("acknowledgeWarnings",
-                "Er zijn aandachtspunten voor dit dossier. Bekijk ze en bevestig bewust.");
+                "Er zijn aandachtspunten voor dit dossier. Bekijk ze en sluit bewust af.");
         }
 
-        // EX-05: confirming over a blocking (High/Critical) open afwijking is a deliberate, motivated decision.
+        // EX-05/UX-001: closing over a blocking (High/Critical) open afwijking or with nothing executed is a deliberate, motivated decision.
         if (evaluation.Warnings.Any(w => w.Severity == "Hold") && string.IsNullOrWhiteSpace(request.Reason))
         {
             throw new DomainValidationException("reason",
-                "Er staan blokkerende afwijkingen open. Geef een reden op om het dossier toch te bevestigen.");
+                "Er staan blokkerende punten open. Geef een reden op om het dossier toch af te sluiten.");
         }
 
         var now = _timeProvider.GetUtcNow().UtcDateTime;
@@ -545,7 +547,7 @@ public class DossierLifecycleService : IDossierLifecycleService
         {
             throw new DomainValidationException("status", dossier.Status == DossierStatus.Cancelled
                 ? "Dit dossier is al geannuleerd."
-                : "Een bevestigd dossier kan niet geannuleerd worden; heropen het eerst.");
+                : "Een afgesloten dossier kan niet geannuleerd worden; heropen het eerst.");
         }
 
         await RequireVersionAsync(dossier, request.Version, cancellationToken);
@@ -568,7 +570,7 @@ public class DossierLifecycleService : IDossierLifecycleService
         {
             throw new DomainValidationException("status",
                 $"Opdracht(en) {string.Join(", ", progressed.Select(o => o.OrderNumber))} zijn al in behandeling of uitgevoerd. "
-                + "Annuleer of rond die eerst af; een uitgevoerd dossier bevestig je in plaats van het te annuleren.");
+                + "Annuleer of rond die eerst af; een uitgevoerd dossier sluit je af in plaats van het te annuleren.");
         }
 
         var now = _timeProvider.GetUtcNow().UtcDateTime;
@@ -591,7 +593,7 @@ public class DossierLifecycleService : IDossierLifecycleService
         {
             throw new DomainValidationException("status", dossier.Status == DossierStatus.Cancelled
                 ? "Dit dossier is al geannuleerd."
-                : "Dit dossier is intussen bevestigd en kan niet geannuleerd worden; heropen het eerst.");
+                : "Dit dossier is intussen afgesloten en kan niet geannuleerd worden; heropen het eerst.");
         }
 
         // Draft orders go along with the same reason (they were only ever administrative).

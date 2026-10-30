@@ -221,8 +221,8 @@
   "related": {
     "open_one": "1 open incident:",
     "open_other": "{count} open incidenten:",
-    "dossierAttention_one": "1 open incident — bevestigen kan pas na afhandeling:",
-    "dossierAttention_other": "{count} open incidenten — bevestigen kan pas na afhandeling:"
+    "dossierAttention_one": "1 open incident: afsluiten kan pas na afhandeling:",
+    "dossierAttention_other": "{count} open incidenten: afsluiten kan pas na afhandeling:"
   },
   "fleet": {
     "title": "Wagenpark",

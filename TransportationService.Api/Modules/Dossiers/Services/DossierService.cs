@@ -5,7 +5,9 @@ using TransportationService.Api.Data;
 using TransportationService.Api.Modules.Auditing.Services;
 using TransportationService.Api.Modules.Dossiers.Dtos;
 using TransportationService.Api.Modules.Dossiers.Entities;
+using TransportationService.Api.Modules.Exceptions.Services;
 using TransportationService.Api.Modules.Incidents.Entities;
+using TransportationService.Api.Modules.Incidents.Services;
 using TransportationService.Api.Modules.Orders.Entities;
 using TransportationService.Api.Modules.Orders.Services;
 using TransportationService.Api.Modules.Tenancy.Entities;
@@ -684,6 +686,20 @@ public partial class DossierService : IDossierService
             .Concat(orderRows.Select(o => o.UpdatedAt))
             .Max();
 
+        var openExceptionStatuses = ProblemScope.OpenExceptionStatuses;
+        var openExceptionRows = await ProblemScope.Exceptions(_dbContext, tenantId, problemScope).AsNoTracking()
+            .Where(e => openExceptionStatuses.Contains(e.Status))
+            .OrderBy(e => e.OccurredAt)
+            .Join(_dbContext.Trips.AsNoTracking().Where(t => t.TenantId == tenantId), e => e.TripId, t => t.Id,
+                (e, t) => new { e.Id, e.Type, e.Severity, t.TripNumber })
+            .ToListAsync(cancellationToken);
+        var openExceptions = openExceptionRows
+            .OrderByDescending(e => e.Severity)
+            .Select(e => new DossierOpenExceptionDto(
+                e.Id, DossierTimelineLabels.ExceptionType(e.Type), DossierTimelineLabels.ExceptionSeverity(e.Severity).ToLowerInvariant(),
+                ExceptionConfirmationPolicy.HoldsAutoConfirmation(e.Severity), e.TripNumber))
+            .ToList();
+
         var detail = new DossierDetailDto(
             dossier.Id, dossier.DossierNumber, dossier.Title, dossier.Description, dossier.Status.ToString(),
             dossier.CustomerId, customerName, dossier.ResponsibleUserId, responsibleName,
@@ -704,7 +720,8 @@ public partial class DossierService : IDossierService
             CancellationReason: dossier.CancellationReason,
             IssuedDocumentCount: issuedDocumentCount,
             PodCount: podCount,
-            Invoices: dossierInvoices);
+            Invoices: dossierInvoices,
+            OpenExceptions: openExceptions);
         return await CanViewPricesAsync(cancellationToken) ? detail : WithoutPrices(detail);
     }
 

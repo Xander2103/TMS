@@ -1,7 +1,7 @@
 {
   "status": {
     "Open": "Open",
-    "Closed": "Confirmed",
+    "Closed": "Closed",
     "Cancelled": "Cancelled"
   },
   "relationType": {
@@ -60,7 +60,7 @@
       "number": "File number",
       "customer": "Customer",
       "status": "Status",
-      "confirmedAt": "Confirmed on",
+      "confirmedAt": "Closed on",
       "planningDate": "Planning date",
       "createdAt": "Created on"
     },
@@ -103,9 +103,9 @@
       "orderNumber": "Order number",
       "customerReference": "Customer reference",
       "customerNumber": "Customer number",
-      "confirmationSource": "Confirmation method",
-      "confirmedFrom": "Confirmed on from",
-      "confirmedTo": "Confirmed on to",
+      "confirmationSource": "Closing method",
+      "confirmedFrom": "Closed on from",
+      "confirmedTo": "Closed on to",
       "createdFrom": "Created on from",
       "createdTo": "Created on to",
       "planningFrom": "Planning date from",
@@ -158,7 +158,7 @@
     "removeSearch": "Clear search",
     "ranges": {
       "date": "File date",
-      "confirmed": "Confirmed on",
+      "confirmed": "Closed on",
       "planning": "Planning date",
       "created": "Created on",
       "since": "from {date}",
@@ -283,7 +283,9 @@
       "route": "route",
       "goederen": "goods",
       "prijs": "price"
-    }
+    },
+    "openException": "Open deviation: {type}, severity {severity}",
+    "openExceptionTrip": "on {tripNumber}"
   },
   "header": {
     "addActivity": "+ Activity",
@@ -448,7 +450,7 @@
     "noNotes": "No notes.",
     "createdAt": "Created on {date}",
     "responsible": "Responsible: {name}",
-    "closedAt": "Confirmed on {date}",
+    "closedAt": "Closed on {date}",
     "activityAdded": "Activity added.",
     "activityUpdated": "Activity updated.",
     "routeSaved": "Route saved.",
@@ -624,23 +626,24 @@
     "podCount_one": "{count} proof of delivery",
     "podCount_other": "{count} proofs of delivery",
     "uploadCount_one": "{count} upload",
-    "uploadCount_other": "{count} uploads"
+    "uploadCount_other": "{count} uploads",
+    "plannedOnTrip": "{tripNumber} · {date}"
   },
   "lifecycle": {
-    "confirm": "Confirm",
-    "confirmTitle": "Confirm file",
-    "confirmIntro": "Confirm that this file is operationally complete. Confirmation is not invoicing: prices and invoices stay separate.",
+    "confirm": "Close file",
+    "confirmTitle": "Close file",
+    "confirmIntro": "Close this file once it is operationally complete. Closing is not invoicing: prices and invoices stay separate.",
     "loading": "Loading readiness…",
     "loadFailed": "Readiness could not be loaded.",
-    "blockersTitle": "Confirmation is not possible",
+    "blockersTitle": "Closing is not possible",
     "warningsTitle": "Points of attention",
     "infoTitle": "For information",
     "noIssues": "Every operational part is complete.",
-    "acknowledge": "I have reviewed the points of attention and confirm deliberately.",
+    "acknowledge": "I have reviewed the points of attention and close deliberately.",
     "reasonLabel": "Note (optional)",
     "reasonHint": "For example: executed on 22/09, entered afterwards.",
-    "confirmed": "File confirmed.",
-    "confirmFailed": "The file could not be confirmed.",
+    "confirmed": "File closed.",
+    "confirmFailed": "The file could not be closed.",
     "summary": {
       "orders": "Orders",
       "ordersValue": "{completed} of {total} completed",
@@ -661,8 +664,8 @@
       "exceptions": "Open deviations",
       "exceptionsHolding": "{count} blocking"
     },
-    "confirmedBadge": "Confirmed",
-    "confirmedAt": "Confirmed on {date}",
+    "confirmedBadge": "Closed",
+    "confirmedAt": "Closed on {date}",
     "confirmedBy": "by {name}",
     "sourceManual": "manually",
     "sourceAutomatic": "automatically",
@@ -671,11 +674,11 @@
     "cancelReasonLabel": "Reason",
     "reopen": "Reopen file",
     "reopenTitle": "Reopen file",
-    "reopenIntro": "The earlier confirmation stays in the history. Invoices and documents are kept. Orders cancelled along with the file stay cancelled; restore them per order.",
+    "reopenIntro": "The earlier closing stays in the history. Invoices and documents remain. Orders cancelled when the file was cancelled stay cancelled; restore them per order.",
     "reopenReason": "Reason for reopening",
     "reopened": "File reopened.",
     "reopenFailed": "The file could not be reopened.",
-    "cancel": "Cancel file",
+    "cancel": "Cancel file…",
     "cancelTitle": "Cancel file",
     "cancelIntro": "Only for work that never happened. Draft orders are cancelled along; planned or executed orders block.",
     "cancelReason": "Reason for cancellation",
@@ -685,22 +688,22 @@
     "reopenShort": "Reopen",
     "conflict": "The file was changed in the meantime. The list has been refreshed; check the file and try again.",
     "holdTitle": "Blocking",
-    "holdHint": "These open deviations hold automatic confirmation. Manual confirmation needs a deliberate decision and a reason.",
+    "holdHint": "These points hold automatic closing. Closing manually is only possible deliberately and with a reason.",
     "reasonRequiredLabel": "Reason (required)",
-    "reasonRequiredHint": "Why do you confirm the file despite the blocking deviation(s)?",
+    "reasonRequiredHint": "Why do you close the file despite these points?",
     "openException": "Open deviation"
   },
   "portalReview": {
     "heading": "{number} · submitted via the customer portal",
     "openOrder": "Open order {number}",
-    "confirmBlocked": "Review the customer portal request ({numbers}) below first; then the dossier can be confirmed."
+    "confirmBlocked": "Review the customer portal request ({numbers}) below first; the file can be closed afterwards."
   },
   "history": {
-    "ConfirmedManually": "Confirmed manually",
-    "ConfirmedAutomatically": "Confirmed automatically",
+    "ConfirmedManually": "Closed manually",
+    "ConfirmedAutomatically": "Closed automatically",
     "Reopened": "Reopened",
     "Cancelled": "Cancelled",
-    "Closed": "Confirmed (historic)",
+    "Closed": "Closed (historic)",
     "LegalEntityChanged": "Invoicing entity changed",
     "CustomerChanged": "Customer changed",
     "OrderLinked": "Order linked",

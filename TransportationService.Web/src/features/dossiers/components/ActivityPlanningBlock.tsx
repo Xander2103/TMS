@@ -30,6 +30,7 @@ import {
   vehicleDraftAfterManualPick,
   type VehicleDraft,
 } from '../../planning/vehicleSelection'
+import { changeTransportOrderStatus } from '../../transport-orders/api/transportOrdersApi'
 import { getDossier, planDossierActivity } from '../api/dossiersApi'
 import { formatDate } from '../dossierDisplay'
 import type { DossierActivity, DossierActivityAssignment, DossierDetail } from '../types'
@@ -87,7 +88,7 @@ function draftFromAssignment(assignment: DossierActivityAssignment | null): Vehi
 function PlanningForm({ dossier, activity, isOpen, onApply, onConflict, onDirtyChange }: ActivityPlanningBlockProps) {
   const { t } = useLocale()
   const toast = useToast()
-  const { hasPermission } = useAuth()
+  const { hasPermission, hasAnyPermission } = useAuth()
   const assignment = activity.assignment ?? null
   const canWrite = isOpen && (assignment ? hasPermission('planning.edit') : hasPermission('planning.create'))
 
@@ -167,6 +168,22 @@ function PlanningForm({ dossier, activity, isOpen, onApply, onConflict, onDirtyC
       if (seq !== driverLookupSeq.current) return
       setVehicleDraft((current) => vehicleDraftAfterDriverChange(current, fixedId))
     })
+  }
+
+  /** UX-004: confirm in place, so the planner keeps the drawer and whatever was picked already. */
+  async function confirmOrder() {
+    if (!activity.linkedTransportOrderId) return
+    setBusy(true)
+    setError(null)
+    try {
+      await changeTransportOrderStatus(activity.linkedTransportOrderId, 'Confirmed')
+      onApply(await getDossier(dossier.id))
+      toast.showSuccess(t('dossierActivities.planning.orderConfirmed', { orderNumber: activity.linkedOrderNumber ?? '' }))
+    } catch (err) {
+      setError(describeApiError(err, t('dossierActivities.planning.orderConfirmFailed')).message)
+    } finally {
+      setBusy(false)
+    }
   }
 
   /** "Rit aanmaken en toewijzen": the server creates the Draft trip (or reuses the open one). */
@@ -260,6 +277,15 @@ function PlanningForm({ dossier, activity, isOpen, onApply, onConflict, onDirtyC
       ? t('dossierActivities.planning.sharedTripWarning', { tripNumber: assignment.tripNumber, count: assignment.otherOrderCount })
       : null
   const conflicts = trip?.conflicts ?? []
+  // UX-004: stop before the pickers are filled in, not after. The server still refuses on its own.
+  const orderIsDraft = activity.linkedOrderStatus === 'Draft'
+  const canConfirmOrder = orderIsDraft && hasAnyPermission(['orders.change_status', 'orders.manage'])
+  const orderGate = orderIsDraft
+    ? t(canConfirmOrder ? 'dossierActivities.planning.orderNotConfirmed' : 'dossierActivities.planning.orderNotConfirmedNoRight',
+      { orderNumber: activity.linkedOrderNumber ?? '', status: t('dossierActivities.planning.statusDraft') })
+    : activity.linkedOrderStatus === 'Submitted'
+      ? t('dossierActivities.planning.orderSubmitted', { orderNumber: activity.linkedOrderNumber ?? '' })
+      : null
 
   return (
     <>
@@ -280,6 +306,17 @@ function PlanningForm({ dossier, activity, isOpen, onApply, onConflict, onDirtyC
         <p className="dossier-planning-error" role="alert">
           {error}
         </p>
+      )}
+
+      {editable && !assignment && orderGate && (
+        <div className="dossier-planning-gate" role="status" data-testid="planning-order-gate">
+          <p>{orderGate}</p>
+          {canConfirmOrder && (
+            <Button variant="secondary" onClick={() => void confirmOrder()} disabled={busy}>
+              {t('dossierActivities.planning.confirmOrder')}
+            </Button>
+          )}
+        </div>
       )}
 
       {!editable && (
@@ -391,7 +428,7 @@ function PlanningForm({ dossier, activity, isOpen, onApply, onConflict, onDirtyC
                 {t('dossierActivities.planning.save')}
               </Button>
             ) : (
-              <Button onClick={() => void plan()} disabled={busy}>
+              <Button onClick={() => void plan()} disabled={busy || orderGate !== null}>
                 {t('dossierActivities.planning.plan')}
               </Button>
             )}

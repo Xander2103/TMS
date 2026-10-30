@@ -173,7 +173,7 @@ public class DossierLifecycleIntegrityTests
     {
         var h = await SeedAsync();
         using var _ = h.Db;
-        var (dossierId, _) = await h.DossierWithOrdersAsync(TransportOrderStatus.Draft);
+        var (dossierId, _) = await h.DossierWithOrdersAsync(TransportOrderStatus.Completed);
         var controller = new DossiersController(h.Dossiers(), null!, null!, null!, null!, h.Lifecycle());
 
         // A real blocker is enforced through the alias exactly as through /confirm.
@@ -369,5 +369,55 @@ public class DossierLifecycleIntegrityTests
         Assert.Equal(InvoiceOperationOutcome.Success, (await invoices.ChangeStatusAsync(created.Invoice!.Id, InvoiceStatus.Cancelled, CancellationToken.None)).Outcome);
         Assert.Equal(DossierStatus.Closed, (await h.Entity(dossierId)).Status);
         Assert.Single(await h.Audits(dossierId, "ConfirmedAutomatically"));
+    }
+
+    /// <summary>UX-001: closing work that never happened is possible only deliberately, with a written reason.</summary>
+    [Fact]
+    public async Task NothingExecuted_IsAHold_ThatTakesAWrittenReason()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var (dossierId, _) = await h.DossierWithOrdersAsync(TransportOrderStatus.Draft);
+
+        var evaluation = (await h.Lifecycle().EvaluateAsync(dossierId, CancellationToken.None))!;
+        Assert.Contains(evaluation.Warnings, w => w.Code == "nothing.completed" && w.Severity == "Hold");
+
+        var refused = await Assert.ThrowsAsync<DomainValidationException>(() =>
+            h.Lifecycle().ConfirmAsync(dossierId, new ConfirmDossierRequest(null, AcknowledgeWarnings: true), CancellationToken.None));
+        Assert.Contains("reden", refused.Message);
+        Assert.Equal(DossierStatus.Open, (await h.Entity(dossierId)).Status);
+
+        var closed = await h.Lifecycle().ConfirmAsync(dossierId, new ConfirmDossierRequest("Administratief nagemaakt, uitgevoerd op 22/09", AcknowledgeWarnings: true), CancellationToken.None);
+        Assert.Equal("Closed", closed!.Status);
+        Assert.Equal("Administratief nagemaakt, uitgevoerd op 22/09", closed.ConfirmationReason);
+    }
+
+    /// <summary>UX-010: the dossier names its open afwijkingen itself, serious first; handled ones are gone.</summary>
+    [Fact]
+    public async Task Detail_ListsOpenAfwijkingen_SeriousFirst_WithTripAndDutchLabels()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var (dossierId, orders) = await h.DossierWithOrdersAsync(TransportOrderStatus.InProgress);
+        var tripId = Guid.NewGuid();
+        h.Db.Context.Trips.Add(new Modules.Planning.Entities.Trip { Id = tripId, TenantId = h.TenantId, TripNumber = "RIT-0240", TripDate = new DateOnly(2026, 10, 30) });
+        Modules.Exceptions.Entities.ExecutionException Afwijking(Modules.Exceptions.Entities.ExecutionExceptionType type, Modules.Exceptions.Entities.ExceptionSeverity severity, Modules.Exceptions.Entities.ExecutionExceptionStatus status) => new()
+        {
+            Id = Guid.NewGuid(), TenantId = h.TenantId, TripId = tripId, TransportOrderId = orders[0].OrderId,
+            Type = type, Severity = severity, Status = status, Description = "TEST", OccurredAt = new DateTime(2026, 10, 30, 10, 0, 0, DateTimeKind.Utc),
+        };
+        var serious = Afwijking(Modules.Exceptions.Entities.ExecutionExceptionType.Delay, Modules.Exceptions.Entities.ExceptionSeverity.High, Modules.Exceptions.Entities.ExecutionExceptionStatus.Open);
+        h.Db.Context.ExecutionExceptions.AddRange(
+            Afwijking(Modules.Exceptions.Entities.ExecutionExceptionType.DamagedPackage, Modules.Exceptions.Entities.ExceptionSeverity.Low, Modules.Exceptions.Entities.ExecutionExceptionStatus.Open),
+            serious,
+            Afwijking(Modules.Exceptions.Entities.ExecutionExceptionType.AddressIssue, Modules.Exceptions.Entities.ExceptionSeverity.Critical, Modules.Exceptions.Entities.ExecutionExceptionStatus.Resolved));
+        await h.Db.Context.SaveChangesAsync();
+
+        var detail = (await h.Dossiers().GetAsync(dossierId, CancellationToken.None))!;
+
+        Assert.Equal(2, detail.OpenExceptions!.Count);
+        var first = detail.OpenExceptions[0];
+        Assert.Equal((serious.Id, "Vertraging", "hoog", true, "RIT-0240"), (first.Id, first.TypeLabel, first.SeverityLabel, first.Holds, first.TripNumber));
+        Assert.False(detail.OpenExceptions[1].Holds);
     }
 }

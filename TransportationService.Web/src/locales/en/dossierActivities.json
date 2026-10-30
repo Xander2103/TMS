@@ -54,7 +54,14 @@
     "readOnlyStatus": "This trip is no longer in preparation; change the assignment on the trip page.",
     "tripLoadFailed": "The trip could not be loaded; the assignment is read-only.",
     "tripLoading": "Loading trip…",
-    "unsavedInDrawer": "The planning has unsaved changes. Save the assignment first or undo them."
+    "unsavedInDrawer": "The planning has unsaved changes. Save the assignment first or undo them.",
+    "orderNotConfirmed": "{orderNumber} is still {status}. Only confirmed orders can go on a trip: confirm the order first.",
+    "orderNotConfirmedNoRight": "{orderNumber} is still {status}. Only confirmed orders can go on a trip; ask a colleague with that right to confirm it.",
+    "orderSubmitted": "{orderNumber} is a customer request awaiting review; only then can it go on a trip.",
+    "confirmOrder": "Confirm order",
+    "orderConfirmed": "Order {orderNumber} confirmed. You can plan it now.",
+    "orderConfirmFailed": "The order could not be confirmed.",
+    "statusDraft": "a draft"
   },
   "overview": {
     "missingPrices": "Missing prices",

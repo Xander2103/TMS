@@ -1,7 +1,7 @@
 {
   "status": {
     "Open": "Open",
-    "Closed": "Bevestigd",
+    "Closed": "Afgesloten",
     "Cancelled": "Geannuleerd"
   },
   "relationType": {
@@ -60,7 +60,7 @@
       "number": "Dossiernummer",
       "customer": "Klant",
       "status": "Status",
-      "confirmedAt": "Bevestigd op",
+      "confirmedAt": "Afgesloten op",
       "planningDate": "Planningdatum",
       "createdAt": "Aanmaakdatum"
     },
@@ -103,9 +103,9 @@
       "orderNumber": "Opdrachtnummer",
       "customerReference": "Klantreferentie",
       "customerNumber": "Klantnummer",
-      "confirmationSource": "Bevestigingswijze",
-      "confirmedFrom": "Bevestigd op van",
-      "confirmedTo": "Bevestigd op tot",
+      "confirmationSource": "Wijze van afsluiten",
+      "confirmedFrom": "Afgesloten op van",
+      "confirmedTo": "Afgesloten op tot",
       "createdFrom": "Aanmaakdatum van",
       "createdTo": "Aanmaakdatum tot",
       "planningFrom": "Planningdatum van",
@@ -158,7 +158,7 @@
     "removeSearch": "Zoekterm wissen",
     "ranges": {
       "date": "Dossierdatum",
-      "confirmed": "Bevestigd op",
+      "confirmed": "Afgesloten op",
       "planning": "Planningdatum",
       "created": "Aanmaakdatum",
       "since": "vanaf {date}",
@@ -283,7 +283,9 @@
       "route": "route",
       "goederen": "goederen",
       "prijs": "prijs"
-    }
+    },
+    "openException": "Open afwijking: {type}, ernst {severity}",
+    "openExceptionTrip": "op {tripNumber}"
   },
   "header": {
     "addActivity": "+ Activiteit",
@@ -448,7 +450,7 @@
     "noNotes": "Geen notities.",
     "createdAt": "Aangemaakt op {date}",
     "responsible": "Verantwoordelijke: {name}",
-    "closedAt": "Bevestigd op {date}",
+    "closedAt": "Afgesloten op {date}",
     "activityAdded": "Activiteit toegevoegd.",
     "activityUpdated": "Activiteit bijgewerkt.",
     "routeSaved": "Route opgeslagen.",
@@ -624,23 +626,24 @@
     "podCount_one": "{count} afleverbewijs",
     "podCount_other": "{count} afleverbewijzen",
     "uploadCount_one": "{count} upload",
-    "uploadCount_other": "{count} uploads"
+    "uploadCount_other": "{count} uploads",
+    "plannedOnTrip": "{tripNumber} · {date}"
   },
   "lifecycle": {
-    "confirm": "Bevestigen",
-    "confirmTitle": "Dossier bevestigen",
-    "confirmIntro": "Bevestig dat dit dossier operationeel afgehandeld is. Bevestigen is geen facturatie: prijzen en facturen blijven apart.",
+    "confirm": "Dossier afsluiten",
+    "confirmTitle": "Dossier afsluiten",
+    "confirmIntro": "Sluit dit dossier af als het operationeel afgehandeld is. Afsluiten is geen facturatie: prijzen en facturen blijven apart.",
     "loading": "Gereedheid wordt geladen…",
     "loadFailed": "De gereedheid kon niet worden geladen.",
-    "blockersTitle": "Bevestigen is niet mogelijk",
+    "blockersTitle": "Afsluiten is niet mogelijk",
     "warningsTitle": "Aandachtspunten",
     "infoTitle": "Ter info",
     "noIssues": "Alle operationele onderdelen zijn afgerond.",
-    "acknowledge": "Ik heb de aandachtspunten bekeken en bevestig bewust.",
+    "acknowledge": "Ik heb de aandachtspunten bekeken en sluit bewust af.",
     "reasonLabel": "Opmerking (optioneel)",
     "reasonHint": "Bijvoorbeeld: uitgevoerd op 22/09, administratief nagemaakt.",
-    "confirmed": "Dossier bevestigd.",
-    "confirmFailed": "Het dossier kon niet worden bevestigd.",
+    "confirmed": "Dossier afgesloten.",
+    "confirmFailed": "Het dossier kon niet worden afgesloten.",
     "summary": {
       "orders": "Opdrachten",
       "ordersValue": "{completed} van {total} voltooid",
@@ -661,8 +664,8 @@
       "exceptions": "Open afwijkingen",
       "exceptionsHolding": "{count} blokkerend"
     },
-    "confirmedBadge": "Bevestigd",
-    "confirmedAt": "Bevestigd op {date}",
+    "confirmedBadge": "Afgesloten",
+    "confirmedAt": "Afgesloten op {date}",
     "confirmedBy": "door {name}",
     "sourceManual": "handmatig",
     "sourceAutomatic": "automatisch",
@@ -671,11 +674,11 @@
     "cancelReasonLabel": "Reden",
     "reopen": "Dossier heropenen",
     "reopenTitle": "Dossier heropenen",
-    "reopenIntro": "De eerdere bevestiging blijft in de historiek staan. Facturen en documenten blijven bestaan. Opdrachten die bij het annuleren geannuleerd werden, blijven geannuleerd; herstel ze per opdracht.",
+    "reopenIntro": "De eerdere afsluiting blijft in de historiek staan. Facturen en documenten blijven bestaan. Opdrachten die bij het annuleren geannuleerd werden, blijven geannuleerd; herstel ze per opdracht.",
     "reopenReason": "Reden voor heropenen",
     "reopened": "Dossier heropend.",
     "reopenFailed": "Het dossier kon niet worden heropend.",
-    "cancel": "Annuleren",
+    "cancel": "Dossier annuleren…",
     "cancelTitle": "Dossier annuleren",
     "cancelIntro": "Alleen voor werk dat nooit is uitgevoerd. Opdrachten in concept worden mee geannuleerd; geplande of uitgevoerde opdrachten blokkeren.",
     "cancelReason": "Reden voor annulering",
@@ -685,22 +688,22 @@
     "reopenShort": "Heropenen",
     "conflict": "Het dossier is intussen gewijzigd. De lijst is vernieuwd; controleer het dossier en probeer opnieuw.",
     "holdTitle": "Blokkerend",
-    "holdHint": "Deze open afwijkingen houden de automatische bevestiging tegen. Handmatig bevestigen kan enkel bewust en met een reden.",
+    "holdHint": "Deze punten houden de automatische afsluiting tegen. Handmatig afsluiten kan enkel bewust en met een reden.",
     "reasonRequiredLabel": "Reden (verplicht)",
-    "reasonRequiredHint": "Waarom bevestig je het dossier ondanks de blokkerende afwijking(en)?",
+    "reasonRequiredHint": "Waarom sluit je het dossier af ondanks deze punten?",
     "openException": "Afwijking openen"
   },
   "portalReview": {
     "heading": "{number} · ingediend via het klantportaal",
     "openOrder": "Opdracht {number} openen",
-    "confirmBlocked": "Beoordeel eerst de klantportaal-aanvraag ({numbers}) hieronder; daarna kan het dossier bevestigd worden."
+    "confirmBlocked": "Beoordeel eerst de klantportaal-aanvraag ({numbers}) hieronder; daarna kan het dossier afgesloten worden."
   },
   "history": {
-    "ConfirmedManually": "Handmatig bevestigd",
-    "ConfirmedAutomatically": "Automatisch bevestigd",
+    "ConfirmedManually": "Handmatig afgesloten",
+    "ConfirmedAutomatically": "Automatisch afgesloten",
     "Reopened": "Heropend",
     "Cancelled": "Geannuleerd",
-    "Closed": "Bevestigd (historisch)",
+    "Closed": "Afgesloten (historisch)",
     "LegalEntityChanged": "Facturerende entiteit gewijzigd",
     "CustomerChanged": "Klant gewijzigd",
     "OrderLinked": "Opdracht gekoppeld",

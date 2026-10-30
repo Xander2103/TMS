@@ -571,6 +571,8 @@ function DossierDetailContent() {
           activities={orderedActivities}
           onNavigate={goToSection}
           openIncidents={dossier.incidents.filter((i) => i.status === 'New' || i.status === 'InProgress')}
+          openExceptions={dossier.openExceptions ?? []}
+          canOpenExceptions={hasPermission('exceptions.view')}
         />
 
         <DossierSubnav ref={subnavRef} dossierId={id} tabs={availableTabs} />

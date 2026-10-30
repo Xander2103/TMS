@@ -123,3 +123,12 @@ export function priceChip(dossier: DossierDetail): { labelKey: string | null; to
   }
   return { labelKey: null, tone: 'neutral' }
 }
+
+/**
+ * UX-001: only decides how prominent "Dossier afsluiten" looks. The server evaluation stays the authority on
+ * whether closing is allowed and what it takes.
+ */
+export function dossierHasExecutedWork(dossier: DossierDetail): boolean {
+  return dossier.orders.some((order) => order.status === 'Completed' || order.status === 'Invoiced')
+    || (dossier.activities ?? []).some((activity) => activity.executionStatus === 'Completed')
+}
