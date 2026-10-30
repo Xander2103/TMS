@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using TransportationService.Api.Common;
+using TransportationService.Api.Common.Diagnostics;
 using TransportationService.Api.Common.Integrity;
 using TransportationService.Api.Common.Persistence;
 using TransportationService.Api.Modules.EmployeePlanning.Entities;
@@ -51,6 +52,32 @@ public class KnownUniqueConflictExceptionFilterTests
         Assert.Contains(ErrorCodes.ConcurrencyConflict, body);
         // Final integration 2026-10-24: a 409 carries the same correlation id as every other error.
         Assert.Contains($"\"correlationId\":\"{context.HttpContext.TraceIdentifier}\"", body);
+    }
+
+    /// <summary>
+    /// Final integration 2026-10-24: the 409 filter (performance) and the 503 handler (production
+    /// hardening) never claim each other's failures, and neither claims a genuine defect (500).
+    /// </summary>
+    [Theory]
+    [InlineData("23505", "PK_user_roles", 409)]
+    [InlineData("23505", "IX_issued_transport_documents_Live", 409)]
+    [InlineData("23505", "IX_customers_TenantId_NormalizedCustomerNumber", 500)]
+    [InlineData("23503", "FK_user_roles_users_UserId", 500)]
+    [InlineData("42P01", null, 500)]
+    [InlineData("40P01", null, 500)]
+    [InlineData("57014", null, 500)]
+    [InlineData("08006", null, 503)]
+    [InlineData("57P01", null, 503)]
+    [InlineData("53300", null, 503)]
+    public void PostgresFailures_MapToExactlyOneStatus(string sqlState, string? constraint, int expected)
+    {
+        var failure = Postgres(sqlState, constraint);
+
+        var status = KnownUniqueConflictExceptionFilter.TryMap(failure, out _) ? 409
+            : DatabaseUnavailableExceptionHandler.IsDatabaseUnavailable(failure) ? 503
+            : 500;
+
+        Assert.Equal(expected, status);
     }
 
     [Fact]
