@@ -1,4 +1,5 @@
 import { apiClient } from '../../../api/apiClient'
+import type { TripStatus } from '../../planning/types'
 import type {
   CreateEmployeeInput, EmployeeAttention, EmployeeDetail, EmployeePagedResult, EmploymentStatus, EmployeeSortOption, UpdateEmployeeInput,
 } from '../types/employee'
@@ -51,6 +52,19 @@ export function createEmployee(input: CreateEmployeeInput): Promise<EmployeeDeta
 
 export function updateEmployee(id: string, input: UpdateEmployeeInput): Promise<EmployeeDetail> {
   return apiClient.putJson<EmployeeDetail, UpdateEmployeeInput>(`/api/employees/${id}`, input)
+}
+
+export interface OffboardingImpact {
+  activeAccounts: number
+  upcomingTripCount: number
+  upcomingTrips: { id: string; tripNumber: string; tripDate: string; status: TripStatus }[]
+  vehicles: { id: string; internalNumber: string; licensePlate: string; isFixedDriver: boolean; isCurrentDriver: boolean }[]
+  fixedTrailerNumber: string | null
+}
+
+/** UX-012: what offboarding would touch; read-only. */
+export function getOffboardingImpact(id: string): Promise<OffboardingImpact> {
+  return apiClient.getJson<OffboardingImpact>(`/api/employees/${id}/offboarding-impact`)
 }
 
 export function deactivateEmployee(id: string): Promise<void> {

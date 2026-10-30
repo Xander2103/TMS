@@ -623,5 +623,19 @@
     "openDriver": "Chauffeursgegevens openen",
     "driverProfileActive": "Chauffeursprofiel actief — rijbewijs, categorieën en ritten staan onder Chauffeur.",
     "editAll": "Gegevens bewerken"
+  },
+  "offboardingImpact": {
+    "title": "Wat dit raakt",
+    "loading": "Gevolgen ophalen…",
+    "failed": "De gevolgen konden niet opgehaald worden. Inactief zetten blijft mogelijk, maar controleer zelf ritten en bedrijfsmiddelen.",
+    "none": "Geen actieve of geplande ritten en geen toegewezen voertuig.",
+    "account": "Gebruikersaccount: {count} wordt geblokkeerd, sessies worden beëindigd.",
+    "noAccount": "Geen gekoppeld gebruikersaccount.",
+    "tripsTitle": "Lopende en geplande ritten ({count}): blijven toegewezen; een planner moet ze herplannen",
+    "tripsMore": "en nog {count} andere",
+    "vehiclesTitle": "Toewijzing die vervalt",
+    "vehicleFixed": "vaste chauffeur",
+    "vehicleCurrent": "huidige chauffeur",
+    "trailerFixed": "vaste oplegger"
   }
 }

@@ -623,5 +623,19 @@
     "openDriver": "Open driver details",
     "driverProfileActive": "Driver profile active — licence, categories and trips are under Driver.",
     "editAll": "Edit details"
+  },
+  "offboardingImpact": {
+    "title": "What this affects",
+    "loading": "Loading impact…",
+    "failed": "The impact could not be loaded. You can still proceed, but check trips and equipment yourself.",
+    "none": "No active or planned trips and no assigned vehicle.",
+    "account": "User account: {count} will be blocked and sessions ended.",
+    "noAccount": "No linked user account.",
+    "tripsTitle": "Active and planned trips ({count}): stay assigned; a planner has to replan them",
+    "tripsMore": "and {count} more",
+    "vehiclesTitle": "Assignment that ends",
+    "vehicleFixed": "fixed driver",
+    "vehicleCurrent": "current driver",
+    "trailerFixed": "fixed trailer"
   }
 }

@@ -16,6 +16,22 @@ public sealed record EmployeeOffboardingSummary(
     int UsersDeactivated, int DriversDeactivated, int VehicleSlotsReleased, int UpcomingTrips, int TrailersReleased = 0,
     int OutstandingEquipment = 0);
 
+/// <summary>
+/// UX-012: what offboarding would touch, for the confirmation dialog. Read-only; the same trip and slot
+/// definitions as <see cref="EmployeeOffboardingService.OffboardAsync"/> so the preview cannot disagree with it.
+/// Outstanding company items have their own read (<c>employees/{id}/outstanding</c>).
+/// </summary>
+public sealed record EmployeeOffboardingImpact(
+    int ActiveAccounts,
+    int UpcomingTripCount,
+    IReadOnlyList<OffboardingImpactTrip> UpcomingTrips,
+    IReadOnlyList<OffboardingImpactVehicle> Vehicles,
+    string? FixedTrailerNumber);
+
+public sealed record OffboardingImpactTrip(Guid Id, string TripNumber, DateOnly TripDate, TripStatus Status);
+
+public sealed record OffboardingImpactVehicle(Guid Id, string InternalNumber, string LicensePlate, bool IsFixedDriver, bool IsCurrentDriver);
+
 /// <summary>Which business path ended the employment (audited as the reason).</summary>
 public enum OffboardingTrigger
 {
@@ -138,10 +154,7 @@ public sealed class EmployeeOffboardingService
         // and the audit say how many trips still need another driver.
         var upcoming = driverIds.Count == 0
             ? 0
-            : await _db.Trips.CountAsync(t => t.TenantId == tenantId && t.DriverId != null && driverIds.Contains(t.DriverId.Value)
-                                              && t.TripDate >= today
-                                              && (t.Status == TripStatus.Draft || t.Status == TripStatus.Planned || t.Status == TripStatus.InProgress),
-                cancellationToken);
+            : await UpcomingTrips(tenantId, driverIds, today).CountAsync(cancellationToken);
 
         await EndAttendanceAsync(tenantId, employee.Id, nowUtc, cancellationToken);
 
@@ -169,6 +182,60 @@ public sealed class EmployeeOffboardingService
         }
 
         return summary;
+    }
+
+    /// <summary>Work that needs another driver once this employment ends: not silently unassigned.</summary>
+    private IQueryable<Trip> UpcomingTrips(Guid tenantId, List<Guid> driverIds, DateOnly today) =>
+        _db.Trips.Where(t => t.TenantId == tenantId && t.DriverId != null && driverIds.Contains(t.DriverId.Value)
+                             && (t.Status == TripStatus.InProgress
+                                 || (t.TripDate >= today && (t.Status == TripStatus.Draft || t.Status == TripStatus.Planned))));
+
+    /// <summary>UX-012: the preview for the dialog (see <see cref="EmployeeOffboardingImpact"/>).</summary>
+    public async Task<EmployeeOffboardingImpact?> GetImpactAsync(Guid employeeId, CancellationToken cancellationToken)
+    {
+        const int tripCap = 10;
+        var tenantId = _tenantContext.TenantId;
+        if (!await _db.Employees.AnyAsync(e => e.TenantId == tenantId && e.Id == employeeId, cancellationToken))
+        {
+            return null;
+        }
+
+        var today = await TenantTimeZone.TodayAsync(_db, tenantId, _clock, cancellationToken);
+        var accounts = await _db.Users.CountAsync(u => u.TenantId == tenantId && u.EmployeeId == employeeId && u.IsActive, cancellationToken);
+        var drivers = await _db.Drivers.AsNoTracking()
+            .Where(d => d.TenantId == tenantId && d.EmployeeId == employeeId && d.IsActive)
+            .Select(d => new { d.Id, d.FixedTrailerId })
+            .ToListAsync(cancellationToken);
+        if (drivers.Count == 0)
+        {
+            return new EmployeeOffboardingImpact(accounts, 0, [], [], null);
+        }
+
+        var driverIds = drivers.Select(d => d.Id).ToList();
+        var upcoming = UpcomingTrips(tenantId, driverIds, today).AsNoTracking();
+        var tripCount = await upcoming.CountAsync(cancellationToken);
+        var trips = await upcoming
+            .OrderBy(t => t.TripDate).ThenBy(t => t.TripNumber)
+            .Take(tripCap)
+            .Select(t => new OffboardingImpactTrip(t.Id, t.TripNumber, t.TripDate, t.Status))
+            .ToListAsync(cancellationToken);
+        var vehicles = await _db.Vehicles.AsNoTracking()
+            .Where(v => v.TenantId == tenantId
+                        && ((v.FixedDriverId != null && driverIds.Contains(v.FixedDriverId.Value))
+                            || (v.CurrentDriverId != null && driverIds.Contains(v.CurrentDriverId.Value))))
+            .Select(v => new OffboardingImpactVehicle(
+                v.Id, v.InternalNumber, v.LicensePlate,
+                v.FixedDriverId != null && driverIds.Contains(v.FixedDriverId.Value),
+                v.CurrentDriverId != null && driverIds.Contains(v.CurrentDriverId.Value)))
+            .ToListAsync(cancellationToken);
+        var fixedTrailerId = drivers.Select(d => d.FixedTrailerId).FirstOrDefault(id => id != null);
+        var trailerNumber = fixedTrailerId is null
+            ? null
+            : await _db.Trailers.AsNoTracking()
+                .Where(t => t.TenantId == tenantId && t.Id == fixedTrailerId)
+                .Select(t => t.InternalNumber)
+                .FirstOrDefaultAsync(cancellationToken);
+        return new EmployeeOffboardingImpact(accounts, tripCount, trips, vehicles, trailerNumber);
     }
 
     private static string ReasonFor(OffboardingTrigger trigger) => trigger switch

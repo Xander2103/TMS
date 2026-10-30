@@ -623,5 +623,19 @@
     "openDriver": "Ouvrir les données chauffeur",
     "driverProfileActive": "Profil chauffeur actif — permis, catégories et trajets sous Chauffeur.",
     "editAll": "Modifier les données"
+  },
+  "offboardingImpact": {
+    "title": "Ce que cela touche",
+    "loading": "Chargement de l’impact…",
+    "failed": "L’impact n’a pas pu être chargé. Vous pouvez continuer, mais vérifiez vous-même trajets et équipements.",
+    "none": "Aucun trajet actif ou planifié et aucun véhicule attribué.",
+    "account": "Compte utilisateur : {count} sera bloqué et les sessions terminées.",
+    "noAccount": "Aucun compte utilisateur lié.",
+    "tripsTitle": "Trajets en cours et planifiés ({count}) : restent attribués ; un planificateur doit les replanifier",
+    "tripsMore": "et {count} autres",
+    "vehiclesTitle": "Attribution qui prend fin",
+    "vehicleFixed": "chauffeur attitré",
+    "vehicleCurrent": "chauffeur actuel",
+    "trailerFixed": "remorque attitrée"
   }
 }

@@ -493,6 +493,9 @@ public class EmployeeService : IEmployeeService
         return true;
     }
 
+    public Task<EmployeeOffboardingImpact?> GetOffboardingImpactAsync(Guid id, CancellationToken cancellationToken) =>
+        Offboarding().GetImpactAsync(id, cancellationToken);
+
     private EmployeeOffboardingService Offboarding() =>
         new(_dbContext, _tenantContext, _auditService, TimeProvider.System);
 

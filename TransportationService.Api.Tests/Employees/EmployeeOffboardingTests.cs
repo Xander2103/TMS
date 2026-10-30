@@ -144,4 +144,50 @@ public class EmployeeOffboardingTests
         h.Db.Context.ChangeTracker.Clear();
         Assert.True((await h.Db.Context.Employees.SingleAsync(e => e.Id == h.EmployeeId)).IsActive);
     }
+
+    /// <summary>UX-012: the preview names what offboarding would touch and changes nothing.</summary>
+    [Fact]
+    public async Task Impact_NamesPlannedTripVehicleAndAccount_AndChangesNothing()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+
+        var impact = (await h.Employees.GetOffboardingImpactAsync(h.EmployeeId, CancellationToken.None))!;
+
+        Assert.Equal(1, impact.ActiveAccounts);
+        Assert.Equal(1, impact.UpcomingTripCount);
+        Assert.Equal("RIT-0099", Assert.Single(impact.UpcomingTrips).TripNumber); // the completed trip is history
+        var vehicle = Assert.Single(impact.Vehicles);
+        Assert.Equal(("VRT-0018", true, true), (vehicle.InternalNumber, vehicle.IsFixedDriver, vehicle.IsCurrentDriver));
+
+        h.Db.Context.ChangeTracker.Clear();
+        Assert.True((await h.Db.Context.Users.SingleAsync(u => u.Id == h.UserId)).IsActive);
+        Assert.True((await h.Db.Context.Employees.SingleAsync(e => e.Id == h.EmployeeId)).IsActive);
+        Assert.Equal(h.DriverId, (await h.Db.Context.Vehicles.SingleAsync(v => v.Id == h.VehicleId)).FixedDriverId);
+        Assert.Empty(await h.Db.Context.AuditLogs.Where(a => a.Action == "Deactivated").ToListAsync());
+
+        // The preview agrees with what offboarding then reports.
+        Assert.True(await h.Employees.DeactivateAsync(h.EmployeeId, CancellationToken.None));
+        var audit = await h.Db.Context.AuditLogs.SingleAsync(a => a.Action == "Deactivated");
+        Assert.Contains("\"UpcomingTrips\":1", audit.NewValuesJson);
+
+        Assert.Null(await h.Employees.GetOffboardingImpactAsync(Guid.NewGuid(), CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Impact_OfAnEmployeeWithoutDriverRecord_IsEmpty()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var other = new Employee
+        {
+            Id = Guid.NewGuid(), TenantId = h.TenantId, EmployeeNumber = "MED-0100", FirstName = "Leeg", LastName = "Bediende",
+            IsActive = true, EmploymentStatus = EmploymentStatus.Active,
+        };
+        h.Db.Context.Employees.Add(other);
+        await h.Db.Context.SaveChangesAsync();
+
+        var impact = (await h.Employees.GetOffboardingImpactAsync(other.Id, CancellationToken.None))!;
+        Assert.Equal((0, 0, 0), (impact.ActiveAccounts, impact.UpcomingTripCount, impact.Vehicles.Count));
+    }
 }

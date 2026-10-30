@@ -161,6 +161,15 @@ public class EmployeesController : ControllerBase
         return updated is null ? NotFound() : Ok(updated);
     }
 
+    /// <summary>UX-012: read-only impact for the offboarding dialog; HR sees what it decides on without planning rights.</summary>
+    [HttpGet("{id:guid}/offboarding-impact")]
+    [RequirePermission(PermissionCodes.EmployeesDeactivate)]
+    public async Task<ActionResult<EmployeeOffboardingImpact>> OffboardingImpact(Guid id, CancellationToken cancellationToken)
+    {
+        var impact = await _employeeService.GetOffboardingImpactAsync(id, cancellationToken);
+        return impact is null ? NotFound() : Ok(impact);
+    }
+
     [HttpPost("{id:guid}/deactivate")]
     [RequirePermission(PermissionCodes.EmployeesDeactivate)]
     public async Task<IActionResult> Deactivate(Guid id, CancellationToken cancellationToken)

@@ -27,6 +27,8 @@ public interface IEmployeeService
     Task<EmployeeDetailDto?> UpdateAsync(Guid id, UpdateEmployeeRequest request, bool canEditConfidential, CancellationToken cancellationToken);
 
     Task<bool> DeactivateAsync(Guid id, CancellationToken cancellationToken);
+    /// <summary>UX-012: what offboarding would touch; null when the employee does not exist.</summary>
+    Task<EmployeeOffboardingImpact?> GetOffboardingImpactAsync(Guid id, CancellationToken cancellationToken);
     /// <summary>Tenant-scoped existence check (no DTO mapping).</summary>
     Task<bool> ExistsAsync(Guid id, CancellationToken cancellationToken);
 
