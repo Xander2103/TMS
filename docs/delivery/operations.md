@@ -774,7 +774,7 @@ Alle secrets via omgevingsvariabelen (`Sectie__Sleutel`) of een vault; in Develo
 |---|---|
 | `ASPNETCORE_ENVIRONMENT` | `Production` op de server (in `tms.env`). |
 | `ASPNETCORE_URLS` | `http://127.0.0.1:5019` (in de systemd-unit; alleen nginx spreekt de API aan). |
-| `ConnectionStrings:DefaultConnection` | Npgsql-connectionstring naar PostgreSQL 16 (`Host=…;Port=…;Database=…;Username=…;Password=…`). Leeg in alle getrackte configs. Geen `Command Timeout` nodig: het deployscript voegt die alleen voor de migratiestap toe. |
+| `ConnectionStrings:DefaultConnection` | Npgsql-connectionstring naar PostgreSQL 16 (`Host=…;Port=…;Database=…;Username=…`, plus het databasewachtwoord). Leeg in alle getrackte configs. Geen `Command Timeout` nodig: het deployscript voegt die alleen voor de migratiestap toe. |
 | `Storage:RootPath` | **Verplicht buiten Development.** Absoluut pad van de duurzame bestandsopslag, **buiten** elke release-/bin-map (bv. `/var/lib/transportationservice/storage`), eigenaar de service-gebruiker. De API weigert te starten zonder geldige waarde; het deployscript weigert te deployen bij een ontbrekend, relatief, niet-schrijfbaar pad of een pad binnen een release-map. Zie `docs/storage.md`. |
 | `Jwt:Issuer` / `Jwt:Audience` | Token-issuer/-audience; staan per omgeving in appsettings. |
 | `Jwt:SigningKey` | **Secret.** Symmetrische HMAC-SHA256-key, ≥ 32 bytes. Startup faalt bij ontbreken, te kort of deny-listed (oude gelekte dev-key). |
@@ -786,7 +786,7 @@ Alle secrets via omgevingsvariabelen (`Sectie__Sleutel`) of een vault; in Develo
 | `Security:PasswordPolicy:*` | Gedeeld wachtwoordbeleid (gebonden met `ValidateOnStart`). |
 | `ColumnEncryption:Key` | **Secret.** Base64, exact 32 bytes; AES-256-GCM kolomversleuteling van bijzondere-categorie-identifiers (rijksregisternummer, identiteitskaartnummer). Zonder key = pass-through, alleen toegestaan in Development. |
 | `ColumnEncryption:PreviousKeys` | Array van oudere keys; alleen voor **lezen** tijdens rotatie. Nieuwe writes gebruiken altijd de actieve key. |
-| `Email:Smtp:Host/Port/Username/Password/FromAddress/FromName/UseTls` | **Password = secret.** SMTP-provider voor de mail-outbox. Buiten Development verplicht (anders start de host niet); `UseTls` moet `true` zijn. Zonder `Host` in een niet-dev-omgeving wordt de fail-closed placeholder geregistreerd en weigert de startupvalidator te booten. SMS heeft nog geen echte provider (fail-closed `UnconfiguredSmsProvider`). |
+| `Email:Smtp:Host/Port/Username/Password/FromAddress/FromName/UseTls` | **Het wachtwoord is een secret.** SMTP-provider voor de mail-outbox. Buiten Development verplicht (anders start de host niet); `UseTls` moet `true` zijn. Zonder `Host` in een niet-dev-omgeving wordt de fail-closed placeholder geregistreerd en weigert de startupvalidator te booten. SMS heeft nog geen echte provider (fail-closed `UnconfiguredSmsProvider`). |
 | `Peppol:Webhook:Secret` | **Secret.** Shared secret voor `POST /api/peppol/webhook/{providerKey}` (header `X-Peppol-Webhook-Secret`, constant-time vergelijking). Zonder enig secretmateriaal weigert het endpoint alles. |
 | `Peppol:Webhook:PreviousSecrets` | Array; rotatievenster voor het shared secret. |
 | `Peppol:Webhook:Hmac:Secret` | **Secret.** Activeert de sterkere HMAC-modus: HMAC-SHA256 over `"{timestamp}.{body}"` via headers `X-Peppol-Timestamp` + `X-Peppol-Signature`, met replay-window. |
