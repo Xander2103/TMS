@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using TransportationService.Api.Modules.Dossiers.Services;
+using TransportationService.Api.Modules.Tenancy.Services;
 
 namespace TransportationService.Api.Data;
 
@@ -15,6 +17,9 @@ namespace TransportationService.Api.Data;
 ///   (departments, unit types, languages, contract types, …). Seed-if-empty / add-if-missing,
 ///   soft-deleted rows count as present, so tenant curation is never undone.
 /// - <see cref="ExpiryPolicySeeder"/>: default reminder policies, add-if-missing per (kind, code).
+/// - <see cref="ActivityTypeSeeder"/>: the default activity catalogue, add-if-missing on Code and a
+///   deleted default is never resurrected. Seeding it lazily let a tenant's parallel first orders
+///   deadlock on these inserts (500).
 /// - <see cref="LegalEntitySeeder"/>: only for a tenant WITHOUT any legal entity, built from that
 ///   tenant's own company settings (never invented data).
 ///
@@ -39,6 +44,8 @@ public static class TenantReferenceDataSync
                 () => ReferenceDataSeeder.SeedTenantAsync(dbContext, tenantId, includeStarterCatalogs: false, cancellationToken));
             await RunGuardedAsync(dbContext, logger, "expiry policies", tenantId,
                 () => ExpiryPolicySeeder.SeedTenantAsync(dbContext, tenantId, cancellationToken));
+            await RunGuardedAsync(dbContext, logger, "activity types", tenantId,
+                () => new ActivityTypeSeeder(dbContext, new DevTenantContext(tenantId)).EnsureSeededAsync(cancellationToken));
         }
 
         await RunGuardedAsync(dbContext, logger, "default legal entities", null,

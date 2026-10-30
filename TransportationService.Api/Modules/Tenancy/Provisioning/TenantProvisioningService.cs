@@ -4,6 +4,7 @@ using TransportationService.Api.Common;
 using TransportationService.Api.Data;
 using TransportationService.Api.Modules.Auditing.Services;
 using TransportationService.Api.Modules.Authentication.Services;
+using TransportationService.Api.Modules.Dossiers.Services;
 using TransportationService.Api.Modules.Identity.Entities;
 using TransportationService.Api.Modules.Identity.Services;
 using TransportationService.Api.Modules.Messaging.Services;
@@ -229,6 +230,10 @@ public sealed partial class TenantProvisioningService
         // --- Tenant reference data -----------------------------------------------------------
         await ReferenceDataSeeder.SeedTenantAsync(_db, tenant.Id, includeStarterCatalogs: true, cancellationToken);
         report.Add("Referentielijsten aangevuld (alleen ontbrekende codes).");
+        // Final integration 2026-10-24: seeded here, not by the tenant's first orders: parallel first
+        // orders all inserted this catalogue, deadlocked, and answered 500.
+        await new ActivityTypeSeeder(_db, new DevTenantContext(tenant.Id)).EnsureSeededAsync(cancellationToken);
+        report.Add("Activiteitstypes aangevuld (alleen ontbrekende codes).");
         var policiesAdded = await ExpiryPolicySeeder.SeedTenantAsync(_db, tenant.Id, cancellationToken);
         report.Add($"Vervaltermijn-herinneringen: {policiesAdded} toegevoegd.");
         var templatesAdded = await IssuedItemTemplateSeeder.SeedTenantAsync(_db, tenant.Id, cancellationToken);

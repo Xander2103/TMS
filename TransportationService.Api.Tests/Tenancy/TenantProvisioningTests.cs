@@ -84,6 +84,8 @@ public class TenantProvisioningTests
         Assert.True(entity.IsDefault);
         Assert.Equal(("Transport Peeters BV", "BE0123456749", "BE"), (entity.LegalName, entity.VatNumber, entity.CountryCode));
         Assert.Equal(8, await db.Context.ExpiryReminderPolicies.CountAsync());
+        // Seeded here so a tenant's parallel first orders never race on the catalogue (final integration).
+        Assert.Equal(10, await db.Context.ActivityTypes.CountAsync());
         Assert.Equal(20, await db.Context.IssuedItemTemplates.CountAsync());
         Assert.Equal(QualificationTypeSeeder.Codes.Count, await db.Context.QualificationTypes.CountAsync());
         Assert.True(await db.Context.Departments.AnyAsync(d => d.TenantId == tenant.Id));
@@ -97,6 +99,26 @@ public class TenantProvisioningTests
         Assert.Contains($"{BaseUrl}/activeren?token={result.Activation!.Token}", mail.Body);
         Assert.Contains("Transport Peeters BV", mail.Subject);
         Assert.DoesNotContain(result.Activation.Token, mail.IdempotencyKey);
+    }
+
+    [Fact]
+    public async Task StartupSync_CompletesAnExistingTenantsActivityTypes_WithoutResurrectingADeletedOne()
+    {
+        using var db = new SqliteTestDbContext();
+        var result = await Service(db).ProvisionAsync(Request(), CancellationToken.None);
+        var deleted = await db.Context.ActivityTypes.FirstAsync(t => t.Code == "EXPRESS");
+        deleted.IsDeleted = true;
+        db.Context.ActivityTypes.Remove(await db.Context.ActivityTypes.FirstAsync(t => t.Code == "OPSLAG"));
+        await db.Context.SaveChangesAsync();
+        await db.Context.ActivityTypes.IgnoreQueryFilters().Where(t => t.Code == "OPSLAG").ExecuteDeleteAsync();
+        db.Context.ChangeTracker.Clear();
+
+        await TenantReferenceDataSync.SyncAsync(db.Context, NullLogger.Instance);
+
+        var types = await db.Context.ActivityTypes.IgnoreQueryFilters().AsNoTracking().ToListAsync();
+        Assert.Equal(10, types.Count);
+        Assert.False(types.Single(t => t.Code == "OPSLAG").IsDeleted);
+        Assert.True(types.Single(t => t.Code == "EXPRESS").IsDeleted);
     }
 
     [Fact]
