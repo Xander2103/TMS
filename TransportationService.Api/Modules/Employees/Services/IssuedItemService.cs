@@ -391,7 +391,7 @@ public class IssuedItemService : IIssuedItemService
         catch (DbUpdateException exception) when (item.NormalizedSerialNumber is not null && TenantNumbering.IsUniqueViolation(exception))
         {
             // WH-H2: the race half — a concurrent issue of the same serial won between our check and save.
-            throw new DomainValidationException("serialNumber",
+            throw new ConcurrencyConflictException(
                 $"Serienummer {item.SerialNumber} is intussen aan iemand anders uitgereikt. Verwerk eerst de retour.");
         }
 
