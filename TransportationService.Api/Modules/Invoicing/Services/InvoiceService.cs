@@ -1152,6 +1152,14 @@ public class InvoiceService : IInvoiceService
                     : $"Deze factuur is al definitief (verzonden of doorgestuurd) en kan niet meer geannuleerd worden. {CreditNoteHint}");
         }
 
+        // Final integration 2026-10-24: a second issue is the same conflict however late it arrives.
+        // The loser of a parallel issue saw "Sent" here or under the series lock depending on timing,
+        // and answered 400 or 409 accordingly.
+        if (target == InvoiceStatus.Sent && invoice.Status is InvoiceStatus.Sent or InvoiceStatus.Paid)
+        {
+            throw AlreadyIssuedConflict();
+        }
+
         if (!Transitions[invoice.Status].Contains(target))
         {
             return InvoiceOperationResult.InvalidState($"Een factuur met status '{invoice.Status}' kan niet naar '{target}'.");

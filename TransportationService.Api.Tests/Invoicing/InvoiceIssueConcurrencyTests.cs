@@ -117,11 +117,11 @@ public class InvoiceIssueConcurrencyTests
         Assert.Equal(1, audit.Count(a => a == "Issued"));
         Assert.Equal(1, audit.Count(a => a == "StatusChanged"));
 
-        // A SEQUENTIAL second issue keeps today's answer: a plain 400 on the transition, no conflict.
+        // A SEQUENTIAL second issue is the same conflict: the answer never depends on timing.
         h.Db.Context.ChangeTracker.Clear();
-        var again = await h.Sut().ChangeStatusAsync(draft.Id, InvoiceStatus.Sent, CancellationToken.None);
-        Assert.Equal(InvoiceOperationOutcome.InvalidState, again.Outcome);
-        Assert.Contains("kan niet naar 'Sent'", again.Error);
+        var again = await Assert.ThrowsAsync<ConcurrencyConflictException>(() =>
+            h.Sut().ChangeStatusAsync(draft.Id, InvoiceStatus.Sent, CancellationToken.None));
+        Assert.Contains("al uitgereikt", again.Message);
     }
 
     [Fact]
