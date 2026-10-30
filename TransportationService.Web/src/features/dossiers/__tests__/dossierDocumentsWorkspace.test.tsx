@@ -181,7 +181,7 @@ describe('Documenten tab (active route)', () => {
     renderPage()
 
     expect(await screen.findByRole('tab', { name: /Dossierdocumenten/ })).toHaveAttribute('aria-selected', 'true')
-    expect(documents.list).toHaveBeenCalledWith('d-1')
+    await waitFor(() => expect(documents.list).toHaveBeenCalledWith('d-1'))
     const general = await list('Dossierdocumenten')
     expect(await within(general).findByText('Vergunning uitzonderlijk vervoer')).toBeInTheDocument()
     // The order document is NOT a dossier document.
