@@ -34,9 +34,13 @@ public sealed class OperationalHealthTests
     private static async Task<(IHost Host, HttpClient Client, SqliteConnection Connection)> StartHealthyAsync(
         Action<IServiceCollection>? configure = null)
     {
-        var connection = new SqliteConnection("DataSource=:memory:");
+        // Readiness runs its checks in parallel. One shared SqliteConnection cannot serve that (the
+        // database check then flakes to Unhealthy); every context gets its own connection, as with
+        // pooled Npgsql. This one only keeps the shared in-memory database alive.
+        var database = $"DataSource=file:health-{Guid.NewGuid():N}?mode=memory&cache=shared";
+        var connection = new SqliteConnection(database);
         connection.Open();
-        var host = await OperationalPipelineHost.StartAsync(options => options.UseSqlite(connection), configureServices: configure);
+        var host = await OperationalPipelineHost.StartAsync(options => options.UseSqlite(database), configureServices: configure);
         using (var scope = host.Services.CreateScope())
         {
             await scope.ServiceProvider.GetRequiredService<TransportationDbContext>().Database.EnsureCreatedAsync();
