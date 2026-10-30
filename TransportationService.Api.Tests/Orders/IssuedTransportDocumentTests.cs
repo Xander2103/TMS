@@ -1,3 +1,4 @@
+using System.Data.Common;
 using System.Reflection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
@@ -259,14 +260,13 @@ public class IssuedTransportDocumentTests
         using var _ = h.Db;
         var first = (await h.Sut().IssueAsync(h.TransportOrderId, Request("Cmr"), CancellationToken.None))!;
 
-        var silent = await Assert.ThrowsAsync<DomainValidationException>(() =>
+        var silent = await Assert.ThrowsAsync<ConcurrencyConflictException>(() =>
             h.Sut().IssueAsync(h.TransportOrderId, Request("Cmr"), CancellationToken.None));
         Assert.Contains("CMR-2026-00001", silent.Message);
-        Assert.Contains("replacesDocumentId", silent.FieldErrors!.Keys);
         var noReason = await Assert.ThrowsAsync<DomainValidationException>(() =>
             h.Sut().IssueAsync(h.TransportOrderId, Replacement("Cmr", first.Id, reason: "  "), CancellationToken.None));
         Assert.Contains("replacementReason", noReason.FieldErrors!.Keys);
-        await Assert.ThrowsAsync<DomainValidationException>(() =>
+        await Assert.ThrowsAsync<ConcurrencyConflictException>(() =>
             h.Sut().IssueAsync(h.TransportOrderId, Replacement("Cmr", Guid.NewGuid()), CancellationToken.None));
         Assert.Single(h.Db.Context.IssuedTransportDocuments); // refusals claimed no number
 
@@ -288,7 +288,7 @@ public class IssuedTransportDocumentTests
         Assert.Equal((first.Id, "CMR-2026-00001"), (list[1].ReplacesDocumentId, list[1].ReplacesDocumentNumber));
 
         // Replacing the already-replaced document again is stale.
-        var stale = await Assert.ThrowsAsync<DomainValidationException>(() =>
+        var stale = await Assert.ThrowsAsync<ConcurrencyConflictException>(() =>
             h.Sut().IssueAsync(h.TransportOrderId, Replacement("Cmr", first.Id), CancellationToken.None));
         Assert.Contains("CMR-2026-00002", stale.Message);
 
@@ -464,6 +464,137 @@ public class IssuedTransportDocumentTests
         finally
         {
             workers.ForEach(w => w.Context.Dispose());
+        }
+    }
+
+    /// <summary>
+    /// Final integration 2026-10-24: twelve simultaneous INITIAL issues of the SAME order, each its
+    /// own request id. One document, one number, one "Issued" audit row, one winner; eleven 409s
+    /// naming it. Never a chain of automatic replacements that would burn twelve legal numbers.
+    /// </summary>
+    [Fact]
+    public async Task TwelveParallelFirstIssues_OnTheSameOrder_OneDocumentOneNumberElevenConflicts()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var workers = Enumerable.Range(0, 12).Select(_ => h.OnOwnContext()).ToList();
+        try
+        {
+            var outcomes = await Task.WhenAll(workers.Select(async w =>
+            {
+                try
+                {
+                    return (Document: await w.Sut.IssueAsync(h.TransportOrderId, Request("Cmr"), CancellationToken.None), Conflict: (ConcurrencyConflictException?)null);
+                }
+                catch (ConcurrencyConflictException conflict)
+                {
+                    return (Document: null, Conflict: conflict);
+                }
+            }));
+
+            var winner = Assert.Single(outcomes, o => o.Document is not null).Document!;
+            Assert.Equal("CMR-2026-00001", winner.DocumentNumber);
+            Assert.Equal(11, outcomes.Count(o => o.Conflict is not null));
+            Assert.All(outcomes.Where(o => o.Conflict is not null), o => Assert.Contains("CMR-2026-00001", o.Conflict!.Message));
+
+            var live = Assert.Single(await h.Db.Context.IssuedTransportDocuments.IgnoreQueryFilters().AsNoTracking().ToListAsync());
+            Assert.Equal((winner.Id, (Guid?)null), (live.Id, live.ReplacedByDocumentId));
+            Assert.Equal(2, (await h.Db.Context.TransportDocumentSequences.AsNoTracking().SingleAsync()).NextValue);
+            Assert.Equal(1, await h.Db.Context.AuditLogs.IgnoreQueryFilters().AsNoTracking()
+                .CountAsync(a => a.EntityId == live.Id.ToString() && a.Action == "Issued"));
+        }
+        finally
+        {
+            workers.ForEach(w => w.Context.Dispose());
+        }
+    }
+
+    /// <summary>Final integration 2026-10-24: twelve copies of ONE request (double click, client retry) all get the same record.</summary>
+    [Fact]
+    public async Task TwelveParallelCopiesOfOneRequest_AllGetTheSameDocument_AndOneNumber()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var requestId = Guid.NewGuid();
+        var workers = Enumerable.Range(0, 12).Select(_ => h.OnOwnContext()).ToList();
+        try
+        {
+            var issued = await Task.WhenAll(workers.Select(w =>
+                w.Sut.IssueAsync(h.TransportOrderId, Request("Cmr", requestId), CancellationToken.None)));
+
+            Assert.Single(issued.Select(d => d!.Id).Distinct());
+            Assert.Single(await h.Db.Context.IssuedTransportDocuments.IgnoreQueryFilters().AsNoTracking().ToListAsync());
+            Assert.Equal(2, (await h.Db.Context.TransportDocumentSequences.AsNoTracking().SingleAsync()).NextValue);
+        }
+        finally
+        {
+            workers.ForEach(w => w.Context.Dispose());
+        }
+    }
+
+    /// <summary>
+    /// Final integration 2026-10-24: a late copy of a request that already won finds the active
+    /// document and its own request id behind it. Deterministic form of the race where the copy
+    /// passed the first look just before the winner committed: the request is replayed, not refused.
+    /// </summary>
+    [Fact]
+    public async Task ARequestThatFindsItsOwnDocumentActive_IsReplayed_NotRefused()
+    {
+        var replay = new CompetingIssueOnFirstLookInterceptor();
+        var h = await SeedAsync(replay);
+        using var _ = h.Db;
+        var requestId = Guid.NewGuid();
+        replay.Arm(async cancellationToken =>
+        {
+            var (winner, context) = h.OnOwnContext();
+            await using (context)
+            {
+                await winner.IssueAsync(h.TransportOrderId, Request("Cmr", requestId), cancellationToken);
+            }
+        });
+
+        var issued = (await h.Sut().IssueAsync(h.TransportOrderId, Request("Cmr", requestId), CancellationToken.None))!;
+
+        Assert.Equal(1, replay.Fired);
+        Assert.Equal("CMR-2026-00001", issued.DocumentNumber);
+        Assert.Single(await h.Db.Context.IssuedTransportDocuments.IgnoreQueryFilters().AsNoTracking().ToListAsync());
+    }
+
+    /// <summary>
+    /// Runs the arranged work exactly once, on the first command after the request's first look for
+    /// its own request id came back empty: that look is over, so a parallel copy that commits now
+    /// is only visible to what the request reads next (the series-lock wait on PostgreSQL).
+    /// </summary>
+    private sealed class CompetingIssueOnFirstLookInterceptor : DbCommandInterceptor
+    {
+        private Func<CancellationToken, Task>? _work;
+        private bool _looked;
+
+        public int Fired { get; private set; }
+
+        public void Arm(Func<CancellationToken, Task> work) => _work = work;
+
+        public override DbDataReader ReaderExecuted(DbCommand command, CommandExecutedEventData eventData, DbDataReader result)
+        {
+            _looked |= _work is not null && command.CommandText.Contains("\"RequestId\"", StringComparison.Ordinal);
+            return result;
+        }
+
+        public override ValueTask<DbDataReader> ReaderExecutedAsync(
+            DbCommand command, CommandExecutedEventData eventData, DbDataReader result, CancellationToken cancellationToken = default) =>
+            new(ReaderExecuted(command, eventData, result));
+
+        public override async ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
+            DbCommand command, CommandEventData eventData, InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default)
+        {
+            if (_looked && _work is { } work)
+            {
+                _work = null;
+                Fired++;
+                await work(cancellationToken);
+            }
+
+            return result;
         }
     }
 

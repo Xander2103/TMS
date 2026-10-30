@@ -277,6 +277,15 @@ public class IssuedTransportDocumentService : IIssuedTransportDocumentService
             .OrderByDescending(d => d.IssuedAt)
             .Select(d => new { d.Id, d.DocumentNumber })
             .FirstOrDefaultAsync(cancellationToken);
+
+        // Final integration 2026-10-24: the check before the series lock cannot see a winner that
+        // committed while this request waited, so the active document may be this very request's
+        // own: a double click or client retry gets that record, never a refusal and never a number.
+        if (active is not null && await FindByRequestAsync(request.RequestId, cancellationToken) is { } sameRequest)
+        {
+            return new ReplacementClaim(active.Id, active.DocumentNumber, await ReturnExistingAsync(sameRequest, orderId, cancellationToken));
+        }
+
         if (active is null)
         {
             if (request.ReplacesDocumentId is not null)
@@ -288,16 +297,19 @@ public class IssuedTransportDocumentService : IIssuedTransportDocumentService
             return null;
         }
 
+        // Final integration 2026-10-24: a request that does not name the live document was decided on
+        // a stale view of the order (that is what the losers of a parallel issue are), so it answers
+        // 409 — whether it lost by a millisecond or by an hour. It claims no number and writes nothing.
         if (request.ReplacesDocumentId is null)
         {
-            throw new DomainValidationException("replacesDocumentId",
-                $"Er bestaat al een actief document {active.DocumentNumber} voor deze opdracht. Maak een nieuw document aan ter vervanging, met een reden.");
+            throw new ConcurrencyConflictException(
+                $"Er bestaat al een actief document {active.DocumentNumber} voor deze opdracht. Vernieuw de lijst; een nieuw document kan alleen ter vervanging, met een reden.");
         }
 
         if (request.ReplacesDocumentId != active.Id)
         {
-            throw new DomainValidationException("replacesDocumentId",
-                $"Het te vervangen document is niet (meer) het actieve document; het actieve document is {active.DocumentNumber}.");
+            throw new ConcurrencyConflictException(
+                $"Het te vervangen document is niet (meer) het actieve document; het actieve document is {active.DocumentNumber}. Vernieuw de lijst.");
         }
 
         var reason = request.ReplacementReason?.Trim();
@@ -329,7 +341,7 @@ public class IssuedTransportDocumentService : IIssuedTransportDocumentService
                 return new ReplacementClaim(active.Id, active.DocumentNumber, await ReturnExistingAsync(winner, orderId, cancellationToken));
             }
 
-            throw new DomainValidationException("replacesDocumentId",
+            throw new ConcurrencyConflictException(
                 $"Document {active.DocumentNumber} is intussen al vervangen. Vernieuw de lijst en probeer opnieuw.");
         }
 
