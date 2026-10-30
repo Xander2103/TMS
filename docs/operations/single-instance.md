@@ -15,7 +15,7 @@ process-local (section 3), so one instance remains the supported topology.
 |---|---|---|
 | Outbox mail/SMS (`OutboxDispatcherHostedService`) | Per-row claim: conditional `UPDATE … SET Status='Sending' WHERE Id=@id AND Status='Pending'`; outcome saved after **each** message | Can never send a row the other instance claimed. No global lock needed. |
 | Startup sync (canary, backfills, permission catalogue, role templates; MIG-07) | PostgreSQL advisory lock `startup-sync` | Waits (up to 5 min) for the first instance, then re-runs the idempotent sync. After 5 min it refuses to start with an explicit message. |
-| Sweeps: employment-end, task, expiry, inventory, notification maintenance, token retention, GDPR retention, attendance, calendar sync | Advisory lock per job (`pg_try_advisory_lock`) for the duration of one run | Skips the run ("Job … skipped: another instance holds its lock", Information). |
+| Sweeps: employment-end, task, expiry, inventory, notification maintenance, token retention, GDPR retention, attendance, calendar sync, operational alert sync | Advisory lock per job (`pg_try_advisory_lock`) for the duration of one run | Skips the run ("Job … skipped: another instance holds its lock", Information). |
 | Automatic daily backup (`AutomaticBackupHostedService`) | Advisory lock `automatic-backup` | Skips; only one `pg_dump` at 02:00 UTC. |
 
 Lock implementation (`TransportationService.Api/Common/Jobs/JobLock.cs`):

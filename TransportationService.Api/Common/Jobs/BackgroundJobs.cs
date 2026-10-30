@@ -17,6 +17,7 @@ public static class JobNames
     public const string AttendanceSweep = "attendance-sweep";
     public const string CalendarSync = "calendar-sync";
     public const string AutomaticBackup = "automatic-backup";
+    public const string OperationalAlertSync = "operational-alert-sync";
 }
 
 public enum JobRunOutcome

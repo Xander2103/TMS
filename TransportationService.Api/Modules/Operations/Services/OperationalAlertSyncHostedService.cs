@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using TransportationService.Api.Common.Jobs;
 using TransportationService.Api.Data;
 
 namespace TransportationService.Api.Modules.Operations.Services;
@@ -19,9 +20,11 @@ namespace TransportationService.Api.Modules.Operations.Services;
 ///   * one UPDATE per unchanged persisting alert, at most once per
 ///     <see cref="AlertSyncService.LastSeenRefreshInterval"/> (15 min), so LastSeenAt stays honest.
 /// The steady state (nothing changed, inside the refresh window) therefore issues ZERO statements
-/// beyond the reads. Every write is idempotent on the unique (TenantId, DedupeKey) row, so two
-/// instances running the job concurrently converge on the same rows; the loser of a unique-index
-/// race on a brand-new condition logs the failure for that tenant and catches up next tick.
+/// beyond the reads. Every write is idempotent on the unique (TenantId, DedupeKey) row. A run holds
+/// the job's advisory lock (<see cref="JobNames.OperationalAlertSync"/>; one API instance is the
+/// supported topology, docs/operations/single-instance.md) and reports a heartbeat in
+/// <c>/health/details</c>; the loser of a unique-index race with a manual sync on a brand-new
+/// condition logs the failure for that tenant and catches up next tick.
 ///
 /// Interval: <see cref="OperationsOptions.AlertSyncIntervalSeconds"/> (default 60 s, clamped to
 /// <see cref="OperationsOptions.MinimumAlertSyncIntervalSeconds"/>). The first tick runs after a
@@ -54,17 +57,19 @@ public sealed class OperationalAlertSyncHostedService : BackgroundService
         {
             try
             {
-                using var scope = _scopeFactory.CreateScope();
-                var worker = scope.ServiceProvider.GetRequiredService<OperationalAlertSyncWorker>();
-                var run = await worker.SyncAllTenantsAsync(stoppingToken);
-                if (run.Totals.Writes > 0 || run.FailedTenantCount > 0)
+                await _scopeFactory.RunJobAsync(JobNames.OperationalAlertSync, async (services, token) =>
                 {
-                    _logger.LogInformation(
-                        "Operational alert sync: {Tenants} tenant(s), {Created} created, {Updated} updated, "
-                        + "{Reopened} reopened, {Resolved} resolved, {Refreshed} refreshed, {Failed} failed.",
-                        run.TenantCount, run.Totals.Created, run.Totals.Updated, run.Totals.Reopened,
-                        run.Totals.Resolved, run.Totals.Refreshed, run.FailedTenantCount);
-                }
+                    var worker = services.GetRequiredService<OperationalAlertSyncWorker>();
+                    var run = await worker.SyncAllTenantsAsync(token);
+                    if (run.Totals.Writes > 0 || run.FailedTenantCount > 0)
+                    {
+                        _logger.LogInformation(
+                            "Operational alert sync: {Tenants} tenant(s), {Created} created, {Updated} updated, "
+                            + "{Reopened} reopened, {Resolved} resolved, {Refreshed} refreshed, {Failed} failed.",
+                            run.TenantCount, run.Totals.Created, run.Totals.Updated, run.Totals.Reopened,
+                            run.Totals.Resolved, run.Totals.Refreshed, run.FailedTenantCount);
+                    }
+                }, stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
