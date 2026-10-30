@@ -76,6 +76,9 @@ export interface VehicleListItem {
   categoryName: string | null
   operationalStatus: VehicleOperationalStatus
   isActive: boolean
+  /** UX-007: today's server verdict. */
+  readiness?: ReadinessLevel | null
+  readinessSummary?: string | null
 }
 
 export interface VehicleOption {

@@ -34,6 +34,9 @@ export interface TrailerListItem {
   categoryName: string | null
   operationalStatus: TrailerOperationalStatus
   isActive: boolean
+  /** UX-007: today's server verdict. */
+  readiness?: ReadinessLevel | null
+  readinessSummary?: string | null
 }
 
 export interface TrailerOption {

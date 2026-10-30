@@ -327,4 +327,33 @@ public class FleetReadinessTests
 
         Assert.Equal(error, result.Error);
     }
+
+    /// <summary>UX-007: the list and the fleet counts carry the ONE verdict, so a blocked vehicle is never counted as available.</summary>
+    [Fact]
+    public async Task ListAndDashboard_DoNotPresentABlockedVehicleAsAvailable()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var tenant = new DevTenantContext(h.TenantId);
+        var clock = new TestClock(Now);
+        var audit = new AuditService(h.Db.Context, tenant, new DevCurrentUserContext(null));
+        var vehicles = new VehicleService(h.Db.Context, tenant, audit, clock, h.Readiness);
+        var dashboard = new FleetDashboardService(h.Db.Context, tenant, h.Maintenance,
+            new InspectionService(h.Db.Context, tenant, audit, clock), h.Documents, h.Damage,
+            new FuelService(h.Db.Context, tenant, audit), h.Readiness);
+
+        var before = await dashboard.GetAsync(CancellationToken.None);
+        Assert.Equal((1, 0), (before.Vehicles.Available, before.Vehicles.NotDeployable));
+
+        await h.Damage.CreateForVehicleAsync(h.VehicleId, new CreateDamageReportRequest(null, Today, null, "Zware schade", DamageSeverity.Severe, null, null), CancellationToken.None);
+
+        var list = await vehicles.SearchAsync(null, null, null, null, new TransportationService.Api.Common.Models.PageRequest(1, 50), CancellationToken.None);
+        var row = Assert.Single(list.Items);
+        Assert.Equal(VehicleOperationalStatus.Available, row.OperationalStatus); // the manual fact is untouched
+        Assert.Equal(ReadinessLevel.Blocked, row.Readiness);
+        Assert.Contains("Zware schade", row.ReadinessSummary);
+
+        var after = await dashboard.GetAsync(CancellationToken.None);
+        Assert.Equal((1, 0, 1), (after.Vehicles.Total, after.Vehicles.Available, after.Vehicles.NotDeployable));
+    }
 }

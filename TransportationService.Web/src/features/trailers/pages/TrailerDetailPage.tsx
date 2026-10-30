@@ -37,6 +37,8 @@ import { formatDate } from '../../../utils/dates'
 import { ErrorState } from '../../../components/feedback/ErrorState'
 import { AssetDeactivateDialog, AssetDeleteDialog } from '../../fleet-readiness/AssetLifecycleDialogs'
 import { ReadinessBlock } from '../../fleet-readiness/ReadinessBlock'
+import { blockedWhileAvailable } from '../../fleet-readiness/readiness'
+import { useAssetReadiness } from '../../fleet-readiness/useAssetReadiness'
 import { ActionMenu } from '../../../components/ui/ActionMenu'
 
 const TAB_IDS = ['overzicht', 'techniek', 'documenten', 'leasing', 'onderhoud', 'keuringen', 'schade', 'kpi', 'historiek'] as const
@@ -54,6 +56,7 @@ export function TrailerDetailPage() {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [loadErrorKind, setLoadErrorKind] = useState<'notFound' | 'forbidden' | 'failed'>('failed')
   const [readinessToken, setReadinessToken] = useState(0)
+  const headerReadiness = useAssetReadiness('trailer', id, readinessToken)
   const [reloadToken, setReloadToken] = useState(0)
   const [editing, setEditing] = useState(false)
   const [form, setForm] = useState<TrailerInput | null>(null)
@@ -209,11 +212,13 @@ export function TrailerDetailPage() {
       <div className="trailer-detail-badges">
         <StatusBadges
           active={trailer.isActive}
-          operational={{
-            label: t(TRAILER_STATUS_LABELS[trailer.operationalStatus]),
-            tone: TRAILER_STATUS_TONES[trailer.operationalStatus],
-            reason: trailer.statusReason,
-          }}
+          operational={blockedWhileAvailable(trailer.operationalStatus, headerReadiness?.level)
+            ? { label: t('fleet.readiness.level.Blocked'), tone: 'danger', reason: trailer.statusReason }
+            : {
+                label: t(TRAILER_STATUS_LABELS[trailer.operationalStatus]),
+                tone: TRAILER_STATUS_TONES[trailer.operationalStatus],
+                reason: trailer.statusReason,
+              }}
         />
         {trailer.adrSuitable && <Badge tone="warning">{t('fleet.common.equipment.adrShort')}</Badge>}
         {trailer.hasRefrigeration && <Badge tone="info">{t('fleet.common.equipment.refrigeration')}</Badge>}

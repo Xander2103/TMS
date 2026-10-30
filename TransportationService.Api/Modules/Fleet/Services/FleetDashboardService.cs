@@ -24,6 +24,7 @@ public class FleetDashboardService : IFleetDashboardService
     private readonly IFleetDocumentService _documentService;
     private readonly IDamageReportService _damageReportService;
     private readonly IFuelService _fuelService;
+    private readonly IFleetReadinessService? _readiness;
 
     public FleetDashboardService(
         TransportationDbContext dbContext,
@@ -32,8 +33,10 @@ public class FleetDashboardService : IFleetDashboardService
         IInspectionService inspectionService,
         IFleetDocumentService documentService,
         IDamageReportService damageReportService,
-        IFuelService fuelService)
+        IFuelService fuelService,
+        IFleetReadinessService? readiness = null)
     {
+        _readiness = readiness;
         _dbContext = dbContext;
         _tenantContext = tenantContext;
         _maintenanceService = maintenanceService;
@@ -43,10 +46,10 @@ public class FleetDashboardService : IFleetDashboardService
         _fuelService = fuelService;
     }
 
-    public async Task<FleetDashboardDto> GetAsync(CancellationToken cancellationToken)
+    public async Task<FleetDashboardDto> GetAsync(CancellationToken cancellationToken, bool withDeployability = true)
     {
-        var vehicles = await VehicleCountsAsync(cancellationToken);
-        var trailers = await TrailerCountsAsync(cancellationToken);
+        var vehicles = await VehicleCountsAsync(withDeployability, cancellationToken);
+        var trailers = await TrailerCountsAsync(withDeployability, cancellationToken);
 
         var maintenanceDue = await _maintenanceService.ListDueAsync(MaintenanceWindowDays, cancellationToken);
         var inspectionsDue = await _inspectionService.ListDueAsync(InspectionWindowDays, cancellationToken);
@@ -101,7 +104,7 @@ public class FleetDashboardService : IFleetDashboardService
             leasingEnding.Take(TopN).ToList());
     }
 
-    private async Task<FleetAssetCountsDto> VehicleCountsAsync(CancellationToken cancellationToken)
+    private async Task<FleetAssetCountsDto> VehicleCountsAsync(bool withDeployability, CancellationToken cancellationToken)
     {
         var rows = await _dbContext.Vehicles
             .Where(v => v.TenantId == _tenantContext.TenantId)
@@ -109,16 +112,28 @@ public class FleetDashboardService : IFleetDashboardService
             .Select(g => new { g.Key.OperationalStatus, g.Key.IsActive, Count = g.Count() })
             .ToListAsync(cancellationToken);
 
+        var notDeployable = 0;
+        if (withDeployability && _readiness is not null)
+        {
+            var availableIds = await _dbContext.Vehicles
+                .Where(v => v.TenantId == _tenantContext.TenantId && v.IsActive && v.OperationalStatus == VehicleOperationalStatus.Available)
+                .Select(v => v.Id)
+                .ToListAsync(cancellationToken);
+            var verdicts = await _readiness.EvaluateVehiclesAsync(availableIds, await _readiness.TodayAsync(cancellationToken), cancellationToken);
+            notDeployable = verdicts.Values.Count(v => v.Level == ReadinessLevel.Blocked);
+        }
+
         return new FleetAssetCountsDto(
             rows.Sum(r => r.Count),
-            rows.Where(r => r.OperationalStatus == VehicleOperationalStatus.Available).Sum(r => r.Count),
+            rows.Where(r => r.OperationalStatus == VehicleOperationalStatus.Available).Sum(r => r.Count) - notDeployable,
             rows.Where(r => r.OperationalStatus == VehicleOperationalStatus.InUse).Sum(r => r.Count),
             rows.Where(r => r.OperationalStatus == VehicleOperationalStatus.InMaintenance).Sum(r => r.Count),
             rows.Where(r => r.OperationalStatus == VehicleOperationalStatus.OutOfService).Sum(r => r.Count),
-            rows.Where(r => !r.IsActive).Sum(r => r.Count));
+            rows.Where(r => !r.IsActive).Sum(r => r.Count),
+            notDeployable);
     }
 
-    private async Task<FleetAssetCountsDto> TrailerCountsAsync(CancellationToken cancellationToken)
+    private async Task<FleetAssetCountsDto> TrailerCountsAsync(bool withDeployability, CancellationToken cancellationToken)
     {
         var rows = await _dbContext.Trailers
             .Where(t => t.TenantId == _tenantContext.TenantId)
@@ -126,12 +141,24 @@ public class FleetDashboardService : IFleetDashboardService
             .Select(g => new { g.Key.OperationalStatus, g.Key.IsActive, Count = g.Count() })
             .ToListAsync(cancellationToken);
 
+        var notDeployable = 0;
+        if (withDeployability && _readiness is not null)
+        {
+            var availableIds = await _dbContext.Trailers
+                .Where(t => t.TenantId == _tenantContext.TenantId && t.IsActive && t.OperationalStatus == TrailerOperationalStatus.Available)
+                .Select(t => t.Id)
+                .ToListAsync(cancellationToken);
+            var verdicts = await _readiness.EvaluateTrailersAsync(availableIds, await _readiness.TodayAsync(cancellationToken), cancellationToken);
+            notDeployable = verdicts.Values.Count(v => v.Level == ReadinessLevel.Blocked);
+        }
+
         return new FleetAssetCountsDto(
             rows.Sum(r => r.Count),
-            rows.Where(r => r.OperationalStatus == TrailerOperationalStatus.Available).Sum(r => r.Count),
+            rows.Where(r => r.OperationalStatus == TrailerOperationalStatus.Available).Sum(r => r.Count) - notDeployable,
             rows.Where(r => r.OperationalStatus == TrailerOperationalStatus.InUse).Sum(r => r.Count),
             rows.Where(r => r.OperationalStatus == TrailerOperationalStatus.InMaintenance).Sum(r => r.Count),
             rows.Where(r => r.OperationalStatus == TrailerOperationalStatus.OutOfService).Sum(r => r.Count),
-            rows.Where(r => !r.IsActive).Sum(r => r.Count));
+            rows.Where(r => !r.IsActive).Sum(r => r.Count),
+            notDeployable);
     }
 }

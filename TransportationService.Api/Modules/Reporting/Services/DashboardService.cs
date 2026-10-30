@@ -132,7 +132,7 @@ public class DashboardService : IDashboardService
             .Distinct()
             .CountAsync(cancellationToken);
 
-        var fleet = await _fleetDashboardService.GetAsync(cancellationToken);
+        var fleet = await _fleetDashboardService.GetAsync(cancellationToken, withDeployability: false);
         var vehiclesAvailable = await _dbContext.Vehicles.AsNoTracking()
             .CountAsync(v => v.TenantId == tenantId && v.IsActive
                              && v.OperationalStatus == VehicleOperationalStatus.Available, cancellationToken);

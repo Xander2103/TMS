@@ -45,6 +45,8 @@ import '../detail/vehicle-detail.css'
 import { formatDate } from '../../../utils/dates'
 import { ErrorState } from '../../../components/feedback/ErrorState'
 import { AssetDeactivateDialog, AssetDeleteDialog } from '../../fleet-readiness/AssetLifecycleDialogs'
+import { blockedWhileAvailable } from '../../fleet-readiness/readiness'
+import { useAssetReadiness } from '../../fleet-readiness/useAssetReadiness'
 import { ActionMenu } from '../../../components/ui/ActionMenu'
 import { VehicleOverview } from '../detail/VehicleOverview'
 import { useVehicleCompliance } from '../detail/useVehicleCompliance'
@@ -75,6 +77,7 @@ export function VehicleDetailPage() {
   /** Re-fetches the readiness block after edits that may change it. */
   const [readinessToken, setReadinessToken] = useState(0)
   const [reloadToken, setReloadToken] = useState(0)
+  const headerReadiness = useAssetReadiness('vehicle', id, readinessToken)
   const [editing, setEditing] = useState(false)
   const [form, setForm] = useState<VehicleInput | null>(null)
   const [saving, setSaving] = useState(false)
@@ -259,10 +262,12 @@ export function VehicleDetailPage() {
           <>
             <StatusBadges
               active={vehicle.isActive}
-              operational={{
-                label: t(OPERATIONAL_STATUS_LABELS[vehicle.operationalStatus]),
-                tone: OPERATIONAL_STATUS_TONES[vehicle.operationalStatus],
-              }}
+              operational={blockedWhileAvailable(vehicle.operationalStatus, headerReadiness?.level)
+                ? { label: t('fleet.readiness.level.Blocked'), tone: 'danger' }
+                : {
+                    label: t(OPERATIONAL_STATUS_LABELS[vehicle.operationalStatus]),
+                    tone: OPERATIONAL_STATUS_TONES[vehicle.operationalStatus],
+                  }}
             />
             {vehicle.adrSuitable && <Badge tone="warning">{t('fleet.common.equipment.adrShort')}</Badge>}
           </>

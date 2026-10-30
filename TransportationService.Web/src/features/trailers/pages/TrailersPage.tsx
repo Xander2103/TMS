@@ -12,6 +12,7 @@ import { useListDensity } from '../../../components/ui/listDensity'
 import { TruncatedText } from '../../../components/ui/TruncatedText'
 import { useLocale } from '../../../i18n/localeContext'
 import { useAuth } from '../../auth/authContextValue'
+import { blockedWhileAvailable } from '../../fleet-readiness/readiness'
 import { searchTrailers } from '../api/trailersApi'
 import { TRAILER_STATUS_LABELS, TRAILER_STATUS_TONES, type TrailerListItem } from '../types'
 
@@ -54,7 +55,9 @@ export function TrailersPage() {
       key: 'status',
       header: t('fleet.list.colStatus'),
       width: '150px',
-      render: (row) => <Badge tone={STATUS_TONE[row.operationalStatus]}>{t(TRAILER_STATUS_LABELS[row.operationalStatus])}</Badge>,
+      render: (row) => blockedWhileAvailable(row.operationalStatus, row.readiness)
+        ? <span title={row.readinessSummary ?? undefined}><Badge tone="danger">{t('fleet.readiness.level.Blocked')}</Badge></span>
+        : <Badge tone={STATUS_TONE[row.operationalStatus]}>{t(TRAILER_STATUS_LABELS[row.operationalStatus])}</Badge>,
     },
     {
       key: 'active',

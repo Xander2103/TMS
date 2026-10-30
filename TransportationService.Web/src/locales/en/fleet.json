@@ -274,7 +274,8 @@
     "leasingEnding": "Leases ending",
     "emptyLeasing": "No lease contracts ending within 30 days.",
     "leasingEndsSoon": "Ends soon",
-    "leasingEnded": "Ended"
+    "leasingEnded": "Ended",
+    "notDeployable": "Not deployable"
   },
   "kpi": {
     "from": "From",

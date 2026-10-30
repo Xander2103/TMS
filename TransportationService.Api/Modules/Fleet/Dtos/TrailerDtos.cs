@@ -10,7 +10,10 @@ public record TrailerListItemDto(
     string? Model,
     string? CategoryName,
     TrailerOperationalStatus OperationalStatus,
-    bool IsActive);
+    bool IsActive,
+    /// <summary>UX-007: the ONE readiness verdict for today, so the list never calls a blocked trailer available.</summary>
+    ReadinessLevel? Readiness = null,
+    string? ReadinessSummary = null);
 
 /// <summary>Picker option; M1 adds the operational status and ADR suitability.</summary>
 public record TrailerOptionDto(

@@ -11,6 +11,8 @@ export interface FleetAssetCounts {
   inMaintenance: number
   outOfService: number
   inactive: number
+  /** UX-007: status Available but blocked by today's readiness verdict; not in `available`. */
+  notDeployable?: number
 }
 
 export interface DueMaintenanceItem {

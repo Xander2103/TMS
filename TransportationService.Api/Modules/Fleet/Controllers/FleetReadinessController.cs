@@ -18,7 +18,7 @@ public class FleetReadinessController : ControllerBase
     [RequirePermission(PermissionCodes.VehiclesView)]
     public async Task<ActionResult<VehicleReadinessDto>> Vehicle(Guid vehicleId, [FromQuery] DateOnly? date, CancellationToken cancellationToken)
     {
-        var result = await _readiness.EvaluateVehicleAsync(vehicleId, date ?? DateOnly.FromDateTime(DateTime.UtcNow), cancellationToken);
+        var result = await _readiness.EvaluateVehicleAsync(vehicleId, date ?? await _readiness.TodayAsync(cancellationToken), cancellationToken);
         return result is null ? NotFound() : Ok(result);
     }
 
@@ -26,7 +26,7 @@ public class FleetReadinessController : ControllerBase
     [RequirePermission(PermissionCodes.TrailersView)]
     public async Task<ActionResult<VehicleReadinessDto>> Trailer(Guid trailerId, [FromQuery] DateOnly? date, CancellationToken cancellationToken)
     {
-        var result = await _readiness.EvaluateTrailerAsync(trailerId, date ?? DateOnly.FromDateTime(DateTime.UtcNow), cancellationToken);
+        var result = await _readiness.EvaluateTrailerAsync(trailerId, date ?? await _readiness.TodayAsync(cancellationToken), cancellationToken);
         return result is null ? NotFound() : Ok(result);
     }
 }

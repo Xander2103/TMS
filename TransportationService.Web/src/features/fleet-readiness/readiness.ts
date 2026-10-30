@@ -36,3 +36,11 @@ export function readinessHint(option: { readiness?: ReadinessLevel | null; readi
   const icon = option.readiness === 'Blocked' ? '⛔' : '⚠'
   return option.readinessSummary ? `${icon} ${option.readinessSummary}` : icon
 }
+
+/**
+ * UX-007: the operational status is a manual fact, readiness is the server's verdict. A unit marked available
+ * that the verdict blocks is presented as not deployable, everywhere; no rule is evaluated here.
+ */
+export function blockedWhileAvailable(operationalStatus: string, level: ReadinessLevel | null | undefined): boolean {
+  return operationalStatus === 'Available' && level === 'Blocked'
+}

@@ -10,7 +10,10 @@ public record VehicleListItemDto(
     string? Model,
     string? CategoryName,
     VehicleOperationalStatus OperationalStatus,
-    bool IsActive);
+    bool IsActive,
+    /// <summary>UX-007: the ONE readiness verdict for today, so the list never calls a blocked vehicle available.</summary>
+    ReadinessLevel? Readiness = null,
+    string? ReadinessSummary = null);
 
 /// <summary>Picker option. M1: the status, payload and equipment flags let the planner judge suitability
 /// BEFORE choosing (not only after the conflict check).</summary>

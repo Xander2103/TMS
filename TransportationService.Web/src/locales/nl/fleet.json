@@ -274,7 +274,8 @@
     "leasingEnding": "Leasing eindigt",
     "emptyLeasing": "Geen leasingcontracten die binnen 30 dagen eindigen.",
     "leasingEndsSoon": "Eindigt binnenkort",
-    "leasingEnded": "Afgelopen"
+    "leasingEnded": "Afgelopen",
+    "notDeployable": "Niet inzetbaar"
   },
   "kpi": {
     "from": "Van",

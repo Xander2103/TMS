@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using TransportationService.Api.Common;
 using TransportationService.Api.Data;
 using TransportationService.Api.Modules.Fleet.Dtos;
 using TransportationService.Api.Modules.Fleet.Entities;
@@ -8,6 +9,9 @@ namespace TransportationService.Api.Modules.Fleet.Services;
 
 public interface IFleetReadinessService
 {
+    /// <summary>The tenant's own today: a verdict "for today" must agree with the local dates people enter.</summary>
+    Task<DateOnly> TodayAsync(CancellationToken cancellationToken);
+
     Task<VehicleReadinessDto?> EvaluateVehicleAsync(Guid vehicleId, DateOnly date, CancellationToken cancellationToken);
 
     Task<VehicleReadinessDto?> EvaluateTrailerAsync(Guid trailerId, DateOnly date, CancellationToken cancellationToken);
@@ -88,6 +92,9 @@ public class FleetReadinessService : IFleetReadinessService
     }
 
     private DateOnly Today => DateOnly.FromDateTime(_timeProvider.GetUtcNow().UtcDateTime);
+
+    public Task<DateOnly> TodayAsync(CancellationToken cancellationToken) =>
+        TenantTimeZone.TodayAsync(_dbContext, _tenantContext.TenantId, _timeProvider, cancellationToken);
 
     public async Task<VehicleReadinessDto?> EvaluateVehicleAsync(Guid vehicleId, DateOnly date, CancellationToken cancellationToken) =>
         (await EvaluateVehiclesAsync([vehicleId], date, cancellationToken)).GetValueOrDefault(vehicleId);

@@ -18,14 +18,16 @@ public class VehicleService : IVehicleService
     private readonly ITenantContext _tenantContext;
     private readonly IAuditService _auditService;
     private readonly TimeProvider _timeProvider;
+    private readonly IFleetReadinessService? _readiness;
 
     public VehicleService(TransportationDbContext dbContext, ITenantContext tenantContext, IAuditService auditService,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider, IFleetReadinessService? readiness = null)
     {
         _dbContext = dbContext;
         _tenantContext = tenantContext;
         _auditService = auditService;
         _timeProvider = timeProvider;
+        _readiness = readiness;
     }
 
     private IQueryable<Vehicle> TenantScoped() =>
@@ -71,7 +73,20 @@ public class VehicleService : IVehicleService
                             v.Id, v.InternalNumber, v.LicensePlate, v.Brand, v.Model,
                             c != null ? c.Name : null, v.OperationalStatus, v.IsActive);
 
-        return await projected.ToPagedResultAsync(page, dto => dto, cancellationToken);
+        var result = await projected.ToPagedResultAsync(page, dto => dto, cancellationToken);
+        if (_readiness is null || result.Items.Count == 0) return result;
+
+        // One batched evaluation for the page (the same sources Planning reads), never one per row.
+        var today = await _readiness.TodayAsync(cancellationToken);
+        var verdicts = await _readiness.EvaluateVehiclesAsync(result.Items.Select(i => i.Id).ToList(), today, cancellationToken);
+        return result with
+        {
+            Items = result.Items
+                .Select(i => verdicts.TryGetValue(i.Id, out var verdict)
+                    ? i with { Readiness = verdict.Level, ReadinessSummary = verdict.Summary }
+                    : i)
+                .ToList(),
+        };
     }
 
     public async Task<IReadOnlyList<VehicleOptionDto>> GetOptionsAsync(CancellationToken cancellationToken)

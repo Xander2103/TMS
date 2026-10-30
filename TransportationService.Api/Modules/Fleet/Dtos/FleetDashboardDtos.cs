@@ -7,7 +7,9 @@ public record FleetAssetCountsDto(
     int InUse,
     int InMaintenance,
     int OutOfService,
-    int Inactive);
+    int Inactive,
+    /// <summary>UX-007: status Available but readiness Blocked today. They are NOT in <see cref="Available"/>.</summary>
+    int NotDeployable = 0);
 
 /// <summary>
 /// One-call aggregate for the fleet dashboard. Counts cover everything in-tenant; the lists are

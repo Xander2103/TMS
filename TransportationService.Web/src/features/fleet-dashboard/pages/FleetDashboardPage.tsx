@@ -117,6 +117,12 @@ export function FleetDashboardPage() {
                   <dt>{t('vehicles.status.OutOfService')}</dt>
                   <dd>{dashboard.vehicles.outOfService}</dd>
                 </div>
+                {(dashboard.vehicles.notDeployable ?? 0) > 0 && (
+                  <div>
+                    <dt>{t('fleet.dashboard.notDeployable')}</dt>
+                    <dd>{dashboard.vehicles.notDeployable}</dd>
+                  </div>
+                )}
                 <div>
                   <dt>{t('fleet.dashboard.inactive')}</dt>
                   <dd>{dashboard.vehicles.inactive}</dd>
@@ -143,6 +149,12 @@ export function FleetDashboardPage() {
                   <dt>{t('trailers.status.OutOfService')}</dt>
                   <dd>{dashboard.trailers.outOfService}</dd>
                 </div>
+                {(dashboard.trailers.notDeployable ?? 0) > 0 && (
+                  <div>
+                    <dt>{t('fleet.dashboard.notDeployable')}</dt>
+                    <dd>{dashboard.trailers.notDeployable}</dd>
+                  </div>
+                )}
                 <div>
                   <dt>{t('fleet.dashboard.inactive')}</dt>
                   <dd>{dashboard.trailers.inactive}</dd>
