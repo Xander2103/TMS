@@ -1,5 +1,5 @@
 import { apiBaseUrl } from '../../../config/env'
-import { apiClient } from '../../../api/apiClient'
+import { apiClient, LONG_RUNNING_TIMEOUT_MS } from '../../../api/apiClient'
 import { getAccessToken } from '../../auth/authStorage'
 
 /** GET /api/system-info — versie-, deploy- en gezondheidsinformatie van de applicatie. */
@@ -71,8 +71,9 @@ export function listBackups(): Promise<BackupListResult> {
   return apiClient.getJson<BackupListResult>('/api/system-info/backups')
 }
 
+/** A backup set is pg_dump + the storage manifest + its verification: slow by nature, never the 30 s default. */
 export function createBackup(note: string | null): Promise<BackupDto> {
-  return apiClient.postJson<BackupDto, { note: string | null }>('/api/system-info/backups', { note })
+  return apiClient.postJson<BackupDto, { note: string | null }>('/api/system-info/backups', { note }, { timeoutMs: LONG_RUNNING_TIMEOUT_MS })
 }
 
 export function deleteBackup(id: string): Promise<void> {
@@ -84,6 +85,7 @@ export function restoreBackup(id: string, confirmation: string): Promise<Restore
   return apiClient.postJson<RestoreResult, { confirmation: string }>(
     `/api/system-info/backups/${id}/restore`,
     { confirmation },
+    { timeoutMs: LONG_RUNNING_TIMEOUT_MS },
   )
 }
 
