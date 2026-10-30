@@ -43,6 +43,7 @@
 
 .drv-content {
   flex: 1;
+  box-sizing: border-box;
   padding: 0.9rem 1rem 5.5rem;
   max-width: 640px;
   width: 100%;
