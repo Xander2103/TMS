@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.EntityFrameworkCore;
+using TransportationService.Api.Common.Diagnostics;
 
 namespace TransportationService.Api.Common.Integrity;
 
@@ -60,6 +61,7 @@ public sealed class ConcurrencyConflictExceptionFilter : IExceptionFilter
                 ? conflict.Message
                 : OptimisticConcurrency.ConflictMessage,
             code = ErrorCodes.ConcurrencyConflict,
+            correlationId = CorrelationId.For(context.HttpContext),
         });
         context.ExceptionHandled = true;
     }

@@ -99,7 +99,7 @@ builder.Services.AddCors(options =>
             .AllowAnyHeader()
             .AllowAnyMethod()
             // PERF-HIGH 3: a capped list (GET /api/trips) tells the SPA it was cut through these headers.
-            .WithExposedHeaders("X-Result-Truncated", "X-Result-Limit")
+            .WithExposedHeaders("X-Result-Truncated", "X-Result-Limit", TransportationService.Api.Common.Diagnostics.CorrelationId.HeaderName)
             // The HttpOnly refresh cookie (H5) must travel on the auth endpoints; credentials
             // are only ever allowed together with the EXPLICIT origin list above, never "*".
             .AllowCredentials();

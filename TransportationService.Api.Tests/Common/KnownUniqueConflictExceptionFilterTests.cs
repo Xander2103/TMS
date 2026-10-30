@@ -49,6 +49,8 @@ public class KnownUniqueConflictExceptionFilterTests
         var body = Body(context);
         Assert.Contains("De rollen van deze gebruiker zijn intussen door iemand anders gewijzigd. Herlaad en probeer opnieuw.", body);
         Assert.Contains(ErrorCodes.ConcurrencyConflict, body);
+        // Final integration 2026-10-24: a 409 carries the same correlation id as every other error.
+        Assert.Contains($"\"correlationId\":\"{context.HttpContext.TraceIdentifier}\"", body);
     }
 
     [Fact]
