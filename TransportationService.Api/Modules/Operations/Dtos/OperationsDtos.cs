@@ -74,9 +74,30 @@ public record OperationsCountersDto(
     int OpenCriticalIncidents,
     int MissingPods,
     int ActiveAlerts,
-    int CriticalAlerts);
+    int CriticalAlerts,
+    /// <summary>UX-008: failed drops whose incident is still open, also when the trip has completed.</summary>
+    int FailedDeliveries = 0);
 
 public record OperationsOverviewDto(
     DateTime GeneratedAt,
     OperationsCountersDto Counters,
-    IReadOnlyList<OperationsTripDto> Trips);
+    IReadOnlyList<OperationsTripDto> Trips,
+    IReadOnlyList<OperationsFailedDeliveryDto>? FailedDeliveries = null);
+
+/// <summary>
+/// UX-008: a failed drop as the dispatcher's work item. A failed drop finishes the stop and often the trip, so
+/// it would leave the trip table; it stays here until the incident the failure already created is handled.
+/// </summary>
+public record OperationsFailedDeliveryDto(
+    Guid IncidentId,
+    Guid? OrderId,
+    string? OrderNumber,
+    Guid? TripId,
+    string? TripNumber,
+    string? CustomerName,
+    Guid? DossierId,
+    string? DossierNumber,
+    string Description,
+    DateTime OccurredAt,
+    Guid? RedeliveryOrderId,
+    string? RedeliveryOrderNumber);

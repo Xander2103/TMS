@@ -96,12 +96,31 @@ export interface OperationsCounters {
   missingPods: number
   activeAlerts: number
   criticalAlerts: number
+  /** UX-008: failed drops whose incident is still open. */
+  failedDeliveries?: number
+}
+
+/** UX-008: a failed drop as a work item; lives on the incident the failure already created. */
+export interface OperationsFailedDelivery {
+  incidentId: string
+  orderId: string | null
+  orderNumber: string | null
+  tripId: string | null
+  tripNumber: string | null
+  customerName: string | null
+  dossierId: string | null
+  dossierNumber: string | null
+  description: string
+  occurredAt: string
+  redeliveryOrderId: string | null
+  redeliveryOrderNumber: string | null
 }
 
 export interface OperationsOverview {
   generatedAt: string
   counters: OperationsCounters
   trips: OperationsTrip[]
+  failedDeliveries?: OperationsFailedDelivery[] | null
 }
 
 export type AlertSeverity = 'Information' | 'Warning' | 'Critical'

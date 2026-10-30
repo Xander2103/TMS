@@ -20,6 +20,8 @@ import './operations.css'
 import { labelFor } from '../../../utils/labels'
 
 const POLL_INTERVAL_MS = 30_000
+/** Newest first; more than this would push the trip table off the screen. */
+const FAILED_VISIBLE = 5
 
 /**
  * The live control center. Refresh strategy is deliberate controlled polling: the overview
@@ -29,10 +31,16 @@ const POLL_INTERVAL_MS = 30_000
  */
 export function OperationsPage() {
   const { showError, showSuccess } = useToast()
-  const { hasPermission } = useAuth()
+  const { hasPermission, hasAnyPermission } = useAuth()
   const { t } = useLocale()
   const navigate = useNavigate()
   const canManageAlerts = hasPermission('operations.manage_alerts')
+  const canOpenIncidents = hasAnyPermission(['incidents.view', 'incidents.manage'])
+  const failedRef = useRef<HTMLElement>(null)
+  const alertsRef = useRef<HTMLElement>(null)
+  /** UX-009: the delay and POD tiles filter the table below them. */
+  const [tripFilter, setTripFilter] = useState<'delayed' | 'missingPod' | null>(null)
+  const [showAllFailed, setShowAllFailed] = useState(false)
 
   const [overview, setOverview] = useState<OperationsOverview | null>(null)
   const [alerts, setAlerts] = useState<OperationalAlert[]>([])
@@ -118,6 +126,11 @@ export function OperationsPage() {
   }
 
   const counters = overview?.counters
+  const visibleTrips = useMemo(() => (overview?.trips ?? []).filter((trip) =>
+    tripFilter === 'delayed' ? trip.etaStatus === 'Late' || (trip.delayMinutes ?? 0) > 0
+      : tripFilter === 'missingPod' ? trip.missingPodCount > 0
+        : true), [overview, tripFilter])
+  const toggleTripFilter = (filter: 'delayed' | 'missingPod') => setTripFilter((current) => (current === filter ? null : filter))
 
   if (forbidden) return <AccessDeniedState />
 
@@ -137,13 +150,63 @@ export function OperationsPage() {
 
       {counters && (
         <div className="ops-kpis">
+          <KpiTile label={t('operations.page.kpiFailedDeliveries')} value={counters.failedDeliveries ?? 0} alert={(counters.failedDeliveries ?? 0) > 0} onClick={(counters.failedDeliveries ?? 0) > 0 ? () => failedRef.current?.scrollIntoView({ block: 'start' }) : undefined} />
           <KpiTile label={t('operations.page.kpiActiveTrips')} value={counters.activeTrips} />
-          <KpiTile label={t('operations.page.kpiDelayed')} value={counters.delayedTrips} alert={counters.delayedTrips > 0} />
-          <KpiTile label={t('operations.page.kpiOpenExceptions')} value={counters.openExceptions} alert={counters.openExceptions > 0} />
-          <KpiTile label={t('operations.page.kpiCriticalIncidents')} value={counters.openCriticalIncidents} alert={counters.openCriticalIncidents > 0} />
-          <KpiTile label={t('operations.page.kpiMissingPods')} value={counters.missingPods} alert={counters.missingPods > 0} />
-          <KpiTile label={t('operations.page.kpiOpenAlerts')} value={counters.activeAlerts} alert={counters.criticalAlerts > 0} />
+          <KpiTile label={t('operations.page.kpiDelayed')} value={counters.delayedTrips} alert={counters.delayedTrips > 0} pressed={tripFilter === 'delayed'} onClick={() => toggleTripFilter('delayed')} />
+          <KpiTile label={t('operations.page.kpiOpenExceptions')} value={counters.openExceptions} alert={counters.openExceptions > 0} to={hasPermission('exceptions.view') ? '/exceptions' : undefined} />
+          <KpiTile label={t('operations.page.kpiCriticalIncidents')} value={counters.openCriticalIncidents} alert={counters.openCriticalIncidents > 0} to={canOpenIncidents ? '/incidents' : undefined} />
+          <KpiTile label={t('operations.page.kpiMissingPods')} value={counters.missingPods} alert={counters.missingPods > 0} pressed={tripFilter === 'missingPod'} onClick={() => toggleTripFilter('missingPod')} />
+          <KpiTile label={t('operations.page.kpiOpenAlerts')} value={counters.activeAlerts} alert={counters.criticalAlerts > 0} onClick={() => alertsRef.current?.scrollIntoView({ block: 'start' })} />
         </div>
+      )}
+
+      {(overview?.failedDeliveries?.length ?? 0) > 0 && (
+        <section className="ops-failed" aria-label={t('operations.page.failedTitle')} ref={failedRef}>
+          <h2>{t('operations.page.failedTitle')}</h2>
+          <p className="ops-sub">{t('operations.page.failedHint')}</p>
+          <ul className="ops-failed-list">
+            {(showAllFailed ? overview!.failedDeliveries! : overview!.failedDeliveries!.slice(0, FAILED_VISIBLE)).map((failed) => (
+              <li key={failed.incidentId} className="ops-failed-item">
+                <div className="ops-failed-what">
+                  <strong>{[failed.orderNumber, failed.tripNumber].filter(Boolean).join(' · ')}</strong>
+                  {failed.customerName && <span> · {failed.customerName}</span>}
+                  <span className="ops-sub"> · {formatDateTime(failed.occurredAt)}</span>
+                  <p>{failed.description}</p>
+                </div>
+                <div className="ops-failed-actions">
+                  {canOpenIncidents && (
+                    <Link className="ui-button ui-button-primary" to={`/incidents/${failed.incidentId}`}>
+                      {failed.redeliveryOrderId ? t('operations.page.failedFollowUp') : t('operations.page.failedAct')}
+                    </Link>
+                  )}
+                  {failed.redeliveryOrderId && failed.redeliveryOrderNumber && (
+                    <Link to={`/transport-orders/${failed.redeliveryOrderId}`}>
+                      {t('operations.page.failedRedelivery', { orderNumber: failed.redeliveryOrderNumber })}
+                    </Link>
+                  )}
+                  {failed.dossierId && failed.dossierNumber && hasPermission('dossiers.view') && (
+                    <Link to={`/dossiers/${failed.dossierId}`}>{failed.dossierNumber}</Link>
+                  )}
+                  {failed.tripId && failed.tripNumber && hasPermission('planning.view') && (
+                    <Link to={`/planning/${failed.tripId}`}>{failed.tripNumber}</Link>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+          {overview!.failedDeliveries!.length > FAILED_VISIBLE && (
+            <button type="button" className="ops-link" aria-expanded={showAllFailed} onClick={() => setShowAllFailed((current) => !current)}>
+              {showAllFailed
+                ? t('operations.page.failedShowLess')
+                : t('operations.page.failedShowAll', { count: overview!.failedDeliveries!.length })}
+            </button>
+          )}
+          {showAllFailed && (counters?.failedDeliveries ?? 0) > overview!.failedDeliveries!.length && (
+            <p className="ops-sub">
+              {t('operations.page.failedMore', { shown: overview!.failedDeliveries!.length, total: counters!.failedDeliveries! })}
+            </p>
+          )}
+        </section>
       )}
 
       <div className="ops-columns">
@@ -154,18 +217,15 @@ export function OperationsPage() {
               <thead>
                 <tr>
                   <th>{t('operations.page.colTrip')}</th>
-                  <th>{t('operations.page.colStatus')}</th>
-                  <th>{t('operations.page.colDriverEquipment')}</th>
-                  <th>{t('operations.page.colProgress')}</th>
-                  <th>{t('operations.page.colCurrentStop')}</th>
-                  <th>{t('operations.page.colNextStop')}</th>
-                  <th>{t('operations.page.colEta')}</th>
-                  <th>{t('operations.page.colLastScan')}</th>
                   <th>{t('operations.page.colSignals')}</th>
+                  <th>{t('operations.page.colEta')}</th>
+                  <th>{t('operations.page.colProgress')}</th>
+                  <th>{t('operations.page.colDriverEquipment')}</th>
+                  <th>{t('operations.page.colLastScan')}</th>
                 </tr>
               </thead>
               <tbody>
-                {(overview?.trips ?? []).map((trip) => {
+                {visibleTrips.map((trip) => {
                   const delay = formatDelay(trip.delayMinutes)
                   return (
                     <tr key={trip.id} onClick={() => navigate(`/planning/${trip.id}`)} className="ops-row" tabIndex={0}
@@ -188,22 +248,17 @@ export function OperationsPage() {
                           </div>
                         )}
                       </td>
-                      <td><Badge tone={TRIP_STATUS_TONE[trip.status]}>{t(TRIP_STATUS_LABELS[trip.status])}</Badge></td>
                       <td>
-                        <div>{trip.driverName ?? '—'}</div>
-                        <div className="ops-sub">
-                          {trip.vehicleNumber ?? '—'}{trip.trailerNumber ? ` + ${trip.trailerNumber}` : ''}
+                        <div className="ops-signals">
+                          {trip.openExceptionCount > 0 && (
+                            <Badge tone="warning">{t('operations.page.exceptions', { count: trip.openExceptionCount })}</Badge>
+                          )}
+                          {trip.missingPodCount > 0 && <Badge tone="danger">{t('operations.page.missingPod')}</Badge>}
+                          <span className="ops-sub" title={trip.position.description ?? undefined}>
+                            {t(LOCATION_SOURCE_LABELS[trip.position.source])}
+                            {trip.position.latitude !== null && ` (${trip.position.latitude.toFixed(4)}, ${trip.position.longitude?.toFixed(4)})`}
+                          </span>
                         </div>
-                      </td>
-                      <td>{t('operations.page.stopsProgress', { completed: trip.completedStopCount, total: trip.stopCount })}</td>
-                      <td>{trip.currentStop ? `${trip.currentStop.city ?? trip.currentStop.locationName ?? '?'} (${labelFor(t, trip.currentStop.status, 'myTrips.stopStatus')})` : '—'}</td>
-                      <td>
-                        {trip.nextStop ? (trip.nextStop.city ?? trip.nextStop.locationName ?? '?') : '—'}
-                        {trip.nextStop?.currentEta && (
-                          <div className="ops-sub">
-                            ETA {formatTime(trip.nextStop.currentEta)}
-                          </div>
-                        )}
                       </td>
                       <td>
                         {trip.etaStatus ? (
@@ -220,34 +275,45 @@ export function OperationsPage() {
                         )}
                       </td>
                       <td>
-                        {trip.lastScanAt
-                          ? `${formatTime(trip.lastScanAt)} (${trip.lastScanResult})`
-                          : '—'}
+                        <div>
+                          <Badge tone={TRIP_STATUS_TONE[trip.status]}>{t(TRIP_STATUS_LABELS[trip.status])}</Badge>{' '}
+                          {t('operations.page.stopsProgress', { completed: trip.completedStopCount, total: trip.stopCount })}
+                        </div>
+                        {trip.currentStop && (
+                          <div className="ops-sub">
+                            {t('operations.page.colCurrentStop')}: {trip.currentStop.city ?? trip.currentStop.locationName ?? '?'} ({labelFor(t, trip.currentStop.status, 'myTrips.stopStatus')})
+                          </div>
+                        )}
+                        {trip.nextStop && (
+                          <div className="ops-sub">
+                            {t('operations.page.colNextStop')}: {trip.nextStop.city ?? trip.nextStop.locationName ?? '?'}
+                            {trip.nextStop.currentEta && ` · ETA ${formatTime(trip.nextStop.currentEta)}`}
+                          </div>
+                        )}
                       </td>
                       <td>
-                        <div className="ops-signals">
-                          {trip.openExceptionCount > 0 && (
-                            <Badge tone="warning">{t('operations.page.exceptions', { count: trip.openExceptionCount })}</Badge>
-                          )}
-                          {trip.missingPodCount > 0 && <Badge tone="danger">{t('operations.page.missingPod')}</Badge>}
-                          <span className="ops-sub" title={trip.position.description ?? undefined}>
-                            {t(LOCATION_SOURCE_LABELS[trip.position.source])}
-                            {trip.position.latitude !== null && ` (${trip.position.latitude.toFixed(4)}, ${trip.position.longitude?.toFixed(4)})`}
-                          </span>
+                        <div>{trip.driverName ?? '—'}</div>
+                        <div className="ops-sub">
+                          {trip.vehicleNumber ?? '—'}{trip.trailerNumber ? ` + ${trip.trailerNumber}` : ''}
                         </div>
+                      </td>
+                      <td>
+                        {trip.lastScanAt
+                          ? `${formatTime(trip.lastScanAt)} (${trip.lastScanResult ? labelFor(t, trip.lastScanResult, 'scanning.scanResult') : '—'})`
+                          : '—'}
                       </td>
                     </tr>
                   )
                 })}
-                {overview && overview.trips.length === 0 && (
-                  <tr><td colSpan={9} className="ops-sub">{t('operations.page.noActiveTrips')}</td></tr>
+                {overview && visibleTrips.length === 0 && (
+                  <tr><td colSpan={6} className="ops-sub">{tripFilter ? t('operations.page.noFilteredTrips') : t('operations.page.noActiveTrips')}</td></tr>
                 )}
               </tbody>
             </table>
           </div>
         </section>
 
-        <section className="ops-alerts" aria-label={t('operations.page.alertsLabel')}>
+        <section className="ops-alerts" aria-label={t('operations.page.alertsLabel')} ref={alertsRef}>
           <div className="ops-alerts-head">
             <h2>{t('operations.page.alertsTitle')}</h2>
             <select value={alertFilter} onChange={(event) => setAlertFilter(event.target.value as AlertStatus | 'Open')} aria-label={t('operations.page.alertsFilterLabel')}>
@@ -315,11 +381,23 @@ export function OperationsPage() {
   )
 }
 
-function KpiTile({ label, value, alert = false }: { label: string; value: number; alert?: boolean }) {
-  return (
-    <div className={`ops-kpi${alert ? ' ops-kpi-alert' : ''}`}>
+/** UX-009: a tile either goes where its number can be worked on, or filters the table; a bare count stays text. */
+function KpiTile({ label, value, alert = false, to, onClick, pressed }: {
+  label: string
+  value: number
+  alert?: boolean
+  to?: string
+  onClick?: () => void
+  pressed?: boolean
+}) {
+  const className = `ops-kpi${alert ? ' ops-kpi-alert' : ''}${to || onClick ? ' ops-kpi-action' : ''}${pressed ? ' ops-kpi-pressed' : ''}`
+  const content = (
+    <>
       <span className="ops-kpi-value">{value}</span>
       <span className="ops-kpi-label">{label}</span>
-    </div>
+    </>
   )
+  if (to) return <Link className={className} to={to}>{content}</Link>
+  if (onClick) return <button type="button" className={className} onClick={onClick} aria-pressed={pressed}>{content}</button>
+  return <div className={className}>{content}</div>
 }

@@ -3,6 +3,7 @@ using TransportationService.Api.Data;
 using TransportationService.Api.Modules.Eta.Entities;
 using TransportationService.Api.Modules.Exceptions.Entities;
 using TransportationService.Api.Modules.Incidents.Entities;
+using TransportationService.Api.Modules.Incidents.Services;
 using TransportationService.Api.Modules.Operations.Dtos;
 using TransportationService.Api.Modules.Operations.Entities;
 using TransportationService.Api.Modules.Orders.Entities;
@@ -229,6 +230,8 @@ public class OperationsOverviewService : IOperationsOverviewService
             .CountAsync(a => a.TenantId == tenantId && a.Status != AlertStatus.Resolved
                              && a.Severity == AlertSeverity.Critical, cancellationToken);
 
+        var (failedDeliveries, failedDeliveryCount) = await ResolveFailedDeliveriesAsync(cancellationToken);
+
         var counters = new OperationsCountersDto(
             items.Count(t => t.Status == TripStatus.InProgress),
             items.Count(t => t.EtaStatus == EtaStatus.Late || t.DelayMinutes > 0),
@@ -236,9 +239,55 @@ public class OperationsOverviewService : IOperationsOverviewService
             openCriticalIncidents,
             items.Sum(t => t.MissingPodCount),
             activeAlerts,
-            criticalAlerts);
+            criticalAlerts,
+            failedDeliveryCount);
 
-        return new OperationsOverviewDto(now, counters, items);
+        return new OperationsOverviewDto(now, counters, items, failedDeliveries);
+    }
+
+    /// <summary>
+    /// UX-008: open incidents the failed-delivery automation created (they carry their source stop). Reads the
+    /// existing incident only; newest first and capped, with the full count for the tile.
+    /// </summary>
+    private async Task<(IReadOnlyList<OperationsFailedDeliveryDto> Items, int Total)> ResolveFailedDeliveriesAsync(
+        CancellationToken cancellationToken)
+    {
+        const int cap = 25;
+        var tenantId = _tenantContext.TenantId;
+        var openStatuses = ProblemScope.OpenIncidentStatuses;
+        var open = _dbContext.Incidents.AsNoTracking()
+            .Where(i => i.TenantId == tenantId && i.SourceStopId != null && openStatuses.Contains(i.Status));
+        var total = await open.CountAsync(cancellationToken);
+        if (total == 0) return ([], 0);
+
+        var incidents = await open
+            .OrderByDescending(i => i.CreatedAt)
+            .Take(cap)
+            .Select(i => new { i.Id, i.TransportOrderId, i.TripId, i.DossierId, i.Description, i.CreatedAt, i.LinkedRedeliveryOrderId })
+            .ToListAsync(cancellationToken);
+
+        var orderIds = incidents.Where(i => i.TransportOrderId != null).Select(i => i.TransportOrderId!.Value)
+            .Concat(incidents.Where(i => i.LinkedRedeliveryOrderId != null).Select(i => i.LinkedRedeliveryOrderId!.Value))
+            .Distinct().ToList();
+        var orders = await ResolveOrderContextAsync(orderIds, cancellationToken);
+        var tripIds = incidents.Where(i => i.TripId != null).Select(i => i.TripId!.Value).Distinct().ToList();
+        var tripNumbers = tripIds.Count == 0
+            ? []
+            : await _dbContext.Trips.AsNoTracking()
+                .Where(t => t.TenantId == tenantId && tripIds.Contains(t.Id))
+                .ToDictionaryAsync(t => t.Id, t => t.TripNumber, cancellationToken);
+
+        var items = incidents.Select(i =>
+        {
+            var order = i.TransportOrderId is { } orderId ? orders.GetValueOrDefault(orderId) : null;
+            var redelivery = i.LinkedRedeliveryOrderId is { } redeliveryId ? orders.GetValueOrDefault(redeliveryId) : null;
+            return new OperationsFailedDeliveryDto(
+                i.Id, i.TransportOrderId, order?.OrderNumber,
+                i.TripId, i.TripId is { } tripId ? tripNumbers.GetValueOrDefault(tripId) : null,
+                order?.CustomerName, order?.DossierId ?? i.DossierId, order?.DossierNumber,
+                i.Description, i.CreatedAt, i.LinkedRedeliveryOrderId, redelivery?.OrderNumber);
+        }).ToList();
+        return (items, total);
     }
 
     private sealed record StopRow(

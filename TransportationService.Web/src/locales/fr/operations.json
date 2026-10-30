@@ -79,6 +79,16 @@
     "lateBy": "{delay} de retard",
     "alertsLoadFailed": "Les notifications n’ont pas pu être chargées.",
     "retry": "Réessayer",
-    "noOpenAlerts": "Aucune notification ouverte."
+    "noOpenAlerts": "Aucune notification ouverte.",
+    "kpiFailedDeliveries": "Livraisons échouées",
+    "failedTitle": "Livraisons échouées",
+    "failedHint": "Restent ici jusqu’au traitement de l’incident, même si le trajet est terminé.",
+    "failedAct": "Suivre / relivrer",
+    "failedFollowUp": "Suivre l’incident",
+    "failedRedelivery": "Relivraison {orderNumber}",
+    "failedMore": "{shown} plus récentes sur {total} ; le reste figure sous Incidents.",
+    "noFilteredTrips": "Aucun trajet pour cette sélection.",
+    "failedShowAll": "Tout afficher ({count})",
+    "failedShowLess": "Afficher moins"
   }
 }

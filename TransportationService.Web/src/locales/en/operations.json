@@ -79,6 +79,16 @@
     "lateBy": "{delay} late",
     "alertsLoadFailed": "Alerts could not be loaded.",
     "retry": "Try again",
-    "noOpenAlerts": "No open alerts."
+    "noOpenAlerts": "No open alerts.",
+    "kpiFailedDeliveries": "Failed deliveries",
+    "failedTitle": "Failed deliveries",
+    "failedHint": "Stay here until the incident is handled, also when the trip has finished.",
+    "failedAct": "Follow up / redeliver",
+    "failedFollowUp": "Follow up incident",
+    "failedRedelivery": "Redelivery {orderNumber}",
+    "failedMore": "Showing the newest {shown} of {total}; the rest is under Incidents.",
+    "noFilteredTrips": "No trips for this selection.",
+    "failedShowAll": "Show all {count}",
+    "failedShowLess": "Show less"
   }
 }

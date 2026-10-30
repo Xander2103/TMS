@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using TransportationService.Api.Data;
+using TransportationService.Api.Modules.Dossiers.Services;
 using TransportationService.Api.Modules.Eta.Entities;
 using TransportationService.Api.Modules.Exceptions.Entities;
 using TransportationService.Api.Modules.Fleet.Entities;
@@ -245,8 +246,8 @@ public class AlertSyncService : IAlertSyncService
             e.Severity == ExceptionSeverity.Critical ? AlertSeverity.Critical : AlertSeverity.Warning,
             "Exception", "execution_exception",
             $"Afwijking op rit {e.TripNumber}",
-            $"Open afwijking ({e.Type}) op rit {e.TripNumber}.",
-            "/exceptions", "ExecutionException", e.Id)));
+            $"Open afwijking ({DossierTimelineLabels.ExceptionType(e.Type).ToLowerInvariant()}, ernst {DossierTimelineLabels.ExceptionSeverity(e.Severity).ToLowerInvariant()}) op rit {e.TripNumber}.",
+            $"/exceptions/{e.Id}", "ExecutionException", e.Id)));
     }
 
     private async Task CollectMaintenanceAsync(

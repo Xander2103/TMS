@@ -79,6 +79,16 @@
     "lateBy": "{delay} te laat",
     "alertsLoadFailed": "Meldingen konden niet worden geladen.",
     "retry": "Opnieuw proberen",
-    "noOpenAlerts": "Geen open meldingen."
+    "noOpenAlerts": "Geen open meldingen.",
+    "kpiFailedDeliveries": "Mislukte leveringen",
+    "failedTitle": "Mislukte leveringen",
+    "failedHint": "Blijven hier staan tot het incident is afgehandeld, ook als de rit al is afgerond.",
+    "failedAct": "Opvolgen / herlevering",
+    "failedFollowUp": "Incident opvolgen",
+    "failedRedelivery": "Herlevering {orderNumber}",
+    "failedMore": "{shown} nieuwste van {total} getoond; de rest staat bij Incidenten.",
+    "noFilteredTrips": "Geen ritten voor deze selectie.",
+    "failedShowAll": "Alle {count} tonen",
+    "failedShowLess": "Minder tonen"
   }
 }

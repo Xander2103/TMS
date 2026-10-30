@@ -111,7 +111,7 @@ public class FailedDeliveryService : IFailedDeliveryHandler
         var dossierId = dossierIds.Count > 0 ? dossierIds[0] : (Guid?)null;
         var trip = await _dbContext.Trips.AsNoTracking()
             .Where(t => t.TenantId == tenantId && t.Id == tripId)
-            .Select(t => new { t.DriverId, t.VehicleId, t.TrailerId })
+            .Select(t => new { t.DriverId, t.VehicleId, t.TrailerId, t.TripNumber })
             .FirstOrDefaultAsync(cancellationToken);
 
         var mode = await _dbContext.TenantSettings.AsNoTracking()
@@ -173,6 +173,9 @@ public class FailedDeliveryService : IFailedDeliveryHandler
                     {
                         CustomerId = order.CustomerId,
                         LinkPath = $"/incidents/{incident.Id}",
+                        // UX-008: the bell names what failed, so it can be triaged without opening it.
+                        InAppTitle = string.Join(" · ", new[] { $"Levering mislukt: {order.OrderNumber}", trip?.TripNumber, customerName }
+                            .Where(part => !string.IsNullOrWhiteSpace(part))),
                         // The customer copy never carries the raw driver report.
                         CustomerTokens = new Dictionary<string, string>
                         {

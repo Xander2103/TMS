@@ -1,3 +1,4 @@
+using TransportationService.Api.Modules.Operations.Services;
 using Microsoft.EntityFrameworkCore;
 using TransportationService.Api.Common;
 using TransportationService.Api.Modules.Auditing.Services;
@@ -258,5 +259,46 @@ public class FailedDeliveryAndChargePolicyTests
         var incident = await h.Incidents.CreateAsync(Request(h, "Customer"), CancellationToken.None);
         Assert.Equal("Proposed", incident.ChargeDecision);
         Assert.Equal(50m, incident.ChargeAmount);
+    }
+
+    /// <summary>UX-008: a failed drop stays dispatcher work until its incident is handled, on the ONE incident.</summary>
+    [Fact]
+    public async Task LiveOverview_KeepsAFailedDeliveryVisible_ReadsTheExistingIncident_UntilItIsHandled()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        await h.Sut.HandleStopFailureAsync(h.TripId, h.StopId, "Poort gesloten", CancellationToken.None);
+        var overview = new OperationsOverviewService(h.Db.Context, new DevTenantContext(h.TenantId), new TestClock(Now));
+
+        var live = await overview.GetOverviewAsync(CancellationToken.None);
+        Assert.Equal(1, live.Counters.FailedDeliveries);
+        var failed = Assert.Single(live.FailedDeliveries!);
+        Assert.Equal(h.TripId, failed.TripId);
+        Assert.Equal("RIT-1", failed.TripNumber);
+        Assert.Equal(h.OrderId, failed.OrderId);
+        Assert.Equal("DOS-0001", failed.DossierNumber);
+        Assert.Contains("Poort gesloten", failed.Description);
+        Assert.Empty(live.Trips); // the trip itself is not running: this is exactly why the strip exists
+        Assert.Single(h.Db.Context.Incidents.ToList());
+
+        var incident = h.Db.Context.Incidents.Single();
+        incident.Status = IncidentStatus.Resolved;
+        await h.Db.Context.SaveChangesAsync();
+        var after = await overview.GetOverviewAsync(CancellationToken.None);
+        Assert.Equal(0, after.Counters.FailedDeliveries);
+        Assert.Empty(after.FailedDeliveries!);
+        Assert.Single(h.Db.Context.Incidents.ToList());
+    }
+
+    /// <summary>A manual incident is not a failed delivery: no source stop, not in the strip.</summary>
+    [Fact]
+    public async Task LiveOverview_LeavesManualIncidentsOut()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        h.Db.Context.Incidents.Add(new Incident { Id = Guid.NewGuid(), TenantId = h.TenantId, Title = "Schade", Status = IncidentStatus.New, TransportOrderId = h.OrderId });
+        await h.Db.Context.SaveChangesAsync();
+        var overview = new OperationsOverviewService(h.Db.Context, new DevTenantContext(h.TenantId), new TestClock(Now));
+        Assert.Empty((await overview.GetOverviewAsync(CancellationToken.None)).FailedDeliveries!);
     }
 }
