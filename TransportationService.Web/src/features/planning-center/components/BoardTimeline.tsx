@@ -216,7 +216,11 @@ function TripBlock({
   const overloaded =
     (trip.capacityWeightKg !== null && trip.totalWeightKg !== null && trip.totalWeightKg > trip.capacityWeightKg) ||
     (trip.capacityVolumeM3 !== null && trip.totalVolumeM3 !== null && trip.totalVolumeM3 > trip.capacityVolumeM3)
+  // UX-1: a Draft trip without driver or vehicle is routine work, so it reads as "Onvolledig", not as an alarm.
+  const incompleteCount = trip.incompleteConflictCount ?? 0
+  const blockingCount = trip.blockingConflictCount - incompleteCount
   const conflictCount = trip.blockingConflictCount + trip.warningConflictCount
+  const attentionCount = blockingCount + trip.warningConflictCount
   const preview = trip.conflictPreview ?? []
   const reasons = preview.length > 0
     ? [...preview, ...(conflictCount > preview.length ? [t('planningCenter.board.moreConflicts', { count: conflictCount - preview.length })] : [])]
@@ -232,7 +236,7 @@ function TripBlock({
         inline ? 'pc-trip-inline' : '',
         selected ? 'pc-selected' : '',
         dragOver ? 'pc-drop-target' : '',
-        trip.blockingConflictCount > 0 ? 'pc-trip-blocked' : '',
+        blockingCount > 0 ? 'pc-trip-blocked' : '',
       ].filter(Boolean).join(' ')}
       tabIndex={0}
       draggable={trip.status === 'Draft' || trip.status === 'Planned'}
@@ -272,10 +276,10 @@ function TripBlock({
         <div className="pc-trip-head">
           <strong>{trip.tripNumber}</strong>
           <span className="pc-trip-inline-driver">{trip.driverName ?? t('planningCenter.board.noDriver')}</span>
-          {conflictCount > 0 && (
+          {attentionCount > 0 && (
             <ConflictHint
-              tone={trip.blockingConflictCount > 0 ? 'danger' : 'warning'}
-              label={`⚠ ${conflictCount}`}
+              tone={blockingCount > 0 ? 'danger' : 'warning'}
+              label={`⚠ ${attentionCount}`}
               title={t('planningCenter.board.conflictsTitle')}
               reasons={reasons}
               ariaLabel={t('planningCenter.board.conflictCount', { count: conflictCount })}
@@ -287,10 +291,10 @@ function TripBlock({
       <div className="pc-trip-head">
         <strong>{trip.tripNumber}</strong>
         {level === 'full' && <Badge tone={TRIP_STATUS_TONE[trip.status]}>{statusLabel}</Badge>}
-        {level !== 'full' && conflictCount > 0 && (
+        {level !== 'full' && attentionCount > 0 && (
           <ConflictHint
-            tone={trip.blockingConflictCount > 0 ? 'danger' : 'warning'}
-            label={`⚠ ${conflictCount}`}
+            tone={blockingCount > 0 ? 'danger' : 'warning'}
+            label={`⚠ ${attentionCount}`}
             title={t('planningCenter.board.conflictsTitle')}
             reasons={reasons}
             ariaLabel={t('planningCenter.board.conflictCount', { count: conflictCount })}
@@ -322,10 +326,11 @@ function TripBlock({
       )}
       {level === 'full' && conflictCount > 0 && (
         <div className="pc-trip-conflicts">
-          {trip.blockingConflictCount > 0 && (
+          {incompleteCount > 0 && <Badge tone="neutral">{t('planningCenter.board.incomplete')}</Badge>}
+          {blockingCount > 0 && (
             <ConflictHint
               tone="danger"
-              label={t('planningCenter.board.blocking', { count: trip.blockingConflictCount })}
+              label={t('planningCenter.board.blocking', { count: blockingCount })}
               title={t('planningCenter.board.conflictsTitle')}
               reasons={reasons}
               ariaLabel={t('planningCenter.board.conflictCount', { count: conflictCount })}

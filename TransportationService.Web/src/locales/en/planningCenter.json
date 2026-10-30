@@ -46,7 +46,8 @@
     "expandRight": "Expand resources",
     "previousPeriod": "Previous period",
     "nextPeriod": "Next period",
-    "truncated": "The planning board shows at most {limit} trips — narrow the period or filters."
+    "truncated": "The planning board shows at most {limit} trips — narrow the period or filters.",
+    "resourceAssignedBlocked": "{label} assigned to {tripNumber}, but not deployable: planning will be blocked."
   },
   "board": {
     "label": "Planning board",
@@ -68,7 +69,8 @@
     "moreConflicts_one": "+ 1 more point of attention",
     "moreConflicts_other": "+ {count} more points of attention",
     "conflictsSelectHint": "Select the trip for the details.",
-    "noTime": "No time"
+    "noTime": "No time",
+    "incomplete": "Incomplete"
   },
   "resources": {
     "label": "Resources",
@@ -95,7 +97,8 @@
     "tailLift": "Tail lift",
     "refrigeration": "Refrigeration",
     "maintenanceOverdue": "Maintenance overdue",
-    "inspectionOverdue": "Inspection overdue"
+    "inspectionOverdue": "Inspection overdue",
+    "notDeployable": "Not deployable"
   },
   "inspector": {
     "label": "Trip details",

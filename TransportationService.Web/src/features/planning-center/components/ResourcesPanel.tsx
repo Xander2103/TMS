@@ -110,6 +110,14 @@ function sortPinnedFirst<T>(items: T[], pinned: ReadonlySet<string>, idOf: (item
   return [...items].sort((a, b) => Number(pinned.has(idOf(b))) - Number(pinned.has(idOf(a))))
 }
 
+/** UX-007: "Vrij" says no trips, so it never stands next to a blocked or out-of-service unit. */
+function FreeBadge({ item, t }: { item: PlanningVehicle | PlanningTrailer; t: TranslateFn }) {
+  if (!item.isActive || item.operationalStatus !== 'Available' || item.readiness === 'Blocked') {
+    return <Badge tone="danger">{t('planningCenter.resources.notDeployable')}</Badge>
+  }
+  return <Badge tone="success">{t('planningCenter.resources.free')}</Badge>
+}
+
 function PinButton({ pinned, onClick, t }: { pinned: boolean; onClick: () => void; t: TranslateFn }) {
   const label = pinned ? t('planningCenter.resources.unpin') : t('planningCenter.resources.pin')
   return (
@@ -215,7 +223,7 @@ function VehicleCard({ vehicle, pinned, onTogglePin, t }: {
         {vehicle.overdueInspectionCount > 0 && <Badge tone="danger">{t('planningCenter.resources.inspectionOverdue')}</Badge>}
         {vehicle.assignments.length > 0
           ? <Badge tone="info">{t('planningCenter.resources.trips', { count: vehicle.assignments.length })}</Badge>
-          : <Badge tone="success">{t('planningCenter.resources.free')}</Badge>}
+          : <FreeBadge item={vehicle} t={t} />}
       </div>
     </article>
   )
@@ -257,7 +265,7 @@ function TrailerCard({ trailer, pinned, onTogglePin, t }: {
         {trailer.overdueInspectionCount > 0 && <Badge tone="danger">{t('planningCenter.resources.inspectionOverdue')}</Badge>}
         {trailer.assignments.length > 0
           ? <Badge tone="info">{t('planningCenter.resources.trips', { count: trailer.assignments.length })}</Badge>
-          : <Badge tone="success">{t('planningCenter.resources.free')}</Badge>}
+          : <FreeBadge item={trailer} t={t} />}
       </div>
     </article>
   )

@@ -26,6 +26,8 @@ export interface PlanningBoardTrip {
   version: string
   /** B09: the first conflict descriptions (blocking first, max 3) — the card explains itself on hover. */
   conflictPreview?: string[] | null
+  /** UX-1: blocking conflicts that only say a Draft trip is not filled in yet (routine, not an alarm). */
+  incompleteConflictCount?: number
 }
 
 export interface PlanningBoard {

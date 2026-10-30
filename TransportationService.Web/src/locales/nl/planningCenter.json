@@ -46,7 +46,8 @@
     "expandRight": "Middelen uitklappen",
     "previousPeriod": "Vorige periode",
     "nextPeriod": "Volgende periode",
-    "truncated": "Het planbord toont maximaal {limit} ritten — verfijn de periode of filters."
+    "truncated": "Het planbord toont maximaal {limit} ritten — verfijn de periode of filters.",
+    "resourceAssignedBlocked": "{label} toegewezen aan {tripNumber}, maar niet inzetbaar: inplannen wordt geblokkeerd."
   },
   "board": {
     "label": "Planbord",
@@ -68,7 +69,8 @@
     "moreConflicts_one": "+ 1 ander aandachtspunt",
     "moreConflicts_other": "+ {count} andere aandachtspunten",
     "conflictsSelectHint": "Selecteer de rit voor de details.",
-    "noTime": "Zonder tijd"
+    "noTime": "Zonder tijd",
+    "incomplete": "Onvolledig"
   },
   "resources": {
     "label": "Middelen",
@@ -95,7 +97,8 @@
     "tailLift": "Laadklep",
     "refrigeration": "Koeling",
     "maintenanceOverdue": "Onderhoud over tijd",
-    "inspectionOverdue": "Keuring over tijd"
+    "inspectionOverdue": "Keuring over tijd",
+    "notDeployable": "Niet inzetbaar"
   },
   "inspector": {
     "label": "Ritdetails",

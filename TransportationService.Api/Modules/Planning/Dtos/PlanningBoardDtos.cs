@@ -34,7 +34,10 @@ public record PlanningBoardTripDto(
     int WarningConflictCount,
     Guid Version,
     /// <summary>B09: the first conflict descriptions (blocking first, max 3) so a card can explain itself without a selection.</summary>
-    IReadOnlyList<string>? ConflictPreview = null);
+    IReadOnlyList<string>? ConflictPreview = null,
+    /// <summary>UX-1: how many of the blocking conflicts only say a Draft trip is not filled in yet (no driver,
+    /// no vehicle). Still blocking at "Inplannen"; on the board it is routine work, not an alarm.</summary>
+    int IncompleteConflictCount = 0);
 
 /// <param name="Truncated">PERF-HIGH 3: true when the window held more trips than <paramref name="Limit"/>
 /// and the list was cut — the client must say so instead of presenting a silently incomplete board.</param>

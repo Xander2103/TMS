@@ -38,6 +38,8 @@ const FILTER_STORAGE_KEY = 'ts.planningCenter.filters'
 const WEEK_NEEDS_RAILS_BELOW = 1700
 interface MutationOptions {
   success?: string
+  /** UX-007: a done-but-attention message must not look like plain success. */
+  successIsNotice?: boolean
   reloadOrders?: boolean
   reloadResources?: boolean
   /** Retry with override+reason when the backend reports blocking conflicts. */
@@ -67,7 +69,7 @@ function loadStoredFilters(): UnplannedFilters {
 
 /** The dispatcher workspace: unplanned pool, drag-and-drop board and resource panel. */
 export function PlanningCenterPage() {
-  const { showError, showSuccess } = useToast()
+  const { showError, showSuccess, showToast } = useToast()
   const { t } = useLocale()
 
   const [layout, setLayout] = useState<BoardLayout>(loadStoredLayout)
@@ -235,7 +237,10 @@ export function PlanningCenterPage() {
     setBusy(true)
     try {
       await action()
-      if (options.success) showSuccess(options.success)
+      if (options.success) {
+        if (options.successIsNotice) showToast(options.success, 'info')
+        else showSuccess(options.success)
+      }
       reloadBoard()
       if (options.reloadOrders) reloadUnplanned()
       if (options.reloadResources) reloadResources()
@@ -262,9 +267,21 @@ export function PlanningCenterPage() {
     } finally {
       setBusy(false)
     }
-  }, [reloadBoard, reloadResources, reloadUnplanned, showError, showSuccess, t])
+  }, [reloadBoard, reloadResources, reloadUnplanned, showError, showSuccess, showToast, t])
 
   // --- Drag-and-drop handlers (all persist through backend commands) ---
+
+  /** UX-007: assigning a blocked unit is allowed, but the toast must not read as "all good". */
+  const assignedFeedback = useCallback((slot: 'driver' | 'vehicle' | 'trailer', id: string, label: string, tripNumber: string) => {
+    const unit = slot === 'vehicle'
+      ? resources?.vehicles.find((entry) => entry.id === id)
+      : slot === 'trailer' ? resources?.trailers.find((entry) => entry.id === id) : undefined
+    const blocked = unit?.readiness === 'Blocked'
+    return {
+      success: t(blocked ? 'planningCenter.page.resourceAssignedBlocked' : 'planningCenter.page.resourceAssigned', { label, tripNumber }),
+      successIsNotice: blocked,
+    }
+  }, [resources, t])
 
   const handleDropOnTrip = useCallback((trip: PlanningBoardTrip, payload: DragPayload) => {
     if (trip.status !== 'Draft' && trip.status !== 'Planned') {
@@ -292,7 +309,7 @@ export function PlanningCenterPage() {
         void runMutation(
           () => assignVehicle(trip.id, payload.id, trip.version),
           {
-            success: t('planningCenter.page.resourceAssigned', { label: payload.label, tripNumber: trip.tripNumber }),
+            ...assignedFeedback('vehicle', payload.id, payload.label, trip.tripNumber),
             reloadResources: true,
             overrideRetry: (reason) => assignVehicle(trip.id, payload.id, trip.version, true, reason),
           },
@@ -302,7 +319,7 @@ export function PlanningCenterPage() {
         void runMutation(
           () => assignTrailer(trip.id, payload.id, trip.version),
           {
-            success: t('planningCenter.page.resourceAssigned', { label: payload.label, tripNumber: trip.tripNumber }),
+            ...assignedFeedback('trailer', payload.id, payload.label, trip.tripNumber),
             reloadResources: true,
             overrideRetry: (reason) => assignTrailer(trip.id, payload.id, trip.version, true, reason),
           },
@@ -312,7 +329,7 @@ export function PlanningCenterPage() {
         // Dropping a trip on a trip has no meaning; ignore.
         break
     }
-  }, [runMutation, showError, t])
+  }, [assignedFeedback, runMutation, showError, t])
 
   const handleDropOnDay = useCallback((dateIso: string, payload: DragPayload) => {
     if (payload.kind === 'order') {
@@ -505,13 +522,15 @@ export function PlanningCenterPage() {
                 ;[ids[index], ids[target]] = [ids[target], ids[index]]
                 void runMutation(() => reorderOrders(trip.id, ids, trip.version), {})
               }}
-              onClearResource={(trip, slot) => {
+              resources={resources}
+              onAssignResource={(trip, slot, resourceId, label) => {
                 const api = slot === 'driver' ? assignDriver : slot === 'vehicle' ? assignVehicle : assignTrailer
                 void runMutation(
-                  () => api(trip.id, null, trip.version),
+                  () => api(trip.id, resourceId, trip.version),
                   {
+                    ...(resourceId && label ? assignedFeedback(slot, resourceId, label, trip.tripNumber) : {}),
                     reloadResources: true,
-                    overrideRetry: (reason) => api(trip.id, null, trip.version, true, reason),
+                    overrideRetry: (reason) => api(trip.id, resourceId, trip.version, true, reason),
                   },
                 )
               }}

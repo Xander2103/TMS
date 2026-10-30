@@ -204,7 +204,10 @@ public class PlanningBoardService : IPlanningBoardService
                 conflicts.Count(c => c.Severity == Common.Scheduling.ConflictSeverity.Blocking),
                 conflicts.Count(c => c.Severity == Common.Scheduling.ConflictSeverity.Warning),
                 trip.Version,
-                conflictPreview));
+                conflictPreview,
+                trip.Status == TripStatus.Draft
+                    ? conflicts.Count(c => c.Code is PlanningConflictCode.MissingDriver or PlanningConflictCode.MissingVehicle)
+                    : 0));
         }
 
         return new PlanningBoardDto(start, end, items, truncated, PlanningListLimits.BoardTrips);

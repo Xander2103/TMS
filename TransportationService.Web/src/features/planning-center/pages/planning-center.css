@@ -995,6 +995,11 @@
   font-size: 0.9rem;
 }
 
+/* UX-005: the pickers need the full panel width for "VRT-0021 · 1-ABC-123". */
+.pc-inspector-facts .pc-inspector-picker {
+  grid-column: 1 / -1;
+}
+
 .pc-inspector-orders,
 .pc-inspector-conflicts,
 .pc-inspector-overrides {

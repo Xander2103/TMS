@@ -1,11 +1,16 @@
 import { Link } from 'react-router-dom'
 import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
+import { SearchableSelect } from '../../../components/ui/SearchableSelect'
 import { useLocale } from '../../../i18n/localeContext'
 import {
   CONFLICT_SEVERITY_META, TRIP_STATUS_LABELS, TRIP_STATUS_TONE, type TripDetail,
 } from '../../planning/types'
+import type { PlanningResources } from '../types'
+import { driverPickerOptions, trailerPickerOptions, vehiclePickerOptions } from '../utils/resourcePickerOptions'
 import { formatDate, formatDateTime } from '../../../utils/dates'
+
+type ResourceSlot = 'driver' | 'vehicle' | 'trailer'
 
 interface TripInspectorProps {
   trip: TripDetail | null
@@ -16,7 +21,9 @@ interface TripInspectorProps {
   onRevertToDraft: (trip: TripDetail) => void
   onRemoveOrder: (trip: TripDetail, orderId: string) => void
   onMoveOrder: (trip: TripDetail, orderId: string, direction: -1 | 1) => void
-  onClearResource: (trip: TripDetail, slot: 'driver' | 'vehicle' | 'trailer') => void
+  /** UX-005: the board's already loaded resources feed the pickers; no extra query per selection. */
+  resources: PlanningResources | null
+  onAssignResource: (trip: TripDetail, slot: ResourceSlot, resourceId: string | null, label: string | null) => void
 }
 
 /**
@@ -24,7 +31,7 @@ interface TripInspectorProps {
  * mutation pipeline, so the board context never gets lost.
  */
 export function TripInspector({
-  trip, isLoading, busy, onClose, onPlan, onRevertToDraft, onRemoveOrder, onMoveOrder, onClearResource,
+  trip, isLoading, busy, onClose, onPlan, onRevertToDraft, onRemoveOrder, onMoveOrder, resources, onAssignResource,
 }: TripInspectorProps) {
   const { t } = useLocale()
   return (
@@ -49,39 +56,21 @@ export function TripInspector({
               <dt>{t('planningCenter.inspector.date')}</dt>
               <dd>{formatDate(trip.tripDate)}</dd>
             </div>
-            <div>
-              <dt>{t('planningCenter.inspector.driver')}</dt>
-              <dd>
-                {trip.driverName ?? '—'}
-                {trip.driverId && (trip.status === 'Draft' || trip.status === 'Planned') && (
-                  <button type="button" className="pc-mini" disabled={busy} onClick={() => onClearResource(trip, 'driver')}>
-                    {t('planningCenter.inspector.clear')}
-                  </button>
-                )}
-              </dd>
-            </div>
-            <div>
-              <dt>{t('planningCenter.inspector.vehicle')}</dt>
-              <dd>
-                {trip.vehicleNumber ?? '—'}
-                {trip.vehicleId && (trip.status === 'Draft' || trip.status === 'Planned') && (
-                  <button type="button" className="pc-mini" disabled={busy} onClick={() => onClearResource(trip, 'vehicle')}>
-                    {t('planningCenter.inspector.clear')}
-                  </button>
-                )}
-              </dd>
-            </div>
-            <div>
-              <dt>{t('planningCenter.inspector.trailer')}</dt>
-              <dd>
-                {trip.trailerNumber ?? '—'}
-                {trip.trailerId && (trip.status === 'Draft' || trip.status === 'Planned') && (
-                  <button type="button" className="pc-mini" disabled={busy} onClick={() => onClearResource(trip, 'trailer')}>
-                    {t('planningCenter.inspector.clear')}
-                  </button>
-                )}
-              </dd>
-            </div>
+            <ResourceField
+              slot="driver" trip={trip} busy={busy} current={trip.driverName}
+              label={t('planningCenter.inspector.driver')} options={driverPickerOptions(resources, t)}
+              onAssign={onAssignResource}
+            />
+            <ResourceField
+              slot="vehicle" trip={trip} busy={busy} current={trip.vehicleNumber}
+              label={t('planningCenter.inspector.vehicle')} options={vehiclePickerOptions(resources, t)}
+              onAssign={onAssignResource}
+            />
+            <ResourceField
+              slot="trailer" trip={trip} busy={busy} current={trip.trailerNumber}
+              label={t('planningCenter.inspector.trailer')} options={trailerPickerOptions(resources, t)}
+              onAssign={onAssignResource}
+            />
           </dl>
 
           <h3>{t('planningCenter.inspector.ordersTitle', { count: trip.orders.length })}</h3>
@@ -123,9 +112,13 @@ export function TripInspector({
               <ul className="pc-inspector-conflicts">
                 {trip.conflicts.map((conflict, index) => (
                   <li key={`${conflict.code}-${index}`}>
-                    <Badge tone={CONFLICT_SEVERITY_META[conflict.severity].tone}>
-                      {t(CONFLICT_SEVERITY_META[conflict.severity].label)}
-                    </Badge>
+                    {trip.status === 'Draft' && (conflict.code === 'MissingDriver' || conflict.code === 'MissingVehicle') ? (
+                      <Badge tone="neutral">{t('planningCenter.board.incomplete')}</Badge>
+                    ) : (
+                      <Badge tone={CONFLICT_SEVERITY_META[conflict.severity].tone}>
+                        {t(CONFLICT_SEVERITY_META[conflict.severity].label)}
+                      </Badge>
+                    )}
                     <span>{conflict.description}</span>
                   </li>
                 ))}
@@ -163,5 +156,45 @@ export function TripInspector({
         </div>
       )}
     </aside>
+  )
+}
+
+/** Picker on an assignable trip (keyboard path next to drag-and-drop), plain text once the trip runs. */
+function ResourceField({ slot, trip, busy, current, label, options, onAssign }: {
+  slot: ResourceSlot
+  trip: TripDetail
+  busy: boolean
+  current: string | null
+  label: string
+  options: ReturnType<typeof driverPickerOptions>
+  onAssign: TripInspectorProps['onAssignResource']
+}) {
+  const selectedId = slot === 'driver' ? trip.driverId : slot === 'vehicle' ? trip.vehicleId : trip.trailerId
+  if (trip.status !== 'Draft' && trip.status !== 'Planned') {
+    return (
+      <div>
+        <dt>{label}</dt>
+        <dd>{current ?? '—'}</dd>
+      </div>
+    )
+  }
+  const inputId = `pc-inspector-${slot}`
+  return (
+    <div className="pc-inspector-picker">
+      <dt><label htmlFor={inputId}>{label}</label></dt>
+      <dd>
+        <SearchableSelect
+          id={inputId}
+          value={selectedId}
+          selectedLabel={current ?? undefined}
+          options={options}
+          disabled={busy}
+          onChange={(value) => {
+            if (value === selectedId) return
+            onAssign(trip, slot, value, options.find((option) => option.value === value)?.label ?? null)
+          }}
+        />
+      </dd>
+    </div>
   )
 }

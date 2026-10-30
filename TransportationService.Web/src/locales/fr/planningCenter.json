@@ -46,7 +46,8 @@
     "expandRight": "Développer Ressources",
     "previousPeriod": "Période précédente",
     "nextPeriod": "Période suivante",
-    "truncated": "Le tableau de planification affiche au maximum {limit} trajets — affinez la période ou les filtres."
+    "truncated": "Le tableau de planification affiche au maximum {limit} trajets — affinez la période ou les filtres.",
+    "resourceAssignedBlocked": "{label} attribué à {tripNumber}, mais non déployable : la planification sera bloquée."
   },
   "board": {
     "label": "Tableau de planification",
@@ -68,7 +69,8 @@
     "moreConflicts_one": "+ 1 autre point d’attention",
     "moreConflicts_other": "+ {count} autres points d’attention",
     "conflictsSelectHint": "Sélectionnez le trajet pour les détails.",
-    "noTime": "Sans heure"
+    "noTime": "Sans heure",
+    "incomplete": "Incomplet"
   },
   "resources": {
     "label": "Ressources",
@@ -95,7 +97,8 @@
     "tailLift": "Hayon",
     "refrigeration": "Frigo",
     "maintenanceOverdue": "Entretien en retard",
-    "inspectionOverdue": "Contrôle en retard"
+    "inspectionOverdue": "Contrôle en retard",
+    "notDeployable": "Non déployable"
   },
   "inspector": {
     "label": "Détails de la tournée",
