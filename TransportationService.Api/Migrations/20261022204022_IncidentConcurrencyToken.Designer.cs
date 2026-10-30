@@ -7884,6 +7884,12 @@ namespace TransportationService.Api.Migrations
                         .HasMaxLength(10)
                         .HasColumnType("character varying(10)");
 
+                    b.Property<Guid?>("ClaimToken")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("ClaimedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -11667,6 +11673,10 @@ namespace TransportationService.Api.Migrations
                         .HasMaxLength(2000)
                         .HasColumnType("character varying(2000)");
 
+                    b.Property<string>("IdempotencyKey")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
                     b.Property<Guid>("InvoiceId")
                         .HasColumnType("uuid");
 
@@ -11674,6 +11684,9 @@ namespace TransportationService.Api.Migrations
                         .HasColumnType("boolean");
 
                     b.Property<DateTime?>("NextAttemptAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("NextPollAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("PayloadHash")
@@ -11714,6 +11727,9 @@ namespace TransportationService.Api.Migrations
                         .HasMaxLength(30)
                         .HasColumnType("character varying(30)");
 
+                    b.Property<DateTime?>("SubmissionClaimedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<Guid>("TenantId")
                         .HasColumnType("uuid");
 
@@ -11726,6 +11742,9 @@ namespace TransportationService.Api.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("InvoiceId");
+
+                    b.HasIndex("Status", "NextPollAt")
+                        .HasDatabaseName("IX_peppol_transmissions_status_next_poll");
 
                     b.HasIndex("TenantId", "Status")
                         .HasDatabaseName("IX_peppol_transmissions_tenant_status");
@@ -13085,6 +13104,27 @@ namespace TransportationService.Api.Migrations
                     b.HasIndex("TenantId", "TripId", "OccurredAt");
 
                     b.ToTable("scan_events", (string)null);
+                });
+
+            modelBuilder.Entity("TransportationService.Api.Modules.Security.ColumnEncryptionCanary", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Value")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("column_encryption_canaries", (string)null);
                 });
 
             modelBuilder.Entity("TransportationService.Api.Modules.SystemAdmin.Entities.DatabaseBackup", b =>
