@@ -99,7 +99,8 @@
     "taskTemplates": "Modèles de tâches",
     "activityTypes": "Types d'activité",
     "units": "Unités",
-    "servicesSurcharges": "Services & suppléments"
+    "servicesSurcharges": "Services & suppléments",
+    "driverApp": "Application chauffeur"
   },
   "lookups": {
     "departments": "Départements",

@@ -767,7 +767,7 @@ public class DefaultRoleSeederTests
 
         var state = await db.Context.RoleTemplateStates.SingleAsync(s => s.TenantId == tenantId);
         Assert.Equal(DefaultRoleUpgrades.CurrentVersion, state.AppliedVersion);
-        Assert.Equal(40, DefaultRoleUpgrades.CurrentVersion);
+        Assert.Equal(41, DefaultRoleUpgrades.CurrentVersion);
 
 
         var roles = await db.Context.Roles.Where(r => r.TenantId == tenantId).ToListAsync();
@@ -1033,7 +1033,7 @@ public class DefaultRoleSeederTests
         var versions = DefaultRoleUpgrades.Steps.Select(s => s.Version).ToList();
         Assert.Equal(versions.Distinct().Count(), versions.Count);
         Assert.Equal(Enumerable.Range(2, DefaultRoleUpgrades.CurrentVersion - 1), versions);
-        Assert.Equal(40, DefaultRoleUpgrades.CurrentVersion);
+        Assert.Equal(41, DefaultRoleUpgrades.CurrentVersion);
 
         var warehouse = DefaultRoleUpgrades.Steps.Single(s => s.Version == 39);
         Assert.Equal(new[] { "hr", "magazijn" }, warehouse.GrantsByTemplateCode.Keys.Order());
@@ -1105,13 +1105,13 @@ public class DefaultRoleSeederTests
         Assert.DoesNotContain(PermissionCodes.ProblemsCreateRedelivery, accounting);
 
         var state = await db.Context.RoleTemplateStates.SingleAsync(s => s.TenantId == tenantId);
-        Assert.Equal(40, state.AppliedVersion);
+        Assert.Equal(41, state.AppliedVersion);
 
-        // Idempotent: a second sync adds no permission rows and keeps the version at 40.
+        // Idempotent: a second sync adds no permission rows and keeps the version at 41.
         var rows = await db.Context.RolePermissions.CountAsync();
         await DefaultRoleSeeder.SyncAsync(db.Context);
         Assert.Equal(rows, await db.Context.RolePermissions.CountAsync());
-        Assert.Equal(40, (await db.Context.RoleTemplateStates.AsNoTracking().SingleAsync(s => s.TenantId == tenantId)).AppliedVersion);
+        Assert.Equal(41, (await db.Context.RoleTemplateStates.AsNoTracking().SingleAsync(s => s.TenantId == tenantId)).AppliedVersion);
         Assert.Equal(1, await db.Context.RoleTemplateStates.CountAsync(s => s.TenantId == tenantId));
     }
 
@@ -1141,6 +1141,52 @@ public class DefaultRoleSeederTests
         Assert.Equal("Eigen omschrijving van de klant",
             (await db.Context.Roles.SingleAsync(r => r.TemplateCode == "management" && r.TenantId == otherTenant)).Description);
         Assert.Equal(grantsBefore, await db.Context.RolePermissions.CountAsync());
-        Assert.Equal(40, DefaultRoleUpgrades.CurrentVersion);
+        Assert.Equal(41, DefaultRoleUpgrades.CurrentVersion);
+    }
+
+    /// <summary>UX-003: v41 takes planning and live operations away from the stamped Magazijn role, once.</summary>
+    [Fact]
+    public async Task Version41_RevokesPlanningAndOperationsFromMagazijn_AnAdminRegrantStays()
+    {
+        var (db, tenantId) = await SeedTenantWithCatalogAsync();
+        using var _ = db;
+        var planningView = await db.Context.Permissions.SingleAsync(p => p.Code == PermissionCodes.PlanningView);
+        var operationsView = await db.Context.Permissions.SingleAsync(p => p.Code == PermissionCodes.OperationsView);
+        var warehouseView = await db.Context.Permissions.SingleAsync(p => p.Code == PermissionCodes.WarehouseView);
+        var magazijn = new Role
+        {
+            Id = Guid.NewGuid(), TenantId = tenantId, Name = "Magazijn", Description = "x", IsSystemRole = false, IsActive = true,
+            TemplateCode = "magazijn", CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow,
+        };
+        var custom = new Role
+        {
+            Id = Guid.NewGuid(), TenantId = tenantId, Name = "Eigen rol", Description = "x", IsSystemRole = false, IsActive = true,
+            CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow,
+        };
+        db.Context.Roles.AddRange(magazijn, custom);
+        db.Context.RolePermissions.AddRange(
+            new RolePermission { RoleId = magazijn.Id, PermissionId = planningView.Id },
+            new RolePermission { RoleId = magazijn.Id, PermissionId = operationsView.Id },
+            new RolePermission { RoleId = magazijn.Id, PermissionId = warehouseView.Id },
+            new RolePermission { RoleId = custom.Id, PermissionId = planningView.Id });
+        db.Context.RoleTemplateStates.Add(new RoleTemplateState { Id = Guid.NewGuid(), TenantId = tenantId, AppliedVersion = 40, UpdatedAt = DateTime.UtcNow });
+        await db.Context.SaveChangesAsync();
+
+        await DefaultRoleSeeder.SyncAsync(db.Context);
+
+        var codes = await CodesOfAsync(db, magazijn.Id);
+        Assert.DoesNotContain(PermissionCodes.PlanningView, codes);
+        Assert.DoesNotContain(PermissionCodes.OperationsView, codes);
+        Assert.Contains(PermissionCodes.WarehouseView, codes);
+        Assert.Contains(PermissionCodes.PlanningView, await CodesOfAsync(db, custom.Id));
+
+        // A deliberate re-grant by an administrator survives later syncs.
+        db.Context.RolePermissions.Add(new RolePermission { RoleId = magazijn.Id, PermissionId = planningView.Id });
+        await db.Context.SaveChangesAsync();
+        await DefaultRoleSeeder.SyncAsync(db.Context);
+        Assert.Contains(PermissionCodes.PlanningView, await CodesOfAsync(db, magazijn.Id));
+
+        Assert.DoesNotContain(PermissionCodes.PlanningView, DefaultRoleDefinitions.All.Single(t => t.Code == "magazijn").PermissionCodes);
+        Assert.DoesNotContain(PermissionCodes.OperationsView, DefaultRoleDefinitions.All.Single(t => t.Code == "magazijn").PermissionCodes);
     }
 }

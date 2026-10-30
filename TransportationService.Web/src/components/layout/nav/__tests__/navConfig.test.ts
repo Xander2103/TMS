@@ -87,7 +87,7 @@ describe('getNavModules — §14 target tree', () => {
 
   it('Vandaag bundles dashboard, communication and the Problemen pair', () => {
     const vandaag = modules.find((m) => m.id === 'vandaag')!
-    expect(vandaag.items!.map((i) => i.to)).toEqual(['/dashboard', '/inbox', '/notifications'])
+    expect(vandaag.items!.map((i) => i.to)).toEqual(['/dashboard', '/driver', '/inbox', '/notifications'])
     expect(vandaag.items!.find((i) => i.to === '/notifications')?.badge).toBe('notifications')
     const problemen = vandaag.subgroups!.find((s) => nl(s.label) === 'Problemen')!
     expect(problemen.items.map((i) => i.to)).toEqual(['/incidents', '/exceptions'])
@@ -126,13 +126,17 @@ describe('getNavModules — §14 target tree', () => {
     expect(facturatie.items.map((i) => i.to)).toEqual(['/invoices', '/invoice-control', '/peppol'])
   })
 
-  it('hides the driver surfaces from the internal sidebar (routes stay reachable)', () => {
+  it('offers the driver shell only to whoever executes trips, not to view-only dispatchers', () => {
+    const entry = modules.flatMap((m) => m.items ?? []).find((i) => i.to === '/driver')
+    expect(entry?.permissions).toEqual(['driver_workflow.execute'])
+  })
+
+  it('hides the driver trip list from the internal sidebar (the route stays reachable)', () => {
     const allRoutes = modules.flatMap((m) => [
       ...(m.items ?? []).map((i) => i.to),
       ...(m.subgroups ?? []).flatMap((sg) => sg.items.map((i) => i.to)),
     ])
     expect(allRoutes).not.toContain('/my-trips')
-    expect(allRoutes).not.toContain('/driver')
     expect(allRoutes).not.toContain('/messaging')
   })
 

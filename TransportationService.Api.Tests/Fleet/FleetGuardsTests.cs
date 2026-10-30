@@ -511,6 +511,6 @@ public class FleetGuardsTests
 
         var step = DefaultRoleUpgrades.Steps.Single(s => s.Version == 37);
         Assert.Contains(PermissionCodes.FleetFinanceView, step.GrantsByTemplateCode["boekhouding"]);
-        Assert.Equal(40, DefaultRoleUpgrades.CurrentVersion);
+        Assert.Equal(41, DefaultRoleUpgrades.CurrentVersion);
     }
 }

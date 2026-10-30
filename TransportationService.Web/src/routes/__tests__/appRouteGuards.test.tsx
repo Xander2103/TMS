@@ -109,6 +109,7 @@ const SELF_CHECKED: Record<string, string> = {
   '/edi': 'checks edi.view|manage per tab',
   '/issued-items': 'index redirect; IssuedItemsAdminPage checks per tab',
   '/portal/time': 'self-service portal (own clock, api/me/attendance)',
+  '/driver': 'guarded on the driver-shell layout route (driver_workflow.view); the menu entry is narrower on purpose',
 }
 
 /** The any-of permissions guarding the AppRoutes line for `path`, or null when unguarded. */

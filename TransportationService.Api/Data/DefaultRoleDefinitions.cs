@@ -335,8 +335,6 @@ public static class DefaultRoleDefinitions
                 PermissionCodes.ScanningView, PermissionCodes.ScanningExecute,
                 PermissionCodes.PackageExceptionsCreate,
                 PermissionCodes.ExceptionsView, PermissionCodes.ExceptionsCreate,
-                PermissionCodes.PlanningView,
-                PermissionCodes.OperationsView,
                 PermissionCodes.WarehouseManage, PermissionCodes.WarehouseSchedule,
                 PermissionCodes.WarehouseConflictOverride,
                 PermissionCodes.IssuedItemsView,

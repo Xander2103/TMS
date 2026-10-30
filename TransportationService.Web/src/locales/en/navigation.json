@@ -99,7 +99,8 @@
     "taskTemplates": "Task templates",
     "activityTypes": "Activity types",
     "units": "Units",
-    "servicesSurcharges": "Services & surcharges"
+    "servicesSurcharges": "Services & surcharges",
+    "driverApp": "Driver app"
   },
   "lookups": {
     "departments": "Departments",

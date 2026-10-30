@@ -21,7 +21,7 @@ public static class DefaultRoleUpgrades
         IReadOnlyDictionary<string, IReadOnlyList<string>>? RevocationsByTemplateCode = null);
 
     /// <summary>Version 1 = the original role creation; steps start at 2.</summary>
-    public const int CurrentVersion = 40;
+    public const int CurrentVersion = 41;
 
     public static IReadOnlyList<UpgradeStep> Steps { get; } =
     [
@@ -702,6 +702,15 @@ public static class DefaultRoleUpgrades
             {
                 ["planner"] = [PermissionCodes.ProblemsCreateRedelivery],
                 ["dispatcher"] = [PermissionCodes.ProblemsCreateRedelivery],
+            }),
+        new(41,
+            "UX-1 2026-10-30 (UX-003): het magazijn werkt vanuit laden & scannen en de uitgiftebalie. Planbord, ritlijst en "
+            + "live opvolging tonen klanten, routes en chauffeurs die het magazijn niet nodig heeft; het magazijn behoudt zijn "
+            + "eigen laadlijsten, docks en afwijkingen. Een beheerder kan het recht bewust opnieuw toekennen.",
+            new Dictionary<string, IReadOnlyList<string>>(),
+            new Dictionary<string, IReadOnlyList<string>>
+            {
+                ["magazijn"] = [PermissionCodes.PlanningView, PermissionCodes.OperationsView],
             }),
     ];
 }

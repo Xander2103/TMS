@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
-import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { InternalOnly, RootRedirect } from '../portalRouting'
 
 const auth = vi.hoisted(() => ({
@@ -22,6 +22,10 @@ vi.mock('../../features/auth/authContextValue', () => ({
     hasAnyPermission: (codes: string[]) => codes.some((c) => auth.permissions.includes(c)),
   }),
 }))
+
+function LandedOn() {
+  return <div data-testid="landed">{useLocation().pathname}</div>
+}
 
 describe('RootRedirect', () => {
   it('sends a portal user (customerId + customer_portal.view) to /klantportaal', () => {
@@ -75,6 +79,34 @@ describe('RootRedirect', () => {
     )
 
     expect(screen.getByText('Interne app')).toBeInTheDocument()
+  })
+
+  it.each([
+    ['Planner', ['planning.view', 'planning.edit', 'orders.create', 'operations.view', 'dossiers.view'], '/planning-center'],
+    ['Dispatcher', ['planning.view', 'planning.edit', 'operations.view', 'dossiers.view'], '/operations'],
+    ['Boekhouding', ['invoices.view', 'invoices.change_status', 'dossiers.view', 'vehicles.view'], '/invoices'],
+    ['Wagenparkbeheerder', ['vehicles.view', 'vehicles.edit', 'planning.view', 'dashboard.view'], '/fleet'],
+    ['HR', ['employees.view', 'employees.edit', 'inventory.issue', 'dashboard.view'], '/employees'],
+    ['Magazijn', ['inventory.issue', 'warehouse.view'], '/inventory/issues'],
+    ['Chauffeur', ['driver_workflow.view', 'driver_workflow.execute'], '/driver'],
+    ['Management', ['operations.view', 'dashboard.view', 'dossiers.view'], '/dashboard'],
+    ['Administrator', ['roles.manage_permissions', 'dossiers.view', 'planning.view', 'planning.edit', 'orders.create', 'operations.view'], '/dossiers'],
+    ['Dispatcher die ook rijdt', ['planning.view', 'planning.edit', 'operations.view', 'driver_workflow.execute'], '/operations'],
+    ['Rol die rechten mist voor de balie', ['planning.edit', 'dossiers.view'], '/dossiers'],
+  ])('lands %s on the desk its rights support', (_role, permissions, expected) => {
+    auth.customerId = null
+    auth.permissions = permissions as string[]
+
+    render(
+      <MemoryRouter initialEntries={['/']}>
+        <Routes>
+          <Route path="/" element={<RootRedirect />} />
+          <Route path="*" element={<LandedOn />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    expect(screen.getByTestId('landed')).toHaveTextContent(expected as string)
   })
 
   it('a customer-linked user WITHOUT customer_portal.view is treated as internal', () => {

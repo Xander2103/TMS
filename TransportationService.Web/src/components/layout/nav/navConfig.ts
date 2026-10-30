@@ -120,8 +120,8 @@ function parametersModule(): NavModule {
 
 /**
  * Wave 1 §14 doelboom: operationele groepen (Vandaag → Rapportage) + één Parameters-groep.
- * Paden veranderen NOOIT — enkel groepering en labels. /my-trips en /driver staan bewust
- * niet meer in de zijbalk: chauffeurs krijgen de driver-shell, de routes blijven bestaan.
+ * Paden veranderen NOOIT — enkel groepering en labels. /my-trips staat bewust niet meer in de
+ * zijbalk: chauffeurs krijgen de driver-shell, /driver enkel voor wie echt uitvoert.
  */
 export function getNavModules(): NavModule[] {
   return [
@@ -145,6 +145,8 @@ export function getNavModules(): NavModule[] {
       icon: LayoutDashboard,
       items: [
         { label: 'navigation.menu.dashboard', to: '/dashboard', permissions: ['dashboard.view'] },
+        // UX-1: the way back from the inbox for whoever actually drives (not for view-only dispatchers).
+        { label: 'navigation.menu.driverApp', to: '/driver', permissions: ['driver_workflow.execute'] },
         { label: 'navigation.menu.inbox', to: '/inbox' },
         { label: 'navigation.menu.notifications', to: '/notifications', badge: 'notifications' },
       ],

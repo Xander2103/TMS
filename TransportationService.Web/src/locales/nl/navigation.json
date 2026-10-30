@@ -99,7 +99,8 @@
     "taskTemplates": "Taaksjablonen",
     "activityTypes": "Activiteitstypes",
     "units": "Eenheden",
-    "servicesSurcharges": "Services & toeslagen"
+    "servicesSurcharges": "Services & toeslagen",
+    "driverApp": "Chauffeursapp"
   },
   "lookups": {
     "departments": "Afdelingen",

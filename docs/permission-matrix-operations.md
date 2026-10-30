@@ -31,7 +31,7 @@ gematcht op TemplateCode; maatwerk blijft intact):
 - **dispatcher**: operations.view, operations.manage_alerts, warehouse.schedule
 - **management**: operations.view, profitability.export
 - **boekhouding**: profitability.export
-- **magazijn**: operations.view, warehouse.manage, warehouse.schedule, warehouse.conflict_override
+- **magazijn**: warehouse.manage, warehouse.schedule, warehouse.conflict_override (operations.view en planning.view zijn in v41 ingetrokken: UX-003)
 
 `DefaultRoleDefinitions` is gelijklopend bijgewerkt voor nieuwe tenants; Administrator
 (systeemrol) krijgt zoals altijd automatisch de volledige catalogus via
