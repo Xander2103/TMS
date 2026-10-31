@@ -379,3 +379,8 @@
   margin-top: 4px;
   white-space: normal;
 }
+
+/* A hold reason is a full sentence: it wraps instead of widening the page. */
+.inv-control-reasons .ui-badge {
+  white-space: normal;
+}

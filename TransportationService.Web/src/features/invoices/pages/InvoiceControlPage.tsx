@@ -312,7 +312,7 @@ export function InvoiceControlPage() {
                     <td className="nowrap">{formatDate(order.orderDate)}</td>
                     <td>{order.dossierNumber ?? '—'}</td>
                     <td>{order.agreedPrice !== null ? euro(order.agreedPrice) : '—'}</td>
-                    <td>
+                    <td className="inv-control-reasons">
                       {order.reasons.map((reason) => (
                         <Badge key={reason} tone="warning">
                           {READINESS_REASON_KEYS[reason] ? t(READINESS_REASON_KEYS[reason], { number: order.billingHoldOrderNumber ?? '' }) : reason}
