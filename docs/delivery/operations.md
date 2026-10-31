@@ -885,7 +885,7 @@ Na elke deploy:
 
 1. **Opstartlog controleren** — geen exceptions van `StartupSecurityValidator`; regels van
    `DossierBackfillSeeder` ("created N wrapper dossiers" of stil bij 0), de
-   `Authorization catalogue synced … v40`-regel en geen `fail:`/`crit:` of seeder-fouten
+   `Authorization catalogue synced … v41`-regel en geen `fail:`/`crit:` of seeder-fouten
    (`journalctl -u transportationservice-api`).
 2. **Migratiestand** — `__EFMigrationsHistory` eindigt op de nieuwste migratie van de
    gedeployde commit en telt evenveel rijen als er migratiebestanden zijn (§1.3); de

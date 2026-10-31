@@ -15,7 +15,7 @@ webserver en **geen** achtergrondjobs; het proces stopt zodra het klaar is.
 | Tenant | naam + slug (uniek) | bestaat al → gerapporteerd, niets overschreven |
 | Bedrijfsinstellingen | tijdzone `Europe/Brussels`, taal `nl`, standaardnummering (`KL-`, `CH-`, `ORD-`, `RIT-`, `FAC-`, `MED-`, …), bedrijfsnaam/btw/land uit de opties | bestaat al |
 | Systeemrol `Administrator` | volledige permissiecatalogus (`PermissionCatalogSeeder`) | bestaat al; catalogus wordt bijgewerkt |
-| 12 standaardrollen | `DefaultRoleSeeder`, actuele sjabloonversie (`DefaultRoleUpgrades.CurrentVersion`, nu v40) | ontbrekende aangevuld |
+| 12 standaardrollen | `DefaultRoleSeeder`, actuele sjabloonversie (`DefaultRoleUpgrades.CurrentVersion`, nu v41) | ontbrekende aangevuld |
 | Referentielijsten | afdelingen, eenheden, contracttypes, talen, nationaliteiten, voertuig-/opleggercategorieën, functies, klantcategorieën, takencategorieën, uitgiftecategorieën, startlijst diensten/toeslagen | alleen ontbrekende codes |
 | Kwalificatietypes | globale catalogus (rijbewijzen, Code 95, ADR, …) | alleen ontbrekende |
 | Eigen bedrijf (juridische entiteit) | standaardentiteit uit `--legal-entity-name`/`--name`, `--vat`, `--company-number`, `--country` | alleen als de tenant er nog geen heeft |
