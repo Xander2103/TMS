@@ -148,3 +148,6 @@ StartUp.local.txt
 # Database dumps (production snapshots for migration validation) must never be committed
 *.dump
 *.pgdump
+
+# Local evidence and archives (bulky, never commit)
+.local/
