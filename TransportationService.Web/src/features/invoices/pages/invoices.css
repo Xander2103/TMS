@@ -372,3 +372,10 @@
 .inv-history {
   margin-top: 24px;
 }
+
+/* R-N2: why a failed-delivery pair member stays off the invoice is read, not hovered. */
+.inv-readiness-hold {
+  display: block;
+  margin-top: 4px;
+  white-space: normal;
+}

@@ -44,6 +44,33 @@ commando `problems.create_redelivery` — dispatcher/planner, v40) maakt een CON
 
 Eén herlevering per incident; originele colli gaan naar *Herlevering gepland* waar de levenscyclus dat toelaat.
 
+### Facturatie van een mislukte levering met herlevering (R-N1, R-N2, 2026-10-31)
+
+Een mislukte levering en haar herlevering zijn **één transport** en worden één keer aangerekend. De
+originele opdracht draagt de transportprijs. De regel staat in `RedeliveryBillingRule` en leest live
+feiten, zodat factuurbouwer, facturatiecontrole, factuur aanmaken en de controle bij definitief maken
+hetzelfde zeggen:
+
+| Situatie | Gevolg |
+|---|---|
+| Origineel geprijsd, herlevering met of zonder prijs | Origineel factureerbaar. Herlevering *Nakijken* (`redelivery.original_charged`), niet aangevinkt en door de server geweigerd |
+| Herlevering bevestigd als gratis | € 0-lijn naast het origineel; totaal is de ene prijs |
+| Origineel bevestigd als gratis of volledig gecrediteerd | De herlevering draagt de prijs |
+| Origineel nog zonder prijs | Een geprijsde herlevering is de enige aanrekening; het origineel blijft *Nakijken* |
+| Herlevering al gefactureerd, origineel daarna geprijsd | Origineel *Nakijken* (`redelivery.already_charged`) |
+| Extra kost | Via de **goedgekeurde doorrekening** op het incident: een aparte verkooplijn op het origineel. Een doorrekening beëindigt een gratis-beslissing |
+
+**Prijs na uitvoering.** De afgesproken prijs kan alleen in concept, ingediend of bevestigd
+(`SetOneOffPriceAsync`); het prijspaneel biedt ze daarna niet meer aan. Verkooplijnen blijven kunnen tot
+de prijs vergrendeld is. *Gratis* kan daarna alleen nog op een afgeronde opdracht van zo'n paar, met
+reden en met `orders.override_price` of `orders.manage` (`POST .../pricing/confirm-free`). Nooit op een
+vergrendelde prijs, een opdracht op een factuur of een opdracht met een goedgekeurde doorrekening.
+Gewone afgeronde opdrachten worden uitsluitend via verkooplijnen geprijsd.
+
+**Afleverbewijs.** Een mislukte stop zonder afleverbewijs houdt het origineel op *Nakijken*, tot een
+afgeronde herlevering de goederen heeft geleverd; het bewijs zit dan op de herlevering. Er wordt geen
+afleverbewijs verzonnen. Een geweigerd afleverbewijs blijft mogelijk en werkt zoals voorheen.
+
 ## Uitzonderingsbeheer-remediëring (2026-10-18)
 
 ### Bewerken zonder gegevensverlies (EX-01)

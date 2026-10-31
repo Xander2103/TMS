@@ -1,8 +1,11 @@
 import { useState } from 'react'
 import { ApiError } from '../../../api/apiClient'
+import { describeApiError } from '../../../api/problemDetails'
 import { useToast } from '../../../components/ui/toastContext'
+import { useLocale } from '../../../i18n/localeContext'
 import { useAuth } from '../../auth/authContextValue'
 import {
+  confirmOrderFreeAfterExecution,
   confirmOrderPriceLine,
   confirmOrderPricing,
   recalculateOrderPricing,
@@ -42,6 +45,7 @@ export type OrderPricingWorkspace = Pick<
   | 'handleConfirmLine'
   | 'openEditLine'
   | 'openRemoveLine'
+  | 'confirmFreeAfterExecution'
 >
 
 interface UseOrderPricingEditorOptions {
@@ -73,6 +77,7 @@ function sameIds(a: string[], b: string[]): boolean {
  * D4: a sales line may be linked to goods lines (`cargoItemIds`); none = the whole trip/activity.
  */
 export function useOrderPricingEditor(order: TransportOrderDetail | null, { onOrderChanged, readOnly = false }: UseOrderPricingEditorOptions) {
+  const { t } = useLocale()
   const { showSuccess, showError } = useToast()
   const { hasAnyPermission } = useAuth()
 
@@ -288,6 +293,23 @@ export function useOrderPricingEditor(order: TransportOrderDetail | null, { onOr
     }
   }
 
+  /** R-N1: resolves to whether it worked, so the reason dialog stays open on a refusal. */
+  async function confirmFreeAfterExecution(reason: string): Promise<boolean> {
+    if (!order) return false
+    setPricingBusy(true)
+    try {
+      const updated = await confirmOrderFreeAfterExecution(order.id, { reason, version: order.version })
+      onOrderChanged(updated)
+      showSuccess(t('dossierPricing.postExecution.freeSaved', { number: order.orderNumber }))
+      return true
+    } catch (err) {
+      showError(describeApiError(err, t('dossierPricing.postExecution.freeFailed')).message)
+      return false
+    } finally {
+      setPricingBusy(false)
+    }
+  }
+
   async function handleRecalculate() {
     if (!order) return
     setPricingBusy(true)
@@ -370,6 +392,7 @@ export function useOrderPricingEditor(order: TransportOrderDetail | null, { onOr
 
   return {
     order,
+    confirmFreeAfterExecution,
     // permissions / read model (the `OrderPricingWorkspace` slice)
     canEditPricingLines,
     canEditPricingStatus,

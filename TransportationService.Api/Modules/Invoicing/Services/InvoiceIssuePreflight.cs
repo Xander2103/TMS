@@ -32,6 +32,7 @@ public static class InvoiceIssuePreflight
     public const string LedgerMissing = "lines.ledger_missing";
     public const string QuantityInvalid = "lines.quantity";
     public const string NegativePrice = "lines.negative_price";
+    public const string RedeliveryDuplicate = "lines.redelivery_duplicate";
 
     public sealed record Issue(string Code, string Message, IReadOnlyList<Guid> LineIds)
     {
@@ -132,6 +133,18 @@ public static class InvoiceIssuePreflight
             Add(UnpricedSource,
                 $"Opdracht(en) {string.Join(", ", numbers)} zijn niet factureerbaar (geen afgewerkte prijs: 'Nakijken'). Prijs de opdracht of markeer ze expliciet als gratis; niet-geprijsd werk wordt nooit als € 0,00 gefactureerd.",
                 unpricedOrderLines);
+        }
+
+        // R-N2: a draft may predate the hold, or the other order may have been priced since. A credit
+        // note only reverses what was billed, so it is never judged here.
+        if (invoice.Status == InvoiceStatus.Draft && invoice.Kind != InvoiceKind.CreditNote)
+        {
+            var holds = await RedeliveryBillingRule.ResolveAsync(db, tenantId, lineOrderIds, cancellationToken);
+            foreach (var (orderId, hold) in holds)
+            {
+                Add(RedeliveryDuplicate, RedeliveryBillingRule.Describe(orders[orderId].OrderNumber, hold),
+                    lines.Where(l => l.TransportOrderId == orderId));
+            }
         }
 
         var lineActivityIds = lines.Where(l => l.DossierActivityId is not null).Select(l => l.DossierActivityId!.Value).Distinct().ToList();

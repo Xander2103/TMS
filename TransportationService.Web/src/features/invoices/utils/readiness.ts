@@ -11,4 +11,7 @@ export const READINESS_REASON_KEYS: Record<string, string> = {
   // MD-H10: never show the raw code "po.missing" to a user.
   'po.missing': 'invoices.readiness.reasons.poMissing',
   'pricing.zero_unconfirmed': 'invoices.readiness.reasons.pricingZeroUnconfirmed',
+  // R-N2: one transport is billed once; {number} is the other order of the failed-delivery pair.
+  'redelivery.original_charged': 'invoices.readiness.reasons.redeliveryOriginalCharged',
+  'redelivery.already_charged': 'invoices.readiness.reasons.redeliveryAlreadyCharged',
 }

@@ -152,7 +152,9 @@ public record UninvoicedOrderDto(
     /// <summary>ACC-M1: explicitly free transport (resolved € 0), never confused with "no price".</summary>
     bool IsFree = false,
     /// <summary>ACC-B1: only ReadyForInvoice orders can be put on an invoice; the rest is listed for context.</summary>
-    bool IsInvoiceable = false);
+    bool IsInvoiceable = false,
+    /// <summary>R-N2: the order of the failed-delivery pair that keeps this one off the invoice.</summary>
+    string? BillingHoldOrderNumber = null);
 
 /// <summary>
 /// Closure sprint 2026-09-23: a priced STANDALONE dossier activity (no linked order) of the

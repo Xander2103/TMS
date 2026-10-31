@@ -301,10 +301,24 @@ public class InvoiceService : IInvoiceService
                 })
                 .ToListAsync(cancellationToken);
         var stopsByOrder = stops.ToLookup(s => s.TransportOrderId);
+        // R-N2: one transport is billed once, whatever the readiness projection of each order says.
+        var holds = await Modules.Orders.Services.RedeliveryBillingRule.ResolveAsync(_dbContext, tenantId, orderIds, cancellationToken);
 
         return orders.Select(o =>
         {
             var orderStops = stopsByOrder[o.Id].OrderBy(s => s.Sequence).ToList();
+            if (holds.TryGetValue(o.Id, out var hold))
+            {
+                return new UninvoicedOrderDto(
+                    o.Id, o.OrderNumber, o.OrderDate, o.GoodsDescription ?? string.Empty,
+                    orderStops.FirstOrDefault(s => s.StopType == StopType.Loading)?.City,
+                    orderStops.LastOrDefault(s => s.StopType is StopType.Unloading or StopType.Site)?.City,
+                    o.AgreedPrice, o.LegalEntityId,
+                    Modules.Orders.Services.InvoiceReadinessEvaluator.ReviewRequired,
+                    Modules.Orders.Services.RedeliveryBillingRule.WithReason(o.InvoiceReadinessReasons, hold),
+                    o.IsFree, IsInvoiceable: false, hold.RelatedOrderNumber);
+            }
+
             return new UninvoicedOrderDto(
                 o.Id, o.OrderNumber, o.OrderDate, o.GoodsDescription ?? string.Empty,
                 orderStops.FirstOrDefault(s => s.StopType == StopType.Loading)?.City,
@@ -456,6 +470,13 @@ public class InvoiceService : IInvoiceService
                 // listed for context but can never become a € 0,00 invoice line.
                 if (!dto.IsInvoiceable)
                 {
+                    // R-N2: the same transport may not be billed twice, however it was selected.
+                    if (dto.BillingHoldOrderNumber is { } holdOrder)
+                    {
+                        return InvoiceOperationResult.Invalid(
+                            $"Opdracht {dto.OrderNumber} is niet factureerbaar: hetzelfde transport wordt al aangerekend via {holdOrder}. Bevestig ze als gratis, of reken een extra kost door via het incident.");
+                    }
+
                     var reasons = InvoiceReadinessReasonLabels(dto.InvoiceReadinessReasons);
                     return InvoiceOperationResult.Invalid(
                         $"Opdracht {dto.OrderNumber} is niet factureerbaar ({reasons}). Prijs de opdracht of markeer ze expliciet als gratis; niet-geprijsd werk wordt nooit als € 0,00 gefactureerd.");
@@ -1598,6 +1619,8 @@ public class InvoiceService : IInvoiceService
                 "pricing.zero_unconfirmed" => "€ 0 zonder bevestiging als gratis",
                 "pod.missing" => "afleverbewijs ontbreekt",
                 "po.missing" => "PO-nummer ontbreekt",
+                Modules.Orders.Services.RedeliveryBillingRule.OriginalCharged => "de originele opdracht draagt de transportprijs al",
+                Modules.Orders.Services.RedeliveryBillingRule.RedeliveryCharged => "de herlevering is al gefactureerd",
                 _ => r,
             }));
 

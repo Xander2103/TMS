@@ -110,6 +110,16 @@
     "colCoverage": "Prijsdekking",
     "includedHint": "Een goederenlijn die inbegrepen is in een vaste rit- of activiteitprijs wordt niet afzonderlijk gefactureerd."
   },
+  "postExecution": {
+    "agreementClosed": "Deze opdracht is al ingepland of uitgevoerd: een afgesproken prijs kan niet meer. De prijs loopt nu via de verkooplijnen.",
+    "freeClosed": "Gratis kan alleen vóór de planning, of na uitvoering bij een mislukte levering met herlevering.",
+    "freeExplain": "Een mislukte levering en haar herlevering zijn één transport. Bevestig als gratis wat niet apart aangerekend wordt.",
+    "needsRight": "Een planner of beheerder met prijsrechten beslist dit op de opdracht.",
+    "freeConfirmMessage": "Opdracht {number} wordt bewust niet aangerekend (€ 0). Eventuele verkooplijnen en diensten van deze opdracht vervallen.",
+    "freeReason": "Reden",
+    "freeSaved": "Opdracht {number} is bevestigd als gratis.",
+    "freeFailed": "De opdracht kon niet als gratis worden bevestigd."
+  },
   "method": {
     "legend": "Prijs bepalen via",
     "agreed": "Afgesproken prijs",

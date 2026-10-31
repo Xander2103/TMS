@@ -269,6 +269,7 @@ export function TransportOrderDetailPage() {
     handleConfirmLine: pricing.handleConfirmLine,
     openEditLine: pricing.openEditLine,
     openRemoveLine: pricing.openRemoveLine,
+    confirmFreeAfterExecution: pricing.confirmFreeAfterExecution,
   }
 
   return (

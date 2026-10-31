@@ -143,3 +143,8 @@
   gap: var(--space-2);
   margin: var(--space-2) 0 0;
 }
+
+/* R-N2: the reason text is shared with the invoice tooltip, which lists it mid-sentence. */
+.order-billing-hold-reason::first-letter {
+  text-transform: uppercase;
+}

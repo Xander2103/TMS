@@ -52,12 +52,13 @@ vi.mock('../api/activityTypesApi', () => ({ listActivityTypes: () => Promise.res
 const lines = vi.hoisted(() => ({ save: vi.fn() }))
 vi.mock('../pricing/activityPriceLinesApi', () => ({ saveActivityPriceLines: lines.save }))
 
-const orders = vi.hoisted(() => ({ get: vi.fn(), update: vi.fn(), saveLines: vi.fn(), setOneOff: vi.fn() }))
+const orders = vi.hoisted(() => ({ get: vi.fn(), update: vi.fn(), saveLines: vi.fn(), setOneOff: vi.fn(), confirmFree: vi.fn() }))
 vi.mock('../../transport-orders/api/transportOrdersApi', () => ({
   getTransportOrder: orders.get,
   updateTransportOrder: orders.update,
   saveOrderPriceLines: orders.saveLines,
   setOrderOneOffPrice: orders.setOneOff,
+  confirmOrderFreeAfterExecution: orders.confirmFree,
   searchTransportOrders: () => Promise.resolve({ items: [], totalCount: 0 }),
 }))
 vi.mock('../../customers/api/customersApi', () => ({
@@ -930,5 +931,78 @@ describe('Pricing UX — € 0 needs an explicit decision; master-detail keeps e
     expect(callout).toHaveTextContent('Gratis prijs bevestigen')
     expect(within(callout).queryByRole('button')).not.toBeInTheDocument()
     expect(within(await screen.findByRole('option', { name: /Plateau/ })).getByText('Controle vereist')).toBeInTheDocument()
+  })
+})
+
+describe('R-N1: the dossier price panel offers what the server allows for the order status', () => {
+  function unpricedDossier() {
+    const dossier = transportDossier()
+    return { ...dossier, activities: dossier.activities.map((a) => ({ ...a, isPriced: false, agreedPrice: null, priceStatus: 'Missing' })) }
+  }
+  const unpriced = (status: TransportOrderDetail['status'], extra: Partial<TransportOrderDetail> = {}) =>
+    pricedOrder({ status, agreedPrice: null, pricingLines: [], ...extra })
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    auth.permissions = new Set(['dossiers.view', 'dossiers.manage', 'orders.edit', 'orders.override_price'])
+    window.HTMLElement.prototype.scrollIntoView = vi.fn()
+    api.getDossier.mockResolvedValue(unpricedDossier())
+  })
+
+  it.each(['Planned', 'InProgress', 'Completed'] as const)('%s: no agreed price and no free choice, the sales lines stay', async (status) => {
+    orders.get.mockResolvedValue(unpriced(status))
+    renderPage()
+    await orderEditorLoaded()
+    expect(screen.queryByRole('radio')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Afgesproken prijs (€)')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Bevestigen als gratis' })).not.toBeInTheDocument()
+    expect(screen.getByText(/De prijs loopt nu via de verkooplijnen/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '+ Verkooplijn toevoegen' })).toBeInTheDocument()
+  })
+
+  it('Draft keeps the choice between agreed price, sales lines and free', async () => {
+    orders.get.mockResolvedValue(unpriced('Draft'))
+    renderPage()
+    await screen.findByRole('radio', { name: /Afgesproken prijs/ })
+    expect(screen.getAllByRole('radio')).toHaveLength(3)
+  })
+
+  it('a redelivery names the order that carries the price and confirms free with a reason', async () => {
+    const user = userEvent.setup()
+    const before = unpriced('Completed', {
+      postExecutionFreeAllowed: true,
+      billingHoldReason: 'redelivery.original_charged',
+      billingHoldOrderNumber: 'ORD-0002',
+    })
+    orders.get.mockResolvedValue(before)
+    orders.confirmFree.mockResolvedValue({ ...before, postExecutionFreeAllowed: false, billingHoldReason: null, billingHoldOrderNumber: null, agreedPrice: 0 })
+    renderPage()
+    await orderEditorLoaded()
+    expect(screen.getByText(/de originele opdracht ORD-0002 draagt de transportprijs al/)).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Bevestigen als gratis' }))
+    const dialog = await screen.findByRole('dialog')
+    const confirm = within(dialog).getByRole('button', { name: 'Bevestigen als gratis' })
+    expect(confirm).toBeDisabled()
+    await user.type(within(dialog).getByLabelText(/Reden/), 'Onze fout')
+    await user.click(confirm)
+
+    await waitFor(() => expect(orders.confirmFree).toHaveBeenCalledWith('o-1', { reason: 'Onze fout', version: before.version }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(screen.queryByText(/draagt de transportprijs al/)).not.toBeInTheDocument()
+  })
+
+  it('without the price right the reason stays visible, the action does not', async () => {
+    auth.permissions = new Set(['dossiers.view', 'invoices.view'])
+    orders.get.mockResolvedValue(unpriced('Completed', {
+      postExecutionFreeAllowed: true,
+      billingHoldReason: 'redelivery.original_charged',
+      billingHoldOrderNumber: 'ORD-0002',
+    }))
+    renderPage()
+    await orderEditorLoaded()
+    expect(screen.getByText(/draagt de transportprijs al/)).toBeInTheDocument()
+    expect(screen.getByText(/Een planner of beheerder met prijsrechten/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Bevestigen als gratis' })).not.toBeInTheDocument()
   })
 })

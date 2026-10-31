@@ -118,6 +118,8 @@ export interface ControlOrder {
   /** P12: uitgesteld tot deze datum (buiten de voorstellen, apart getoond). */
   snoozedUntil: string | null
   snoozeReason: string | null
+  /** R-N2: the order of the failed-delivery pair that keeps this one out of the proposals. */
+  billingHoldOrderNumber?: string | null
 }
 
 /** T-H8: a billable standalone dossier activity (crane work, plateau, storage) on the control page. */

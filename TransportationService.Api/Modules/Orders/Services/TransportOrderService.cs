@@ -3284,6 +3284,7 @@ public class TransportOrderService : ITransportOrderService
             order.LiftConditions, order.LiftEquipment,
             linkedActivity?.Id, linkedActivity?.ActivityTypeId, linkedActivity?.DurationHours, activitySupportsOnSiteWork,
             Invoices: invoices);
+        detail = await WithRedeliveryBillingAsync(detail, order, cancellationToken);
 
         // Security M1: an operational viewer (Dispatcher) gets the order without its money —
         // the projection, not the UI, is what keeps prices away from a role without a price right.
@@ -3315,6 +3316,9 @@ public class TransportOrderService : ITransportOrderService
         OneOffFixedAmount = null,
         OneOffExtraHourlyRate = null,
         OneOffNotes = null,
+        PostExecutionFreeAllowed = false,
+        BillingHoldReason = null,
+        BillingHoldOrderNumber = null,
         TotalWithProposed = null,
         ExtraTimeHourlyRateOverride = null,
         Invoices = [],
@@ -4770,6 +4774,10 @@ public class TransportOrderService : ITransportOrderService
         if (!linksOnly)
         {
             await RecomputeLinesTotalAndAgreedPriceAsync(order, cancellationToken);
+            if (order.AgreedPrice > 0m)
+            {
+                OrderPricingState.EndFreeDecision(order);
+            }
         }
 
         // Closure sprint 2026-09-23: links and removed lines change what covers the goods, so
@@ -5008,6 +5016,163 @@ public class TransportOrderService : ITransportOrderService
             new { order.PricingSource, order.OneOffFixedAmount, order.AgreedPrice, order.FreeConfirmed }, cancellationToken);
 
         return TransportOrderOperationResult.Success(await MapDetailAsync(order, cancellationToken));
+    }
+
+    /// <summary>
+    /// R-N1: "gratis" after execution, ONLY for a member of a failed-delivery pair, because that is
+    /// where R-N2 demands the decision. An ordinary completed order stays priced through its sales
+    /// lines, and the one-off command keeps refusing every completed order. An invoiced, locked or
+    /// on-a-draft price stays immutable. A real charge contradicts free, so an approved incident
+    /// charge refuses it. Lines and services are removed so the invoice line is truly € 0; what they
+    /// were stays in the audit entry, and a later sales line ends the free decision again.
+    /// </summary>
+    public async Task<TransportOrderOperationResult> ConfirmFreeAfterExecutionAsync(
+        Guid orderId, ConfirmOrderFreeRequest request, CancellationToken cancellationToken)
+    {
+        var tenantId = _tenantContext.TenantId;
+        var order = await TenantScoped().Include(o => o.Stops).FirstOrDefaultAsync(o => o.Id == orderId, cancellationToken);
+        if (order is null)
+        {
+            return TransportOrderOperationResult.NotFound;
+        }
+
+        // Fail-closed: the same right as the post-execution sales lines, checked on the service too.
+        if (!await CurrentUserHasAnyAsync(cancellationToken, PermissionCodes.OrdersOverridePrice, PermissionCodes.OrdersManage))
+        {
+            return TransportOrderOperationResult.Invalid("Je hebt geen rechten om deze opdracht als gratis te bevestigen.");
+        }
+
+        if (request.Version is { } expectedVersion && expectedVersion != order.Version)
+        {
+            return TransportOrderOperationResult.Conflict(await MapDetailAsync(order, cancellationToken));
+        }
+
+        var snapshot = await _dbContext.TransportOrderPricingSnapshots
+            .FirstOrDefaultAsync(s => s.TenantId == tenantId && s.TransportOrderId == orderId, cancellationToken);
+        if (await PostExecutionFreeRefusalAsync(order, snapshot?.Status, cancellationToken) is { } refusal)
+        {
+            return TransportOrderOperationResult.InvalidState(refusal);
+        }
+
+        if (string.IsNullOrWhiteSpace(request.Reason))
+        {
+            return TransportOrderOperationResult.Invalid("Geef een reden op waarom deze opdracht gratis is.");
+        }
+
+        var lines = await _dbContext.TransportOrderPricingLines
+            .Where(l => l.TenantId == tenantId && l.TransportOrderId == orderId)
+            .ToListAsync(cancellationToken);
+        var services = await _dbContext.TransportOrderServiceLines
+            .Where(l => l.TenantId == tenantId && l.TransportOrderId == orderId)
+            .ToListAsync(cancellationToken);
+        var links = await _dbContext.OrderPriceLineCargoLinks
+            .Where(l => l.TenantId == tenantId && l.TransportOrderId == orderId)
+            .ToListAsync(cancellationToken);
+        var before = new
+        {
+            order.PricingSource, order.OneOffFixedAmount, order.AgreedPrice, order.PriceIsManual, order.PriceOverrideReason,
+            Lines = lines.Select(l => new { l.Label, l.Amount, Kind = l.Kind.ToString() }).ToList(),
+            Services = services.Select(l => new { l.NameSnapshot, l.Amount }).ToList(),
+        };
+
+        _dbContext.RemoveRange(lines);
+        _dbContext.RemoveRange(services);
+        _dbContext.RemoveRange(links);
+        order.PricingSource = OrderPricingSource.OneOff;
+        order.OneOffFixedAmount = 0m;
+        order.FreeConfirmed = true;
+        order.AgreedPrice = 0m;
+        order.PriceIsManual = false;
+        order.PriceOverrideReason = null;
+        if (snapshot is not null)
+        {
+            snapshot.LinesTotal = 0m;
+            snapshot.IsStale = false;
+        }
+
+        await InvoiceReadinessEvaluator.EvaluateAsync(_dbContext, order, cancellationToken);
+        order.Version = Guid.NewGuid();
+        try
+        {
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return await VersionConflictFromStoreAsync(order.Id, cancellationToken);
+        }
+
+        await _auditService.RecordAsync("OrderPricing", orderId.ToString(), "orderConfirmedFree", before,
+            new { order.PricingSource, order.OneOffFixedAmount, order.AgreedPrice, order.FreeConfirmed, Reason = request.Reason.Trim() },
+            cancellationToken);
+
+        return TransportOrderOperationResult.Success(await MapDetailAsync(order, cancellationToken));
+    }
+
+    /// <summary>The one statement of when post-execution "gratis" is legal; null = allowed. The detail read model shares it.</summary>
+    private async Task<string?> PostExecutionFreeRefusalAsync(
+        TransportOrder order, OrderPricingStatus? pricingStatus, CancellationToken cancellationToken)
+    {
+        var tenantId = _tenantContext.TenantId;
+        if (order.Status != TransportOrderStatus.Completed)
+        {
+            return "Gratis bevestigen na uitvoering kan alleen op een afgeronde, nog niet gefactureerde opdracht.";
+        }
+
+        if (pricingStatus is OrderPricingStatus.Locked or OrderPricingStatus.Invoiced)
+        {
+            return PricingLockedMessage;
+        }
+
+        var inFailedDeliveryPair = order.RedeliveryOfOrderId is not null
+            || await _dbContext.TransportOrders.AsNoTracking().AnyAsync(
+                o => o.TenantId == tenantId && o.RedeliveryOfOrderId == order.Id && o.Status != TransportOrderStatus.Cancelled,
+                cancellationToken);
+        if (!inFailedDeliveryPair)
+        {
+            return "Een afgeronde opdracht kan alleen via verkooplijnen geprijsd worden. Gratis na uitvoering kan alleen bij een mislukte levering met herlevering.";
+        }
+
+        var onLiveInvoice = await _dbContext.InvoiceLines.AsNoTracking()
+            .Where(l => l.TenantId == tenantId && l.TransportOrderId == order.Id)
+            .Join(_dbContext.Invoices.AsNoTracking().Where(i => i.Status != Modules.Invoicing.Entities.InvoiceStatus.Cancelled),
+                l => l.InvoiceId, i => i.Id, (l, i) => i.Id)
+            .AnyAsync(cancellationToken);
+        if (onLiveInvoice)
+        {
+            return "Deze opdracht staat al op een factuur en kan niet meer gratis worden.";
+        }
+
+        var hasApprovedCharge = await _dbContext.Incidents.AsNoTracking().AnyAsync(
+            i => i.TenantId == tenantId && i.TransportOrderId == order.Id && i.ChargeDecision == "Approved" && i.ChargeAmount > 0m,
+            cancellationToken);
+        return hasApprovedCharge
+            ? "Op deze opdracht staat een goedgekeurde doorrekening; een opdracht met een doorrekening is niet gratis."
+            : null;
+    }
+
+    private async Task<TransportOrderDetailDto> WithRedeliveryBillingAsync(
+        TransportOrderDetailDto detail, TransportOrder order, CancellationToken cancellationToken)
+    {
+        if (order.Status != TransportOrderStatus.Completed)
+        {
+            return detail;
+        }
+
+        var tenantId = _tenantContext.TenantId;
+        var holds = await RedeliveryBillingRule.ResolveAsync(_dbContext, tenantId, [order.Id], cancellationToken);
+        var hold = holds.GetValueOrDefault(order.Id);
+        var isFree = order.FreeConfirmed
+                     || OrderPricingState.IsIntentionalZero(order.PriceIsManual, order.PricingSource, order.OneOffFixedAmount, order.AgreedPrice);
+        var pricingStatus = await _dbContext.TransportOrderPricingSnapshots.AsNoTracking()
+            .Where(s => s.TenantId == tenantId && s.TransportOrderId == order.Id)
+            .Select(s => (OrderPricingStatus?)s.Status)
+            .FirstOrDefaultAsync(cancellationToken);
+        return detail with
+        {
+            PostExecutionFreeAllowed = !isFree && await PostExecutionFreeRefusalAsync(order, pricingStatus, cancellationToken) is null,
+            BillingHoldReason = hold?.Reason,
+            BillingHoldOrderNumber = hold?.RelatedOrderNumber,
+        };
     }
 
     /// <summary>Pricing status transition (Draft/Reviewed/Locked); Invoiced is set only by invoice generation.</summary>

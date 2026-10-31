@@ -192,6 +192,8 @@ export interface UninvoicedOrder {
   invoiceReadinessReasons?: string | null
   /** ACC-B1: false = listed for context only ("Nakijken"); the server refuses it on an invoice. */
   isInvoiceable?: boolean
+  /** R-N2: the order of the failed-delivery pair that keeps this one off the invoice. */
+  billingHoldOrderNumber?: string | null
 }
 
 /** Mirrors UninvoicedActivityDto (GET /api/invoices/uninvoiced-activities): a priced dossier activity without an invoice line. */

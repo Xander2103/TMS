@@ -243,7 +243,9 @@
       "pricingStale": "price out of date — recalculate",
       "podMissing": "proof of delivery missing",
       "poMissing": "PO number missing — register the customer PO or enter it on the invoice",
-      "pricingZeroUnconfirmed": "€ 0 price not confirmed as free"
+      "pricingZeroUnconfirmed": "€ 0 price not confirmed as free",
+      "redeliveryOriginalCharged": "the original order {number} already carries the transport price: confirm this redelivery as free, or charge an extra cost through the incident",
+      "redeliveryAlreadyCharged": "redelivered through {number}, which was already invoiced with a price: confirm this order as free, or credit that invoice first"
     }
   },
   "control": {

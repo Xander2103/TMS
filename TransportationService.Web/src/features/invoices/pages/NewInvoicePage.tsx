@@ -29,13 +29,13 @@ interface ManualRow extends ManualLineInput {
 let manualKey = 0
 
 /** Wave 2 §6: readable tooltip for the semicolon-separated readiness reason codes. */
-function readinessTooltip(t: TranslateFn, reasons: string | null | undefined): string {
+function readinessTooltip(t: TranslateFn, reasons: string | null | undefined, holdOrderNumber?: string | null): string {
   if (!reasons) return t('invoices.readiness.tooltipFallback')
   return reasons
     .split(';')
     .map((code) => {
       const key = READINESS_REASON_KEYS[code]
-      return key ? t(key) : code
+      return key ? t(key, { number: holdOrderNumber ?? '' }) : code
     })
     .join(', ')
 }
@@ -378,7 +378,7 @@ export function NewInvoicePage() {
                           onChange={() => toggleOrder(order.id)}
                           onClick={(e) => e.stopPropagation()}
                           disabled={order.isInvoiceable === false}
-                          title={order.isInvoiceable === false ? readinessTooltip(t, order.invoiceReadinessReasons) : undefined}
+                          title={order.isInvoiceable === false ? readinessTooltip(t, order.invoiceReadinessReasons, order.billingHoldOrderNumber) : undefined}
                           aria-label={t('invoices.new.selectOrder', { number: order.orderNumber })}
                         />
                       </td>
@@ -398,10 +398,15 @@ export function NewInvoicePage() {
                         {order.invoiceReadiness === 'ReviewRequired' && (
                           <span
                             className="inv-readiness inv-readiness-review"
-                            title={readinessTooltip(t, order.invoiceReadinessReasons)}
+                            title={readinessTooltip(t, order.invoiceReadinessReasons, order.billingHoldOrderNumber)}
                           >
                             {t('invoices.readiness.review')}
                           </span>
+                        )}
+                        {order.billingHoldOrderNumber && (
+                          <small className="inv-readiness-hold">
+                            {readinessTooltip(t, order.invoiceReadinessReasons, order.billingHoldOrderNumber)}
+                          </small>
                         )}
                         {(!order.invoiceReadiness || order.invoiceReadiness === 'NotReady') && '—'}
                       </td>

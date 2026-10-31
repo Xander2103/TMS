@@ -327,6 +327,19 @@ public class TransportOrdersController : ControllerBase
         return Handle(result, created: false);
     }
 
+    /// <summary>
+    /// R-N1: declares a completed order of a failed-delivery pair free. The same right as the
+    /// sales lines, the only other price change allowed after execution; see the service for the rules.
+    /// </summary>
+    [HttpPost("{id:guid}/pricing/confirm-free")]
+    [RequirePermission(PermissionCodes.OrdersOverridePrice, PermissionCodes.OrdersManage)]
+    public async Task<ActionResult<TransportOrderDetailDto>> ConfirmFreeAfterExecution(
+        Guid id, ConfirmOrderFreeRequest request, CancellationToken cancellationToken)
+    {
+        var result = await _service.ConfirmFreeAfterExecutionAsync(id, request, cancellationToken);
+        return Handle(result, created: false);
+    }
+
     /// <summary>Pricing status transition; fine-grained permission per transition is enforced service-side.</summary>
     [HttpPost("{id:guid}/pricing/status")]
     [RequirePermission(PermissionCodes.OrdersEdit, PermissionCodes.OrdersLockPrice, PermissionCodes.OrdersManage)]

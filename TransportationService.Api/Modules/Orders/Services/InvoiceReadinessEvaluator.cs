@@ -13,7 +13,8 @@ namespace TransportationService.Api.Modules.Orders.Services;
 ///
 /// Rules: Completed && coverage Full && !stale && (a current POD per unloading stop when the
 /// order ran on a completed trip) → ReadyForInvoice; Completed && anything missing →
-/// ReviewRequired + reasons; every other status → NotReady.
+/// ReviewRequired + reasons; every other status → NotReady. R-N2: a stop that failed and whose
+/// goods were delivered by a completed redelivery needs no POD of its own; the redelivery holds it.
 /// </summary>
 public static class InvoiceReadinessEvaluator
 {
@@ -68,6 +69,27 @@ public static class InvoiceReadinessEvaluator
     public static async Task EvaluateAsync(
         TransportationDbContext db, TransportOrder order, CancellationToken cancellationToken,
         bool? tripExecutedOverride = null)
+    {
+        await EvaluateCoreAsync(db, order, tripExecutedOverride, redeliveredOverride: null, cancellationToken);
+
+        // R-N2: finishing a redelivery can settle the proof question of the failed original. Its
+        // own new status may still be unsaved here, so that fact is passed along explicitly.
+        if (order.RedeliveryOfOrderId is { } originalId)
+        {
+            var original = await db.TransportOrders.FirstOrDefaultAsync(
+                o => o.TenantId == order.TenantId && o.Id == originalId, cancellationToken);
+            if (original is { Status: TransportOrderStatus.Completed })
+            {
+                await EvaluateCoreAsync(db, original, tripExecutedOverride: null,
+                    redeliveredOverride: order.Status is TransportOrderStatus.Completed or TransportOrderStatus.Invoiced ? true : null,
+                    cancellationToken);
+            }
+        }
+    }
+
+    private static async Task EvaluateCoreAsync(
+        TransportationDbContext db, TransportOrder order, bool? tripExecutedOverride, bool? redeliveredOverride,
+        CancellationToken cancellationToken)
     {
         if (order.Status != TransportOrderStatus.Completed)
         {
@@ -157,7 +179,9 @@ public static class InvoiceReadinessEvaluator
                     .Select(p => p.TransportOrderStopId)
                     .Distinct()
                     .ToListAsync(cancellationToken);
-                if (unloadingStopIds.Any(id => !coveredStopIds.Contains(id)))
+                var uncoveredStopIds = unloadingStopIds.Where(id => !coveredStopIds.Contains(id)).ToList();
+                if (uncoveredStopIds.Count > 0
+                    && await AnyStopWithoutProofAsync(db, order, uncoveredStopIds, redeliveredOverride, cancellationToken))
                 {
                     reasons.Add("pod.missing");
                 }
@@ -166,5 +190,33 @@ public static class InvoiceReadinessEvaluator
 
         order.InvoiceReadiness = reasons.Count == 0 ? ReadyForInvoice : ReviewRequired;
         order.InvoiceReadinessReasons = reasons.Count == 0 ? null : string.Join(";", reasons);
+    }
+
+    /// <summary>
+    /// A stop without a POD still needs one, unless nothing could be signed there: its latest
+    /// execution failed (same facts as <see cref="DeliveryOutcomeRules"/>) AND a completed
+    /// redelivery delivered the goods. Without that redelivery a failed stop stays "Nakijken".
+    /// </summary>
+    private static async Task<bool> AnyStopWithoutProofAsync(
+        TransportationDbContext db, TransportOrder order, IReadOnlyCollection<Guid> stopIds, bool? redeliveredOverride,
+        CancellationToken cancellationToken)
+    {
+        var redelivered = redeliveredOverride
+            ?? await db.TransportOrders.AsNoTracking().AnyAsync(
+                o => o.TenantId == order.TenantId && o.RedeliveryOfOrderId == order.Id
+                     && (o.Status == TransportOrderStatus.Completed || o.Status == TransportOrderStatus.Invoiced),
+                cancellationToken);
+        if (!redelivered)
+        {
+            return true;
+        }
+
+        var executions = await db.StopExecutions.AsNoTracking()
+            .Where(e => e.TenantId == order.TenantId && stopIds.Contains(e.TransportOrderStopId))
+            .Select(e => new { e.TransportOrderStopId, e.Status, At = e.CompletedAt ?? e.UpdatedAt })
+            .ToListAsync(cancellationToken);
+        return stopIds.Any(stopId =>
+            executions.Where(e => e.TransportOrderStopId == stopId).MaxBy(e => e.At)?.Status
+                is not (Modules.Planning.Entities.StopExecutionStatus.Failed or Modules.Planning.Entities.StopExecutionStatus.Skipped));
     }
 }

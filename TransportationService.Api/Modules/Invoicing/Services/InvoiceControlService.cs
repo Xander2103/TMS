@@ -3,6 +3,7 @@ using TransportationService.Api.Data;
 using TransportationService.Api.Modules.Dossiers.Entities;
 using TransportationService.Api.Modules.Dossiers.Services;
 using TransportationService.Api.Modules.Orders.Entities;
+using TransportationService.Api.Modules.Orders.Services;
 using TransportationService.Api.Modules.Tenancy.Services;
 
 namespace TransportationService.Api.Modules.Invoicing.Services;
@@ -12,7 +13,9 @@ public sealed record ControlOrderDto(
     string? DossierNumber, string? CustomerReference,
     string InvoiceReadiness, IReadOnlyList<string> Reasons,
     /// <summary>P12: postponed until this date (excluded from proposals, shown separately).</summary>
-    DateOnly? SnoozedUntil = null, string? SnoozeReason = null);
+    DateOnly? SnoozedUntil = null, string? SnoozeReason = null,
+    /// <summary>R-N2: the order of the failed-delivery pair that keeps this one out of the proposals.</summary>
+    string? BillingHoldOrderNumber = null);
 
 /// <summary>
 /// T-H8: one billable STANDALONE dossier activity (crane work, plateau, storage ...) on the control
@@ -114,14 +117,22 @@ public class InvoiceControlService : IInvoiceControlService
                 .GroupBy(x => x.TransportOrderId)
                 .ToDictionary(g => g.Key, g => g.First().DossierNumber);
 
+        // R-N2: a held order of a failed-delivery pair is review work, never part of a proposal.
+        var holds = await RedeliveryBillingRule.ResolveAsync(_dbContext, tenantId, orderIds, cancellationToken);
+        string ReasonsOf(Guid id, string? reasons) =>
+            holds.TryGetValue(id, out var hold) ? RedeliveryBillingRule.WithReason(reasons, hold) : reasons ?? string.Empty;
+        string ReadinessOf(Guid id, string readiness) =>
+            holds.ContainsKey(id) ? InvoiceReadinessEvaluator.ReviewRequired : readiness;
+
         var dtoById = orders.ToDictionary(
             o => o.Id,
             o => new ControlOrderDto(
                 o.Id, o.OrderNumber, o.OrderDate, o.AgreedPrice,
                 dossierByOrder.GetValueOrDefault(o.Id), o.CustomerReference,
-                o.InvoiceReadiness,
-                o.InvoiceReadinessReasons?.Split(';', StringSplitOptions.RemoveEmptyEntries) ?? [],
-                o.InvoiceSnoozeUntil, o.InvoiceSnoozeReason));
+                ReadinessOf(o.Id, o.InvoiceReadiness),
+                ReasonsOf(o.Id, o.InvoiceReadinessReasons).Split(';', StringSplitOptions.RemoveEmptyEntries),
+                o.InvoiceSnoozeUntil, o.InvoiceSnoozeReason,
+                holds.GetValueOrDefault(o.Id)?.RelatedOrderNumber));
 
         // P12: an active snooze parks the order — out of proposals AND review, but always
         // visible in its own section. An expired snooze simply stops applying.
@@ -134,7 +145,7 @@ public class InvoiceControlService : IInvoiceControlService
             .ToList();
 
         var needsReview = orders
-            .Where(o => o.InvoiceReadiness == "ReviewRequired" && !IsSnoozed(o.InvoiceSnoozeUntil))
+            .Where(o => ReadinessOf(o.Id, o.InvoiceReadiness) == "ReviewRequired" && !IsSnoozed(o.InvoiceSnoozeUntil))
             .OrderBy(o => o.OrderDate)
             .Select(o => dtoById[o.Id])
             .ToList();
@@ -153,7 +164,7 @@ public class InvoiceControlService : IInvoiceControlService
         // Orders and ready standalone activities share the customer's grouping: one proposal per
         // (customer, group) carrying both, invoiced together through the existing create endpoint.
         var orderGroups = orders
-            .Where(o => o.InvoiceReadiness == "ReadyForInvoice" && !IsSnoozed(o.InvoiceSnoozeUntil))
+            .Where(o => ReadinessOf(o.Id, o.InvoiceReadiness) == "ReadyForInvoice" && !IsSnoozed(o.InvoiceSnoozeUntil))
             .Select(o => new ProposalItem(
                 new ProposalKey(o.CustomerId, o.CustomerName, o.InvoiceGrouping,
                     GroupKey(o.InvoiceGrouping, o.OrderDate, dossierByOrder.GetValueOrDefault(o.Id), o.CustomerReference)),

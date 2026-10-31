@@ -198,6 +198,12 @@ export function setOrderOneOffPrice(orderId: string, input: SetOneOffPriceInput)
     `/api/transport-orders/${orderId}/pricing/one-off`, input)
 }
 
+/** R-N1: declares a completed order of a failed-delivery pair free, with a mandatory reason. */
+export function confirmOrderFreeAfterExecution(orderId: string, input: { reason: string; version?: string }): Promise<TransportOrderDetail> {
+  return apiClient.postJson<TransportOrderDetail, { reason: string; version?: string }>(
+    `/api/transport-orders/${orderId}/pricing/confirm-free`, input)
+}
+
 export function recalculateOrderPricing(orderId: string): Promise<TransportOrderDetail> {
   return apiClient.postJson<TransportOrderDetail, Record<string, never>>(
     `/api/transport-orders/${orderId}/pricing/recalculate`, {})

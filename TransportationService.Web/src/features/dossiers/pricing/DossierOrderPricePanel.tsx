@@ -40,6 +40,9 @@ interface DossierOrderPricePanelProps {
 }
 
 const LOCKED_STATUSES = new Set(['Locked', 'Invoiced'])
+// R-N1: the statuses in which the server accepts the one-off price command (SetOneOffPriceAsync).
+// From planning on, the price only moves through the sales lines.
+const PRICE_AGREEMENT_STATUSES = new Set(['Draft', 'Submitted', 'Confirmed'])
 
 /** '' → null (clear), a valid amount ≥ 0 → cents-rounded number, anything else → undefined (invalid). */
 function parseAmount(raw: string): number | null | undefined {
@@ -122,7 +125,8 @@ export function DossierOrderPricePanel({ dossier, activity, order, canEditPrice,
   const pricingStatus = order.pricingSnapshot?.status ?? 'Draft'
   const locked = LOCKED_STATUSES.has(pricingStatus)
   const overridden = Boolean(order.priceIsManual)
-  const agreedEditable = canEditPrice && !locked && !overridden
+  const agreementOpen = PRICE_AGREEMENT_STATUSES.has(order.status)
+  const agreedEditable = canEditPrice && !locked && !overridden && agreementOpen
   const linesEditable = editor.canEditPricingLines && !locked
   const calculatedTotal = calculatedTariffTotal(order)
   // Intentional € 0 on the target order: priced (provenance from the dossier payload) AND amount 0
@@ -224,6 +228,12 @@ export function DossierOrderPricePanel({ dossier, activity, order, canEditPrice,
         </p>
       )}
 
+      {canEditPrice && !locked && !agreementOpen && !orderIsFree && (
+        <p className="dossier-price-note">
+          {t('dossierPricing.postExecution.agreementClosed')}
+          {!order.postExecutionFreeAllowed && ` ${t('dossierPricing.postExecution.freeClosed')}`}
+        </p>
+      )}
       {!orderIsPriced && agreedEditable && <p className="dossier-price-none">{t('dossierPricing.noPriceSet')}</p>}
       {undecided && <PriceMethodChoice value={method} onChange={chooseMethod} disabled={busy} />}
       {undecided && method === 'free' && (

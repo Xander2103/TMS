@@ -13,6 +13,7 @@ import {
   type OrderPricingLine,
 } from '../types'
 import { CargoCommercialCoverageTable } from './CargoCommercialCoverageTable'
+import { RedeliveryBillingDecision } from './RedeliveryBillingDecision'
 import { describeCargoItem, type UnitLabelResolver } from './cargoLabels'
 import type { OrderPricingWorkspace } from './useOrderPricingEditor'
 import '../pages/transport-orders.css'
@@ -155,6 +156,12 @@ export function OrderPricingPanel({ ws, unitLabel, isPriced, addLineLabel, secti
           </p>
         )}
         {!hasPricing && <p className="tod-muted">Nog geen prijsberekening voor deze opdracht.</p>}
+        <RedeliveryBillingDecision
+          order={order}
+          canDecide={canEditPricingLines}
+          busy={pricingBusy}
+          onConfirm={ws.confirmFreeAfterExecution}
+        />
       </section>
 
       {order.pricingLines && order.pricingLines.length > 0 && (

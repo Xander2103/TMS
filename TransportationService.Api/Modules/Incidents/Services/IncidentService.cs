@@ -1125,6 +1125,11 @@ public class IncidentService : IIncidentService
             AdjustedAtUtc = _timeProvider.GetUtcNow().UtcDateTime,
             LineKey = $"manual:{Guid.NewGuid()}",
         });
+        if (incident.ChargeAmount is > 0m)
+        {
+            Modules.Orders.Services.OrderPricingState.EndFreeDecision(order);
+        }
+
         if (!order.PriceIsManual)
         {
             order.AgreedPrice = (order.AgreedPrice ?? 0m) + (incident.ChargeAmount ?? 0m);

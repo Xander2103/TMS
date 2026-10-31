@@ -110,6 +110,16 @@
     "colCoverage": "Couverture tarifaire",
     "includedHint": "Une ligne de marchandises incluse dans un prix fixe de trajet ou d'activité n'est pas facturée séparément."
   },
+  "postExecution": {
+    "agreementClosed": "Cette commande est déjà planifiée ou exécutée : un prix convenu n'est plus possible. Le prix passe désormais par les lignes de vente.",
+    "freeClosed": "La gratuité n'est possible qu'avant la planification, ou après l'exécution pour une livraison échouée avec relivraison.",
+    "freeExplain": "Une livraison échouée et sa relivraison forment un seul transport. Confirmez comme gratuit ce qui n'est pas facturé séparément.",
+    "needsRight": "Un planificateur ou un administrateur disposant des droits sur les prix en décide sur la commande.",
+    "freeConfirmMessage": "La commande {number} n'est délibérément pas facturée (0 €). Les éventuelles lignes de vente et prestations de cette commande sont supprimées.",
+    "freeReason": "Motif",
+    "freeSaved": "La commande {number} est confirmée comme gratuite.",
+    "freeFailed": "La commande n'a pas pu être confirmée comme gratuite."
+  },
   "method": {
     "legend": "Déterminer le prix via",
     "agreed": "Prix convenu",

@@ -110,6 +110,16 @@
     "colCoverage": "Price coverage",
     "includedHint": "A goods line that is included in a fixed trip or activity price is not invoiced separately."
   },
+  "postExecution": {
+    "agreementClosed": "This order is already planned or executed: an agreed price is no longer possible. The price now goes through the sales lines.",
+    "freeClosed": "Free is only possible before planning, or after execution for a failed delivery with a redelivery.",
+    "freeExplain": "A failed delivery and its redelivery are one transport. Confirm as free whatever is not charged separately.",
+    "needsRight": "A planner or administrator with price rights decides this on the order.",
+    "freeConfirmMessage": "Order {number} is deliberately not charged (€ 0). Any sales lines and services of this order are dropped.",
+    "freeReason": "Reason",
+    "freeSaved": "Order {number} is confirmed as free.",
+    "freeFailed": "The order could not be confirmed as free."
+  },
   "method": {
     "legend": "Set the price via",
     "agreed": "Agreed price",

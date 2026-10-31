@@ -57,6 +57,7 @@ export interface OrderDetailWorkspace {
   handleConfirmLine: (line: OrderPricingLine) => void
   openEditLine: (line: OrderPricingLine) => void
   openRemoveLine: (line: OrderPricingLine) => void
+  confirmFreeAfterExecution: (reason: string) => Promise<boolean>
 }
 
 export const OrderDetailContext = createContext<OrderDetailWorkspace | null>(null)

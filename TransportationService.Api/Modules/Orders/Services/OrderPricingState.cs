@@ -77,4 +77,18 @@ public static class OrderPricingState
     public static bool IsIntentionalZero(bool priceIsManual, OrderPricingSource pricingSource, decimal? oneOffFixedAmount, decimal? agreedPrice) =>
         (pricingSource == OrderPricingSource.OneOff && oneOffFixedAmount == 0m)
         || (priceIsManual && agreedPrice == 0m);
+
+    /// <summary>
+    /// R-N1: a real amount landing on a free order (a sales line, an approved charge) ends the free
+    /// decision. Otherwise the invoice would still bill € 0 while the order shows that amount.
+    /// </summary>
+    public static void EndFreeDecision(TransportOrder order)
+    {
+        order.FreeConfirmed = false;
+        if (order.PricingSource == OrderPricingSource.OneOff && order.OneOffFixedAmount == 0m)
+        {
+            order.PricingSource = OrderPricingSource.Contract;
+            order.OneOffFixedAmount = null;
+        }
+    }
 }

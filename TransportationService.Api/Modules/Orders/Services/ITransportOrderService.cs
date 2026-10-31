@@ -86,6 +86,7 @@ public interface ITransportOrderService
     /// while Locked/Invoiced, override permission enforced when the order carries an override.
     /// </summary>
     Task<TransportOrderOperationResult> SetOneOffPriceAsync(Guid orderId, SetOneOffPriceRequest request, CancellationToken cancellationToken);
+    Task<TransportOrderOperationResult> ConfirmFreeAfterExecutionAsync(Guid orderId, ConfirmOrderFreeRequest request, CancellationToken cancellationToken);
 
     /// <summary>Pricing status transition (Draft/Reviewed/Locked); Invoiced is set only by invoicing.</summary>
     Task<TransportOrderOperationResult> SetOrderPricingStatusAsync(

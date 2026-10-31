@@ -243,7 +243,9 @@
       "pricingStale": "prix obsolète — recalculez",
       "podMissing": "preuve de livraison manquante",
       "poMissing": "numéro de bon de commande manquant — enregistrez le PO du client ou saisissez-le sur la facture",
-      "pricingZeroUnconfirmed": "prix de 0 € non confirmé comme gratuit"
+      "pricingZeroUnconfirmed": "prix de 0 € non confirmé comme gratuit",
+      "redeliveryOriginalCharged": "la commande d'origine {number} porte déjà le prix du transport : confirmez cette relivraison comme gratuite, ou facturez un coût supplémentaire via l'incident",
+      "redeliveryAlreadyCharged": "relivrée via {number}, déjà facturée avec un prix : confirmez cette commande comme gratuite, ou créditez d'abord cette facture"
     }
   },
   "control": {

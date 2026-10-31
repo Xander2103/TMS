@@ -315,7 +315,7 @@ export function InvoiceControlPage() {
                     <td>
                       {order.reasons.map((reason) => (
                         <Badge key={reason} tone="warning">
-                          {READINESS_REASON_KEYS[reason] ? t(READINESS_REASON_KEYS[reason]) : reason}
+                          {READINESS_REASON_KEYS[reason] ? t(READINESS_REASON_KEYS[reason], { number: order.billingHoldOrderNumber ?? '' }) : reason}
                         </Badge>
                       ))}
                     </td>

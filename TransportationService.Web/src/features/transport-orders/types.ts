@@ -296,6 +296,11 @@ export interface TransportOrderDetail {
   dossierNumber?: string | null
   /** ACC-M12: the invoices/credit notes carrying a line of this order (reverse link). Absent on older payloads. */
   invoices?: OrderInvoiceLink[] | null
+  /** R-N1: the server's verdict on `pricing/confirm-free`; the right itself is checked apart. */
+  postExecutionFreeAllowed?: boolean
+  /** R-N2: why this order may not be billed now (a readiness reason code), and because of which order. */
+  billingHoldReason?: string | null
+  billingHoldOrderNumber?: string | null
   // --- D2: crane job (absent on older payloads = None) ---
   craneJobKind?: CraneJobKind
   /** What has to be done on site; mandatory for OnSiteLifting. */

@@ -191,7 +191,12 @@ public record TransportOrderDetailDto(
     decimal? ActivityDurationHours = null,
     bool ActivitySupportsOnSiteWork = false,
     /// <summary>ACC-M12: invoices and credit notes carrying this order (live ones first).</summary>
-    IReadOnlyList<InvoiceLinkDto>? Invoices = null);
+    IReadOnlyList<InvoiceLinkDto>? Invoices = null,
+    /// <summary>R-N1: the server's own verdict on <c>pricing/confirm-free</c> (the right itself is checked apart).</summary>
+    bool PostExecutionFreeAllowed = false,
+    /// <summary>R-N2: why this order may not be billed now (a RedeliveryBillingRule code), and because of which order.</summary>
+    string? BillingHoldReason = null,
+    string? BillingHoldOrderNumber = null);
 
 /// <summary>Snapshot line of the price calculation stored on the order.</summary>
 public record OrderPricingLineDto(
@@ -290,6 +295,9 @@ public record SetOrderPricingStatusRequest(OrderPricingStatus Status);
 /// </summary>
 /// <summary>ACC-M1: <c>FixedAmount = 0</c> is only accepted together with <c>FreeConfirmed = true</c> (an explicit "gratis").</summary>
 public record SetOneOffPriceRequest(decimal? FixedAmount, Guid? Version = null, bool FreeConfirmed = false);
+
+/// <summary>R-N1: a member of a failed-delivery pair is declared free after execution; the reason is mandatory.</summary>
+public record ConfirmOrderFreeRequest(string? Reason, Guid? Version = null);
 
 /// <summary>
 /// Body for "Prijs bevestigen" (wave 2026-08-04 §8/§10). UnpricedGoodsReason is only consulted —
