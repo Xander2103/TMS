@@ -326,6 +326,18 @@
   flex-wrap: wrap;
 }
 
+/* R-N2: why a failed-delivery pair member stays off the invoice is read, not hovered. */
+.inv-readiness-hold {
+  display: block;
+  margin-top: 4px;
+  white-space: normal;
+}
+
+/* A hold reason is a full sentence: it wraps instead of widening the page. */
+.inv-control-reasons .ui-badge {
+  white-space: normal;
+}
+
 .inv-list-muted {
   color: var(--text-muted, var(--text));
   font-size: var(--text-sm, 0.875em);
@@ -371,16 +383,4 @@
 
 .inv-history {
   margin-top: 24px;
-}
-
-/* R-N2: why a failed-delivery pair member stays off the invoice is read, not hovered. */
-.inv-readiness-hold {
-  display: block;
-  margin-top: 4px;
-  white-space: normal;
-}
-
-/* A hold reason is a full sentence: it wraps instead of widening the page. */
-.inv-control-reasons .ui-badge {
-  white-space: normal;
 }
