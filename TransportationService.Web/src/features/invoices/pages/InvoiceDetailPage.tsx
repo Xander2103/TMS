@@ -807,12 +807,18 @@ export function InvoiceDetailPage() {
           }
         >
           <p>{t('invoices.internalDetail.payment.intro', { number })}</p>
-          <dl className="inv-payment-facts" data-testid="invoice-payment-facts">
-            <div><dt>{t('invoices.internalDetail.payment.customer')}</dt><dd>{invoice.customerName}</dd></div>
-            <div><dt>{t('invoices.internalDetail.payment.amount')}</dt><dd>{euro(invoice.total, invoice.currency)}</dd></div>
-            <div><dt>{t('invoices.internalDetail.payment.dueDate')}</dt><dd>{formatDate(invoice.dueDate)}</dd></div>
+          <dl className="inv-send-summary" data-testid="invoice-payment-facts">
+            <dt>{t('invoices.internalDetail.payment.customer')}</dt>
+            <dd>{invoice.customerName}</dd>
+            <dt>{t('invoices.internalDetail.payment.amount')}</dt>
+            <dd>{euro(invoice.total, invoice.currency)}</dd>
+            <dt>{t('invoices.internalDetail.payment.dueDate')}</dt>
+            <dd>{formatDate(invoice.dueDate)}</dd>
             {invoice.paymentReference && (
-              <div><dt>{t('invoices.internalDetail.payment.reference')}</dt><dd>{invoice.paymentReference}</dd></div>
+              <>
+                <dt>{t('invoices.internalDetail.payment.reference')}</dt>
+                <dd>{invoice.paymentReference}</dd>
+              </>
             )}
           </dl>
           {(invoice.creditNotes ?? []).some((note) => note.status !== 'Cancelled') && (
