@@ -22,6 +22,7 @@ Altijd. Het menu toont alleen wat jij mag gebruiken, dus iedereen ziet een ander
 2. Klik op het onderdeel dat je nodig hebt, bijvoorbeeld **Planbord**.
 3. Weet je niet waar iets staat? Typ een deel van de naam in **Filter menu…**.
 4. Klik op de bel rechtsboven om je meldingen te zien.
+5. Klik rechtsboven op **Help** voor uitleg over het scherm waarop je staat. Alle handleidingen vind je daarna via **Terug naar de handleidingen**.
 
 ### Snel zoeken
 
