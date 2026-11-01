@@ -1,224 +1,78 @@
 # TransportationService
 
-TransportationService is een modulair Transportation Management System (TMS) voor transport- en distributiebedrijven.
+TransportationService is een modulair Transportation Management System (TMS) voor transport- en distributiebedrijven: klanten, dossiers en opdrachten, ritplanning, live opvolging, chauffeursapp, klantportaal, incidenten, wagenpark, personeel, magazijn en facturatie.
 
-Het systeem centraliseert onder andere klanten, personeel, chauffeurs, voertuigen, opleggers, transportopdrachten, ritplanning, scanning, Proof of Delivery, facturatie, kostenberekening, HR en rapportering.
+`main` is de enige canonieke tak.
 
-## Doel
+## Technologie
 
-Het doel van dit project is een modern en schaalbaar TMS te bouwen waarmee transportbedrijven hun volledige operationele flow kunnen beheren:
+| Onderdeel | Stack |
+|---|---|
+| Backend | .NET 10, ASP.NET Core Web API, Entity Framework Core, PostgreSQL 16 |
+| Frontend | React 19, TypeScript, Vite, React Router |
+| Tests | xUnit, Vitest, Testing Library |
 
-- klanten en locaties beheren;
-- transportopdrachten aanmaken;
-- ritten plannen;
-- chauffeurs, voertuigen en opleggers toewijzen;
-- pakketten en barcodes beheren;
-- laden en lossen registreren;
-- afwijkingen en schade melden;
-- Proof of Delivery registreren;
-- kosten, omzet en winst opvolgen;
-- facturen genereren;
-- werknemers en afwezigheden beheren;
-- klant- en chauffeursportalen aanbieden.
-
-## Technologieën
-
-### Backend
-
-- .NET 10
-- ASP.NET Core Web API
-- Entity Framework Core
-- PostgreSQL
-- JWT authentication
-- Role-based permissions
-- Docker
-
-### Frontend
-
-- React
-- TypeScript
-- Vite
-- React Router
-
-## Projectstructuur
+## Mappen
 
 ```text
-TransportationService/
-├── TransportationService.Api/
-├── TransportationService.Application/
-├── TransportationService.Domain/
-├── TransportationService.Infrastructure/
-├── TransportationService.Tests/
-└── TransportationService.Web/
+TransportationService.Api/        de API, per module onder Modules/
+TransportationService.Api.Tests/  backendtests
+TransportationService.Web/        de webapplicatie
+docs/                             alle documentatie, zie docs/README.md
+scripts/                          deploy, secret scan en de generatie van de handleidingen
+deploy/                           voorbeelden voor nginx en systemd
+.local/                           lokaal bewijs en archieven, nooit gecommit
+```
 
-De exacte structuur kan afwijken afhankelijk van de huidige solution-opbouw.
+## Lokaal starten
 
-Belangrijkste modules
-Authenticatie
-Gebruikers
-Rollen en permissions
-Personeel
-Chauffeurs
-Kwalificaties
-Klanten
-Contactpersonen
-Locaties
-Voertuigen
-Opleggers
-Vlootdocumenten
-Onderhoud en inspecties
-Transportopdrachten
-Goederenlijnen
-Ritplanning
-Pakketten
-Barcodes en QR-codes
-Scanning
-Stopuitvoering
-ETA-opvolging
-Afwijkingen en schade
-Proof of Delivery
-Facturatie
-Kostenberekening
-Winstgevendheid
-Notificaties
-Rapportering
-HR en afwezigheden
-EDI-integratie
-Vereisten
+Vereist: .NET 10 SDK, Node.js en Docker. De volledige uitleg, met de lokale secrets, staat in `docs/security/dev-setup.md`.
 
-Installeer lokaal:
-
-.NET 10 SDK
-Node.js
-npm
-Docker Desktop
-Git
-Lokaal opstarten
-1. Repository clonen
-git clone https://github.com/Xander2103/TransportationService.git
-cd TransportationService
-2. Database starten
+```bash
 docker compose up -d
-3. Database migrations uitvoeren
 dotnet ef database update --project TransportationService.Api
-4. Backend starten
 dotnet run --project TransportationService.Api
-5. Frontend starten
-
-Open een tweede terminal:
 
 cd TransportationService.Web
-npm install
+npm ci
 npm run dev
+```
 
-Open daarna:
+## Testen
 
-http://localhost:5173
-Development-login
-
-Gebruik uitsluitend lokale testaccounts.
-
-E-mail: admin@dev.local
-Wachtwoord: zie lokale developmentconfiguratie of seed-documentatie
-
-Plaats nooit echte wachtwoorden of secrets in deze README.
-
-Database
-
-De applicatie gebruikt PostgreSQL.
-
-De databaseconfiguratie staat lokaal in:
-
-docker-compose.yml
-
-en/of:
-
-appsettings.Development.json
-
-Gevoelige configuratiebestanden mogen niet naar GitHub worden gepusht.
-
-Migrations
-
-Een nieuwe migration maken:
-
-dotnet ef migrations add NaamVanMigration --project TransportationService.Api
-
-Database bijwerken:
-
-dotnet ef database update --project TransportationService.Api
-
-Migrations bekijken:
-
-dotnet ef migrations list --project TransportationService.Api
-Tests
-
-Backendtests uitvoeren:
-
-dotnet test
-
-Frontend controleren:
+```bash
+dotnet build TransportationService.slnx
+dotnet test TransportationService.slnx
+dotnet ef migrations has-pending-model-changes --project TransportationService.Api
 
 cd TransportationService.Web
-npm run lint
-npm run build
-Security
+npx tsc -b
+npx eslint .
+npx vitest run
+VITE_API_BASE_URL=https://example.invalid npm run build
+```
 
-Het project gebruikt:
+## Documentatie
 
-JWT access tokens;
-refresh tokens;
-wachtwoordhashing;
-rollen en permissions;
-tenantisolatie;
-auditlogging;
-server-side validatie.
+Begin bij [docs/README.md](docs/README.md).
 
-Secrets, tokens, wachtwoorden en productiegegevens mogen nooit in Git worden opgeslagen.
+| Document | Bron | PDF |
+|---|---|---|
+| Gebruikershandleiding | `docs/user-manual/` | `docs/generated/TMS-Complete-Gebruikershandleiding.pdf` |
+| Handleiding klantportaal | uittreksel van de gebruikershandleiding | `docs/generated/TMS-Klantportaal-Handleiding.pdf` |
+| Beheerdershandleiding | `docs/admin-manual/` | `docs/generated/TMS-Beheerdershandleiding.pdf` |
+| Projectoverzicht en historiek | `docs/project-history/` | `docs/generated/TMS-Projectoverzicht-En-Wijzigingshistoriek.pdf` |
 
-Status
+### Helpcentrum in de applicatie
 
-Dit project is momenteel in actieve ontwikkeling.
+Aangemeld vind je de handleidingen op `/help`, via de knop **Help** rechtsboven. Op belangrijke schermen opent die knop meteen het juiste artikel. Klanten gebruiken `/klantportaal/help`, chauffeurs `/driver/help`.
 
-De bestaande basis bevat onder andere:
+### Handleidingen opnieuw maken
 
-authenticatie;
-masterdata;
-vlootbeheer;
-HR;
-transportopdrachten;
-ritplanning;
-scanning;
-POD;
-facturatie;
-kostenberekening;
-notificaties;
-rapportering.
+```bash
+npm --prefix scripts/manuals ci
+npx --prefix scripts/manuals playwright-core install chromium-headless-shell
+node scripts/generate-manuals.mjs
+```
 
-Verdere functionele testen, UX-verbeteringen en integraties zijn nog bezig.
-
-Roadmap
-
-Geplande uitbreidingen:
-
-uitgebreid klantenportaal;
-volledige chauffeursapp;
-automatische accountcreatie;
-automatische barcode- en QR-generatie;
-verbeterde pakketlabels;
-PTV-routeplanning;
-automatische ETA-notificaties;
-e-mail- en sms-integraties;
-EDI-import en export;
-Peppol;
-Outlook-integratie;
-AI-ondersteunde planning;
-live operational control center.
-Auteur
-
-Ontwikkeld door Xander Van Malder.
-
-
-Ik zou zeker nog controleren of deze commando’s exact overeenkomen met uw echte mapnamen. Vooral:
-
-```text
-TransportationService.Api
+Schermafbeeldingen vernieuwen: zie [docs/technical/manuals.md](docs/technical/manuals.md).

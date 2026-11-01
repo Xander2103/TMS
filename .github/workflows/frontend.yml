@@ -3,9 +3,9 @@ name: frontend
 on:
   push:
     branches: [main, nav-redesign]
-    paths: ['TransportationService.Web/**', '.github/workflows/frontend.yml']
+    paths: ['TransportationService.Web/**', 'docs/user-manual/**', 'docs/admin-manual/**', '.github/workflows/frontend.yml']
   pull_request:
-    paths: ['TransportationService.Web/**', '.github/workflows/frontend.yml']
+    paths: ['TransportationService.Web/**', 'docs/user-manual/**', 'docs/admin-manual/**', '.github/workflows/frontend.yml']
 
 permissions:
   contents: read
