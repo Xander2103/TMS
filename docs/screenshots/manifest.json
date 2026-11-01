@@ -1,0 +1,759 @@
+{
+ "afwijking-detail": {
+  "group": "dispatcher",
+  "url": "/exceptions/b58b7062-5625-47ac-8604-425305a0d080",
+  "viewport": "1440x900",
+  "callouts": [
+   "Neem de afwijking in onderzoek.",
+   "Onder Meer: oplossen, afwijzen of escaleren naar incident."
+  ]
+ },
+ "beheer-eigen-bedrijven": {
+  "group": "beheer",
+  "url": "/settings/legal-entities",
+  "viewport": "1440x900",
+  "callouts": []
+ },
+ "beheer-gebruiker-nieuw": {
+  "group": "beheer",
+  "url": "/users/new",
+  "viewport": "1440x900",
+  "callouts": [
+   "Het e-mailadres waarmee de gebruiker zich aanmeldt."
+  ]
+ },
+ "beheer-gebruikers": {
+  "group": "beheer",
+  "url": "/users",
+  "viewport": "1440x900",
+  "callouts": [
+   "Maak een nieuwe gebruiker."
+  ]
+ },
+ "beheer-instellingen": {
+  "group": "beheer",
+  "url": "/settings",
+  "viewport": "1440x900",
+  "callouts": []
+ },
+ "beheer-peppol": {
+  "group": "beheer",
+  "url": "/peppol",
+  "viewport": "1440x900",
+  "callouts": [
+   "Sandbox: er wordt niets echt verzonden."
+  ]
+ },
+ "beheer-rol": {
+  "group": "beheer-hr",
+  "url": "/roles/5fd4a2dd-116a-44c8-b791-4ff3ebf3e337",
+  "viewport": "1440x900",
+  "callouts": []
+ },
+ "beheer-rollen": {
+  "group": "beheer",
+  "url": "/roles",
+  "viewport": "1440x900",
+  "callouts": [
+   "Open een rol om de rechten te zien."
+  ]
+ },
+ "beheer-systeem": {
+  "group": "beheer",
+  "url": "/settings/system",
+  "viewport": "1440x900",
+  "callouts": [
+   "Back-ups: maak of bekijk ze hier."
+  ]
+ },
+ "chauffeur-documenten": {
+  "group": "chauffeur",
+  "url": "/driver/documents",
+  "viewport": "390x844",
+  "callouts": []
+ },
+ "chauffeur-incident": {
+  "group": "chauffeur",
+  "url": "/driver/incidents",
+  "viewport": "390x844",
+  "callouts": [
+   "Meld een incident."
+  ]
+ },
+ "chauffeur-mislukt": {
+  "group": "chauffeur",
+  "url": "/my-trips/160710a3-76b7-4da1-95b4-742c062fe17d",
+  "viewport": "390x844",
+  "callouts": [
+   "De reden is verplicht."
+  ]
+ },
+ "chauffeur-pod": {
+  "group": "chauffeur",
+  "url": "/my-trips/160710a3-76b7-4da1-95b4-742c062fe17d",
+  "viewport": "390x844",
+  "callouts": [
+   "Kies het resultaat van de levering.",
+   "De naam van de ontvanger is verplicht."
+  ]
+ },
+ "chauffeur-probleem": {
+  "group": "chauffeur",
+  "url": "/my-trips/160710a3-76b7-4da1-95b4-742c062fe17d",
+  "viewport": "390x844",
+  "callouts": [
+   "Kies wat er aan de hand is.",
+   "Beschrijf het probleem kort."
+  ]
+ },
+ "chauffeur-stop-acties": {
+  "group": "chauffeur",
+  "url": "/my-trips/160710a3-76b7-4da1-95b4-742c062fe17d",
+  "viewport": "390x844",
+  "callouts": [
+   "De volgende stap.",
+   "Lukt het leveren niet? Tik op Mislukt.",
+   "Meld een probleem."
+  ]
+ },
+ "chauffeur-stops": {
+  "group": "chauffeur",
+  "url": "/my-trips/160710a3-76b7-4da1-95b4-742c062fe17d",
+  "viewport": "390x844",
+  "callouts": [
+   "De stop waar je nu bent."
+  ]
+ },
+ "chauffeur-vandaag": {
+  "group": "chauffeur",
+  "url": "/driver",
+  "viewport": "390x844",
+  "callouts": [
+   "Je rit van vandaag.",
+   "Al je ritten.",
+   "Meld een incident."
+  ]
+ },
+ "dashboard": {
+  "group": "management",
+  "url": "/dashboard",
+  "viewport": "1440x900",
+  "callouts": [
+   "Het overzicht van vandaag."
+  ]
+ },
+ "dossier-afsluiten": {
+  "group": "planner",
+  "url": "/dossiers/77cd80c1-3b9c-4cab-bc43-6d0750422920",
+  "viewport": "1440x900",
+  "callouts": [
+   "Lees wat afsluiten betekent en welke punten openstaan.",
+   "Bevestig dat je de aandachtspunten bekeken hebt.",
+   "Sluit het dossier af."
+  ]
+ },
+ "dossier-documenten": {
+  "group": "planner",
+  "url": "/dossiers/51978efa-6e63-402c-b32d-709f24f79fac/documenten",
+  "viewport": "1440x1100",
+  "callouts": [
+   "CMR, leveringsbon of werkbon van deze opdracht.",
+   "Pas na publiceren ziet de klant dit document."
+  ]
+ },
+ "dossier-nieuw": {
+  "group": "planner",
+  "url": "/dossiers/new",
+  "viewport": "1440x900",
+  "callouts": [
+   "Alleen de klant is verplicht."
+  ]
+ },
+ "dossier-overzicht": {
+  "group": "planner",
+  "url": "/dossiers/2b391009-c849-4eb7-a4a8-b4356b533b9b",
+  "viewport": "1440x900",
+  "callouts": [
+   "De onderdelen van het dossier.",
+   "Onder Meer vind je bewerken, heropenen en incident registreren."
+  ]
+ },
+ "dossier-verkoop": {
+  "group": "planner",
+  "url": "/dossiers/48e296c4-69c3-45f3-a273-80c1d0040cde/prijs",
+  "viewport": "1440x900",
+  "callouts": [
+   "Kies het onderdeel waarvan je de prijs wilt zien."
+  ]
+ },
+ "dossiers-filters": {
+  "group": "planner",
+  "url": "/dossiers",
+  "viewport": "1440x900",
+  "callouts": [
+   "Filters per onderwerp: identificatie, klant, status, datum, planning.",
+   "Vul alleen in wat je zoekt.",
+   "Klik opnieuw om de filters te sluiten."
+  ]
+ },
+ "dossiers-lijst": {
+  "group": "planner",
+  "url": "/dossiers",
+  "viewport": "1440x900",
+  "callouts": [
+   "Zoek op nummer, klant, chauffeur, kenteken of plaats.",
+   "Open de uitgebreide filters.",
+   "Kies een bewaarde weergave.",
+   "Maak een nieuw dossier."
+  ]
+ },
+ "facturatiecontrole": {
+  "group": "boekhouding",
+  "url": "/invoice-control",
+  "viewport": "1440x900",
+  "callouts": [
+   "Dit kan gefactureerd worden.",
+   "Dit moet eerst nagekeken worden, met de reden erbij."
+  ]
+ },
+ "facturen-lijst": {
+  "group": "boekhouding",
+  "url": "/invoices",
+  "viewport": "1440x900",
+  "callouts": [
+   "Maak een nieuwe factuur."
+  ]
+ },
+ "factuur-betaling": {
+  "group": "boekhouding",
+  "url": "/invoices/2704b31e-2a96-47f6-b368-71bcbec362a2",
+  "viewport": "1440x900",
+  "callouts": [
+   "De datum van de betaling.",
+   "Klik om de betaling te registreren."
+  ]
+ },
+ "factuur-blokkade": {
+  "group": "boekhouding",
+  "url": "/invoices/d3d397b5-3f95-4f25-b3d8-5c59fe61aa7c",
+  "viewport": "1440x900",
+  "callouts": [
+   "Dit moet eerst opgelost zijn.",
+   "Hier: het PO-nummer ontbreekt."
+  ]
+ },
+ "factuur-bouwer": {
+  "group": "boekhouding",
+  "url": "/invoices/new",
+  "viewport": "1440x1300",
+  "callouts": [
+   "Vink aan wat op de factuur moet.",
+   "Maak de conceptfactuur."
+  ]
+ },
+ "factuur-concept": {
+  "group": "boekhouding",
+  "url": "/invoices/388743c6-dd1d-47c8-a34a-723fc4061a70",
+  "viewport": "1440x900",
+  "callouts": [
+   "Maak de factuur definitief.",
+   "Bekijk de PDF zoals de klant ze krijgt."
+  ]
+ },
+ "factuur-creditnota": {
+  "group": "boekhouding",
+  "url": "/invoices/2704b31e-2a96-47f6-b368-71bcbec362a2",
+  "viewport": "1440x900",
+  "callouts": [
+   "De reden is verplicht."
+  ]
+ },
+ "factuur-definitief": {
+  "group": "boekhouding",
+  "url": "/invoices/2704b31e-2a96-47f6-b368-71bcbec362a2",
+  "viewport": "1440x900",
+  "callouts": [
+   "Registreer de betaling.",
+   "Corrigeer met een creditnota."
+  ]
+ },
+ "factuur-definitief-dialoog": {
+  "group": "boekhouding",
+  "url": "/invoices/388743c6-dd1d-47c8-a34a-723fc4061a70",
+  "viewport": "1440x900",
+  "callouts": [
+   "Controleer de gegevens. Daarna kunnen ze niet meer wijzigen.",
+   "Klik om definitief te maken."
+  ]
+ },
+ "factuur-nieuw": {
+  "group": "boekhouding",
+  "url": "/invoices/new",
+  "viewport": "1440x900",
+  "callouts": [
+   "Kies de klant."
+  ]
+ },
+ "fout-geen-toegang": {
+  "group": "foutmeldingen",
+  "url": "/planning-center",
+  "viewport": "1440x900",
+  "callouts": [
+   "Je hebt geen recht op dit scherm.",
+   "Ga terug naar je startscherm."
+  ]
+ },
+ "fout-niet-gevonden": {
+  "group": "foutmeldingen",
+  "url": "/deze-pagina-bestaat-niet",
+  "viewport": "1440x900",
+  "callouts": [
+   "Deze pagina bestaat niet."
+  ]
+ },
+ "fout-offline": {
+  "group": "foutmeldingen",
+  "url": "/inventory/issues",
+  "viewport": "1440x900",
+  "callouts": [
+   "Je hebt geen verbinding."
+  ]
+ },
+ "herlevering-gratis": {
+  "group": "planner",
+  "url": "/dossiers/f554c3e2-35c5-4dba-853e-7e6a14f7588e/prijs",
+  "viewport": "1440x900",
+  "callouts": [
+   "Geef de reden in."
+  ]
+ },
+ "herlevering-prijs": {
+  "group": "planner",
+  "url": "/dossiers/f554c3e2-35c5-4dba-853e-7e6a14f7588e/prijs",
+  "viewport": "1440x900",
+  "callouts": [
+   "Gratis herlevering: met een verplichte reden."
+  ]
+ },
+ "hr-account": {
+  "group": "beheer-hr",
+  "url": "/employees/0205a4cd-337d-4835-83df-03b72a30eab3",
+  "viewport": "1440x900",
+  "callouts": [
+   "Maak een account voor deze medewerker."
+  ]
+ },
+ "hr-bedrijfsmiddelen": {
+  "group": "hr",
+  "url": "/employees/533493c5-3eb4-4a9b-b01f-2cb63c1bda2a",
+  "viewport": "1440x900",
+  "callouts": []
+ },
+ "hr-detail": {
+  "group": "hr",
+  "url": "/employees/533493c5-3eb4-4a9b-b01f-2cb63c1bda2a",
+  "viewport": "1440x900",
+  "callouts": [
+   "Wat deze medewerker in bezit heeft.",
+   "Onder Meer: Medewerker inactief zetten.",
+   "Pas de gegevens aan."
+  ]
+ },
+ "hr-lijst": {
+  "group": "hr",
+  "url": "/employees",
+  "viewport": "1440x900",
+  "callouts": [
+   "Maak een nieuwe medewerker aan."
+  ]
+ },
+ "hr-nieuw": {
+  "group": "hr",
+  "url": "/employees/new",
+  "viewport": "1440x900",
+  "callouts": [
+   "Voornaam en achternaam zijn verplicht."
+  ]
+ },
+ "hr-offboarding": {
+  "group": "hr",
+  "url": "/employees/533493c5-3eb4-4a9b-b01f-2cb63c1bda2a",
+  "viewport": "1440x900",
+  "callouts": [
+   "Lees eerst wat dit raakt.",
+   "Bevestig pas als je alles nagelezen hebt."
+  ]
+ },
+ "incident-detail": {
+  "group": "dispatcher",
+  "url": "/incidents/f9372ed7-0da5-4248-8ba5-6d14a0ddfde4",
+  "viewport": "1440x900",
+  "callouts": [
+   "Dit incident is automatisch aangemaakt na de mislukte stop.",
+   "Neem het incident in behandeling.",
+   "Onder Meer vind je ook Afhandelen."
+  ]
+ },
+ "incident-herlevering": {
+  "group": "dispatcher",
+  "url": "/incidents/d80421e3-e72c-45d0-9d07-e8fc45130e8d",
+  "viewport": "1440x900",
+  "callouts": [
+   "Hier staat de gekoppelde herlevering."
+  ]
+ },
+ "incidenten-lijst": {
+  "group": "dispatcher",
+  "url": "/incidents",
+  "viewport": "1440x900",
+  "callouts": [
+   "Toon incidenten en afwijkingen samen."
+  ]
+ },
+ "inloggen": {
+  "group": "anoniem",
+  "url": "/login",
+  "viewport": "1440x900",
+  "callouts": [
+   "Vul je e-mailadres in.",
+   "Vul je wachtwoord in.",
+   "Klik hier om aan te melden.",
+   "Wachtwoord vergeten? Klik hier."
+  ]
+ },
+ "klant-po": {
+  "group": "boekhouding",
+  "url": "/customers/5a11307a-dae8-468a-88de-81105946b68a",
+  "viewport": "1440x900",
+  "callouts": [
+   "Het PO-beleid: Geen, Vrij of Verplicht."
+  ]
+ },
+ "live-mislukt": {
+  "group": "dispatcher",
+  "url": "/operations",
+  "viewport": "1440x900",
+  "callouts": [
+   "Mislukte leveringen blijven hier staan tot het incident is afgehandeld.",
+   "Klik door naar het incident.",
+   "De herlevering van deze opdracht."
+  ]
+ },
+ "live-overzicht": {
+  "group": "dispatcher",
+  "url": "/operations",
+  "viewport": "1440x900",
+  "callouts": [
+   "Mislukte leveringen die opvolging vragen.",
+   "Ritten die te laat zijn."
+  ]
+ },
+ "live-ritten": {
+  "group": "dispatcher",
+  "url": "/operations",
+  "viewport": "1440x1200",
+  "callouts": [
+   "Klik op een rij om de rit te openen.",
+   "Meldingen: openen, bevestigen en afhandelen."
+  ]
+ },
+ "magazijn-artikel": {
+  "group": "magazijn",
+  "url": "/issued-items/templates/a2421bc8-bedb-446a-aff4-ff33667f9645",
+  "viewport": "1440x900",
+  "callouts": []
+ },
+ "magazijn-balie": {
+  "group": "magazijn",
+  "url": "/inventory/issues",
+  "viewport": "1440x900",
+  "callouts": [
+   "Geef een artikel uit aan een medewerker.",
+   "Wat nog bij medewerkers is.",
+   "Alles wat er gebeurd is."
+  ]
+ },
+ "magazijn-historiek": {
+  "group": "magazijn",
+  "url": "/inventory/issues",
+  "viewport": "1440x900",
+  "callouts": []
+ },
+ "magazijn-openstaand": {
+  "group": "magazijn",
+  "url": "/inventory/issues",
+  "viewport": "1440x900",
+  "callouts": [
+   "Verwerk de retour als het artikel terugkomt."
+  ]
+ },
+ "magazijn-retour": {
+  "group": "magazijn",
+  "url": "/inventory/issues",
+  "viewport": "1440x900",
+  "callouts": [
+   "In welke staat komt het terug?",
+   "Klik om de retour te bevestigen."
+  ]
+ },
+ "magazijn-uitgeven": {
+  "group": "magazijn",
+  "url": "/inventory/issues",
+  "viewport": "1440x900",
+  "callouts": [
+   "Kies de medewerker.",
+   "Kies het artikel.",
+   "Vul het aantal in."
+  ]
+ },
+ "magazijn-voorraad": {
+  "group": "magazijn",
+  "url": "/inventory",
+  "viewport": "1440x900",
+  "callouts": [
+   "De voorraad op dit moment.",
+   "Open een artikel: houders en historiek."
+  ]
+ },
+ "navigatie-menu": {
+  "group": "planner",
+  "url": "/dossiers",
+  "viewport": "1440x900",
+  "callouts": [
+   "Het menu links: klik op een onderdeel.",
+   "Typ hier om het menu te filteren.",
+   "Hier meld je je af.",
+   "De bel toont je meldingen."
+  ]
+ },
+ "navigatie-zoeken": {
+  "group": "planner",
+  "url": "/dossiers",
+  "viewport": "1440x900",
+  "callouts": [
+   "Typ wat je zoekt, bijvoorbeeld een schermnaam."
+  ]
+ },
+ "opdracht-bevestigen": {
+  "group": "planner",
+  "url": "/transport-orders/0f08ce6f-f9c5-4144-b920-a517917990f8",
+  "viewport": "1440x900",
+  "callouts": [
+   "Controleer alles en klik op Bevestigen."
+  ]
+ },
+ "opdracht-nieuw-klant": {
+  "group": "planner",
+  "url": "/transport-orders/new",
+  "viewport": "1440x900",
+  "callouts": [
+   "Kies eerst de klant.",
+   "De referentie van de klant.",
+   "De datum van de opdracht."
+  ]
+ },
+ "opdracht-nieuw-stops": {
+  "group": "planner",
+  "url": "/transport-orders/new",
+  "viewport": "1440x900",
+  "callouts": [
+   "Open het onderdeel Route en stops.",
+   "Voeg de laadplaats toe.",
+   "Voeg de losplaats toe."
+  ]
+ },
+ "planbord": {
+  "group": "planner",
+  "url": "/planning-center",
+  "viewport": "1440x900",
+  "callouts": [
+   "Werk dat nog ingepland moet worden.",
+   "Chauffeurs, voertuigen en opleggers."
+  ]
+ },
+ "planbord-concepten": {
+  "group": "planner",
+  "url": "/planning-center",
+  "viewport": "1440x900",
+  "callouts": [
+   "Toon ook opdrachten die nog concept zijn.",
+   "Nog niet planbaar: eerst bevestigen."
+  ]
+ },
+ "planbord-inplannen": {
+  "group": "planner",
+  "url": "/planning-center",
+  "viewport": "1440x900",
+  "callouts": [
+   "Maak een nieuwe rit, of kies hierboven een bestaande rit."
+  ]
+ },
+ "planbord-inspector": {
+  "group": "planner",
+  "url": "/planning-center",
+  "viewport": "1440x900",
+  "callouts": [
+   "Kies de chauffeur.",
+   "Controleer het voertuig.",
+   "Kies zo nodig de oplegger.",
+   "Blokkerend: dit moet eerst opgelost zijn."
+  ]
+ },
+ "planbord-voertuigen": {
+  "group": "planner",
+  "url": "/planning-center",
+  "viewport": "1440x900",
+  "callouts": [
+   "Bekijk de voertuigen.",
+   "Toon alleen wat vrij is."
+  ]
+ },
+ "portaal-aanvraag": {
+  "group": "klant",
+  "url": "/klantportaal/new",
+  "viewport": "1440x900",
+  "callouts": [
+   "Uw PO-nummer of eigen kenmerk.",
+   "De gewenste datum."
+  ]
+ },
+ "portaal-beoordelen": {
+  "group": "planner",
+  "url": "/transport-orders/57fcb5ec-8935-4128-b99f-81be6e249130",
+  "viewport": "1440x900",
+  "callouts": [
+   "Neem de aanvraag aan.",
+   "Stel de klant een vraag.",
+   "Wijs de aanvraag af, met een reden."
+  ]
+ },
+ "portaal-documenten": {
+  "group": "klant",
+  "url": "/klantportaal/documenten",
+  "viewport": "1440x900",
+  "callouts": []
+ },
+ "portaal-facturen": {
+  "group": "klant",
+  "url": "/klantportaal/facturen",
+  "viewport": "1440x900",
+  "callouts": [
+   "Open een factuur om de PDF te downloaden."
+  ]
+ },
+ "portaal-mobiel": {
+  "group": "klant-mobiel",
+  "url": "/klantportaal",
+  "viewport": "390x844",
+  "callouts": []
+ },
+ "portaal-opdrachten": {
+  "group": "klant",
+  "url": "/klantportaal",
+  "viewport": "1440x900",
+  "callouts": [
+   "Dien een nieuwe aanvraag in.",
+   "Uw documenten.",
+   "Uw facturen."
+  ]
+ },
+ "portaal-voorkeuren": {
+  "group": "klant",
+  "url": "/klantportaal/voorkeuren",
+  "viewport": "1440x900",
+  "callouts": []
+ },
+ "portaal-vraag": {
+  "group": "klant",
+  "url": "/klantportaal/orders/5cb6909f-d41c-461f-b360-dc1c49df1438",
+  "viewport": "1440x900",
+  "callouts": [
+   "Onze planning heeft een vraag.",
+   "Typ hier uw antwoord.",
+   "Klik om uw antwoord te versturen."
+  ]
+ },
+ "rit-pagina": {
+  "group": "planner",
+  "url": "/planning/256fec36-ad9b-4995-9e17-6259d3922f74",
+  "viewport": "1440x900",
+  "callouts": [
+   "Chauffeur, voertuig en oplegger.",
+   "Voeg een bevestigde opdracht toe.",
+   "Conflicten: Blokkerend moet opgelost zijn.",
+   "Inplannen: pas nu wordt de chauffeur verwittigd."
+  ]
+ },
+ "rit-vertraging": {
+  "group": "dispatcher",
+  "url": "/planning/221a736f-0441-4222-a136-d8ff9c8e9d5e",
+  "viewport": "1440x900",
+  "callouts": [
+   "Meld hier een vertraging."
+  ]
+ },
+ "ritlijst": {
+  "group": "planner",
+  "url": "/planning",
+  "viewport": "1440x900",
+  "callouts": [
+   "Maak een nieuwe rit aan."
+  ]
+ },
+ "thema-donker": {
+  "group": "thema",
+  "url": "/dashboard",
+  "viewport": "1440x900",
+  "callouts": [
+   "Dezelfde pagina in de donkere weergave."
+  ]
+ },
+ "thema-kiezen": {
+  "group": "planner",
+  "url": "/dossiers",
+  "viewport": "1440x900",
+  "callouts": [
+   "Kies Systeem, Licht of Donker."
+  ]
+ },
+ "wagenpark-opleggers": {
+  "group": "wagenpark",
+  "url": "/trailers",
+  "viewport": "1440x900",
+  "callouts": []
+ },
+ "wagenpark-overzicht": {
+  "group": "wagenpark",
+  "url": "/fleet",
+  "viewport": "1440x900",
+  "callouts": [
+   "Voertuigen die je nu niet mag inzetten."
+  ]
+ },
+ "wagenpark-schade": {
+  "group": "wagenpark",
+  "url": "/vehicles/58a80b74-fe61-4525-a7e0-da2f56c8f952",
+  "viewport": "1440x900",
+  "callouts": [
+   "Registreer nieuwe schade."
+  ]
+ },
+ "wagenpark-voertuig": {
+  "group": "wagenpark",
+  "url": "/vehicles/58a80b74-fe61-4525-a7e0-da2f56c8f952",
+  "viewport": "1440x900",
+  "callouts": [
+   "Waarom dit voertuig niet inzetbaar is.",
+   "Bekijk of meld schade."
+  ]
+ },
+ "wagenpark-voertuigen": {
+  "group": "wagenpark",
+  "url": "/vehicles",
+  "viewport": "1440x900",
+  "callouts": [
+   "Het oordeel over de inzetbaarheid.",
+   "Voeg een voertuig toe."
+  ]
+ }
+}

@@ -1,0 +1,10 @@
+{
+  "name": "tms-manual-tools",
+  "private": true,
+  "type": "module",
+  "description": "Tools behind the manuals: screenshots with callouts and PDF generation. Not part of the application.",
+  "dependencies": {
+    "pdfjs-dist": "4.10.38",
+    "playwright-core": "1.56.1"
+  }
+}
