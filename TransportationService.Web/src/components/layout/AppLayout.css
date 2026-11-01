@@ -22,6 +22,28 @@
   padding: 12px 40px 0;
 }
 
+.help-context-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.3rem 0.55rem;
+  margin-right: 0.4rem;
+  font-size: 0.9rem;
+  color: var(--color-text-muted);
+  text-decoration: none;
+  border-radius: 8px;
+}
+
+.help-context-link:hover {
+  color: var(--color-primary);
+  background: var(--color-primary-bg);
+}
+
+.help-context-link:focus-visible {
+  outline: 3px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
 .content {
   flex: 1;
   min-width: 0;

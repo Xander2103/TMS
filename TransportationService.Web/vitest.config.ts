@@ -5,6 +5,8 @@ export default defineConfig({
   plugins: [react()],
   // `npm test` is a bare `vitest run`, and Vitest prefers this file over vite.config.ts, so
   // everything below is what CI actually runs — no CLI flag required or allowed to differ.
+  // The help center reads its Markdown from ../docs, the single source of the manuals.
+  server: { fs: { allow: ['..'] } },
   test: {
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],

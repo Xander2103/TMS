@@ -30,6 +30,7 @@ const NAV_ITEMS: NavItem[] = [
   { labelKey: 'navigation.messages', to: '/klantportaal/berichten', permission: 'customer_portal.messages', badgeKey: 'messages' },
   { labelKey: 'navigation.users', to: '/klantportaal/gebruikers', permission: 'customer_portal.manage_users' },
   { labelKey: 'navigation.preferences', to: '/klantportaal/voorkeuren', permission: 'customer_portal.view' },
+  { labelKey: 'navigation.help', to: '/klantportaal/help', permission: 'customer_portal.view' },
 ]
 
 const UNREAD_POLL_MS = 60_000

@@ -1,5 +1,6 @@
 import { Suspense, useEffect, useState } from 'react'
-import { Outlet } from 'react-router-dom'
+import { CircleHelp } from 'lucide-react'
+import { Link, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../../features/auth/authContextValue'
 import { useLocale } from '../../i18n/localeContext'
 import { isLocale } from '../../i18n/translations'
@@ -14,6 +15,7 @@ import { Modal } from '../ui/Modal'
 import { CommandPalette } from './CommandPalette'
 import { OfflineBanner } from './OfflineBanner'
 import { Sidebar } from './Sidebar'
+import { helpPathFor } from '../../features/help/helpLinks'
 import './AppLayout.css'
 
 /**
@@ -26,6 +28,7 @@ import './AppLayout.css'
  */
 export function AppLayout() {
   const [navOpen, setNavOpen] = useState(false)
+  const { pathname } = useLocation()
   const { user } = useAuth()
   const { applyFallbackLocale, t } = useLocale()
   // Offline queues (scans + driver actions) replay automatically when the connection returns.
@@ -82,6 +85,10 @@ export function AppLayout() {
           {/* Slim header zone: on desktop a right-aligned strip above the page content,
               on mobile the bell overlays the fixed mobile-topbar's right edge. */}
           <header className="app-topbar">
+            <Link to={helpPathFor(pathname)} className="help-context-link" aria-label={t('help.contextLinkLabel')}>
+              <CircleHelp size={18} aria-hidden="true" />
+              {t('help.contextLink')}
+            </Link>
             <NotificationBell />
           </header>
           <main className="content">

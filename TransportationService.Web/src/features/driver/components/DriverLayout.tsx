@@ -19,6 +19,7 @@ export function DriverLayout() {
     <div className="drv-shell">
       <header className="drv-topbar">
         <span className="drv-title">{t('driverApp.layout.title')}</span>
+        <NavLink to="/driver/help" className="drv-help-link" aria-label={t('help.contextLinkLabel')}>{t('help.contextLink')}</NavLink>
         <span className={`drv-status${online ? '' : ' drv-status-offline'}`}>
           {online ? t('driverApp.layout.online') : t('driverApp.layout.offline')}
           {unsyncedCount > 0 && <span className="drv-sync-badge">{unsyncedCount}</span>}

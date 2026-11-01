@@ -47,6 +47,9 @@ function lazyPage<TModule extends Record<string, unknown>>(
   return lazy(async () => ({ default: (await loader())[name] as ComponentType }))
 }
 
+const HelpCenterPage = lazyPage(() => import('../features/help/pages/HelpCenterPage'), 'HelpCenterPage')
+const CustomerHelpPage = lazyPage(() => import('../features/help/pages/HelpCenterPage'), 'CustomerHelpPage')
+const DriverHelpPage = lazyPage(() => import('../features/help/pages/HelpCenterPage'), 'DriverHelpPage')
 const DashboardPage = lazyPage(() => import('../features/dashboard/pages/DashboardPage'), 'DashboardPage')
 const TransportOrdersPage = lazyPage(() => import('../features/transport-orders/pages/TransportOrdersPage'), 'TransportOrdersPage')
 const NewTransportOrderPage = lazyPage(() => import('../features/transport-orders/pages/NewTransportOrderPage'), 'NewTransportOrderPage')
@@ -244,6 +247,8 @@ const router = createBrowserRouter(
               <Route path="/driver" element={<DriverHomePage />} />
               <Route path="/driver/documents" element={<DriverDocumentsPage />} />
               <Route path="/driver/incidents" element={<DriverIncidentsPage />} />
+              <Route path="/driver/help" element={<DriverHelpPage />} />
+              <Route path="/driver/help/:articleId" element={<DriverHelpPage />} />
             </Route>
           </Route>
         </Route>
@@ -265,6 +270,8 @@ const router = createBrowserRouter(
           <Route path="/klantportaal/mededelingen" element={<CustomerPortalNoticesPage />} />
           <Route path="/klantportaal/gebruikers" element={<RequirePermission permissions={TRANSPORT_GUARDS['/klantportaal/gebruikers']}><CustomerPortalUsersPage /></RequirePermission>} />
           <Route path="/klantportaal/voorkeuren" element={<CustomerPortalPreferencesPage />} />
+          <Route path="/klantportaal/help" element={<CustomerHelpPage />} />
+          <Route path="/klantportaal/help/:articleId" element={<CustomerHelpPage />} />
           </Route>
         </Route>
         </Route>
@@ -354,6 +361,8 @@ const router = createBrowserRouter(
           <Route path="/roles" element={<RequirePermission permissions={navPermissions('/roles')}><RolesPage /></RequirePermission>} />
           <Route path="/job-function-mappings" element={<RequirePermission permissions={APP_GUARDS['/job-function-mappings']}><JobFunctionMappingsPage /></RequirePermission>} />
           <Route path="/inbox" element={<InboxPage />} />
+          <Route path="/help" element={<HelpCenterPage />} />
+          <Route path="/help/:articleId" element={<HelpCenterPage />} />
           <Route path="/roles/:id" element={<RequirePermission permissions={navPermissions('/roles')}><RoleDetailPage /></RequirePermission>} />
           <Route path="/employees" element={<RequirePermission permissions={navPermissions('/employees')}><EmployeesPage /></RequirePermission>} />
           <Route path="/employees/new" element={<RequirePermission permissions={['employees.create']}><NewEmployeePage /></RequirePermission>} />

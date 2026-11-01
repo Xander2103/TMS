@@ -1,5 +1,44 @@
-import { defineConfig, loadEnv } from 'vite'
+import fs from 'node:fs'
+import path from 'node:path'
+import { defineConfig, loadEnv, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
+
+const DOCS = path.resolve(__dirname, '../docs')
+// Not "/help": a folder of that name in dist/ would make nginx answer the /help route with a directory.
+const ASSET_ROOT = '/manual-assets'
+const PDF_FILES = ['TMS-Complete-Gebruikershandleiding.pdf', 'TMS-Beheerdershandleiding.pdf', 'TMS-Klantportaal-Handleiding.pdf']
+
+/** docs/ is the one source of the manuals: its screenshots and PDFs are served from there and copied into the build. */
+function manualAssets(): Plugin {
+  let outDir = 'dist'
+  const imageFile = (name: string) => {
+    const annotated = path.join(DOCS, 'screenshots/annotated', name)
+    return fs.existsSync(annotated) ? annotated : path.join(DOCS, 'screenshots/original', name)
+  }
+  return {
+    name: 'manual-assets',
+    configResolved(config) { outDir = path.resolve(config.root, config.build.outDir) },
+    configureServer(server) {
+      server.middlewares.use(ASSET_ROOT, (req, res, next) => {
+        const name = path.basename((req.url ?? '').split('?')[0])
+        const file = (req.url ?? '').startsWith('/img/') ? imageFile(name) : path.join(DOCS, 'generated', name)
+        if (!fs.existsSync(file)) return next()
+        res.setHeader('Content-Type', file.endsWith('.pdf') ? 'application/pdf' : 'image/png')
+        fs.createReadStream(file).pipe(res)
+      })
+    },
+    closeBundle() {
+      const target = path.join(outDir, ASSET_ROOT)
+      fs.mkdirSync(path.join(target, 'img'), { recursive: true })
+      const originals = path.join(DOCS, 'screenshots/original')
+      if (fs.existsSync(originals)) for (const name of fs.readdirSync(originals)) fs.copyFileSync(imageFile(name), path.join(target, 'img', name))
+      for (const name of PDF_FILES) {
+        const file = path.join(DOCS, 'generated', name)
+        if (fs.existsSync(file)) fs.copyFileSync(file, path.join(target, name))
+      }
+    },
+  }
+}
 
 // https://vite.dev/config/
 export default defineConfig(({ command, mode }) => {
@@ -18,6 +57,7 @@ export default defineConfig(({ command, mode }) => {
   }
 
   return {
-    plugins: [react()],
+    plugins: [react(), manualAssets()],
+    server: { fs: { allow: [path.resolve(__dirname, '..')] } },
   }
 })
