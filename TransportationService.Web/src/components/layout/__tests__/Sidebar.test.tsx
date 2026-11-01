@@ -38,7 +38,7 @@ function renderSidebar(path = '/dashboard') {
   return render(
     <MemoryRouter initialEntries={[path]}>
       <NotificationsProvider>
-        <Sidebar onNavigate={vi.fn()} />
+        <Sidebar onNavigate={vi.fn()} onAction={vi.fn()} />
       </NotificationsProvider>
     </MemoryRouter>,
   )
@@ -86,11 +86,41 @@ describe('Sidebar', () => {
     render(
       <MemoryRouter initialEntries={['/vehicles']}>
         <NotificationsProvider>
-          <Sidebar onNavigate={onNavigate} />
+          <Sidebar onNavigate={onNavigate} onAction={vi.fn()} />
         </NotificationsProvider>
       </MemoryRouter>,
     )
     await userEvent.click(screen.getByRole('link', { name: 'Voertuigen' }))
     expect(onNavigate).toHaveBeenCalled()
+  })
+
+  describe('Help', () => {
+    const helpHeader = () => screen.getByRole('button', { name: 'Help' })
+
+    it('comes right after Parameters as the last module, collapsed by default', () => {
+      auth.permissions = ['company_settings.view']
+      renderSidebar()
+      const modules = screen.getAllByRole('button', { expanded: false }).map((b) => b.textContent)
+      expect(modules.slice(-2)).toEqual(['Parameters', 'Help'])
+      expect(helpHeader()).toHaveAttribute('aria-expanded', 'false')
+      expect(screen.getByRole('region', { name: 'Help', hidden: true })).toHaveAttribute('data-expanded', 'false')
+    })
+
+    it.each(['/help', '/help/planbord'])('expands and highlights Handleidingen on %s', (path) => {
+      renderSidebar(path)
+      expect(helpHeader()).toHaveAttribute('aria-expanded', 'true')
+      expect(helpHeader().closest('li')).toHaveClass('nav-module-active')
+      const link = screen.getByRole('link', { name: 'Handleidingen' })
+      expect(link).toHaveAttribute('href', '/help')
+      expect(link).toHaveClass('active')
+    })
+
+    it('collapses and expands like any other module', async () => {
+      renderSidebar()
+      await userEvent.click(helpHeader())
+      expect(helpHeader()).toHaveAttribute('aria-expanded', 'true')
+      await userEvent.click(helpHeader())
+      expect(helpHeader()).toHaveAttribute('aria-expanded', 'false')
+    })
   })
 })

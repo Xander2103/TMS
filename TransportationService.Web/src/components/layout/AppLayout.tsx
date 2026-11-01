@@ -67,7 +67,13 @@ export function AppLayout() {
           <span className="mobile-topbar-title">Transportation Service</span>
         </header>
         {navOpen && <div className="mobile-nav-overlay" onClick={() => setNavOpen(false)} aria-hidden="true" />}
-        <Sidebar open={navOpen} onNavigate={() => setNavOpen(false)} />
+        <Sidebar
+          open={navOpen}
+          onNavigate={() => setNavOpen(false)}
+          onAction={(id) => {
+            if (id === 'shortcuts') shortcuts.setHelpOpen(true)
+          }}
+        />
         <CommandPalette open={shortcuts.paletteOpen} onClose={() => shortcuts.setPaletteOpen(false)} />
         {shortcuts.helpOpen && (
           <Modal title={t('ui.nav.shortcuts')} onClose={() => shortcuts.setHelpOpen(false)}>

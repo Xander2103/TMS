@@ -52,6 +52,7 @@ describe('missing translation keys', () => {
     for (const mod of getNavModules()) {
       labels.push(mod.label)
       for (const item of mod.items ?? []) labels.push(item.label)
+      for (const action of mod.actions ?? []) labels.push(action.label)
       for (const sg of mod.subgroups ?? []) {
         labels.push(sg.label)
         for (const item of sg.items) labels.push(item.label)

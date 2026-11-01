@@ -1,8 +1,9 @@
-import type { NavItem, NavModule, NavSubgroup } from './navConfig'
+import type { NavAction, NavItem, NavModule, NavSubgroup } from './navConfig'
 
 export interface VisibleModule {
   module: NavModule
   items: NavItem[]
+  actions?: NavAction[]
   subgroups: NavSubgroup[]
 }
 
@@ -76,6 +77,10 @@ export function filterModule(
     .map((i) => keepItem(i, opts.hasAnyPermission, q, translate))
     .filter((i): i is NavItem => i !== null)
 
+  const actions = (module.actions ?? []).filter(
+    (a) => q.length === 0 || translate(a.label).toLowerCase().includes(q),
+  )
+
   const subgroups = (module.subgroups ?? [])
     .map((sg) => ({
       label: sg.label,
@@ -85,8 +90,8 @@ export function filterModule(
     }))
     .filter((sg) => sg.items.length > 0)
 
-  if (items.length === 0 && subgroups.length === 0) return null
-  return { module, items, subgroups }
+  if (items.length === 0 && actions.length === 0 && subgroups.length === 0) return null
+  return { module, items, actions, subgroups }
 }
 
 /**

@@ -1,5 +1,5 @@
 import {
-  BarChart3, CalendarClock, CircleUser, Contact, FolderOpen, LayoutDashboard,
+  BarChart3, BookOpen, CalendarClock, CircleHelp, CircleUser, Contact, FolderOpen, Keyboard, LayoutDashboard,
   Settings, Truck, UsersRound, Warehouse, type LucideIcon,
 } from 'lucide-react'
 import { LOOKUP_RESOURCES, type LookupGroup } from '../../../features/master-data/lookupRegistry'
@@ -20,6 +20,17 @@ export interface NavItem {
   children?: NavItem[]
 }
 
+/** What a route-less sidebar row triggers; the shell that owns that behaviour handles it. */
+export type NavActionId = 'shortcuts'
+
+/** A sidebar row that opens something in place instead of navigating. */
+export interface NavAction {
+  id: NavActionId
+  /** Translation key. */
+  label: string
+  icon?: LucideIcon
+}
+
 export interface NavSubgroup {
   /** Translation key. */
   label: string
@@ -34,6 +45,8 @@ export interface NavModule {
   /** Rendered only when the signed-in user has an employee link. */
   requiresEmployee?: boolean
   items?: NavItem[]
+  /** Rendered after `items`, with the same row styling. */
+  actions?: NavAction[]
   subgroups?: NavSubgroup[]
 }
 
@@ -119,7 +132,7 @@ function parametersModule(): NavModule {
 }
 
 /**
- * Wave 1 §14 doelboom: operationele groepen (Vandaag → Rapportage) + één Parameters-groep.
+ * Wave 1 §14 doelboom: operationele groepen (Vandaag → Rapportage) + één Parameters-groep, afgesloten door Help.
  * Paden veranderen NOOIT — enkel groepering en labels. /my-trips staat bewust niet meer in de
  * zijbalk: chauffeurs krijgen de driver-shell, /driver enkel voor wie echt uitvoert.
  */
@@ -258,5 +271,13 @@ export function getNavModules(): NavModule[] {
       ],
     },
     parametersModule(),
+    {
+      id: 'help',
+      label: 'navigation.menu.modules.help',
+      icon: CircleHelp,
+      // Ungated, like the /help route itself and the '?' shortcut.
+      items: [{ label: 'help.title', to: '/help', icon: BookOpen }],
+      actions: [{ id: 'shortcuts', label: 'ui.nav.shortcuts', icon: Keyboard }],
+    },
   ]
 }

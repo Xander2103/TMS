@@ -22,7 +22,8 @@
       "personeel": "Personnel",
       "vloot": "Fleet",
       "rapportage": "Reporting",
-      "parameters": "Settings"
+      "parameters": "Settings",
+      "help": "Help"
     },
     "groups": {
       "problems": "Problems",

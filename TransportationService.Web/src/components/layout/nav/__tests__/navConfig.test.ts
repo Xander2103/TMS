@@ -74,15 +74,23 @@ function leavesOf(vm: VisibleModule): NavItem[] {
 describe('getNavModules — §14 target tree', () => {
   const modules = getNavModules()
 
-  it('returns the target groups in order: operational groups first, Parameters last', () => {
+  it('returns the target groups in order: operational groups first, then Parameters and Help', () => {
     expect(modules.map((m) => m.id)).toEqual([
       'portaal', 'vandaag', 'dossiers', 'planning', 'magazijn', 'klanten',
-      'personeel', 'vloot', 'rapportage', 'parameters',
+      'personeel', 'vloot', 'rapportage', 'parameters', 'help',
     ])
   })
 
   it('flags the portal module as employee-only', () => {
     expect(modules.find((m) => m.id === 'portaal')?.requiresEmployee).toBe(true)
+  })
+
+  it('Help offers the existing help center route and the shortcuts action, to everyone', () => {
+    const help = modules.find((m) => m.id === 'help')!
+    expect(help.items!.map((i) => [i.to, nl(i.label), i.permissions])).toEqual([['/help', 'Handleidingen', undefined]])
+    expect(help.actions!.map((a) => [a.id, nl(a.label)])).toEqual([['shortcuts', 'Sneltoetsen']])
+    expect(help.requiresEmployee).toBeUndefined()
+    expect(visibleFor([]).map((vm) => vm.module.id)).toContain('help')
   })
 
   it('Vandaag bundles dashboard, communication and the Problemen pair', () => {

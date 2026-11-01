@@ -7,7 +7,7 @@ import { AppLanguageSwitcher } from './AppLanguageSwitcher'
 import { ThemeSwitcher } from '../../theme/ThemeSwitcher'
 import { LegalEntitySwitcher } from '../../features/legal-entities/components/LegalEntitySwitcher'
 import { useUnreadNotifications } from '../../features/notifications/notificationsContextValue'
-import { getNavModules } from './nav/navConfig'
+import { getNavModules, type NavActionId } from './nav/navConfig'
 import { NavFilter } from './nav/NavFilter'
 import { NavModule } from './nav/NavModule'
 import { filterModule, findActiveModuleId, type VisibleModule } from './nav/navState'
@@ -19,7 +19,11 @@ function initials(firstName: string, lastName: string): string {
   return `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase() || '?'
 }
 
-export function Sidebar({ open = false, onNavigate }: { open?: boolean; onNavigate?: () => void }) {
+export function Sidebar({ open = false, onNavigate, onAction }: {
+  open?: boolean
+  onNavigate?: () => void
+  onAction: (id: NavActionId) => void
+}) {
   const { user, logout, hasAnyPermission } = useAuth()
   const { t } = useLocale()
   const location = useLocation()
@@ -59,6 +63,7 @@ export function Sidebar({ open = false, onNavigate }: { open?: boolean; onNaviga
               unreadCount={unreadCount}
               onToggle={toggle}
               onNavigate={onNavigate}
+              onAction={onAction}
             />
           ))}
         </ul>

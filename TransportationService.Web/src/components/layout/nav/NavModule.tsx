@@ -1,9 +1,11 @@
 ﻿import { useState } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
-import type { NavItem } from './navConfig'
+import type { NavActionId, NavItem } from './navConfig'
 import { moduleHasUnread, type VisibleModule } from './navState'
 import { useLocale } from '../../../i18n/localeContext'
+
+const rowIndent = (depth: number) => ({ paddingLeft: `${12 + depth * 14}px` })
 
 interface NavItemRowProps {
   item: NavItem
@@ -18,7 +20,7 @@ function NavItemRow({ item, depth, unreadCount, onNavigate }: NavItemRowProps) {
   const [open, setOpen] = useState(false)
   const Icon = item.icon
   const badgeCount = item.badge === 'notifications' ? unreadCount : 0
-  const indent = { paddingLeft: `${12 + depth * 14}px` }
+  const indent = rowIndent(depth)
 
   if (item.children && item.children.length > 0) {
     return (
@@ -69,9 +71,10 @@ export interface NavModuleProps {
   unreadCount: number
   onToggle: (id: string) => void
   onNavigate?: () => void
+  onAction?: (id: NavActionId) => void
 }
 
-export function NavModule({ vm, expanded, active, unreadCount, onToggle, onNavigate }: NavModuleProps) {
+export function NavModule({ vm, expanded, active, unreadCount, onToggle, onNavigate, onAction }: NavModuleProps) {
   const { t } = useLocale()
   const { module } = vm
   const Icon = module.icon
@@ -105,6 +108,27 @@ export function NavModule({ vm, expanded, active, unreadCount, onToggle, onNavig
             {vm.items.map((item) => (
               <NavItemRow key={item.to} item={item} depth={0} unreadCount={unreadCount} onNavigate={onNavigate} />
             ))}
+            {vm.actions?.map((action) => {
+              const ActionIcon = action.icon
+              return (
+                <li key={action.id}>
+                  <button
+                    type="button"
+                    className="nav-item"
+                    style={rowIndent(0)}
+                    aria-haspopup="dialog"
+                    onClick={() => {
+                      onAction?.(action.id)
+                      // Same as a link: leave the mobile drawer.
+                      onNavigate?.()
+                    }}
+                  >
+                    {ActionIcon && <ActionIcon className="nav-item-icon" size={16} aria-hidden />}
+                    <span className="nav-item-label" title={t(action.label)}>{t(action.label)}</span>
+                  </button>
+                </li>
+              )
+            })}
             {vm.subgroups.map((sg) => (
               <li key={sg.label} className="nav-subgroup">
                 <div className="nav-subgroup-label" role="presentation" title={t(sg.label)}>{t(sg.label)}</div>

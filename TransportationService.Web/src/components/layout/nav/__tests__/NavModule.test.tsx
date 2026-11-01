@@ -70,6 +70,31 @@ describe('NavModule', () => {
     expect(screen.getByRole('link', { name: 'Kind' })).toHaveAttribute('href', '/parent/child')
   })
 
+  it('renders an action as a row button that fires the action and closes the drawer, without navigating', async () => {
+    const onAction = vi.fn()
+    const onNavigate = vi.fn()
+    const withAction: VisibleModule = {
+      module: { id: 'x', label: 'X', icon: Truck },
+      items: [{ label: 'Handleidingen', to: '/help' }],
+      actions: [{ id: 'shortcuts', label: 'Sneltoetsen' }],
+      subgroups: [],
+    }
+    render(
+      <MemoryRouter>
+        <NavModule vm={withAction} expanded active={false} unreadCount={0} onToggle={vi.fn()} onAction={onAction} onNavigate={onNavigate} />
+      </MemoryRouter>,
+    )
+    expect(screen.queryByRole('link', { name: 'Sneltoetsen' })).toBeNull()
+    const row = screen.getByRole('button', { name: 'Sneltoetsen' })
+    expect(row).toHaveClass('nav-item')
+    expect(row).toHaveAttribute('aria-haspopup', 'dialog')
+    // Same inline indent as a link row: without it the sibling rows sit 2px apart.
+    expect(row.style.paddingLeft).toBe(screen.getByRole('link', { name: 'Handleidingen' }).style.paddingLeft)
+    await userEvent.click(row)
+    expect(onAction).toHaveBeenCalledExactlyOnceWith('shortcuts')
+    expect(onNavigate).toHaveBeenCalledOnce()
+  })
+
   it('honours end:true so a parent route is not active on a descendant route', () => {
     // Regression guard: /settings must NOT highlight while on /settings/legal-entities.
     const settings: VisibleModule = {

@@ -22,7 +22,8 @@
       "personeel": "Personeel",
       "vloot": "Vloot",
       "rapportage": "Rapportage",
-      "parameters": "Parameters"
+      "parameters": "Parameters",
+      "help": "Help"
     },
     "groups": {
       "problems": "Problemen",

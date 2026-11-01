@@ -18,6 +18,10 @@ describe('findActiveModuleId', () => {
     expect(findActiveModuleId(modules, '/warehouses')).toBe('magazijn')
     expect(findActiveModuleId(modules, '/warehouse')).toBe('magazijn')
   })
+  it('resolves the help center and its articles to the Help module', () => {
+    expect(findActiveModuleId(modules, '/help')).toBe('help')
+    expect(findActiveModuleId(modules, '/help/planbord')).toBe('help')
+  })
   it('returns null for an unknown route', () => {
     expect(findActiveModuleId(modules, '/nowhere')).toBeNull()
   })
@@ -67,6 +71,16 @@ describe('filterModule', () => {
     const vm = filterModule(planning, { hasAnyPermission: allowAll, hasEmployee: false, query: 'planbord', translate: nl })!
     expect(vm.items.map((i) => nl(i.label))).toEqual(['Planbord'])
     expect(filterModule(planning, { hasAnyPermission: allowAll, hasEmployee: false, query: 'zzz', translate: nl })).toBeNull()
+  })
+
+  it('narrows actions by query too and keeps a module whose only match is an action', () => {
+    const help = modules.find((m) => m.id === 'help')!
+    const opts = { hasAnyPermission: () => false, hasEmployee: false, translate: nl }
+    const vm = filterModule(help, { ...opts, query: 'sneltoets' })!
+    expect(vm.items).toEqual([])
+    expect(vm.actions!.map((a) => a.id)).toEqual(['shortcuts'])
+    expect(filterModule(help, { ...opts, query: 'handleid' })!.actions).toEqual([])
+    expect(filterModule(help, { ...opts, query: 'zzz' })).toBeNull()
   })
 
   it('filters subgroup items and drops emptied subgroups', () => {
