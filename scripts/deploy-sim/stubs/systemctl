@@ -120,7 +120,10 @@ case "$CMD" in
     start) do_start ;;
     stop) do_stop ;;
     restart) do_stop; do_start ;;
-    reload) ev "reload $SERVICE" ;;
+    reload)
+        ev "reload $SERVICE"
+        # SIM_ON_NGINX_RELOAD_HOOK: runs right after 'reload nginx' (e.g. break a live asset).
+        if [[ "$SERVICE" == "nginx" && -n "${SIM_ON_NGINX_RELOAD_HOOK:-}" ]]; then bash -c "$SIM_ON_NGINX_RELOAD_HOOK"; fi ;;
     status) refresh; echo "$SERVICE: $(state) $(bin_id)"; [[ "$(state)" == "active" ]] ;;
     enable|disable) ev "$CMD $SERVICE" ;;
     *) echo "systemctl stub: unsupported '$CMD'" >&2; exit 1 ;;

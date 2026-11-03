@@ -1,0 +1,35 @@
+#!/bin/bash
+# deploy-sim stub for rsync: records the call and runs the system rsync. macOS ships openrsync,
+# which has no --chmod; this stub implements --chmod=D<oct>,F<oct> by applying the modes to the
+# destination tree afterwards (what GNU rsync does for a mirrored tree). --chown is dropped
+# (the simulation runs without root).
+#   SIM_RSYNC_IGNORE_CHMOD=1  accept --chmod but do NOT apply it (an rsync that leaves modes
+#                             alone) — the deploy script must still produce 0755/0644 itself.
+SIM_ROOT="${SIM_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
+SIM_EVENTS="${SIM_EVENTS:-$SIM_ROOT/state/events.log}"
+REAL_RSYNC="${SIM_REAL_RSYNC:-/usr/bin/rsync}"
+printf '%s\trsync\t%s\n' "$(date +%s)" "$*" >> "$SIM_EVENTS"
+args=(); dmode=""; fmode=""; dry=0
+for a in "$@"; do
+    case "$a" in
+        --chmod=*)
+            IFS=, read -ra parts <<< "${a#--chmod=}"
+            for p in "${parts[@]}"; do
+                case "$p" in
+                    D[0-7][0-7][0-7]) dmode="${p#D}" ;;
+                    F[0-7][0-7][0-7]) fmode="${p#F}" ;;
+                    *) echo "rsync stub: unsupported --chmod spec '$p'" >&2; exit 1 ;;
+                esac
+            done ;;
+        --chown=*) ;;
+        -n|--dry-run) dry=1; args+=("$a") ;;
+        *) args+=("$a") ;;
+    esac
+done
+"$REAL_RSYNC" "${args[@]}" || exit $?
+dest="${args[${#args[@]}-1]}"
+if [[ $dry -eq 0 && "${SIM_RSYNC_IGNORE_CHMOD:-0}" != "1" && -d "$dest" ]]; then
+    [[ -n "$dmode" ]] && find "$dest" -type d -exec chmod "$dmode" {} +
+    [[ -n "$fmode" ]] && find "$dest" -type f -exec chmod "$fmode" {} +
+fi
+exit 0

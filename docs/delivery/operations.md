@@ -543,14 +543,16 @@ Belangrijkste knoppen (omgevingsvariabelen van het script, nooit secrets):
 | `STORAGE_SNAPSHOT` | `1` | tar-snapshot van `Storage__RootPath` direct na de dump. `0` alleen als er een gelijktijdige off-host bestandsback-up is. |
 | `MAINTENANCE_MODE` / `MAINTENANCE_FLAG` | `1` / zie layout | Onderhoudspagina tijdens de downtime (§3.8). |
 | `READY_PATH` / `LOCAL_API_URL` | `/health/ready` / `http://127.0.0.1:5019` | Readiness-check. |
-| `PUBLIC_URL` | `Frontend__BaseUrl` uit tms.env | Publieke eindcontrole. |
+| `PUBLIC_URL` | `Frontend__BaseUrl` uit tms.env | Publieke eindcontrole (`/` + JS/CSS-entry-assets). |
+| `WEB_GROUP` | `www-data` | Groep van de live `dist/` (nginx leest via deze groep); eigenaar is `DEPLOY_USER`. |
 | `REPO_DIR`, `API_BIN_DIR`, `WEB_DIST_DIR`, `BACKUP_DIR`, `STAGE_ROOT`, `ENV_FILE`, `SERVICE_NAME` | zie layout | Paden. |
 
 De externe commando's (`SYSTEMCTL`, `NGINX`, `PG_DUMP`, `PG_RESTORE`, `PSQL`, `DOTNET`,
 `DOTNET_EF`, `NPM`, …) zijn overschrijfbaar; met `DEPLOY_SIMULATE=1` draait het script zonder root
 tegen sandboxpaden. Daarop steunt de lokale simulatie `scripts/deploy-sim/run.sh` (echte
 PostgreSQL 16 en dotnet-ef, gestubde systemctl/nginx; scenario's: geslaagde release,
-migratiefout, opstartfout, lock-timeout, onveilige opslag, ontbrekende ref, …). Simulatiemodus
+migratiefout, opstartfout, lock-timeout, onveilige opslag, ontbrekende ref, frontend-rechten
+en -assets (403/404/HTML voor JS), frontend-rollback, …). Simulatiemodus
 weigert de productiepaden.
 
 ### 3.4 Releasevolgorde (afgedwongen door het script)
@@ -574,8 +576,8 @@ ongemoeid.
 | 12 | Validatie: EF meldt 0 openstaand, nieuwste toegepaste = nieuwste in broncode, aantallen gelijk. | forward-only |
 | 13 | Vorige binaries naar `stage-…/previous-api/` (zonder `App_Data/`), nieuwe binaries met `rsync --delete --exclude=/App_Data/` naar `API_BIN_DIR` (service is gestopt). | forward-only (zonder migraties: zie `RESTORE_PREVIOUS_ON_FAILURE`) |
 | 14 | `systemctl start`, wachten tot `GET http://127.0.0.1:5019/health/ready` = 200 (max. `STARTUP_WAIT_SECONDS`). Unit `failed` of ≥ 3 herstarts → meteen falen. | forward-only: nieuwe service wordt **gestopt**, vorige wordt **niet** gestart |
-| 15 | Huidige `dist/` naar `stage-…/previous-web/`, nieuwe frontend naar `dist/`, `nginx -t`, `systemctl reload nginx`, onderhoudsvlag weg. | forward-only |
-| 16 | Publieke check `PUBLIC_URL/` = 200. | release is live; alleen gemeld, niets teruggedraaid |
+| 15 | Huidige `dist/` naar `stage-…/previous-web/`, nieuwe frontend naar `dist/` met `rsync --chmod=D755,F644` + `chown -R deploy:www-data` (`WEB_GROUP`), daarna gecontroleerd: alle mappen `0755`, alle bestanden `0644`, eigenaar `deploy:www-data` — anders faalt de stap. `nginx -t`, `systemctl reload nginx`, onderhoudsvlag weg. | forward-only |
+| 16 | Publieke check `PUBLIC_URL/` = 200 **én** elk JS/CSS-entry-asset uit de nieuwe `index.html` (`<script src>`, `modulepreload`, `stylesheet`) = 200 zonder HTML-body. Een 403 (nginx kan het bestand niet lezen), 404 of HTML voor een `.js`/`.css` laat de deploy falen. | release is live; gemeld (exitcode 1), niets teruggedraaid; `--rollback-frontend`-commando getoond |
 | 17 | Retentie: 10 dumps, 3 opslag-snapshots, 3 staging-mappen. Samenvatting (commit, dump + tijdstip, snapshot, checksums, migraties, schema, vorige binaries/frontend). | — |
 
 Waarom zo: de dump is pas de echte eindtoestand als niets meer schrijft (H11); migraties lopen
@@ -725,8 +727,12 @@ reboot niets start op het (deels) nieuwe schema. Zet hem pas na het herstel weer
    3. Binaries: als stap 13 al liep,
       `rsync -a --delete --exclude=/App_Data/ <stage>/previous-api/ <API_BIN_DIR>/`; anders staan
       de vorige binaries nog in `API_BIN_DIR`.
-   4. Frontend: als stap 15 al liep, `rsync -a --delete <stage>/previous-web/ <dist>/` en
-      `nginx -s reload`; anders is de vorige frontend nog live.
+   4. Frontend: als stap 15 al liep,
+      `sudo deploy-transportationservice.sh --rollback-frontend <stage>/previous-web` — zelfde
+      regels als de deploy (mappen `0755`, bestanden `0644`, `deploy:www-data`, `nginx -t` +
+      reload, controle van `/` en de JS/CSS-entry-assets); raakt database, API en opslag niet aan.
+      Geen kale `rsync -a`: die neemt de `0750/0640`-rechten van de staging mee (nginx → 403).
+      Anders is de vorige frontend nog live.
    5. Bestanden: zet `Storage__RootPath` **niet** terug (de snapshot dient voor rampherstel, niet
       voor een rollback). Bestanden die na het dumptijdstip werden geüpload hebben geen DB-rij
       meer; noteer ze als wees.

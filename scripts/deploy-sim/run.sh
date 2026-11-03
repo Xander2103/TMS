@@ -6,7 +6,9 @@
 # server layout in a temp dir, with:
 #   * a real PostgreSQL 16 cluster of its own (initdb, 127.0.0.1:$SIM_PG_PORT, no unix socket),
 #   * the real dotnet SDK + real dotnet-ef (wrapped to record what they receive),
-#   * stubs for systemctl/journalctl/nginx/npm that record every call in state/events.log,
+#   * stubs for systemctl/journalctl/nginx/npm/rsync that record every call in state/events.log,
+#   * a public web server that behaves like the nginx site as www-data (403 for files that are
+#     not world-readable, 404 for a missing /assets/ file, SPA fallback elsewhere) — fake_web.py,
 #   * a throw-away git clone of this worktree (origin = this worktree) as REPO_DIR.
 # Nothing outside the temp dir is written, no root is used, no real server is contacted.
 #
@@ -16,6 +18,8 @@
 #     core: no-ref storage-unset storage-relative storage-missing storage-unwritable
 #           storage-inside-release legacy-app-data restore-previous-pending success
 #           startup-never-ready startup-crash lock-timeout migration-failure db-ahead-of-code
+#           frontend-chmod-fallback frontend-asset-403 frontend-asset-404 frontend-js-html
+#           frontend-rollback
 #     app (need the integrated app: GET /health/ready + Storage:RootPath support; run by the
 #          coordinator after integration): app-real-success app-missing-encryption-key
 #          app-db-down-at-start
@@ -57,7 +61,7 @@ for a in "$@"; do
         *) SCENARIOS+=("$a") ;;
     esac
 done
-CORE="no-ref storage-unset storage-relative storage-missing storage-unwritable storage-inside-release legacy-app-data restore-previous-pending success startup-never-ready startup-crash lock-timeout migration-failure db-ahead-of-code"
+CORE="no-ref storage-unset storage-relative storage-missing storage-unwritable storage-inside-release legacy-app-data restore-previous-pending success startup-never-ready startup-crash lock-timeout migration-failure db-ahead-of-code frontend-chmod-fallback frontend-asset-403 frontend-asset-404 frontend-js-html frontend-rollback"
 APP="app-real-success app-missing-encryption-key app-db-down-at-start app-bad-frontend-url app-peppol-live"
 if [[ ${#SCENARIOS[@]} -eq 0 ]]; then SCENARIOS=(core); fi
 EXPANDED=""
@@ -191,7 +195,8 @@ ef_harness() {
 
 start_web() {
     mkdir -p "$WEB_DIST_DIR"
-    nohup python3 -m http.server "$SIM_WEB_PORT" --bind 127.0.0.1 --directory "$WEB_DIST_DIR" \
+    # nginx stand-in: www-data is not the owner of dist/, so only world-readable files are served.
+    nohup python3 "$BIN/fake_web.py" --port "$SIM_WEB_PORT" --root "$WEB_DIST_DIR" --mode-file "$STATE/web-mode" \
         > "$LOGS/public-web.log" 2>&1 &
     WEB_PID=$!
 }
@@ -264,7 +269,10 @@ reset_fixture() {
     mkdir -p "$API_BIN_DIR" "$WEB_DIST_DIR" "$BACKUPS" "$RELEASES" "$SIM_ROOT/run"
     printf 'previous-release-binary\n' > "$API_BIN_DIR/TransportationService.Api.dll"
     printf '{\n  "version": "0.1.0",\n  "commit": "previous0"\n}\n' > "$API_BIN_DIR/deployment.json"
-    printf '<!doctype html><title>previous web</title>\n' > "$WEB_DIST_DIR/index.html"
+    mkdir -p "$WEB_DIST_DIR/assets"
+    printf '<!doctype html><title>previous web</title>\n<script type="module" crossorigin src="/assets/index-previous0.js"></script>\n<link rel="stylesheet" crossorigin href="/assets/index-previous0.css">\n' > "$WEB_DIST_DIR/index.html"
+    printf 'console.log("previous");\n' > "$WEB_DIST_DIR/assets/index-previous0.js"
+    printf 'body{}\n' > "$WEB_DIST_DIR/assets/index-previous0.css"
     PREV_BIN_SHA="$(shasum -a 256 "$API_BIN_DIR/TransportationService.Api.dll" | cut -c1-12)"
     # Durable storage (outside every release dir).
     chmod -R u+w "$STORAGE" 2>/dev/null
@@ -291,6 +299,16 @@ reset_fixture() {
 # run_deploy <scenario> <ref|-> [KEY=VALUE ...]  — runs the real deploy script, sets RC.
 run_deploy() {
     local scn="$1" ref="$2"; shift 2
+    if [[ "$ref" == "-" ]]; then run_script "$scn" "$@" --; else run_script "$scn" "$@" -- "$ref"; fi
+}
+# run_rollback <scenario> <previous-web dir> [KEY=VALUE ...]  — deploy script --rollback-frontend.
+run_rollback() {
+    local scn="$1" dir="$2"; shift 2
+    run_script "$scn" "$@" -- --rollback-frontend "$dir"
+}
+# run_script <scenario> [KEY=VALUE ...] -- [script args ...]
+run_script() {
+    local scn="$1"; shift
     local log="$LOGS/$scn.log"
     (
         export DEPLOY_SIMULATE=1 REPO_DIR="$REPO" DEPLOY_USER="$(id -un)" DEPLOY_HOME="$HOME" \
@@ -300,13 +318,13 @@ run_deploy() {
             STARTUP_WAIT_SECONDS=20 LOCK_FILE="$SIM_ROOT/run/deploy.lock" PGPASS_DIR="$SIM_ROOT/run" \
             DOTNET="$BIN/dotnet" DOTNET_EF="$BIN/dotnet-ef" NPM="$BIN/npm" PSQL="$PGBIN/psql" \
             PG_DUMP="$BIN/pg_dump" PG_RESTORE="$PGBIN/pg_restore" SYSTEMCTL="$BIN/systemctl" \
-            JOURNALCTL="$BIN/journalctl" NGINX="$BIN/nginx" DOTNET_ROOT="$REAL_DOTNET_ROOT" \
+            JOURNALCTL="$BIN/journalctl" NGINX="$BIN/nginx" RSYNC="$BIN/rsync" DOTNET_ROOT="$REAL_DOTNET_ROOT" \
             BUILD_PATH="$REAL_DOTNET_ROOT:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin" \
             SIM_ROOT="$SIM_ROOT" SIM_EVENTS="$SIM_EVENTS" SIM_API_PORT="$SIM_API_PORT" \
             SIM_SERVICE_MODE="${SIM_SERVICE_MODE:-ready}"
-        local kv
-        for kv in "$@"; do export "$kv"; done
-        if [[ "$ref" == "-" ]]; then /bin/bash "$DEPLOY_SCRIPT"; else /bin/bash "$DEPLOY_SCRIPT" "$ref"; fi
+        while [[ $# -gt 0 && "$1" != "--" ]]; do export "$1"; shift; done
+        shift
+        /bin/bash "$DEPLOY_SCRIPT" "$@"
     ) > "$log" 2>&1
     RC=$?
     LOG="$log"
@@ -338,6 +356,16 @@ nothing_touched() { ! ev_has $'systemctl\tstop' && ! ev_has $'pg_dump' && ! ev_h
 no_build() { ! ev_has $'dotnet\tbuild'; }
 no_secret_keys() { [[ -f "$1" ]] && ! grep -qE '^(ConnectionStrings__|Jwt__|ColumnEncryption__|Email__Smtp__Password|Storage__)' "$1"; }
 ef_env_minimal() { local f="$STATE/env-dotnet-ef-database-update.keys"; [[ -f "$f" ]] && grep -q '^ConnectionStrings__DefaultConnection$' "$f" && ! grep -qE '^(Jwt__|ColumnEncryption__|Email__)' "$f"; }
+# Live frontend as nginx needs it: every directory 0755, every file 0644.
+web_perms_ok() { [[ -d "$WEB_DIST_DIR" && -z "$(find "$WEB_DIST_DIR" \( \( -type d ! -perm 0755 \) -o \( -type f ! -perm 0644 \) \) -print)" ]]; }
+no_log() { ! grep -qE -- "$1" "$LOG"; }
+no_stop_after_last_start() {
+    local s; s="$(grep -nE $'systemctl\tstart' "$SIM_EVENTS" | tail -n 1 | cut -d: -f1)"
+    [[ -n "$s" ]] && ! tail -n +"$s" "$SIM_EVENTS" | grep -qE $'systemctl\t(stop|disable)'
+}
+no_service_calls() { ! ev_has $'systemctl\t(start|stop|restart|disable)'; }
+web_code() { curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$SIM_WEB_PORT$1"; }
+web_code_is() { [[ "$(web_code "$1")" == "$2" ]]; }
 newest_stage() { ls -1dt "$RELEASES"/stage-* 2>/dev/null | head -n 1; }
 newest_file() { ls -1t $1 2>/dev/null | head -n 1; }
 
@@ -492,6 +520,15 @@ scn_success() {
     check "previous binaries kept (without App_Data)" sh -c "test -f '$stage/previous-api/deployment.json' && test ! -e '$stage/previous-api/App_Data'"
     check "previous frontend kept" grep -q 'previous web' "$stage/previous-web/index.html"
     check "new frontend live" grep -q "commit=$SHORT_REF" "$WEB_DIST_DIR/index.html"
+    check "staged Vite build is 0640 (umask 027 — the input of the 403 incident)" \
+        test -n "$(find "$stage/web/assets" -type f -perm 0640 2>/dev/null)"
+    check "live dist: directories 0755, files 0644" web_perms_ok
+    check "dist published with rsync --chmod=D755,F644" ev_has $'rsync\t.*--chmod=D755,F644.*'"$WEB_DIST_DIR/"
+    check "nginx stand-in serves the new entry JS (200)" web_code_is "/assets/index-$SHORT_REF.js" 200
+    check "step 16 checked the entry script" log_has "Entry-asset OK: js /assets/index-$SHORT_REF.js"
+    check "step 16 checked the modulepreload chunk" log_has "Entry-asset OK: js /assets/vendor-$SHORT_REF.js"
+    check "step 16 checked the stylesheet" log_has "Entry-asset OK: css /assets/index-$SHORT_REF.css"
+    check "step 16 summary: 3 assets (JS: 2)" log_has 'Entry-assets gecontroleerd: 3 \(JS: 2\)'
     check "no secret printed in the log" sh -c "! grep -qE '$DB_PASSWORD|$JWT_KEY|$SMTP_PASSWORD' '$LOG'"
     finish
 }
@@ -568,6 +605,101 @@ scn_db-ahead-of-code() {
     check "no build ran" no_build
     check "previous release still active" svc_active
     check "database still at $SOURCE_COUNT" db_count_is "$SOURCE_COUNT"
+    check "storage untouched" storage_unchanged
+    finish
+}
+
+# ------------------------------------------------- frontend permissions ----
+# The incident: after two deployments nginx (www-data) answered 403 for the new Vite assets — the
+# build in staging is 0750/0640 (umask 027) and was copied with 'rsync -a' + deploy:deploy.
+release_live_but_failed() {
+    check "exit code 1" rc_is 1
+    check "message: release is LIVE, only a post-check failed" log_has 'De nieuwe release is LIVE'
+    check "message: frontend rollback command offered" log_has 'rollback-frontend .*previous-web'
+    check "no success summary" no_log 'DEPLOYMENT GESLAAGD'
+    check "API stays up (nothing rolled back)" svc_active
+    check "no stop/disable after the new start" no_stop_after_last_start
+    check "maintenance page off" maint_off
+    check "all $SOURCE_COUNT migrations applied" db_count_is "$SOURCE_COUNT"
+    check "storage untouched" storage_unchanged
+}
+
+scn_frontend-chmod-fallback() {
+    begin frontend-chmod-fallback "rsync accepts --chmod but leaves modes alone: the script still yields 0755/0644"
+    reset_fixture
+    SIM_RSYNC_IGNORE_CHMOD=1 run_deploy frontend-chmod-fallback "$SIM_REF" SIM_RSYNC_IGNORE_CHMOD=1
+    check "exit code 0" rc_is 0
+    check "staged build is 0640/0750" test -n "$(find "$(newest_stage)/web" -type d -perm 0750 2>/dev/null)"
+    check "live dist: directories 0755, files 0644" web_perms_ok
+    check "message: permissions verified" log_has 'Live frontend-rechten OK: mappen 0755, bestanden 0644'
+    check "nginx stand-in serves the new CSS (200)" web_code_is "/assets/index-$SHORT_REF.css" 200
+    finish
+}
+
+scn_frontend-asset-403() {
+    begin frontend-asset-403 "a live entry asset is unreadable for nginx after the reload -> step 16 fails"
+    reset_fixture
+    run_deploy frontend-asset-403 "$SIM_REF" \
+        SIM_ON_NGINX_RELOAD_HOOK="chmod 0640 '$WEB_DIST_DIR'/assets/index-$SHORT_REF.js"
+    release_live_but_failed
+    check "message: 403 for the entry script" log_has "js /assets/index-$SHORT_REF.js -> HTTP 403"
+    check "message: points at permissions/owner" log_has 'nginx kan het bestand niet lezen'
+    check "failed in step 16" log_has 'DEPLOYMENT MISLUKT in stap: Stap 16/17'
+    finish
+}
+
+scn_frontend-asset-404() {
+    begin frontend-asset-404 "index.html references a chunk the build did not emit -> 404 -> step 16 fails"
+    reset_fixture
+    echo missing-asset > "$STATE/npm-mode"
+    run_deploy frontend-asset-404 "$SIM_REF"
+    release_live_but_failed
+    check "message: 404 for the missing chunk" log_has "js /assets/missing-$SHORT_REF.js -> HTTP 404"
+    check "the present assets were still checked" log_has "Entry-asset OK: css /assets/index-$SHORT_REF.css"
+    finish
+}
+
+scn_frontend-js-html() {
+    begin frontend-js-html "a JS request returns index.html (200, text/html) -> step 16 fails"
+    reset_fixture
+    echo missing-asset > "$STATE/npm-mode"
+    echo assets-fallback > "$STATE/web-mode"
+    run_deploy frontend-js-html "$SIM_REF"
+    release_live_but_failed
+    check "the stand-in really answered 200 for the missing chunk" web_code_is "/assets/missing-$SHORT_REF.js" 200
+    check "message: HTML instead of js" log_has "js /assets/missing-$SHORT_REF.js -> HTML in plaats van js"
+    finish
+}
+
+scn_frontend-rollback() {
+    begin frontend-rollback "--rollback-frontend puts previous-web live with 0755/0644 and checks its assets"
+    reset_fixture
+    run_deploy frontend-rollback-deploy "$SIM_REF"
+    check "deploy before the rollback succeeded" rc_is 0
+    local prev; prev="$(newest_stage)/previous-web"
+    # The kept frontend carries the broken modes of the incident.
+    chmod 0750 "$prev" "$prev/assets"; chmod 0640 "$prev/index.html" "$prev"/assets/*
+    : > "$SIM_EVENTS"
+    run_rollback frontend-rollback-refused "$SRV/no-such-previous-web"
+    check "missing source refused (exit 2)" rc_is 2
+    check "live frontend untouched by the refusal" grep -q "commit=$SHORT_REF" "$WEB_DIST_DIR/index.html"
+    run_rollback frontend-rollback "$prev"
+    check "exit code 0" rc_is 0
+    check "summary printed" log_has 'FRONTEND-ROLLBACK GESLAAGD'
+    check "previous frontend live again" grep -q 'previous web' "$WEB_DIST_DIR/index.html"
+    check "new assets removed from dist (rsync --delete)" test ! -e "$WEB_DIST_DIR/assets/index-$SHORT_REF.js"
+    check "live dist: directories 0755, files 0644" web_perms_ok
+    check "rollback used rsync --chmod=D755,F644" ev_has $'rsync\t.*--chmod=D755,F644.*'"$WEB_DIST_DIR/"
+    check "nginx -t before reload" ev_before $'nginx\t-t' $'systemctl\treload nginx'
+    check "rollback checked the previous entry script" log_has 'Entry-asset OK: js /assets/index-previous0.js'
+    check "rollback checked the previous stylesheet" log_has 'Entry-asset OK: css /assets/index-previous0.css'
+    check "nginx stand-in serves the previous JS (200)" web_code_is /assets/index-previous0.js 200
+    check "nothing else touched (no stop, no dump, no migration)" nothing_touched
+    check "no build ran" no_build
+    check "no service start/stop" no_service_calls
+    check "API still active" svc_active
+    check "binaries untouched (commit $SHORT_REF)" bin_commit_is "$SHORT_REF"
+    check "database untouched ($SOURCE_COUNT)" db_count_is "$SOURCE_COUNT"
     check "storage untouched" storage_unchanged
     finish
 }

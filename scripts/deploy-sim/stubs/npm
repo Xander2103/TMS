@@ -14,8 +14,26 @@ if [[ "${1:-}" == "run" && "${2:-}" == "build" ]]; then
     out=""
     while [[ $# -gt 0 ]]; do [[ "$1" == "--outDir" ]] && out="$2"; shift; done
     [[ -n "$out" ]] || { echo "npm stub: --outDir missing" >&2; exit 1; }
-    mkdir -p "$out"
-    printf '<!doctype html><title>TMS sim build</title><!-- api=%s commit=%s -->\n' \
-        "${VITE_API_BASE_URL:-unset}" "${VITE_BUILD_COMMIT:-unset}" > "$out/index.html"
+    # Vite-shaped output: entry script, modulepreload chunk and stylesheet under assets/. It is
+    # written with the deploy script's umask (027), like the real build: dirs 0750, files 0640.
+    c="${VITE_BUILD_COMMIT:-unset}"
+    mkdir -p "$out/assets"
+    printf 'console.log("tms sim %s");\n' "$c" > "$out/assets/index-$c.js"
+    printf 'export const chunk = "%s";\n' "$c" > "$out/assets/vendor-$c.js"
+    printf 'body { color: #222; }\n' > "$out/assets/index-$c.css"
+    extra=""
+    # $SIM_ROOT/state/npm-mode = missing-asset: index.html references a chunk the build did not emit.
+    if [[ "$(cat "$SIM_ROOT/state/npm-mode" 2>/dev/null)" == "missing-asset" ]]; then
+        extra="<link rel=\"modulepreload\" crossorigin href=\"/assets/missing-$c.js\">"
+    fi
+    {
+        printf '<!doctype html>\n<html lang="nl">\n<head>\n<title>TMS sim build</title>\n'
+        printf '<!-- api=%s commit=%s -->\n' "${VITE_API_BASE_URL:-unset}" "$c"
+        printf '<script>document.documentElement.dataset.theme = "light";</script>\n'
+        printf '<script type="module" crossorigin src="/assets/index-%s.js"></script>\n' "$c"
+        printf '<link rel="modulepreload" crossorigin href="/assets/vendor-%s.js">%s\n' "$c" "$extra"
+        printf '<link rel="stylesheet" crossorigin href="/assets/index-%s.css">\n' "$c"
+        printf '</head>\n<body><div id="root"></div></body>\n</html>\n'
+    } > "$out/index.html"
 fi
 exit 0

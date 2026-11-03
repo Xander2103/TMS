@@ -44,9 +44,15 @@
 #   12  validate: 0 pending, history == source
 #   13  install binaries (previous copy kept; rsync --delete NEVER touches App_Data/)
 #   14  systemctl start + wait for GET /health/ready == 200
-#   15  frontend live (previous dist kept), nginx reload, maintenance page off
+#   15  frontend live (previous dist kept), nginx reload, maintenance page off.
+#       Live dist is ALWAYS directories 0755 / files 0644, owner DEPLOY_USER, group WEB_GROUP
+#       (www-data): rsync --chmod=D755,F644, then chown -R, then verified (publish_web).
 #   --- live ---
-#   16  public check   17  prune
+#   16  public check: GET / AND every JS/CSS entry asset of the new index.html (200, not HTML)
+#   17  prune
+#
+# Frontend rollback (no database, API or storage access; same permission rules + checks):
+#   sudo deploy-transportationservice.sh --rollback-frontend <STAGE_ROOT>/stage-…/previous-web
 #
 # FORWARD-ONLY (production-readiness B2/MIG-01): once the migration step has started, or the
 # new binaries have been started once, the previous binaries are NEVER started again by this
@@ -60,7 +66,9 @@
 #   * No secret is ever printed. tms.env is never exported into this shell: builds get a clean
 #     environment; dotnet-ef gets only ASPNETCORE_ENVIRONMENT + the connection string (env, never
 #     argv); psql/pg_dump get the password via a 0600 PGPASSFILE.
-#   * Ownership/privileges are only DETECTED, never changed. No git reset/force/push, no
+#   * Database/storage ownership and privileges are only DETECTED, never changed (the script only
+#     sets ownership on its own release output: binaries deploy:deploy, live dist deploy:www-data).
+#     No git reset/force/push, no
 #     destructive DB actions, no tool installs, no file moves in the storage root.
 #
 # Local simulation (macOS/Linux, no root): DEPLOY_SIMULATE=1 plus explicit sandbox paths and
@@ -76,6 +84,9 @@ Gebruik: sudo deploy-transportationservice.sh <git-ref>
 
   <git-ref>   verplicht: exacte commit-sha (aanbevolen), tag of branch. Geen default.
 
+Frontend terugzetten (raakt database, API en opslag niet aan):
+  sudo deploy-transportationservice.sh --rollback-frontend <stage-…/previous-web>
+
 Belangrijkste omgevingsvariabelen (paden/gedrag, nooit secrets):
   RESTORE_PREVIOUS_ON_FAILURE=0   forward-only (default). 1 wordt geweigerd bij openstaande migraties.
   STARTUP_WAIT_SECONDS=300        max. wachttijd op GET /health/ready na de start.
@@ -83,18 +94,25 @@ Belangrijkste omgevingsvariabelen (paden/gedrag, nooit secrets):
   MIGRATION_COMMAND_TIMEOUT=0     Npgsql Command Timeout voor de migratiestap (0 = geen limiet).
   STORAGE_SNAPSHOT=1              tar-snapshot van Storage__RootPath na de dump (0 = overslaan).
   MAINTENANCE_FLAG=...            vlagbestand dat nginx de onderhoudspagina laat tonen.
+  WEB_GROUP=www-data              groep van de live dist/ (nginx); eigenaar is DEPLOY_USER.
 Zie docs/delivery/operations.md §3 voor de volledige lijst.
 USAGE
 }
 
-case "${1:-}" in -h|--help) usage; exit 0 ;; esac
+MODE="deploy"
+ROLLBACK_WEB_SRC=""
+case "${1:-}" in
+    -h|--help) usage; exit 0 ;;
+    --rollback-frontend) MODE="rollback-frontend"; ROLLBACK_WEB_SRC="${2:-}" ;;
+esac
 
 # --- Configuration (paths/behaviour only — never credentials) ---------------
 DEPLOY_SIMULATE="${DEPLOY_SIMULATE:-0}"
 REPO_DIR="${REPO_DIR:-/var/www/transportationservice/TMS}"
 DEPLOY_USER="${DEPLOY_USER:-deploy}"
 DEPLOY_HOME="${DEPLOY_HOME:-/home/$DEPLOY_USER}"
-DEPLOY_REF="${1:-}"
+DEPLOY_REF=""
+[[ "$MODE" == "deploy" ]] && DEPLOY_REF="${1:-}"
 SERVICE_NAME="${SERVICE_NAME:-transportationservice-api}"
 ENV_FILE="${ENV_FILE:-/etc/transportationservice/tms.env}"
 BACKUP_DIR="${BACKUP_DIR:-/var/www/transportationservice/backups}"
@@ -107,6 +125,8 @@ WEB_PROJECT="TransportationService.Web"
 TARGET_FRAMEWORK="${TARGET_FRAMEWORK:-net10.0}"
 API_BIN_DIR="${API_BIN_DIR:-$REPO_DIR/$API_PROJECT/bin/Release/$TARGET_FRAMEWORK}"
 WEB_DIST_DIR="${WEB_DIST_DIR:-$REPO_DIR/$WEB_PROJECT/dist}"
+# nginx reads the live dist/ through this group (deploy/nginx/transportationservice.conf).
+WEB_GROUP="${WEB_GROUP:-www-data}"
 MAINTENANCE_MODE="${MAINTENANCE_MODE:-1}"
 MAINTENANCE_FLAG="${MAINTENANCE_FLAG:-/var/www/transportationservice/maintenance/maintenance.on}"
 LOCAL_API_URL="${LOCAL_API_URL:-http://127.0.0.1:5019}"
@@ -163,6 +183,7 @@ PENDING_COUNT=0
 PREV_WEB_DIR=""
 STAGE_DIR=""
 PGPASSFILE_TMP=""
+CHECK_BODY_TMP=""
 LOCK_DIR_CREATED=""
 GIT_COMMIT="(onbekend)"
 DB_NAME=""
@@ -235,6 +256,155 @@ sha256_files() {
     if command -v sha256sum >/dev/null 2>&1; then sha256sum "$@"; else shasum -a 256 "$@"; fi
 }
 
+# --- Live frontend (nginx root) ---------------------------------------------
+# This script runs under umask 027, so a fresh Vite build in staging is 0750/0640 and owned by
+# 'deploy:deploy'. Copied with plain 'rsync -a' (and a 0750 dist root from install -d) nginx
+# (www-data) could not read the new assets: 403 on every JS/CSS file. The live dist is therefore
+# ALWAYS published through publish_web — by step 15 and by --rollback-frontend alike:
+# directories 0755, files 0644, owner DEPLOY_USER, group WEB_GROUP; then verified.
+make_web_root() {
+    if simulating; then mkdir -p "$WEB_DIST_DIR"
+    else install -d -o "$DEPLOY_USER" -g "$WEB_GROUP" -m 0755 "$WEB_DIST_DIR"; fi
+    chmod 0755 "$WEB_DIST_DIR"
+}
+# publish_web SRC — mirror SRC/ into WEB_DIST_DIR/ with the live permissions.
+publish_web() {
+    local src="$1"
+    [[ -f "$src/index.html" ]] || fail "frontend-bron $src bevat geen index.html."
+    make_web_root
+    if simulating; then
+        "$RSYNC" -a --delete --chmod=D755,F644 "$src/" "$WEB_DIST_DIR/"
+    else
+        "$RSYNC" -a --delete --chmod=D755,F644 --chown="$DEPLOY_USER:$WEB_GROUP" "$src/" "$WEB_DIST_DIR/"
+        chown -R "$DEPLOY_USER:$WEB_GROUP" "$WEB_DIST_DIR"
+    fi
+    # Normalise whatever an rsync build left behind (e.g. one that ignores --chmod on unchanged files).
+    chmod 0755 "$WEB_DIST_DIR"
+    find "$WEB_DIST_DIR" -type d ! -perm 0755 -exec chmod 0755 {} +
+    find "$WEB_DIST_DIR" -type f ! -perm 0644 -exec chmod 0644 {} +
+    verify_web_permissions
+}
+# verify_web_permissions — fail unless every dir is 0755, every file 0644 (and, on the server,
+# everything is owned by DEPLOY_USER:WEB_GROUP).
+verify_web_permissions() {
+    local bad
+    bad="$(find "$WEB_DIST_DIR" \( \( -type d ! -perm 0755 \) -o \( -type f ! -perm 0644 \) \) -print 2>&1 | head -n 10 || true)"
+    if [[ -n "$bad" ]]; then
+        printf '      %s\n' $bad >&2
+        fail "live frontend $WEB_DIST_DIR heeft afwijkende rechten (verwacht mappen 0755, bestanden 0644)."
+    fi
+    if ! simulating; then
+        bad="$(find "$WEB_DIST_DIR" \( ! -user "$DEPLOY_USER" -o ! -group "$WEB_GROUP" \) -print 2>&1 | head -n 10 || true)"
+        if [[ -n "$bad" ]]; then
+            printf '      %s\n' $bad >&2
+            fail "live frontend $WEB_DIST_DIR heeft afwijkende eigenaar (verwacht $DEPLOY_USER:$WEB_GROUP)."
+        fi
+    fi
+    note "Live frontend-rechten OK: mappen 0755, bestanden 0644$(simulating || printf ', eigenaar %s:%s' "$DEPLOY_USER" "$WEB_GROUP")."
+}
+# web_preflight — read-only, BEFORE any downtime: the web group exists and rsync supports --chmod.
+web_preflight() {
+    if ! simulating; then
+        getent group "$WEB_GROUP" >/dev/null 2>&1 || grep -q "^$WEB_GROUP:" /etc/group \
+            || fail "groep '$WEB_GROUP' (nginx, WEB_GROUP) bestaat niet; de live frontend zou onleesbaar worden."
+    fi
+    local probe
+    probe="$(mktemp -d "${TMPDIR:-/tmp}/deploy-rsync-probe.XXXXXX")"
+    mkdir "$probe/src"
+    if ! "$RSYNC" -a --dry-run --chmod=D755,F644 "$probe/src/" "$probe/dst/" >/dev/null 2>&1; then
+        rm -rf "$probe"
+        fail "$RSYNC ondersteunt --chmod niet (GNU rsync >= 3 vereist) — de live frontend kan dan onleesbaar worden voor nginx."
+    fi
+    rm -rf "$probe"
+}
+
+# web_entry_assets INDEX_HTML — prints "<js|css><TAB><url>" for every entry asset in index.html:
+# <script src>, <link rel=modulepreload href> (js) and <link rel=stylesheet href> (css).
+html_attr() {  # html_attr NAME TAG
+    printf '%s' "$2" | sed -nE "s/.*[[:space:]]$1=[\"']([^\"']+)[\"'].*/\\1/p" | head -n 1
+}
+web_entry_assets() {
+    local tag kind url rel
+    tr '\r\n' '  ' < "$1" | grep -oiE '<(script|link)[[:space:]][^>]*>' | while IFS= read -r tag; do
+        kind=""; url=""
+        case "$tag" in
+            "<script"*|"<SCRIPT"*) kind="js"; url="$(html_attr src "$tag")" ;;
+            *)
+                rel="$(html_attr rel "$tag" | tr '[:upper:]' '[:lower:]')"
+                case " $rel " in
+                    *" stylesheet "*) kind="css" ;;
+                    *" modulepreload "*) kind="js" ;;
+                    *) continue ;;
+                esac
+                url="$(html_attr href "$tag")" ;;
+        esac
+        [[ -n "$url" ]] || continue       # inline <script> (theme bootstrap)
+        printf '%s\t%s\n' "$kind" "$url"
+    done | awk '!seen[$0]++'
+}
+
+# public_check INDEX_HTML — GET PUBLIC_URL/ = 200, then every same-origin JS/CSS entry asset of
+# INDEX_HTML (the release just published) must answer 200 with a non-HTML body. A 403 (nginx
+# cannot read the file), a 404 (asset missing) or HTML for a .js/.css (SPA fallback) fails.
+public_check() {
+    local index="$1" i kind url full meta code ctype first problems="" checked=0 js_count=0 attempt origin
+    PUBLIC_CODE="000"
+    for ((i = 0; i < 10; i++)); do
+        PUBLIC_CODE="$("$CURL" -s -o /dev/null -m 10 -L -w '%{http_code}' "$PUBLIC_URL/" || true)"
+        [[ "$PUBLIC_CODE" == "200" ]] && break
+        sleep 2
+    done
+    [[ "$PUBLIC_CODE" == "200" ]] || fail "publieke site geeft HTTP $PUBLIC_CODE (verwacht 200)."
+    note "Publieke site: HTTP 200."
+
+    origin="$(printf '%s' "$PUBLIC_URL" | sed -nE 's#^([A-Za-z][A-Za-z0-9+.-]*://[^/]+).*#\1#p')"
+    [[ -n "$origin" ]] || fail "PUBLIC_URL '$PUBLIC_URL' is geen absolute URL."
+    CHECK_BODY_TMP="$(mktemp "${TMPDIR:-/tmp}/deploy-asset-check.XXXXXX")"
+    while IFS=$'\t' read -r kind url; do
+        [[ -n "$url" ]] || continue
+        case "$url" in
+            http:*|https:*|//*|data:*) note "Extern entry-asset niet gecontroleerd: $url"; continue ;;
+            /*) full="$origin$url" ;;
+            *) full="$PUBLIC_URL/${url#./}" ;;
+        esac
+        [[ "$kind" == "js" ]] && js_count=$((js_count + 1))
+        checked=$((checked + 1))
+        code="000"; ctype=""
+        for attempt in 1 2 3 4 5; do
+            : > "$CHECK_BODY_TMP"
+            meta="$("$CURL" -s -L -m 10 -o "$CHECK_BODY_TMP" -w '%{http_code} %{content_type}' "$full" || true)"
+            code="${meta%% *}"; ctype="${meta#* }"; [[ "$ctype" == "$meta" ]] && ctype=""
+            case "$code" in 000|502|503|504) sleep 2 ;; *) break ;; esac
+        done
+        first="$(head -c 256 "$CHECK_BODY_TMP" | tr -d ' \t\r\n' | head -c 1)"
+        if [[ "$code" != "200" ]]; then
+            problems="$problems"$'\n'"$kind $url -> HTTP $code"
+            [[ "$code" == "403" ]] && problems="$problems (nginx kan het bestand niet lezen — rechten/eigenaar van $WEB_DIST_DIR)"
+        elif [[ "$(printf '%s' "$ctype" | tr '[:upper:]' '[:lower:]')" == *text/html* || "$first" == "<" ]]; then
+            problems="$problems"$'\n'"$kind $url -> HTML in plaats van ${kind} (content-type '${ctype:-?}'; ontbrekend bestand achter een SPA-fallback?)"
+        else
+            note "Entry-asset OK: $kind $url (HTTP 200, ${ctype:-?})"
+        fi
+    done <<<"$(web_entry_assets "$index")"
+    rm -f "$CHECK_BODY_TMP"; CHECK_BODY_TMP=""
+    if [[ -n "$problems" ]]; then
+        printf '%s\n' "$problems" | grep . | sed 's/^/      FOUT: /' >&2
+        fail "vereiste frontend-assets niet correct bereikbaar via $PUBLIC_URL."
+    fi
+    (( js_count > 0 )) || fail "index.html in $index bevat geen JS-entry (<script src> / modulepreload) — onvolledige build?"
+    note "Entry-assets gecontroleerd: $checked (JS: $js_count), allemaal HTTP 200 en geen HTML."
+}
+
+acquire_lock() {
+    if command -v flock >/dev/null 2>&1; then
+        exec 9>"$LOCK_FILE"
+        flock -n 9 || fail "er loopt al een deployment (lock: $LOCK_FILE)."
+    else
+        mkdir "$LOCK_FILE.d" 2>/dev/null || fail "er loopt al een deployment (lock: $LOCK_FILE.d)."
+        LOCK_DIR_CREATED="$LOCK_FILE.d"
+    fi
+}
+
 # Read ONE key from the EnvironmentFile without exporting anything (same parsing rules as
 # before: KEY=VALUE, optional surrounding quotes, comments/blank lines ignored; last one wins).
 env_file_value() {
@@ -275,6 +445,7 @@ is_within() {
 
 cleanup() {
     [[ -n "$PGPASSFILE_TMP" && -f "$PGPASSFILE_TMP" ]] && rm -f "$PGPASSFILE_TMP"
+    [[ -n "$CHECK_BODY_TMP" && -f "$CHECK_BODY_TMP" ]] && rm -f "$CHECK_BODY_TMP"
     [[ -n "$LOCK_DIR_CREATED" && -d "$LOCK_DIR_CREATED" ]] && rmdir "$LOCK_DIR_CREATED" 2>/dev/null
     return 0
 }
@@ -296,7 +467,8 @@ print_rollback_runbook() {
         emsg "     2. Binaries: ongewijzigd — de vorige release staat nog in $API_BIN_DIR."
     fi
     if [[ -n "$PREV_WEB_DIR" ]]; then
-        emsg "     3. Frontend: $RSYNC -a --delete $PREV_WEB_DIR/ $WEB_DIST_DIR/ && nginx -s reload"
+        emsg "     3. Frontend: sudo $(basename "$0") --rollback-frontend $PREV_WEB_DIR"
+        emsg "        (zelfde regels als de deploy: mappen 0755, bestanden 0644, $DEPLOY_USER:$WEB_GROUP, nginx reload + asset-check)"
     else
         emsg "     3. Frontend: ongewijzigd — de vorige dist/ is nog live."
     fi
@@ -330,6 +502,10 @@ on_exit() {
     if (( RELEASE_LIVE == 1 )); then
         emsg "De nieuwe release is LIVE (API gezond, frontend gewisseld). Alleen een nacontrole faalde."
         emsg "Er wordt niets teruggedraaid; onderzoek de fout hierboven."
+        if [[ -n "$PREV_WEB_DIR" && -d "$PREV_WEB_DIR" ]]; then
+            emsg "Vorige frontend terugzetten (enkel als dat bewust gekozen wordt; de API blijft de nieuwe):"
+            emsg "  sudo $(basename "$0") --rollback-frontend $PREV_WEB_DIR"
+        fi
     elif (( DOWNTIME_STARTED == 0 )); then
         emsg "De draaiende service en de database zijn NIET aangeraakt; de vorige release blijft actief."
     elif (( MIGRATION_STARTED == 0 && NEW_BINARIES_STARTED == 0 && BINARIES_INSTALL_STARTED == 0 )); then
@@ -418,6 +594,75 @@ trap on_exit EXIT
 require_cmd() { command -v "$1" >/dev/null 2>&1 || fail "vereist commando ontbreekt: $1"; }
 
 # =============================================================================
+# --rollback-frontend <dir>: put a kept frontend (stage-…/previous-web) live again with exactly
+# the rules of step 15/16. Never touches the database, the API service, the binaries or storage.
+# =============================================================================
+if [[ "$MODE" == "rollback-frontend" ]]; then
+    on_exit_rollback() {
+        local exit_code=$?
+        set +e
+        trap - EXIT
+        if (( DEPLOY_DONE == 1 || exit_code == 0 )); then cleanup; exit "$exit_code"; fi
+        printf '\n[%s] !! FRONTEND-ROLLBACK MISLUKT in stap: %s (exitcode %d)\n' "$(ts)" "$CURRENT_STEP" "$exit_code" >&2
+        emsg "Database, API-service, binaries en opslag zijn NIET aangeraakt."
+        emsg "Los de fout hierboven op en herhaal: sudo $(basename "$0") --rollback-frontend ${ROLLBACK_WEB_SRC:-<stage-…/previous-web>}"
+        cleanup
+        exit "$exit_code"
+    }
+    trap on_exit_rollback EXIT
+
+    step "Frontend-rollback 1/3: Preflight"
+    [[ -n "$ROLLBACK_WEB_SRC" ]] || refuse "geef de bewaarde frontend op: --rollback-frontend <STAGE_ROOT>/stage-…/previous-web"
+    [[ -d "$ROLLBACK_WEB_SRC" ]] || refuse "map bestaat niet: $ROLLBACK_WEB_SRC"
+    ROLLBACK_WEB_SRC="$(phys_path "$ROLLBACK_WEB_SRC")"
+    [[ -f "$ROLLBACK_WEB_SRC/index.html" ]] || refuse "$ROLLBACK_WEB_SRC bevat geen index.html — geen frontend-build."
+    if is_within "$ROLLBACK_WEB_SRC" "$WEB_DIST_DIR" || is_within "$WEB_DIST_DIR" "$ROLLBACK_WEB_SRC"; then
+        refuse "bron $ROLLBACK_WEB_SRC en live frontend $WEB_DIST_DIR overlappen."
+    fi
+    if simulating; then
+        note "SIMULATIEMODUS (DEPLOY_SIMULATE=1): geen root, geen chown, commando's via overrides."
+        for guard in "$ENV_FILE" "$REPO_DIR" "$STAGE_ROOT" "$WEB_DIST_DIR"; do
+            case "$guard" in
+                /etc/transportationservice/*|/var/www/transportationservice*|/var/lib/transportationservice*)
+                    refuse "simulatie weigert productiepad '$guard' — geef sandboxpaden op (scripts/deploy-sim/)." ;;
+            esac
+        done
+    else
+        [[ "$(id -u)" -eq 0 ]] || fail "dit script moet als root draaien (sudo): chown/nginx vereisen root."
+    fi
+    for c in "$CURL" "$NGINX" "$RSYNC" "$SYSTEMCTL"; do require_cmd "$c"; done
+    id "$DEPLOY_USER" >/dev/null 2>&1 || fail "deploy-gebruiker '$DEPLOY_USER' bestaat niet."
+    web_preflight
+    if [[ -r "$ENV_FILE" ]]; then
+        [[ -n "$PUBLIC_URL" ]] || PUBLIC_URL="$(env_file_value Frontend__BaseUrl)"
+        STORAGE_ROOT="$(env_file_value Storage__RootPath)"
+    fi
+    [[ -n "$PUBLIC_URL" ]] || fail "PUBLIC_URL niet gezet en Frontend__BaseUrl niet leesbaar uit $ENV_FILE."
+    PUBLIC_URL="${PUBLIC_URL%/}"
+    # Storage safety: rsync --delete may never run over (or inside) the document storage.
+    if [[ -n "$STORAGE_ROOT" ]] && { is_within "$STORAGE_ROOT" "$WEB_DIST_DIR" || is_within "$WEB_DIST_DIR" "$STORAGE_ROOT"; }; then
+        refuse "WEB_DIST_DIR '$WEB_DIST_DIR' overlapt met Storage__RootPath '$STORAGE_ROOT' — er wordt niets gekopieerd."
+    fi
+    acquire_lock
+    note "Bron: $ROLLBACK_WEB_SRC -> live: $WEB_DIST_DIR (publieke check: $PUBLIC_URL)."
+
+    step "Frontend-rollback 2/3: Frontend terugzetten (mappen 0755, bestanden 0644) + nginx herladen"
+    publish_web "$ROLLBACK_WEB_SRC"
+    "$NGINX" -t
+    "$SYSTEMCTL" reload nginx
+
+    step "Frontend-rollback 3/3: Publieke check incl. JS/CSS entry-assets ($PUBLIC_URL)"
+    public_check "$WEB_DIST_DIR/index.html"
+    DEPLOY_DONE=1
+    printf '\n================= FRONTEND-ROLLBACK GESLAAGD =================\n'
+    printf 'Live frontend : %s (uit %s)\nPublieke site : %s (HTTP %s, entry-assets OK)\n' \
+        "$WEB_DIST_DIR" "$ROLLBACK_WEB_SRC" "$PUBLIC_URL" "$PUBLIC_CODE"
+    printf 'Niet aangeraakt: database, %s, binaries, opslag.\n' "$SERVICE_NAME"
+    printf '==============================================================\n'
+    exit 0
+fi
+
+# =============================================================================
 step "Stap 1/17: Preflight — vereisten, paden en git-ref"
 if [[ -z "$DEPLOY_REF" ]]; then
     usage >&2
@@ -452,15 +697,10 @@ SERVICE_USER="$("$SYSTEMCTL" show -p User --value "$SERVICE_NAME" 2>/dev/null ||
 [[ -n "$SERVICE_USER" ]] || SERVICE_USER="$DEPLOY_USER"
 SERVICE_WORKDIR="$("$SYSTEMCTL" show -p WorkingDirectory --value "$SERVICE_NAME" 2>/dev/null || true)"
 SERVICE_WORKDIR="${SERVICE_WORKDIR#!}"; SERVICE_WORKDIR="${SERVICE_WORKDIR#-}"
+web_preflight
 mkdir -p "$BACKUP_DIR" "$STAGE_ROOT"
 chmod 0750 "$BACKUP_DIR"
-if command -v flock >/dev/null 2>&1; then
-    exec 9>"$LOCK_FILE"
-    flock -n 9 || fail "er loopt al een deployment (lock: $LOCK_FILE)."
-else
-    mkdir "$LOCK_FILE.d" 2>/dev/null || fail "er loopt al een deployment (lock: $LOCK_FILE.d)."
-    LOCK_DIR_CREATED="$LOCK_FILE.d"
-fi
+acquire_lock
 cd "$REPO_DIR"
 EF_VERSION="$(run_clean -- "$DOTNET_EF" --version 2>/dev/null | tail -n 1 || true)"
 note "dotnet $(run_clean -- "$DOTNET" --version 2>/dev/null || echo '?'), dotnet-ef ${EF_VERSION:-?}, npm $(run_clean -- "$NPM" --version 2>/dev/null || echo '?')"
@@ -911,9 +1151,11 @@ note "Service actief en $HEALTH_RESULT ($("$SYSTEMCTL" show -p MainPID --value "
 # =============================================================================
 step "Stap 15/17: Frontend live zetten (vorige dist bewaard) + nginx herladen + onderhoud uit"
 PREV_WEB_DIR="$STAGE_DIR/previous-web"
-install_dir "$PREV_WEB_DIR" "$WEB_DIST_DIR"
+install_dir "$PREV_WEB_DIR"
+[[ -d "$WEB_DIST_DIR" ]] || make_web_root
 "$RSYNC" -a "$WEB_DIST_DIR/" "$PREV_WEB_DIR/"
-rsync_owned -a --delete "$STAGE_WEB/" "$WEB_DIST_DIR/"
+# Staging is 0750/0640 (umask 027): publish_web sets 0755/0644 + DEPLOY_USER:WEB_GROUP and verifies.
+publish_web "$STAGE_WEB"
 "$NGINX" -t
 "$SYSTEMCTL" reload nginx
 maintenance_off
@@ -921,15 +1163,9 @@ RELEASE_LIVE=1
 note "Frontend staat in $WEB_DIST_DIR (vorige in $PREV_WEB_DIR); nginx herladen; onderhoudspagina uit."
 
 # =============================================================================
-step "Stap 16/17: Publieke website-check ($PUBLIC_URL)"
-PUBLIC_CODE="000"
-for ((i = 0; i < 10; i++)); do
-    PUBLIC_CODE="$("$CURL" -s -o /dev/null -m 10 -L -w '%{http_code}' "$PUBLIC_URL/" || true)"
-    [[ "$PUBLIC_CODE" == "200" ]] && break
-    sleep 2
-done
-[[ "$PUBLIC_CODE" == "200" ]] || fail "publieke site geeft HTTP $PUBLIC_CODE (verwacht 200) — release is wel live."
-note "Publieke site: HTTP 200."
+step "Stap 16/17: Publieke website-check ($PUBLIC_URL) incl. JS/CSS entry-assets van de nieuwe index.html"
+# The asset list comes from the NEW build (staging); a 403/404 or HTML for a .js/.css fails the deploy.
+public_check "$STAGE_WEB/index.html"
 
 # =============================================================================
 step "Stap 17/17: Opruimen (oude back-ups, snapshots en staging)"
