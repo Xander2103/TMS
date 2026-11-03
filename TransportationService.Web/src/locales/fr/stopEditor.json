@@ -70,5 +70,10 @@
     "switchTitle": "Modifier le type de mission de grue ?",
     "switchMessage": "Les arrêts remplis du type actuel seront supprimés. Continuer ?",
     "switchConfirm": "Modifier"
+  },
+  "sheet": {
+    "address": "Coordonnées de l'adresse",
+    "planning": "Planification",
+    "advancedFilled": "renseigné"
   }
 }

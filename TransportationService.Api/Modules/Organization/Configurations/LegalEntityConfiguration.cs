@@ -37,6 +37,9 @@ public class LegalEntityConfiguration : IEntityTypeConfiguration<LegalEntity>
         builder.Property(e => e.LogoStorageKey).HasMaxLength(500);
         builder.Property(e => e.LogoFileName).HasMaxLength(255);
         builder.Property(e => e.LogoContentType).HasMaxLength(100);
+        builder.Property(e => e.HeaderImageStorageKey).HasMaxLength(500);
+        builder.Property(e => e.HeaderImageFileName).HasMaxLength(255);
+        builder.Property(e => e.HeaderImageContentType).HasMaxLength(100);
 
         builder.HasIndex(e => e.TenantId);
         builder.HasIndex(e => new { e.TenantId, e.IsActive });

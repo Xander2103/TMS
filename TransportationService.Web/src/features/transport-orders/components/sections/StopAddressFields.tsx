@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Building2, SearchCheck } from 'lucide-react'
 import { Badge } from '../../../../components/ui/Badge'
 import { FormField } from '../../../../components/ui/FormField'
 import { useLocale } from '../../../../i18n/localeContext'
@@ -23,6 +24,8 @@ interface StopAddressFieldsProps {
   onQuickCreate?: (name: string) => Promise<LocationOption | null>
   /** locations.create AND a known customer: the "also store in the address book" option is offered. */
   canSaveToAddressBook: boolean
+  /** Dossier route sheet: the same fields under the section titles "Adres zoeken" and "Adresgegevens". */
+  sheet?: boolean
 }
 
 /**
@@ -47,6 +50,7 @@ export function StopAddressFields({
   onRequestRefresh,
   onQuickCreate,
   canSaveToAddressBook,
+  sheet = false,
 }: StopAddressFieldsProps) {
   const { t } = useLocale()
   const linked = stop.locationId !== ''
@@ -107,8 +111,8 @@ export function StopAddressFields({
     </button>
   )
 
-  return (
-    <div className="tof-address">
+  const searchBlock = (
+    <>
       <div className="tof-row tof-row-single">
         <FormField label={t('stopEditor.address.search')} htmlFor={`st-loc-${stop.key}`}>
           <LocationSelect
@@ -151,6 +155,11 @@ export function StopAddressFields({
           {unlinkButton}
         </div>
       )}
+    </>
+  )
+
+  const detailsBlock = (
+    <>
       <div className="tof-row">
         <FormField label={t('stopEditor.address.name')} htmlFor={`st-name-${stop.key}`}>
           <input
@@ -229,6 +238,34 @@ export function StopAddressFields({
             <StopAddressDuplicates stop={stop} saving={saving} onUse={fill} />
           )}
         </div>
+      )}
+    </>
+  )
+
+  return (
+    <div className="tof-address">
+      {sheet ? (
+        <>
+          <div className="tof-sheet-section tof-sheet-search">
+            <h4 className="tof-sheet-section-title">
+              <SearchCheck size={16} aria-hidden />
+              {t('stopEditor.address.search')}
+            </h4>
+            {searchBlock}
+          </div>
+          <div className="tof-sheet-section">
+            <h4 className="tof-sheet-section-title">
+              <Building2 size={16} aria-hidden />
+              {t('stopEditor.sheet.address')}
+            </h4>
+            {detailsBlock}
+          </div>
+        </>
+      ) : (
+        <>
+          {searchBlock}
+          {detailsBlock}
+        </>
       )}
     </div>
   )

@@ -1,9 +1,11 @@
 import { useId, useRef, type KeyboardEvent } from 'react'
+import { ChevronRight } from 'lucide-react'
 import { useLocale } from '../../../i18n/localeContext'
 import { euro } from '../../invoices/types'
 import type { DossierActivity, DossierDetail } from '../types'
 import { activityUnitKind, activityUnitName, readActivityPrice } from './activityPriceDisplay'
 import { PriceStatusBadge } from './PriceStatusBadge'
+import { priceUnitIcon } from './priceUnitDisplay'
 import './dossier-pricing.css'
 
 interface ActivityPricePickerProps {
@@ -20,7 +22,7 @@ interface ActivityPricePickerProps {
 
 /**
  * Pricing UX sprint 2026-10-08: the MASTER list of the price tab — "Prijsbare onderdelen (N)".
- * One selectable card per billable unit: reference (order number), name, the KIND of unit
+ * One selectable card per billable unit: its icon, reference (order number), name, the KIND of unit
  * ("Opdracht" = priced through its order, "Activiteit" = own price record — decided by the type's
  * `hasStops` capability, never by a name), the amount and ONE status badge (Niet geprijsd /
  * Gedeeltelijk / Geprijsd / Controle vereist / Gratis). ALWAYS shown, also with a single unit, so
@@ -58,6 +60,7 @@ export function ActivityPricePicker({ dossier, activities, selectedActivityId, o
           const kind = activityUnitKind(activity)
           const price = readActivityPrice(dossier, activity)
           const amount = price.kind === 'amount' ? price.amount : price.kind === 'free' ? 0 : null
+          const Icon = priceUnitIcon(activity)
           return (
             <button
               key={activity.id}
@@ -76,9 +79,12 @@ export function ActivityPricePicker({ dossier, activities, selectedActivityId, o
               }}
               onKeyDown={(event) => onKeyDown(event, index)}
             >
+              <Icon className="dossier-price-master-icon" size={22} aria-hidden="true" />
               <span className="dossier-price-master-main">
-                {activity.linkedOrderNumber && <span className="dossier-price-master-ref">{activity.linkedOrderNumber}</span>}
-                <span className="dossier-price-master-name">{activityUnitName(activity)}</span>
+                <span className="dossier-price-master-title-row">
+                  {activity.linkedOrderNumber && <span className="dossier-price-master-ref">{activity.linkedOrderNumber}</span>}
+                  <span className="dossier-price-master-name">{activityUnitName(activity)}</span>
+                </span>
                 {activity.hasStops && !activity.linkedOrderNumber && (
                   <span className="dossier-price-master-secondary">{t('dossierSheet.orderSwitch.noOrderYet')}</span>
                 )}
@@ -95,9 +101,7 @@ export function ActivityPricePicker({ dossier, activities, selectedActivityId, o
                   </span>
                 )}
               </span>
-              <span className="dossier-price-master-chevron" aria-hidden="true">
-                ›
-              </span>
+              <ChevronRight className="dossier-price-master-chevron" size={18} aria-hidden="true" />
             </button>
           )
         })}

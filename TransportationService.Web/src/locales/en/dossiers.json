@@ -271,7 +271,7 @@
   },
   "attention": {
     "title": "Attention",
-    "goTo": "Go to {section}",
+    "goTo": "To {section}",
     "severity": {
       "Blocking": "Blocking",
       "Warning": "Warning",
@@ -285,11 +285,30 @@
       "prijs": "price"
     },
     "openException": "Open deviation: {type}, severity {severity}",
-    "openExceptionTrip": "on {tripNumber}"
+    "openExceptionTrip": "on {tripNumber}",
+    "toPlanning": "To planning",
+    "viewAll": "View",
+    "activityCount_one": "{count} activity",
+    "activityCount_other": "{count} activities",
+    "openExceptions_one": "{count} open exception",
+    "openExceptions_other": "{count} open exceptions",
+    "kind": {
+      "priceMissing": "Sales price missing",
+      "priceZero": "€ 0.00 price to be confirmed",
+      "priceIncomplete": "Price incomplete",
+      "priceStale": "Price outdated",
+      "planningMissing": "Planning date missing",
+      "stopsBoth": "Loading and unloading location unknown",
+      "stopsLoading": "Loading location unknown",
+      "stopsUnloading": "Unloading location unknown",
+      "orderMissing": "Transport order missing"
+    },
+    "openIncidents_one": "{count} open incident",
+    "openIncidents_other": "{count} open incidents"
   },
   "header": {
     "addActivity": "+ Activity",
-    "change": "change",
+    "change": "Change",
     "changeAction": "Change",
     "changeEntityAria": "Change entity",
     "chooseEntity": "— Choose an entity —",
@@ -759,10 +778,15 @@
     }
   },
   "timeline": {
+    "subtitle": "Overview of all changes in this dossier.",
+    "searchPlaceholder": "Search history…",
+    "typeOption": "Type: {type}",
+    "range_one": "1 change",
+    "range_other": "{start}–{end} of {count} changes",
     "loadFailed": "The history could not be loaded.",
     "loading": "Loading history…",
     "empty": "No history for this file yet.",
-    "emptyFiltered": "No events in this category.",
+    "emptyFiltered": "No events match this search or type.",
     "filterLabel": "Show events",
     "system": "System",
     "unknownUser": "Unknown user",

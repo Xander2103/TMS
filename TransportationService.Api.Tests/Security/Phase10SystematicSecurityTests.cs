@@ -89,6 +89,7 @@ public class Phase10SystematicSecurityTests
         "CountriesController.GetAll",
         "LegalEntitiesController.Options",
         "LegalEntitiesController.DownloadLogo",
+        "LegalEntitiesController.DownloadHeaderImage", // cosmetic banner of dossier and order headers, tenant-scoped like the logo
         "LegalEntitiesController.GetActiveSelection",
         "LegalEntitiesController.SetActiveSelection",
     };

@@ -60,6 +60,7 @@ public static class StorageIntegrityVerifier
         Column<InvoiceAttachment>("invoice_attachments.StorageKey", e => e.StorageKey),
         Column<Invoice>("invoices.SellerLogoStorageKey", e => e.SellerLogoStorageKey),
         Column<LeasingContract>("leasing_contracts.StorageKey", e => e.StorageKey),
+        Column<LegalEntity>("legal_entities.HeaderImageStorageKey", e => e.HeaderImageStorageKey),
         Column<LegalEntity>("legal_entities.LogoStorageKey", e => e.LogoStorageKey),
         Column<MaintenanceRecord>("maintenance_records.AttachmentPath", e => e.AttachmentPath),
         Column<TransportOrderDocument>("order_documents.DocumentPath", e => e.DocumentPath),

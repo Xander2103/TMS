@@ -271,7 +271,7 @@
   },
   "attention": {
     "title": "Aandacht",
-    "goTo": "Ga naar {section}",
+    "goTo": "Naar {section}",
     "severity": {
       "Blocking": "Blokkerend",
       "Warning": "Waarschuwing",
@@ -285,11 +285,30 @@
       "prijs": "prijs"
     },
     "openException": "Open afwijking: {type}, ernst {severity}",
-    "openExceptionTrip": "op {tripNumber}"
+    "openExceptionTrip": "op {tripNumber}",
+    "toPlanning": "Naar planning",
+    "viewAll": "Bekijken",
+    "activityCount_one": "{count} activiteit",
+    "activityCount_other": "{count} activiteiten",
+    "openExceptions_one": "{count} open afwijking",
+    "openExceptions_other": "{count} open afwijkingen",
+    "kind": {
+      "priceMissing": "Verkoopprijs ontbreekt",
+      "priceZero": "Prijs € 0,00 nog te bevestigen",
+      "priceIncomplete": "Prijs onvolledig",
+      "priceStale": "Prijs verouderd",
+      "planningMissing": "Planningsdatum ontbreekt",
+      "stopsBoth": "Laad- en loslocatie onbekend",
+      "stopsLoading": "Laadlocatie onbekend",
+      "stopsUnloading": "Loslocatie onbekend",
+      "orderMissing": "Transportopdracht ontbreekt"
+    },
+    "openIncidents_one": "{count} open incident",
+    "openIncidents_other": "{count} open incidenten"
   },
   "header": {
     "addActivity": "+ Activiteit",
-    "change": "wijzigen",
+    "change": "Wijzigen",
     "changeAction": "Wijzigen",
     "changeEntityAria": "Entiteit wijzigen",
     "chooseEntity": "— Kies een entiteit —",
@@ -759,10 +778,15 @@
     }
   },
   "timeline": {
+    "subtitle": "Overzicht van alle wijzigingen in dit dossier.",
+    "searchPlaceholder": "Zoek in historiek…",
+    "typeOption": "Type: {type}",
+    "range_one": "1 wijziging",
+    "range_other": "{start}–{end} van {count} wijzigingen",
     "loadFailed": "De historiek kon niet worden geladen.",
     "loading": "Historiek laden…",
     "empty": "Nog geen historiek voor dit dossier.",
-    "emptyFiltered": "Geen gebeurtenissen in deze categorie.",
+    "emptyFiltered": "Geen gebeurtenissen voor deze zoekopdracht of dit type.",
     "filterLabel": "Toon gebeurtenissen",
     "system": "Systeem",
     "unknownUser": "Onbekende gebruiker",

@@ -12,10 +12,10 @@ import { DossierPricePanel, type DossierPricePanelHandle } from '../DossierPrice
 const ACTIVITY_PARAM = 'activiteit'
 
 /**
- * Verkoop & prijs workspace (master sprint 2026-09-21, spec §15; pricing UX sprint 2026-10-08):
- * the DOSSIER summary on top, then a master-detail layout — LEFT the list of priceable parts
- * ("Prijsbare onderdelen", every commercial activity selectable, always shown), RIGHT the price
- * detail of the selected part. On narrow screens the list stacks above the detail. The selection
+ * Verkoop & prijs workspace (master sprint 2026-09-21, spec §15; redesign 2026-11-03): a
+ * master-detail layout — LEFT the list of priceable parts ("Prijsbare onderdelen", every
+ * commercial activity selectable, always shown) with the compact DOSSIER summary under it, RIGHT
+ * the price of the selected part. On narrow screens the list stacks above the detail. The selection
  * is the workspace's (shared with the attention jumps and the route target); `?activiteit=`
  * selects once on arrival and never writes the URL back, so switching stays local state (no
  * navigation, no scroll jump).
@@ -44,30 +44,31 @@ export function DossierPriceSection({ panelRef }: { panelRef: Ref<DossierPricePa
   }, [requestedId, billableActivities.length])
 
   const hasUnits = ws.billableActivities.length > 0
+  const locked = ws.routeDirty || priceDirty
 
   return (
     <section id="sectie-prijs" className="dossier-section dossier-workspace dossier-pricing" aria-label={t('dossiers.detail.priceAria')} ref={register}>
-      <h2 tabIndex={-1}>{t('dossiers.detail.priceTitle')}</h2>
-      <DossierPriceSummary
-        dossier={ws.dossier}
-        billableActivities={ws.billableActivities}
-        legacyOrders={ws.legacyOrders}
-        onSelect={ws.selectActivity}
-        locked={ws.routeDirty || priceDirty}
-      />
+      <h2 className="visually-hidden" tabIndex={-1}>{t('dossiers.detail.priceTitle')}</h2>
       <div className={`dossier-pricing-layout${hasUnits ? '' : ' dossier-pricing-layout-single'}`}>
-        {hasUnits && (
-          <aside className="dossier-pricing-master">
+        <aside className="dossier-pricing-master">
+          {hasUnits && (
             <ActivityPricePicker
               dossier={ws.dossier}
               activities={ws.billableActivities}
               selectedActivityId={ws.priceActivity?.id ?? ''}
               onSelect={ws.selectActivity}
-              locked={ws.routeDirty || priceDirty}
+              locked={locked}
               lockedHint={ws.routeDirty ? t('dossierSheet.orderSwitch.lockedWhileDirty') : t('dossierPricing.picker.lockedWhileDirty')}
             />
-          </aside>
-        )}
+          )}
+          <DossierPriceSummary
+            dossier={ws.dossier}
+            billableActivities={ws.billableActivities}
+            legacyOrders={ws.legacyOrders}
+            onSelect={ws.selectActivity}
+            locked={locked}
+          />
+        </aside>
         <div className="dossier-pricing-detail">
           <RetainedHeight retain={loading} className="dossier-section-body">
             <DossierPricePanel
@@ -89,6 +90,8 @@ export function DossierPriceSection({ panelRef }: { panelRef: Ref<DossierPricePa
               onAddActivity={ws.openAddActivity}
               onDirtyChange={(dirty) => setDirtyActivityId(dirty ? priceActivityId : null)}
               onRetryLoad={ws.retryOrderLoad}
+              onSelectUnit={ws.selectActivity}
+              selectLocked={locked}
             />
           </RetainedHeight>
         </div>

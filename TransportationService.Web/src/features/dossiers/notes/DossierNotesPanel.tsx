@@ -1,13 +1,17 @@
 import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent } from 'react'
 import { describeApiError } from '../../../api/problemDetails'
 import { LoadingState } from '../../../components/feedback/LoadingState'
+import { FileText } from 'lucide-react'
 import { Button } from '../../../components/ui/Button'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
+import { RowActionMenu } from '../../../components/ui/RowActionMenu'
 import { SelfSavingPanel } from '../../../components/ui/SelfSavingPanel'
 import { useToast } from '../../../components/ui/toastContext'
 import { useLocale } from '../../../i18n/localeContext'
-import { formatDate, formatTime } from '../../../utils/dates'
+import { formatDate, formatDateTime, formatTime } from '../../../utils/dates'
 import { MAX_DOSSIER_NOTE_LENGTH, type DossierNote } from '../api/dossierNotesApi'
+import { HistoryCardHeader, HistoryListFooter, HistoryListToolbar } from '../components/HistoryListControls'
+import { matchesSearch, sortByMoment, useListPaging, type HistorySort } from '../components/historyListState'
 import { useDossierNotes } from './useDossierNotes'
 import './dossier-notes.css'
 
@@ -31,6 +35,11 @@ export interface DossierNotesPanelProps {
   title?: string
   /** Tighter spacing for drawers and cards. */
   compact?: boolean
+  /**
+   * "workspace" (Historiek tab): a card with search, sort, a fixed-height list, paging and a "⋯"
+   * menu per note. The default stays the plain list of drawers and cards.
+   */
+  layout?: 'default' | 'workspace'
   /** Legacy free-text notes: shown read-only ONLY when the notes could not be loaded. */
   legacyText?: string | null
   /** Reports unsaved note text, so a hosting drawer can guard its close. */
@@ -57,6 +66,7 @@ function ScopedNotesPanel({
   canWrite,
   title,
   compact = false,
+  layout = 'default',
   legacyText = null,
   onDirtyChange,
   onChanged,
@@ -77,6 +87,16 @@ function ScopedNotesPanel({
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const [composerDirty, setComposerDirty] = useState(false)
   const [editDirty, setEditDirty] = useState(false)
+  const [search, setSearch] = useState('')
+  const [sort, setSort] = useState<HistorySort>('newest')
+
+  const workspace = layout === 'workspace'
+  const matching = workspace
+    ? notes.filter((note) => matchesSearch(search, [note.text, note.authorName, note.editedByName]))
+    : notes
+  const paging = useListPaging(matching.length)
+  // While a note is being edited the list stays put: search, sort and paging must not take it away.
+  const listLocked = editingId !== null
 
   const dirty = (composerOpen && composerDirty) || (editingId !== null && editDirty)
   useEffect(() => {
@@ -86,8 +106,25 @@ function ScopedNotesPanel({
   }, [dirty])
 
   const heading = title ?? t('dossierNotes.title')
-  const visibleNotes = showAll ? notes : notes.slice(0, DEFAULT_VISIBLE_NOTES)
-  const hiddenCount = notes.length - DEFAULT_VISIBLE_NOTES
+  const visibleNotes = workspace
+    ? sortByMoment(matching, (note) => note.createdAt, sort).slice(Math.max(paging.start - 1, 0), paging.end)
+    : showAll
+      ? notes
+      : notes.slice(0, DEFAULT_VISIBLE_NOTES)
+  const hiddenCount = workspace ? 0 : notes.length - DEFAULT_VISIBLE_NOTES
+
+  const addButton = canWrite && !isLoading && !loadFailed && (
+    <Button
+      ref={addButtonRef}
+      variant="secondary"
+      className="dossier-notes-add"
+      aria-expanded={composerOpen}
+      aria-controls={composerId}
+      onClick={() => setComposerOpen(true)}
+    >
+      {t('dossierNotes.add')}
+    </Button>
+  )
 
   function closeComposer() {
     setComposerOpen(false)
@@ -137,23 +174,38 @@ function ScopedNotesPanel({
   }
 
   return (
-    <SelfSavingPanel className={compact ? 'dossier-notes dossier-notes-compact' : 'dossier-notes'}>
-      <div className="dossier-notes-header">
-        <h3>{heading}</h3>
-        {canWrite && !isLoading && !loadFailed && (
-          <Button
-            ref={addButtonRef}
-            variant="secondary"
-            className="dossier-notes-add"
-            aria-expanded={composerOpen}
-            aria-controls={composerId}
-            onClick={() => setComposerOpen(true)}
-          >
-            {t('dossierNotes.add')}
-          </Button>
-        )}
-      </div>
+    <SelfSavingPanel className={workspace ? 'dossier-notes dossier-history-card' : compact ? 'dossier-notes dossier-notes-compact' : 'dossier-notes'}>
+      {workspace ? (
+        <HistoryCardHeader icon={<FileText size={20} />} title={heading} subtitle={t('dossierNotes.workspaceSubtitle')} action={addButton} />
+      ) : (
+        <div className="dossier-notes-header">
+          <h3>{heading}</h3>
+          {addButton}
+        </div>
+      )}
 
+      {workspace && !isLoading && !loadFailed && (
+        <HistoryListToolbar
+          search={search}
+          onSearch={(value) => {
+            setSearch(value)
+            paging.setPage(1)
+          }}
+          searchPlaceholder={t('dossierNotes.list.searchPlaceholder')}
+          sort={sort}
+          onSort={(value) => {
+            setSort(value)
+            paging.setPage(1)
+          }}
+          disabled={listLocked}
+        />
+      )}
+
+      {/* Default layout: display:contents, so this wrapper does not change the plain list. */}
+      <div
+        className={workspace ? 'dossier-history-scroll' : 'dossier-notes-body'}
+        {...(workspace ? { role: 'region', 'aria-label': heading, tabIndex: 0 } : {})}
+      >
       {isLoading && <LoadingState message={t('dossierNotes.loading')} />}
 
       {loadFailed && (
@@ -196,8 +248,9 @@ function ScopedNotesPanel({
       )}
 
       {!isLoading && !loadFailed && notes.length === 0 && <p className="placeholder-text dossier-notes-empty">{t('dossierNotes.empty')}</p>}
+      {notes.length > 0 && matching.length === 0 && <p className="placeholder-text dossier-notes-empty">{t('dossierNotes.list.noMatches')}</p>}
 
-      {notes.length > 0 && (
+      {matching.length > 0 && (
         <ul id={listId} className="dossier-notes-list">
           {visibleNotes.map((note) => (
             <li key={note.id} className="dossier-note">
@@ -218,6 +271,7 @@ function ScopedNotesPanel({
                   note={note}
                   canEdit={canWrite && note.canEdit}
                   canDelete={canWrite && note.canDelete}
+                  menu={workspace}
                   onEdit={() => {
                     setEditDirty(false)
                     setEditingId(note.id)
@@ -244,6 +298,15 @@ function ScopedNotesPanel({
           {showAll ? t('dossierNotes.showLess') : t('dossierNotes.showAll', { total: notes.length })}
         </button>
       )}
+      </div>
+
+      {workspace && matching.length > 0 && (
+        <HistoryListFooter
+          summary={t('dossierNotes.list.range', { start: paging.start, end: paging.end, count: matching.length })}
+          paging={paging}
+          disabled={listLocked}
+        />
+      )}
 
       {deleteTarget && (
         <ConfirmDialog
@@ -264,12 +327,14 @@ interface NoteItemProps {
   note: DossierNote
   canEdit: boolean
   canDelete: boolean
+  /** Compact row: text left, author + moment right, the actions behind "⋯". */
+  menu?: boolean
   onEdit: () => void
   onDelete: () => void
 }
 
 /** One note: author + moment, the text clamped to two lines, and the per-note actions. */
-function NoteItem({ note, canEdit, canDelete, onEdit, onDelete }: NoteItemProps) {
+function NoteItem({ note, canEdit, canDelete, menu = false, onEdit, onDelete }: NoteItemProps) {
   const { t } = useLocale()
   const textId = useId()
   const [expanded, setExpanded] = useState(false)
@@ -288,6 +353,50 @@ function NoteItem({ note, canEdit, canDelete, onEdit, onDelete }: NoteItemProps)
   const edited = note.updatedAt !== note.createdAt
   // "08/10/2026 om 23:04": date and time stay separate parts so the wording reads naturally.
   const stamp = (value: string) => t('dossierNotes.dateAtTime', { date: formatDate(value), time: formatTime(value) })
+
+  const expandToggle = isLong && (
+    <button
+      type="button"
+      className="dossier-notes-toggle"
+      aria-expanded={expanded}
+      aria-controls={textId}
+      onClick={() => setExpanded((value) => !value)}
+    >
+      {expanded ? t('dossierNotes.less') : t('dossierNotes.more')}
+    </button>
+  )
+
+  if (menu) {
+    const author = note.authorName ?? t('dossierNotes.unknownAuthor')
+    return (
+      <div className="dossier-note-row">
+        <div className="dossier-note-row-main">
+          <p id={textId} ref={measure} className={expanded ? 'dossier-note-text' : 'dossier-note-text dossier-note-text-clamped'}>
+            {note.text}
+          </p>
+          {expandToggle}
+          {edited && (
+            <span className="dossier-note-row-edited" data-testid="note-edited">
+              {note.editedByName ? `${t('dossierNotes.editedByPrefix')} ${note.editedByName}` : t('dossierNotes.editedPrefix')}
+              {' · '}
+              <time dateTime={note.updatedAt}>{formatDateTime(note.updatedAt)}</time>
+            </span>
+          )}
+        </div>
+        <div className="dossier-note-row-meta" data-testid="note-created">
+          <span>{author}</span>
+          <time dateTime={note.createdAt}>{formatDateTime(note.createdAt)}</time>
+        </div>
+        <RowActionMenu
+          label={t('dossierNotes.list.actions', { author, date: formatDateTime(note.createdAt) })}
+          items={[
+            ...(canEdit ? [{ key: 'edit', label: t('ui.actions.edit'), onSelect: onEdit }] : []),
+            ...(canDelete ? [{ key: 'delete', label: t('ui.actions.delete'), onSelect: onDelete, danger: true }] : []),
+          ]}
+        />
+      </div>
+    )
+  }
 
   return (
     <>
@@ -318,17 +427,7 @@ function NoteItem({ note, canEdit, canDelete, onEdit, onDelete }: NoteItemProps)
       </p>
       {(isLong || canEdit || canDelete) && (
         <div className="dossier-note-actions">
-          {isLong && (
-            <button
-              type="button"
-              className="dossier-notes-toggle"
-              aria-expanded={expanded}
-              aria-controls={textId}
-              onClick={() => setExpanded((value) => !value)}
-            >
-              {expanded ? t('dossierNotes.less') : t('dossierNotes.more')}
-            </button>
-          )}
+          {expandToggle}
           {canEdit && (
             <Button variant="ghost" onClick={onEdit}>
               {t('ui.actions.edit')}

@@ -70,5 +70,10 @@
     "switchTitle": "Change the kind of crane job?",
     "switchMessage": "The filled-in stops of the current kind will be removed. Continue?",
     "switchConfirm": "Change"
+  },
+  "sheet": {
+    "address": "Address details",
+    "planning": "Planning",
+    "advancedFilled": "filled in"
   }
 }

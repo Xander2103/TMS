@@ -27,12 +27,35 @@
   flex: 1 1 520px;
 }
 
-.tod-header-title {
+.tod-header-identity {
   display: flex;
   align-items: center;
   gap: 14px;
+  margin-top: 6px;
+}
+
+.tod-header-icon {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  border: 1px solid var(--accent-border);
+  border-radius: 12px;
+  background: var(--accent-bg);
+  color: var(--accent);
+}
+
+.tod-header-identity-text {
+  min-width: 0;
+}
+
+.tod-header-title {
+  display: flex;
+  align-items: center;
+  gap: 8px 14px;
   flex-wrap: wrap;
-  margin-top: 4px;
 }
 
 .tod-header-title h1 {
@@ -51,7 +74,8 @@
 
 .tod-header-chips code {
   font-size: 13px;
-  padding: 2px 8px;
+  padding: 2px 10px;
+  border-radius: 999px;
 }
 
 .tod-header-sub {
@@ -60,9 +84,73 @@
   color: var(--text-muted);
 }
 
-.tod-commercial-bar {
-  margin: 8px 0 0;
+.tod-header-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Info bar: customer, order date, reference, invoicing entity. */
+.tod-header .tod-commercial-bar {
+  gap: 8px 0;
+  margin: 0;
+  padding: 10px 6px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--bg) 82%, transparent);
   font-size: 14px;
+}
+
+.tod-info-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 0 28px 0 14px;
+  color: var(--text-muted);
+}
+
+.tod-info-item svg {
+  flex-shrink: 0;
+}
+
+.tod-info-item + .tod-info-item {
+  border-left: 1px solid var(--border);
+}
+
+.tod-info-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.tod-info-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.tod-info-value {
+  display: flex;
+  align-items: center;
+  gap: 4px 12px;
+  flex-wrap: wrap;
+  color: var(--text-h);
+}
+
+.tod-info-value a {
+  text-underline-offset: 2px;
+}
+
+.tod-info-value .to-inline-action {
+  margin-left: 0;
+}
+
+.tod-header-note {
+  margin: 0;
+  font-size: 13px;
 }
 
 .tod-header-actions {
@@ -98,28 +186,7 @@
   font-weight: 500;
 }
 
-/* --- Attention strip ---------------------------------------------------------------------- */
-
-.tod-attention {
-  border: 1px solid color-mix(in srgb, var(--color-warning) 45%, var(--border));
-  border-left: 4px solid var(--color-warning);
-  border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--color-warning) 7%, var(--bg));
-  padding: 6px 14px;
-  margin-bottom: 14px;
-}
-
-.tod-attention.is-danger {
-  border-color: color-mix(in srgb, var(--color-danger) 40%, var(--border));
-  border-left-color: var(--color-danger);
-  background: color-mix(in srgb, var(--color-danger) 6%, var(--bg));
-}
-
-.tod-attention.is-info {
-  border-color: var(--border);
-  border-left-color: var(--accent);
-  background: var(--bg);
-}
+/* --- Attention points (bottom of the header) ---------------------------------------------- */
 
 .tod-attention ul {
   list-style: none;
@@ -127,18 +194,30 @@
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 6px;
 }
 
 .tod-attention-item {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 6px 0;
+  padding: 5px 8px 5px 12px;
+  border: 1px solid color-mix(in srgb, var(--color-warning) 40%, var(--border));
+  border-left: 3px solid var(--color-warning);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--color-warning) 7%, var(--bg));
 }
 
-.tod-attention-item + .tod-attention-item {
-  border-top: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+.tod-attention-item.is-danger {
+  border-color: color-mix(in srgb, var(--color-danger) 40%, var(--border));
+  border-left-color: var(--color-danger);
+  background: color-mix(in srgb, var(--color-danger) 6%, var(--bg));
+}
+
+.tod-attention-item.is-info {
+  border-color: var(--border);
+  border-left-color: var(--accent);
+  background: var(--bg);
 }
 
 .tod-attention-icon {
@@ -281,6 +360,7 @@
 .tod-card-head {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 10px;
 }
 
@@ -677,6 +757,19 @@
     align-items: flex-start;
   }
 
+  .tod-header .tod-commercial-bar {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .tod-info-item {
+    padding-right: 14px;
+  }
+
+  .tod-info-item + .tod-info-item {
+    border-left: none;
+  }
+
   .tod-actions-row {
     justify-content: flex-start;
   }
@@ -699,4 +792,43 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
+}
+
+@media (max-width: 640px) {
+  .tod-header-icon {
+    display: none;
+  }
+
+  .tod-header .tod-commercial-bar {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .tod-attention-item {
+    flex-wrap: wrap;
+  }
+}
+
+/* This banner is taller and its title longer: a smaller photo, on the road line, near the actions. */
+.tod-header .entity-hero-photo {
+  top: auto;
+  bottom: 0;
+  right: 24%;
+  height: 82%;
+  -webkit-mask-image:
+    var(--entity-hero-fade),
+    linear-gradient(180deg, transparent 0, #000 22%);
+  mask-image:
+    var(--entity-hero-fade),
+    linear-gradient(180deg, transparent 0, #000 22%);
+  -webkit-mask-composite: source-in;
+  mask-composite: intersect;
+}
+
+@media (max-width: 1100px) {
+  .tod-header .entity-hero-photo {
+    right: 0;
+    height: 100%;
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
 }

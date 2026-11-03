@@ -1,0 +1,389 @@
+/* Route tab of the dossier: stop cards, order choice and the sticky action bar. Everything is
+   scoped to the sheet: the intake, the route drawer and the order form share the stop editor but
+   not this look. Tokens from styles/global.css, so light and dark follow the theme. */
+
+/* --- Which order --- */
+
+.dossier-route-workspace .dossier-order-switch-button {
+  min-width: 132px;
+  padding: 8px 18px 8px 14px;
+  border-radius: var(--radius-lg);
+  text-align: left;
+}
+
+.dossier-route-workspace .dossier-order-switch-button:hover:not(:disabled, .is-selected) {
+  border-color: var(--accent-border);
+}
+
+.dossier-route-workspace .dossier-order-switch-button code {
+  background: none;
+  padding: 0;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-h);
+}
+
+.dossier-route-workspace .dossier-order-switch-button.is-selected {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.dossier-route-workspace .dossier-order-switch-button.is-selected code,
+.dossier-route-workspace .dossier-order-switch-button.is-selected .dossier-order-switch-secondary {
+  color: var(--accent);
+}
+
+/* --- Stop card --- */
+
+.dossier-route-sheet .tof-stops-grid {
+  gap: var(--space-4);
+}
+
+.dossier-route-sheet .tof-stop-sheet {
+  position: relative;
+  margin: 0;
+  padding: 0 var(--space-4) var(--space-3);
+  border-radius: var(--radius-lg);
+  background: var(--bg);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+}
+
+/* A floated legend stops straddling the fieldset border and becomes the card's header row. */
+.dossier-route-sheet .tof-stop-sheet > legend {
+  float: left;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  box-sizing: border-box;
+  width: calc(100% + 2 * var(--space-4));
+  min-height: 60px;
+  margin: 0 calc(-1 * var(--space-4)) var(--space-1);
+  padding: 10px 196px 10px var(--space-4);
+  border-bottom: 1px solid var(--border);
+}
+
+.tof-stop-type-icon {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--accent-border);
+  border-radius: 10px;
+  background: var(--accent-bg);
+  color: var(--accent);
+}
+
+.tof-stop-title {
+  font-size: 18px;
+  font-weight: 650;
+  letter-spacing: -0.2px;
+  color: var(--text-h);
+  white-space: nowrap;
+}
+
+.tof-stop-sheet > legend .ui-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.dossier-route-sheet .tof-stop-sheet-actions {
+  position: absolute;
+  top: 12px;
+  right: var(--space-3);
+  gap: 6px;
+  margin: 0;
+}
+
+.tof-stop-icon-button,
+.tof-stop-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 34px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.tof-stop-icon-button {
+  width: 34px;
+  padding: 0;
+  border-color: var(--border);
+  color: var(--text-h);
+}
+
+.tof-stop-remove {
+  padding: 0 8px;
+}
+
+.tof-stop-icon-button:hover:not(:disabled) {
+  border-color: var(--accent-border);
+  background: var(--accent-bg);
+  color: var(--accent);
+}
+
+.tof-stop-remove:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-danger) 10%, transparent);
+  color: var(--color-danger);
+}
+
+.tof-stop-icon-button:focus-visible,
+.tof-stop-remove:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.tof-stop-icon-button:disabled,
+.tof-stop-remove:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* --- Sections inside a card --- */
+
+/* Starts under the floated legend; as a grid it would otherwise squeeze in beside it. */
+.dossier-route-sheet .tof-stop-sheet .tof-address {
+  clear: both;
+}
+
+.tof-sheet-section {
+  clear: both;
+  padding: var(--space-3) 0 var(--space-1);
+}
+
+.tof-sheet-section + .tof-sheet-section,
+.tof-stop-sheet .tof-address + .tof-sheet-section {
+  border-top: 1px solid var(--border);
+}
+
+.dossier-route-sheet h4.tof-sheet-section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 var(--space-2);
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--text-h);
+}
+
+.tof-sheet-section-title svg {
+  flex: 0 0 auto;
+  color: var(--text);
+}
+
+/* The section title already names the search field; the label stays for assistive technology. */
+.tof-sheet-search .ui-form-field > label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.dossier-route-sheet .tof-sheet-search .location-select-create {
+  border-color: var(--accent-border);
+  background: var(--accent-bg);
+  color: var(--accent);
+}
+
+/* "Overgenomen van adres": one quiet line. */
+.dossier-route-sheet .tof-snapshot-row {
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin: 0 0 var(--space-2);
+  font-size: 13px;
+}
+
+.dossier-route-sheet .tof-snapshot-row .ui-badge {
+  border-color: var(--accent-border);
+  background: var(--accent-bg);
+  color: var(--accent);
+  text-transform: none;
+}
+
+/* "Adres ook bewaren in klantenbestand": a tinted state instead of a dashed box. */
+.dossier-route-sheet .tof-address-save {
+  margin: var(--space-1) 0 var(--space-2);
+  padding: 8px 12px;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: var(--accent-bg);
+}
+
+.dossier-route-sheet .tof-address-save-check {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.dossier-route-sheet .tof-address-save-help {
+  margin: 2px 0 0 23px;
+  font-size: 12.5px;
+}
+
+/* Van, Tot, Tijdseis and its time on one grid; Tijdseis gets two tracks for its long options. */
+.tof-sheet-times {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
+  gap: 0 var(--space-3);
+}
+
+.tof-sheet-times > .tof-time-pair,
+.tof-sheet-times > .tof-row-4 {
+  display: contents;
+}
+
+.tof-sheet-times > .tof-row-4 > .ui-form-field:first-child {
+  grid-column: span 2;
+}
+
+.tof-sheet-times .ui-form-field {
+  min-width: 0;
+}
+
+.tof-sheet-times .ui-form-field input.ui-time-input {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  text-align: left;
+}
+
+/* Geavanceerd: collapsed, one low-key row. */
+.dossier-route-sheet .tof-stop-sheet .tof-stop-extended {
+  margin-top: var(--space-1);
+  padding: 0;
+  border: 0;
+}
+
+.dossier-route-sheet .tof-stop-sheet .tof-stop-extended > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  border-radius: var(--radius-md);
+  background: var(--accent-bg);
+  font-size: 13px;
+  list-style: none;
+}
+
+.dossier-route-sheet .tof-stop-sheet .tof-stop-extended > summary::-webkit-details-marker {
+  display: none;
+}
+
+.dossier-route-sheet .tof-stop-sheet .tof-stop-extended > summary::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  margin: 0 3px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: translateY(-1px) rotate(45deg);
+}
+
+.dossier-route-sheet .tof-stop-sheet .tof-stop-extended[open] > summary::before {
+  transform: translateY(1px) rotate(225deg);
+}
+
+.dossier-route-sheet .tof-stop-sheet .tof-stop-extended > summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* --- Action bar: stays in view at the bottom while the page scrolls, and stops at the end of the
+   editor. Under the subnav (z-index 5) and every dialog. --- */
+
+.dossier-route-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
+  margin-top: var(--space-3);
+  padding: 10px var(--space-3);
+  border: 1px solid var(--border);
+  border-bottom: 0;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  background: var(--bg);
+  box-shadow: 0 -4px 12px rgba(15, 23, 42, 0.06);
+}
+
+.dossier-route-add,
+.dossier-route-save {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.dossier-route-add .ui-button {
+  border-color: var(--accent-border);
+  color: var(--accent);
+}
+
+.dossier-route-save {
+  margin-left: auto;
+}
+
+/* A field reached by keyboard or an attention jump never ends up behind the bar. */
+.dossier-route-sheet input,
+.dossier-route-sheet select,
+.dossier-route-sheet textarea {
+  scroll-margin-bottom: 96px;
+}
+
+/* Phone: the card actions get their own row and the bar stacks, the save button full width. */
+@media (max-width: 640px) {
+  .dossier-route-sheet .tof-stop-sheet > legend {
+    min-height: 0;
+    padding-right: var(--space-4);
+  }
+
+  .dossier-route-sheet .tof-stop-sheet-actions {
+    position: static;
+    clear: both;
+    justify-content: flex-end;
+    padding-top: var(--space-1);
+  }
+
+  .dossier-route-actions {
+    padding: 8px;
+  }
+
+  .dossier-route-add,
+  .dossier-route-save {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .dossier-route-add .ui-button,
+  .dossier-route-save .ui-button {
+    flex: 1 1 0;
+    min-height: 36px;
+    padding: 4px 8px;
+    font-size: 13px;
+  }
+}
+
+/* A low window (phone in landscape): a sticky bar would cover most of the form. */
+@media (max-height: 500px) {
+  .dossier-route-actions {
+    position: static;
+  }
+}

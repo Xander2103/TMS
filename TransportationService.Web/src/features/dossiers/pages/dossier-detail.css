@@ -8,12 +8,25 @@
 /* --- Kop --- */
 
 .dossier-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  flex-wrap: wrap;
   margin-bottom: 16px;
+}
+
+.dossier-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 16px;
+  flex-wrap: wrap;
+}
+
+.dossier-header-title {
+  min-width: 0;
+}
+
+/* The way back sits inside the banner, tight above the title. */
+.dossier-header-title .ui-back-button,
+.dossier-header-title > a:first-child {
+  margin-bottom: 4px;
 }
 
 .dossier-header-title h1 {
@@ -137,44 +150,6 @@
   border-radius: 8px;
   padding: 12px 16px;
   margin: 0 0 16px;
-}
-
-/* --- Aandacht --- */
-
-.dossier-attention {
-  border: 1px solid var(--border);
-  border-left: 4px solid var(--color-warning);
-  border-radius: 8px;
-  padding: 12px 16px;
-  margin-bottom: 24px;
-}
-
-.dossier-attention h2 {
-  font-size: 1rem;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  margin: 0 0 8px;
-}
-
-.dossier-attention ul {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.dossier-attention li {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.dossier-attention-message {
-  flex: 1;
-  min-width: 200px;
 }
 
 /* --- Secties --- */
@@ -407,37 +382,7 @@
   max-width: none;
 }
 
-.dossier-route-sheet .tof-stops-grid {
-  gap: var(--space-3);
-}
-
-.dossier-route-sheet .tof-stop {
-  margin: 0;
-  padding: var(--space-2) var(--space-4) var(--space-3);
-}
-
-.dossier-route-sheet .tof-stop legend {
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  font-size: 0.8125rem;
-}
-
-.dossier-route-actions {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-  flex-wrap: wrap;
-  margin-top: var(--space-3);
-}
-
-.dossier-route-add,
-.dossier-route-save {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  flex-wrap: wrap;
-}
+/* Stop cards and the sticky action bar: components/route-editor.css. */
 
 .dossier-route-state {
   font-size: 0.875rem;
@@ -626,7 +571,7 @@
 
 /* Compact header: title row + one meta line; the old KPI chips are gone. */
 .dossier-header {
-  margin-bottom: var(--space-3);
+  margin-bottom: var(--space-4);
 }
 
 .dossier-header-title h1 {
@@ -635,71 +580,6 @@
 
 .dossier-header-meta {
   margin: 0;
-}
-
-/* Aandacht as a horizontal strip. */
-.dossier-attention-strip {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-3);
-  padding: 8px 14px;
-  margin-bottom: var(--space-3);
-  border-left-width: 1px;
-  background: color-mix(in srgb, var(--color-warning) 7%, var(--bg));
-  border-color: color-mix(in srgb, var(--color-warning) 45%, var(--border));
-}
-
-.dossier-attention-strip.is-blocking {
-  background: color-mix(in srgb, var(--color-danger) 6%, var(--bg));
-  border-color: color-mix(in srgb, var(--color-danger) 40%, var(--border));
-}
-
-.dossier-attention-strip.is-info {
-  background: var(--bg);
-}
-
-.dossier-attention-strip h2 {
-  margin: 0;
-  padding-top: 2px;
-  font-size: 0.9375rem;
-  letter-spacing: 0.02em;
-  text-transform: none;
-  white-space: nowrap;
-  color: var(--color-warning);
-}
-
-.dossier-attention-strip.is-blocking h2 {
-  color: var(--color-danger);
-}
-
-.dossier-attention-strip ul {
-  flex: 1;
-  flex-direction: row;
-  flex-wrap: wrap;
-  gap: 4px 0;
-  min-width: 0;
-}
-
-.dossier-attention-strip li {
-  flex-wrap: nowrap;
-  gap: 8px;
-  padding: 2px 14px 2px 0;
-  margin-right: 14px;
-  border-right: 1px solid var(--border);
-}
-
-.dossier-attention-strip li:last-child {
-  border-right: none;
-  margin-right: 0;
-}
-
-.dossier-attention-strip .dossier-attention-message {
-  flex: 0 1 auto;
-  min-width: 0;
-}
-
-.dossier-attention-strip .link-button {
-  white-space: nowrap;
 }
 
 /* Subnav: links inside one dossier, scrollable on narrow viewports, sticky under the topbar. */
@@ -991,8 +871,8 @@
 
 .dossier-history-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
-  gap: var(--space-5);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
   margin-bottom: var(--space-4);
 }
 
@@ -1000,20 +880,6 @@
   .dossier-overview,
   .dossier-history-grid {
     grid-template-columns: 1fr;
-  }
-}
-
-@media (max-width: 640px) {
-  .dossier-attention-strip {
-    flex-direction: column;
-    gap: 6px;
-  }
-
-  .dossier-attention-strip li {
-    flex-wrap: wrap;
-    border-right: none;
-    margin-right: 0;
-    padding-right: 0;
   }
 }
 
@@ -1053,16 +919,6 @@
 .dossier-detail .dossier-header-actions .dossier-header-primary {
   min-height: 40px;
   padding: 8px 20px;
-}
-
-.dossier-detail .dossier-attention-strip {
-  font-size: 14px;
-  padding: 6px 12px;
-  margin-bottom: 10px;
-}
-
-.dossier-detail .dossier-attention-strip h2 {
-  font-size: 14px;
 }
 
 .dossier-detail .dossier-subnav-link {

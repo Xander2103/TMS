@@ -734,6 +734,8 @@
     "changedEntity": "Invoicing entity changed.",
     "customerDefault": "Customer default",
     "customerLabel": "Customer",
+    "orderDateLabel": "Order date",
+    "referenceLabel": "Reference",
     "entityLabel": "Invoicing entity",
     "placeholderCustomer": "Temporary customer",
     "placeholderHint": "This order sits on a temporary customer. Link the real customer as soon as it is known."

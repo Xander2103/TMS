@@ -63,8 +63,10 @@ describe('order commercial bar (sprint 6)', () => {
   it('shows the customer with a change action, and the invoicing entity (customer default when none is set)', async () => {
     renderPage()
     const bar = await screen.findByTestId('order-commercial-bar')
-    expect(bar).toHaveTextContent('Klant: Klant X')
-    expect(bar).toHaveTextContent('Facturerende entiteit: Klantstandaard')
+    expect(bar).toHaveTextContent('KlantKlant X')
+    expect(bar).toHaveTextContent('Opdrachtdatum12/08/2026')
+    expect(bar).toHaveTextContent('ReferentieABC-458')
+    expect(bar).toHaveTextContent('Facturerende entiteitKlantstandaard')
     expect(screen.getByRole('button', { name: 'Klant van deze opdracht wijzigen' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Facturerende entiteit van deze opdracht wijzigen' })).toBeInTheDocument()
     expect(screen.queryByText('Tijdelijke klant')).not.toBeInTheDocument()

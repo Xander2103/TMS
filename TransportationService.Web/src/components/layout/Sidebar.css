@@ -34,21 +34,40 @@
   background: var(--color-sidebar-bg);
 }
 
-/* Footer row: language select + appearance quick toggle side by side. */
+/* Footer rows: language and appearance under each other, each with its own icon and label. */
 .sidebar-prefs {
   display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 8px;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 10px 2px 0;
+  border-top: 1px solid var(--border);
 }
 
-.sidebar-prefs .app-lang {
+.sidebar-theme-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.sidebar-theme-icon {
+  flex-shrink: 0;
+  color: var(--color-primary);
+}
+
+.sidebar-theme-label {
   flex: 1;
   min-width: 0;
-  margin: 0;
+  overflow: hidden;
+  color: var(--text-h);
+  font-size: 13px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.sidebar-prefs .theme-switcher {
+.sidebar-theme-row .theme-switcher {
   flex-shrink: 0;
 }
 
@@ -159,7 +178,7 @@
    scale of the dossier content area. Rows keep >= 30px hit height; contrast is untouched. */
 
 .sidebar {
-  width: 232px;
+  width: 256px;
   padding: 14px 12px 12px;
   font-size: 14px;
   line-height: 1.35;
@@ -206,20 +225,20 @@
 }
 
 .sidebar .nav-module {
-  margin-bottom: 4px;
+  margin-bottom: 6px;
 }
 
 .sidebar .nav-module-header {
-  padding: 6px 10px;
-  gap: 8px;
-  font-size: 11px;
-  letter-spacing: 0.05em;
-  border-radius: 6px;
+  padding: 5px 10px 5px 6px;
+  gap: 10px;
+  font-size: 14px;
+  border-radius: 10px;
 }
 
 .sidebar .nav-module-icon {
-  width: 16px;
-  height: 16px;
+  width: 28px;
+  height: 28px;
+  padding: 6px;
 }
 
 .sidebar .nav-module-header .nav-chevron {
@@ -269,15 +288,6 @@
 .sidebar .nav-empty {
   padding: 6px 10px;
   font-size: 13px;
-}
-
-.sidebar .sidebar-prefs {
-  margin: 8px 2px 2px;
-}
-
-.sidebar .app-lang-select {
-  padding: 3px 6px;
-  font-size: 12.5px;
 }
 
 .sidebar .sidebar-user {

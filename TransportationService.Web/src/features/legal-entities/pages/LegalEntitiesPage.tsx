@@ -19,13 +19,16 @@ import { ConcurrencyConflictNotice } from '../../settings/components/Concurrency
 import { useDirtyDialogClose } from '../../settings/components/useDirtyDialogClose'
 import {
   createLegalEntity,
+  deleteLegalEntityHeaderImage,
   deleteLegalEntityLogo,
   getLegalEntity,
   listLegalEntities,
   setLegalEntityActive,
   updateLegalEntity,
+  uploadLegalEntityHeaderImage,
   uploadLegalEntityLogo,
 } from '../api/legalEntitiesApi'
+import { forgetEntityHeaderImage } from '../components/useEntityHeaderImage'
 import type { LegalEntity, SaveLegalEntityInput } from '../types'
 import './legal-entities.css'
 
@@ -106,6 +109,9 @@ interface EditorState {
   pendingLogo: File | null
   /** MD-M10: "Logo verwijderen" was pressed; applied on Opslaan, never immediately. */
   removeLogo: boolean
+  /** Same staged flow as the logo: applied on Opslaan. */
+  pendingHeaderImage: File | null
+  removeHeaderImage: boolean
 }
 
 function editorFor(entity: LegalEntity | null): EditorState {
@@ -117,6 +123,8 @@ function editorFor(entity: LegalEntity | null): EditorState {
     baseline: JSON.stringify(form),
     pendingLogo: null,
     removeLogo: false,
+    pendingHeaderImage: null,
+    removeHeaderImage: false,
   }
 }
 
@@ -140,10 +148,11 @@ export function LegalEntitiesPage() {
   const [busy, setBusy] = useState(false)
   const [deactivating, setDeactivating] = useState<LegalEntity | null>(null)
   const logoInputRef = useRef<HTMLInputElement | null>(null)
+  const headerImageInputRef = useRef<HTMLInputElement>(null)
 
   const editorDirty =
     editor !== null &&
-    (JSON.stringify(editor.form) !== editor.baseline || editor.pendingLogo !== null || editor.removeLogo)
+    (JSON.stringify(editor.form) !== editor.baseline || editor.pendingLogo !== null || editor.removeLogo || editor.pendingHeaderImage !== null || editor.removeHeaderImage)
   const editorClose = useDirtyDialogClose(editorDirty, busy, () => setEditor(null))
 
   // Authoritative Peppol scheme catalog for the grouped Peppol control (same source as customers).
@@ -224,7 +233,7 @@ export function LegalEntitiesPage() {
   async function handleSubmit(event: FormEvent) {
     event.preventDefault()
     if (!editor) return
-    const { pendingLogo, removeLogo } = editor
+    const { pendingLogo, removeLogo, pendingHeaderImage, removeHeaderImage } = editor
     setBusy(true)
     setFormError(null)
     setFieldErrors({})
@@ -255,8 +264,21 @@ export function LegalEntitiesPage() {
         // The entity IS saved: stay open on the saved version with the logo choice still pending,
         // so pressing Opslaan again retries just the logo.
         const fallback = pendingLogo ? t('legalEntities.page.logoUploadFailed') : t('legalEntities.page.logoRemoveFailed')
-        setEditor({ ...editorFor(saved), pendingLogo, removeLogo })
+        setEditor({ ...editorFor(saved), pendingLogo, removeLogo, pendingHeaderImage, removeHeaderImage })
         setFormError(t('legalEntities.page.savedLogoFailed', { message: describeApiError(error, fallback).message }))
+        reload()
+        return
+      }
+
+      // Likewise for the banner photo; a failure keeps only that choice pending.
+      try {
+        if (pendingHeaderImage) saved = await uploadLegalEntityHeaderImage(saved.id, pendingHeaderImage)
+        else if (removeHeaderImage && saved.hasHeaderImage) saved = await deleteLegalEntityHeaderImage(saved.id)
+        if (pendingHeaderImage || removeHeaderImage) forgetEntityHeaderImage(saved.id)
+      } catch (error) {
+        const fallback = t(pendingHeaderImage ? 'legalEntities.page.headerImageUploadFailed' : 'legalEntities.page.headerImageRemoveFailed')
+        setEditor({ ...editorFor(saved), pendingHeaderImage, removeHeaderImage })
+        setFormError(t('legalEntities.page.savedHeaderImageFailed', { message: describeApiError(error, fallback).message }))
         reload()
         return
       }
@@ -331,6 +353,17 @@ export function LegalEntitiesPage() {
   function handleLogoUndo() {
     if (logoInputRef.current) logoInputRef.current.value = ''
     setEditor((current) => (current ? { ...current, pendingLogo: null, removeLogo: false } : current))
+  }
+
+  function handleHeaderImageChosen(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0] ?? null
+    if (!file) return
+    setEditor((current) => (current ? { ...current, pendingHeaderImage: file, removeHeaderImage: false } : current))
+  }
+
+  function setHeaderImageRemoval(removeHeaderImage: boolean) {
+    if (headerImageInputRef.current) headerImageInputRef.current.value = ''
+    setEditor((current) => (current ? { ...current, pendingHeaderImage: null, removeHeaderImage } : current))
   }
 
   const columns: Column<LegalEntity>[] = [
@@ -591,6 +624,46 @@ export function LegalEntitiesPage() {
                 </div>
                 <p className="le-logo-hint">{t('legalEntities.form.logoHint')}</p>
                 <p className="le-logo-hint">{t('legalEntities.form.logoAppliedOnSave')}</p>
+              </div>
+            </FormSection>
+
+            <FormSection title={t('legalEntities.form.sectionHeaderImage')} columns={1}>
+              <div className="le-logo">
+                {editor.pendingHeaderImage ? (
+                  <p className="le-logo-current">
+                    {t('legalEntities.form.headerImagePending')} <strong>{editor.pendingHeaderImage.name}</strong>
+                  </p>
+                ) : editor.removeHeaderImage ? (
+                  <p className="le-logo-current">{t('legalEntities.form.headerImagePendingRemoval')}</p>
+                ) : editor.entity?.hasHeaderImage ? (
+                  <p className="le-logo-current">
+                    {t('legalEntities.form.currentHeaderImage')} <strong>{editor.entity.headerImageFileName ?? 'banner'}</strong>
+                  </p>
+                ) : (
+                  <p className="le-logo-current">{t('legalEntities.form.noHeaderImageYet')}</p>
+                )}
+                <div className="le-logo-actions">
+                  <input
+                    ref={headerImageInputRef}
+                    type="file"
+                    accept=".png,.jpg,.jpeg"
+                    disabled={busy}
+                    aria-label={t('legalEntities.form.headerImageUploadAria')}
+                    onChange={handleHeaderImageChosen}
+                  />
+                  {editor.pendingHeaderImage || editor.removeHeaderImage ? (
+                    <Button variant="secondary" onClick={() => setHeaderImageRemoval(false)} disabled={busy}>
+                      {t('legalEntities.form.logoUndo')}
+                    </Button>
+                  ) : (
+                    editor.entity?.hasHeaderImage && (
+                      <Button variant="danger" onClick={() => setHeaderImageRemoval(true)} disabled={busy}>
+                        {t('legalEntities.form.headerImageDelete')}
+                      </Button>
+                    )
+                  )}
+                </div>
+                <p className="le-logo-hint">{t('legalEntities.form.headerImageHint')}</p>
               </div>
             </FormSection>
 

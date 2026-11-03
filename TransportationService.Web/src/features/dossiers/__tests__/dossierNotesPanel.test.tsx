@@ -536,22 +536,113 @@ describe('DossierHistorySection', () => {
     expect(row).toHaveTextContent('Afgesloten')
     expect(row).toHaveTextContent('Open')
 
-    const titles = screen.getAllByRole('article').map((article) => article.querySelector('.ui-history-summary')?.textContent)
-    expect(titles.filter(Boolean)).toEqual(TIMELINE.map((event) => event.title))
+    const titles = () => screen.getAllByRole('article').map((article) => article.querySelector('.ui-history-summary')?.textContent).filter(Boolean)
+    expect(titles()).toEqual(TIMELINE.map((event) => event.title).reverse())
+    const card = screen.getByRole('region', { name: 'Wijzigingshistoriek' }).parentElement!
+    await user.selectOptions(within(card).getByRole('combobox', { name: 'Sorteren' }), 'oldest')
+    expect(titles()).toEqual(TIMELINE.map((event) => event.title))
   })
 
-  it('filters by category with the chips that have events', async () => {
+  it('filters by type on the types that have events', async () => {
     api.listDossierNotes.mockResolvedValue([])
     getJson.mockResolvedValue(TIMELINE)
     const user = userEvent.setup()
     renderHistorySection()
 
-    const chips = await screen.findByRole('group', { name: 'Toon gebeurtenissen' })
-    expect(within(chips).getAllByRole('button').map((b) => b.textContent)).toEqual(['Alles', 'Dossier', 'Opdrachten', 'Planning'])
-    await user.click(within(chips).getByRole('button', { name: 'Planning' }))
+    const filter = await screen.findByRole('combobox', { name: 'Toon gebeurtenissen' })
+    expect(within(filter).getAllByRole('option').map((option) => option.textContent)).toEqual([
+      'Type: Alles', 'Type: Dossier', 'Type: Opdrachten', 'Type: Planning',
+    ])
+    await user.selectOptions(filter, 'planning')
     expect(screen.getByText('Rit RIT-0023 gepland met chauffeur Jan Peeters en voertuig VRT-0001')).toBeInTheDocument()
     expect(screen.queryByText('Dossier heropend')).not.toBeInTheDocument()
     expect(screen.queryByText('Transportaanvraag ORD-0050 ingediend via het klantportaal')).not.toBeInTheDocument()
+  })
+
+  it('searches the sentence, the user and the details; no match says so and hides the range', async () => {
+    api.listDossierNotes.mockResolvedValue([])
+    getJson.mockResolvedValue(TIMELINE)
+    const user = userEvent.setup()
+    renderHistorySection()
+
+    const search = await screen.findByRole('searchbox', { name: 'Zoek in historiek…' })
+    await user.type(search, 'piet planner')
+    expect(screen.getByText('Rit RIT-0023 gepland met chauffeur Jan Peeters en voertuig VRT-0001')).toBeInTheDocument()
+    expect(screen.queryByText('Transportaanvraag ORD-0050 ingediend via het klantportaal')).not.toBeInTheDocument()
+
+    await user.clear(search)
+    await user.type(search, 'herlevering')
+    expect(screen.getByText('Dossier heropend')).toBeInTheDocument()
+
+    await user.clear(search)
+    await user.type(search, 'bestaat niet')
+    expect(screen.getByText('Geen gebeurtenissen voor deze zoekopdracht of dit type.')).toBeInTheDocument()
+    expect(screen.queryByText(/van \d+ wijzigingen/)).not.toBeInTheDocument()
+  })
+
+  it('pages 20 events by default, with a choice of page size; the list has its own scroll region', async () => {
+    api.listDossierNotes.mockResolvedValue([])
+    getJson.mockResolvedValue(
+      Array.from({ length: 45 }, (_, index) => ({
+        ...TIMELINE[0],
+        id: `e-${index}`,
+        timestamp: new Date(Date.UTC(2026, 8, 1, 8, index)).toISOString(),
+        title: `Gebeurtenis ${index + 1}`,
+      })),
+    )
+    const user = userEvent.setup()
+    renderHistorySection()
+
+    await screen.findByText('Gebeurtenis 45')
+    expect(screen.getAllByRole('article')).toHaveLength(20)
+    expect(screen.getByText('1–20 van 45 wijzigingen')).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'Wijzigingshistoriek' })).toContainElement(screen.getByText('Gebeurtenis 45'))
+
+    await user.click(screen.getByRole('button', { name: 'Pagina 3' }))
+    expect(screen.getByText('41–45 van 45 wijzigingen')).toBeInTheDocument()
+    expect(screen.getByText('Gebeurtenis 1')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Pagina 3' })).toHaveAttribute('aria-current', 'page')
+
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Aantal per pagina' }), '50')
+    expect(screen.getAllByRole('article')).toHaveLength(45)
+    expect(screen.queryByRole('button', { name: 'Pagina 1' })).not.toBeInTheDocument()
+  })
+
+  it('notes on the tab: compact row with author and moment, actions behind the menu, search and sort', async () => {
+    api.listDossierNotes.mockResolvedValue([
+      note({ id: 'n-1', text: 'Oudste notitie', createdAt: '2026-09-20T08:15:00Z', updatedAt: '2026-09-20T08:15:00Z' }),
+      note({ id: 'n-2', text: 'Nieuwste notitie', authorName: 'Piet Planner', createdAt: '2026-09-21T08:15:00Z', updatedAt: '2026-09-21T08:15:00Z' }),
+    ])
+    getJson.mockResolvedValue([])
+    auth.permissions = new Set(['dossiers.view'])
+    const user = userEvent.setup()
+    renderHistorySection()
+
+    await screen.findByText('Nieuwste notitie')
+    const texts = () => [...document.querySelectorAll('.dossier-note-text')].map((element) => element.textContent)
+    expect(texts()).toEqual(['Nieuwste notitie', 'Oudste notitie'])
+    expect(screen.getByText('1–2 van 2 notities')).toBeInTheDocument()
+
+    const notesCard = screen.getByRole('region', { name: 'Notities' })
+    await user.selectOptions(within(notesCard.parentElement!).getByRole('combobox', { name: 'Sorteren' }), 'oldest')
+    expect(texts()).toEqual(['Oudste notitie', 'Nieuwste notitie'])
+
+    await user.type(screen.getByRole('searchbox', { name: 'Zoek in notities…' }), 'piet')
+    expect(texts()).toEqual(['Nieuwste notitie'])
+    await user.clear(screen.getByRole('searchbox', { name: 'Zoek in notities…' }))
+    await user.type(screen.getByRole('searchbox', { name: 'Zoek in notities…' }), 'bestaat niet')
+    expect(screen.getByText('Geen notities gevonden voor deze zoekopdracht.')).toBeInTheDocument()
+    await user.clear(screen.getByRole('searchbox', { name: 'Zoek in notities…' }))
+
+    // One menu per note, nothing else: the same edit and delete as the plain list.
+    expect(within(notesCard).queryByRole('button', { name: 'Bewerken' })).not.toBeInTheDocument()
+    const created = screen.getAllByTestId('note-created')[0]
+    expect(created).toHaveTextContent('Sofie Peeters')
+    await user.click(within(notesCard).getAllByRole('button', { name: /^Acties voor notitie van/ })[0])
+    await user.click(screen.getByRole('menuitem', { name: 'Bewerken' }))
+    expect(screen.getByRole('textbox', { name: 'Notitie bewerken' })).toHaveValue('Oudste notitie')
+    // While editing, the list cannot move the note away.
+    expect(screen.getByRole('searchbox', { name: 'Zoek in notities…' })).toBeDisabled()
   })
 
   it('says so when the history cannot be loaded', async () => {

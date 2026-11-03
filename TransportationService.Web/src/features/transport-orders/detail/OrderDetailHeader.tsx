@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { FileText, Pencil } from 'lucide-react'
+import { Building2, CalendarDays, FileText, Hash, Landmark, Pencil, Truck } from 'lucide-react'
 import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { BackButton } from '../../../components/ui/BackButton'
 import { Badge } from '../../../components/ui/Badge'
@@ -10,6 +10,7 @@ import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
 import { useLocale } from '../../../i18n/localeContext'
 import { formatDate } from '../../../utils/dates'
+import { EntityHero } from '../../legal-entities/components/EntityHero'
 import { downloadOrderDocument } from '../api/transportDocumentsApi'
 import {
   downloadIssuedTransportDocumentPdf,
@@ -19,6 +20,7 @@ import {
 } from '../api/issuedDocumentsApi'
 import { isPlaceholderCustomerName } from '../components/placeholderCustomer'
 import { ORDER_STATUS_LABELS, ORDER_STATUS_TONE, ORDER_TRANSITION_LABELS, type TransportOrderStatus } from '../types'
+import { OrderAttention } from './OrderAttention'
 import { useOrderDetail } from './orderDetailContext'
 
 /** Tooltip of a document button that has no issued document yet. */
@@ -37,9 +39,10 @@ interface OrderDetailHeaderProps {
 }
 
 /**
- * Redesign 2026-09-12: compact identity block (number — customer, date/ref, status chips,
- * customer + invoicing entity) and grouped actions: workflow actions on the first row with the
- * destructive one set apart, document/template actions calmly on the second row.
+ * Banner header (redesign 2026-11-03, same hero as the dossier): identity block (number — customer,
+ * date/ref, status chips) with grouped actions on the photo: workflow actions on the first row,
+ * document actions on the second. Under it the info bar (customer, order date, reference, invoicing
+ * entity) and the attention points, each with its own action; hidden while editing, as before.
  */
 export function OrderDetailHeader({ onEdit, onDelete, onCancel, onCorrectStatus, onTransition }: OrderDetailHeaderProps) {
   const { t } = useLocale()
@@ -100,148 +103,185 @@ export function OrderDetailHeader({ onEdit, onDelete, onCancel, onCorrectStatus,
 
   return (
     <header className="tod-header">
-      {/* B12: an order that belongs to a dossier lives INSIDE it — the path and the way back say so. */}
-      {order.dossierId && order.dossierNumber ? (
-        <Breadcrumbs
-          items={[
-            { label: t('navigation.menu.dossiers'), to: '/dossiers' },
-            { label: order.dossierNumber, to: `/dossiers/${order.dossierId}` },
-            { label: order.orderNumber },
-          ]}
-        />
-      ) : (
-        <Breadcrumbs items={[{ label: 'Transportopdrachten', to: '/transport-orders' }, { label: order.orderNumber }]} />
-      )}
-      <div className="tod-header-row">
-        <div className="tod-header-main">
-          {order.dossierId && order.dossierNumber ? (
-            <BackButton to={`/dossiers/${order.dossierId}/activiteiten`} label={t('transportOrders.detail.backToDossier', { number: order.dossierNumber })} />
-          ) : (
-            <BackButton to="/transport-orders" label="Terug naar opdrachten" />
-          )}
-          <div className="tod-header-title">
-            <h1>
-              {order.orderNumber} — {order.customerName}
-            </h1>
-            <span className="tod-header-chips">
-              <code>{order.orderNumber}</code>
-              <Badge tone={ORDER_STATUS_TONE[order.status]}>{t(ORDER_STATUS_LABELS[order.status])}</Badge>
-              {showPriceChip && <Badge tone={priceDisplay.tone}>{t(priceDisplay.labelKey)}</Badge>}
-              {order.dossierId && order.dossierNumber && (
-                <Link to={`/dossiers/${order.dossierId}`} className="ui-badge ui-badge-info" title="Open het dossier">
-                  {order.dossierNumber}
-                </Link>
-              )}
-            </span>
+      <EntityHero
+        legalEntityId={order.legalEntityId}
+        footer={
+          <div className="tod-header-footer">
+            <div className="to-commercial-bar tod-commercial-bar" data-testid="order-commercial-bar">
+              <div className="tod-info-item">
+                <Building2 size={20} aria-hidden />
+                <span className="tod-info-text">
+                  <span className="tod-info-label">{t('transportOrders.commercial.customerLabel')}</span>
+                  <span className="tod-info-value">
+                    <Link to={`/customers/${order.customerId}`}>
+                      <strong>{order.customerName}</strong>
+                    </Link>
+                    {isPlaceholderCustomerName(order.customerName) && (
+                      <Badge tone="warning">{t('transportOrders.commercial.placeholderCustomer')}</Badge>
+                    )}
+                    {hasPermission('orders.edit') && (
+                      <button
+                        type="button"
+                        className="to-inline-action"
+                        onClick={ws.openCustomerChange}
+                        disabled={busy || editing}
+                        aria-label={t('transportOrders.commercial.changeCustomerAria')}
+                      >
+                        {t('transportOrders.commercial.change')}
+                      </button>
+                    )}
+                  </span>
+                </span>
+              </div>
+              <div className="tod-info-item">
+                <CalendarDays size={20} aria-hidden />
+                <span className="tod-info-text">
+                  <span className="tod-info-label">{t('transportOrders.commercial.orderDateLabel')}</span>
+                  <span className="tod-info-value"><strong>{formatDate(order.orderDate)}</strong></span>
+                </span>
+              </div>
+              <div className="tod-info-item">
+                <Hash size={20} aria-hidden />
+                <span className="tod-info-text">
+                  <span className="tod-info-label">{t('transportOrders.commercial.referenceLabel')}</span>
+                  <span className="tod-info-value"><strong>{order.customerReference || '—'}</strong></span>
+                </span>
+              </div>
+              <div className="tod-info-item">
+                <Landmark size={20} aria-hidden />
+                <span className="tod-info-text">
+                  <span className="tod-info-label">{t('transportOrders.commercial.entityLabel')}</span>
+                  <span className="tod-info-value">
+                    <strong>
+                      {order.legalEntityId
+                        ? (entities.find((e) => e.id === order.legalEntityId)?.displayName ?? '…')
+                        : t('transportOrders.commercial.customerDefault')}
+                    </strong>
+                    {hasPermission('orders.edit') && (
+                      <button
+                        type="button"
+                        className="to-inline-action"
+                        onClick={ws.openEntityChange}
+                        disabled={busy || editing}
+                        aria-label={t('transportOrders.commercial.changeEntityAria')}
+                      >
+                        {t('transportOrders.commercial.change')}
+                      </button>
+                    )}
+                  </span>
+                </span>
+              </div>
+            </div>
+            {isPlaceholderCustomerName(order.customerName) && (
+              <p className="customer-form-muted tod-header-note" role="note">
+                {t('transportOrders.commercial.placeholderHint')}
+              </p>
+            )}
+            {!editing && <OrderAttention />}
           </div>
-          <p className="tod-header-sub">
-            Opdracht van {formatDate(order.orderDate)}
-            {order.customerReference ? ` · ref. ${order.customerReference}` : ''}
-          </p>
-          <p className="to-commercial-bar tod-commercial-bar" data-testid="order-commercial-bar">
-            <span>
-              {t('transportOrders.commercial.customerLabel')}:{' '}
-              <Link to={`/customers/${order.customerId}`}>
-                <strong>{order.customerName}</strong>
-              </Link>
-              {isPlaceholderCustomerName(order.customerName) && (
-                <>
-                  {' '}
-                  <Badge tone="warning">{t('transportOrders.commercial.placeholderCustomer')}</Badge>
-                </>
-              )}
-              {hasPermission('orders.edit') && (
-                <button
-                  type="button"
-                  className="to-inline-action"
-                  onClick={ws.openCustomerChange}
-                  disabled={busy || editing}
-                  aria-label={t('transportOrders.commercial.changeCustomerAria')}
-                >
-                  {t('transportOrders.commercial.change')}
-                </button>
-              )}
-            </span>
-            <span>
-              {t('transportOrders.commercial.entityLabel')}:{' '}
-              <strong>
-                {order.legalEntityId
-                  ? (entities.find((e) => e.id === order.legalEntityId)?.displayName ?? '…')
-                  : t('transportOrders.commercial.customerDefault')}
-              </strong>
-              {hasPermission('orders.edit') && (
-                <button
-                  type="button"
-                  className="to-inline-action"
-                  onClick={ws.openEntityChange}
-                  disabled={busy || editing}
-                  aria-label={t('transportOrders.commercial.changeEntityAria')}
-                >
-                  {t('transportOrders.commercial.change')}
-                </button>
-              )}
-            </span>
-          </p>
-        </div>
+        }
+      >
+        {/* B12: an order that belongs to a dossier lives INSIDE it — the path and the way back say so. */}
+        {order.dossierId && order.dossierNumber ? (
+          <Breadcrumbs
+            items={[
+              { label: t('navigation.menu.dossiers'), to: '/dossiers' },
+              { label: order.dossierNumber, to: `/dossiers/${order.dossierId}` },
+              { label: order.orderNumber },
+            ]}
+          />
+        ) : (
+          <Breadcrumbs items={[{ label: 'Transportopdrachten', to: '/transport-orders' }, { label: order.orderNumber }]} />
+        )}
+        <div className="tod-header-row">
+          <div className="tod-header-main">
+            {order.dossierId && order.dossierNumber ? (
+              <BackButton to={`/dossiers/${order.dossierId}/activiteiten`} label={t('transportOrders.detail.backToDossier', { number: order.dossierNumber })} />
+            ) : (
+              <BackButton to="/transport-orders" label="Terug naar opdrachten" />
+            )}
+            <div className="tod-header-identity">
+              <span className="tod-header-icon" aria-hidden="true">
+                <Truck size={26} />
+              </span>
+              <div className="tod-header-identity-text">
+                <div className="tod-header-title">
+                  <h1>
+                    {order.orderNumber} — {order.customerName}
+                  </h1>
+                  <span className="tod-header-chips">
+                    <code>{order.orderNumber}</code>
+                    <Badge tone={ORDER_STATUS_TONE[order.status]}>{t(ORDER_STATUS_LABELS[order.status])}</Badge>
+                    {showPriceChip && <Badge tone={priceDisplay.tone}>{t(priceDisplay.labelKey)}</Badge>}
+                    {order.dossierId && order.dossierNumber && (
+                      <Link to={`/dossiers/${order.dossierId}`} className="ui-badge ui-badge-info" title="Open het dossier">
+                        {order.dossierNumber}
+                      </Link>
+                    )}
+                  </span>
+                </div>
+                <p className="tod-header-sub">
+                  Opdracht van {formatDate(order.orderDate)}
+                  {order.customerReference ? ` · ref. ${order.customerReference}` : ''}
+                </p>
+              </div>
+            </div>
+          </div>
 
-        <div className="tod-header-actions">
-          {/* B04: one primary (the next lifecycle step), secondary edit/document actions, and a
-              "Meer" menu for the backward, corrective, template and destructive actions. */}
-          <div className="tod-actions-row tod-actions-workflow">
-            {editable && !editing && (
-              <Button variant="secondary" onClick={onEdit} disabled={busy}>
-                <Pencil size={15} aria-hidden /> Bewerken
+          <div className="tod-header-actions">
+            {/* B04: one primary (the next lifecycle step), secondary edit/document actions, and a
+                "Meer" menu for the backward, corrective, template and destructive actions. */}
+            <div className="tod-actions-row tod-actions-workflow">
+              {editable && !editing && (
+                <Button variant="secondary" onClick={onEdit} disabled={busy}>
+                  <Pencil size={15} aria-hidden /> Bewerken
+                </Button>
+              )}
+              {secondaryTransitions.map((target) => (
+                <Button key={target} variant="secondary" onClick={() => onTransition(target)} disabled={busy || editing}>
+                  {t(ORDER_TRANSITION_LABELS[target])}
+                </Button>
+              ))}
+              {primaryTransition && (
+                <Button onClick={() => onTransition(primaryTransition)} disabled={busy || editing}>
+                  {t(ORDER_TRANSITION_LABELS[primaryTransition])}
+                </Button>
+              )}
+              <ActionMenu items={menuItems} disabled={busy || editing} size="sm" />
+            </div>
+            <div className="tod-actions-row tod-actions-documents">
+              {/* MD-B1: an issued CMR / leveringsbon opens the immutable, numbered document; otherwise a stamped concept. */}
+              <Button
+                variant="secondary"
+                title={issuedCmr ? undefined : CONCEPT_TITLE}
+                onClick={() =>
+                  void (issuedCmr
+                    ? downloadIssuedTransportDocumentPdf(issuedCmr)
+                    : downloadOrderDocument(order.id, 'cmr', order.orderNumber)
+                  ).catch(() => showError('De CMR kon niet worden gegenereerd.'))
+                }
+                disabled={busy}
+              >
+                <FileText size={15} aria-hidden /> {issuedCmr ? `CMR ${issuedCmr.documentNumber}` : 'CMR (concept)'}
               </Button>
-            )}
-            {secondaryTransitions.map((target) => (
-              <Button key={target} variant="secondary" onClick={() => onTransition(target)} disabled={busy || editing}>
-                {t(ORDER_TRANSITION_LABELS[target])}
+              <Button
+                variant="secondary"
+                title={issuedDeliveryNote ? undefined : CONCEPT_TITLE}
+                onClick={() =>
+                  void (issuedDeliveryNote
+                    ? downloadIssuedTransportDocumentPdf(issuedDeliveryNote)
+                    : downloadOrderDocument(order.id, 'delivery-note', order.orderNumber)
+                  ).catch(() => showError('De leveringsbon kon niet worden gegenereerd.'))
+                }
+                disabled={busy}
+              >
+                <FileText size={15} aria-hidden />{' '}
+                {issuedDeliveryNote ? `Leveringsbon ${issuedDeliveryNote.documentNumber}` : 'Leveringsbon (concept)'}
               </Button>
-            ))}
-            {primaryTransition && (
-              <Button onClick={() => onTransition(primaryTransition)} disabled={busy || editing}>
-                {t(ORDER_TRANSITION_LABELS[primaryTransition])}
-              </Button>
-            )}
-            <ActionMenu items={menuItems} disabled={busy || editing} size="sm" />
-          </div>
-          <div className="tod-actions-row tod-actions-documents">
-            {/* MD-B1: an issued CMR / leveringsbon opens the immutable, numbered document; otherwise a stamped concept. */}
-            <Button
-              variant="secondary"
-              title={issuedCmr ? undefined : CONCEPT_TITLE}
-              onClick={() =>
-                void (issuedCmr
-                  ? downloadIssuedTransportDocumentPdf(issuedCmr)
-                  : downloadOrderDocument(order.id, 'cmr', order.orderNumber)
-                ).catch(() => showError('De CMR kon niet worden gegenereerd.'))
-              }
-              disabled={busy}
-            >
-              <FileText size={15} aria-hidden /> {issuedCmr ? `CMR ${issuedCmr.documentNumber}` : 'CMR (concept)'}
-            </Button>
-            <Button
-              variant="secondary"
-              title={issuedDeliveryNote ? undefined : CONCEPT_TITLE}
-              onClick={() =>
-                void (issuedDeliveryNote
-                  ? downloadIssuedTransportDocumentPdf(issuedDeliveryNote)
-                  : downloadOrderDocument(order.id, 'delivery-note', order.orderNumber)
-                ).catch(() => showError('De leveringsbon kon niet worden gegenereerd.'))
-              }
-              disabled={busy}
-            >
-              <FileText size={15} aria-hidden />{' '}
-              {issuedDeliveryNote ? `Leveringsbon ${issuedDeliveryNote.documentNumber}` : 'Leveringsbon (concept)'}
-            </Button>
+            </div>
           </div>
         </div>
-      </div>
-      {isPlaceholderCustomerName(order.customerName) && (
-        <p className="customer-form-muted" role="note">
-          {t('transportOrders.commercial.placeholderHint')}
-        </p>
-      )}
+      </EntityHero>
     </header>
   )
 }

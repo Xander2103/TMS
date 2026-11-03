@@ -734,6 +734,8 @@
     "changedEntity": "Entité facturante modifiée.",
     "customerDefault": "Défaut du client",
     "customerLabel": "Client",
+    "orderDateLabel": "Date de la commande",
+    "referenceLabel": "Référence",
     "entityLabel": "Entité facturante",
     "placeholderCustomer": "Client temporaire",
     "placeholderHint": "Cette commande est liée à un client temporaire. Associez le vrai client dès qu’il est connu."

@@ -255,4 +255,23 @@ describe('getNavModules — role-scoped sidebars (§14)', () => {
       'Laden & scannen', 'Trace & voorraad', 'Magazijnen (beheer)', 'Dockplanning',
     ])
   })
+
+  it('gives every module, item and subgroup item its own icon', () => {
+    const missing: string[] = []
+    const icons = new Map<unknown, string[]>()
+    for (const module of getNavModules()) {
+      const items = [...(module.items ?? []), ...(module.subgroups ?? []).flatMap((sg) => sg.items)]
+      for (const item of items) {
+        if (!item.icon) missing.push(item.label)
+        else icons.set(item.icon, [...(icons.get(item.icon) ?? []), item.label])
+      }
+      for (const action of module.actions ?? []) {
+        if (!action.icon) missing.push(action.label)
+      }
+    }
+    expect(missing).toEqual([])
+    // Generic fallback for a lookup without its own icon must not be in use today.
+    const shared = [...icons.values()].filter((labels) => labels.length > 1)
+    expect(shared).toEqual([])
+  })
 })

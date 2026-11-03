@@ -70,5 +70,10 @@
     "switchTitle": "Soort kraanopdracht wijzigen?",
     "switchMessage": "De ingevulde stops van de huidige soort worden verwijderd. Doorgaan?",
     "switchConfirm": "Wijzigen"
+  },
+  "sheet": {
+    "address": "Adresgegevens",
+    "planning": "Planning",
+    "advancedFilled": "ingevuld"
   }
 }

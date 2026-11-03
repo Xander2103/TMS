@@ -1,4 +1,5 @@
 import { useImperativeHandle, useRef, useState, type Ref } from 'react'
+import { ArrowDown, ArrowUp, Trash2 } from 'lucide-react'
 import { ApiError } from '../../../api/apiClient'
 import { describeApiError } from '../../../api/problemDetails'
 import { Button } from '../../../components/ui/Button'
@@ -12,7 +13,7 @@ import type { ActivityPriceLineInput, DossierActivityPriceLine } from './types'
 import { lineTotal } from '../../../utils/money'
 
 export interface ActivityPriceLinesEditorHandle {
-  /** Starts a new line and focuses its description. */
+  /** Starts a new line and focuses its description (the add action sits in the unit summary). */
   addLine: () => void
   /** Focuses the unit price of the first line (editable rows only); false when there is none. */
   focusFirstLine: () => boolean
@@ -104,6 +105,7 @@ export function ActivityPriceLinesEditor({
   }
 
   function addLine() {
+    if (busy) return
     const key = nextKey()
     focusKey.current = key
     setError(null)
@@ -288,13 +290,13 @@ export function ActivityPriceLinesEditor({
                     </td>
                     <td className="actions">
                       <button type="button" className="link-button" onClick={() => move(i, -1)} disabled={busy || i === 0} aria-label={t('dossierPricing.activity.moveUp', { index })}>
-                        ↑
+                        <ArrowUp size={16} aria-hidden="true" />
                       </button>
                       <button type="button" className="link-button" onClick={() => move(i, 1)} disabled={busy || i === rows.length - 1} aria-label={t('dossierPricing.activity.moveDown', { index })}>
-                        ↓
+                        <ArrowDown size={16} aria-hidden="true" />
                       </button>
                       <button type="button" className="link-button" onClick={() => update(rows.filter((r) => r.key !== row.key))} disabled={busy} aria-label={t('dossierPricing.activity.removeRow', { index })}>
-                        ✕
+                        <Trash2 size={16} aria-hidden="true" />
                       </button>
                     </td>
                   </tr>
@@ -331,11 +333,8 @@ export function ActivityPriceLinesEditor({
         </p>
       )}
 
-      {editable && (
+      {editable && (dirty || saveStatus.state.kind !== 'idle') && (
         <p className="dossier-price-actions">
-          <Button variant="secondary" onClick={addLine} disabled={busy}>
-            {t('dossierPricing.addLine')}
-          </Button>
           {dirty && (
             <>
               <Button onClick={() => void save()} disabled={busy}>

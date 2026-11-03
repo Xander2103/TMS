@@ -1,0 +1,96 @@
+/* Header banner of the dossier and order detail pages. Tokens from styles/global.css. */
+
+.entity-hero {
+  --entity-hero-tint: color-mix(in srgb, var(--color-primary-solid) 9%, var(--bg));
+  --entity-hero-fade: linear-gradient(90deg, transparent 0, rgba(0, 0, 0, 0.1) 14%, rgba(0, 0, 0, 0.45) 28%, #000 40%, #000 78%, rgba(0, 0, 0, 0.5) 88%, rgba(0, 0, 0, 0.12) 96%, transparent 100%);
+  box-sizing: border-box;
+  padding: 16px 20px;
+  border: 1px solid color-mix(in srgb, var(--color-primary-solid) 20%, var(--border));
+  border-radius: 14px;
+  background: var(--entity-hero-tint);
+  color: var(--text-h);
+}
+
+html[data-theme='dark'] .entity-hero {
+  --entity-hero-tint: color-mix(in srgb, var(--color-primary-solid) 14%, var(--color-sidebar-bg));
+}
+
+.entity-hero-banner {
+  position: relative;
+  isolation: isolate;
+  margin: -16px -20px 0;
+  padding: 16px 20px;
+}
+
+.entity-hero-photo-clip {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  overflow: hidden;
+  border-radius: 13px 13px 0 0;
+}
+
+.entity-hero-photo {
+  position: absolute;
+  top: 0;
+  right: 27%;
+  height: 100%;
+  /* As wide as a landscape banner at this height, so the whole vehicle shows and both edges fade. */
+  aspect-ratio: 3.2;
+  max-width: 70%;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
+  -webkit-mask-image: var(--entity-hero-fade);
+  mask-image: var(--entity-hero-fade);
+  opacity: 0.95;
+}
+
+html[data-theme='dark'] .entity-hero-photo {
+  filter: brightness(0.66) saturate(1.1);
+}
+
+.entity-hero-content {
+  position: relative;
+}
+
+.entity-hero-banner:last-child {
+  margin-bottom: -16px;
+}
+
+.entity-hero-banner:last-child .entity-hero-photo-clip {
+  border-radius: 13px;
+}
+
+/* No room next to the title: the photo steps back behind the text. */
+@media (max-width: 1100px) {
+  .entity-hero-photo {
+    right: 0;
+    width: 100%;
+    max-width: none;
+    aspect-ratio: auto;
+    opacity: 0.22;
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .entity-hero {
+    padding: 12px;
+  }
+
+  .entity-hero-banner {
+    margin: -12px -12px 0;
+    padding: 12px;
+  }
+
+  .entity-hero-banner:last-child {
+    margin-bottom: -12px;
+  }
+}
+
+/* An open menu in the banner stays above the sticky dossier subnav under it. */
+.entity-hero-banner:has([role='menu']) {
+  z-index: 20;
+}

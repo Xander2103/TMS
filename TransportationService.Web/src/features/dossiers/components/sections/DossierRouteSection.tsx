@@ -18,7 +18,7 @@ export function DossierRouteSection({ editorRef }: { editorRef: Ref<DossierRoute
   const hasRoute = ws.activities.some((a) => a.hasStops)
 
   return (
-    <section id="sectie-route" className="dossier-section dossier-workspace" aria-label={t('dossiers.detail.routeTitle')} ref={register}>
+    <section id="sectie-route" className="dossier-section dossier-workspace dossier-route-workspace" aria-label={t('dossiers.detail.routeTitle')} ref={register}>
       <h2 tabIndex={-1}>{t('dossiers.detail.routeTitle')}</h2>
       {!hasRoute && <p className="placeholder-text">{t('dossiers.overview.routeNoTransport')}</p>}
       {hasRoute && (

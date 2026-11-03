@@ -38,6 +38,7 @@ import type { DossierActivity, DossierDetail } from '../types'
 import { orderValuesFromDetail } from './orderDrawerState'
 import { DossierRouteSummary } from './DossierRouteSummary'
 import '../../transport-orders/components/transport-order-form.css'
+import './route-editor.css'
 import { Link } from 'react-router-dom'
 
 /**
@@ -564,7 +565,7 @@ export function DossierRouteEditor({
           {!creatingOrder && (
             <SaveStatus state={saveStatus.state} dirty={dirty} onRetry={requestSave} />
           )}
-          <Button variant="ghost" onClick={discard} disabled={!dirty || busy}>
+          <Button variant="secondary" onClick={discard} disabled={!dirty || busy}>
             {t('dossierSheet.route.discard')}
           </Button>
           <Button onClick={requestSave} disabled={!dirty || busy}>

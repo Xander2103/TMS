@@ -8,10 +8,10 @@ import { DossierMoreSection } from '../DossierMoreSection'
 import { DossierTimelinePanel } from '../DossierTimelinePanel'
 
 /**
- * Historiek workspace: user notes (left) next to the dossier's reconstructed story (right, T-H6:
- * orders, planning, prices, documents, incidents and lifecycle — readable with dossiers.view) —
- * two separate sources that are never mixed — plus description, lifecycle facts and the compat
- * block with financials, related dossiers and incidents.
+ * Historiek workspace: two equal cards with a fixed-height list — user notes next to the dossier's
+ * reconstructed story (T-H6: orders, planning, prices, documents, incidents and lifecycle, readable
+ * with dossiers.view), two separate sources that are never mixed. Below them description, lifecycle
+ * facts and the block with financials, related dossiers and incidents.
  */
 export function DossierHistorySection() {
   const { t } = useLocale()
@@ -25,37 +25,36 @@ export function DossierHistorySection() {
     <section id="sectie-notities" className="dossier-section dossier-workspace" aria-label={t('dossiers.detail.notesTitle')} ref={register}>
       <h2 tabIndex={-1}>{t('dossiers.detail.notesTitle')}</h2>
       <div className="dossier-history-grid">
-        <div>
-          {/* Dossier-level notes only (activity notes live on their activity). The legacy free-text
-              `dossier.notes` is migrated into a first note server-side; it is passed along solely as
-              the read-only fallback for when the notes cannot be loaded. */}
-          <DossierNotesPanel
-            dossierId={dossier.id}
-            activityId={null}
-            // Same rule as the activity drawer: a closed dossier takes no new notes.
-            canWrite={ws.canManage && ws.isOpen}
-            title={t('dossiers.overview.historyNotes')}
-            legacyText={dossier.notes}
-            // The Overzicht card shows the dossier's note count: re-read it after every change.
-            onChanged={ws.reloadDossier}
-          />
-          {dossier.description && (
-            <>
-              <h3>{t('dossiers.overview.historyDescription')}</h3>
-              <p>{dossier.description}</p>
-            </>
-          )}
-          <p className="placeholder-text">
-            {t('dossiers.detail.createdAt', { date: formatIsoDate(dossier.createdAt) })}
-            {dossier.responsibleName && <> · {t('dossiers.detail.responsible', { name: dossier.responsibleName })}</>}
-            {lifecycle.facts.length > 0 && <> · {lifecycle.facts.join(' · ')}</>}
-          </p>
-          {lifecycle.reason && <p className="placeholder-text">{lifecycle.reason}</p>}
-        </div>
-        <div>
-          <h3>{t('dossiers.overview.historyAudit')}</h3>
-          <DossierTimelinePanel dossierId={dossier.id} />
-        </div>
+        {/* Dossier-level notes only (activity notes live on their activity). The legacy free-text
+            `dossier.notes` is migrated into a first note server-side; it is passed along solely as
+            the read-only fallback for when the notes cannot be loaded. */}
+        <DossierNotesPanel
+          dossierId={dossier.id}
+          activityId={null}
+          // Same rule as the activity drawer: a closed dossier takes no new notes.
+          canWrite={ws.canManage && ws.isOpen}
+          title={t('dossiers.overview.historyNotes')}
+          legacyText={dossier.notes}
+          layout="workspace"
+          // The Overzicht card shows the dossier's note count: re-read it after every change.
+          onChanged={ws.reloadDossier}
+        />
+        {/* Keyed: another dossier starts without the search and filter of the previous one. */}
+        <DossierTimelinePanel key={dossier.id} dossierId={dossier.id} title={t('dossiers.overview.historyAudit')} />
+      </div>
+      <div className="dossier-history-facts">
+        {dossier.description && (
+          <>
+            <h3>{t('dossiers.overview.historyDescription')}</h3>
+            <p className="dossier-history-description">{dossier.description}</p>
+          </>
+        )}
+        <p>
+          {t('dossiers.detail.createdAt', { date: formatIsoDate(dossier.createdAt) })}
+          {dossier.responsibleName && <> · {t('dossiers.detail.responsible', { name: dossier.responsibleName })}</>}
+          {lifecycle.facts.length > 0 && <> · {lifecycle.facts.join(' · ')}</>}
+        </p>
+        {lifecycle.reason && <p>{lifecycle.reason}</p>}
       </div>
       <DossierMoreSection
         dossier={dossier}

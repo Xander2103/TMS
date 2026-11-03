@@ -1,8 +1,7 @@
 {
   "levels": {
     "dossier": "Dossier documents",
-    "dossierShort": "Dossier",
-    "dossierHint": "Apply to the whole dossier"
+    "dossierHint": "For all orders and activities"
   },
   "summary_one": "{count} document in this dossier",
   "summary_other": "{count} documents in this dossier",
@@ -15,14 +14,11 @@
   "fileMissing": "File missing",
   "sections": {
     "dossier": "Dossier documents",
-    "dossierHint": "These documents apply to the dossier as a whole and can be consulted from every order and activity. If a document belongs to one order or activity, upload it at that level.",
     "own": "Documents of this order",
-    "ownHint": "Documents that belong to order {number} only.",
     "general": "Dossier documents (also apply here)",
     "generalHint": "The same documents as on the dossier level, no copies. View and download only here.",
     "manageViaDossier": "Manage under Dossier documents",
-    "ownActivity": "Documents of this activity",
-    "ownActivityHint": "Documents that belong to activity {label} only."
+    "ownActivity": "Documents of this activity"
   },
   "empty": {
     "dossier": "No dossier documents yet.",
@@ -33,20 +29,15 @@
   "columns": {
     "title": "Title",
     "type": "Type",
-    "level": "Level",
     "file": "File",
     "portal": "Customer portal",
-    "actions": "Actions"
+    "actions": "Actions",
+    "uploaded": "Uploaded"
   },
   "actions": {
-    "view": "View: {title}",
-    "download": "Download: {title}",
-    "attachFile": "Add file: {title}",
-    "visibility": "Change visibility: {title}",
-    "move": "Move: {title}",
-    "delete": "Delete: {title}",
     "viewShort": "View",
-    "downloadShort": "Download"
+    "downloadShort": "Download",
+    "menu": "Actions: {title}"
   },
   "visibility": {
     "visible": "Visible to customer",
@@ -62,7 +53,6 @@
     "nowInternal": "The document is no longer visible to the customer."
   },
   "upload": {
-    "open": "Upload document",
     "title": "Upload document",
     "target": "Save under",
     "targetHint": "Choose the level the document belongs to. A dossier document applies to the whole dossier.",
@@ -92,7 +82,10 @@
       "tooLarge": "The file is larger than 10 MB.",
       "unsupportedType": "Only PDF, JPG and PNG files are allowed."
     },
-    "targetActivity": "Activity {label}"
+    "targetActivity": "Activity {label}",
+    "openDossier": "Upload document for dossier",
+    "openOrder": "Upload document for order",
+    "openActivity": "Upload document for activity"
   },
   "move": {
     "title": "Move document to…",
@@ -182,8 +175,42 @@
     "activities": "Activities"
   },
   "kinds": {
-    "order": "Order",
-    "activity": "Activity"
+    "orderHint": "Only for this order",
+    "activityHint": "Only for this activity"
   },
-  "selector": "Document level"
+  "selector": "Document level",
+  "context": {
+    "dossierHint": "Apply to the whole dossier, and so to all its orders and activities.",
+    "order": "Documents for order {label}",
+    "orderHint": "Linked to this order only.",
+    "activity": "Documents for activity {label}",
+    "activityHint": "Linked to this activity only."
+  },
+  "shared": {
+    "order": "Dossier documents — also available for this order",
+    "activity": "Dossier documents — also available for this activity",
+    "hint": "These documents apply to the whole dossier and can also be consulted here.",
+    "link": "Go to dossier documents"
+  },
+  "filters": {
+    "search": "Search documents",
+    "searchPlaceholder": "Search documents…",
+    "type": "Filter by type",
+    "typeAll": "Type: All",
+    "portal": "Filter by customer portal",
+    "portalAll": "Customer portal: All",
+    "sort": "Sort order",
+    "sortBy": {
+      "newest": "Date (newest)",
+      "oldest": "Date (oldest)",
+      "title": "Title (A–Z)",
+      "type": "Type (A–Z)"
+    },
+    "noResults": "No documents match these filters.",
+    "reset": "Clear filters",
+    "pageSize": "Items per page",
+    "perPage": "{size} per page"
+  },
+  "range_one": "{start}–{end} of {count} document",
+  "range_other": "{start}–{end} of {count} documents"
 }

@@ -1,6 +1,14 @@
 import {
-  BarChart3, BookOpen, CalendarClock, CircleHelp, CircleUser, Contact, FolderOpen, Keyboard, LayoutDashboard,
-  Settings, Truck, UsersRound, Warehouse, type LucideIcon,
+  Activity, AlarmClock, ArrowLeftRight, Award, BadgeEuro, BarChart3, Bell, BellRing, BookOpen, Boxes,
+  BriefcaseBusiness, Building2, Calculator, CalendarClock, CalendarDays, CalendarOff, CalendarRange,
+  CalendarX2, CarFront, Caravan, CircleHelp, CirclePlus, CircleUser, ClipboardCopy, ClipboardList, Clock,
+  Coins, Contact, Container, FileBarChart, FileCheck2, FileCog, FileSignature, FileText, Fingerprint, Flag,
+  FolderOpen, Folders, Fuel, Gauge, GraduationCap, HandCoins, IdCard, Inbox, KanbanSquare, Keyboard,
+  Languages, LayoutDashboard, LayoutGrid, ListTodo, MapPin, Megaphone, MessagesSquare, Network, Package,
+  PackageOpen, PackageSearch, Palmtree, Plug, Radio, ReceiptText, Route, Ruler, ScanBarcode, SearchCheck,
+  Send, Server, Settings, Shapes, ShieldAlert, ShieldCheck, Siren, SlidersHorizontal, Smartphone, SquareUser,
+  Store, Table2, Tags, Timer, TrendingUp, TriangleAlert, Truck, Upload, UserCog, UserRound, Users,
+  UsersRound, Warehouse, Wrench, type LucideIcon,
 } from 'lucide-react'
 import { LOOKUP_RESOURCES, type LookupGroup } from '../../../features/master-data/lookupRegistry'
 
@@ -50,11 +58,27 @@ export interface NavModule {
   subgroups?: NavSubgroup[]
 }
 
+/** Icon per lookup; a lookup added to the registry later shows the generic one until it gets its own. */
+const LOOKUP_ICONS: Record<string, LucideIcon> = {
+  departments: Network,
+  'job-functions': BriefcaseBusiness,
+  'vehicle-categories': CarFront,
+  'trailer-categories': Caravan,
+  'driver-categories': SquareUser,
+  'customer-categories': Store,
+  'issued-item-categories': Package,
+  'task-categories': ClipboardList,
+  languages: Languages,
+  nationalities: Flag,
+  'contract-types': FileSignature,
+}
+
 /** Lookup resources of one registry group as nav items (view+manage = any-of); lookups with a home elsewhere are skipped. */
 function lookupItems(group: LookupGroup): NavItem[] {
   return LOOKUP_RESOURCES.filter((r) => r.group === group && !r.hiddenFromNav).map((r) => ({
     label: `navigation.lookups.${r.slug}`,
     to: `/master-data/${r.slug}`,
+    icon: LOOKUP_ICONS[r.slug] ?? Tags,
     permissions: [r.viewPermission, r.managePermission],
   }))
 }
@@ -72,56 +96,56 @@ function parametersModule(): NavModule {
     label: 'navigation.menu.modules.parameters',
     icon: Settings,
     items: [
-      { label: 'navigation.menu.settings', to: '/settings', end: true, permissions: ['company_settings.view', 'company_settings.manage'] },
+      { label: 'navigation.menu.settings', icon: SlidersHorizontal, to: '/settings', end: true, permissions: ['company_settings.view', 'company_settings.manage'] },
     ],
     subgroups: [
       {
         label: 'navigation.menu.groups.pricing',
         items: [
-          { label: 'navigation.menu.priceTables', to: '/pricing/tables', permissions: ['tariffs.view', 'tariffs.manage'] },
-          { label: 'navigation.menu.pricingSettings', to: '/settings/pricing', permissions: ['tariffs.manage'] },
-          { label: 'navigation.menu.costRates', to: '/cost-rates', permissions: ['trip_costs.view', 'trip_costs.manage'] },
+          { label: 'navigation.menu.priceTables', icon: Table2, to: '/pricing/tables', permissions: ['tariffs.view', 'tariffs.manage'] },
+          { label: 'navigation.menu.pricingSettings', icon: BadgeEuro, to: '/settings/pricing', permissions: ['tariffs.manage'] },
+          { label: 'navigation.menu.costRates', icon: Coins, to: '/cost-rates', permissions: ['trip_costs.view', 'trip_costs.manage'] },
         ],
       },
       {
         label: 'navigation.menu.groups.integrationsNotifications',
         items: [
-          { label: 'navigation.menu.edi', to: '/edi', permissions: ['edi.view', 'edi.manage'] },
-          { label: 'navigation.menu.integrations', to: '/integrations', permissions: ['integrations.manage'] },
-          { label: 'navigation.menu.notificationRules', to: '/settings/notifications', permissions: ['notification_rules.view'] },
-          { label: 'navigation.menu.escalationRules', to: '/settings/escalations', permissions: ['escalations.manage'] },
+          { label: 'navigation.menu.edi', icon: ArrowLeftRight, to: '/edi', permissions: ['edi.view', 'edi.manage'] },
+          { label: 'navigation.menu.integrations', icon: Plug, to: '/integrations', permissions: ['integrations.manage'] },
+          { label: 'navigation.menu.notificationRules', icon: BellRing, to: '/settings/notifications', permissions: ['notification_rules.view'] },
+          { label: 'navigation.menu.escalationRules', icon: Siren, to: '/settings/escalations', permissions: ['escalations.manage'] },
         ],
       },
       {
         label: 'navigation.menu.groups.administration',
         items: [
-          { label: 'navigation.menu.users', to: '/users', permissions: ['users.view'] },
-          { label: 'navigation.menu.rolesRights', to: '/roles', permissions: ['roles.view'] },
-          { label: 'navigation.menu.jobFunctionRoles', to: '/job-function-mappings', permissions: ['roles.view', 'roles.manage_permissions'] },
-          { label: 'navigation.menu.accounting', to: '/settings/accounting', permissions: ['accounting.view', 'accounting.manage'] },
-          { label: 'navigation.menu.documentRules', to: '/settings/document-rules', permissions: ['company_settings.view', 'company_settings.manage'] },
-          { label: 'navigation.menu.chargePolicies', to: '/settings/charge-policies', permissions: ['problems.approve_charge', 'incidents.manage'] },
-          { label: 'navigation.menu.systemInfo', to: '/settings/system', permissions: ['system_info.view'] },
-          { label: 'navigation.menu.legalEntities', to: '/settings/legal-entities', permissions: ['legal_entities.view', 'legal_entities.manage'] },
-          { label: 'navigation.menu.portalAnnouncements', to: '/settings/portal-announcements', permissions: ['portal_announcements.manage'] },
-          { label: 'navigation.menu.portalMessages', to: '/settings/portal-messages', permissions: ['portal_messages.view', 'portal_messages.send'] },
+          { label: 'navigation.menu.users', icon: Users, to: '/users', permissions: ['users.view'] },
+          { label: 'navigation.menu.rolesRights', icon: ShieldCheck, to: '/roles', permissions: ['roles.view'] },
+          { label: 'navigation.menu.jobFunctionRoles', icon: UserCog, to: '/job-function-mappings', permissions: ['roles.view', 'roles.manage_permissions'] },
+          { label: 'navigation.menu.accounting', icon: Calculator, to: '/settings/accounting', permissions: ['accounting.view', 'accounting.manage'] },
+          { label: 'navigation.menu.documentRules', icon: FileCog, to: '/settings/document-rules', permissions: ['company_settings.view', 'company_settings.manage'] },
+          { label: 'navigation.menu.chargePolicies', icon: HandCoins, to: '/settings/charge-policies', permissions: ['problems.approve_charge', 'incidents.manage'] },
+          { label: 'navigation.menu.systemInfo', icon: Server, to: '/settings/system', permissions: ['system_info.view'] },
+          { label: 'navigation.menu.legalEntities', icon: Building2, to: '/settings/legal-entities', permissions: ['legal_entities.view', 'legal_entities.manage'] },
+          { label: 'navigation.menu.portalAnnouncements', icon: Megaphone, to: '/settings/portal-announcements', permissions: ['portal_announcements.manage'] },
+          { label: 'navigation.menu.portalMessages', icon: MessagesSquare, to: '/settings/portal-messages', permissions: ['portal_messages.view', 'portal_messages.send'] },
         ],
       },
       {
         label: 'navigation.menu.groups.personnel',
         items: [
-          { label: 'navigation.menu.leaveSettings', to: '/settings/leave', permissions: ['leave_types.manage'] },
-          { label: 'navigation.menu.attendanceSettings', to: '/settings/attendance', permissions: ['attendance.manage_settings', 'attendance.manage_kiosks'] },
-          { label: 'navigation.menu.hrReminders', to: '/settings/hr-reminders', permissions: ['hr_settings.manage'] },
-          { label: 'navigation.menu.taskTemplates', to: '/settings/task-templates', permissions: ['tasks.manage_templates', 'tasks.manage_recurring'] },
+          { label: 'navigation.menu.leaveSettings', icon: Palmtree, to: '/settings/leave', permissions: ['leave_types.manage'] },
+          { label: 'navigation.menu.attendanceSettings', icon: Timer, to: '/settings/attendance', permissions: ['attendance.manage_settings', 'attendance.manage_kiosks'] },
+          { label: 'navigation.menu.hrReminders', icon: AlarmClock, to: '/settings/hr-reminders', permissions: ['hr_settings.manage'] },
+          { label: 'navigation.menu.taskTemplates', icon: ClipboardCopy, to: '/settings/task-templates', permissions: ['tasks.manage_templates', 'tasks.manage_recurring'] },
         ],
       },
       {
         label: 'navigation.menu.groups.masterData',
         items: [
-          { label: 'navigation.menu.activityTypes', to: '/settings/activity-types', permissions: ['activity_types.view', 'activity_types.manage'] },
-          { label: 'navigation.menu.units', to: '/master-data/eenheden', permissions: ['unit_types.view', 'unit_types.manage', 'tariffs.view', 'tariffs.manage'] },
-          { label: 'navigation.menu.servicesSurcharges', to: '/master-data/services', permissions: ['tariffs.view', 'tariffs.manage'] },
+          { label: 'navigation.menu.activityTypes', icon: Shapes, to: '/settings/activity-types', permissions: ['activity_types.view', 'activity_types.manage'] },
+          { label: 'navigation.menu.units', icon: Ruler, to: '/master-data/eenheden', permissions: ['unit_types.view', 'unit_types.manage', 'tariffs.view', 'tariffs.manage'] },
+          { label: 'navigation.menu.servicesSurcharges', icon: CirclePlus, to: '/master-data/services', permissions: ['tariffs.view', 'tariffs.manage'] },
           ...lookupItems('organisatie'),
           ...lookupItems('referentie'),
           ...lookupItems('categorieen'),
@@ -144,12 +168,12 @@ export function getNavModules(): NavModule[] {
       icon: CircleUser,
       requiresEmployee: true,
       items: [
-        { label: 'navigation.menu.myDashboard', to: '/portal', end: true },
-        { label: 'navigation.menu.myTime', to: '/portal/time', permissions: ['attendance.self'] },
-        { label: 'navigation.menu.myPlanning', to: '/portal/planning' },
-        { label: 'navigation.menu.myAbsences', to: '/portal/absences' },
-        { label: 'navigation.menu.myQualifications', to: '/portal/qualifications' },
-        { label: 'navigation.menu.myProfile', to: '/portal/profile' },
+        { label: 'navigation.menu.myDashboard', icon: LayoutGrid, to: '/portal', end: true },
+        { label: 'navigation.menu.myTime', icon: Clock, to: '/portal/time', permissions: ['attendance.self'] },
+        { label: 'navigation.menu.myPlanning', icon: CalendarDays, to: '/portal/planning' },
+        { label: 'navigation.menu.myAbsences', icon: CalendarOff, to: '/portal/absences' },
+        { label: 'navigation.menu.myQualifications', icon: GraduationCap, to: '/portal/qualifications' },
+        { label: 'navigation.menu.myProfile', icon: UserRound, to: '/portal/profile' },
       ],
     },
     {
@@ -157,18 +181,18 @@ export function getNavModules(): NavModule[] {
       label: 'navigation.menu.modules.vandaag',
       icon: LayoutDashboard,
       items: [
-        { label: 'navigation.menu.dashboard', to: '/dashboard', permissions: ['dashboard.view'] },
+        { label: 'navigation.menu.dashboard', icon: Gauge, to: '/dashboard', permissions: ['dashboard.view'] },
         // UX-1: the way back from the inbox for whoever actually drives (not for view-only dispatchers).
-        { label: 'navigation.menu.driverApp', to: '/driver', permissions: ['driver_workflow.execute'] },
-        { label: 'navigation.menu.inbox', to: '/inbox' },
-        { label: 'navigation.menu.notifications', to: '/notifications', badge: 'notifications' },
+        { label: 'navigation.menu.driverApp', icon: Smartphone, to: '/driver', permissions: ['driver_workflow.execute'] },
+        { label: 'navigation.menu.inbox', icon: Inbox, to: '/inbox' },
+        { label: 'navigation.menu.notifications', icon: Bell, to: '/notifications', badge: 'notifications' },
       ],
       subgroups: [
         {
           label: 'navigation.menu.groups.problems',
           items: [
-            { label: 'navigation.menu.incidents', to: '/incidents', permissions: ['incidents.view', 'incidents.manage'] },
-            { label: 'navigation.menu.exceptions', to: '/exceptions', permissions: ['exceptions.view'] },
+            { label: 'navigation.menu.incidents', icon: ShieldAlert, to: '/incidents', permissions: ['incidents.view', 'incidents.manage'] },
+            { label: 'navigation.menu.exceptions', icon: TriangleAlert, to: '/exceptions', permissions: ['exceptions.view'] },
           ],
         },
       ],
@@ -180,9 +204,9 @@ export function getNavModules(): NavModule[] {
       items: [
         // Dossiers eerst: het dossier is het centrale werkobject; de klassieke
         // opdrachtenlijst blijft als secundaire ingang bestaan.
-        { label: 'navigation.menu.dossiers', to: '/dossiers', permissions: ['dossiers.view', 'dossiers.manage'] },
-        { label: 'navigation.menu.classicOrders', to: '/transport-orders', permissions: ['orders.view', 'orders.manage'] },
-        { label: 'navigation.menu.excelImport', to: '/order-imports', permissions: ['orders.create', 'orders.manage'] },
+        { label: 'navigation.menu.dossiers', icon: Folders, to: '/dossiers', permissions: ['dossiers.view', 'dossiers.manage'] },
+        { label: 'navigation.menu.classicOrders', icon: FileText, to: '/transport-orders', permissions: ['orders.view', 'orders.manage'] },
+        { label: 'navigation.menu.excelImport', icon: Upload, to: '/order-imports', permissions: ['orders.create', 'orders.manage'] },
       ],
     },
     {
@@ -190,9 +214,9 @@ export function getNavModules(): NavModule[] {
       label: 'navigation.menu.modules.planning',
       icon: CalendarClock,
       items: [
-        { label: 'navigation.menu.planningBoard', to: '/planning-center', permissions: ['planning.view'] },
-        { label: 'navigation.menu.tripList', to: '/planning', permissions: ['planning.view'] },
-        { label: 'navigation.menu.liveOperations', to: '/operations', permissions: ['operations.view'] },
+        { label: 'navigation.menu.planningBoard', icon: KanbanSquare, to: '/planning-center', permissions: ['planning.view'] },
+        { label: 'navigation.menu.tripList', icon: Route, to: '/planning', permissions: ['planning.view'] },
+        { label: 'navigation.menu.liveOperations', icon: Radio, to: '/operations', permissions: ['operations.view'] },
       ],
     },
     {
@@ -200,11 +224,11 @@ export function getNavModules(): NavModule[] {
       label: 'navigation.menu.modules.magazijn',
       icon: Warehouse,
       items: [
-        { label: 'navigation.menu.warehouseScanning', to: '/warehouse', permissions: ['warehouse.view'] },
+        { label: 'navigation.menu.warehouseScanning', icon: ScanBarcode, to: '/warehouse', permissions: ['warehouse.view'] },
         // SEC-H1: GET api/warehouse/trace no longer admits scanning-only roles (drivers).
-        { label: 'navigation.menu.warehouseTrace', to: '/warehouse/trace', permissions: ['warehouse.view', 'warehouse.manage'] },
-        { label: 'navigation.menu.warehousesAdmin', to: '/warehouses', permissions: ['warehouse.view', 'warehouse.manage'] },
-        { label: 'navigation.menu.dockPlanning', to: '/dock-planning', permissions: ['warehouse.view', 'warehouse.schedule'] },
+        { label: 'navigation.menu.warehouseTrace', icon: SearchCheck, to: '/warehouse/trace', permissions: ['warehouse.view', 'warehouse.manage'] },
+        { label: 'navigation.menu.warehousesAdmin', icon: Warehouse, to: '/warehouses', permissions: ['warehouse.view', 'warehouse.manage'] },
+        { label: 'navigation.menu.dockPlanning', icon: CalendarRange, to: '/dock-planning', permissions: ['warehouse.view', 'warehouse.schedule'] },
       ],
     },
     {
@@ -212,16 +236,16 @@ export function getNavModules(): NavModule[] {
       label: 'navigation.menu.modules.klanten',
       icon: Contact,
       items: [
-        { label: 'navigation.menu.customers', to: '/customers', permissions: ['customers.view'] },
-        { label: 'navigation.menu.locations', to: '/locations', permissions: ['locations.view'] },
+        { label: 'navigation.menu.customers', icon: Contact, to: '/customers', permissions: ['customers.view'] },
+        { label: 'navigation.menu.locations', icon: MapPin, to: '/locations', permissions: ['locations.view'] },
       ],
       subgroups: [
         {
           label: 'navigation.menu.groups.billing',
           items: [
-            { label: 'navigation.menu.invoices', to: '/invoices', permissions: ['invoices.view'] },
-            { label: 'navigation.menu.invoiceControl', to: '/invoice-control', permissions: ['invoices.view'] },
-            { label: 'navigation.menu.peppol', to: '/peppol', permissions: ['peppol.view'] },
+            { label: 'navigation.menu.invoices', icon: ReceiptText, to: '/invoices', permissions: ['invoices.view'] },
+            { label: 'navigation.menu.invoiceControl', icon: FileCheck2, to: '/invoice-control', permissions: ['invoices.view'] },
+            { label: 'navigation.menu.peppol', icon: Send, to: '/peppol', permissions: ['peppol.view'] },
           ],
         },
       ],
@@ -231,21 +255,21 @@ export function getNavModules(): NavModule[] {
       label: 'navigation.menu.modules.personeel',
       icon: UsersRound,
       items: [
-        { label: 'navigation.menu.employees', to: '/employees', permissions: ['employees.view'] },
-        { label: 'navigation.menu.tasks', to: '/tasks', permissions: ['tasks.view_own', 'tasks.view_team', 'tasks.view_all'] },
-        { label: 'navigation.menu.employeePlanning', to: '/employee-planning', permissions: ['employee_planning.view', 'employee_planning.manage'] },
-        { label: 'navigation.menu.attendance', to: '/attendance', permissions: ['attendance.view'] },
-        { label: 'navigation.menu.absences', to: '/absences', permissions: ['absences.view'] },
-        { label: 'navigation.menu.qualifications', to: '/qualifications', permissions: ['employee_documents.view'] },
+        { label: 'navigation.menu.employees', icon: IdCard, to: '/employees', permissions: ['employees.view'] },
+        { label: 'navigation.menu.tasks', icon: ListTodo, to: '/tasks', permissions: ['tasks.view_own', 'tasks.view_team', 'tasks.view_all'] },
+        { label: 'navigation.menu.employeePlanning', icon: CalendarClock, to: '/employee-planning', permissions: ['employee_planning.view', 'employee_planning.manage'] },
+        { label: 'navigation.menu.attendance', icon: Fingerprint, to: '/attendance', permissions: ['attendance.view'] },
+        { label: 'navigation.menu.absences', icon: CalendarX2, to: '/absences', permissions: ['absences.view'] },
+        { label: 'navigation.menu.qualifications', icon: Award, to: '/qualifications', permissions: ['employee_documents.view'] },
         // Voorraad van bedrijfsmiddelen hoort bij het personeelsdomein (uitgifte aan medewerkers).
-        { label: 'navigation.menu.inventory', to: '/inventory', end: true, permissions: ['inventory.view', 'inventory.manage'] },
+        { label: 'navigation.menu.inventory', icon: Boxes, to: '/inventory', end: true, permissions: ['inventory.view', 'inventory.manage'] },
         // WH-H3/H4: de magazijnbalie — uitgeven, retour verwerken, openstaande uitgiftes en historiek.
-        { label: 'navigation.menu.inventoryIssues', to: '/inventory/issues', permissions: ['inventory.issue', 'inventory.return', 'inventory.loans_view'] },
+        { label: 'navigation.menu.inventoryIssues', icon: PackageOpen, to: '/inventory/issues', permissions: ['inventory.issue', 'inventory.return', 'inventory.loans_view'] },
         // Beheer van bedrijfsmiddelen (categorieën + sjablonen) staat naast de voorraad, niet meer
         // verspreid over Parameters → Personeel en Parameters → Basisgegevens. Het item wijst naar de
         // sectiewortel (niet naar één tabblad): de prefix-match houdt het dan actief op zowel
         // /issued-items/categories als /issued-items/templates(/:id); de indexroute kiest het tabblad.
-        { label: 'navigation.menu.issuedItemsAdmin', to: '/issued-items', permissions: ['issued_items.manage_templates', 'inventory.manage'] },
+        { label: 'navigation.menu.issuedItemsAdmin', icon: PackageSearch, to: '/issued-items', permissions: ['issued_items.manage_templates', 'inventory.manage'] },
       ],
     },
     {
@@ -253,11 +277,11 @@ export function getNavModules(): NavModule[] {
       label: 'navigation.menu.modules.vloot',
       icon: Truck,
       items: [
-        { label: 'navigation.menu.fleetOverview', to: '/fleet', permissions: ['vehicles.view'] },
-        { label: 'navigation.menu.vehicles', to: '/vehicles', permissions: ['vehicles.view'] },
-        { label: 'navigation.menu.trailers', to: '/trailers', permissions: ['trailers.view'] },
-        { label: 'navigation.menu.tankCards', to: '/tank-cards', permissions: ['tank_cards.view'] },
-        { label: 'navigation.menu.maintenance', to: '/maintenance-policies', permissions: ['maintenance_policies.view', 'maintenance_policies.manage'] },
+        { label: 'navigation.menu.fleetOverview', icon: LayoutDashboard, to: '/fleet', permissions: ['vehicles.view'] },
+        { label: 'navigation.menu.vehicles', icon: Truck, to: '/vehicles', permissions: ['vehicles.view'] },
+        { label: 'navigation.menu.trailers', icon: Container, to: '/trailers', permissions: ['trailers.view'] },
+        { label: 'navigation.menu.tankCards', icon: Fuel, to: '/tank-cards', permissions: ['tank_cards.view'] },
+        { label: 'navigation.menu.maintenance', icon: Wrench, to: '/maintenance-policies', permissions: ['maintenance_policies.view', 'maintenance_policies.manage'] },
       ],
     },
     {
@@ -265,9 +289,9 @@ export function getNavModules(): NavModule[] {
       label: 'navigation.menu.modules.rapportage',
       icon: BarChart3,
       items: [
-        { label: 'navigation.menu.kpis', to: '/kpi', permissions: ['kpi.view'] },
-        { label: 'navigation.menu.profitability', to: '/profitability', permissions: ['profitability.view'] },
-        { label: 'navigation.menu.reports', to: '/reports', permissions: ['reports.view'] },
+        { label: 'navigation.menu.kpis', icon: Activity, to: '/kpi', permissions: ['kpi.view'] },
+        { label: 'navigation.menu.profitability', icon: TrendingUp, to: '/profitability', permissions: ['profitability.view'] },
+        { label: 'navigation.menu.reports', icon: FileBarChart, to: '/reports', permissions: ['reports.view'] },
       ],
     },
     parametersModule(),

@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { ActionMenu } from '../../../components/ui/ActionMenu'
+import { BackButton } from '../../../components/ui/BackButton'
 import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { FormField } from '../../../components/ui/FormField'
@@ -10,6 +11,7 @@ import { useLocale } from '../../../i18n/localeContext'
 import { useAuth } from '../../auth/authContextValue'
 import { getCustomer } from '../../customers/api/customersApi'
 import { getLegalEntityOptions } from '../../legal-entities/api/legalEntitiesApi'
+import { EntityHero } from '../../legal-entities/components/EntityHero'
 import type { LegalEntityOption } from '../../legal-entities/types'
 import { changeDossierLegalEntity, getDossierLegalEntityImpact } from '../api/dossiersApi'
 import type { DossierLegalEntityChangeImpact } from '../api/dossiersApi'
@@ -34,10 +36,15 @@ interface DossierHeaderProps {
   menuActions: DossierMenuAction[]
   onUpdated: (dossier: DossierDetail) => void
   onConflict: (err: unknown) => boolean
+  /** The attention bar: part of the header card, takes no room when it renders nothing. */
+  attention?: ReactNode
 }
 
-/** §11 header: nummer + status, klant · ref · datum · entiteit, twee statuschips, primaire actie. */
-export function DossierHeader({ dossier, canManage, onAddActivity, onConfirm, menuActions, onUpdated, onConflict }: DossierHeaderProps) {
+/**
+ * Header card (redesign 2026-11-03): the banner with the entity's photo, number + status, klant ·
+ * ref · datum · entiteit and the actions; the attention bar closes the same card.
+ */
+export function DossierHeader({ dossier, canManage, onAddActivity, onConfirm, menuActions, onUpdated, onConflict, attention }: DossierHeaderProps) {
   const { t } = useLocale()
   const [entityDialog, setEntityDialog] = useState(false)
   const [entities, setEntities] = useState<LegalEntityOption[]>([])
@@ -139,71 +146,76 @@ export function DossierHeader({ dossier, canManage, onAddActivity, onConfirm, me
 
   return (
     <header className="dossier-header">
-      <div className="dossier-header-title">
-        <h1>
-          {t('dossiers.header.title', { number: dossier.dossierNumber })}{' '}
-          <Badge tone={DOSSIER_STATUS_TONE[dossier.status]}>{t(DOSSIER_STATUS_LABELS[dossier.status])}</Badge>
-        </h1>
-        <DossierLifecycleFacts dossier={dossier} />
-        <p className="dossier-header-meta">
-          {metaParts.join(' · ')}
-          {' · '}
-          <span className="dossier-header-entity">
-            {t('dossiers.header.entity', { name: dossier.legalEntityName ?? '—' })}
-            {canManage && (
-              <button
-                type="button"
-                className="link-button"
-                onClick={openEntityDialog}
-                aria-label={t('dossiers.header.changeEntityAria')}
-              >
-                {t('dossiers.header.change')}
-              </button>
-            )}
-          </span>
-        </p>
-      </div>
+      <EntityHero legalEntityId={dossier.legalEntityId} footer={attention}>
+        <div className="dossier-header-row">
+          <div className="dossier-header-title">
+            <BackButton to="/dossiers" label={t('dossiers.detail.back')} />
+            <h1>
+              {t('dossiers.header.title', { number: dossier.dossierNumber })}{' '}
+              <Badge tone={DOSSIER_STATUS_TONE[dossier.status]}>{t(DOSSIER_STATUS_LABELS[dossier.status])}</Badge>
+            </h1>
+            <DossierLifecycleFacts dossier={dossier} />
+            <p className="dossier-header-meta">
+              {metaParts.join(' · ')}
+              {' · '}
+              <span className="dossier-header-entity">
+                {t('dossiers.header.entity', { name: dossier.legalEntityName ?? '—' })}
+                {canManage && (
+                  <button
+                    type="button"
+                    className="link-button"
+                    onClick={openEntityDialog}
+                    aria-label={t('dossiers.header.changeEntityAria')}
+                  >
+                    {t('dossiers.header.change')}
+                  </button>
+                )}
+              </span>
+            </p>
+          </div>
 
-      {/* Action hierarchy: the secondary group (+ Activiteit, Meer ▾) on the left, a clear gap,
-          and the lifecycle action right-most. UX-001: it only reads as the primary next step once
-          work was executed. A closed or cancelled dossier has none; "Heropenen" stays in Meer. */}
-      <div className="dossier-header-actions">
-        {(canManage && isOpen) || menuActions.length > 0 ? (
-          <div className="dossier-header-actions-secondary">
-            {canManage && isOpen && (
-              <Button variant="secondary" onClick={onAddActivity}>{t('dossiers.header.addActivity')}</Button>
+          {/* Action hierarchy: the secondary group (+ Activiteit, Meer ▾) on the left, a clear gap,
+              and the lifecycle action right-most. UX-001: it only reads as the primary next step once
+              work was executed. A closed or cancelled dossier has none; "Heropenen" stays in Meer. */}
+          <div className="dossier-header-actions">
+            {(canManage && isOpen) || menuActions.length > 0 ? (
+              <div className="dossier-header-actions-secondary">
+                {canManage && isOpen && (
+                  <Button variant="secondary" onClick={onAddActivity}>{t('dossiers.header.addActivity')}</Button>
+                )}
+                {menuActions.length > 0 && (
+                  <ActionMenu
+                    items={menuActions.map((action) => ({
+                      key: action.key, label: action.label, onSelect: action.onSelect, danger: action.danger,
+                    }))}
+                  />
+                )}
+              </div>
+            ) : null}
+            {canManage && isOpen && pendingReview.length > 0 && (
+              // M4: "Dossier afsluiten" closes the DOSSIER; with a portal request still unreviewed it would
+              // be the wrong button, so it is blocked with the reason and the review panel below.
+              <span className="dossier-header-confirm-blocked">
+                <Button className="dossier-header-primary" disabled aria-describedby="dossier-confirm-blocked-reason">
+                  {t('dossiers.lifecycle.confirm')}
+                </Button>
+                <small id="dossier-confirm-blocked-reason" className="dossier-header-hint">
+                  {t('dossiers.portalReview.confirmBlocked', { numbers: pendingReview.map((o) => o.orderNumber).join(', ') })}
+                </small>
+              </span>
             )}
-            {menuActions.length > 0 && (
-              <ActionMenu
-                items={menuActions.map((action) => ({
-                  key: action.key, label: action.label, onSelect: action.onSelect, danger: action.danger,
-                }))}
-              />
+            {canManage && isOpen && pendingReview.length === 0 && (
+              <Button
+                className="dossier-header-primary"
+                variant={dossierHasExecutedWork(dossier) ? 'primary' : 'secondary'}
+                onClick={onConfirm}
+              >
+                {t('dossiers.lifecycle.confirm')}
+              </Button>
             )}
           </div>
-        ) : null}
-        {canManage && isOpen && pendingReview.length > 0 && (
-          // M4: "Dossier afsluiten" closes the DOSSIER; with a portal request still unreviewed it would
-          // be the wrong button, so it is blocked with the reason and the review panel below.
-          <span className="dossier-header-confirm-blocked">
-            <Button className="dossier-header-primary" disabled aria-describedby="dossier-confirm-blocked-reason">
-              {t('dossiers.lifecycle.confirm')}
-            </Button>
-            <small id="dossier-confirm-blocked-reason" className="dossier-header-hint">
-              {t('dossiers.portalReview.confirmBlocked', { numbers: pendingReview.map((o) => o.orderNumber).join(', ') })}
-            </small>
-          </span>
-        )}
-        {canManage && isOpen && pendingReview.length === 0 && (
-          <Button
-            className="dossier-header-primary"
-            variant={dossierHasExecutedWork(dossier) ? 'primary' : 'secondary'}
-            onClick={onConfirm}
-          >
-            {t('dossiers.lifecycle.confirm')}
-          </Button>
-        )}
-      </div>
+        </div>
+      </EntityHero>
 
       {entityDialog && (
         <Modal

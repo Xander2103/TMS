@@ -1,3 +1,4 @@
+import { ArrowDown, ArrowUp, CalendarDays, Clock, Download, MapPin, Trash2, Upload } from 'lucide-react'
 import { Badge } from '../../../../components/ui/Badge'
 import { Button } from '../../../../components/ui/Button'
 import { FormField } from '../../../../components/ui/FormField'
@@ -187,14 +188,161 @@ function StopRow({
           .find((warning) => warning !== null) ?? null)
       : null
 
+  const dateRow = (
+    <div className="tof-row">
+      <FormField
+        label={
+          isSite
+            ? t('stopEditor.site.date')
+            : stop.stopType === 'Loading' ? t('transportOrders.route.loadDate') : t('transportOrders.route.unloadDate')
+        }
+        htmlFor={`st-date-${stop.key}`}
+      >
+        <input id={`st-date-${stop.key}`} type="date" value={stop.date} onChange={(e) => setStop(stop.key, { date: e.target.value })} disabled={saving} />
+      </FormField>
+      {!compact && !isSite && (
+        <FormField label={t('transportOrders.route.reference')} htmlFor={`st-ref-${stop.key}`}>
+          <input id={`st-ref-${stop.key}`} value={stop.reference} onChange={(e) => setStop(stop.key, { reference: e.target.value })} disabled={saving} maxLength={100} />
+        </FormField>
+      )}
+      {isSite && (stop.plannedToIsManual || (stop.toDate !== '' && stop.toDate !== stop.date)) && (
+        <FormField label={t('stopEditor.site.endDate')} htmlFor={`st-todate-${stop.key}`}>
+          <input
+            id={`st-todate-${stop.key}`}
+            type="date"
+            value={stop.toDate || stop.date}
+            onChange={(e) => setStop(stop.key, { toDate: e.target.value })}
+            disabled={saving}
+          />
+        </FormField>
+      )}
+    </div>
+  )
+  // Van/Tot: always two equal columns with the label above — also on a phone, where two
+  // 24h fields fit side by side. Both stay optional.
+  const timePair = (
+    <div className="tof-time-pair">
+      <FormField label={t('transportOrders.route.from')} htmlFor={`st-fromtime-${stop.key}`} hint={sheet ? undefined : t('transportOrders.route.optional')}>
+        <TimeInput id={`st-fromtime-${stop.key}`} value={stop.fromTime} onChange={(value) => setStop(stop.key, { fromTime: value })} disabled={saving} />
+      </FormField>
+      <FormField label={t('transportOrders.route.to')} htmlFor={`st-totime-${stop.key}`} hint={sheet ? undefined : t('transportOrders.route.optional')}>
+        <TimeInput id={`st-totime-${stop.key}`} value={stop.toTime} onChange={(value) => setStop(stop.key, { toTime: value })} disabled={saving} />
+      </FormField>
+    </div>
+  )
+  const siteEndNote = isSite && (
+    <p className="tof-site-end" role="note">
+      {stop.plannedToIsManual ? (
+        <>
+          {t('stopEditor.site.endManual')}{' '}
+          <button type="button" className="tof-link" onClick={() => setStop(stop.key, { plannedToIsManual: false })} disabled={saving}>
+            {t('stopEditor.site.endAuto')}
+          </button>
+        </>
+      ) : siteDurationHours !== null && siteDurationHours > 0 ? (
+        t('stopEditor.site.endFollows', { hours: String(siteDurationHours).replace('.', ',') })
+      ) : (
+        t('stopEditor.site.endNoDuration')
+      )}
+      {stop.toTime && stop.toDate !== '' && stop.toDate !== stop.date
+        ? ` ${t('stopEditor.site.endNextDay', { date: stop.toDate.split('-').reverse().join('-') })}`
+        : ''}
+    </p>
+  )
+  const hoursNote = hoursHint && (
+    <p className="tof-hours-warning" role="note">
+      ⚠ {hoursHint}
+    </p>
+  )
+  const requirementRow = !isSite && (
+    <div className="tof-row tof-row-4">
+      <FormField label={t('transportOrders.route.timeReq')} htmlFor={`st-timereq-${stop.key}`}>
+        <select
+          id={`st-timereq-${stop.key}`}
+          value={stop.timeRequirement}
+          onChange={(e) => setStop(stop.key, { timeRequirement: e.target.value as StopFormRow['timeRequirement'] })}
+          disabled={saving}
+        >
+          <option value="">{t('transportOrders.route.noTimeReq')}</option>
+          <option value="Before">
+            {isUnloading ? t('transportOrders.route.deliverBefore') : t('transportOrders.route.loadBefore')}
+          </option>
+          <option value="After">
+            {isUnloading ? t('transportOrders.route.notDeliverBefore') : t('transportOrders.route.notLoadBefore')}
+          </option>
+          <option value="Window">
+            {isUnloading ? t('transportOrders.route.exactDeliveryWindow') : t('transportOrders.route.exactLoadingWindow')}
+          </option>
+        </select>
+      </FormField>
+      {(stop.timeRequirement === 'After' || stop.timeRequirement === 'Window') && (
+        <FormField
+          label={stop.timeRequirement === 'Window' ? t('transportOrders.route.windowFrom') : t('transportOrders.route.notBefore')}
+          htmlFor={`st-timereqfrom-${stop.key}`}
+          error={errors[`stops[${index}].timeReqFrom`]}
+        >
+          <TimeInput
+            id={`st-timereqfrom-${stop.key}`}
+            value={stop.timeReqFrom}
+            onChange={(value) => setStop(stop.key, { timeReqFrom: value })}
+            disabled={saving}
+            aria-invalid={errors[`stops[${index}].timeReqFrom`] ? true : undefined}
+          />
+        </FormField>
+      )}
+      {(stop.timeRequirement === 'Before' || stop.timeRequirement === 'Window') && (
+        <FormField
+          label={stop.timeRequirement === 'Window' ? t('transportOrders.route.windowTo') : t('transportOrders.route.before')}
+          htmlFor={`st-timereqto-${stop.key}`}
+          error={errors[`stops[${index}].timeReqTo`]}
+        >
+          <TimeInput
+            id={`st-timereqto-${stop.key}`}
+            value={stop.timeReqTo}
+            onChange={(value) => setStop(stop.key, { timeReqTo: value })}
+            disabled={saving}
+            aria-invalid={errors[`stops[${index}].timeReqTo`] ? true : undefined}
+          />
+        </FormField>
+      )}
+    </div>
+  )
+
+  const advancedFilled = Boolean(
+    stop.requestedFrom || stop.requestedTo || stop.confirmedFrom || stop.confirmedTo ||
+    stop.earliestAllowed || stop.latestAllowed ||
+    // Sheet mode: the AFSPRAAK badge already surfaces the flag; only a reference counts here.
+    (!sheet && stop.appointmentRequired) || stop.appointmentReference ||
+    stop.includedTimeMinutesOverride || stop.refreshSnapshot ||
+    stop.accessInstructions || stop.loadingInstructions || stop.unloadingInstructions ||
+    (sheet && stop.instructions),
+  )
+  const advancedError = Object.keys(errors).some((key) =>
+    key.startsWith(`stops[${index}].`) && /requested|confirmed|earliest|latest|included|appointment|instructions/i.test(key))
+
+  const stopTitle = isSite ? t('stopEditor.site.legend') : `${index + 1}. ${t(STOP_TYPE_LABELS[stop.stopType])}`
+  const StopTypeIcon = isSite ? MapPin : isUnloading ? Upload : Download
+
   return (
-    <fieldset className="tof-stop">
+    <fieldset className={sheet ? 'tof-stop tof-stop-sheet' : 'tof-stop'}>
       <legend>
-        {isSite ? t('stopEditor.site.legend') : `${index + 1}. ${t(STOP_TYPE_LABELS[stop.stopType])}`}
+        {sheet ? (
+          <>
+            <span className="tof-stop-type-icon" aria-hidden="true">
+              <StopTypeIcon size={20} />
+            </span>
+            <span className="tof-stop-title">{stopTitle}</span>
+          </>
+        ) : (
+          stopTitle
+        )}
         {requirementBadge && (
           <>
             {' '}
-            <Badge tone="info">{requirementBadge}</Badge>
+            <Badge tone="info">
+              {sheet && <Clock size={13} aria-hidden />}
+              {requirementBadge}
+            </Badge>
           </>
         )}
         {stop.appointmentRequired && (
@@ -205,32 +353,33 @@ function StopRow({
         )}
       </legend>
       {isSite ? null : sheet ? (
-        <div className="tof-stop-toolbar">
+        <div className="tof-stop-toolbar tof-stop-sheet-actions">
           <button
             type="button"
-            className="tof-link"
+            className="tof-stop-icon-button"
             onClick={() => moveStop(index, -1)}
             disabled={saving || index === 0}
             aria-label={t('transportOrders.route.moveUp', { number: index + 1 })}
           >
-            ↑
+            <ArrowUp size={16} aria-hidden />
           </button>
           <button
             type="button"
-            className="tof-link"
+            className="tof-stop-icon-button"
             onClick={() => moveStop(index, 1)}
             disabled={saving || index === stopCount - 1}
             aria-label={t('transportOrders.route.moveDown', { number: index + 1 })}
           >
-            ↓
+            <ArrowDown size={16} aria-hidden />
           </button>
           <button
             type="button"
-            className="tof-link tof-link-danger"
+            className="tof-stop-remove"
             onClick={() => onRemoveStop(stop.key)}
             disabled={saving}
             aria-label={t('transportOrders.route.removeStop', { number: index + 1 })}
           >
+            <Trash2 size={16} aria-hidden />
             {t('ui.actions.delete')}
           </button>
         </div>
@@ -303,121 +452,31 @@ function StopRow({
             onRequestRefresh={onRequestRefresh}
             onQuickCreate={onQuickCreate}
             canSaveToAddressBook={canSaveToAddressBook}
+            sheet={sheet}
           />
-          <div className="tof-row">
-            <FormField
-              label={
-                isSite
-                  ? t('stopEditor.site.date')
-                  : stop.stopType === 'Loading' ? t('transportOrders.route.loadDate') : t('transportOrders.route.unloadDate')
-              }
-              htmlFor={`st-date-${stop.key}`}
-            >
-              <input id={`st-date-${stop.key}`} type="date" value={stop.date} onChange={(e) => setStop(stop.key, { date: e.target.value })} disabled={saving} />
-            </FormField>
-            {!compact && !isSite && (
-              <FormField label={t('transportOrders.route.reference')} htmlFor={`st-ref-${stop.key}`}>
-                <input id={`st-ref-${stop.key}`} value={stop.reference} onChange={(e) => setStop(stop.key, { reference: e.target.value })} disabled={saving} maxLength={100} />
-              </FormField>
-            )}
-            {isSite && (stop.plannedToIsManual || (stop.toDate !== '' && stop.toDate !== stop.date)) && (
-              <FormField label={t('stopEditor.site.endDate')} htmlFor={`st-todate-${stop.key}`}>
-                <input
-                  id={`st-todate-${stop.key}`}
-                  type="date"
-                  value={stop.toDate || stop.date}
-                  onChange={(e) => setStop(stop.key, { toDate: e.target.value })}
-                  disabled={saving}
-                />
-              </FormField>
-            )}
-          </div>
-          {/* Van/Tot: always two equal columns with the label above — also on a phone, where two
-              24h fields fit side by side. Both stay optional. */}
-          <div className="tof-time-pair">
-            <FormField label={t('transportOrders.route.from')} htmlFor={`st-fromtime-${stop.key}`} hint={t('transportOrders.route.optional')}>
-              <TimeInput id={`st-fromtime-${stop.key}`} value={stop.fromTime} onChange={(value) => setStop(stop.key, { fromTime: value })} disabled={saving} />
-            </FormField>
-            <FormField label={t('transportOrders.route.to')} htmlFor={`st-totime-${stop.key}`} hint={t('transportOrders.route.optional')}>
-              <TimeInput id={`st-totime-${stop.key}`} value={stop.toTime} onChange={(value) => setStop(stop.key, { toTime: value })} disabled={saving} />
-            </FormField>
-          </div>
-          {isSite && (
-            <p className="tof-site-end" role="note">
-              {stop.plannedToIsManual ? (
-                <>
-                  {t('stopEditor.site.endManual')}{' '}
-                  <button type="button" className="tof-link" onClick={() => setStop(stop.key, { plannedToIsManual: false })} disabled={saving}>
-                    {t('stopEditor.site.endAuto')}
-                  </button>
-                </>
-              ) : siteDurationHours !== null && siteDurationHours > 0 ? (
-                t('stopEditor.site.endFollows', { hours: String(siteDurationHours).replace('.', ',') })
-              ) : (
-                t('stopEditor.site.endNoDuration')
-              )}
-              {stop.toTime && stop.toDate !== '' && stop.toDate !== stop.date
-                ? ` ${t('stopEditor.site.endNextDay', { date: stop.toDate.split('-').reverse().join('-') })}`
-                : ''}
-            </p>
-          )}
-          {hoursHint && (
-            <p className="tof-hours-warning" role="note">
-              ⚠ {hoursHint}
-            </p>
-          )}
-          {!isSite && (
-          <div className="tof-row tof-row-4">
-            <FormField label={t('transportOrders.route.timeReq')} htmlFor={`st-timereq-${stop.key}`}>
-              <select
-                id={`st-timereq-${stop.key}`}
-                value={stop.timeRequirement}
-                onChange={(e) => setStop(stop.key, { timeRequirement: e.target.value as StopFormRow['timeRequirement'] })}
-                disabled={saving}
-              >
-                <option value="">{t('transportOrders.route.noTimeReq')}</option>
-                <option value="Before">
-                  {isUnloading ? t('transportOrders.route.deliverBefore') : t('transportOrders.route.loadBefore')}
-                </option>
-                <option value="After">
-                  {isUnloading ? t('transportOrders.route.notDeliverBefore') : t('transportOrders.route.notLoadBefore')}
-                </option>
-                <option value="Window">
-                  {isUnloading ? t('transportOrders.route.exactDeliveryWindow') : t('transportOrders.route.exactLoadingWindow')}
-                </option>
-              </select>
-            </FormField>
-            {(stop.timeRequirement === 'After' || stop.timeRequirement === 'Window') && (
-              <FormField
-                label={stop.timeRequirement === 'Window' ? t('transportOrders.route.windowFrom') : t('transportOrders.route.notBefore')}
-                htmlFor={`st-timereqfrom-${stop.key}`}
-                error={errors[`stops[${index}].timeReqFrom`]}
-              >
-                <TimeInput
-                  id={`st-timereqfrom-${stop.key}`}
-                  value={stop.timeReqFrom}
-                  onChange={(value) => setStop(stop.key, { timeReqFrom: value })}
-                  disabled={saving}
-                  aria-invalid={errors[`stops[${index}].timeReqFrom`] ? true : undefined}
-                />
-              </FormField>
-            )}
-            {(stop.timeRequirement === 'Before' || stop.timeRequirement === 'Window') && (
-              <FormField
-                label={stop.timeRequirement === 'Window' ? t('transportOrders.route.windowTo') : t('transportOrders.route.before')}
-                htmlFor={`st-timereqto-${stop.key}`}
-                error={errors[`stops[${index}].timeReqTo`]}
-              >
-                <TimeInput
-                  id={`st-timereqto-${stop.key}`}
-                  value={stop.timeReqTo}
-                  onChange={(value) => setStop(stop.key, { timeReqTo: value })}
-                  disabled={saving}
-                  aria-invalid={errors[`stops[${index}].timeReqTo`] ? true : undefined}
-                />
-              </FormField>
-            )}
-          </div>
+          {sheet ? (
+            <div className="tof-sheet-section">
+              <h4 className="tof-sheet-section-title">
+                <CalendarDays size={16} aria-hidden />
+                {t('stopEditor.sheet.planning')}
+              </h4>
+              {dateRow}
+              {/* One grid: Van, Tot, Tijdseis and its time read as one line of planning. */}
+              <div className="tof-sheet-times">
+                {timePair}
+                {requirementRow}
+              </div>
+              {siteEndNote}
+              {hoursNote}
+            </div>
+          ) : (
+            <>
+              {dateRow}
+              {timePair}
+              {siteEndNote}
+              {hoursNote}
+              {requirementRow}
+            </>
           )}
           {!compact && !sheet && (
             <div className="tof-row">
@@ -440,17 +499,13 @@ function StopRow({
               advanced field carries a value so existing data never disappears silently. */}
           <details
             className="tof-stop-extended"
-            open={Boolean(
-              stop.requestedFrom || stop.requestedTo || stop.confirmedFrom || stop.confirmedTo ||
-              stop.earliestAllowed || stop.latestAllowed ||
-              // Sheet mode: the AFSPRAAK badge already surfaces the flag; only a reference opens the disclosure.
-              (!sheet && stop.appointmentRequired) || stop.appointmentReference ||
-              stop.includedTimeMinutesOverride || stop.refreshSnapshot ||
-              stop.accessInstructions || stop.loadingInstructions || stop.unloadingInstructions ||
-              (sheet && stop.instructions),
-            )}
+            // Dossier sheet: stays collapsed and says that it holds data; a validation error opens it.
+            open={sheet ? (advancedError ? true : undefined) : advancedFilled}
           >
-            <summary>{t('transportOrders.route.advanced')}</summary>
+            <summary>
+              {t('transportOrders.route.advanced')}
+              {sheet && advancedFilled && <span className="tof-stop-extended-filled"> · {t('stopEditor.sheet.advancedFilled')}</span>}
+            </summary>
             <div className="tof-row tof-row-4">
               <FormField label={t('transportOrders.route.requestedFrom')} htmlFor={`st-reqfrom-${stop.key}`} hint={t('transportOrders.route.requestedFromHint')}>
                 <input id={`st-reqfrom-${stop.key}`} type="datetime-local" value={stop.requestedFrom} onChange={(e) => setStop(stop.key, { requestedFrom: e.target.value })} disabled={saving} />

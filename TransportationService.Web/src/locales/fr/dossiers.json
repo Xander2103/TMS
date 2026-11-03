@@ -271,7 +271,7 @@
   },
   "attention": {
     "title": "Points d'attention",
-    "goTo": "Aller à {section}",
+    "goTo": "Vers {section}",
     "severity": {
       "Blocking": "Bloquant",
       "Warning": "Avertissement",
@@ -285,11 +285,30 @@
       "prijs": "prix"
     },
     "openException": "Écart ouvert : {type}, gravité {severity}",
-    "openExceptionTrip": "sur {tripNumber}"
+    "openExceptionTrip": "sur {tripNumber}",
+    "toPlanning": "Vers le planning",
+    "viewAll": "Voir",
+    "activityCount_one": "{count} activité",
+    "activityCount_other": "{count} activités",
+    "openExceptions_one": "{count} anomalie ouverte",
+    "openExceptions_other": "{count} anomalies ouvertes",
+    "kind": {
+      "priceMissing": "Prix de vente manquant",
+      "priceZero": "Prix de 0,00 € à confirmer",
+      "priceIncomplete": "Prix incomplet",
+      "priceStale": "Prix obsolète",
+      "planningMissing": "Date de planification manquante",
+      "stopsBoth": "Lieu de chargement et de déchargement inconnu",
+      "stopsLoading": "Lieu de chargement inconnu",
+      "stopsUnloading": "Lieu de déchargement inconnu",
+      "orderMissing": "Ordre de transport manquant"
+    },
+    "openIncidents_one": "{count} incident ouvert",
+    "openIncidents_other": "{count} incidents ouverts"
   },
   "header": {
     "addActivity": "+ Activité",
-    "change": "modifier",
+    "change": "Modifier",
     "changeAction": "Modifier",
     "changeEntityAria": "Modifier l'entité",
     "chooseEntity": "— Choisissez une entité —",
@@ -759,10 +778,15 @@
     }
   },
   "timeline": {
+    "subtitle": "Aperçu de toutes les modifications de ce dossier.",
+    "searchPlaceholder": "Rechercher dans l’historique…",
+    "typeOption": "Type : {type}",
+    "range_one": "1 modification",
+    "range_other": "{start}–{end} sur {count} modifications",
     "loadFailed": "L'historique n'a pas pu être chargé.",
     "loading": "Chargement de l'historique…",
     "empty": "Pas encore d'historique pour ce dossier.",
-    "emptyFiltered": "Aucun événement dans cette catégorie.",
+    "emptyFiltered": "Aucun événement pour cette recherche ou ce type.",
     "filterLabel": "Afficher les événements",
     "system": "Système",
     "unknownUser": "Utilisateur inconnu",

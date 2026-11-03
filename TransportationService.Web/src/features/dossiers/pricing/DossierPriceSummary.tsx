@@ -1,9 +1,11 @@
-import { useId } from 'react'
+import { CheckCircle2 } from 'lucide-react'
 import { useLocale } from '../../../i18n/localeContext'
 import { euro } from '../../invoices/types'
+import { issueActivity } from '../activityDisplay'
 import { isDossierPriced } from '../dossierDisplay'
 import type { DossierActivity, DossierDetail, DossierOrder } from '../types'
-import { activityUnitName, needsAttention } from './activityPriceDisplay'
+import { needsAttention } from './activityPriceDisplay'
+import { priceAttention } from './priceUnitDisplay'
 import './dossier-pricing.css'
 
 interface DossierPriceSummaryProps {
@@ -41,58 +43,81 @@ function settledCounts(dossier: DossierDetail, activities: DossierActivity[], le
   return { handled: Math.min(handled, total), total }
 }
 
+/** Above this many units the progress reads as one bar instead of a segment per unit. */
+const MAX_SEGMENTS = 12
+
 /**
- * DOSSIER summary block of the price tab — labelled as such, so it is never mistaken for the
- * price of the selected unit. The TOTAL is the server's financial summary (one column per
- * billable unit on the backend — nothing is summed here), "x van y onderdelen afgehandeld"
- * excludes the € 0 units that still await a decision, and the units that still need a price or a
- * check are links that make them the selected unit. "Nog geen prijs" instead of € 0,00 while
- * nothing is priced.
+ * DOSSIER summary of the price tab: a compact card under the list of parts, so the dossier's own
+ * numbers never mix with those of the selected unit on the right.
+ *  - TOTAAL: the server's financial summary (nothing is summed here); "Nog geen prijs" while
+ *    nothing is priced, and the label says "Voorlopig totaal" as long as a unit is still open, so
+ *    a partial aggregate is never read as the dossier price.
+ *  - VOORTGANG: "x van y onderdelen afgehandeld" with a segment per unit — the € 0 units that
+ *    still await a decision are not settled.
+ *  - A pricing warning that no open unit represents (e.g. an outdated price) is named here; the
+ *    open units themselves are visible in the list above.
  */
 export function DossierPriceSummary({ dossier, billableActivities, legacyOrders, onSelect, locked }: DossierPriceSummaryProps) {
   const { t } = useLocale()
-  const titleId = useId()
   const priced = isDossierPriced(dossier)
-  const pricingIssues = dossier.readiness.filter((issue) => issue.code.startsWith('pricing.') && issue.severity !== 'Info')
   const counts = settledCounts(dossier, billableActivities, legacyOrders)
-  const toHandle = billableActivities.filter((activity) => needsAttention(dossier, activity))
+  const { otherIssues, count: openCount } = priceAttention(dossier, billableActivities)
+  const complete = counts !== null && counts.handled >= counts.total && openCount === 0
 
   return (
-    <section className="dossier-price-summary" aria-labelledby={titleId}>
-      <p id={titleId} className="dossier-price-summary-title">
-        {t('dossierPricing.summary.title')}
-      </p>
-      <p className="dossier-price-total">
+    <section className="dossier-price-summary" aria-label={t('dossierPricing.summary.title')}>
+      <div className="dossier-price-total">
+        <span className="dossier-price-summary-label">
+          {t(counts && counts.handled < counts.total ? 'dossierPricing.summary.totalProvisional' : 'dossierPricing.summary.total')}
+        </span>
         {priced ? (
-          <strong>{euro(dossier.financials.agreedOrderTotal)}</strong>
+          <strong className="dossier-price-total-amount">{euro(dossier.financials.agreedOrderTotal)}</strong>
         ) : (
-          <strong className="dossier-price-none">{t('dossierSheet.price.noPrice')}</strong>
+          <strong className="dossier-price-total-amount dossier-price-none">{t('dossierSheet.price.noPrice')}</strong>
         )}
-        {counts && <span className="dossier-price-partial">{t('dossierPricing.summary.handled', counts)}</span>}
-        {pricingIssues.length > 0 && (
-          <span className="dossier-price-warning">⚠ {t('dossiers.price.attention', { count: pricingIssues.length })}</span>
-        )}
-      </p>
+      </div>
 
-      {toHandle.length > 0 && (
-        <p className="dossier-price-toprice">
-          <span>{t('dossierPricing.summary.toHandle')}</span>
-          {toHandle.map((activity) => {
-            const unit = activityUnitName(activity)
-            const name = activity.linkedOrderNumber ? t('dossierPricing.picker.itemWithOrder', { number: activity.linkedOrderNumber, name: unit }) : unit
-            const label =
-              activity.priceStatus === 'PartiallyPriced'
-                ? t('dossierPricing.summary.partial', { name })
-                : activity.priceStatus === 'ZeroUnconfirmed'
-                  ? t('dossierPricing.summary.needsReview', { name })
-                  : name
+      {counts && (
+        <div className="dossier-price-progress">
+          <span className="dossier-price-progress-text">{t('dossierPricing.summary.handled', counts)}</span>
+          {counts.total <= MAX_SEGMENTS ? (
+            <span className={`dossier-price-progress-bar${complete ? ' is-complete' : ''}`} aria-hidden="true">
+              {Array.from({ length: counts.total }, (_, index) => (
+                <span key={index} className={index < counts.handled ? 'is-done' : undefined} />
+              ))}
+            </span>
+          ) : (
+            <span className={`dossier-price-progress-bar is-continuous${complete ? ' is-complete' : ''}`} aria-hidden="true">
+              <span className="is-done" style={{ width: `${Math.round((counts.handled / counts.total) * 100)}%` }} />
+            </span>
+          )}
+        </div>
+      )}
+
+      {openCount === 0 && (
+        <p className="dossier-price-settled">
+          <CheckCircle2 size={16} aria-hidden />
+          {t('dossierPricing.summary.allSettled')}
+        </p>
+      )}
+
+      {otherIssues.length > 0 && (
+        <ul className="dossier-price-issues">
+          {otherIssues.map((issue) => {
+            const target = issueActivity(issue, billableActivities)
             return (
-              <button key={activity.id} type="button" className="link-button" onClick={() => onSelect(activity.id)} disabled={locked}>
-                {label}
-              </button>
+              <li key={`${issue.code}-${issue.activityId ?? issue.transportOrderId ?? issue.message}`}>
+                {target ? (
+                  <button type="button" className="link-button" onClick={() => onSelect(target.id)} disabled={locked}>
+                    {issue.message}
+                  </button>
+                ) : (
+                  issue.message
+                )}
+              </li>
             )
           })}
-        </p>
+        </ul>
       )}
 
       {legacyOrders.length > 0 && (

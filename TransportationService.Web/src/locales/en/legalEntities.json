@@ -40,7 +40,15 @@
     "logoPending": "New logo (not saved yet):",
     "logoPendingRemoval": "The logo will be removed when you click Save.",
     "logoUndo": "Undo logo change",
-    "logoAppliedOnSave": "A logo change is only saved when you click Save. Invoices already issued keep their logo; new invoices use the new logo."
+    "logoAppliedOnSave": "A logo change is only saved when you click Save. Invoices already issued keep their logo; new invoices use the new logo.",
+    "sectionHeaderImage": "Banner photo",
+    "headerImagePending": "New photo (not saved yet):",
+    "headerImagePendingRemoval": "The photo is removed when you click Save.",
+    "currentHeaderImage": "Current photo:",
+    "noHeaderImageYet": "No photo of its own: the standard transport photo is shown.",
+    "headerImageUploadAria": "Choose banner photo",
+    "headerImageDelete": "Remove photo",
+    "headerImageHint": "At the top of this company's dossiers and orders. PNG or JPG, up to 5 MB, preferably at least 1600 px wide."
   },
   "page": {
     "columnDefault": "Default",
@@ -69,7 +77,10 @@
     "saved": "Company saved.",
     "savingBusy": "Saving…",
     "subtitle": "Invoicing entities of this organisation.",
-    "savedLogoFailed": "The company was saved, but the logo change was not: {message} Click Save again to retry the logo."
+    "savedLogoFailed": "The company was saved, but the logo change was not: {message} Click Save again to retry the logo.",
+    "headerImageUploadFailed": "The banner photo could not be uploaded.",
+    "headerImageRemoveFailed": "The banner photo could not be removed.",
+    "savedHeaderImageFailed": "The company was saved, but the banner photo change was not: {message} Click Save again to retry."
   },
   "switcher": {
     "defaultSuffix": "(default)",

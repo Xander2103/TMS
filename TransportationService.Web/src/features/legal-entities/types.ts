@@ -27,6 +27,9 @@ export interface LegalEntity {
   invoiceFooter: string | null
   hasLogo: boolean
   logoFileName: string | null
+  /** Banner photo of the dossier and order headers; absent on older payloads. */
+  hasHeaderImage?: boolean
+  headerImageFileName?: string | null
   isActive: boolean
   isDefault: boolean
   /** MD-M2: optimistic-concurrency token; echoed as `expectedVersion`. Absent on older payloads. */
@@ -40,6 +43,7 @@ export interface LegalEntityOption {
   vatNumber: string | null
   isDefault: boolean
   isActive: boolean
+  hasHeaderImage?: boolean
 }
 
 /** Mirrors SaveLegalEntityRequest (create + update share the same body). */

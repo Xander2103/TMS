@@ -585,7 +585,7 @@ describe('Dossier navigation — attention jumps land on the right tab and field
     const { router } = renderPage()
     await screen.findByText('Nexans site Antwerpen')
 
-    await user.click(screen.getByRole('button', { name: 'Ga naar route' }))
+    await user.click(screen.getByRole('button', { name: 'Naar route' }))
     expect(router.state.location.pathname).toBe(ROUTE_TAB)
     expect(subnavLink('Route')).toHaveAttribute('aria-current', 'page')
     const locationInputs = await screen.findAllByLabelText('locatie')
@@ -603,7 +603,7 @@ describe('Dossier navigation — attention jumps land on the right tab and field
     const { router } = renderPage()
     await screen.findByText('Nexans site Antwerpen')
 
-    await user.click(screen.getByRole('button', { name: 'Ga naar prijs' }))
+    await user.click(screen.getByRole('button', { name: 'Naar prijs' }))
     expect(router.state.location.pathname).toBe(PRICE_TAB)
     expect(subnavLink('Verkoop & prijs')).toHaveAttribute('aria-current', 'page')
     const agreed = await screen.findByLabelText('Afgesproken prijs (€)')
@@ -619,7 +619,7 @@ describe('Dossier navigation — attention jumps land on the right tab and field
     const { router } = renderPage()
     await screen.findByText('Nexans site Antwerpen')
 
-    await user.click(screen.getByRole('button', { name: 'Ga naar prijs' }))
+    await user.click(screen.getByRole('button', { name: 'Naar prijs' }))
     expect(router.state.location.pathname).toBe(PRICE_TAB)
     const units = await screen.findByRole('listbox', { name: /Prijsbare onderdelen/ })
     await waitFor(() => expect(within(units).getByRole('option', { name: /Kraanwerk/ })).toHaveAttribute('aria-selected', 'true'))

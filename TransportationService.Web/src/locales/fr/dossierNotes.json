@@ -1,4 +1,18 @@
 {
+  "workspaceSubtitle": "Notes internes de ce dossier.",
+  "list": {
+    "searchPlaceholder": "Rechercher dans les notes…",
+    "sortLabel": "Trier",
+    "newest": "Date (plus récentes)",
+    "oldest": "Date (plus anciennes)",
+    "pageSizeLabel": "Nombre par page",
+    "perPage": "{size} par page",
+    "pageNumber": "Page {page}",
+    "noMatches": "Aucune note ne correspond à cette recherche.",
+    "range_one": "1 note",
+    "range_other": "{start}–{end} sur {count} notes",
+    "actions": "Actions pour la note de {author}, {date}"
+  },
   "title": "Notes",
   "activityTitle": "Notes de cette activité",
   "add": "+ Ajouter une note",

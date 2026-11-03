@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
+import { AlertTriangle, ChevronUp, ClipboardList, Coins, FileText, FolderOpen, Info, ListChecks, OctagonAlert, PackageCheck, ShieldAlert, TriangleAlert, type LucideIcon } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { localizeApiError } from '../../../api/problemDetails'
 import { Button } from '../../../components/ui/Button'
@@ -75,6 +76,8 @@ export function DossierConfirmDialog({ dossierId, dossierNumber, version, onConf
       title={`${t('dossiers.lifecycle.confirmTitle')} — ${dossierNumber}`}
       onClose={onClose}
       busy={busy}
+      size="wide"
+      titleIcon={<FolderOpen size={20} />}
       footer={
         <>
           <Button variant="secondary" onClick={onClose} disabled={busy}>{t('ui.actions.cancel')}</Button>
@@ -108,7 +111,7 @@ export function DossierConfirmDialog({ dossierId, dossierNumber, version, onConf
           {!blocked && needsAcknowledgement && (
             <label className="dossier-confirm-ack">
               <input type="checkbox" checked={acknowledged} onChange={(e) => setAcknowledged(e.target.checked)} />
-              {' '}{t('dossiers.lifecycle.acknowledge')}
+              {t('dossiers.lifecycle.acknowledge')}
             </label>
           )}
 
@@ -130,82 +133,89 @@ export function DossierConfirmDialog({ dossierId, dossierNumber, version, onConf
   )
 }
 
+function SummaryTile({ icon: Icon, label, children }: { icon: LucideIcon; label: string; children: ReactNode }) {
+  return (
+    <div className="dossier-confirm-tile">
+      <dt>
+        <Icon size={18} aria-hidden="true" />
+        {label}
+      </dt>
+      <dd>{children}</dd>
+    </div>
+  )
+}
+
 function ConfirmationSummary({ evaluation }: { evaluation: DossierConfirmationEvaluation }) {
   const { t } = useLocale()
   const s = evaluation.summary
   const k = 'dossiers.lifecycle.summary.'
   return (
     <dl className="dossier-confirm-summary">
-      <div>
-        <dt>{t(`${k}orders`)}</dt>
-        <dd>
-          {t(`${k}ordersValue`, { completed: s.ordersCompleted, total: s.ordersTotal })}
-          {s.ordersCancelled > 0 && ` · ${t(`${k}ordersCancelled`, { count: s.ordersCancelled })}`}
-        </dd>
-      </div>
+      <SummaryTile icon={ClipboardList} label={t(`${k}orders`)}>
+        {t(`${k}ordersValue`, { completed: s.ordersCompleted, total: s.ordersTotal })}
+        {s.ordersCancelled > 0 && ` · ${t(`${k}ordersCancelled`, { count: s.ordersCancelled })}`}
+      </SummaryTile>
       {s.ordersCompleted > 0 && (
-        <div>
-          <dt>{t(`${k}deliveries`)}</dt>
-          <dd>
-            {s.deliveriesFailed > 0 ? t(`${k}deliveriesFailed`, { count: s.deliveriesFailed }) : t(`${k}deliveriesOk`)}
-            {s.podMissing > 0 && ` · ${t(`${k}podMissing`, { count: s.podMissing })}`}
-          </dd>
-        </div>
+        <SummaryTile icon={PackageCheck} label={t(`${k}deliveries`)}>
+          {s.deliveriesFailed > 0 ? t(`${k}deliveriesFailed`, { count: s.deliveriesFailed }) : t(`${k}deliveriesOk`)}
+          {s.podMissing > 0 && ` · ${t(`${k}podMissing`, { count: s.podMissing })}`}
+        </SummaryTile>
       )}
       {s.activitiesExecutable > 0 && (
-        <div>
-          <dt>{t(`${k}activities`)}</dt>
-          <dd>{t(`${k}activitiesValue`, { executed: s.activitiesExecuted, total: s.activitiesExecutable })}</dd>
-        </div>
+        <SummaryTile icon={ListChecks} label={t(`${k}activities`)}>
+          {t(`${k}activitiesValue`, { executed: s.activitiesExecuted, total: s.activitiesExecutable })}
+        </SummaryTile>
       )}
-      <div>
-        <dt>{t(`${k}pricing`)}</dt>
-        <dd>{t(`${k}pricingValue`, { priced: s.pricedUnits, total: s.billableUnits })}</dd>
-      </div>
-      <div>
-        <dt>{t(`${k}documents`)}</dt>
-        <dd>{t(`${k}documentsValue`, { count: s.documents })} · {s.hasCmr ? t(`${k}cmrPresent`) : t(`${k}cmrMissing`)}</dd>
-      </div>
+      <SummaryTile icon={Coins} label={t(`${k}pricing`)}>
+        {t(`${k}pricingValue`, { priced: s.pricedUnits, total: s.billableUnits })}
+      </SummaryTile>
+      <SummaryTile icon={FileText} label={t(`${k}documents`)}>
+        {t(`${k}documentsValue`, { count: s.documents })} · {s.hasCmr ? t(`${k}cmrPresent`) : t(`${k}cmrMissing`)}
+      </SummaryTile>
       {s.openIncidents > 0 && (
-        <div>
-          <dt>{t(`${k}incidents`)}</dt>
-          <dd>{s.openIncidents}</dd>
-        </div>
+        <SummaryTile icon={ShieldAlert} label={t(`${k}incidents`)}>{s.openIncidents}</SummaryTile>
       )}
       {(s.openExceptions ?? 0) > 0 && (
-        <div>
-          <dt>{t(`${k}exceptions`)}</dt>
-          <dd>
-            {s.openExceptions}
-            {(s.openExceptionsHolding ?? 0) > 0 && ` · ${t(`${k}exceptionsHolding`, { count: s.openExceptionsHolding ?? 0 })}`}
-          </dd>
-        </div>
+        <SummaryTile icon={TriangleAlert} label={t(`${k}exceptions`)}>
+          {s.openExceptions}
+          {(s.openExceptionsHolding ?? 0) > 0 && ` · ${t(`${k}exceptionsHolding`, { count: s.openExceptionsHolding ?? 0 })}`}
+        </SummaryTile>
       )}
     </dl>
   )
 }
 
+const TONE_ICONS: Record<'blocking' | 'warning' | 'info', LucideIcon> = { blocking: OctagonAlert, warning: AlertTriangle, info: Info }
+
 function CheckList({ tone, title, hint, checks }: {
   tone: 'blocking' | 'warning' | 'info'; title: string; hint?: string; checks: DossierConfirmationCheck[]
 }) {
   const { t } = useLocale()
+  const Icon = TONE_ICONS[tone]
   return (
-    <section className={`dossier-confirm-checks dossier-confirm-checks-${tone}`}>
-      <h4>{title}</h4>
-      {hint && <p className="dossier-confirm-hint">{hint}</p>}
-      <ul>
-        {checks.map((check, index) => (
-          <li key={`${check.code}-${check.transportOrderId ?? ''}-${check.activityId ?? ''}-${index}`}>
-            {check.message}
-            {check.problemId && (
-              <>
-                {' '}
-                <Link to={`/exceptions/${check.problemId}`}>{t('dossiers.lifecycle.openException')}</Link>
-              </>
-            )}
-          </li>
-        ))}
-      </ul>
-    </section>
+    <details className={`dossier-confirm-checks dossier-confirm-checks-${tone}`} open>
+      <summary>
+        <Icon className="dossier-confirm-checks-icon" size={20} aria-hidden="true" />
+        <h4>{title}</h4>
+        <span className="dossier-confirm-count">{checks.length}</span>
+        <ChevronUp className="dossier-confirm-chevron" size={18} aria-hidden="true" />
+      </summary>
+      <div className="dossier-confirm-checks-body">
+        {hint && <p className="dossier-confirm-hint">{hint}</p>}
+        <ul>
+          {checks.map((check, index) => (
+            <li key={`${check.code}-${check.transportOrderId ?? ''}-${check.activityId ?? ''}-${index}`}>
+              {check.message}
+              {check.problemId && (
+                <>
+                  {' '}
+                  <Link to={`/exceptions/${check.problemId}`}>{t('dossiers.lifecycle.openException')}</Link>
+                </>
+              )}
+            </li>
+          ))}
+        </ul>
+      </div>
+    </details>
   )
 }

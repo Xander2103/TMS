@@ -16,6 +16,7 @@ import {
 } from '../../incidents/types'
 import { isDossierPriced } from '../dossierDisplay'
 import { DOSSIER_RELATION_LABELS, type DossierDetail } from '../types'
+import './dossier-history.css'
 
 interface DossierMoreSectionProps {
   dossier: DossierDetail
@@ -33,7 +34,7 @@ export function DossierMoreSection({ dossier, canManage, busy, onRemoveRelation,
   // SEC-M1: the financial block is all amounts; without a price right the API zeroes them.
   const canViewPrices = useCanViewPrices()
   return (
-    <details className="dossier-collapsed" id="sectie-meer" open={defaultOpen}>
+    <details className="dossier-collapsed dossier-more" id="sectie-meer" open={defaultOpen}>
       <summary>
         {dossier.incidents.length > 0
           ? t('dossiers.more.summaryWithCount', { count: dossier.incidents.length })
@@ -67,54 +68,59 @@ export function DossierMoreSection({ dossier, canManage, busy, onRemoveRelation,
         </>
       )}
 
-      <h3>{t('dossiers.more.relatedTitle', { count: dossier.relations.length })}</h3>
-      {dossier.relations.length === 0 && <p className="placeholder-text">{t('dossiers.more.noRelated')}</p>}
-      {dossier.relations.length > 0 && (
-        <ul className="db-list">
-          {dossier.relations.map((relation) => (
-            <li key={relation.id}>
-              <span className="db-row">
-                <Badge tone="info">
-                  {t(DOSSIER_RELATION_LABELS[relation.relationType])}
-                  {relation.isOutgoing ? ' →' : ' ←'}
-                </Badge>
-                <button type="button" className="link-button" onClick={() => navigate(`/dossiers/${relation.otherDossierId}`)}>
-                  <code>{relation.otherDossierNumber}</code> {relation.otherDossierTitle}
-                </button>
-                <span className="db-row-main">{relation.notes ?? ''}</span>
-                {canManage && (
-                  <Button variant="secondary" onClick={() => onRemoveRelation(relation.id)} disabled={busy}>
-                    {t('ui.actions.delete')}
-                  </Button>
-                )}
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
-
-      <h3>{t('dossiers.more.incidentsTitle', { count: dossier.incidents.length })}</h3>
-      {dossier.incidents.length === 0 && <p className="placeholder-text">{t('dossiers.more.noIncidents')}</p>}
-      {dossier.incidents.length > 0 && (
-        <ul className="db-list">
-          {dossier.incidents.map((incident) => (
-            <li key={incident.id}>
-              <Link className="db-row" to={`/incidents/${incident.id}`}>
-                <span className="db-row-main">{incident.title}</span>
-                <span className="db-row-meta">
-                  {INCIDENT_TYPE_LABELS[incident.incidentType as IncidentType] ? t(INCIDENT_TYPE_LABELS[incident.incidentType as IncidentType]) : incident.incidentType}
-                  <Badge tone={INCIDENT_SEVERITY_TONE[incident.severity as IncidentSeverity] ?? 'neutral'}>
-                    {INCIDENT_SEVERITY_LABELS[incident.severity as IncidentSeverity] ? t(INCIDENT_SEVERITY_LABELS[incident.severity as IncidentSeverity]) : incident.severity}
-                  </Badge>
-                  <Badge tone={INCIDENT_STATUS_TONE[incident.status as IncidentStatus] ?? 'neutral'}>
-                    {INCIDENT_STATUS_LABELS[incident.status as IncidentStatus] ? t(INCIDENT_STATUS_LABELS[incident.status as IncidentStatus]) : incident.status}
-                  </Badge>
-                </span>
-              </Link>
-            </li>
-          ))}
-        </ul>
-      )}
+      <div className="dossier-more-columns">
+        <div>
+          <h3>{t('dossiers.more.relatedTitle', { count: dossier.relations.length })}</h3>
+          {dossier.relations.length === 0 && <p className="placeholder-text">{t('dossiers.more.noRelated')}</p>}
+          {dossier.relations.length > 0 && (
+            <ul className="db-list">
+              {dossier.relations.map((relation) => (
+                <li key={relation.id}>
+                  <span className="db-row">
+                    <Badge tone="info">
+                      {t(DOSSIER_RELATION_LABELS[relation.relationType])}
+                      {relation.isOutgoing ? ' →' : ' ←'}
+                    </Badge>
+                    <button type="button" className="link-button" onClick={() => navigate(`/dossiers/${relation.otherDossierId}`)}>
+                      <code>{relation.otherDossierNumber}</code> {relation.otherDossierTitle}
+                    </button>
+                    <span className="db-row-main">{relation.notes ?? ''}</span>
+                    {canManage && (
+                      <Button variant="secondary" onClick={() => onRemoveRelation(relation.id)} disabled={busy}>
+                        {t('ui.actions.delete')}
+                      </Button>
+                    )}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+        <div>
+          <h3>{t('dossiers.more.incidentsTitle', { count: dossier.incidents.length })}</h3>
+          {dossier.incidents.length === 0 && <p className="placeholder-text">{t('dossiers.more.noIncidents')}</p>}
+          {dossier.incidents.length > 0 && (
+            <ul className="db-list">
+              {dossier.incidents.map((incident) => (
+                <li key={incident.id}>
+                  <Link className="db-row" to={`/incidents/${incident.id}`}>
+                    <span className="db-row-main">{incident.title}</span>
+                    <span className="db-row-meta">
+                      {INCIDENT_TYPE_LABELS[incident.incidentType as IncidentType] ? t(INCIDENT_TYPE_LABELS[incident.incidentType as IncidentType]) : incident.incidentType}
+                      <Badge tone={INCIDENT_SEVERITY_TONE[incident.severity as IncidentSeverity] ?? 'neutral'}>
+                        {INCIDENT_SEVERITY_LABELS[incident.severity as IncidentSeverity] ? t(INCIDENT_SEVERITY_LABELS[incident.severity as IncidentSeverity]) : incident.severity}
+                      </Badge>
+                      <Badge tone={INCIDENT_STATUS_TONE[incident.status as IncidentStatus] ?? 'neutral'}>
+                        {INCIDENT_STATUS_LABELS[incident.status as IncidentStatus] ? t(INCIDENT_STATUS_LABELS[incident.status as IncidentStatus]) : incident.status}
+                      </Badge>
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
     </details>
   )
 }

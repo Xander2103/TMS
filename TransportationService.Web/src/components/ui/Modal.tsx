@@ -17,6 +17,8 @@ interface ModalProps {
    * the default 560px stays right for plain field forms. Both collapse to the viewport on phones.
    */
   size?: 'default' | 'wide'
+  /** Decorative tile before the title. */
+  titleIcon?: ReactNode
 }
 
 /**
@@ -28,7 +30,7 @@ interface ModalProps {
  * react to a dialog's edits wrap it in `SelfSavingPanel`.) Focus returns to the element that
  * opened the dialog when it closes.
  */
-export function Modal({ title, onClose, children, footer, busy = false, size = 'default' }: ModalProps) {
+export function Modal({ title, onClose, children, footer, busy = false, size = 'default', titleIcon }: ModalProps) {
   const { t } = useLocale()
   const dialogRef = useRef<HTMLDivElement>(null)
   // Captured during the FIRST render, before commit: content with `autoFocus` (e.g. the contact
@@ -71,7 +73,10 @@ export function Modal({ title, onClose, children, footer, busy = false, size = '
         onClick={(event) => event.stopPropagation()}
       >
         <header className="ui-modal-header">
-          <h3>{title}</h3>
+          <h3 className={titleIcon ? 'ui-modal-title-with-icon' : undefined}>
+            {titleIcon && <span className="ui-modal-title-icon" aria-hidden="true">{titleIcon}</span>}
+            {title}
+          </h3>
           <button type="button" className="ui-modal-close" onClick={onClose} disabled={busy} aria-label={t('ui.modal.close')}>
             ×
           </button>

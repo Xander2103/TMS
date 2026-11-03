@@ -24,7 +24,8 @@ describe('AttentionPanel', () => {
         <AttentionPanel issues={[]} onNavigate={vi.fn()} openIncidents={[{ id: 'inc-9', title: 'Verkeerde lossplaats' }]} />
       </MemoryRouter>,
     )
-    expect(screen.getByText(/1 open incident: afsluiten kan pas na afhandeling/)).toBeInTheDocument()
+    expect(screen.getByText('1 open incident')).toBeInTheDocument()
+    expect(screen.getByText('1 open incident').closest('li')?.title).toMatch(/afsluiten kan pas na afhandeling/)
     expect(screen.getByRole('link', { name: 'Verkeerde lossplaats' })).toHaveAttribute('href', '/incidents/inc-9')
   })
 
@@ -63,48 +64,65 @@ describe('AttentionPanel', () => {
     expect(screen.getAllByRole('img', { name: 'Waarschuwing' })).toHaveLength(2)
     expect(screen.getByRole('img', { name: 'Info' })).toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: 'Ga naar route' }))
+    await user.click(screen.getByRole('button', { name: 'Naar route' }))
     expect(onNavigate).toHaveBeenCalledWith('route', null, issues[0])
-    await user.click(screen.getByRole('button', { name: 'Ga naar prijs' }))
+    await user.click(screen.getByRole('button', { name: 'Naar prijs' }))
     expect(onNavigate).toHaveBeenCalledWith('prijs', 'price', issues[1])
   })
 
-  it('makes the warning itself clickable: same jump, with the issue (activity/order) along', async () => {
+  it('groups issues of one kind: one item, one action, landing on the first activity of the group', async () => {
     const user = userEvent.setup()
     const onNavigate = vi.fn()
-    const priceIssue: ReadinessIssue = {
-      code: 'pricing.missing', severity: 'Warning', message: '0006: verkoopprijs ontbreekt.', section: 'prijs', field: 'price', stage: 'Commercial', transportOrderId: 'o-6',
-    }
-    render(<AttentionPanel issues={[priceIssue]} onNavigate={onNavigate} />)
-    await user.click(screen.getByRole('button', { name: '0006: verkoopprijs ontbreekt.' }))
-    expect(onNavigate).toHaveBeenCalledWith('prijs', 'price', priceIssue)
-  })
-
-  it('names the activity/order of an issue that only carries the id — and never twice', () => {
     const activities = [
       dossierActivity({ id: 'a-6', linkedTransportOrderId: 'o-6', linkedOrderNumber: '0006', linkedOrderStatus: 'Confirmed' }),
       dossierActivity({ id: 'a-7', sequence: 2, hasStops: false, activityTypeName: 'Opslag' }),
-      dossierActivity({ id: 'a-8', sequence: 3, hasStops: false, activityTypeName: 'Kraanwerk', label: 'Werf Gent' }),
     ]
-    const base = { severity: 'Warning' as const, stage: 'Planning', field: null }
+    const base = { severity: 'Warning' as const, stage: 'Commercial', section: 'prijs' as const, field: 'price' }
+    const first: ReadinessIssue = { ...base, code: 'pricing.missing', message: '0006: verkoopprijs ontbreekt.', transportOrderId: 'o-6' }
     render(
       <AttentionPanel
         activities={activities}
-        onNavigate={vi.fn()}
+        onNavigate={onNavigate}
         issues={[
-          { ...base, code: 'route.date_missing', section: 'route', message: 'planningsdatum ontbreekt.', transportOrderId: 'o-6' },
-          { ...base, code: 'pricing.missing', section: 'prijs', message: '0006: verkoopprijs ontbreekt.', activityId: 'a-6' },
-          { ...base, code: 'pricing.missing', section: 'prijs', message: 'verkoopprijs ontbreekt.', activityId: 'a-7' },
-          // The backend names a standalone activity by its type: no second prefix with the label.
-          { ...base, code: 'pricing.missing', section: 'prijs', message: 'Kraanwerk: verkoopprijs ontbreekt.', activityId: 'a-8' },
-          { ...base, code: 'activity.none', section: 'activiteiten', message: 'Nog geen activiteit toegevoegd.' },
+          first,
+          { ...base, code: 'pricing.missing', message: 'Opslag: verkoopprijs ontbreekt.', activityId: 'a-7' },
+          { ...base, code: 'route.date_missing', section: 'route', field: 'stops.plannedFrom', message: '0006: planningsdatum ontbreekt.', transportOrderId: 'o-6' },
+          { ...base, code: 'order.confirm.stops', severity: 'Blocking', section: 'route', field: 'stops.unloading', message: '0006: loslocatie is nog onbekend (nodig om te bevestigen).', transportOrderId: 'o-6' },
         ]}
       />,
     )
-    expect(screen.getByRole('button', { name: '0006: planningsdatum ontbreekt.' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '0006: verkoopprijs ontbreekt.' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Opslag: verkoopprijs ontbreekt.' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Kraanwerk: verkoopprijs ontbreekt.' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Nog geen activiteit toegevoegd.' })).toBeInTheDocument()
+
+    expect(screen.getByText('Verkoopprijs ontbreekt')).toBeInTheDocument()
+    expect(screen.getByText('2 activiteiten · 0006, Opslag')).toBeInTheDocument()
+    expect(screen.getByText('Planningsdatum ontbreekt')).toBeInTheDocument()
+    expect(screen.getByText('Loslocatie onbekend')).toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: 'Naar prijs' })).toHaveLength(1)
+    expect(screen.getAllByRole('button')).toHaveLength(3)
+    // The worst severity first, and the bar takes its tone.
+    expect(screen.getAllByRole('listitem')[0]).toHaveTextContent('Loslocatie onbekend')
+    expect(screen.getByRole('region', { name: 'Aandacht' })).toHaveClass('is-blocking')
+    // The original messages stay readable.
+    expect(screen.getByText('Verkoopprijs ontbreekt').closest('li')).toHaveAttribute('title', '0006: verkoopprijs ontbreekt.\nOpslag: verkoopprijs ontbreekt.')
+
+    await user.click(screen.getByRole('button', { name: 'Naar prijs' }))
+    expect(onNavigate).toHaveBeenCalledWith('prijs', 'price', first)
+    await user.click(screen.getByRole('button', { name: 'Naar planning' }))
+    expect(onNavigate).toHaveBeenCalledWith('route', 'stops.plannedFrom', expect.objectContaining({ code: 'route.date_missing' }))
+  })
+
+  it('names both stops when the backend says both are unknown, and keeps an unknown code on its own message', () => {
+    const base = { severity: 'Warning' as const, stage: 'Planning', section: 'route' as const, field: 'stops.loading' }
+    render(
+      <AttentionPanel
+        onNavigate={vi.fn()}
+        issues={[
+          { ...base, code: 'order.confirm.stops', message: '0006: laad- en loslocatie zijn nog onbekend (nodig om te bevestigen).' },
+          { ...base, code: 'activity.none', section: 'activiteiten', field: null, message: 'Nog geen activiteit toegevoegd.' },
+        ]}
+      />,
+    )
+    expect(screen.getByText('Laad- en loslocatie onbekend')).toBeInTheDocument()
+    expect(screen.getByText('Nog geen activiteit toegevoegd.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Naar activiteiten' })).toBeInTheDocument()
   })
 })

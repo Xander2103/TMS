@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
+import { ArrowRight, Folder, Layers, Truck } from 'lucide-react'
 import { Button } from '../../../components/ui/Button'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { FormField } from '../../../components/ui/FormField'
@@ -23,7 +24,8 @@ import {
   setDossierDocumentCustomerVisible,
   type DossierDocument,
 } from '../api/dossierDocumentsApi'
-import { DossierDocumentTable } from './DossierDocumentTable'
+import { DossierDocumentList } from './DossierDocumentList'
+import { DossierSharedDocumentList } from './DossierDocumentTable'
 import { fileProblem } from './documentFile'
 import {
   DOSSIER_LEVEL,
@@ -59,8 +61,9 @@ interface DossierDocumentsWorkspaceProps {
  * ONE list (the dossier endpoint, every scope) feeds every level. The level selector groups the
  * levels the way a planner thinks about the dossier — Dossier / Opdrachten / Activiteiten — with
  * the OWN document count per level. "Dossierdocumenten" shows the documents of the dossier as a
- * whole; an order or activity level shows its OWN documents plus the dossier documents read-only
- * (the same records, never copies), and an order level also its issued transport documents.
+ * whole; an order or activity level shows its OWN documents in a card that names the context, an
+ * order level then its issued transport documents, and at the bottom, apart from the level's own
+ * files, the dossier documents read-only (the same records, never copies).
  * Scope and customer visibility are two different things: the level switch never publishes or
  * withdraws anything.
  *
@@ -166,43 +169,57 @@ export function DossierDocumentsWorkspace({ dossierId, levels, initialOrderId, i
   const orderActions = rowActions('Order')
   const activityActions = rowActions('Activity')
 
-  /** The read-only block of dossier documents shown on an order or activity level: the same records, never copies. */
-  const sharedDossierDocuments = (
-    <section className="ddoc-section ddoc-section-general" aria-label={t('dossierDocuments.sections.general')}>
-      <h3>{t('dossierDocuments.sections.general')}</h3>
-      <p className="ddoc-hint">
-        {t('dossierDocuments.sections.generalHint')}{' '}
-        <button type="button" className="link-button" onClick={() => setLevel(DOSSIER_LEVEL)}>
-          {t('dossierDocuments.sections.manageViaDossier')}
-        </button>
-      </p>
-      <DossierDocumentTable documents={dossierDocuments} emptyText={t('dossierDocuments.empty.general')} />
+  /** The read-only block of dossier documents on an order or activity level; nothing to show, no block. */
+  const sharedDossierDocuments = (title: string) =>
+    dossierDocuments.length > 0 && (
+      <section className="ddoc-card ddoc-shared" aria-label={title}>
+        <header className="ddoc-card-head">
+          <Folder size={22} aria-hidden className="ddoc-shared-folder" />
+          <div className="ddoc-card-heading">
+            <h3>{title}</h3>
+            <p>{t('dossierDocuments.shared.hint')}</p>
+          </div>
+          <button type="button" className="link-button ddoc-shared-link" onClick={() => setLevel(DOSSIER_LEVEL)}>
+            {t('dossierDocuments.shared.link')} <ArrowRight size={15} aria-hidden />
+          </button>
+        </header>
+        <DossierSharedDocumentList documents={dossierDocuments} />
+      </section>
+    )
+
+  const uploadLabelKey = activeRef.kind === 'order' ? 'openOrder' : activeRef.kind === 'activity' ? 'openActivity' : 'openDossier'
+  const uploadButton = (
+    <Button variant="secondary" onClick={() => setUploadOpen(true)} disabled={busy}>
+      + {t(`dossierDocuments.upload.${uploadLabelKey}`)}
+    </Button>
+  )
+  // B48: an empty list offers the upload right there instead of a bare sentence.
+  const uploadAction = canUploadHere && documents ? uploadButton : undefined
+
+  /** The level's own documents: a head that says whose they are, with its upload, above the list. */
+  const ownCard = (regionLabel: string, icon: ReactNode, title: string, subtitle: string, list: ReactNode) => (
+    <section className="ddoc-card" aria-label={regionLabel}>
+      <header className="ddoc-card-head">
+        <span className="ddoc-card-icon" aria-hidden>{icon}</span>
+        <div className="ddoc-card-heading">
+          <h3>{title}</h3>
+          <p>{subtitle}</p>
+        </div>
+        {uploadAction}
+      </header>
+      <div className="ddoc-card-body">{list}</div>
     </section>
   )
-
-  // B48: an empty list offers the upload right there instead of a bare sentence.
-  const uploadAction =
-    canUploadHere && documents ? (
-      <Button variant="secondary" onClick={() => setUploadOpen(true)} disabled={busy}>
-        + {t('dossierDocuments.upload.open')}
-      </Button>
-    ) : undefined
 
   return (
     <div className="ddoc-workspace" data-level={activeLevel}>
       <div className="ddoc-layout">
-        <DocumentLevelNav levels={levels} activeLevel={activeLevel} countOf={countOf} onSelect={setLevel} />
+        <div className="ddoc-side">
+          <DocumentLevelNav levels={levels} activeLevel={activeLevel} countOf={countOf} onSelect={setLevel} />
+          {documents && <p className="ddoc-summary">{t('dossierDocuments.summary', { count: documents.length })}</p>}
+        </div>
 
         <div className="ddoc-main">
-          <div className="ddoc-toolbar">
-            {documents && <span className="ddoc-summary">{t('dossierDocuments.summary', { count: documents.length })}</span>}
-            {canUploadHere && documents && (
-              <Button variant="secondary" onClick={() => setUploadOpen(true)} disabled={busy}>
-                + {t('dossierDocuments.upload.open')}
-              </Button>
-            )}
-          </div>
-
           {loadFailed && (
             <p className="ddoc-error" role="alert">
               {t('dossierDocuments.loadFailed')}{' '}
@@ -211,34 +228,43 @@ export function DossierDocumentsWorkspace({ dossierId, levels, initialOrderId, i
           )}
           {!loadFailed && documents === null && <p className="placeholder-text">{t('dossierDocuments.loading')}</p>}
 
-          {documents && activeRef.kind === 'dossier' && (
-            <section className="ddoc-section" aria-label={t('dossierDocuments.sections.dossier')}>
-              <h3>{t('dossierDocuments.sections.dossier')}</h3>
-              <p className="ddoc-hint">{t('dossierDocuments.sections.dossierHint')}</p>
-              <DossierDocumentTable documents={dossierDocuments} actions={dossierActions} emptyText={t('dossierDocuments.empty.dossier')} emptyAction={uploadAction} />
-            </section>
-          )}
+          {documents && activeRef.kind === 'dossier' &&
+            ownCard(
+              t('dossierDocuments.sections.dossier'),
+              <Folder size={22} />,
+              t('dossierDocuments.sections.dossier'),
+              t('dossierDocuments.context.dossierHint'),
+              <DossierDocumentList key={activeLevel} documents={dossierDocuments} actions={dossierActions} emptyText={t('dossierDocuments.empty.dossier')} emptyAction={uploadAction} />,
+            )}
 
           {documents && activeOrder && (
             <>
-              <section className="ddoc-section" aria-label={t('dossierDocuments.sections.own')}>
-                <h3>{t('dossierDocuments.sections.own')}</h3>
-                <p className="ddoc-hint">{t('dossierDocuments.sections.ownHint', { number: activeOrder.orderNumber })}</p>
-                <DossierDocumentTable documents={ownDocuments} actions={orderActions} emptyText={t('dossierDocuments.empty.order')} emptyAction={uploadAction} />
-              </section>
-              {sharedDossierDocuments}
-              <IssuedTransportDocumentsBlock key={activeOrder.orderId} orderId={activeOrder.orderId} craneJobKind={craneJobKinds?.[activeOrder.orderId]} onIssued={onTransportDocumentIssued} />
+              {ownCard(
+                t('dossierDocuments.sections.own'),
+                <Truck size={22} />,
+                t('dossierDocuments.context.order', {
+                  label: activeOrder.activityName ? `${activeOrder.orderNumber} — ${activeOrder.activityName}` : activeOrder.orderNumber,
+                }),
+                t('dossierDocuments.context.orderHint'),
+                <DossierDocumentList key={activeLevel} documents={ownDocuments} actions={orderActions} emptyText={t('dossierDocuments.empty.order')} emptyAction={uploadAction} />,
+              )}
+              <div className="ddoc-card ddoc-card-issued">
+                <IssuedTransportDocumentsBlock key={activeOrder.orderId} orderId={activeOrder.orderId} craneJobKind={craneJobKinds?.[activeOrder.orderId]} onIssued={onTransportDocumentIssued} />
+              </div>
+              {sharedDossierDocuments(t('dossierDocuments.shared.order'))}
             </>
           )}
 
           {documents && activeActivity && (
             <>
-              <section className="ddoc-section" aria-label={t('dossierDocuments.sections.ownActivity')}>
-                <h3>{t('dossierDocuments.sections.ownActivity')}</h3>
-                <p className="ddoc-hint">{t('dossierDocuments.sections.ownActivityHint', { label: activeActivity.label })}</p>
-                <DossierDocumentTable documents={ownDocuments} actions={activityActions} emptyText={t('dossierDocuments.empty.activity')} emptyAction={uploadAction} />
-              </section>
-              {sharedDossierDocuments}
+              {ownCard(
+                t('dossierDocuments.sections.ownActivity'),
+                <Layers size={22} />,
+                t('dossierDocuments.context.activity', { label: activeActivity.label }),
+                t('dossierDocuments.context.activityHint'),
+                <DossierDocumentList key={activeLevel} documents={ownDocuments} actions={activityActions} emptyText={t('dossierDocuments.empty.activity')} emptyAction={uploadAction} />,
+              )}
+              {sharedDossierDocuments(t('dossierDocuments.shared.activity'))}
             </>
           )}
         </div>
@@ -318,15 +344,15 @@ interface DocumentLevelNavProps {
 }
 
 /**
- * The level selector: three labelled groups (Dossier / Opdrachten / Activiteiten) of selectable
- * levels, each with its OWN document count. A vertical rail beside the documents on desktop, stacked
- * groups on narrow screens — never one unexplained row of pills. ONE tablist, so arrow keys move
- * through every level; the active one is marked by `aria-selected`, a ✓ and its styling.
+ * The level selector: the dossier level on top, then the labelled groups Opdrachten and
+ * Activiteiten, each level with its OWN document count and a line that says what it covers. A
+ * vertical rail beside the documents on desktop, stacked on narrow screens. ONE tablist, so arrow
+ * keys move through every level; the active one is marked by `aria-selected` and its styling.
  */
 function DocumentLevelNav({ levels, activeLevel, countOf, onSelect }: DocumentLevelNavProps) {
   const { t } = useLocale()
 
-  const item = (id: DocumentLevelId, title: string, subtitle: string) => {
+  const item = (id: DocumentLevelId, icon: ReactNode, title: string, subtitle: string) => {
     const selected = id === activeLevel
     return (
       <button
@@ -338,8 +364,9 @@ function DocumentLevelNav({ levels, activeLevel, countOf, onSelect }: DocumentLe
         className={`ddoc-level${selected ? ' is-active' : ''}`}
         onClick={() => onSelect(id)}
       >
+        <span className="ddoc-level-icon" aria-hidden>{icon}</span>
         <span className="ddoc-level-text">
-          <span className="ddoc-level-title">{title}</span>
+          <span className="ddoc-level-title" title={title}>{title}</span>
           <span className="ddoc-level-subtitle">{subtitle}</span>
         </span>
         <span className="ddoc-level-count">{countOf(id)}</span>
@@ -374,11 +401,11 @@ function DocumentLevelNav({ levels, activeLevel, countOf, onSelect }: DocumentLe
           ;(event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]')[(next + ids.length) % ids.length])?.focus()
         }}
       >
-        {group('dossier', t('dossierDocuments.groups.dossier'), item(DOSSIER_LEVEL, t('dossierDocuments.levels.dossier'), t('dossierDocuments.levels.dossierHint')))}
+        {item(DOSSIER_LEVEL, <Folder size={20} />, t('dossierDocuments.levels.dossier'), t('dossierDocuments.levels.dossierHint'))}
         {levels.orders.length > 0 && group('orders', t('dossierDocuments.groups.orders'),
-          levels.orders.map((order) => item(order.orderId, orderLevelLabel(order), t('dossierDocuments.kinds.order'))))}
+          levels.orders.map((order) => item(order.orderId, <Truck size={20} />, orderLevelLabel(order), t('dossierDocuments.kinds.orderHint'))))}
         {levels.activities.length > 0 && group('activities', t('dossierDocuments.groups.activities'),
-          levels.activities.map((activity) => item(activityLevelId(activity.activityId), activity.label, t('dossierDocuments.kinds.activity'))))}
+          levels.activities.map((activity) => item(activityLevelId(activity.activityId), <Layers size={20} />, activity.label, t('dossierDocuments.kinds.activityHint'))))}
       </div>
     </nav>
   )

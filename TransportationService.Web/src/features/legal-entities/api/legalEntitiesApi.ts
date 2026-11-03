@@ -56,6 +56,39 @@ export function deleteLegalEntityLogo(id: string): Promise<LegalEntity> {
   return apiClient.deleteJson<LegalEntity>(`/api/legal-entities/${id}/logo`)
 }
 
+export async function uploadLegalEntityHeaderImage(id: string, file: File): Promise<LegalEntity> {
+  const body = new FormData()
+  body.append('file', file)
+  const response = await fetch(`${apiBaseUrl}/api/legal-entities/${id}/header-image`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${getAccessToken() ?? ''}` },
+    body,
+  })
+  if (!response.ok) {
+    let message = ''
+    try {
+      const data = (await response.json()) as { detail?: string; message?: string }
+      message = data.detail ?? data.message ?? message
+    } catch {
+      // keep fallback
+    }
+    throw new ApiError(message, response.status)
+  }
+  return (await response.json()) as LegalEntity
+}
+
+export function deleteLegalEntityHeaderImage(id: string): Promise<LegalEntity> {
+  return apiClient.deleteJson<LegalEntity>(`/api/legal-entities/${id}/header-image`)
+}
+
+/** The banner photo as a blob: the endpoint needs the bearer token, which an <img> cannot send. */
+export async function fetchLegalEntityHeaderImage(id: string): Promise<Blob | null> {
+  const response = await fetch(`${apiBaseUrl}/api/legal-entities/${id}/header-image`, {
+    headers: { Authorization: `Bearer ${getAccessToken() ?? ''}` },
+  })
+  return response.ok ? response.blob() : null
+}
+
 export function getActiveLegalEntity(): Promise<ActiveLegalEntity> {
   return apiClient.getJson<ActiveLegalEntity>('/api/me/active-legal-entity')
 }

@@ -12,6 +12,10 @@
   min-width: 0;
 }
 
+.dossier-notes-body {
+  display: contents;
+}
+
 .dossier-notes-header {
   display: flex;
   align-items: center;

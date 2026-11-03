@@ -161,6 +161,11 @@ function document_(id: string): HTMLElement {
 }
 const tab = (name: RegExp) => screen.getByRole('tab', { name })
 const list = (name: string) => within(section()).findByRole('region', { name })
+/** Opens the "..." menu of a document row; the menu renders through a portal. */
+async function openRowMenu(user: ReturnType<typeof userEvent.setup>, title: string, container: HTMLElement = section()) {
+  await user.click(await within(container).findByRole('button', { name: `Acties: ${title}` }))
+  return screen.getByRole('menu', { name: `Acties: ${title}` })
+}
 
 describe('Documenten tab (active route)', () => {
   beforeEach(() => {
@@ -193,11 +198,15 @@ describe('Documenten tab (active route)', () => {
     expect(within(own).getByText('Getekende CMR')).toBeInTheDocument()
     expect(within(own).queryByText('Vergunning uitzonderlijk vervoer')).not.toBeInTheDocument()
     // The dossier document is visible from the order — the same record, read-only, no copy.
-    const shared = await list('Dossierdocumenten (gelden ook hier)')
+    const shared = await list('Dossierdocumenten — ook beschikbaar voor deze opdracht')
     expect(within(shared).getByText('Vergunning uitzonderlijk vervoer')).toBeInTheDocument()
-    expect(within(shared).getByRole('button', { name: 'Downloaden: Vergunning uitzonderlijk vervoer' })).toBeInTheDocument()
-    expect(within(shared).queryByRole('button', { name: /Verwijderen: Vergunning/ })).not.toBeInTheDocument()
-    expect(within(shared).getByRole('button', { name: 'Beheren bij Dossierdocumenten' })).toBeInTheDocument()
+    const sharedMenu = await openRowMenu(user, 'Vergunning uitzonderlijk vervoer', shared)
+    expect(within(sharedMenu).getByRole('menuitem', { name: 'Downloaden' })).toBeInTheDocument()
+    expect(within(sharedMenu).queryByRole('menuitem', { name: 'Verwijderen' })).not.toBeInTheDocument()
+    await user.keyboard('{Escape}')
+    expect(within(shared).getByRole('button', { name: 'Naar dossierdocumenten' })).toBeInTheDocument()
+    // Apart from the order's own files, after everything else of the level.
+    expect(own.compareDocumentPosition(shared) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     // Issued transport documents (CMR numbers) of the order live on its level.
     expect(within(section()).getByRole('region', { name: 'Transportdocumenten' })).toBeInTheDocument()
     expect(documents.list).toHaveBeenCalledTimes(1)
@@ -220,7 +229,7 @@ describe('Documenten tab (active route)', () => {
     renderPage(`${DOCUMENTS_TAB}?opdracht=o-1`)
     await screen.findByRole('tab', { name: /ORD-0001/ })
 
-    await user.click(await screen.findByRole('button', { name: '+ Document uploaden' }))
+    await user.click(await screen.findByRole('button', { name: '+ Document uploaden voor opdracht' }))
     const dialog = screen.getByRole('dialog', { name: 'Document uploaden' })
     // Opened from the order level, the target defaults to that order.
     expect(within(dialog).getByLabelText('Opslaan bij')).toHaveValue('o-1')
@@ -252,7 +261,7 @@ describe('Documenten tab (active route)', () => {
     renderPage()
     await screen.findByRole('tab', { name: /Dossierdocumenten/ })
 
-    await user.click(await screen.findByRole('button', { name: '+ Document uploaden' }))
+    await user.click(await screen.findByRole('button', { name: '+ Document uploaden voor dossier' }))
     const dialog = screen.getByRole('dialog', { name: 'Document uploaden' })
     await user.upload(within(dialog).getByLabelText(/^Bestand/), new File(['x'], 'virus.exe', { type: 'application/octet-stream' }))
     await user.click(within(dialog).getByRole('button', { name: 'Uploaden' }))
@@ -275,7 +284,7 @@ describe('Documenten tab (active route)', () => {
     renderPage()
     await screen.findByRole('tab', { name: /Dossierdocumenten/ })
 
-    await user.click(await screen.findByRole('button', { name: 'Zichtbaarheid aanpassen: Vergunning uitzonderlijk vervoer' }))
+    await user.click(within(await openRowMenu(user, 'Vergunning uitzonderlijk vervoer')).getByRole('menuitem', { name: 'Zichtbaar maken voor de klant' }))
     const dialog = screen.getByRole('dialog', { name: 'Zichtbaarheid aanpassen' })
     expect(within(dialog).getByText('De klant kan dit document daarna bekijken en downloaden in het klantportaal.')).toBeInTheDocument()
     await user.click(within(dialog).getByRole('button', { name: 'Zichtbaar maken voor de klant' }))
@@ -294,7 +303,7 @@ describe('Documenten tab (active route)', () => {
     renderPage(`${DOCUMENTS_TAB}?opdracht=o-1`)
     await screen.findByRole('tab', { name: /ORD-0001/ })
 
-    await user.click(await screen.findByRole('button', { name: 'Verplaatsen: Getekende CMR' }))
+    await user.click(within(await openRowMenu(user, 'Getekende CMR')).getByRole('menuitem', { name: 'Verplaatsen' }))
     const move = screen.getByRole('dialog', { name: 'Document verplaatsen naar…' })
     expect(within(move).getByRole('radio', { name: /ORD-0001/ })).toBeChecked()
     expect(within(move).getByRole('radio', { name: /ORD-0001/ }).closest('label')).toHaveTextContent('huidige locatie')
@@ -305,7 +314,7 @@ describe('Documenten tab (active route)', () => {
     await waitFor(() => expect(documents.move).toHaveBeenCalledWith('doc-order', { targetTransportOrderId: null, targetDossierActivityId: null }))
     expect(toast.showSuccess).toHaveBeenCalledWith('Document verplaatst naar Dossierdocumenten.')
 
-    await user.click(await screen.findByRole('button', { name: 'Verwijderen: Getekende CMR' }))
+    await user.click(within(await openRowMenu(user, 'Getekende CMR')).getByRole('menuitem', { name: 'Verwijderen' }))
     const remove = screen.getByRole('dialog', { name: 'Document verwijderen' })
     expect(within(remove).getByText(/hoort alleen bij opdracht ORD-0001/)).toBeInTheDocument()
     await user.click(within(remove).getByRole('button', { name: 'Verwijderen' }))
@@ -321,16 +330,16 @@ describe('Documenten tab (active route)', () => {
     await within(section()).findByText('3 documenten in dit dossier')
 
     const nav = screen.getByRole('tablist', { name: 'Documentniveau' })
-    expect(within(nav).getByText('Dossier', { selector: '.ddoc-level-group-label' })).toBeInTheDocument()
     expect(within(nav).getByText('Opdrachten', { selector: '.ddoc-level-group-label' })).toBeInTheDocument()
     expect(within(nav).getByText('Activiteiten', { selector: '.ddoc-level-group-label' })).toBeInTheDocument()
     // Secondary labels say what kind of level it is; the count is the level's OWN documents, never the total.
     const plateau = within(nav).getByRole('tab', { name: /Plateau/ })
-    expect(plateau).toHaveTextContent('Activiteit')
+    expect(plateau).toHaveTextContent('Alleen voor deze activiteit')
     expect(plateau.querySelector('.ddoc-level-count')).toHaveTextContent('1')
-    expect(within(nav).getByRole('tab', { name: /ORD-0001/ })).toHaveTextContent('Opdracht')
+    expect(within(nav).getByRole('tab', { name: /ORD-0001/ })).toHaveTextContent('Alleen voor deze opdracht')
     expect(within(nav).getByRole('tab', { name: /ORD-0001/ }).querySelector('.ddoc-level-count')).toHaveTextContent('1')
     expect(within(nav).getByRole('tab', { name: /Dossierdocumenten/ }).querySelector('.ddoc-level-count')).toHaveTextContent('1')
+    expect(within(nav).getByRole('tab', { name: /Dossierdocumenten/ })).toHaveTextContent('Voor alle opdrachten en activiteiten')
     expect(within(section()).getByText('3 documenten in dit dossier')).toBeInTheDocument()
 
     // Dossier level: only the dossier document.
@@ -345,7 +354,7 @@ describe('Documenten tab (active route)', () => {
     expect(within(own).getByText('Hijsplan plateau')).toBeInTheDocument()
     expect(within(own).queryByText('Getekende CMR')).not.toBeInTheDocument()
     expect(within(own).queryByText('Vergunning uitzonderlijk vervoer')).not.toBeInTheDocument()
-    expect(within(await list('Dossierdocumenten (gelden ook hier)')).getByText('Vergunning uitzonderlijk vervoer')).toBeInTheDocument()
+    expect(within(await list('Dossierdocumenten — ook beschikbaar voor deze activiteit')).getByText('Vergunning uitzonderlijk vervoer')).toBeInTheDocument()
     // An activity has no issued transport documents (no order).
     expect(within(section()).queryByRole('region', { name: 'Transportdocumenten' })).not.toBeInTheDocument()
 
@@ -365,7 +374,7 @@ describe('Documenten tab (active route)', () => {
     }))
     renderPage()
     const nav = await screen.findByRole('tablist', { name: 'Documentniveau' })
-    expect(within(nav).getByRole('tab', { name: /Kraanwerk site B/ })).toHaveTextContent('Activiteit')
+    expect(within(nav).getByRole('tab', { name: /Kraanwerk site B/ })).toHaveTextContent('Alleen voor deze activiteit')
     expect(within(nav).getAllByRole('tab')).toHaveLength(3)
   })
 
@@ -380,7 +389,7 @@ describe('Documenten tab (active route)', () => {
     expect(await screen.findByRole('tab', { name: /Plateau/ })).toHaveAttribute('aria-selected', 'true')
     expect(within(await list('Documenten van deze activiteit')).getByText('Hijsplan plateau')).toBeInTheDocument()
 
-    await user.click(await screen.findByRole('button', { name: '+ Document uploaden' }))
+    await user.click(await screen.findByRole('button', { name: '+ Document uploaden voor activiteit' }))
     const dialog = screen.getByRole('dialog', { name: 'Document uploaden' })
     // Context-sensitive default: the level the planner is looking at.
     const target = within(dialog).getByLabelText('Opslaan bij')
@@ -400,7 +409,7 @@ describe('Documenten tab (active route)', () => {
     renderPage(`${DOCUMENTS_TAB}?activiteit=a-2`)
     await screen.findByRole('tab', { name: /Plateau/ })
 
-    await user.click(await screen.findByRole('button', { name: 'Verwijderen: Hijsplan plateau' }))
+    await user.click(within(await openRowMenu(user, 'Hijsplan plateau')).getByRole('menuitem', { name: 'Verwijderen' }))
     const remove = screen.getByRole('dialog', { name: 'Document verwijderen' })
     expect(within(remove).getByText(/hoort alleen bij activiteit Plateau/)).toBeInTheDocument()
     await user.click(within(remove).getByRole('button', { name: 'Verwijderen' }))
@@ -409,15 +418,76 @@ describe('Documenten tab (active route)', () => {
 
   it('without write rights the tab is read-only: view/download stay, every mutation is gone', async () => {
     auth.permissions = new Set(['dossiers.view', 'orders.view'])
+    const user = userEvent.setup()
     renderPage()
     await screen.findByRole('tab', { name: /Dossierdocumenten/ })
     const general = await list('Dossierdocumenten')
-    expect(await within(general).findByRole('button', { name: 'Downloaden: Vergunning uitzonderlijk vervoer' })).toBeInTheDocument()
-    expect(within(general).getByRole('button', { name: 'Bekijken: Vergunning uitzonderlijk vervoer' })).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: '+ Document uploaden' })).not.toBeInTheDocument()
-    expect(within(general).queryByRole('button', { name: /Zichtbaarheid aanpassen/ })).not.toBeInTheDocument()
-    expect(within(general).queryByRole('button', { name: /Verplaatsen/ })).not.toBeInTheDocument()
-    expect(within(general).queryByRole('button', { name: /Verwijderen/ })).not.toBeInTheDocument()
+    const menu = await openRowMenu(user, 'Vergunning uitzonderlijk vervoer', general)
+    expect(within(menu).getByRole('menuitem', { name: 'Downloaden' })).toBeInTheDocument()
+    expect(within(menu).getByRole('menuitem', { name: 'Bekijken' })).toBeInTheDocument()
+    expect(within(menu).getAllByRole('menuitem')).toHaveLength(2)
+    expect(screen.queryByRole('button', { name: /Document uploaden/ })).not.toBeInTheDocument()
+  })
+
+  it('searches and filters on type and customer portal, and sorts newest first by default', async () => {
+    const user = userEvent.setup()
+    documents.list.mockResolvedValue([
+      document({ id: 'a', title: 'Oud contract', createdAt: '2026-01-01T09:00:00Z', documentType: 'Other', customTypeName: 'Contract' }),
+      document({ id: 'b', title: 'Nieuwe vergunning', createdAt: '2026-06-01T09:00:00Z', documentType: 'Other', customTypeName: 'Vergunning', customerVisible: true }),
+    ])
+    renderPage()
+    await screen.findByRole('tab', { name: /Dossierdocumenten/ })
+    const general = await list('Dossierdocumenten')
+    const titles = () => within(general).getAllByRole('row').slice(1).map((row) => row.querySelector('.ddoc-title')?.textContent)
+    await within(general).findByText('Oud contract')
+    expect(titles()).toEqual(['Nieuwe vergunning', 'Oud contract'])
+
+    await user.selectOptions(within(general).getByLabelText('Sortering'), 'Datum (oudste)')
+    expect(titles()).toEqual(['Oud contract', 'Nieuwe vergunning'])
+
+    await user.selectOptions(within(general).getByLabelText('Filteren op klantportaal'), 'Zichtbaar voor klant')
+    expect(titles()).toEqual(['Nieuwe vergunning'])
+    await user.selectOptions(within(general).getByLabelText('Filteren op klantportaal'), 'Klantportaal: Alle')
+
+    await user.selectOptions(within(general).getByLabelText('Filteren op type'), 'Contract')
+    expect(titles()).toEqual(['Oud contract'])
+    await user.selectOptions(within(general).getByLabelText('Filteren op type'), 'Type: Alle')
+
+    await user.type(within(general).getByLabelText('Zoeken in documenten'), 'zzz')
+    expect(within(general).getByText('Geen documenten gevonden met deze filters.')).toBeInTheDocument()
+    await user.click(within(general).getByRole('button', { name: 'Filters wissen' }))
+    expect(titles()).toHaveLength(2)
+  })
+
+  it('pages at 20 per page from larger amounts on; up to 20 documents there is no pager', async () => {
+    const user = userEvent.setup()
+    const many = Array.from({ length: 45 }, (_, index) =>
+      document({ id: `m-${index}`, title: `Doc ${String(index).padStart(2, '0')}`, createdAt: `2026-01-01T09:${String(index).padStart(2, '0')}:00Z` }))
+    documents.list.mockResolvedValueOnce(many.slice(0, 20)).mockResolvedValue(many)
+    const first = renderPage()
+    await screen.findByRole('tab', { name: /Dossierdocumenten/ })
+    const small = await list('Dossierdocumenten')
+    expect(await within(small).findByText('1–20 van 20 documenten')).toBeInTheDocument()
+    expect(within(small).queryByRole('navigation')).not.toBeInTheDocument()
+    first.unmount()
+
+    renderPage()
+    await screen.findByRole('tab', { name: /Dossierdocumenten/ })
+    const general = await list('Dossierdocumenten')
+    expect(await within(general).findByText('1–20 van 45 documenten')).toBeInTheDocument()
+    expect(within(general).getAllByRole('row')).toHaveLength(21)
+    expect(within(general).getByRole('button', { name: '1' })).toHaveAttribute('aria-current', 'page')
+    await user.click(within(general).getByRole('button', { name: '3' }))
+    expect(within(general).getByText('41–45 van 45 documenten')).toBeInTheDocument()
+    await user.selectOptions(within(general).getByLabelText('Aantal per pagina'), '50 per pagina')
+    expect(within(general).getByText('1–45 van 45 documenten')).toBeInTheDocument()
+    expect(within(general).queryByRole('navigation')).not.toBeInTheDocument()
+  })
+
+  it('names the context in the card head: order number and activity, and the upload button says where it goes', async () => {
+    renderPage(`${DOCUMENTS_TAB}?opdracht=o-1`)
+    expect(await screen.findByRole('heading', { name: /^Documenten voor opdracht ORD-0001 — / })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: '+ Document uploaden voor opdracht' })).toBeInTheDocument()
   })
 
   it('a load failure is told, with a retry — never an empty "no documents"', async () => {

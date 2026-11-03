@@ -1,8 +1,7 @@
 {
   "levels": {
     "dossier": "Documents du dossier",
-    "dossierShort": "Dossier",
-    "dossierHint": "Valables pour tout le dossier"
+    "dossierHint": "Pour tous les ordres et activités"
   },
   "summary_one": "{count} document dans ce dossier",
   "summary_other": "{count} documents dans ce dossier",
@@ -15,14 +14,11 @@
   "fileMissing": "Fichier manquant",
   "sections": {
     "dossier": "Documents du dossier",
-    "dossierHint": "Ces documents valent pour l'ensemble du dossier et sont consultables depuis chaque ordre et activité. Si un document concerne un seul ordre ou une seule activité, chargez-le à ce niveau.",
     "own": "Documents de cet ordre",
-    "ownHint": "Documents qui n'appartiennent qu'à l'ordre {number}.",
     "general": "Documents du dossier (valables ici aussi)",
     "generalHint": "Les mêmes documents qu'au niveau du dossier, sans copies. Ici uniquement consulter et télécharger.",
     "manageViaDossier": "Gérer sous Documents du dossier",
-    "ownActivity": "Documents de cette activité",
-    "ownActivityHint": "Documents qui n'appartiennent qu'à l'activité {label}."
+    "ownActivity": "Documents de cette activité"
   },
   "empty": {
     "dossier": "Pas encore de documents du dossier.",
@@ -33,20 +29,15 @@
   "columns": {
     "title": "Titre",
     "type": "Type",
-    "level": "Niveau",
     "file": "Fichier",
     "portal": "Portail client",
-    "actions": "Actions"
+    "actions": "Actions",
+    "uploaded": "Téléversé"
   },
   "actions": {
-    "view": "Consulter : {title}",
-    "download": "Télécharger : {title}",
-    "attachFile": "Ajouter un fichier : {title}",
-    "visibility": "Modifier la visibilité : {title}",
-    "move": "Déplacer : {title}",
-    "delete": "Supprimer : {title}",
     "viewShort": "Consulter",
-    "downloadShort": "Télécharger"
+    "downloadShort": "Télécharger",
+    "menu": "Actions : {title}"
   },
   "visibility": {
     "visible": "Visible pour le client",
@@ -62,7 +53,6 @@
     "nowInternal": "Le document n'est plus visible pour le client."
   },
   "upload": {
-    "open": "Téléverser un document",
     "title": "Téléverser un document",
     "target": "Enregistrer sous",
     "targetHint": "Choisissez le niveau auquel appartient le document. Un document du dossier vaut pour tout le dossier.",
@@ -92,7 +82,10 @@
       "tooLarge": "Le fichier dépasse 10 Mo.",
       "unsupportedType": "Seuls les fichiers PDF, JPG et PNG sont autorisés."
     },
-    "targetActivity": "Activité {label}"
+    "targetActivity": "Activité {label}",
+    "openDossier": "Téléverser un document pour le dossier",
+    "openOrder": "Téléverser un document pour l'ordre",
+    "openActivity": "Téléverser un document pour l'activité"
   },
   "move": {
     "title": "Déplacer le document vers…",
@@ -182,8 +175,42 @@
     "activities": "Activités"
   },
   "kinds": {
-    "order": "Ordre",
-    "activity": "Activité"
+    "orderHint": "Uniquement pour cet ordre",
+    "activityHint": "Uniquement pour cette activité"
   },
-  "selector": "Niveau du document"
+  "selector": "Niveau du document",
+  "context": {
+    "dossierHint": "S'appliquent à tout le dossier, donc aussi à tous ses ordres et activités.",
+    "order": "Documents de l'ordre {label}",
+    "orderHint": "Liés uniquement à cet ordre.",
+    "activity": "Documents de l'activité {label}",
+    "activityHint": "Liés uniquement à cette activité."
+  },
+  "shared": {
+    "order": "Documents du dossier — également disponibles pour cet ordre",
+    "activity": "Documents du dossier — également disponibles pour cette activité",
+    "hint": "Ces documents s'appliquent à tout le dossier et peuvent aussi être consultés ici.",
+    "link": "Vers les documents du dossier"
+  },
+  "filters": {
+    "search": "Rechercher dans les documents",
+    "searchPlaceholder": "Rechercher dans les documents…",
+    "type": "Filtrer par type",
+    "typeAll": "Type : Tous",
+    "portal": "Filtrer par portail client",
+    "portalAll": "Portail client : Tous",
+    "sort": "Tri",
+    "sortBy": {
+      "newest": "Date (plus récent)",
+      "oldest": "Date (plus ancien)",
+      "title": "Titre (A–Z)",
+      "type": "Type (A–Z)"
+    },
+    "noResults": "Aucun document ne correspond à ces filtres.",
+    "reset": "Effacer les filtres",
+    "pageSize": "Nombre par page",
+    "perPage": "{size} par page"
+  },
+  "range_one": "{start}–{end} sur {count} document",
+  "range_other": "{start}–{end} sur {count} documents"
 }

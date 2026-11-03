@@ -1,4 +1,18 @@
 {
+  "workspaceSubtitle": "Internal notes on this dossier.",
+  "list": {
+    "searchPlaceholder": "Search notes…",
+    "sortLabel": "Sort",
+    "newest": "Date (newest)",
+    "oldest": "Date (oldest)",
+    "pageSizeLabel": "Items per page",
+    "perPage": "{size} per page",
+    "pageNumber": "Page {page}",
+    "noMatches": "No notes match this search.",
+    "range_one": "1 note",
+    "range_other": "{start}–{end} of {count} notes",
+    "actions": "Actions for note by {author}, {date}"
+  },
   "title": "Notes",
   "activityTitle": "Notes on this activity",
   "add": "+ Add note",

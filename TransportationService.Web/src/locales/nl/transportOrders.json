@@ -734,6 +734,8 @@
     "changedEntity": "Facturerende entiteit gewijzigd.",
     "customerDefault": "Klantstandaard",
     "customerLabel": "Klant",
+    "orderDateLabel": "Opdrachtdatum",
+    "referenceLabel": "Referentie",
     "entityLabel": "Facturerende entiteit",
     "placeholderCustomer": "Tijdelijke klant",
     "placeholderHint": "Deze opdracht staat op een tijdelijke klant. Koppel de echte klant zodra die bekend is."

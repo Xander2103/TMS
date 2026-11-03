@@ -1,94 +1,8 @@
 /* Master sprint 2026-09-21 (D5): price per activity — amount block, activity picker and the sales
    line table of a standalone activity. Tokens from styles/global.css; box-sizing set here. */
 
-.dossier-price-summary {
-  box-sizing: border-box;
-  margin: 0 0 var(--space-3);
-}
-
-.dossier-price-summary .dossier-price-total {
-  margin: 0 0 var(--space-2);
-}
-
-.dossier-price-toprice {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: var(--space-1) var(--space-3);
-  margin: 0 0 var(--space-2);
-  font-size: 0.875rem;
-  color: var(--text-muted);
-}
-
-.dossier-price-toprice .link-button {
-  font-size: inherit;
-}
-
 .dossier-price-legacy {
   margin-top: var(--space-2);
-}
-
-/* Activity picker: one compact row per commercial activity, always shown. */
-.dossier-price-picker {
-  box-sizing: border-box;
-  margin: 0 0 var(--space-4);
-}
-
-.dossier-price-picker-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-}
-
-.dossier-price-picker-item {
-  box-sizing: border-box;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-1) var(--space-2);
-  width: 100%;
-  padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--bg);
-  color: var(--text-h);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-.dossier-price-picker-item:hover:not(:disabled) {
-  border-color: var(--accent-border);
-}
-
-.dossier-price-picker-item.is-selected {
-  border-color: var(--accent);
-  box-shadow: inset 0 0 0 1px var(--accent);
-  background: var(--accent-bg);
-}
-
-.dossier-price-picker-item:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
-.dossier-price-picker-name {
-  font-weight: 600;
-  min-width: 0;
-}
-
-.dossier-price-picker-secondary {
-  font-weight: 400;
-  color: var(--text-muted);
-}
-
-.dossier-price-picker-price {
-  margin-right: auto;
-  font-variant-numeric: tabular-nums;
-  color: var(--text-muted);
 }
 
 /* Sales lines of a standalone activity. */
@@ -179,21 +93,7 @@
   border-top: 1px solid var(--border);
 }
 
-.dossier-order-price .tod-section {
-  margin-top: var(--space-3);
-}
-
 /* ---- Pricing UX sprint 2026-10-08: master-detail -------------------------------------------- */
-
-/* Dossier summary: clearly the DOSSIER's numbers, never the selected unit's. */
-.dossier-price-summary-title {
-  margin: 0 0 var(--space-1);
-  font-size: 0.75rem;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--text-muted);
-}
 
 /* Master (list of priceable parts) beside the detail on desktop; stacked below ~1100px. */
 .dossier-pricing-layout {
@@ -230,35 +130,39 @@
   }
 }
 
+/* Left column: the list of parts with the dossier's own numbers under it. */
 .dossier-price-master-title {
   margin: 0 0 var(--space-1);
-  font-size: 1rem;
+  font-size: 1.125rem;
+}
+
+.dossier-detail .dossier-price-master-title {
+  font-size: 18px;
 }
 
 .dossier-price-master-hint {
-  margin: 0 0 var(--space-2);
-  font-size: 0.8125rem;
+  margin: 0 0 var(--space-3);
+  font-size: 0.875rem;
   color: var(--text-muted);
 }
 
 .dossier-price-master-list {
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
+  gap: var(--space-2);
 }
 
-/* One selectable card per unit: reference + name + kind on the left, amount + status on the right. */
+/* One selectable card per unit: icon, reference + name + kind, amount + status, chevron. */
 .dossier-price-master-item {
   box-sizing: border-box;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
   align-items: center;
-  gap: var(--space-1) var(--space-2);
+  gap: var(--space-1) 10px;
   width: 100%;
-  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
+  padding: 10px 10px 10px 14px;
   border: 1px solid var(--border);
-  border-left: 4px solid transparent;
-  border-radius: var(--radius-md);
+  border-radius: 12px;
   background: var(--bg);
   color: var(--text-h);
   font: inherit;
@@ -268,7 +172,6 @@
 
 .dossier-price-master-item:hover:not(:disabled) {
   border-color: var(--accent-border);
-  border-left-color: var(--accent-border);
 }
 
 .dossier-price-master-item:focus-visible {
@@ -276,15 +179,17 @@
   outline-offset: 2px;
 }
 
-/* Selected: filled background, accent edge AND a chevron — never colour alone. */
+/* Selected: tint, accent ring AND an accent icon + chevron — never colour alone. */
 .dossier-price-master-item.is-selected {
   border-color: var(--accent);
-  border-left-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
   background: var(--accent-bg);
 }
 
-.dossier-price-master-item.is-selected .dossier-price-master-chevron {
+.dossier-price-master-item.is-selected .dossier-price-master-chevron,
+.dossier-price-master-item.is-selected .dossier-price-master-icon {
   color: var(--accent);
+  opacity: 1;
 }
 
 .dossier-price-master-item:disabled {
@@ -292,20 +197,27 @@
   cursor: not-allowed;
 }
 
+.dossier-price-master-icon {
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+
 .dossier-price-master-main {
   display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 2px var(--space-2);
+  flex-direction: column;
+  gap: 2px;
   min-width: 0;
 }
 
-.dossier-price-master-ref {
-  font-family: var(--font-mono, ui-monospace, monospace);
-  font-size: 0.8125rem;
-  font-weight: 600;
+.dossier-price-master-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 8px;
+  min-width: 0;
+  font-size: 0.9375rem;
 }
 
+.dossier-price-master-ref,
 .dossier-price-master-name {
   font-weight: 600;
   min-width: 0;
@@ -318,18 +230,9 @@
   color: var(--text-muted);
 }
 
-/* Kind of unit ("Opdracht" / "Activiteit"): a quiet outlined tag, the same in the detail header. */
-.dossier-price-master-kind,
-.dossier-pricing-kind {
-  display: inline-block;
-  padding: 1px 6px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  font-size: 0.75rem;
-  font-weight: 500;
-  line-height: 1.4;
+.dossier-price-master-kind {
+  font-size: 0.8125rem;
   color: var(--text-muted);
-  white-space: nowrap;
 }
 
 .dossier-price-master-state {
@@ -343,35 +246,34 @@
 .dossier-price-master-amount {
   font-variant-numeric: tabular-nums;
   font-weight: 600;
+  white-space: nowrap;
 }
 
 .dossier-price-master-chevron {
-  font-size: 1.25rem;
-  line-height: 1;
+  flex-shrink: 0;
   color: var(--text-muted);
 }
 
-/* Detail header: which part is being edited, and its kind. */
-.dossier-pricing-detail-header {
+/* The selected unit: name, kind and status above total, status, attention and actions. */
+.dossier-price-unit {
+  box-sizing: border-box;
   margin: 0 0 var(--space-3);
-  padding-bottom: var(--space-2);
-  border-bottom: 1px solid var(--border);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--bg);
 }
 
-.dossier-pricing-eyebrow {
-  margin: 0 0 2px;
-  font-size: 0.75rem;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--text-muted);
-}
-
-.dossier-pricing-detail-titlerow {
+.dossier-pricing-detail-header {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-2);
+  gap: 8px 10px;
+  padding: 12px 18px;
+}
+
+.dossier-pricing-detail-header > svg {
+  flex-shrink: 0;
+  color: var(--accent);
 }
 
 .dossier-pricing-detail-name {
@@ -381,27 +283,418 @@
 }
 
 .dossier-detail .dossier-pricing-detail-name {
-  font-size: 17px;
+  font-size: 18px;
 }
 
-/* Blocks inside the detail (PRIJS, VERKOOPLIJNEN): small caps titles so the hierarchy reads at a glance. */
-.dossier-pricing-block {
-  margin-bottom: var(--space-3);
+.dossier-pricing-kind {
+  display: inline-block;
+  padding: 1px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.5;
+  color: var(--text-muted);
+  white-space: nowrap;
 }
 
-.dossier-pricing-block-title,
-.dossier-activity-lines h3 {
-  margin: 0 0 var(--space-2);
+.dossier-price-unit-body {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 0;
+  padding: 14px 18px;
+  border-top: 1px solid var(--border);
+}
+
+.dossier-price-unit-total {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-right: 22px;
+}
+
+.dossier-price-unit-total-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--accent-bg);
+  color: var(--accent);
+}
+
+.dossier-price-unit-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-size: 0.8125rem;
+  color: var(--text-muted);
+}
+
+.dossier-price-unit-label svg {
+  color: var(--accent);
+}
+
+.dossier-price-unit-tile.is-attention .dossier-price-unit-label svg {
+  color: var(--warning);
+}
+
+.dossier-price-unit-amount {
+  display: block;
+  font-size: 1.75rem;
+  line-height: 1.2;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  color: var(--text-h);
+}
+
+.dossier-price-unit-amount.is-unpriced {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.dossier-detail .dossier-price-unit-amount {
+  font-size: 28px;
+}
+
+.dossier-detail .dossier-price-unit-amount.is-unpriced {
+  font-size: 20px;
+}
+
+.dossier-price-unit-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  padding: 0 22px;
+  border-left: 1px solid var(--border);
+}
+
+.dossier-price-unit-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  color: var(--color-warning-text);
+}
+
+.dossier-price-unit-status[data-status='Priced'] {
+  color: var(--success);
+}
+
+.dossier-price-unit-status[data-status='Free'] {
+  color: var(--text-h);
+}
+
+.dossier-price-unit-status svg {
+  flex-shrink: 0;
+}
+
+.dossier-price-unit-detail {
+  font-size: 0.875rem;
+  color: var(--text);
+}
+
+.dossier-price-unit-next {
+  font-size: 0.875rem;
+  text-align: left;
+}
+
+.dossier-price-unit-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.dossier-price-unit-actions .ui-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Cards under the summary: sales lines, folds, fixed price, way to the order. */
+.dossier-price-card,
+.dossier-activity-lines,
+.dossier-price-fold,
+.dossier-price-fixed,
+.dossier-price-open-order {
+  box-sizing: border-box;
+  margin: 0 0 var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--bg);
+}
+
+.dossier-price-card,
+.dossier-activity-lines {
+  padding: 14px 18px;
+}
+
+.dossier-price-card-title,
+.dossier-detail .dossier-activity-lines h3 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 var(--space-2);
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.dossier-price-table-wrap {
+  overflow-x: auto;
+}
+
+.dossier-price-lines-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9375rem;
+}
+
+.dossier-price-lines-table th,
+.dossier-price-lines-table td {
+  padding: 10px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.dossier-price-lines-table thead th {
+  font-size: 0.75rem;
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--text-muted);
 }
 
-.dossier-detail .dossier-pricing-block-title,
-.dossier-detail .dossier-activity-lines h3 {
-  font-size: 13px;
+.dossier-price-lines-table .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.dossier-price-lines-table .actions {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.dossier-price-lines-table td.actions .ui-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 4px 8px;
+  font-size: 0.875rem;
+}
+
+.dossier-price-lines-table tr.is-informational td {
+  color: var(--text-muted);
+}
+
+.dossier-price-lines-table tfoot th,
+.dossier-price-lines-table tfoot td {
+  border-bottom: none;
+  background: var(--accent-bg);
+  color: var(--text-h);
+  font-weight: 700;
+}
+
+.dossier-price-lines-table tfoot th {
+  border-radius: 8px 0 0 8px;
+}
+
+.dossier-price-lines-table tfoot tr > :last-child {
+  border-radius: 0 8px 8px 0;
+}
+
+/* Collapsible card. */
+.dossier-price-fold > summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 18px;
+  font-weight: 600;
+  color: var(--text-h);
+  cursor: pointer;
+  list-style: none;
+}
+
+.dossier-price-fold > summary::-webkit-details-marker {
+  display: none;
+}
+
+.dossier-price-fold > summary:focus-visible,
+.dossier-price-open-order:focus-visible,
+.dossier-price-switch:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.dossier-price-fold > summary > svg:first-child {
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+
+.dossier-price-fold > summary > h3 {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.dossier-price-fold-chevron {
+  flex-shrink: 0;
+  color: var(--text-muted);
+  transition: transform 0.15s ease;
+}
+
+.dossier-price-fold[open] .dossier-price-fold-chevron {
+  transform: rotate(180deg);
+}
+
+.dossier-price-fold-body {
+  padding: 0 18px 14px;
+}
+
+.dossier-price-fold-body h4 {
+  margin: 0 0 4px;
+  font-size: 0.875rem;
+}
+
+.dossier-price-fold-body .dossier-price-actions {
+  margin: 0;
+  flex-wrap: wrap;
+}
+
+.dossier-price-fold-body .order-cargo-coverage {
+  margin-top: var(--space-2);
+}
+
+.dossier-price-coverage {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.9375rem;
+}
+
+/* Fixed price: title and switch on one row, the form under it once it is on. */
+.dossier-price-fixed {
+  padding: 12px 18px;
+}
+
+.dossier-price-fixed-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.dossier-price-fixed-head > svg {
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+
+.dossier-price-fixed-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.dossier-price-fixed-text h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.dossier-price-fixed-text p {
+  margin: 2px 0 0;
+  font-size: 0.875rem;
+  color: var(--text-muted);
+}
+
+.dossier-price-fixed-body .dossier-price-agreed {
+  margin: var(--space-3) 0 0;
+}
+
+.dossier-price-switch {
+  flex-shrink: 0;
+  position: relative;
+  width: 44px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-muted);
+  cursor: pointer;
+}
+
+.dossier-price-switch > span {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--bg);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.3);
+  transition: transform 0.15s ease;
+}
+
+.dossier-price-switch[aria-checked='true'] {
+  border-color: var(--color-primary-solid);
+  background: var(--color-primary-solid);
+}
+
+.dossier-price-switch[aria-checked='true'] > span {
+  transform: translateX(20px);
+}
+
+.dossier-price-switch:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* The way to the order page: looks like the folds, but it leaves the dossier. */
+.dossier-price-open-order {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 18px;
+  color: var(--text-h);
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.dossier-price-open-order:hover {
+  border-color: var(--accent-border);
+}
+
+.dossier-price-open-order svg {
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dossier-price-fold-chevron,
+  .dossier-price-switch > span {
+    transition: none;
+  }
 }
 
 /* The ONE € 0 callout: amber, titled, with its two real actions. Never red — it is not an error. */
@@ -418,12 +711,16 @@
 }
 
 .dossier-price-callout-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   margin: 0 0 var(--space-1);
   font-weight: 600;
   color: var(--color-warning-text);
 }
 
 .dossier-price-callout-icon {
+  flex-shrink: 0;
   color: var(--warning);
 }
 
@@ -451,11 +748,23 @@
 
 @media (max-width: 640px) {
   .dossier-price-master-item {
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: auto minmax(0, 1fr) auto;
   }
 
   .dossier-price-master-chevron {
     display: none;
+  }
+
+  .dossier-price-unit-tile {
+    flex-basis: 100%;
+    padding: 0;
+    border-left: none;
+  }
+
+  .dossier-price-unit-actions {
+    flex-basis: 100%;
+    justify-content: flex-start;
+    margin-left: 0;
   }
 }
 
@@ -531,4 +840,129 @@
   .dossier-price-method {
     grid-template-columns: minmax(0, 1fr);
   }
+}
+
+/* ---- Dossier summary (redesign 2026-11-03) under the list of parts: the dossier's own numbers,
+   never the selected unit's. The progress is one segment per billable unit. */
+.dossier-price-summary {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: var(--space-3) 0 0;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg);
+}
+
+.dossier-price-summary-label {
+  display: block;
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+}
+
+/* The block keeps the historical .dossier-price-total hook; its flex row becomes a column. */
+.dossier-price-summary .dossier-price-total {
+  display: block;
+  font-size: inherit;
+}
+
+.dossier-price-total-amount {
+  font-size: 1.25rem;
+  line-height: 1.2;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.dossier-price-total-amount.dossier-price-none {
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.dossier-detail .dossier-price-total-amount {
+  font-size: 20px;
+}
+
+.dossier-detail .dossier-price-total-amount.dossier-price-none {
+  font-size: 16px;
+}
+
+.dossier-price-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dossier-price-progress-text {
+  font-size: 0.875rem;
+  color: var(--text-h);
+}
+
+/* One segment per unit: settled = green, open = neutral. A completed dossier is all green. */
+.dossier-price-progress-bar {
+  display: flex;
+  gap: 3px;
+  width: 100%;
+  height: 6px;
+}
+
+.dossier-price-progress-bar > span {
+  flex: 1 1 0;
+  min-width: 0;
+  border-radius: 999px;
+  background: var(--bg-muted, var(--border));
+}
+
+.dossier-price-progress-bar > span.is-done,
+.dossier-price-progress-bar.is-complete > span {
+  background: var(--success);
+}
+
+.dossier-price-progress-bar.is-continuous {
+  gap: 0;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--bg-muted, var(--border));
+}
+
+.dossier-price-progress-bar.is-continuous > span {
+  flex: none;
+  border-radius: 0;
+  background: transparent;
+}
+
+.dossier-price-progress-bar.is-continuous > span.is-done {
+  background: var(--success);
+}
+
+.dossier-price-issues {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.875rem;
+  color: var(--color-warning-text);
+}
+
+.dossier-price-issues .link-button {
+  text-align: left;
+}
+
+/* Everything settled: a quiet green line. */
+.dossier-price-settled {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--success);
+}
+
+.dossier-price-settled svg {
+  flex-shrink: 0;
 }

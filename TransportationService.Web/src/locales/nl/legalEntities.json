@@ -40,7 +40,15 @@
     "logoPending": "Nieuw logo (nog niet opgeslagen):",
     "logoPendingRemoval": "Het logo wordt verwijderd wanneer je op Opslaan klikt.",
     "logoUndo": "Logowijziging ongedaan maken",
-    "logoAppliedOnSave": "Een logowijziging wordt pas opgeslagen wanneer je op Opslaan klikt. Reeds uitgegeven facturen behouden hun logo; nieuwe facturen gebruiken het nieuwe logo."
+    "logoAppliedOnSave": "Een logowijziging wordt pas opgeslagen wanneer je op Opslaan klikt. Reeds uitgegeven facturen behouden hun logo; nieuwe facturen gebruiken het nieuwe logo.",
+    "sectionHeaderImage": "Bannerfoto",
+    "headerImagePending": "Nieuwe foto (nog niet opgeslagen):",
+    "headerImagePendingRemoval": "De foto wordt verwijderd wanneer je op Opslaan klikt.",
+    "currentHeaderImage": "Huidige foto:",
+    "noHeaderImageYet": "Geen eigen foto: de standaard transportfoto wordt getoond.",
+    "headerImageUploadAria": "Bannerfoto kiezen",
+    "headerImageDelete": "Foto verwijderen",
+    "headerImageHint": "Bovenaan dossiers en opdrachten van dit bedrijf. PNG of JPG, maximaal 5 MB, liefst minstens 1600 px breed."
   },
   "page": {
     "columnDefault": "Standaard",
@@ -69,7 +77,10 @@
     "saved": "Bedrijf opgeslagen.",
     "savingBusy": "Opslaan…",
     "subtitle": "Facturerende entiteiten van deze organisatie.",
-    "savedLogoFailed": "Het bedrijf is opgeslagen, maar de logowijziging niet: {message} Klik opnieuw op Opslaan om het logo nog eens te proberen."
+    "savedLogoFailed": "Het bedrijf is opgeslagen, maar de logowijziging niet: {message} Klik opnieuw op Opslaan om het logo nog eens te proberen.",
+    "headerImageUploadFailed": "De bannerfoto kon niet worden geüpload.",
+    "headerImageRemoveFailed": "De bannerfoto kon niet worden verwijderd.",
+    "savedHeaderImageFailed": "Het bedrijf is opgeslagen, maar de wijziging van de bannerfoto niet: {message} Klik opnieuw op Opslaan om het nog eens te proberen."
   },
   "switcher": {
     "defaultSuffix": "(standaard)",

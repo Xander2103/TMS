@@ -32,10 +32,19 @@
 
 .nav-modules { list-style: none; margin: 0; padding: 0; }
 
-/* Clear separation between modules. */
-.nav-module { margin-bottom: 10px; }
+/* Each module is a small card; it opens up around its items. */
+.nav-module {
+  margin-bottom: 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg);
+}
+.nav-module:has(> .nav-module-region[data-expanded='true']) {
+  border-color: var(--accent-border);
+  background: color-mix(in srgb, var(--accent-bg) 45%, var(--bg));
+}
 
-/* Module header is visually distinct from items: heavier, uppercase, full-width band. */
+/* Module header is visually distinct from items: icon tile and a bold title. */
 .nav-module-header {
   display: flex;
   align-items: center;
@@ -47,19 +56,23 @@
   box-sizing: border-box;
   padding: 9px 12px;
   border: none;
-  border-radius: 8px;
+  border-radius: 12px;
   background: transparent;
   font: inherit;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
   color: var(--text-h);
   cursor: pointer;
 }
 .nav-module-header:hover { background: var(--accent-bg); }
 .nav-module-header:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-.nav-module-icon { flex-shrink: 0; opacity: 0.85; }
+.nav-module-icon {
+  flex-shrink: 0;
+  box-sizing: border-box;
+  border-radius: 8px;
+  background: var(--accent-bg);
+  color: var(--accent);
+}
 .nav-module-title {
   flex: 1;
   min-width: 0;
@@ -97,6 +110,9 @@
 .nav-module-items, .nav-subitems { list-style: none; margin: 0; padding: 0; }
 .nav-module-items { padding: 2px 0 6px; display: flex; flex-direction: column; gap: 2px; }
 
+.nav-module-items, .nav-subitems { padding-inline: 6px; }
+.nav-subitems { padding-inline: 0; }
+
 .nav-item, .nav-subitem-toggle {
   display: flex;
   align-items: center;
@@ -114,7 +130,13 @@
   cursor: pointer;
 }
 .nav-item:hover, .nav-subitem-toggle:hover { background: var(--accent-bg); }
-.nav-item.active { background: var(--accent-bg); color: var(--text-h); font-weight: 500; }
+.nav-item.active {
+  background: var(--accent-bg);
+  color: var(--accent);
+  font-weight: 600;
+  box-shadow: inset 3px 0 0 var(--color-primary-solid);
+}
+.nav-item.active .nav-item-icon { opacity: 1; }
 .nav-item:focus-visible, .nav-subitem-toggle:focus-visible {
   outline: 2px solid var(--accent); outline-offset: 1px;
 }

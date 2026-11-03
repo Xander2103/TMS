@@ -217,7 +217,7 @@ describe('DossierDetailPage', () => {
     const user = userEvent.setup()
     const { router } = renderPage()
 
-    await user.click(await screen.findByRole('button', { name: 'Ga naar route' }))
+    await user.click(await screen.findByRole('button', { name: 'Naar route' }))
     expect(router.state.location.pathname).toBe('/dossiers/d-1/route')
     await waitFor(() => expect(scrollSpy).toHaveBeenCalled())
     expect(document.getElementById('sectie-route')?.hasAttribute('data-highlight')).toBe(true)

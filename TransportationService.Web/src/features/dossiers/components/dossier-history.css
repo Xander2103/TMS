@@ -1,0 +1,358 @@
+/* Historiek tab: two equal cards with a fixed-height list, the rest of the dossier facts below. */
+
+.dossier-history-card {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--bg);
+  overflow: hidden;
+}
+
+.dossier-history-card *,
+.dossier-history-card *::before {
+  box-sizing: border-box;
+}
+
+.dossier-history-card-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-subtle);
+}
+
+.dossier-history-card-icon {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: var(--accent-bg);
+  color: var(--accent);
+}
+
+.dossier-history-card-title {
+  flex: 1;
+  min-width: 0;
+}
+
+.dossier-history-card-title h3 {
+  margin: 0;
+  font-size: 17px;
+  line-height: 1.25;
+  color: var(--text-h);
+}
+
+.dossier-history-card-title p {
+  margin: 2px 0 0;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.dossier-history-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+}
+
+.dossier-history-search {
+  flex: 1 1 180px;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--color-input-border);
+  border-radius: 8px;
+  background: var(--color-input-bg);
+  color: var(--text-muted);
+}
+
+.dossier-history-search:focus-within,
+.dossier-history-select:focus-within {
+  outline: 2px solid var(--accent-border);
+  outline-offset: 1px;
+}
+
+.dossier-history-search input {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: none;
+  color: var(--text-h);
+  font: inherit;
+  font-size: 14px;
+}
+
+.dossier-history-select {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 8px;
+  border: 1px solid var(--color-input-border);
+  border-radius: 8px;
+  background: var(--color-input-bg);
+  color: var(--text-muted);
+}
+
+.dossier-history-select select {
+  height: 100%;
+  max-width: 180px;
+  padding: 0 2px;
+  border: 0;
+  outline: 0;
+  background: none;
+  color: var(--text-h);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+/* The fixed height: a long story scrolls inside the card, the page itself stays short. */
+.dossier-history-scroll {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  height: 340px;
+  padding: 2px 16px 12px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border-top: 1px solid var(--border);
+}
+
+.dossier-history-scroll:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.dossier-history-scroll > .placeholder-text {
+  margin: 12px 0 0;
+}
+
+.dossier-history-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  min-height: 60px;
+  margin-top: auto;
+  padding: 10px 16px;
+  border-top: 1px solid var(--border);
+}
+
+.dossier-history-range {
+  flex: 1 1 auto;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.dossier-history-pager {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.dossier-history-pager button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  height: 32px;
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text-h);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.dossier-history-pager button:hover:not(:disabled) {
+  border-color: var(--accent-border);
+  background: var(--accent-bg);
+}
+
+.dossier-history-pager button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.dossier-history-pager button[aria-current='page'] {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.dossier-history-pager button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.dossier-history-pager-gap {
+  padding: 0 2px;
+  color: var(--text-muted);
+}
+
+/* --- Notes: one compact row per note --- */
+
+.dossier-history-card .dossier-notes-list {
+  gap: 0;
+}
+
+.dossier-history-card .dossier-note {
+  padding: 10px 0;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  background: none;
+}
+
+.dossier-history-card .dossier-note:last-child {
+  border-bottom: 0;
+}
+
+.dossier-note-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: start;
+  gap: 4px 12px;
+}
+
+.dossier-note-row-main {
+  min-width: 0;
+}
+
+.dossier-note-row-main .dossier-note-text {
+  font-size: 14px;
+}
+
+.dossier-note-row-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text-muted);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.dossier-note-row-edited {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  font-style: italic;
+  color: var(--text-muted);
+}
+
+/* --- Change history: the shared timeline, tighter --- */
+
+.dossier-history-card .ui-history {
+  gap: 8px;
+  padding-top: 10px;
+}
+
+.dossier-history-card .ui-history-list {
+  gap: 6px;
+  margin-left: 6px;
+}
+
+.dossier-history-card .ui-history-item {
+  padding: 6px 10px;
+  border-radius: 10px;
+}
+
+.dossier-history-card .ui-history-head {
+  gap: 2px 10px;
+}
+
+.dossier-history-card .ui-history-summary {
+  margin-top: 2px;
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.dossier-history-card .ui-history-detail {
+  margin-top: 2px;
+}
+
+.dossier-history-card .ui-history-toggle {
+  margin-top: 2px;
+}
+
+/* --- Below the cards --- */
+
+.dossier-history-facts {
+  margin: 0 0 var(--space-3);
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.dossier-history-facts h3 {
+  margin: 0 0 2px;
+  font-size: 14px;
+  color: var(--text-h);
+}
+
+.dossier-history-facts p {
+  margin: 0 0 4px;
+}
+
+.dossier-history-facts .dossier-history-description {
+  color: var(--text-h);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.dossier-more .db-kpis {
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  max-width: none;
+  margin-bottom: 8px;
+}
+
+.dossier-more .db-kpi {
+  border-radius: 12px;
+}
+
+.dossier-more-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 var(--space-5);
+}
+
+@media (max-width: 760px) {
+  .dossier-more-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* On a phone the height follows the screen, so the page keeps room around the list. */
+  .dossier-history-scroll {
+    height: min(340px, 55vh);
+  }
+
+  .dossier-history-select {
+    flex: 1 1 auto;
+  }
+
+  .dossier-history-select select {
+    flex: 1;
+    max-width: none;
+  }
+}

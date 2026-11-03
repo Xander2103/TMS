@@ -50,7 +50,7 @@ public class LegalEntityService : ILegalEntityService
         return await _dbContext.LegalEntities
             .Where(e => e.TenantId == _tenantContext.TenantId && e.IsActive)
             .OrderByDescending(e => e.IsDefault).ThenBy(e => e.LegalName)
-            .Select(e => new LegalEntityOptionDto(e.Id, e.TradingName ?? e.LegalName, e.VatNumber, e.IsDefault, e.IsActive))
+            .Select(e => new LegalEntityOptionDto(e.Id, e.TradingName ?? e.LegalName, e.VatNumber, e.IsDefault, e.IsActive, e.HeaderImageStorageKey != null))
             .ToListAsync(cancellationToken);
     }
 
@@ -236,6 +236,65 @@ public class LegalEntityService : ILegalEntityService
             await _dbContext.SaveChangesAsync(cancellationToken);
             await DeleteLogoFileUnlessIssuedAsync(key, cancellationToken);
             await _auditService.RecordAsync(EntityType, entity.Id.ToString(), "LogoRemoved", null, null, cancellationToken);
+        }
+
+        return Map(entity);
+    }
+
+    public async Task<LegalEntityDto?> AttachHeaderImageAsync(Guid id, string fileName, string contentType, Stream content, CancellationToken cancellationToken)
+    {
+        var entity = await FindAsync(id, cancellationToken);
+        if (entity is null)
+        {
+            return null;
+        }
+
+        var previousKey = entity.HeaderImageStorageKey;
+        entity.HeaderImageStorageKey = await _fileStorage.SaveAsync(_tenantContext.TenantId, LogoStorageCategory, fileName, content, cancellationToken);
+        entity.HeaderImageFileName = fileName;
+        entity.HeaderImageContentType = contentType;
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        if (previousKey is not null)
+        {
+            await _fileStorage.DeleteAsync(previousKey, cancellationToken);
+        }
+
+        await _auditService.RecordAsync(EntityType, entity.Id.ToString(), "HeaderImageUploaded", null,
+            new { FileName = fileName, ContentType = contentType, Replaced = previousKey is not null }, cancellationToken);
+
+        return Map(entity);
+    }
+
+    public async Task<(Stream Content, string FileName, string ContentType)?> OpenHeaderImageAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var entity = await FindAsync(id, cancellationToken);
+        if (entity?.HeaderImageStorageKey is null)
+        {
+            return null;
+        }
+
+        var stream = await _fileStorage.OpenReadAsync(entity.HeaderImageStorageKey, cancellationToken);
+        return (stream, entity.HeaderImageFileName ?? "banner", entity.HeaderImageContentType ?? "application/octet-stream");
+    }
+
+    public async Task<LegalEntityDto?> RemoveHeaderImageAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var entity = await FindAsync(id, cancellationToken);
+        if (entity is null)
+        {
+            return null;
+        }
+
+        if (entity.HeaderImageStorageKey is not null)
+        {
+            var key = entity.HeaderImageStorageKey;
+            entity.HeaderImageStorageKey = null;
+            entity.HeaderImageFileName = null;
+            entity.HeaderImageContentType = null;
+            await _dbContext.SaveChangesAsync(cancellationToken);
+            await _fileStorage.DeleteAsync(key, cancellationToken);
+            await _auditService.RecordAsync(EntityType, entity.Id.ToString(), "HeaderImageRemoved", null, null, cancellationToken);
         }
 
         return Map(entity);
@@ -498,5 +557,6 @@ public class LegalEntityService : ILegalEntityService
         e.DefaultCurrency, e.PaymentTermDays,
         e.InvoiceNumberFormat, e.InvoiceSequencePadding, e.InvoicePrefix, e.InvoiceFooter,
         e.LogoStorageKey is not null, e.LogoFileName,
-        e.IsActive, e.IsDefault, e.CreditNotePrefix, e.Version);
+        e.IsActive, e.IsDefault, e.CreditNotePrefix, e.Version,
+        e.HeaderImageStorageKey is not null, e.HeaderImageFileName);
 }

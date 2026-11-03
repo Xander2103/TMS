@@ -49,10 +49,10 @@ public class StorageIntegrityVerifierTests : IDisposable
     }
 
     [Fact]
-    public void Columns_CoverAllTwentyAuditedReferenceColumns()
+    public void Columns_CoverAllAuditedReferenceColumns()
     {
-        Assert.Equal(20, StorageIntegrityVerifier.Columns.Count);
-        Assert.Equal(20, StorageIntegrityVerifier.Columns.Select(c => c.Label).Distinct().Count());
+        Assert.Equal(21, StorageIntegrityVerifier.Columns.Count);
+        Assert.Equal(21, StorageIntegrityVerifier.Columns.Select(c => c.Label).Distinct().Count());
     }
 
     [Fact]

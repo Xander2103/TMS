@@ -1,4 +1,18 @@
 {
+  "workspaceSubtitle": "Interne notities bij dit dossier.",
+  "list": {
+    "searchPlaceholder": "Zoek in notities…",
+    "sortLabel": "Sorteren",
+    "newest": "Datum (nieuwste)",
+    "oldest": "Datum (oudste)",
+    "pageSizeLabel": "Aantal per pagina",
+    "perPage": "{size} per pagina",
+    "pageNumber": "Pagina {page}",
+    "noMatches": "Geen notities gevonden voor deze zoekopdracht.",
+    "range_one": "1 notitie",
+    "range_other": "{start}–{end} van {count} notities",
+    "actions": "Acties voor notitie van {author}, {date}"
+  },
   "title": "Notities",
   "activityTitle": "Notities bij deze activiteit",
   "add": "+ Notitie toevoegen",

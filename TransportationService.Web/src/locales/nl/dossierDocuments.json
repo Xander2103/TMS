@@ -1,8 +1,7 @@
 {
   "levels": {
     "dossier": "Dossierdocumenten",
-    "dossierShort": "Dossier",
-    "dossierHint": "Gelden voor het volledige dossier"
+    "dossierHint": "Voor alle opdrachten en activiteiten"
   },
   "summary_one": "{count} document in dit dossier",
   "summary_other": "{count} documenten in dit dossier",
@@ -15,14 +14,11 @@
   "fileMissing": "Bestand ontbreekt",
   "sections": {
     "dossier": "Dossierdocumenten",
-    "dossierHint": "Deze documenten gelden voor het dossier als geheel en zijn bij elke opdracht en activiteit te raadplegen. Hoort een document bij één opdracht of activiteit, upload het dan op dat niveau.",
     "own": "Documenten van deze opdracht",
-    "ownHint": "Documenten die alleen bij opdracht {number} horen.",
     "general": "Dossierdocumenten (gelden ook hier)",
     "generalHint": "Dezelfde documenten als op dossierniveau, geen kopieën. Hier alleen bekijken en downloaden.",
     "manageViaDossier": "Beheren bij Dossierdocumenten",
-    "ownActivity": "Documenten van deze activiteit",
-    "ownActivityHint": "Documenten die alleen bij activiteit {label} horen."
+    "ownActivity": "Documenten van deze activiteit"
   },
   "empty": {
     "dossier": "Nog geen dossierdocumenten.",
@@ -33,20 +29,15 @@
   "columns": {
     "title": "Titel",
     "type": "Type",
-    "level": "Niveau",
     "file": "Bestand",
     "portal": "Klantportaal",
-    "actions": "Acties"
+    "actions": "Acties",
+    "uploaded": "Geüpload"
   },
   "actions": {
-    "view": "Bekijken: {title}",
-    "download": "Downloaden: {title}",
-    "attachFile": "Bestand toevoegen: {title}",
-    "visibility": "Zichtbaarheid aanpassen: {title}",
-    "move": "Verplaatsen: {title}",
-    "delete": "Verwijderen: {title}",
     "viewShort": "Bekijken",
-    "downloadShort": "Downloaden"
+    "downloadShort": "Downloaden",
+    "menu": "Acties: {title}"
   },
   "visibility": {
     "visible": "Zichtbaar voor klant",
@@ -62,7 +53,6 @@
     "nowInternal": "Het document is niet langer zichtbaar voor de klant."
   },
   "upload": {
-    "open": "Document uploaden",
     "title": "Document uploaden",
     "target": "Opslaan bij",
     "targetHint": "Kies het niveau waar het document bij hoort. Een dossierdocument geldt voor het volledige dossier.",
@@ -92,7 +82,10 @@
       "tooLarge": "Het bestand is groter dan 10 MB.",
       "unsupportedType": "Alleen PDF-, JPG- en PNG-bestanden zijn toegestaan."
     },
-    "targetActivity": "Activiteit {label}"
+    "targetActivity": "Activiteit {label}",
+    "openDossier": "Document uploaden voor dossier",
+    "openOrder": "Document uploaden voor opdracht",
+    "openActivity": "Document uploaden voor activiteit"
   },
   "move": {
     "title": "Document verplaatsen naar…",
@@ -182,8 +175,42 @@
     "activities": "Activiteiten"
   },
   "kinds": {
-    "order": "Opdracht",
-    "activity": "Activiteit"
+    "orderHint": "Alleen voor deze opdracht",
+    "activityHint": "Alleen voor deze activiteit"
   },
-  "selector": "Documentniveau"
+  "selector": "Documentniveau",
+  "context": {
+    "dossierHint": "Gelden voor het volledige dossier, dus ook voor alle opdrachten en activiteiten.",
+    "order": "Documenten voor opdracht {label}",
+    "orderHint": "Alleen gekoppeld aan deze opdracht.",
+    "activity": "Documenten voor activiteit {label}",
+    "activityHint": "Alleen gekoppeld aan deze activiteit."
+  },
+  "shared": {
+    "order": "Dossierdocumenten — ook beschikbaar voor deze opdracht",
+    "activity": "Dossierdocumenten — ook beschikbaar voor deze activiteit",
+    "hint": "Deze documenten gelden voor het volledige dossier en zijn ook hier raadpleegbaar.",
+    "link": "Naar dossierdocumenten"
+  },
+  "filters": {
+    "search": "Zoeken in documenten",
+    "searchPlaceholder": "Zoek in documenten…",
+    "type": "Filteren op type",
+    "typeAll": "Type: Alle",
+    "portal": "Filteren op klantportaal",
+    "portalAll": "Klantportaal: Alle",
+    "sort": "Sortering",
+    "sortBy": {
+      "newest": "Datum (nieuwste)",
+      "oldest": "Datum (oudste)",
+      "title": "Titel (A–Z)",
+      "type": "Type (A–Z)"
+    },
+    "noResults": "Geen documenten gevonden met deze filters.",
+    "reset": "Filters wissen",
+    "pageSize": "Aantal per pagina",
+    "perPage": "{size} per pagina"
+  },
+  "range_one": "{start}–{end} van {count} document",
+  "range_other": "{start}–{end} van {count} documenten"
 }

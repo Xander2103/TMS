@@ -1,3 +1,4 @@
+import { ChevronDown, Globe } from 'lucide-react'
 import { useLocale } from '../../i18n/localeContext'
 import { LANGUAGE_NAMES } from '../../i18n/languageNames'
 import { LOCALES, isLocale } from '../../i18n/translations'
@@ -13,21 +14,25 @@ export function AppLanguageSwitcher() {
 
   return (
     <label className="app-lang">
-      <span className="app-lang-icon" aria-hidden="true">🌐</span>
-      <span className="visually-hidden">{t('common.languageSwitcher.label')}</span>
-      <select
-        className="app-lang-select"
-        value={locale}
-        onChange={(event) => {
-          if (isLocale(event.target.value)) setLocale(event.target.value, { persist: true })
-        }}
-      >
-        {LOCALES.map((candidate) => (
-          <option key={candidate} value={candidate} lang={candidate}>
-            {LANGUAGE_NAMES[candidate]}
-          </option>
-        ))}
-      </select>
+      <Globe className="app-lang-icon" size={16} aria-hidden="true" />
+      <span className="app-lang-label">{t('ui.nav.language')}</span>
+      <span className="app-lang-control">
+        <select
+          className="app-lang-select"
+          aria-label={t('common.languageSwitcher.label')}
+          value={locale}
+          onChange={(event) => {
+            if (isLocale(event.target.value)) setLocale(event.target.value, { persist: true })
+          }}
+        >
+          {LOCALES.map((candidate) => (
+            <option key={candidate} value={candidate} lang={candidate}>
+              {LANGUAGE_NAMES[candidate]}
+            </option>
+          ))}
+        </select>
+        <ChevronDown className="app-lang-chevron" size={14} aria-hidden="true" />
+      </span>
     </label>
   )
 }

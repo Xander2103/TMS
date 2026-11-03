@@ -444,7 +444,7 @@ describe('Dossier attention jumps', () => {
     orders.get.mockImplementation(async (id: string) => orderDetail({ id, orderNumber: id === 'o-6' ? '0006' : '0005', agreedPrice: 0 }))
   })
 
-  it('clicking "0006: verkoopprijs ontbreekt." opens the price tab with activity 0006 selected', async () => {
+  it('clicking "Naar prijs" on the issue about 0006 opens the price tab with activity 0006 selected', async () => {
     const user = userEvent.setup()
     const activities = [
       orderActivity({ id: 'a-5', sequence: 1, linkedTransportOrderId: 'o-5', linkedOrderNumber: '0005', agreedPrice: 300, isPriced: true, priceStatus: 'Priced' }),
@@ -454,15 +454,16 @@ describe('Dossier attention jumps', () => {
       dossierWith(activities, {
         readiness: [
           issue({ transportOrderId: 'o-6' }),
-          // Only the id travels: the strip names the order itself.
           issue({ code: 'route.date_missing', section: 'route', field: 'stops.plannedFrom', message: 'planningsdatum ontbreekt.', transportOrderId: 'o-6' }),
         ],
       }),
     )
     const { router } = renderPage('/dossiers/d-1')
 
-    expect(await screen.findByRole('button', { name: '0006: planningsdatum ontbreekt.' })).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: '0006: verkoopprijs ontbreekt.' }))
+    expect(await screen.findByRole('button', { name: 'Naar planning' })).toBeInTheDocument()
+    // Only the id travels: the bar names the order itself.
+    expect(screen.getAllByText('1 activiteit · 0006')).toHaveLength(2)
+    await user.click(screen.getByRole('button', { name: 'Naar prijs' }))
 
     await waitFor(() => expect(router.state.location.pathname).toBe('/dossiers/d-1/prijs'))
     await screen.findByRole('heading', { name: 'Verkoop & prijs' })
@@ -481,7 +482,7 @@ describe('Dossier attention jumps', () => {
     )
     const { router } = renderPage('/dossiers/d-1')
 
-    await user.click(await screen.findByRole('button', { name: '0006: controleer de activiteit.' }))
+    await user.click(await screen.findByRole('button', { name: 'Naar activiteiten' }))
     await waitFor(() => expect(router.state.location.pathname).toBe('/dossiers/d-1/activiteiten'))
     expect(await screen.findByRole('listitem', { name: '0006' })).toHaveClass('is-highlighted')
     expect(screen.getByRole('listitem', { name: '0005' })).not.toHaveClass('is-highlighted')

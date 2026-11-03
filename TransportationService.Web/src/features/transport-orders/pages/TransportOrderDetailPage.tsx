@@ -41,7 +41,6 @@ import '../detail/order-detail.css'
 import { OrderDetailContext, type OrderDetailWorkspace } from '../detail/orderDetailContext'
 import { ORDER_TABS, isOrderTab, orderTabPath, type OrderTab } from '../detail/orderSections'
 import { OrderDetailHeader } from '../detail/OrderDetailHeader'
-import { OrderAttention } from '../detail/OrderAttention'
 import { OrderSubnav } from '../detail/OrderSubnav'
 import { OrderOverview } from '../detail/OrderOverview'
 import { OrderLadingSection } from '../detail/OrderLadingSection'
@@ -331,7 +330,6 @@ export function TransportOrderDetailPage() {
         />
       ) : (
         <>
-          <OrderAttention />
           <OrderSubnav orderId={order.id} tabs={ORDER_TABS.filter((tab) => tab !== 'prijs' || canViewPrices)} />
           <div className="tod-subsection" data-tab={activeTab}>
             {activeTab === 'overzicht' && <OrderOverview />}

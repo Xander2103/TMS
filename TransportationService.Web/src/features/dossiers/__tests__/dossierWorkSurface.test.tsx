@@ -176,7 +176,8 @@ describe('Dossier work surface', () => {
 
   it('shows "Nog geen prijs" instead of € 0,00 for an unpriced dossier, and the amount once priced', async () => {
     const first = renderPage(PRICE_TAB)
-    expect(await screen.findByText('Nog geen prijs')).toBeInTheDocument()
+    expect(await screen.findByTestId('unit-total')).toHaveTextContent('Nog geen prijs')
+    expect(within(screen.getByRole('region', { name: 'Dossiersamenvatting' })).getByText('Nog geen prijs')).toBeInTheDocument()
     expect(within(document.getElementById('sectie-prijs')!).queryByText(/€\s0,00/)).not.toBeInTheDocument()
     first.unmount()
 
@@ -188,23 +189,24 @@ describe('Dossier work surface', () => {
     renderPage(PRICE_TAB)
     await screen.findByRole('heading', { name: 'Verkoop & prijs' })
     expect(await within(document.getElementById('sectie-prijs')!).findByText(/€\s450,00/)).toBeInTheDocument()
-    expect(screen.queryByText('Nog geen prijs')).not.toBeInTheDocument()
+    expect(within(screen.getByRole('region', { name: 'Dossiersamenvatting' })).queryByText('Nog geen prijs')).not.toBeInTheDocument()
   })
 
   it('"Ga naar route" focuses the first unresolved route field: the unloading location, then the date', async () => {
     const user = userEvent.setup()
     renderPage(ROUTE_TAB)
-    const buttons = await screen.findAllByRole('button', { name: 'Ga naar route' })
+    const toRoute = await screen.findByRole('button', { name: 'Naar route' })
+    const toPlanning = screen.getByRole('button', { name: 'Naar planning' })
     await screen.findByDisplayValue('Nexans site Antwerpen')
 
-    await user.click(buttons[0]) // stops.unloading
+    await user.click(toRoute) // stops.unloading
     const locationInputs = screen.getAllByLabelText('locatie')
     expect(locationInputs).toHaveLength(2)
     expect(document.activeElement).toBe(locationInputs[1])
     const unloadCard = locationInputs[1].closest('fieldset')!
     expect(within(unloadCard).getByText('2. Lossen')).toBeInTheDocument()
 
-    await user.click(buttons[1]) // stops.plannedFrom → first stop without a date
+    await user.click(toPlanning) // stops.plannedFrom → first stop without a date
     expect((document.activeElement as HTMLInputElement).type).toBe('date')
     expect(document.getElementById('sectie-route')?.hasAttribute('data-highlight')).toBe(true)
   })
@@ -266,7 +268,7 @@ describe('Dossier work surface', () => {
     const { router } = renderPage()
     await screen.findByText('Nexans site Antwerpen')
 
-    await user.click(screen.getByRole('button', { name: 'Ga naar prijs' }))
+    await user.click(screen.getByRole('button', { name: 'Naar prijs' }))
     expect(router.state.location.pathname).toBe(PRICE_TAB)
     const agreed = await screen.findByLabelText('Afgesproken prijs (€)')
     await waitFor(() => expect(document.activeElement).toBe(agreed))
@@ -340,7 +342,7 @@ describe('Dossier work surface', () => {
     api.createOrderForActivity.mockResolvedValue(created)
     const { router } = renderPage()
 
-    await user.click(await screen.findByRole('button', { name: 'Ga naar prijs' }))
+    await user.click(await screen.findByRole('button', { name: 'Naar prijs' }))
     expect(router.state.location.pathname).toBe(PRICE_TAB)
     const createButton = await screen.findByRole('button', { name: 'Transportopdracht aanmaken' })
     await waitFor(() => expect(document.activeElement).toBe(createButton))
@@ -426,7 +428,8 @@ describe('Dossier work surface — several transport orders', () => {
     const price = document.getElementById('sectie-prijs')!
     const total = price.querySelector('.dossier-price-total')!
     expect(await within(total as HTMLElement).findByText(/€\s450,00/)).toBeInTheDocument()
-    expect(within(total as HTMLElement).getByText('1 van 2 onderdelen afgehandeld')).toBeInTheDocument()
+    expect(within(total as HTMLElement).getByText('Voorlopig totaal')).toBeInTheDocument()
+    expect(within(price).getByText('1 van 2 onderdelen afgehandeld')).toBeInTheDocument()
     // Per-unit cards follow the backend flag, not "amount > 0".
     const rows = within(price).getAllByRole('option')
     expect(rows[0]).toHaveTextContent('ORD-0001')
@@ -475,7 +478,7 @@ describe('Dossier work surface — several transport orders', () => {
     const { router } = renderPage()
     await screen.findByText('Nexans site Antwerpen')
 
-    await user.click(screen.getByRole('button', { name: 'Ga naar route' }))
+    await user.click(screen.getByRole('button', { name: 'Naar route' }))
     expect(router.state.location.pathname).toBe(ROUTE_TAB)
     await screen.findByDisplayValue('Depot Gent')
     const routeSwitch = screen.getByRole('group', { name: 'Opdracht' })
@@ -483,7 +486,7 @@ describe('Dossier work surface — several transport orders', () => {
     // stops.unloading → the (still empty) unloading location of ORD-0002.
     await waitFor(() => expect(document.activeElement).toBe(screen.getAllByLabelText('locatie')[1]))
 
-    await user.click(screen.getByRole('button', { name: 'Ga naar prijs' }))
+    await user.click(screen.getByRole('button', { name: 'Naar prijs' }))
     expect(router.state.location.pathname).toBe(PRICE_TAB)
     const agreed = await screen.findByLabelText('Afgesproken prijs (€)')
     await waitFor(() => expect(document.activeElement).toBe(agreed))
@@ -672,7 +675,7 @@ describe('Dossier work surface — standalone billable activities carry their ow
     renderPage(PRICE_TAB)
     await screen.findByRole('heading', { name: 'Verkoop & prijs' })
     const price = document.getElementById('sectie-prijs')!
-    expect(await within(price).findByText('Nog geen prijs')).toBeInTheDocument()
+    expect(await within(price).findByTestId('unit-total')).toHaveTextContent('Nog geen prijs')
     expect(within(price).getByRole('heading', { name: 'Opslag' })).toBeInTheDocument()
     expect(within(price).getByLabelText('Afgesproken prijs (€)')).toHaveValue('')
     expect(within(price).queryByRole('button', { name: 'Transportopdracht aanmaken' })).not.toBeInTheDocument()
@@ -721,7 +724,7 @@ describe('Dossier work surface — standalone billable activities carry their ow
     expect(await screen.findByText(/^✓ Opgeslagen · \d{2}:\d{2}$/)).toBeInTheDocument()
     expect(toast.showSuccess).not.toHaveBeenCalled()
     const price = document.getElementById('sectie-prijs')!
-    expect(await within(price).findByText('Huidige prijsafspraak: € 350,00')).toBeInTheDocument()
+    await waitFor(() => expect(screen.getByTestId('unit-total')).toHaveTextContent(/€\s350,00/))
     expect(within(price.querySelector('.dossier-price-total')!).getByText(/€\s350,00/)).toBeInTheDocument()
     expect(screen.queryByText('Nog geen prijs')).not.toBeInTheDocument()
     // The next save goes against the new record version.
@@ -770,7 +773,7 @@ describe('Dossier work surface — standalone billable activities carry their ow
     await screen.findByRole('heading', { name: /^ORD-0001/ })
     await user.click(within(screen.getByRole('listbox', { name: /Prijsbare onderdelen/ })).getByRole('option', { name: /Opslag/ }))
     expect(screen.getByText('De prijs van deze activiteit is vergrendeld (Gefactureerd).')).toBeInTheDocument()
-    expect(screen.getByText('Huidige prijsafspraak: € 200,00')).toBeInTheDocument()
+    expect(screen.getByTestId('unit-total')).toHaveTextContent(/€\s200,00/)
     expect(screen.queryByLabelText('Afgesproken prijs (€)')).not.toBeInTheDocument()
   })
 
@@ -790,7 +793,7 @@ describe('Dossier work surface — standalone billable activities carry their ow
     expect(screen.getByLabelText('Afgesproken prijs (€)')).toHaveValue('350')
 
     await user.click(screen.getByRole('button', { name: 'Herladen' }))
-    expect(await screen.findByText('Huidige prijsafspraak: € 99,00')).toBeInTheDocument()
+    await waitFor(() => expect(screen.getByTestId('unit-total')).toHaveTextContent(/€\s99,00/))
     expect(screen.getByLabelText('Afgesproken prijs (€)')).toHaveValue('99')
   })
 })
@@ -816,7 +819,7 @@ describe('Dossier work surface — mixed dossier: transport + storage + crane', 
     const price = document.getElementById('sectie-prijs')!
     const total = price.querySelector<HTMLElement>('.dossier-price-total')!
     expect(within(total).getByText(/€\s650,00/)).toBeInTheDocument()
-    expect(within(total).getByText('2 van 3 onderdelen afgehandeld')).toBeInTheDocument()
+    expect(within(price).getByText('2 van 3 onderdelen afgehandeld')).toBeInTheDocument()
     const rows = within(price).getAllByRole('option')
     expect(rows).toHaveLength(3)
     expect(rows[0]).toHaveTextContent('ORD-0001')
@@ -843,7 +846,7 @@ describe('Dossier work surface — mixed dossier: transport + storage + crane', 
     await user.click(within(units).getByRole('option', { name: /Opslag/ }))
     expect(screen.getByRole('heading', { name: 'Opslag' })).toBeInTheDocument()
     expect(screen.getByLabelText('Afgesproken prijs (€)')).toHaveValue('200')
-    expect(screen.getByText('Huidige prijsafspraak: € 200,00')).toBeInTheDocument()
+    expect(screen.getByTestId('unit-total')).toHaveTextContent(/€\s200,00/)
     // No order was (re)loaded for the switch: the route target is untouched.
     expect(orders.get).toHaveBeenCalledTimes(1)
 
@@ -873,7 +876,7 @@ describe('Dossier work surface — mixed dossier: transport + storage + crane', 
     renderPage(PRICE_TAB)
     await screen.findByRole('heading', { name: /^ORD-0001/ })
 
-    await user.click(screen.getByRole('button', { name: 'Ga naar prijs' }))
+    await user.click(screen.getByRole('button', { name: 'Naar prijs' }))
     const units = screen.getByRole('listbox', { name: /Prijsbare onderdelen/ })
     await waitFor(() => expect(within(units).getByRole('option', { name: /Kraanwerk/ })).toHaveAttribute('aria-selected', 'true'))
     expect(screen.getByRole('heading', { name: 'Kraanwerk' })).toBeInTheDocument()
@@ -973,7 +976,7 @@ describe('Dossier work surface — intentional € 0 is priced, visible and ques
     expect(within(within(price).getByRole('option', { name: /ORD-0001/ })).getByText('Gratis')).toBeInTheDocument()
     // Settled: "1 van 1 afgehandeld", nothing left to price or check.
     expect(within(price).getByText('1 van 1 onderdelen afgehandeld')).toBeInTheDocument()
-    expect(within(price).queryByText('Nog te prijzen of te controleren:')).not.toBeInTheDocument()
+    expect(within(price).getByText('Alle onderdelen zijn afgehandeld.')).toBeInTheDocument()
 
     // 0 → 120: a positive amount needs no confirmation; the note is gone.
     orders.setOneOff.mockResolvedValueOnce(zeroOrder(120, 'ov-3'))
@@ -993,7 +996,7 @@ describe('Dossier work surface — intentional € 0 is priced, visible and ques
     renderPage(PRICE_TAB)
     // Wait for the order to be on screen: the warning must never appear, also not once loaded.
     await screen.findByLabelText('Afgesproken prijs (€)')
-    expect(screen.getByText('Nog geen prijs')).toBeInTheDocument()
+    expect(screen.getByTestId('unit-total')).toHaveTextContent('Nog geen prijs')
     expect(within(document.getElementById('sectie-prijs')!).queryByRole('note')).not.toBeInTheDocument()
   })
 })
@@ -1109,7 +1112,7 @@ describe('Dossier work surface — order switch keeps the page in place', () => 
     orders.get.mockImplementation((id: string) => Promise.resolve(id === 'o-2' ? secondOrder() : firstOrder()))
     const { router } = renderPage(ROUTE_TAB)
     await screen.findByDisplayValue('Nexans site Antwerpen')
-    await user.click(screen.getByRole('button', { name: 'Ga naar prijs' }))
+    await user.click(screen.getByRole('button', { name: 'Naar prijs' }))
     expect(router.state.location.pathname).toBe(PRICE_TAB)
     await screen.findByRole('heading', { name: /^ORD-0002/ })
     await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText('Afgesproken prijs (€)')))

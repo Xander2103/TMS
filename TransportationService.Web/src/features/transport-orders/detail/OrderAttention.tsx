@@ -13,8 +13,8 @@ interface AttentionItem {
 }
 
 /**
- * Redesign 2026-09-12: the order's attention points as ONE compact strip under the header,
- * each with the subsection that resolves it. Derived from the loaded order — no new endpoint.
+ * The order's attention points, compact at the bottom of the header (redesign 2026-11-03), each
+ * with its own action to the subsection that resolves it. Derived from the loaded order — no new endpoint.
  */
 export function OrderAttention() {
   const ws = useOrderDetail()
@@ -62,9 +62,8 @@ export function OrderAttention() {
   }
 
   if (items.length === 0) return null
-  const worst = items.some((i) => i.tone === 'danger') ? 'danger' : items.some((i) => i.tone === 'warning') ? 'warning' : 'info'
   return (
-    <section className={`tod-attention is-${worst}`} aria-label="Aandachtspunten">
+    <section className="tod-attention" aria-label="Aandachtspunten">
       <ul>
         {items.map((item) => (
           <li key={item.key} className={`tod-attention-item is-${item.tone}`}>

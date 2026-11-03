@@ -40,7 +40,15 @@
     "logoPending": "Nouveau logo (pas encore enregistré) :",
     "logoPendingRemoval": "Le logo sera supprimé lorsque vous cliquerez sur Enregistrer.",
     "logoUndo": "Annuler la modification du logo",
-    "logoAppliedOnSave": "Une modification du logo n'est enregistrée que lorsque vous cliquez sur Enregistrer. Les factures déjà émises conservent leur logo ; les nouvelles factures utilisent le nouveau logo."
+    "logoAppliedOnSave": "Une modification du logo n'est enregistrée que lorsque vous cliquez sur Enregistrer. Les factures déjà émises conservent leur logo ; les nouvelles factures utilisent le nouveau logo.",
+    "sectionHeaderImage": "Photo de bannière",
+    "headerImagePending": "Nouvelle photo (pas encore enregistrée) :",
+    "headerImagePendingRemoval": "La photo sera supprimée lorsque vous cliquerez sur Enregistrer.",
+    "currentHeaderImage": "Photo actuelle :",
+    "noHeaderImageYet": "Pas de photo propre : la photo de transport standard est affichée.",
+    "headerImageUploadAria": "Choisir la photo de bannière",
+    "headerImageDelete": "Supprimer la photo",
+    "headerImageHint": "En haut des dossiers et ordres de cette société. PNG ou JPG, 5 Mo maximum, de préférence au moins 1600 px de large."
   },
   "page": {
     "columnDefault": "Par défaut",
@@ -69,7 +77,10 @@
     "saved": "Entreprise enregistrée.",
     "savingBusy": "Enregistrement…",
     "subtitle": "Entités facturantes de cette organisation.",
-    "savedLogoFailed": "La société est enregistrée, mais pas la modification du logo : {message} Cliquez à nouveau sur Enregistrer pour réessayer le logo."
+    "savedLogoFailed": "La société est enregistrée, mais pas la modification du logo : {message} Cliquez à nouveau sur Enregistrer pour réessayer le logo.",
+    "headerImageUploadFailed": "La photo de bannière n'a pas pu être téléversée.",
+    "headerImageRemoveFailed": "La photo de bannière n'a pas pu être supprimée.",
+    "savedHeaderImageFailed": "La société a été enregistrée, mais pas la modification de la photo de bannière : {message} Cliquez à nouveau sur Enregistrer pour réessayer."
   },
   "switcher": {
     "defaultSuffix": "(par défaut)",

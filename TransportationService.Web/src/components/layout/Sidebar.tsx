@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { LogOut } from 'lucide-react'
+import { LogOut, SunMoon } from 'lucide-react'
 import { useLocation } from 'react-router-dom'
 import { useAuth } from '../../features/auth/authContextValue'
 import { useLocale } from '../../i18n/localeContext'
@@ -75,7 +75,11 @@ export function Sidebar({ open = false, onNavigate, onAction }: {
       {/* Personal preferences (language, appearance): per USER, never tenant settings. */}
       <div className="sidebar-prefs">
         <AppLanguageSwitcher />
-        <ThemeSwitcher />
+        <div className="sidebar-theme-row">
+          <SunMoon className="sidebar-theme-icon" size={16} aria-hidden="true" />
+          <span className="sidebar-theme-label">{t('ui.appearance.label')}</span>
+          <ThemeSwitcher />
+        </div>
       </div>
 
       {user && (

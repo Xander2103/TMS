@@ -22,7 +22,7 @@ Bij de start, en als er iets wijzigt.
 
 ![De eigen bedrijven](shot:beheer-eigen-bedrijven "De eigen bedrijven")
 
-2. Open **Eigen bedrijven**. Factuurnummering, IBAN en logo staan per juridische entiteit.
+2. Open **Eigen bedrijven**. Factuurnummering, IBAN, logo en de bannerfoto bovenaan dossiers en opdrachten staan per juridische entiteit. Zonder eigen bannerfoto toont de pagina de foto van het standaardbedrijf, en anders de standaard transportfoto.
 
 ### Een nieuw bedrijf aanmaken
 

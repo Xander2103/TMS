@@ -65,6 +65,14 @@ public class LegalEntity : AuditableTenantEntity, TransportationService.Api.Comm
     public string? LogoFileName { get; set; }
     public string? LogoContentType { get; set; }
 
+    /// <summary>
+    /// Opaque IFileStorageService key of the banner photo shown in the dossier and order headers.
+    /// Purely cosmetic (never on a document), so a replaced file is simply removed.
+    /// </summary>
+    public string? HeaderImageStorageKey { get; set; }
+    public string? HeaderImageFileName { get; set; }
+    public string? HeaderImageContentType { get; set; }
+
     public bool IsActive { get; set; } = true;
 
     /// <summary>Exactly one default entity per tenant (filtered unique index).</summary>

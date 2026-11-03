@@ -86,7 +86,8 @@
     "notFoundTitle": "Page not found",
     "notFoundMessage": "The requested page does not exist.",
     "notFoundBack": "Back",
-    "notFoundHome": "Go to the start screen"
+    "notFoundHome": "Go to the start screen",
+    "language": "Language"
   },
   "shortcutList": {
     "globalSearch": "Global search / commands",

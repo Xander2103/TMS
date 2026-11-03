@@ -1,4 +1,5 @@
 import { useImperativeHandle, useRef, useState, type FormEvent, type Ref } from 'react'
+import { AlertTriangle } from 'lucide-react'
 import { ApiError } from '../../../api/apiClient'
 import { describeApiError } from '../../../api/problemDetails'
 import { Button } from '../../../components/ui/Button'
@@ -18,6 +19,8 @@ import { activityUnitName } from '../pricing/activityPriceDisplay'
 import type { ActivityPriceLineInput } from '../pricing/types'
 import type { DossierActivity, DossierDetail } from '../types'
 import { PriceMethodChoice, type PriceMethod } from '../pricing/PriceMethodChoice'
+import { FixedPriceSection } from '../pricing/PriceSections'
+import { PriceUnitSummary } from '../pricing/PriceUnitSummary'
 import '../pricing/dossier-pricing.css'
 
 export interface DossierActivityPricePanelHandle {
@@ -37,6 +40,8 @@ interface DossierActivityPricePanelProps {
   onConflict: (err: unknown) => boolean
   /** Unsaved sales lines exist (the section locks the activity picker meanwhile). */
   onDirtyChange?: (dirty: boolean) => void
+  onSelectUnit?: (activityId: string) => void
+  selectLocked?: boolean
   ref?: Ref<DossierActivityPricePanelHandle>
 }
 
@@ -88,7 +93,7 @@ function serverLinesAsInput(activity: DossierActivity): ActivityPriceLineInput[]
  * reads as € 0,00.
  */
 export function DossierActivityPricePanel({
-  dossier, activity, canEdit, hasPriceRight = canEdit, onDossierUpdated, onConflict, onDirtyChange, ref,
+  dossier, activity, canEdit, hasPriceRight = canEdit, onDossierUpdated, onConflict, onDirtyChange, onSelectUnit, selectLocked, ref,
 }: DossierActivityPricePanelProps) {
   const { t } = useLocale()
   const toast = useToast()
@@ -262,8 +267,52 @@ export function DossierActivityPricePanel({
     if (!linesRef.current?.focusFirstLine()) linesRef.current?.addLine()
   }
 
+  const agreedForm = (
+        <form className="dossier-price-agreed" onSubmit={(event) => void save(event)}>
+          <FormField
+            label={t('dossierSheet.price.agreedLabel')}
+            htmlFor="dossier-activity-agreed-price"
+            error={error ?? undefined}
+            hint={hasLines ? t('dossierPricing.activity.flatReplacesLines') : t('dossierSheet.price.agreedHintActivity')}
+          >
+            <div className="dossier-price-agreed-row">
+              <input
+                ref={inputRef}
+                id="dossier-activity-agreed-price"
+                type="text"
+                inputMode="decimal"
+                value={input}
+                onChange={(event) => setInput(event.target.value)}
+                disabled={busy}
+                aria-invalid={error ? true : undefined}
+                placeholder="0,00"
+              />
+              <Button type="submit" disabled={busy || input.trim() === currentAgreedAmount(activity)}>
+                {t('dossierSheet.price.agreedSave')}
+              </Button>
+              <SaveStatus state={agreedStatus.state} onRetry={() => void persistAgreed(lastAgreedAmount)} />
+            </div>
+          </FormField>
+        </form>
+  )
+
   return (
     <div className="dossier-activity-price">
+      <PriceUnitSummary
+        dossier={dossier}
+        activity={activity}
+        total={isFree ? t('dossierPricing.free') : activity.isPriced && activity.agreedPrice != null ? euro(activity.agreedPrice) : t('dossierSheet.price.noPrice')}
+        unpriced={!isFree && !(activity.isPriced && activity.agreedPrice != null)}
+        statusFallback={isFree ? t('dossierPricing.free') : activity.isPriced ? null : t('dossierPricing.notPricedYet')}
+        onSelectUnit={onSelectUnit}
+        selectLocked={selectLocked}
+        actions={editable && showLines ? (
+          <Button variant="secondary" onClick={() => linesRef.current?.addLine()} disabled={busy}>
+            {t('dossierPricing.addLine')}
+          </Button>
+        ) : undefined}
+      />
+
       {locked && <p className="dossier-price-note">{t('dossierSheet.price.lockedActivity', { status: statusLabel })}</p>}
       {!locked && !canEdit && (
         <p className="dossier-price-note">
@@ -271,108 +320,77 @@ export function DossierActivityPricePanel({
         </p>
       )}
 
-      <div className="dossier-pricing-block">
-        <h4 className="dossier-pricing-block-title">{t('dossierPricing.detail.priceBlock')}</h4>
+      {isFree && <p className="dossier-price-note">{t('dossierPricing.activity.freeConfirmed')}</p>}
+      {!hasPrice && editable && <p className="dossier-price-none">{t('dossierPricing.noPriceSet')}</p>}
+      {undecided && <PriceMethodChoice value={activeMethod} onChange={chooseMethod} disabled={busy} />}
+      {undecided && activeMethod === 'free' && (
+        <div className="dossier-price-free-choice">
+          <p>{t('dossierPricing.method.freeExplain')}</p>
+          <Button onClick={() => void clearLines(true)} disabled={busy}>
+            {t('dossierPricing.method.freeConfirm')}
+          </Button>
+        </div>
+      )}
+      {!hasPrice && !editable && <p className="placeholder-text">{t('dossierSheet.price.noActivityPrice')}</p>}
 
-        {isFree && <p className="dossier-price-note">{t('dossierPricing.activity.freeConfirmed')}</p>}
-        {!isFree && !isZeroUnconfirmed && activity.isPriced && activity.agreedPrice != null && (
-          <p className="dossier-price-note">{t('dossierSheet.price.agreedCurrent', { amount: euro(activity.agreedPrice) })}</p>
-        )}
-        {!hasPrice && editable && <p className="dossier-price-none">{t('dossierPricing.noPriceSet')}</p>}
-        {undecided && <PriceMethodChoice value={activeMethod} onChange={chooseMethod} disabled={busy} />}
-        {undecided && activeMethod === 'free' && (
-          <div className="dossier-price-free-choice">
-            <p>{t('dossierPricing.method.freeExplain')}</p>
-            <Button onClick={() => void clearLines(true)} disabled={busy}>
-              {t('dossierPricing.method.freeConfirm')}
-            </Button>
-          </div>
-        )}
-        {!hasPrice && !editable && <p className="placeholder-text">{t('dossierSheet.price.noActivityPrice')}</p>}
-
-        {isZeroUnconfirmed && (
-          <div className="dossier-price-callout" role="alert" data-testid="zero-callout">
-            <p className="dossier-price-callout-title">
-              <span className="dossier-price-callout-icon" aria-hidden="true">⚠</span> {t('dossierPricing.zeroCallout.title')}
-            </p>
-            <p className="dossier-price-callout-text">{t('dossierPricing.zeroCallout.message')}</p>
-            {editable && (
-              <div className="dossier-price-callout-actions">
-                <Button onClick={() => void confirmFree()} disabled={busy}>
-                  {t('dossierPricing.zeroCallout.confirm')}
-                </Button>
-                <Button variant="secondary" onClick={adjustPrice} disabled={busy}>
-                  {t('dossierPricing.zeroCallout.adjust')}
-                </Button>
-              </div>
-            )}
-          </div>
-        )}
-
-        {showFlat && (
-          <form className="dossier-price-agreed" onSubmit={(event) => void save(event)}>
-            <FormField
-              label={t('dossierSheet.price.agreedLabel')}
-              htmlFor="dossier-activity-agreed-price"
-              error={error ?? undefined}
-              hint={hasLines ? t('dossierPricing.activity.flatReplacesLines') : t('dossierSheet.price.agreedHintActivity')}
-            >
-              <div className="dossier-price-agreed-row">
-                <input
-                  ref={inputRef}
-                  id="dossier-activity-agreed-price"
-                  type="text"
-                  inputMode="decimal"
-                  value={input}
-                  onChange={(event) => setInput(event.target.value)}
-                  disabled={busy}
-                  aria-invalid={error ? true : undefined}
-                  placeholder="0,00"
-                />
-                <Button type="submit" disabled={busy || input.trim() === currentAgreedAmount(activity)}>
-                  {t('dossierSheet.price.agreedSave')}
-                </Button>
-                <SaveStatus state={agreedStatus.state} onRetry={() => void persistAgreed(lastAgreedAmount)} />
-              </div>
-            </FormField>
-          </form>
-        )}
-        {!showFlat && error && (
-          <p className="dossier-activity-lines-error" role="alert">
-            {error}
+      {isZeroUnconfirmed && (
+        <div className="dossier-price-callout" role="alert" data-testid="zero-callout">
+          <p className="dossier-price-callout-title">
+            <AlertTriangle className="dossier-price-callout-icon" size={16} aria-hidden="true" /> {t('dossierPricing.zeroCallout.title')}
           </p>
-        )}
-      </div>
+          <p className="dossier-price-callout-text">{t('dossierPricing.zeroCallout.message')}</p>
+          {editable && (
+            <div className="dossier-price-callout-actions">
+              <Button onClick={() => void confirmFree()} disabled={busy}>
+                {t('dossierPricing.zeroCallout.confirm')}
+              </Button>
+              <Button variant="secondary" onClick={adjustPrice} disabled={busy}>
+                {t('dossierPricing.zeroCallout.adjust')}
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {undecided && showFlat && agreedForm}
 
       <div hidden={!showLines}>
-      <ActivityPriceLinesEditor
-        key={linesReset}
-        ref={linesRef}
-        dossier={dossier}
-        activity={activity}
-        editable={editable}
-        replacesFlatPrice={activity.isPriced && !hasLines && !isFree}
-        onDirtyChange={(dirty) => {
-          setLinesDirty(dirty)
-          onDirtyChange?.(dirty)
-        }}
-        onDossierUpdated={onDossierUpdated}
-        reloadDossier={() => getDossier(dossier.id)}
-      />
+        <ActivityPriceLinesEditor
+          key={linesReset}
+          ref={linesRef}
+          dossier={dossier}
+          activity={activity}
+          editable={editable}
+          replacesFlatPrice={activity.isPriced && !hasLines && !isFree}
+          onDirtyChange={(dirty) => {
+            setLinesDirty(dirty)
+            onDirtyChange?.(dirty)
+          }}
+          onDossierUpdated={onDossierUpdated}
+          reloadDossier={() => getDossier(dossier.id)}
+        />
       </div>
+
+      {editable && !undecided && (hasLines || showFlat) && (
+        <FixedPriceSection
+          title={t(hasLines ? 'dossierPricing.activity.useFlat' : 'dossierPricing.panel.fixedTitle')}
+          description={hasLines ? t('dossierPricing.panel.fixedDescription') : undefined}
+          toggle={hasLines ? { checked: flatForced, onChange: setFlatForced, disabled: busy } : undefined}
+        >
+          {showFlat ? agreedForm : null}
+        </FixedPriceSection>
+      )}
+      {!showFlat && error && (
+        <p className="dossier-activity-lines-error" role="alert">
+          {error}
+        </p>
+      )}
 
       {editable && hasPrice && (
         <p className="dossier-price-actions dossier-activity-price-actions">
-          {hasLines && !flatForced && (
-            <Button variant="ghost" onClick={() => setFlatForced(true)} disabled={busy}>
-              {t('dossierPricing.activity.useFlat')}
-            </Button>
-          )}
-          {hasPrice && (
-            <Button variant="ghost" className="dossier-price-remove" onClick={() => setConfirming('remove')} disabled={busy}>
-              {t('dossierPricing.activity.removePrice')}
-            </Button>
-          )}
+          <Button variant="ghost" className="dossier-price-remove" onClick={() => setConfirming('remove')} disabled={busy}>
+            {t('dossierPricing.activity.removePrice')}
+          </Button>
         </p>
       )}
 

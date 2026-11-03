@@ -86,7 +86,8 @@
     "notFoundTitle": "Pagina niet gevonden",
     "notFoundMessage": "De opgevraagde pagina bestaat niet.",
     "notFoundBack": "Terug",
-    "notFoundHome": "Naar het startscherm"
+    "notFoundHome": "Naar het startscherm",
+    "language": "Taal"
   },
   "shortcutList": {
     "globalSearch": "Globaal zoeken / commando's",

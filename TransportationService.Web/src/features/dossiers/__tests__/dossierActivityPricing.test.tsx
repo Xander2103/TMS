@@ -165,7 +165,7 @@ describe('Price per activity — the picker is always there', () => {
     expect(options[0]).not.toHaveTextContent('€')
     expect(within(priceSection()).queryByText(/€\s0,00/)).not.toBeInTheDocument()
     // The detail says which part it edits.
-    expect(screen.getByText('Prijsdetails')).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'Prijsdetails' })).toBeInTheDocument()
     expect(detailHeading('Plateau')).toBeInTheDocument()
   })
 
@@ -202,20 +202,24 @@ describe('Price per activity — the picker is always there', () => {
     expect(screen.queryByRole('button', { name: '+ Verkooplijn toevoegen' })).not.toBeInTheDocument()
   })
 
-  it('the dossier summary shows the server total, "1 van 3 onderdelen afgehandeld" and the open units as links that select them', async () => {
+  it('the dossier summary shows the server total, "1 van 3 onderdelen afgehandeld" and the attention tile that selects the next open unit', async () => {
     const user = userEvent.setup()
     api.getDossier.mockResolvedValue(mixedDossier())
     renderPage()
     await screen.findByRole('heading', { name: /^ORD-0005/ })
-    expect(screen.getByText('Dossiersamenvatting')).toBeInTheDocument()
-    const total = priceSection().querySelector<HTMLElement>('.dossier-price-total')!
+    const summary = screen.getByRole('region', { name: 'Dossiersamenvatting' })
+    // A partial aggregate is labelled as provisional, never as the dossier price.
+    const total = summary.querySelector<HTMLElement>('.dossier-price-total')!
+    expect(within(total).getByText('Voorlopig totaal')).toBeInTheDocument()
     expect(within(total).getByText(/€\s102,37/)).toBeInTheDocument()
-    expect(within(total).getByText('1 van 3 onderdelen afgehandeld')).toBeInTheDocument()
+    expect(within(summary).getByText('1 van 3 onderdelen afgehandeld')).toBeInTheDocument()
 
-    const toPrice = priceSection().querySelector<HTMLElement>('.dossier-price-toprice')!
-    expect(toPrice).toHaveTextContent('Nog te prijzen of te controleren:')
-    expect(within(toPrice).getAllByRole('button').map((b) => b.textContent)).toEqual(['ORD-0006 — Distributie', 'Plateau'])
-    await user.click(within(toPrice).getByRole('button', { name: 'Plateau' }))
+    expect(within(summary).queryByText('Alle onderdelen zijn afgehandeld.')).not.toBeInTheDocument()
+
+    // The attention tile of the selected unit counts the open units and leads to the next one.
+    await user.click(within(await screen.findByRole('region', { name: 'Prijsdetails' })).getByRole('button', { name: '2 onderdelen vragen aandacht' }))
+    expect(within(picker()).getByRole('option', { name: /ORD-0006/ })).toHaveAttribute('aria-selected', 'true')
+    await user.click(within(await screen.findByRole('region', { name: 'Prijsdetails' })).getByRole('button', { name: '2 onderdelen vragen aandacht' }))
     expect(within(picker()).getByRole('option', { name: /Plateau/ })).toHaveAttribute('aria-selected', 'true')
     expect(detailHeading('Plateau')).toBeInTheDocument()
   })
@@ -349,7 +353,8 @@ describe('Price per activity — sales lines of a standalone activity', () => {
     // The returned dossier replaced the workspace state: total block, picker and editor agree.
     const total = priceSection().querySelector<HTMLElement>('.dossier-price-total')!
     expect(await within(total).findByText(/€\s125,00/)).toBeInTheDocument()
-    expect(within(total).getByText('1 van 1 onderdelen afgehandeld')).toBeInTheDocument()
+    expect(within(total).getByText('Dossiertotaal')).toBeInTheDocument()
+    expect(within(priceSection()).getByText('1 van 1 onderdelen afgehandeld')).toBeInTheDocument()
     const option = within(picker()).getByRole('option', { name: /Plateau/ })
     expect(option).toHaveTextContent(/€\s125,00/)
     expect(within(option).getByText('Geprijsd')).toBeInTheDocument()
@@ -431,7 +436,8 @@ describe('Price per activity — sales lines of a standalone activity', () => {
     const option = within(picker()).getByRole('option', { name: /Plateau/ })
     expect(within(option).getByText('Niet geprijsd')).toBeInTheDocument()
     expect(option).not.toHaveTextContent('€')
-    expect(screen.getByText('Nog geen prijs')).toBeInTheDocument()
+    expect(within(screen.getByRole('region', { name: 'Dossiersamenvatting' })).getByText('Nog geen prijs')).toBeInTheDocument()
+    expect(screen.getByTestId('unit-total')).toHaveTextContent('Nog geen prijs')
     expect(within(priceSection()).queryByText(/€\s0,00/)).not.toBeInTheDocument()
   })
 
@@ -583,7 +589,7 @@ describe('Price per activity — an order-backed activity uses THE order price l
     expect(screen.getByRole('button', { name: '+ Verkooplijn toevoegen' })).toBeInTheDocument()
     // B13: priced through sales lines → the agreed (one-off) price steps aside, one click away.
     expect(screen.queryByLabelText('Afgesproken prijs (€)')).not.toBeInTheDocument()
-    await userEvent.setup().click(screen.getByRole('button', { name: 'Vaste prijs gebruiken' }))
+    await userEvent.setup().click(screen.getByRole('switch', { name: 'Vaste prijs gebruiken' }))
     expect(screen.getByLabelText('Afgesproken prijs (€)')).toBeInTheDocument()
   })
 
@@ -679,7 +685,7 @@ describe('Price per activity — an order-backed activity uses THE order price l
     )
     renderPage()
     const heading = await screen.findByRole('heading', { name: 'Prijsdekking goederen' })
-    const block = heading.closest<HTMLElement>('.order-cargo-coverage')!
+    const block = heading.closest<HTMLElement>('.dossier-price-fold')!
     const rows = within(block).getAllByRole('row').slice(1)
     expect(rows).toHaveLength(3)
     expect(rows[0]).toHaveTextContent('Kabelhaspels')
@@ -781,12 +787,12 @@ describe('Pricing UX — € 0 needs an explicit decision; master-detail keeps e
     expect(option).toHaveTextContent(/€\s0,00/)
     expect(within(option).getByText('Controle vereist')).toBeInTheDocument()
     expect(within(priceSection()).queryByText('Geprijsd')).not.toBeInTheDocument()
-    // Dossier summary: nothing settled yet; the unit is listed as "controle vereist".
+    // Dossier summary: nothing settled yet; the selected unit is the one that needs attention.
     expect(screen.getByText('0 van 1 onderdelen afgehandeld')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Plateau (controle vereist)' })).toBeInTheDocument()
-    expect(screen.getByText('⚠ 1 onderdeel vraagt aandacht')).toBeInTheDocument()
+    expect(screen.getByText('1 onderdeel vraagt aandacht')).toBeInTheDocument()
+    expect(screen.queryByText('Alle onderdelen zijn afgehandeld.')).not.toBeInTheDocument()
     // The attention strip carries the compact version; the detail the single callout — nothing else.
-    expect(screen.getByRole('button', { name: 'Plateau: verkoopprijs van € 0,00 vraagt bevestiging als gratis.' })).toBeInTheDocument()
+    expect(within(screen.getByRole('region', { name: 'Aandacht' })).getByRole('button', { name: 'Naar prijs' })).toBeInTheDocument()
     const callouts = within(priceSection()).getAllByTestId('zero-callout')
     expect(callouts).toHaveLength(1)
     expect(callouts[0]).toHaveAttribute('role', 'alert')
@@ -813,7 +819,8 @@ describe('Pricing UX — € 0 needs an explicit decision; master-detail keeps e
     expect(within(priceSection()).queryByTestId('zero-callout')).not.toBeInTheDocument()
     expect(screen.getByText('Deze activiteit is bevestigd als gratis (€ 0).')).toBeInTheDocument()
     expect(screen.getByText('1 van 1 onderdelen afgehandeld')).toBeInTheDocument()
-    expect(screen.queryByText(/vraagt aandacht/)).not.toBeInTheDocument()
+    expect(screen.getByText('Alle onderdelen zijn afgehandeld.')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Controle vereist/ })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /vraagt bevestiging als gratis/ })).not.toBeInTheDocument()
     // State came from the save response — the server's authoritative dossier — not a second GET.
     expect(api.getDossier).toHaveBeenCalledTimes(1)
@@ -880,7 +887,8 @@ describe('Pricing UX — € 0 needs an explicit decision; master-detail keeps e
     const option = await screen.findByRole('option', { name: /Plateau/ })
     expect(within(option).getByText('Niet geprijsd')).toBeInTheDocument()
     expect(within(priceSection()).queryByText('Gratis', { selector: '.ui-badge' })).not.toBeInTheDocument()
-    expect(screen.getByText('Nog geen prijs')).toBeInTheDocument()
+    expect(within(screen.getByRole('region', { name: 'Dossiersamenvatting' })).getByText('Nog geen prijs')).toBeInTheDocument()
+    expect(screen.getByTestId('unit-total')).toHaveTextContent('Nog geen prijs')
     expect(screen.getByText('0 van 1 onderdelen afgehandeld')).toBeInTheDocument()
   })
 
@@ -903,7 +911,7 @@ describe('Pricing UX — € 0 needs an explicit decision; master-detail keeps e
     expect(within(priceSection()).getByTestId('zero-callout')).toBeInTheDocument()
     // The sales lines block belongs to the SELECTED unit.
     expect(screen.getByRole('heading', { name: 'Verkooplijnen' })).toBeInTheDocument()
-    expect(screen.queryByText('Totaalprijs')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Volledige opdrachtprijs openen' })).not.toBeInTheDocument()
 
     await user.click(within(picker()).getByRole('option', { name: /ORD-0005/ }))
     expect(await screen.findByRole('heading', { name: /^ORD-0005/ })).toBeInTheDocument()
@@ -917,7 +925,7 @@ describe('Pricing UX — € 0 needs an explicit decision; master-detail keeps e
     api.getDossier.mockResolvedValue(orderPlusZero())
     renderPage()
     await screen.findByRole('heading', { name: /^ORD-0005/ })
-    await user.click(screen.getByRole('button', { name: 'Plateau: verkoopprijs van € 0,00 vraagt bevestiging als gratis.' }))
+    await user.click(within(screen.getByRole('region', { name: 'Aandacht' })).getByRole('button', { name: 'Naar prijs' }))
     await waitFor(() => expect(within(picker()).getByRole('option', { name: /Plateau/ })).toHaveAttribute('aria-selected', 'true'))
     expect(within(priceSection()).getByTestId('zero-callout')).toBeInTheDocument()
   })

@@ -1,18 +1,92 @@
-/* Confirmation sprint 2026-09-23 — "Dossier bevestigen" dialog (detail header + list row action). */
-.dossier-confirm-intro { margin: 0 0 0.75rem; color: var(--color-text-muted); }
+/* "Dossier afsluiten" dialog (detail header + list row action). Tokens from styles/global.css. */
+.dossier-confirm-intro { margin: 0 0 14px; color: var(--color-text-muted); }
 .dossier-confirm-loading { color: var(--color-text-muted); }
-.dossier-confirm-summary { display: grid; grid-template-columns: max-content 1fr; gap: 0.25rem 1rem; margin: 0 0 0.75rem; padding: 0.5rem 0.75rem; border-radius: 6px; background: var(--color-surface-muted); }
-.dossier-confirm-summary > div { display: contents; }
-.dossier-confirm-summary dt { font-weight: 600; }
-.dossier-confirm-summary dd { margin: 0; }
-.dossier-confirm-checks { margin: 0 0 0.75rem; padding: 0.5rem 0.75rem; border-left: 3px solid var(--color-border); }
-.dossier-confirm-checks h4 { margin: 0 0 0.25rem; font-size: 0.95rem; }
-.dossier-confirm-checks ul { margin: 0; padding-left: 1.1rem; }
-.dossier-confirm-checks-blocking { border-color: var(--color-danger); background: var(--color-danger-soft); }
-.dossier-confirm-checks-warning { border-color: var(--color-warning); background: var(--color-warning-soft); }
-.dossier-confirm-checks-info { border-color: var(--color-info); }
-.dossier-confirm-hint { margin: 0 0 0.25rem; font-size: 0.875rem; }
+
+.dossier-confirm-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  margin: 0 0 14px;
+}
+.dossier-confirm-tile {
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-surface-muted);
+}
+.dossier-confirm-tile dt {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  color: var(--color-text-muted);
+  font-size: 13px;
+}
+.dossier-confirm-tile dt svg { flex-shrink: 0; }
+.dossier-confirm-tile dd { margin: 0; color: var(--color-text); font-size: 14px; font-weight: 600; line-height: 1.3; }
+
+.dossier-confirm-checks {
+  --confirm-tone: var(--color-border);
+  margin: 0 0 10px;
+  border: 1px solid color-mix(in srgb, var(--confirm-tone) 35%, var(--color-border));
+  border-left: 3px solid var(--confirm-tone);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--confirm-tone) 7%, transparent);
+}
+.dossier-confirm-checks-blocking { --confirm-tone: var(--color-danger); }
+.dossier-confirm-checks-warning { --confirm-tone: var(--color-warning-strong); }
+.dossier-confirm-checks-info { --confirm-tone: var(--color-info); }
+
+.dossier-confirm-checks summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  cursor: pointer;
+  list-style: none;
+}
+.dossier-confirm-checks summary::-webkit-details-marker { display: none; }
+.dossier-confirm-checks summary:focus-visible { outline: 2px solid var(--color-focus-ring); outline-offset: 1px; }
+.dossier-confirm-checks-icon { flex-shrink: 0; color: var(--confirm-tone); }
+.dossier-confirm-checks h4 { margin: 0; color: var(--color-text); font-size: 15px; font-weight: 700; }
+.dossier-confirm-count {
+  min-width: 22px;
+  padding: 0 7px;
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--confirm-tone) 18%, transparent);
+  color: var(--color-text);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 20px;
+  text-align: center;
+}
+.dossier-confirm-chevron { margin-left: auto; color: var(--color-text-muted); transition: transform 0.15s ease; }
+.dossier-confirm-checks:not([open]) .dossier-confirm-chevron { transform: rotate(180deg); }
+
+.dossier-confirm-checks-body { padding: 0 12px 10px 42px; color: var(--color-text); font-size: 14px; }
+.dossier-confirm-checks ul { margin: 0; padding-left: 16px; }
+.dossier-confirm-checks li + li { margin-top: 2px; }
+.dossier-confirm-hint { margin: 0 0 4px; font-size: 13px; color: var(--color-text-muted); }
+
 .dossier-confirm-ok { color: var(--color-success); }
-.dossier-confirm-ack { display: block; margin: 0.5rem 0 0.75rem; font-weight: 500; }
-.dossier-confirm-error { color: var(--color-danger); margin: 0.5rem 0 0; }
-@media (max-width: 480px) { .dossier-confirm-summary { grid-template-columns: 1fr; } }
+.dossier-confirm-ack {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 14px 0;
+  padding-top: 14px;
+  border-top: 1px solid var(--color-border);
+  font-weight: 500;
+  cursor: pointer;
+}
+.dossier-confirm-ack input { flex-shrink: 0; width: 18px; height: 18px; margin: 0; }
+.dossier-confirm-error { color: var(--color-danger); margin: 8px 0 0; }
+
+@media (max-width: 480px) {
+  .dossier-confirm-summary { grid-template-columns: 1fr 1fr; }
+  .dossier-confirm-checks-body { padding-left: 12px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dossier-confirm-chevron { transition: none; }
+}

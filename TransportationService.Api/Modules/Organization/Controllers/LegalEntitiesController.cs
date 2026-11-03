@@ -15,6 +15,8 @@ public class LegalEntitiesController : ControllerBase
     // XSS vector; raster formats only.
     private static readonly string[] AllowedLogoExtensions = [".png", ".jpg", ".jpeg"];
 
+    private const long MaxHeaderImageBytes = 5 * 1024 * 1024;
+
     private readonly ILegalEntityService _service;
 
     public LegalEntitiesController(ILegalEntityService service)
@@ -120,6 +122,55 @@ public class LegalEntitiesController : ControllerBase
     public async Task<ActionResult<LegalEntityDto>> RemoveLogo(Guid id, CancellationToken cancellationToken)
     {
         var updated = await _service.RemoveLogoAsync(id, cancellationToken);
+        return updated is null ? NotFound() : Ok(updated);
+    }
+
+    /// <summary>Banner photo of the dossier and order headers; same raster-only rule as the logo.</summary>
+    [HttpPost("api/legal-entities/{id:guid}/header-image")]
+    [RequirePermission(PermissionCodes.LegalEntitiesManage)]
+    [RequestSizeLimit(MaxHeaderImageBytes + 1024)]
+    public async Task<ActionResult<LegalEntityDto>> UploadHeaderImage(Guid id, IFormFile file, CancellationToken cancellationToken)
+    {
+        if (file.Length == 0 || file.Length > MaxHeaderImageBytes)
+        {
+            return BadRequest(new { message = "De bannerfoto moet tussen 1 byte en 5 MB groot zijn." });
+        }
+
+        var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
+        if (!AllowedLogoExtensions.Contains(extension))
+        {
+            return BadRequest(new { message = "Alleen PNG- en JPG-bestanden zijn toegestaan." });
+        }
+
+        if (Modules.Security.UploadValidation.SignatureError(file) is { } signatureError)
+        {
+            return BadRequest(new { message = signatureError });
+        }
+
+        var contentType = extension == ".png" ? "image/png" : "image/jpeg";
+        await using var stream = file.OpenReadStream();
+        var updated = await _service.AttachHeaderImageAsync(id, file.FileName, contentType, stream, cancellationToken);
+        return updated is null ? NotFound() : Ok(updated);
+    }
+
+    [HttpGet("api/legal-entities/{id:guid}/header-image")]
+    [Authorize]
+    public async Task<IActionResult> DownloadHeaderImage(Guid id, CancellationToken cancellationToken)
+    {
+        var image = await _service.OpenHeaderImageAsync(id, cancellationToken);
+        if (image is not { } found)
+        {
+            return NotFound();
+        }
+
+        return File(found.Content, found.ContentType, found.FileName);
+    }
+
+    [HttpDelete("api/legal-entities/{id:guid}/header-image")]
+    [RequirePermission(PermissionCodes.LegalEntitiesManage)]
+    public async Task<ActionResult<LegalEntityDto>> RemoveHeaderImage(Guid id, CancellationToken cancellationToken)
+    {
+        var updated = await _service.RemoveHeaderImageAsync(id, cancellationToken);
         return updated is null ? NotFound() : Ok(updated);
     }
 

@@ -181,7 +181,10 @@ function header() {
 }
 
 function attention() {
-  return screen.getByRole('region', { name: 'Aandachtspunten' })
+  const region = screen.getByRole('region', { name: 'Aandachtspunten' })
+  // Redesign 2026-11-03: the warnings sit at the bottom of the header, not under it.
+  expect(header()).toContainElement(region)
+  return region
 }
 
 beforeEach(() => {
@@ -240,8 +243,8 @@ describe('order detail — subnav and sections', () => {
     const bar = await screen.findByTestId('order-commercial-bar')
 
     expect(header()).toContainElement(bar)
-    expect(bar).toHaveTextContent('Klant: Nexans NV')
-    expect(bar).toHaveTextContent('Facturerende entiteit: Klantstandaard')
+    expect(bar).toHaveTextContent('KlantNexans NV')
+    expect(bar).toHaveTextContent('Facturerende entiteitKlantstandaard')
     expect(within(bar).getByRole('button', { name: 'Klant van deze opdracht wijzigen' })).toBeInTheDocument()
     expect(within(bar).getByRole('button', { name: 'Facturerende entiteit van deze opdracht wijzigen' })).toBeInTheDocument()
     expect(screen.getByText('Totaalprijs')).toBeInTheDocument()

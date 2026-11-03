@@ -31,10 +31,12 @@ public record LegalEntityDto(
     bool IsDefault,
     string? CreditNotePrefix = null,
     /// <summary>MD-M2: optimistic-concurrency version; send it back as <c>ExpectedVersion</c>.</summary>
-    int Version = 0);
+    int Version = 0,
+    bool HasHeaderImage = false,
+    string? HeaderImageFileName = null);
 
 /// <summary>Compact shape for dropdowns (entity pickers, top-bar selector).</summary>
-public record LegalEntityOptionDto(Guid Id, string DisplayName, string? VatNumber, bool IsDefault, bool IsActive);
+public record LegalEntityOptionDto(Guid Id, string DisplayName, string? VatNumber, bool IsDefault, bool IsActive, bool HasHeaderImage = false);
 
 public record SaveLegalEntityRequest(
     string LegalName,

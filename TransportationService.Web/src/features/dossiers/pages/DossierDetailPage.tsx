@@ -3,7 +3,6 @@ import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import { LoadingState } from '../../../components/feedback/LoadingState'
 import { ErrorState } from '../../../components/feedback/ErrorState'
 import { isNotFoundError } from '../../../api/notFound'
-import { BackButton } from '../../../components/ui/BackButton'
 import { Button } from '../../../components/ui/Button'
 import { FormField } from '../../../components/ui/FormField'
 import { Modal } from '../../../components/ui/Modal'
@@ -543,8 +542,6 @@ function DossierDetailContent() {
   return (
     <DossierWorkspaceContext.Provider value={workspace}>
       <div className="dossier-detail">
-        <BackButton to="/dossiers" label={t('dossiers.detail.back')} />
-
         <DossierHeader
           dossier={dossier}
           canManage={canManage}
@@ -553,6 +550,16 @@ function DossierDetailContent() {
           menuActions={menuActions}
           onUpdated={applyDossier}
           onConflict={handleConflict}
+          attention={
+              <AttentionPanel
+                issues={canViewPrices ? dossier.readiness : dossier.readiness.filter((issue) => issue.section !== 'prijs')}
+                activities={orderedActivities}
+                onNavigate={goToSection}
+                openIncidents={dossier.incidents.filter((i) => i.status === 'New' || i.status === 'InProgress')}
+                openExceptions={dossier.openExceptions ?? []}
+                canOpenExceptions={hasPermission('exceptions.view')}
+              />
+          }
         />
 
         {conflict && (
@@ -565,15 +572,6 @@ function DossierDetailContent() {
         )}
 
         {isOpen && <DossierPortalReview dossier={dossier} onReviewed={load} />}
-
-        <AttentionPanel
-          issues={canViewPrices ? dossier.readiness : dossier.readiness.filter((issue) => issue.section !== 'prijs')}
-          activities={orderedActivities}
-          onNavigate={goToSection}
-          openIncidents={dossier.incidents.filter((i) => i.status === 'New' || i.status === 'InProgress')}
-          openExceptions={dossier.openExceptions ?? []}
-          canOpenExceptions={hasPermission('exceptions.view')}
-        />
 
         <DossierSubnav ref={subnavRef} dossierId={id} tabs={availableTabs} />
 

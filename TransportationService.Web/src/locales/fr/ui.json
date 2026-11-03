@@ -86,7 +86,8 @@
     "notFoundTitle": "Page introuvable",
     "notFoundMessage": "La page demandée n'existe pas.",
     "notFoundBack": "Retour",
-    "notFoundHome": "Vers l'écran d'accueil"
+    "notFoundHome": "Vers l'écran d'accueil",
+    "language": "Langue"
   },
   "shortcutList": {
     "globalSearch": "Recherche globale / commandes",

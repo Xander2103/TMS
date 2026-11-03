@@ -14,6 +14,9 @@ public interface ILegalEntityService
     Task<LegalEntityDto?> AttachLogoAsync(Guid id, string fileName, string contentType, Stream content, CancellationToken cancellationToken);
     Task<(Stream Content, string FileName, string ContentType)?> OpenLogoAsync(Guid id, CancellationToken cancellationToken);
     Task<LegalEntityDto?> RemoveLogoAsync(Guid id, CancellationToken cancellationToken);
+    Task<LegalEntityDto?> AttachHeaderImageAsync(Guid id, string fileName, string contentType, Stream content, CancellationToken cancellationToken);
+    Task<(Stream Content, string FileName, string ContentType)?> OpenHeaderImageAsync(Guid id, CancellationToken cancellationToken);
+    Task<LegalEntityDto?> RemoveHeaderImageAsync(Guid id, CancellationToken cancellationToken);
 
     Task<ActiveLegalEntityDto> GetActiveSelectionAsync(CancellationToken cancellationToken);
     Task<ActiveLegalEntityDto> SetActiveSelectionAsync(Guid? legalEntityId, CancellationToken cancellationToken);
